@@ -1,43 +1,40 @@
 //! Phase 1 WS-E acceptance tests for `TantivySearchIndex`.
 //!
+//! Per `v0.9-refactor-2-plan.md` §17, the Tantivy rewrite is deferred to
+//! v0.9.x — for WS-1 the search index just needs to compile and accept
+//! [`ComponentRow`] payloads. The corpus-level tests below now build rows
+//! directly and verify text/numeric query paths against the row schema.
+//!
 //! Run with: `cargo test -p signex-library --features search-tantivy --test search_index`.
 
 #![cfg(feature = "search-tantivy")]
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 
+use chrono::Utc;
 use signex_library::{
-    Component, ComponentClass, DatasheetRef, Facet, FacetOp, LifecycleState, ManufacturerPart,
-    ParamMap, ParamValue, PlmReserved, PrimitiveRef, Revision, SearchIndex, SearchQuery,
-    TantivySearchIndex, Version,
+    ComponentClass, ComponentRow, DatasheetRef, Facet, FacetOp, LifecycleState, ManufacturerPart,
+    ParamMap, ParamValue, PlmReserved, PrimitiveRef, SearchIndex, SearchQuery, TantivySearchIndex,
 };
 use uuid::Uuid;
 
 // ── fixture builders ───────────────────────────────────────────────────
 
-fn fresh_component(
+fn fresh_row(
     internal_pn: &str,
     mpn: &str,
     manufacturer: &str,
     _description: &str,
-    category: &str,
+    class: &str,
     parameters: ParamMap,
-) -> Component {
+) -> ComponentRow {
     let lib = Uuid::nil();
-    let mut params = parameters;
-    // Pre-refactor convention: `category` lives as a parameter so the search
-    // index can hoist it. The new index also reads `Component.category`
-    // directly, but keeping the param mirror means the existing
-    // category-filter assertions stay correct.
-    params.insert("category".into(), ParamValue::Text(category.into()));
-
-    let revision = Revision {
-        version: Version::new(1, 0),
+    ComponentRow {
+        row_id: Uuid::now_v7(),
+        internal_pn: signex_library::InternalPn::new(internal_pn),
+        class: ComponentClass::new(class),
+        datasheet: DatasheetRef::url(""),
         state: LifecycleState::Released,
-        created: chrono::Utc::now(),
-        author: "test@example.com".into(),
-        message: "fixture".into(),
         symbol_ref: PrimitiveRef::new(lib, Uuid::nil()),
         footprint_ref: None,
         sim_ref: None,
@@ -45,25 +42,16 @@ fn fresh_component(
         primary_mpn: ManufacturerPart::draft(manufacturer, mpn),
         alternates: Vec::new(),
         supply: Vec::new(),
-        datasheet: DatasheetRef::url(""),
-        parameters: params,
+        parameters,
         plm: PlmReserved::default(),
+        created: Utc::now(),
+        updated: Utc::now(),
         content_hash: [0u8; 32],
-    };
-
-    Component {
-        uuid: Uuid::now_v7(),
-        internal_pn: signex_library::InternalPn::new(internal_pn),
-        class: ComponentClass::new(category),
-        category: PathBuf::from(category),
-        family: None,
-        revisions: vec![revision],
-        head: Version::new(1, 0),
     }
 }
 
-/// Build 100 fixture components: caps, resistors, ICs, etc.
-fn fixture_corpus() -> Vec<Component> {
+/// Build 100 fixture rows: caps, resistors, ICs, etc.
+fn fixture_corpus() -> Vec<ComponentRow> {
     let mut out = Vec::with_capacity(100);
 
     // 1 — the unique target the text-search test queries for.
@@ -75,7 +63,7 @@ fn fixture_corpus() -> Vec<Component> {
     cap_target_params.insert("voltage".into(), ParamValue::Number(25.0));
     cap_target_params.insert("dielectric".into(), ParamValue::Text("X7R".into()));
     cap_target_params.insert("package".into(), ParamValue::Text("0805".into()));
-    out.push(fresh_component(
+    out.push(fresh_row(
         "C0805_10uF_25V_X7R",
         "GRM21BR71E106KE12L",
         "Murata",
@@ -84,8 +72,7 @@ fn fixture_corpus() -> Vec<Component> {
         cap_target_params,
     ));
 
-    // 39 other capacitors with varying values. None of them should match the
-    // single-result query on description content.
+    // 39 other capacitors with varying values.
     let cap_specs = [
         (1e-9, 50.0, "C0G", "0402"),
         (10e-9, 25.0, "X7R", "0402"),
@@ -110,7 +97,7 @@ fn fixture_corpus() -> Vec<Component> {
                 "Generic ceramic capacitor {} package, {} dielectric, {} V",
                 pkg, dielec, v
             );
-            out.push(fresh_component(
+            out.push(fresh_row(
                 &pn,
                 &format!("CAP{}", i * 4 + rep),
                 "GenericCo",
@@ -133,7 +120,7 @@ fn fixture_corpus() -> Vec<Component> {
             params.insert("tolerance".into(), ParamValue::Text("1%".into()));
             let pn = format!("R{}_{}_{}", pkg, *r as u64, i);
             let desc = format!("Thick film resistor {} Ω, 1%, {}", r, pkg);
-            out.push(fresh_component(
+            out.push(fresh_row(
                 &pn,
                 &format!("RES{}_{}", i, rep),
                 "Yageo",
@@ -150,7 +137,7 @@ fn fixture_corpus() -> Vec<Component> {
         params.insert("voltage".into(), ParamValue::Number(3.3));
         params.insert("package".into(), ParamValue::Text("SOT-23".into()));
         let pn = format!("IC_FILLER_{:03}", i);
-        out.push(fresh_component(
+        out.push(fresh_row(
             &pn,
             &format!("IC{}", i),
             "TI",
@@ -160,7 +147,7 @@ fn fixture_corpus() -> Vec<Component> {
         ));
     }
 
-    assert_eq!(out.len(), 100, "fixture corpus must be exactly 100 parts");
+    assert_eq!(out.len(), 100, "fixture corpus must be exactly 100 rows");
     out
 }
 
@@ -173,7 +160,7 @@ fn text_query_pinpoints_the_single_matching_part() {
 
     let corpus = fixture_corpus();
     for c in &corpus {
-        idx.add_or_update(c).expect("add component");
+        idx.add_or_update(c).expect("add row");
     }
     idx.commit().expect("commit");
 
@@ -193,9 +180,9 @@ fn text_query_pinpoints_the_single_matching_part() {
         "top hit was {:?}",
         hits[0].internal_pn
     );
-    // The v0.9 refactor dropped the inline `description` slot; the search
-    // index now synthesises it from `manufacturer + mpn`. The MPN is unique
-    // enough that the synthesised description still pinpoints the hit.
+    // The search index synthesises a "<manufacturer> <mpn>" description; the
+    // MPN is unique enough that the synthesised string still pinpoints the
+    // hit.
     assert!(
         hits[0].description.contains("Murata"),
         "unexpected description: {:?}",
@@ -215,7 +202,7 @@ fn numeric_facet_lt_returns_only_sub_threshold_parts() {
 
     let corpus = fixture_corpus();
     for c in &corpus {
-        idx.add_or_update(c).expect("add component");
+        idx.add_or_update(c).expect("add row");
     }
     idx.commit().expect("commit");
 
@@ -237,18 +224,10 @@ fn numeric_facet_lt_returns_only_sub_threshold_parts() {
     let mut expected: Vec<String> = corpus
         .iter()
         .filter(|c| {
-            let head = c.head_revision().unwrap();
-            let cat = head
-                .parameters
-                .get("category")
-                .and_then(|v| match v {
-                    ParamValue::Text(t) => Some(t.as_str()),
-                    _ => None,
-                });
-            if cat != Some("Capacitor") {
+            if c.class.as_str() != "Capacitor" {
                 return false;
             }
-            let cap = head.parameters.get("capacitance");
+            let cap = c.parameters.get("capacitance");
             matches!(cap, Some(ParamValue::Number(n)) if *n < 1e-6)
         })
         .map(|c| c.internal_pn.0.clone())
@@ -273,16 +252,14 @@ fn index_persists_across_drop_and_reopen() {
     let dir = tempfile::tempdir().unwrap();
     let dir_path = dir.path().to_path_buf();
 
-    // Build & commit, then drop the writer/index entirely.
     {
         let idx = TantivySearchIndex::open(&dir_path).expect("open index");
         for c in &fixture_corpus() {
-            idx.add_or_update(c).expect("add component");
+            idx.add_or_update(c).expect("add row");
         }
         idx.commit().expect("commit");
     }
 
-    // Reopen from the same path. No re-indexing.
     let idx2 = TantivySearchIndex::open(&dir_path).expect("reopen index");
     let q = SearchQuery {
         text: Some("Capacitor 10µF 0805 25V X7R".into()),
@@ -305,7 +282,7 @@ fn add_or_update_replaces_existing_doc() {
 
     let mut params = ParamMap::new();
     params.insert("capacitance".into(), ParamValue::Number(1e-6));
-    let mut comp = fresh_component(
+    let mut row = fresh_row(
         "C_TEST",
         "TEST-001",
         "Acme",
@@ -313,18 +290,13 @@ fn add_or_update_replaces_existing_doc() {
         "Capacitor",
         params,
     );
-    idx.add_or_update(&comp).expect("add");
+    idx.add_or_update(&row).expect("add");
     idx.commit().expect("commit");
 
-    // Mutate the head revision — same uuid, new content. The pre-refactor
-    // index surfaced `shared.description`; the new index synthesises the
-    // description from `manufacturer + mpn`, so update those instead.
-    {
-        let head = comp.revisions.last_mut().unwrap();
-        head.primary_mpn.manufacturer = "Sentinel-updated-zucchini".into();
-        head.primary_mpn.mpn = "TEST-002".into();
-    }
-    idx.add_or_update(&comp).expect("update");
+    // Mutate manufacturer + mpn — same row_id, new content.
+    row.primary_mpn.manufacturer = "Sentinel-updated-zucchini".into();
+    row.primary_mpn.mpn = "TEST-002".into();
+    idx.add_or_update(&row).expect("update");
     idx.commit().expect("commit update");
 
     let q_new = SearchQuery {

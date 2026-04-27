@@ -63,7 +63,7 @@ fn fixture_revision(version: Version) -> Revision {
         plm: PlmReserved::default(),
         content_hash: [0u8; 32],
     };
-    rev.refresh_content_hash();
+    rev.refresh_content_hash().unwrap();
     rev
 }
 

@@ -39,8 +39,8 @@ use tantivy::schema::{
 use tantivy::{Index, IndexReader, IndexWriter, ReloadPolicy, TantivyError, Term};
 
 use crate::adapter::ComponentSummary;
-use crate::component::Component;
-use crate::identity::{InternalPn, Version};
+use crate::component::ComponentRow;
+use crate::identity::InternalPn;
 use crate::lifecycle::LifecycleState;
 use crate::param::ParamValue;
 use crate::search::{Facet, FacetOp, SearchIndex, SearchQuery};
@@ -281,63 +281,54 @@ impl TantivySearchIndex {
             .map_err(|_| TantivyIndexError::Internal("writer mutex poisoned".into()))
     }
 
-    /// Add or replace the doc for a single component.
+    /// Add or replace the doc for a single row.
     ///
-    /// Replacement is by `uuid` term; safe to call on the same component
+    /// Per `v0.9-refactor-2-plan.md` §17, full Tantivy rewiring is deferred
+    /// — the row-flavour `add_or_update` mirrors the v0.9-original schema
+    /// but reads from a [`ComponentRow`] directly instead of walking a
+    /// `Revision` chain. The `head_major / head_minor` fields are filled
+    /// with zeros for now; WS-9 may drop them entirely.
+    ///
+    /// Replacement is by `row_id` term; safe to call on the same row
     /// repeatedly. Caller must `commit()` to make changes visible to
     /// subsequent queries.
-    pub fn add_or_update(&self, component: &Component) -> Result<(), TantivyIndexError> {
+    pub fn add_or_update(&self, row: &ComponentRow) -> Result<(), TantivyIndexError> {
         let writer = self.writer()?;
 
-        // Delete any existing doc with this uuid; harmless on first insert.
-        let uuid_str = component.uuid.to_string();
+        // Delete any existing doc with this row_id; harmless on first insert.
+        let uuid_str = row.row_id.to_string();
         let term = Term::from_field_text(self.fields.uuid, &uuid_str);
         writer.delete_term(term);
 
-        let Some(head) = component.head_revision() else {
-            return Ok(());
-        };
+        // The row carries its own `class` (resistor / capacitor / …); we
+        // surface that as the `category` facet so existing UI code that
+        // filters by category keeps working.
+        let category_value = row.class.as_str().to_string();
 
-        // Category now lives on Component.category (refactor); fallback to
-        // a "category" parameter for backwards source compatibility.
-        let category_value = component
-            .category
-            .to_str()
-            .map(str::to_string)
-            .filter(|s| !s.is_empty())
-            .or_else(|| {
-                head.parameters.get("category").and_then(|v| match v {
-                    ParamValue::Text(s) => Some(s.clone()),
-                    _ => None,
-                })
-            })
-            .unwrap_or_default();
-
-        // The refactor dropped the inline `description` slot on Revision;
-        // surface a synthesised "<manufacturer> <mpn>" string for free-text
-        // search until WS-E ships a dedicated description field on Component.
-        let description = format!(
-            "{} {}",
-            head.primary_mpn.manufacturer, head.primary_mpn.mpn
-        )
-        .trim()
-        .to_string();
+        // Synthesised "<manufacturer> <mpn>" stays the description until
+        // WS-9 retargets the field at the row's `parameters` map.
+        let description = format!("{} {}", row.primary_mpn.manufacturer, row.primary_mpn.mpn)
+            .trim()
+            .to_string();
 
         let mut doc = TantivyDocument::default();
         doc.add_text(self.fields.uuid, &uuid_str);
-        doc.add_text(self.fields.internal_pn, component.internal_pn.as_str());
-        doc.add_text(self.fields.mpn, &head.primary_mpn.mpn);
-        doc.add_text(self.fields.manufacturer, &head.primary_mpn.manufacturer);
+        doc.add_text(self.fields.internal_pn, row.internal_pn.as_str());
+        doc.add_text(self.fields.mpn, &row.primary_mpn.mpn);
+        doc.add_text(self.fields.manufacturer, &row.primary_mpn.manufacturer);
         doc.add_text(self.fields.description, &description);
         doc.add_text(self.fields.category, &category_value);
-        doc.add_u64(self.fields.head_major, component.head.major as u64);
-        doc.add_u64(self.fields.head_minor, component.head.minor as u64);
-        doc.add_text(self.fields.state, lifecycle_token(head.state));
+        // Rows have no per-row version chain in the refactor-2 model.
+        // Stash zeros so the schema doesn't need a rebuild before WS-9
+        // drops these columns entirely.
+        doc.add_u64(self.fields.head_major, 0);
+        doc.add_u64(self.fields.head_minor, 0);
+        doc.add_text(self.fields.state, lifecycle_token(row.state));
 
         // Push numeric values into their dedicated f64 columns; non-numeric
         // values fall through to the JSON blob.
         let mut json_blob: BTreeMap<String, OwnedValue> = BTreeMap::new();
-        for (k, v) in &head.parameters {
+        for (k, v) in &row.parameters {
             if k == "category" {
                 continue;
             }
@@ -572,20 +563,22 @@ impl TantivySearchIndex {
     }
 
     fn doc_to_summary(&self, doc: &TantivyDocument) -> Option<ComponentSummary> {
-        let uuid = read_text(doc, self.fields.uuid).and_then(|s| uuid::Uuid::parse_str(&s).ok())?;
+        let row_id =
+            read_text(doc, self.fields.uuid).and_then(|s| uuid::Uuid::parse_str(&s).ok())?;
         let internal_pn = read_text(doc, self.fields.internal_pn).unwrap_or_default();
         let mpn = read_text(doc, self.fields.mpn).unwrap_or_default();
         let description = read_text(doc, self.fields.description).unwrap_or_default();
-        let major = read_u64(doc, self.fields.head_major).unwrap_or(0) as u32;
-        let minor = read_u64(doc, self.fields.head_minor).unwrap_or(0) as u32;
+        // `head_major` / `head_minor` are written as zeros in the row model;
+        // the unused bindings below silence the unused-helper warning until
+        // WS-9 drops them entirely.
+        let _ = read_u64;
         let state_raw = read_text(doc, self.fields.state).unwrap_or_default();
         let state = parse_lifecycle_token(&state_raw).unwrap_or(LifecycleState::Released);
 
         Some(ComponentSummary {
-            uuid,
+            row_id,
             internal_pn: InternalPn::new(internal_pn),
             mpn,
-            head: Version::new(major, minor),
             state,
             description,
         })

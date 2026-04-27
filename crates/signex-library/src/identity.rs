@@ -1,8 +1,63 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Stable internal identifier — UUIDv7 for time-orderability.
-pub type ComponentId = Uuid;
+/// Stable row identifier — UUIDv7 for time-orderability. Newtype wraps
+/// `Uuid` so the type system can distinguish a `RowId` from a generic UUID
+/// used elsewhere (library_id, primitive uuid, etc).
+///
+/// Per `v0.9-refactor-2-plan.md` §6 step 1.10, this replaces the previous
+/// `ComponentId = Uuid` type alias from the v0.9-original layout.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct RowId(pub Uuid);
+
+impl RowId {
+    /// Construct a new time-ordered RowId.
+    pub fn new() -> Self {
+        Self(Uuid::now_v7())
+    }
+
+    /// Wrap an existing UUID — used when reading a row back from disk.
+    pub fn from_uuid(uuid: Uuid) -> Self {
+        Self(uuid)
+    }
+
+    /// Borrow the underlying UUID.
+    pub fn as_uuid(&self) -> Uuid {
+        self.0
+    }
+}
+
+impl Default for RowId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl From<Uuid> for RowId {
+    fn from(u: Uuid) -> Self {
+        Self(u)
+    }
+}
+
+impl From<RowId> for Uuid {
+    fn from(r: RowId) -> Self {
+        r.0
+    }
+}
+
+impl std::fmt::Display for RowId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl std::str::FromStr for RowId {
+    type Err = uuid::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Uuid::parse_str(s).map(Self)
+    }
+}
 
 /// Library-internal part number. Unique within a library; user-renameable.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -22,6 +77,17 @@ impl InternalPn {
 impl std::fmt::Display for InternalPn {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.0)
+    }
+}
+
+/// `InternalPn::from_str` is infallible — every string is a valid PN — but
+/// the `parse()` ergonomics require a `FromStr` impl so the test fixtures
+/// in `v0.9-refactor-2-plan.md` (`"R0805_10k".parse().unwrap()`) work
+/// without a special-case helper.
+impl std::str::FromStr for InternalPn {
+    type Err = std::convert::Infallible;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self(s.to_string()))
     }
 }
 
@@ -75,76 +141,30 @@ impl Default for ComponentClass {
     }
 }
 
-/// Two-segment monotonic version. Minor = compatible, major = breaking.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct Version {
-    pub major: u32,
-    pub minor: u32,
-}
-
-impl Version {
-    pub fn new(major: u32, minor: u32) -> Self {
-        Self { major, minor }
-    }
-
-    pub fn bump_minor(self) -> Self {
-        Self::new(self.major, self.minor + 1)
-    }
-
-    pub fn bump_major(self) -> Self {
-        Self::new(self.major + 1, 0)
-    }
-}
-
-impl std::fmt::Display for Version {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}.{}", self.major, self.minor)
-    }
-}
-
-/// M7: typed error for `Version::from_str` so `?` propagation keeps structure
-/// instead of stringifying. `MissingDot` distinguishes a malformed input
-/// (`"3"`) from a non-numeric segment (`"3.x"`); the latter wraps the
-/// underlying `ParseIntError` so callers can dig into `kind()` if needed.
-#[derive(Clone, Debug, thiserror::Error)]
-pub enum ParseVersionError {
-    #[error("version must contain a single dot separator (e.g. \"1.2\")")]
-    MissingDot,
-    #[error("version segment is not a valid u32: {0}")]
-    InvalidNumber(#[from] std::num::ParseIntError),
-}
-
-impl std::str::FromStr for Version {
-    type Err = ParseVersionError;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (maj, min) = s.split_once('.').ok_or(ParseVersionError::MissingDot)?;
-        let major = maj.parse::<u32>()?;
-        let minor = min.parse::<u32>()?;
-        Ok(Self::new(major, minor))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn version_parses_and_displays() {
-        let v: Version = "3.7".parse().unwrap();
-        assert_eq!(v, Version::new(3, 7));
-        assert_eq!(v.to_string(), "3.7");
+    fn row_id_round_trip() {
+        let r = RowId::new();
+        let s = serde_json::to_string(&r).unwrap();
+        let back: RowId = serde_json::from_str(&s).unwrap();
+        assert_eq!(r, back);
     }
 
     #[test]
-    fn version_bumps_correctly() {
-        assert_eq!(Version::new(1, 2).bump_minor(), Version::new(1, 3));
-        assert_eq!(Version::new(1, 2).bump_major(), Version::new(2, 0));
+    fn row_id_display_and_fromstr_match() {
+        let r = RowId::new();
+        let s = r.to_string();
+        let back: RowId = s.parse().unwrap();
+        assert_eq!(r, back);
     }
 
     #[test]
-    fn version_orders_by_major_then_minor() {
-        assert!(Version::new(1, 9) < Version::new(2, 0));
-        assert!(Version::new(2, 0) < Version::new(2, 1));
+    fn row_id_fromstr_rejects_garbage() {
+        let bad: Result<RowId, _> = "not-a-uuid".parse();
+        assert!(bad.is_err());
     }
 
     #[test]
@@ -154,6 +174,12 @@ mod tests {
         assert_eq!(s, "\"R0805_10k\"");
         let back: InternalPn = serde_json::from_str(&s).unwrap();
         assert_eq!(pn, back);
+    }
+
+    #[test]
+    fn internal_pn_parses_via_fromstr() {
+        let pn: InternalPn = "R0805_10k".parse().unwrap();
+        assert_eq!(pn.as_str(), "R0805_10k");
     }
 
     #[test]
