@@ -208,6 +208,8 @@ impl Signex {
             cached_document: None,
             dirty: false,
             project_id,
+            // WS-I: tab-not-window
+            kind: super::TabKind::Schematic,
         });
         self.document_state.active_tab = self.document_state.tabs.len() - 1;
 
@@ -241,6 +243,8 @@ impl Signex {
             cached_document: None,
             dirty,
             project_id,
+            // WS-I: tab-not-window
+            kind: super::TabKind::Schematic,
         });
         self.document_state.active_tab = self.document_state.tabs.len() - 1;
         // Point active_path at the parked entry. `apply_loaded_schematic`
@@ -263,6 +267,8 @@ impl Signex {
             cached_document: Some(TabDocument::Pcb(board)),
             dirty: false,
             project_id,
+            // WS-I: tab-not-window
+            kind: super::TabKind::Pcb,
         });
         self.document_state.active_tab = self.document_state.tabs.len() - 1;
         self.apply_loaded_pcb_document(true, true);

@@ -31,7 +31,9 @@ pub use contracts::{
     ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState, RenameDialogState,
     StatusBarRequest, TabContextAction, TabContextMenuState, TextEditState,
 };
-pub use documents::{DrawMode, SchematicTabSession, TabDocument, TabInfo, Tool};
+pub use documents::{
+    ComponentEditorTab, DrawMode, SchematicTabSession, TabDocument, TabInfo, TabKind, Tool,
+};
 pub use state::{DocumentState, InteractionState, ProjectId, Signex, UiState};
 
 // Re-exported so modal dialogs outside `state` can reference the type.

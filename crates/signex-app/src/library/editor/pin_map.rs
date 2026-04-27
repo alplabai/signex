@@ -24,7 +24,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::super::messages::{EditorMsg, LibraryMessage};
-use super::super::state::{ComponentEditorState, PinMapTabState};
+use super::super::state::{ComponentEditorState, EditorAddress, PinMapTabState};
 
 /// Result of resolving one symbol pin against a footprint + the
 /// override list.
@@ -191,7 +191,7 @@ pub fn view<'a>(
     editor: &'a ComponentEditorState,
     primitives: Option<(&'a Symbol, &'a Footprint)>,
     tokens: &'a ThemeTokens,
-    window_id: iced::window::Id,
+    address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
@@ -227,8 +227,8 @@ pub fn view<'a>(
     let warnings = validate(&matches);
 
     let banner = status_banner(&matches, tokens);
-    let bar = toolbar(tokens, window_id);
-    let table_inner = matches_table(matches, &editor.pin_map, tokens, window_id);
+    let bar = toolbar(tokens, &address);
+    let table_inner = matches_table(matches, &editor.pin_map, tokens, &address);
     let warnings_panel = validation_panel(&warnings, tokens);
 
     container(
@@ -297,13 +297,17 @@ fn status_banner<'a>(
 
 fn toolbar<'a>(
     tokens: &'a ThemeTokens,
-    window_id: iced::window::Id,
+    address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let btn = |label: &'static str, msg: EditorMsg| {
         let text_c = theme_ext::text_primary(tokens);
         let border = theme_ext::border_color(tokens);
         button(container(text(label).size(11).color(text_c)).padding([4, 12]))
-            .on_press(LibraryMessage::EditorEvent { window_id, msg })
+            .on_press(LibraryMessage::EditorEvent {
+                library_path: address.library_path.clone(),
+                component_id: address.component_id,
+                msg,
+            })
             .style(move |_: &Theme, status: iced::widget::button::Status| {
                 let bg = match status {
                     iced::widget::button::Status::Hovered => Some(iced::Background::Color(
@@ -340,7 +344,7 @@ fn matches_table<'a>(
     matches: Vec<PinPadMatch>,
     pin_map: &'a PinMapTabState,
     tokens: &'a ThemeTokens,
-    window_id: iced::window::Id,
+    address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let muted = theme_ext::text_secondary(tokens);
     let text_c = theme_ext::text_primary(tokens);
@@ -379,7 +383,7 @@ fn matches_table<'a>(
 
     let mut col = column![header].spacing(2);
     for m in matches {
-        col = col.push(match_row(m, pin_map, tokens, window_id, text_c, muted));
+        col = col.push(match_row(m, pin_map, tokens, address, text_c, muted));
     }
     col.into()
 }
@@ -388,7 +392,7 @@ fn match_row<'a>(
     m: PinPadMatch,
     pin_map: &'a PinMapTabState,
     tokens: &'a ThemeTokens,
-    window_id: iced::window::Id,
+    address: &EditorAddress,
     text_c: iced::Color,
     muted: iced::Color,
 ) -> Element<'a, LibraryMessage> {
@@ -421,7 +425,8 @@ fn match_row<'a>(
             container(text("Save").size(10).color(iced::Color::WHITE)).padding([3, 10]),
         )
         .on_press(LibraryMessage::EditorEvent {
-            window_id,
+            library_path: address.library_path.clone(),
+            component_id: address.component_id,
             msg: EditorMsg::PinMapAddOverride {
                 pin: pin_number_for_save,
                 pad: pin_map.override_buf.clone(),
@@ -443,7 +448,8 @@ fn match_row<'a>(
             container(text("Cancel").size(10).color(text_c)).padding([3, 10]),
         )
         .on_press(LibraryMessage::EditorEvent {
-            window_id,
+            library_path: address.library_path.clone(),
+            component_id: address.component_id,
             msg: EditorMsg::PinMapCancelOverrideEdit,
         })
         .style(move |_: &Theme, _| iced::widget::button::Style {
@@ -459,12 +465,15 @@ fn match_row<'a>(
             ..iced::widget::button::Style::default()
         });
         let pin_for_input = pin.number.clone();
+        let lib_path_for_input = address.library_path.clone();
+        let component_id_for_input = address.component_id;
         let input = text_input("pad #", &buf)
             .padding([3, 6])
             .size(11)
             .width(Length::Fixed(80.0))
             .on_input(move |s| LibraryMessage::EditorEvent {
-                window_id,
+                library_path: lib_path_for_input.clone(),
+                component_id: component_id_for_input,
                 msg: EditorMsg::PinMapOverrideBufChanged {
                     pin: pin_for_input.clone(),
                     value: s,
@@ -486,7 +495,8 @@ fn match_row<'a>(
         };
         let trigger = button(container(text(label).size(10).color(text_c)).padding([3, 10]))
             .on_press(LibraryMessage::EditorEvent {
-                window_id,
+                library_path: address.library_path.clone(),
+                component_id: address.component_id,
                 msg: EditorMsg::PinMapOpenOverrideEdit(pin_number_for_open),
             })
             .style(move |_: &Theme, _| iced::widget::button::Style {
@@ -507,7 +517,8 @@ fn match_row<'a>(
                 container(text("Remove").size(10).color(text_c)).padding([3, 10]),
             )
             .on_press(LibraryMessage::EditorEvent {
-                window_id,
+                library_path: address.library_path.clone(),
+                component_id: address.component_id,
                 msg: EditorMsg::PinMapRemoveOverride {
                     pin: pin_number_for_remove,
                 },

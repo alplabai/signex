@@ -20,7 +20,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::super::messages::{EditorMsg, LibraryMessage};
-use super::super::state::ComponentEditorState;
+use super::super::state::{ComponentEditorState, EditorAddress};
 
 /// Width / height of the modal card. Sized to fit a ~6-line notes
 /// field comfortably; the text_input itself drives the actual rows
@@ -35,7 +35,7 @@ const MODAL_W: f32 = 520.0;
 pub fn view<'a>(
     editor: &'a ComponentEditorState,
     tokens: &'a ThemeTokens,
-    window_id: iced::window::Id,
+    address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
@@ -45,7 +45,7 @@ pub fn view<'a>(
         row![
             text("Submit for Review").size(14).color(text_c),
             Space::new().width(Length::Fill),
-            close_x(window_id, tokens),
+            close_x(&address, tokens),
         ]
         .align_y(iced::Alignment::Center),
     )
@@ -58,6 +58,8 @@ pub fn view<'a>(
         editor.display_internal_pn, editor.displayed_version, editor.component_id,
     );
 
+    let lib_path_for_input = address.library_path.clone();
+    let component_id_for_input = address.component_id;
     let body = column![
         text(target_line).size(11).color(muted),
         Space::new().height(8),
@@ -68,7 +70,8 @@ pub fn view<'a>(
             &editor.review_notes_buf,
         )
         .on_input(move |s| LibraryMessage::EditorEvent {
-            window_id,
+            library_path: lib_path_for_input.clone(),
+            component_id: component_id_for_input,
             msg: EditorMsg::SubmitForReviewNotesChanged(s),
         })
         .padding(8)
@@ -95,7 +98,8 @@ pub fn view<'a>(
             secondary_btn(
                 "Cancel",
                 LibraryMessage::EditorEvent {
-                    window_id,
+                    library_path: address.library_path.clone(),
+                    component_id: address.component_id,
                     msg: EditorMsg::SubmitForReviewCancel,
                 },
                 text_c,
@@ -105,7 +109,8 @@ pub fn view<'a>(
             primary_btn(
                 "Submit",
                 LibraryMessage::EditorEvent {
-                    window_id,
+                    library_path: address.library_path.clone(),
+                    component_id: address.component_id,
                     msg: EditorMsg::SubmitForReviewConfirm,
                 },
             ),
@@ -121,12 +126,16 @@ pub fn view<'a>(
         .into()
 }
 
-fn close_x<'a>(window_id: iced::window::Id, tokens: &ThemeTokens) -> Element<'a, LibraryMessage> {
+fn close_x<'a>(
+    address: &EditorAddress,
+    tokens: &ThemeTokens,
+) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
     button(container(text("\u{00D7}".to_string()).size(14).color(text_c)).padding([0, 6]))
         .on_press(LibraryMessage::EditorEvent {
-            window_id,
+            library_path: address.library_path.clone(),
+            component_id: address.component_id,
             msg: EditorMsg::SubmitForReviewCancel,
         })
         .style(move |_: &Theme, status: iced::widget::button::Status| {

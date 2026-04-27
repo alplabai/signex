@@ -15,7 +15,7 @@ use signex_library::{
 use signex_types::project::{LibraryEntry, LibraryEntryKind, ProjectData};
 use uuid::Uuid;
 
-use super::state::{ComponentEditorState, LibraryState};
+use super::state::{ComponentEditorState, EditorAddress, LibraryState};
 
 /// Open a `*.snxlib/` and refresh its component list.
 pub fn open_library(state: &mut LibraryState, root: PathBuf) -> Result<(), LibraryError> {
@@ -196,14 +196,16 @@ pub fn load_component_for_editor(
 }
 
 /// Save the editor's draft revision locally.
+// WS-I: tab-not-window — editors are addressed by
+// `EditorAddress(library_path, component_id)` instead of by window id.
 pub fn save_draft(
     state: &mut LibraryState,
-    window_id: iced::window::Id,
+    address: &EditorAddress,
 ) -> Result<(), LibraryError> {
     let editor = state
-        .open_editors
-        .get_mut(&window_id)
-        .ok_or_else(|| LibraryError::NotFound(format!("editor window {window_id:?}")))?;
+        .editors
+        .get_mut(address)
+        .ok_or_else(|| LibraryError::NotFound(format!("editor {address:?}")))?;
     editor.draft.refresh_content_hash();
     let library_root = editor.library_root.clone();
     let id = editor.component_id;
@@ -225,15 +227,16 @@ pub fn save_draft(
 }
 
 /// Commit the current draft as a new revision.
+// WS-I: tab-not-window
 pub fn commit_revision(
     state: &mut LibraryState,
-    window_id: iced::window::Id,
+    address: &EditorAddress,
     message: &str,
 ) -> Result<Revision, LibraryError> {
     let editor = state
-        .open_editors
-        .get_mut(&window_id)
-        .ok_or_else(|| LibraryError::NotFound(format!("editor window {window_id:?}")))?;
+        .editors
+        .get_mut(address)
+        .ok_or_else(|| LibraryError::NotFound(format!("editor {address:?}")))?;
     editor.draft.refresh_content_hash();
     let library_root = editor.library_root.clone();
     let id = editor.component_id;
