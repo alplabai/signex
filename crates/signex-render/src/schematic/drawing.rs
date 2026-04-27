@@ -301,67 +301,110 @@ pub fn draw_child_sheet(
         0.0,
     );
 
-    // Draw sheet pins — stub direction and label placement driven by rotation:
-    //   0°   = left edge  (stub exits left,  label inside-right)
-    //   180° = right edge (stub exits right, label inside-left)
-    //   270° = top edge   (stub exits up,    label inside-below)
-    //   90°  = bottom edge(stub exits down,  label inside-above)
-    let pin_stub = 1.5;
-    for pin in &child.pins {
-        let pp = transform.to_screen_point(pin.position.x, pin.position.y);
+    // Draw sheet pins — Altium hierarchical port style. The pin's position is
+    // the connection point on the sheet edge; the pentagon tip sits exactly
+    // there with the body extending INWARD into the sheet so external wires
+    // dock cleanly without any protruding stub. Rotation maps the inward
+    // direction:
+    //   0°   = left edge   → body extends right, label to the right
+    //   180° = right edge  → body extends left,  label to the left
+    //   270° = top edge    → body extends down,  label below
+    //   90°  = bottom edge → body extends up,    label above
+    let pin_h_mm = 1.4_f64;
+    let arrow_len_mm = 0.7_f64;
+    let body_len_mm = 2.4_f64;
+    let text_pad_mm = 0.4_f64;
+    let total_in_mm = arrow_len_mm + body_len_mm;
 
+    for pin in &child.pins {
         let rot = pin.rotation.rem_euclid(360.0).round() as i32;
-        let (stub_wx, stub_wy, text_off_x, text_off_y, h_align, v_align) = match rot {
+
+        // Inward unit vector (into the sheet), text alignment, and text anchor
+        // offset along the inward axis.
+        let (ix, iy, h_align, v_align, text_dx, text_dy): (
+            f64,
+            f64,
+            iced::alignment::Horizontal,
+            iced::alignment::Vertical,
+            f64,
+            f64,
+        ) = match rot {
             180 => (
-                pin.position.x + pin_stub,
-                pin.position.y,
-                -4.0,
+                -1.0,
                 0.0,
                 iced::alignment::Horizontal::Right,
                 iced::alignment::Vertical::Center,
-            ),
-            270 => (
-                pin.position.x,
-                pin.position.y - pin_stub,
+                -(total_in_mm + text_pad_mm),
                 0.0,
-                small_font + 4.0,
-                iced::alignment::Horizontal::Center,
-                iced::alignment::Vertical::Top,
             ),
             90 => (
-                pin.position.x,
-                pin.position.y + pin_stub,
                 0.0,
-                -(small_font + 4.0),
+                -1.0,
                 iced::alignment::Horizontal::Center,
                 iced::alignment::Vertical::Bottom,
+                0.0,
+                -(total_in_mm + text_pad_mm),
+            ),
+            270 => (
+                0.0,
+                1.0,
+                iced::alignment::Horizontal::Center,
+                iced::alignment::Vertical::Top,
+                0.0,
+                total_in_mm + text_pad_mm,
             ),
             _ => (
-                // 0° and anything else → left edge
-                pin.position.x - pin_stub,
-                pin.position.y,
-                4.0,
+                1.0,
                 0.0,
                 iced::alignment::Horizontal::Left,
                 iced::alignment::Vertical::Center,
+                total_in_mm + text_pad_mm,
+                0.0,
             ),
         };
 
-        let stub_end = transform.to_screen_point(stub_wx, stub_wy);
+        // Perpendicular vector (rotate inward 90° CCW) for the body half-height.
+        let perpx = -iy;
+        let perpy = ix;
+        let half_h = pin_h_mm / 2.0;
+
+        let lx = pin.position.x;
+        let ly = pin.position.y;
+        let arr_x = lx + ix * arrow_len_mm;
+        let arr_y = ly + iy * arrow_len_mm;
+        let back_x = lx + ix * total_in_mm;
+        let back_y = ly + iy * total_in_mm;
+
+        // Pentagon: tip on edge → arrow shoulders → flat back inside.
+        let pts_world = [
+            (lx, ly),
+            (arr_x + perpx * half_h, arr_y + perpy * half_h),
+            (back_x + perpx * half_h, back_y + perpy * half_h),
+            (back_x - perpx * half_h, back_y - perpy * half_h),
+            (arr_x - perpx * half_h, arr_y - perpy * half_h),
+        ];
+
+        let path = canvas::Path::new(|b: &mut path::Builder| {
+            let p0 = transform.to_screen_point(pts_world[0].0, pts_world[0].1);
+            b.move_to(p0);
+            for &(x, y) in &pts_world[1..] {
+                b.line_to(transform.to_screen_point(x, y));
+            }
+            b.close();
+        });
+
+        frame.fill(&path, body_fill_color);
+        let sw = (transform.scale * 0.16).clamp(1.0, 2.0);
         frame.stroke(
-            &canvas::Path::line(pp, stub_end),
-            canvas::Stroke::default()
-                .with_color(body_color)
-                .with_width((transform.scale * 0.16).clamp(1.0, 2.0)),
+            &path,
+            canvas::Stroke::default().with_color(body_color).with_width(sw),
         );
 
-        let dot = canvas::Path::circle(pp, (transform.scale * 0.3).max(2.0));
-        frame.fill(&dot, body_color);
-
+        let text_anchor = transform.to_screen_point(lx + text_dx, ly + text_dy);
         draw_rich_text(
             frame,
             &pin.name,
-            iced::Point::new(pp.x + text_off_x, pp.y + text_off_y),
+            text_anchor,
             body_color,
             small_font,
             h_align,
