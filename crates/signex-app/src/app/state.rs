@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use signex_render::{LabelStyle, PowerPortStyle};
+use signex_render::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
 use signex_types::coord::Unit;
 use signex_types::project::ProjectData;
 use signex_types::theme::ThemeId;
@@ -37,6 +37,13 @@ pub struct UiState {
     pub right_width: f32,
     pub bottom_height: f32,
     pub window_size: (f32, f32),
+    /// OS-reported scale factor for the main window (1.0 at 100 %,
+    /// 1.25 at 125 %, 2.0 at 200 %, etc.). Populated on
+    /// `MainWindowOpened` and refreshed on every main-window resize,
+    /// which also fires when Windows moves the window to a different
+    /// monitor. Used to pick the 1×/2×/3× wordmark PNG so the brand
+    /// lockup stays 1:1 with device pixels.
+    pub main_window_scale: f32,
     pub panel_list_open: bool,
     pub preferences_open: bool,
     pub find_replace: crate::find_replace::FindReplaceState,
@@ -47,12 +54,22 @@ pub struct UiState {
     pub preferences_draft_power_port_style: PowerPortStyle,
     pub label_style: LabelStyle,
     pub preferences_draft_label_style: LabelStyle,
+    pub multisheet_style: MultisheetStyle,
+    pub preferences_draft_multisheet_style: MultisheetStyle,
+    pub grid_style: GridStyle,
+    pub preferences_draft_grid_style: GridStyle,
     pub preferences_dirty: bool,
     pub custom_theme: Option<signex_types::theme::CustomThemeFile>,
-    /// Index of a tab queued for close-confirmation because it has unsaved
-    /// edits. While `Some`, an overlay modal blocks other interaction with
-    /// Save / Discard / Cancel actions.
-    pub close_tab_confirm: Option<usize>,
+    /// Rename-sheet modal state. Opened from the Projects-panel tree
+    /// context menu; `None` when the modal is closed.
+    pub rename_dialog: Option<crate::app::RenameDialogState>,
+    /// Remove-from-project modal state (Delete / Exclude / Cancel).
+    pub remove_dialog: Option<crate::app::RemoveDialogState>,
+    /// "Close Project — Unsaved Edits" confirmation modal. `Some`
+    /// while the user is being asked to save / discard / cancel a
+    /// close request that intersects `dirty_paths`. Cleared on any
+    /// of the three button choices.
+    pub project_close_confirm: Option<crate::app::ProjectCloseConfirmState>,
     /// ERC results for the currently-visible sheet. Driven by the
     /// per-sheet cache below — switching tabs repoints this at the
     /// cached violations for that sheet, so markers and the Messages
@@ -233,7 +250,14 @@ pub enum ModalId {
     // header gets a drag hook.
     Preferences,
     FindReplace,
-    CloseTabConfirm,
+    /// Rename-sheet dialog (Projects-panel leaf → Rename...).
+    RenameDialog,
+    /// Remove-from-project dialog (Projects-panel leaf → Remove from Project).
+    RemoveDialog,
+    /// Print Preview / Export PDF unified modal (File → Print Preview, File → Export PDF).
+    PrintPreview,
+    /// BOM Export preview modal (File → Export → Bill of Materials…).
+    BomPreview,
 }
 
 /// Order in which symbols are visited during Annotate. Mirrors Altium's
@@ -248,6 +272,38 @@ pub enum AnnotateOrder {
     AcrossThenDown,
     /// Left-to-right within each row, bottom-to-top across rows.
     AcrossThenUp,
+}
+
+/// Opaque identifier for a loaded project in the workspace. Assigned by
+/// `DocumentState::next_project_id` on load and never reused, so stale
+/// references (e.g. a tab pointing at a closed project) resolve to `None`
+/// via `DocumentState::project_by_id` instead of silently aliasing another
+/// project.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct ProjectId(u32);
+
+impl ProjectId {
+    pub fn raw(self) -> u32 {
+        self.0
+    }
+}
+
+impl std::fmt::Display for ProjectId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "proj:{}", self.0)
+    }
+}
+
+/// One loaded project in the multi-project workspace. `path` is the
+/// canonical identity (`.kicad_pro` / `.snxprj` location on disk); `data`
+/// is the parsed project contents. Multiple projects with different
+/// `path`s coexist in `DocumentState.projects`; two identical `path`s
+/// at once is a loader bug (existing `open_project_file` de-dupes).
+#[derive(Debug, Clone)]
+pub struct LoadedProject {
+    pub id: ProjectId,
+    pub path: PathBuf,
+    pub data: ProjectData,
 }
 
 pub struct DocumentState {
@@ -267,14 +323,267 @@ pub struct DocumentState {
     /// no schematic tab is active (e.g. a PCB tab is active, or nothing
     /// is open).
     pub active_path: Option<PathBuf>,
-    pub project_path: Option<PathBuf>,
-    pub project_data: Option<ProjectData>,
+    /// Every loaded project in the workspace. Order = load order. First
+    /// project becomes active on load; subsequent opens append.
+    pub projects: Vec<LoadedProject>,
+    /// Which project is "active" for handlers that operate on the workspace
+    /// at large (ERC / annotate / export / save-all). Currently tracks the
+    /// most-recently-loaded project plus whichever project contains the
+    /// active tab; single source of truth for "where am I focused".
+    pub active_project: Option<ProjectId>,
+    /// Files with unsaved edits, keyed by absolute path. Tracks the
+    /// "Altium-style" project-scoped dirty state — a file stays in this
+    /// set after its tab is closed (the engine in `engines` keeps the
+    /// edited document) and clears when the file is saved or the
+    /// project's edits are explicitly discarded. Drives the red dot on
+    /// the Projects-panel tree row independently of `tab.dirty`, which
+    /// would otherwise lose the signal the moment the tab is closed.
+    pub dirty_paths: std::collections::HashSet<PathBuf>,
+    /// Monotonic counter used to mint `ProjectId` on load. Never reused —
+    /// closing a project does not free its id (tabs may hold stale refs,
+    /// which we detect by resolving through `projects` and treating None
+    /// as "no longer loaded").
+    pub next_project_id: u32,
     pub panel_ctx: crate::panels::PanelContext,
     pub kicad_lib_dir: Option<PathBuf>,
     pub loaded_lib: std::collections::HashMap<String, signex_types::schematic::LibSymbol>,
+    /// Print-preview overlay state. `Some` while the preview dialog is
+    /// open. Doubles as the unified PDF Export modal — `File → Export
+    /// PDF` and `File → Print Preview` both populate this field.
+    pub preview: Option<PreviewState>,
+    /// Pending PDF options stashed from the unified preview modal
+    /// while the file picker is running. Used by
+    /// `handle_export_pdf_finished` to apply user-selected options
+    /// instead of defaults. Cleared after export.
+    pub pending_pdf_options: Option<signex_output::PdfOptions>,
+    /// Companion to `pending_pdf_options` — sheet paths to include in
+    /// the export, copied from the preview's file picker. Empty set
+    /// (after a Clear) means "no files chosen" and the export is
+    /// rejected with a user-visible error. `None` means the preview
+    /// path was bypassed (legacy direct-export caller); the export
+    /// then includes every sheet by default.
+    pub pending_pdf_files: Option<std::collections::HashSet<PathBuf>>,
+    /// Pending BOM options stashed from the BOM preview modal while
+    /// the file picker is running. Without this, the user's column /
+    /// grouping / variant / include-DNP picks in the preview would
+    /// be dropped on export and the actual file would be a default
+    /// 6-column Grouped Base BOM. Cleared after export.
+    pub pending_bom_options: Option<signex_output::BomOptions>,
+    /// User-visible export error. `Some(msg)` while the error modal is shown.
+    /// Populated by ExportPdfFinished/ExportNetlistFinished when the export
+    /// itself (not the file dialog) fails. Cleared by DismissExportError.
+    pub export_error: Option<String>,
+    /// BOM preview state. `Some` while the BOM Export modal is open.
+    /// Mirrors the Print Preview pattern: the user adjusts grouping /
+    /// include flags / format / variant in the modal and clicks
+    /// Export to drive `rfd::AsyncFileDialog` with the chosen options.
+    pub bom_preview: Option<BomPreviewState>,
+}
+
+/// Which sidebar tab is currently shown inside the BOM preview's
+/// Properties panel — Altium-style General / Columns split.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BomSidebarTab {
+    General,
+    Columns,
+}
+
+/// Live BOM preview state — the rolled-up table for the active project
+/// plus the user-editable options that drive the next rollup. Re-rolled
+/// whenever an option toggle fires.
+pub struct BomPreviewState {
+    pub options: signex_output::BomOptions,
+    pub table: signex_output::BomTable,
+    /// Available variants for the active project. Reserved for the
+    /// variant picker dropdown — empty when no variants are defined.
+    /// Currently only seeded; the picker UI lands in v0.8.1.
+    #[allow(dead_code)]
+    pub variants: Vec<String>,
+    /// Active sort spec — `(column index in options.columns, ascending)`.
+    /// `None` = render rollup order (the default emit order from
+    /// `bom::rollup`). Click a header cell to set; click the same one
+    /// again to flip direction.
+    pub sort: Option<(usize, bool)>,
+    /// In-flight column drag — `Some(from_idx)` while the user is
+    /// holding the mouse down on a header cell. The header only
+    /// renders the drag highlight once the cursor has moved past
+    /// `column_drag_press_x` by at least the threshold (see
+    /// `view`); a quick press-and-release counts as a click and
+    /// the cell never lights up.
+    pub column_drag: Option<usize>,
+    /// Cursor x at the moment the column drag was armed. Compared
+    /// against `last_mouse_pos.0` in the view to decide whether
+    /// the press has graduated into an actual drag.
+    pub column_drag_press_x: Option<f32>,
+    /// Index of the column header currently under the cursor.
+    /// Tracked via on_enter/on_exit on each header cell so the
+    /// release handler (which fires on the press-source widget,
+    /// not the cursor target) can resolve where the drop landed.
+    pub column_hover: Option<usize>,
+    /// Per-column width overrides keyed by index in
+    /// `options.columns`. Populated as the user drags a header
+    /// resize handle; consulted by the width helper before falling
+    /// back to the per-`BomColumn` default. Cleared on close.
+    pub column_widths: std::collections::HashMap<usize, f32>,
+    /// In-flight column-resize state — `Some` while the user is
+    /// dragging a header's right-edge handle. `start_x` is the
+    /// global cursor x at press; `start_width` is the column's
+    /// width at press. Width updates each mouse-move tick are
+    /// computed against these baselines.
+    pub column_resize: Option<ColumnResizeState>,
+    /// Currently-shown tab inside the Properties sidebar.
+    pub sidebar_tab: BomSidebarTab,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ColumnResizeState {
+    pub idx: usize,
+    pub start_x: f32,
+    pub start_width: f32,
+}
+
+/// Tabs inside the unified Export PDF modal — Preview is the
+/// rasterised page view, Settings is the multi-section configuration
+/// panel (file picker, additional settings, structure settings).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PdfPreviewTab {
+    Preview,
+    Settings,
+}
+
+/// Output PDF resolution preset — Altium parity. Drives the Quality
+/// dropdown in the Settings tab. The export pipeline is vector-only
+/// today, so DPI only affects the *preview* rasterisation: a higher
+/// preset gives a sharper preview when you zoom in. The mapped DPI
+/// for the export-side `PdfOptions.dpi` is the picker label (72/300/
+/// 600) so future raster fallbacks (embedded images) get the user
+/// intent verbatim.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PdfQuality {
+    Draft72,
+    Medium300,
+    High600,
+}
+
+impl PdfQuality {
+    /// DPI used to rasterise the on-screen preview. Capped well below
+    /// the export label so an A4 page doesn't blow up to ~35 MB of
+    /// RGBA at 600 DPI.
+    pub fn preview_dpi(self) -> f64 {
+        match self {
+            PdfQuality::Draft72 => 72.0,
+            PdfQuality::Medium300 => 144.0,
+            PdfQuality::High600 => 200.0,
+        }
+    }
+
+    /// DPI written to `PdfOptions.dpi` at export time. Vector content
+    /// ignores this; future raster fallbacks (embedded images,
+    /// rasterised symbol bodies) honour the verbatim picker label.
+    pub fn export_dpi(self) -> f32 {
+        match self {
+            PdfQuality::Draft72 => 72.0,
+            PdfQuality::Medium300 => 300.0,
+            PdfQuality::High600 => 600.0,
+        }
+    }
+}
+
+impl std::fmt::Display for PdfQuality {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            PdfQuality::Draft72 => "Draft (72 dpi)",
+            PdfQuality::Medium300 => "Medium (300 dpi)",
+            PdfQuality::High600 => "High (600 dpi)",
+        };
+        f.write_str(s)
+    }
+}
+
+/// Open-print-preview state — rasterised pages + which one is currently
+/// shown full-size. Pages are produced by `signex_output::PreviewRasterizer`
+/// when the user invokes File → Print Preview (Ctrl+P).
+///
+/// **Single source of truth.** Every option that's also on
+/// `signex_output::PdfOptions` lives ONLY on `pdf_options`; the
+/// dispatcher mutates that struct directly so the rasterizer and
+/// exporter see one consistent view. Fields on this struct itself are
+/// the leftovers — UI presentation (active tab, quality enum), the
+/// rasterised pages, and pan/zoom interaction state.
+pub struct PreviewState {
+    pub pages: Vec<signex_output::PreviewPage>,
+    pub page_handles: Vec<iced::widget::image::Handle>,
+    pub selected: usize,
+    pub pdf_options: signex_output::PdfOptions,
+    pub specific_page_input: String,
+    /// Multiplicative zoom for the preview image. 1.0 = fit-to-viewport;
+    /// scroll wheel multiplies by `1.10`/`1/1.10`. Clamped to
+    /// `[Self::ZOOM_MIN, Self::ZOOM_MAX]` in the handler so very fast
+    /// wheel bursts can't blow the image up to gigabytes.
+    pub zoom: f32,
+    /// Currently-shown tab inside the Export PDF modal.
+    pub active_tab: PdfPreviewTab,
+    /// Pan offset in logical pixels — added to the image origin so the
+    /// user can drag a zoomed-in page around the viewport. Reset to
+    /// (0, 0) when zoom ≤ 1 (no pan needed) and on page change.
+    pub pan: (f32, f32),
+    /// In-flight pan drag — `Some((origin_pan, press_x, press_y))`
+    /// while the user is holding the mouse down on the preview
+    /// surface. Updated every move via the global mouse handler.
+    pub panning: Option<((f32, f32), f32, f32)>,
+    /// Files chosen for export from the active project's sheet list.
+    /// Empty = all files (default at open). When non-empty, only the
+    /// listed paths are rasterised + exported. Driven by the file
+    /// picker in the Settings tab.
+    pub selected_files: std::collections::HashSet<PathBuf>,
+    /// Available variants for the active project — drives the variant
+    /// picker dropdown options. The currently-selected value lives on
+    /// `pdf_options.variant`.
+    pub variants: Vec<String>,
+    /// Quality preset shown in the Settings tab dropdown. Mapped to
+    /// `pdf_options.dpi` at export time; the preview always rasterises
+    /// at 96 DPI for speed.
+    pub quality: PdfQuality,
+}
+
+impl PreviewState {
+    pub const ZOOM_MIN: f32 = 0.25;
+    pub const ZOOM_MAX: f32 = 6.0;
+    pub const ZOOM_STEP: f32 = 1.10;
 }
 
 impl DocumentState {
+    /// Mint a fresh `ProjectId` and bump the counter. Never reuses ids.
+    pub fn mint_project_id(&mut self) -> ProjectId {
+        let id = ProjectId(self.next_project_id);
+        self.next_project_id = self.next_project_id.wrapping_add(1);
+        id
+    }
+
+    pub fn project_by_id(&self, id: ProjectId) -> Option<&LoadedProject> {
+        self.projects.iter().find(|p| p.id == id)
+    }
+
+    pub fn project_by_id_mut(&mut self, id: ProjectId) -> Option<&mut LoadedProject> {
+        self.projects.iter_mut().find(|p| p.id == id)
+    }
+
+    /// Resolve the project that contains a file at this path. Used for
+    /// per-tab project scoping (tabs store a path, we resolve to the
+    /// project that parented them at load time).
+    pub fn project_for_path(&self, path: &std::path::Path) -> Option<&LoadedProject> {
+        let dir = path.parent()?;
+        self.projects
+            .iter()
+            .find(|p| p.path.parent() == Some(dir))
+    }
+
+    /// Convenience: currently-active project. Returns `None` when the
+    /// workspace is empty or no project has been made active yet.
+    pub fn active_loaded_project(&self) -> Option<&LoadedProject> {
+        self.active_project.and_then(|id| self.project_by_id(id))
+    }
+
     pub fn active_engine(&self) -> Option<&signex_engine::Engine> {
         self.engines.get(self.active_path.as_ref()?)
     }
@@ -361,9 +670,50 @@ pub struct InteractionState {
     pub draw_mode: DrawMode,
     pub editing_text: Option<TextEditState>,
     pub context_menu: Option<ContextMenuState>,
+    /// Projects-panel tree-view right-click menu state. Separate from
+    /// `context_menu` (canvas-scoped) because the two menus have no
+    /// overlap in actions and the canvas menu depends on placement /
+    /// selection state that does not exist in the panel context.
+    pub project_tree_context_menu: Option<crate::app::ProjectTreeContextMenuState>,
+    /// Document-tab right-click menu state. Anchored at the right-click
+    /// coordinates inside the tab strip; carries the index of the
+    /// clicked tab so per-tab actions ("Close [filename]") resolve
+    /// against the correct entry. Mutually exclusive with
+    /// `context_menu` and `project_tree_context_menu` — opening one
+    /// dismisses the others.
+    pub tab_context_menu: Option<crate::app::TabContextMenuState>,
+    /// Currently-expanded submenu inside the right-click context menu
+    /// (None when no submenu is shown). Always cleared when
+    /// `context_menu` becomes None.
+    pub context_submenu: Option<crate::app::ContextSubmenu>,
+    /// `(kind, hover_started_at)` for the submenu launcher the cursor
+    /// is currently hovering. The 50 ms hover-tick subscription opens
+    /// the submenu once `hover_started_at + 200 ms <= Instant::now()`,
+    /// matching the standard Altium / Windows menu delay.
+    pub pending_submenu: Option<(crate::app::ContextSubmenu, std::time::Instant)>,
+    /// Which submenu launcher row the cursor is currently over, or
+    /// `None`. Paired with `submenu_panel_hovered` to decide whether
+    /// the open submenu should stay visible.
+    pub submenu_launcher_hovered: Option<crate::app::ContextSubmenu>,
+    /// Whether the cursor is currently over the opened submenu panel.
+    pub submenu_panel_hovered: bool,
+    /// Timestamp of when *both* the launcher and the panel became
+    /// unhovered. The 50 ms tick closes the submenu once 150 ms has
+    /// elapsed, giving the user time to cross the gap between the two
+    /// zones without the menu collapsing mid-traversal.
+    pub submenu_unhovered_since: Option<std::time::Instant>,
     pub last_mouse_pos: (f32, f32),
     pub active_bar_menu: Option<crate::active_bar::ActiveBarMenu>,
     pub selection_filters: std::collections::HashSet<crate::active_bar::SelectionFilter>,
+    /// User-defined custom filter presets (capped at
+    /// `crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT`). Loaded from
+    /// `~/.config/signex/prefs.json` on launch and written back when
+    /// edited from the Properties panel.
+    pub custom_filter_presets: Vec<crate::active_bar::CustomFilterPreset>,
+    /// Index of the active preset tab in the Properties-panel editor.
+    /// Clamped to `0..custom_filter_presets.len()` whenever the list
+    /// changes; ignored entirely when the list is empty.
+    pub active_custom_filter_tab: usize,
     pub selection_slots: [Vec<signex_types::schematic::SelectedItem>; 8],
     pub last_tool: std::collections::HashMap<String, crate::active_bar::ActiveBarAction>,
     pub pending_power: Option<(String, String)>,
@@ -389,10 +739,7 @@ impl InteractionState {
     }
 
     #[allow(dead_code)]
-    pub fn canvas_for_window_mut(
-        &mut self,
-        window_id: iced::window::Id,
-    ) -> &mut SchematicCanvas {
+    pub fn canvas_for_window_mut(&mut self, window_id: iced::window::Id) -> &mut SchematicCanvas {
         // `get_mut` returns `Option<&mut V>`. Match rather than
         // `contains_key` + `get_mut().unwrap()` to avoid the double
         // lookup and the unwrap.

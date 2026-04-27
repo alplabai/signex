@@ -124,8 +124,11 @@ impl Signex {
         match request {
             selection_request::SelectionRequest::SelectAll => {
                 if let Some(snapshot) = self.active_render_snapshot() {
-                    self.interaction_state.active_canvas_mut().selected = all_selectable_items(snapshot);
-                    self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                    self.interaction_state.active_canvas_mut().selected =
+                        all_selectable_items(snapshot);
+                    self.interaction_state
+                        .active_canvas_mut()
+                        .clear_overlay_cache();
                     self.update_selection_info();
                 }
             }
@@ -144,7 +147,9 @@ impl Signex {
                         .map(|items| valid_selection_items(snapshot, items))
                         .unwrap_or_default();
                     self.interaction_state.active_canvas_mut().selected = recalled;
-                    self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                    self.interaction_state
+                        .active_canvas_mut()
+                        .clear_overlay_cache();
                     self.update_selection_info();
                 }
             }
@@ -155,7 +160,9 @@ impl Signex {
                     let filters = &self.interaction_state.selection_filters;
                     let hit = hit.filter(|h| passes_filter(h, snapshot, filters));
                     self.interaction_state.active_canvas_mut().selected = hit.into_iter().collect();
-                    self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                    self.interaction_state
+                        .active_canvas_mut()
+                        .clear_overlay_cache();
                     self.update_selection_info();
                 }
             }
@@ -171,7 +178,9 @@ impl Signex {
                         .into_iter()
                         .filter(|h| passes_filter(h, snapshot, &filters))
                         .collect();
-                    self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                    self.interaction_state
+                        .active_canvas_mut()
+                        .clear_overlay_cache();
                     self.update_selection_info();
                 }
             }
@@ -180,8 +189,11 @@ impl Signex {
                     let hit =
                         signex_render::schematic::hit_test::hit_test(snapshot, world_x, world_y);
                     if let Some(item) = hit {
-                        self.interaction_state.active_canvas_mut().selected = expand_to_net(snapshot, &item);
-                        self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                        self.interaction_state.active_canvas_mut().selected =
+                            expand_to_net(snapshot, &item);
+                        self.interaction_state
+                            .active_canvas_mut()
+                            .clear_overlay_cache();
                         self.update_selection_info();
                     }
                 }

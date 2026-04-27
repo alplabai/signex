@@ -40,6 +40,12 @@ fn selection_slot_from_key(key: &str) -> Option<usize> {
 
 impl Signex {
     pub(super) const CONTEXT_MENU_WIDTH: f32 = 248.0;
+    /// Default size of the unified Export PDF / Print Preview modal.
+    /// Both `view_print_preview` (in-window) and the detached-window
+    /// path read from these so resizing the modal happens in one
+    /// place instead of two duplicated literals.
+    pub(super) const PDF_MODAL_W: f32 = 1180.0;
+    pub(super) const PDF_MODAL_H: f32 = 760.0;
 
     pub fn new() -> (Self, Task<Message>) {
         // Default panel layout — restored from disk if a previous
@@ -65,7 +71,7 @@ impl Signex {
 
         let sch_canvas = SchematicCanvas::new();
         let pcb_canvas = crate::pcb_canvas::PcbCanvas::new();
-        let grid_size_mm = crate::canvas::grid::GRID_SIZES_MM[2]; // 2.54mm
+        let grid_size_mm = crate::canvas::grid::GRID_SIZES_MM[1]; // 1.27mm (Altium default, 50 mil)
         let kicad_lib_dir = helpers::find_kicad_symbols_dir();
         let mut kicad_libraries = kicad_lib_dir
             .as_deref()
@@ -85,7 +91,7 @@ impl Signex {
                 cursor_y: 0.0,
                 zoom: 100.0,
                 grid_size_mm,
-                visible_grid_mm: 2.54,
+                visible_grid_mm: 1.27,
                 snap_hotspots: true,
                 ui_font_name: crate::fonts::read_ui_font_pref(),
                 canvas_font_name: crate::fonts::DEFAULT_CANVAS_FONT.to_string(),
@@ -96,6 +102,7 @@ impl Signex {
                 right_width: 220.0,
                 bottom_height: 120.0,
                 window_size: (1400.0, 900.0),
+                main_window_scale: 1.0,
                 panel_list_open: false,
                 preferences_open: false,
                 find_replace: crate::find_replace::FindReplaceState::default(),
@@ -106,9 +113,15 @@ impl Signex {
                 preferences_draft_power_port_style: crate::fonts::read_power_port_style_pref(),
                 label_style: crate::fonts::read_label_style_pref(),
                 preferences_draft_label_style: crate::fonts::read_label_style_pref(),
+                multisheet_style: crate::fonts::read_multisheet_style_pref(),
+                preferences_draft_multisheet_style: crate::fonts::read_multisheet_style_pref(),
+                grid_style: crate::fonts::read_grid_style_pref(),
+                preferences_draft_grid_style: crate::fonts::read_grid_style_pref(),
                 preferences_dirty: false,
                 custom_theme: None,
-                close_tab_confirm: None,
+                rename_dialog: None,
+                remove_dialog: None,
+                project_close_confirm: None,
                 erc_violations: Vec::new(),
                 erc_violations_by_path: std::collections::HashMap::new(),
                 erc_focus_global_index: None,
@@ -143,13 +156,12 @@ impl Signex {
                 active_tab: 0,
                 engines: std::collections::HashMap::new(),
                 active_path: None,
-                project_path: None,
-                project_data: None,
+                projects: Vec::new(),
+                active_project: None,
+                dirty_paths: std::collections::HashSet::new(),
+                next_project_id: 0,
                 panel_ctx: crate::panels::PanelContext {
-                    project_name: None,
-                    project_file: None,
-                    pcb_file: None,
-                    sheets: vec![],
+                    projects: Vec::new(),
                     sym_count: 0,
                     wire_count: 0,
                     label_count: 0,
@@ -162,11 +174,12 @@ impl Signex {
                     lib_symbol_names: vec![],
                     placed_symbols: vec![],
                     tokens: signex_types::theme::theme_tokens(ThemeId::Signex),
+                    theme_id: ThemeId::Signex,
                     unit: Unit::Mm,
                     grid_visible: true,
                     snap_enabled: true,
-                    grid_size_mm: 2.54,
-                    visible_grid_mm: 2.54,
+                    grid_size_mm: 1.27,
+                    visible_grid_mm: 1.27,
                     snap_hotspots: true,
                     ui_font_name: crate::fonts::read_ui_font_pref(),
                     canvas_font_name: crate::fonts::DEFAULT_CANVAS_FONT.to_string(),
@@ -190,6 +203,12 @@ impl Signex {
                     drawing_edit_buf: std::collections::HashMap::new(),
                     drawing_edit_buf_for: None,
                     selected_drawing: None,
+                    selected_child_sheet: None,
+                    child_sheet_border_picker_open: false,
+                    child_sheet_fill_picker_open: false,
+                    child_sheet_border_advanced_open: false,
+                    child_sheet_fill_advanced_open: false,
+                    child_sheet_stroke_width_buf: None,
                     component_filter: String::new(),
                     collapsed_sections: std::collections::HashSet::new(),
                     pre_placement: None,
@@ -201,6 +220,8 @@ impl Signex {
                         .iter()
                         .copied()
                         .collect(),
+                    custom_filter_presets: crate::fonts::read_custom_filter_presets(),
+                    active_custom_filter_tab: 0,
                     page_format_mode: crate::panels::PageFormatMode::default(),
                     margin_vertical: 1,
                     margin_horizontal: 1,
@@ -211,6 +232,12 @@ impl Signex {
                 },
                 kicad_lib_dir,
                 loaded_lib: std::collections::HashMap::new(),
+                preview: None,
+                pending_pdf_options: None,
+                pending_pdf_files: None,
+                pending_bom_options: None,
+                export_error: None,
+                bom_preview: None,
             },
             interaction_state: InteractionState {
                 current_tool: Tool::Select,
@@ -237,12 +264,21 @@ impl Signex {
                 draw_mode: DrawMode::default(),
                 editing_text: None,
                 context_menu: None,
+                project_tree_context_menu: None,
+                tab_context_menu: None,
+                context_submenu: None,
+                pending_submenu: None,
+                submenu_launcher_hovered: None,
+                submenu_panel_hovered: false,
+                submenu_unhovered_since: None,
                 last_mouse_pos: (0.0, 0.0),
                 active_bar_menu: None,
                 selection_filters: crate::active_bar::SelectionFilter::ALL
                     .iter()
                     .copied()
                     .collect(),
+                custom_filter_presets: crate::fonts::read_custom_filter_presets(),
+                active_custom_filter_tab: 0,
                 selection_slots: std::array::from_fn(|_| Vec::new()),
                 last_tool: std::collections::HashMap::new(),
                 pending_power: None,
@@ -257,6 +293,8 @@ impl Signex {
         );
         signex_render::set_power_port_style(app.ui_state.power_port_style);
         signex_render::set_label_style(app.ui_state.label_style);
+        signex_render::set_multisheet_style(app.ui_state.multisheet_style);
+        signex_render::set_grid_style(app.ui_state.grid_style);
 
         // Multi-window (Phase 1): open the main OS window here. Phase 2
         // will open additional windows on demand when the user drags a
@@ -345,6 +383,18 @@ impl Signex {
                     warning: iced::Color::from_rgb(0.91, 0.57, 0.18),
                 },
             ),
+            ThemeId::Alplab => Theme::custom(
+                "Alp Lab".to_string(),
+                iced::theme::Palette {
+                    background: iced::Color::from_rgb(0.18, 0.18, 0.19),
+                    text: iced::Color::from_rgb(0.86, 0.86, 0.86),
+                    // Alp Lab cyan #0891b2 as primary accent.
+                    primary: iced::Color::from_rgb(0.031, 0.569, 0.698),
+                    success: iced::Color::from_rgb(0.34, 0.65, 0.29),
+                    danger: iced::Color::from_rgb(0.96, 0.31, 0.31),
+                    warning: iced::Color::from_rgb(0.91, 0.57, 0.18),
+                },
+            ),
             ThemeId::GitHubDark => Theme::custom(
                 "GitHub Dark".to_string(),
                 iced::theme::Palette {
@@ -387,6 +437,14 @@ impl Signex {
                     }
                     (keyboard::Key::Character(c), m) if c == "p" && !m.command() => {
                         Message::Tool(ToolMessage::SelectTool(Tool::Component))
+                    }
+                    // Ctrl+P: Print Preview
+                    (keyboard::Key::Character(c), m) if c == "p" && m.command() && !m.shift() => {
+                        Message::PrintPreviewRequested
+                    }
+                    // Ctrl+Shift+P: Export PDF options dialog
+                    (keyboard::Key::Character(c), m) if c == "P" && m.command() && m.shift() => {
+                        Message::ExportPdfOpenDialog
                     }
                     // Ctrl+, open Preferences
                     (keyboard::Key::Character(c), m) if c == "," && m.command() => {
@@ -600,6 +658,21 @@ impl Signex {
         let window_resize = iced::window::resize_events()
             .map(|(id, size)| Message::WindowResizedFor(id, size.width, size.height));
 
-        Subscription::batch([kbd, mouse_sub, window_close, window_resize])
+        // Hover-open timer for the right-click context-menu submenus.
+        // Active while ANY menu that owns submenus is open — canvas
+        // right-click, project-tree right-click, or document-tab
+        // right-click. The dispatcher checks `pending_submenu`'s
+        // elapsed time on each tick.
+        let any_menu_open = self.interaction_state.context_menu.is_some()
+            || self.interaction_state.project_tree_context_menu.is_some()
+            || self.interaction_state.tab_context_menu.is_some();
+        let hover_tick = if any_menu_open {
+            iced::time::every(std::time::Duration::from_millis(50))
+                .map(|_| Message::TickContextSubmenuHover)
+        } else {
+            Subscription::none()
+        };
+
+        Subscription::batch([kbd, mouse_sub, window_close, window_resize, hover_tick])
     }
 }

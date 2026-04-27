@@ -35,6 +35,87 @@ pub fn panel_region(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style
     }
 }
 
+/// 1 px horizontal divider that sits between two strips of chrome —
+/// used between the menu/Active-Bar row and the document tab strip
+/// so the two zones read as separate UI bands.
+pub fn chrome_separator(
+    tokens: &ThemeTokens,
+) -> impl Fn(&Theme) -> container::Style + 'static {
+    let border = ti(tokens.border);
+    move |_| container::Style {
+        background: Some(Background::Color(border)),
+        ..container::Style::default()
+    }
+}
+
+/// Pill geometry shared between the document tab bar and the panel
+/// tab strip: top-only rounded corners, no bottom border (iced 0.14
+/// can't draw per-side borders, so the outer accent strip + tab bg
+/// fill stand in for the missing top/side divider). Output is a
+/// closure suitable for `container.style(...)`.
+///
+/// `is_active`, `is_hovered`, `is_dragging` drive the fill colour:
+///   - dragging → 22 % alpha tint of the theme accent
+///   - active   → `tokens.hover` (full alpha)
+///   - hovered  → `tokens.hover` × 0.70 alpha
+///   - default  → `tokens.hover` × 0.35 alpha
+pub fn tab_pill(
+    tokens: &ThemeTokens,
+    is_active: bool,
+    is_dragging: bool,
+    is_hovered: bool,
+) -> impl Fn(&Theme) -> container::Style + 'static {
+    let tab_active = ti(tokens.hover);
+    let accent = ti(tokens.accent);
+    let inactive_fill = iced::Color {
+        a: tab_active.a * 0.35,
+        ..tab_active
+    };
+    let hover_fill = iced::Color {
+        a: tab_active.a * 0.70,
+        ..tab_active
+    };
+    let drag_fill = iced::Color { a: 0.22, ..accent };
+    move |_: &Theme| container::Style {
+        background: Some(Background::Color(if is_dragging {
+            drag_fill
+        } else if is_active {
+            tab_active
+        } else if is_hovered {
+            hover_fill
+        } else {
+            inactive_fill
+        })),
+        // No border (the bottom edge would otherwise draw across
+        // the underline). Top-only radius gives the pill a subtle
+        // chrome lift without rounding into the underline strip.
+        border: Border {
+            width: 0.0,
+            radius: iced::border::Radius::default()
+                .top_left(3.0)
+                .top_right(3.0),
+            color: Color::TRANSPARENT,
+        },
+        ..container::Style::default()
+    }
+}
+
+/// Outer accent-line wrapper for a tab pill: a 2 px high strip whose
+/// background is the accent colour (active) or transparent (inactive).
+/// Pair with `tab_pill` via a 2 px bottom padding on the wrapping
+/// container so the strip peeks below the pill as the active marker.
+pub fn tab_pill_underline(
+    tokens: &ThemeTokens,
+    is_active: bool,
+) -> impl Fn(&Theme) -> container::Style + 'static {
+    let accent = ti(tokens.accent);
+    let line = if is_active { accent } else { Color::TRANSPARENT };
+    move |_: &Theme| container::Style {
+        background: Some(Background::Color(line)),
+        ..container::Style::default()
+    }
+}
+
 /// Toolbar / menu bar strip
 pub fn toolbar_strip(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 'static {
     let bg = ti(tokens.toolbar_bg);
@@ -46,6 +127,58 @@ pub fn toolbar_strip(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Styl
         border: Border {
             width: 0.0,
             radius: 0.0.into(),
+            color: border,
+        },
+        ..container::Style::default()
+    }
+}
+
+/// Modal header strip — same toolbar bg as `toolbar_strip` but with a
+/// top-only rounded radius matching `MODAL_CORNER_RADIUS`. Without
+/// this, the modal's outer 8 px rounded border is visually masked by
+/// the header's own rectangular background filling into the corners
+/// (iced's `Container::clip(true)` clips to the bounds rectangle, not
+/// the rounded path).
+pub fn modal_header_strip(
+    tokens: &ThemeTokens,
+) -> impl Fn(&Theme) -> container::Style + 'static {
+    let bg = ti(tokens.toolbar_bg);
+    let text = ti(tokens.text);
+    let border = ti(tokens.border);
+    move |_| container::Style {
+        background: Some(bg.into()),
+        text_color: Some(text),
+        border: Border {
+            width: 0.0,
+            radius: iced::border::Radius::default()
+                .top_left(MODAL_CORNER_RADIUS)
+                .top_right(MODAL_CORNER_RADIUS),
+            color: border,
+        },
+        ..container::Style::default()
+    }
+}
+
+/// Modal footer strip — mirrors `modal_header_strip` for the bottom
+/// of a modal: same toolbar bg, BL+BR rounded radius matching
+/// `MODAL_CORNER_RADIUS`. Apply to the very bottom container of a
+/// modal that's wider than the body padding (button rows, status
+/// rows) so the rectangular bg doesn't paint into the modal's
+/// rounded bottom corners.
+pub fn modal_footer_strip(
+    tokens: &ThemeTokens,
+) -> impl Fn(&Theme) -> container::Style + 'static {
+    let bg = ti(tokens.toolbar_bg);
+    let text = ti(tokens.text);
+    let border = ti(tokens.border);
+    move |_| container::Style {
+        background: Some(bg.into()),
+        text_color: Some(text),
+        border: Border {
+            width: 0.0,
+            radius: iced::border::Radius::default()
+                .bottom_left(MODAL_CORNER_RADIUS)
+                .bottom_right(MODAL_CORNER_RADIUS),
             color: border,
         },
         ..container::Style::default()
@@ -155,6 +288,36 @@ pub fn context_menu(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style
     }
 }
 
+/// Corner radius shared by every modal card — sized to match the
+/// Windows 11 OS-window rounding so the modal chrome reads as a
+/// continuation of the app shell, not a separate panel.
+pub const MODAL_CORNER_RADIUS: f32 = 8.0;
+
+/// Modal-card surface — same panel/text/border palette as
+/// `context_menu`, but with a wider corner radius matching the
+/// OS chrome. Used by every modal so the rounding stays in step
+/// with the surrounding window shell.
+pub fn modal_card(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 'static {
+    let bg = ti(tokens.paper);
+    let text = ti(tokens.text);
+    let border = ti(tokens.border);
+    move |_| container::Style {
+        background: Some(bg.into()),
+        text_color: Some(text),
+        border: Border {
+            width: 1.0,
+            radius: MODAL_CORNER_RADIUS.into(),
+            color: border,
+        },
+        shadow: iced::Shadow {
+            color: Color::from_rgba(0.0, 0.0, 0.0, 0.4),
+            offset: iced::Vector::new(2.0, 3.0),
+            blur_radius: 12.0,
+        },
+        ..container::Style::default()
+    }
+}
+
 /// Floating panel title bar
 pub fn floating_title_bar(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 'static {
     let bg = ti(tokens.paper);
@@ -231,6 +394,7 @@ pub fn dock_tab_container_dragging(
     tokens: &ThemeTokens,
     is_active: bool,
     is_dragging: bool,
+    is_hovered: bool,
 ) -> impl Fn(&Theme) -> container::Style + 'static {
     let tab_active = ti(tokens.hover);
     let border_c = ti(tokens.border);
@@ -239,12 +403,21 @@ pub fn dock_tab_container_dragging(
         a: tab_active.a * 0.35,
         ..tab_active
     };
+    // Hover fill sits between inactive and active so hovering an
+    // inactive tab reads as a lift without being confused with the
+    // selected tab. Matches Altium's subtle tab hover.
+    let hover_fill = iced::Color {
+        a: tab_active.a * 0.70,
+        ..tab_active
+    };
     let drag_fill = iced::Color { a: 0.22, ..accent };
     move |_: &Theme| container::Style {
         background: Some(Background::Color(if is_dragging {
             drag_fill
         } else if is_active {
             tab_active
+        } else if is_hovered {
+            hover_fill
         } else {
             inactive_fill
         })),

@@ -44,18 +44,16 @@ impl Engine {
                     .iter()
                     .any(|sheet_pin| sheet_pin.uuid == item.uuid)
             }),
-            SelectedKind::Drawing => {
-                self.document.drawings.iter().any(|d| {
-                    let u = match d {
-                        SchDrawing::Line { uuid, .. }
-                        | SchDrawing::Rect { uuid, .. }
-                        | SchDrawing::Circle { uuid, .. }
-                        | SchDrawing::Arc { uuid, .. }
-                        | SchDrawing::Polyline { uuid, .. } => *uuid,
-                    };
-                    u == item.uuid
-                })
-            }
+            SelectedKind::Drawing => self.document.drawings.iter().any(|d| {
+                let u = match d {
+                    SchDrawing::Line { uuid, .. }
+                    | SchDrawing::Rect { uuid, .. }
+                    | SchDrawing::Circle { uuid, .. }
+                    | SchDrawing::Arc { uuid, .. }
+                    | SchDrawing::Polyline { uuid, .. } => *uuid,
+                };
+                u == item.uuid
+            }),
             _ => false,
         }
     }
@@ -205,9 +203,7 @@ impl Engine {
                             (c.position.x, c.position.y, c.size.0, c.size.1)
                         };
                         let pin = &mut self.document.child_sheets[child_idx].pins[pin_idx];
-                        super::sheet::lock_sheet_pin_to_child_edge(
-                            pin, dx, dy, cx, cy, cw, ch,
-                        );
+                        super::sheet::lock_sheet_pin_to_child_edge(pin, dx, dy, cx, cy, cw, ch);
                         pin.user_moved = true;
                         return true;
                     }
@@ -314,14 +310,52 @@ impl Engine {
 
     pub(super) fn rotate_selected_item(&mut self, item: &SelectedItem, angle_degrees: f64) -> bool {
         match item.kind {
-            SelectedKind::Symbol => self
+            SelectedKind::Symbol => {
+                let lib_symbols = &self.document.lib_symbols.clone();
+                self.document
+                    .symbols
+                    .iter_mut()
+                    .find(|symbol| symbol.uuid == item.uuid)
+                    .map(|symbol| {
+                        symbol.rotation = (symbol.rotation + angle_degrees).rem_euclid(360.0);
+                        if let Some(lib) = lib_symbols.get(&symbol.lib_id) {
+                            autoplace_fields(symbol, lib);
+                        }
+                        true
+                    })
+                    .unwrap_or(false)
+            }
+            SelectedKind::SymbolRefField => self
                 .document
                 .symbols
                 .iter_mut()
                 .find(|symbol| symbol.uuid == item.uuid)
                 .map(|symbol| {
-                    symbol.rotation = (symbol.rotation + angle_degrees) % 360.0;
-                    true
+                    if let Some(ref mut ref_text) = symbol.ref_text {
+                        ref_text.rotation =
+                            (ref_text.rotation + angle_degrees).rem_euclid(360.0);
+                        // Manual field rotation overrides KiCad's autoplace.
+                        symbol.fields_autoplaced = false;
+                        true
+                    } else {
+                        false
+                    }
+                })
+                .unwrap_or(false),
+            SelectedKind::SymbolValField => self
+                .document
+                .symbols
+                .iter_mut()
+                .find(|symbol| symbol.uuid == item.uuid)
+                .map(|symbol| {
+                    if let Some(ref mut val_text) = symbol.val_text {
+                        val_text.rotation =
+                            (val_text.rotation + angle_degrees).rem_euclid(360.0);
+                        symbol.fields_autoplaced = false;
+                        true
+                    } else {
+                        false
+                    }
                 })
                 .unwrap_or(false),
             _ => false,
@@ -330,22 +364,288 @@ impl Engine {
 
     pub(super) fn mirror_selected_item(&mut self, item: &SelectedItem, axis: MirrorAxis) -> bool {
         match item.kind {
-            SelectedKind::Symbol => self
-                .document
-                .symbols
-                .iter_mut()
-                .find(|symbol| symbol.uuid == item.uuid)
-                .map(|symbol| {
-                    match axis {
-                        MirrorAxis::Horizontal => symbol.mirror_y = !symbol.mirror_y,
-                        MirrorAxis::Vertical => symbol.mirror_x = !symbol.mirror_x,
-                    }
-                    true
-                })
-                .unwrap_or(false),
+            SelectedKind::Symbol => {
+                let lib_symbols = &self.document.lib_symbols.clone();
+                self.document
+                    .symbols
+                    .iter_mut()
+                    .find(|symbol| symbol.uuid == item.uuid)
+                    .map(|symbol| {
+                        match axis {
+                            MirrorAxis::Horizontal => symbol.mirror_y = !symbol.mirror_y,
+                            MirrorAxis::Vertical => symbol.mirror_x = !symbol.mirror_x,
+                        }
+                        if let Some(lib) = lib_symbols.get(&symbol.lib_id) {
+                            autoplace_fields(symbol, lib);
+                        }
+                        true
+                    })
+                    .unwrap_or(false)
+            }
             _ => false,
         }
     }
+}
+
+/// Reposition the visible Reference and Value fields on the side of the
+/// symbol body with the fewest pins, mirroring KiCad's `AutoplaceFields`
+/// behaviour. Fields are stacked vertically and given a justify/rotation
+/// that always renders horizontally.
+/// Re-run autoplace on every symbol whose `fields_autoplaced` flag is set.
+///
+/// Kept available for callers that want to migrate stale layouts; not
+/// invoked automatically because KiCad-saved layouts already match
+/// KiCad's autoplace output and re-running ours can shift them.
+pub fn autoplace_all_marked_fields(document: &mut signex_types::schematic::SchematicSheet) {
+    let lib_symbols = document.lib_symbols.clone();
+    for symbol in &mut document.symbols {
+        if !symbol.fields_autoplaced {
+            continue;
+        }
+        if let Some(lib) = lib_symbols.get(&symbol.lib_id) {
+            autoplace_fields(symbol, lib);
+        }
+    }
+}
+
+fn autoplace_fields(symbol: &mut signex_types::schematic::Symbol, lib: &signex_types::schematic::LibSymbol) {
+    use signex_types::schematic::{HAlign, VAlign};
+
+    // 1a. Body bbox in world space (graphics only). Used as the geometric
+    //     reference for pin-side classification — its centre is the natural
+    //     pivot, just like KiCad's `SCH_SYMBOL::GetBodyBoundingBox()`.
+    let mut body_bbox: Option<(f64, f64, f64, f64)> = None;
+    let extend = |bbox: &mut Option<(f64, f64, f64, f64)>, x: f64, y: f64| match bbox {
+        None => *bbox = Some((x, y, x, y)),
+        Some((lx, ly, hx, hy)) => {
+            if x < *lx { *lx = x; }
+            if y < *ly { *ly = y; }
+            if x > *hx { *hx = x; }
+            if y > *hy { *hy = y; }
+        }
+    };
+    for g in &lib.graphics {
+        if g.unit != 0 && g.unit != symbol.unit {
+            continue;
+        }
+        let pts = graphic_extent_points(&g.graphic);
+        for (lx, ly) in pts {
+            let (wx, wy) = transform_local_point(symbol, lx, ly);
+            extend(&mut body_bbox, wx, wy);
+        }
+    }
+    let body = body_bbox.unwrap_or((
+        symbol.position.x - 1.27,
+        symbol.position.y - 1.27,
+        symbol.position.x + 1.27,
+        symbol.position.y + 1.27,
+    ));
+    let (body_min_x, body_min_y, body_max_x, body_max_y) = body;
+    let body_cx = (body_min_x + body_max_x) * 0.5;
+    let body_cy = (body_min_y + body_max_y) * 0.5;
+
+    // 1b. Outer bbox = body + visible pin endpoints. This is the same
+    //     rectangle the selection overlay shows, and the autoplace anchors
+    //     here so fields sit just past the pin extents.
+    let mut outer_bbox = body_bbox;
+    for p in &lib.pins {
+        if p.unit != 0 && p.unit != symbol.unit {
+            continue;
+        }
+        if !p.pin.visible {
+            continue;
+        }
+        let rad = p.pin.rotation.to_radians();
+        let (sx, sy) = (p.pin.position.x, p.pin.position.y);
+        let (ex, ey) = (sx + p.pin.length * rad.cos(), sy + p.pin.length * rad.sin());
+        for (lx, ly) in [(sx, sy), (ex, ey)] {
+            let (wx, wy) = transform_local_point(symbol, lx, ly);
+            extend(&mut outer_bbox, wx, wy);
+        }
+    }
+    let (min_x, min_y, max_x, max_y) = outer_bbox.unwrap_or(body);
+    let cx = (min_x + max_x) * 0.5;
+    let cy = (min_y + max_y) * 0.5;
+
+    // 2. Count pins on each side by the world-space position of each pin's
+    //    connection point relative to the body bbox centre. Using the body
+    //    centre (not the outer centre) keeps the classification independent
+    //    of the pin lengths the user happens to have, matching KiCad's
+    //    AutoplaceFields side-selection.
+    let (mut pins_right, mut pins_left, mut pins_top, mut pins_bottom) = (0u32, 0u32, 0u32, 0u32);
+    for p in &lib.pins {
+        if p.unit != 0 && p.unit != symbol.unit {
+            continue;
+        }
+        let (wx, wy) = transform_local_point(symbol, p.pin.position.x, p.pin.position.y);
+        let dx = wx - body_cx;
+        let dy = wy - body_cy;
+        if dx.abs() >= dy.abs() {
+            if dx >= 0.0 { pins_right += 1; } else { pins_left += 1; }
+        } else if dy >= 0.0 {
+            pins_bottom += 1;
+        } else {
+            pins_top += 1;
+        }
+    }
+
+    // 3. Pick the side with the fewest pins. Ties resolved Right > Left > Top > Bottom
+    //    to match KiCad's preference for horizontal placement.
+    #[derive(Clone, Copy)]
+    enum Side { Right, Left, Top, Bottom }
+    let candidates = [
+        (Side::Right, pins_right, 0),
+        (Side::Left, pins_left, 1),
+        (Side::Top, pins_top, 2),
+        (Side::Bottom, pins_bottom, 3),
+    ];
+    let side = candidates
+        .iter()
+        .min_by(|a, b| a.1.cmp(&b.1).then(a.2.cmp(&b.2)))
+        .map(|(s, _, _)| *s)
+        .unwrap_or(Side::Right);
+
+    // 4. Collect visible fields in stacking order: Reference first, Value second.
+    let mut fields: Vec<&mut signex_types::schematic::TextProp> = Vec::new();
+    if let Some(rt) = symbol.ref_text.as_mut()
+        && !rt.hidden
+    {
+        fields.push(rt);
+    }
+    if let Some(vt) = symbol.val_text.as_mut()
+        && !vt.hidden
+    {
+        fields.push(vt);
+    }
+    if fields.is_empty() {
+        symbol.fields_autoplaced = true;
+        return;
+    }
+
+    // 5. Anchor and per-field justify. Fields are always stacked vertically.
+    //    `line_height` is roughly KiCad's 1.6 * text_size; using the first
+    //    visible field's font size keeps it scale-correct.
+    //
+    //    Justify-V is chosen so the field block sits cleanly outside the
+    //    body: VAlign::Top below the body grows downward from the anchor,
+    //    VAlign::Bottom above the body grows upward, and Center is used
+    //    on horizontal sides where the block straddles cy symmetrically.
+    let font_size = fields[0].font_size.max(0.1);
+    let line_height = font_size * 1.6;
+    // KiCad's AutoplaceFields keeps roughly two text-heights of clearance
+    // between the body bbox and the closest field so the stack visibly
+    // separates from the symbol. A single text-height was still cramped
+    // compared to KiCad's reference rendering.
+    let margin = (font_size * 2.0).max(1.016);
+    let n = fields.len() as f64;
+
+    let (anchor_x, anchor_y_first, justify_h, justify_v): (f64, f64, HAlign, VAlign) = match side {
+        Side::Right => (
+            max_x + margin,
+            cy - (n - 1.0) * line_height * 0.5,
+            HAlign::Left,
+            VAlign::Center,
+        ),
+        Side::Left => (
+            min_x - margin,
+            cy - (n - 1.0) * line_height * 0.5,
+            HAlign::Right,
+            VAlign::Center,
+        ),
+        Side::Top => (
+            cx,
+            min_y - margin - (n - 1.0) * line_height,
+            HAlign::Center,
+            VAlign::Bottom,
+        ),
+        Side::Bottom => (cx, max_y + margin, HAlign::Center, VAlign::Top),
+    };
+
+    // 6. Field rotation follows KiCad's AutoplaceFields convention:
+    //    horizontal text is achieved by writing 90° when the symbol is
+    //    rotated 90°/270° (because KiCad's GetDrawRotation toggles), and
+    //    0° otherwise. The renderer reads this with the same toggle, and
+    //    KiCad opens the saved file rendering the text horizontally.
+    let sym_rot = symbol.rotation.rem_euclid(360.0).round() as i32;
+    let field_rotation = if matches!(sym_rot, 90 | 270) { 90.0 } else { 0.0 };
+
+    for (i, prop) in fields.iter_mut().enumerate() {
+        prop.position.x = anchor_x;
+        prop.position.y = anchor_y_first + i as f64 * line_height;
+        prop.justify_h = justify_h;
+        prop.justify_v = justify_v;
+        prop.rotation = field_rotation;
+    }
+
+    symbol.fields_autoplaced = true;
+}
+
+/// Apply a symbol instance's position, rotation, and mirror to a local
+/// library-space point, returning the world-space coordinates. Mirrors
+/// `signex_render::instance_transform`'s convention so engine geometry
+/// matches the renderer.
+fn transform_local_point(sym: &signex_types::schematic::Symbol, lx: f64, ly: f64) -> (f64, f64) {
+    let x = lx;
+    let y = -ly; // library Y-up → schematic Y-down
+    let rad = -sym.rotation.to_radians();
+    let cos = rad.cos();
+    let sin = rad.sin();
+    let mut rx = x * cos - y * sin;
+    let mut ry = x * sin + y * cos;
+    if sym.mirror_y {
+        rx = -rx;
+    }
+    if sym.mirror_x {
+        ry = -ry;
+    }
+    (rx + sym.position.x, ry + sym.position.y)
+}
+
+/// Return all extreme points of a library graphic for bounding-box
+/// computation. For closed shapes this returns the corners; for open
+/// shapes the vertices.
+fn graphic_extent_points(g: &signex_types::schematic::Graphic) -> Vec<(f64, f64)> {
+    use signex_types::schematic::Graphic;
+    match g {
+        Graphic::Polyline { points, .. } | Graphic::Bezier { points, .. } => {
+            points.iter().map(|p| (p.x, p.y)).collect()
+        }
+        Graphic::Rectangle { start, end, .. } => vec![
+            (start.x, start.y),
+            (end.x, start.y),
+            (end.x, end.y),
+            (start.x, end.y),
+        ],
+        Graphic::Circle { center, radius, .. } => vec![
+            (center.x - *radius, center.y - *radius),
+            (center.x + *radius, center.y - *radius),
+            (center.x - *radius, center.y + *radius),
+            (center.x + *radius, center.y + *radius),
+        ],
+        Graphic::Arc { start, mid, end, .. } => {
+            vec![(start.x, start.y), (mid.x, mid.y), (end.x, end.y)]
+        }
+        Graphic::Text { position, .. } | Graphic::TextBox { position, .. } => {
+            vec![(position.x, position.y)]
+        }
+    }
+}
+
+/// Rotate `(x, y)` around `(cx, cy)` by `angle_deg` using the same screen
+/// convention as `signex_render::instance_transform` (Y-down schematic
+/// coordinates, positive `angle_deg` = visual CCW rotation as seen by the
+/// user, matching KiCad's rotate command).
+///
+/// In a Y-down coordinate space the standard rotation matrix gives a visual
+/// CW rotation, so we negate the angle to recover the expected visual CCW.
+#[allow(dead_code)]
+fn rotate_point_around(x: f64, y: f64, cx: f64, cy: f64, angle_deg: f64) -> (f64, f64) {
+    let rx = x - cx;
+    let ry = y - cy;
+    let rad = -angle_deg.to_radians();
+    let cos = rad.cos();
+    let sin = rad.sin();
+    (cx + rx * cos - ry * sin, cy + rx * sin + ry * cos)
 }
 
 // ---------------------------------------------------------------------------
