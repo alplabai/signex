@@ -323,13 +323,25 @@ pub fn draw_child_sheet(
 
         // Inward unit vector (into the sheet) and label placement that puts
         // the text inside the sheet, hugging the flat back of the pentagon.
-        let (ix, iy, h_align, v_align, text_dx, text_dy): (
+        // For top / bottom pins the label is rotated 90° so it reads
+        // vertically along the inward direction — otherwise long names
+        // overlap each other on closely-spaced pins (Altium convention).
+        let (
+            ix,
+            iy,
+            h_align,
+            v_align,
+            text_dx,
+            text_dy,
+            label_rotation_rad,
+        ): (
             f64,
             f64,
             iced::alignment::Horizontal,
             iced::alignment::Vertical,
             f64,
             f64,
+            f32,
         ) = match rot {
             0 => (
                 // pin on RIGHT edge, body extends LEFT into sheet
@@ -339,24 +351,29 @@ pub fn draw_child_sheet(
                 iced::alignment::Vertical::Center,
                 -(total_in_mm + text_pad_mm),
                 0.0,
+                0.0,
             ),
             90 => (
-                // pin on TOP edge, body extends DOWN into sheet
+                // pin on TOP edge, body extends DOWN into sheet — vertical
+                // label reads top-to-bottom (edge → into sheet).
                 0.0,
                 1.0,
-                iced::alignment::Horizontal::Center,
-                iced::alignment::Vertical::Top,
+                iced::alignment::Horizontal::Left,
+                iced::alignment::Vertical::Center,
                 0.0,
                 total_in_mm + text_pad_mm,
+                std::f32::consts::FRAC_PI_2,
             ),
             270 => (
-                // pin on BOTTOM edge, body extends UP into sheet
+                // pin on BOTTOM edge, body extends UP into sheet — vertical
+                // label reads bottom-to-top (edge → into sheet).
                 0.0,
                 -1.0,
-                iced::alignment::Horizontal::Center,
-                iced::alignment::Vertical::Bottom,
+                iced::alignment::Horizontal::Left,
+                iced::alignment::Vertical::Center,
                 0.0,
                 -(total_in_mm + text_pad_mm),
+                -std::f32::consts::FRAC_PI_2,
             ),
             _ => (
                 // 180° and fallback: pin on LEFT edge, body extends RIGHT into sheet
@@ -365,6 +382,7 @@ pub fn draw_child_sheet(
                 iced::alignment::Horizontal::Left,
                 iced::alignment::Vertical::Center,
                 total_in_mm + text_pad_mm,
+                0.0,
                 0.0,
             ),
         };
@@ -415,7 +433,7 @@ pub fn draw_child_sheet(
             small_font,
             h_align,
             v_align,
-            0.0,
+            label_rotation_rad,
         );
     }
 }
