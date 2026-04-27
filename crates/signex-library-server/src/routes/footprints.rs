@@ -16,7 +16,7 @@ use signex_library::primitive::Footprint;
 use uuid::Uuid;
 
 use crate::db::{AppState, PrimitiveSummary};
-use crate::routes::components::ApiError;
+use crate::routes::error::ApiError;
 
 pub fn router() -> Router<AppState> {
     Router::new()

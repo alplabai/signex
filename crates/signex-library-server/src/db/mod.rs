@@ -1,23 +1,31 @@
-//! Database layer — pool management, migrations, and component/revision
-//! persistence helpers used by the route handlers.
+//! Database layer — pool management, migrations, and component-row /
+//! primitive persistence helpers used by the route handlers.
+//!
+//! Per `v0.9-refactor-2-plan.md` §2.1, components live as rows inside
+//! category tables (Altium DBLib model). The legacy `Component` /
+//! `Revision` API from v0.9-original is gone; this module exposes:
+//!
+//! * primitive CRUD (`insert_symbol` / `fetch_symbol` / …) — unchanged from
+//!   WS-D, since primitives stay file-shaped under the row model;
+//! * row CRUD (`insert_row` / `fetch_row` / `update_row` / `delete_row`) +
+//!   table-name listing (`list_table_names` / `list_rows_in_table`) —
+//!   backing the new `/tables` and `/rows` HTTP routes.
 //!
 //! The pool is a thin enum over SQLite (default for tests + offline) and
 //! Postgres (production). Schema is portable across both — see
-//! `migrations/0001_initial.sql`.
+//! `migrations/0001_initial.sql` (legacy, retained for forward-compat) +
+//! `migrations/0005_tabular_components.sql` (the row table).
 
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use chrono::{DateTime, Utc};
-use signex_library::adapter::ComponentSummary;
-use signex_library::component::{Component, Revision};
-use signex_library::identity::{ComponentClass, ComponentId, InternalPn, Version};
-use signex_library::lifecycle::LifecycleState;
-use signex_library::param::{ParamMap, ParamValue};
+use chrono::Utc;
+use signex_library::component::ComponentRow;
+use signex_library::identity::RowId;
 use signex_library::primitive::{Footprint, SimModel, Symbol};
+use sqlx::Row;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
-use sqlx::{Executor, Row};
 use uuid::Uuid;
 
 use crate::locks::LockManager;
@@ -122,63 +130,249 @@ impl AppState {
         Ok(())
     }
 
-    /// Insert (or upsert) a component plus its revisions. Used by routes and
-    /// by tests building fixture data.
-    pub async fn insert_component(&self, comp: &Component) -> sqlx::Result<()> {
-        match &self.pool {
-            DbPool::Sqlite(pool) => insert_component_sqlite(pool, comp).await,
-            DbPool::Postgres(pool) => insert_component_postgres(pool, comp).await,
-        }
-    }
+    // ── Component-row CRUD (WS-3 / WS-4 §9) ────────────────────────────────
+    //
+    // `component_rows` is the unified DBLib row table. `(library_id,
+    // table_name, row_id)` is the primary key — same shape across SQLite
+    // and Postgres so the route handlers can stay backend-agnostic.
+    //
+    // The row body is round-tripped as JSON via `ComponentRow`'s serde impl
+    // so adding fields later (e.g. when v3.0 lifts `PlmReserved` into wire
+    // format) doesn't require a schema migration.
 
-    pub async fn fetch_component(&self, uuid: ComponentId) -> sqlx::Result<Option<Component>> {
-        match &self.pool {
-            DbPool::Sqlite(pool) => fetch_component_sqlite(pool, uuid).await,
-            DbPool::Postgres(pool) => fetch_component_postgres(pool, uuid).await,
-        }
-    }
-
-    pub async fn list_components(&self) -> sqlx::Result<Vec<ComponentSummary>> {
-        match &self.pool {
-            DbPool::Sqlite(pool) => list_components_sqlite(pool).await,
-            DbPool::Postgres(pool) => list_components_postgres(pool).await,
-        }
-    }
-
-    pub async fn save_revision(
+    pub async fn insert_row(
         &self,
-        uuid: ComponentId,
-        revision: &Revision,
-        internal_pn_default: &InternalPn,
+        library_id: Uuid,
+        table_name: &str,
+        row: &ComponentRow,
     ) -> sqlx::Result<()> {
-        // Upsert the parent component (cheap: ignores if it already exists).
-        let now = Utc::now();
-        let parent = Component {
-            uuid,
-            internal_pn: internal_pn_default.clone(),
-            class: ComponentClass::generic(),
-            category: std::path::PathBuf::new(),
-            family: None,
-            revisions: vec![revision.clone()],
-            head: revision.version,
-        };
-        // Insert component header (ignored on conflict) then the revision row.
+        let payload = serde_json::to_string(row).map_err(decode_err)?;
+        let now = Utc::now().to_rfc3339();
+        let row_id = row.row_id.to_string();
+        let internal_pn = row.internal_pn.as_str().to_string();
         match &self.pool {
             DbPool::Sqlite(pool) => {
-                upsert_component_header_sqlite(pool, &parent, now).await?;
-                insert_revision_sqlite(pool, uuid, revision).await?;
-                update_head_sqlite(pool, uuid, revision.version, now).await?;
+                sqlx::query(
+                    "INSERT INTO component_rows \
+                       (library_id, table_name, row_id, internal_pn, payload, created_at, updated_at) \
+                     VALUES (?, ?, ?, ?, ?, ?, ?) \
+                     ON CONFLICT(library_id, table_name, row_id) DO UPDATE SET \
+                         internal_pn = excluded.internal_pn, \
+                         payload = excluded.payload, \
+                         updated_at = excluded.updated_at",
+                )
+                .bind(library_id.to_string())
+                .bind(table_name)
+                .bind(&row_id)
+                .bind(&internal_pn)
+                .bind(&payload)
+                .bind(&now)
+                .bind(&now)
+                .execute(pool)
+                .await?;
             }
             DbPool::Postgres(pool) => {
-                upsert_component_header_postgres(pool, &parent, now).await?;
-                insert_revision_postgres(pool, uuid, revision).await?;
-                update_head_postgres(pool, uuid, revision.version, now).await?;
+                sqlx::query(
+                    "INSERT INTO component_rows \
+                       (library_id, table_name, row_id, internal_pn, payload, created_at, updated_at) \
+                     VALUES ($1, $2, $3, $4, $5, $6, $7) \
+                     ON CONFLICT (library_id, table_name, row_id) DO UPDATE SET \
+                         internal_pn = EXCLUDED.internal_pn, \
+                         payload = EXCLUDED.payload, \
+                         updated_at = EXCLUDED.updated_at",
+                )
+                .bind(library_id.to_string())
+                .bind(table_name)
+                .bind(&row_id)
+                .bind(&internal_pn)
+                .bind(&payload)
+                .bind(&now)
+                .bind(&now)
+                .execute(pool)
+                .await?;
             }
         }
         Ok(())
     }
 
-    // ---------- Primitive CRUD (WS-D §9) -----------------------------------
+    /// Update an existing row. Returns `Ok(false)` if no row with the
+    /// supplied `(library_id, table, row_id)` exists; the caller maps that
+    /// to a 404.
+    pub async fn update_row(
+        &self,
+        library_id: Uuid,
+        table_name: &str,
+        row: &ComponentRow,
+    ) -> sqlx::Result<bool> {
+        let payload = serde_json::to_string(row).map_err(decode_err)?;
+        let now = Utc::now().to_rfc3339();
+        let row_id = row.row_id.to_string();
+        let internal_pn = row.internal_pn.as_str().to_string();
+        let affected = match &self.pool {
+            DbPool::Sqlite(pool) => sqlx::query(
+                "UPDATE component_rows SET \
+                         internal_pn = ?, payload = ?, updated_at = ? \
+                     WHERE library_id = ? AND table_name = ? AND row_id = ?",
+            )
+            .bind(&internal_pn)
+            .bind(&payload)
+            .bind(&now)
+            .bind(library_id.to_string())
+            .bind(table_name)
+            .bind(&row_id)
+            .execute(pool)
+            .await?
+            .rows_affected(),
+            DbPool::Postgres(pool) => sqlx::query(
+                "UPDATE component_rows SET \
+                         internal_pn = $1, payload = $2, updated_at = $3 \
+                     WHERE library_id = $4 AND table_name = $5 AND row_id = $6",
+            )
+            .bind(&internal_pn)
+            .bind(&payload)
+            .bind(&now)
+            .bind(library_id.to_string())
+            .bind(table_name)
+            .bind(&row_id)
+            .execute(pool)
+            .await?
+            .rows_affected(),
+        };
+        Ok(affected > 0)
+    }
+
+    pub async fn fetch_row(
+        &self,
+        library_id: Uuid,
+        table_name: &str,
+        row_id: RowId,
+    ) -> sqlx::Result<Option<ComponentRow>> {
+        let id_str = row_id.to_string();
+        let payload: Option<String> = match &self.pool {
+            DbPool::Sqlite(pool) => {
+                sqlx::query_scalar(
+                    "SELECT payload FROM component_rows \
+                 WHERE library_id = ? AND table_name = ? AND row_id = ?",
+                )
+                .bind(library_id.to_string())
+                .bind(table_name)
+                .bind(&id_str)
+                .fetch_optional(pool)
+                .await?
+            }
+            DbPool::Postgres(pool) => {
+                sqlx::query_scalar(
+                    "SELECT payload FROM component_rows \
+                 WHERE library_id = $1 AND table_name = $2 AND row_id = $3",
+                )
+                .bind(library_id.to_string())
+                .bind(table_name)
+                .bind(&id_str)
+                .fetch_optional(pool)
+                .await?
+            }
+        };
+        payload
+            .map(|p| serde_json::from_str(&p).map_err(decode_err))
+            .transpose()
+    }
+
+    /// Delete a row. Returns `Ok(false)` if no matching row existed.
+    pub async fn delete_row(
+        &self,
+        library_id: Uuid,
+        table_name: &str,
+        row_id: RowId,
+    ) -> sqlx::Result<bool> {
+        let id_str = row_id.to_string();
+        let affected = match &self.pool {
+            DbPool::Sqlite(pool) => sqlx::query(
+                "DELETE FROM component_rows \
+                 WHERE library_id = ? AND table_name = ? AND row_id = ?",
+            )
+            .bind(library_id.to_string())
+            .bind(table_name)
+            .bind(&id_str)
+            .execute(pool)
+            .await?
+            .rows_affected(),
+            DbPool::Postgres(pool) => sqlx::query(
+                "DELETE FROM component_rows \
+                 WHERE library_id = $1 AND table_name = $2 AND row_id = $3",
+            )
+            .bind(library_id.to_string())
+            .bind(table_name)
+            .bind(&id_str)
+            .execute(pool)
+            .await?
+            .rows_affected(),
+        };
+        Ok(affected > 0)
+    }
+
+    /// List the names of every distinct table that has at least one row
+    /// inside `library_id`.
+    pub async fn list_table_names(&self, library_id: Uuid) -> sqlx::Result<Vec<String>> {
+        match &self.pool {
+            DbPool::Sqlite(pool) => {
+                sqlx::query_scalar(
+                    "SELECT DISTINCT table_name FROM component_rows \
+                 WHERE library_id = ? ORDER BY table_name",
+                )
+                .bind(library_id.to_string())
+                .fetch_all(pool)
+                .await
+            }
+            DbPool::Postgres(pool) => {
+                sqlx::query_scalar(
+                    "SELECT DISTINCT table_name FROM component_rows \
+                 WHERE library_id = $1 ORDER BY table_name",
+                )
+                .bind(library_id.to_string())
+                .fetch_all(pool)
+                .await
+            }
+        }
+    }
+
+    /// Read every row in `table_name` for `library_id`, ordered by
+    /// `internal_pn`.
+    pub async fn list_rows_in_table(
+        &self,
+        library_id: Uuid,
+        table_name: &str,
+    ) -> sqlx::Result<Vec<ComponentRow>> {
+        let payloads: Vec<String> = match &self.pool {
+            DbPool::Sqlite(pool) => {
+                sqlx::query_scalar(
+                    "SELECT payload FROM component_rows \
+                 WHERE library_id = ? AND table_name = ? \
+                 ORDER BY internal_pn",
+                )
+                .bind(library_id.to_string())
+                .bind(table_name)
+                .fetch_all(pool)
+                .await?
+            }
+            DbPool::Postgres(pool) => {
+                sqlx::query_scalar(
+                    "SELECT payload FROM component_rows \
+                 WHERE library_id = $1 AND table_name = $2 \
+                 ORDER BY internal_pn",
+                )
+                .bind(library_id.to_string())
+                .bind(table_name)
+                .fetch_all(pool)
+                .await?
+            }
+        };
+        payloads
+            .into_iter()
+            .map(|p| serde_json::from_str(&p).map_err(decode_err))
+            .collect()
+    }
+
+    // ── Primitive CRUD (WS-D §9) ──────────────────────────────────────────
     //
     // The primitives table layout is identical for all three kinds, so we
     // share one generic helper per backend with the table name as a parameter.
@@ -419,516 +613,4 @@ pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
 /// Wrap `serde_json::Error` into the `sqlx::Error::Decode(Box<dyn StdError>)` form.
 fn decode_err(e: serde_json::Error) -> sqlx::Error {
     sqlx::Error::Decode(Box::new(e))
-}
-
-// ---------- SQLite implementations -------------------------------------------------
-
-async fn insert_component_sqlite(pool: &sqlx::SqlitePool, comp: &Component) -> sqlx::Result<()> {
-    let now = Utc::now();
-    let mut tx = pool.begin().await?;
-    upsert_component_header_tx_sqlite(&mut tx, comp, now).await?;
-    for rev in &comp.revisions {
-        insert_revision_tx_sqlite(&mut tx, comp.uuid, rev).await?;
-    }
-    sqlx::query("UPDATE components SET head_major = ?, head_minor = ?, updated = ? WHERE uuid = ?")
-        .bind(comp.head.major as i64)
-        .bind(comp.head.minor as i64)
-        .bind(now.to_rfc3339())
-        .bind(comp.uuid.to_string())
-        .execute(&mut *tx)
-        .await?;
-    tx.commit().await?;
-    Ok(())
-}
-
-async fn upsert_component_header_sqlite(
-    pool: &sqlx::SqlitePool,
-    comp: &Component,
-    now: DateTime<Utc>,
-) -> sqlx::Result<()> {
-    let mut conn = pool.acquire().await?;
-    sqlx::query(
-        "INSERT INTO components (uuid, internal_pn, head_major, head_minor, created, updated) \
-         VALUES (?, ?, ?, ?, ?, ?) \
-         ON CONFLICT(uuid) DO UPDATE SET internal_pn = excluded.internal_pn, updated = excluded.updated",
-    )
-    .bind(comp.uuid.to_string())
-    .bind(comp.internal_pn.as_str())
-    .bind(comp.head.major as i64)
-    .bind(comp.head.minor as i64)
-    .bind(now.to_rfc3339())
-    .bind(now.to_rfc3339())
-    .execute(&mut *conn)
-    .await?;
-    Ok(())
-}
-
-async fn upsert_component_header_tx_sqlite(
-    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
-    comp: &Component,
-    now: DateTime<Utc>,
-) -> sqlx::Result<()> {
-    sqlx::query(
-        "INSERT INTO components (uuid, internal_pn, head_major, head_minor, created, updated) \
-         VALUES (?, ?, ?, ?, ?, ?) \
-         ON CONFLICT(uuid) DO UPDATE SET internal_pn = excluded.internal_pn, updated = excluded.updated",
-    )
-    .bind(comp.uuid.to_string())
-    .bind(comp.internal_pn.as_str())
-    .bind(comp.head.major as i64)
-    .bind(comp.head.minor as i64)
-    .bind(now.to_rfc3339())
-    .bind(now.to_rfc3339())
-    .execute(&mut **tx)
-    .await?;
-    Ok(())
-}
-
-async fn insert_revision_sqlite(
-    pool: &sqlx::SqlitePool,
-    uuid: ComponentId,
-    rev: &Revision,
-) -> sqlx::Result<()> {
-    let mut tx = pool.begin().await?;
-    insert_revision_tx_sqlite(&mut tx, uuid, rev).await?;
-    tx.commit().await
-}
-
-async fn insert_revision_tx_sqlite(
-    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
-    uuid: ComponentId,
-    rev: &Revision,
-) -> sqlx::Result<()> {
-    let payload = serde_json::to_string(rev).map_err(decode_err)?;
-    let hash_hex = hex_encode(&rev.content_hash);
-    sqlx::query(
-        "INSERT INTO revisions (component_uuid, major, minor, state, author, message, created, content_hash, payload) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) \
-         ON CONFLICT(component_uuid, major, minor) DO UPDATE SET state = excluded.state, payload = excluded.payload",
-    )
-    .bind(uuid.to_string())
-    .bind(rev.version.major as i64)
-    .bind(rev.version.minor as i64)
-    .bind(serde_json::to_string(&rev.state).map_err(decode_err)?.trim_matches('"').to_string())
-    .bind(&rev.author)
-    .bind(&rev.message)
-    .bind(rev.created.to_rfc3339())
-    .bind(hash_hex)
-    .bind(payload)
-    .execute(&mut **tx)
-    .await?;
-    insert_parameters_tx_sqlite(tx, uuid, rev).await?;
-    insert_suppliers_tx_sqlite(tx, uuid, rev).await?;
-    Ok(())
-}
-
-async fn insert_parameters_tx_sqlite(
-    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
-    uuid: ComponentId,
-    rev: &Revision,
-) -> sqlx::Result<()> {
-    // wipe the old rows for this revision then re-insert.
-    sqlx::query("DELETE FROM parameters WHERE component_uuid = ? AND major = ? AND minor = ?")
-        .bind(uuid.to_string())
-        .bind(rev.version.major as i64)
-        .bind(rev.version.minor as i64)
-        .execute(&mut **tx)
-        .await?;
-    // Refactored Component carries a single `parameters` map per revision —
-    // the old `shared / schematic / pcb` side-buckets fold together. We keep
-    // the `side` column for forward compatibility (per-primitive params land
-    // when WS-C/E lift symbol/footprint defaults onto the component view) and
-    // tag the unified flat list as `"shared"`.
-    insert_param_set_tx_sqlite(tx, uuid, rev.version, "shared", &rev.parameters).await?;
-    Ok(())
-}
-
-async fn insert_param_set_tx_sqlite(
-    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
-    uuid: ComponentId,
-    version: Version,
-    side: &str,
-    params: &ParamMap,
-) -> sqlx::Result<()> {
-    for (key, value) in params {
-        let serialised = serialise_param(value);
-        sqlx::query(
-            "INSERT INTO parameters (component_uuid, major, minor, side, key, value) VALUES (?, ?, ?, ?, ?, ?)",
-        )
-        .bind(uuid.to_string())
-        .bind(version.major as i64)
-        .bind(version.minor as i64)
-        .bind(side)
-        .bind(key)
-        .bind(serialised)
-        .execute(&mut **tx)
-        .await?;
-    }
-    Ok(())
-}
-
-fn serialise_param(value: &ParamValue) -> String {
-    match value {
-        ParamValue::Text(s) => s.clone(),
-        ParamValue::Number(n) => n.to_string(),
-        ParamValue::Bool(b) => b.to_string(),
-        ParamValue::Measurement { value, unit } => format!("{value} {unit}"),
-    }
-}
-
-async fn insert_suppliers_tx_sqlite(
-    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
-    uuid: ComponentId,
-    rev: &Revision,
-) -> sqlx::Result<()> {
-    sqlx::query("DELETE FROM suppliers WHERE component_uuid = ? AND major = ? AND minor = ?")
-        .bind(uuid.to_string())
-        .bind(rev.version.major as i64)
-        .bind(rev.version.minor as i64)
-        .execute(&mut **tx)
-        .await?;
-    for link in &rev.supply {
-        sqlx::query(
-            "INSERT OR IGNORE INTO suppliers (component_uuid, major, minor, distributor, sku) VALUES (?, ?, ?, ?, ?)",
-        )
-        .bind(uuid.to_string())
-        .bind(rev.version.major as i64)
-        .bind(rev.version.minor as i64)
-        .bind(&link.distributor)
-        .bind(&link.sku)
-        .execute(&mut **tx)
-        .await?;
-    }
-    Ok(())
-}
-
-async fn update_head_sqlite(
-    pool: &sqlx::SqlitePool,
-    uuid: ComponentId,
-    version: Version,
-    now: DateTime<Utc>,
-) -> sqlx::Result<()> {
-    sqlx::query("UPDATE components SET head_major = ?, head_minor = ?, updated = ? WHERE uuid = ?")
-        .bind(version.major as i64)
-        .bind(version.minor as i64)
-        .bind(now.to_rfc3339())
-        .bind(uuid.to_string())
-        .execute(pool)
-        .await?;
-    Ok(())
-}
-
-async fn fetch_component_sqlite(
-    pool: &sqlx::SqlitePool,
-    uuid: ComponentId,
-) -> sqlx::Result<Option<Component>> {
-    let row =
-        sqlx::query("SELECT internal_pn, head_major, head_minor FROM components WHERE uuid = ?")
-            .bind(uuid.to_string())
-            .fetch_optional(pool)
-            .await?;
-    let Some(row) = row else { return Ok(None) };
-    let internal_pn: String = row.get("internal_pn");
-    let head_major: i64 = row.get("head_major");
-    let head_minor: i64 = row.get("head_minor");
-
-    let revs =
-        sqlx::query("SELECT payload FROM revisions WHERE component_uuid = ? ORDER BY major, minor")
-            .bind(uuid.to_string())
-            .fetch_all(pool)
-            .await?;
-    let mut revisions = Vec::with_capacity(revs.len());
-    for r in revs {
-        let payload: String = r.get("payload");
-        let rev: Revision = serde_json::from_str(&payload).map_err(decode_err)?;
-        revisions.push(rev);
-    }
-    Ok(Some(Component {
-        uuid,
-        internal_pn: InternalPn::new(internal_pn),
-        class: ComponentClass::generic(),
-        category: std::path::PathBuf::new(),
-        family: None,
-        revisions,
-        head: Version::new(head_major as u32, head_minor as u32),
-    }))
-}
-
-async fn list_components_sqlite(pool: &sqlx::SqlitePool) -> sqlx::Result<Vec<ComponentSummary>> {
-    let rows = pool
-        .fetch_all(
-            "SELECT c.uuid, c.internal_pn, c.head_major, c.head_minor, \
-                    r.state, r.payload \
-             FROM components c \
-             LEFT JOIN revisions r \
-               ON r.component_uuid = c.uuid \
-              AND r.major = c.head_major \
-              AND r.minor = c.head_minor \
-             ORDER BY c.internal_pn",
-        )
-        .await?;
-
-    rows_to_summaries(rows).await
-}
-
-async fn rows_to_summaries(
-    rows: Vec<sqlx::sqlite::SqliteRow>,
-) -> sqlx::Result<Vec<ComponentSummary>> {
-    let mut out = Vec::with_capacity(rows.len());
-    for r in rows {
-        let uuid_str: String = r.get("uuid");
-        let internal_pn: String = r.get("internal_pn");
-        let head_major: i64 = r.get("head_major");
-        let head_minor: i64 = r.get("head_minor");
-        let state: Option<String> = r.try_get("state").ok();
-        let payload: Option<String> = r.try_get("payload").ok();
-
-        let (state, description, mpn) = match (state, payload) {
-            (Some(s), Some(p)) => {
-                let rev: Revision = serde_json::from_str(&p).map_err(decode_err)?;
-                // The refactored Component model has no top-level
-                // `description`; we synthesise a short one for legacy summary
-                // consumers from the manufacturer + class. The picker UI
-                // surfaces the parametric fields directly, so this is just a
-                // fallback for older API clients still expecting the field.
-                let description = rev
-                    .parameters
-                    .get("description")
-                    .map(|v| v.display())
-                    .unwrap_or_default();
-                (
-                    parse_lifecycle(&s).unwrap_or(LifecycleState::Draft),
-                    description,
-                    rev.primary_mpn.mpn.clone(),
-                )
-            }
-            _ => (LifecycleState::Draft, String::new(), String::new()),
-        };
-
-        out.push(ComponentSummary {
-            uuid: ComponentId::from_str(&uuid_str).unwrap_or_else(|_| ComponentId::nil()),
-            internal_pn: InternalPn::new(internal_pn),
-            mpn,
-            head: Version::new(head_major as u32, head_minor as u32),
-            state,
-            description,
-        });
-    }
-    Ok(out)
-}
-
-fn parse_lifecycle(raw: &str) -> Option<LifecycleState> {
-    match raw {
-        "Draft" => Some(LifecycleState::Draft),
-        "InReview" => Some(LifecycleState::InReview),
-        "Released" => Some(LifecycleState::Released),
-        "Deprecated" => Some(LifecycleState::Deprecated),
-        "Obsolete" => Some(LifecycleState::Obsolete),
-        _ => None,
-    }
-}
-
-fn hex_encode(bytes: &[u8]) -> String {
-    let mut s = String::with_capacity(bytes.len() * 2);
-    for b in bytes {
-        use std::fmt::Write as _;
-        let _ = write!(s, "{b:02x}");
-    }
-    s
-}
-
-// ---------- Postgres implementations -----------------------------------------------
-//
-// Postgres uses `$1, $2, ...` placeholders and `ON CONFLICT` syntax.
-
-async fn insert_component_postgres(pool: &sqlx::PgPool, comp: &Component) -> sqlx::Result<()> {
-    let now = Utc::now();
-    let mut tx = pool.begin().await?;
-    sqlx::query(
-        "INSERT INTO components (uuid, internal_pn, head_major, head_minor, created, updated) \
-         VALUES ($1, $2, $3, $4, $5, $6) \
-         ON CONFLICT (uuid) DO UPDATE SET internal_pn = EXCLUDED.internal_pn, updated = EXCLUDED.updated",
-    )
-    .bind(comp.uuid.to_string())
-    .bind(comp.internal_pn.as_str())
-    .bind(comp.head.major as i64)
-    .bind(comp.head.minor as i64)
-    .bind(now.to_rfc3339())
-    .bind(now.to_rfc3339())
-    .execute(&mut *tx)
-    .await?;
-    for rev in &comp.revisions {
-        let payload = serde_json::to_string(rev).map_err(decode_err)?;
-        let hash_hex = hex_encode(&rev.content_hash);
-        sqlx::query(
-            "INSERT INTO revisions (component_uuid, major, minor, state, author, message, created, content_hash, payload) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) \
-             ON CONFLICT (component_uuid, major, minor) DO UPDATE SET state = EXCLUDED.state, payload = EXCLUDED.payload",
-        )
-        .bind(comp.uuid.to_string())
-        .bind(rev.version.major as i64)
-        .bind(rev.version.minor as i64)
-        .bind(serde_json::to_string(&rev.state).map_err(decode_err)?.trim_matches('"').to_string())
-        .bind(&rev.author)
-        .bind(&rev.message)
-        .bind(rev.created.to_rfc3339())
-        .bind(hash_hex)
-        .bind(payload)
-        .execute(&mut *tx)
-        .await?;
-    }
-    tx.commit().await?;
-    Ok(())
-}
-
-async fn upsert_component_header_postgres(
-    pool: &sqlx::PgPool,
-    comp: &Component,
-    now: DateTime<Utc>,
-) -> sqlx::Result<()> {
-    sqlx::query(
-        "INSERT INTO components (uuid, internal_pn, head_major, head_minor, created, updated) \
-         VALUES ($1, $2, $3, $4, $5, $6) \
-         ON CONFLICT (uuid) DO UPDATE SET internal_pn = EXCLUDED.internal_pn, updated = EXCLUDED.updated",
-    )
-    .bind(comp.uuid.to_string())
-    .bind(comp.internal_pn.as_str())
-    .bind(comp.head.major as i64)
-    .bind(comp.head.minor as i64)
-    .bind(now.to_rfc3339())
-    .bind(now.to_rfc3339())
-    .execute(pool)
-    .await?;
-    Ok(())
-}
-
-async fn insert_revision_postgres(
-    pool: &sqlx::PgPool,
-    uuid: ComponentId,
-    rev: &Revision,
-) -> sqlx::Result<()> {
-    let payload = serde_json::to_string(rev).map_err(decode_err)?;
-    let hash_hex = hex_encode(&rev.content_hash);
-    sqlx::query(
-        "INSERT INTO revisions (component_uuid, major, minor, state, author, message, created, content_hash, payload) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) \
-         ON CONFLICT (component_uuid, major, minor) DO UPDATE SET state = EXCLUDED.state, payload = EXCLUDED.payload",
-    )
-    .bind(uuid.to_string())
-    .bind(rev.version.major as i64)
-    .bind(rev.version.minor as i64)
-    .bind(serde_json::to_string(&rev.state).map_err(decode_err)?.trim_matches('"').to_string())
-    .bind(&rev.author)
-    .bind(&rev.message)
-    .bind(rev.created.to_rfc3339())
-    .bind(hash_hex)
-    .bind(payload)
-    .execute(pool)
-    .await?;
-    Ok(())
-}
-
-async fn update_head_postgres(
-    pool: &sqlx::PgPool,
-    uuid: ComponentId,
-    version: Version,
-    now: DateTime<Utc>,
-) -> sqlx::Result<()> {
-    sqlx::query(
-        "UPDATE components SET head_major = $1, head_minor = $2, updated = $3 WHERE uuid = $4",
-    )
-    .bind(version.major as i64)
-    .bind(version.minor as i64)
-    .bind(now.to_rfc3339())
-    .bind(uuid.to_string())
-    .execute(pool)
-    .await?;
-    Ok(())
-}
-
-async fn fetch_component_postgres(
-    pool: &sqlx::PgPool,
-    uuid: ComponentId,
-) -> sqlx::Result<Option<Component>> {
-    let row =
-        sqlx::query("SELECT internal_pn, head_major, head_minor FROM components WHERE uuid = $1")
-            .bind(uuid.to_string())
-            .fetch_optional(pool)
-            .await?;
-    let Some(row) = row else { return Ok(None) };
-    let internal_pn: String = row.get("internal_pn");
-    let head_major: i64 = row.get("head_major");
-    let head_minor: i64 = row.get("head_minor");
-
-    let revs = sqlx::query(
-        "SELECT payload FROM revisions WHERE component_uuid = $1 ORDER BY major, minor",
-    )
-    .bind(uuid.to_string())
-    .fetch_all(pool)
-    .await?;
-    let mut revisions = Vec::with_capacity(revs.len());
-    for r in revs {
-        let payload: String = r.get("payload");
-        let rev: Revision = serde_json::from_str(&payload).map_err(decode_err)?;
-        revisions.push(rev);
-    }
-    Ok(Some(Component {
-        uuid,
-        internal_pn: InternalPn::new(internal_pn),
-        class: ComponentClass::generic(),
-        category: std::path::PathBuf::new(),
-        family: None,
-        revisions,
-        head: Version::new(head_major as u32, head_minor as u32),
-    }))
-}
-
-async fn list_components_postgres(pool: &sqlx::PgPool) -> sqlx::Result<Vec<ComponentSummary>> {
-    let rows = sqlx::query(
-        "SELECT c.uuid, c.internal_pn, c.head_major, c.head_minor, \
-                r.state, r.payload \
-         FROM components c \
-         LEFT JOIN revisions r \
-           ON r.component_uuid = c.uuid \
-          AND r.major = c.head_major \
-          AND r.minor = c.head_minor \
-         ORDER BY c.internal_pn",
-    )
-    .fetch_all(pool)
-    .await?;
-
-    let mut out = Vec::with_capacity(rows.len());
-    for r in rows {
-        let uuid_str: String = r.get("uuid");
-        let internal_pn: String = r.get("internal_pn");
-        let head_major: i64 = r.get("head_major");
-        let head_minor: i64 = r.get("head_minor");
-        let state: Option<String> = r.try_get("state").ok();
-        let payload: Option<String> = r.try_get("payload").ok();
-        let (state, description, mpn) = match (state, payload) {
-            (Some(s), Some(p)) => {
-                let rev: Revision = serde_json::from_str(&p).map_err(decode_err)?;
-                let description = rev
-                    .parameters
-                    .get("description")
-                    .map(|v| v.display())
-                    .unwrap_or_default();
-                (
-                    parse_lifecycle(&s).unwrap_or(LifecycleState::Draft),
-                    description,
-                    rev.primary_mpn.mpn.clone(),
-                )
-            }
-            _ => (LifecycleState::Draft, String::new(), String::new()),
-        };
-        out.push(ComponentSummary {
-            uuid: ComponentId::from_str(&uuid_str).unwrap_or_else(|_| ComponentId::nil()),
-            internal_pn: InternalPn::new(internal_pn),
-            mpn,
-            head: Version::new(head_major as u32, head_minor as u32),
-            state,
-            description,
-        });
-    }
-    Ok(out)
 }

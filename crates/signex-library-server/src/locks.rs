@@ -1,9 +1,13 @@
 //! In-memory advisory lock service.
 //!
-//! Locks are keyed on `(ComponentId, FieldSet)`. Each lock records the holder
+//! Locks are keyed on `(Uuid, FieldSet)`. Each lock records the holder
 //! and the wall-clock time it was last touched. A lock is considered free if
 //! its `last_renewed + idle_ttl` has passed — that's the "idle TTL" the spec
 //! calls out (default 10 min, override per-test via `set_idle_ttl`).
+//!
+//! Per `v0.9-refactor-2-plan.md` §7 the lockable identifier is now a row's
+//! `RowId`; the manager keeps a bare `Uuid` so it stays type-agnostic across
+//! the WS-1 identity refactor. Callers convert via `RowId::as_uuid()`.
 //!
 //! Persistence is intentionally NOT in the SQL `locks` table by default: the
 //! advisory layer is purely in-memory and cheap to reset on server restart.
@@ -16,7 +20,7 @@ use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
 use signex_library::adapter::FieldSet;
-use signex_library::identity::ComponentId;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LockErrorKind {
@@ -60,7 +64,7 @@ pub struct LockManager {
 }
 
 struct Inner {
-    locks: HashMap<(ComponentId, FieldSet), Entry>,
+    locks: HashMap<(Uuid, FieldSet), Entry>,
     idle_ttl: Duration,
 }
 
@@ -80,12 +84,7 @@ impl LockManager {
         inner.idle_ttl = ttl;
     }
 
-    pub fn try_lock(
-        &self,
-        uuid: ComponentId,
-        field_set: FieldSet,
-        holder: &str,
-    ) -> Result<(), LockError> {
+    pub fn try_lock(&self, uuid: Uuid, field_set: FieldSet, holder: &str) -> Result<(), LockError> {
         let mut inner = self.inner.lock().unwrap();
         let now = Instant::now();
         let now_wall = Utc::now();
@@ -113,12 +112,7 @@ impl LockManager {
         Ok(())
     }
 
-    pub fn renew(
-        &self,
-        uuid: ComponentId,
-        field_set: FieldSet,
-        holder: &str,
-    ) -> Result<(), LockError> {
+    pub fn renew(&self, uuid: Uuid, field_set: FieldSet, holder: &str) -> Result<(), LockError> {
         let mut inner = self.inner.lock().unwrap();
         let key = (uuid, field_set);
         let entry = inner.locks.get_mut(&key).ok_or(LockError {
@@ -136,12 +130,7 @@ impl LockManager {
         Ok(())
     }
 
-    pub fn release(
-        &self,
-        uuid: ComponentId,
-        field_set: FieldSet,
-        holder: &str,
-    ) -> Result<(), LockError> {
+    pub fn release(&self, uuid: Uuid, field_set: FieldSet, holder: &str) -> Result<(), LockError> {
         let mut inner = self.inner.lock().unwrap();
         let key = (uuid, field_set);
         let entry = inner.locks.get(&key).ok_or(LockError {
@@ -158,7 +147,7 @@ impl LockManager {
         Ok(())
     }
 
-    pub fn snapshot(&self, uuid: ComponentId, field_set: FieldSet) -> Option<LockSnapshot> {
+    pub fn snapshot(&self, uuid: Uuid, field_set: FieldSet) -> Option<LockSnapshot> {
         let inner = self.inner.lock().unwrap();
         let key = (uuid, field_set);
         let entry = inner.locks.get(&key)?;
