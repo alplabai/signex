@@ -9,9 +9,9 @@
 use std::path::PathBuf;
 
 use signex_library::{
-    ComponentClass, ComponentRow, ComponentSummary, DatasheetRef, Footprint, InternalPn,
+    ComponentClass, ComponentRow, ComponentSummary, DatasheetRef, InternalPn,
     LibraryError, LibraryMeta, LibraryMode, LifecycleState, LocalGitAdapter, Manifest,
-    ManufacturerPart, ParamMap, PlmReserved, PrimitiveRef, RowId, Symbol, UsersConfig,
+    ManufacturerPart, ParamMap, PlmReserved, PrimitiveRef, RowId, UsersConfig,
     WorkflowConfig, hash_row_content,
 };
 use signex_types::project::{LibraryEntry, LibraryEntryKind, ProjectData};
@@ -139,19 +139,17 @@ pub fn auto_mount_project_libraries(state: &mut LibraryState, project: &ProjectD
 
 /// Create a new component **row**:
 ///
-/// 1. Mints a [`Symbol`] primitive with one default pin.
-/// 2. Mints a [`Footprint`] primitive with no pads.
-/// 3. Persists both primitives via `adapter.save_symbol` /
-///    `adapter.save_footprint`. Adapters that haven't wired primitive
-///    persistence yet keep the in-memory binding so the row insert
-///    proceeds.
-/// 4. Builds a [`ComponentRow`] holding the binding refs +
-///    user-supplied PN / class, computes the canonical content hash
-///    via [`hash_row_content`], and inserts it into the chosen table
-///    via `adapter.insert_row`.
+/// 1. Builds a [`ComponentRow`] with the user-supplied PN / class and
+///    sentinel `Uuid::nil()` symbol/footprint refs (the primitive
+///    binding is the user's explicit choice — picked from existing
+///    `.snxsym` / `.snxfpt` files post-creation, never auto-minted).
+/// 2. Computes the canonical content hash via [`hash_row_content`].
+/// 3. Inserts the row into the chosen table via `adapter.insert_row`.
 ///
 /// Returns the new row's `RowId` so the caller can open it as a
-/// Component Preview tab via `LibraryMessage::OpenComponentRow`.
+/// Component Preview tab via `LibraryMessage::OpenComponentRow`. The
+/// preview's "Pick Symbol / Pick Footprint" affordance (Phase 2) lets
+/// the user bind the primitives.
 pub fn create_component_row(
     state: &mut LibraryState,
     library_idx: usize,
@@ -177,28 +175,17 @@ pub fn create_component_row(
     let library_root = library.root.clone();
     let library_id = library.library_id;
 
-    let symbol_uuid = Uuid::new_v4();
-    let footprint_uuid = Uuid::new_v4();
-    let mut symbol = Symbol::empty(internal_pn);
-    symbol.uuid = symbol_uuid;
-    let mut footprint = Footprint::empty(internal_pn);
-    footprint.uuid = footprint_uuid;
-
-    let adapter = state
-        .set
-        .get(library_id)
-        .ok_or_else(|| LibraryError::NotFound(format!("library_id={library_id}")))?;
-
-    match adapter.save_symbol(symbol.clone(), "new component: seed symbol") {
-        Ok(()) => {}
-        Err(LibraryError::Backend(msg)) if msg.contains("not implemented") => {}
-        Err(e) => return Err(e),
-    }
-    match adapter.save_footprint(footprint.clone(), "new component: seed footprint") {
-        Ok(()) => {}
-        Err(LibraryError::Backend(msg)) if msg.contains("not implemented") => {}
-        Err(e) => return Err(e),
-    }
+    // Component creation does NOT mint new primitive files. Symbol +
+    // footprint are bound by the user explicitly — they pick existing
+    // `.snxsym` / `.snxfpt` files from this library, another library, or
+    // the filesystem. The row starts with sentinel `Uuid::nil()` refs;
+    // the resolver returns None for nil UUIDs and the Component Preview
+    // surfaces an "Unresolved — pick a symbol" prompt.
+    //
+    // Phase 2 follow-up: dedicated Pick-Symbol / Pick-Footprint picker
+    // UI that lets the user browse mounted libraries (and an optional
+    // filesystem fallback) and writes the selected `PrimitiveRef` back
+    // onto the row via `adapter.update_row`.
 
     let row_id = RowId::new();
     let now = chrono::Utc::now();
@@ -208,8 +195,8 @@ pub fn create_component_row(
         class,
         datasheet: DatasheetRef::default(),
         state: LifecycleState::Draft,
-        symbol_ref: PrimitiveRef::new(library_id, symbol_uuid),
-        footprint_ref: Some(PrimitiveRef::new(library_id, footprint_uuid)),
+        symbol_ref: PrimitiveRef::new(library_id, Uuid::nil()),
+        footprint_ref: None,
         sim_ref: None,
         pin_map_overrides: Vec::new(),
         primary_mpn: ManufacturerPart::draft("", ""),
