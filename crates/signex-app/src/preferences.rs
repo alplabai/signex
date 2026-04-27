@@ -6,7 +6,7 @@
 
 use iced::widget::{Space, button, column, container, row, scrollable, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
-use signex_render::{LabelStyle, PowerPortStyle};
+use signex_render::{LabelStyle, MultisheetStyle, PowerPortStyle};
 use signex_types::theme::ThemeId;
 
 use crate::fonts;
@@ -59,6 +59,8 @@ pub enum PrefMsg {
     DraftPowerPortStyle(PowerPortStyle),
     /// Update draft global/hier label drawing style (applies as live preview).
     DraftLabelStyle(LabelStyle),
+    /// Update draft hierarchical-sheet drawing style (applies as live preview).
+    DraftMultisheetStyle(MultisheetStyle),
     /// Open a file picker to import a custom theme JSON.
     ImportTheme,
     /// Save the current draft theme as a JSON file.
@@ -114,6 +116,7 @@ pub fn view<'a>(
     draft_font: &str,
     draft_power_port_style: PowerPortStyle,
     draft_label_style: LabelStyle,
+    draft_multisheet_style: MultisheetStyle,
     custom_name: Option<&'a str>,
     dirty: bool,
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
@@ -125,6 +128,7 @@ pub fn view<'a>(
         draft_font,
         draft_power_port_style,
         draft_label_style,
+        draft_multisheet_style,
         custom_name,
         dirty,
         erc_overrides,
@@ -162,6 +166,7 @@ fn build_dialog<'a>(
     draft_font: &str,
     draft_power_port_style: PowerPortStyle,
     draft_label_style: LabelStyle,
+    draft_multisheet_style: MultisheetStyle,
     custom_name: Option<&'a str>,
     dirty: bool,
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
@@ -206,6 +211,7 @@ fn build_dialog<'a>(
             draft_font,
             draft_power_port_style,
             draft_label_style,
+            draft_multisheet_style,
             custom_name,
             erc_overrides,
         ),
@@ -337,6 +343,7 @@ fn build_content<'a>(
     draft_font: &str,
     draft_power_port_style: PowerPortStyle,
     draft_label_style: LabelStyle,
+    draft_multisheet_style: MultisheetStyle,
     custom_name: Option<&'a str>,
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
 ) -> Element<'a, PrefMsg> {
@@ -347,6 +354,7 @@ fn build_content<'a>(
             draft_font,
             draft_power_port_style,
             draft_label_style,
+            draft_multisheet_style,
             custom_name,
         ),
         PrefNav::Erc => content_erc(erc_overrides),
@@ -371,6 +379,7 @@ fn content_appearance<'a>(
     draft_font: &str,
     draft_power_port_style: PowerPortStyle,
     draft_label_style: LabelStyle,
+    draft_multisheet_style: MultisheetStyle,
     custom_name: Option<&'a str>,
 ) -> Element<'a, PrefMsg> {
     let mut col = column![].spacing(0).padding([16, 20]);
@@ -541,6 +550,31 @@ fn content_appearance<'a>(
                 [LabelStyle::Standard, LabelStyle::Altium],
                 Some(draft_label_style),
                 PrefMsg::DraftLabelStyle,
+            )
+            .text_size(12)
+            .width(200),
+        ]
+        .align_y(iced::Alignment::Center),
+    );
+    col = col.push(Space::new().height(16));
+    col = col.push(
+        row![
+            column![
+                text("Multisheet Style").size(12).color(TEXT_PRI),
+                text(
+                    "Controls hierarchical sheet body fill defaults. \
+                     Per-sheet colours from the source file always win."
+                )
+                .size(10)
+                .color(TEXT_MUT),
+            ]
+            .spacing(3)
+            .width(200),
+            Space::new().width(Length::Fill),
+            iced::widget::pick_list(
+                [MultisheetStyle::Standard, MultisheetStyle::Altium],
+                Some(draft_multisheet_style),
+                PrefMsg::DraftMultisheetStyle,
             )
             .text_size(12)
             .width(200),
