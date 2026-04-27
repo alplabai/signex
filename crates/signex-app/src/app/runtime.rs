@@ -65,13 +65,12 @@ impl Signex {
                     .as_deref()
                     .map(lookup)
                     .unwrap_or((false, false, false));
-                // WS-H: Project tree library wiring — flatten
-                // `Project::libraries` into the panel struct alongside
-                // the sheet list. Each entry resolves to an absolute
-                // path so the right-click menu can dispatch back to
-                // the correct library; cached components come from
-                // `LibraryState::library_at` when the library is
-                // currently mounted.
+                // Flatten `Project::libraries` into the panel struct
+                // alongside the sheet list. Each entry resolves to an
+                // absolute path so the right-click menu can dispatch
+                // back to the correct library; cached components
+                // come from `LibraryState::library_at` when the
+                // library is currently mounted.
                 let libraries: Vec<crate::panels::LibraryNodeInfo> = p
                     .data
                     .libraries

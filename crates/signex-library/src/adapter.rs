@@ -87,8 +87,8 @@ pub struct PrimitiveSummary {
 ///
 /// **Default impls:** every method has a `LibraryError::Backend("not impl")`
 /// default so individual adapters can override only the surface they
-/// actually support. WS-2 (LocalGit) and WS-3 (Database) supply real
-/// implementations; this WS (WS-1) ships only the trait shape.
+/// actually support. `LocalGitAdapter` and `DatabaseAdapter` supply
+/// real implementations.
 pub trait LibraryAdapter: Send + Sync {
     /// Stable UUID of this library, sourced from `library.toml::library.library_id`.
     ///
@@ -102,12 +102,13 @@ pub trait LibraryAdapter: Send + Sync {
 
     fn manifest(&self) -> &Manifest;
 
-    // ── Tables (WS-2 / WS-3) ────────────────────────────────────────────
+    // ── Tables ──────────────────────────────────────────────────────────
     //
-    // The unit of storage is now a row inside a category table. WS-2 lands
-    // the LocalGit (TSV) implementation; WS-3 lands the Database (JSONB)
-    // implementation. Until then every method default-errors with
-    // `Backend("not impl")` so adapter authors can layer in pieces.
+    // The unit of storage is a row inside a category table. The
+    // LocalGit adapter persists tables as TSV files; the Database
+    // adapter forwards to `/tables` + `/rows` HTTP routes. Adapter
+    // authors that haven't wired this surface yet keep the default
+    // `Backend("not impl")` errors below.
 
     /// List the names of every table this library exposes (filename stem,
     /// no extension).

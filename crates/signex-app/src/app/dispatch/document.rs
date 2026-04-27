@@ -10,11 +10,10 @@ impl Signex {
                 self.finish_update()
             }
             Message::DeleteSelected => {
-                // WS-E (refactor): the Footprint tab's pre-empt path is
-                // gone with the old per-tab selection model. WS-F
-                // re-introduces it once the new Footprint editor lands
-                // — until then Delete always falls through to the
-                // schematic engine.
+                // Delete falls through to the schematic engine; the
+                // Component Preview tab is read-only and Footprint
+                // editing happens in the standalone `.snxfpt` tab,
+                // which owns its own delete handling.
                 self.handle_selection_delete_requested();
                 self.finish_update()
             }

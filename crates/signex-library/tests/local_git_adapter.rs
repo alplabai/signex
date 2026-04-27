@@ -71,7 +71,7 @@ fn init_refuses_existing_library() {
     assert!(matches!(err, LibraryError::Conflict(_)));
 }
 
-// ── Primitive CRUD (WS-C step C2) ────────────────────────────────────────
+// ── Primitive CRUD ───────────────────────────────────────────────────────
 
 fn fixture_symbol(name: &str) -> Symbol {
     let now = chrono::Utc::now();
@@ -345,7 +345,7 @@ fn library_set_resolves_across_two_local_libs() {
     assert!(!unresolved.contains(&resolves));
 }
 
-// ── Row CRUD (WS-2 §2.5) ──────────────────────────────────────────────────
+// ── Row CRUD ──────────────────────────────────────────────────────────────
 
 /// Build a fixture row with a given internal PN and class. The `lib_id`
 /// argument is the library this row's primitives live in — the adapter's

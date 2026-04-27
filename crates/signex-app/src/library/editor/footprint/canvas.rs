@@ -368,12 +368,11 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     .with_color(Color::from_rgba(1.0, 1.0, 1.0, 0.30)),
             );
 
-            // WS-F: silk/fab graphics live on the Footprint primitive
-            // (`silk_f` / `silk_b` / `fab_f` / `fab_b`). The pre-refactor
-            // canvas rendered these from a per-canvas `EditorGraphic`
-            // slice; WS-E will rebuild that pipeline reading directly
-            // from the primitive. Pads-only rendering for now.
-            // TODO(merge-with-WS-E): render `Footprint::silk_f` etc.
+            // Silk/fab graphics live on the Footprint primitive
+            // (`silk_f` / `silk_b` / `fab_f` / `fab_b`). Pads-only
+            // rendering for now — the graphics pipeline reads
+            // directly from the primitive once the standalone
+            // `.snxfpt` editor grows that surface.
 
             // Courtyard — drawn as a hollow rectangle on Edge.Cuts.
             if self.state.layer_visibility.get(FpLayer::EdgeCuts)

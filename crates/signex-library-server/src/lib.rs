@@ -2,16 +2,15 @@
 //!
 //! Exposes a JSON HTTP API over a shared `AppState` (DB pool + lock manager).
 //! Liveness checks (`/health`, `/version`) stay anonymous so process
-//! supervisors don't need credentials. Every other route — the WS-4
-//! `/tables` + `/rows` row tier, the WS-D primitive routes, and the
-//! advisory `/rows/:row_id/locks` endpoint — is gated behind a bearer
-//! token check sourced from the `SIGNEX_API_TOKEN` env var.
+//! supervisors don't need credentials. Every other route — the
+//! `/tables` + `/rows` row tier, the primitive
+//! (`/symbols` / `/footprints` / `/sims`) routes, and the advisory
+//! `/rows/:row_id/locks` endpoint — is gated behind a bearer-token
+//! check sourced from the `SIGNEX_API_TOKEN` env var.
 //!
-//! ## v0.9-refactor-2 (DBLib row model)
+//! ## DBLib row model
 //!
-//! Per `v0.9-refactor-2-plan.md` §9, components live as rows inside a
-//! shared `component_rows` table. The legacy `/components` +
-//! `/components/:uuid/revisions` family is gone; in its place:
+//! Components live as rows inside a shared `component_rows` table:
 //!
 //! ```text
 //! GET    /tables                      list table names

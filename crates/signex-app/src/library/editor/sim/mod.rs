@@ -1,13 +1,12 @@
 //! Sim tab — SPICE deck editor + per-pin SPICE node mapping.
 //!
-//! WS-L: backed by the typed `SimModel` primitive bound through
-//! `Revision::sim_ref`. The view operates entirely on
-//! `state.sim` (resolved lazily by the dispatcher's
-//! `EditorTab::Sim` arm via `LibrarySet::resolve_sim`) and
-//! `state.sim_body`, the live `text_editor::Content` mirror of
-//! the SPICE deck.
+//! Backed by the typed `SimModel` primitive bound through
+//! `ComponentRow::sim_ref`. The view operates on `state.sim`
+//! (resolved lazily by the dispatcher's `PreviewTab::Simulation` arm
+//! via `LibrarySet::resolve_sim`) and `state.sim_body`, the live
+//! `text_editor::Content` mirror of the SPICE deck.
 //!
-//! The pin/node table iterates `editor.symbol.pins`; the SPICE-node
+//! The pin/node table iterates `state.symbol.pins`; the SPICE-node
 //! buffer for a given pin is read from
 //! `sim.default_node_map[pin_number]` and edits flow back through
 //! [`EditorMsg::SimSetPinNode`] which empty-removes / non-empty-
@@ -362,7 +361,7 @@ mod tests {
         crate::app::dispatch::library::apply_inline_edit(editor, msg);
     }
 
-    /// WS-L: enable → disable round-trip clears every Sim-side field.
+    /// Enable → disable round-trip clears every Sim-side field.
     #[test]
     fn sim_set_enabled_round_trip_clears_state() {
         let mut e = fixture_editor();
@@ -390,8 +389,7 @@ mod tests {
         assert!(e.row.sim_ref.is_none(), "disable should clear sim_ref");
     }
 
-    /// WS-L: setting a pin-node mapping persists into
-    /// `default_node_map`.
+    /// Setting a pin-node mapping persists into `default_node_map`.
     #[test]
     fn sim_set_pin_node_persists_into_default_node_map() {
         let mut e = fixture_editor();
@@ -410,7 +408,7 @@ mod tests {
         );
     }
 
-    /// WS-L: empty value removes the key from `default_node_map`.
+    /// Empty value removes the key from `default_node_map`.
     #[test]
     fn sim_set_pin_node_empty_removes_key() {
         let mut e = fixture_editor();
@@ -437,7 +435,7 @@ mod tests {
         );
     }
 
-    /// WS-L: whitespace-only values trim to empty and remove the key —
+    /// Whitespace-only values trim to empty and remove the key —
     /// mirrors the trimming that the SaveDraft path does on text input.
     #[test]
     fn sim_set_pin_node_whitespace_removes_key() {
@@ -463,7 +461,7 @@ mod tests {
         );
     }
 
-    /// WS-L: SimSetKind / SimSetName mutate the bound model in place.
+    /// SimSetKind / SimSetName mutate the bound model in place.
     #[test]
     fn sim_set_kind_and_name_mutate_in_place() {
         let mut e = fixture_editor();
@@ -475,7 +473,7 @@ mod tests {
         assert_eq!(sim.name, "LM358");
     }
 
-    /// WS-L: enable on an editor that already has a sim is idempotent
+    /// Enable on an editor that already has a sim is idempotent
     /// (no clobber).
     #[test]
     fn sim_set_enabled_true_is_idempotent_when_already_bound() {

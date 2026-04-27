@@ -1,4 +1,5 @@
-//! Faceted parametric search. Real Tantivy backend in Phase 1 WS-E.
+//! Faceted parametric search. Tantivy-backed implementation lives in
+//! [`crate::search_index`].
 
 use crate::adapter::ComponentSummary;
 

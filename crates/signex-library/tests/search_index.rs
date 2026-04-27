@@ -1,9 +1,10 @@
-//! Phase 1 WS-E acceptance tests for `TantivySearchIndex`.
+//! Acceptance tests for `TantivySearchIndex`.
 //!
-//! Per `v0.9-refactor-2-plan.md` §17, the Tantivy rewrite is deferred to
-//! v0.9.x — for WS-1 the search index just needs to compile and accept
-//! [`ComponentRow`] payloads. The corpus-level tests below now build rows
-//! directly and verify text/numeric query paths against the row schema.
+//! The full Tantivy rewrite for the DBLib model is deferred (see
+//! `docs/internal/docs/LIBRARY_PLAN.md`); the index needs only to
+//! compile and accept [`ComponentRow`] payloads for now. The
+//! corpus-level tests below build rows directly and verify
+//! text/numeric query paths against the row schema.
 //!
 //! Run with: `cargo test -p signex-library --features search-tantivy --test search_index`.
 

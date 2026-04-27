@@ -18,7 +18,7 @@ pub enum DocumentType {
 }
 
 // ---------------------------------------------------------------------------
-// Library entry (per-project library mount, v0.9 WS-H)
+// Library entry (per-project library mount)
 // ---------------------------------------------------------------------------
 
 /// How a [`LibraryEntry`] resolves on disk. Project-local libraries live
@@ -41,8 +41,8 @@ pub enum LibraryEntryKind {
 /// iterates this list at open-time and mounts each library via the
 /// matching adapter (currently `LocalGitAdapter` for all three kinds).
 ///
-/// Added by v0.9 WS-H — see `.claude/PRPs/v0.9-library-refactor-plan.md`
-/// §13 for the data-model rationale.
+/// See `docs/internal/docs/LIBRARY_PLAN.md` for the data-model
+/// rationale.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LibraryEntry {
     /// On-disk location. Relative to the project dir for
@@ -104,11 +104,11 @@ pub struct ProjectData {
     /// Currently selected variant if known from project context.
     #[serde(default)]
     pub active_variant: Option<String>,
-    /// Component libraries referenced by this project (v0.9 WS-H).
-    /// Project-open auto-mounts every entry; the project tree renders
-    /// each as a `Libraries ▸ <name>.snxlib` node. `#[serde(default)]`
-    /// so old `.snxprj` files (and `.standard_pro` files which know
-    /// nothing about Signex libraries) load with an empty list.
+    /// Component libraries referenced by this project. Project-open
+    /// auto-mounts every entry; the project tree renders each as a
+    /// `Libraries ▸ <name>.snxlib` node. `#[serde(default)]` so old
+    /// `.snxprj` files (and `.standard_pro` files which know nothing
+    /// about Signex libraries) load with an empty list.
     #[serde(default)]
     pub libraries: Vec<LibraryEntry>,
 }
@@ -130,10 +130,10 @@ impl ProjectData {
 mod tests {
     use super::*;
 
-    /// Old `.snxprj` files written before WS-H (which know nothing
-    /// about `libraries`) must round-trip cleanly with an empty
-    /// list. Backwards-compat is the load-bearing constraint here —
-    /// we cannot break existing project files.
+    /// `.snxprj` files written before the `libraries` field landed
+    /// must round-trip cleanly with an empty list. Backwards-compat
+    /// is the load-bearing constraint here — we cannot break
+    /// existing project files.
     #[test]
     fn project_data_loads_without_libraries_field() {
         let json = r#"{

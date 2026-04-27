@@ -51,7 +51,6 @@ impl Signex {
             MenuMessage::LibraryNewComponent => Some(self.update(Message::Library(
                 crate::library::LibraryMessage::NewComponent,
             ))),
-            // WS-H: Project tree library wiring
             MenuMessage::AddComponentLibrary => {
                 let path = self.document_state.active_project.and_then(|id| {
                     self.document_state

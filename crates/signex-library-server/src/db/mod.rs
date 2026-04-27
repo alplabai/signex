@@ -1,15 +1,14 @@
 //! Database layer — pool management, migrations, and component-row /
 //! primitive persistence helpers used by the route handlers.
 //!
-//! Per `v0.9-refactor-2-plan.md` §2.1, components live as rows inside
-//! category tables (Altium DBLib model). The legacy `Component` /
-//! `Revision` API from v0.9-original is gone; this module exposes:
+//! Components live as rows inside category tables (Altium DBLib
+//! model). This module exposes:
 //!
-//! * primitive CRUD (`insert_symbol` / `fetch_symbol` / …) — unchanged from
-//!   WS-D, since primitives stay file-shaped under the row model;
+//! * primitive CRUD (`insert_symbol` / `fetch_symbol` / …) —
+//!   primitives stay file-shaped under the row model;
 //! * row CRUD (`insert_row` / `fetch_row` / `update_row` / `delete_row`) +
 //!   table-name listing (`list_table_names` / `list_rows_in_table`) —
-//!   backing the new `/tables` and `/rows` HTTP routes.
+//!   backing the `/tables` and `/rows` HTTP routes.
 //!
 //! The pool is a thin enum over SQLite (default for tests + offline) and
 //! Postgres (production). Schema is portable across both — see
@@ -130,7 +129,7 @@ impl AppState {
         Ok(())
     }
 
-    // ── Component-row CRUD (WS-3 / WS-4 §9) ────────────────────────────────
+    // ── Component-row CRUD ─────────────────────────────────────────────────
     //
     // `component_rows` is the unified DBLib row table. `(library_id,
     // table_name, row_id)` is the primary key — same shape across SQLite
@@ -372,7 +371,7 @@ impl AppState {
             .collect()
     }
 
-    // ── Primitive CRUD (WS-D §9) ──────────────────────────────────────────
+    // ── Primitive CRUD ────────────────────────────────────────────────────
     //
     // The primitives table layout is identical for all three kinds, so we
     // share one generic helper per backend with the table name as a parameter.

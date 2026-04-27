@@ -1,6 +1,5 @@
 //! Mouser distributor adapter — API-key auth from OS keyring.
 //!
-//! Spec (WS-C):
 //! - API key stored in OS keyring under service name
 //!   `signex-distributor-mouser`. Adapter accepts the key directly via
 //!   `with_api_key` (test-friendly) or pulls it lazily from `KeyringStore`.

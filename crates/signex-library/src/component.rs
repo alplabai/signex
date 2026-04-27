@@ -189,9 +189,8 @@ mod tests {
         }
     }
 
-    /// Step 1.1 from the plan §6: a `ComponentRow` round-trips through JSON
-    /// without losing any fields. This is the foundational test the rest of
-    /// the WS-1 work hangs on.
+    /// `ComponentRow` round-trips through JSON without losing any
+    /// fields. Foundational test for the rest of the row-tier work.
     #[test]
     fn component_row_json_roundtrip() {
         let row = ComponentRow {

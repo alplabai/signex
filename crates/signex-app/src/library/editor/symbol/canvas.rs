@@ -1,10 +1,10 @@
 //! Symbol-tab interactive canvas.
 //!
-//! WS-F refactor: the canvas now reads the typed
-//! [`signex_library::Symbol`] primitive directly. The body rectangle
-//! is derived from `Symbol.graphics` (first `Rectangle` graphic), or
-//! defaults to a `[-5.08, -2.54] .. [5.08, 2.54]` rectangle when the
-//! primitive carries no body geometry yet.
+//! The canvas reads the typed [`signex_library::Symbol`] primitive
+//! directly. The body rectangle is derived from `Symbol.graphics`
+//! (first `Rectangle` graphic), or defaults to a
+//! `[-5.08, -2.54] .. [5.08, 2.54]` rectangle when the primitive
+//! carries no body geometry yet.
 //!
 //! Pan/zoom is intentionally fixed — the canvas auto-fits the body so
 //! the parent view can render side-by-side with the properties pane

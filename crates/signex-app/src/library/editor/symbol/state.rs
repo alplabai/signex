@@ -1,14 +1,12 @@
 //! Symbol-tab editor state.
 //!
-//! WS-F refactor: the editor now mutates a typed
-//! [`signex_library::Symbol`] primitive in-place — no more
-//! `(symbol …)` sexpr round-trip. Helpers below operate on a `&mut
-//! Symbol` so the dispatcher can call them directly off
-//! `ComponentEditorState.symbol`.
+//! The editor mutates a typed [`signex_library::Symbol`] primitive
+//! in-place. Helpers below operate on a `&mut Symbol` so the
+//! dispatcher can call them directly off the active editor state.
 //!
-//! Selection / hit-test / pin-add / move / delete logic is mostly
-//! preserved from the pre-refactor `SymbolDoc` so the canvas and the
-//! AI-stub apply path keep their behaviour.
+//! Selection / hit-test / pin-add / move / delete logic preserves
+//! the canvas + AI-stub apply behaviour the pre-refactor `SymbolDoc`
+//! had.
 
 use signex_library::{PinElectricalType, PinOrientation, Symbol, SymbolPin};
 
@@ -71,12 +69,12 @@ impl PinKind {
     }
 }
 
-/// One on-canvas text field (Designator / Value). WS-F note: the
-/// Designator + Value lookup roots on `Component.internal_pn` /
-/// `primary_mpn` (binding record), not on the Symbol primitive. We
-/// keep this struct + the `Field` variant on [`SymbolSelection`] so
-/// the canvas hit-test surface stays compatible while WS-E rebuilds
-/// the on-canvas drag-edit.
+/// One on-canvas text field (Designator / Value). The Designator +
+/// Value lookup roots on the host `ComponentRow::internal_pn` /
+/// `primary_mpn`, not on the Symbol primitive itself. The struct
+/// (and the `Field` variant on [`SymbolSelection`]) keeps the
+/// canvas hit-test surface compatible while the on-canvas
+/// drag-edit pipeline gets rebuilt.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SymbolField {
     pub key: FieldKey,
@@ -145,8 +143,9 @@ pub fn move_selected(sym: &mut Symbol, sel: Option<SymbolSelection>, x: f64, y: 
     {
         pin.position = [x, y];
     }
-    // SymbolSelection::Field — no-op until WS-E rebinds the on-canvas
-    // designator/value drag against `Component`.
+    // SymbolSelection::Field — no-op; the on-canvas designator /
+    // value drag re-binds against `ComponentRow` once that pipeline
+    // ships.
 }
 
 /// Delete whatever is currently selected. Returns `Some(new_sel)` if

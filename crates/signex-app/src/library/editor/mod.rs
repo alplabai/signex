@@ -2,30 +2,29 @@
 //! template-validated forms for parameters / supply / datasheet /
 //! simulation.
 //!
-//! Per `v0.9-refactor-2-plan.md` §11, the Component view is preview-
-//! only. Symbol and Footprint editing happens via standalone
-//! `.snxsym` / `.snxfpt` document tabs (WS-7); right-click on either
-//! render in the Preview tab fires
+//! In the v0.9-refactor-2 (DBLib) model, components are TSV rows
+//! addressed by [`crate::library::state::EditorAddress`]
+//! (`library_path + table + row_id`). The state lives on
+//! [`crate::library::state::ComponentPreviewState`].
+//!
+//! The Component view is preview-only: Symbol and Footprint render
+//! read-only. Editing happens via standalone `.snxsym` / `.snxfpt`
+//! document tabs in the main window — right-click on either render
+//! in the Preview tab fires
 //! [`crate::library::messages::LibraryMessage::OpenPrimitiveEditor`]
 //! to open the standalone editor.
 //!
 //! Tab count is 5: Preview / Parameters / Supply / Datasheet /
-//! Simulation. The History / Where-Used / Pin Map / Symbol / Footprint
-//! tabs from the original v0.9 layout are dropped — Pin Map folds
-//! into Preview as an inline subsection, History is reachable via
-//! `git log`, Where-Used is a footer line on Preview.
+//! Simulation. Pin Map folds into Preview as an inline subsection;
+//! History is reachable via `git log`; Where-Used is a footer line
+//! on Preview.
 
 pub mod datasheet_picker;
 pub mod params;
 pub mod preview;
 pub mod sim;
 pub mod supply;
-
-// `editor/symbol/` and `editor/footprint/` STAY on disk for WS-7 to
-// pick up as standalone document editors. Per plan §11 step 6.8, the
-// Component context drops its references to them — we keep the file
-// tree but stop declaring the modules from this `editor/mod.rs`. No
-// `pub mod symbol;` / `pub mod footprint;` lines here.
+pub mod symbol;
 
 use iced::widget::{Space, button, column, container, row, text};
 use iced::{Border, Element, Length, Theme};

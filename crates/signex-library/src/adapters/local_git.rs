@@ -1,12 +1,12 @@
 //! Local + git storage adapter — `*.snxlib/` directory backed by libgit2.
 //!
-//! Per `v0.9-refactor-2-plan.md` §7, this adapter speaks the DBLib row model:
-//! a "component" is a row inside `tables/<category>.tsv`, not a file holding a
-//! revision chain. WS-2 wires up the row CRUD — table read/write, insert /
-//! update / delete by row id, lookup by `internal_pn` — alongside the
-//! pre-existing primitive (`Symbol` / `Footprint` / `SimModel`) flows.
+//! Speaks the DBLib row model: a "component" is a row inside
+//! `tables/<category>.tsv`, not a file holding a revision chain.
+//! Row CRUD — table read/write, insert / update / delete by row id,
+//! lookup by `internal_pn` — sits alongside the primitive
+//! (`Symbol` / `Footprint` / `SimModel`) flows.
 //!
-//! Layout per the refactor (§3):
+//! Layout:
 //!
 //! ```text
 //! MyComponents.snxlib/

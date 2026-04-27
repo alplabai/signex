@@ -5,9 +5,9 @@
 //! its `last_renewed + idle_ttl` has passed — that's the "idle TTL" the spec
 //! calls out (default 10 min, override per-test via `set_idle_ttl`).
 //!
-//! Per `v0.9-refactor-2-plan.md` §7 the lockable identifier is now a row's
-//! `RowId`; the manager keeps a bare `Uuid` so it stays type-agnostic across
-//! the WS-1 identity refactor. Callers convert via `RowId::as_uuid()`.
+//! The lockable identifier is a row's `RowId`; the manager keeps a
+//! bare `Uuid` so it stays type-agnostic. Callers convert via
+//! `RowId::as_uuid()`.
 //!
 //! Persistence is intentionally NOT in the SQL `locks` table by default: the
 //! advisory layer is purely in-memory and cheap to reset on server restart.

@@ -99,8 +99,8 @@ impl Signex {
             return Task::none();
         }
         let closing_path = self.document_state.tabs[idx].path.clone();
-        // WS-I: tab-not-window — capture before removal so the
-        // editor-state cleanup below can run after the tab is dropped.
+        // Capture the tab kind before removal so the editor-state
+        // cleanup below can run after the tab is dropped.
         let closing_kind = self.document_state.tabs[idx].kind.clone();
 
         // If the tab has an undocked window open, close that window
@@ -114,7 +114,8 @@ impl Signex {
             .iter()
             .filter_map(|(id, kind)| match (kind, &closing_kind) {
                 (WindowKind::UndockedTab { path, .. }, _) if path == &closing_path => Some(*id),
-                // WS-I: tab-not-window
+                // Component Preview windows are addressed by the DBLib
+                // row tier `(library_path, table, row_id)`.
                 (
                     WindowKind::ComponentEditor {
                         library_path,
@@ -138,10 +139,10 @@ impl Signex {
             self.document_state.active_path = None;
         }
 
-        // WS-I: tab-not-window — drop the editor state when the tab is
-        // a Component Editor. The library subsystem doesn't have a
-        // dirty-park mechanism yet, so closing the tab discards the
-        // draft (matches Wave 2's window-close behaviour).
+        // Drop the editor state when the tab is a Component Preview.
+        // The library subsystem has no dirty-park mechanism yet, so
+        // closing the tab discards the draft (matches the
+        // window-close behaviour).
         if let crate::app::TabKind::ComponentEditor(ref ce) = closing_kind {
             self.library
                 .editors
@@ -149,6 +150,15 @@ impl Signex {
                     ce.library_path.clone(),
                     ce.component_id,
                 ));
+        }
+        // Standalone primitive editor tabs — drop the per-tab editor
+        // state on close. Same shape as Component Preview cleanup
+        // (no dirty-park yet, so closing discards the in-flight draft).
+        if let crate::app::TabKind::SymbolEditor(ref p) = closing_kind {
+            self.document_state.symbol_editors.remove(p);
+        }
+        if let crate::app::TabKind::FootprintEditor(ref p) = closing_kind {
+            self.document_state.footprint_editors.remove(p);
         }
         self.document_state.tabs.remove(idx);
         if self.document_state.active_tab >= self.document_state.tabs.len()

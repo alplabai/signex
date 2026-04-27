@@ -1,8 +1,9 @@
 //! Integration tests for `KeyringStore`.
 //!
-//! WS-C: round-trip test gated by platform availability. Windows Credential
-//! Manager is available in tests; Linux/macOS CI runners often lack a
-//! `Secret Service` daemon, so those tests run conditionally.
+//! Round-trip test gated by platform availability. Windows
+//! Credential Manager is available in tests; Linux/macOS CI runners
+//! often lack a `Secret Service` daemon, so those tests run
+//! conditionally.
 
 #![cfg(feature = "distributors-community")]
 
@@ -91,7 +92,8 @@ fn keyring_overwrite_replaces_value() {
 
 #[test]
 fn service_name_format_matches_spec() {
-    // Per WS-C: `signex-distributor-<provider>`. No network or backend touch.
+    // Service-name format: `signex-distributor-<provider>`. No
+    // network or backend touch.
     let store = KeyringStore::for_provider("digikey", "user1");
     assert_eq!(store.service_name(), "signex-distributor-digikey");
     assert_eq!(store.username(), "user1");

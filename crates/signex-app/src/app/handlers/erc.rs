@@ -884,9 +884,9 @@ impl Signex {
             return Task::none();
         };
         let path = tab.path.clone();
-        // WS-I: tab-not-window — Component Editor tabs undock to a
-        // window with `WindowKind::ComponentEditor` so the editor view
-        // dispatch picks it up. Schematic / PCB tabs keep using
+        // Component Preview tabs undock to a window with
+        // `WindowKind::ComponentEditor` so the editor view dispatch
+        // picks it up. Schematic / PCB tabs use
         // `WindowKind::UndockedTab` as before.
         let component_editor = tab.kind.as_component_editor().cloned();
 

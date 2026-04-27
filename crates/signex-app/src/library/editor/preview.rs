@@ -1,11 +1,10 @@
 //! Preview tab — read-only Symbol + Footprint render side-by-side,
 //! inline Pin Map subsection, Where-Used footer line.
 //!
-//! Per `v0.9-refactor-2-plan.md` §11, the Preview surface is purely
-//! read-only for primitives; right-click on either render → context
-//! menu fires
+//! The Preview surface is purely read-only for primitives;
+//! right-click on either render → context menu fires
 //! [`crate::library::messages::LibraryMessage::OpenPrimitiveEditor`]
-//! to open the standalone `.snxsym` / `.snxfpt` editor (WS-7).
+//! to open the standalone `.snxsym` / `.snxfpt` document tab.
 //!
 //! The Symbol render uses a minimal preview canvas — no pan/zoom, no
 //! drag/drop, just an auto-fit body rectangle + pin stubs. Same for

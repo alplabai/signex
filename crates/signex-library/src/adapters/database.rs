@@ -1,17 +1,17 @@
 //! `LibraryAdapter` over the HTTP API exposed by `signex-library-server`.
 //!
-//! The adapter is a synchronous facade for the trait. Per
-//! `v0.9-refactor-2-plan.md` §8 (WS-3), row CRUD speaks to the new
-//! `/tables` / `/rows` routes — primitive (`/symbols` / `/footprints` /
-//! `/sims`) wiring is unchanged from v0.9-original because primitives are
-//! already row-shaped under the refactor.
+//! Synchronous facade for the trait. Row CRUD speaks to the
+//! `/tables` / `/rows` routes; primitive (`/symbols` / `/footprints`
+//! / `/sims`) wiring is unchanged because primitives stay
+//! file-shaped under the DBLib model.
 //!
-//! The new routes (owned by WS-4) are addressed by a `library_id` query
-//! parameter — the adapter sources its own from
-//! `manifest().library.library_id`. Mutating calls carry their commit
-//! message in the `x-signex-message` header so the server-side audit log
-//! has it (the DB backend doesn't have its own commit graph the way
-//! `LocalGitAdapter` does — see TODO around the `audit_log` table below).
+//! Routes are addressed by a `library_id` query parameter — the
+//! adapter sources its own from `manifest().library.library_id`.
+//! Mutating calls carry their commit message in the
+//! `x-signex-message` header so the server-side audit log has it
+//! (the DB backend doesn't have its own commit graph the way
+//! `LocalGitAdapter` does — see TODO around the `audit_log` table
+//! below).
 
 use std::sync::OnceLock;
 
@@ -27,8 +27,8 @@ use crate::primitive::{Footprint, SimModel, Symbol};
 pub struct DatabaseAdapter {
     manifest: Manifest,
     base_url: String,
-    /// Bearer token sent via `Authorization: Bearer <token>`. WS-3 may
-    /// extend this; for now it's a static credential.
+    /// Bearer token sent via `Authorization: Bearer <token>`. Static
+    /// credential for now; OIDC lands later.
     token: Option<String>,
     /// Caller-facing string used for advisory locks — defaults to the
     /// bearer token's caller identity. When OIDC lands this becomes the
@@ -211,10 +211,10 @@ impl LibraryAdapter for DatabaseAdapter {
         &self.manifest
     }
 
-    // ── Row + table CRUD (WS-3) ──────────────────────────────────────────
+    // ── Row + table CRUD ─────────────────────────────────────────────────
     //
-    // The adapter forwards each method to its planned route on
-    // `signex-library-server` (WS-4). The server-side DB schema lives in
+    // The adapter forwards each method to its route on
+    // `signex-library-server`. The server-side DB schema lives in
     // `migrations/0005_tabular_components.sql`; the wire format is the
     // `ComponentRow` JSON serialisation defined in `component::ComponentRow`.
     //

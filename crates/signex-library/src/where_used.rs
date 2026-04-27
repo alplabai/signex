@@ -1,4 +1,4 @@
-//! Where-used reverse index (Phase 1 WS-G — refactored for the row model).
+//! Where-used reverse index — keyed by `RowId` for the DBLib model.
 //!
 //! Pure data structure. The consumer (signex-app) pushes references in via
 //! `ingest_sheet` whenever a sheet is opened or saved, and drops a project's

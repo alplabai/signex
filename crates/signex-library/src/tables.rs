@@ -16,9 +16,9 @@
 //!
 //! `Option<PrimitiveRef>` cells: empty string = `None`, JSON = `Some`.
 //!
-//! This module is the *file format*; commit / branch handling lives in the
-//! LocalGit adapter (WS-2). The unit tests here only exercise the
-//! TSV serialisation contract.
+//! This module is the *file format*; commit / branch handling lives
+//! in [`crate::adapters::local_git::LocalGitAdapter`]. The unit
+//! tests here only exercise the TSV serialisation contract.
 
 use std::path::Path;
 

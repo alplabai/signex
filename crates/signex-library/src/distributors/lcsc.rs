@@ -1,6 +1,5 @@
 //! LCSC distributor adapter — anonymous, polite-throttled (1 req/s).
 //!
-//! Spec (WS-C):
 //! - No auth (anonymous public catalogue endpoint).
 //! - **1 req/s** polite throttle. Implemented as a `Mutex<Option<Instant>>`
 //!   that delays the next request until at least 1 s after the last one

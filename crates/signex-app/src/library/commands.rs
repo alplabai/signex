@@ -28,15 +28,7 @@ pub fn open_library(state: &mut LibraryState, root: PathBuf) -> Result<(), Libra
     Ok(())
 }
 
-// WS-H: Project tree library wiring ─────────────────────────────────
-//
-// The plan (`v0.9-library-refactor-plan.md` §13) documents
-// `create_library(set: &mut LibrarySet, project: &mut Project, name)`
-// against a `LibrarySet` API that ships with WS-E. This crate
-// currently uses `LibraryState::open_library` (which is the same
-// idea — a list of mounted adapters keyed by absolute path), so the
-// helper signature wraps that directly. WS-E may rename the
-// receiver type without touching the body.
+// ── Library lifecycle helpers ────────────────────────────────────────
 
 /// Create a fresh project-local library at `<project_dir>/<name>.snxlib/`.
 ///
@@ -99,9 +91,9 @@ pub fn create_library(
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),
         users: UsersConfig::default(),
-        // WS-8 (DBLib model): no `[[tables]]` overrides at create
-        // time — class-table routing falls back to mechanical plural
-        // (`<class>s.tsv`) until the user adds explicit overrides.
+        // No `[[tables]]` overrides at create time — class-table
+        // routing falls back to mechanical plural (`<class>s.tsv`)
+        // until the user adds explicit overrides.
         tables: Vec::new(),
     };
 
@@ -255,7 +247,7 @@ pub fn commit_revision(
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// WS-8: New Component create-flow (DBLib model — components are rows)
+// New Component create-flow (components are TSV rows in the DBLib model)
 // ─────────────────────────────────────────────────────────────────────
 
 // The create_component_row helper returns `LibraryError` directly —
@@ -409,7 +401,7 @@ pub fn list_components_filtered(
 /// Stub: emit `tracing::info!` with the use-site coordinates the
 /// editor's Where-Used tab handed back.
 pub fn jump_to_use_site(site: &signex_library::UseSite) {
-    // WS-8 (DBLib model): `UseSite::version_pinned` is gone — past
+    // `UseSite::version_pinned` is gone in the DBLib model — past
     // versions of a row are read from `git log` (LocalGit) or the
     // audit trail (Database) rather than carried inline. The handler
     // surfaces just the project / sheet / instance triple now.

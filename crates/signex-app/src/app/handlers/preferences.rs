@@ -291,13 +291,12 @@ impl Signex {
                 crate::fonts::write_erc_severity_overrides(&self.ui_state.erc_severity_override);
             }
             PrefMsg::LibrarySettings(settings_msg) => {
-                // UI-WS7: route the Distributor APIs panel's
-                // SettingsMsg back through the library dispatcher so
-                // the canonical state (`LibraryState.settings`) +
-                // any async tasks (OAuth flow, Mouser test) live in
-                // one place. Returning the dispatch-task lets long-
-                // running flows like the OAuth handshake settle on
-                // the iced runtime.
+                // Route the Distributor APIs panel's SettingsMsg back
+                // through the library dispatcher so the canonical
+                // state (`LibraryState.settings`) and any async tasks
+                // (OAuth flow, Mouser test) live in one place.
+                // Returning the dispatch task lets long-running flows
+                // like the OAuth handshake settle on the iced runtime.
                 return self.dispatch_library_message(
                     crate::library::messages::LibraryMessage::Settings(settings_msg),
                 );

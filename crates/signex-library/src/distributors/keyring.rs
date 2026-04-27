@@ -1,6 +1,5 @@
 //! OS keyring credential storage for distributor adapters.
 //!
-//! Spec (WS-C):
 //! - Service name format: `signex-distributor-<provider>`
 //! - Used by Mouser (API key) and DigiKey (OAuth refresh token).
 //! - Tests gated by platform: Windows Credential Manager works; Linux/macOS

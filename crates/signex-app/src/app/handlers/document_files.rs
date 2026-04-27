@@ -39,7 +39,6 @@ impl Signex {
             "standard_pro" | "snxprj" => self.open_project_file(path)?,
             "standard_sch" | "snxsch" => self.open_schematic_file(path)?,
             "standard_pcb" | "snxpcb" => self.open_pcb_file(path)?,
-            // WS-7 (refactor-2): standalone primitive editor tabs
             "snxsym" | "snxfpt" => {
                 let _ = self.handle_open_primitive(path);
             }
@@ -78,12 +77,11 @@ impl Signex {
         let data = signex_types::project::parse_project(project_path)
             .with_context(|| format!("parse project {}", project_path.display()))?;
         let id = self.document_state.mint_project_id();
-        // WS-H: Project tree library wiring — auto-mount every
-        // library referenced by `Project::libraries` so the project
-        // tree picks them up before the panel rebuild fires. Errors
-        // are logged inside `auto_mount_project_libraries` and never
-        // bubble: a missing library shouldn't block the project
-        // from loading.
+        // Auto-mount every library referenced by `Project::libraries`
+        // so the project tree picks them up before the panel rebuild
+        // fires. Errors are logged inside `auto_mount_project_libraries`
+        // and never bubble: a missing library shouldn't block the
+        // project from loading.
         let mounted =
             crate::library::commands::auto_mount_project_libraries(&mut self.library, &data);
         if mounted > 0 {
@@ -174,11 +172,11 @@ impl Signex {
     }
 
     fn save_active_document(&mut self) -> Result<()> {
-        // WS-7 (refactor-2): standalone primitive editor tabs route
-        // Ctrl+S through `save_primitive_tab_at` so JSON persistence
-        // happens before the generic schematic-save handler runs (it
-        // would no-op for these tabs but the diagnostic log line
-        // would be misleading).
+        // Standalone `.snxsym` / `.snxfpt` document tabs route Ctrl+S
+        // through `save_primitive_tab_at` so JSON persistence happens
+        // before the generic schematic-save handler runs (it would
+        // no-op for these tabs but the diagnostic log line would be
+        // misleading).
         if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab) {
             match &active_tab.kind {
                 super::super::TabKind::SymbolEditor(path)

@@ -330,7 +330,6 @@ pub struct DocumentState {
     /// `engine_for_window`. Save-as rekeys an entry via
     /// `rekey_engine(old, new)`.
     pub engines: std::collections::HashMap<PathBuf, signex_engine::Engine>,
-    // WS-7 (refactor-2): standalone primitive editor tabs
     /// Per-tab state for open `.snxsym` document tabs. Keyed by the
     /// file path stored on `TabInfo.path` for matching
     /// `TabKind::SymbolEditor(path)` tabs. Insert on

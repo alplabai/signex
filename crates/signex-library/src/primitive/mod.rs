@@ -31,9 +31,6 @@ pub use symbol::{
 
 /// Discriminator surfaced on `PrimitiveSummary` so a single `list_*` API can
 /// describe heterogeneous primitive collections.
-///
-/// (Reserved for WS-C — `LibraryAdapter::list_symbols/_footprints/_sims` —
-/// but lives here so the type is sharable from day one.)
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 #[non_exhaustive]
 pub enum PrimitiveKind {

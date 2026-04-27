@@ -1,10 +1,8 @@
-//! Footprint editor tests — WS-F.
+//! Footprint editor tests.
 //!
-//! The pre-refactor suite exercised the sexpr round-trip; WS-F dropped
-//! that path in favour of typed `Footprint` primitives. The smaller
-//! `from_footprint` / `add_pad_at` / `sync_pads_to_primitive` flow is
-//! covered in `state.rs` itself; the tests below cover the layer
-//! visibility helpers + the pad hit-test surface.
+//! Coverage focuses on the layer visibility helpers + the pad
+//! hit-test surface; the smaller `from_footprint` / `add_pad_at` /
+//! `sync_pads_to_primitive` flow is covered in `state.rs` itself.
 
 use super::layers::{FpLayer, LayerVisibility};
 use super::state::FootprintEditorState;

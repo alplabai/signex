@@ -1,5 +1,5 @@
-//! Integration tests for WS-4 — DB schema migrations + the `/tables` and
-//! `/rows` HTTP routes that replace the legacy `/components` family.
+//! Integration tests covering DB schema migrations + the `/tables`
+//! and `/rows` HTTP routes for the DBLib row model.
 //!
 //! Default backend: in-memory SQLite. Postgres path is gated behind
 //! `SIGNEX_TEST_PG_URL` env var so CI without Postgres still passes.
@@ -86,7 +86,7 @@ async fn migrations_apply_cleanly() {
             .await
             .unwrap();
 
-    // The WS-4 row table must exist alongside the WS-D primitive tables and
+    // The row table must exist alongside the primitive tables and
     // any legacy tables retained for forward-compat.
     for required in ["component_rows", "symbols", "footprints", "sims"] {
         assert!(
@@ -348,8 +348,8 @@ async fn route_unauthenticated_returns_401() {
     assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
 }
 
-// Lock tests — kept here because the lock manager keys off `RowId.as_uuid()`
-// after the WS-4 refactor and the ergonomics are easiest to exercise from
+// Lock tests — kept here because the lock manager keys off
+// `RowId.as_uuid()` and the ergonomics are easiest to exercise from
 // a single integration suite.
 
 #[tokio::test]
