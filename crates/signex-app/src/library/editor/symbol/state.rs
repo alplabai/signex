@@ -56,14 +56,10 @@ const DEFAULT_PIN_LENGTH_MM: f64 = 2.54;
 /// `Symbol::pins`. Auto-assigns the next free numeric pin number.
 pub fn add_pin(sym: &mut Symbol, x: f64, y: f64) -> usize {
     let next_num = next_pin_number(sym);
-    sym.pins.push(SymbolPin {
-        number: next_num.clone(),
-        name: format!("PIN{next_num}"),
-        electrical: PinElectricalType::Unspecified,
-        position: [x, y],
-        orientation: PinOrientation::Right,
-        length: DEFAULT_PIN_LENGTH_MM,
-    });
+    let mut pin = SymbolPin::new(next_num.clone(), format!("PIN{next_num}"));
+    pin.position = [x, y];
+    pin.length = DEFAULT_PIN_LENGTH_MM;
+    sym.pins.push(pin);
     sym.pins.len() - 1
 }
 

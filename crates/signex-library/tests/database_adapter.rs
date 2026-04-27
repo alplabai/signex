@@ -65,13 +65,10 @@ fn fixture_symbol() -> Symbol {
         uuid: Uuid::now_v7(),
         name: "OPAMP-DUAL-8".into(),
         anchor: [0.0, 0.0],
-        pins: vec![SymbolPin {
-            number: "1".into(),
-            name: "OUT".into(),
-            electrical: PinElectricalType::Output,
-            position: [0.0, 0.0],
-            orientation: PinOrientation::Right,
-            length: 2.54,
+        pins: vec![{
+            let mut p = SymbolPin::new("1", "OUT");
+            p.electrical = PinElectricalType::Output;
+            p
         }],
         graphics: Vec::new(),
         schematic_params: ParamMap::new(),
