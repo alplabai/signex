@@ -12,11 +12,21 @@
 use std::path::PathBuf;
 
 use signex_library::{
-    AlternateStatus, BodyShape, ComponentClass, ComponentId, ComponentSummary, DistributorSource,
-    LifecycleState, RowId, SimKind, SimModel, UseSite, Version,
+    AlternateStatus, BodyShape, ComponentClass, ComponentSummary, DistributorSource,
+    LifecycleState, RowId, SimKind, SimModel, UseSite,
 };
+use uuid::Uuid;
 
 use super::state::{EditorAddress, EditorTab};
+
+// WS-5 (DBLib): kept as type aliases until WS-6 retargets the editor
+// at `ComponentPreviewState`. The original `ComponentId` was a
+// `uuid::Uuid` newtype; `Version` was a `u32` revision counter. Both
+// fold away once the row tier ships everywhere.
+#[allow(dead_code)]
+pub type ComponentId = Uuid;
+#[allow(dead_code)]
+pub type Version = u32;
 
 /// Top-level library message — folded into [`Message::Library`].
 #[derive(Debug, Clone)]
@@ -47,6 +57,10 @@ pub enum LibraryMessage {
     // ── WS-E: New Component flow ─────────────────────────────────────
     /// File ▸ Library ▸ New Component… — opens the New Component modal.
     NewComponent,
+    /// New Component modal — picks the target table for the new row
+    /// (resolves to a TSV filename stem in the LocalGit backend). WS-8
+    /// owns the modal that fires this.
+    NewComponentSetTable(String),
     // WS-H: Project tree library wiring
     /// Project tree → right-click → Add New to Project ▸ Component
     /// Library. Carries the active project's root directory; the
@@ -124,6 +138,31 @@ pub enum LibraryMessage {
         library_path: PathBuf,
         component_id: ComponentId,
         version: Version,
+    },
+    // ── WS-5 (DBLib): row-tier panel wiring ──────────────────────────
+    /// User clicked a row inside the Library panel's inline grid for
+    /// a category. Opens the row as a Component Preview tab in the
+    /// main window (WS-6 owns the actual tab construction; this
+    /// variant carries the address so WS-6 can re-key from
+    /// `LibraryMessage::ComponentPreviewOpened` once it lands).
+    OpenComponentRow {
+        library_path: PathBuf,
+        table: String,
+        row_id: RowId,
+    },
+    /// Open a standalone primitive editor (`.snxsym` / `.snxfpt`) as a
+    /// document tab. Fired from the row-row right-click menu's
+    /// "Edit Symbol" / "Edit Footprint" entries; WS-7 owns the
+    /// tab-construction handler that consumes it.
+    OpenPrimitiveEditor { path: PathBuf },
+    /// Internal trace-only signal: a Component Preview tab was opened
+    /// for the given address. WS-5 fires this from
+    /// `OpenComponentRow` so WS-6 has a single message to subscribe
+    /// to once the row-shaped editor lands.
+    ComponentPreviewOpened {
+        path: PathBuf,
+        table: String,
+        row_id: RowId,
     },
 }
 

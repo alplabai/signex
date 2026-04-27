@@ -280,6 +280,78 @@ impl Signex {
             LibraryMessage::CreateLibraryAt(project_root) => {
                 self.handle_create_library_for_project(project_root)
             }
+            // ── WS-5 (DBLib): row-tier panel wiring ──────────────
+            LibraryMessage::OpenComponentRow {
+                library_path,
+                table,
+                row_id,
+            } => {
+                // WS-6 owns the actual Component Preview tab
+                // construction. v0.9-refactor-2 plan §11 lays out the
+                // 5-tab `ComponentPreviewState`; until that lands we
+                // emit a tracing breadcrumb and re-fire
+                // `ComponentPreviewOpened` so WS-6 can pick the
+                // synthetic-tab-path off the same address shape used
+                // here.
+                let synthetic_path = library_path
+                    .join("tables")
+                    .join(format!("{table}.tsv#{row_id}"));
+                tracing::info!(
+                    target: "signex::library",
+                    library = %library_path.display(),
+                    table = %table,
+                    row_id = %row_id,
+                    "OpenComponentRow — Component Preview tab construction lands in WS-6"
+                );
+                Task::done(Message::Library(LibraryMessage::ComponentPreviewOpened {
+                    path: synthetic_path,
+                    table,
+                    row_id,
+                }))
+            }
+            LibraryMessage::OpenPrimitiveEditor { path } => {
+                // WS-7 owns the standalone `.snxsym` / `.snxfpt`
+                // document-tab handler. Until that lands, log the
+                // request so the panel-side trace is visible end to
+                // end.
+                tracing::info!(
+                    target: "signex::library",
+                    primitive = %path.display(),
+                    "OpenPrimitiveEditor — standalone primitive tab lands in WS-7"
+                );
+                Task::none()
+            }
+            LibraryMessage::ComponentPreviewOpened {
+                path,
+                table,
+                row_id,
+            } => {
+                // Trace-only sink. WS-6 will replace the body with
+                // real tab construction; the variant exists in the
+                // Wave 2 contract so all four slices stitch together
+                // at merge time without further enum churn.
+                tracing::debug!(
+                    target: "signex::library",
+                    path = %path.display(),
+                    table = %table,
+                    row_id = %row_id,
+                    "ComponentPreviewOpened — placeholder until WS-6"
+                );
+                Task::none()
+            }
+            LibraryMessage::NewComponentSetTable(table) => {
+                // WS-8 owns the New Component modal's table picker;
+                // the dispatcher shape is already wired so the four
+                // Wave 2 slices stitch at merge. v0.9 keeps this as
+                // a trace-only no-op until the modal grows the
+                // Table pick_list.
+                tracing::debug!(
+                    target: "signex::library",
+                    table = %table,
+                    "NewComponentSetTable — modal pre-select lands in WS-8"
+                );
+                Task::none()
+            }
         }
     }
 
@@ -373,7 +445,7 @@ impl Signex {
     fn handle_open_editor(
         &mut self,
         library_path: std::path::PathBuf,
-        component_id: signex_library::ComponentId,
+        component_id: uuid::Uuid,
     ) -> Task<Message> {
         let address = EditorAddress::new(library_path.clone(), component_id);
         let synthetic_path = address.synthetic_tab_path();
@@ -443,11 +515,18 @@ impl Signex {
                 picker.filter = s;
             }
             PickerMsg::SelectComponent(summary) => {
+                // WS-5 (DBLib): `ComponentSummary` lost its `uuid`
+                // alias when WS-1 renamed `ComponentId` → `RowId`.
+                // Match against the row tier's `row_id` directly.
                 let path = self
                     .library
                     .open_libraries
                     .iter()
-                    .find(|lib| lib.cached_components.iter().any(|c| c.uuid == summary.uuid))
+                    .find(|lib| {
+                        lib.cached_components
+                            .iter()
+                            .any(|c| c.row_id == summary.row_id)
+                    })
                     .map(|lib| lib.root.clone());
                 picker.selected = path.map(|p| (p, summary));
             }
@@ -658,24 +737,17 @@ impl Signex {
                 return Task::none();
             }
             EditorMsg::Commit => {
-                match commands::commit_revision(
-                    &mut self.library,
-                    &address,
-                    "commit (signex-app phase 1)",
-                ) {
-                    Ok(rev) => {
-                        if let Some(editor) = self.library.editors.get_mut(&address) {
-                            editor.component.revisions.push(rev.clone());
-                            editor.component.revisions.sort_by_key(|r| r.version);
-                            editor.component.head = rev.version;
-                            editor.displayed_version = rev.version;
-                            editor.history_selected = Some(rev.version);
-                        }
-                    }
-                    Err(e) => {
-                        tracing::warn!(target: "signex::library", error = %e, "commit failed");
-                    }
-                }
+                // WS-5 (DBLib): the v0.9-original `commit_revision`
+                // path mutated `Component::revisions` + `head`; that
+                // model is gone in the row tier. WS-6 owns the
+                // replacement (a single `adapter.update_row` call
+                // with a fresh content hash). Leaving the handler as
+                // a trace-only stub until the row-shaped editor lands.
+                tracing::warn!(
+                    target: "signex::library",
+                    address = ?address,
+                    "EditorMsg::Commit — WS-6 wires the row-tier commit; stub no-op"
+                );
                 return Task::none();
             }
             EditorMsg::SubmitForReview => {
@@ -699,62 +771,25 @@ impl Signex {
                 return Task::none();
             }
             EditorMsg::SubmitForReviewConfirm => {
-                let editor = match self.library.editors.get_mut(&address) {
-                    Some(e) => e,
-                    None => return Task::none(),
-                };
-                if editor.review_in_flight {
-                    return Task::none();
+                // WS-5 (DBLib): the v0.9-original `save_revision` API
+                // is gone — review submissions for a row tier ride
+                // through `adapter.update_row(&table, row, msg)` with
+                // the lifecycle bumped on the row payload. WS-6 wires
+                // the replacement; until then the handler reports a
+                // "not yet implemented" status so the UI doesn't
+                // hang in the in-flight state.
+                if let Some(editor) = self.library.editors.get_mut(&address) {
+                    editor.review_in_flight = false;
+                    editor.review_status = Some(
+                        "Submit-for-Review wires through to the new update_row path in WS-6".into(),
+                    );
                 }
-                editor.review_in_flight = true;
-                editor.review_status = Some("Submitting…".to_string());
-
-                let library_root = editor.library_root.clone();
-                let component_id = editor.component_id;
-                let mut revision = editor.draft.clone();
-                revision.state = signex_library::LifecycleState::InReview;
-                revision.refresh_content_hash();
-                let message = if editor.review_notes_buf.trim().is_empty() {
-                    format!("submit for review: {}", editor.display_internal_pn)
-                } else {
-                    format!(
-                        "submit for review: {}\n\n{}",
-                        editor.display_internal_pn,
-                        editor.review_notes_buf.trim()
-                    )
-                };
-
-                let library_id = match self.library.library_at(&library_root) {
-                    Some(lib) => lib.library_id,
-                    None => {
-                        return Task::done(Message::Library(LibraryMessage::EditorEvent {
-                            library_path: address.library_path.clone(),
-                            component_id: address.component_id,
-                            msg: EditorMsg::SubmitForReviewResult(Err(
-                                "library no longer open".into()
-                            )),
-                        }));
-                    }
-                };
-                let adapter = match self.library.set.get(library_id) {
-                    Some(a) => a,
-                    None => {
-                        return Task::done(Message::Library(LibraryMessage::EditorEvent {
-                            library_path: address.library_path.clone(),
-                            component_id: address.component_id,
-                            msg: EditorMsg::SubmitForReviewResult(
-                                Err("library not mounted".into()),
-                            ),
-                        }));
-                    }
-                };
-                let result = adapter
-                    .save_revision(component_id, revision, &message)
-                    .map_err(|e| e.to_string());
                 return Task::done(Message::Library(LibraryMessage::EditorEvent {
-                    library_path: address.library_path,
+                    library_path: address.library_path.clone(),
                     component_id: address.component_id,
-                    msg: EditorMsg::SubmitForReviewResult(result),
+                    msg: EditorMsg::SubmitForReviewResult(Err(
+                        "submit-for-review path is WS-6 territory".into(),
+                    )),
                 }));
             }
             EditorMsg::SubmitForReviewResult(result) => {
