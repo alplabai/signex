@@ -70,7 +70,11 @@ pub fn parse(src: &str) -> Result<Vec<RuleAst>, Vec<(usize, String)>> {
 // ---------------------------------------------------------------------------
 
 fn program_parser<'src>() -> impl Parser<'src, &'src str, Vec<RuleAst>, Err<'src>> {
-    rule_parser().padded().repeated().collect().then_ignore(end())
+    rule_parser()
+        .padded()
+        .repeated()
+        .collect()
+        .then_ignore(end())
 }
 
 // ---------------------------------------------------------------------------
@@ -123,15 +127,17 @@ fn rule_parser<'src>() -> impl Parser<'src, &'src str, RuleAst, Err<'src>> {
         .then(kw("scope").ignore_then(scope).or_not())
         .then(kw("when").ignore_then(expr))
         .then(kw("then").ignore_then(severity).then(str_lit))
-        .map(|(((((id, app), target), scope), when), (severity, message))| RuleAst {
-            id,
-            applicability: app.unwrap_or(ApplicabilityAst::All),
-            target,
-            scope: scope.unwrap_or(ScopeKind::Sheet),
-            when,
-            severity,
-            message,
-        })
+        .map(
+            |(((((id, app), target), scope), when), (severity, message))| RuleAst {
+                id,
+                applicability: app.unwrap_or(ApplicabilityAst::All),
+                target,
+                scope: scope.unwrap_or(ScopeKind::Sheet),
+                when,
+                severity,
+                message,
+            },
+        )
 }
 
 // ---------------------------------------------------------------------------
@@ -150,23 +156,24 @@ fn expr_parser<'src>() -> impl Parser<'src, &'src str, ExprAst, Err<'src>> {
             .collect::<Vec<_>>()
             .then(primary.clone())
             .map(|(nots, base)| {
-                nots
-                    .into_iter()
+                nots.into_iter()
                     .rev()
                     .fold(base, |acc, _| ExprAst::Not(Box::new(acc)))
             });
 
         // and_expr := not_expr ("and" not_expr)*
-        let and_expr = not_expr.clone().foldl(
-            kw("and").ignore_then(not_expr).repeated(),
-            |a, b| ExprAst::And(Box::new(a), Box::new(b)),
-        );
+        let and_expr = not_expr
+            .clone()
+            .foldl(kw("and").ignore_then(not_expr).repeated(), |a, b| {
+                ExprAst::And(Box::new(a), Box::new(b))
+            });
 
         // or_expr := and_expr ("or" and_expr)*
-        and_expr.clone().foldl(
-            kw("or").ignore_then(and_expr).repeated(),
-            |a, b| ExprAst::Or(Box::new(a), Box::new(b)),
-        )
+        and_expr
+            .clone()
+            .foldl(kw("or").ignore_then(and_expr).repeated(), |a, b| {
+                ExprAst::Or(Box::new(a), Box::new(b))
+            })
     })
 }
 

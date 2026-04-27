@@ -7,8 +7,8 @@
 
 use signex_types::schematic::{Point, SelectedItem};
 
-use crate::{RuleKind, Severity, Violation};
 use crate::rule::RuleId;
+use crate::{RuleKind, Severity, Violation};
 
 // ---------------------------------------------------------------------------
 // Diagnostic
@@ -27,11 +27,7 @@ pub struct Diagnostic {
 
 impl Diagnostic {
     /// Shorthand for built-in rules: severity comes from the kind's default.
-    pub fn new(
-        kind: RuleKind,
-        message: impl Into<String>,
-        location: Point,
-    ) -> Self {
+    pub fn new(kind: RuleKind, message: impl Into<String>, location: Point) -> Self {
         Diagnostic {
             rule_id: RuleId::builtin(kind),
             rule_kind: kind,

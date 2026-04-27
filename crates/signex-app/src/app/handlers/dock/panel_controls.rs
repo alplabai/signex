@@ -30,8 +30,13 @@ impl Signex {
                 self.ui_state.erc_violations.clear();
                 self.ui_state.erc_violations_by_path.clear();
                 self.ui_state.erc_focus_global_index = None;
-                self.interaction_state.active_canvas_mut().erc_markers.clear();
-                self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                self.interaction_state
+                    .active_canvas_mut()
+                    .erc_markers
+                    .clear();
+                self.interaction_state
+                    .active_canvas_mut()
+                    .clear_overlay_cache();
                 self.refresh_panel_ctx();
             }
             crate::panels::PanelMsg::FocusErcViolation(idx) => {
@@ -45,14 +50,16 @@ impl Signex {
             }
             crate::panels::PanelMsg::ToggleGrid => {
                 self.ui_state.grid_visible = !self.ui_state.grid_visible;
-                self.interaction_state.active_canvas_mut().grid_visible = self.ui_state.grid_visible;
+                self.interaction_state.active_canvas_mut().grid_visible =
+                    self.ui_state.grid_visible;
                 self.interaction_state.pcb_canvas.grid_visible = self.ui_state.grid_visible;
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
             }
             crate::panels::PanelMsg::ToggleSnap => {
                 self.ui_state.snap_enabled = !self.ui_state.snap_enabled;
-                self.interaction_state.active_canvas_mut().snap_enabled = self.ui_state.snap_enabled;
+                self.interaction_state.active_canvas_mut().snap_enabled =
+                    self.ui_state.snap_enabled;
             }
             crate::panels::PanelMsg::PropertiesTab(index) => {
                 self.document_state.panel_ctx.properties_tab = *index;
@@ -266,15 +273,23 @@ impl Signex {
                     self.ui_state.canvas_font_bold,
                     self.ui_state.canvas_font_italic,
                 );
-                self.interaction_state.active_canvas_mut().clear_content_cache();
-                self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                self.interaction_state
+                    .active_canvas_mut()
+                    .clear_content_cache();
+                self.interaction_state
+                    .active_canvas_mut()
+                    .clear_overlay_cache();
             }
             crate::panels::PanelMsg::SetCanvasFontSize(size) => {
                 self.ui_state.canvas_font_size = *size;
                 self.document_state.panel_ctx.canvas_font_size = *size;
                 signex_render::set_canvas_font_size(*size);
-                self.interaction_state.active_canvas_mut().clear_content_cache();
-                self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                self.interaction_state
+                    .active_canvas_mut()
+                    .clear_content_cache();
+                self.interaction_state
+                    .active_canvas_mut()
+                    .clear_overlay_cache();
             }
             crate::panels::PanelMsg::SetCanvasFontBold(is_bold) => {
                 self.ui_state.canvas_font_bold = *is_bold;
@@ -283,8 +298,12 @@ impl Signex {
                     self.ui_state.canvas_font_bold,
                     self.ui_state.canvas_font_italic,
                 );
-                self.interaction_state.active_canvas_mut().clear_content_cache();
-                self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                self.interaction_state
+                    .active_canvas_mut()
+                    .clear_content_cache();
+                self.interaction_state
+                    .active_canvas_mut()
+                    .clear_overlay_cache();
             }
             crate::panels::PanelMsg::SetCanvasFontItalic(is_italic) => {
                 self.ui_state.canvas_font_italic = *is_italic;
@@ -293,8 +312,12 @@ impl Signex {
                     self.ui_state.canvas_font_bold,
                     self.ui_state.canvas_font_italic,
                 );
-                self.interaction_state.active_canvas_mut().clear_content_cache();
-                self.interaction_state.active_canvas_mut().clear_overlay_cache();
+                self.interaction_state
+                    .active_canvas_mut()
+                    .clear_content_cache();
+                self.interaction_state
+                    .active_canvas_mut()
+                    .clear_overlay_cache();
             }
             crate::panels::PanelMsg::OpenCanvasFontPopup => {
                 self.document_state.panel_ctx.canvas_font_popup_open = true;
@@ -343,6 +366,24 @@ impl Signex {
             }
             crate::panels::PanelMsg::ToggleAllSelectionFilters => {
                 let _ = self.handle_active_bar_all_filters_toggle();
+            }
+            crate::panels::PanelMsg::AddCustomFilterPreset => {
+                self.handle_add_custom_filter_preset();
+            }
+            crate::panels::PanelMsg::RemoveCustomFilterPreset(idx) => {
+                self.handle_remove_custom_filter_preset(*idx);
+            }
+            crate::panels::PanelMsg::RenameCustomFilterPreset(idx, name) => {
+                self.handle_rename_custom_filter_preset(*idx, name.clone());
+            }
+            crate::panels::PanelMsg::ToggleCustomFilterPresetMember(idx, filter) => {
+                self.handle_toggle_custom_filter_preset_member(*idx, *filter);
+            }
+            crate::panels::PanelMsg::CaptureCustomFilterPreset(idx) => {
+                self.handle_capture_custom_filter_preset(*idx);
+            }
+            crate::panels::PanelMsg::SelectCustomFilterTab(idx) => {
+                self.handle_select_custom_filter_tab(*idx);
             }
             _ => return false,
         }

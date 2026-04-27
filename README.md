@@ -9,8 +9,9 @@
 
 <p align="center">
   <a href="https://github.com/alplabai/signex/blob/dev/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License"></a>
-  <a href="https://github.com/alplabai/signex/releases/tag/v0.7.1"><img src="https://img.shields.io/badge/version-v0.7.1-green.svg" alt="Version"></a>
+  <a href="https://github.com/alplabai/signex/releases/tag/v0.8.0"><img src="https://img.shields.io/badge/version-v0.8.0-green.svg" alt="Version"></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.80%2B-orange.svg" alt="Rust"></a>
+  <a href="https://github.com/alplabai/signex/wiki"><img src="https://img.shields.io/badge/wiki-user%20guide-blueviolet.svg" alt="Wiki"></a>
   <a href="https://github.com/alplabai/signex/discussions"><img src="https://img.shields.io/badge/discussions-join-brightgreen.svg" alt="Discussions"></a>
 </p>
 
@@ -19,6 +20,7 @@
   <a href="#screenshots">Screenshots</a> &middot;
   <a href="#building">Building</a> &middot;
   <a href="#roadmap">Roadmap</a> &middot;
+  <a href="https://github.com/alplabai/signex/wiki">Wiki</a> &middot;
   <a href="#contributing">Contributing</a> &middot;
   <a href="#license">License</a>
 </p>
@@ -37,13 +39,14 @@ get a better editor without leaving the ecosystem they trust.
 - **Signex Pro** (subscription) — adds Signal AI (Claude-powered design
   copilot), real-time collaboration, and Signex 365 cloud PLM
 
-> **Status:** Early development — v0.7.1 shipped (macOS Apple-Silicon launch fix); next up v0.8 (PDF / BOM / netlist output)
-> in progress. [Join the discussion](https://github.com/alplabai/signex/discussions)
+> **Status:** Early development — v0.8.0 shipped (Output subsystem + multi-project workspaces + dirty
+> tracking + chrome refactor + hierarchical-sheet polish); next up v0.9 (Library & Polish — symbol /
+> footprint editor, installers). [Join the discussion](https://github.com/alplabai/signex/discussions)
 > or check the [roadmap](#roadmap).
 
 ## Features
 
-**What works today (v0.1–v0.7):**
+**What works today (v0.1–v0.8):**
 
 - Open and render any KiCad schematic (.kicad_sch, .kicad_sym, .kicad_pro)
 - Full schematic editing: select, move, wire (W), bus (B), label (L),
@@ -68,12 +71,23 @@ get a better editor without leaving the ecosystem they trust.
 - Lasso + Inside/Outside/TouchingLine selection modes (Shift+S to cycle)
 - KiCad 8/9 format support with round-trip fidelity
 - 60fps pan/zoom on schematics with 500+ components
+- **Output (v0.8)** — PDF export with bookmarks + theme palette, Altium-spec
+  BOM preview with column/variant pickers and CSV/HTML/XLSX export, KiCad
+  netlist export, unified Print Preview / Export PDF modal
+- **Multi-project workspaces (v0.8)** — multiple projects open side-by-side,
+  per-tab project scoping, accent-tinted active project root
+- **Altium-style dirty tracking (v0.8)** — closing tabs never prompts;
+  project-close lists every dirty file with Save All / Discard All / Cancel
+- **Hierarchical sheet polish (v0.8)** — Altium-port-style child-sheet pins,
+  per-sheet stroke/fill colours, multisheet style preference
+- **TabPill chrome refactor (v0.8)** — 3-sided shared borders, theme-aware
+  inactive fill, drag accent from theme
 
 **What's next:**
 
 | Version | Milestone |
 |---|---|
-| v0.8–v0.9 | PDF/BOM output, library editor, installers |
+| v0.9 | Library & Polish — symbol / footprint editor, installers |
 | **v1.0** | **Community Preview** — schematic-only release |
 | **v2.0–v2.2** | **Community Release** — full PCB editor |
 | **v3.0** | **Pro Release** — Signal AI + collaboration |
@@ -148,8 +162,8 @@ cargo clippy --workspace -- -D warnings  # Lint
 | Schematic Editor — select, move, wire, undo/redo, save | v0.5 | Done |
 | Full SCH Editor — copy/paste, labels, components, Active Bar | v0.6 | Done |
 | Validation + Multi-Window — ERC, annotation, pin matrix, undockable tabs | v0.7 | Done |
-| Output — PDF, BOM, netlist | v0.8 | **In Progress** |
-| Library & Polish — symbol/footprint editor, installers | v0.9 | |
+| Output — PDF, BOM, netlist, multi-project workspaces, dirty tracking | v0.8 | Done |
+| Library & Polish — symbol/footprint editor, installers | v0.9 | **In Progress** |
 | **Community Preview** — schematic-only editor | **v1.0** | |
 | PCB Viewer — GPU rendering, layers, cross-probe | v2.0 | |
 | PCB Routing + DRC + Output | v2.1–v2.2 | |
@@ -160,6 +174,19 @@ cargo clippy --workspace -- -D warnings  # Lint
 | **Signex 365** — cloud PLM, BOM Studio, ERP bridge | **v5.0** | |
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for the detailed version plan.
+
+## Documentation
+
+The **[Signex Wiki](https://github.com/alplabai/signex/wiki)** is the user
+guide — installation, quick start, keyboard shortcuts, feature-by-feature
+walkthroughs for every v0.1–v0.7 capability (ERC, annotation, multi-window
+editing, hierarchical sheets, net-color pen, themes, and more), plus an FAQ
+and roadmap.
+
+Start with **[Quick Start](https://github.com/alplabai/signex/wiki/Quick-Start)**
+to open your first KiCad project, or jump straight to
+**[Keyboard Shortcuts](https://github.com/alplabai/signex/wiki/Keyboard-Shortcuts)**
+for the full Altium-compatible reference.
 
 ## Contributing
 
