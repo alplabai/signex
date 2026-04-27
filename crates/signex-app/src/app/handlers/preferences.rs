@@ -77,6 +77,7 @@ impl Signex {
                 self.ui_state.power_port_style = self.ui_state.preferences_draft_power_port_style;
                 self.ui_state.label_style = self.ui_state.preferences_draft_label_style;
                 self.ui_state.multisheet_style = self.ui_state.preferences_draft_multisheet_style;
+                self.ui_state.grid_style = self.ui_state.preferences_draft_grid_style;
                 self.update_canvas_theme();
                 let tokens = if self.ui_state.theme_id == ThemeId::Custom {
                     self.ui_state
@@ -92,10 +93,12 @@ impl Signex {
                 signex_render::set_power_port_style(self.ui_state.power_port_style);
                 signex_render::set_label_style(self.ui_state.label_style);
                 signex_render::set_multisheet_style(self.ui_state.multisheet_style);
+                signex_render::set_grid_style(self.ui_state.grid_style);
                 crate::fonts::write_ui_font_pref(&self.ui_state.ui_font_name);
                 crate::fonts::write_power_port_style_pref(self.ui_state.power_port_style);
                 crate::fonts::write_label_style_pref(self.ui_state.label_style);
                 crate::fonts::write_multisheet_style_pref(self.ui_state.multisheet_style);
+                crate::fonts::write_grid_style_pref(self.ui_state.grid_style);
                 self.ui_state.preferences_dirty = false;
             }
             PrefMsg::DraftTheme(id) => {
@@ -186,6 +189,20 @@ impl Signex {
                     || self.ui_state.preferences_draft_label_style != self.ui_state.label_style
                     || self.ui_state.preferences_draft_multisheet_style
                         != self.ui_state.multisheet_style;
+            }
+            PrefMsg::DraftGridStyle(style) => {
+                self.ui_state.preferences_draft_grid_style = style;
+                signex_render::set_grid_style(style);
+                self.interaction_state.active_canvas_mut().clear_bg_cache();
+                self.ui_state.preferences_dirty = self.ui_state.preferences_draft_theme
+                    != self.ui_state.theme_id
+                    || self.ui_state.preferences_draft_font != self.ui_state.ui_font_name
+                    || self.ui_state.preferences_draft_power_port_style
+                        != self.ui_state.power_port_style
+                    || self.ui_state.preferences_draft_label_style != self.ui_state.label_style
+                    || self.ui_state.preferences_draft_multisheet_style
+                        != self.ui_state.multisheet_style
+                    || self.ui_state.preferences_draft_grid_style != self.ui_state.grid_style;
             }
             PrefMsg::ImportTheme => {
                 return Task::future(async {

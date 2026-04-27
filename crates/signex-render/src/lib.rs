@@ -52,11 +52,36 @@ pub enum MultisheetStyle {
     Altium,
 }
 
+/// Visible schematic grid rendering style. Mirrors KiCad's Display
+/// Options preference (Dots / Lines / Small crosses).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum GridStyle {
+    #[default]
+    Dots,
+    Lines,
+    SmallCrosses,
+}
+
+impl GridStyle {
+    pub const ALL: &'static [GridStyle] =
+        &[GridStyle::Dots, GridStyle::Lines, GridStyle::SmallCrosses];
+}
+
 impl std::fmt::Display for MultisheetStyle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             MultisheetStyle::KiCad => write!(f, "KiCad"),
             MultisheetStyle::Altium => write!(f, "Altium"),
+        }
+    }
+}
+
+impl std::fmt::Display for GridStyle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GridStyle::Dots => write!(f, "Dots"),
+            GridStyle::Lines => write!(f, "Lines"),
+            GridStyle::SmallCrosses => write!(f, "Small crosses"),
         }
     }
 }
@@ -89,6 +114,7 @@ struct CanvasTextConfig {
     power_port_style: PowerPortStyle,
     label_style: LabelStyle,
     multisheet_style: MultisheetStyle,
+    grid_style: GridStyle,
 }
 
 fn build_font(name: &'static str, bold: bool, italic: bool) -> iced::Font {
@@ -120,6 +146,7 @@ fn canvas_text_config() -> &'static RwLock<CanvasTextConfig> {
             power_port_style: PowerPortStyle::Altium,
             label_style: LabelStyle::KiCad,
             multisheet_style: MultisheetStyle::KiCad,
+            grid_style: GridStyle::Dots,
         })
     })
 }
@@ -184,6 +211,19 @@ pub fn multisheet_style() -> MultisheetStyle {
         .read()
         .map(|c| c.multisheet_style)
         .unwrap_or(MultisheetStyle::KiCad)
+}
+
+pub fn set_grid_style(style: GridStyle) {
+    if let Ok(mut cfg) = canvas_text_config().write() {
+        cfg.grid_style = style;
+    }
+}
+
+pub fn grid_style() -> GridStyle {
+    canvas_text_config()
+        .read()
+        .map(|c| c.grid_style)
+        .unwrap_or(GridStyle::Dots)
 }
 
 pub fn canvas_font() -> iced::Font {
