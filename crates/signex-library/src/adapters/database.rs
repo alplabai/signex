@@ -15,7 +15,7 @@
 
 use std::sync::OnceLock;
 
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::{Serialize, de::DeserializeOwned};
 use uuid::Uuid;
 
 use crate::adapter::{LibraryAdapter, LibraryError, PrimitiveSummary};
@@ -206,15 +206,6 @@ impl DatabaseAdapter {
     }
 }
 
-/// Wire shape of a single `(table_name, row)` pair returned by `/rows` and
-/// `/rows/by_pn/{pn}`. The server (WS-4) emits this exact JSON; the adapter
-/// deserialises into the trait's `(String, ComponentRow)` tuple.
-#[derive(Debug, Deserialize)]
-struct WireTableRow {
-    table: String,
-    row: ComponentRow,
-}
-
 impl LibraryAdapter for DatabaseAdapter {
     fn manifest(&self) -> &Manifest {
         &self.manifest
@@ -265,22 +256,19 @@ impl LibraryAdapter for DatabaseAdapter {
         }
     }
 
+    /// Composed from `list_tables` + `read_table` per plan §9 (the server
+    /// only ships the 6 row/table routes; no aggregate `/rows` endpoint).
+    /// Cost is one round-trip per table, then one per non-empty table —
+    /// fine at v0.9 scale.
     fn iter_rows(&self) -> Result<Vec<(String, ComponentRow)>, LibraryError> {
-        let url = self.url(&format!("/rows?{}", self.library_id_query()));
-        let resp = self
-            .auth(self.client.get(url))
-            .send()
-            .map_err(|e| LibraryError::Backend(e.to_string()))?;
-        if !resp.status().is_success() {
-            return Err(LibraryError::Backend(format!(
-                "iter_rows: {}",
-                resp.status()
-            )));
+        let mut out = Vec::new();
+        for name in self.list_tables()? {
+            let rows = self.read_table(&name)?;
+            for row in rows {
+                out.push((name.clone(), row));
+            }
         }
-        let wire: Vec<WireTableRow> = resp
-            .json()
-            .map_err(|e| LibraryError::Backend(e.to_string()))?;
-        Ok(wire.into_iter().map(|w| (w.table, w.row)).collect())
+        Ok(out)
     }
 
     fn read_row(&self, table: &str, row_id: RowId) -> Result<ComponentRow, LibraryError> {
@@ -305,33 +293,15 @@ impl LibraryAdapter for DatabaseAdapter {
         }
     }
 
+    /// Linear scan via `iter_rows` — same composition rationale as
+    /// `iter_rows`. The server has no PN index endpoint; v0.9 acceptable.
     fn read_row_by_pn(&self, pn: &InternalPn) -> Result<(String, ComponentRow), LibraryError> {
-        // The PN is part of the path — the server can pull it out without a
-        // body. We url-encode it so PNs that include `/` or `?` (sometimes
-        // seen on legacy parts) survive the trip.
-        let encoded = url_encode_path_segment(pn.as_str());
-        let url = self.url(&format!(
-            "/rows/by_pn/{encoded}?{}",
-            self.library_id_query()
-        ));
-        let resp = self
-            .auth(self.client.get(url))
-            .send()
-            .map_err(|e| LibraryError::Backend(e.to_string()))?;
-        match resp.status() {
-            s if s.is_success() => {
-                let wire: WireTableRow = resp
-                    .json()
-                    .map_err(|e| LibraryError::Backend(e.to_string()))?;
-                Ok((wire.table, wire.row))
+        for (table, row) in self.iter_rows()? {
+            if &row.internal_pn == pn {
+                return Ok((table, row));
             }
-            reqwest::StatusCode::NOT_FOUND => {
-                Err(LibraryError::NotFound(format!("internal_pn {pn}")))
-            }
-            other => Err(LibraryError::Backend(format!(
-                "read_row_by_pn {pn}: {other}"
-            ))),
         }
+        Err(LibraryError::NotFound(format!("internal_pn {pn}")))
     }
 
     fn insert_row(&self, table: &str, row: ComponentRow, msg: &str) -> Result<(), LibraryError> {
@@ -469,28 +439,6 @@ impl LibraryAdapter for DatabaseAdapter {
 // Suppress dead-code warning for the OnceLock when we add caching later.
 #[allow(dead_code)]
 static CACHE_DIR: OnceLock<std::path::PathBuf> = OnceLock::new();
-
-/// Percent-encode every byte of `s` that isn't a path-safe ASCII character.
-///
-/// We don't pull in `percent-encoding` for one call site; the rule is:
-/// keep `A-Z a-z 0-9 - _ . ~` (RFC 3986 unreserved) verbatim, percent-
-/// encode everything else as `%XX`. PNs containing `/` or `?` therefore
-/// survive being placed inside the URL path.
-fn url_encode_path_segment(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for b in s.as_bytes() {
-        match *b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                out.push(*b as char);
-            }
-            other => {
-                use std::fmt::Write as _;
-                let _ = write!(out, "%{other:02X}");
-            }
-        }
-    }
-    out
-}
 
 #[cfg(test)]
 mod tests {
