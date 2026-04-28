@@ -434,6 +434,46 @@ pub struct SymbolEditorPanelContext {
     /// (Altium "Part Zero" — shared across every part). Drives the
     /// optional "Part 0 (shared)" tree-expander row.
     pub active_has_part_zero: bool,
+    /// Per-`.snxlib` display settings (sheet color, grid, unit) —
+    /// rendered on the Properties panel's "None" branch as Altium
+    /// Document Options. Resolved by `runtime.rs` from the
+    /// containing library; falls back to defaults for lone-file
+    /// edits.
+    pub display: SymbolDisplayOptions,
+}
+
+/// Sheet / grid / unit + library identity surfaced on the
+/// Properties panel as Altium "Document Options" when nothing is
+/// selected on the symbol canvas. Mirrors
+/// [`crate::library::state::LibraryDisplaySettings`] but lives in
+/// the panels crate so view code doesn't pull
+/// `crate::library::state` directly.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SymbolDisplayOptions {
+    pub sheet_color: SheetColor,
+    pub grid_visible: bool,
+    pub grid_size_mm: f32,
+    pub unit: signex_types::coord::Unit,
+    /// Display name of the containing `.snxlib` (or the file stem
+    /// when the symbol lives outside any mounted library).
+    pub library_name: String,
+    /// Total number of symbols across every `.snxsym` in the
+    /// containing library — surfaced as "Symbols in library: N".
+    /// `None` for lone-file edits.
+    pub library_symbol_count: Option<usize>,
+}
+
+impl Default for SymbolDisplayOptions {
+    fn default() -> Self {
+        Self {
+            sheet_color: SheetColor::default(),
+            grid_visible: true,
+            grid_size_mm: 2.54,
+            unit: signex_types::coord::Unit::Mm,
+            library_name: "(lone file)".to_string(),
+            library_symbol_count: None,
+        }
+    }
 }
 
 /// One symbol's row entry in the SCH Library panel's components list.
@@ -941,6 +981,19 @@ pub enum PanelMsg {
     /// + the on-disk container's `display_name` when the active
     /// symbol is the only one in the file.
     SymEditorSetSymbolName(String),
+    /// Document Options (Properties pane when nothing is selected)
+    /// — set the sheet background color preset on the containing
+    /// `.snxlib`. All `.snxsym` tabs from the same library share.
+    SymEditorSetDisplaySheetColor(SheetColor),
+    /// Document Options — toggle the visible dot grid on the
+    /// containing `.snxlib`.
+    SymEditorToggleDisplayGrid,
+    /// Document Options — cycle the visible grid spacing through
+    /// `crate::canvas::grid::GRID_SIZES_MM`.
+    SymEditorCycleDisplayGridSize,
+    /// Document Options — cycle the coordinate display unit on
+    /// the containing `.snxlib` (mm → mil → inch → um → mm).
+    SymEditorCycleDisplayUnit,
     /// SCH Library panel: switch the active symbol within the open
     /// `.snxsym` container to the given index.
     SchLibrarySelectSymbol(usize),
@@ -2430,6 +2483,7 @@ fn view_symbol_editor_properties<'a>(
 
     match &sym.selected {
         SymbolEditorSelection::None => {
+            // ── Active Symbol section ──
             // Symbol Name is editable via text_input.
             let name_row: Element<'a, PanelMsg> = container(
                 row![
@@ -2452,6 +2506,103 @@ fn view_symbol_editor_properties<'a>(
             col = col.push(name_row);
             col = col.push(prop_row_static("UUID", sym.symbol_uuid.to_string()));
             col = col.push(prop_row_static("Pins", sym.pins.len().to_string()));
+
+            // ── Document Options section ──
+            // Altium parity: when nothing is selected on the canvas,
+            // the Properties panel shows the document-level controls
+            // (sheet color, grid, unit, library identity).
+            col = col.push(thin_sep(border_c));
+            col = col
+                .push(container(text("Document Options").size(11).color(primary)).padding([6, 8]));
+            col = col.push(prop_row_static("Library", sym.display.library_name.clone()));
+            if let Some(n) = sym.display.library_symbol_count {
+                col = col.push(prop_row_static("Items in library", n.to_string()));
+            }
+
+            // Sheet Color picker.
+            let sheet_color = sym.display.sheet_color;
+            let sheet_color_picker = iced::widget::pick_list(
+                SheetColor::ALL.to_vec(),
+                Some(sheet_color),
+                PanelMsg::SymEditorSetDisplaySheetColor,
+            )
+            .padding([2, 4])
+            .text_size(11);
+            let sheet_row: Element<'a, PanelMsg> = container(
+                row![
+                    text("Sheet Color")
+                        .size(10)
+                        .color(muted)
+                        .width(Length::FillPortion(2)),
+                    container(sheet_color_picker).width(Length::FillPortion(3)),
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([3, 8])
+            .width(Length::Fill)
+            .into();
+            col = col.push(sheet_row);
+
+            // Grid visibility — toggle button.
+            let grid_visible = sym.display.grid_visible;
+            let grid_toggle: Element<'a, PanelMsg> = container(
+                row![
+                    text("Grid Visible")
+                        .size(10)
+                        .color(muted)
+                        .width(Length::FillPortion(2)),
+                    iced::widget::checkbox(grid_visible)
+                        .size(14)
+                        .on_toggle(|_| PanelMsg::SymEditorToggleDisplayGrid),
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([3, 8])
+            .width(Length::Fill)
+            .into();
+            col = col.push(grid_toggle);
+
+            // Grid spacing — click-to-cycle pill.
+            let grid_label = format!("{:.3} mm", sym.display.grid_size_mm);
+            let grid_size_btn: Element<'a, PanelMsg> = container(
+                row![
+                    text("Grid Spacing")
+                        .size(10)
+                        .color(muted)
+                        .width(Length::FillPortion(2)),
+                    iced::widget::button(text(grid_label).size(11).color(primary))
+                        .padding([2, 6])
+                        .on_press(PanelMsg::SymEditorCycleDisplayGridSize),
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([3, 8])
+            .width(Length::Fill)
+            .into();
+            col = col.push(grid_size_btn);
+
+            // Unit — click-to-cycle pill.
+            let unit_label = format!("{}", sym.display.unit);
+            let unit_btn: Element<'a, PanelMsg> = container(
+                row![
+                    text("Unit")
+                        .size(10)
+                        .color(muted)
+                        .width(Length::FillPortion(2)),
+                    iced::widget::button(text(unit_label).size(11).color(primary))
+                        .padding([2, 6])
+                        .on_press(PanelMsg::SymEditorCycleDisplayUnit),
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([3, 8])
+            .width(Length::Fill)
+            .into();
+            col = col.push(unit_btn);
         }
         SymbolEditorSelection::Pin(pin) => {
             let pin_idx = pin.idx;

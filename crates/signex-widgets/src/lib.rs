@@ -3,6 +3,7 @@
 //! Reusable, theme-aware widgets built on stock Iced 0.14 primitives.
 //! No Iced fork — composition only.
 
+pub mod active_bar;
 pub mod icon_button;
 pub mod status_bar;
 pub mod symbol_preview;

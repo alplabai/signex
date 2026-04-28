@@ -484,8 +484,8 @@ fn build_symbol_editor_panel_ctx(
 ) -> Option<crate::panels::SymbolEditorPanelContext> {
     use crate::library::editor::symbol::state as sym_state;
     use crate::panels::{
-        GraphicKindSummary, GraphicSummary, SymbolEditorPanelContext, SymbolEditorSelection,
-        SymbolFileEntry, SymbolPinDetails, SymbolPinSummary,
+        GraphicKindSummary, GraphicSummary, SymbolDisplayOptions, SymbolEditorPanelContext,
+        SymbolEditorSelection, SymbolFileEntry, SymbolPinDetails, SymbolPinSummary,
     };
 
     let active = app.document_state.tabs.get(app.document_state.active_tab)?;
@@ -579,6 +579,23 @@ fn build_symbol_editor_panel_ctx(
     let active_max_part = sym_state::max_part_number(sym);
     let active_has_part_zero = sym.pins.iter().any(|p| p.part_number == 0);
 
+    // Resolve the containing `.snxlib` so the Properties panel's
+    // Document Options branch can render real per-library values.
+    // Lone-file edits (no mounted library) fall through to defaults.
+    let display = match app.library.containing_library(&path) {
+        Some(lib) => SymbolDisplayOptions {
+            sheet_color: lib.display.sheet_color,
+            grid_visible: lib.display.grid_visible,
+            grid_size_mm: lib.display.grid_size_mm,
+            unit: lib.display.unit,
+            library_name: lib.display_name.clone(),
+            library_symbol_count: Some(
+                lib.cached_symbols.len() + lib.cached_footprints.len() + lib.cached_sims.len(),
+            ),
+        },
+        None => SymbolDisplayOptions::default(),
+    };
+
     Some(SymbolEditorPanelContext {
         path,
         symbol_name: sym.name.clone(),
@@ -591,6 +608,7 @@ fn build_symbol_editor_panel_ctx(
         active_part: editor.active_part,
         active_max_part,
         active_has_part_zero,
+        display,
     })
 }
 

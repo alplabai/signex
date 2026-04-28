@@ -2254,6 +2254,8 @@ pub(crate) fn apply_symbol_primitive_edit(
                 SymbolToolMsg::PlaceRectangle => SymbolTool::PlaceRectangle,
                 SymbolToolMsg::PlaceLine => SymbolTool::PlaceLine,
                 SymbolToolMsg::PlaceCircle => SymbolTool::PlaceCircle,
+                SymbolToolMsg::PlaceArc => SymbolTool::PlaceArc,
+                SymbolToolMsg::PlaceText => SymbolTool::PlaceText,
             };
         }
         PrimitiveEditorMsg::SymbolAddPin { x, y } => {
@@ -2300,6 +2302,42 @@ pub(crate) fn apply_symbol_primitive_edit(
                         to: [x + L, y],
                     },
                     stroke_width: 0.15,
+                });
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::SymbolAddArc { x, y } => {
+            // Default 2 mm-radius arc, 0°→90° quadrant centred on
+            // the click. User edits start/end angle via Properties
+            // (or drag-to-resize the start/end handles).
+            editor
+                .primitive_mut()
+                .graphics
+                .push(signex_library::SymbolGraphic {
+                    kind: signex_library::SymbolGraphicKind::Arc {
+                        center: [x, y],
+                        radius: 2.0,
+                        start_deg: 0.0,
+                        end_deg: 90.0,
+                    },
+                    stroke_width: 0.15,
+                });
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::SymbolAddText { x, y } => {
+            // Default "Text" label at the click position. User edits
+            // the content + size via Properties.
+            editor
+                .primitive_mut()
+                .graphics
+                .push(signex_library::SymbolGraphic {
+                    kind: signex_library::SymbolGraphicKind::Text {
+                        position: [x, y],
+                        content: "Text".to_string(),
+                        size: 1.27,
+                    },
+                    stroke_width: 0.0,
                 });
             editor.dirty = true;
             editor.canvas_cache.clear();
@@ -2657,6 +2695,8 @@ pub(crate) fn apply_footprint_primitive_edit(
         | PrimitiveEditorMsg::SymbolAddRectangle { .. }
         | PrimitiveEditorMsg::SymbolAddLine { .. }
         | PrimitiveEditorMsg::SymbolAddCircle { .. }
+        | PrimitiveEditorMsg::SymbolAddArc { .. }
+        | PrimitiveEditorMsg::SymbolAddText { .. }
         | PrimitiveEditorMsg::SymbolSelect(_)
         | PrimitiveEditorMsg::SymbolDeselect
         | PrimitiveEditorMsg::SymbolMoveSelected { .. }

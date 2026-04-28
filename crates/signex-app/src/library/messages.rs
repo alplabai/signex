@@ -587,6 +587,8 @@ pub enum SymbolToolMsg {
     PlaceRectangle,
     PlaceLine,
     PlaceCircle,
+    PlaceArc,
+    PlaceText,
 }
 
 /// Selection target on the Symbol canvas — pure-data version of
@@ -652,8 +654,15 @@ pub enum PrimitiveEditorMsg {
     SymbolAddRectangle { x: f64, y: f64 },
     /// Stamp a 5 mm horizontal line starting at `(x, y)`.
     SymbolAddLine { x: f64, y: f64 },
-    /// Stamp a 2 mm-radius circle centred on `(x, y)`.
+    /// Stamp a 2 mm-radius circle (Altium "Ellipse") centred on
+    /// `(x, y)`.
     SymbolAddCircle { x: f64, y: f64 },
+    /// Stamp a default arc (radius 2 mm, 0°→90° quadrant) centred
+    /// on `(x, y)`.
+    SymbolAddArc { x: f64, y: f64 },
+    /// Stamp a default "Text" label anchored at `(x, y)`. Edit the
+    /// content via the Properties panel after placement.
+    SymbolAddText { x: f64, y: f64 },
     /// Select a symbol element (pin index / field key).
     SymbolSelect(SymbolSelectionMsg),
     /// Click landed on empty canvas — drop the current selection.

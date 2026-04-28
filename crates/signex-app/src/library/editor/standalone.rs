@@ -14,7 +14,7 @@
 //! (`save_primitive_tab_at`); the editor view only owns the widget
 //! tree.
 
-use iced::widget::{Space, button, column, container, pick_list, row, text};
+use iced::widget::{Space, button, column, container, row, text};
 use iced::{Border, Element, Length, Theme};
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeTokens;
@@ -23,14 +23,13 @@ use signex_widgets::theme_ext;
 use crate::app::{FootprintEditorState, SymbolEditorState};
 use crate::library::editor::footprint::canvas::FootprintCanvas;
 use crate::library::editor::footprint::layers::FpLayer;
-use crate::library::editor::symbol::canvas::{self as sym_canvas, SymbolCanvas, SymbolTool};
+use crate::library::editor::symbol::canvas::{self as sym_canvas, SymbolCanvas};
 use crate::library::editor::symbol::state as sym_state;
 use crate::library::messages::{
     EditorMsg, GraphicHandleMsg, LibraryMessage, PrimitiveEditorMsg, SymbolSelectionMsg,
-    SymbolToolMsg,
 };
 use crate::library::state::LibraryDisplaySettings;
-use crate::panels::{PanelContext, SheetColor};
+use crate::panels::PanelContext;
 
 // ── Symbol ──────────────────────────────────────────────────────────
 
@@ -45,13 +44,22 @@ pub fn view_symbol<'a>(
     editor: &'a SymbolEditorState,
     panel_ctx: &'a PanelContext,
     display: LibraryDisplaySettings,
+    theme_id: signex_types::theme::ThemeId,
 ) -> Element<'a, LibraryMessage> {
     let tokens = &panel_ctx.tokens;
-    let toolbar = view_symbol_toolbar(editor, panel_ctx, display);
+    let toolbar = view_symbol_toolbar(editor, panel_ctx);
+    let active_bar = container(crate::library::editor::symbol::active_bar::view(
+        &editor.path,
+        editor.tool,
+        theme_id,
+        tokens,
+    ))
+    .padding([4, 8])
+    .center_x(Length::Fill);
     let canvas_widget = view_symbol_canvas(editor, panel_ctx, display);
 
-    let body = column![toolbar, canvas_widget]
-        .spacing(10)
+    let body = column![toolbar, active_bar, canvas_widget]
+        .spacing(6)
         .width(Length::Fill)
         .height(Length::Fill);
 
@@ -183,25 +191,11 @@ fn format_coord(x_mm: f64, y_mm: f64, unit: Unit) -> String {
 fn view_symbol_toolbar<'a>(
     editor: &'a SymbolEditorState,
     panel_ctx: &'a PanelContext,
-    display: LibraryDisplaySettings,
 ) -> Element<'a, LibraryMessage> {
     let tokens = &panel_ctx.tokens;
     let text_c = theme_ext::text_primary(tokens);
     let border = theme_ext::border_color(tokens);
     let path = editor.path.clone();
-
-    let tool_button =
-        |label: &str, tool: SymbolTool, msg: SymbolToolMsg| -> Element<'a, LibraryMessage> {
-            let path_for_press = path.clone();
-            button(text(label.to_string()).size(11).color(text_c))
-                .padding([4, 10])
-                .on_press(LibraryMessage::PrimitiveEditorEvent {
-                    path: path_for_press,
-                    msg: PrimitiveEditorMsg::SymbolSetTool(msg),
-                })
-                .style(symbol_tool_button_style(editor.tool == tool, border))
-                .into()
-        };
 
     let save_path = path.clone();
     let save_btn = button(
@@ -241,7 +235,10 @@ fn view_symbol_toolbar<'a>(
         .size(11)
         .color(text_c);
 
-    // ── View controls (Altium "Document Options" parity) ──
+    // Fit button stays on the in-tab strip — quick access to
+    // viewport reset; tool selection moves to the floating Active Bar
+    // below this strip. Sheet color picker moves to Properties ▸
+    // Document Options (selection-driven UI).
     let fit_path = path.clone();
     let fit_btn = button(text("Fit").size(11).color(text_c))
         .padding([4, 8])
@@ -251,39 +248,9 @@ fn view_symbol_toolbar<'a>(
         })
         .style(symbol_tool_button_style(false, border));
 
-    let sheet_color_path = path.clone();
-    let current_sheet = display.sheet_color;
-    let sheet_color_picker = pick_list(SheetColor::ALL.to_vec(), Some(current_sheet), move |c| {
-        LibraryMessage::PrimitiveEditorEvent {
-            path: sheet_color_path.clone(),
-            msg: PrimitiveEditorMsg::SymbolSetSheetColor(c),
-        }
-    })
-    .padding([2, 6])
-    .text_size(11);
-    let sheet_color_label = text("BG").size(11).color(text_c);
-
     container(
         row![
-            tool_button("Select", SymbolTool::Select, SymbolToolMsg::Select),
-            tool_button("Add Pin", SymbolTool::AddPin, SymbolToolMsg::AddPin),
-            Space::new().width(8),
-            tool_button(
-                "Rectangle",
-                SymbolTool::PlaceRectangle,
-                SymbolToolMsg::PlaceRectangle,
-            ),
-            tool_button("Line", SymbolTool::PlaceLine, SymbolToolMsg::PlaceLine),
-            tool_button(
-                "Circle",
-                SymbolTool::PlaceCircle,
-                SymbolToolMsg::PlaceCircle
-            ),
-            Space::new().width(8),
             fit_btn,
-            Space::new().width(6),
-            sheet_color_label,
-            sheet_color_picker,
             Space::new().width(Length::Fill),
             prev_btn,
             part_label,
@@ -359,6 +326,8 @@ fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> Primitive
         CanvasAction::AddRectangle { x, y } => PrimitiveEditorMsg::SymbolAddRectangle { x, y },
         CanvasAction::AddLine { x, y } => PrimitiveEditorMsg::SymbolAddLine { x, y },
         CanvasAction::AddCircle { x, y } => PrimitiveEditorMsg::SymbolAddCircle { x, y },
+        CanvasAction::AddArc { x, y } => PrimitiveEditorMsg::SymbolAddArc { x, y },
+        CanvasAction::AddText { x, y } => PrimitiveEditorMsg::SymbolAddText { x, y },
         CanvasAction::Select(sel) => PrimitiveEditorMsg::SymbolSelect(symbol_selection_to_msg(sel)),
         CanvasAction::Deselect => PrimitiveEditorMsg::SymbolDeselect,
         CanvasAction::Move { x, y } => PrimitiveEditorMsg::SymbolMoveSelected { x, y },
