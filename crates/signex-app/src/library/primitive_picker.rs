@@ -72,14 +72,16 @@ pub fn view<'a>(
     let mut list_col = column![].spacing(0);
     let mut total_visible = 0usize;
     for lib in &state.open_libraries {
-        let Some(adapter) = state.set.get(lib.library_id) else {
-            continue;
-        };
-        let summaries: Vec<PrimitiveSummary> = match picker.kind {
-            PrimitiveKind::Symbol => adapter.list_symbols().unwrap_or_default(),
-            PrimitiveKind::Footprint => adapter.list_footprints().unwrap_or_default(),
-            PrimitiveKind::Sim => adapter.list_sims().unwrap_or_default(),
-            _ => Vec::new(),
+        // Read the per-library cache instead of calling `adapter.list_*`
+        // every view tick. The cache is refreshed by
+        // `OpenLibrary::reload_tables` on open + post-save and by
+        // `LibraryState::refresh_components` after row mutations, so
+        // the picker stays accurate without per-frame disk IO.
+        let summaries: &[PrimitiveSummary] = match picker.kind {
+            PrimitiveKind::Symbol => &lib.cached_symbols,
+            PrimitiveKind::Footprint => &lib.cached_footprints,
+            PrimitiveKind::Sim => &lib.cached_sims,
+            _ => &[],
         };
         let filtered: Vec<&PrimitiveSummary> = summaries
             .iter()

@@ -14,12 +14,14 @@ use iced::Task;
 use super::super::*;
 use crate::library::commands;
 use crate::library::messages::{
-    BrowserEditMsg, EditorMsg, GraphicHandleMsg, LibraryMessage, ParamKindMsg, PickerMsg,
-    PrimitiveEditorMsg, PrimitivePickerMsg, SettingsMsg, SymbolSelectionMsg, SymbolToolMsg,
+    BrowserEditMsg, CloseLibraryChoice, EditorMsg, GraphicHandleMsg, LibraryMessage, ParamKindMsg,
+    PickerMsg, PrimitiveEditorMsg, PrimitivePickerMsg, SettingsMsg, SymbolSelectionMsg,
+    SymbolToolMsg,
 };
 use crate::library::state::{
-    ComponentPreviewState, DeleteConfirmState, EditRowModalState, EditorAddress, NewComponentState,
-    PickerState, PreviewTab, PrimitivePickerState, PrimitivePickerTarget,
+    CloseLibraryConfirmState, ComponentPreviewState, DeleteConfirmState, EditRowModalState,
+    EditorAddress, NewComponentState, PickerState, PreviewTab, PrimitivePickerState,
+    PrimitivePickerTarget,
 };
 use signex_library::{PrimitiveKind, PrimitiveRef, RowId};
 
@@ -44,7 +46,31 @@ impl Signex {
                 Task::none()
             }
             LibraryMessage::CloseLibrary(path) => {
-                self.library.close_library(&path);
+                // If any Component Preview editors against this library
+                // are dirty, divert to the confirm modal so the user
+                // can Save All / Discard All / Cancel rather than
+                // losing the edits silently. The modal handler
+                // (`CloseLibraryConfirm`) finishes the close once the
+                // user picks an option.
+                let dirty = self.library.dirty_editors_for_library(&path);
+                if dirty.is_empty() {
+                    self.library.close_library(&path);
+                } else {
+                    let library_name = self
+                        .library
+                        .library_at(&path)
+                        .map(|lib| lib.display_name.clone())
+                        .unwrap_or_else(|| {
+                            path.file_name()
+                                .map(|s| s.to_string_lossy().into_owned())
+                                .unwrap_or_else(|| path.display().to_string())
+                        });
+                    self.library.close_library_confirm = Some(CloseLibraryConfirmState {
+                        library_path: path,
+                        library_name,
+                        dirty_editors: dirty,
+                    });
+                }
                 Task::none()
             }
             LibraryMessage::OpenPicker => {
@@ -233,15 +259,58 @@ impl Signex {
                 library_path,
                 dirty_editors,
             } => {
-                tracing::info!(
-                    target: "signex::library",
-                    library = %library_path.display(),
-                    dirty = dirty_editors.len(),
-                    "close-library confirm modal — full UI ships post-WS6"
-                );
+                // Direct opener for the modal — used when callers
+                // already know the dirty list (e.g. a future
+                // workspace-close batch op). For the user-driven
+                // close path, `CloseLibrary` is the entry point and
+                // it diverts here automatically.
+                let library_name = self
+                    .library
+                    .library_at(&library_path)
+                    .map(|lib| lib.display_name.clone())
+                    .unwrap_or_else(|| {
+                        library_path
+                            .file_name()
+                            .map(|s| s.to_string_lossy().into_owned())
+                            .unwrap_or_else(|| library_path.display().to_string())
+                    });
+                self.library.close_library_confirm = Some(CloseLibraryConfirmState {
+                    library_path,
+                    library_name,
+                    dirty_editors,
+                });
                 Task::none()
             }
-            LibraryMessage::CloseLibraryConfirm(_) => Task::none(),
+            LibraryMessage::CloseLibraryConfirm(choice) => {
+                let Some(confirm) = self.library.close_library_confirm.take() else {
+                    return Task::none();
+                };
+                match choice {
+                    CloseLibraryChoice::Cancel => {
+                        // No state change — user kept the library open.
+                    }
+                    CloseLibraryChoice::DiscardAll => {
+                        // Drop every dirty editor and proceed with the close.
+                        // `close_library` retains-not by `library_path`, so
+                        // this happens automatically as part of the close.
+                        self.library.close_library(&confirm.library_path);
+                    }
+                    CloseLibraryChoice::SaveAll => {
+                        // Persist every dirty editor's row through the
+                        // adapter (`handle_save_row` already runs the
+                        // hash + commit cycle), then close the
+                        // library. Failures are logged; we still
+                        // proceed with the close so the user isn't
+                        // trapped (the rows stay on disk in their
+                        // last good state).
+                        for address in &confirm.dirty_editors {
+                            self.handle_save_row(address);
+                        }
+                        self.library.close_library(&confirm.library_path);
+                    }
+                }
+                Task::none()
+            }
             LibraryMessage::PlaceLibraryComponent {
                 library_path,
                 table,
@@ -1892,10 +1961,11 @@ impl Signex {
         Task::none()
     }
 
-    /// Write the primitive at `path` back to disk as JSON, mark the
-    /// tab clean, and (when the file lives under a `.snxlib/`) ask
-    /// the matching `LibrarySet` adapter to reload its cached copy
-    /// so any open Component Preview tabs see the new bytes.
+    /// Write the primitive at `path` back to disk as JSON, commit
+    /// through the matching adapter (when the file lives under a
+    /// mounted `.snxlib/`), mark the tab clean, and ask the
+    /// `LibrarySet` to reload its cached copy so any open Component
+    /// Preview tabs see the new bytes.
     pub(crate) fn save_primitive_tab_at(&mut self, path: &std::path::Path) {
         // Symbol path — write the full multi-symbol container back to
         // disk so other symbols in the same file are preserved.
@@ -1917,7 +1987,7 @@ impl Signex {
                     return;
                 }
             };
-            if let Err(e) = std::fs::write(path, json) {
+            if let Err(e) = atomic_write(path, json.as_bytes()) {
                 tracing::warn!(
                     target: "signex::library",
                     path = %path.display(),
@@ -1926,6 +1996,9 @@ impl Signex {
                 );
                 return;
             }
+            // Capture the symbol name for the commit message before
+            // dropping the editor borrow.
+            let sym_name = editor.primitive().name.clone();
             editor.dirty = false;
             // Clear the project-scoped dirty marker if any callers
             // had set it.
@@ -1934,9 +2007,16 @@ impl Signex {
             if let Some(tab) = self.document_state.tabs.iter_mut().find(|t| t.path == path) {
                 tab.dirty = false;
             }
-            // Best-effort LibrarySet reload — only fires when the
-            // primitive lives under a `.snxlib/` we already have
-            // mounted. Failures are non-fatal.
+            // Commit through the matching adapter so the edit lands
+            // in git history. No-op when the file lives outside any
+            // mounted library (lone-file edit) or when the adapter
+            // has no version control (database backend).
+            self.commit_external_change_for(path, &format!("save symbol {sym_name}"));
+            // Refresh the matching library's primitive cache so the
+            // picker modal picks up the new symbol immediately.
+            self.refresh_primitive_cache_for(path);
+            // Best-effort LibrarySet reload so Component Preview
+            // tabs that already cached the primitive see the new bytes.
             self.reload_primitive_in_library_set(path);
             return;
         }
@@ -1964,7 +2044,7 @@ impl Signex {
                     return;
                 }
             };
-            if let Err(e) = std::fs::write(path, json) {
+            if let Err(e) = atomic_write(path, json.as_bytes()) {
                 tracing::warn!(
                     target: "signex::library",
                     path = %path.display(),
@@ -1973,12 +2053,79 @@ impl Signex {
                 );
                 return;
             }
+            let fp_name = editor.primitive.name.clone();
             editor.dirty = false;
             self.document_state.dirty_paths.remove(path);
             if let Some(tab) = self.document_state.tabs.iter_mut().find(|t| t.path == path) {
                 tab.dirty = false;
             }
+            self.commit_external_change_for(path, &format!("save footprint {fp_name}"));
+            self.refresh_primitive_cache_for(path);
             self.reload_primitive_in_library_set(path);
+        }
+    }
+
+    /// Find the open library whose root contains `path`, then ask its
+    /// adapter to stage + commit. Best-effort: silently returns when
+    /// no mounted library covers `path` (lone-file edit) or when the
+    /// commit itself fails (warning is emitted via tracing). Never
+    /// blocks the user — the file write already succeeded.
+    fn commit_external_change_for(&self, path: &std::path::Path, message: &str) {
+        // Find the open library whose root is an ancestor of `path`.
+        let lib = self
+            .library
+            .open_libraries
+            .iter()
+            .find(|lib| path.starts_with(&lib.root));
+        let Some(lib) = lib else {
+            return;
+        };
+        let Some(adapter) = self.library.set.get(lib.library_id) else {
+            return;
+        };
+        if let Err(e) = adapter.commit_external_change(path, message) {
+            tracing::warn!(
+                target: "signex::library",
+                path = %path.display(),
+                error = %e,
+                "save primitive: commit_external_change failed (file written; commit deferred)",
+            );
+        }
+    }
+
+    /// Refresh the matching library's per-kind primitive cache so the
+    /// picker modal sees the just-saved primitive without waiting
+    /// for the next full `refresh_components` round-trip. No-op when
+    /// `path` lives outside any mounted library.
+    fn refresh_primitive_cache_for(&mut self, path: &std::path::Path) {
+        let library_id = match self
+            .library
+            .open_libraries
+            .iter()
+            .find(|lib| path.starts_with(&lib.root))
+        {
+            Some(lib) => lib.library_id,
+            None => return,
+        };
+        // Two-step borrow dance: snapshot the listings through the
+        // mounted adapter, then move them onto the OpenLibrary entry.
+        let (symbols, footprints, sims) = match self.library.set.get(library_id) {
+            Some(adapter) => (
+                adapter.list_symbols().unwrap_or_default(),
+                adapter.list_footprints().unwrap_or_default(),
+                adapter.list_sims().unwrap_or_default(),
+            ),
+            None => return,
+        };
+        if let Some(lib) = self
+            .library
+            .open_libraries
+            .iter_mut()
+            .find(|lib| lib.library_id == library_id)
+        {
+            lib.cached_symbols = symbols;
+            lib.cached_footprints = footprints;
+            lib.cached_sims = sims;
         }
     }
 
@@ -2207,6 +2354,39 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintToggleAutoFit
         | PrimitiveEditorMsg::Save => {}
     }
+}
+
+/// Atomic write — write `bytes` to `<path>.tmp` then `rename` over
+/// `path`. A crash mid-write leaves either the original file intact
+/// or `<path>.tmp` orphaned; the destination file is never half-
+/// written. Used by the standalone primitive save path so the
+/// `.snxsym` / `.snxfpt` container can't be corrupted by an
+/// untimely crash.
+fn atomic_write(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(parent)?;
+    }
+    let mut tmp = path.to_path_buf();
+    let tmp_name = match tmp.file_name() {
+        Some(name) => {
+            let mut s = name.to_os_string();
+            s.push(".tmp");
+            s
+        }
+        None => return Err(std::io::Error::other("destination path has no file name")),
+    };
+    tmp.set_file_name(tmp_name);
+    std::fs::write(&tmp, bytes)?;
+    // Windows rename fails if the destination exists; remove it first.
+    // (POSIX rename is atomic-replace by spec; no remove needed there
+    // but the no-op when missing is harmless.)
+    if path.exists() {
+        let _ = std::fs::remove_file(path);
+    }
+    std::fs::rename(&tmp, path)?;
+    Ok(())
 }
 
 /// Translate the pure-data [`GraphicHandleMsg`] back into the

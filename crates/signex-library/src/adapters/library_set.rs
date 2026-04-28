@@ -25,7 +25,7 @@ use std::collections::HashMap;
 
 use uuid::Uuid;
 
-use crate::adapter::LibraryAdapter;
+use crate::adapter::{LibraryAdapter, LibraryError};
 use crate::primitive::{Footprint, PrimitiveRef, SimModel, Symbol};
 
 /// A bag of mounted libraries, keyed by `library_id`.
@@ -43,11 +43,39 @@ impl LibrarySet {
     }
 
     /// Mount a library — the adapter's [`LibraryAdapter::library_id`] is
-    /// used as the key. If a library with the same id is already mounted it
-    /// is replaced and the old adapter dropped.
-    pub fn mount(&mut self, lib: Box<dyn LibraryAdapter>) {
+    /// used as the key.
+    ///
+    /// Returns `LibraryError::Conflict` when a library with the same
+    /// `library_id` is already mounted. Two `.snxlib/` directories with
+    /// duplicate `library_id`s (e.g. the user copy-pasted a library to
+    /// start a new one without regenerating the manifest UUID) would
+    /// otherwise have the second mount silently shadow the first, and
+    /// every cross-library `PrimitiveRef` for that id would resolve to
+    /// the wrong file. The caller surfaces the conflict to the UI so
+    /// the user can rename one of the libraries.
+    ///
+    /// To replace an existing mount intentionally, use
+    /// [`Self::remount`] which drops the old adapter and installs the
+    /// new one in one step.
+    pub fn mount(&mut self, lib: Box<dyn LibraryAdapter>) -> Result<(), LibraryError> {
         let id = lib.library_id();
+        if self.libs.contains_key(&id) {
+            return Err(LibraryError::Conflict(format!(
+                "library_id {id} is already mounted — duplicate library_id across two .snxlib/ \
+                 directories. Open only one, or regenerate the manifest UUID on the duplicate."
+            )));
+        }
         self.libs.insert(id, lib);
+        Ok(())
+    }
+
+    /// Replace whatever adapter is mounted at `lib.library_id` with
+    /// `lib`. Drops the previous adapter and returns it (or `None` if
+    /// no previous mount existed). Use [`Self::mount`] when you want
+    /// the duplicate-id case to be an explicit error.
+    pub fn remount(&mut self, lib: Box<dyn LibraryAdapter>) -> Option<Box<dyn LibraryAdapter>> {
+        let id = lib.library_id();
+        self.libs.insert(id, lib)
     }
 
     /// Unmount and return a previously-mounted library, or `None` if no
@@ -217,7 +245,7 @@ mod tests {
         let sym_uuid = sym.uuid;
         let adapter = FakeAdapter::new(lib_id).with_symbol(sym.clone());
         let mut set = LibrarySet::new();
-        set.mount(Box::new(adapter));
+        set.mount(Box::new(adapter)).unwrap();
 
         let r = PrimitiveRef::new(lib_id, sym_uuid);
         let got = set.resolve_symbol(&r).expect("symbol resolves");
@@ -236,7 +264,7 @@ mod tests {
     fn unresolved_when_uuid_missing_in_mounted_lib() {
         let lib_id = Uuid::now_v7();
         let mut set = LibrarySet::new();
-        set.mount(Box::new(FakeAdapter::new(lib_id)));
+        set.mount(Box::new(FakeAdapter::new(lib_id))).unwrap();
         let r = PrimitiveRef::new(lib_id, Uuid::now_v7());
         assert!(set.resolve_symbol(&r).is_none());
     }
@@ -248,7 +276,7 @@ mod tests {
         let known_uuid = known.uuid;
         let adapter = FakeAdapter::new(lib_id).with_symbol(known);
         let mut set = LibrarySet::new();
-        set.mount(Box::new(adapter));
+        set.mount(Box::new(adapter)).unwrap();
 
         let resolves = PrimitiveRef::new(lib_id, known_uuid);
         let stale_lib = PrimitiveRef::new(Uuid::now_v7(), Uuid::now_v7());
@@ -268,7 +296,7 @@ mod tests {
         let sym_uuid = sym.uuid;
         let adapter = FakeAdapter::new(lib_id).with_symbol(sym);
         let mut set = LibrarySet::new();
-        set.mount(Box::new(adapter));
+        set.mount(Box::new(adapter)).unwrap();
 
         assert!(set.contains(lib_id));
         let returned = set.unmount(lib_id);
@@ -284,8 +312,8 @@ mod tests {
         let a = Uuid::now_v7();
         let b = Uuid::now_v7();
         let mut set = LibrarySet::new();
-        set.mount(Box::new(FakeAdapter::new(a)));
-        set.mount(Box::new(FakeAdapter::new(b)));
+        set.mount(Box::new(FakeAdapter::new(a))).unwrap();
+        set.mount(Box::new(FakeAdapter::new(b))).unwrap();
         let ids: Vec<Uuid> = set.library_ids().collect();
         assert_eq!(ids.len(), 2);
         assert!(ids.contains(&a));
@@ -293,7 +321,17 @@ mod tests {
     }
 
     #[test]
-    fn re_mount_replaces_previous_adapter() {
+    fn mount_rejects_duplicate_library_id() {
+        let lib_id = Uuid::now_v7();
+        let mut set = LibrarySet::new();
+        set.mount(Box::new(FakeAdapter::new(lib_id))).unwrap();
+        let dup = set.mount(Box::new(FakeAdapter::new(lib_id)));
+        assert!(matches!(dup, Err(LibraryError::Conflict(_))));
+        assert_eq!(set.len(), 1);
+    }
+
+    #[test]
+    fn remount_replaces_previous_adapter_and_returns_old() {
         let lib_id = Uuid::now_v7();
         let first = fixture_symbol("First");
         let first_uuid = first.uuid;
@@ -303,9 +341,13 @@ mod tests {
         let mut set = LibrarySet::new();
         set.mount(Box::new(
             FakeAdapter::new(lib_id).with_symbol(first.clone()),
-        ));
-        // Re-mount under same library_id with a different adapter; first is dropped.
-        set.mount(Box::new(FakeAdapter::new(lib_id).with_symbol(second)));
+        ))
+        .unwrap();
+        // remount under same library_id replaces the adapter and
+        // returns the previous one so the caller can decide to drop it
+        // or hand it elsewhere.
+        let prev = set.remount(Box::new(FakeAdapter::new(lib_id).with_symbol(second)));
+        assert!(prev.is_some());
 
         // First UUID no longer resolves; second does.
         assert!(
