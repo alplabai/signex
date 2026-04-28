@@ -202,8 +202,23 @@ impl Signex {
             }
         };
 
-        let library_id = match self.library.library_at(&resolved_root) {
-            Some(lib) => lib.library_id,
+        // `resolved_root` is the `.snxlib` *file* path (it's the
+        // library's identity). For the on-disk `symbols/` /
+        // `footprints/` siblings we need the file's *parent* dir —
+        // grab it via `OpenLibrary::root_dir()` so a future shift in
+        // how `root` is laid out only has to touch that helper.
+        let (library_id, disk_root) = match self.library.library_at(&resolved_root) {
+            Some(lib) => match lib.root_dir() {
+                Some(dir) => (lib.library_id, dir.to_path_buf()),
+                None => {
+                    tracing::warn!(
+                        target: "signex::library",
+                        root = %resolved_root.display(),
+                        "Add Library primitive: library has no parent dir"
+                    );
+                    return Task::none();
+                }
+            },
             None => {
                 tracing::warn!(
                     target: "signex::library",
@@ -238,7 +253,7 @@ impl Signex {
         let _ = (adapter, library_id); // intentionally unused after this point
         match kind {
             PrimitiveKind::Symbol => {
-                let target = self.unique_new_symbol_path(&resolved_root, "NewSymbol");
+                let target = self.unique_new_symbol_path(&disk_root, "NewSymbol");
                 let sym = signex_library::Symbol::empty("NewSymbol");
                 let file = signex_library::SymbolFile::from_symbol(sym);
 
@@ -248,7 +263,7 @@ impl Signex {
                 Task::none()
             }
             PrimitiveKind::Footprint => {
-                let target = self.unique_new_footprint_path(&resolved_root, "NewFootprint");
+                let target = self.unique_new_footprint_path(&disk_root, "NewFootprint");
                 let fp = signex_library::Footprint::empty("NewFootprint");
 
                 self.interaction_state.project_tree_context_menu = None;
