@@ -22,7 +22,8 @@ use uuid::Uuid;
 use crate::adapter::{LibraryAdapter, LibraryError, PrimitiveSummary};
 use crate::component::ComponentRow;
 use crate::identity::{InternalPn, RowId};
-use crate::manifest::{LibraryMode, Manifest};
+use crate::library_file::SnxlibManifest;
+use crate::manifest::{LibraryMeta, LibraryMode, Manifest};
 use crate::primitive::{Footprint, SimModel, Symbol};
 
 /// Connect-timeout for the HTTP client. A hung TLS handshake should
@@ -79,6 +80,22 @@ impl DatabaseAdapter {
             holder: auth,
             client,
         })
+    }
+
+    /// Construct from a [`SnxlibManifest`] — the v0.9 manifest shape.
+    ///
+    /// The DB adapter has no `.snxlib` file on disk, but it still
+    /// carries the same library metadata in [`SnxlibManifest::mode`]
+    /// (must be [`LibraryMode::Database`]). This constructor mirrors
+    /// [`crate::adapters::local_git::LocalGitAdapter::init`]'s API
+    /// surface so callers reaching for one or the other can use the
+    /// same manifest type.
+    ///
+    /// Synthesises the legacy [`Manifest`] internally for the
+    /// [`LibraryAdapter::manifest`] callers — Stage 5+ retires those
+    /// and lets us drop the synthesis.
+    pub fn from_snxlib(manifest: SnxlibManifest) -> Result<Self, LibraryError> {
+        Self::new(synthesize_legacy_manifest(manifest))
     }
 
     /// Explicit bearer-token + holder constructor.
@@ -248,6 +265,14 @@ impl LibraryAdapter for DatabaseAdapter {
     fn manifest(&self) -> &Manifest {
         &self.manifest
     }
+
+    // The new (Stage 2) `library_file` / `root_dir` / `library_file_path`
+    // trait methods all default to `None`. The DB adapter inherits those
+    // defaults intentionally — there is no `.snxlib` file on disk for a
+    // remote-DB-backed library; the tables live server-side. Callers
+    // that need the parsed view should go through the row-CRUD methods
+    // (`list_tables` / `read_table` / etc.) which work for both
+    // backends.
 
     // ── Row + table CRUD ─────────────────────────────────────────────────
     //
@@ -483,9 +508,80 @@ impl LibraryAdapter for DatabaseAdapter {
 #[allow(dead_code)]
 static CACHE_DIR: OnceLock<std::path::PathBuf> = OnceLock::new();
 
+/// Build a legacy [`Manifest`] from the v0.9 [`SnxlibManifest`] header.
+///
+/// The DB adapter's `manifest()` trait method continues to return a
+/// `&Manifest` so existing callers (`new_component`, `dispatch/library`,
+/// `state.rs`) keep working. Stage 5+ will retire this synthesis once
+/// those callers move onto the new accessors.
+fn synthesize_legacy_manifest(snx: SnxlibManifest) -> Manifest {
+    Manifest {
+        library: LibraryMeta {
+            name: snx.library.name,
+            library_id: snx.library_id,
+            description: snx.library.description,
+        },
+        mode: snx.mode,
+        workflow: snx.workflow,
+        users: snx.users,
+        // The new model carries tables in `LibraryFile.tables`, not
+        // in the manifest header — Stage 12 retires the legacy field.
+        tables: Vec::new(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use crate::library_file::{FORMAT_TOKEN, LibrarySection};
+    use crate::manifest::{UsersConfig, WorkflowConfig};
+
+    /// `from_snxlib` mirrors `LocalGitAdapter::init`'s manifest API
+    /// shape. The DB adapter requires `LibraryMode::Database`; passing
+    /// the default `LocalGit` mode must fail loudly so a misconfigured
+    /// project doesn't silently bring up a remote-shaped adapter
+    /// pointed at nothing.
+    #[test]
+    fn from_snxlib_round_trips_database_mode() {
+        let manifest = SnxlibManifest {
+            format: FORMAT_TOKEN.into(),
+            library_id: Uuid::nil(),
+            library: LibrarySection {
+                name: "Remote".into(),
+                description: None,
+            },
+            mode: LibraryMode::Database {
+                url: "https://example.com/api".into(),
+                auth: "remote-token".into(),
+            },
+            workflow: WorkflowConfig::default(),
+            users: UsersConfig::default(),
+        };
+        let adapter = DatabaseAdapter::from_snxlib(manifest).unwrap();
+        assert_eq!(adapter.base_url(), "https://example.com/api");
+        assert_eq!(adapter.manifest().library.name, "Remote");
+    }
+
+    #[test]
+    fn from_snxlib_rejects_non_database_mode() {
+        let manifest = SnxlibManifest {
+            format: FORMAT_TOKEN.into(),
+            library_id: Uuid::nil(),
+            library: LibrarySection {
+                name: "OopsLocalGit".into(),
+                description: None,
+            },
+            mode: LibraryMode::default(), // LocalGit — wrong for DB adapter
+            workflow: WorkflowConfig::default(),
+            users: UsersConfig::default(),
+        };
+        match DatabaseAdapter::from_snxlib(manifest) {
+            Err(LibraryError::Backend(_)) => {}
+            Err(other) => panic!("expected Backend error, got {other:?}"),
+            Ok(_) => panic!("non-database mode should have been rejected"),
+        }
+    }
 
     #[test]
     fn with_token_round_trips_holder_and_url() {
