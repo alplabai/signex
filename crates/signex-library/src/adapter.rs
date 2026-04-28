@@ -6,8 +6,9 @@
 //! Every adapter — LocalGit (TSV) or Database (JSONB) — answers the same
 //! row-oriented surface.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -81,6 +82,54 @@ pub struct PrimitiveSummary {
     pub kind: PrimitiveKind,
     #[serde(default)]
     pub used_by_count: usize,
+}
+
+/// One entry in the per-primitive git history feed.
+///
+/// Per `v0.9-snxlib-as-file-plan.md` §3 ("History panel inside the
+/// per-primitive editor"), the SCH Library / Footprint / Sim editors
+/// and the Library Browser tab all bind a [`HistoryEntry`] list to the
+/// shared `signex_widgets::history_pane::HistoryPane` widget. Stage 17
+/// scaffolds the API + data shape; later stages layer the graph lane,
+/// diff stats, and revert/reset affordances on top.
+///
+/// `parent_shas`, `files_changed`, `additions`, `deletions` are kept on
+/// the struct so future polish stages (lazy diff stats, merge-graph
+/// rendering) can land without a schema bump. The scaffold's
+/// [`LocalGitAdapter`](crate::adapters::local_git::LocalGitAdapter)
+/// implementation only fills `sha`, `author_name`, `author_email`,
+/// `time`, `subject`, `body`, and `parent_shas`; the rest stay empty
+/// until lazy-diff support arrives.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HistoryEntry {
+    /// Full 40-char hex SHA-1 of the commit.
+    pub sha: String,
+    pub author_name: String,
+    pub author_email: String,
+    /// Author timestamp (NOT committer) — matches what `git log` shows
+    /// by default. UTC.
+    pub time: DateTime<Utc>,
+    /// First line of the commit message.
+    pub subject: String,
+    /// Everything after the subject (sans the blank-line separator).
+    /// Empty if the commit message is single-line.
+    #[serde(default)]
+    pub body: String,
+    /// Parent commit SHAs — empty for the root commit, one for a
+    /// linear commit, two-or-more for merges. The widget uses this to
+    /// render the graph lane in later stages.
+    #[serde(default)]
+    pub parent_shas: Vec<String>,
+    /// Files touched by this commit, relative to the library root.
+    /// Empty in the scaffold; populated by lazy diff support later.
+    #[serde(default)]
+    pub files_changed: Vec<String>,
+    /// Inserted lines/keys for this commit (lazy — 0 in the scaffold).
+    #[serde(default)]
+    pub additions: u32,
+    /// Removed lines/keys for this commit (lazy — 0 in the scaffold).
+    #[serde(default)]
+    pub deletions: u32,
 }
 
 /// Storage backend abstraction. All flavours (LocalGit, Database, Plm)
@@ -292,6 +341,28 @@ pub trait LibraryAdapter: Send + Sync {
         _message: &str,
     ) -> Result<(), LibraryError> {
         Ok(())
+    }
+
+    /// Per-primitive git history.
+    ///
+    /// Returns up to 50 entries from `git log --follow --max-count 50
+    /// -- <primitive_path>`, newest first. `primitive_path` may be
+    /// absolute or relative to [`Self::root_dir`]; absolute paths
+    /// outside `root_dir` are rejected with
+    /// [`LibraryError::NotFound`].
+    ///
+    /// Per `v0.9-snxlib-as-file-plan.md` §3 this is the *single*
+    /// hook the SCH Library / Footprint / Sim editors and the
+    /// Library Browser tab call to populate the
+    /// `signex_widgets::history_pane::HistoryPane` widget — there's
+    /// no second code path. Adapters that aren't backed by git
+    /// (e.g. the database adapter) keep the default
+    /// `Backend("history not implemented")` response so the UI can
+    /// gracefully degrade to "history unavailable" without aborting.
+    fn history(&self, _primitive_path: &Path) -> Result<Vec<HistoryEntry>, LibraryError> {
+        Err(LibraryError::Backend(
+            "history not implemented for this adapter".into(),
+        ))
     }
 }
 

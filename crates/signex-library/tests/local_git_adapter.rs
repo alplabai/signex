@@ -275,6 +275,65 @@ fn primitive_saves_each_create_a_commit() {
     assert_eq!(count, 5, "expected 5 commits, got {count}");
 }
 
+/// Stage 17: `history(primitive_path)` returns one [`HistoryEntry`]
+/// per commit that touched the file, newest-first, capped at 50.
+///
+/// Two saves of the same symbol uuid land in the same `.snxsym`
+/// container (`save_symbol_in_container` upserts in place), so the
+/// per-file history must surface both saves' commit messages and
+/// none of the unrelated ones (init commit, footprint commit).
+#[test]
+fn history_returns_per_primitive_commits() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "Hist", false);
+    let mut sym = fixture_symbol("OPAMP-DUAL-8");
+    let uuid = sym.uuid;
+    adapter.save_symbol(sym.clone(), "add OPAMP-DUAL-8").unwrap();
+    sym.pins.first_mut().unwrap().name = "VOUT".into();
+    adapter
+        .save_symbol(sym.clone(), "rename pin 1 → VOUT")
+        .unwrap();
+
+    // An unrelated footprint save — proves history filters by path.
+    adapter
+        .save_footprint(fixture_footprint("SOIC-8"), "add SOIC-8")
+        .unwrap();
+
+    let symbol_path = file
+        .parent()
+        .unwrap()
+        .join("symbols")
+        .join("opamp-dual-8.snxsym");
+    assert!(symbol_path.exists());
+
+    let entries = adapter.history(&symbol_path).unwrap();
+    assert!(
+        entries.len() >= 2,
+        "expected ≥ 2 history entries, got {}: {:?}",
+        entries.len(),
+        entries.iter().map(|e| &e.subject).collect::<Vec<_>>()
+    );
+    // Newest-first.
+    assert_eq!(entries[0].subject, "rename pin 1 → VOUT");
+    assert_eq!(entries[1].subject, "add OPAMP-DUAL-8");
+    // Author is filled in.
+    assert!(!entries[0].author_name.is_empty());
+    // 40-char hex SHA.
+    assert_eq!(entries[0].sha.len(), 40);
+    // Footprint commit must NOT show up in the symbol's history.
+    assert!(
+        !entries.iter().any(|e| e.subject == "add SOIC-8"),
+        "footprint commit leaked into symbol history"
+    );
+
+    // Relative paths (from library root) must produce the same list
+    // as absolute ones — the trait surface accepts either form.
+    let rel = std::path::PathBuf::from("symbols").join("opamp-dual-8.snxsym");
+    let entries_rel = adapter.history(&rel).unwrap();
+    assert_eq!(entries_rel.len(), entries.len());
+    let _ = uuid; // uuid retained for clarity; not asserted on.
+}
+
 /// `list_symbols` / `list_footprints` / `list_sims` walk the per-kind dir,
 /// return one summary per file, alphabetically sorted by name.
 #[test]

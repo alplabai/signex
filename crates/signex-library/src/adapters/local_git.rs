@@ -34,7 +34,7 @@ use std::sync::RwLock;
 use serde::{Serialize, de::DeserializeOwned};
 use uuid::Uuid;
 
-use crate::adapter::{LibraryAdapter, LibraryError, PrimitiveSummary};
+use crate::adapter::{HistoryEntry, LibraryAdapter, LibraryError, PrimitiveSummary};
 use crate::component::ComponentRow;
 use crate::identity::{InternalPn, RowId};
 use crate::library_file::{LibraryFile, LibraryRow, LibraryTable, SnxlibManifest};
@@ -841,9 +841,145 @@ impl LibraryAdapter for LocalGitAdapter {
         let fallback = format!("save {rel_path}");
         self.commit_path(&rel_path, message, &fallback)
     }
+
+    fn history(&self, primitive_path: &Path) -> Result<Vec<HistoryEntry>, LibraryError> {
+        // Stage 17 scaffold: walk the repo's commit graph newest-first
+        // and keep commits whose tree differs from at least one parent
+        // at `primitive_path`. Mirrors `git log --follow --max-count 50
+        // -- <path>` semantics (per `v0.9-snxlib-as-file-plan.md` §3
+        // "Performance"), minus the rename-follow heuristic — git2
+        // doesn't expose `--follow` directly so a future stage layers
+        // it on. For now plain pathspec match is enough; the file
+        // names are uuid-keyed so renames are rare in practice.
+        const MAX_ENTRIES: usize = 50;
+
+        let rel_path = if primitive_path.is_absolute() {
+            primitive_path
+                .strip_prefix(&self.root_dir)
+                .map_err(|_| {
+                    LibraryError::NotFound(format!(
+                        "history: {} is not under {}",
+                        primitive_path.display(),
+                        self.root_dir.display(),
+                    ))
+                })?
+                .to_path_buf()
+        } else {
+            primitive_path.to_path_buf()
+        };
+        let rel_str = rel_path.to_string_lossy().replace('\\', "/");
+
+        let repo = git2::Repository::open(&self.root_dir)
+            .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
+
+        let mut walk = repo
+            .revwalk()
+            .map_err(|e| LibraryError::Backend(format!("git revwalk: {e}")))?;
+        // Topological + time so that on equal-second timestamps (the
+        // common case in tests + back-to-back saves on Windows where
+        // git2 stamps to one-second precision) child commits still
+        // come before parents — matches `git log`'s default visual
+        // order.
+        walk.set_sorting(git2::Sort::TIME | git2::Sort::TOPOLOGICAL)
+            .map_err(|e| LibraryError::Backend(format!("git revwalk sort: {e}")))?;
+
+        // Unborn HEAD (fresh repo, no commits yet) is a legitimate
+        // "no history" answer rather than an error — the editor
+        // should render an empty list, not a red banner.
+        match walk.push_head() {
+            Ok(()) => {}
+            Err(e) if e.code() == git2::ErrorCode::UnbornBranch => return Ok(Vec::new()),
+            Err(e) => return Err(LibraryError::Backend(format!("git push head: {e}"))),
+        }
+
+        let mut entries: Vec<HistoryEntry> = Vec::new();
+        for oid_res in walk {
+            if entries.len() >= MAX_ENTRIES {
+                break;
+            }
+            let oid =
+                oid_res.map_err(|e| LibraryError::Backend(format!("git revwalk oid: {e}")))?;
+            let commit = repo
+                .find_commit(oid)
+                .map_err(|e| LibraryError::Backend(format!("git find commit: {e}")))?;
+
+            if !commit_touches_path(&repo, &commit, &rel_str)? {
+                continue;
+            }
+
+            entries.push(commit_to_history_entry(&commit));
+        }
+        Ok(entries)
+    }
 }
 
 // ── Free helpers ───────────────────────────────────────────────────────────
+
+/// Project a `git2::Commit` onto the trait-level [`HistoryEntry`].
+///
+/// Diff-stat fields (`additions`, `deletions`, `files_changed`) stay
+/// at the scaffold defaults — Stage 17 ships the list shape without
+/// the lazy diff plumbing. The author timestamp is preferred over
+/// the committer's so rebases/cherry-picks don't visually skew the
+/// "12 minutes ago" labels.
+fn commit_to_history_entry(commit: &git2::Commit<'_>) -> HistoryEntry {
+    let author = commit.author();
+    let secs = author.when().seconds();
+    let time = chrono::DateTime::<chrono::Utc>::from_timestamp(secs, 0)
+        .unwrap_or_else(chrono::Utc::now);
+    let raw = commit.message().unwrap_or("");
+    let (subject, body) = match raw.find("\n\n") {
+        Some(i) => (raw[..i].trim_end().to_string(), raw[i + 2..].to_string()),
+        None => (raw.trim_end().to_string(), String::new()),
+    };
+    HistoryEntry {
+        sha: commit.id().to_string(),
+        author_name: author.name().unwrap_or_default().to_string(),
+        author_email: author.email().unwrap_or_default().to_string(),
+        time,
+        subject,
+        body,
+        parent_shas: commit.parent_ids().map(|id| id.to_string()).collect(),
+        files_changed: Vec::new(),
+        additions: 0,
+        deletions: 0,
+    }
+}
+
+/// True if `commit` modified `rel_path` relative to *any* of its
+/// parents (or, for the root commit, if the path exists in its
+/// tree). Mirrors the behaviour of `git log -- <path>` for the simple
+/// non-rename case the scaffold targets.
+fn commit_touches_path(
+    repo: &git2::Repository,
+    commit: &git2::Commit<'_>,
+    rel_path: &str,
+) -> Result<bool, LibraryError> {
+    let new_tree = commit
+        .tree()
+        .map_err(|e| LibraryError::Backend(format!("git commit tree: {e}")))?;
+
+    if commit.parent_count() == 0 {
+        // Root commit: include if the path exists in this tree at all.
+        return Ok(new_tree.get_path(Path::new(rel_path)).is_ok());
+    }
+
+    let mut diff_opts = git2::DiffOptions::new();
+    diff_opts.pathspec(rel_path);
+
+    for parent in commit.parents() {
+        let old_tree = parent
+            .tree()
+            .map_err(|e| LibraryError::Backend(format!("git parent tree: {e}")))?;
+        let diff = repo
+            .diff_tree_to_tree(Some(&old_tree), Some(&new_tree), Some(&mut diff_opts))
+            .map_err(|e| LibraryError::Backend(format!("git diff: {e}")))?;
+        if diff.deltas().len() > 0 {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
 
 const LEGACY_ROW_ID_COL: &str = "row_id";
 

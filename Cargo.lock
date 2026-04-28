@@ -5176,6 +5176,7 @@ dependencies = [
 name = "signex-widgets"
 version = "0.7.0"
 dependencies = [
+ "chrono",
  "iced",
  "signex-types",
 ]
