@@ -68,9 +68,9 @@ impl Signex {
                 // Flatten `Project::libraries` into the panel struct
                 // alongside the sheet list. Each entry resolves to an
                 // absolute path so the right-click menu can dispatch
-                // back to the correct library; cached components
-                // come from `LibraryState::library_at` when the
-                // library is currently mounted.
+                // back to the correct library; the library renders as
+                // a single leaf in the project tree, so we don't
+                // enumerate the library's primitive files here.
                 let libraries: Vec<crate::panels::LibraryNodeInfo> = p
                     .data
                     .libraries
@@ -87,13 +87,9 @@ impl Signex {
                                 .map(str::to_string)
                                 .unwrap_or_else(|| entry.path.display().to_string()),
                         };
-                        let (symbols, footprints, sims) = scan_library_primitives(&resolved);
                         crate::panels::LibraryNodeInfo {
                             display_name,
                             root: resolved,
-                            symbols,
-                            footprints,
-                            sims,
                             mounted: mounted_lib.is_some(),
                         }
                     })
@@ -665,56 +661,3 @@ fn graphic_kind_to_summary(
     }
 }
 
-fn scan_library_primitives(
-    root: &std::path::Path,
-) -> (
-    Vec<(String, std::path::PathBuf)>,
-    Vec<(String, std::path::PathBuf)>,
-    Vec<(String, std::path::PathBuf)>,
-) {
-    let symbols = scan_dir(&root.join("symbols"), "snxsym");
-    let footprints = scan_dir(&root.join("footprints"), "snxfpt");
-    let sims = scan_dir(&root.join("sims"), "snxsim");
-    (symbols, footprints, sims)
-}
-
-fn scan_dir(dir: &std::path::Path, want_ext: &str) -> Vec<(String, std::path::PathBuf)> {
-    let read_iter = match std::fs::read_dir(dir) {
-        Ok(it) => it,
-        Err(_) => return Vec::new(),
-    };
-    let mut out: Vec<(String, std::path::PathBuf)> = Vec::new();
-    for entry in read_iter.flatten() {
-        let path = entry.path();
-        if !path.is_file() {
-            continue;
-        }
-        let name = match path.file_name().and_then(|s| s.to_str()) {
-            Some(n) => n,
-            None => continue,
-        };
-        // Skip dotfiles, swap files, backup files.
-        if name.starts_with('.')
-            || name.ends_with(".swp")
-            || name.ends_with(".bak")
-            || name.ends_with('~')
-        {
-            continue;
-        }
-        let ext = path
-            .extension()
-            .and_then(|s| s.to_str())
-            .map(str::to_ascii_lowercase)
-            .unwrap_or_default();
-        if ext != want_ext {
-            continue;
-        }
-        let stem = match path.file_stem().and_then(|s| s.to_str()) {
-            Some(s) => s.to_string(),
-            None => continue,
-        };
-        out.push((stem, path));
-    }
-    out.sort_by(|a, b| a.0.cmp(&b.0));
-    out
-}

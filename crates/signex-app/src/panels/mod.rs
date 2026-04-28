@@ -185,30 +185,23 @@ pub struct ProjectPanelInfo {
 
 /// Per-library bundle for the project tree's `Libraries` group.
 /// Mirrors what [`signex_types::project::LibraryEntry`] records on
-/// the project, plus a few cached fields the panel pulls from
+/// the project, plus a couple of cached fields the panel pulls from
 /// `LibraryState` so the view doesn't have to re-borrow the library
 /// crate at render time.
 ///
-/// Components are TSV rows, not files — they don't appear in the
-/// project tree. The tree under each `<name>.snxlib` lists only the
-/// standalone primitive files (`*.snxsym` / `*.snxfpt` / `*.snxsim`)
-/// the library carries on disk; the row catalogue surfaces in the
-/// dedicated Library Browser tab.
+/// The library renders as a single leaf in the project tree under
+/// the v0.9 `.snxlib`-as-file model — symbols / footprints / sims
+/// are not surfaced here. Browsing the library's contents is the
+/// Library Browser tab's job; double-clicking the leaf opens it.
 #[derive(Debug, Clone)]
 pub struct LibraryNodeInfo {
     /// Display name for the row — `<entry.path>.file_name()` or the
     /// manifest name when the library is mounted.
     pub display_name: String,
-    /// Absolute on-disk root of the library — feeds the right-click
-    /// menu (Add New ▸ Component pre-selects this path).
+    /// Absolute on-disk path of the `.snxlib` file — feeds the
+    /// right-click menu (Add New ▸ Component pre-selects this path)
+    /// and the double-click → Library Browser open dispatch.
     pub root: std::path::PathBuf,
-    /// Standalone symbol primitives (`<root>/symbols/*.snxsym`).
-    /// Each tuple is (file_stem, absolute_path).
-    pub symbols: Vec<(String, std::path::PathBuf)>,
-    /// Standalone footprint primitives (`<root>/footprints/*.snxfpt`).
-    pub footprints: Vec<(String, std::path::PathBuf)>,
-    /// Standalone simulation primitives (`<root>/sims/*.snxsim`).
-    pub sims: Vec<(String, std::path::PathBuf)>,
     /// True when the library is currently mounted in
     /// `LibraryState::open_libraries`. Drives the icon tint —
     /// unmounted entries render in the muted "missing" colour.
@@ -1654,81 +1647,31 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
         );
     }
 
-    // Render each `Project::libraries[i]` entry as a `*.snxlib` leaf.
-    // Children are the standalone primitive files on disk
-    // (`*.snxsym` / `*.snxfpt` / `*.snxsim`) grouped by kind. Component
-    // rows are TSV records — they don't appear in the project tree;
-    // double-click on the `.snxlib` opens the Library Browser tab.
+    // Render each `Project::libraries[i]` entry as a single `.snxlib`
+    // leaf — no children, no chevron. Under the v0.9 `.snxlib`-as-file
+    // model a library is one thing the user opens, not a folder they
+    // browse. Symbols / footprints / sims are siblings on disk, but
+    // surfacing them in the project tree confuses the mental model:
+    // the user's contract is the `.snxlib` file, not its private
+    // working directory. Double-click opens the Library Browser tab,
+    // which is the proper surface for browsing the library's contents.
     //
-    // When the project carries no library entries the branch renders
-    // empty (matching Settings) — the user can right-click → Add New ▸
-    // Component Library to create one. We deliberately do NOT mint a
-    // synthetic "N symbols loaded" child from the workspace-wide
-    // library count: that pre-DBLib placeholder advertised symbols
-    // the project hadn't actually mounted, which caused real
-    // confusion (a project with nothing saved would show "222 symbols
-    // loaded" sourced from globally-mounted libraries).
-    let lib_children: Vec<TreeNode> = if project.libraries.is_empty() {
-        Vec::new()
-    } else {
-        project
-            .libraries
-            .iter()
-            .map(|lib| {
-                let mut groups: Vec<TreeNode> = Vec::new();
-                if !lib.symbols.is_empty() {
-                    let leaves: Vec<TreeNode> = lib
-                        .symbols
-                        .iter()
-                        .map(|(stem, _path)| {
-                            TreeNode::leaf(format!("{stem}.snxsym"), TreeIcon::SnxSymbol)
-                        })
-                        .collect();
-                    groups.push(TreeNode::branch(
-                        "Symbols".to_string(),
-                        TreeIcon::Folder,
-                        leaves,
-                    ));
-                }
-                if !lib.footprints.is_empty() {
-                    let leaves: Vec<TreeNode> = lib
-                        .footprints
-                        .iter()
-                        .map(|(stem, _path)| {
-                            TreeNode::leaf(format!("{stem}.snxfpt"), TreeIcon::SnxFootprint)
-                        })
-                        .collect();
-                    groups.push(TreeNode::branch(
-                        "Footprints".to_string(),
-                        TreeIcon::Folder,
-                        leaves,
-                    ));
-                }
-                if !lib.sims.is_empty() {
-                    let leaves: Vec<TreeNode> = lib
-                        .sims
-                        .iter()
-                        .map(|(stem, _path)| {
-                            TreeNode::leaf(format!("{stem}.snxsim"), TreeIcon::SnxSimulation)
-                        })
-                        .collect();
-                    let mut sims_branch =
-                        TreeNode::branch("Sims".to_string(), TreeIcon::Folder, leaves);
-                    // Collapsed by default — sims are rare; symbols /
-                    // footprints stay expanded since users browse those
-                    // every session.
-                    sims_branch.expanded = false;
-                    groups.push(sims_branch);
-                }
-                let display = format!("{}.snxlib", lib.display_name);
-                if groups.is_empty() {
-                    TreeNode::leaf(display, TreeIcon::SnxLibrary)
-                } else {
-                    TreeNode::branch(display, TreeIcon::SnxLibrary, groups)
-                }
-            })
-            .collect()
-    };
+    // When the project carries no library entries the Libraries branch
+    // renders empty (matching Settings) — the user can right-click →
+    // Add New ▸ Component Library to create one. We deliberately do
+    // NOT mint a synthetic "N symbols loaded" child from the
+    // workspace-wide library count: that pre-DBLib placeholder
+    // advertised symbols the project hadn't actually mounted, which
+    // caused real confusion (a project with nothing saved would show
+    // "222 symbols loaded" sourced from globally-mounted libraries).
+    let lib_children: Vec<TreeNode> = project
+        .libraries
+        .iter()
+        .map(|lib| {
+            let display = format!("{}.snxlib", lib.display_name);
+            TreeNode::leaf(display, TreeIcon::SnxLibrary)
+        })
+        .collect();
 
     // Settings holds nothing today — gated until a project actually
     // carries per-project preferences. Showing an empty branch reads
