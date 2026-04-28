@@ -31,7 +31,8 @@ pub mod templates;
 pub mod where_used;
 
 pub use adapter::{
-    ComponentSummary, FieldSet, LibraryAdapter, LibraryError, LibraryQuery, PrimitiveSummary,
+    ComponentSummary, FieldSet, HistoryEntry, LibraryAdapter, LibraryError, LibraryQuery,
+    PrimitiveSummary,
 };
 pub use adapters::library_set::LibrarySet;
 #[cfg(feature = "ai-stub")]

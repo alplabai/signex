@@ -4,6 +4,7 @@
 //! No Iced fork — composition only.
 
 pub mod active_bar;
+pub mod history_pane;
 pub mod icon_button;
 pub mod status_bar;
 pub mod symbol_preview;
@@ -11,6 +12,7 @@ pub mod tab_pill;
 pub mod theme_ext;
 pub mod tree_view;
 
+pub use history_pane::{HistoryEntry, history_pane};
 pub use tab_pill::{AccentPosition, TabPill, TabPillStyle};
 
 // ─── Extension Traits (Ludusavi pattern) ─────────────────────
