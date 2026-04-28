@@ -3467,6 +3467,7 @@ impl Signex {
             || self.library.primitive_picker.is_some()
             || self.library.close_library_confirm.is_some()
             || self.library.document_options.is_some()
+            || self.library.recovery.is_some()
             || self
                 .library
                 .library_browsers
@@ -4674,6 +4675,26 @@ impl Signex {
                 &document.panel_ctx.tokens,
             )
             .map(Message::Library);
+            let backdrop = container(card)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x(Length::Fill)
+                .center_y(Length::Fill)
+                .style(|_: &iced::Theme| iced::widget::container::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgba(
+                        0.0, 0.0, 0.0, 0.45,
+                    ))),
+                    ..Default::default()
+                });
+            layers.push(backdrop.into());
+        }
+
+        // Library recovery dialog (Stage 10). Surfaces missing-snxlib,
+        // missing-.git, and broken primitive bindings as user-facing
+        // modals instead of silent log lines.
+        if let Some(dialog) = self.library.recovery.as_ref() {
+            let card = crate::library::recovery::view(dialog, &document.panel_ctx.tokens)
+                .map(Message::Library);
             let backdrop = container(card)
                 .width(Length::Fill)
                 .height(Length::Fill)

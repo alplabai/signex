@@ -272,6 +272,12 @@ pub enum LibraryMessage {
     DocumentOptionsApply,
     /// Modal — drop the draft and close.
     DocumentOptionsCancel,
+
+    // Recovery dialogs (Stage 10 of v0.9-snxlib-as-file).
+    RecoveryLibraryMissing(super::recovery::LibraryMissingChoice),
+    RecoveryLibraryMissingLocateResult(Option<PathBuf>),
+    RecoveryGitMissing(super::recovery::GitMissingChoice),
+    RecoveryBrokenBinding(super::recovery::BrokenBindingChoice),
 }
 
 /// User choice from the close-library confirmation modal.
