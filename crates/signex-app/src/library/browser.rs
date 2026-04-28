@@ -307,6 +307,13 @@ enum ColumnKind {
     InternalPn,
     Manufacturer,
     Mpn,
+    /// Stage 14 — combined version + released indicator. Renders as
+    /// `🔒 1.2.3` for released rows, `1.2.3` for unreleased. Sorts
+    /// against the row's `version` cell so semver patterns sort
+    /// numerically (1.0.2 vs 1.0.10 — `compare_cells` handles the
+    /// pure-number case; mixed `1.0.2` strings fall back to lexical
+    /// which still works for short major.minor.patch strings).
+    Rev,
     /// Stage 18 — read-only column reading from `parameters["tags"]`.
     /// Inline-editable through the leftmost cell-edit buffer pattern
     /// is deferred to a polish pass; for now the canonical edit point
@@ -324,18 +331,23 @@ impl ColumnKind {
             ColumnKind::InternalPn => "internal_pn".to_string(),
             ColumnKind::Manufacturer => "manufacturer".to_string(),
             ColumnKind::Mpn => "mpn".to_string(),
+            ColumnKind::Rev => "version".to_string(),
             ColumnKind::Tags => "parameters.tags".to_string(),
             ColumnKind::Parameter(key) => format!("parameters.{key}"),
         }
     }
 
     /// Extract the row's cell value for this column. Empty string when
-    /// the row has no value for the underlying field.
+    /// the row has no value for the underlying field. For
+    /// [`ColumnKind::Rev`], the value is the bare semver string (the
+    /// 🔒/🔓 badge is added at render time, not in the sort key, so
+    /// released and unreleased rows still sort by version order).
     fn cell_value(&self, r: &ComponentRow) -> String {
         match self {
             ColumnKind::InternalPn => r.internal_pn.as_str().to_string(),
             ColumnKind::Manufacturer => r.primary_mpn.manufacturer.clone(),
             ColumnKind::Mpn => r.primary_mpn.mpn.clone(),
+            ColumnKind::Rev => r.version.clone(),
             ColumnKind::Tags => match r.parameters.get("tags") {
                 Some(v) => v.display(),
                 None => String::new(),
@@ -384,6 +396,16 @@ fn derive_columns(rows: &[ComponentRow]) -> Vec<GridColumn> {
         label: "MPN".to_string(),
         kind: ColumnKind::Mpn,
         width: 130.0,
+    });
+
+    // Stage 14: surface row revision + released-flag as a single
+    // column. Rendered with a 🔒 prefix on released rows. Always
+    // present so the user has a stable place to spot drift even
+    // when no rows are flagged released yet.
+    columns.push(GridColumn {
+        label: "Rev".to_string(),
+        kind: ColumnKind::Rev,
+        width: 80.0,
     });
 
     // Surface tags as a first-class column whenever the table has at
@@ -586,6 +608,31 @@ fn view_grid<'a>(
             for c in columns {
                 let column_key = c.kind.sort_key();
                 let row_value = c.kind.cell_value(r);
+
+                // Rev column: read-only, prefixes a 🔒 glyph when
+                // released. Stage 14 of v0.9-snxlib-as-file. Edit
+                // path is the bump dialog (Team mode) or auto-bump
+                // on save (Personal mode), not inline grid editing.
+                if matches!(c.kind, ColumnKind::Rev) {
+                    let label = if r.released {
+                        format!("🔒 {row_value}")
+                    } else {
+                        row_value.clone()
+                    };
+                    let color = if r.released {
+                        // Released rows lock-icon-amber so the gate
+                        // stands out at a glance.
+                        iced::Color::from_rgb(0.96, 0.78, 0.10)
+                    } else {
+                        theme_ext::text_secondary(tokens)
+                    };
+                    data_row = data_row.push(
+                        container(text(label).size(BROWSER_TEXT_SIZE).color(color))
+                            .padding([4, 6])
+                            .width(Length::Fixed(c.width)),
+                    );
+                    continue;
+                }
 
                 // Tags render read-only for now — canonical edit point
                 // is the Edit Component Details modal (plan §6 calls
