@@ -280,6 +280,11 @@ impl Signex {
             },
             library: crate::library::LibraryState::default(),
         };
+        // v0.9 Stage 9: load + mount globally-configured libraries
+        // before the first frame so the Components Panel's Global
+        // section is populated from the get-go.
+        app.library.global_libraries =
+            crate::panels::components_panel::global_prefs::load_and_mount_all(&mut app.library);
         signex_render::set_canvas_font_name(&app.ui_state.canvas_font_name);
         signex_render::set_canvas_font_size(app.ui_state.canvas_font_size);
         signex_render::set_canvas_font_style(

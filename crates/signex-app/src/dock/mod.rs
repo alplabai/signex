@@ -533,14 +533,27 @@ impl DockArea {
         // Panel content
         let content: Element<'_, DockMessage> =
             if let Some(panel) = region.panels.get(region.active) {
-                if matches!(*panel, PanelKind::Library) {
-                    // v0.9 Library panel — content lives in the
-                    // library subsystem, not in `panels::view_panel`.
-                    // Wrap the LibraryMessage in DockMessage::Library
-                    // so the dispatcher can route it back out.
-                    crate::library::panel::view(library, &ctx.tokens).map(DockMessage::Library)
-                } else {
-                    panels::view_panel(*panel, ctx).map(DockMessage::Panel)
+                match *panel {
+                    PanelKind::Library => {
+                        // v0.9 Library panel — content lives in the
+                        // library subsystem, not in `panels::view_panel`.
+                        // Wrap the LibraryMessage in DockMessage::Library
+                        // so the dispatcher can route it back out.
+                        crate::library::panel::view(library, &ctx.tokens)
+                            .map(DockMessage::Library)
+                    }
+                    PanelKind::Components => {
+                        // v0.9 Stage 9 Components Panel — three mount
+                        // sources (Project / Installed / Global) read
+                        // through `library_state` directly, not
+                        // through the legacy `PanelContext`. Project
+                        // library paths are derived from
+                        // `ctx.projects[].libraries[].root` so the
+                        // dock signature stays narrow.
+                        panels::components_panel::view(library, ctx, &ctx.tokens)
+                            .map(DockMessage::Library)
+                    }
+                    _ => panels::view_panel(*panel, ctx).map(DockMessage::Panel),
                 }
             } else {
                 text("").into()
@@ -687,10 +700,15 @@ impl DockArea {
             .on_press(DockMessage::StartDragFloating(idx))
             .on_release(DockMessage::FloatingDragEnd(idx));
 
-        let content: Element<'a, DockMessage> = if matches!(kind, PanelKind::Library) {
-            crate::library::panel::view(library, &ctx.tokens).map(DockMessage::Library)
-        } else {
-            panels::view_panel(kind, ctx).map(DockMessage::Panel)
+        let content: Element<'a, DockMessage> = match kind {
+            PanelKind::Library => {
+                crate::library::panel::view(library, &ctx.tokens).map(DockMessage::Library)
+            }
+            PanelKind::Components => {
+                panels::components_panel::view(library, ctx, &ctx.tokens)
+                    .map(DockMessage::Library)
+            }
+            _ => panels::view_panel(kind, ctx).map(DockMessage::Panel),
         };
 
         let panel_widget = container(

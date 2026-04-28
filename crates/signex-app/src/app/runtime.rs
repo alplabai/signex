@@ -1,6 +1,24 @@
 use super::*;
 
 impl Signex {
+    /// Resolved `.snxlib` paths referenced by every loaded project's
+    /// `Project.libraries` list — reserved for callers outside the
+    /// Components Panel that still need a flat slice (the panel itself
+    /// derives the same Vec from `ctx.projects[].libraries[].root`).
+    #[allow(dead_code)]
+    pub(crate) fn collect_project_library_paths(&self) -> Vec<std::path::PathBuf> {
+        let mut out: Vec<std::path::PathBuf> = Vec::new();
+        for p in &self.document_state.projects {
+            for entry in &p.data.libraries {
+                let resolved = p.data.resolve_library_path(entry);
+                if !out.contains(&resolved) {
+                    out.push(resolved);
+                }
+            }
+        }
+        out
+    }
+
     pub(crate) fn finish_update(&mut self) -> Task<Message> {
         self.document_state.panel_ctx.unit = self.ui_state.unit;
         self.document_state.panel_ctx.grid_visible = self.ui_state.grid_visible;

@@ -317,6 +317,55 @@ pub enum LibraryMessage {
     /// User dismissed the modal (Cancel / Esc / X). No state mutates;
     /// drift is left pinned and the schematic stays clean.
     LibraryUpdatesCancel,
+
+    // ── Components Panel (Stage 9 of v0.9-snxlib-as-file) ───────────
+    /// Toggle the collapse flag for the named section
+    /// ("project" / "installed" / "global"). The dispatcher looks
+    /// the section up by name so adding a fourth section later
+    /// doesn't ripple through the message enum.
+    ComponentsPanelToggleSection(super::state::ComponentsMountSource),
+    /// Live edit of the Components Panel filter input. Substring
+    /// matched across mpn / manufacturer / internal_pn / library
+    /// name. Stage 9 ships this; the rich syntax (plan §5) is
+    /// follow-up work.
+    ComponentsPanelSetFilter(String),
+    /// "+ Add Library…" button on the Installed / Global section
+    /// header. Opens an `rfd::AsyncFileDialog` with `*.snxlib`
+    /// filter and lands in `ComponentsPanelAddLibraryAt`.
+    ComponentsPanelAddLibrary(super::state::ComponentsMountSource),
+    /// Result of the Add Library file dialog. `None` = user
+    /// cancelled. Carries the source the picker was opened against
+    /// so the dispatcher knows whether to push onto
+    /// `installed_libraries` or `global_libraries`.
+    ComponentsPanelAddLibraryAt {
+        source: super::state::ComponentsMountSource,
+        path: Option<PathBuf>,
+    },
+    /// Promote an Installed library to Global — moves the path from
+    /// the session-scoped Vec to the persisted TOML file. No-op when
+    /// the path isn't currently Installed.
+    #[allow(dead_code)]
+    ComponentsPanelPromoteToGlobal(PathBuf),
+    /// "Manage…" button on the Global section header — opens the
+    /// global libraries management dialog. Stage 9 stub: logs and
+    /// no-ops so the wiring path is observable.
+    #[allow(dead_code)]
+    ComponentsPanelManageGlobal,
+    /// "Add to Project" button on a Components Panel row — adds
+    /// the row's library to the active project's
+    /// `Project.libraries` list. Stage 9 stub.
+    #[allow(dead_code)]
+    ComponentsPanelAddToProject {
+        library_path: PathBuf,
+    },
+    /// "Place into Schematic" button on a Components Panel row.
+    /// Stage 9 stub — full ghost-component drag is polish work.
+    #[allow(dead_code)]
+    ComponentsPanelPlace {
+        library_path: PathBuf,
+        table: String,
+        row_id: RowId,
+    },
 }
 
 /// User choice from the close-library confirmation modal.
