@@ -92,6 +92,33 @@ impl Signex {
             MenuMessage::ToolsRemovePart => self.dispatch_active_symbol_primitive_event(
                 crate::library::messages::PrimitiveEditorMsg::SymbolRemovePart,
             ),
+            MenuMessage::ToolsDocumentOptions => {
+                // Resolve the active tab's containing `.snxlib` and
+                // open the modal against its library_path. No-op on
+                // non-primitive tabs (Altium-style "menu greys out
+                // when not applicable" — modeled here as silent
+                // no-op since MenuContext doesn't carry a SchLib
+                // flag yet).
+                let path = self
+                    .document_state
+                    .tabs
+                    .get(self.document_state.active_tab)
+                    .and_then(|t| match &t.kind {
+                        crate::app::TabKind::SymbolEditor(p)
+                        | crate::app::TabKind::FootprintEditor(p) => Some(p.clone()),
+                        _ => None,
+                    });
+                let library_path = path.and_then(|p| {
+                    self.library
+                        .containing_library(&p)
+                        .map(|lib| lib.root.clone())
+                });
+                library_path.map(|library_path| {
+                    self.update(Message::Library(
+                        crate::library::LibraryMessage::OpenDocumentOptions { library_path },
+                    ))
+                })
+            }
             _ => None,
         }
     }

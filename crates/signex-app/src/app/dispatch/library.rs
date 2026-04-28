@@ -19,9 +19,9 @@ use crate::library::messages::{
     SymbolToolMsg,
 };
 use crate::library::state::{
-    CloseLibraryConfirmState, ComponentPreviewState, DeleteConfirmState, EditRowModalState,
-    EditorAddress, NewComponentState, PickerState, PreviewTab, PrimitivePickerState,
-    PrimitivePickerTarget,
+    CloseLibraryConfirmState, ComponentPreviewState, DeleteConfirmState, DocumentOptionsModalState,
+    EditRowModalState, EditorAddress, NewComponentState, PickerState, PreviewTab,
+    PrimitivePickerState, PrimitivePickerTarget,
 };
 use signex_library::{PrimitiveKind, PrimitiveRef, RowId};
 
@@ -434,6 +434,72 @@ impl Signex {
                 if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
                     state.cell_edit.remove(&(row_id, column));
                 }
+                Task::none()
+            }
+            // ── Document Options modal (Tools ▸ Document Options) ──
+            LibraryMessage::OpenDocumentOptions { library_path } => {
+                if let Some(lib) = self.library.library_at(&library_path) {
+                    self.library.document_options = Some(DocumentOptionsModalState {
+                        library_path: lib.root.clone(),
+                        library_name: lib.display_name.clone(),
+                        draft: lib.display,
+                    });
+                }
+                Task::none()
+            }
+            LibraryMessage::DocumentOptionsSetSheetColor(c) => {
+                if let Some(s) = self.library.document_options.as_mut() {
+                    s.draft.sheet_color = c;
+                }
+                Task::none()
+            }
+            LibraryMessage::DocumentOptionsToggleGrid => {
+                if let Some(s) = self.library.document_options.as_mut() {
+                    s.draft.grid_visible = !s.draft.grid_visible;
+                }
+                Task::none()
+            }
+            LibraryMessage::DocumentOptionsCycleGridSize => {
+                if let Some(s) = self.library.document_options.as_mut() {
+                    let sizes = crate::canvas::grid::GRID_SIZES_MM;
+                    let i = sizes
+                        .iter()
+                        .position(|sz| (sz - s.draft.grid_size_mm).abs() < f32::EPSILON)
+                        .unwrap_or(2);
+                    s.draft.grid_size_mm = sizes[(i + 1) % sizes.len()];
+                }
+                Task::none()
+            }
+            LibraryMessage::DocumentOptionsCycleUnit => {
+                use signex_types::coord::Unit;
+                if let Some(s) = self.library.document_options.as_mut() {
+                    s.draft.unit = match s.draft.unit {
+                        Unit::Mm => Unit::Mil,
+                        Unit::Mil => Unit::Inch,
+                        Unit::Inch => Unit::Micrometer,
+                        Unit::Micrometer => Unit::Mm,
+                    };
+                }
+                Task::none()
+            }
+            LibraryMessage::DocumentOptionsApply => {
+                if let Some(s) = self.library.document_options.take()
+                    && let Some(lib) = self.library.containing_library_mut(&s.library_path)
+                {
+                    lib.display = s.draft;
+                }
+                // Clear every primitive editor's canvas cache so the
+                // new sheet color / grid paints immediately. Cheap.
+                for editor in self.document_state.symbol_editors.values_mut() {
+                    editor.canvas_cache.clear();
+                }
+                for editor in self.document_state.footprint_editors.values_mut() {
+                    editor.canvas_cache.clear();
+                }
+                Task::none()
+            }
+            LibraryMessage::DocumentOptionsCancel => {
+                self.library.document_options = None;
                 Task::none()
             }
         }

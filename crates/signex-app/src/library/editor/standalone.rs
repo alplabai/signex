@@ -97,67 +97,26 @@ fn view_symbol_status<'a>(
         Some((x, y)) => format_coord(x, y, unit),
         None => "X: -.--   Y: -.--".to_string(),
     };
-    let grid_text = if display.grid_visible {
-        match unit {
-            Unit::Mm => format!("{:.3} mm", display.grid_size_mm),
-            Unit::Mil => format!("{:.0} mil", (display.grid_size_mm as f64) / 0.0254),
-            _ => format!("{:.3} mm", display.grid_size_mm),
-        }
-    } else {
-        "OFF".to_string()
-    };
     let zoom_text = format!("{:.0}%", editor.camera.zoom_percent());
     let pin_count = format!("{} pins", editor.primitive().pins.len());
-    let unit_text = format!("{unit}");
 
     let sep = || text("|").size(10).color(muted);
-    let path_for_grid = editor.path.clone();
-    let path_for_grid_size = editor.path.clone();
-    let path_for_unit = editor.path.clone();
 
-    // Click-to-cycle status pills mirror the schematic status bar's
-    // pattern (`status_bar.rs`). Grid label toggles visibility;
-    // grid-size label cycles GRID_SIZES_MM; unit label cycles
-    // mm → mil → inch → um.
-    let grid_toggle = button(text("Grid").size(11).color(muted))
-        .padding([1, 4])
-        .style(button::text)
-        .on_press(LibraryMessage::PrimitiveEditorEvent {
-            path: path_for_grid,
-            msg: PrimitiveEditorMsg::SymbolToggleGrid,
-        });
-    let grid_size_btn = button(text(grid_text).size(11).color(text_c))
-        .padding([1, 4])
-        .style(button::text)
-        .on_press(LibraryMessage::PrimitiveEditorEvent {
-            path: path_for_grid_size,
-            msg: PrimitiveEditorMsg::SymbolCycleGridSize,
-        });
-    let unit_btn = button(text(unit_text).size(11).color(text_c))
-        .padding([1, 4])
-        .style(button::text)
-        .on_press(LibraryMessage::PrimitiveEditorEvent {
-            path: path_for_unit,
-            msg: PrimitiveEditorMsg::SymbolCycleUnit,
-        });
-
+    // Sheet / grid / unit live in Tools ▸ Document Options
+    // (per Altium parity) — the footer is read-only quick info
+    // (cursor / zoom / pin count + hint).
     container(
         row![
             text(coord_text).size(11).color(text_c),
             sep(),
-            grid_toggle,
-            grid_size_btn,
-            sep(),
             text(zoom_text).size(11).color(muted),
-            sep(),
-            unit_btn,
             sep(),
             text(pin_count).size(11).color(muted),
             Space::new().width(Length::Fill),
             text(if editor.selected.is_some() {
                 "Del removes · drag to move · scroll zooms · right-drag pans · Home fits"
             } else {
-                "scroll zooms · right-drag pans · Home fits"
+                "Tools ▸ Document Options for sheet / grid / unit · scroll zooms · right-drag pans · Home fits"
             })
             .size(10)
             .color(muted),

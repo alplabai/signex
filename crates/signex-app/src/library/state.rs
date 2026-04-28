@@ -245,6 +245,21 @@ pub struct LibraryState {
     /// the Component Preview tab's Symbol/Footprint pane, the New
     /// Component modal, and the Edit Component Details modal.
     pub primitive_picker: Option<PrimitivePickerState>,
+    /// Tools ▸ Document Options modal state — `None` while closed.
+    /// Opens against a specific `.snxlib` root path so the modal
+    /// edits the matching `OpenLibrary.display`.
+    pub document_options: Option<DocumentOptionsModalState>,
+}
+
+/// State for the Tools ▸ Document Options modal — keyed by the
+/// containing `.snxlib` root path so the dispatcher knows which
+/// `OpenLibrary.display` to mutate. Working draft + the modal's
+/// scratch buffer. Apply on Save; discard on Cancel.
+#[derive(Debug, Clone)]
+pub struct DocumentOptionsModalState {
+    pub library_path: PathBuf,
+    pub library_name: String,
+    pub draft: LibraryDisplaySettings,
 }
 
 impl Default for LibraryState {
@@ -267,6 +282,7 @@ impl Default for LibraryState {
             template_registry: Arc::new(TemplateRegistry::new_with_builtins()),
             library_browsers: HashMap::new(),
             primitive_picker: None,
+            document_options: None,
         }
     }
 }
@@ -549,11 +565,14 @@ pub struct LibraryDisplaySettings {
 
 impl Default for LibraryDisplaySettings {
     fn default() -> Self {
+        // Altium SchLib defaults: cream sheet + fine 50-mil (1.27 mm)
+        // grid + visible-on. Matches the look in the user's reference
+        // screenshot of an Altium .SchLib document.
         Self {
             unit: Unit::Mm,
-            grid_size_mm: 2.54,
+            grid_size_mm: 1.27,
             grid_visible: true,
-            sheet_color: SheetColor::default(),
+            sheet_color: SheetColor::Cream,
         }
     }
 }
