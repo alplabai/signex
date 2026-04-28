@@ -8,9 +8,7 @@
 //! the canvas + AI-stub apply behaviour the pre-refactor `SymbolDoc`
 //! had.
 
-use signex_library::{
-    PinElectricalType, PinOrientation, Symbol, SymbolGraphicKind, SymbolPin,
-};
+use signex_library::{PinElectricalType, PinOrientation, Symbol, SymbolGraphicKind, SymbolPin};
 
 /// Coarse pin classification — kept independent of the canonical
 /// [`PinElectricalType`] so the AI-stub heuristic can hand back a
@@ -83,13 +81,45 @@ pub enum GraphicHandle {
 /// Default new-pin layout: place new pins to the right of the body.
 const DEFAULT_PIN_LENGTH_MM: f64 = 2.54;
 
+/// Highest declared part number across every pin on `sym`. `0`
+/// (Part Zero) is excluded — it's the special "appears on every
+/// part" marker, not a real part. Returns `1` for symbols with no
+/// pins or only Part Zero pins so multi-part wiring still has a
+/// sensible "current max part = 1" baseline.
+pub fn max_part_number(sym: &Symbol) -> u8 {
+    let mut max = 1;
+    for pin in &sym.pins {
+        if pin.part_number > 0 && pin.part_number > max {
+            max = pin.part_number;
+        }
+    }
+    max
+}
+
+/// Demote every pin on the active part down to `part_number = 1`.
+/// Used by Tools ▸ Remove Part — the partition disappears but the
+/// pins survive on part 1.
+pub fn demote_part_pins_to_part_one(sym: &mut Symbol, part: u8) {
+    if part == 0 || part == 1 {
+        return;
+    }
+    for pin in sym.pins.iter_mut() {
+        if pin.part_number == part {
+            pin.part_number = 1;
+        }
+    }
+}
+
 /// Add a pin at the given canvas coordinates and return its index in
-/// `Symbol::pins`. Auto-assigns the next free numeric pin number.
-pub fn add_pin(sym: &mut Symbol, x: f64, y: f64) -> usize {
+/// `Symbol::pins`. Auto-assigns the next free numeric pin number and
+/// scopes it to `part_number` (typically the editor's active sub-part
+/// for multi-part components; `1` for single-part).
+pub fn add_pin(sym: &mut Symbol, x: f64, y: f64, part_number: u8) -> usize {
     let next_num = next_pin_number(sym);
     let mut pin = SymbolPin::new(next_num.clone(), format!("PIN{next_num}"));
     pin.position = [x, y];
     pin.length = DEFAULT_PIN_LENGTH_MM;
+    pin.part_number = part_number;
     sym.pins.push(pin);
     sym.pins.len() - 1
 }
@@ -153,8 +183,7 @@ fn translate_graphic_to(sym: &mut Symbol, idx: usize, x: f64, y: f64) {
             to[0] += dx;
             to[1] += dy;
         }
-        SymbolGraphicKind::Circle { center, .. }
-        | SymbolGraphicKind::Arc { center, .. } => {
+        SymbolGraphicKind::Circle { center, .. } | SymbolGraphicKind::Arc { center, .. } => {
             center[0] = x;
             center[1] = y;
         }
@@ -401,11 +430,7 @@ pub fn graphic_handles(sym: &Symbol, idx: usize) -> Vec<(GraphicHandle, [f64; 2]
 /// handles. Returns `(graphic_idx, handle)` for the first hit, scanning
 /// graphics in reverse so the most-recently-placed graphic wins when
 /// handles overlap.
-pub fn hit_test_graphic_handle(
-    sym: &Symbol,
-    x: f64,
-    y: f64,
-) -> Option<(usize, GraphicHandle)> {
+pub fn hit_test_graphic_handle(sym: &Symbol, x: f64, y: f64) -> Option<(usize, GraphicHandle)> {
     for idx in (0..sym.graphics.len()).rev() {
         for (handle, pos) in graphic_handles(sym, idx) {
             let dx = pos[0] - x;
@@ -423,13 +448,7 @@ pub fn hit_test_graphic_handle(
 /// doesn't match the graphic kind. For arc endpoints the handle drag
 /// only updates the angle (radius is preserved) so the user can sweep
 /// the arc without resizing it.
-pub fn move_graphic_handle(
-    sym: &mut Symbol,
-    idx: usize,
-    handle: GraphicHandle,
-    x: f64,
-    y: f64,
-) {
+pub fn move_graphic_handle(sym: &mut Symbol, idx: usize, handle: GraphicHandle, x: f64, y: f64) {
     let Some(g) = sym.graphics.get_mut(idx) else {
         return;
     };
@@ -501,15 +520,51 @@ mod tests {
     fn add_pin_assigns_next_number() {
         let mut s = Symbol::empty("test");
         // Symbol::empty seeds one default pin "1".
-        let idx = add_pin(&mut s, 1.0, 1.0);
+        let idx = add_pin(&mut s, 1.0, 1.0, 1);
         assert_eq!(idx, 1);
         assert_eq!(s.pins[1].number, "2");
     }
 
     #[test]
+    fn add_pin_records_active_part() {
+        let mut s = Symbol::empty("test");
+        let idx = add_pin(&mut s, 0.0, 0.0, 3);
+        assert_eq!(s.pins[idx].part_number, 3);
+    }
+
+    #[test]
+    fn max_part_number_ignores_part_zero() {
+        let mut s = Symbol::empty("test");
+        add_pin(&mut s, 0.0, 0.0, 0); // shared
+        add_pin(&mut s, 0.0, 0.0, 2);
+        add_pin(&mut s, 0.0, 0.0, 4);
+        assert_eq!(max_part_number(&s), 4);
+    }
+
+    #[test]
+    fn max_part_number_defaults_to_one() {
+        let s = Symbol::empty("test");
+        assert_eq!(max_part_number(&s), 1);
+    }
+
+    #[test]
+    fn demote_part_pins_collapses_target_part() {
+        let mut s = Symbol::empty("test");
+        add_pin(&mut s, 0.0, 0.0, 2);
+        add_pin(&mut s, 0.0, 0.0, 2);
+        add_pin(&mut s, 0.0, 0.0, 3);
+        demote_part_pins_to_part_one(&mut s, 2);
+        let twos = s.pins.iter().filter(|p| p.part_number == 2).count();
+        let ones = s.pins.iter().filter(|p| p.part_number == 1).count();
+        assert_eq!(twos, 0);
+        // 1 default + 2 demoted = 3 ones
+        assert_eq!(ones, 3);
+    }
+
+    #[test]
     fn delete_pin_clears_selection_via_return() {
         let mut s = Symbol::empty("test");
-        add_pin(&mut s, 1.0, 1.0);
+        add_pin(&mut s, 1.0, 1.0, 1);
         let new_sel = delete_selected(&mut s, Some(SymbolSelection::Pin(0)));
         assert_eq!(new_sel, Some(None));
         assert_eq!(s.pins.len(), 1);

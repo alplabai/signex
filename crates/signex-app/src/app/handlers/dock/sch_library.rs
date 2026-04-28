@@ -124,6 +124,10 @@ impl Signex {
                 self.sym_editor_select_graphic(*idx);
                 true
             }
+            crate::panels::PanelMsg::SymEditorSelectPart(part) => {
+                self.sym_editor_select_part(*part);
+                true
+            }
             crate::panels::PanelMsg::SymEditorSetGraphicField { idx, field, value } => {
                 let field = *field;
                 let value = *value;
@@ -198,9 +202,26 @@ impl Signex {
         if idx >= editor.primitive().graphics.len() {
             return;
         }
-        editor.selected = Some(
-            crate::library::editor::symbol::state::SymbolSelection::Graphic(idx),
-        );
+        editor.selected =
+            Some(crate::library::editor::symbol::state::SymbolSelection::Graphic(idx));
+        editor.canvas_cache.clear();
+        self.refresh_panel_ctx();
+    }
+
+    /// SCH Library panel: switch the editor's `active_part` to `part`.
+    /// `0` is the special Part Zero (shared pins). Clamps `part` to
+    /// `[0, max_part]` so a stale tree click can't park the editor
+    /// outside the symbol's actual range.
+    fn sym_editor_select_part(&mut self, part: u8) {
+        let Some(editor) = self.active_symbol_editor_mut() else {
+            return;
+        };
+        let max = crate::library::editor::symbol::state::max_part_number(editor.primitive());
+        let clamped = if part == 0 { 0 } else { part.min(max).max(1) };
+        if editor.active_part == clamped {
+            return;
+        }
+        editor.active_part = clamped;
         editor.canvas_cache.clear();
         self.refresh_panel_ctx();
     }
@@ -212,9 +233,9 @@ impl Signex {
         if pin_idx >= editor.primitive().pins.len() {
             return;
         }
-        editor.selected = Some(
-            crate::library::editor::symbol::state::SymbolSelection::Pin(pin_idx),
-        );
+        editor.selected = Some(crate::library::editor::symbol::state::SymbolSelection::Pin(
+            pin_idx,
+        ));
         editor.canvas_cache.clear();
         self.refresh_panel_ctx();
     }
@@ -373,6 +394,10 @@ impl Signex {
         }
         editor.active_idx = idx;
         editor.selected = None;
+        // Active part is per-editor but only meaningful for the
+        // currently-active symbol; switching symbols resets to part 1
+        // so the new symbol's pin filter starts in a sane state.
+        editor.active_part = 1;
         editor.canvas_cache.clear();
         self.refresh_panel_ctx();
     }
@@ -387,8 +412,12 @@ impl Signex {
         };
         // Pick a fresh name that doesn't collide with any existing
         // symbol in the file. `NewSymbol`, then `NewSymbol-2`, etc.
-        let used: std::collections::HashSet<&str> =
-            editor.file.symbols.iter().map(|s| s.name.as_str()).collect();
+        let used: std::collections::HashSet<&str> = editor
+            .file
+            .symbols
+            .iter()
+            .map(|s| s.name.as_str())
+            .collect();
         let mut name = "NewSymbol".to_string();
         if used.contains(name.as_str()) {
             for n in 2..=999 {
@@ -462,9 +491,7 @@ impl Signex {
     /// Borrow-mut the active tab's `SymbolEditorState`, if the
     /// active tab is a Symbol editor. Returns `None` for any other
     /// tab kind so the SCH Library handlers can exit fast.
-    fn active_symbol_editor_mut(
-        &mut self,
-    ) -> Option<&mut crate::app::SymbolEditorState> {
+    fn active_symbol_editor_mut(&mut self) -> Option<&mut crate::app::SymbolEditorState> {
         let path = self
             .document_state
             .tabs
@@ -522,8 +549,12 @@ fn apply_graphic_field(
         ) => *radius = value.max(0.1),
         (SymbolGraphicKind::Arc { start_deg, .. }, GraphicFieldId::StartDeg) => *start_deg = value,
         (SymbolGraphicKind::Arc { end_deg, .. }, GraphicFieldId::EndDeg) => *end_deg = value,
-        (SymbolGraphicKind::Text { position, .. }, GraphicFieldId::PositionX) => position[0] = value,
-        (SymbolGraphicKind::Text { position, .. }, GraphicFieldId::PositionY) => position[1] = value,
+        (SymbolGraphicKind::Text { position, .. }, GraphicFieldId::PositionX) => {
+            position[0] = value
+        }
+        (SymbolGraphicKind::Text { position, .. }, GraphicFieldId::PositionY) => {
+            position[1] = value
+        }
         (SymbolGraphicKind::Text { size, .. }, GraphicFieldId::TextSize) => *size = value.max(0.1),
         _ => {}
     }

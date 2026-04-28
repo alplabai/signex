@@ -2044,7 +2044,13 @@ pub(crate) fn apply_symbol_primitive_edit(
             };
         }
         PrimitiveEditorMsg::SymbolAddPin { x, y } => {
-            let idx = crate::library::editor::symbol::state::add_pin(editor.primitive_mut(), x, y);
+            let active_part = editor.active_part;
+            let idx = crate::library::editor::symbol::state::add_pin(
+                editor.primitive_mut(),
+                x,
+                y,
+                active_part,
+            );
             editor.selected = Some(SymbolSelection::Pin(idx));
             editor.dirty = true;
             editor.canvas_cache.clear();
@@ -2056,38 +2062,47 @@ pub(crate) fn apply_symbol_primitive_edit(
             // through the Select tool).
             const W: f64 = 5.08; // half-width 5.08 mm → 10.16 mm overall
             const H: f64 = 2.54; // half-height
-            editor.primitive_mut().graphics.push(signex_library::SymbolGraphic {
-                kind: signex_library::SymbolGraphicKind::Rectangle {
-                    from: [x - W, y - H],
-                    to: [x + W, y + H],
-                },
-                stroke_width: 0.15,
-            });
+            editor
+                .primitive_mut()
+                .graphics
+                .push(signex_library::SymbolGraphic {
+                    kind: signex_library::SymbolGraphicKind::Rectangle {
+                        from: [x - W, y - H],
+                        to: [x + W, y + H],
+                    },
+                    stroke_width: 0.15,
+                });
             editor.dirty = true;
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::SymbolAddLine { x, y } => {
             // 5 mm horizontal line going right.
             const L: f64 = 5.08;
-            editor.primitive_mut().graphics.push(signex_library::SymbolGraphic {
-                kind: signex_library::SymbolGraphicKind::Line {
-                    from: [x, y],
-                    to: [x + L, y],
-                },
-                stroke_width: 0.15,
-            });
+            editor
+                .primitive_mut()
+                .graphics
+                .push(signex_library::SymbolGraphic {
+                    kind: signex_library::SymbolGraphicKind::Line {
+                        from: [x, y],
+                        to: [x + L, y],
+                    },
+                    stroke_width: 0.15,
+                });
             editor.dirty = true;
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::SymbolAddCircle { x, y } => {
             // 2 mm-radius circle centred on the click.
-            editor.primitive_mut().graphics.push(signex_library::SymbolGraphic {
-                kind: signex_library::SymbolGraphicKind::Circle {
-                    center: [x, y],
-                    radius: 2.0,
-                },
-                stroke_width: 0.15,
-            });
+            editor
+                .primitive_mut()
+                .graphics
+                .push(signex_library::SymbolGraphic {
+                    kind: signex_library::SymbolGraphicKind::Circle {
+                        center: [x, y],
+                        radius: 2.0,
+                    },
+                    stroke_width: 0.15,
+                });
             editor.dirty = true;
             editor.canvas_cache.clear();
         }
@@ -2148,6 +2163,54 @@ pub(crate) fn apply_symbol_primitive_edit(
             if let Some(pin) = editor.primitive_mut().pins.get_mut(idx) {
                 pin.name = name;
                 editor.dirty = true;
+            }
+        }
+        // ── Multi-part component ────────────────────────────────
+        PrimitiveEditorMsg::SymbolPrevPart => {
+            if editor.active_part > 1 {
+                editor.active_part -= 1;
+                editor.canvas_cache.clear();
+            }
+        }
+        PrimitiveEditorMsg::SymbolNextPart => {
+            let max = crate::library::editor::symbol::state::max_part_number(editor.primitive());
+            if editor.active_part < max {
+                editor.active_part += 1;
+                editor.canvas_cache.clear();
+            }
+        }
+        PrimitiveEditorMsg::SymbolNewPart => {
+            // Bump the symbol's max declared part by one and switch
+            // to it. The new part starts pinless; the user adds pins
+            // in Add Pin mode with the new active_part selected.
+            let new_part =
+                crate::library::editor::symbol::state::max_part_number(editor.primitive()) + 1;
+            editor.active_part = new_part;
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::SymbolRemovePart => {
+            // Refuse to remove if this is the only part — a single-
+            // part symbol must always have part 1 active.
+            let max = crate::library::editor::symbol::state::max_part_number(editor.primitive());
+            if max <= 1 || editor.active_part <= 1 {
+                // No-op; surface a tracing line so a user-visible
+                // toast can land later if needed.
+                tracing::debug!(
+                    target: "signex::library",
+                    active = editor.active_part,
+                    max,
+                    "SymbolRemovePart: refusing to remove the only part"
+                );
+            } else {
+                let to_remove = editor.active_part;
+                crate::library::editor::symbol::state::demote_part_pins_to_part_one(
+                    editor.primitive_mut(),
+                    to_remove,
+                );
+                editor.active_part = 1;
+                editor.dirty = true;
+                editor.canvas_cache.clear();
             }
         }
         // Footprint variants are no-ops on a Symbol editor — the
@@ -2242,6 +2305,10 @@ pub(crate) fn apply_footprint_primitive_edit(
         | PrimitiveEditorMsg::SymbolDeleteSelected
         | PrimitiveEditorMsg::SymbolSetPinNumber { .. }
         | PrimitiveEditorMsg::SymbolSetPinName { .. }
+        | PrimitiveEditorMsg::SymbolPrevPart
+        | PrimitiveEditorMsg::SymbolNextPart
+        | PrimitiveEditorMsg::SymbolNewPart
+        | PrimitiveEditorMsg::SymbolRemovePart
         | PrimitiveEditorMsg::Save => {}
     }
 }

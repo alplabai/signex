@@ -206,6 +206,12 @@ pub struct SymbolEditorState {
     /// SCH-Library left-dock panel will eventually drive this index;
     /// for now it always lands on the first symbol.
     pub active_idx: usize,
+    /// Active sub-part for multi-part components (Altium "Part X / N"
+    /// arrows). `1` is the single-part default; higher values let the
+    /// user step through parts. Pins with `part_number == 0` (Part
+    /// Zero) render on every part; pins with `part_number == active_part`
+    /// render on the active part only.
+    pub active_part: u8,
     pub tool: crate::library::editor::symbol::canvas::SymbolTool,
     pub selected: Option<crate::library::editor::symbol::state::SymbolSelection>,
     pub ai_preview: Option<crate::library::editor::symbol::ai_stub::AiPinoutPreview>,
@@ -222,6 +228,7 @@ impl SymbolEditorState {
             path,
             file,
             active_idx: 0,
+            active_part: 1,
             tool: crate::library::editor::symbol::canvas::SymbolTool::Select,
             selected: None,
             ai_preview: None,
@@ -235,7 +242,9 @@ impl SymbolEditorState {
     /// (defensive — should never happen in practice). Panics only
     /// when the file has zero symbols, which the loader rejects.
     pub fn primitive(&self) -> &Symbol {
-        let idx = self.active_idx.min(self.file.symbols.len().saturating_sub(1));
+        let idx = self
+            .active_idx
+            .min(self.file.symbols.len().saturating_sub(1));
         &self.file.symbols[idx]
     }
 
@@ -243,7 +252,9 @@ impl SymbolEditorState {
     /// (add/move/delete pin etc.). Same out-of-range fallback as
     /// [`primitive`](Self::primitive).
     pub fn primitive_mut(&mut self) -> &mut Symbol {
-        let idx = self.active_idx.min(self.file.symbols.len().saturating_sub(1));
+        let idx = self
+            .active_idx
+            .min(self.file.symbols.len().saturating_sub(1));
         &mut self.file.symbols[idx]
     }
 }

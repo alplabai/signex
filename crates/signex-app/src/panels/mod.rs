@@ -421,6 +421,19 @@ pub struct SymbolEditorPanelContext {
     /// Index into `symbols_in_file` for the symbol currently being
     /// edited. The SCH Library panel's row click rewrites this.
     pub active_idx: usize,
+    /// Active sub-part of the currently-edited symbol — surfaced on
+    /// the in-tab toolbar's `Part X / N` picker and the SCH Library
+    /// panel's part tree-expander.
+    pub active_part: u8,
+    /// Highest declared `part_number` across the active symbol's
+    /// pins (`1` for single-part components). Drives the tree-
+    /// expander row count under the active symbol and clamps the
+    /// in-tab toolbar's right arrow.
+    pub active_max_part: u8,
+    /// Whether any pin on the active symbol carries `part_number == 0`
+    /// (Altium "Part Zero" — shared across every part). Drives the
+    /// optional "Part 0 (shared)" tree-expander row.
+    pub active_has_part_zero: bool,
 }
 
 /// One symbol's row entry in the SCH Library panel's components list.
@@ -500,9 +513,18 @@ pub struct GraphicSummary {
 /// shape's editable fields without depending on the library type.
 #[derive(Debug, Clone, PartialEq)]
 pub enum GraphicKindSummary {
-    Rectangle { from: [f64; 2], to: [f64; 2] },
-    Line { from: [f64; 2], to: [f64; 2] },
-    Circle { center: [f64; 2], radius: f64 },
+    Rectangle {
+        from: [f64; 2],
+        to: [f64; 2],
+    },
+    Line {
+        from: [f64; 2],
+        to: [f64; 2],
+    },
+    Circle {
+        center: [f64; 2],
+        radius: f64,
+    },
     Arc {
         center: [f64; 2],
         radius: f64,
@@ -812,11 +834,20 @@ pub enum PanelMsg {
     /// Properties panel — edit a pin's designator (number) on the
     /// active Symbol editor tab. Routed through `handle_dock_sch_library_message`
     /// because the symbol editor's lifecycle owns the pin edits.
-    SymEditorSetPinNumber { pin_idx: usize, value: String },
+    SymEditorSetPinNumber {
+        pin_idx: usize,
+        value: String,
+    },
     /// Properties panel — edit a pin's display name.
-    SymEditorSetPinName { pin_idx: usize, value: String },
+    SymEditorSetPinName {
+        pin_idx: usize,
+        value: String,
+    },
     /// Properties panel — edit a pin's stub length in mm.
-    SymEditorSetPinLength { pin_idx: usize, value: f64 },
+    SymEditorSetPinLength {
+        pin_idx: usize,
+        value: f64,
+    },
     /// Properties panel — set a pin's electrical type from the
     /// Altium-spec dropdown (Input / Output / Bidirectional / Power
     /// / Passive / Open Collector / Open Emitter / Tri-state /
@@ -833,19 +864,31 @@ pub enum PanelMsg {
         value: signex_library::PinOrientation,
     },
     /// Properties panel — set a pin's X coordinate in mm.
-    SymEditorSetPinX { pin_idx: usize, value: f64 },
+    SymEditorSetPinX {
+        pin_idx: usize,
+        value: f64,
+    },
     /// Properties panel — set a pin's Y coordinate in mm.
-    SymEditorSetPinY { pin_idx: usize, value: f64 },
+    SymEditorSetPinY {
+        pin_idx: usize,
+        value: f64,
+    },
     /// SCH Library panel — click on a row in the Pins sub-list.
     /// Selects the pin on the canvas (Properties panel switches
     /// to pin-mode automatically via the next refresh_panel_ctx).
     SymEditorSelectPin(usize),
     /// Properties panel — edit a pin's free-text Description.
-    SymEditorSetPinDescription { pin_idx: usize, value: String },
+    SymEditorSetPinDescription {
+        pin_idx: usize,
+        value: String,
+    },
     /// Properties panel — edit a pin's Function list (alt-names) as
     /// a single comma-separated string. Persisted as `Vec<String>`
     /// after splitting + trimming on commit.
-    SymEditorSetPinFunctionCsv { pin_idx: usize, value: String },
+    SymEditorSetPinFunctionCsv {
+        pin_idx: usize,
+        value: String,
+    },
     /// Properties panel — toggle a pin's designator visibility.
     SymEditorTogglePinDesignatorVisible(usize),
     /// Properties panel — toggle a pin's name visibility.
@@ -864,11 +907,19 @@ pub enum PanelMsg {
     /// Properties panel — set a pin's multi-part scope (Altium
     /// "Part Number" spinner). `0` is the special Part Zero (pin
     /// appears on every part); `1..=N` scopes to a specific part.
-    SymEditorSetPinPartNumber { pin_idx: usize, value: u8 },
+    SymEditorSetPinPartNumber {
+        pin_idx: usize,
+        value: u8,
+    },
     /// SCH Library panel: select a placed graphic from the active
     /// symbol's `graphics` vector. Fires the same selection state as
     /// a canvas click on a graphic body.
     SymEditorSelectGraphic(usize),
+    /// SCH Library panel: switch the editor's `active_part` to the
+    /// given value. `0` selects Part Zero (shared pins). The
+    /// dispatcher clamps to `[0, active_max_part]` so a stale tree
+    /// click can't park `active_part` outside the symbol's range.
+    SymEditorSelectPart(u8),
     /// Properties panel — set one numeric field of the placed graphic
     /// at `idx`. The dispatcher routes `field` to the matching
     /// `SymbolGraphicKind` variant; mismatched (idx, field) pairs
@@ -881,7 +932,10 @@ pub enum PanelMsg {
     },
     /// Properties panel — set the text content of a placed
     /// `SymbolGraphicKind::Text` at `idx`. No-op for other kinds.
-    SymEditorSetGraphicText { idx: usize, value: String },
+    SymEditorSetGraphicText {
+        idx: usize,
+        value: String,
+    },
     /// Properties panel — edit the active symbol's name (Altium
     /// "Design Item ID"). Affects the SCH Library panel row label
     /// + the on-disk container's `display_name` when the active
@@ -1172,6 +1226,56 @@ fn view_stub<'a>(title: &str, desc: &str, ctx: &PanelContext) -> Element<'a, Pan
 // When no Symbol editor is open the panel renders a hint pointing the
 // user at the project tree's `Add New ▸ Symbol` flow.
 
+/// Render one indented part row inside the SCH Library tree-expander.
+/// Active part gets the selection background; otherwise the row hovers
+/// like the symbol rows above it.
+fn part_tree_row<'a>(
+    label: &str,
+    part: u8,
+    is_active: bool,
+    primary: Color,
+    muted: Color,
+    bg_active: Color,
+) -> Element<'a, PanelMsg> {
+    let label_color = if is_active { primary } else { muted };
+    iced::widget::button(
+        row![
+            // Tree-expander indent: 18 px gutter + a faint glyph so
+            // the part rows visually nest under the symbol.
+            text("\u{2514}")
+                .size(10)
+                .color(muted)
+                .width(Length::Fixed(18.0)),
+            text(label.to_string())
+                .size(10)
+                .color(label_color)
+                .width(Length::Fill),
+        ]
+        .spacing(4)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([3, 8])
+    .width(Length::Fill)
+    .on_press(PanelMsg::SymEditorSelectPart(part))
+    .style(
+        move |_: &iced::Theme, status: iced::widget::button::Status| iced::widget::button::Style {
+            background: if is_active {
+                Some(iced::Background::Color(bg_active))
+            } else if matches!(status, iced::widget::button::Status::Hovered) {
+                Some(iced::Background::Color(iced::Color::from_rgba(
+                    1.0, 1.0, 1.0, 0.04,
+                )))
+            } else {
+                None
+            },
+            border: iced::Border::default(),
+            text_color: label_color,
+            ..iced::widget::button::Style::default()
+        },
+    )
+    .into()
+}
+
 fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let muted = theme_ext::text_secondary(&ctx.tokens);
     let primary = theme_ext::text_primary(&ctx.tokens);
@@ -1207,7 +1311,9 @@ fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             column![
                 text(format!(
                     "File: {}",
-                    sym.path.file_name().map(|s| s.to_string_lossy().into_owned())
+                    sym.path
+                        .file_name()
+                        .map(|s| s.to_string_lossy().into_owned())
                         .unwrap_or_else(|| "<untitled>".to_string())
                 ))
                 .size(10)
@@ -1223,6 +1329,10 @@ fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     col = col.push(thin_sep(border_c));
 
     // ── Symbols list ──
+    // The active symbol's row is followed by a tree-expander listing
+    // its parts (Altium "Part X / N" sub-rows) when the symbol is
+    // multi-part (max declared part_number > 1) or carries Part Zero
+    // pins. Click a part row to switch the editor's active_part.
     for entry in &sym.symbols_in_file {
         let is_active = entry.idx == sym.active_idx;
         let label_color = if is_active { primary } else { muted };
@@ -1243,23 +1353,53 @@ fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         .padding([4, 8])
         .width(Length::Fill)
         .on_press(row_msg)
-        .style(move |_: &iced::Theme, status: iced::widget::button::Status| {
-            iced::widget::button::Style {
-                background: if is_active {
-                    Some(iced::Background::Color(bg_active))
-                } else if matches!(status, iced::widget::button::Status::Hovered) {
-                    Some(iced::Background::Color(iced::Color::from_rgba(
-                        1.0, 1.0, 1.0, 0.04,
-                    )))
-                } else {
-                    None
-                },
-                border: iced::Border::default(),
-                text_color: label_color,
-                ..iced::widget::button::Style::default()
-            }
-        });
+        .style(
+            move |_: &iced::Theme, status: iced::widget::button::Status| {
+                iced::widget::button::Style {
+                    background: if is_active {
+                        Some(iced::Background::Color(bg_active))
+                    } else if matches!(status, iced::widget::button::Status::Hovered) {
+                        Some(iced::Background::Color(iced::Color::from_rgba(
+                            1.0, 1.0, 1.0, 0.04,
+                        )))
+                    } else {
+                        None
+                    },
+                    border: iced::Border::default(),
+                    text_color: label_color,
+                    ..iced::widget::button::Style::default()
+                }
+            },
+        );
         col = col.push(row_btn);
+
+        // Part tree-expander — only under the active symbol, only
+        // when there's something interesting to expand (multi-part
+        // OR carries Part Zero).
+        if is_active && (sym.active_max_part > 1 || sym.active_has_part_zero) {
+            // Part Zero (shared) — only when the symbol has any
+            // part_number == 0 pins.
+            if sym.active_has_part_zero {
+                col = col.push(part_tree_row(
+                    "Part 0 (shared)",
+                    0,
+                    sym.active_part == 0,
+                    primary,
+                    muted,
+                    bg_active,
+                ));
+            }
+            for part in 1..=sym.active_max_part {
+                col = col.push(part_tree_row(
+                    &format!("Part {part}"),
+                    part,
+                    sym.active_part == part,
+                    primary,
+                    muted,
+                    bg_active,
+                ));
+            }
+        }
     }
 
     col = col.push(thin_sep(border_c));
@@ -1290,7 +1430,10 @@ fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 row![
                     text("#").size(10).color(muted).width(Length::Fixed(28.0)),
                     text("Name").size(10).color(muted).width(Length::Fill),
-                    text("Type").size(10).color(muted).width(Length::Fixed(80.0)),
+                    text("Type")
+                        .size(10)
+                        .color(muted)
+                        .width(Length::Fixed(80.0)),
                 ]
                 .spacing(6),
             )
@@ -1323,22 +1466,24 @@ fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             .padding([3, 8])
             .width(Length::Fill)
             .on_press(PanelMsg::SymEditorSelectPin(pin_idx))
-            .style(move |_: &iced::Theme, status: iced::widget::button::Status| {
-                iced::widget::button::Style {
-                    background: if active_pin {
-                        Some(iced::Background::Color(bg_active))
-                    } else if matches!(status, iced::widget::button::Status::Hovered) {
-                        Some(iced::Background::Color(iced::Color::from_rgba(
-                            1.0, 1.0, 1.0, 0.04,
-                        )))
-                    } else {
-                        None
-                    },
-                    border: iced::Border::default(),
-                    text_color: label_color,
-                    ..iced::widget::button::Style::default()
-                }
-            });
+            .style(
+                move |_: &iced::Theme, status: iced::widget::button::Status| {
+                    iced::widget::button::Style {
+                        background: if active_pin {
+                            Some(iced::Background::Color(bg_active))
+                        } else if matches!(status, iced::widget::button::Status::Hovered) {
+                            Some(iced::Background::Color(iced::Color::from_rgba(
+                                1.0, 1.0, 1.0, 0.04,
+                            )))
+                        } else {
+                            None
+                        },
+                        border: iced::Border::default(),
+                        text_color: label_color,
+                        ..iced::widget::button::Style::default()
+                    }
+                },
+            );
             col = col.push(pin_row_btn);
         }
     }
@@ -1397,76 +1542,78 @@ fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             .padding([3, 8])
             .width(Length::Fill)
             .on_press(PanelMsg::SymEditorSelectGraphic(g_idx))
-            .style(move |_: &iced::Theme, status: iced::widget::button::Status| {
-                iced::widget::button::Style {
-                    background: if active_g {
-                        Some(iced::Background::Color(bg_active))
-                    } else if matches!(status, iced::widget::button::Status::Hovered) {
-                        Some(iced::Background::Color(iced::Color::from_rgba(
-                            1.0, 1.0, 1.0, 0.04,
-                        )))
-                    } else {
-                        None
-                    },
-                    border: iced::Border::default(),
-                    text_color: label_color,
-                    ..iced::widget::button::Style::default()
-                }
-            });
+            .style(
+                move |_: &iced::Theme, status: iced::widget::button::Status| {
+                    iced::widget::button::Style {
+                        background: if active_g {
+                            Some(iced::Background::Color(bg_active))
+                        } else if matches!(status, iced::widget::button::Status::Hovered) {
+                            Some(iced::Background::Color(iced::Color::from_rgba(
+                                1.0, 1.0, 1.0, 0.04,
+                            )))
+                        } else {
+                            None
+                        },
+                        border: iced::Border::default(),
+                        text_color: label_color,
+                        ..iced::widget::button::Style::default()
+                    }
+                },
+            );
             col = col.push(g_row_btn);
         }
     }
     col = col.push(thin_sep(border_c));
 
     // ── Action row: Add / Delete ──
-    let add_btn = iced::widget::button(
-        text("Add Symbol")
-            .size(11)
-            .color(primary),
-    )
-    .padding([4, 10])
-    .on_press(PanelMsg::SchLibraryAddSymbol)
-    .style(move |_: &iced::Theme, status: iced::widget::button::Status| {
-        iced::widget::button::Style {
-            background: Some(iced::Background::Color(
-                if matches!(status, iced::widget::button::Status::Hovered) {
-                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.08)
-                } else {
-                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.03)
-                },
-            )),
-            border: iced::Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: border_c,
+    let add_btn = iced::widget::button(text("Add Symbol").size(11).color(primary))
+        .padding([4, 10])
+        .on_press(PanelMsg::SchLibraryAddSymbol)
+        .style(
+            move |_: &iced::Theme, status: iced::widget::button::Status| {
+                iced::widget::button::Style {
+                    background: Some(iced::Background::Color(
+                        if matches!(status, iced::widget::button::Status::Hovered) {
+                            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.08)
+                        } else {
+                            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.03)
+                        },
+                    )),
+                    border: iced::Border {
+                        width: 1.0,
+                        radius: 3.0.into(),
+                        color: border_c,
+                    },
+                    text_color: primary,
+                    ..iced::widget::button::Style::default()
+                }
             },
-            text_color: primary,
-            ..iced::widget::button::Style::default()
-        }
-    });
+        );
 
     let can_delete = sym.symbols_in_file.len() > 1;
     let delete_color = if can_delete { primary } else { muted };
     let mut delete_btn = iced::widget::button(text("Delete").size(11).color(delete_color))
         .padding([4, 10])
-        .style(move |_: &iced::Theme, status: iced::widget::button::Status| {
-            iced::widget::button::Style {
-                background: Some(iced::Background::Color(
-                    if matches!(status, iced::widget::button::Status::Hovered) && can_delete {
-                        iced::Color::from_rgba(1.0, 0.2, 0.2, 0.10)
-                    } else {
-                        iced::Color::from_rgba(1.0, 1.0, 1.0, 0.03)
+        .style(
+            move |_: &iced::Theme, status: iced::widget::button::Status| {
+                iced::widget::button::Style {
+                    background: Some(iced::Background::Color(
+                        if matches!(status, iced::widget::button::Status::Hovered) && can_delete {
+                            iced::Color::from_rgba(1.0, 0.2, 0.2, 0.10)
+                        } else {
+                            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.03)
+                        },
+                    )),
+                    border: iced::Border {
+                        width: 1.0,
+                        radius: 3.0.into(),
+                        color: border_c,
                     },
-                )),
-                border: iced::Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border_c,
-                },
-                text_color: delete_color,
-                ..iced::widget::button::Style::default()
-            }
-        });
+                    text_color: delete_color,
+                    ..iced::widget::button::Style::default()
+                }
+            },
+        );
     if can_delete {
         delete_btn = delete_btn.on_press(PanelMsg::SchLibraryDeleteSymbol(sym.active_idx));
     }
@@ -2199,22 +2346,18 @@ fn view_pin_symbol_picker<'a>(
         .find(|(_, v)| *v == current)
         .map(|(l, _)| l.to_string())
         .unwrap_or_else(|| "None".to_string());
-    let picker = iced::widget::pick_list(
-        labels,
-        Some(current_label),
-        move |chosen: String| {
-            let value = lookup
-                .iter()
-                .find(|(l, _)| l == &chosen)
-                .map(|(_, v)| *v)
-                .unwrap_or(K::None);
-            PanelMsg::SymEditorSetPinSymbol {
-                pin_idx,
-                slot,
-                value,
-            }
-        },
-    )
+    let picker = iced::widget::pick_list(labels, Some(current_label), move |chosen: String| {
+        let value = lookup
+            .iter()
+            .find(|(l, _)| l == &chosen)
+            .map(|(_, v)| *v)
+            .unwrap_or(K::None);
+        PanelMsg::SymEditorSetPinSymbol {
+            pin_idx,
+            slot,
+            value,
+        }
+    })
     .padding([2, 4])
     .text_size(10);
     container(
@@ -2323,10 +2466,7 @@ fn view_symbol_editor_properties<'a>(
                     iced::widget::text_input("number", pin.number.as_str())
                         .padding([2, 4])
                         .size(11)
-                        .on_input(move |s| PanelMsg::SymEditorSetPinNumber {
-                            pin_idx,
-                            value: s,
-                        })
+                        .on_input(move |s| PanelMsg::SymEditorSetPinNumber { pin_idx, value: s })
                         .width(Length::FillPortion(3)),
                 ]
                 .spacing(4)
@@ -2347,10 +2487,7 @@ fn view_symbol_editor_properties<'a>(
                     iced::widget::text_input("name", pin.name.as_str())
                         .padding([2, 4])
                         .size(11)
-                        .on_input(move |s| PanelMsg::SymEditorSetPinName {
-                            pin_idx,
-                            value: s,
-                        })
+                        .on_input(move |s| PanelMsg::SymEditorSetPinName { pin_idx, value: s })
                         .width(Length::FillPortion(3)),
                 ]
                 .spacing(4)
@@ -2366,40 +2503,51 @@ fn view_symbol_editor_properties<'a>(
                 ("Input", signex_library::PinElectricalType::Input),
                 ("I/O", signex_library::PinElectricalType::Bidirectional),
                 ("Output", signex_library::PinElectricalType::Output),
-                ("Open Collector", signex_library::PinElectricalType::OpenCollector),
+                (
+                    "Open Collector",
+                    signex_library::PinElectricalType::OpenCollector,
+                ),
                 ("Passive", signex_library::PinElectricalType::Passive),
                 ("HiZ", signex_library::PinElectricalType::Tristate),
-                ("Open Emitter", signex_library::PinElectricalType::OpenEmitter),
+                (
+                    "Open Emitter",
+                    signex_library::PinElectricalType::OpenEmitter,
+                ),
                 ("Power", signex_library::PinElectricalType::Power),
-                ("Not Connected", signex_library::PinElectricalType::NotConnected),
-                ("Unspecified", signex_library::PinElectricalType::Unspecified),
+                (
+                    "Not Connected",
+                    signex_library::PinElectricalType::NotConnected,
+                ),
+                (
+                    "Unspecified",
+                    signex_library::PinElectricalType::Unspecified,
+                ),
             ];
             let current_label = electrical_options
                 .iter()
                 .find(|(_, v)| format!("{:?}", v) == pin.electrical)
                 .map(|(label, _)| label.to_string())
                 .unwrap_or_else(|| pin.electrical.clone());
-            let labels: Vec<String> =
-                electrical_options.iter().map(|(label, _)| label.to_string()).collect();
+            let labels: Vec<String> = electrical_options
+                .iter()
+                .map(|(label, _)| label.to_string())
+                .collect();
             let labels_for_msg: Vec<(String, signex_library::PinElectricalType)> =
                 electrical_options
                     .iter()
                     .map(|(label, v)| (label.to_string(), *v))
                     .collect();
-            let electrical_picker = iced::widget::pick_list(
-                labels,
-                Some(current_label),
-                move |chosen: String| {
+            let electrical_picker =
+                iced::widget::pick_list(labels, Some(current_label), move |chosen: String| {
                     let value = labels_for_msg
                         .iter()
                         .find(|(label, _)| label == &chosen)
                         .map(|(_, v)| *v)
                         .unwrap_or(signex_library::PinElectricalType::Unspecified);
                     PanelMsg::SymEditorSetPinElectrical { pin_idx, value }
-                },
-            )
-            .padding([2, 4])
-            .text_size(11);
+                })
+                .padding([2, 4])
+                .text_size(11);
             let electrical_row: Element<'a, PanelMsg> = container(
                 row![
                     text("Electrical")
@@ -2557,20 +2705,17 @@ fn view_symbol_editor_properties<'a>(
                         .size(10)
                         .color(muted)
                         .width(Length::FillPortion(2)),
-                    iced::widget::text_input(
-                        "1, or 0 for shared",
-                        &part_now.to_string(),
-                    )
-                    .padding([2, 4])
-                    .size(11)
-                    .on_input(move |s| {
-                        let parsed = s.trim().parse::<u8>().unwrap_or(part_now);
-                        PanelMsg::SymEditorSetPinPartNumber {
-                            pin_idx,
-                            value: parsed,
-                        }
-                    })
-                    .width(Length::FillPortion(3)),
+                    iced::widget::text_input("1, or 0 for shared", &part_now.to_string(),)
+                        .padding([2, 4])
+                        .size(11)
+                        .on_input(move |s| {
+                            let parsed = s.trim().parse::<u8>().unwrap_or(part_now);
+                            PanelMsg::SymEditorSetPinPartNumber {
+                                pin_idx,
+                                value: parsed,
+                            }
+                        })
+                        .width(Length::FillPortion(3)),
                 ]
                 .spacing(4)
                 .align_y(iced::Alignment::Center),
@@ -2674,10 +2819,7 @@ fn view_symbol_editor_properties<'a>(
 
             // ── IEEE Symbols (Inside / Inside Edge / Outside Edge / Outside) ──
             col = col.push(thin_sep(border_c));
-            col = col.push(
-                container(text("Symbols").size(10).color(primary))
-                    .padding([4, 8]),
-            );
+            col = col.push(container(text("Symbols").size(10).color(primary)).padding([4, 8]));
             col = col.push(view_pin_symbol_picker(
                 "Inside",
                 pin.details.inside_symbol,
@@ -2714,36 +2856,34 @@ fn view_symbol_editor_properties<'a>(
             // (e.g. CircleRadius on a Line) silently no-op in the
             // dispatcher so a stale Properties pane can't corrupt
             // geometry.
-            let num_field = |label: &'static str,
-                             field: GraphicFieldId,
-                             value: f64|
-             -> Element<'a, PanelMsg> {
-                container(
-                    row![
-                        text(label.to_string())
-                            .size(10)
-                            .color(muted)
-                            .width(Length::FillPortion(2)),
-                        iced::widget::text_input("mm", &format!("{:.3}", value))
-                            .padding([2, 4])
-                            .size(11)
-                            .on_input(move |s| {
-                                let parsed = s.trim().parse::<f64>().unwrap_or(value);
-                                PanelMsg::SymEditorSetGraphicField {
-                                    idx: g_idx,
-                                    field,
-                                    value: parsed,
-                                }
-                            })
-                            .width(Length::FillPortion(3)),
-                    ]
-                    .spacing(4)
-                    .align_y(iced::Alignment::Center),
-                )
-                .padding([3, 8])
-                .width(Length::Fill)
-                .into()
-            };
+            let num_field =
+                |label: &'static str, field: GraphicFieldId, value: f64| -> Element<'a, PanelMsg> {
+                    container(
+                        row![
+                            text(label.to_string())
+                                .size(10)
+                                .color(muted)
+                                .width(Length::FillPortion(2)),
+                            iced::widget::text_input("mm", &format!("{:.3}", value))
+                                .padding([2, 4])
+                                .size(11)
+                                .on_input(move |s| {
+                                    let parsed = s.trim().parse::<f64>().unwrap_or(value);
+                                    PanelMsg::SymEditorSetGraphicField {
+                                        idx: g_idx,
+                                        field,
+                                        value: parsed,
+                                    }
+                                })
+                                .width(Length::FillPortion(3)),
+                        ]
+                        .spacing(4)
+                        .align_y(iced::Alignment::Center),
+                    )
+                    .padding([3, 8])
+                    .width(Length::Fill)
+                    .into()
+                };
 
             match &g.kind {
                 GraphicKindSummary::Rectangle { from, to } => {
@@ -2777,11 +2917,7 @@ fn view_symbol_editor_properties<'a>(
                         GraphicFieldId::StartDeg,
                         *start_deg,
                     ));
-                    col = col.push(num_field(
-                        "End \u{00B0}",
-                        GraphicFieldId::EndDeg,
-                        *end_deg,
-                    ));
+                    col = col.push(num_field("End \u{00B0}", GraphicFieldId::EndDeg, *end_deg));
                 }
                 GraphicKindSummary::Text {
                     position,
@@ -2823,7 +2959,10 @@ fn view_symbol_editor_properties<'a>(
             ));
         }
         SymbolEditorSelection::FieldReference => {
-            col = col.push(prop_row_static("Field", "Reference (designator)".to_string()));
+            col = col.push(prop_row_static(
+                "Field",
+                "Reference (designator)".to_string(),
+            ));
             col = col.push(
                 container(
                     text("Bound to the host Component's designator at place-time.")

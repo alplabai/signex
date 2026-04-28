@@ -86,8 +86,35 @@ impl Signex {
             MenuMessage::AddLibraryFootprint => {
                 Some(self.handle_add_library_primitive(signex_library::PrimitiveKind::Footprint))
             }
+            MenuMessage::ToolsNewPart => self.dispatch_active_symbol_primitive_event(
+                crate::library::messages::PrimitiveEditorMsg::SymbolNewPart,
+            ),
+            MenuMessage::ToolsRemovePart => self.dispatch_active_symbol_primitive_event(
+                crate::library::messages::PrimitiveEditorMsg::SymbolRemovePart,
+            ),
             _ => None,
         }
+    }
+
+    /// Resolve the active tab; if it's a `.snxsym` standalone editor
+    /// fire `msg` against its `path`. Returns `None` when no Symbol
+    /// editor is active so the menu item silently no-ops on other
+    /// tab kinds (mirrors `MenuMessage::Save`-style guards).
+    fn dispatch_active_symbol_primitive_event(
+        &mut self,
+        msg: crate::library::messages::PrimitiveEditorMsg,
+    ) -> Option<Task<Message>> {
+        let path = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .and_then(|t| match &t.kind {
+                crate::app::TabKind::SymbolEditor(p) => Some(p.clone()),
+                _ => None,
+            })?;
+        Some(self.update(Message::Library(
+            crate::library::LibraryMessage::PrimitiveEditorEvent { path, msg },
+        )))
     }
 
     /// Right-click → Add New ▸ Symbol / Footprint. Resolves the
@@ -125,15 +152,17 @@ impl Signex {
         let project_idx = tree_path[0];
         let library_idx = tree_path[2];
 
-        let resolved_root = match self.document_state.projects.get(project_idx).and_then(
-            |loaded| {
+        let resolved_root = match self
+            .document_state
+            .projects
+            .get(project_idx)
+            .and_then(|loaded| {
                 loaded
                     .data
                     .libraries
                     .get(library_idx)
                     .map(|entry| loaded.data.resolve_library_path(entry))
-            },
-        ) {
+            }) {
             Some(p) => p,
             None => {
                 tracing::warn!(
