@@ -252,6 +252,13 @@ pub struct LibraryState {
     /// Library recovery dialog — Stage 10 of v0.9-snxlib-as-file.
     /// `None` while closed; one of three modal flows when set.
     pub recovery: Option<super::recovery::RecoveryDialog>,
+    /// "Library Options" modal state — `None` while closed. Opens
+    /// after the user picks a `.snxlib` save target in the New Library
+    /// Save-As dialog (Stage 11 of `v0.9-snxlib-as-file-plan.md`). The
+    /// modal lets the user opt into Git LFS for binary 3D models
+    /// (`*.step` / `*.stp` / `*.wrl` / `*.iges`) before the adapter
+    /// runs `git init` + initial commit.
+    pub create_options: Option<LibraryCreateOptionsState>,
 }
 
 /// State for the Tools ▸ Document Options modal — keyed by the
@@ -263,6 +270,27 @@ pub struct DocumentOptionsModalState {
     pub library_path: PathBuf,
     pub library_name: String,
     pub draft: LibraryDisplaySettings,
+}
+
+/// State for the "Library Options" modal that pops up between the
+/// Save-As dialog (where the user picked the `.snxlib` filename) and
+/// the actual `LocalGitAdapter::init` call. Carries the project the
+/// library should attach to + the chosen `.snxlib` path so the
+/// dispatcher can finalise `commands::create_library_at` once the user
+/// confirms. The single user-facing toggle is `use_lfs`; the plan
+/// (§3, §7 step 11) calls out LFS opt-in as the only library-create
+/// option for v0.9.
+#[derive(Debug, Clone)]
+pub struct LibraryCreateOptionsState {
+    /// Project the library will attach to — re-resolved at confirm
+    /// time in case the project unloads between modal spawn and
+    /// confirmation.
+    pub project_path: PathBuf,
+    /// `.snxlib` file path the user picked in the Save-As dialog.
+    pub lib_path: PathBuf,
+    /// "Use Git LFS for binary 3D models" — defaults to `false`. The
+    /// adapter writes `.gitattributes` + stages it on init when set.
+    pub use_lfs: bool,
 }
 
 impl Default for LibraryState {
@@ -287,6 +315,7 @@ impl Default for LibraryState {
             primitive_picker: None,
             document_options: None,
             recovery: None,
+            create_options: None,
         }
     }
 }
