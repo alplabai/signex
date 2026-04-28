@@ -10,6 +10,7 @@ pub mod adapter;
 pub mod adapters;
 #[cfg(feature = "ai-stub")]
 pub mod ai_stub;
+pub mod cascade;
 pub mod component;
 pub mod diff;
 pub mod distributor;
@@ -37,6 +38,10 @@ pub use adapter::{
 pub use adapters::library_set::LibrarySet;
 #[cfg(feature = "ai-stub")]
 pub use ai_stub::{PinGuess, PinoutGuess, extract_pinout};
+pub use cascade::{
+    CascadeReport, cascade_after_footprint_save, cascade_after_sim_save,
+    cascade_after_symbol_save, patch_bump,
+};
 pub use component::{ComponentRow, DatasheetRef, PinPadOverride, PlmReserved};
 pub use diff::{
     BumpKind, LifecycleDiff, ListDiff, ParameterDiff, PinMapDiff, RowDiff, auto_bump_kind,

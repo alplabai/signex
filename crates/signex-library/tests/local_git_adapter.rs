@@ -18,7 +18,7 @@ use signex_library::component::{ComponentRow, DatasheetRef, PlmReserved};
 use signex_library::identity::{ComponentClass, InternalPn, RowId};
 use signex_library::lifecycle::LifecycleState;
 use signex_library::library_file::{FORMAT_TOKEN, LibrarySection, SnxlibManifest};
-use signex_library::manifest::{LibraryMode, UsersConfig, WorkflowConfig};
+use signex_library::manifest::{LibraryMode, UsersConfig, WorkflowConfig, WorkflowMode};
 use signex_library::manufacturer::ManufacturerPart;
 use signex_library::param::ParamMap;
 use signex_library::primitive::{
@@ -602,4 +602,194 @@ fn local_git_commits_with_message() {
     let repo = git2::Repository::open(file.parent().unwrap()).unwrap();
     let head = repo.head().unwrap().peel_to_commit().unwrap();
     assert_eq!(head.summary(), Some("msg-XYZ"));
+}
+
+// ── Cascade engine (Stage 15) ────────────────────────────────────────────
+
+/// Build an `.snxlib` manifest in the given workflow mode. Cascade
+/// behaviour gates on this — Personal silently bumps every bound row,
+/// Team leaves released rows stale.
+fn snx_manifest_with_mode(name: &str, mode: WorkflowMode) -> SnxlibManifest {
+    SnxlibManifest {
+        format: FORMAT_TOKEN.into(),
+        library_id: Uuid::now_v7(),
+        library: LibrarySection {
+            name: name.into(),
+            description: None,
+        },
+        mode: LibraryMode::default(),
+        workflow: WorkflowConfig {
+            mode,
+            ..Default::default()
+        },
+        users: UsersConfig::default(),
+    }
+}
+
+/// Personal-mode cascade silently bumps a row binding to the saved
+/// symbol — both the row's pinned `symbol_version` and its own
+/// `version` patch advance.
+#[test]
+fn cascade_personal_mode_auto_bumps_bound_row() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = snxlib_path(dir.path(), "CascadeP");
+    let manifest = snx_manifest_with_mode("CascadeP", WorkflowMode::Personal);
+    let lib_id = manifest.library_id;
+    let adapter = LocalGitAdapter::init(&file, manifest, LibraryInitOptions::default()).unwrap();
+
+    // Save symbol v0.0.1 — no rows yet, cascade is a no-op here.
+    let mut sym = fixture_symbol("OPAMP-V1");
+    sym.version = "0.0.1".into();
+    let sym_uuid = sym.uuid;
+    adapter.save_symbol(sym.clone(), "init opamp").unwrap();
+
+    // Insert a row whose symbol_ref points at our saved symbol's uuid;
+    // pin its `symbol_version` to the v0.0.1 we just saved.
+    let mut row = fixture_row("U-OPAMP-001", "opamp", lib_id);
+    row.symbol_ref = PrimitiveRef::new(lib_id, sym_uuid);
+    row.symbol_version = "0.0.1".into();
+    row.version = "0.0.1".into();
+    row.released = false;
+    let row_id = RowId::from_uuid(row.row_id);
+    adapter.insert_row("opamps", row.clone(), "bind row").unwrap();
+
+    // Save symbol v0.0.2 — cascade should silently advance the row.
+    let mut sym2 = sym.clone();
+    sym2.version = "0.0.2".into();
+    adapter.save_symbol(sym2, "edit opamp").unwrap();
+
+    // Row's pinned symbol_version moved to the new symbol version,
+    // and the row's own version patch-bumped (0.0.1 → 0.0.2).
+    let after = adapter.read_row("opamps", row_id).unwrap();
+    assert_eq!(after.symbol_version, "0.0.2");
+    assert_eq!(after.version, "0.0.2");
+    assert_eq!(after.row_id, row.row_id, "row identity preserved");
+}
+
+/// Team-mode + released row — cascade leaves the pinned
+/// `symbol_version` alone so the schematic doesn't auto-pull a
+/// breaking change. The Library Browser's stale-binding indicator
+/// catches the drift visually.
+#[test]
+fn cascade_team_mode_leaves_released_row_stale() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = snxlib_path(dir.path(), "CascadeT");
+    let manifest = snx_manifest_with_mode("CascadeT", WorkflowMode::Team);
+    let lib_id = manifest.library_id;
+    let adapter = LocalGitAdapter::init(&file, manifest, LibraryInitOptions::default()).unwrap();
+
+    let mut sym = fixture_symbol("OPAMP-V1");
+    sym.version = "1.0.0".into();
+    let sym_uuid = sym.uuid;
+    adapter.save_symbol(sym.clone(), "init opamp").unwrap();
+
+    // Released row binding at v1.0.0.
+    let mut row = fixture_row("U-OPAMP-RELEASED", "opamp", lib_id);
+    row.symbol_ref = PrimitiveRef::new(lib_id, sym_uuid);
+    row.symbol_version = "1.0.0".into();
+    row.version = "1.0.0".into();
+    row.released = true;
+    let row_id = RowId::from_uuid(row.row_id);
+    adapter
+        .insert_row("opamps", row.clone(), "bind released row")
+        .unwrap();
+
+    // Save symbol v1.0.1 — Team mode + released row → stale.
+    let mut sym2 = sym.clone();
+    sym2.version = "1.0.1".into();
+    adapter.save_symbol(sym2, "edit opamp").unwrap();
+
+    let after = adapter.read_row("opamps", row_id).unwrap();
+    assert_eq!(
+        after.symbol_version, "1.0.0",
+        "released row keeps old symbol_version pin"
+    );
+    assert_eq!(after.version, "1.0.0", "released row's version stays put");
+    assert!(after.released, "released flag preserved");
+
+    // Confirm the cascade engine itself bucketed it as stale rather
+    // than silently dropping it — call it directly so we can inspect
+    // the report shape (the adapter wrapper discards its return).
+    let report = signex_library::cascade::cascade_after_symbol_save(
+        &adapter,
+        sym_uuid,
+        "1.0.2",
+        WorkflowMode::Team,
+    )
+    .unwrap();
+    assert!(report.auto_bumped.is_empty());
+    assert_eq!(report.stale, vec![row_id]);
+}
+
+/// Team-mode + unreleased row — auto-cascade fires (the released
+/// flag is the gate, not the workflow mode alone). Mirrors Altium's
+/// "edit-in-place is fine while the row is still in draft".
+#[test]
+fn cascade_team_mode_unreleased_row_auto_bumps() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = snxlib_path(dir.path(), "CascadeTU");
+    let manifest = snx_manifest_with_mode("CascadeTU", WorkflowMode::Team);
+    let lib_id = manifest.library_id;
+    let adapter = LocalGitAdapter::init(&file, manifest, LibraryInitOptions::default()).unwrap();
+
+    let mut sym = fixture_symbol("OPAMP-V1");
+    sym.version = "1.0.0".into();
+    let sym_uuid = sym.uuid;
+    adapter.save_symbol(sym.clone(), "init opamp").unwrap();
+
+    let mut row = fixture_row("U-OPAMP-DRAFT", "opamp", lib_id);
+    row.symbol_ref = PrimitiveRef::new(lib_id, sym_uuid);
+    row.symbol_version = "1.0.0".into();
+    row.version = "0.0.5".into();
+    row.released = false;
+    let row_id = RowId::from_uuid(row.row_id);
+    adapter
+        .insert_row("opamps", row.clone(), "bind draft row")
+        .unwrap();
+
+    let mut sym2 = sym.clone();
+    sym2.version = "1.0.1".into();
+    adapter.save_symbol(sym2, "edit opamp").unwrap();
+
+    let after = adapter.read_row("opamps", row_id).unwrap();
+    assert_eq!(after.symbol_version, "1.0.1");
+    assert_eq!(after.version, "0.0.6", "row.version patch-bumps");
+    assert!(!after.released);
+}
+
+/// Footprint cascade mirrors symbol cascade — same predicate
+/// (Personal mode OR `!row.released`), same auto-bump rules. Test
+/// confirms the trait dispatches against `footprint_ref` rather
+/// than `symbol_ref`.
+#[test]
+fn cascade_footprint_personal_mode_auto_bumps_bound_row() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = snxlib_path(dir.path(), "CascadeF");
+    let manifest = snx_manifest_with_mode("CascadeF", WorkflowMode::Personal);
+    let lib_id = manifest.library_id;
+    let adapter = LocalGitAdapter::init(&file, manifest, LibraryInitOptions::default()).unwrap();
+
+    let mut fp = fixture_footprint("SOIC-8");
+    fp.version = "0.0.1".into();
+    let fp_uuid = fp.uuid;
+    adapter.save_footprint(fp.clone(), "init fp").unwrap();
+
+    let mut row = fixture_row("U-SOIC-001", "opamp", lib_id);
+    row.footprint_ref = Some(PrimitiveRef::new(lib_id, fp_uuid));
+    row.footprint_version = "0.0.1".into();
+    row.version = "0.0.1".into();
+    row.released = false;
+    let row_id = RowId::from_uuid(row.row_id);
+    adapter.insert_row("opamps", row.clone(), "bind row").unwrap();
+
+    let mut fp2 = fp.clone();
+    fp2.version = "0.0.2".into();
+    adapter.save_footprint(fp2, "edit fp").unwrap();
+
+    let after = adapter.read_row("opamps", row_id).unwrap();
+    assert_eq!(after.footprint_version, "0.0.2");
+    assert_eq!(after.version, "0.0.2");
+    // Symbol pin must NOT have moved — cascade stays scoped to the
+    // primitive kind that was saved.
+    assert_eq!(after.symbol_version, row.symbol_version);
 }
