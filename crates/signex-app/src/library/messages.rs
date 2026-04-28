@@ -597,6 +597,10 @@ pub enum SymbolSelectionMsg {
     Pin(usize),
     FieldReference,
     FieldValue,
+    /// A placed `SymbolGraphic` at the given index in the active
+    /// symbol's `graphics` vector. Drives the right-dock Properties
+    /// panel's Graphic branch.
+    Graphic(usize),
 }
 
 /// Symbol field key — pure-data alias of

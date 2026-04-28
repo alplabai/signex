@@ -2096,6 +2096,7 @@ pub(crate) fn apply_symbol_primitive_edit(
                 SymbolSelectionMsg::Pin(idx) => SymbolSelection::Pin(idx),
                 SymbolSelectionMsg::FieldReference => SymbolSelection::Field(FieldKey::Reference),
                 SymbolSelectionMsg::FieldValue => SymbolSelection::Field(FieldKey::Value),
+                SymbolSelectionMsg::Graphic(idx) => SymbolSelection::Graphic(idx),
             });
             editor.canvas_cache.clear();
         }

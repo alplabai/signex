@@ -290,9 +290,33 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         // ── Body + every other graphic ──
         // Render the first Rectangle as the filled "body" (translucent
         // fill + thick stroke); all other graphics (additional rects,
-        // lines, circles, arcs) render as outlines only.
+        // lines, circles, arcs) render as outlines only. Selection
+        // halo: the currently-selected graphic gets the accent stroke
+        // colour with extra width so it stands out against the body.
+        let selected_graphic_idx = match self.selected {
+            Some(SymbolSelection::Graphic(i)) => Some(i),
+            _ => None,
+        };
         let mut body_drawn = false;
-        for g in &self.symbol.graphics {
+        for (i, g) in self.symbol.graphics.iter().enumerate() {
+            let is_selected = selected_graphic_idx == Some(i);
+            let stroke_color = if is_selected {
+                self.selected_color
+            } else {
+                self.body_color
+            };
+            let stroke_w = if is_selected { 2.5 } else { 1.5 };
+            // Rectangle defaults to a thicker stroke than other
+            // outline graphics so the "body" reads cleanly; selection
+            // overrides both with the accent stroke width.
+            let rect_w = if is_selected { 2.5 } else { 2.0 };
+            // Text colour follows the same selection rule; body uses
+            // the regular text colour, selected uses the accent.
+            let text_c = if is_selected {
+                self.selected_color
+            } else {
+                self.text_color
+            };
             match &g.kind {
                 SymbolGraphicKind::Rectangle { from, to } => {
                     let p1 = w2s(from[0], from[1]);
@@ -313,8 +337,8 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                     frame.stroke(
                         &path,
                         canvas::Stroke::default()
-                            .with_color(self.body_color)
-                            .with_width(2.0),
+                            .with_color(stroke_color)
+                            .with_width(rect_w),
                     );
                 }
                 SymbolGraphicKind::Line { from, to } => {
@@ -325,8 +349,8 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                     frame.stroke(
                         &path,
                         canvas::Stroke::default()
-                            .with_color(self.body_color)
-                            .with_width(1.5),
+                            .with_color(stroke_color)
+                            .with_width(stroke_w),
                     );
                 }
                 SymbolGraphicKind::Circle { center, radius } => {
@@ -335,8 +359,8 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                     frame.stroke(
                         &path,
                         canvas::Stroke::default()
-                            .with_color(self.body_color)
-                            .with_width(1.5),
+                            .with_color(stroke_color)
+                            .with_width(stroke_w),
                     );
                 }
                 SymbolGraphicKind::Arc {
@@ -360,8 +384,8 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                     frame.stroke(
                         &path,
                         canvas::Stroke::default()
-                            .with_color(self.body_color)
-                            .with_width(1.5),
+                            .with_color(stroke_color)
+                            .with_width(stroke_w),
                     );
                 }
                 SymbolGraphicKind::Text { position, content, size: text_size } => {
@@ -369,7 +393,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                         content: content.clone(),
                         position: w2s(position[0], position[1]),
                         size: ((*text_size as f32) * scale * 0.5).into(),
-                        color: self.text_color,
+                        color: text_c,
                         ..canvas::Text::default()
                     });
                 }

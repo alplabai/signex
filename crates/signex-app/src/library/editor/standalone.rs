@@ -213,6 +213,7 @@ fn symbol_selection_to_msg(sel: sym_state::SymbolSelection) -> SymbolSelectionMs
         SymbolSelection::Pin(idx) => SymbolSelectionMsg::Pin(idx),
         SymbolSelection::Field(FieldKey::Reference) => SymbolSelectionMsg::FieldReference,
         SymbolSelection::Field(FieldKey::Value) => SymbolSelectionMsg::FieldValue,
+        SymbolSelection::Graphic(idx) => SymbolSelectionMsg::Graphic(idx),
     }
 }
 

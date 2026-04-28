@@ -44,11 +44,17 @@ pub enum FieldKey {
     Value,
 }
 
-/// Selected element on the Symbol canvas — drives delete + drag.
+/// Selected element on the Symbol canvas — drives delete + drag and
+/// the right-dock Properties panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SymbolSelection {
     Pin(usize),
     Field(FieldKey),
+    /// A placed [`signex_library::SymbolGraphic`] at the given index
+    /// in the active symbol's `graphics` vector. Picked up by the
+    /// canvas hit-test on Select-tool clicks that miss every pin and
+    /// every graphic resize handle but land inside a graphic body.
+    Graphic(usize),
 }
 
 /// Resize-handle identity for a placed [`SymbolGraphic`]. Each
@@ -102,15 +108,61 @@ fn next_pin_number(sym: &Symbol) -> String {
 
 /// Move the currently-selected element to a new canvas position.
 /// Coordinates are in mm; callers should snap to the grid first.
+/// For graphics this translates the entire shape so its anchor (TL
+/// corner / `from` endpoint / `center` / `position`) lands on `(x, y)`.
 pub fn move_selected(sym: &mut Symbol, sel: Option<SymbolSelection>, x: f64, y: f64) {
-    if let Some(SymbolSelection::Pin(idx)) = sel
-        && let Some(pin) = sym.pins.get_mut(idx)
-    {
-        pin.position = [x, y];
+    match sel {
+        Some(SymbolSelection::Pin(idx)) => {
+            if let Some(pin) = sym.pins.get_mut(idx) {
+                pin.position = [x, y];
+            }
+        }
+        Some(SymbolSelection::Graphic(idx)) => {
+            translate_graphic_to(sym, idx, x, y);
+        }
+        // SymbolSelection::Field — no-op; the on-canvas designator /
+        // value drag re-binds against `ComponentRow` once that pipeline
+        // ships.
+        Some(SymbolSelection::Field(_)) | None => {}
     }
-    // SymbolSelection::Field — no-op; the on-canvas designator /
-    // value drag re-binds against `ComponentRow` once that pipeline
-    // ships.
+}
+
+/// Translate the graphic at `idx` so its primary anchor lands on
+/// `(x, y)`. Anchors are picked to match the visual centre of mass
+/// of each shape: rectangles + lines move by the delta between the
+/// new point and `from`; circles + arcs use `center`; text uses
+/// `position`. No-op when `idx` is out of range.
+fn translate_graphic_to(sym: &mut Symbol, idx: usize, x: f64, y: f64) {
+    let Some(g) = sym.graphics.get_mut(idx) else {
+        return;
+    };
+    match &mut g.kind {
+        SymbolGraphicKind::Rectangle { from, to } => {
+            let dx = x - from[0];
+            let dy = y - from[1];
+            from[0] += dx;
+            from[1] += dy;
+            to[0] += dx;
+            to[1] += dy;
+        }
+        SymbolGraphicKind::Line { from, to } => {
+            let dx = x - from[0];
+            let dy = y - from[1];
+            from[0] += dx;
+            from[1] += dy;
+            to[0] += dx;
+            to[1] += dy;
+        }
+        SymbolGraphicKind::Circle { center, .. }
+        | SymbolGraphicKind::Arc { center, .. } => {
+            center[0] = x;
+            center[1] = y;
+        }
+        SymbolGraphicKind::Text { position, .. } => {
+            position[0] = x;
+            position[1] = y;
+        }
+    }
 }
 
 /// Delete whatever is currently selected. Returns `Some(new_sel)` if
@@ -129,12 +181,23 @@ pub fn delete_selected(
                 None
             }
         }
+        Some(SymbolSelection::Graphic(idx)) => {
+            if idx < sym.graphics.len() {
+                sym.graphics.remove(idx);
+                Some(None)
+            } else {
+                None
+            }
+        }
         Some(SymbolSelection::Field(_)) => None,
         None => None,
     }
 }
 
-/// Hit-test cursor world coordinates against pins.
+/// Hit-test cursor world coordinates against pins, then graphic
+/// bodies. Pins win (small hit target, often inside graphics);
+/// graphics scan in reverse so the most-recently-placed graphic
+/// wins overlap.
 pub fn hit_test(sym: &Symbol, x: f64, y: f64) -> Option<SymbolSelection> {
     const PIN_HIT_R_SQ: f64 = 1.5 * 1.5;
     for (i, pin) in sym.pins.iter().enumerate() {
@@ -144,7 +207,88 @@ pub fn hit_test(sym: &Symbol, x: f64, y: f64) -> Option<SymbolSelection> {
             return Some(SymbolSelection::Pin(i));
         }
     }
+    for idx in (0..sym.graphics.len()).rev() {
+        if hit_test_graphic_body(sym, idx, x, y) {
+            return Some(SymbolSelection::Graphic(idx));
+        }
+    }
     None
+}
+
+/// Tolerance band around line / arc / circle outlines (mm).
+const GRAPHIC_BODY_TOL: f64 = 0.5;
+
+/// Body hit test for the graphic at `idx`. Rectangle counts every
+/// interior point; line / arc / circle count any point within the
+/// stroke tolerance band so the user can grab thin strokes without
+/// pixel-perfect aim.
+fn hit_test_graphic_body(sym: &Symbol, idx: usize, x: f64, y: f64) -> bool {
+    let Some(g) = sym.graphics.get(idx) else {
+        return false;
+    };
+    match &g.kind {
+        SymbolGraphicKind::Rectangle { from, to } => {
+            let xmin = from[0].min(to[0]);
+            let xmax = from[0].max(to[0]);
+            let ymin = from[1].min(to[1]);
+            let ymax = from[1].max(to[1]);
+            x >= xmin && x <= xmax && y >= ymin && y <= ymax
+        }
+        SymbolGraphicKind::Line { from, to } => {
+            point_to_segment_dist_sq([x, y], *from, *to) <= GRAPHIC_BODY_TOL * GRAPHIC_BODY_TOL
+        }
+        SymbolGraphicKind::Circle { center, radius } => {
+            let dx = x - center[0];
+            let dy = y - center[1];
+            let d = (dx * dx + dy * dy).sqrt();
+            (d - radius).abs() <= GRAPHIC_BODY_TOL
+        }
+        SymbolGraphicKind::Arc {
+            center,
+            radius,
+            start_deg,
+            end_deg,
+        } => {
+            let dx = x - center[0];
+            let dy = y - center[1];
+            let d = (dx * dx + dy * dy).sqrt();
+            if (d - radius).abs() > GRAPHIC_BODY_TOL {
+                return false;
+            }
+            // Angle of the click point in degrees, normalised to [0, 360).
+            let a = dy.atan2(dx).to_degrees().rem_euclid(360.0);
+            let s = start_deg.rem_euclid(360.0);
+            let e = end_deg.rem_euclid(360.0);
+            if s <= e {
+                a >= s && a <= e
+            } else {
+                a >= s || a <= e
+            }
+        }
+        SymbolGraphicKind::Text { position, size, .. } => {
+            // Approximate text bounds as a small box around the anchor.
+            let half_w = size * 0.5;
+            let half_h = size * 0.5;
+            (x - position[0]).abs() <= half_w && (y - position[1]).abs() <= half_h
+        }
+    }
+}
+
+fn point_to_segment_dist_sq(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
+    let dx = b[0] - a[0];
+    let dy = b[1] - a[1];
+    let len_sq = dx * dx + dy * dy;
+    if len_sq <= f64::EPSILON {
+        let ddx = p[0] - a[0];
+        let ddy = p[1] - a[1];
+        return ddx * ddx + ddy * ddy;
+    }
+    let t = (((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len_sq).clamp(0.0, 1.0);
+    let cx = a[0] + t * dx;
+    let cy = a[1] + t * dy;
+    let ddx = p[0] - cx;
+    let ddy = p[1] - cy;
+    ddx * ddx + ddy * ddy
 }
 
 /// Hit radius for graphic resize handles — same 1.5 mm budget as the
@@ -155,6 +299,7 @@ const HANDLE_HIT_R_SQ: f64 = 1.5 * 1.5;
 /// Returns `None` if the handle variant doesn't match the graphic
 /// kind — defensive against stale `GraphicHandle` values lingering
 /// across selection swaps.
+#[allow(dead_code)]
 pub fn graphic_handle_position(
     sym: &Symbol,
     idx: usize,
@@ -453,6 +598,57 @@ mod tests {
             SymbolGraphicKind::Circle { radius, .. } => assert!((*radius - 5.0).abs() < 1e-9),
             _ => panic!("expected Circle"),
         }
+    }
+
+    #[test]
+    fn hit_test_returns_graphic_inside_rectangle() {
+        let mut s = Symbol::empty("test");
+        s.graphics.push(signex_library::SymbolGraphic {
+            kind: SymbolGraphicKind::Rectangle {
+                from: [0.0, 0.0],
+                to: [10.0, 5.0],
+            },
+            stroke_width: 0.15,
+        });
+        // Pin still at default (0, 0) — would have to move it for clean test.
+        s.pins[0].position = [-99.0, -99.0]; // park the pin off-canvas
+        let hit = hit_test(&s, 5.0, 2.5);
+        assert_eq!(hit, Some(SymbolSelection::Graphic(0)));
+    }
+
+    #[test]
+    fn move_selected_translates_rectangle_by_anchor_delta() {
+        let mut s = Symbol::empty("test");
+        s.graphics.push(signex_library::SymbolGraphic {
+            kind: SymbolGraphicKind::Rectangle {
+                from: [0.0, 0.0],
+                to: [10.0, 5.0],
+            },
+            stroke_width: 0.15,
+        });
+        move_selected(&mut s, Some(SymbolSelection::Graphic(0)), 3.0, 7.0);
+        match &s.graphics[0].kind {
+            SymbolGraphicKind::Rectangle { from, to } => {
+                assert_eq!(*from, [3.0, 7.0]);
+                assert_eq!(*to, [13.0, 12.0]);
+            }
+            _ => panic!("expected Rectangle"),
+        }
+    }
+
+    #[test]
+    fn delete_selected_removes_graphic() {
+        let mut s = Symbol::empty("test");
+        s.graphics.push(signex_library::SymbolGraphic {
+            kind: SymbolGraphicKind::Circle {
+                center: [0.0, 0.0],
+                radius: 1.0,
+            },
+            stroke_width: 0.15,
+        });
+        let new_sel = delete_selected(&mut s, Some(SymbolSelection::Graphic(0)));
+        assert_eq!(new_sel, Some(None));
+        assert!(s.graphics.is_empty());
     }
 
     #[test]
