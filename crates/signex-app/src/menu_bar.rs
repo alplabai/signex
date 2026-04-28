@@ -173,6 +173,15 @@ pub enum MenuMessage {
     // Tools
     /// Open the Preferences dialog.
     OpenPreferences,
+    /// Tools ▸ New Part — bumps the active `.snxsym` symbol's max
+    /// `part_number` by one and switches the editor's active_part to
+    /// the new value. No-op when no Symbol editor is the active tab.
+    ToolsNewPart,
+    /// Tools ▸ Remove Part — drops the active part on the active
+    /// `.snxsym` symbol; pins on that part are demoted to part 1 so
+    /// the data survives. No-op when only one part exists or no
+    /// Symbol editor is the active tab.
+    ToolsRemovePart,
 }
 
 /// Context passed into `view` so each menu leaf can decide whether to
@@ -559,6 +568,12 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
             separator(mc),
             leaf_stub("Design Rule Check", None, mc),
             leaf_stub("Net Inspector", None, mc),
+            separator(mc),
+            // Multi-part component flow — only meaningful when the
+            // active tab is a `.snxsym` standalone editor; the
+            // dispatcher silently no-ops on non-Symbol tabs.
+            leaf("New Part", None, MenuMessage::ToolsNewPart, mc),
+            leaf("Remove Part", None, MenuMessage::ToolsRemovePart, mc),
             separator(mc),
             leaf(
                 "Preferences...",

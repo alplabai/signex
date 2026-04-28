@@ -87,20 +87,18 @@ fn view_symbol_toolbar<'a>(
     let border = theme_ext::border_color(tokens);
     let path = editor.path.clone();
 
-    let tool_button = |label: &str,
-                       tool: SymbolTool,
-                       msg: SymbolToolMsg|
-     -> Element<'a, LibraryMessage> {
-        let path_for_press = path.clone();
-        button(text(label.to_string()).size(11).color(text_c))
-            .padding([4, 10])
-            .on_press(LibraryMessage::PrimitiveEditorEvent {
-                path: path_for_press,
-                msg: PrimitiveEditorMsg::SymbolSetTool(msg),
-            })
-            .style(symbol_tool_button_style(editor.tool == tool, border))
-            .into()
-    };
+    let tool_button =
+        |label: &str, tool: SymbolTool, msg: SymbolToolMsg| -> Element<'a, LibraryMessage> {
+            let path_for_press = path.clone();
+            button(text(label.to_string()).size(11).color(text_c))
+                .padding([4, 10])
+                .on_press(LibraryMessage::PrimitiveEditorEvent {
+                    path: path_for_press,
+                    msg: PrimitiveEditorMsg::SymbolSetTool(msg),
+                })
+                .style(symbol_tool_button_style(editor.tool == tool, border))
+                .into()
+        };
 
     let save_path = path.clone();
     let save_btn = button(
@@ -115,6 +113,31 @@ fn view_symbol_toolbar<'a>(
     })
     .style(symbol_tool_button_style(false, border));
 
+    // Active Part picker. `← Part X / N →` reads + steps the active
+    // sub-part. Arrows clamp at 1 / max — Tools ▸ New Part is the
+    // way to add new parts, not the right arrow (mirrors Altium).
+    let max_part = crate::library::editor::symbol::state::max_part_number(editor.primitive());
+    let active_part = editor.active_part;
+    let prev_path = path.clone();
+    let next_path = path.clone();
+    let prev_btn = button(text("\u{2190}").size(11).color(text_c))
+        .padding([4, 8])
+        .on_press(LibraryMessage::PrimitiveEditorEvent {
+            path: prev_path,
+            msg: PrimitiveEditorMsg::SymbolPrevPart,
+        })
+        .style(symbol_tool_button_style(false, border));
+    let next_btn = button(text("\u{2192}").size(11).color(text_c))
+        .padding([4, 8])
+        .on_press(LibraryMessage::PrimitiveEditorEvent {
+            path: next_path,
+            msg: PrimitiveEditorMsg::SymbolNextPart,
+        })
+        .style(symbol_tool_button_style(false, border));
+    let part_label = text(format!("Part {active_part} / {max_part}"))
+        .size(11)
+        .color(text_c);
+
     container(
         row![
             tool_button("Select", SymbolTool::Select, SymbolToolMsg::Select),
@@ -126,8 +149,16 @@ fn view_symbol_toolbar<'a>(
                 SymbolToolMsg::PlaceRectangle,
             ),
             tool_button("Line", SymbolTool::PlaceLine, SymbolToolMsg::PlaceLine),
-            tool_button("Circle", SymbolTool::PlaceCircle, SymbolToolMsg::PlaceCircle),
+            tool_button(
+                "Circle",
+                SymbolTool::PlaceCircle,
+                SymbolToolMsg::PlaceCircle
+            ),
             Space::new().width(Length::Fill),
+            prev_btn,
+            part_label,
+            next_btn,
+            Space::new().width(8),
             save_btn,
         ]
         .spacing(6)
@@ -158,7 +189,12 @@ fn symbol_tool_button_style(
 }
 
 fn view_symbol_canvas<'a>(editor: &'a SymbolEditorState) -> Element<'a, LibraryMessage> {
-    let program = SymbolCanvas::new(editor.primitive(), editor.selected, editor.tool);
+    let program = SymbolCanvas::new(
+        editor.primitive(),
+        editor.selected,
+        editor.tool,
+        editor.active_part,
+    );
     let widget: Element<'a, sym_canvas::CanvasAction> = iced::widget::Canvas::new(program)
         .width(Length::Fill)
         .height(Length::Fill)
@@ -180,17 +216,14 @@ fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> Primitive
         CanvasAction::Select(sel) => PrimitiveEditorMsg::SymbolSelect(symbol_selection_to_msg(sel)),
         CanvasAction::Deselect => PrimitiveEditorMsg::SymbolDeselect,
         CanvasAction::Move { x, y } => PrimitiveEditorMsg::SymbolMoveSelected { x, y },
-        CanvasAction::MoveGraphicHandle {
-            idx,
-            handle,
-            x,
-            y,
-        } => PrimitiveEditorMsg::SymbolMoveGraphicHandle {
-            idx,
-            handle: graphic_handle_to_msg(handle),
-            x,
-            y,
-        },
+        CanvasAction::MoveGraphicHandle { idx, handle, x, y } => {
+            PrimitiveEditorMsg::SymbolMoveGraphicHandle {
+                idx,
+                handle: graphic_handle_to_msg(handle),
+                x,
+                y,
+            }
+        }
         CanvasAction::DeleteSelected => PrimitiveEditorMsg::SymbolDeleteSelected,
     }
 }

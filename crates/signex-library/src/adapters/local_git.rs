@@ -308,18 +308,16 @@ impl LocalGitAdapter {
                     file.symbols.push(sym.clone());
                     file.updated = chrono::Utc::now();
                 }
-                let bytes = serde_json::to_vec_pretty(&file).map_err(|e| {
-                    LibraryError::Backend(format!("write symbol container: {e}"))
-                })?;
+                let bytes = serde_json::to_vec_pretty(&file)
+                    .map_err(|e| LibraryError::Backend(format!("write symbol container: {e}")))?;
                 fs::write(&path, bytes)?;
                 path
             }
             None => {
                 let file = SymbolFile::from_symbol(sym.clone());
                 let path = self.fresh_symbol_file_path(&dir, &file)?;
-                let bytes = serde_json::to_vec_pretty(&file).map_err(|e| {
-                    LibraryError::Backend(format!("write symbol container: {e}"))
-                })?;
+                let bytes = serde_json::to_vec_pretty(&file)
+                    .map_err(|e| LibraryError::Backend(format!("write symbol container: {e}")))?;
                 fs::write(&path, bytes)?;
                 path
             }

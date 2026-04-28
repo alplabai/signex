@@ -28,21 +28,36 @@ use super::state::{self, GraphicHandle, SymbolSelection};
 /// The actions a [`SymbolCanvas`] can emit upward.
 #[derive(Debug, Clone, Copy)]
 pub enum CanvasAction {
-    AddPin { x: f64, y: f64 },
+    AddPin {
+        x: f64,
+        y: f64,
+    },
     /// Stamp a default-sized rectangle (10 × 5 mm) centred on
     /// `(x, y)`. Drag-to-resize lands in a follow-up — for the
     /// first cut the rectangle is committed in one click and
     /// the user can later edit the corners via the Properties
     /// panel (or move/delete via the Select tool).
-    AddRectangle { x: f64, y: f64 },
+    AddRectangle {
+        x: f64,
+        y: f64,
+    },
     /// Stamp a 5 mm horizontal line starting at `(x, y)` going
     /// right.
-    AddLine { x: f64, y: f64 },
+    AddLine {
+        x: f64,
+        y: f64,
+    },
     /// Stamp a circle of radius 2 mm centred on `(x, y)`.
-    AddCircle { x: f64, y: f64 },
+    AddCircle {
+        x: f64,
+        y: f64,
+    },
     Select(SymbolSelection),
     Deselect,
-    Move { x: f64, y: f64 },
+    Move {
+        x: f64,
+        y: f64,
+    },
     /// Drag-to-resize a graphic handle. Fired continuously while the
     /// user drags the handle of a placed graphic in the Select tool.
     MoveGraphicHandle {
@@ -94,6 +109,11 @@ pub struct SymbolCanvas<'a> {
     pub symbol: &'a Symbol,
     pub selected: Option<SymbolSelection>,
     pub tool: SymbolTool,
+    /// Active sub-part the canvas is filtering pins for. Pins with
+    /// `part_number == 0` (Part Zero) render on every part; pins
+    /// with `part_number == active_part` render on the active part
+    /// only. Defaults to `1` (single-part components).
+    pub active_part: u8,
     pub bg_color: Color,
     pub grid_color: Color,
     pub body_color: Color,
@@ -103,11 +123,17 @@ pub struct SymbolCanvas<'a> {
 }
 
 impl<'a> SymbolCanvas<'a> {
-    pub fn new(symbol: &'a Symbol, selected: Option<SymbolSelection>, tool: SymbolTool) -> Self {
+    pub fn new(
+        symbol: &'a Symbol,
+        selected: Option<SymbolSelection>,
+        tool: SymbolTool,
+        active_part: u8,
+    ) -> Self {
         Self {
             symbol,
             selected,
             tool,
+            active_part,
             bg_color: Color::from_rgb(0.10, 0.11, 0.13),
             grid_color: Color::from_rgba(1.0, 1.0, 1.0, 0.06),
             body_color: Color::from_rgb(0.95, 0.78, 0.30),
@@ -115,6 +141,13 @@ impl<'a> SymbolCanvas<'a> {
             selected_color: Color::from_rgb(0.30, 0.85, 0.95),
             text_color: Color::from_rgb(0.85, 0.88, 0.92),
         }
+    }
+
+    /// True when `pin` should render on the currently-active part.
+    /// Part Zero (`part_number == 0`) appears on every part; other
+    /// pins only render when they match `active_part`.
+    fn pin_visible_on_active_part(&self, pin: &SymbolPin) -> bool {
+        pin.part_number == 0 || pin.part_number == self.active_part
     }
 
     /// Body rectangle: derived from the first `SymbolGraphicKind::Rectangle`
@@ -388,7 +421,11 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                             .with_width(stroke_w),
                     );
                 }
-                SymbolGraphicKind::Text { position, content, size: text_size } => {
+                SymbolGraphicKind::Text {
+                    position,
+                    content,
+                    size: text_size,
+                } => {
                     frame.fill_text(canvas::Text {
                         content: content.clone(),
                         position: w2s(position[0], position[1]),
@@ -428,8 +465,13 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
             );
         }
 
-        // Pins.
+        // Pins — filtered by active_part. Pins with part_number == 0
+        // (Part Zero) render on every part; other pins render only
+        // when their part matches editor.active_part.
         for (i, pin) in self.symbol.pins.iter().enumerate() {
+            if !self.pin_visible_on_active_part(pin) {
+                continue;
+            }
             self.draw_pin(&mut frame, &w2s, scale, pin, i);
         }
 

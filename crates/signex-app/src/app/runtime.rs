@@ -533,14 +533,19 @@ fn build_symbol_editor_panel_ctx(
         Some(sym_state::SymbolSelection::Graphic(idx)) => sym
             .graphics
             .get(idx)
-            .map(|g| SymbolEditorSelection::Graphic(GraphicSummary {
-                idx,
-                kind: graphic_kind_to_summary(&g.kind),
-                stroke_width: g.stroke_width,
-            }))
+            .map(|g| {
+                SymbolEditorSelection::Graphic(GraphicSummary {
+                    idx,
+                    kind: graphic_kind_to_summary(&g.kind),
+                    stroke_width: g.stroke_width,
+                })
+            })
             .unwrap_or(SymbolEditorSelection::None),
         None => SymbolEditorSelection::None,
     };
+
+    let active_max_part = sym_state::max_part_number(sym);
+    let active_has_part_zero = sym.pins.iter().any(|p| p.part_number == 0);
 
     Some(SymbolEditorPanelContext {
         path,
@@ -551,6 +556,9 @@ fn build_symbol_editor_panel_ctx(
         selected,
         symbols_in_file,
         active_idx: editor.active_idx,
+        active_part: editor.active_part,
+        active_max_part,
+        active_has_part_zero,
     })
 }
 

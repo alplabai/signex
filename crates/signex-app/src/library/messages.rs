@@ -669,6 +669,27 @@ pub enum PrimitiveEditorMsg {
     /// Properties pane — overwrite the pin name string at index.
     SymbolSetPinName { idx: usize, name: String },
 
+    // ── Multi-part component ───────────────────────────────
+    /// Toolbar — step the active sub-part down one (Altium "←
+    /// Part" arrow). Clamps at `1`. Drives the canvas pin filter +
+    /// the active-part badge in the toolbar.
+    SymbolPrevPart,
+    /// Toolbar — step the active sub-part up one (Altium "Part →"
+    /// arrow). Clamps at the symbol's max declared `part_number`
+    /// (i.e. doesn't auto-create new parts; that's the Tools ▸
+    /// New Part flow's job).
+    SymbolNextPart,
+    /// Tools ▸ New Part — bumps the symbol's max `part_number` by
+    /// one and switches `active_part` to the new value. The new
+    /// part starts with no pins; the user adds pins with the
+    /// active_part selected.
+    SymbolNewPart,
+    /// Tools ▸ Remove Part — drops the active part. Pins scoped to
+    /// that part get demoted to `part_number = 1` (defensive — keep
+    /// the data, lose only the partition); the active part falls
+    /// back to `1`. No-op when only one part exists.
+    SymbolRemovePart,
+
     // ── Footprint ──────────────────────────────────────────
     /// Click-to-place a pad at the given world position.
     FootprintAddPad { x_mm: f64, y_mm: f64 },
