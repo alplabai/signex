@@ -3721,8 +3721,8 @@ impl Signex {
             if let Some(path) = active_tab.kind.as_symbol_editor()
                 && let Some(editor) = self.document_state.symbol_editors.get(path)
             {
-                let tokens = &self.document_state.panel_ctx.tokens;
-                return crate::library::editor::standalone::view_symbol(editor, tokens)
+                let panel_ctx = &self.document_state.panel_ctx;
+                return crate::library::editor::standalone::view_symbol(editor, panel_ctx)
                     .map(Message::Library);
             }
             if let Some(path) = active_tab.kind.as_footprint_editor()

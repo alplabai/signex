@@ -6,12 +6,21 @@
 //! `[-5.08, -2.54] .. [5.08, 2.54]` rectangle when the primitive
 //! carries no body geometry yet.
 //!
-//! Pan/zoom is intentionally fixed — the canvas auto-fits the body so
-//! the parent view can render side-by-side with the properties pane
-//! without contending for cursor input.
+//! World-space convention mirrors the schematic editor: Standard y-axis
+//! (positive going up; on screen y goes down so we flip). The
+//! camera ([`crate::canvas::Camera`]) handles pan/zoom; the user
+//! pans with right- or middle-button drag and zooms with the wheel.
+//! Press Home (or click the Fit button) to fit the symbol bbox to
+//! the viewport — also the implicit state on tab open.
 //!
-//! World-space convention mirrors the schematic editor: 1.27 mm grid,
-//! Standard y-axis (positive going up; on screen y goes down so we flip).
+//! Background colour, grid size + visibility, snap, and the cursor
+//! coordinate readout follow the same Altium-parity surface as the
+//! schematic canvas: bg + grid colour come from the active theme's
+//! `CanvasColors`; grid spacing follows `panel_ctx.grid_size_mm`;
+//! the unit ([`signex_types::coord::Unit`]) drives the status
+//! footer. Sheet colour is per-tab (Altium "Document Options")
+//! and shifts the bg fill alpha so the user can pick Black / White
+//! / Dark Gray / Light Gray / Cream per-symbol library.
 
 use iced::Color;
 use iced::Rectangle;
@@ -67,6 +76,28 @@ pub enum CanvasAction {
         y: f64,
     },
     DeleteSelected,
+    // ── View / camera ──
+    /// Pan the camera by `(dx, dy)` screen pixels. Fired by right-
+    /// or middle-button drag.
+    Pan {
+        dx: f32,
+        dy: f32,
+    },
+    /// Zoom centred on `(sx, sy)` (canvas-local pixels). Positive
+    /// `delta` zooms in.
+    Zoom {
+        sx: f32,
+        sy: f32,
+        delta: f32,
+    },
+    /// Fit the symbol bbox into the viewport (Home key).
+    Fit,
+    /// Cursor world position update — drives the status footer.
+    /// `None` clears the readout when the cursor leaves bounds.
+    CursorAt {
+        x_mm: Option<f64>,
+        y_mm: Option<f64>,
+    },
 }
 
 /// Canvas tools — Altium-style `Tool` enum scoped to this surface.
@@ -92,7 +123,7 @@ impl SymbolTool {
     }
 }
 
-/// Canvas-program ephemeral state — drag tracking only.
+/// Canvas-program ephemeral state — drag + pan tracking.
 #[derive(Debug, Default)]
 pub struct CanvasState {
     /// True when the user is mid-drag of the currently-selected pin.
@@ -102,9 +133,17 @@ pub struct CanvasState {
     /// with `dragging` — a click either lands on a pin or on a
     /// graphic handle, never both.
     pub dragging_handle: Option<(usize, GraphicHandle)>,
+    /// True while the user holds right- or middle-button to pan.
+    pub panning: bool,
+    /// Last cursor screen position during a pan, used to compute
+    /// per-frame deltas.
+    pub last_pan_pos: Option<iced::Point>,
 }
 
-/// The canvas program.
+/// Builder for the per-render [`SymbolCanvas`] — all the inputs the
+/// canvas needs from the surrounding state. The canvas itself is
+/// constructed fresh on every iced view tick (see
+/// `library/editor/standalone.rs::view_symbol_canvas`).
 pub struct SymbolCanvas<'a> {
     pub symbol: &'a Symbol,
     pub selected: Option<SymbolSelection>,
@@ -114,6 +153,17 @@ pub struct SymbolCanvas<'a> {
     /// with `part_number == active_part` render on the active part
     /// only. Defaults to `1` (single-part components).
     pub active_part: u8,
+    /// Pan/zoom state owned by the editor tab — see
+    /// [`crate::app::SymbolEditorState::camera`].
+    pub camera: &'a crate::canvas::Camera,
+    /// Visible grid spacing in mm — sourced from
+    /// `panel_ctx.grid_size_mm` so the schematic + library editors
+    /// share the global grid setting.
+    pub grid_size_mm: f64,
+    /// Whether the grid is rendered. Sourced from
+    /// `panel_ctx.grid_visible` (View ▸ Toggle Grid / status-bar
+    /// click).
+    pub grid_visible: bool,
     pub bg_color: Color,
     pub grid_color: Color,
     pub body_color: Color,
@@ -123,23 +173,38 @@ pub struct SymbolCanvas<'a> {
 }
 
 impl<'a> SymbolCanvas<'a> {
+    /// Construct the per-frame canvas with the inputs from
+    /// `SymbolEditorState` + the active theme + global grid/unit
+    /// settings. See module-level docs for the parity rationale.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         symbol: &'a Symbol,
         selected: Option<SymbolSelection>,
         tool: SymbolTool,
         active_part: u8,
+        camera: &'a crate::canvas::Camera,
+        grid_size_mm: f64,
+        grid_visible: bool,
+        sheet_color: Color,
+        accent_color: Color,
+        body_color: Color,
+        text_color: Color,
+        grid_color: Color,
     ) -> Self {
         Self {
             symbol,
             selected,
             tool,
             active_part,
-            bg_color: Color::from_rgb(0.10, 0.11, 0.13),
-            grid_color: Color::from_rgba(1.0, 1.0, 1.0, 0.06),
-            body_color: Color::from_rgb(0.95, 0.78, 0.30),
-            pin_color: Color::from_rgb(0.85, 0.88, 0.92),
-            selected_color: Color::from_rgb(0.30, 0.85, 0.95),
-            text_color: Color::from_rgb(0.85, 0.88, 0.92),
+            camera,
+            grid_size_mm,
+            grid_visible,
+            bg_color: sheet_color,
+            grid_color,
+            body_color,
+            pin_color: text_color,
+            selected_color: accent_color,
+            text_color,
         }
     }
 
@@ -161,24 +226,10 @@ impl<'a> SymbolCanvas<'a> {
         (-5.08, -2.54, 5.08, 2.54)
     }
 
-    /// Build the active world↔screen transform.
-    fn transform(&self, bounds: Rectangle) -> (f32, f32, f32) {
-        let (min_x, min_y, max_x, max_y) = self.bbox();
-        let w = (max_x - min_x).max(0.1) as f32;
-        let h = (max_y - min_y).max(0.1) as f32;
-        let pad = 30.0_f32;
-        let view_w = (bounds.width - 2.0 * pad).max(40.0);
-        let view_h = (bounds.height - 2.0 * pad).max(40.0);
-        let scale = (view_w / w).min(view_h / h).max(0.1);
-        let cx = ((min_x + max_x) * 0.5) as f32;
-        let cy = ((min_y + max_y) * 0.5) as f32;
-        let ox = bounds.width * 0.5 - cx * scale;
-        let oy = bounds.height * 0.5 + cy * scale;
-        (scale, ox, oy)
-    }
-
-    /// Bounding box around the body + every pin, with a generous pad.
-    fn bbox(&self) -> (f64, f64, f64, f64) {
+    /// Bounding box around the body + every pin + every graphic,
+    /// with a generous pad. Used by `Fit` (Home key) to centre the
+    /// camera on the symbol's content.
+    pub(crate) fn bbox(&self) -> (f64, f64, f64, f64) {
         let (bx0, by0, bx1, by1) = self.body_rect();
         let mut min_x = bx0.min(bx1) - 5.08;
         let mut min_y = by0.min(by1) - 5.08;
@@ -190,20 +241,71 @@ impl<'a> SymbolCanvas<'a> {
             max_x = max_x.max(pin.position[0] + pin.length + 1.27);
             max_y = max_y.max(pin.position[1] + 1.27);
         }
+        // Include every graphic's extent so Fit doesn't leave shapes
+        // off-screen.
+        for g in &self.symbol.graphics {
+            match &g.kind {
+                SymbolGraphicKind::Rectangle { from, to }
+                | SymbolGraphicKind::Line { from, to } => {
+                    min_x = min_x.min(from[0]).min(to[0]);
+                    min_y = min_y.min(from[1]).min(to[1]);
+                    max_x = max_x.max(from[0]).max(to[0]);
+                    max_y = max_y.max(from[1]).max(to[1]);
+                }
+                SymbolGraphicKind::Circle { center, radius }
+                | SymbolGraphicKind::Arc { center, radius, .. } => {
+                    min_x = min_x.min(center[0] - radius);
+                    min_y = min_y.min(center[1] - radius);
+                    max_x = max_x.max(center[0] + radius);
+                    max_y = max_y.max(center[1] + radius);
+                }
+                SymbolGraphicKind::Text { position, size, .. } => {
+                    min_x = min_x.min(position[0] - size);
+                    min_y = min_y.min(position[1] - size);
+                    max_x = max_x.max(position[0] + size);
+                    max_y = max_y.max(position[1] + size);
+                }
+            }
+        }
         (min_x, min_y, max_x, max_y)
     }
 }
 
-/// Convert screen coords → schematic-mm, snapped to the 1.27 mm grid.
+/// World-space mm grid the symbol canvas snaps cursor positions
+/// to when the user is placing/moving things. Independent of the
+/// visible grid (which follows `panel_ctx.grid_size_mm`) so a 0.635
+/// mm visible grid still snaps to 1.27 mm — Altium's "smaller grid
+/// for visual precision, larger for commit". Future toolbar work
+/// could expose a separate snap-grid picker.
+const SNAP_GRID_MM: f64 = 1.27;
+
+/// Convert screen coords → world-mm via the camera, then snap to
+/// the symbol-canvas grid. The canvas's Standard y-flip happens at
+/// the world↔screen boundary inside `world_to_screen` /
+/// `screen_to_world`; we mirror it here so screen-down → world-up.
 fn world_for(canvas: &SymbolCanvas<'_>, sx: f32, sy: f32, bounds: Rectangle) -> (f64, f64) {
-    let (scale, ox, oy) = canvas.transform(bounds);
-    // Standard y is positive-up in the data model; screen y is positive-down.
-    let wx = ((sx - ox) / scale) as f64;
-    let wy = -((sy - oy) / scale) as f64;
-    let snap = 1.27_f64;
-    let sx = (wx / snap).round() * snap;
-    let sy = (wy / snap).round() * snap;
-    (sx, sy)
+    // The camera's screen_to_world doesn't know about y-flip — it
+    // assumes screen and world share the same y-axis direction.
+    // Symbol coords are Standard y-up; mirror by negating after.
+    let world = canvas
+        .camera
+        .screen_to_world(iced::Point::new(sx, sy), bounds);
+    let wx = world.x as f64;
+    let wy = -world.y as f64;
+    (
+        (wx / SNAP_GRID_MM).round() * SNAP_GRID_MM,
+        (wy / SNAP_GRID_MM).round() * SNAP_GRID_MM,
+    )
+}
+
+/// Same as `world_for` but without the snap — used by the cursor
+/// readout so the status footer shows the unsnapped position the
+/// user actually pointed at.
+fn world_unsnapped(canvas: &SymbolCanvas<'_>, sx: f32, sy: f32, bounds: Rectangle) -> (f64, f64) {
+    let world = canvas
+        .camera
+        .screen_to_world(iced::Point::new(sx, sy), bounds);
+    (world.x as f64, -world.y as f64)
 }
 
 impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
@@ -258,8 +360,35 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                     ),
                 }
             }
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right))
+            | Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Middle)) => {
+                // Right- or middle-button starts a pan. Schematic
+                // canvas uses the same gesture (`canvas/mod.rs`).
+                let pos = cursor.position_in(bounds)?;
+                state.panning = true;
+                state.last_pan_pos = Some(pos);
+                Some(canvas::Action::capture())
+            }
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Right))
+            | Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Middle)) => {
+                state.panning = false;
+                state.last_pan_pos = None;
+                None
+            }
             Event::Mouse(mouse::Event::CursorMoved { .. }) => {
                 let pos = cursor.position_in(bounds)?;
+                // Pan first so panning while a handle is grabbed
+                // doesn't accidentally reshape geometry.
+                if state.panning {
+                    let last = state.last_pan_pos.unwrap_or(pos);
+                    let dx = pos.x - last.x;
+                    let dy = pos.y - last.y;
+                    state.last_pan_pos = Some(pos);
+                    if dx != 0.0 || dy != 0.0 {
+                        return Some(canvas::Action::publish(CanvasAction::Pan { dx, dy }));
+                    }
+                    return None;
+                }
                 let (wx, wy) = world_for(self, pos.x, pos.y, bounds);
                 if let Some((idx, handle)) = state.dragging_handle {
                     return Some(canvas::Action::publish(CanvasAction::MoveGraphicHandle {
@@ -269,10 +398,42 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                         y: wy,
                     }));
                 }
-                if !state.dragging {
+                if state.dragging {
+                    return Some(canvas::Action::publish(CanvasAction::Move { x: wx, y: wy }));
+                }
+                // Idle cursor — publish the unsnapped world position
+                // for the status footer X/Y readout.
+                let (ux, uy) = world_unsnapped(self, pos.x, pos.y, bounds);
+                Some(canvas::Action::publish(CanvasAction::CursorAt {
+                    x_mm: Some(ux),
+                    y_mm: Some(uy),
+                }))
+            }
+            Event::Mouse(mouse::Event::CursorLeft) => {
+                state.panning = false;
+                state.last_pan_pos = None;
+                Some(canvas::Action::publish(CanvasAction::CursorAt {
+                    x_mm: None,
+                    y_mm: None,
+                }))
+            }
+            Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
+                let pos = cursor.position_in(bounds)?;
+                let dy = match delta {
+                    mouse::ScrollDelta::Lines { y, .. } => *y,
+                    mouse::ScrollDelta::Pixels { y, .. } => *y / 30.0,
+                };
+                if dy.abs() < f32::EPSILON {
                     return None;
                 }
-                Some(canvas::Action::publish(CanvasAction::Move { x: wx, y: wy }))
+                Some(
+                    canvas::Action::publish(CanvasAction::Zoom {
+                        sx: pos.x,
+                        sy: pos.y,
+                        delta: dy,
+                    })
+                    .and_capture(),
+                )
             }
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
                 state.dragging = false;
@@ -283,6 +444,9 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                 iced::keyboard::Key::Named(iced::keyboard::key::Named::Delete)
                 | iced::keyboard::Key::Named(iced::keyboard::key::Named::Backspace) => {
                     Some(canvas::Action::publish(CanvasAction::DeleteSelected))
+                }
+                iced::keyboard::Key::Named(iced::keyboard::key::Named::Home) => {
+                    Some(canvas::Action::publish(CanvasAction::Fit))
                 }
                 _ => None,
             },
@@ -302,22 +466,58 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
 
         frame.fill_rectangle(iced::Point::ORIGIN, bounds.size(), self.bg_color);
 
-        let (scale, ox, oy) = self.transform(bounds);
+        // Camera-driven world↔screen. Symbol coords are Standard y-up;
+        // the camera doesn't know that, so we negate y on the way
+        // out to match screen y-down.
+        let cam = self.camera;
+        let scale = cam.scale;
+        let ox = cam.offset.x;
+        let oy = cam.offset.y;
         let w2s = |x: f64, y: f64| -> iced::Point {
             iced::Point::new(ox + (x as f32) * scale, oy - (y as f32) * scale)
         };
-
-        // Grid — major dot every 2.54 mm.
+        // Grid — read spacing from the global panel_ctx so the
+        // schematic + library editors share the View ▸ Grid
+        // setting.
         let (min_x, min_y, max_x, max_y) = self.bbox();
-        let mut gx = (min_x / 2.54).floor() * 2.54;
-        while gx <= max_x {
-            let mut gy = (min_y / 2.54).floor() * 2.54;
-            while gy <= max_y {
-                let p = w2s(gx, gy);
-                frame.fill(&canvas::Path::circle(p, 0.8), self.grid_color);
-                gy += 2.54;
+        if self.grid_visible {
+            let g = self.grid_size_mm.max(0.001);
+            // Visible bounds in world space (camera screen→world,
+            // y-flipped). The grid pad lets dots peek past the
+            // bbox so panning shows continuity.
+            let pad = 6.0 * g;
+            let (vx0, vy0) = world_unsnapped(self, 0.0, bounds.height, bounds);
+            let (vx1, vy1) = world_unsnapped(self, bounds.width, 0.0, bounds);
+            let world_x0 = (min_x - pad).min(vx0);
+            let world_x1 = (max_x + pad).max(vx1);
+            let world_y0 = (min_y - pad).min(vy0);
+            let world_y1 = (max_y + pad).max(vy1);
+            // Cap the iteration count so a zoomed-out view doesn't
+            // try to plot millions of dots.
+            let cols = ((world_x1 - world_x0) / g).abs() as i64 + 1;
+            let rows = ((world_y1 - world_y0) / g).abs() as i64 + 1;
+            // Skip render entirely when dots would be < 4 px apart
+            // (they'd just smear into noise).
+            let dot_screen_spacing = (g as f32) * scale;
+            if cols * rows < 60_000 && dot_screen_spacing >= 4.0 {
+                let dot_radius = (scale * 0.3).clamp(0.5, 2.0);
+                let mut gx = (world_x0 / g).floor() * g;
+                while gx <= world_x1 {
+                    let mut gy = (world_y0 / g).floor() * g;
+                    while gy <= world_y1 {
+                        let p = w2s(gx, gy);
+                        if p.x >= -dot_radius
+                            && p.x <= bounds.width + dot_radius
+                            && p.y >= -dot_radius
+                            && p.y <= bounds.height + dot_radius
+                        {
+                            frame.fill(&canvas::Path::circle(p, dot_radius), self.grid_color);
+                        }
+                        gy += g;
+                    }
+                    gx += g;
+                }
             }
-            gx += 2.54;
         }
 
         // ── Body + every other graphic ──

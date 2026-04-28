@@ -217,6 +217,22 @@ pub struct SymbolEditorState {
     pub ai_preview: Option<crate::library::editor::symbol::ai_stub::AiPinoutPreview>,
     pub canvas_cache: iced::widget::canvas::Cache,
     pub dirty: bool,
+    /// Pan/zoom camera state — mirrors the schematic canvas so the
+    /// user's viewport survives across tool / selection changes
+    /// within the same `.snxsym` tab. Reset to `fit` on first frame
+    /// (`fit_pending = true`) and on every active-symbol switch so a
+    /// new symbol opens centred regardless of the previous symbol's
+    /// pan offset.
+    pub camera: crate::canvas::Camera,
+    /// Sheet background colour preset — Altium "Sheet Color"
+    /// (Black / White / Dark Gray / Light Gray / Cream). Drives the
+    /// canvas bg and the body fill alpha. Per-tab so a user can
+    /// have, e.g., Cream on one symbol library and Black on another.
+    pub sheet_color: crate::panels::SheetColor,
+    /// Last cursor world position over the canvas, in mm. Drives the
+    /// status footer's X/Y readout. `None` when the cursor is
+    /// outside the canvas.
+    pub cursor_mm: Option<(f64, f64)>,
 }
 
 impl SymbolEditorState {
@@ -234,6 +250,9 @@ impl SymbolEditorState {
             ai_preview: None,
             canvas_cache: iced::widget::canvas::Cache::default(),
             dirty: false,
+            camera: crate::canvas::Camera::default(),
+            sheet_color: crate::panels::SheetColor::default(),
+            cursor_mm: None,
         }
     }
 

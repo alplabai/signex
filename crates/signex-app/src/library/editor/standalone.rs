@@ -14,8 +14,9 @@
 //! (`save_primitive_tab_at`); the editor view only owns the widget
 //! tree.
 
-use iced::widget::{Space, button, column, container, row, text};
+use iced::widget::{Space, button, column, container, pick_list, row, text};
 use iced::{Border, Element, Length, Theme};
+use signex_types::coord::Unit;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
@@ -28,6 +29,7 @@ use crate::library::messages::{
     EditorMsg, GraphicHandleMsg, LibraryMessage, PrimitiveEditorMsg, SymbolSelectionMsg,
     SymbolToolMsg,
 };
+use crate::panels::{PanelContext, SheetColor};
 
 // ── Symbol ──────────────────────────────────────────────────────────
 
@@ -40,33 +42,20 @@ use crate::library::messages::{
 /// a symbol library — single source of truth, no duplicated panes.
 pub fn view_symbol<'a>(
     editor: &'a SymbolEditorState,
-    tokens: &'a ThemeTokens,
+    panel_ctx: &'a PanelContext,
 ) -> Element<'a, LibraryMessage> {
-    let muted = theme_ext::text_secondary(tokens);
-
-    let toolbar = view_symbol_toolbar(editor, tokens);
-    let canvas_widget = view_symbol_canvas(editor);
+    let tokens = &panel_ctx.tokens;
+    let toolbar = view_symbol_toolbar(editor, panel_ctx);
+    let canvas_widget = view_symbol_canvas(editor, panel_ctx);
 
     let body = column![toolbar, canvas_widget]
         .spacing(10)
         .width(Length::Fill)
         .height(Length::Fill);
 
-    let status_line = row![
-        text(format!("{} pins", editor.primitive().pins.len()))
-            .size(11)
-            .color(muted),
-        Space::new().width(Length::Fill),
-        text(if editor.selected.is_some() {
-            "Press Delete to remove the selected element."
-        } else {
-            "Click a pin to select; drag to move."
-        })
-        .size(11)
-        .color(muted),
-    ];
+    let status_line = view_symbol_status(editor, panel_ctx);
 
-    let outer = column![body, Space::new().height(8), status_line]
+    let outer = column![body, Space::new().height(4), status_line]
         .spacing(0)
         .width(Length::Fill)
         .height(Length::Fill);
@@ -79,10 +68,87 @@ pub fn view_symbol<'a>(
         .into()
 }
 
+/// Bottom status footer for the .snxsym tab — Altium SchLib parity.
+/// X / Y in the active unit (mm / mil), zoom %, grid spacing,
+/// pin count + a hint string. Mirrors the global schematic
+/// status bar so a user editing a symbol library has the same
+/// metadata at the same place on screen.
+fn view_symbol_status<'a>(
+    editor: &'a SymbolEditorState,
+    panel_ctx: &'a PanelContext,
+) -> Element<'a, LibraryMessage> {
+    let tokens = &panel_ctx.tokens;
+    let muted = theme_ext::text_secondary(tokens);
+    let text_c = theme_ext::text_primary(tokens);
+
+    let unit = panel_ctx.unit;
+    let coord_text = match editor.cursor_mm {
+        Some((x, y)) => format_coord(x, y, unit),
+        None => "X: -.--   Y: -.--".to_string(),
+    };
+    let grid_text = if panel_ctx.grid_visible {
+        match unit {
+            Unit::Mm => format!("Grid {:.3} mm", panel_ctx.grid_size_mm),
+            Unit::Mil => format!("Grid {:.0} mil", (panel_ctx.grid_size_mm as f64) / 0.0254),
+            _ => format!("Grid {:.3} mm", panel_ctx.grid_size_mm),
+        }
+    } else {
+        "Grid OFF".to_string()
+    };
+    let zoom_text = format!("{:.0}%", editor.camera.zoom_percent());
+    let pin_count = format!("{} pins", editor.primitive().pins.len());
+
+    let sep = || text("|").size(10).color(muted);
+
+    container(
+        row![
+            text(coord_text).size(11).color(text_c),
+            sep(),
+            text(grid_text).size(11).color(muted),
+            sep(),
+            text(zoom_text).size(11).color(muted),
+            sep(),
+            text(pin_count).size(11).color(muted),
+            Space::new().width(Length::Fill),
+            text(if editor.selected.is_some() {
+                "Del removes · drag to move · scroll zooms · right-drag pans · Home fits"
+            } else {
+                "scroll zooms · right-drag pans · Home fits"
+            })
+            .size(10)
+            .color(muted),
+        ]
+        .spacing(8)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([4, 12])
+    .style(crate::styles::status_bar(tokens))
+    .width(Length::Fill)
+    .into()
+}
+
+fn format_coord(x_mm: f64, y_mm: f64, unit: Unit) -> String {
+    match unit {
+        Unit::Mm => format!("X: {x_mm:>+8.3} mm   Y: {y_mm:>+8.3} mm"),
+        Unit::Mil => format!(
+            "X: {:>+8.1} mil  Y: {:>+8.1} mil",
+            x_mm / 0.0254,
+            y_mm / 0.0254
+        ),
+        Unit::Inch => format!("X: {:>+8.4} in   Y: {:>+8.4} in", x_mm / 25.4, y_mm / 25.4),
+        Unit::Micrometer => format!(
+            "X: {:>+8.0} um   Y: {:>+8.0} um",
+            x_mm * 1000.0,
+            y_mm * 1000.0
+        ),
+    }
+}
+
 fn view_symbol_toolbar<'a>(
     editor: &'a SymbolEditorState,
-    tokens: &'a ThemeTokens,
+    panel_ctx: &'a PanelContext,
 ) -> Element<'a, LibraryMessage> {
+    let tokens = &panel_ctx.tokens;
     let text_c = theme_ext::text_primary(tokens);
     let border = theme_ext::border_color(tokens);
     let path = editor.path.clone();
@@ -138,6 +204,28 @@ fn view_symbol_toolbar<'a>(
         .size(11)
         .color(text_c);
 
+    // ── View controls (Altium "Document Options" parity) ──
+    let fit_path = path.clone();
+    let fit_btn = button(text("Fit").size(11).color(text_c))
+        .padding([4, 8])
+        .on_press(LibraryMessage::PrimitiveEditorEvent {
+            path: fit_path,
+            msg: PrimitiveEditorMsg::SymbolFit,
+        })
+        .style(symbol_tool_button_style(false, border));
+
+    let sheet_color_path = path.clone();
+    let current_sheet = editor.sheet_color;
+    let sheet_color_picker = pick_list(SheetColor::ALL.to_vec(), Some(current_sheet), move |c| {
+        LibraryMessage::PrimitiveEditorEvent {
+            path: sheet_color_path.clone(),
+            msg: PrimitiveEditorMsg::SymbolSetSheetColor(c),
+        }
+    })
+    .padding([2, 6])
+    .text_size(11);
+    let sheet_color_label = text("BG").size(11).color(text_c);
+
     container(
         row![
             tool_button("Select", SymbolTool::Select, SymbolToolMsg::Select),
@@ -154,6 +242,11 @@ fn view_symbol_toolbar<'a>(
                 SymbolTool::PlaceCircle,
                 SymbolToolMsg::PlaceCircle
             ),
+            Space::new().width(8),
+            fit_btn,
+            Space::new().width(6),
+            sheet_color_label,
+            sheet_color_picker,
             Space::new().width(Length::Fill),
             prev_btn,
             part_label,
@@ -188,12 +281,27 @@ fn symbol_tool_button_style(
     }
 }
 
-fn view_symbol_canvas<'a>(editor: &'a SymbolEditorState) -> Element<'a, LibraryMessage> {
+fn view_symbol_canvas<'a>(
+    editor: &'a SymbolEditorState,
+    panel_ctx: &'a PanelContext,
+) -> Element<'a, LibraryMessage> {
+    let tokens = &panel_ctx.tokens;
     let program = SymbolCanvas::new(
         editor.primitive(),
         editor.selected,
         editor.tool,
         editor.active_part,
+        &editor.camera,
+        panel_ctx.grid_size_mm as f64,
+        panel_ctx.grid_visible,
+        editor.sheet_color.to_color(),
+        crate::styles::ti(tokens.accent),
+        crate::styles::ti(tokens.text),
+        crate::styles::ti(tokens.text),
+        iced::Color {
+            a: 0.18,
+            ..crate::styles::ti(tokens.text_secondary)
+        },
     );
     let widget: Element<'a, sym_canvas::CanvasAction> = iced::widget::Canvas::new(program)
         .width(Length::Fill)
@@ -225,6 +333,10 @@ fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> Primitive
             }
         }
         CanvasAction::DeleteSelected => PrimitiveEditorMsg::SymbolDeleteSelected,
+        CanvasAction::Pan { dx, dy } => PrimitiveEditorMsg::SymbolPan { dx, dy },
+        CanvasAction::Zoom { sx, sy, delta } => PrimitiveEditorMsg::SymbolZoom { sx, sy, delta },
+        CanvasAction::Fit => PrimitiveEditorMsg::SymbolFit,
+        CanvasAction::CursorAt { x_mm, y_mm } => PrimitiveEditorMsg::SymbolCursorAt { x_mm, y_mm },
     }
 }
 
