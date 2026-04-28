@@ -169,6 +169,24 @@ impl Signex {
                 self.sym_editor_mutate_symbol(|s| s.mirrored = !s.mirrored);
                 true
             }
+            crate::panels::PanelMsg::SymEditorCycleLocalFillColor => {
+                self.sym_editor_mutate_symbol(|s| {
+                    s.local_fill_color = cycle_local_color(s.local_fill_color);
+                });
+                true
+            }
+            crate::panels::PanelMsg::SymEditorCycleLocalLineColor => {
+                self.sym_editor_mutate_symbol(|s| {
+                    s.local_line_color = cycle_local_color(s.local_line_color);
+                });
+                true
+            }
+            crate::panels::PanelMsg::SymEditorCycleLocalPinColor => {
+                self.sym_editor_mutate_symbol(|s| {
+                    s.local_pin_color = cycle_local_color(s.local_pin_color);
+                });
+                true
+            }
             crate::panels::PanelMsg::SymEditorSetDisplaySheetColor(color) => {
                 let color = *color;
                 self.sym_editor_mutate_display(|d| d.sheet_color = color);
@@ -611,6 +629,25 @@ impl Signex {
 /// Apply one numeric Properties-pane edit to a graphic. (idx, field)
 /// pairs whose field doesn't apply to the graphic's variant silently
 /// no-op so a stale Properties pane can't mutate the wrong slot.
+/// Click-to-cycle the symbol's local color override through a small
+/// preset palette and back to `None` (= inherit). 5 steps total:
+/// None → red → green → blue → yellow → back to None.
+fn cycle_local_color(current: Option<[u8; 4]>) -> Option<[u8; 4]> {
+    const PALETTE: &[[u8; 4]] = &[
+        [220, 60, 60, 255],  // red
+        [60, 180, 80, 255],  // green
+        [60, 110, 220, 255], // blue
+        [240, 200, 80, 255], // yellow
+    ];
+    match current {
+        None => Some(PALETTE[0]),
+        Some(c) => match PALETTE.iter().position(|p| *p == c) {
+            Some(i) if i + 1 < PALETTE.len() => Some(PALETTE[i + 1]),
+            _ => None,
+        },
+    }
+}
+
 fn apply_graphic_field(
     g: &mut signex_library::SymbolGraphic,
     field: crate::panels::GraphicFieldId,
