@@ -1129,7 +1129,7 @@ impl Signex {
             }
         });
         match id {
-            Some(id) => iced::window::drag(id),
+            Some(id) => crate::chrome::start_window_drag(id),
             None => Task::none(),
         }
     }
