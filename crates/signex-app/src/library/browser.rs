@@ -112,13 +112,27 @@ pub fn view<'a>(
 
     let needle = browser.search.trim().to_lowercase();
     let lifecycle_filter = browser.lifecycle_filter;
-    let visible: Vec<&ComponentRow> = rows
+    let mut visible: Vec<&ComponentRow> = rows
         .iter()
         .filter(|r| lifecycle_filter.allows(r.state))
         .filter(|r| needle.is_empty() || row_matches_filter(r, &needle))
         .collect();
 
     let columns = derive_columns(rows);
+
+    // Stage 8: apply the user's sort selection to the visible rows
+    // before grid rendering. The grid view is a pure projection of
+    // `visible`, so sorting here doesn't ripple into the render path.
+    if let Some(sort) = browser.sort_by.as_ref() {
+        if let Some(column) = columns.iter().find(|c| c.kind.sort_key() == sort.key) {
+            visible.sort_by(|a, b| {
+                let ca = column.kind.cell_value(a);
+                let cb = column.kind.cell_value(b);
+                let ord = compare_cells(&ca, &cb);
+                if sort.descending { ord.reverse() } else { ord }
+            });
+        }
+    }
 
     let grid = view_grid(
         library_path,
@@ -301,6 +315,53 @@ enum ColumnKind {
     Parameter(String),
 }
 
+impl ColumnKind {
+    /// Stable sort key matching `LibraryMessage::BrowserSortColumn`'s
+    /// `column_key` field. Ties columns to their cell-edit buffers
+    /// and to the [`super::state::BrowserSort`] state.
+    fn sort_key(&self) -> String {
+        match self {
+            ColumnKind::InternalPn => "internal_pn".to_string(),
+            ColumnKind::Manufacturer => "manufacturer".to_string(),
+            ColumnKind::Mpn => "mpn".to_string(),
+            ColumnKind::Tags => "parameters.tags".to_string(),
+            ColumnKind::Parameter(key) => format!("parameters.{key}"),
+        }
+    }
+
+    /// Extract the row's cell value for this column. Empty string when
+    /// the row has no value for the underlying field.
+    fn cell_value(&self, r: &ComponentRow) -> String {
+        match self {
+            ColumnKind::InternalPn => r.internal_pn.as_str().to_string(),
+            ColumnKind::Manufacturer => r.primary_mpn.manufacturer.clone(),
+            ColumnKind::Mpn => r.primary_mpn.mpn.clone(),
+            ColumnKind::Tags => match r.parameters.get("tags") {
+                Some(v) => v.display(),
+                None => String::new(),
+            },
+            ColumnKind::Parameter(key) => match r.parameters.get(key) {
+                Some(v) => v.display(),
+                None => String::new(),
+            },
+        }
+    }
+}
+
+/// Comparator for two cell strings with auto-detected numeric
+/// fallback. If both values parse as `f64`, sort numerically;
+/// otherwise sort case-insensitively. This is Stage 8's answer to
+/// the Altium "lexical sort on numeric columns" pain — we don't
+/// need a typed schema lookup at compare time, and untyped legacy
+/// columns get the right behaviour automatically when their cells
+/// happen to be numeric.
+fn compare_cells(a: &str, b: &str) -> std::cmp::Ordering {
+    if let (Ok(na), Ok(nb)) = (a.trim().parse::<f64>(), b.trim().parse::<f64>()) {
+        return na.partial_cmp(&nb).unwrap_or(std::cmp::Ordering::Equal);
+    }
+    a.to_lowercase().cmp(&b.to_lowercase())
+}
+
 /// Resolve the column list. Always: Internal PN / Manufacturer / MPN.
 /// Then a Tags column (Stage 18) when *any* row carries a non-empty
 /// `parameters["tags"]`. Finally up to [`MAX_PARAM_COLUMNS`] of the
@@ -420,12 +481,39 @@ fn view_grid<'a>(
     let header_row = {
         // 16-px gutter aligns with the per-row lifecycle dot below.
         let mut r = row![Space::new().width(Length::Fixed(LIFECYCLE_DOT_GUTTER))].spacing(0);
+        let active_sort = browser.sort_by.as_ref();
         for c in columns {
-            r = r.push(
-                container(text(c.label.clone()).size(BROWSER_HEADER_SIZE).color(muted))
-                    .padding([4, 6])
-                    .width(Length::Fixed(c.width)),
-            );
+            // Indicate the active sort column with a "▲" / "▼" glyph
+            // appended to the label. Other columns render plain so the
+            // user can spot the sort target at a glance.
+            let column_key = c.kind.sort_key();
+            let label_text = match active_sort {
+                Some(s) if s.key == column_key => {
+                    let arrow = if s.descending { "▼" } else { "▲" };
+                    format!("{}  {arrow}", c.label)
+                }
+                _ => c.label.clone(),
+            };
+            // Wrap the header label in a borderless button so a click
+            // toggles the sort. Stage 8 of `v0.9-snxlib-as-file-plan.md`.
+            let library_for_sort = library_path.to_path_buf();
+            let header_btn = button(text(label_text).size(BROWSER_HEADER_SIZE).color(muted))
+                .padding([4, 6])
+                .on_press(LibraryMessage::BrowserSortColumn {
+                    library_path: library_for_sort,
+                    column_key,
+                })
+                .style(|_: &Theme, _| iced::widget::button::Style {
+                    background: None,
+                    text_color: iced::Color::from_rgba(1.0, 1.0, 1.0, 0.65),
+                    border: Border {
+                        width: 0.0,
+                        radius: 0.0.into(),
+                        color: iced::Color::TRANSPARENT,
+                    },
+                    ..iced::widget::button::Style::default()
+                });
+            r = r.push(container(header_btn).width(Length::Fixed(c.width)));
         }
         container(r)
             .padding([2, 4])
@@ -496,26 +584,8 @@ fn view_grid<'a>(
 
             let mut data_row = row![lifecycle_cell].spacing(0);
             for c in columns {
-                let column_key = match &c.kind {
-                    ColumnKind::InternalPn => "internal_pn".to_string(),
-                    ColumnKind::Manufacturer => "manufacturer".to_string(),
-                    ColumnKind::Mpn => "mpn".to_string(),
-                    ColumnKind::Tags => "parameters.tags".to_string(),
-                    ColumnKind::Parameter(key) => format!("parameters.{key}"),
-                };
-                let row_value = match &c.kind {
-                    ColumnKind::InternalPn => r.internal_pn.as_str().to_string(),
-                    ColumnKind::Manufacturer => r.primary_mpn.manufacturer.clone(),
-                    ColumnKind::Mpn => r.primary_mpn.mpn.clone(),
-                    ColumnKind::Tags => match r.parameters.get("tags") {
-                        Some(v) => v.display(),
-                        None => String::new(),
-                    },
-                    ColumnKind::Parameter(key) => match r.parameters.get(key) {
-                        Some(v) => v.display(),
-                        None => String::new(),
-                    },
-                };
+                let column_key = c.kind.sort_key();
+                let row_value = c.kind.cell_value(r);
 
                 // Tags render read-only for now — canonical edit point
                 // is the Edit Component Details modal (plan §6 calls
