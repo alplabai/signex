@@ -597,6 +597,27 @@ pub enum FieldKeyMsg {
     Value,
 }
 
+/// Resize-handle identity for a Symbol graphic — pure-data alias of
+/// `editor::symbol::state::GraphicHandle`. Carried by
+/// `PrimitiveEditorMsg::SymbolMoveGraphicHandle` so the dispatcher
+/// knows which handle of which graphic the canvas is dragging.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[allow(dead_code)]
+pub enum GraphicHandleMsg {
+    /// Rectangle corner — `0=TL, 1=TR, 2=BR, 3=BL` (Standard y-up).
+    RectCorner(u8),
+    /// Line endpoint — `0=from, 1=to`.
+    LineEndpoint(u8),
+    /// Circle radius handle.
+    CircleRadius,
+    /// Arc start point on the circumference.
+    ArcStart,
+    /// Arc end point on the circumference.
+    ArcEnd,
+    /// Text anchor / `position` field.
+    TextAnchor,
+}
+
 /// Inner messages for a [`LibraryMessage::PrimitiveEditorEvent`]
 /// envelope. Path-keyed dispatch routes each variant to the symbol
 /// or footprint editor state stored on `DocumentState` per the
@@ -625,6 +646,18 @@ pub enum PrimitiveEditorMsg {
     /// Drag the currently-selected element to a new grid-snapped
     /// world position.
     SymbolMoveSelected { x: f64, y: f64 },
+    /// Drag-to-resize: move one resize handle of the graphic at
+    /// `idx` to grid-snapped world coordinates `(x, y)`. Fires
+    /// continuously while the user holds and drags a graphic handle
+    /// in the Select tool. The dispatcher mutates the matching field
+    /// on `SymbolGraphic.kind` (rect corner / line endpoint / circle
+    /// radius / arc angle / text anchor).
+    SymbolMoveGraphicHandle {
+        idx: usize,
+        handle: GraphicHandleMsg,
+        x: f64,
+        y: f64,
+    },
     /// Delete-key — drop the currently-selected element.
     SymbolDeleteSelected,
     /// Properties pane — overwrite the pin number string at index.

@@ -23,7 +23,7 @@ use iced::mouse;
 use iced::widget::canvas;
 use signex_library::{Symbol, SymbolGraphicKind, SymbolPin};
 
-use super::state::{self, SymbolSelection};
+use super::state::{self, GraphicHandle, SymbolSelection};
 
 /// The actions a [`SymbolCanvas`] can emit upward.
 #[derive(Debug, Clone, Copy)]
@@ -43,6 +43,14 @@ pub enum CanvasAction {
     Select(SymbolSelection),
     Deselect,
     Move { x: f64, y: f64 },
+    /// Drag-to-resize a graphic handle. Fired continuously while the
+    /// user drags the handle of a placed graphic in the Select tool.
+    MoveGraphicHandle {
+        idx: usize,
+        handle: GraphicHandle,
+        x: f64,
+        y: f64,
+    },
     DeleteSelected,
 }
 
@@ -72,8 +80,13 @@ impl SymbolTool {
 /// Canvas-program ephemeral state — drag tracking only.
 #[derive(Debug, Default)]
 pub struct CanvasState {
-    /// True when the user is mid-drag (cursor pressed and moved).
+    /// True when the user is mid-drag of the currently-selected pin.
     pub dragging: bool,
+    /// `(graphic_idx, handle)` while the user drags a graphic resize
+    /// handle. `None` outside of a handle drag. Mutually exclusive
+    /// with `dragging` — a click either lands on a pin or on a
+    /// graphic handle, never both.
+    pub dragging_handle: Option<(usize, GraphicHandle)>,
 }
 
 /// The canvas program.
@@ -176,6 +189,17 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                 let (wx, wy) = world_for(self, pos.x, pos.y, bounds);
                 match self.tool {
                     SymbolTool::Select => {
+                        // Resize handles win over pin hits — corners /
+                        // endpoints / radius are usually inside or right
+                        // next to the body where pins might also live.
+                        if let Some((idx, handle)) =
+                            state::hit_test_graphic_handle(self.symbol, wx, wy)
+                        {
+                            state.dragging_handle = Some((idx, handle));
+                            // Capture without publishing — the actual
+                            // geometry mutation rides on CursorMoved.
+                            return Some(canvas::Action::capture());
+                        }
                         if let Some(sel) = state::hit_test(self.symbol, wx, wy) {
                             state.dragging = true;
                             Some(canvas::Action::publish(CanvasAction::Select(sel)).and_capture())
@@ -202,15 +226,24 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                 }
             }
             Event::Mouse(mouse::Event::CursorMoved { .. }) => {
+                let pos = cursor.position_in(bounds)?;
+                let (wx, wy) = world_for(self, pos.x, pos.y, bounds);
+                if let Some((idx, handle)) = state.dragging_handle {
+                    return Some(canvas::Action::publish(CanvasAction::MoveGraphicHandle {
+                        idx,
+                        handle,
+                        x: wx,
+                        y: wy,
+                    }));
+                }
                 if !state.dragging {
                     return None;
                 }
-                let pos = cursor.position_in(bounds)?;
-                let (wx, wy) = world_for(self, pos.x, pos.y, bounds);
                 Some(canvas::Action::publish(CanvasAction::Move { x: wx, y: wy }))
             }
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
                 state.dragging = false;
+                state.dragging_handle = None;
                 None
             }
             Event::Keyboard(iced::keyboard::Event::KeyPressed { key, .. }) => match key {
@@ -374,6 +407,28 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         // Pins.
         for (i, pin) in self.symbol.pins.iter().enumerate() {
             self.draw_pin(&mut frame, &w2s, scale, pin, i);
+        }
+
+        // Resize handles for every placed graphic — visible when the
+        // Select tool is active so the user can grab any corner /
+        // endpoint / radius / arc-angle / text-anchor at any time.
+        if self.tool == SymbolTool::Select {
+            for idx in 0..self.symbol.graphics.len() {
+                for (_handle, pos) in state::graphic_handles(self.symbol, idx) {
+                    let p = w2s(pos[0], pos[1]);
+                    let half = 3.0_f32;
+                    let top_left = iced::Point::new(p.x - half, p.y - half);
+                    let size = Size::new(half * 2.0, half * 2.0);
+                    let path = canvas::Path::rectangle(top_left, size);
+                    frame.fill(&path, self.bg_color);
+                    frame.stroke(
+                        &path,
+                        canvas::Stroke::default()
+                            .with_color(self.selected_color)
+                            .with_width(1.0),
+                    );
+                }
+            }
         }
 
         // Tool hint.

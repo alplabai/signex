@@ -25,7 +25,8 @@ use crate::library::editor::footprint::layers::FpLayer;
 use crate::library::editor::symbol::canvas::{self as sym_canvas, SymbolCanvas, SymbolTool};
 use crate::library::editor::symbol::state as sym_state;
 use crate::library::messages::{
-    EditorMsg, LibraryMessage, PrimitiveEditorMsg, SymbolSelectionMsg, SymbolToolMsg,
+    EditorMsg, GraphicHandleMsg, LibraryMessage, PrimitiveEditorMsg, SymbolSelectionMsg,
+    SymbolToolMsg,
 };
 
 // ── Symbol ──────────────────────────────────────────────────────────
@@ -179,7 +180,30 @@ fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> Primitive
         CanvasAction::Select(sel) => PrimitiveEditorMsg::SymbolSelect(symbol_selection_to_msg(sel)),
         CanvasAction::Deselect => PrimitiveEditorMsg::SymbolDeselect,
         CanvasAction::Move { x, y } => PrimitiveEditorMsg::SymbolMoveSelected { x, y },
+        CanvasAction::MoveGraphicHandle {
+            idx,
+            handle,
+            x,
+            y,
+        } => PrimitiveEditorMsg::SymbolMoveGraphicHandle {
+            idx,
+            handle: graphic_handle_to_msg(handle),
+            x,
+            y,
+        },
         CanvasAction::DeleteSelected => PrimitiveEditorMsg::SymbolDeleteSelected,
+    }
+}
+
+fn graphic_handle_to_msg(handle: sym_state::GraphicHandle) -> GraphicHandleMsg {
+    use sym_state::GraphicHandle;
+    match handle {
+        GraphicHandle::RectCorner(c) => GraphicHandleMsg::RectCorner(c),
+        GraphicHandle::LineEndpoint(e) => GraphicHandleMsg::LineEndpoint(e),
+        GraphicHandle::CircleRadius => GraphicHandleMsg::CircleRadius,
+        GraphicHandle::ArcStart => GraphicHandleMsg::ArcStart,
+        GraphicHandle::ArcEnd => GraphicHandleMsg::ArcEnd,
+        GraphicHandle::TextAnchor => GraphicHandleMsg::TextAnchor,
     }
 }
 

@@ -14,8 +14,8 @@ use iced::Task;
 use super::super::*;
 use crate::library::commands;
 use crate::library::messages::{
-    BrowserEditMsg, EditorMsg, LibraryMessage, ParamKindMsg, PickerMsg, PrimitiveEditorMsg,
-    PrimitivePickerMsg, SettingsMsg, SymbolSelectionMsg, SymbolToolMsg,
+    BrowserEditMsg, EditorMsg, GraphicHandleMsg, LibraryMessage, ParamKindMsg, PickerMsg,
+    PrimitiveEditorMsg, PrimitivePickerMsg, SettingsMsg, SymbolSelectionMsg, SymbolToolMsg,
 };
 use crate::library::state::{
     ComponentPreviewState, DeleteConfirmState, EditRowModalState, EditorAddress, NewComponentState,
@@ -2096,6 +2096,18 @@ pub(crate) fn apply_symbol_primitive_edit(
             editor.dirty = true;
             editor.canvas_cache.clear();
         }
+        PrimitiveEditorMsg::SymbolMoveGraphicHandle { idx, handle, x, y } => {
+            let h = graphic_handle_msg_to_state(handle);
+            crate::library::editor::symbol::state::move_graphic_handle(
+                editor.primitive_mut(),
+                idx,
+                h,
+                x,
+                y,
+            );
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+        }
         PrimitiveEditorMsg::SymbolDeleteSelected => {
             let selected = editor.selected;
             if let Some(new_sel) = crate::library::editor::symbol::state::delete_selected(
@@ -2130,6 +2142,22 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintToggleLayer(_)
         | PrimitiveEditorMsg::FootprintToggleAutoFit
         | PrimitiveEditorMsg::Save => {}
+    }
+}
+
+/// Translate the pure-data [`GraphicHandleMsg`] back into the
+/// canvas-side [`crate::library::editor::symbol::state::GraphicHandle`].
+fn graphic_handle_msg_to_state(
+    msg: GraphicHandleMsg,
+) -> crate::library::editor::symbol::state::GraphicHandle {
+    use crate::library::editor::symbol::state::GraphicHandle;
+    match msg {
+        GraphicHandleMsg::RectCorner(c) => GraphicHandle::RectCorner(c),
+        GraphicHandleMsg::LineEndpoint(e) => GraphicHandle::LineEndpoint(e),
+        GraphicHandleMsg::CircleRadius => GraphicHandle::CircleRadius,
+        GraphicHandleMsg::ArcStart => GraphicHandle::ArcStart,
+        GraphicHandleMsg::ArcEnd => GraphicHandle::ArcEnd,
+        GraphicHandleMsg::TextAnchor => GraphicHandle::TextAnchor,
     }
 }
 
@@ -2191,6 +2219,7 @@ pub(crate) fn apply_footprint_primitive_edit(
         | PrimitiveEditorMsg::SymbolSelect(_)
         | PrimitiveEditorMsg::SymbolDeselect
         | PrimitiveEditorMsg::SymbolMoveSelected { .. }
+        | PrimitiveEditorMsg::SymbolMoveGraphicHandle { .. }
         | PrimitiveEditorMsg::SymbolDeleteSelected
         | PrimitiveEditorMsg::SymbolSetPinNumber { .. }
         | PrimitiveEditorMsg::SymbolSetPinName { .. }
