@@ -44,12 +44,39 @@ pub enum LibraryMode {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct WorkflowConfig {
+    /// Per `v0.9-snxlib-as-file-plan.md` §3.6, library workflow features
+    /// scale with this mode: `Personal` hides released-flag /
+    /// bump-dialog / cascade-modal / Library-Updates-dialog (silent
+    /// auto-cascade + auto-update); `Team` enables them all; `Enterprise`
+    /// adds approval workflow + audit log + sign-off (preview only,
+    /// v0.9 doesn't expose the picker).
+    #[serde(default)]
+    pub mode: WorkflowMode,
     #[serde(default)]
     pub review_required: bool,
     #[serde(default = "default_reviewers_required")]
     pub reviewers_required: u32,
     #[serde(default = "default_auto_promote")]
     pub auto_lifecycle_promote: String,
+}
+
+/// Per-library workflow mode — controls which versioning + cascade
+/// gates are visible in the UI. Stored as a TOML string token.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkflowMode {
+    /// Default for new libraries — auto-bump on save, silent cascade,
+    /// auto-update on schematic open. The `released` flag, bump
+    /// dialogs, and Library Updates dialog are hidden.
+    #[default]
+    Personal,
+    /// Released flag + bump dialog + cascade modal + Library Updates
+    /// dialog all visible. The plan's full §3.5 / §3.5.cascade
+    /// behaviour is active.
+    Team,
+    /// Adds approval workflow, audit log, and sign-off on top of Team.
+    /// Design preview only — v0.9 does not expose this in the UI.
+    Enterprise,
 }
 
 fn default_reviewers_required() -> u32 {
@@ -62,6 +89,7 @@ fn default_auto_promote() -> String {
 impl Default for WorkflowConfig {
     fn default() -> Self {
         Self {
+            mode: WorkflowMode::default(),
             review_required: false,
             reviewers_required: 1,
             auto_lifecycle_promote: "Released".into(),
@@ -158,7 +186,51 @@ review_required = false
         assert_eq!(m.library.name, "MyComponents");
         assert!(matches!(m.mode, LibraryMode::LocalGit));
         assert!(!m.workflow.review_required);
+        assert_eq!(m.workflow.mode, WorkflowMode::Personal);
         assert!(m.tables().is_empty());
+    }
+
+    /// Workflow mode round-trips through TOML — Stage 13 of
+    /// `v0.9-snxlib-as-file-plan.md`. The picker defaults to
+    /// `Personal` for new libraries and gates the §3.5 versioning UI
+    /// (released flag, bump dialog, cascade modal) when set to
+    /// `Team`.
+    #[test]
+    fn workflow_mode_round_trips() {
+        for (token, mode) in [
+            ("personal", WorkflowMode::Personal),
+            ("team", WorkflowMode::Team),
+            ("enterprise", WorkflowMode::Enterprise),
+        ] {
+            let text = format!(
+                r#"
+[library]
+name = "X"
+library_id = "0192a8c0-0000-7000-8000-000000000000"
+
+[workflow]
+mode = "{token}"
+"#
+            );
+            let m = Manifest::parse(&text).unwrap();
+            assert_eq!(m.workflow.mode, mode, "parse {token:?}");
+            // Round-trip: write + parse back, mode survives.
+            let back = Manifest::parse(&m.write().unwrap()).unwrap();
+            assert_eq!(back.workflow.mode, mode, "round-trip {token:?}");
+        }
+    }
+
+    /// Missing `[workflow]` block — `mode` defaults to `Personal`
+    /// (no surprise UI gates appear).
+    #[test]
+    fn workflow_mode_defaults_to_personal_when_absent() {
+        let text = r#"
+[library]
+name = "X"
+library_id = "0192a8c0-0000-7000-8000-000000000000"
+"#;
+        let m = Manifest::parse(text).unwrap();
+        assert_eq!(m.workflow.mode, WorkflowMode::Personal);
     }
 
     #[test]
