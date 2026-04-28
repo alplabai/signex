@@ -337,6 +337,10 @@ impl Signex {
             LibraryMessage::CreateLibraryAt(project_root) => {
                 self.handle_create_library_for_project(project_root)
             }
+            LibraryMessage::CreateLibraryAtPath {
+                project_path,
+                lib_path,
+            } => self.handle_create_library_at_path(project_path, lib_path),
             LibraryMessage::ComponentPreviewOpened {
                 path,
                 table,
@@ -1318,22 +1322,29 @@ impl Signex {
         )))
     }
 
-    /// Create a fresh `<name>.snxlib/` under the project rooted at
-    /// `project_root`. Default name `<project>-lib`; conflicts are
-    /// suffix-disambiguated. The library is registered on
-    /// `Project::libraries` so the project tree picks it up on the
-    /// next refresh.
+    /// Spawn the "New Component Library" Save-As dialog for the
+    /// project rooted at `project_root`. The dialog defaults to
+    /// `<project_dir>/<project>-lib.snxlib` so the common
+    /// project-local case is one Enter key, but the user can navigate
+    /// to a global directory to create a shared library. On confirm,
+    /// the dialog dispatches `CreateLibraryAtPath` which calls
+    /// `commands::create_library_at` to do the actual disk + manifest
+    /// + git init.
+    ///
+    /// We deliberately do NOT touch disk here — the previous "instant
+    /// create on click" behaviour was confusing because users
+    /// couldn't see where it was going to land or override the
+    /// default name.
     fn handle_create_library_for_project(
         &mut self,
         project_root: std::path::PathBuf,
     ) -> Task<Message> {
-        // Locate the LoadedProject so we can mutate its `libraries`
-        // list. We match on `project_root` against the project file
-        // path and against its parent dir — callers emit the file
-        // path, but a future menu wired to a tree-row right-click
-        // could reasonably emit the directory.
+        // Locate the LoadedProject so we can derive the suggested
+        // path. The dispatch handler that consumes the dialog result
+        // re-resolves the project at apply time so a project unload
+        // between dialog spawn + confirm is recoverable.
         let Some(loaded) =
-            self.document_state.projects.iter_mut().find(|p| {
+            self.document_state.projects.iter().find(|p| {
                 p.path == project_root || p.path.parent() == Some(project_root.as_path())
             })
         else {
@@ -1353,6 +1364,10 @@ impl Signex {
         let mut name = format!("{stem}-lib");
 
         let project_dir = std::path::PathBuf::from(&loaded.data.dir);
+        // Pre-disambiguate the default name so the user doesn't get a
+        // misleading "<project>-lib" suggestion when that path already
+        // exists. Conflicts get a `-2`, `-3`, … suffix matching the
+        // pattern `commands::create_library` previously used.
         if project_dir.join(format!("{name}.snxlib")).exists() {
             for n in 2..=99 {
                 let candidate = format!("{stem}-lib-{n}");
@@ -1362,24 +1377,78 @@ impl Signex {
                 }
             }
         }
+        let suggested_filename = format!("{name}.snxlib");
+        let project_path = loaded.path.clone();
 
-        match crate::library::commands::create_library(&mut self.library, &mut loaded.data, &name) {
+        Task::perform(
+            async move {
+                rfd::AsyncFileDialog::new()
+                    .set_title("New Component Library")
+                    .add_filter("Signex Component Library", &["snxlib"])
+                    .set_directory(&project_dir)
+                    .set_file_name(&suggested_filename)
+                    .save_file()
+                    .await
+                    .map(|file| file.path().to_path_buf())
+            },
+            move |picked| match picked {
+                Some(lib_path) => Message::Library(LibraryMessage::CreateLibraryAtPath {
+                    project_path: project_path.clone(),
+                    lib_path,
+                }),
+                None => Message::Noop,
+            },
+        )
+    }
+
+    /// Resolution of the New Library save-as dialog. Re-resolves the
+    /// project (in case it was unloaded between dialog spawn +
+    /// confirm), then runs `commands::create_library_at` to do the
+    /// disk init + manifest + git scaffolding + project registration.
+    fn handle_create_library_at_path(
+        &mut self,
+        project_path: std::path::PathBuf,
+        lib_path: std::path::PathBuf,
+    ) -> Task<Message> {
+        let Some(loaded) = self
+            .document_state
+            .projects
+            .iter_mut()
+            .find(|p| p.path == project_path)
+        else {
+            tracing::warn!(
+                target: "signex::library",
+                path = %project_path.display(),
+                "create library: project unloaded between dialog spawn and confirm"
+            );
+            return Task::none();
+        };
+
+        match crate::library::commands::create_library_at(
+            &mut self.library,
+            &mut loaded.data,
+            lib_path.clone(),
+        ) {
             Ok(library_id) => {
                 tracing::info!(
                     target: "signex::library",
                     project = %loaded.path.display(),
-                    library_name = %name,
+                    library = %lib_path.display(),
                     library_id = %library_id,
-                    "created project-local library"
+                    "created library via save-as dialog"
                 );
+                // Mark the project file dirty so the user is prompted
+                // to persist the new library entry in the `.snxprj`.
+                let project_path = loaded.path.clone();
+                self.document_state.dirty_paths.insert(project_path);
             }
             Err(e) => {
                 tracing::warn!(
                     target: "signex::library",
                     project = %loaded.path.display(),
-                    library_name = %name,
+                    library = %lib_path.display(),
                     error = %e,
-                    "create_library failed"
+                    "create_library_at failed"
                 );
             }
         }
@@ -2019,8 +2088,17 @@ impl Signex {
     ) -> Task<Message> {
         // Save is a sibling of the canvas-mutation messages — route
         // through the standalone save path which writes JSON back to
-        // disk and (when applicable) reloads in the LibrarySet.
+        // disk and (when applicable) reloads in the LibrarySet. When
+        // the file doesn't exist on disk yet (newly-minted in-memory
+        // tab from `Add New ▸ Symbol` / `Add New ▸ Footprint`), spawn
+        // the Save-As dialog instead so the user picks where it lands
+        // — same gate as the top-level `Message::SaveFile` path uses.
         if matches!(msg, PrimitiveEditorMsg::Save) {
+            if !path.exists() {
+                return crate::app::handlers::document_files::spawn_save_as_for_new_primitive(
+                    path,
+                );
+            }
             self.save_primitive_tab_at(&path);
             return Task::none();
         }

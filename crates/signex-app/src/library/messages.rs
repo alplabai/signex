@@ -59,11 +59,24 @@ pub enum LibraryMessage {
     NewComponent,
     /// Project tree → right-click → Add New to Project ▸ Component
     /// Library. Carries the active project's root directory; the
-    /// dispatcher prompts for a name (default `<project>-lib`),
-    /// creates `<root>/<name>.snxlib` via [`crate::library::commands::create_library`],
-    /// then registers it in `Project::libraries` so the project
-    /// tree picks it up on the next `refresh_panel_ctx`.
+    /// dispatcher opens an `rfd::AsyncFileDialog::save_file()` with
+    /// `.snxlib` filter so the user picks the library's name and
+    /// location (defaults to `<root>/<project>-lib.snxlib` for the
+    /// common project-local case, but the user can navigate anywhere
+    /// for a shared library). On confirm, dispatches
+    /// `CreateLibraryAtPath` with the chosen path.
     CreateLibraryAt(std::path::PathBuf),
+    /// Resolution of the "New Component Library" save-as dialog —
+    /// `project_path` is the project the library should attach to
+    /// (the same file the original `CreateLibraryAt` carried);
+    /// `lib_path` is the user's chosen `.snxlib/` directory path.
+    /// Calls `crate::library::commands::create_library_at` to do
+    /// the actual disk init + manifest + git scaffolding, then
+    /// registers it on the project's library list.
+    CreateLibraryAtPath {
+        project_path: std::path::PathBuf,
+        lib_path: std::path::PathBuf,
+    },
     /// Dismiss the New Component modal without creating anything.
     CloseNewComponent,
     /// Live-edit of the New Component modal's "Internal PN" field.

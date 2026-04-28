@@ -226,41 +226,42 @@ impl Signex {
             }
         };
 
-        let (new_path, save_result) = match kind {
+        // We deliberately do NOT call `adapter.save_symbol` /
+        // `save_footprint` here — that's what was auto-persisting
+        // every "Add New ▸ Symbol" click to disk before the user had
+        // a chance to discard or rename the new primitive. Instead,
+        // build the editor state in memory (dirty = true) and let the
+        // user's explicit Save be the first disk write. The adapter is
+        // dropped to release the borrow on `self.library` so the
+        // `handle_open_*_in_memory` calls below can mutate
+        // `self.document_state` freely.
+        let _ = (adapter, library_id); // intentionally unused after this point
+        match kind {
             PrimitiveKind::Symbol => {
-                // Multi-symbol containers — let the adapter pick the
-                // on-disk filename (slug from `Symbol::name`), then
-                // discover where it landed by scanning the symbols dir
-                // for the file that holds the new uuid. We could
-                // alternatively change the adapter to return the path,
-                // but the scan keeps the adapter trait small and the
-                // failure surface visible (a missing-after-write file
-                // surfaces as "not found" right here).
+                let target = self.unique_new_symbol_path(&resolved_root, "NewSymbol");
                 let sym = signex_library::Symbol::empty("NewSymbol");
-                let uuid = sym.uuid;
-                let result = adapter.save_symbol(sym, "add new symbol");
-                let path = result
-                    .as_ref()
-                    .ok()
-                    .and_then(|_| find_symbol_file_for_uuid(&resolved_root, uuid))
-                    .unwrap_or_else(|| resolved_root.join("symbols").join("NewSymbol.snxsym"));
-                (path, result)
+                let file = signex_library::SymbolFile::from_symbol(sym);
+
+                self.interaction_state.project_tree_context_menu = None;
+                self.interaction_state.context_submenu = None;
+                self.handle_open_new_symbol_in_memory(target, file);
+                Task::none()
             }
             PrimitiveKind::Footprint => {
+                let target = self.unique_new_footprint_path(&resolved_root, "NewFootprint");
                 let fp = signex_library::Footprint::empty("NewFootprint");
-                let uuid = fp.uuid;
-                let path = resolved_root
-                    .join("footprints")
-                    .join(format!("{uuid}.snxfpt"));
-                let result = adapter.save_footprint(fp, "add new footprint");
-                (path, result)
+
+                self.interaction_state.project_tree_context_menu = None;
+                self.interaction_state.context_submenu = None;
+                self.handle_open_new_footprint_in_memory(target, fp);
+                Task::none()
             }
             PrimitiveKind::Sim => {
                 tracing::warn!(
                     target: "signex::library",
                     "Add Library primitive: Sim creation not wired from this menu"
                 );
-                return Task::none();
+                Task::none()
             }
             _ => {
                 tracing::warn!(
@@ -268,32 +269,149 @@ impl Signex {
                     ?kind,
                     "Add Library primitive: unsupported PrimitiveKind variant"
                 );
-                return Task::none();
+                Task::none()
             }
-        };
-
-        if let Err(e) = save_result {
-            tracing::warn!(
-                target: "signex::library",
-                ?kind,
-                root = %resolved_root.display(),
-                error = %e,
-                "Add Library primitive: adapter save failed"
-            );
-            return Task::none();
         }
+    }
 
-        // Dismiss the context menu so the user gets visual feedback —
-        // the menu wasn't auto-closing for the stubbed arms.
-        self.interaction_state.project_tree_context_menu = None;
-        self.interaction_state.context_submenu = None;
+    /// Pick a path under `<root>/symbols/` that doesn't collide with
+    /// an existing file on disk OR an in-memory editor tab. Tries
+    /// `<base>.snxsym` first, then `<base>-2.snxsym`, `<base>-3`, etc.
+    fn unique_new_symbol_path(
+        &self,
+        root: &std::path::Path,
+        base: &str,
+    ) -> std::path::PathBuf {
+        let dir = root.join("symbols");
+        let mut name = format!("{base}.snxsym");
+        let mut path = dir.join(&name);
+        if !self.path_in_use(&path) {
+            return path;
+        }
+        for n in 2..=999 {
+            name = format!("{base}-{n}.snxsym");
+            path = dir.join(&name);
+            if !self.path_in_use(&path) {
+                return path;
+            }
+        }
+        // 999 collisions is silly — fall through with the last
+        // candidate; the user will see it overwrite something obvious.
+        path
+    }
 
-        // Rescan the library directory so the new file shows up under
-        // Libraries ▸ <name> ▸ Symbols / Footprints.
+    /// Counterpart to `unique_new_symbol_path` for footprints.
+    fn unique_new_footprint_path(
+        &self,
+        root: &std::path::Path,
+        base: &str,
+    ) -> std::path::PathBuf {
+        let dir = root.join("footprints");
+        let mut name = format!("{base}.snxfpt");
+        let mut path = dir.join(&name);
+        if !self.path_in_use(&path) {
+            return path;
+        }
+        for n in 2..=999 {
+            name = format!("{base}-{n}.snxfpt");
+            path = dir.join(&name);
+            if !self.path_in_use(&path) {
+                return path;
+            }
+        }
+        path
+    }
+
+    fn path_in_use(&self, path: &std::path::Path) -> bool {
+        path.exists()
+            || self.document_state.symbol_editors.contains_key(path)
+            || self.document_state.footprint_editors.contains_key(path)
+    }
+
+    /// Open `file` as a new in-memory `.snxsym` editor tab at `path`.
+    /// The file does NOT exist on disk yet — `dirty` is set so the
+    /// next user-Save writes it via the standard `save_primitive_tab_at`
+    /// path (which `atomic_write`s, creating the parent dirs). Mirrors
+    /// the disk-loading branch of `handle_open_primitive` minus the
+    /// `std::fs::read` step.
+    fn handle_open_new_symbol_in_memory(
+        &mut self,
+        path: std::path::PathBuf,
+        file: signex_library::SymbolFile,
+    ) {
+        let title = path
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|| {
+                if !file.display_name.is_empty() {
+                    file.display_name.clone()
+                } else {
+                    file.symbols[0].name.clone()
+                }
+            });
+        let project_id = self
+            .document_state
+            .project_for_path(&path)
+            .map(|p| p.id);
+
+        let mut state = crate::app::SymbolEditorState::new(path.clone(), file);
+        state.dirty = true;
+        self.document_state
+            .symbol_editors
+            .insert(path.clone(), state);
+        // Track the dirty path so the project-close prompt picks it up
+        // alongside other unsaved tabs.
+        self.document_state.dirty_paths.insert(path.clone());
+
+        self.park_active_schematic_session();
+        self.document_state.tabs.push(crate::app::TabInfo {
+            title,
+            path: path.clone(),
+            cached_document: None,
+            dirty: true,
+            project_id,
+            kind: crate::app::TabKind::SymbolEditor(path),
+        });
+        self.document_state.active_tab = self.document_state.tabs.len() - 1;
+        self.document_state.active_path = None;
         self.refresh_panel_ctx();
+    }
 
-        // Open the new file as a standalone primitive-editor tab.
-        self.handle_open_primitive(new_path)
+    /// Footprint counterpart to `handle_open_new_symbol_in_memory`.
+    fn handle_open_new_footprint_in_memory(
+        &mut self,
+        path: std::path::PathBuf,
+        primitive: signex_library::Footprint,
+    ) {
+        let title = path
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|| primitive.name.clone());
+        let project_id = self
+            .document_state
+            .project_for_path(&path)
+            .map(|p| p.id);
+
+        let mut state =
+            crate::app::FootprintEditorState::new(path.clone(), primitive);
+        state.dirty = true;
+        self.document_state
+            .footprint_editors
+            .insert(path.clone(), state);
+        self.document_state.dirty_paths.insert(path.clone());
+
+        self.park_active_schematic_session();
+        self.document_state.tabs.push(crate::app::TabInfo {
+            title,
+            path: path.clone(),
+            cached_document: None,
+            dirty: true,
+            project_id,
+            kind: crate::app::TabKind::FootprintEditor(path),
+        });
+        self.document_state.active_tab = self.document_state.tabs.len() - 1;
+        self.document_state.active_path = None;
+        self.refresh_panel_ctx();
     }
 }
 

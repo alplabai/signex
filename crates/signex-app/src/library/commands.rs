@@ -29,47 +29,53 @@ pub fn open_library(state: &mut LibraryState, root: PathBuf) -> Result<(), Libra
 
 // ── Library lifecycle helpers ────────────────────────────────────────
 
-/// Create a fresh project-local library at `<project_dir>/<name>.snxlib/`.
-///
-/// Steps (per plan §13 H4):
-/// 1. Mint a new `library_id` UUID and assemble the default
-///    `library.toml` manifest (LocalGit mode, no review required).
-/// 2. Hand the directory + manifest to [`LocalGitAdapter::init`],
-///    which creates the layout, writes `library.toml`, and seeds
-///    the initial commit.
-/// 3. Re-open via `LibraryState::open_library` so the adapter
-///    registers in `open_libraries` and the panel can drill in.
-/// 4. Push a [`LibraryEntry`] onto `project.libraries` so the
-///    project tree shows the library on the next refresh and the
-///    next project-open auto-mounts it.
-///
-/// Returns the new `library_id` so the caller can update tabs /
-/// breadcrumbs without re-querying the manifest.
-pub fn create_library(
+/// Create a fresh `.snxlib/` library at `lib_path`. The directory's
+/// final filename stem (`<name>.snxlib`) becomes the library's
+/// display name in the manifest. The library is registered on
+/// `project.libraries` as `ProjectLocal` when `lib_path` lives
+/// inside `project.dir`, otherwise `Shared` — so the same call site
+/// handles both the right-click "Add New ▸ Component Library"
+/// project-local case and "save my new symbol into a global library
+/// directory" shared case.
+pub fn create_library_at(
     state: &mut LibraryState,
     project: &mut ProjectData,
-    name: &str,
+    lib_path: PathBuf,
 ) -> Result<Uuid, LibraryError> {
-    let trimmed = name.trim();
-    if trimmed.is_empty() {
-        return Err(LibraryError::Conflict("library name is empty".to_string()));
+    // Library directories must use the `.snxlib` extension so the
+    // library detector elsewhere (ancestor walk, dock open dialog,
+    // adapter resolution) can identify them. Reject anything else
+    // up-front rather than failing later with a confusing
+    // adapter-init error.
+    let ext_ok = lib_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.eq_ignore_ascii_case("snxlib"))
+        .unwrap_or(false);
+    if !ext_ok {
+        return Err(LibraryError::Conflict(format!(
+            "library path must end with `.snxlib`: {}",
+            lib_path.display()
+        )));
     }
-    if trimmed
+    let stem = lib_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_string())
+        .unwrap_or_default();
+    if stem.is_empty() {
+        return Err(LibraryError::Conflict(
+            "library name (filename stem) is empty".to_string(),
+        ));
+    }
+    if stem
         .chars()
         .any(|c| matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|'))
     {
         return Err(LibraryError::Conflict(format!(
-            "library name {trimmed:?} contains illegal path characters"
+            "library name {stem:?} contains illegal path characters"
         )));
     }
-    let project_dir = PathBuf::from(&project.dir);
-    if project_dir.as_os_str().is_empty() {
-        return Err(LibraryError::Conflict(
-            "project has no directory on disk yet".to_string(),
-        ));
-    }
-    let dir_name = format!("{trimmed}.snxlib");
-    let lib_path = project_dir.join(&dir_name);
     if lib_path.exists() {
         return Err(LibraryError::Conflict(format!(
             "{} already exists",
@@ -83,7 +89,7 @@ pub fn create_library(
     let library_id = Uuid::new_v4();
     let manifest = Manifest {
         library: LibraryMeta {
-            name: trimmed.to_string(),
+            name: stem.clone(),
             library_id,
             description: None,
         },
@@ -118,16 +124,51 @@ pub fn create_library(
         );
     }
 
-    // 4. Record the library on the project so the project tree
-    //    surfaces it under the Libraries node and the next session
-    //    auto-mounts.
+    // Pick LibraryEntryKind based on whether the library lives inside
+    // the project's directory. Project-local entries store a relative
+    // path so a project move doesn't break the binding.
+    let project_dir = PathBuf::from(&project.dir);
+    let (entry_path, entry_kind) =
+        if !project_dir.as_os_str().is_empty()
+            && let Ok(rel) = lib_path.strip_prefix(&project_dir)
+        {
+            (rel.to_path_buf(), LibraryEntryKind::ProjectLocal)
+        } else {
+            (lib_path.clone(), LibraryEntryKind::Shared)
+        };
+
     project.libraries.push(LibraryEntry {
-        path: PathBuf::from(&dir_name),
-        kind: LibraryEntryKind::ProjectLocal,
+        path: entry_path,
+        kind: entry_kind,
         library_id: Some(library_id),
     });
 
     Ok(library_id)
+}
+
+/// Convenience wrapper — create a project-local library named
+/// `<name>` under `<project.dir>/<name>.snxlib`. Keeps the legacy
+/// call sites that don't go through the Save-As dialog working
+/// (currently none — all new code goes through `create_library_at`,
+/// which lets the user pick the location).
+#[allow(dead_code)]
+pub fn create_library(
+    state: &mut LibraryState,
+    project: &mut ProjectData,
+    name: &str,
+) -> Result<Uuid, LibraryError> {
+    let trimmed = name.trim().to_string();
+    if trimmed.is_empty() {
+        return Err(LibraryError::Conflict("library name is empty".to_string()));
+    }
+    let project_dir = PathBuf::from(&project.dir);
+    if project_dir.as_os_str().is_empty() {
+        return Err(LibraryError::Conflict(
+            "project has no directory on disk yet".to_string(),
+        ));
+    }
+    let lib_path = project_dir.join(format!("{trimmed}.snxlib"));
+    create_library_at(state, project, lib_path)
 }
 
 /// Auto-mount every library referenced by `project.libraries`. Called
