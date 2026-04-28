@@ -3506,6 +3506,7 @@ impl Signex {
             || self.library.document_options.is_some()
             || self.library.recovery.is_some()
             || self.library.create_options.is_some()
+            || self.library.library_updates.is_some()
             || self
                 .library
                 .library_browsers
@@ -4754,6 +4755,30 @@ impl Signex {
         // modals instead of silent log lines.
         if let Some(dialog) = self.library.recovery.as_ref() {
             let card = crate::library::recovery::view(dialog, &document.panel_ctx.tokens)
+                .map(Message::Library);
+            let backdrop = container(card)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x(Length::Fill)
+                .center_y(Length::Fill)
+                .style(|_: &iced::Theme| iced::widget::container::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgba(
+                        0.0, 0.0, 0.0, 0.45,
+                    ))),
+                    ..Default::default()
+                });
+            layers.push(backdrop.into());
+        }
+
+        // "Library Updates Available" modal (Stage 16 §3.5).
+        // Opened on schematic open under Team workflow mode when a
+        // placed Symbol's `library_version` drifts from the source
+        // row's current `ComponentRow.version`. The corresponding
+        // `needs_overlay` predicate above must include
+        // `library_updates.is_some()` — without it the click target
+        // never paints (memory: needs_overlay-predicate-gates-modal).
+        if let Some(state) = self.library.library_updates.as_ref() {
+            let card = crate::library::updates_dialog::view(state, &document.panel_ctx.tokens)
                 .map(Message::Library);
             let backdrop = container(card)
                 .width(Length::Fill)

@@ -170,6 +170,15 @@ impl Signex {
             custom_properties: Vec::new(),
             pin_uuids: std::collections::HashMap::new(),
             instances: Vec::new(),
+            // Legacy lib_id-driven place flow has no `.snxlib` identity —
+            // Stage 16 of `v0.9-snxlib-as-file-plan.md` only tags
+            // placements that go through the Library picker
+            // (`handle_place_library_component`). Anything placed via
+            // `selected_component` (Standard-style lib_id) skips drift
+            // tracking by design.
+            library_id: None,
+            row_id: None,
+            library_version: String::new(),
         };
         self.apply_engine_command(signex_engine::Command::PlaceSymbol { symbol }, false, false);
 

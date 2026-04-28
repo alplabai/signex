@@ -30,6 +30,7 @@ pub mod primitive_picker;
 pub mod recovery;
 pub mod settings;
 pub mod state;
+pub mod updates_dialog;
 
 // Re-export the heavily-used types so callers don't have to know
 // the internal module layout. `LibraryMessage` is folded into the
