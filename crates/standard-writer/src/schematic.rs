@@ -1249,6 +1249,9 @@ mod tests {
                 reference: "R1".to_string(),
                 unit: 1,
             }],
+            library_id: None,
+            row_id: None,
+            library_version: String::new(),
         });
 
         let rendered = write_schematic(&sheet);

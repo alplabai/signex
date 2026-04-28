@@ -297,6 +297,26 @@ pub enum LibraryMessage {
     RecoveryLibraryMissingLocateResult(Option<PathBuf>),
     RecoveryGitMissing(super::recovery::GitMissingChoice),
     RecoveryBrokenBinding(super::recovery::BrokenBindingChoice),
+
+    // ── Library Updates Available modal (Stage 16) ─────────────────────
+    /// Internal: the schematic-open scan finished and produced drift —
+    /// open the modal in Team mode, or silently apply in Personal
+    /// mode. Carried as a single message so the dispatcher's open path
+    /// stays linear (scan first, decide branch, fire this message).
+    /// The dispatcher mounts the state directly when this fires; no
+    /// payload because the state is already on `LibraryState`.
+    /// Toggle one row's checkbox in the modal — the symbol_uuid keys
+    /// the entry inside the modal state's `entries` vec.
+    LibraryUpdatesToggleSelection(uuid::Uuid),
+    /// User clicked Update Selected Components — apply the picked
+    /// updates to the schematic engine + dirty-mark + close modal.
+    LibraryUpdatesApply,
+    /// User clicked Skip All — close the modal and record the path on
+    /// `skipped_updates_for` so the status bar can flag it persistently.
+    LibraryUpdatesSkipAll,
+    /// User dismissed the modal (Cancel / Esc / X). No state mutates;
+    /// drift is left pinned and the schematic stays clean.
+    LibraryUpdatesCancel,
 }
 
 /// User choice from the close-library confirmation modal.

@@ -400,6 +400,34 @@ pub struct Symbol {
     pub pin_uuids: HashMap<String, Uuid>,
     #[serde(default)]
     pub instances: Vec<SymbolInstance>,
+
+    // ─────────────────────────────────────────────────────────────────────
+    // v0.9 §3.5 — schematic-side library pinning
+    //
+    // When a Symbol is placed from a `*.snxlib/` row (Library panel /
+    // picker), the dispatcher tags it with the row's identity + version
+    // so re-opening the schematic can detect drift against the library's
+    // current row version.  All three fields are `#[serde(default)]` so
+    // legacy `.snxsch` / `.standard_sch` files (and Standard-imported sheets,
+    // which have no notion of a Signex library) load cleanly with
+    // `library_id = None`, `row_id = None`, `version = ""`.
+    // ─────────────────────────────────────────────────────────────────────
+    /// Source library for this placed Symbol.  `None` for Standard-imported
+    /// sheets, hand-built primitives, or any Symbol that wasn't placed
+    /// via a `.snxlib` row.
+    #[serde(default)]
+    pub library_id: Option<Uuid>,
+    /// Row identity inside the source library — points at the
+    /// `ComponentRow.row_id` so renaming the row's `internal_pn` doesn't
+    /// break placement.  `None` whenever `library_id` is `None`.
+    #[serde(default)]
+    pub row_id: Option<Uuid>,
+    /// Pinned row version at place-time (semver-style, e.g. `"1.0.2"`).
+    /// Empty for un-pinned placements.  The Library Updates dialog
+    /// (`v0.9-snxlib-as-file-plan.md` §3.5) compares this to the row's
+    /// current `ComponentRow.version` on schematic open.
+    #[serde(default)]
+    pub library_version: String,
 }
 
 fn default_unit() -> u32 {

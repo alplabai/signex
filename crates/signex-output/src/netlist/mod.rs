@@ -497,6 +497,9 @@ mod tests {
             custom_properties: vec![],
             pin_uuids: std::collections::HashMap::new(),
             instances: vec![],
+            library_id: None,
+            row_id: None,
+            library_version: String::new(),
         };
 
         let sym2 = Symbol {
@@ -524,6 +527,9 @@ mod tests {
             custom_properties: vec![],
             pin_uuids: std::collections::HashMap::new(),
             instances: vec![],
+            library_id: None,
+            row_id: None,
+            library_version: String::new(),
         };
 
         let sheet = SchematicSheet {
@@ -591,6 +597,9 @@ mod tests {
             custom_properties: vec![],
             pin_uuids: std::collections::HashMap::new(),
             instances: vec![],
+            library_id: None,
+            row_id: None,
+            library_version: String::new(),
         };
 
         let sheet = SchematicSheet {
@@ -699,6 +708,9 @@ mod tests {
             custom_properties: vec![],
             pin_uuids: std::collections::HashMap::new(),
             instances: vec![],
+            library_id: None,
+            row_id: None,
+            library_version: String::new(),
         };
 
         let wire = Wire {
@@ -847,6 +859,9 @@ mod tests {
             custom_properties: vec![],
             pin_uuids: std::collections::HashMap::new(),
             instances: vec![],
+            library_id: None,
+            row_id: None,
+            library_version: String::new(),
         };
 
         let sym2 = Symbol {
@@ -874,6 +889,9 @@ mod tests {
             custom_properties: vec![],
             pin_uuids: std::collections::HashMap::new(),
             instances: vec![],
+            library_id: None,
+            row_id: None,
+            library_version: String::new(),
         };
 
         // Wire connecting R1 pin 2 (at 10,0) to R2 pin 1 (at 10,0)
@@ -990,6 +1008,9 @@ mod tests {
             custom_properties: vec![],
             pin_uuids: std::collections::HashMap::new(),
             instances: vec![],
+            library_id: None,
+            row_id: None,
+            library_version: String::new(),
         };
 
         // Wire from (0,0) to (10,0)

@@ -1087,6 +1087,10 @@ fn parse_symbol_instance(s: &SExpr) -> Symbol {
         custom_properties,
         pin_uuids,
         instances,
+        // v0.9 §3.5: Standard-imported sheets carry no Signex library identity.
+        library_id: None,
+        row_id: None,
+        library_version: String::new(),
     }
 }
 

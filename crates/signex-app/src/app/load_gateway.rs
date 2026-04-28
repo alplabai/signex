@@ -208,6 +208,7 @@ impl Signex {
     ) {
         self.park_active_schematic_session();
         let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
+        let scan_path = path.clone();
         self.document_state.tabs.push(TabInfo {
             title,
             path,
@@ -219,6 +220,14 @@ impl Signex {
         self.document_state.active_tab = self.document_state.tabs.len() - 1;
 
         self.apply_loaded_schematic(Some(sheet), true, true, true, true);
+
+        // Stage 16 §3.5 — Library Updates Available scan.
+        // Walks placed Symbols whose `library_id` is set and
+        // surfaces drift against the source library row's current
+        // version. Personal-mode libraries auto-apply silently; Team
+        // mode opens the "Library Updates Available" modal on the
+        // next view tick.
+        self.scan_library_updates_for_open_schematic(scan_path);
     }
 
     /// Reattach a tab to a schematic engine that's already parked in

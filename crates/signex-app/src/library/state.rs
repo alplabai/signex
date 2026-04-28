@@ -355,6 +355,19 @@ pub struct LibraryState {
     /// (`*.step` / `*.stp` / `*.wrl` / `*.iges`) before the adapter
     /// runs `git init` + initial commit.
     pub create_options: Option<LibraryCreateOptionsState>,
+    /// "Library Updates Available" modal state — Stage 16 of
+    /// `v0.9-snxlib-as-file-plan.md` §3.5. Populated by the
+    /// schematic-open scan when the source library's mode is
+    /// [`signex_library::WorkflowMode::Team`] and at least one placed
+    /// Symbol's pinned version drifts from the row's current version.
+    /// Personal-mode schematic opens auto-apply silently and never
+    /// build this state.
+    pub library_updates: Option<super::updates_dialog::LibraryUpdatesState>,
+    /// Set of schematic paths the user explicitly skipped updates on
+    /// — drives the persistent "Library Updates" status-bar indicator.
+    /// Cleared on apply / re-scan / close-tab.
+    #[allow(dead_code)]
+    pub skipped_updates_for: std::collections::HashSet<PathBuf>,
 }
 
 /// State for the Tools ▸ Document Options modal — keyed by the
@@ -412,6 +425,8 @@ impl Default for LibraryState {
             document_options: None,
             recovery: None,
             create_options: None,
+            library_updates: None,
+            skipped_updates_for: std::collections::HashSet::new(),
         }
     }
 }
