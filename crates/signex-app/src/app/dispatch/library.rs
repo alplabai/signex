@@ -3217,6 +3217,12 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
                         kind: signex_library::SimKind::Spice3,
                         body: String::new(),
                         default_node_map: std::collections::BTreeMap::new(),
+                        // Stage 14: every primitive carries its own
+                        // semver string + released flag. Defaults match
+                        // the serde defaults so reads of pre-Stage-14
+                        // `.snxsim` files work.
+                        version: "0.0.1".into(),
+                        released: false,
                         created: chrono::Utc::now(),
                         updated: chrono::Utc::now(),
                     };

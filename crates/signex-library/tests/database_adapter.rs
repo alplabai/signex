@@ -137,6 +137,8 @@ fn save_sim_posts_to_sims_route() {
         kind: SimKind::Spice3,
         body: ".SUBCKT LM358\n.ENDS".into(),
         default_node_map: Default::default(),
+        version: "0.0.1".into(),
+        released: false,
         created: chrono::Utc::now(),
         updated: chrono::Utc::now(),
     };

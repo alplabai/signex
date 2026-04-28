@@ -33,8 +33,20 @@ pub struct SimModel {
     /// override on a per-MPN basis.
     #[serde(default)]
     pub default_node_map: BTreeMap<String, String>,
+    /// Semver-style revision string. Stage 14 of
+    /// `v0.9-snxlib-as-file-plan.md`: sim models version independently
+    /// of the bound symbols and component rows. Defaults to `"0.0.1"`.
+    #[serde(default = "default_sim_version")]
+    pub version: String,
+    /// Released-flag: locks edit-in-place under Team mode.
+    #[serde(default)]
+    pub released: bool,
     pub created: DateTime<Utc>,
     pub updated: DateTime<Utc>,
+}
+
+fn default_sim_version() -> String {
+    "0.0.1".to_string()
 }
 
 impl SimModel {
@@ -46,6 +58,8 @@ impl SimModel {
             kind,
             body: String::new(),
             default_node_map: BTreeMap::new(),
+            version: default_sim_version(),
+            released: false,
             created: now,
             updated: now,
         }
@@ -68,6 +82,8 @@ mod tests {
             kind: SimKind::Spice3,
             body: ".SUBCKT LM358 IN OUT VCC GND\n.ENDS".into(),
             default_node_map: node_map,
+            version: "0.0.1".into(),
+            released: false,
             created: Utc::now(),
             updated: Utc::now(),
         };

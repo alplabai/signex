@@ -260,8 +260,21 @@ pub struct Footprint {
     /// Default PCB-side parameter values that flow to the binding component.
     #[serde(default)]
     pub pcb_params: ParamMap,
+    /// Semver-style revision string. Stage 14 of
+    /// `v0.9-snxlib-as-file-plan.md`: footprints version
+    /// independently of the bound symbols and component rows.
+    /// Defaults to `"0.0.1"` for new + legacy primitives.
+    #[serde(default = "default_footprint_version")]
+    pub version: String,
+    /// Released-flag: locks edit-in-place under Team mode.
+    #[serde(default)]
+    pub released: bool,
     pub created: DateTime<Utc>,
     pub updated: DateTime<Utc>,
+}
+
+fn default_footprint_version() -> String {
+    "0.0.1".to_string()
 }
 
 impl Footprint {
@@ -281,6 +294,8 @@ impl Footprint {
             body_3d: Body3D::default(),
             step_attachment: None,
             pcb_params: ParamMap::new(),
+            version: default_footprint_version(),
+            released: false,
             created: now,
             updated: now,
         }
@@ -339,6 +354,8 @@ mod tests {
                 rotation_xyz: [0.0, 0.0, 90.0],
             }),
             pcb_params: ParamMap::new(),
+            version: "0.0.1".into(),
+            released: false,
             created: Utc::now(),
             updated: Utc::now(),
         };
