@@ -297,20 +297,30 @@ impl LibraryState {
         self.open_libraries.iter_mut().find(|lib| lib.root == path)
     }
 
-    /// Find the open library whose root is an ancestor of `child_path`.
-    /// Used to resolve `.snxsym` / `.snxfpt` files back to the
-    /// `.snxlib/` they live inside, e.g. for sourcing per-library
-    /// canvas display settings ([`LibraryDisplaySettings`]).
+    /// Find the open library whose `root_dir` is an ancestor of
+    /// `child_path`. Used to resolve `.snxsym` / `.snxfpt` files back
+    /// to the `.snxlib` they live alongside — e.g. for sourcing
+    /// per-library canvas display settings
+    /// ([`LibraryDisplaySettings`]).
+    ///
+    /// Per `v0.9-snxlib-as-file-plan.md` §2 Stage C the comparison
+    /// is against the `.snxlib`'s *parent directory*, not the file
+    /// itself, so `<root_dir>/symbols/foo.snxsym` correctly resolves
+    /// to its library.
     pub fn containing_library(&self, child_path: &Path) -> Option<&OpenLibrary> {
-        self.open_libraries
-            .iter()
-            .find(|lib| child_path.starts_with(&lib.root))
+        self.open_libraries.iter().find(|lib| {
+            lib.root_dir()
+                .map(|d| child_path.starts_with(d))
+                .unwrap_or(false)
+        })
     }
 
     pub fn containing_library_mut(&mut self, child_path: &Path) -> Option<&mut OpenLibrary> {
-        self.open_libraries
-            .iter_mut()
-            .find(|lib| child_path.starts_with(&lib.root))
+        self.open_libraries.iter_mut().find(|lib| {
+            lib.root_dir()
+                .map(|d| child_path.starts_with(d))
+                .unwrap_or(false)
+        })
     }
 
     /// Open the `*.snxlib/` at `root`, mounting the adapter under its
@@ -514,6 +524,16 @@ impl LibraryState {
 /// write triggers a full table reload (v0.9 keeps it simple — hot
 /// per-row patches are a polish item).
 pub struct OpenLibrary {
+    /// Absolute path to the `.snxlib` *file* itself. Per
+    /// `v0.9-snxlib-as-file-plan.md` §1, a library is a directory
+    /// holding a `.snxlib` file plus sibling `symbols/` /
+    /// `footprints/` / `sims/` subdirs; this field points at the
+    /// `.snxlib` file. The git working tree (and `symbols/` parent)
+    /// is reachable via [`OpenLibrary::root_dir`].
+    ///
+    /// Field name kept as `root` to minimise ripple through ~14
+    /// callers; Stage 12+ can rename to `path` once the v0.9 sweep
+    /// settles.
     pub root: PathBuf,
     pub display_name: String,
     pub library_id: Uuid,
@@ -575,6 +595,20 @@ impl Default for LibraryDisplaySettings {
 }
 
 impl OpenLibrary {
+    /// Directory holding the `.snxlib` file — the per-library git
+    /// working tree and parent of `symbols/` / `footprints/` /
+    /// `sims/`. Returns `None` only when `root` is rooted (no
+    /// parent), which shouldn't happen for legitimate libraries
+    /// since `.snxlib` always lives inside its parent dir.
+    ///
+    /// Use this whenever you need to compare paths against the
+    /// library's working tree (e.g. "is this `.snxsym` inside this
+    /// library?") or join sibling paths
+    /// (`root_dir().join("symbols")`).
+    pub fn root_dir(&self) -> Option<&Path> {
+        self.root.parent()
+    }
+
     /// Re-read every TSV via the supplied adapter. Replaces both
     /// `tables` and `cached_components` atomically — readers see one
     /// consistent snapshot regardless of which view they query.
