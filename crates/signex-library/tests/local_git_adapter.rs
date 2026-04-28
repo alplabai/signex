@@ -310,8 +310,8 @@ fn library_set_resolves_across_two_local_libs() {
         .unwrap();
 
     let mut set = LibrarySet::new();
-    set.mount(Box::new(adapter_a));
-    set.mount(Box::new(adapter_b));
+    set.mount(Box::new(adapter_a)).unwrap();
+    set.mount(Box::new(adapter_b)).unwrap();
     assert_eq!(set.len(), 2);
 
     // Cross-library resolution: refs disambiguated by library_id.

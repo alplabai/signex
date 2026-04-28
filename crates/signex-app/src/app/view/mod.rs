@@ -3465,6 +3465,7 @@ impl Signex {
             || self.library.new_component.is_some()
             || self.library.picker.is_some()
             || self.library.primitive_picker.is_some()
+            || self.library.close_library_confirm.is_some()
             || self
                 .library
                 .library_browsers
@@ -4615,6 +4616,28 @@ impl Signex {
             let card = crate::library::primitive_picker::view(
                 &self.library,
                 picker,
+                &document.panel_ctx.tokens,
+            )
+            .map(Message::Library);
+            let backdrop = container(card)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x(Length::Fill)
+                .center_y(Length::Fill)
+                .style(|_: &iced::Theme| iced::widget::container::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgba(
+                        0.0, 0.0, 0.0, 0.45,
+                    ))),
+                    ..Default::default()
+                });
+            layers.push(backdrop.into());
+        }
+
+        // Close-Library — Unsaved Drafts confirm modal.
+        if let Some(confirm) = self.library.close_library_confirm.as_ref() {
+            let card = crate::library::close_prompt::view(
+                &self.library,
+                confirm,
                 &document.panel_ctx.tokens,
             )
             .map(Message::Library);

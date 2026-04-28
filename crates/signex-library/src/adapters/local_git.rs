@@ -588,6 +588,27 @@ impl LibraryAdapter for LocalGitAdapter {
     fn root_path(&self) -> Option<PathBuf> {
         Some(self.root.clone())
     }
+
+    /// Stage + commit `abs_path` via libgit2. Used by the standalone
+    /// primitive editor tabs to land their writes in git history
+    /// without going through the per-primitive `save_*` round-trip
+    /// (which would lose multi-symbol container semantics for
+    /// `.snxsym`).
+    fn commit_external_change(&self, abs_path: &Path, message: &str) -> Result<(), LibraryError> {
+        let rel_path = abs_path
+            .strip_prefix(&self.root)
+            .map_err(|_| {
+                LibraryError::Backend(format!(
+                    "commit_external_change: {} is not under {}",
+                    abs_path.display(),
+                    self.root.display(),
+                ))
+            })?
+            .to_string_lossy()
+            .replace('\\', "/");
+        let fallback = format!("save {rel_path}");
+        self.commit_path(&rel_path, message, &fallback)
+    }
 }
 
 /// Slugify a human-facing name into a safe filename component.

@@ -32,8 +32,8 @@ use std::sync::Arc;
 
 use signex_library::{
     ComponentClass, ComponentRow, ComponentSummary, DistributorSource, Footprint, LibraryAdapter,
-    LibraryError, LibrarySet, LocalGitAdapter, PrimitiveKind, PrimitiveRef, RowId, SimModel,
-    Symbol, TemplateRegistry, UseSite, WhereUsedIndex,
+    LibraryError, LibrarySet, LocalGitAdapter, PrimitiveKind, PrimitiveRef, PrimitiveSummary,
+    RowId, SimModel, Symbol, TemplateRegistry, UseSite, WhereUsedIndex,
 };
 use uuid::Uuid;
 
@@ -227,7 +227,6 @@ pub struct LibraryState {
     /// "New Component" modal state — `None` while closed.
     pub new_component: Option<NewComponentState>,
     /// "Close Library — Unsaved Drafts" modal state — `None` while closed.
-    #[allow(dead_code)]
     pub close_library_confirm: Option<CloseLibraryConfirmState>,
     /// Bundled + per-library parameter templates. Reference-counted
     /// because both the editor and the validator borrow it. The
@@ -299,13 +298,20 @@ impl LibraryState {
         let manifest = adapter.manifest();
         let display_name = manifest.library.name.clone();
         let library_id = manifest.library.library_id;
-        self.set.mount(Box::new(adapter));
+        // `LibrarySet::mount` rejects duplicate `library_id`s — this
+        // surfaces the case where the user has copy-pasted a `.snxlib/`
+        // without regenerating the manifest UUID, so cross-library
+        // `PrimitiveRef`s can't silently resolve to the wrong file.
+        self.set.mount(Box::new(adapter))?;
         let mut entry = OpenLibrary {
             root,
             display_name,
             library_id,
             tables: HashMap::new(),
             cached_components: Vec::new(),
+            cached_symbols: Vec::new(),
+            cached_footprints: Vec::new(),
+            cached_sims: Vec::new(),
         };
         if let Some(adapter) = self.set.get(library_id)
             && let Err(e) = entry.reload_tables(adapter)
@@ -352,21 +358,47 @@ impl LibraryState {
         let rows = self
             .set
             .get(library_id)
-            .ok_or_else(|| LibraryError::NotFound(root.display().to_string()))?
-            .iter_rows()?;
-        let summaries: Vec<ComponentSummary> = rows
-            .into_iter()
-            .map(|(_table, row)| ComponentSummary {
-                row_id: row.row_id,
-                internal_pn: row.internal_pn,
-                mpn: row.primary_mpn.mpn,
-                state: row.state,
-                description: String::new(),
-            })
-            .collect();
+            .ok_or_else(|| LibraryError::NotFound(root.display().to_string()))?;
+        let names = adapter.list_tables()?;
+        let mut tables: HashMap<String, Vec<ComponentRow>> = HashMap::new();
+        let mut summaries: Vec<ComponentSummary> = Vec::new();
+        for name in names {
+            match adapter.read_table(&name) {
+                Ok(rows) => {
+                    for row in &rows {
+                        summaries.push(ComponentSummary {
+                            row_id: row.row_id,
+                            internal_pn: row.internal_pn.clone(),
+                            mpn: row.primary_mpn.mpn.clone(),
+                            state: row.state,
+                            description: String::new(),
+                        });
+                    }
+                    tables.insert(name, rows);
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        target: "signex::library",
+                        table = %name,
+                        error = %e,
+                        "refresh_components: read_table failed; entry left empty"
+                    );
+                    tables.insert(name, Vec::new());
+                }
+            }
+        }
+        // Snapshot primitive listings before the second mut borrow so
+        // we don't have to call adapter methods while `library_at_mut`
+        // holds &mut self.
+        let symbols = adapter.list_symbols().unwrap_or_default();
+        let footprints = adapter.list_footprints().unwrap_or_default();
+        let sims = adapter.list_sims().unwrap_or_default();
         if let Some(lib) = self.library_at_mut(root) {
             lib.tables = tables;
             lib.cached_components = summaries;
+            lib.cached_symbols = symbols;
+            lib.cached_footprints = footprints;
+            lib.cached_sims = sims;
         }
         Ok(())
     }
@@ -403,7 +435,6 @@ impl LibraryState {
     }
 
     /// Editor addresses currently pointing at `root` that have unsaved edits.
-    #[allow(dead_code)]
     pub fn dirty_editors_for_library(&self, root: &Path) -> Vec<EditorAddress> {
         let mut keys: Vec<EditorAddress> = self
             .editors
@@ -459,6 +490,14 @@ pub struct OpenLibrary {
     /// caller that wants a flat per-library view); kept in lock-step
     /// with `tables` by `reload_tables`.
     pub cached_components: Vec<ComponentSummary>,
+    /// Cached primitive listings — populated by `reload_tables` /
+    /// `reload_primitives` so the per-tick `primitive_picker.rs`
+    /// view doesn't have to re-walk the filesystem on every keystroke.
+    /// One per primitive kind. Refreshed when a standalone primitive
+    /// editor saves (best-effort).
+    pub cached_symbols: Vec<PrimitiveSummary>,
+    pub cached_footprints: Vec<PrimitiveSummary>,
+    pub cached_sims: Vec<PrimitiveSummary>,
 }
 
 impl OpenLibrary {
@@ -501,7 +540,55 @@ impl OpenLibrary {
         }
         self.tables = tables;
         self.cached_components = summaries;
+        self.reload_primitives(adapter);
         Ok(())
+    }
+
+    /// Refresh the cached `(symbols, footprints, sims)` summary
+    /// lists. Called by `reload_tables` (full open/refresh path) and
+    /// by `save_primitive_tab_at` after a standalone editor write so
+    /// the picker modal sees the new primitive without re-scanning
+    /// the filesystem on every view tick.
+    ///
+    /// Adapter errors degrade to empty lists with a tracing warn —
+    /// the picker just shows fewer entries until the next refresh.
+    pub fn reload_primitives(&mut self, adapter: &dyn LibraryAdapter) {
+        match adapter.list_symbols() {
+            Ok(v) => self.cached_symbols = v,
+            Err(e) => {
+                tracing::warn!(
+                    target: "signex::library",
+                    library = %self.display_name,
+                    error = %e,
+                    "list_symbols failed; cache left empty"
+                );
+                self.cached_symbols = Vec::new();
+            }
+        }
+        match adapter.list_footprints() {
+            Ok(v) => self.cached_footprints = v,
+            Err(e) => {
+                tracing::warn!(
+                    target: "signex::library",
+                    library = %self.display_name,
+                    error = %e,
+                    "list_footprints failed; cache left empty"
+                );
+                self.cached_footprints = Vec::new();
+            }
+        }
+        match adapter.list_sims() {
+            Ok(v) => self.cached_sims = v,
+            Err(e) => {
+                tracing::warn!(
+                    target: "signex::library",
+                    library = %self.display_name,
+                    error = %e,
+                    "list_sims failed; cache left empty"
+                );
+                self.cached_sims = Vec::new();
+            }
+        }
     }
 
     /// Total number of rows across every cached table.
@@ -609,7 +696,6 @@ impl Default for NewComponentState {
 
 /// "Close Library — Unsaved Drafts" confirmation modal state.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct CloseLibraryConfirmState {
     pub library_path: PathBuf,
     pub library_name: String,
@@ -865,6 +951,9 @@ mod tests {
             library_id: Uuid::nil(),
             tables: HashMap::new(),
             cached_components: Vec::new(),
+            cached_symbols: Vec::new(),
+            cached_footprints: Vec::new(),
+            cached_sims: Vec::new(),
         };
         assert_eq!(lib.total_rows(), 0);
         lib.tables.insert("resistors".into(), Vec::new());

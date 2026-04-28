@@ -14,6 +14,7 @@
 //! below).
 
 use std::sync::OnceLock;
+use std::time::Duration;
 
 use serde::{Serialize, de::DeserializeOwned};
 use uuid::Uuid;
@@ -23,6 +24,16 @@ use crate::component::ComponentRow;
 use crate::identity::{InternalPn, RowId};
 use crate::manifest::{LibraryMode, Manifest};
 use crate::primitive::{Footprint, SimModel, Symbol};
+
+/// Connect-timeout for the HTTP client. A hung TLS handshake should
+/// not freeze the iced runtime — fail fast and let the dispatcher
+/// surface the error.
+const HTTP_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+/// Total request timeout (header + body). Protects against the
+/// server accepting the connection then never replying. 30s is
+/// generous enough for a large `read_table` over slow links but
+/// short enough to bound the worst-case freeze.
+const HTTP_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct DatabaseAdapter {
     manifest: Manifest,
@@ -52,6 +63,8 @@ impl DatabaseAdapter {
             }
         };
         let client = reqwest::blocking::Client::builder()
+            .connect_timeout(HTTP_CONNECT_TIMEOUT)
+            .timeout(HTTP_REQUEST_TIMEOUT)
             .build()
             .map_err(|e| LibraryError::Backend(format!("reqwest client: {e}")))?;
         let token = if auth.is_empty() {
@@ -79,6 +92,8 @@ impl DatabaseAdapter {
         let token = if token.is_empty() { None } else { Some(token) };
         let holder = holder.into();
         let client = reqwest::blocking::Client::builder()
+            .connect_timeout(HTTP_CONNECT_TIMEOUT)
+            .timeout(HTTP_REQUEST_TIMEOUT)
             .build()
             .map_err(|e| LibraryError::Backend(format!("reqwest client: {e}")))?;
         // We don't have a real Manifest here — fabricate the minimal one
@@ -121,6 +136,24 @@ impl DatabaseAdapter {
         format!("{}{}", self.base_url, path)
     }
 
+    /// Percent-encode a single path segment per RFC 3986.
+    /// Used for every user-controlled string that flows into the URL
+    /// path (table names, primitive collection names) so a value like
+    /// `"Discrete Passives"` or `"resistors?evil"` can't reshape the
+    /// request URL.
+    fn encode_segment(s: &str) -> String {
+        let mut out = String::with_capacity(s.len());
+        for b in s.bytes() {
+            match b {
+                b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                    out.push(b as char)
+                }
+                _ => out.push_str(&format!("%{b:02X}")),
+            }
+        }
+        out
+    }
+
     /// Apply the `Authorization: Bearer <token>` header when configured.
     fn auth(&self, req: reqwest::blocking::RequestBuilder) -> reqwest::blocking::RequestBuilder {
         if let Some(token) = &self.token {
@@ -131,14 +164,17 @@ impl DatabaseAdapter {
     }
 
     /// Generic GET → JSON for a primitive at `/{collection}/{uuid}`.
+    /// `collection` is percent-encoded; `uuid` is hex (Display) so it
+    /// is already URL-safe.
     fn get_primitive_json<T: DeserializeOwned>(
         &self,
         collection: &str,
         uuid: Uuid,
         kind_label: &str,
     ) -> Result<T, LibraryError> {
+        let coll = Self::encode_segment(collection);
         let resp = self
-            .auth(self.client.get(self.url(&format!("/{collection}/{uuid}"))))
+            .auth(self.client.get(self.url(&format!("/{coll}/{uuid}"))))
             .send()
             .map_err(|e| LibraryError::Backend(e.to_string()))?;
         match resp.status() {
@@ -160,10 +196,11 @@ impl DatabaseAdapter {
         body: &T,
         message: &str,
     ) -> Result<(), LibraryError> {
+        let coll = Self::encode_segment(collection);
         let resp = self
             .auth(
                 self.client
-                    .post(self.url(&format!("/{collection}")))
+                    .post(self.url(&format!("/{coll}")))
                     .header("x-signex-message", message)
                     .json(body),
             )
@@ -183,8 +220,9 @@ impl DatabaseAdapter {
         &self,
         collection: &str,
     ) -> Result<Vec<PrimitiveSummary>, LibraryError> {
+        let coll = Self::encode_segment(collection);
         let resp = self
-            .auth(self.client.get(self.url(&format!("/{collection}"))))
+            .auth(self.client.get(self.url(&format!("/{coll}"))))
             .send()
             .map_err(|e| LibraryError::Backend(e.to_string()))?;
         if !resp.status().is_success() {
@@ -242,7 +280,8 @@ impl LibraryAdapter for DatabaseAdapter {
     }
 
     fn read_table(&self, name: &str) -> Result<Vec<ComponentRow>, LibraryError> {
-        let url = self.url(&format!("/tables/{name}?{}", self.library_id_query()));
+        let n = Self::encode_segment(name);
+        let url = self.url(&format!("/tables/{n}?{}", self.library_id_query()));
         let resp = self
             .auth(self.client.get(url))
             .send()
@@ -272,8 +311,9 @@ impl LibraryAdapter for DatabaseAdapter {
     }
 
     fn read_row(&self, table: &str, row_id: RowId) -> Result<ComponentRow, LibraryError> {
+        let t = Self::encode_segment(table);
         let url = self.url(&format!(
-            "/tables/{table}/rows/{row_id}?{}",
+            "/tables/{t}/rows/{row_id}?{}",
             self.library_id_query()
         ));
         let resp = self
@@ -317,7 +357,8 @@ impl LibraryAdapter for DatabaseAdapter {
             message = msg,
             "insert_row",
         );
-        let url = self.url(&format!("/tables/{table}/rows?{}", self.library_id_query()));
+        let t = Self::encode_segment(table);
+        let url = self.url(&format!("/tables/{t}/rows?{}", self.library_id_query()));
         let resp = self
             .auth(
                 self.client
@@ -347,8 +388,9 @@ impl LibraryAdapter for DatabaseAdapter {
             "update_row",
         );
         let row_id = row.row_id;
+        let t = Self::encode_segment(table);
         let url = self.url(&format!(
-            "/tables/{table}/rows/{row_id}?{}",
+            "/tables/{t}/rows/{row_id}?{}",
             self.library_id_query()
         ));
         let resp = self
@@ -380,8 +422,9 @@ impl LibraryAdapter for DatabaseAdapter {
             message = msg,
             "delete_row",
         );
+        let t = Self::encode_segment(table);
         let url = self.url(&format!(
-            "/tables/{table}/rows/{row_id}?{}",
+            "/tables/{t}/rows/{row_id}?{}",
             self.library_id_query()
         ));
         let resp = self
@@ -454,5 +497,34 @@ mod tests {
         .unwrap();
         assert_eq!(adapter.base_url(), "https://example.com/api");
         assert_eq!(adapter.holder(), "alice@example");
+    }
+
+    #[test]
+    fn encode_segment_passes_through_unreserved() {
+        assert_eq!(
+            DatabaseAdapter::encode_segment("Discrete-Passives_v2.0~final"),
+            "Discrete-Passives_v2.0~final"
+        );
+    }
+
+    #[test]
+    fn encode_segment_escapes_path_breakers() {
+        // Spaces, slashes, query separators, anchors — every byte that
+        // could reshape the URL has to come back percent-encoded.
+        assert_eq!(
+            DatabaseAdapter::encode_segment("Discrete Passives"),
+            "Discrete%20Passives"
+        );
+        assert_eq!(
+            DatabaseAdapter::encode_segment("resistors?evil"),
+            "resistors%3Fevil"
+        );
+        assert_eq!(DatabaseAdapter::encode_segment("a/b#c"), "a%2Fb%23c");
+    }
+
+    #[test]
+    fn encode_segment_handles_utf8() {
+        // Multi-byte UTF-8 must escape every byte.
+        assert_eq!(DatabaseAdapter::encode_segment("π"), "%CF%80");
     }
 }
