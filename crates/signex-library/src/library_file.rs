@@ -84,10 +84,133 @@ pub struct LibrarySection {
 /// across round-trip so column reordering is a deliberate user action).
 /// Each [`LibraryRow`] stores its values keyed by column name; the
 /// shared [`LibraryTable::columns`] is the schema.
+///
+/// `column_types` is the optional typed-sidecar map: per-column type
+/// declarations that drive UI sort behaviour (numeric sort vs lexical),
+/// validation on edit, and rendering hints (checkboxes for bool, drop-
+/// downs for enum). Columns without an entry default to
+/// [`ColumnType::String`] so untyped tables keep working unchanged.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct LibraryTable {
     pub columns: Vec<String>,
     pub rows: Vec<LibraryRow>,
+    pub column_types: BTreeMap<String, ColumnType>,
+}
+
+/// Per-column type declared in `[tables.<name>.column_types]`.
+///
+/// Drives:
+///  * Numeric sort when a column is `Number` / `Int` (so `10k`-style
+///    cells still sort as numbers when the column is typed numeric;
+///    raw lexical sort gives `1, 10, 100, 2, 200, 25` which is the
+///    Altium pain point we explicitly want to avoid).
+///  * Validation in the Edit modal — `Bool` accepts only `true`/`false`,
+///    `Enum` accepts only the declared values, etc.
+///  * Render hints in the Library Browser — right-align numbers,
+///    render `Bool` as checkboxes, render `Url` as clickable links,
+///    render `Enum` as inline dropdowns.
+///
+/// Encoded in TOML as a string token (`"string"`, `"number"`, `"int"`,
+/// `"bool"`, `"uuid"`, `"date"`, `"datetime"`, `"url"`, `"version"`,
+/// `"tags"`, or `"enum:val1,val2,..."`). Keeping the wire format as
+/// plain strings avoids inline-table noise in the `.snxlib`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ColumnType {
+    /// Free-form text. Default for columns without an entry.
+    String,
+    /// IEEE 754 double — covers float and integer numeric data.
+    Number,
+    /// Signed 64-bit integer — for counts and bare integer parameters.
+    Int,
+    /// `true` / `false`.
+    Bool,
+    /// UUID v4 / v7 string.
+    Uuid,
+    /// ISO 8601 date (`YYYY-MM-DD`).
+    Date,
+    /// ISO 8601 date-time with timezone.
+    DateTime,
+    /// HTTPS URL string.
+    Url,
+    /// Semver-style version (`X.Y.Z`).
+    Version,
+    /// Comma-separated tag tokens.
+    Tags,
+    /// One of the declared values (rendered as a dropdown).
+    Enum(Vec<String>),
+}
+
+impl ColumnType {
+    /// Encode the type as the string token written in TOML. Unit
+    /// variants emit the bare type name; [`ColumnType::Enum`] emits
+    /// `"enum:value1,value2,..."` so the wire format is one cell per
+    /// row and human-readable in `git diff`.
+    pub fn to_token(&self) -> String {
+        match self {
+            ColumnType::String => "string".into(),
+            ColumnType::Number => "number".into(),
+            ColumnType::Int => "int".into(),
+            ColumnType::Bool => "bool".into(),
+            ColumnType::Uuid => "uuid".into(),
+            ColumnType::Date => "date".into(),
+            ColumnType::DateTime => "datetime".into(),
+            ColumnType::Url => "url".into(),
+            ColumnType::Version => "version".into(),
+            ColumnType::Tags => "tags".into(),
+            ColumnType::Enum(values) => format!("enum:{}", values.join(",")),
+        }
+    }
+
+    /// Parse a TOML wire token back to the typed enum. Errors on
+    /// unknown type names or malformed `enum:` payloads.
+    pub fn parse_token(s: &str) -> Result<Self, ColumnTypeParseError> {
+        if let Some(rest) = s.strip_prefix("enum:") {
+            let values: Vec<String> = rest
+                .split(',')
+                .map(str::trim)
+                .map(str::to_string)
+                .collect();
+            if values.is_empty() || values.iter().any(String::is_empty) {
+                return Err(ColumnTypeParseError::EmptyEnum);
+            }
+            return Ok(ColumnType::Enum(values));
+        }
+        Ok(match s {
+            "string" => ColumnType::String,
+            "number" => ColumnType::Number,
+            "int" => ColumnType::Int,
+            "bool" => ColumnType::Bool,
+            "uuid" => ColumnType::Uuid,
+            "date" => ColumnType::Date,
+            "datetime" => ColumnType::DateTime,
+            "url" => ColumnType::Url,
+            "version" => ColumnType::Version,
+            "tags" => ColumnType::Tags,
+            other => return Err(ColumnTypeParseError::UnknownToken(other.to_string())),
+        })
+    }
+}
+
+/// Errors from [`ColumnType::parse_token`].
+#[derive(Debug, thiserror::Error)]
+pub enum ColumnTypeParseError {
+    #[error("unknown column type token {0:?}")]
+    UnknownToken(String),
+    #[error("enum column type must list at least one non-empty value")]
+    EmptyEnum,
+}
+
+impl Serialize for ColumnType {
+    fn serialize<S: serde::Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {
+        ser.serialize_str(&self.to_token())
+    }
+}
+
+impl<'de> Deserialize<'de> for ColumnType {
+    fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(de)?;
+        ColumnType::parse_token(&s).map_err(serde::de::Error::custom)
+    }
 }
 
 /// One row inside a [`LibraryTable`]. Cell lookup is by column name —
@@ -152,6 +275,11 @@ pub enum LibraryFileError {
          (\"'''\") which would terminate the embedded TOML literal multi-line string"
     )]
     DisallowedTripleQuoteInCell { table: String, column: String },
+    #[error(
+        "table {table:?}: column_types declares {column:?} but the TSV header \
+         does not include that column"
+    )]
+    ColumnTypeForUnknownColumn { table: String, column: String },
 }
 
 impl From<LibraryFileError> for LibraryError {
@@ -167,10 +295,11 @@ impl LibraryFile {
     /// Parse a `.snxlib` TOML document. Validates the format token, then
     /// parses each `[tables.<name>]` block's embedded TSV into rows.
     pub fn parse(text: &str) -> Result<Self, LibraryFileError> {
-        // Intermediate shape — captures both the manifest header fields and
-        // the raw TSV strings in one TOML deserialization pass. The split
-        // back into [`SnxlibManifest`] + parsed `tables` happens after we
-        // hand the TSV strings to [`parse_tsv`].
+        // Intermediate shape — captures the manifest header fields, the
+        // raw TSV strings, and any `[tables.<name>.column_types]` sidecar
+        // map in one TOML deserialization pass. The split back into
+        // [`SnxlibManifest`] + parsed `tables` happens after we hand the
+        // TSV strings to [`parse_tsv`] and merge the type sidecar.
         #[derive(Deserialize)]
         struct Raw {
             format: String,
@@ -188,6 +317,8 @@ impl LibraryFile {
         #[derive(Deserialize)]
         struct RawTable {
             tsv: String,
+            #[serde(default)]
+            column_types: BTreeMap<String, ColumnType>,
         }
 
         let raw: Raw = toml::from_str(text)?;
@@ -197,7 +328,19 @@ impl LibraryFile {
 
         let mut tables = BTreeMap::new();
         for (name, body) in raw.tables {
-            let table = parse_tsv(&name, &body.tsv)?;
+            // Reject column_types entries naming columns the TSV header
+            // doesn't declare — drift between sidecar and schema is a
+            // foot-gun (the UI would render dropdowns for ghost columns).
+            let mut table = parse_tsv(&name, &body.tsv)?;
+            for ctype_col in body.column_types.keys() {
+                if !table.columns.iter().any(|c| c == ctype_col) {
+                    return Err(LibraryFileError::ColumnTypeForUnknownColumn {
+                        table: name.clone(),
+                        column: ctype_col.clone(),
+                    });
+                }
+            }
+            table.column_types = body.column_types;
             tables.insert(name, table);
         }
 
@@ -272,6 +415,22 @@ impl LibraryFile {
             out.push_str("tsv = '''\n");
             out.push_str(&serialize_tsv(table));
             out.push_str("'''\n");
+
+            // Optional `[tables.<name>.column_types]` sub-table — only
+            // emitted when at least one column declares a non-default
+            // type. Untyped tables stay clean.
+            if !table.column_types.is_empty() {
+                out.push('\n');
+                out.push_str("[tables.");
+                out.push_str(name);
+                out.push_str(".column_types]\n");
+                for (col, ty) in &table.column_types {
+                    out.push_str(col);
+                    out.push_str(" = \"");
+                    out.push_str(&ty.to_token());
+                    out.push_str("\"\n");
+                }
+            }
         }
 
         Ok(out)
@@ -334,15 +493,51 @@ fn parse_tsv(table_name: &str, tsv: &str) -> Result<LibraryTable, LibraryFileErr
         rows.push(row);
     }
 
-    Ok(LibraryTable { columns, rows })
+    Ok(LibraryTable {
+        columns,
+        rows,
+        column_types: BTreeMap::new(),
+    })
 }
 
 /// Serialize a [`LibraryTable`] back to TSV text. Always ends with `\n`.
+///
+/// **Canonical row order.** When the table declares a `row_id` column,
+/// rows are emitted sorted by `row_id` ascending — regardless of the
+/// in-memory `rows` Vec order. This keeps the on-disk file layout
+/// stable across UI sort changes, insertion order, and bulk-import
+/// order, so `git blame` on a row line points at the engineer who last
+/// edited *that row's data* rather than whoever last reordered the
+/// catalog.
+///
+/// Tables without a `row_id` column (rare; legitimate for user-defined
+/// lookup-only tables) preserve insertion order — there's no canonical
+/// key to sort by.
 fn serialize_tsv(table: &LibraryTable) -> String {
     let mut out = String::new();
     out.push_str(&table.columns.join("\t"));
     out.push('\n');
-    for row in &table.rows {
+
+    let has_row_id = table.columns.iter().any(|c| c == "row_id");
+    let mut order: Vec<usize> = (0..table.rows.len()).collect();
+    if has_row_id {
+        order.sort_by(|&a, &b| {
+            let ra = table.rows[a]
+                .cells
+                .get("row_id")
+                .map(String::as_str)
+                .unwrap_or("");
+            let rb = table.rows[b]
+                .cells
+                .get("row_id")
+                .map(String::as_str)
+                .unwrap_or("");
+            ra.cmp(rb)
+        });
+    }
+
+    for &i in &order {
+        let row = &table.rows[i];
         let cells: Vec<String> = table
             .columns
             .iter()
@@ -400,7 +595,11 @@ mod tests {
                 &["r2uuid", "R-002", "RC0603FR-074K7L", "Yageo", "4k7", "0603"],
             ),
         ];
-        LibraryTable { columns, rows }
+        LibraryTable {
+            columns,
+            rows,
+            column_types: BTreeMap::new(),
+        }
     }
 
     /// The foundational round-trip — a library with no tables still
@@ -455,6 +654,7 @@ mod tests {
             LibraryTable {
                 columns: regulator_columns,
                 rows,
+                column_types: BTreeMap::new(),
             },
         );
 
@@ -580,6 +780,7 @@ tsv = '''
             LibraryTable {
                 columns: vec!["a".into()],
                 rows: vec![make_row(&["a"], &["has\ttab"])],
+                column_types: BTreeMap::new(),
             },
         );
         let lib = LibraryFile {
@@ -598,6 +799,7 @@ tsv = '''
             LibraryTable {
                 columns: vec!["a".into()],
                 rows: vec![make_row(&["a"], &["has\nnewline"])],
+                column_types: BTreeMap::new(),
             },
         );
         let lib = LibraryFile {
@@ -616,6 +818,7 @@ tsv = '''
             LibraryTable {
                 columns: vec!["a".into()],
                 rows: vec![make_row(&["a"], &["trip''' quoted"])],
+                column_types: BTreeMap::new(),
             },
         );
         let lib = LibraryFile {
@@ -637,6 +840,7 @@ tsv = '''
             LibraryTable {
                 columns: vec!["bad\tcol".into()],
                 rows: vec![],
+                column_types: BTreeMap::new(),
             },
         );
         let lib = LibraryFile {
@@ -703,6 +907,7 @@ tsv = '''
         let table = LibraryTable {
             columns: vec!["a".into()],
             rows: vec![],
+            column_types: BTreeMap::new(),
         };
         let mut row = LibraryRow::default();
         row.cells.insert("a".into(), "alpha".into());
@@ -721,7 +926,11 @@ tsv = '''
             make_row(&["mpn", "tags"], &["", "automotive"]),
         ];
         let mut tables = BTreeMap::new();
-        tables.insert("misc".to_string(), LibraryTable { columns, rows });
+        tables.insert("misc".to_string(), LibraryTable {
+            columns,
+            rows,
+            column_types: BTreeMap::new(),
+        });
         let lib = LibraryFile {
             manifest: fixture_manifest(),
             tables,
@@ -729,6 +938,239 @@ tsv = '''
         let s = lib.write().unwrap();
         let back = LibraryFile::parse(&s).unwrap();
         assert_eq!(lib, back);
+    }
+
+    /// Canonical row order on write — rows must emit sorted by `row_id`
+    /// regardless of in-memory `rows` Vec order, so on-disk file layout
+    /// is stable across UI sort changes / bulk insertion order. This is
+    /// the load-bearing fix for the "git blame breaks when rows are
+    /// reordered" failure mode the architecture critique called out.
+    #[test]
+    fn write_emits_canonical_row_order_by_row_id() {
+        let columns = vec!["row_id".to_string(), "mpn".to_string()];
+        // Insert rows in REVERSE row_id order — write should still emit
+        // them sorted ascending.
+        let rows = vec![
+            make_row(&["row_id", "mpn"], &["zzzz", "Late"]),
+            make_row(&["row_id", "mpn"], &["mmmm", "Mid"]),
+            make_row(&["row_id", "mpn"], &["aaaa", "Early"]),
+        ];
+        let mut tables = BTreeMap::new();
+        tables.insert(
+            "items".to_string(),
+            LibraryTable {
+                columns,
+                rows,
+                column_types: BTreeMap::new(),
+            },
+        );
+        let lib = LibraryFile {
+            manifest: fixture_manifest(),
+            tables,
+        };
+        let s = lib.write().unwrap();
+
+        // The TSV body should list rows alphabetically by row_id.
+        let expected_order = ["aaaa\tEarly", "mmmm\tMid", "zzzz\tLate"];
+        let aaaa_pos = s.find("aaaa\tEarly").expect("aaaa row");
+        let mmmm_pos = s.find("mmmm\tMid").expect("mmmm row");
+        let zzzz_pos = s.find("zzzz\tLate").expect("zzzz row");
+        assert!(
+            aaaa_pos < mmmm_pos && mmmm_pos < zzzz_pos,
+            "expected canonical order {:?} but got: {s}",
+            expected_order
+        );
+
+        // And the round-trip's rows are in canonical order too.
+        let back = LibraryFile::parse(&s).unwrap();
+        let row_ids: Vec<&str> = back.tables["items"]
+            .rows
+            .iter()
+            .map(|r| r.cells["row_id"].as_str())
+            .collect();
+        assert_eq!(row_ids, vec!["aaaa", "mmmm", "zzzz"]);
+    }
+
+    /// Tables without a `row_id` column preserve insertion order — no
+    /// canonical key to sort by, so we don't reshuffle the user's
+    /// arbitrary lookup tables.
+    #[test]
+    fn write_preserves_insertion_order_when_no_row_id() {
+        let columns = vec!["key".to_string(), "value".to_string()];
+        let rows = vec![
+            make_row(&["key", "value"], &["zebra", "Z"]),
+            make_row(&["key", "value"], &["apple", "A"]),
+        ];
+        let mut tables = BTreeMap::new();
+        tables.insert(
+            "lookups".to_string(),
+            LibraryTable {
+                columns,
+                rows,
+                column_types: BTreeMap::new(),
+            },
+        );
+        let lib = LibraryFile {
+            manifest: fixture_manifest(),
+            tables,
+        };
+        let s = lib.write().unwrap();
+        let zebra_pos = s.find("zebra\tZ").unwrap();
+        let apple_pos = s.find("apple\tA").unwrap();
+        assert!(zebra_pos < apple_pos, "expected insertion order kept");
+    }
+
+    /// `column_types` map round-trips through the
+    /// `[tables.<name>.column_types]` sidecar — the type tokens
+    /// (`number`, `bool`, `enum:active,preferred,...`) survive parse +
+    /// write unchanged.
+    #[test]
+    fn column_types_round_trip() {
+        let columns = vec![
+            "row_id".to_string(),
+            "mpn".to_string(),
+            "rated_power_mw".to_string(),
+            "released".to_string(),
+            "lifecycle".to_string(),
+        ];
+        let rows = vec![make_row(
+            &["row_id", "mpn", "rated_power_mw", "released", "lifecycle"],
+            &["abc-123", "RC0603", "100", "true", "preferred"],
+        )];
+        let mut column_types = BTreeMap::new();
+        column_types.insert("row_id".into(), ColumnType::Uuid);
+        column_types.insert("rated_power_mw".into(), ColumnType::Number);
+        column_types.insert("released".into(), ColumnType::Bool);
+        column_types.insert(
+            "lifecycle".into(),
+            ColumnType::Enum(vec![
+                "active".into(),
+                "preferred".into(),
+                "deprecated".into(),
+                "obsolete".into(),
+            ]),
+        );
+
+        let mut tables = BTreeMap::new();
+        tables.insert(
+            "resistors".into(),
+            LibraryTable {
+                columns,
+                rows,
+                column_types,
+            },
+        );
+        let lib = LibraryFile {
+            manifest: fixture_manifest(),
+            tables,
+        };
+        let s = lib.write().unwrap();
+        let back = LibraryFile::parse(&s).unwrap();
+        assert_eq!(lib, back);
+    }
+
+    /// Untyped tables round-trip without emitting an empty
+    /// `[tables.<name>.column_types]` block — keeps the `.snxlib`
+    /// clean for the common "user just made a quick lookup table" case.
+    #[test]
+    fn untyped_tables_skip_column_types_block() {
+        let mut tables = BTreeMap::new();
+        tables.insert("resistors".to_string(), fixture_table_resistors());
+        let lib = LibraryFile {
+            manifest: fixture_manifest(),
+            tables,
+        };
+        let s = lib.write().unwrap();
+        assert!(
+            !s.contains("column_types"),
+            "untyped tables must not emit a column_types block; got:\n{s}"
+        );
+        let back = LibraryFile::parse(&s).unwrap();
+        assert_eq!(lib, back);
+    }
+
+    /// `column_types` with a key that doesn't exist in the TSV header
+    /// is loud — silently rendering dropdowns for ghost columns would
+    /// be confusing.
+    #[test]
+    fn parse_rejects_column_type_for_unknown_column() {
+        let s = "format = \"snxlib/1\"\n\
+                 library_id = \"0192a8c0-0000-7000-8000-000000000000\"\n\
+                 \n\
+                 [library]\n\
+                 name = \"X\"\n\
+                 \n\
+                 [tables.t]\n\
+                 tsv = '''\n\
+                 row_id\tmpn\n\
+                 abc\tLM317\n\
+                 '''\n\
+                 \n\
+                 [tables.t.column_types]\n\
+                 row_id = \"uuid\"\n\
+                 ghost_col = \"number\"\n";
+        let err = LibraryFile::parse(s).unwrap_err();
+        assert!(matches!(
+            err,
+            LibraryFileError::ColumnTypeForUnknownColumn { .. }
+        ));
+    }
+
+    /// Unknown type tokens fail loudly rather than silently treating
+    /// the column as `string`.
+    #[test]
+    fn parse_rejects_unknown_type_token() {
+        let s = "format = \"snxlib/1\"\n\
+                 library_id = \"0192a8c0-0000-7000-8000-000000000000\"\n\
+                 \n\
+                 [library]\n\
+                 name = \"X\"\n\
+                 \n\
+                 [tables.t]\n\
+                 tsv = '''\n\
+                 row_id\tmpn\n\
+                 abc\tLM317\n\
+                 '''\n\
+                 \n\
+                 [tables.t.column_types]\n\
+                 row_id = \"banana\"\n";
+        let err = LibraryFile::parse(s).unwrap_err();
+        // Wrapped through serde, so the inner error is TomlDe.
+        assert!(matches!(err, LibraryFileError::TomlDe(_)));
+    }
+
+    /// `ColumnType::Enum` requires at least one non-empty value —
+    /// `enum:` (empty) or `enum:,` (only blanks) are rejected.
+    #[test]
+    fn column_type_parse_rejects_empty_enum() {
+        let err = ColumnType::parse_token("enum:").unwrap_err();
+        assert!(matches!(err, ColumnTypeParseError::EmptyEnum));
+        let err = ColumnType::parse_token("enum:,,").unwrap_err();
+        assert!(matches!(err, ColumnTypeParseError::EmptyEnum));
+    }
+
+    /// Token-level round-trip for every variant — paranoia test that
+    /// every enum variant survives `to_token` → `parse_token`.
+    #[test]
+    fn column_type_token_round_trip_all_variants() {
+        let cases = [
+            ColumnType::String,
+            ColumnType::Number,
+            ColumnType::Int,
+            ColumnType::Bool,
+            ColumnType::Uuid,
+            ColumnType::Date,
+            ColumnType::DateTime,
+            ColumnType::Url,
+            ColumnType::Version,
+            ColumnType::Tags,
+            ColumnType::Enum(vec!["a".into(), "b".into(), "c".into()]),
+        ];
+        for t in cases {
+            let token = t.to_token();
+            let back = ColumnType::parse_token(&token).unwrap();
+            assert_eq!(t, back, "round-trip failed for {:?}", t);
+        }
     }
 
     /// Column order from the header is preserved through round-trip.
@@ -746,6 +1188,7 @@ tsv = '''
             LibraryTable {
                 columns: columns.clone(),
                 rows,
+                column_types: BTreeMap::new(),
             },
         );
         let lib = LibraryFile {

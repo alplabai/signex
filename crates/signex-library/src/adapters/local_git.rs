@@ -703,6 +703,7 @@ impl LibraryAdapter for LocalGitAdapter {
                     .or_insert_with(|| LibraryTable {
                         columns: legacy_columns(),
                         rows: Vec::new(),
+                        column_types: std::collections::BTreeMap::new(),
                     });
                 validate_legacy_header(&table_owned, &entry.columns)?;
                 entry.rows.push(lib_row);
