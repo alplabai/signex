@@ -1688,23 +1688,39 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
             .collect()
     };
 
-    let mut settings = TreeNode::branch("Settings".to_string(), TreeIcon::File, vec![]);
-    settings.expanded = false;
+    // Settings holds nothing today — gated until a project actually
+    // carries per-project preferences. Showing an empty branch reads
+    // as "this project has settings hidden behind a toggle"; the
+    // honest UI is to omit the heading.
+    let settings_children: Vec<TreeNode> = Vec::new();
 
-    TreeNode::branch(
-        project.name.clone(),
-        TreeIcon::Folder,
-        vec![
-            TreeNode::branch(
-                "Source Documents".to_string(),
-                TreeIcon::Folder,
-                source_docs,
-            ),
-            TreeNode::branch("Libraries".to_string(), TreeIcon::Library, lib_children),
-            settings,
-        ],
-    )
-    .with_accent(project.is_active)
+    // Build the project's child list, skipping any heading whose
+    // children list is empty so the tree never renders a bare
+    // "(empty)" placeholder under Libraries / Settings.
+    let mut children: Vec<TreeNode> = Vec::new();
+    if !source_docs.is_empty() {
+        children.push(TreeNode::branch(
+            "Source Documents".to_string(),
+            TreeIcon::Folder,
+            source_docs,
+        ));
+    }
+    if !lib_children.is_empty() {
+        children.push(TreeNode::branch(
+            "Libraries".to_string(),
+            TreeIcon::Library,
+            lib_children,
+        ));
+    }
+    if !settings_children.is_empty() {
+        let mut settings =
+            TreeNode::branch("Settings".to_string(), TreeIcon::File, settings_children);
+        settings.expanded = false;
+        children.push(settings);
+    }
+
+    TreeNode::branch(project.name.clone(), TreeIcon::Folder, children)
+        .with_accent(project.is_active)
 }
 
 fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
