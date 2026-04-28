@@ -3733,8 +3733,11 @@ impl Signex {
                     .containing_library(path)
                     .map(|lib| lib.display)
                     .unwrap_or_default();
-                return crate::library::editor::standalone::view_symbol(editor, panel_ctx, display)
-                    .map(Message::Library);
+                let theme_id = self.ui_state.theme_id;
+                return crate::library::editor::standalone::view_symbol(
+                    editor, panel_ctx, display, theme_id,
+                )
+                .map(Message::Library);
             }
             if let Some(path) = active_tab.kind.as_footprint_editor()
                 && let Some(editor) = self.document_state.footprint_editors.get(path)

@@ -145,8 +145,69 @@ impl Signex {
                 });
                 true
             }
+            crate::panels::PanelMsg::SymEditorSetDisplaySheetColor(color) => {
+                let color = *color;
+                self.sym_editor_mutate_display(|d| d.sheet_color = color);
+                true
+            }
+            crate::panels::PanelMsg::SymEditorToggleDisplayGrid => {
+                self.sym_editor_mutate_display(|d| d.grid_visible = !d.grid_visible);
+                true
+            }
+            crate::panels::PanelMsg::SymEditorCycleDisplayGridSize => {
+                self.sym_editor_mutate_display(|d| {
+                    let sizes = crate::canvas::grid::GRID_SIZES_MM;
+                    let i = sizes
+                        .iter()
+                        .position(|s| (s - d.grid_size_mm).abs() < f32::EPSILON)
+                        .unwrap_or(2);
+                    d.grid_size_mm = sizes[(i + 1) % sizes.len()];
+                });
+                true
+            }
+            crate::panels::PanelMsg::SymEditorCycleDisplayUnit => {
+                self.sym_editor_mutate_display(|d| {
+                    use signex_types::coord::Unit;
+                    d.unit = match d.unit {
+                        Unit::Mm => Unit::Mil,
+                        Unit::Mil => Unit::Inch,
+                        Unit::Inch => Unit::Micrometer,
+                        Unit::Micrometer => Unit::Mm,
+                    };
+                });
+                true
+            }
             _ => false,
         }
+    }
+
+    /// Resolve the active `.snxsym` tab → its containing `.snxlib`,
+    /// run `mutator` on the library's display settings, then clear
+    /// the active editor's canvas cache so the change paints
+    /// immediately. Silently no-ops on lone-file edits or when
+    /// no Symbol editor is active.
+    fn sym_editor_mutate_display<F>(&mut self, mutator: F)
+    where
+        F: FnOnce(&mut crate::library::state::LibraryDisplaySettings),
+    {
+        let Some(path) = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .and_then(|t| match &t.kind {
+                crate::app::TabKind::SymbolEditor(p) => Some(p.clone()),
+                _ => None,
+            })
+        else {
+            return;
+        };
+        if let Some(lib) = self.library.containing_library_mut(&path) {
+            mutator(&mut lib.display);
+        }
+        if let Some(editor) = self.document_state.symbol_editors.get_mut(&path) {
+            editor.canvas_cache.clear();
+        }
+        self.refresh_panel_ctx();
     }
 
     /// Helper — apply a closure to the pin at `pin_idx` on the active

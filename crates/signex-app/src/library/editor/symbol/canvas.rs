@@ -61,6 +61,17 @@ pub enum CanvasAction {
         x: f64,
         y: f64,
     },
+    /// Stamp a default 2 mm-radius arc centred on `(x, y)` sweeping
+    /// 0°→90° (quadrant arc).
+    AddArc {
+        x: f64,
+        y: f64,
+    },
+    /// Stamp a default text label "Text" anchored at `(x, y)`.
+    AddText {
+        x: f64,
+        y: f64,
+    },
     Select(SymbolSelection),
     Deselect,
     Move {
@@ -101,6 +112,10 @@ pub enum CanvasAction {
 }
 
 /// Canvas tools — Altium-style `Tool` enum scoped to this surface.
+/// Mirrors the SchLib Place menu: Pin / Line / Rectangle / Ellipse
+/// (Circle) / Arc / Text are the working tools; `Polygon` /
+/// `RoundRectangle` / `Bezier` / `Image` etc. live on the Active
+/// Bar as stubs and are deferred to v0.9.x.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SymbolTool {
     Select,
@@ -108,6 +123,8 @@ pub enum SymbolTool {
     PlaceRectangle,
     PlaceLine,
     PlaceCircle,
+    PlaceArc,
+    PlaceText,
 }
 
 impl SymbolTool {
@@ -118,7 +135,9 @@ impl SymbolTool {
             SymbolTool::AddPin => "Add Pin",
             SymbolTool::PlaceRectangle => "Rectangle",
             SymbolTool::PlaceLine => "Line",
-            SymbolTool::PlaceCircle => "Circle",
+            SymbolTool::PlaceCircle => "Ellipse",
+            SymbolTool::PlaceArc => "Arc",
+            SymbolTool::PlaceText => "Text",
         }
     }
 }
@@ -356,6 +375,14 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                     ),
                     SymbolTool::PlaceCircle => Some(
                         canvas::Action::publish(CanvasAction::AddCircle { x: wx, y: wy })
+                            .and_capture(),
+                    ),
+                    SymbolTool::PlaceArc => Some(
+                        canvas::Action::publish(CanvasAction::AddArc { x: wx, y: wy })
+                            .and_capture(),
+                    ),
+                    SymbolTool::PlaceText => Some(
+                        canvas::Action::publish(CanvasAction::AddText { x: wx, y: wy })
                             .and_capture(),
                     ),
                 }
@@ -703,7 +730,9 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
             SymbolTool::AddPin => "Tool: Add Pin  (click to place)",
             SymbolTool::PlaceRectangle => "Tool: Place Rectangle  (click)",
             SymbolTool::PlaceLine => "Tool: Place Line  (click)",
-            SymbolTool::PlaceCircle => "Tool: Place Circle  (click)",
+            SymbolTool::PlaceCircle => "Tool: Place Ellipse  (click)",
+            SymbolTool::PlaceArc => "Tool: Place Arc  (click)",
+            SymbolTool::PlaceText => "Tool: Place Text  (click)",
         };
         frame.fill_text(canvas::Text {
             content: tool_label.to_string(),

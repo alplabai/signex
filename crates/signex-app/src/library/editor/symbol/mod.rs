@@ -4,6 +4,7 @@
 //! editor in [`crate::library::editor::standalone`], which re-uses
 //! [`canvas`] / [`state`] verbatim.
 
+pub mod active_bar;
 pub mod ai_stub;
 pub mod canvas;
 pub mod state;
