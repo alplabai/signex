@@ -173,15 +173,23 @@ impl Signex {
             return Task::none();
         };
         let project_dir = project.path.parent().map(|p| p.to_path_buf());
-        // Collect dirty paths inside this project's directory.
-        // dirty_paths is project-scoped via on-disk parent dir;
-        // a file outside `project_dir` is somebody else's problem.
+        // Collect dirty paths inside this project's directory tree.
+        // `dirty_paths` is project-scoped by ancestor check —
+        // primitive editors live under `<project>/<lib>.snxlib/
+        // symbols|footprints/<file>` so the immediate parent dir is
+        // never the project dir itself; a strict `parent() == dir`
+        // check would miss every nested primitive draft (which is
+        // why Add New ▸ Symbol drafts weren't surfacing in the
+        // close-project prompt). Walk ancestors instead. The
+        // project's own `.snxprj` file (when added to dirty_paths
+        // by the auto-attach-library flow) sits exactly at the
+        // project root and is also picked up here.
         let dirty: Vec<std::path::PathBuf> = if let Some(dir) = project_dir.as_deref() {
             let mut v: Vec<std::path::PathBuf> = self
                 .document_state
                 .dirty_paths
                 .iter()
-                .filter(|p| p.parent() == Some(dir))
+                .filter(|p| p.starts_with(dir))
                 .cloned()
                 .collect();
             v.sort();
