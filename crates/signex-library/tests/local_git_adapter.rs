@@ -74,21 +74,12 @@ fn init_refuses_existing_library() {
 // ── Primitive CRUD ───────────────────────────────────────────────────────
 
 fn fixture_symbol(name: &str) -> Symbol {
-    let now = chrono::Utc::now();
-    Symbol {
-        uuid: Uuid::now_v7(),
-        name: name.into(),
-        anchor: [0.0, 0.0],
-        pins: vec![{
-            let mut p = SymbolPin::new("1", "OUT");
-            p.electrical = PinElectricalType::Output;
-            p
-        }],
-        graphics: Vec::new(),
-        schematic_params: ParamMap::new(),
-        created: now,
-        updated: now,
-    }
+    let mut s = Symbol::empty(name);
+    s.pins.clear();
+    let mut p = SymbolPin::new("1", "OUT");
+    p.electrical = PinElectricalType::Output;
+    s.pins.push(p);
+    s
 }
 
 fn fixture_footprint(name: &str) -> Footprint {

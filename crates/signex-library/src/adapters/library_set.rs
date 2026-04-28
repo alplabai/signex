@@ -216,16 +216,7 @@ mod tests {
     }
 
     fn fixture_symbol(name: &str) -> Symbol {
-        Symbol {
-            uuid: Uuid::now_v7(),
-            name: name.into(),
-            anchor: [0.0, 0.0],
-            pins: vec![SymbolPin::new("1", "1")],
-            graphics: Vec::new(),
-            schematic_params: Default::default(),
-            created: chrono::Utc::now(),
-            updated: chrono::Utc::now(),
-        }
+        Symbol::empty(name)
     }
 
     #[test]

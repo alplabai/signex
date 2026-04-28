@@ -189,6 +189,10 @@ pub struct SymbolCanvas<'a> {
     pub pin_color: Color,
     pub selected_color: Color,
     pub text_color: Color,
+    /// Stroke color for the X/Y axis lines through world (0, 0) —
+    /// Altium-style "centre crosshair" so the symbol's anchor is
+    /// always visible.
+    pub axis_color: Color,
 }
 
 impl<'a> SymbolCanvas<'a> {
@@ -206,10 +210,17 @@ impl<'a> SymbolCanvas<'a> {
         grid_visible: bool,
         sheet_color: Color,
         accent_color: Color,
-        body_color: Color,
-        text_color: Color,
-        grid_color: Color,
+        _body_color_unused: Color,
+        _text_color_unused: Color,
+        _grid_color_unused: Color,
     ) -> Self {
+        // Pick canvas-content colours based on sheet luminance —
+        // Altium-style. Light sheets (Cream/White/LightGray) want
+        // dark body strokes + black text; dark sheets keep the
+        // signature yellow body + light text. Theme-text colours
+        // are ignored — they're tuned for the surrounding panel
+        // chrome and read as washed-out on a Cream sheet.
+        let palette = SymbolPalette::for_sheet(sheet_color);
         Self {
             symbol,
             selected,
@@ -219,11 +230,12 @@ impl<'a> SymbolCanvas<'a> {
             grid_size_mm,
             grid_visible,
             bg_color: sheet_color,
-            grid_color,
-            body_color,
-            pin_color: text_color,
+            grid_color: palette.grid,
+            body_color: palette.body,
+            pin_color: palette.pin,
             selected_color: accent_color,
-            text_color,
+            text_color: palette.text,
+            axis_color: palette.axis,
         }
     }
 
@@ -287,6 +299,45 @@ impl<'a> SymbolCanvas<'a> {
             }
         }
         (min_x, min_y, max_x, max_y)
+    }
+}
+
+/// Palette derived from the active sheet colour — picks a content
+/// foreground that reads correctly on the sheet bg. Two flavours:
+/// dark-on-light (Cream / White / LightGray) and light-on-dark
+/// (Black / DarkGray). Mirrors Altium's per-sheet contrast rule.
+struct SymbolPalette {
+    body: Color,
+    pin: Color,
+    text: Color,
+    grid: Color,
+    /// Slight stroke for axis lines through (0, 0).
+    axis: Color,
+}
+
+impl SymbolPalette {
+    fn for_sheet(sheet: Color) -> Self {
+        // Rec. 601 luma — perceptually-weighted brightness.
+        let luma = 0.299 * sheet.r + 0.587 * sheet.g + 0.114 * sheet.b;
+        if luma > 0.5 {
+            // Light sheet: dark text + the Altium signature blue body.
+            Self {
+                body: Color::from_rgb(0.10, 0.20, 0.55),
+                pin: Color::from_rgb(0.10, 0.10, 0.10),
+                text: Color::from_rgb(0.10, 0.10, 0.10),
+                grid: Color::from_rgba(0.00, 0.00, 0.00, 0.18),
+                axis: Color::from_rgba(0.00, 0.00, 0.00, 0.45),
+            }
+        } else {
+            // Dark sheet: keep the warm yellow body + light text.
+            Self {
+                body: Color::from_rgb(0.95, 0.78, 0.30),
+                pin: Color::from_rgb(0.85, 0.88, 0.92),
+                text: Color::from_rgb(0.85, 0.88, 0.92),
+                grid: Color::from_rgba(1.0, 1.0, 1.0, 0.12),
+                axis: Color::from_rgba(1.0, 1.0, 1.0, 0.35),
+            }
+        }
     }
 }
 
@@ -545,6 +596,36 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                     gx += g;
                 }
             }
+        }
+
+        // Axis lines through world (0, 0) — Altium-style centre
+        // crosshair so the symbol's anchor is always visible. Drawn
+        // edge-to-edge across the visible viewport in a low-alpha
+        // sheet-aware colour.
+        let origin = w2s(0.0, 0.0);
+        if origin.x >= -1.0 && origin.x <= bounds.width + 1.0 {
+            let path = canvas::Path::line(
+                iced::Point::new(origin.x, 0.0),
+                iced::Point::new(origin.x, bounds.height),
+            );
+            frame.stroke(
+                &path,
+                canvas::Stroke::default()
+                    .with_color(self.axis_color)
+                    .with_width(1.0),
+            );
+        }
+        if origin.y >= -1.0 && origin.y <= bounds.height + 1.0 {
+            let path = canvas::Path::line(
+                iced::Point::new(0.0, origin.y),
+                iced::Point::new(bounds.width, origin.y),
+            );
+            frame.stroke(
+                &path,
+                canvas::Stroke::default()
+                    .with_color(self.axis_color)
+                    .with_width(1.0),
+            );
         }
 
         // ── Body + every other graphic ──
