@@ -249,6 +249,9 @@ pub struct LibraryState {
     /// Opens against a specific `.snxlib` root path so the modal
     /// edits the matching `OpenLibrary.display`.
     pub document_options: Option<DocumentOptionsModalState>,
+    /// Library recovery dialog — Stage 10 of v0.9-snxlib-as-file.
+    /// `None` while closed; one of three modal flows when set.
+    pub recovery: Option<super::recovery::RecoveryDialog>,
 }
 
 /// State for the Tools ▸ Document Options modal — keyed by the
@@ -283,6 +286,7 @@ impl Default for LibraryState {
             library_browsers: HashMap::new(),
             primitive_picker: None,
             document_options: None,
+            recovery: None,
         }
     }
 }

@@ -26,6 +26,7 @@ pub mod new_component;
 pub mod panel;
 pub mod picker;
 pub mod primitive_picker;
+pub mod recovery;
 pub mod settings;
 pub mod state;
 
