@@ -18,6 +18,7 @@
 pub mod browser;
 pub mod close_prompt;
 pub mod commands;
+pub mod document_options;
 pub mod edit_row_modal;
 pub mod editor;
 pub mod messages;

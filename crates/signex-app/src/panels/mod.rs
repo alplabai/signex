@@ -2506,103 +2506,11 @@ fn view_symbol_editor_properties<'a>(
             col = col.push(name_row);
             col = col.push(prop_row_static("UUID", sym.symbol_uuid.to_string()));
             col = col.push(prop_row_static("Pins", sym.pins.len().to_string()));
-
-            // ── Document Options section ──
-            // Altium parity: when nothing is selected on the canvas,
-            // the Properties panel shows the document-level controls
-            // (sheet color, grid, unit, library identity).
-            col = col.push(thin_sep(border_c));
-            col = col
-                .push(container(text("Document Options").size(11).color(primary)).padding([6, 8]));
-            col = col.push(prop_row_static("Library", sym.display.library_name.clone()));
-            if let Some(n) = sym.display.library_symbol_count {
-                col = col.push(prop_row_static("Items in library", n.to_string()));
-            }
-
-            // Sheet Color picker.
-            let sheet_color = sym.display.sheet_color;
-            let sheet_color_picker = iced::widget::pick_list(
-                SheetColor::ALL.to_vec(),
-                Some(sheet_color),
-                PanelMsg::SymEditorSetDisplaySheetColor,
-            )
-            .padding([2, 4])
-            .text_size(11);
-            let sheet_row: Element<'a, PanelMsg> = container(
-                row![
-                    text("Sheet Color")
-                        .size(10)
-                        .color(muted)
-                        .width(Length::FillPortion(2)),
-                    container(sheet_color_picker).width(Length::FillPortion(3)),
-                ]
-                .spacing(4)
-                .align_y(iced::Alignment::Center),
-            )
-            .padding([3, 8])
-            .width(Length::Fill)
-            .into();
-            col = col.push(sheet_row);
-
-            // Grid visibility — toggle button.
-            let grid_visible = sym.display.grid_visible;
-            let grid_toggle: Element<'a, PanelMsg> = container(
-                row![
-                    text("Grid Visible")
-                        .size(10)
-                        .color(muted)
-                        .width(Length::FillPortion(2)),
-                    iced::widget::checkbox(grid_visible)
-                        .size(14)
-                        .on_toggle(|_| PanelMsg::SymEditorToggleDisplayGrid),
-                ]
-                .spacing(4)
-                .align_y(iced::Alignment::Center),
-            )
-            .padding([3, 8])
-            .width(Length::Fill)
-            .into();
-            col = col.push(grid_toggle);
-
-            // Grid spacing — click-to-cycle pill.
-            let grid_label = format!("{:.3} mm", sym.display.grid_size_mm);
-            let grid_size_btn: Element<'a, PanelMsg> = container(
-                row![
-                    text("Grid Spacing")
-                        .size(10)
-                        .color(muted)
-                        .width(Length::FillPortion(2)),
-                    iced::widget::button(text(grid_label).size(11).color(primary))
-                        .padding([2, 6])
-                        .on_press(PanelMsg::SymEditorCycleDisplayGridSize),
-                ]
-                .spacing(4)
-                .align_y(iced::Alignment::Center),
-            )
-            .padding([3, 8])
-            .width(Length::Fill)
-            .into();
-            col = col.push(grid_size_btn);
-
-            // Unit — click-to-cycle pill.
-            let unit_label = format!("{}", sym.display.unit);
-            let unit_btn: Element<'a, PanelMsg> = container(
-                row![
-                    text("Unit")
-                        .size(10)
-                        .color(muted)
-                        .width(Length::FillPortion(2)),
-                    iced::widget::button(text(unit_label).size(11).color(primary))
-                        .padding([2, 6])
-                        .on_press(PanelMsg::SymEditorCycleDisplayUnit),
-                ]
-                .spacing(4)
-                .align_y(iced::Alignment::Center),
-            )
-            .padding([3, 8])
-            .width(Length::Fill)
-            .into();
-            col = col.push(unit_btn);
+            // Sheet color / grid / unit live in Tools ▸ Document
+            // Options per Altium parity — they're document-level
+            // settings, not Component properties. The full Component
+            // properties layout (Designator / Comment / Description /
+            // Type / Parameters / Graphical) lands in a follow-up.
         }
         SymbolEditorSelection::Pin(pin) => {
             let pin_idx = pin.idx;

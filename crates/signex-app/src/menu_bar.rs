@@ -182,6 +182,11 @@ pub enum MenuMessage {
     /// the data survives. No-op when only one part exists or no
     /// Symbol editor is the active tab.
     ToolsRemovePart,
+    /// Tools ▸ Document Options... — opens the Document Options modal
+    /// for the active `.snxlib` (sheet color / grid / unit). Mirrors
+    /// Altium's Tools ▸ Document Options entry. No-op when not on
+    /// a SchLib tab.
+    ToolsDocumentOptions,
 }
 
 /// Context passed into `view` so each menu leaf can decide whether to
@@ -574,6 +579,16 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
             // dispatcher silently no-ops on non-Symbol tabs.
             leaf("New Part", None, MenuMessage::ToolsNewPart, mc),
             leaf("Remove Part", None, MenuMessage::ToolsRemovePart, mc),
+            separator(mc),
+            // Document Options — Altium SchLib parity. Sheet color
+            // / grid / unit per `.snxlib`. Greyed when not on a
+            // primitive editor tab.
+            leaf(
+                "Document Options...",
+                None,
+                MenuMessage::ToolsDocumentOptions,
+                mc,
+            ),
             separator(mc),
             leaf(
                 "Preferences...",

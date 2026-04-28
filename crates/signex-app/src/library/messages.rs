@@ -242,6 +242,23 @@ pub enum LibraryMessage {
         row_id: RowId,
         column: String,
     },
+    // ── Tools ▸ Document Options modal ──────────────────────────────
+    /// Tools menu fired Document Options for the library at
+    /// `library_path`. Opens the modal pre-filled with the library's
+    /// current display settings.
+    OpenDocumentOptions { library_path: PathBuf },
+    /// Modal — pick a new sheet color preset.
+    DocumentOptionsSetSheetColor(crate::panels::SheetColor),
+    /// Modal — toggle the visible-grid checkbox.
+    DocumentOptionsToggleGrid,
+    /// Modal — cycle the visible grid spacing.
+    DocumentOptionsCycleGridSize,
+    /// Modal — cycle the coordinate display unit.
+    DocumentOptionsCycleUnit,
+    /// Modal — apply the draft to the library and close.
+    DocumentOptionsApply,
+    /// Modal — drop the draft and close.
+    DocumentOptionsCancel,
 }
 
 /// User choice from the close-library confirmation modal.
