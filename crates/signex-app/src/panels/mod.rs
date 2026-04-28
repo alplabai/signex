@@ -388,6 +388,10 @@ pub struct SymbolEditorPanelContext {
     /// Pin summaries for the active symbol — drives Properties panel
     /// pin selection.
     pub pins: Vec<SymbolPinSummary>,
+    /// Graphic summaries for the active symbol — drives the SCH
+    /// Library Graphics sub-list (click to select, populates the
+    /// Properties panel).
+    pub graphics: Vec<GraphicSummary>,
     /// What's currently selected on the canvas. Drives the right-dock
     /// Properties panel's mode (Pin / Field / Component default).
     pub selected: SymbolEditorSelection,
@@ -455,6 +459,75 @@ pub enum SymbolEditorSelection {
     Pin(SymbolPinSummary),
     FieldReference,
     FieldValue,
+    /// A placed graphic — drives the per-shape Properties branch
+    /// (corners / endpoints / centre + radius / arc angles / text +
+    /// stroke).
+    Graphic(GraphicSummary),
+}
+
+/// Per-shape Properties-panel summary for a placed `SymbolGraphic`.
+/// Cloned out of the live `Symbol::graphics` vector each refresh so
+/// the panel doesn't hold a borrow into the editor state.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GraphicSummary {
+    pub idx: usize,
+    pub kind: GraphicKindSummary,
+    pub stroke_width: f64,
+}
+
+/// Per-variant geometry for [`GraphicSummary`] — mirrors
+/// `signex_library::SymbolGraphicKind` so the panel can render each
+/// shape's editable fields without depending on the library type.
+#[derive(Debug, Clone, PartialEq)]
+pub enum GraphicKindSummary {
+    Rectangle { from: [f64; 2], to: [f64; 2] },
+    Line { from: [f64; 2], to: [f64; 2] },
+    Circle { center: [f64; 2], radius: f64 },
+    Arc {
+        center: [f64; 2],
+        radius: f64,
+        start_deg: f64,
+        end_deg: f64,
+    },
+    Text {
+        position: [f64; 2],
+        content: String,
+        size: f64,
+    },
+}
+
+/// Identifier for one numeric field on a graphic — carried by
+/// [`PanelMsg::SymEditorSetGraphicField`] so the dispatcher knows which
+/// scalar to mutate. The dispatcher silently ignores (idx, field)
+/// pairs whose field doesn't apply to the graphic's kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum GraphicFieldId {
+    /// `Rectangle`/`Line` `from.x`.
+    FromX,
+    /// `Rectangle`/`Line` `from.y`.
+    FromY,
+    /// `Rectangle`/`Line` `to.x`.
+    ToX,
+    /// `Rectangle`/`Line` `to.y`.
+    ToY,
+    /// `Circle`/`Arc` `center.x`.
+    CenterX,
+    /// `Circle`/`Arc` `center.y`.
+    CenterY,
+    /// `Circle`/`Arc` `radius`.
+    Radius,
+    /// `Arc` `start_deg`.
+    StartDeg,
+    /// `Arc` `end_deg`.
+    EndDeg,
+    /// `Text` `position.x`.
+    PositionX,
+    /// `Text` `position.y`.
+    PositionY,
+    /// `Text` `size`.
+    TextSize,
+    /// All variants — `SymbolGraphic.stroke_width`.
+    StrokeWidth,
 }
 
 /// Sheet background colour presets.
@@ -772,6 +845,23 @@ pub enum PanelMsg {
     /// "Part Number" spinner). `0` is the special Part Zero (pin
     /// appears on every part); `1..=N` scopes to a specific part.
     SymEditorSetPinPartNumber { pin_idx: usize, value: u8 },
+    /// SCH Library panel: select a placed graphic from the active
+    /// symbol's `graphics` vector. Fires the same selection state as
+    /// a canvas click on a graphic body.
+    SymEditorSelectGraphic(usize),
+    /// Properties panel — set one numeric field of the placed graphic
+    /// at `idx`. The dispatcher routes `field` to the matching
+    /// `SymbolGraphicKind` variant; mismatched (idx, field) pairs
+    /// silently no-op so an out-of-date Properties panel can't
+    /// corrupt geometry.
+    SymEditorSetGraphicField {
+        idx: usize,
+        field: GraphicFieldId,
+        value: f64,
+    },
+    /// Properties panel — set the text content of a placed
+    /// `SymbolGraphicKind::Text` at `idx`. No-op for other kinds.
+    SymEditorSetGraphicText { idx: usize, value: String },
     /// Properties panel — edit the active symbol's name (Altium
     /// "Design Item ID"). Affects the SCH Library panel row label
     /// + the on-disk container's `display_name` when the active
@@ -1208,6 +1298,80 @@ fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 }
             });
             col = col.push(pin_row_btn);
+        }
+    }
+    col = col.push(thin_sep(border_c));
+
+    // ── Graphics sub-list (Altium SchLib parity) — every placed
+    //    graphic on the active symbol with a kind-derived label.
+    //    Click a row to select that graphic on the canvas; the
+    //    Properties panel picks up the per-shape edit fields.
+    col = col.push(
+        container(text("Graphics").size(10).color(primary))
+            .padding([4, 8])
+            .width(Length::Fill),
+    );
+    if sym.graphics.is_empty() {
+        col = col.push(
+            container(
+                text(
+                    "No graphics yet — pick Rectangle / Line / Circle from the toolbar and \
+                     click on the canvas.",
+                )
+                .size(10)
+                .color(muted),
+            )
+            .padding([4, 8])
+            .width(Length::Fill),
+        );
+    } else {
+        for g in &sym.graphics {
+            let g_idx = g.idx;
+            let label = match &g.kind {
+                GraphicKindSummary::Rectangle { .. } => "Rectangle",
+                GraphicKindSummary::Line { .. } => "Line",
+                GraphicKindSummary::Circle { .. } => "Circle",
+                GraphicKindSummary::Arc { .. } => "Arc",
+                GraphicKindSummary::Text { .. } => "Text",
+            };
+            let active_g =
+                matches!(&sym.selected, SymbolEditorSelection::Graphic(s) if s.idx == g_idx);
+            let label_color = if active_g { primary } else { muted };
+            let bg_active = crate::styles::ti(ctx.tokens.selection);
+            let g_row_btn = iced::widget::button(
+                row![
+                    text(format!("#{g_idx}"))
+                        .size(10)
+                        .color(label_color)
+                        .width(Length::Fixed(28.0)),
+                    text(label.to_string())
+                        .size(10)
+                        .color(label_color)
+                        .width(Length::Fill),
+                ]
+                .spacing(6)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([3, 8])
+            .width(Length::Fill)
+            .on_press(PanelMsg::SymEditorSelectGraphic(g_idx))
+            .style(move |_: &iced::Theme, status: iced::widget::button::Status| {
+                iced::widget::button::Style {
+                    background: if active_g {
+                        Some(iced::Background::Color(bg_active))
+                    } else if matches!(status, iced::widget::button::Status::Hovered) {
+                        Some(iced::Background::Color(iced::Color::from_rgba(
+                            1.0, 1.0, 1.0, 0.04,
+                        )))
+                    } else {
+                        None
+                    },
+                    border: iced::Border::default(),
+                    text_color: label_color,
+                    ..iced::widget::button::Style::default()
+                }
+            });
+            col = col.push(g_row_btn);
         }
     }
     col = col.push(thin_sep(border_c));
@@ -2046,6 +2210,13 @@ fn view_symbol_editor_properties<'a>(
         SymbolEditorSelection::Pin(_) => "Pin",
         SymbolEditorSelection::FieldReference => "Field — Reference",
         SymbolEditorSelection::FieldValue => "Field — Value",
+        SymbolEditorSelection::Graphic(g) => match &g.kind {
+            GraphicKindSummary::Rectangle { .. } => "Graphic — Rectangle",
+            GraphicKindSummary::Line { .. } => "Graphic — Line",
+            GraphicKindSummary::Circle { .. } => "Graphic — Circle",
+            GraphicKindSummary::Arc { .. } => "Graphic — Arc",
+            GraphicKindSummary::Text { .. } => "Graphic — Text",
+        },
     };
     col = col.push(
         container(text(header_label).size(11).color(primary))
@@ -2492,6 +2663,121 @@ fn view_symbol_editor_properties<'a>(
                 pin_idx,
                 3,
                 muted,
+            ));
+        }
+        SymbolEditorSelection::Graphic(g) => {
+            let g_idx = g.idx;
+            // Per-shape numeric fields. Each invokes
+            // `PanelMsg::SymEditorSetGraphicField`; mismatched fields
+            // (e.g. CircleRadius on a Line) silently no-op in the
+            // dispatcher so a stale Properties pane can't corrupt
+            // geometry.
+            let num_field = |label: &'static str,
+                             field: GraphicFieldId,
+                             value: f64|
+             -> Element<'a, PanelMsg> {
+                container(
+                    row![
+                        text(label.to_string())
+                            .size(10)
+                            .color(muted)
+                            .width(Length::FillPortion(2)),
+                        iced::widget::text_input("mm", &format!("{:.3}", value))
+                            .padding([2, 4])
+                            .size(11)
+                            .on_input(move |s| {
+                                let parsed = s.trim().parse::<f64>().unwrap_or(value);
+                                PanelMsg::SymEditorSetGraphicField {
+                                    idx: g_idx,
+                                    field,
+                                    value: parsed,
+                                }
+                            })
+                            .width(Length::FillPortion(3)),
+                    ]
+                    .spacing(4)
+                    .align_y(iced::Alignment::Center),
+                )
+                .padding([3, 8])
+                .width(Length::Fill)
+                .into()
+            };
+
+            match &g.kind {
+                GraphicKindSummary::Rectangle { from, to } => {
+                    col = col.push(num_field("From X", GraphicFieldId::FromX, from[0]));
+                    col = col.push(num_field("From Y", GraphicFieldId::FromY, from[1]));
+                    col = col.push(num_field("To X", GraphicFieldId::ToX, to[0]));
+                    col = col.push(num_field("To Y", GraphicFieldId::ToY, to[1]));
+                }
+                GraphicKindSummary::Line { from, to } => {
+                    col = col.push(num_field("Start X", GraphicFieldId::FromX, from[0]));
+                    col = col.push(num_field("Start Y", GraphicFieldId::FromY, from[1]));
+                    col = col.push(num_field("End X", GraphicFieldId::ToX, to[0]));
+                    col = col.push(num_field("End Y", GraphicFieldId::ToY, to[1]));
+                }
+                GraphicKindSummary::Circle { center, radius } => {
+                    col = col.push(num_field("Center X", GraphicFieldId::CenterX, center[0]));
+                    col = col.push(num_field("Center Y", GraphicFieldId::CenterY, center[1]));
+                    col = col.push(num_field("Radius", GraphicFieldId::Radius, *radius));
+                }
+                GraphicKindSummary::Arc {
+                    center,
+                    radius,
+                    start_deg,
+                    end_deg,
+                } => {
+                    col = col.push(num_field("Center X", GraphicFieldId::CenterX, center[0]));
+                    col = col.push(num_field("Center Y", GraphicFieldId::CenterY, center[1]));
+                    col = col.push(num_field("Radius", GraphicFieldId::Radius, *radius));
+                    col = col.push(num_field(
+                        "Start \u{00B0}",
+                        GraphicFieldId::StartDeg,
+                        *start_deg,
+                    ));
+                    col = col.push(num_field(
+                        "End \u{00B0}",
+                        GraphicFieldId::EndDeg,
+                        *end_deg,
+                    ));
+                }
+                GraphicKindSummary::Text {
+                    position,
+                    content,
+                    size: text_size,
+                } => {
+                    col = col.push(num_field("X", GraphicFieldId::PositionX, position[0]));
+                    col = col.push(num_field("Y", GraphicFieldId::PositionY, position[1]));
+                    col = col.push(num_field("Size", GraphicFieldId::TextSize, *text_size));
+                    let content_row: Element<'a, PanelMsg> = container(
+                        row![
+                            text("Content")
+                                .size(10)
+                                .color(muted)
+                                .width(Length::FillPortion(2)),
+                            iced::widget::text_input("text", content.as_str())
+                                .padding([2, 4])
+                                .size(11)
+                                .on_input(move |s| PanelMsg::SymEditorSetGraphicText {
+                                    idx: g_idx,
+                                    value: s,
+                                })
+                                .width(Length::FillPortion(3)),
+                        ]
+                        .spacing(4)
+                        .align_y(iced::Alignment::Center),
+                    )
+                    .padding([3, 8])
+                    .width(Length::Fill)
+                    .into();
+                    col = col.push(content_row);
+                }
+            }
+            // Stroke width — common to every variant.
+            col = col.push(num_field(
+                "Stroke (mm)",
+                GraphicFieldId::StrokeWidth,
+                g.stroke_width,
             ));
         }
         SymbolEditorSelection::FieldReference => {

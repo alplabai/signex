@@ -452,8 +452,8 @@ fn build_symbol_editor_panel_ctx(
 ) -> Option<crate::panels::SymbolEditorPanelContext> {
     use crate::library::editor::symbol::state as sym_state;
     use crate::panels::{
-        SymbolEditorPanelContext, SymbolEditorSelection, SymbolFileEntry, SymbolPinDetails,
-        SymbolPinSummary,
+        GraphicKindSummary, GraphicSummary, SymbolEditorPanelContext, SymbolEditorSelection,
+        SymbolFileEntry, SymbolPinDetails, SymbolPinSummary,
     };
 
     let active = app.document_state.tabs.get(app.document_state.active_tab)?;
@@ -507,6 +507,17 @@ fn build_symbol_editor_panel_ctx(
         })
         .collect();
 
+    let graphics: Vec<GraphicSummary> = sym
+        .graphics
+        .iter()
+        .enumerate()
+        .map(|(idx, g)| GraphicSummary {
+            idx,
+            kind: graphic_kind_to_summary(&g.kind),
+            stroke_width: g.stroke_width,
+        })
+        .collect();
+
     let selected = match editor.selected {
         Some(sym_state::SymbolSelection::Pin(idx)) => pins
             .get(idx)
@@ -519,6 +530,15 @@ fn build_symbol_editor_panel_ctx(
         Some(sym_state::SymbolSelection::Field(sym_state::FieldKey::Value)) => {
             SymbolEditorSelection::FieldValue
         }
+        Some(sym_state::SymbolSelection::Graphic(idx)) => sym
+            .graphics
+            .get(idx)
+            .map(|g| SymbolEditorSelection::Graphic(GraphicSummary {
+                idx,
+                kind: graphic_kind_to_summary(&g.kind),
+                stroke_width: g.stroke_width,
+            }))
+            .unwrap_or(SymbolEditorSelection::None),
         None => SymbolEditorSelection::None,
     };
 
@@ -527,10 +547,55 @@ fn build_symbol_editor_panel_ctx(
         symbol_name: sym.name.clone(),
         symbol_uuid: sym.uuid,
         pins,
+        graphics,
         selected,
         symbols_in_file,
         active_idx: editor.active_idx,
     })
+}
+
+/// Project a `SymbolGraphicKind` into a [`GraphicKindSummary`] so the
+/// Properties panel can render per-shape fields without depending on
+/// the library type.
+fn graphic_kind_to_summary(
+    kind: &signex_library::SymbolGraphicKind,
+) -> crate::panels::GraphicKindSummary {
+    use crate::panels::GraphicKindSummary;
+    use signex_library::SymbolGraphicKind;
+    match kind {
+        SymbolGraphicKind::Rectangle { from, to } => GraphicKindSummary::Rectangle {
+            from: *from,
+            to: *to,
+        },
+        SymbolGraphicKind::Line { from, to } => GraphicKindSummary::Line {
+            from: *from,
+            to: *to,
+        },
+        SymbolGraphicKind::Circle { center, radius } => GraphicKindSummary::Circle {
+            center: *center,
+            radius: *radius,
+        },
+        SymbolGraphicKind::Arc {
+            center,
+            radius,
+            start_deg,
+            end_deg,
+        } => GraphicKindSummary::Arc {
+            center: *center,
+            radius: *radius,
+            start_deg: *start_deg,
+            end_deg: *end_deg,
+        },
+        SymbolGraphicKind::Text {
+            position,
+            content,
+            size,
+        } => GraphicKindSummary::Text {
+            position: *position,
+            content: content.clone(),
+            size: *size,
+        },
+    }
 }
 
 fn scan_library_primitives(

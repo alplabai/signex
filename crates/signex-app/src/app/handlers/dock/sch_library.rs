@@ -120,6 +120,27 @@ impl Signex {
                 self.sym_editor_mutate_pin(*pin_idx, move |pin| pin.part_number = value);
                 true
             }
+            crate::panels::PanelMsg::SymEditorSelectGraphic(idx) => {
+                self.sym_editor_select_graphic(*idx);
+                true
+            }
+            crate::panels::PanelMsg::SymEditorSetGraphicField { idx, field, value } => {
+                let field = *field;
+                let value = *value;
+                self.sym_editor_mutate_graphic(*idx, move |g| {
+                    apply_graphic_field(g, field, value);
+                });
+                true
+            }
+            crate::panels::PanelMsg::SymEditorSetGraphicText { idx, value } => {
+                let value = value.clone();
+                self.sym_editor_mutate_graphic(*idx, move |g| {
+                    if let signex_library::SymbolGraphicKind::Text { content, .. } = &mut g.kind {
+                        *content = value.clone();
+                    }
+                });
+                true
+            }
             _ => false,
         }
     }
@@ -143,6 +164,44 @@ impl Signex {
         editor.dirty = true;
         editor.canvas_cache.clear();
         self.mark_active_symbol_tab_dirty();
+        self.refresh_panel_ctx();
+    }
+
+    /// Helper — apply a closure to the graphic at `idx` on the active
+    /// Symbol editor. Sibling of [`sym_editor_mutate_pin`] for
+    /// per-shape Properties edits. Silently returns when no Symbol
+    /// editor is active or the index is out of range.
+    fn sym_editor_mutate_graphic<F>(&mut self, idx: usize, mutator: F)
+    where
+        F: FnOnce(&mut signex_library::SymbolGraphic),
+    {
+        let Some(editor) = self.active_symbol_editor_mut() else {
+            return;
+        };
+        let Some(g) = editor.primitive_mut().graphics.get_mut(idx) else {
+            return;
+        };
+        mutator(g);
+        editor.dirty = true;
+        editor.canvas_cache.clear();
+        self.mark_active_symbol_tab_dirty();
+        self.refresh_panel_ctx();
+    }
+
+    /// SCH Library panel: select a placed graphic so the right-dock
+    /// Properties panel renders its per-shape fields. Mirrors
+    /// [`sym_editor_select_pin`].
+    fn sym_editor_select_graphic(&mut self, idx: usize) {
+        let Some(editor) = self.active_symbol_editor_mut() else {
+            return;
+        };
+        if idx >= editor.primitive().graphics.len() {
+            return;
+        }
+        editor.selected = Some(
+            crate::library::editor::symbol::state::SymbolSelection::Graphic(idx),
+        );
+        editor.canvas_cache.clear();
         self.refresh_panel_ctx();
     }
 
@@ -415,5 +474,57 @@ impl Signex {
                 _ => None,
             })?;
         self.document_state.symbol_editors.get_mut(&path)
+    }
+}
+
+/// Apply one numeric Properties-pane edit to a graphic. (idx, field)
+/// pairs whose field doesn't apply to the graphic's variant silently
+/// no-op so a stale Properties pane can't mutate the wrong slot.
+fn apply_graphic_field(
+    g: &mut signex_library::SymbolGraphic,
+    field: crate::panels::GraphicFieldId,
+    value: f64,
+) {
+    use crate::panels::GraphicFieldId;
+    use signex_library::SymbolGraphicKind;
+    if matches!(field, GraphicFieldId::StrokeWidth) {
+        g.stroke_width = value.max(0.0);
+        return;
+    }
+    match (&mut g.kind, field) {
+        (
+            SymbolGraphicKind::Rectangle { from, .. } | SymbolGraphicKind::Line { from, .. },
+            GraphicFieldId::FromX,
+        ) => from[0] = value,
+        (
+            SymbolGraphicKind::Rectangle { from, .. } | SymbolGraphicKind::Line { from, .. },
+            GraphicFieldId::FromY,
+        ) => from[1] = value,
+        (
+            SymbolGraphicKind::Rectangle { to, .. } | SymbolGraphicKind::Line { to, .. },
+            GraphicFieldId::ToX,
+        ) => to[0] = value,
+        (
+            SymbolGraphicKind::Rectangle { to, .. } | SymbolGraphicKind::Line { to, .. },
+            GraphicFieldId::ToY,
+        ) => to[1] = value,
+        (
+            SymbolGraphicKind::Circle { center, .. } | SymbolGraphicKind::Arc { center, .. },
+            GraphicFieldId::CenterX,
+        ) => center[0] = value,
+        (
+            SymbolGraphicKind::Circle { center, .. } | SymbolGraphicKind::Arc { center, .. },
+            GraphicFieldId::CenterY,
+        ) => center[1] = value,
+        (
+            SymbolGraphicKind::Circle { radius, .. } | SymbolGraphicKind::Arc { radius, .. },
+            GraphicFieldId::Radius,
+        ) => *radius = value.max(0.1),
+        (SymbolGraphicKind::Arc { start_deg, .. }, GraphicFieldId::StartDeg) => *start_deg = value,
+        (SymbolGraphicKind::Arc { end_deg, .. }, GraphicFieldId::EndDeg) => *end_deg = value,
+        (SymbolGraphicKind::Text { position, .. }, GraphicFieldId::PositionX) => position[0] = value,
+        (SymbolGraphicKind::Text { position, .. }, GraphicFieldId::PositionY) => position[1] = value,
+        (SymbolGraphicKind::Text { size, .. }, GraphicFieldId::TextSize) => *size = value.max(0.1),
+        _ => {}
     }
 }
