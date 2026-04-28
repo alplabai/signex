@@ -2281,12 +2281,19 @@ impl Signex {
     /// commit itself fails (warning is emitted via tracing). Never
     /// blocks the user — the file write already succeeded.
     fn commit_external_change_for(&self, path: &std::path::Path, message: &str) {
-        // Find the open library whose root is an ancestor of `path`.
+        // Find the open library whose working dir is an ancestor of
+        // `path`. `lib.root` is the `.snxlib` *file* path now, so we
+        // walk against its parent directory (where `symbols/` and
+        // `footprints/` actually live).
         let lib = self
             .library
             .open_libraries
             .iter()
-            .find(|lib| path.starts_with(&lib.root));
+            .find(|lib| {
+                lib.root_dir()
+                    .map(|d| path.starts_with(d))
+                    .unwrap_or(false)
+            });
         let Some(lib) = lib else {
             return;
         };
@@ -2308,12 +2315,18 @@ impl Signex {
     /// for the next full `refresh_components` round-trip. No-op when
     /// `path` lives outside any mounted library.
     fn refresh_primitive_cache_for(&mut self, path: &std::path::Path) {
+        // Same `root_dir()` ancestor walk as
+        // `commit_external_change_for` — `lib.root` is the `.snxlib`
+        // file, the on-disk children sit under its parent dir.
         let library_id = match self
             .library
             .open_libraries
             .iter()
-            .find(|lib| path.starts_with(&lib.root))
-        {
+            .find(|lib| {
+                lib.root_dir()
+                    .map(|d| path.starts_with(d))
+                    .unwrap_or(false)
+            }) {
             Some(lib) => lib.library_id,
             None => return,
         };
