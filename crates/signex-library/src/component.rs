@@ -48,6 +48,10 @@ impl Default for DatasheetRef {
     }
 }
 
+fn default_row_version() -> String {
+    "0.0.1".to_string()
+}
+
 /// Pin-to-pad override — empty list = default 1:1 binding by number string
 /// equality. Non-empty entries override specific pins.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -136,6 +140,31 @@ pub struct ComponentRow {
     #[serde(default)]
     pub plm: PlmReserved,
 
+    // ── Stage 14: entity versioning + released flag ─────────────────────
+    /// Semver-style revision string for this row. Defaults to
+    /// `"0.0.1"` for new + legacy rows. In Personal workflow mode
+    /// (Stage 13) every row save patch-bumps automatically; in Team
+    /// mode released rows require an explicit bump via the dialog.
+    #[serde(default = "default_row_version")]
+    pub version: String,
+    /// When `true`, the row is locked from edit-in-place under Team
+    /// mode — saves open the bump dialog. Hidden in Personal mode.
+    #[serde(default)]
+    pub released: bool,
+    /// Pinned symbol revision — which version of the bound `symbol_ref`
+    /// this row was built against. The cascade engine (Stage 15)
+    /// updates this when the user opts in to a primitive bump; the
+    /// "Library Updates" dialog (Stage 16) surfaces drift on
+    /// schematic open.
+    #[serde(default)]
+    pub symbol_version: String,
+    /// Pinned footprint revision. Empty when `footprint_ref` is `None`.
+    #[serde(default)]
+    pub footprint_version: String,
+    /// Pinned sim revision. Empty when `sim_ref` is `None`.
+    #[serde(default)]
+    pub sim_version: String,
+
     /// Bookkeeping — set on insert.
     pub created: DateTime<Utc>,
     /// Bookkeeping — bumped on every update.
@@ -183,6 +212,11 @@ mod tests {
             supply: Vec::new(),
             parameters: ParamMap::new(),
             plm: PlmReserved::default(),
+            version: "0.0.1".into(),
+            released: false,
+            symbol_version: String::new(),
+            footprint_version: String::new(),
+            sim_version: String::new(),
             created: Utc::now(),
             updated: Utc::now(),
             content_hash: [0u8; 32],
@@ -208,6 +242,11 @@ mod tests {
             supply: vec![],
             parameters: ParamMap::new(),
             plm: PlmReserved::default(),
+            version: "0.0.1".into(),
+            released: false,
+            symbol_version: String::new(),
+            footprint_version: String::new(),
+            sim_version: String::new(),
             created: Utc::now(),
             updated: Utc::now(),
             content_hash: [0u8; 32],

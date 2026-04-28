@@ -377,6 +377,14 @@ pub fn create_component_row(
         supply: Vec::new(),
         parameters: ParamMap::new(),
         plm: PlmReserved::default(),
+        // Stage 14: every new row defaults to v0.0.1 + not-released.
+        // Personal-mode auto-bumps on save, Team-mode requires the
+        // bump dialog once `released` flips to true.
+        version: "0.0.1".into(),
+        released: false,
+        symbol_version: String::new(),
+        footprint_version: String::new(),
+        sim_version: String::new(),
         created: now,
         updated: now,
         content_hash: [0u8; 32],

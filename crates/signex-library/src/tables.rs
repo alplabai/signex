@@ -57,6 +57,15 @@ pub const TABLE_HEADER: &[&str] = &[
     "created",
     "updated",
     "content_hash",
+    // Stage 14 of v0.9-snxlib-as-file: entity versioning + released
+    // flag. Appended at the end so pre-Stage-14 fixtures (which can't
+    // round-trip these columns) need updating but the v0.9 wire
+    // format stays additive — not a renumbering of existing columns.
+    "version",
+    "released",
+    "symbol_version",
+    "footprint_version",
+    "sim_version",
 ];
 
 /// Schema descriptor — held on the side for callers that need to reflect
@@ -347,6 +356,14 @@ pub(crate) fn row_to_record(row: &ComponentRow) -> Result<Vec<String>, LibraryEr
         timestamp_to_cell(row.created),
         timestamp_to_cell(row.updated),
         hash_to_cell(&row.content_hash),
+        // Stage 14 versioning + released — empty strings + "false"
+        // are the back-compat defaults for rows that haven't been
+        // touched since the bump-on-save convention landed.
+        row.version.clone(),
+        if row.released { "true".into() } else { "false".into() },
+        row.symbol_version.clone(),
+        row.footprint_version.clone(),
+        row.sim_version.clone(),
     ])
 }
 
@@ -378,6 +395,27 @@ pub(crate) fn record_to_row(record: &csv::StringRecord) -> Result<ComponentRow, 
     let created = timestamp_from_cell(cell(13))?;
     let updated = timestamp_from_cell(cell(14))?;
     let content_hash = hash_from_cell(cell(15))?;
+    // Stage 14 versioning fields — appended after content_hash so the
+    // legacy 16-column fixtures pre-versioning could in theory still
+    // parse through a tolerant header check (we don't take that route,
+    // but the wire format remains additive).
+    let version = if cell(16).is_empty() {
+        "0.0.1".into()
+    } else {
+        cell(16).to_string()
+    };
+    let released = match cell(17) {
+        "" | "false" => false,
+        "true" => true,
+        other => {
+            return Err(LibraryError::Backend(format!(
+                "released cell expects 'true'/'false'/empty, got {other:?}"
+            )));
+        }
+    };
+    let symbol_version = cell(18).to_string();
+    let footprint_version = cell(19).to_string();
+    let sim_version = cell(20).to_string();
 
     Ok(ComponentRow {
         row_id,
@@ -394,6 +432,11 @@ pub(crate) fn record_to_row(record: &csv::StringRecord) -> Result<ComponentRow, 
         supply,
         parameters,
         plm: PlmReserved::default(),
+        version,
+        released,
+        symbol_version,
+        footprint_version,
+        sim_version,
         created,
         updated,
         content_hash,
@@ -428,6 +471,11 @@ mod tests {
             supply: vec![DistributorListing::new("DigiKey", "DK-1")],
             parameters: ParamMap::new(),
             plm: PlmReserved::default(),
+            version: "0.0.1".into(),
+            released: false,
+            symbol_version: String::new(),
+            footprint_version: String::new(),
+            sim_version: String::new(),
             created,
             updated,
             content_hash: [0u8; 32],
