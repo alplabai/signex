@@ -53,6 +53,7 @@ pub use library_file::{
 pub use lifecycle::LifecycleState;
 pub use manifest::{
     LibraryMeta, LibraryMode, Manifest, TableConfig, UserEntry, UsersConfig, WorkflowConfig,
+    WorkflowMode,
 };
 pub use manufacturer::{AlternateStatus, DistributorListing, ManufacturerPart};
 pub use param::{ParamMap, ParamValue};
