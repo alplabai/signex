@@ -1,29 +1,35 @@
-//! Local + git storage adapter — `*.snxlib/` directory backed by libgit2.
+//! Local + git storage adapter — `.snxlib` file backed by libgit2.
 //!
-//! Speaks the DBLib row model: a "component" is a row inside
-//! `tables/<category>.tsv`, not a file holding a revision chain.
-//! Row CRUD — table read/write, insert / update / delete by row id,
-//! lookup by `internal_pn` — sits alongside the primitive
-//! (`Symbol` / `Footprint` / `SimModel`) flows.
-//!
-//! Layout:
+//! Per `v0.9-snxlib-as-file-plan.md`, a Signex library on disk is a
+//! *directory* containing a `.snxlib` file (the user-facing entry
+//! point) and sibling `symbols/` / `footprints/` / `sims/` /
+//! `models/` directories. The `.git/` repo lives at the parent
+//! directory so per-primitive `git log -- symbols/<name>.snxsym`
+//! works line-by-line — that's the load-bearing reason the layout
+//! is multi-file.
 //!
 //! ```text
-//! MyComponents.snxlib/
-//! ├── library.toml
-//! ├── tables/<category>.tsv          (one row per component, TSV)
-//! ├── symbols/<uuid>.snxsym
+//! mylib/                           (root_dir — git working tree)
+//! ├── mylib.snxlib                 (file_path — TOML manifest + [tables.<name>] TSV)
+//! ├── symbols/<slug>.snxsym
 //! ├── footprints/<uuid>.snxfpt
 //! ├── sims/<uuid>.snxsim
+//! ├── models/                      (3D models, optionally LFS-tracked)
+//! ├── .gitattributes               (written when [`LibraryInitOptions::use_lfs`])
 //! └── .git/
 //! ```
 //!
-//! Every write — primitive or row — commits via libgit2 with the supplied
-//! message. The TSV (de)serialisation is delegated to [`crate::tables`]; this
-//! module is the on-disk + git glue.
+//! Tables (component rows) live *inside* the `.snxlib` file under
+//! `[tables.<name>]` blocks — there are no separate `tables/*.tsv`
+//! files anymore. The trait still talks in [`ComponentRow`] for v0.9
+//! compatibility; the adapter converts between the legacy 16-column
+//! [`crate::tables::TABLE_HEADER`] schema and the new
+//! [`LibraryRow`] cell-map at the boundary. Stage 12 will retire
+//! the legacy schema in favour of user-defined columns.
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::RwLock;
 
 use serde::{Serialize, de::DeserializeOwned};
 use uuid::Uuid;
@@ -31,51 +37,95 @@ use uuid::Uuid;
 use crate::adapter::{LibraryAdapter, LibraryError, PrimitiveSummary};
 use crate::component::ComponentRow;
 use crate::identity::{InternalPn, RowId};
-use crate::manifest::Manifest;
+use crate::library_file::{LibraryFile, LibraryRow, LibraryTable, SnxlibManifest};
+use crate::manifest::{LibraryMeta, Manifest};
 use crate::primitive::{Footprint, PrimitiveKind, SimModel, Symbol, SymbolFile};
-use crate::tables;
+use crate::tables::{TABLE_HEADER, record_to_row, row_to_record};
 
 const SYMBOLS_DIR: &str = "symbols";
 const FOOTPRINTS_DIR: &str = "footprints";
 const SIMS_DIR: &str = "sims";
-const TABLES_DIR: &str = "tables";
 const SYMBOL_EXT: &str = "snxsym";
 const FOOTPRINT_EXT: &str = "snxfpt";
 const SIM_EXT: &str = "snxsim";
-const TABLE_EXT: &str = "tsv";
-const MANIFEST_FILE: &str = "library.toml";
+const SNXLIB_EXT: &str = "snxlib";
+const GITATTRIBUTES_FILE: &str = ".gitattributes";
 
-/// Adapter over a `*.snxlib/` directory + git repo.
+/// File extensions tracked by Git LFS when [`LibraryInitOptions::use_lfs`] is on.
+const LFS_EXTENSIONS: &[&str] = &["step", "stp", "wrl", "iges"];
+
+/// Library-create options threaded through [`LocalGitAdapter::init`].
+///
+/// LFS defaults to **off**. The library-create UI flips it on for
+/// production libraries (Stage 11 of `v0.9-snxlib-as-file-plan.md`
+/// wires the checkbox), but unit tests + library-server fixtures stay
+/// off so they don't depend on a local `git lfs` install.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct LibraryInitOptions {
+    /// Write a `.gitattributes` opting `*.step` / `*.stp` / `*.wrl` /
+    /// `*.iges` into Git LFS at init time.
+    pub use_lfs: bool,
+}
+
+/// Adapter over a `.snxlib`-file-rooted directory + git repo.
 #[derive(Debug)]
 pub struct LocalGitAdapter {
-    root: PathBuf,
-    manifest: Manifest,
+    /// Absolute path to the `.snxlib` file.
+    file_path: PathBuf,
+    /// Absolute path to the directory holding the `.snxlib` file —
+    /// the per-library git repo root and parent of `symbols/` etc.
+    root_dir: PathBuf,
+    /// In-memory parsed view of the `.snxlib` file. Mutated on row
+    /// CRUD and persisted before the matching `git commit`. The
+    /// `RwLock` lets the trait keep `&self` semantics on mutations
+    /// while still letting parallel readers grab snapshots.
+    library_file: RwLock<LibraryFile>,
+    /// Synthesised legacy [`Manifest`] view for callers reaching for
+    /// `manifest()`. Header data only — never carries the `tables`
+    /// list. Stable for the adapter's lifetime; mutations to
+    /// `library_file.tables` do not alter it.
+    manifest_synth: Manifest,
 }
 
 impl LocalGitAdapter {
-    /// Initialise a fresh `.snxlib/` at `root` and run `git init` on it.
+    /// Initialise a fresh library at `file_path`. The path must end
+    /// in `.snxlib`; its parent directory becomes the git working tree.
     ///
-    /// Creates the directory layout, writes `library.toml`, and stages the
-    /// initial commit. Fails with `Conflict` if `root` already contains a
-    /// manifest.
-    pub fn init(root: impl AsRef<Path>, manifest: Manifest) -> Result<Self, LibraryError> {
-        let root = root.as_ref().to_path_buf();
-        let manifest_path = root.join(MANIFEST_FILE);
-        if manifest_path.exists() {
+    /// Fails with `Conflict` if a `.snxlib` already exists at
+    /// `file_path`. Creates the parent directory if it doesn't
+    /// already exist.
+    pub fn init(
+        file_path: impl AsRef<Path>,
+        snx_manifest: SnxlibManifest,
+        opts: LibraryInitOptions,
+    ) -> Result<Self, LibraryError> {
+        let file_path = file_path.as_ref().to_path_buf();
+        Self::validate_file_path(&file_path)?;
+        if file_path.exists() {
             return Err(LibraryError::Conflict(format!(
-                "library already exists at {}",
-                root.display()
+                "library file already exists at {}",
+                file_path.display()
             )));
         }
 
-        fs::create_dir_all(&root)?;
-        let manifest_text = manifest
-            .write()
-            .map_err(|e| LibraryError::Backend(format!("manifest serialise: {e}")))?;
-        fs::write(&manifest_path, &manifest_text)?;
+        let root_dir = parent_dir(&file_path)?;
+        fs::create_dir_all(&root_dir)?;
 
-        // Run `git init` and seed the manifest so the working tree has a HEAD.
-        let repo = git2::Repository::init(&root)
+        let library_file = LibraryFile {
+            manifest: snx_manifest,
+            tables: std::collections::BTreeMap::new(),
+        };
+        let text = library_file.write()?;
+        fs::write(&file_path, &text)?;
+
+        // LFS attributes go in BEFORE `git init` so the initial commit
+        // already has `.gitattributes` staged; otherwise libgit2's
+        // index update sequence gets fiddly.
+        if opts.use_lfs {
+            write_lfs_attributes(&root_dir)?;
+        }
+
+        let repo = git2::Repository::init(&root_dir)
             .map_err(|e| LibraryError::Backend(format!("git init: {e}")))?;
         let (sig_name, sig_email) = identity_for_repo(&repo);
         let sig = git2::Signature::now(&sig_name, &sig_email)
@@ -84,9 +134,15 @@ impl LocalGitAdapter {
         let mut index = repo
             .index()
             .map_err(|e| LibraryError::Backend(format!("git index: {e}")))?;
+        let snxlib_rel = file_name_str(&file_path)?;
         index
-            .add_path(Path::new(MANIFEST_FILE))
-            .map_err(|e| LibraryError::Backend(format!("git add manifest: {e}")))?;
+            .add_path(Path::new(&snxlib_rel))
+            .map_err(|e| LibraryError::Backend(format!("git add snxlib: {e}")))?;
+        if opts.use_lfs {
+            index
+                .add_path(Path::new(GITATTRIBUTES_FILE))
+                .map_err(|e| LibraryError::Backend(format!("git add gitattributes: {e}")))?;
+        }
         index
             .write()
             .map_err(|e| LibraryError::Backend(format!("git index write: {e}")))?;
@@ -106,35 +162,150 @@ impl LocalGitAdapter {
         )
         .map_err(|e| LibraryError::Backend(format!("git initial commit: {e}")))?;
 
-        Ok(Self { root, manifest })
+        let manifest_synth = synthesize_manifest(&library_file.manifest);
+        Ok(Self {
+            file_path,
+            root_dir,
+            library_file: RwLock::new(library_file),
+            manifest_synth,
+        })
     }
 
-    /// Open an existing `.snxlib/` directory.
-    pub fn open(root: impl AsRef<Path>) -> Result<Self, LibraryError> {
-        let root = root.as_ref().to_path_buf();
-        let manifest_path = root.join(MANIFEST_FILE);
-        if !manifest_path.exists() {
+    /// Open an existing library by `.snxlib` file path. The file's
+    /// parent directory must already host a `.git/` — recovery from
+    /// a deleted git repo lives in [`Self::recover_init`].
+    pub fn open(file_path: impl AsRef<Path>) -> Result<Self, LibraryError> {
+        let file_path = file_path.as_ref().to_path_buf();
+        Self::validate_file_path(&file_path)?;
+        if !file_path.exists() {
             return Err(LibraryError::NotFound(format!(
-                "no manifest at {}",
-                manifest_path.display()
+                "no .snxlib at {}",
+                file_path.display()
             )));
         }
-        let text = fs::read_to_string(&manifest_path)?;
-        let manifest = Manifest::parse(&text)
-            .map_err(|e| LibraryError::Backend(format!("manifest parse: {e}")))?;
-        // Validate the repo opens; surfaces dirty installs early.
-        git2::Repository::open(&root)
+        let text = fs::read_to_string(&file_path)?;
+        let library_file = LibraryFile::parse(&text)?;
+        let root_dir = parent_dir(&file_path)?;
+        // Validate the repo opens; surfaces dirty installs early so the
+        // recovery dialog can route the user to `recover_init`.
+        git2::Repository::open(&root_dir)
             .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
-        Ok(Self { root, manifest })
+        let manifest_synth = synthesize_manifest(&library_file.manifest);
+        Ok(Self {
+            file_path,
+            root_dir,
+            library_file: RwLock::new(library_file),
+            manifest_synth,
+        })
     }
 
-    /// Borrow the on-disk root directory.
+    /// Recover a library whose `.git/` directory was deleted
+    /// out-from-under-it. Re-runs `git init` at the parent directory
+    /// and stages the current working tree as a fresh
+    /// "snxlib re-init" commit. Past history is lost — the recovery
+    /// dialog (Stage 10) is responsible for warning the user before
+    /// landing here.
+    pub fn recover_init(file_path: impl AsRef<Path>) -> Result<Self, LibraryError> {
+        let file_path = file_path.as_ref().to_path_buf();
+        Self::validate_file_path(&file_path)?;
+        if !file_path.exists() {
+            return Err(LibraryError::NotFound(format!(
+                "cannot recover-init: no .snxlib at {}",
+                file_path.display()
+            )));
+        }
+        let root_dir = parent_dir(&file_path)?;
+
+        // `git2::Repository::init` is idempotent on an already-init'd
+        // working tree, so this also handles the "git was *not*
+        // deleted" case as a no-op + re-commit-everything. The recovery
+        // dialog is the gate; the adapter just does what it's asked.
+        let repo = git2::Repository::init(&root_dir)
+            .map_err(|e| LibraryError::Backend(format!("git re-init: {e}")))?;
+        let (sig_name, sig_email) = identity_for_repo(&repo);
+        let sig = git2::Signature::now(&sig_name, &sig_email)
+            .map_err(|e| LibraryError::Backend(format!("git signature: {e}")))?;
+
+        let mut index = repo
+            .index()
+            .map_err(|e| LibraryError::Backend(format!("git index: {e}")))?;
+        index
+            .add_all(["."].iter(), git2::IndexAddOption::DEFAULT, None)
+            .map_err(|e| LibraryError::Backend(format!("git add all: {e}")))?;
+        index
+            .write()
+            .map_err(|e| LibraryError::Backend(format!("git index write: {e}")))?;
+        let tree_oid = index
+            .write_tree()
+            .map_err(|e| LibraryError::Backend(format!("git write tree: {e}")))?;
+        let tree = repo
+            .find_tree(tree_oid)
+            .map_err(|e| LibraryError::Backend(format!("git find tree: {e}")))?;
+        // Use the existing HEAD commit as parent if any — a re-init
+        // case keeps prior history intact under the rewritten ref.
+        let parent = match repo.head() {
+            Ok(h) => h
+                .peel_to_commit()
+                .map_err(|e| LibraryError::Backend(format!("git peel to commit: {e}")))
+                .map(Some)?,
+            Err(e) if e.code() == git2::ErrorCode::UnbornBranch => None,
+            Err(e) => return Err(LibraryError::Backend(format!("git head: {e}"))),
+        };
+        let parents: Vec<&git2::Commit> = parent.as_ref().map(|c| vec![c]).unwrap_or_default();
+        repo.commit(
+            Some("HEAD"),
+            &sig,
+            &sig,
+            "chore: snxlib re-init",
+            &tree,
+            &parents,
+        )
+        .map_err(|e| LibraryError::Backend(format!("git recover commit: {e}")))?;
+
+        let text = fs::read_to_string(&file_path)?;
+        let library_file = LibraryFile::parse(&text)?;
+        let manifest_synth = synthesize_manifest(&library_file.manifest);
+        Ok(Self {
+            file_path,
+            root_dir,
+            library_file: RwLock::new(library_file),
+            manifest_synth,
+        })
+    }
+
+    /// Reject paths whose extension isn't `.snxlib`. We refuse rather
+    /// than silently rewriting; the file picker should be filtering,
+    /// but defensively block anyway so a misnamed path doesn't end up
+    /// committed to history.
+    fn validate_file_path(p: &Path) -> Result<(), LibraryError> {
+        let ext_ok = p
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.eq_ignore_ascii_case(SNXLIB_EXT))
+            .unwrap_or(false);
+        if !ext_ok {
+            return Err(LibraryError::Backend(format!(
+                "library path must end with `.{SNXLIB_EXT}`: {}",
+                p.display()
+            )));
+        }
+        Ok(())
+    }
+
+    // ── Path accessors ─────────────────────────────────────────────────────
+
+    /// Borrow the directory holding the `.snxlib` file (the git working tree).
     pub fn root(&self) -> &Path {
-        &self.root
+        &self.root_dir
+    }
+
+    /// Borrow the absolute path to the `.snxlib` file itself.
+    pub fn file_path_buf(&self) -> &Path {
+        &self.file_path
     }
 
     fn primitive_dir(&self, kind: PrimitiveKind) -> PathBuf {
-        self.root.join(primitive_subdir(kind))
+        self.root_dir.join(primitive_subdir(kind))
     }
 
     fn primitive_path(&self, kind: PrimitiveKind, uuid: Uuid) -> PathBuf {
@@ -173,7 +344,7 @@ impl LocalGitAdapter {
         let dir = self.primitive_dir(kind);
         fs::create_dir_all(&dir)?;
         let rel_path = format!("{}/{uuid}.{}", primitive_subdir(kind), primitive_ext(kind));
-        let abs_path = self.root.join(&rel_path);
+        let abs_path = self.root_dir.join(&rel_path);
         let bytes = serde_json::to_vec_pretty(value)
             .map_err(|e| LibraryError::Backend(format!("write primitive: {e}")))?;
         fs::write(&abs_path, bytes)?;
@@ -182,17 +353,15 @@ impl LocalGitAdapter {
         self.commit_path(&rel_path, message, &fallback)
     }
 
-    /// Stage `rel_path` and create a new commit. Used by both primitive
-    /// saves (`*.snx*` files) and table writes (`tables/*.tsv`). The two
-    /// share a single signature/index/tree/commit dance; only the relative
-    /// path and commit message vary.
+    /// Stage `rel_path` and create a new commit. Used by primitive saves
+    /// (`*.snx*` files) and table writes (the `.snxlib` itself).
     fn commit_path(
         &self,
         rel_path: &str,
         message: &str,
         fallback_message: &str,
     ) -> Result<(), LibraryError> {
-        let repo = git2::Repository::open(&self.root)
+        let repo = git2::Repository::open(&self.root_dir)
             .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
         let (sig_name, sig_email) = identity_for_repo(&repo);
         let sig = git2::Signature::now(&sig_name, &sig_email)
@@ -216,8 +385,8 @@ impl LocalGitAdapter {
 
         // Resolve the parent commit. An unborn HEAD (fresh repo, no commits
         // yet) is the only legitimate "no parent" case — every other error
-        // (corrupt ref, locked ref, etc.) propagates so we don't silently
-        // produce an orphan commit on a broken repo.
+        // (corrupt ref, locked ref) propagates so we don't silently produce
+        // an orphan commit on a broken repo.
         let parent = match repo.head() {
             Ok(h) => h
                 .peel_to_commit()
@@ -239,27 +408,65 @@ impl LocalGitAdapter {
 
     // ── Table helpers ──────────────────────────────────────────────────────
 
-    /// Path to `<root>/tables/`.
-    fn tables_dir(&self) -> PathBuf {
-        self.root.join(TABLES_DIR)
+    fn snxlib_rel_path(&self) -> Result<String, LibraryError> {
+        file_name_str(&self.file_path)
     }
 
-    /// Absolute path to a table file by name (no extension).
-    fn table_path(&self, name: &str) -> PathBuf {
-        self.tables_dir().join(format!("{name}.{TABLE_EXT}"))
+    /// Persist the in-memory `library_file` to disk. Caller already holds
+    /// the appropriate read/write lock.
+    fn persist_library_file(&self, lf: &LibraryFile) -> Result<(), LibraryError> {
+        let text = lf.write()?;
+        fs::write(&self.file_path, text)?;
+        Ok(())
     }
 
-    /// Relative-to-root path for `git add` — always forward slashes regardless
-    /// of platform so the index entries stay portable.
-    fn table_rel_path(name: &str) -> String {
-        format!("{TABLES_DIR}/{name}.{TABLE_EXT}")
+    /// Mutate the in-memory `library_file`, persist it, and commit the
+    /// `.snxlib` with the supplied message.
+    fn mutate_library_file<F>(
+        &self,
+        f: F,
+        message: &str,
+        fallback: &str,
+    ) -> Result<(), LibraryError>
+    where
+        F: FnOnce(&mut LibraryFile) -> Result<(), LibraryError>,
+    {
+        let mut guard = self
+            .library_file
+            .write()
+            .map_err(|_| LibraryError::Backend("library_file write lock poisoned".into()))?;
+        f(&mut guard)?;
+        self.persist_library_file(&guard)?;
+        let rel = self.snxlib_rel_path()?;
+        self.commit_path(&rel, message, fallback)
     }
 
-    /// Walk `<root>/symbols/*.snxsym` and parse each as a
-    /// [`SymbolFile`]. Returns `(file_path, parsed_file)` pairs in
-    /// filename order. Legacy single-Symbol files are wrapped into
-    /// one-element containers via [`SymbolFile::from_json`] so the
-    /// rest of the adapter can treat every file uniformly.
+    /// Read the table named `table` as a snapshot of [`ComponentRow`]s,
+    /// scoped to whatever the legacy [`TABLE_HEADER`] columns are.
+    /// Returns an empty vec for unknown tables (matches the old
+    /// `tables/<name>.tsv` "missing file = empty" semantics).
+    fn snapshot_table(&self, name: &str) -> Result<Vec<ComponentRow>, LibraryError> {
+        let guard = self
+            .library_file
+            .read()
+            .map_err(|_| LibraryError::Backend("library_file read lock poisoned".into()))?;
+        let Some(table) = guard.tables.get(name) else {
+            return Ok(Vec::new());
+        };
+        // Verify the on-disk header matches the legacy schema. Once
+        // Stage 12 lifts the fixed-column constraint this guard goes
+        // away, but for v0.9 we want a loud error if a hand-edited
+        // .snxlib drifts the schema.
+        validate_legacy_header(name, &table.columns)?;
+        let mut out = Vec::with_capacity(table.rows.len());
+        for row in &table.rows {
+            out.push(library_row_to_component(row)?);
+        }
+        Ok(out)
+    }
+
+    // ── Symbol container helpers (v0.9 phase 2 multi-symbol files) ────────
+
     fn scan_symbol_files(&self) -> Result<Vec<(PathBuf, SymbolFile)>, LibraryError> {
         let dir = self.primitive_dir(PrimitiveKind::Symbol);
         if !dir.exists() {
@@ -292,12 +499,6 @@ impl LocalGitAdapter {
         Ok(out)
     }
 
-    /// Persist `sym` into a `.snxsym` container. Locates the existing
-    /// file holding the symbol's uuid (upsert path); if the symbol is
-    /// new, creates a fresh container at `<symbols>/<slug>.snxsym`
-    /// (slug derived from `sym.name`, fallback to the symbol's uuid
-    /// if the slug collides). Commits via libgit2 so the on-disk
-    /// history matches every other adapter write.
     fn save_symbol_in_container(&self, sym: Symbol, message: &str) -> Result<(), LibraryError> {
         let dir = self.primitive_dir(PrimitiveKind::Symbol);
         fs::create_dir_all(&dir)?;
@@ -324,7 +525,7 @@ impl LocalGitAdapter {
         };
 
         let rel_path = target_path
-            .strip_prefix(&self.root)
+            .strip_prefix(&self.root_dir)
             .map_err(|_| {
                 LibraryError::Backend(format!(
                     "could not relativise {} against root",
@@ -337,9 +538,6 @@ impl LocalGitAdapter {
         self.commit_path(&rel_path, message, &fallback)
     }
 
-    /// Find the existing `.snxsym` file containing the given symbol
-    /// uuid. Returns `None` when the symbol is new (no container holds
-    /// it yet). Reads but does not mutate.
     fn locate_symbol_file(
         &self,
         uuid: Uuid,
@@ -352,9 +550,6 @@ impl LocalGitAdapter {
         Ok(None)
     }
 
-    /// Pick a unique filename for a freshly-created `SymbolFile`.
-    /// Slug derives from the file's `display_name` (or first symbol's
-    /// name); collisions fall back to the file's UUID.
     fn fresh_symbol_file_path(
         &self,
         dir: &Path,
@@ -376,8 +571,6 @@ impl LocalGitAdapter {
         Ok(dir.join(format!("{}.{SYMBOL_EXT}", file.file_uuid)))
     }
 
-    /// Walk a primitive directory and produce one [`PrimitiveSummary`] per
-    /// `<uuid>.<ext>` file.
     fn list_primitive_summaries<T>(
         &self,
         kind: PrimitiveKind,
@@ -429,48 +622,48 @@ impl LocalGitAdapter {
 
 impl LibraryAdapter for LocalGitAdapter {
     fn manifest(&self) -> &Manifest {
-        &self.manifest
+        &self.manifest_synth
+    }
+
+    fn library_file(&self) -> Option<&LibraryFile> {
+        // Returning `&LibraryFile` from inside a `RwLock` would require a
+        // self-referential guard, which the trait shape can't express.
+        // Stage 5 will replace this with a closure-based accessor; for
+        // now the trait method stays `None` for git-backed adapters and
+        // callers wanting the parsed view go through other surfaces
+        // (`list_tables` / `read_table`). The DB adapter returns `None`
+        // because it has no `.snxlib` on disk.
+        None
+    }
+
+    fn root_dir(&self) -> Option<&Path> {
+        Some(&self.root_dir)
+    }
+
+    fn library_file_path(&self) -> Option<&Path> {
+        Some(&self.file_path)
     }
 
     // ── Tables ─────────────────────────────────────────────────────────────
 
     fn list_tables(&self) -> Result<Vec<String>, LibraryError> {
-        let dir = self.tables_dir();
-        if !dir.exists() {
-            return Ok(Vec::new());
-        }
-        let mut out: Vec<String> = Vec::new();
-        for entry in fs::read_dir(&dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            if !path.is_file() {
-                continue;
-            }
-            // Only `.tsv` files count — sibling `.toml` lock files or stray
-            // editor backups (`.tsv~`) are ignored.
-            if path.extension().and_then(|s| s.to_str()) != Some(TABLE_EXT) {
-                continue;
-            }
-            if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                out.push(stem.to_string());
-            }
-        }
-        out.sort();
-        Ok(out)
+        let guard = self
+            .library_file
+            .read()
+            .map_err(|_| LibraryError::Backend("library_file read lock poisoned".into()))?;
+        let mut names: Vec<String> = guard.tables.keys().cloned().collect();
+        names.sort();
+        Ok(names)
     }
 
     fn read_table(&self, name: &str) -> Result<Vec<ComponentRow>, LibraryError> {
-        // Delegate to the file-format module — `tables::read_table` returns an
-        // empty `Vec` for missing files, so the caller doesn't have to
-        // existence-check up front.
-        tables::read_table(&self.table_path(name))
+        self.snapshot_table(name)
     }
 
     fn iter_rows(&self) -> Result<Vec<(String, ComponentRow)>, LibraryError> {
         let mut out: Vec<(String, ComponentRow)> = Vec::new();
         for name in self.list_tables()? {
-            let rows = self.read_table(&name)?;
-            for row in rows {
+            for row in self.snapshot_table(&name)? {
                 out.push((name.clone(), row));
             }
         }
@@ -479,15 +672,15 @@ impl LibraryAdapter for LocalGitAdapter {
 
     fn read_row(&self, table: &str, row_id: RowId) -> Result<ComponentRow, LibraryError> {
         let target = row_id.as_uuid();
-        let rows = self.read_table(table)?;
-        rows.into_iter()
+        self.snapshot_table(table)?
+            .into_iter()
             .find(|r| r.row_id == target)
             .ok_or_else(|| LibraryError::NotFound(format!("row {row_id} in table {table}")))
     }
 
-    /// Linear scan across every table — O(total rows). Acceptable at v0.9
-    /// scale (libraries are O(thousands)). When the search index lands the
-    /// call should redirect through it; until then, avoid hot-loop usage.
+    /// Linear scan across every table — O(total rows). Acceptable at
+    /// v0.9 scale (libraries are O(thousands)). When the search index
+    /// lands the call should redirect through it.
     fn read_row_by_pn(&self, pn: &InternalPn) -> Result<(String, ComponentRow), LibraryError> {
         for (table, row) in self.iter_rows()? {
             if &row.internal_pn == pn {
@@ -498,40 +691,84 @@ impl LibraryAdapter for LocalGitAdapter {
     }
 
     fn insert_row(&self, table: &str, row: ComponentRow, msg: &str) -> Result<(), LibraryError> {
-        let path = self.table_path(table);
-        // Ensure `<root>/tables/` exists; the file is created (header-only)
-        // by `append_row` if missing.
-        fs::create_dir_all(self.tables_dir())?;
-        tables::append_row(&path, &row)?;
-
-        let rel = Self::table_rel_path(table);
-        let fallback = format!("insert row {} into {}", row.row_id, table);
-        self.commit_path(&rel, msg, &fallback)
+        let table_owned = table.to_string();
+        let row_id = row.row_id;
+        let lib_row = component_to_library_row(&row)?;
+        let fallback = format!("insert row {row_id} into {table_owned}");
+        self.mutate_library_file(
+            move |lf| {
+                let entry = lf
+                    .tables
+                    .entry(table_owned.clone())
+                    .or_insert_with(|| LibraryTable {
+                        columns: legacy_columns(),
+                        rows: Vec::new(),
+                    });
+                validate_legacy_header(&table_owned, &entry.columns)?;
+                entry.rows.push(lib_row);
+                Ok(())
+            },
+            msg,
+            &fallback,
+        )
     }
 
     fn update_row(&self, table: &str, row: ComponentRow, msg: &str) -> Result<(), LibraryError> {
-        let path = self.table_path(table);
+        let table_owned = table.to_string();
         let row_id = row.row_id;
-        tables::update_row(&path, &row)?;
-
-        let rel = Self::table_rel_path(table);
-        let fallback = format!("update row {row_id} in {table}");
-        self.commit_path(&rel, msg, &fallback)
+        let lib_row = component_to_library_row(&row)?;
+        let fallback = format!("update row {row_id} in {table_owned}");
+        self.mutate_library_file(
+            move |lf| {
+                let entry = lf.tables.get_mut(&table_owned).ok_or_else(|| {
+                    LibraryError::NotFound(format!("table {table_owned} not in library"))
+                })?;
+                validate_legacy_header(&table_owned, &entry.columns)?;
+                let row_id_s = row_id.to_string();
+                let target = entry.rows.iter_mut().find(|r| {
+                    r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) == Some(row_id_s.as_str())
+                });
+                match target {
+                    Some(slot) => {
+                        *slot = lib_row;
+                        Ok(())
+                    }
+                    None => Err(LibraryError::NotFound(format!(
+                        "row {row_id} in table {table_owned}"
+                    ))),
+                }
+            },
+            msg,
+            &fallback,
+        )
     }
 
     fn delete_row(&self, table: &str, row_id: RowId, msg: &str) -> Result<(), LibraryError> {
-        let path = self.table_path(table);
-        tables::delete_row(&path, row_id)?;
-
-        let rel = Self::table_rel_path(table);
-        let fallback = format!("delete row {row_id} from {table}");
-        self.commit_path(&rel, msg, &fallback)
+        let table_owned = table.to_string();
+        let fallback = format!("delete row {row_id} from {table_owned}");
+        self.mutate_library_file(
+            move |lf| {
+                let entry = lf.tables.get_mut(&table_owned).ok_or_else(|| {
+                    LibraryError::NotFound(format!("table {table_owned} not in library"))
+                })?;
+                let target = row_id.as_uuid().to_string();
+                let before = entry.rows.len();
+                entry
+                    .rows
+                    .retain(|r| r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) != Some(target.as_str()));
+                if entry.rows.len() == before {
+                    return Err(LibraryError::NotFound(format!(
+                        "row {row_id} in table {table_owned}"
+                    )));
+                }
+                Ok(())
+            },
+            msg,
+            &fallback,
+        )
     }
 
     fn get_symbol(&self, uuid: Uuid) -> Result<Symbol, LibraryError> {
-        // Multi-symbol containers — scan each .snxsym file for the
-        // requested uuid. SymbolFile::from_json handles legacy
-        // single-Symbol files transparently (one-element container).
         for (_, file) in self.scan_symbol_files()? {
             if let Some(sym) = file.get_symbol(uuid) {
                 return Ok(sym.clone());
@@ -561,7 +798,6 @@ impl LibraryAdapter for LocalGitAdapter {
     }
 
     fn list_symbols(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
-        // Flatten every SymbolFile container into per-symbol summaries.
         let mut out: Vec<PrimitiveSummary> = Vec::new();
         for (_, file) in self.scan_symbol_files()? {
             for sym in &file.symbols {
@@ -586,22 +822,17 @@ impl LibraryAdapter for LocalGitAdapter {
     }
 
     fn root_path(&self) -> Option<PathBuf> {
-        Some(self.root.clone())
+        Some(self.root_dir.clone())
     }
 
-    /// Stage + commit `abs_path` via libgit2. Used by the standalone
-    /// primitive editor tabs to land their writes in git history
-    /// without going through the per-primitive `save_*` round-trip
-    /// (which would lose multi-symbol container semantics for
-    /// `.snxsym`).
     fn commit_external_change(&self, abs_path: &Path, message: &str) -> Result<(), LibraryError> {
         let rel_path = abs_path
-            .strip_prefix(&self.root)
+            .strip_prefix(&self.root_dir)
             .map_err(|_| {
                 LibraryError::Backend(format!(
                     "commit_external_change: {} is not under {}",
                     abs_path.display(),
-                    self.root.display(),
+                    self.root_dir.display(),
                 ))
             })?
             .to_string_lossy()
@@ -609,6 +840,113 @@ impl LibraryAdapter for LocalGitAdapter {
         let fallback = format!("save {rel_path}");
         self.commit_path(&rel_path, message, &fallback)
     }
+}
+
+// ── Free helpers ───────────────────────────────────────────────────────────
+
+const LEGACY_ROW_ID_COL: &str = "row_id";
+
+/// Header expected for the v0.9 fixed-schema `[tables.<name>]` blocks
+/// — same column ordering as the pre-refactor `tables/*.tsv` files
+/// so the conversion through [`row_to_record`] / [`record_to_row`]
+/// stays bit-exact. Stage 12 lifts the fixed-schema constraint.
+fn legacy_columns() -> Vec<String> {
+    TABLE_HEADER.iter().map(|s| (*s).to_string()).collect()
+}
+
+/// Verify a `[tables.<name>]` block's column order matches the
+/// legacy schema. Mismatches are loud — a hand-edited `.snxlib`
+/// where someone reordered or renamed columns would silently
+/// miscolumn data otherwise.
+fn validate_legacy_header(table: &str, columns: &[String]) -> Result<(), LibraryError> {
+    if columns.len() != TABLE_HEADER.len() {
+        return Err(LibraryError::Backend(format!(
+            "table {table:?} schema mismatch: {} columns, expected {}",
+            columns.len(),
+            TABLE_HEADER.len()
+        )));
+    }
+    for (got, want) in columns.iter().zip(TABLE_HEADER.iter()) {
+        if got.as_str() != *want {
+            return Err(LibraryError::Backend(format!(
+                "table {table:?} schema mismatch: column {got:?}, expected {want:?}"
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn component_to_library_row(row: &ComponentRow) -> Result<LibraryRow, LibraryError> {
+    let cells = row_to_record(row)?;
+    let mut lib_row = LibraryRow::default();
+    for (col, val) in TABLE_HEADER.iter().zip(cells) {
+        lib_row.cells.insert((*col).to_string(), val);
+    }
+    Ok(lib_row)
+}
+
+fn library_row_to_component(row: &LibraryRow) -> Result<ComponentRow, LibraryError> {
+    let mut record = csv::StringRecord::new();
+    for col in TABLE_HEADER.iter() {
+        let val = row.cells.get(*col).map(String::as_str).unwrap_or("");
+        record.push_field(val);
+    }
+    record_to_row(&record)
+}
+
+fn synthesize_manifest(snx: &SnxlibManifest) -> Manifest {
+    Manifest {
+        library: LibraryMeta {
+            name: snx.library.name.clone(),
+            library_id: snx.library_id,
+            description: snx.library.description.clone(),
+        },
+        mode: snx.mode.clone(),
+        workflow: snx.workflow.clone(),
+        users: snx.users.clone(),
+        // The new model stores tables inside `LibraryFile.tables`, not
+        // in the manifest header — leave the legacy field empty so
+        // `Manifest::table_for_class` falls back to the mechanical
+        // plural until Stage 8/12 retires that caller surface.
+        tables: Vec::new(),
+    }
+}
+
+fn parent_dir(p: &Path) -> Result<PathBuf, LibraryError> {
+    p.parent().map(Path::to_path_buf).ok_or_else(|| {
+        LibraryError::Backend(format!(
+            "library file {} has no parent directory",
+            p.display()
+        ))
+    })
+}
+
+fn file_name_str(p: &Path) -> Result<String, LibraryError> {
+    p.file_name()
+        .and_then(|s| s.to_str())
+        .map(str::to_string)
+        .ok_or_else(|| {
+            LibraryError::Backend(format!(
+                "library file path {} has no UTF-8 file name",
+                p.display()
+            ))
+        })
+}
+
+fn write_lfs_attributes(root_dir: &Path) -> Result<(), LibraryError> {
+    let path = root_dir.join(GITATTRIBUTES_FILE);
+    let mut text = String::new();
+    text.push_str(
+        "# Git LFS attributes for Signex 3D model binaries.\n\
+         # Written at library-create time when LFS opt-in was selected.\n",
+    );
+    for ext in LFS_EXTENSIONS {
+        text.push_str(&format!(
+            "*.{ext} filter=lfs diff=lfs merge=lfs -text\n"
+        ));
+    }
+    fs::write(&path, text)?;
+    Ok(())
 }
 
 /// Slugify a human-facing name into a safe filename component.
@@ -676,22 +1014,27 @@ fn identity_for_repo(repo: &git2::Repository) -> (String, String) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::manifest::{LibraryMeta, LibraryMode, Manifest, UsersConfig, WorkflowConfig};
-    use crate::primitive::{PinElectricalType, PinOrientation, Symbol, SymbolPin};
+    use crate::library_file::{FORMAT_TOKEN, LibrarySection};
+    use crate::manifest::{LibraryMode, UsersConfig, WorkflowConfig};
+    use crate::primitive::Symbol;
     use uuid::Uuid;
 
-    fn fixture_manifest() -> Manifest {
-        Manifest {
-            library: LibraryMeta {
-                name: "TestLib".into(),
-                library_id: Uuid::now_v7(),
+    fn fixture_snx_manifest(name: &str) -> SnxlibManifest {
+        SnxlibManifest {
+            format: FORMAT_TOKEN.into(),
+            library_id: Uuid::now_v7(),
+            library: LibrarySection {
+                name: name.into(),
                 description: None,
             },
             mode: LibraryMode::default(),
             workflow: WorkflowConfig::default(),
             users: UsersConfig::default(),
-            tables: Vec::new(),
         }
+    }
+
+    fn fixture_snxlib_path(dir: &tempfile::TempDir, name: &str) -> PathBuf {
+        dir.path().join(name).join(format!("{name}.{SNXLIB_EXT}"))
     }
 
     fn fixture_symbol(name: &str) -> Symbol {
@@ -699,18 +1042,29 @@ mod tests {
     }
 
     #[test]
-    fn init_creates_manifest_and_repo() {
+    fn init_creates_snxlib_file_and_repo() {
         let dir = tempfile::tempdir().unwrap();
-        let _adapter =
-            LocalGitAdapter::init(dir.path(), fixture_manifest()).expect("init succeeds");
-        assert!(dir.path().join(MANIFEST_FILE).exists());
-        assert!(dir.path().join(".git").exists());
+        let path = fixture_snxlib_path(&dir, "Test");
+        let _adapter = LocalGitAdapter::init(
+            &path,
+            fixture_snx_manifest("Test"),
+            LibraryInitOptions::default(),
+        )
+        .expect("init succeeds");
+        assert!(path.exists(), "expected .snxlib file at {path:?}");
+        assert!(path.parent().unwrap().join(".git").exists());
     }
 
     #[test]
     fn save_then_load_symbol_round_trip() {
         let dir = tempfile::tempdir().unwrap();
-        let adapter = LocalGitAdapter::init(dir.path(), fixture_manifest()).unwrap();
+        let path = fixture_snxlib_path(&dir, "Sym");
+        let adapter = LocalGitAdapter::init(
+            &path,
+            fixture_snx_manifest("Sym"),
+            LibraryInitOptions::default(),
+        )
+        .unwrap();
         let sym = fixture_symbol("R");
         let uuid = sym.uuid;
         adapter.save_symbol(sym.clone(), "save R").unwrap();
@@ -720,18 +1074,49 @@ mod tests {
     }
 
     #[test]
-    fn list_symbols_returns_saved_entries() {
+    fn lfs_opt_in_writes_gitattributes() {
         let dir = tempfile::tempdir().unwrap();
-        let adapter = LocalGitAdapter::init(dir.path(), fixture_manifest()).unwrap();
-        adapter
-            .save_symbol(fixture_symbol("Aaa"), "init Aaa")
-            .unwrap();
-        adapter
-            .save_symbol(fixture_symbol("Bbb"), "init Bbb")
-            .unwrap();
-        let summaries = adapter.list_symbols().unwrap();
-        assert_eq!(summaries.len(), 2);
-        assert_eq!(summaries[0].name, "Aaa");
-        assert_eq!(summaries[1].name, "Bbb");
+        let path = fixture_snxlib_path(&dir, "Lfs");
+        let adapter = LocalGitAdapter::init(
+            &path,
+            fixture_snx_manifest("Lfs"),
+            LibraryInitOptions { use_lfs: true },
+        )
+        .unwrap();
+        let attrs = adapter.root().join(GITATTRIBUTES_FILE);
+        assert!(attrs.exists(), "expected .gitattributes when LFS is on");
+        let text = fs::read_to_string(&attrs).unwrap();
+        for ext in LFS_EXTENSIONS {
+            assert!(
+                text.contains(&format!("*.{ext} filter=lfs")),
+                "missing LFS rule for *.{ext}"
+            );
+        }
+    }
+
+    #[test]
+    fn lfs_off_skips_gitattributes() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = fixture_snxlib_path(&dir, "NoLfs");
+        let adapter = LocalGitAdapter::init(
+            &path,
+            fixture_snx_manifest("NoLfs"),
+            LibraryInitOptions::default(),
+        )
+        .unwrap();
+        assert!(!adapter.root().join(GITATTRIBUTES_FILE).exists());
+    }
+
+    #[test]
+    fn rejects_non_snxlib_extension() {
+        let dir = tempfile::tempdir().unwrap();
+        let bogus = dir.path().join("nope.txt");
+        let err = LocalGitAdapter::init(
+            &bogus,
+            fixture_snx_manifest("Bad"),
+            LibraryInitOptions::default(),
+        )
+        .unwrap_err();
+        assert!(matches!(err, LibraryError::Backend(_)));
     }
 }

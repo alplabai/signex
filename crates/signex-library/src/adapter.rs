@@ -13,6 +13,7 @@ use uuid::Uuid;
 
 use crate::component::ComponentRow;
 use crate::identity::{InternalPn, RowId};
+use crate::library_file::LibraryFile;
 use crate::lifecycle::LifecycleState;
 use crate::manifest::Manifest;
 use crate::primitive::{Footprint, PrimitiveKind, SimModel, Symbol};
@@ -101,6 +102,37 @@ pub trait LibraryAdapter: Send + Sync {
     }
 
     fn manifest(&self) -> &Manifest;
+
+    /// Borrow the parsed `.snxlib` view if this adapter is backed by an
+    /// on-disk file. Returns `None` for non-file adapters (e.g. the DB
+    /// backend) — they don't have a `[tables.<name>]` document on disk.
+    ///
+    /// Stage 2 introduces this hook so future adapters and callers can
+    /// reach the new format without going through the legacy
+    /// `manifest()` synthesis. The default `None` keeps existing
+    /// adapters compiling unchanged.
+    fn library_file(&self) -> Option<&LibraryFile> {
+        None
+    }
+
+    /// Absolute path to the directory that *contains* the `.snxlib` file
+    /// — i.e. the per-library git repo root and parent of `symbols/`,
+    /// `footprints/`, `sims/`. Returns `None` for non-file adapters.
+    ///
+    /// Differs from [`Self::root_path`]: under v0.9, `root_path` and
+    /// `root_dir` happen to coincide for `LocalGitAdapter` (both point
+    /// at the directory holding the `.snxlib` file), but the new name
+    /// makes the parent-of-file relationship explicit per
+    /// `v0.9-snxlib-as-file-plan.md` §2 Stage B.
+    fn root_dir(&self) -> Option<&std::path::Path> {
+        None
+    }
+
+    /// Absolute path to the `.snxlib` file itself. `None` for non-file
+    /// adapters.
+    fn library_file_path(&self) -> Option<&std::path::Path> {
+        None
+    }
 
     // ── Tables ──────────────────────────────────────────────────────────
     //

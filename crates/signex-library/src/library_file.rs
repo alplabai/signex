@@ -28,6 +28,7 @@ use std::collections::{BTreeMap, HashSet};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::adapter::LibraryError;
 use crate::manifest::{LibraryMode, UsersConfig, WorkflowConfig};
 
 /// Format token written at the top of every `.snxlib`. Bumping this is a
@@ -151,6 +152,15 @@ pub enum LibraryFileError {
          (\"'''\") which would terminate the embedded TOML literal multi-line string"
     )]
     DisallowedTripleQuoteInCell { table: String, column: String },
+}
+
+impl From<LibraryFileError> for LibraryError {
+    /// Funnel `.snxlib` parse / write failures into the adapter's error
+    /// channel so callers can `?` through `LibraryAdapter` methods without
+    /// matching on the inner enum.
+    fn from(value: LibraryFileError) -> Self {
+        LibraryError::Backend(value.to_string())
+    }
 }
 
 impl LibraryFile {

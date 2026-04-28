@@ -8,11 +8,18 @@
 
 use std::path::{Path, PathBuf};
 
+use signex_library::adapters::local_git::LibraryInitOptions;
 use signex_library::{
-    ComponentClass, ComponentRow, ComponentSummary, DatasheetRef, InternalPn, LibraryError,
-    LibraryMeta, LibraryMode, LifecycleState, LocalGitAdapter, Manifest, ManufacturerPart,
-    ParamMap, PlmReserved, PrimitiveRef, RowId, UsersConfig, WorkflowConfig, hash_row_content,
+    ComponentClass, ComponentRow, ComponentSummary, DatasheetRef, FORMAT_TOKEN, InternalPn,
+    LibraryError, LibrarySection, LifecycleState, LocalGitAdapter, ManufacturerPart, ParamMap,
+    PlmReserved, PrimitiveRef, RowId, SnxlibManifest, UsersConfig, WorkflowConfig,
+    hash_row_content,
 };
+// Legacy `Manifest` / `LibraryMeta` / `LibraryMode` imports were retired
+// when `LocalGitAdapter::init` switched to the new `SnxlibManifest`
+// shape. The remaining sub-stages (Stage 13 workflow mode, Stage 14
+// versioning) will introduce richer manifest fields; keeping the
+// imports tight here keeps the v0.9-snxlib-as-file refactor auditable.
 use signex_types::project::{LibraryEntry, LibraryEntryKind, ProjectData};
 use uuid::Uuid;
 
@@ -83,33 +90,24 @@ pub fn create_library_at(
         )));
     }
 
-    // 1. Manifest with a fresh library_id. Other defaults match the
-    //    `LocalGit` mode + open-workflow profile that the new-project
-    //    flow expects (no review, single designer role).
-    let library_id = Uuid::new_v4();
-    let manifest = Manifest {
-        library: LibraryMeta {
+    let library_id = Uuid::now_v7();
+    let manifest = SnxlibManifest {
+        format: FORMAT_TOKEN.into(),
+        library_id,
+        library: LibrarySection {
             name: stem.clone(),
-            library_id,
             description: None,
         },
-        mode: LibraryMode::default(),
+        // Mode/workflow/users default — Stage 13 will surface the
+        // workflow-mode picker (Personal / Team) at create time.
+        mode: Default::default(),
         workflow: WorkflowConfig::default(),
         users: UsersConfig::default(),
-        // No `[[tables]]` overrides at create time — class-table
-        // routing falls back to mechanical plural (`<class>s.tsv`)
-        // until the user adds explicit overrides.
-        tables: Vec::new(),
     };
 
-    // 2. `LocalGitAdapter::init` lays out the directory, writes
-    //    library.toml, runs `git init`, and seeds the initial commit
-    //    in one shot. The plan listed each `fs::create_dir_all` call
-    //    explicitly (symbols/, footprints/, sims/, components/,
-    //    step/, templates/, locks/) — those subdirectories are
-    //    populated lazily by the adapter when components are first
-    //    written, matching the LIBRARY_PLAN §13 layout.
-    let _adapter = LocalGitAdapter::init(&lib_path, manifest)?;
+    // LFS opt-in lands in Stage 11 — for now every UI-driven create
+    // goes off so we don't surprise users without `git lfs` installed.
+    let _adapter = LocalGitAdapter::init(&lib_path, manifest, LibraryInitOptions::default())?;
 
     // 3. Mount via the existing `open_library` helper so the panel
     //    sees the new library immediately and the picker can pull

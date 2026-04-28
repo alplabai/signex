@@ -295,7 +295,7 @@ fn hash_from_cell(s: &str) -> Result<[u8; 32], LibraryError> {
     Ok(out)
 }
 
-fn row_to_record(row: &ComponentRow) -> Result<Vec<String>, LibraryError> {
+pub(crate) fn row_to_record(row: &ComponentRow) -> Result<Vec<String>, LibraryError> {
     let primary_mpn = json_cell(&row.primary_mpn)?;
     let alternates = json_cell(&row.alternates)?;
     let supply = json_cell::<Vec<DistributorListing>>(&row.supply)?;
@@ -350,7 +350,7 @@ fn row_to_record(row: &ComponentRow) -> Result<Vec<String>, LibraryError> {
     ])
 }
 
-fn record_to_row(record: &csv::StringRecord) -> Result<ComponentRow, LibraryError> {
+pub(crate) fn record_to_row(record: &csv::StringRecord) -> Result<ComponentRow, LibraryError> {
     if record.len() != TABLE_HEADER.len() {
         return Err(LibraryError::Backend(format!(
             "row has {} cells, expected {}",
