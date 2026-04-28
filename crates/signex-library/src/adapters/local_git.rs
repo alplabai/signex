@@ -787,15 +787,35 @@ impl LibraryAdapter for LocalGitAdapter {
     }
 
     fn save_symbol(&self, sym: Symbol, message: &str) -> Result<(), LibraryError> {
-        self.save_symbol_in_container(sym, message)
+        let uuid = sym.uuid;
+        let new_version = sym.version.clone();
+        self.save_symbol_in_container(sym, message)?;
+        // Stage 15 cascade: propagate the new symbol version to bound
+        // ComponentRows. Personal mode silently auto-bumps everything;
+        // Team mode auto-bumps non-released rows + leaves released
+        // rows flagged as stale (the Library Browser surface picks
+        // them up via the existing stale-binding indicator).
+        let mode = self.manifest_synth.workflow.mode;
+        let _report = crate::cascade::cascade_after_symbol_save(self, uuid, &new_version, mode)?;
+        Ok(())
     }
 
     fn save_footprint(&self, fp: Footprint, message: &str) -> Result<(), LibraryError> {
-        self.write_primitive(PrimitiveKind::Footprint, fp.uuid, &fp, message)
+        let uuid = fp.uuid;
+        let new_version = fp.version.clone();
+        self.write_primitive(PrimitiveKind::Footprint, fp.uuid, &fp, message)?;
+        let mode = self.manifest_synth.workflow.mode;
+        let _report = crate::cascade::cascade_after_footprint_save(self, uuid, &new_version, mode)?;
+        Ok(())
     }
 
     fn save_sim(&self, sm: SimModel, message: &str) -> Result<(), LibraryError> {
-        self.write_primitive(PrimitiveKind::Sim, sm.uuid, &sm, message)
+        let uuid = sm.uuid;
+        let new_version = sm.version.clone();
+        self.write_primitive(PrimitiveKind::Sim, sm.uuid, &sm, message)?;
+        let mode = self.manifest_synth.workflow.mode;
+        let _report = crate::cascade::cascade_after_sim_save(self, uuid, &new_version, mode)?;
+        Ok(())
     }
 
     fn list_symbols(&self) -> Result<Vec<PrimitiveSummary>, LibraryError> {
