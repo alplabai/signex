@@ -73,6 +73,17 @@ pub enum Message {
     Duplicate,
     SaveFile,
     SaveFileAs(PathBuf),
+    /// User picked a destination from the Save-As dialog spawned the
+    /// first time a freshly-minted `.snxsym` / `.snxfpt` editor tab is
+    /// saved (the in-memory tab opened by `Add New ▸ Symbol` /
+    /// `Add New ▸ Footprint`). Re-keys the editor + tab from the
+    /// suggested path to the user's choice, then writes the file.
+    /// `from_path` is the suggested in-memory path the editor is
+    /// currently keyed under; `to_path` is the rfd result.
+    SavePrimitiveAs {
+        from_path: PathBuf,
+        to_path: PathBuf,
+    },
     CycleDrawMode,
     CancelDrawing,
     TogglePanelList,
