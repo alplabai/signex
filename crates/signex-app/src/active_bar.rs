@@ -114,7 +114,13 @@ const DISABLED_TEXT: Color = Color {
 };
 
 /// Theme-derived colors for Active Bar chrome (all Copy+ʼstatic).
+/// `bar_bg` / `bar_border` were used by the bespoke bar container;
+/// since `view_bar` now delegates to
+/// `signex_widgets::active_bar::view`, those fields are unused but
+/// kept on the struct so the dropdown helpers below don't have to
+/// rebuild a separate palette.
 #[derive(Clone, Copy)]
+#[allow(dead_code)]
 struct AbColors {
     text: Color,
     bar_bg: Color,
@@ -487,133 +493,145 @@ fn action_icon(action: &ActiveBarAction, tid: ThemeId) -> svg::Handle {
 // ─── View: Active Bar ────────────────────────────────────────
 
 /// Render the Active Bar (the floating toolbar strip).
-pub fn view_bar(
+pub fn view_bar<'a>(
     current_tool: crate::app::Tool,
     draw_mode: crate::app::DrawMode,
     last_tool: &std::collections::HashMap<String, ActiveBarAction>,
-    tokens: &ThemeTokens,
+    tokens: &'a ThemeTokens,
     tid: ThemeId,
     has_selection: bool,
     has_net_colors: bool,
-) -> Element<'static, ActiveBarMsg> {
-    // Publish gating context to `ab_icon_btn` so the Move cell's
-    // left-click greys out when nothing is selected, and any future
-    // bar cell that defaults to ClearNetColor would grey when no nets
-    // have a custom colour. Right-clicks still open dropdowns.
+) -> Element<'a, ActiveBarMsg> {
+    use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
+
+    // Publish gating context so cells like Move grey their left-press
+    // when nothing is selected. Right-clicks still open dropdowns.
     let _selection_guard = HasSelectionGuard::enter(has_selection, has_net_colors);
-    let ac = AbColors::from_tokens(tokens);
-    // Helper: get last-used action for a group, or use default
+
+    // Helper: get last-used action for a group, or use default.
     let last = |group: &str, default: ActiveBarAction| -> ActiveBarMsg {
         ActiveBarMsg::Action(last_tool.get(group).cloned().unwrap_or(default))
     };
-    // Helper: get the icon for the last-used action in a group, or fall
-    // back to the group's default icon. Both paths return a themed
-    // `svg::Handle` resolved through `crate::icons`.
     let last_icon = |group: &str, default_icon: svg::Handle| -> svg::Handle {
         last_tool
             .get(group)
             .map(|a| action_icon(a, tid))
             .unwrap_or(default_icon)
     };
-    let mut items: Vec<Element<'_, ActiveBarMsg>> = Vec::with_capacity(20);
-    // 1. Filter — left: toggle, right: filter dropdown
-    items.push(ab_icon_btn(
+
+    // Helper — build a button item with the schematic editor's
+    // standard pattern: left-click action + right-click dropdown +
+    // chevron indicator. Selection-aware enable inferred from the
+    // left action through `action_enabled`.
+    let btn = |icon: svg::Handle,
+               selected: bool,
+               left: ActiveBarMsg,
+               right: Option<ActiveBarMsg>,
+               tooltip: &str|
+     -> ActiveBarItem<ActiveBarMsg> {
+        let enabled = match &left {
+            ActiveBarMsg::Action(a) => action_enabled(a),
+            _ => true,
+        };
+        ActiveBarItem::Button(ActiveBarButton {
+            icon: ActiveBarIcon::Svg(icon),
+            tooltip: tooltip.to_string(),
+            enabled,
+            selected,
+            on_press: Some(left),
+            on_right_press: right.clone(),
+            has_dropdown_indicator: right.is_some(),
+        })
+    };
+
+    let mut items: Vec<ActiveBarItem<ActiveBarMsg>> = Vec::with_capacity(20);
+
+    items.push(btn(
         ic::icon_filter(tid),
         false,
         ActiveBarMsg::ToggleMenu(ActiveBarMenu::Filter),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Filter)),
         "Selection Filter",
-        tid,
     ));
-    items.push(ab_icon_btn(
+    items.push(btn(
         ic::icon_move(tid),
         false,
         ActiveBarMsg::Action(ActiveBarAction::MoveSelection),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Select)),
         "Move / Transform",
-        tid,
     ));
-    items.push(sep(ac.sep));
+    items.push(ActiveBarItem::Separator);
 
-    items.push(ab_icon_btn(
+    items.push(btn(
         ic::icon_select(tid),
         current_tool == crate::app::Tool::Select,
         ActiveBarMsg::Action(ActiveBarAction::ToolSelect),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::SelectMode)),
         "Select",
-        tid,
     ));
-    items.push(ab_icon_btn(
+    items.push(btn(
         ic::icon_align(tid),
         false,
         ActiveBarMsg::Action(ActiveBarAction::AlignToGrid),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Align)),
         "Align",
-        tid,
     ));
-    items.push(sep(ac.sep));
+    items.push(ActiveBarItem::Separator);
 
-    items.push(ab_icon_btn(
+    items.push(btn(
         last_icon("wiring", ic::icon_wire(tid)),
         current_tool == crate::app::Tool::Wire || current_tool == crate::app::Tool::Bus,
         last("wiring", ActiveBarAction::DrawWire),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Wiring)),
         "Wiring",
-        tid,
     ));
-    items.push(ab_icon_btn(
+    items.push(btn(
         last_icon("power", ic::icon_power(tid)),
         false,
         last("power", ActiveBarAction::PlacePowerGND),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Power)),
         "Power Port",
-        tid,
     ));
-    items.push(sep(ac.sep));
+    items.push(ActiveBarItem::Separator);
 
-    items.push(ab_icon_btn(
+    items.push(btn(
         last_icon("harness", ic::icon_harness(tid)),
         false,
         last("harness", ActiveBarAction::PlaceSignalHarness),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Harness)),
         "Harness",
-        tid,
     ));
-    items.push(ab_icon_btn(
+    items.push(btn(
         last_icon("sheet", ic::icon_sheetsym(tid)),
         false,
         last("sheet", ActiveBarAction::PlaceSheetSymbol),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::SheetSymbol)),
         "Sheet Symbol",
-        tid,
     ));
-    items.push(ab_icon_btn(
+    items.push(btn(
         last_icon("port", ic::icon_port(tid)),
         false,
         last("port", ActiveBarAction::PlacePort),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Port)),
         "Port / Connector",
-        tid,
     ));
-    items.push(ab_icon_btn(
+    items.push(btn(
         last_icon("directives", ic::icon_directives(tid)),
         false,
         last("directives", ActiveBarAction::PlaceParameterSet),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Directives)),
         "Directives",
-        tid,
     ));
-    items.push(sep(ac.sep));
+    items.push(ActiveBarItem::Separator);
 
-    items.push(ab_icon_btn(
+    items.push(btn(
         last_icon("text", ic::icon_text(tid)),
         current_tool == crate::app::Tool::Text,
         last("text", ActiveBarAction::PlaceTextString),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::TextTools)),
         "Text",
-        tid,
     ));
-    items.push(ab_icon_btn(
+    items.push(btn(
         last_icon("shapes", ic::icon_shapes(tid)),
         matches!(
             current_tool,
@@ -622,29 +640,29 @@ pub fn view_bar(
         last("shapes", ActiveBarAction::DrawLine),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::Shapes)),
         "Drawing Tools",
-        tid,
     ));
-    items.push(ab_icon_btn(
+    items.push(btn(
         ic::icon_netcolor(tid),
         false,
         ActiveBarMsg::Action(ActiveBarAction::ToolSelect),
         Some(ActiveBarMsg::ToggleMenu(ActiveBarMenu::NetColor)),
         "Net Color",
-        tid,
     ));
 
-    // Draw mode indicator
+    // Draw-mode indicator (only visible while wire/bus is the active
+    // tool). Drops in as a Custom variant so the standard button
+    // styling doesn't apply.
     if matches!(current_tool, crate::app::Tool::Wire | crate::app::Tool::Bus) {
-        items.push(sep(ac.sep));
+        items.push(ActiveBarItem::Separator);
         let mode_label = match draw_mode {
             crate::app::DrawMode::Ortho90 => "90\u{00B0}",
             crate::app::DrawMode::Angle45 => "45\u{00B0}",
             crate::app::DrawMode::FreeAngle => "Any",
         };
-        items.push(
+        let pill: Element<'static, ActiveBarMsg> =
             button(text(mode_label.to_string()).size(12).color(Color::WHITE))
                 .padding([5, 7])
-                .on_press(ActiveBarMsg::Action(ActiveBarAction::DrawWire)) // cycles draw mode
+                .on_press(ActiveBarMsg::Action(ActiveBarAction::DrawWire))
                 .style(|_: &Theme, _| button::Style {
                     background: Some(Background::Color(Color::from_rgb(0.22, 0.23, 0.30))),
                     border: Border {
@@ -654,28 +672,11 @@ pub fn view_bar(
                     },
                     ..button::Style::default()
                 })
-                .into(),
-        );
+                .into();
+        items.push(ActiveBarItem::Custom(pill));
     }
 
-    container(row(items).spacing(2).align_y(iced::Alignment::Center))
-        .padding([2, 2])
-        .style(move |_: &Theme| container::Style {
-            background: Some(ac.bar_bg.into()),
-            text_color: Some(ac.text),
-            border: Border {
-                width: 1.0,
-                radius: 4.0.into(),
-                color: ac.bar_border,
-            },
-            shadow: iced::Shadow {
-                color: Color::from_rgba(0.0, 0.0, 0.0, 0.5),
-                offset: iced::Vector::new(0.0, 2.0),
-                blur_radius: 8.0,
-            },
-            ..container::Style::default()
-        })
-        .into()
+    signex_widgets::active_bar::view(items, tokens)
 }
 
 // ─── View: Dropdown menus ────────────────────────────────────
@@ -1634,6 +1635,12 @@ pub fn dropdown_x_offset(menu: ActiveBarMenu) -> f32 {
 
 /// Active Bar button: left-click activates tool, right-click opens dropdown.
 /// Shows a small 45° chevron at bottom-right if button has a dropdown.
+/// Legacy bespoke button builder — superseded by
+/// `signex_widgets::active_bar::ActiveBarButton`. Kept here so a
+/// follow-up patch can lift the chevron / mouse_area details if
+/// the generic widget needs them; remove when the migration is
+/// fully bedded in.
+#[allow(dead_code)]
 fn ab_icon_btn(
     icon: svg::Handle,
     active: bool,
@@ -1747,6 +1754,10 @@ fn ab_icon_btn(
         .into()
 }
 
+/// Legacy separator builder — superseded by
+/// `ActiveBarItem::Separator`. See `ab_icon_btn` for the rationale
+/// to keep this around for one more cycle.
+#[allow(dead_code)]
 fn sep(sep_c: Color) -> Element<'static, ActiveBarMsg> {
     container(Space::new())
         .width(1)

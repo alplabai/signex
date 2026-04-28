@@ -35,7 +35,7 @@
 use std::path::PathBuf;
 
 use signex_types::theme::{ThemeId, ThemeTokens};
-use signex_widgets::active_bar::{ActiveBarIcon, ActiveBarItem};
+use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 
 use crate::icons;
 use crate::library::editor::symbol::canvas::SymbolTool;
@@ -54,7 +54,7 @@ pub fn items(
                 msg: SymbolToolMsg,
                 icon: ActiveBarIcon|
      -> ActiveBarItem<LibraryMessage> {
-        ActiveBarItem {
+        ActiveBarItem::Button(ActiveBarButton {
             icon,
             tooltip: label.to_string(),
             enabled: true,
@@ -63,16 +63,18 @@ pub fn items(
                 path: path.clone(),
                 msg: PrimitiveEditorMsg::SymbolSetTool(msg),
             }),
-        }
+            ..ActiveBarButton::default()
+        })
     };
     let stub = |label: &str, glyph: &'static str| -> ActiveBarItem<LibraryMessage> {
-        ActiveBarItem {
+        ActiveBarItem::Button(ActiveBarButton {
             icon: ActiveBarIcon::Glyph(glyph),
             tooltip: format!("{label} (coming soon)"),
             enabled: false,
             selected: false,
             on_press: None,
-        }
+            ..ActiveBarButton::default()
+        })
     };
 
     vec![

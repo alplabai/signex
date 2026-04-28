@@ -9,24 +9,31 @@
 //! `Vec<ActiveBarItem<M>>` with the editor-specific message type;
 //! this widget just renders.
 //!
-//! The schematic editor's existing in-tree `active_bar.rs` (with
-//! dropdowns + advanced state) stays as-is for now — too risky to
-//! migrate in one pass — but new editors and the planned PCB
-//! / PCB library surfaces use this widget.
+//! Item variants:
+//! - `Button(ActiveBarButton<M>)` — clickable tool button. Optional
+//!   right-press message + chevron indicator for buttons that open
+//!   dropdowns (the dropdown overlay itself is rendered separately
+//!   by the consumer as a Stack overlay layer).
+//! - `Separator` — thin vertical divider between groups.
+//! - `Custom(Element<M>)` — escape hatch for special slots (e.g.
+//!   the schematic editor's wire draw-mode 90°/45°/Any cycle pill).
 //!
 //! # Example
 //!
 //! ```ignore
-//! use signex_widgets::active_bar::{view, ActiveBarItem, ActiveBarIcon};
+//! use signex_widgets::active_bar::{view, ActiveBarItem, ActiveBarButton, ActiveBarIcon};
 //!
 //! let items = vec![
-//!     ActiveBarItem {
+//!     ActiveBarItem::Button(ActiveBarButton {
 //!         icon: ActiveBarIcon::Svg(SELECT_SVG.clone()),
 //!         tooltip: "Select".into(),
 //!         enabled: true,
 //!         selected: matches!(tool, Tool::Select),
 //!         on_press: Some(Msg::SetTool(Tool::Select)),
-//!     },
+//!         on_right_press: Some(Msg::OpenSelectMenu),
+//!         has_dropdown_indicator: true,
+//!     }),
+//!     ActiveBarItem::Separator,
 //!     // …
 //! ];
 //! view(items, &tokens)
@@ -35,32 +42,73 @@
 //! Render the resulting `Element<M>` into a `Stack` overlay so it
 //! floats over the canvas content.
 
-use iced::widget::{button, container, image, row, svg, text, tooltip};
+use iced::widget::{button, container, image, mouse_area, row, svg, text, tooltip};
 use iced::{Border, Color, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 
 use crate::theme_ext;
 
-/// One button in the Active Bar.
+/// One slot in the Active Bar — either a clickable button, a thin
+/// vertical separator, or an arbitrary user-supplied widget (escape
+/// hatch for special cases like the schematic's draw-mode pill).
+pub enum ActiveBarItem<M: 'static + Clone> {
+    Button(ActiveBarButton<M>),
+    /// 1 px-wide vertical separator between groups.
+    Separator,
+    /// Arbitrary user-supplied widget — drops into the row as-is.
+    Custom(Element<'static, M>),
+}
+
+impl<M: 'static + Clone> ActiveBarItem<M> {
+    /// Convenience — build a Button item.
+    pub fn button(button: ActiveBarButton<M>) -> Self {
+        Self::Button(button)
+    }
+}
+
+/// One clickable button in the Active Bar.
 ///
 /// `M` is the editor's message type; the bar is generic over it so
 /// every editor can publish its own messages without sharing a
 /// common message enum.
-pub struct ActiveBarItem<M: 'static + Clone> {
+pub struct ActiveBarButton<M: 'static + Clone> {
     /// Glyph or SVG to render in the button.
     pub icon: ActiveBarIcon,
     /// Tooltip text shown on hover.
     pub tooltip: String,
-    /// `false` → button greys out and ignores clicks. Used for v0.9.x
-    /// stub tools that haven't been wired yet so the user still sees
-    /// the icon (Altium parity) without the ability to fire it.
+    /// `false` → button greys out and ignores left-click. The
+    /// optional right-click (dropdown trigger) still works so the
+    /// user can discover what's greyed out via the menu.
     pub enabled: bool,
     /// `true` → button paints with the accent background (Altium's
     /// "armed tool" highlight).
     pub selected: bool,
-    /// Message published on press. `None` keeps the button
-    /// non-interactive even when `enabled` is true (passive item).
+    /// Message published on left-press. `None` = passive (no
+    /// left-click action even when enabled).
     pub on_press: Option<M>,
+    /// Optional message published on right-press. Used by editors
+    /// that pair a tool action with a dropdown menu (e.g. the
+    /// schematic's Wiring button: left-click draws, right-click
+    /// opens the wire/bus/label picker).
+    pub on_right_press: Option<M>,
+    /// `true` → render a small chevron in the bottom-right of the
+    /// button to advertise that it has a secondary (right-click)
+    /// action.
+    pub has_dropdown_indicator: bool,
+}
+
+impl<M: 'static + Clone> Default for ActiveBarButton<M> {
+    fn default() -> Self {
+        Self {
+            icon: ActiveBarIcon::Glyph(""),
+            tooltip: String::new(),
+            enabled: true,
+            selected: false,
+            on_press: None,
+            on_right_press: None,
+            has_dropdown_indicator: false,
+        }
+    }
 }
 
 /// What to render inside a button — SVG (preferred), bitmap image
@@ -68,26 +116,23 @@ pub struct ActiveBarItem<M: 'static + Clone> {
 /// items that have no icon yet.
 pub enum ActiveBarIcon {
     /// `iced::widget::svg::Handle`. Use for any SVG asset shipped in
-    /// `assets/icons/*.svg` — `signex-app::assets::svg_handle("…")`
-    /// gives one.
+    /// `assets/icons/*.svg`.
     Svg(svg::Handle),
     /// Raster image handle (PNG/JPEG). Reserved for icons that don't
     /// have an SVG version.
     Raster(image::Handle),
     /// Unicode glyph fallback. Use for tools whose SVG icon hasn't
-    /// been authored yet so the bar still shows something
-    /// recognisable. Picked the geometry / roman letter that most
-    /// closely matches the tool.
+    /// been authored yet.
     Glyph(&'static str),
 }
 
-/// Pixel sizes — tightened to match the compact dark pill in
-/// Altium's reference SchLib screenshot. Buttons are 22 px square
-/// with 14 px icons; 3 px outer pad keeps the bar a single
-/// horizontal row.
-const BTN_SIZE: f32 = 22.0;
-const ICON_SIZE: f32 = 14.0;
-const BAR_PADDING: f32 = 3.0;
+/// Pixel sizes — match the schematic editor's existing visual
+/// rhythm so the bar reads identically across every editor.
+const BTN_SIZE: f32 = 26.0;
+const ICON_SIZE: f32 = 20.0;
+const SEP_W: f32 = 1.0;
+const SEP_H: f32 = 18.0;
+const BAR_PADDING: f32 = 2.0;
 const BAR_RADIUS: f32 = 4.0;
 
 /// Render the bar.
@@ -117,6 +162,11 @@ where
                 radius: BAR_RADIUS.into(),
                 color: border,
             },
+            shadow: iced::Shadow {
+                color: Color::from_rgba(0.0, 0.0, 0.0, 0.5),
+                offset: iced::Vector::new(0.0, 2.0),
+                blur_radius: 8.0,
+            },
             ..iced::widget::container::Style::default()
         })
         .into()
@@ -126,20 +176,41 @@ fn view_item<'a, M>(item: ActiveBarItem<M>, tokens: &'a ThemeTokens) -> Element<
 where
     M: 'static + Clone,
 {
+    match item {
+        ActiveBarItem::Button(b) => view_button(b, tokens),
+        ActiveBarItem::Separator => {
+            let sep_color = theme_ext::border_color(tokens);
+            container(iced::widget::Space::new())
+                .width(Length::Fixed(SEP_W))
+                .height(Length::Fixed(SEP_H))
+                .style(move |_: &Theme| iced::widget::container::Style {
+                    background: Some(iced::Background::Color(sep_color)),
+                    ..iced::widget::container::Style::default()
+                })
+                .into()
+        }
+        ActiveBarItem::Custom(elem) => elem,
+    }
+}
+
+fn view_button<'a, M>(b: ActiveBarButton<M>, tokens: &'a ThemeTokens) -> Element<'a, M>
+where
+    M: 'static + Clone,
+{
     let text_c = theme_ext::text_primary(tokens);
     let muted_c = theme_ext::text_secondary(tokens);
     let accent_c = theme_ext::accent_color(tokens);
     let border = theme_ext::border_color(tokens);
 
-    let icon_color = if !item.enabled {
+    let icon_color = if !b.enabled {
         Color { a: 0.4, ..muted_c }
-    } else if item.selected {
+    } else if b.selected {
         Color::WHITE
     } else {
         text_c
     };
 
-    let icon_widget: Element<'a, M> = match item.icon {
+    let raw_icon: Element<'a, M> = match b.icon {
         ActiveBarIcon::Svg(handle) => svg(handle)
             .width(Length::Fixed(ICON_SIZE))
             .height(Length::Fixed(ICON_SIZE))
@@ -151,52 +222,83 @@ where
             .width(Length::Fixed(ICON_SIZE))
             .height(Length::Fixed(ICON_SIZE))
             .into(),
-        ActiveBarIcon::Glyph(s) => text(s.to_string()).size(13).color(icon_color).into(),
+        ActiveBarIcon::Glyph(s) => text(s.to_string()).size(14).color(icon_color).into(),
     };
 
-    let selected = item.selected;
-    let enabled = item.enabled;
-
-    let mut btn = button(
-        container(icon_widget)
+    // Optional dropdown chevron in the bottom-right corner.
+    let icon_content: Element<'a, M> = if b.has_dropdown_indicator {
+        let chevron_color = Color { a: 0.7, ..muted_c };
+        iced::widget::Stack::new()
+            .push(
+                container(raw_icon)
+                    .width(Length::Fixed(BTN_SIZE))
+                    .height(Length::Fixed(BTN_SIZE))
+                    .center_x(Length::Fixed(BTN_SIZE))
+                    .center_y(Length::Fixed(BTN_SIZE)),
+            )
+            .push(
+                container(text("\u{25BE}".to_string()).size(8).color(chevron_color))
+                    .width(Length::Fixed(BTN_SIZE))
+                    .height(Length::Fixed(BTN_SIZE))
+                    .align_x(iced::alignment::Horizontal::Right)
+                    .align_y(iced::alignment::Vertical::Bottom),
+            )
+            .into()
+    } else {
+        container(raw_icon)
             .width(Length::Fixed(BTN_SIZE))
             .height(Length::Fixed(BTN_SIZE))
             .center_x(Length::Fixed(BTN_SIZE))
-            .center_y(Length::Fixed(BTN_SIZE)),
-    )
-    .padding(0)
-    .style(move |_: &Theme, status: iced::widget::button::Status| {
-        let bg = if !enabled {
-            None
-        } else if selected {
-            Some(iced::Background::Color(accent_c))
-        } else {
-            match status {
-                iced::widget::button::Status::Hovered => Some(iced::Background::Color(
-                    Color::from_rgba(1.0, 1.0, 1.0, 0.08),
-                )),
-                _ => Some(iced::Background::Color(Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.02,
-                ))),
+            .center_y(Length::Fixed(BTN_SIZE))
+            .into()
+    };
+
+    let selected = b.selected;
+    let enabled = b.enabled;
+
+    let mut btn = button(icon_content).padding(0).style(
+        move |_: &Theme, status: iced::widget::button::Status| {
+            let bg = if !enabled {
+                None
+            } else if selected {
+                Some(iced::Background::Color(accent_c))
+            } else {
+                match status {
+                    iced::widget::button::Status::Hovered => Some(iced::Background::Color(
+                        Color::from_rgba(1.0, 1.0, 1.0, 0.08),
+                    )),
+                    _ => Some(iced::Background::Color(Color::from_rgba(
+                        1.0, 1.0, 1.0, 0.02,
+                    ))),
+                }
+            };
+            iced::widget::button::Style {
+                background: bg,
+                border: Border {
+                    width: if selected { 1.0 } else { 0.0 },
+                    radius: 3.0.into(),
+                    color: border,
+                },
+                ..iced::widget::button::Style::default()
             }
-        };
-        iced::widget::button::Style {
-            background: bg,
-            border: Border {
-                width: if selected { 1.0 } else { 0.0 },
-                radius: 3.0.into(),
-                color: border,
-            },
-            ..iced::widget::button::Style::default()
-        }
-    });
-    if enabled && let Some(msg) = item.on_press {
+        },
+    );
+    if enabled && let Some(msg) = b.on_press {
         btn = btn.on_press(msg);
     }
 
-    let tooltip_text = item.tooltip.clone();
+    // Wrap in mouse_area for right-click → dropdown trigger. The
+    // dropdown overlay itself is rendered separately by the
+    // consumer as a Stack overlay layer.
+    let interactive: Element<'a, M> = if let Some(rc) = b.on_right_press {
+        mouse_area(btn).on_right_press(rc).into()
+    } else {
+        btn.into()
+    };
+
+    let tooltip_text = b.tooltip.clone();
     tooltip(
-        btn,
+        interactive,
         container(text(tooltip_text).size(11).color(text_c))
             .padding([2, 6])
             .style(move |_: &Theme| iced::widget::container::Style {
