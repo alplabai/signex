@@ -29,6 +29,7 @@ use crate::library::messages::{
     EditorMsg, GraphicHandleMsg, LibraryMessage, PrimitiveEditorMsg, SymbolSelectionMsg,
     SymbolToolMsg,
 };
+use crate::library::state::LibraryDisplaySettings;
 use crate::panels::{PanelContext, SheetColor};
 
 // ── Symbol ──────────────────────────────────────────────────────────
@@ -43,17 +44,18 @@ use crate::panels::{PanelContext, SheetColor};
 pub fn view_symbol<'a>(
     editor: &'a SymbolEditorState,
     panel_ctx: &'a PanelContext,
+    display: LibraryDisplaySettings,
 ) -> Element<'a, LibraryMessage> {
     let tokens = &panel_ctx.tokens;
-    let toolbar = view_symbol_toolbar(editor, panel_ctx);
-    let canvas_widget = view_symbol_canvas(editor, panel_ctx);
+    let toolbar = view_symbol_toolbar(editor, panel_ctx, display);
+    let canvas_widget = view_symbol_canvas(editor, panel_ctx, display);
 
     let body = column![toolbar, canvas_widget]
         .spacing(10)
         .width(Length::Fill)
         .height(Length::Fill);
 
-    let status_line = view_symbol_status(editor, panel_ctx);
+    let status_line = view_symbol_status(editor, panel_ctx, display);
 
     let outer = column![body, Space::new().height(4), status_line]
         .spacing(0)
@@ -76,37 +78,71 @@ pub fn view_symbol<'a>(
 fn view_symbol_status<'a>(
     editor: &'a SymbolEditorState,
     panel_ctx: &'a PanelContext,
+    display: LibraryDisplaySettings,
 ) -> Element<'a, LibraryMessage> {
     let tokens = &panel_ctx.tokens;
     let muted = theme_ext::text_secondary(tokens);
     let text_c = theme_ext::text_primary(tokens);
 
-    let unit = panel_ctx.unit;
+    let unit = display.unit;
     let coord_text = match editor.cursor_mm {
         Some((x, y)) => format_coord(x, y, unit),
         None => "X: -.--   Y: -.--".to_string(),
     };
-    let grid_text = if panel_ctx.grid_visible {
+    let grid_text = if display.grid_visible {
         match unit {
-            Unit::Mm => format!("Grid {:.3} mm", panel_ctx.grid_size_mm),
-            Unit::Mil => format!("Grid {:.0} mil", (panel_ctx.grid_size_mm as f64) / 0.0254),
-            _ => format!("Grid {:.3} mm", panel_ctx.grid_size_mm),
+            Unit::Mm => format!("{:.3} mm", display.grid_size_mm),
+            Unit::Mil => format!("{:.0} mil", (display.grid_size_mm as f64) / 0.0254),
+            _ => format!("{:.3} mm", display.grid_size_mm),
         }
     } else {
-        "Grid OFF".to_string()
+        "OFF".to_string()
     };
     let zoom_text = format!("{:.0}%", editor.camera.zoom_percent());
     let pin_count = format!("{} pins", editor.primitive().pins.len());
+    let unit_text = format!("{unit}");
 
     let sep = || text("|").size(10).color(muted);
+    let path_for_grid = editor.path.clone();
+    let path_for_grid_size = editor.path.clone();
+    let path_for_unit = editor.path.clone();
+
+    // Click-to-cycle status pills mirror the schematic status bar's
+    // pattern (`status_bar.rs`). Grid label toggles visibility;
+    // grid-size label cycles GRID_SIZES_MM; unit label cycles
+    // mm → mil → inch → um.
+    let grid_toggle = button(text("Grid").size(11).color(muted))
+        .padding([1, 4])
+        .style(button::text)
+        .on_press(LibraryMessage::PrimitiveEditorEvent {
+            path: path_for_grid,
+            msg: PrimitiveEditorMsg::SymbolToggleGrid,
+        });
+    let grid_size_btn = button(text(grid_text).size(11).color(text_c))
+        .padding([1, 4])
+        .style(button::text)
+        .on_press(LibraryMessage::PrimitiveEditorEvent {
+            path: path_for_grid_size,
+            msg: PrimitiveEditorMsg::SymbolCycleGridSize,
+        });
+    let unit_btn = button(text(unit_text).size(11).color(text_c))
+        .padding([1, 4])
+        .style(button::text)
+        .on_press(LibraryMessage::PrimitiveEditorEvent {
+            path: path_for_unit,
+            msg: PrimitiveEditorMsg::SymbolCycleUnit,
+        });
 
     container(
         row![
             text(coord_text).size(11).color(text_c),
             sep(),
-            text(grid_text).size(11).color(muted),
+            grid_toggle,
+            grid_size_btn,
             sep(),
             text(zoom_text).size(11).color(muted),
+            sep(),
+            unit_btn,
             sep(),
             text(pin_count).size(11).color(muted),
             Space::new().width(Length::Fill),
@@ -147,6 +183,7 @@ fn format_coord(x_mm: f64, y_mm: f64, unit: Unit) -> String {
 fn view_symbol_toolbar<'a>(
     editor: &'a SymbolEditorState,
     panel_ctx: &'a PanelContext,
+    display: LibraryDisplaySettings,
 ) -> Element<'a, LibraryMessage> {
     let tokens = &panel_ctx.tokens;
     let text_c = theme_ext::text_primary(tokens);
@@ -215,7 +252,7 @@ fn view_symbol_toolbar<'a>(
         .style(symbol_tool_button_style(false, border));
 
     let sheet_color_path = path.clone();
-    let current_sheet = editor.sheet_color;
+    let current_sheet = display.sheet_color;
     let sheet_color_picker = pick_list(SheetColor::ALL.to_vec(), Some(current_sheet), move |c| {
         LibraryMessage::PrimitiveEditorEvent {
             path: sheet_color_path.clone(),
@@ -284,6 +321,7 @@ fn symbol_tool_button_style(
 fn view_symbol_canvas<'a>(
     editor: &'a SymbolEditorState,
     panel_ctx: &'a PanelContext,
+    display: LibraryDisplaySettings,
 ) -> Element<'a, LibraryMessage> {
     let tokens = &panel_ctx.tokens;
     let program = SymbolCanvas::new(
@@ -292,9 +330,9 @@ fn view_symbol_canvas<'a>(
         editor.tool,
         editor.active_part,
         &editor.camera,
-        panel_ctx.grid_size_mm as f64,
-        panel_ctx.grid_visible,
-        editor.sheet_color.to_color(),
+        display.grid_size_mm as f64,
+        display.grid_visible,
+        display.sheet_color.to_color(),
         crate::styles::ti(tokens.accent),
         crate::styles::ti(tokens.text),
         crate::styles::ti(tokens.text),

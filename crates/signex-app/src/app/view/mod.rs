@@ -3722,7 +3722,18 @@ impl Signex {
                 && let Some(editor) = self.document_state.symbol_editors.get(path)
             {
                 let panel_ctx = &self.document_state.panel_ctx;
-                return crate::library::editor::standalone::view_symbol(editor, panel_ctx)
+                // Per-library display settings — Altium-style
+                // Document Options. Resolve the `.snxlib/` ancestor
+                // of the symbol's path so every primitive editor
+                // opened from the same library shares the same
+                // grid / unit / background. Lone-file edits (no
+                // mounted library) get safe defaults.
+                let display = self
+                    .library
+                    .containing_library(path)
+                    .map(|lib| lib.display)
+                    .unwrap_or_default();
+                return crate::library::editor::standalone::view_symbol(editor, panel_ctx, display)
                     .map(Message::Library);
             }
             if let Some(path) = active_tab.kind.as_footprint_editor()

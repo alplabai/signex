@@ -688,8 +688,21 @@ pub enum PrimitiveEditorMsg {
     },
     /// Toolbar / context-menu — pick the sheet background colour
     /// preset (Black / White / Dark Gray / Light Gray / Cream),
-    /// matching Altium's per-document Sheet Color.
+    /// matching Altium's per-document Sheet Color. Applies to the
+    /// `.snxlib` containing this `.snxsym` so every primitive
+    /// editor opened from the same library shares the colour.
     SymbolSetSheetColor(crate::panels::SheetColor),
+    /// Status-footer click on the `Grid` label — toggles whether
+    /// the dot grid renders. Applies to the containing `.snxlib`.
+    SymbolToggleGrid,
+    /// Status-footer click on the grid spacing — cycles through
+    /// `crate::canvas::grid::GRID_SIZES_MM`. Applies to the
+    /// containing `.snxlib`.
+    SymbolCycleGridSize,
+    /// Status-footer click on the unit label — cycles
+    /// mm → mil → inch → um → mm. Applies to the containing
+    /// `.snxlib`.
+    SymbolCycleUnit,
 
     // ── Multi-part component ───────────────────────────────
     /// Toolbar — step the active sub-part down one (Altium "←

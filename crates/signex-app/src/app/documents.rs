@@ -224,14 +224,10 @@ pub struct SymbolEditorState {
     /// new symbol opens centred regardless of the previous symbol's
     /// pan offset.
     pub camera: crate::canvas::Camera,
-    /// Sheet background colour preset — Altium "Sheet Color"
-    /// (Black / White / Dark Gray / Light Gray / Cream). Drives the
-    /// canvas bg and the body fill alpha. Per-tab so a user can
-    /// have, e.g., Cream on one symbol library and Black on another.
-    pub sheet_color: crate::panels::SheetColor,
     /// Last cursor world position over the canvas, in mm. Drives the
     /// status footer's X/Y readout. `None` when the cursor is
-    /// outside the canvas.
+    /// outside the canvas. Per-tab — tracking the cursor is
+    /// inherently a single-canvas concept.
     pub cursor_mm: Option<(f64, f64)>,
 }
 
@@ -251,7 +247,6 @@ impl SymbolEditorState {
             canvas_cache: iced::widget::canvas::Cache::default(),
             dirty: false,
             camera: crate::canvas::Camera::default(),
-            sheet_color: crate::panels::SheetColor::default(),
             cursor_mm: None,
         }
     }
