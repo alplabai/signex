@@ -201,7 +201,7 @@ where
 {
     let text_c = theme_ext::text_primary(tokens);
     let muted_c = theme_ext::text_secondary(tokens);
-    let accent_c = theme_ext::accent_color(tokens);
+    let hover_c = theme_ext::hover_color(tokens);
     let border = theme_ext::border_color(tokens);
 
     // Disabled icons are tinted to a muted gray so they read as
@@ -290,26 +290,32 @@ where
     let selected = b.selected;
     let enabled = b.enabled;
 
+    // Selected uses the theme's muted `hover` slate (Altium-style
+    // armed-tool look) — never the bright accent, since the accent is
+    // reserved for active-project markers + brand highlights and would
+    // compete visually with the canvas content. Hover uses a slightly
+    // brighter version of the same slate so the affordance reads
+    // through without changing color register. Same palette across
+    // every editor (schematic, SchLib, eventual PCB / PCB-lib) so the
+    // bar reads identically wherever it appears.
     let mut btn = button(icon_content).padding(0).style(
         move |_: &Theme, status: iced::widget::button::Status| {
             let bg = if !enabled {
                 None
             } else if selected {
-                Some(iced::Background::Color(accent_c))
+                Some(iced::Background::Color(hover_c))
             } else {
                 match status {
                     iced::widget::button::Status::Hovered => Some(iced::Background::Color(
-                        Color::from_rgba(1.0, 1.0, 1.0, 0.08),
+                        Color::from_rgba(1.0, 1.0, 1.0, 0.06),
                     )),
-                    _ => Some(iced::Background::Color(Color::from_rgba(
-                        1.0, 1.0, 1.0, 0.02,
-                    ))),
+                    _ => None,
                 }
             };
             iced::widget::button::Style {
                 background: bg,
                 border: Border {
-                    width: if selected { 1.0 } else { 0.0 },
+                    width: 0.0,
                     radius: 3.0.into(),
                     color: border,
                 },
