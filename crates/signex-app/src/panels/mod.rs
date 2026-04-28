@@ -394,6 +394,11 @@ pub struct SymbolEditorPanelContext {
     pub symbol_component_type: signex_library::ComponentType,
     /// Altium "Mirrored" toggle.
     pub symbol_mirrored: bool,
+    /// Optional per-symbol Local Colors override (Fills / Lines /
+    /// Pins). `None` = inherit from sheet palette.
+    pub symbol_local_fill_color: Option<[u8; 4]>,
+    pub symbol_local_line_color: Option<[u8; 4]>,
+    pub symbol_local_pin_color: Option<[u8; 4]>,
     /// UUID of the active symbol — surfaced read-only on the panel.
     pub symbol_uuid: uuid::Uuid,
     /// Pin summaries for the active symbol — drives Properties panel
@@ -987,6 +992,15 @@ pub enum PanelMsg {
     SymEditorSetSymbolType(signex_library::ComponentType),
     /// Properties panel — toggle the active symbol's mirrored flag.
     SymEditorToggleSymbolMirrored,
+    /// Properties panel — cycle the active symbol's local fill
+    /// colour through preset palette → None → preset palette.
+    SymEditorCycleLocalFillColor,
+    /// Properties panel — cycle the active symbol's local line
+    /// colour.
+    SymEditorCycleLocalLineColor,
+    /// Properties panel — cycle the active symbol's local pin
+    /// colour.
+    SymEditorCycleLocalPinColor,
     /// Document Options (Properties pane when nothing is selected)
     /// — set the sheet background color preset on the containing
     /// `.snxlib`. All `.snxsym` tabs from the same library share.
@@ -2289,6 +2303,75 @@ fn view_pin_symbol_picker<'a>(
 /// Electrical / Position / Orientation), field selected → field
 /// properties, nothing selected → symbol-level defaults (Name /
 /// UUID / pin count) with Name editable.
+/// Render one Local Colors row — three click-to-cycle swatches
+/// (Fills / Lines / Pins). Each swatch shows the current override
+/// colour or a striped "inherit" pattern when `None`. Clicking
+/// cycles through a small preset palette + back to None.
+fn local_colors_row<'a>(
+    label: &'a str,
+    fill: Option<[u8; 4]>,
+    line: Option<[u8; 4]>,
+    pin: Option<[u8; 4]>,
+    muted: Color,
+) -> Element<'a, PanelMsg> {
+    let swatch = |slot_label: &'a str, c: Option<[u8; 4]>, msg: PanelMsg| {
+        let bg = match c {
+            Some([r, g, b, a]) => iced::Color::from_rgba8(r, g, b, (a as f32) / 255.0),
+            None => iced::Color::from_rgba(0.5, 0.5, 0.5, 0.25),
+        };
+        let border = if c.is_some() {
+            iced::Color::from_rgba(0.0, 0.0, 0.0, 0.35)
+        } else {
+            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.30)
+        };
+        column![
+            text(slot_label).size(9).color(muted),
+            iced::widget::button(iced::widget::Space::new())
+                .padding(0)
+                .width(Length::Fixed(28.0))
+                .height(Length::Fixed(16.0))
+                .on_press(msg)
+                .style(
+                    move |_: &iced::Theme, _status: iced::widget::button::Status| {
+                        iced::widget::button::Style {
+                            background: Some(iced::Background::Color(bg)),
+                            border: iced::Border {
+                                width: 1.0,
+                                radius: 2.0.into(),
+                                color: border,
+                            },
+                            ..iced::widget::button::Style::default()
+                        }
+                    }
+                ),
+        ]
+        .spacing(2)
+        .align_x(iced::Alignment::Center)
+    };
+
+    container(
+        row![
+            text(label.to_string())
+                .size(10)
+                .color(muted)
+                .width(Length::FillPortion(2)),
+            row![
+                swatch("Fills", fill, PanelMsg::SymEditorCycleLocalFillColor),
+                Space::new().width(8),
+                swatch("Lines", line, PanelMsg::SymEditorCycleLocalLineColor),
+                Space::new().width(8),
+                swatch("Pins", pin, PanelMsg::SymEditorCycleLocalPinColor),
+            ]
+            .width(Length::FillPortion(3)),
+        ]
+        .spacing(4)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([3, 8])
+    .width(Length::Fill)
+    .into()
+}
+
 fn view_symbol_editor_properties<'a>(
     sym: &'a SymbolEditorPanelContext,
     muted: Color,
@@ -2337,6 +2420,13 @@ fn view_symbol_editor_properties<'a>(
 
     match &sym.selected {
         SymbolEditorSelection::None => {
+            // The .snxsym editor is a SYMBOL editor — symbol-level
+            // visual / geometric properties only. Component metadata
+            // (Designator / Comment / Description / Type / Parameters)
+            // lives on the host ComponentRow in the component library
+            // and is edited from the Library Browser / Component
+            // Editor, not here.
+
             // Helper — labelled text_input row.
             let text_field = |label: &'a str,
                               value: &'a str,
@@ -2363,27 +2453,18 @@ fn view_symbol_editor_properties<'a>(
                 .into()
             };
 
-            // ── ▾ General ──
+            // ── ▾ Symbol ──
             col = col.push(thin_sep(border_c));
-            col = col.push(container(text("General").size(11).color(primary)).padding([6, 8]));
+            col = col.push(container(text("Symbol").size(11).color(primary)).padding([6, 8]));
             col = col.push(text_field(
                 "Design Item ID",
                 sym.symbol_name.as_str(),
                 "Symbol name",
                 PanelMsg::SymEditorSetSymbolName,
             ));
-            col = col.push(text_field(
-                "Designator",
-                sym.symbol_designator.as_str(),
-                "U?",
-                PanelMsg::SymEditorSetSymbolDesignator,
-            ));
-            col = col.push(text_field(
-                "Comment",
-                sym.symbol_comment.as_str(),
-                "*",
-                PanelMsg::SymEditorSetSymbolComment,
-            ));
+            col = col.push(prop_row_static("UUID", sym.symbol_uuid.to_string()));
+            col = col.push(prop_row_static("Pins", sym.pins.len().to_string()));
+            col = col.push(prop_row_static("Graphics", sym.graphics.len().to_string()));
 
             // Part of Parts (Altium "Part B / of Parts: 2") — surfaces
             // the multi-part picker the user already drives via the
@@ -2394,78 +2475,9 @@ fn view_symbol_editor_properties<'a>(
                     sym.active_part, sym.active_max_part
                 )
             } else {
-                "Single-part component".to_string()
+                "Single-part".to_string()
             };
             col = col.push(prop_row_static("Part", part_label));
-
-            col = col.push(text_field(
-                "Description",
-                sym.symbol_description.as_str(),
-                "Free-form description",
-                PanelMsg::SymEditorSetSymbolDescription,
-            ));
-
-            // Type — Component Type pick_list.
-            use signex_library::ComponentType;
-            let type_options: &[(ComponentType, &str)] = &[
-                (ComponentType::Standard, "Standard"),
-                (ComponentType::Mechanical, "Mechanical"),
-                (ComponentType::Graphical, "Graphical"),
-                (ComponentType::NetTie, "Net Tie"),
-                (ComponentType::StandardNoBom, "Standard (No BOM)"),
-                (ComponentType::Jumper, "Jumper"),
-            ];
-            let labels: Vec<String> = type_options.iter().map(|(_, n)| n.to_string()).collect();
-            let current_label = type_options
-                .iter()
-                .find(|(t, _)| *t == sym.symbol_component_type)
-                .map(|(_, n)| n.to_string())
-                .unwrap_or_else(|| "Standard".to_string());
-            let lookup: Vec<(String, ComponentType)> = type_options
-                .iter()
-                .map(|(t, n)| (n.to_string(), *t))
-                .collect();
-            let type_picker = iced::widget::pick_list(labels, Some(current_label), move |chosen| {
-                let value = lookup
-                    .iter()
-                    .find(|(n, _)| n == &chosen)
-                    .map(|(_, t)| *t)
-                    .unwrap_or(ComponentType::Standard);
-                PanelMsg::SymEditorSetSymbolType(value)
-            })
-            .padding([2, 4])
-            .text_size(11);
-            let type_row: Element<'a, PanelMsg> = container(
-                row![
-                    text("Type")
-                        .size(10)
-                        .color(muted)
-                        .width(Length::FillPortion(2)),
-                    container(type_picker).width(Length::FillPortion(3)),
-                ]
-                .spacing(4)
-                .align_y(iced::Alignment::Center),
-            )
-            .padding([3, 8])
-            .width(Length::Fill)
-            .into();
-            col = col.push(type_row);
-
-            col = col.push(prop_row_static("UUID", sym.symbol_uuid.to_string()));
-            col = col.push(prop_row_static("Pins", sym.pins.len().to_string()));
-
-            // ── ▾ Parameters (placeholder skeleton) ──
-            col = col.push(thin_sep(border_c));
-            col = col.push(container(text("Parameters").size(11).color(primary)).padding([6, 8]));
-            col = col.push(
-                container(
-                    text("(parameters editing lands in v0.9.x — the schema slot exists on Symbol::schematic_params)")
-                        .size(10)
-                        .color(muted),
-                )
-                .padding([3, 8])
-                .width(Length::Fill),
-            );
 
             // ── ▾ Graphical ──
             col = col.push(thin_sep(border_c));
@@ -2487,9 +2499,19 @@ fn view_symbol_editor_properties<'a>(
             .width(Length::Fill)
             .into();
             col = col.push(mirrored_row);
-            col = col.push(prop_row_static(
+
+            // ── Local Colors (Fills / Lines / Pins) ──
+            // Three click-to-cycle swatches. None = inherit from
+            // sheet palette; clicking cycles through 4 preset
+            // overrides + back to None. Each slot has its own
+            // Set message so the dispatcher can clear / set
+            // independently.
+            col = col.push(local_colors_row(
                 "Local Colors",
-                "(picker lands in v0.9.x)".to_string(),
+                sym.symbol_local_fill_color,
+                sym.symbol_local_line_color,
+                sym.symbol_local_pin_color,
+                muted,
             ));
         }
         SymbolEditorSelection::Pin(pin) => {
