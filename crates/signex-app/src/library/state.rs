@@ -183,6 +183,30 @@ pub struct LibraryBrowserState {
     /// Confirmation modal state for Delete Selected (Deliverable D).
     /// `Some` while the confirm modal is open.
     pub delete_confirm: Option<DeleteConfirmState>,
+    /// Active sort column + direction. `None` = canonical insertion
+    /// order (the file's row_id-sorted order from Stage 12a). When
+    /// set, [`view_grid`](super::browser) sorts visible rows with
+    /// auto-detected numeric comparison: if both cells parse as
+    /// `f64` the sort is numeric, otherwise lexical
+    /// (case-insensitive). Repeated clicks on the same column header
+    /// toggle ascending/descending; clicking a different column
+    /// resets to ascending.
+    ///
+    /// Stage 8 of `v0.9-snxlib-as-file-plan.md` — closes the Altium
+    /// "lexical sort on numeric columns" pain by detecting numeric
+    /// columns at compare time without needing a typed schema lookup.
+    /// The `[tables.<name>.column_types]` sidecar (Stage 12a) drives
+    /// stricter validation when needed; the auto-detect path keeps
+    /// untyped legacy tables sorting sanely.
+    pub sort_by: Option<BrowserSort>,
+}
+
+/// Active sort key + direction for the Library Browser grid.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BrowserSort {
+    /// Sort key matching the column's `ColumnKind::sort_key()`.
+    pub key: String,
+    pub descending: bool,
 }
 
 impl LibraryBrowserState {
@@ -196,6 +220,21 @@ impl LibraryBrowserState {
             edit_modal: None,
             cell_edit: HashMap::new(),
             delete_confirm: None,
+            sort_by: None,
+        }
+    }
+
+    /// Toggle the sort: if `key` matches the current sort column, flip
+    /// direction; otherwise set ascending sort on `key`.
+    pub fn toggle_sort(&mut self, key: String) {
+        match &mut self.sort_by {
+            Some(s) if s.key == key => s.descending = !s.descending,
+            _ => {
+                self.sort_by = Some(BrowserSort {
+                    key,
+                    descending: false,
+                });
+            }
         }
     }
 }

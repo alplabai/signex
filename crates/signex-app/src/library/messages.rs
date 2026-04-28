@@ -176,6 +176,16 @@ pub enum LibraryMessage {
         library_path: PathBuf,
         value: String,
     },
+    /// Column-header click — toggles sort direction on the matching
+    /// key, or sets ascending sort if a different column is clicked.
+    /// Stage 8 of `v0.9-snxlib-as-file-plan.md`. The `column_key` is
+    /// the stable identifier from `ColumnKind::sort_key()`
+    /// (`"internal_pn"`, `"manufacturer"`, `"mpn"`, `"tags"`, or
+    /// `"parameters.<key>"`).
+    BrowserSortColumn {
+        library_path: PathBuf,
+        column_key: String,
+    },
     /// Row click inside the browser grid — selects the row, drives
     /// the side preview pane.
     BrowserSelectRow {

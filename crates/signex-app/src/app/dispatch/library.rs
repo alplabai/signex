@@ -397,6 +397,15 @@ impl Signex {
                 }
                 Task::none()
             }
+            LibraryMessage::BrowserSortColumn {
+                library_path,
+                column_key,
+            } => {
+                if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
+                    state.toggle_sort(column_key);
+                }
+                Task::none()
+            }
             LibraryMessage::BrowserSelectRow {
                 library_path,
                 table,
