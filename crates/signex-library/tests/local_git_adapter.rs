@@ -145,6 +145,8 @@ fn fixture_footprint(name: &str) -> Footprint {
         },
         step_attachment: None,
         pcb_params: ParamMap::new(),
+        version: "0.0.1".into(),
+        released: false,
         created: now,
         updated: now,
     }
@@ -157,6 +159,8 @@ fn fixture_sim(name: &str) -> SimModel {
         kind: SimKind::Spice3,
         body: ".SUBCKT TEST IN OUT\n.ENDS".into(),
         default_node_map: Default::default(),
+        version: "0.0.1".into(),
+        released: false,
         created: chrono::Utc::now(),
         updated: chrono::Utc::now(),
     }

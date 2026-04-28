@@ -295,8 +295,28 @@ pub struct Symbol {
     /// Optional per-symbol pin colour override.
     #[serde(default)]
     pub local_pin_color: Option<[u8; 4]>,
+    /// Semver-style revision string (`X.Y.Z`). Stage 14 of
+    /// `v0.9-snxlib-as-file-plan.md`: every Symbol carries its own
+    /// version independent of the bound ComponentRow's version. In
+    /// `Personal` workflow mode every save patch-bumps automatically;
+    /// in `Team` mode released symbols require an explicit bump
+    /// dialog. Defaults to `"0.0.1"` for new symbols and old files
+    /// missing the field (back-compat: pre-Stage-14 `.snxsym` files
+    /// load cleanly via serde default).
+    #[serde(default = "default_version")]
+    pub version: String,
+    /// When `true`, the symbol is locked from edit-in-place — saves
+    /// open the bump dialog (Team mode only). Defaults to `false` so
+    /// new + legacy symbols stay editable until the user explicitly
+    /// marks them released.
+    #[serde(default)]
+    pub released: bool,
     pub created: DateTime<Utc>,
     pub updated: DateTime<Utc>,
+}
+
+fn default_version() -> String {
+    "0.0.1".to_string()
 }
 
 fn default_designator() -> String {
@@ -326,6 +346,8 @@ impl Symbol {
             local_fill_color: None,
             local_line_color: None,
             local_pin_color: None,
+            version: default_version(),
+            released: false,
             created: now,
             updated: now,
         }
@@ -488,6 +510,8 @@ mod tests {
             local_fill_color: None,
             local_line_color: None,
             local_pin_color: None,
+            version: "0.0.1".into(),
+            released: false,
             created: Utc::now(),
             updated: Utc::now(),
         };
