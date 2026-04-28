@@ -9,13 +9,16 @@
 
 #![cfg(feature = "local-git")]
 
+use std::path::{Path, PathBuf};
+
 use signex_library::adapter::{LibraryAdapter, LibraryError};
 use signex_library::adapters::library_set::LibrarySet;
-use signex_library::adapters::local_git::LocalGitAdapter;
+use signex_library::adapters::local_git::{LibraryInitOptions, LocalGitAdapter};
 use signex_library::component::{ComponentRow, DatasheetRef, PlmReserved};
 use signex_library::identity::{ComponentClass, InternalPn, RowId};
 use signex_library::lifecycle::LifecycleState;
-use signex_library::manifest::{LibraryMeta, LibraryMode, Manifest, UsersConfig, WorkflowConfig};
+use signex_library::library_file::{FORMAT_TOKEN, LibrarySection, SnxlibManifest};
+use signex_library::manifest::{LibraryMode, UsersConfig, WorkflowConfig};
 use signex_library::manufacturer::ManufacturerPart;
 use signex_library::param::ParamMap;
 use signex_library::primitive::{
@@ -24,11 +27,12 @@ use signex_library::primitive::{
 };
 use uuid::Uuid;
 
-fn empty_manifest(name: &str, review_required: bool) -> Manifest {
-    Manifest {
-        library: LibraryMeta {
+fn empty_snx_manifest(name: &str, review_required: bool) -> SnxlibManifest {
+    SnxlibManifest {
+        format: FORMAT_TOKEN.into(),
+        library_id: Uuid::now_v7(),
+        library: LibrarySection {
             name: name.into(),
-            library_id: Uuid::now_v7(),
             description: None,
         },
         mode: LibraryMode::default(),
@@ -37,37 +41,63 @@ fn empty_manifest(name: &str, review_required: bool) -> Manifest {
             ..Default::default()
         },
         users: UsersConfig::default(),
-        tables: Vec::new(),
     }
 }
 
-/// Initialising into a non-existent directory writes manifest + makes a git
-/// commit; reopening picks up the same manifest.
+/// Per-library .snxlib path inside `dir`. The file lives one level
+/// down (`dir/<name>/<name>.snxlib`) so each test gets its own
+/// directory for the parent-keyed git repo.
+fn snxlib_path(dir: &Path, name: &str) -> PathBuf {
+    dir.join(name).join(format!("{name}.snxlib"))
+}
+
+fn init_adapter(
+    dir: &tempfile::TempDir,
+    name: &str,
+    review_required: bool,
+) -> (PathBuf, LocalGitAdapter) {
+    let file = snxlib_path(dir.path(), name);
+    let manifest = empty_snx_manifest(name, review_required);
+    let adapter = LocalGitAdapter::init(&file, manifest, LibraryInitOptions::default())
+        .expect("init succeeds");
+    (file, adapter)
+}
+
+/// Initialising at a non-existent path writes the `.snxlib` file + makes a
+/// git commit; reopening picks up the same manifest.
 #[test]
 fn init_open_round_trip_empty_library() {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("Empty.snxlib");
-    let manifest = empty_manifest("Empty", false);
-    let adapter = LocalGitAdapter::init(&root, manifest.clone()).unwrap();
+    let file = snxlib_path(dir.path(), "Empty");
+    let manifest = empty_snx_manifest("Empty", false);
+    let library_id = manifest.library_id;
+    let adapter = LocalGitAdapter::init(&file, manifest, LibraryInitOptions::default()).unwrap();
     assert_eq!(adapter.manifest().library.name, "Empty");
-    assert!(root.join("library.toml").exists());
-    assert!(root.join(".git").is_dir());
+    assert!(file.exists(), "expected .snxlib file at {file:?}");
+    assert!(file.parent().unwrap().join(".git").is_dir());
 
     drop(adapter);
-    let reopened = LocalGitAdapter::open(&root).unwrap();
-    assert_eq!(
-        reopened.manifest().library.library_id,
-        manifest.library.library_id
-    );
+    let reopened = LocalGitAdapter::open(&file).unwrap();
+    assert_eq!(reopened.manifest().library.library_id, library_id);
 }
 
-/// Re-init over an existing manifest must not silently nuke history.
+/// Re-init over an existing `.snxlib` must not silently nuke history.
 #[test]
 fn init_refuses_existing_library() {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("X.snxlib");
-    LocalGitAdapter::init(&root, empty_manifest("X", false)).unwrap();
-    let err = LocalGitAdapter::init(&root, empty_manifest("X", false)).unwrap_err();
+    let file = snxlib_path(dir.path(), "X");
+    LocalGitAdapter::init(
+        &file,
+        empty_snx_manifest("X", false),
+        LibraryInitOptions::default(),
+    )
+    .unwrap();
+    let err = LocalGitAdapter::init(
+        &file,
+        empty_snx_manifest("X", false),
+        LibraryInitOptions::default(),
+    )
+    .unwrap_err();
     assert!(matches!(err, LibraryError::Conflict(_)));
 }
 
@@ -137,10 +167,10 @@ fn fixture_sim(name: &str) -> SimModel {
 #[test]
 fn library_id_returns_manifest_id() {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("Id.snxlib");
-    let manifest = empty_manifest("Id", false);
-    let expected = manifest.library.library_id;
-    let adapter = LocalGitAdapter::init(&root, manifest).unwrap();
+    let file = snxlib_path(dir.path(), "Id");
+    let manifest = empty_snx_manifest("Id", false);
+    let expected = manifest.library_id;
+    let adapter = LocalGitAdapter::init(&file, manifest, LibraryInitOptions::default()).unwrap();
     assert_eq!(adapter.library_id(), expected);
 }
 
@@ -151,19 +181,22 @@ fn library_id_returns_manifest_id() {
 #[test]
 fn save_then_get_symbol_round_trip() {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("Sym.snxlib");
-    let adapter = LocalGitAdapter::init(&root, empty_manifest("Sym", false)).unwrap();
+    let (file, adapter) = init_adapter(&dir, "Sym", false);
     let sym = fixture_symbol("OPAMP-DUAL-8");
     let uuid = sym.uuid;
     adapter
         .save_symbol(sym.clone(), "add OPAMP-DUAL-8")
         .unwrap();
 
-    let on_disk = root.join("symbols").join("opamp-dual-8.snxsym");
+    let on_disk = file
+        .parent()
+        .unwrap()
+        .join("symbols")
+        .join("opamp-dual-8.snxsym");
     assert!(on_disk.exists(), "expected {on_disk:?} after save_symbol");
 
     drop(adapter);
-    let reopened = LocalGitAdapter::open(&root).unwrap();
+    let reopened = LocalGitAdapter::open(&file).unwrap();
     let got = reopened.get_symbol(uuid).unwrap();
     assert_eq!(got, sym);
 }
@@ -171,8 +204,7 @@ fn save_then_get_symbol_round_trip() {
 #[test]
 fn get_symbol_missing_uuid_is_not_found() {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("Miss.snxlib");
-    let adapter = LocalGitAdapter::init(&root, empty_manifest("Miss", false)).unwrap();
+    let (_file, adapter) = init_adapter(&dir, "Miss", false);
     let err = adapter.get_symbol(Uuid::now_v7()).unwrap_err();
     assert!(matches!(err, LibraryError::NotFound(_)));
 }
@@ -180,17 +212,20 @@ fn get_symbol_missing_uuid_is_not_found() {
 #[test]
 fn save_then_get_footprint_round_trip() {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("Fpt.snxlib");
-    let adapter = LocalGitAdapter::init(&root, empty_manifest("Fpt", false)).unwrap();
+    let (file, adapter) = init_adapter(&dir, "Fpt", false);
     let fp = fixture_footprint("SOIC-8");
     let uuid = fp.uuid;
     adapter.save_footprint(fp.clone(), "add SOIC-8").unwrap();
 
-    let on_disk = root.join("footprints").join(format!("{uuid}.snxfpt"));
+    let on_disk = file
+        .parent()
+        .unwrap()
+        .join("footprints")
+        .join(format!("{uuid}.snxfpt"));
     assert!(on_disk.exists());
 
     drop(adapter);
-    let reopened = LocalGitAdapter::open(&root).unwrap();
+    let reopened = LocalGitAdapter::open(&file).unwrap();
     let got = reopened.get_footprint(uuid).unwrap();
     assert_eq!(got, fp);
 }
@@ -198,17 +233,20 @@ fn save_then_get_footprint_round_trip() {
 #[test]
 fn save_then_get_sim_round_trip() {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("Sim.snxlib");
-    let adapter = LocalGitAdapter::init(&root, empty_manifest("Sim", false)).unwrap();
+    let (file, adapter) = init_adapter(&dir, "Sim", false);
     let sm = fixture_sim("LM358");
     let uuid = sm.uuid;
     adapter.save_sim(sm.clone(), "add LM358").unwrap();
 
-    let on_disk = root.join("sims").join(format!("{uuid}.snxsim"));
+    let on_disk = file
+        .parent()
+        .unwrap()
+        .join("sims")
+        .join(format!("{uuid}.snxsim"));
     assert!(on_disk.exists());
 
     drop(adapter);
-    let reopened = LocalGitAdapter::open(&root).unwrap();
+    let reopened = LocalGitAdapter::open(&file).unwrap();
     let got = reopened.get_sim(uuid).unwrap();
     assert_eq!(got, sm);
 }
@@ -217,8 +255,7 @@ fn save_then_get_sim_round_trip() {
 #[test]
 fn primitive_saves_each_create_a_commit() {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("Hist.snxlib");
-    let adapter = LocalGitAdapter::init(&root, empty_manifest("Hist", false)).unwrap();
+    let (file, adapter) = init_adapter(&dir, "Hist", false);
     adapter.save_symbol(fixture_symbol("A"), "add A").unwrap();
     adapter.save_symbol(fixture_symbol("B"), "add B").unwrap();
     adapter
@@ -226,7 +263,7 @@ fn primitive_saves_each_create_a_commit() {
         .unwrap();
     adapter.save_sim(fixture_sim("S1"), "add S1").unwrap();
 
-    let repo = git2::Repository::open(&root).unwrap();
+    let repo = git2::Repository::open(file.parent().unwrap()).unwrap();
     let mut walk = repo.revwalk().unwrap();
     walk.push_head().unwrap();
     let count = walk.count();
@@ -239,8 +276,7 @@ fn primitive_saves_each_create_a_commit() {
 #[test]
 fn list_primitives_returns_alphabetic_summaries() {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("List.snxlib");
-    let adapter = LocalGitAdapter::init(&root, empty_manifest("List", false)).unwrap();
+    let (_file, adapter) = init_adapter(&dir, "List", false);
     adapter.save_symbol(fixture_symbol("Zeta"), "z").unwrap();
     adapter.save_symbol(fixture_symbol("Alpha"), "a").unwrap();
     adapter.save_symbol(fixture_symbol("Mu"), "m").unwrap();
@@ -271,16 +307,18 @@ fn list_primitives_returns_alphabetic_summaries() {
 #[test]
 fn library_set_resolves_across_two_local_libs() {
     let dir = tempfile::tempdir().unwrap();
-    let root_a = dir.path().join("A.snxlib");
-    let root_b = dir.path().join("B.snxlib");
-    let manifest_a = empty_manifest("A", false);
-    let manifest_b = empty_manifest("B", false);
-    let lib_a = manifest_a.library.library_id;
-    let lib_b = manifest_b.library.library_id;
+    let file_a = snxlib_path(dir.path(), "A");
+    let file_b = snxlib_path(dir.path(), "B");
+    let manifest_a = empty_snx_manifest("A", false);
+    let manifest_b = empty_snx_manifest("B", false);
+    let lib_a = manifest_a.library_id;
+    let lib_b = manifest_b.library_id;
     assert_ne!(lib_a, lib_b);
 
-    let adapter_a = LocalGitAdapter::init(&root_a, manifest_a).unwrap();
-    let adapter_b = LocalGitAdapter::init(&root_b, manifest_b).unwrap();
+    let adapter_a =
+        LocalGitAdapter::init(&file_a, manifest_a, LibraryInitOptions::default()).unwrap();
+    let adapter_b =
+        LocalGitAdapter::init(&file_b, manifest_b, LibraryInitOptions::default()).unwrap();
 
     // Each library gets its own symbol with the SAME local UUID — so a
     // resolver that ignores library_id would pick the wrong one. The test
@@ -370,10 +408,11 @@ fn fixture_row(internal_pn: &str, class: &str, lib_id: Uuid) -> ComponentRow {
 #[test]
 fn local_git_round_trip_row() {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("RowRT.snxlib");
-    let manifest = empty_manifest("RowRT", false);
-    let lib_id = manifest.library.library_id;
-    let adapter = LocalGitAdapter::init(&root, manifest).unwrap();
+    let file = snxlib_path(dir.path(), "RowRT");
+    let manifest = empty_snx_manifest("RowRT", false);
+    let lib_id = manifest.library_id;
+    let adapter =
+        LocalGitAdapter::init(&file, manifest, LibraryInitOptions::default()).unwrap();
 
     let row = fixture_row("R10K", "resistor", lib_id);
     let row_id = RowId::from_uuid(row.row_id);
@@ -381,8 +420,13 @@ fn local_git_round_trip_row() {
     adapter
         .insert_row("resistors", row.clone(), "first")
         .unwrap();
-    let on_disk = root.join("tables").join("resistors.tsv");
-    assert!(on_disk.exists(), "expected {on_disk:?} after insert_row");
+    // Tables now live inside the .snxlib file; the embedded
+    // [tables.resistors] block carries the row.
+    let snxlib_text = std::fs::read_to_string(&file).unwrap();
+    assert!(
+        snxlib_text.contains("[tables.resistors]"),
+        "expected [tables.resistors] in {file:?}"
+    );
 
     let got = adapter.read_row("resistors", row_id).unwrap();
     assert_eq!(got, row);
@@ -403,15 +447,16 @@ fn local_git_round_trip_row() {
     assert!(matches!(err, LibraryError::NotFound(_)));
 }
 
-/// `iter_rows` walks every `.tsv` under `tables/` and pairs each row with
-/// its table name.
+/// `iter_rows` walks every `[tables.<name>]` inside the `.snxlib` and
+/// pairs each row with its table name.
 #[test]
 fn local_git_iter_rows_across_tables() {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("IterRows.snxlib");
-    let manifest = empty_manifest("IterRows", false);
-    let lib_id = manifest.library.library_id;
-    let adapter = LocalGitAdapter::init(&root, manifest).unwrap();
+    let file = snxlib_path(dir.path(), "IterRows");
+    let manifest = empty_snx_manifest("IterRows", false);
+    let lib_id = manifest.library_id;
+    let adapter =
+        LocalGitAdapter::init(&file, manifest, LibraryInitOptions::default()).unwrap();
 
     let r1 = fixture_row("R10K", "resistor", lib_id);
     let r2 = fixture_row("R47K", "resistor", lib_id);
@@ -448,10 +493,11 @@ fn local_git_iter_rows_across_tables() {
 #[test]
 fn local_git_read_row_by_pn() {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("ByPN.snxlib");
-    let manifest = empty_manifest("ByPN", false);
-    let lib_id = manifest.library.library_id;
-    let adapter = LocalGitAdapter::init(&root, manifest).unwrap();
+    let file = snxlib_path(dir.path(), "ByPN");
+    let manifest = empty_snx_manifest("ByPN", false);
+    let lib_id = manifest.library_id;
+    let adapter =
+        LocalGitAdapter::init(&file, manifest, LibraryInitOptions::default()).unwrap();
 
     let target = fixture_row("R10K", "resistor", lib_id);
     let other = fixture_row("R47K", "resistor", lib_id);
@@ -476,15 +522,16 @@ fn local_git_read_row_by_pn() {
 #[test]
 fn local_git_commits_with_message() {
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("Commits.snxlib");
-    let manifest = empty_manifest("Commits", false);
-    let lib_id = manifest.library.library_id;
-    let adapter = LocalGitAdapter::init(&root, manifest).unwrap();
+    let file = snxlib_path(dir.path(), "Commits");
+    let manifest = empty_snx_manifest("Commits", false);
+    let lib_id = manifest.library_id;
+    let adapter =
+        LocalGitAdapter::init(&file, manifest, LibraryInitOptions::default()).unwrap();
 
     let row = fixture_row("R10K", "resistor", lib_id);
     adapter.insert_row("resistors", row, "msg-XYZ").unwrap();
 
-    let repo = git2::Repository::open(&root).unwrap();
+    let repo = git2::Repository::open(file.parent().unwrap()).unwrap();
     let head = repo.head().unwrap().peel_to_commit().unwrap();
     assert_eq!(head.summary(), Some("msg-XYZ"));
 }
