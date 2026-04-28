@@ -1570,16 +1570,16 @@ pub fn build_project_tree(ctx: &PanelContext) -> Vec<TreeNode> {
 
     ctx.projects
         .iter()
-        .map(|project| project_root_node(project, ctx.lib_symbol_count))
+        .map(project_root_node)
         .collect()
 }
 
 /// One project root — "Source Documents" / "Libraries" / "Settings".
-/// `fallback_lib_count` is the workspace-wide library count that we
-/// fall through to when the project's own sheet sym totals don't give
-/// a useful number; accurate per-project lib counting is a follow-up
-/// once the library system is project-scoped (v0.9+).
-fn project_root_node(project: &ProjectPanelInfo, fallback_lib_count: usize) -> TreeNode {
+/// The Libraries branch lists this project's mounted `*.snxlib`
+/// entries (right-click → Add New ▸ Component Library to add one);
+/// it renders empty when the project has no libraries rather than
+/// inheriting a workspace-wide symbol count.
+fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
     let mut source_docs: Vec<TreeNode> = Vec::new();
 
     if !project.sheets.is_empty() {
@@ -1618,19 +1618,16 @@ fn project_root_node(project: &ProjectPanelInfo, fallback_lib_count: usize) -> T
     // rows are TSV records — they don't appear in the project tree;
     // double-click on the `.snxlib` opens the Library Browser tab.
     //
-    // When the project carries no library entries we fall back to the
-    // legacy "N symbols loaded" placeholder so single-project
-    // workspaces without a library still get a useful tree row.
+    // When the project carries no library entries the branch renders
+    // empty (matching Settings) — the user can right-click → Add New ▸
+    // Component Library to create one. We deliberately do NOT mint a
+    // synthetic "N symbols loaded" child from the workspace-wide
+    // library count: that pre-DBLib placeholder advertised symbols
+    // the project hadn't actually mounted, which caused real
+    // confusion (a project with nothing saved would show "222 symbols
+    // loaded" sourced from globally-mounted libraries).
     let lib_children: Vec<TreeNode> = if project.libraries.is_empty() {
-        let lib_count = if fallback_lib_count > 0 {
-            fallback_lib_count
-        } else {
-            project.sheets.iter().map(|s| s.sym_count).sum::<usize>()
-        };
-        vec![TreeNode::leaf(
-            format!("{} symbols loaded", lib_count),
-            TreeIcon::Component,
-        )]
+        Vec::new()
     } else {
         project
             .libraries
