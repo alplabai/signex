@@ -20,8 +20,8 @@ use crate::library::messages::{
 };
 use crate::library::state::{
     CloseLibraryConfirmState, ComponentPreviewState, DeleteConfirmState, DocumentOptionsModalState,
-    EditRowModalState, EditorAddress, NewComponentState, PickerState, PreviewTab,
-    PrimitivePickerState, PrimitivePickerTarget,
+    EditRowModalState, EditorAddress, LibraryCreateOptionsState, NewComponentState, PickerState,
+    PreviewTab, PrimitivePickerState, PrimitivePickerTarget,
 };
 use signex_library::{PrimitiveKind, PrimitiveRef, RowId};
 
@@ -341,7 +341,42 @@ impl Signex {
             LibraryMessage::CreateLibraryAtPath {
                 project_path,
                 lib_path,
-            } => self.handle_create_library_at_path(project_path, lib_path),
+            } => {
+                // Stage 11 of `v0.9-snxlib-as-file-plan.md`: pop the
+                // "Library Options" modal here instead of creating
+                // immediately. The modal lets the user opt into Git
+                // LFS for binary 3D models before any disk +
+                // `git init` runs. Confirming dispatches
+                // `LibraryCreateOptionsConfirm` which calls into
+                // `handle_create_library_at_path`.
+                self.library.create_options = Some(LibraryCreateOptionsState {
+                    project_path,
+                    lib_path,
+                    use_lfs: false,
+                });
+                Task::none()
+            }
+            LibraryMessage::LibraryCreateOptionsToggleLfs => {
+                if let Some(state) = self.library.create_options.as_mut() {
+                    state.use_lfs = !state.use_lfs;
+                }
+                Task::none()
+            }
+            LibraryMessage::LibraryCreateOptionsCancel => {
+                self.library.create_options = None;
+                Task::none()
+            }
+            LibraryMessage::LibraryCreateOptionsConfirm => {
+                if let Some(state) = self.library.create_options.take() {
+                    self.handle_create_library_at_path(
+                        state.project_path,
+                        state.lib_path,
+                        state.use_lfs,
+                    )
+                } else {
+                    Task::none()
+                }
+            }
             LibraryMessage::ComponentPreviewOpened {
                 path,
                 table,
@@ -1422,14 +1457,19 @@ impl Signex {
         )
     }
 
-    /// Resolution of the New Library save-as dialog. Re-resolves the
-    /// project (in case it was unloaded between dialog spawn +
-    /// confirm), then runs `commands::create_library_at` to do the
-    /// disk init + manifest + git scaffolding + project registration.
+    /// Resolution of the "Library Options" modal (Stage 11 of
+    /// `v0.9-snxlib-as-file-plan.md`). Re-resolves the project (in
+    /// case it was unloaded between modal spawn + confirm), then runs
+    /// `commands::create_library_at` to do the disk init + manifest +
+    /// git scaffolding + project registration. `use_lfs` carries the
+    /// modal's checkbox state — when on, the adapter writes
+    /// `.gitattributes` for `*.step` / `*.stp` / `*.wrl` / `*.iges`
+    /// and stages it into the initial commit.
     fn handle_create_library_at_path(
         &mut self,
         project_path: std::path::PathBuf,
         lib_path: std::path::PathBuf,
+        use_lfs: bool,
     ) -> Task<Message> {
         let Some(loaded) = self
             .document_state
@@ -1449,6 +1489,7 @@ impl Signex {
             &mut self.library,
             &mut loaded.data,
             lib_path.clone(),
+            use_lfs,
         ) {
             Ok(library_id) => {
                 tracing::info!(
@@ -1456,6 +1497,7 @@ impl Signex {
                     project = %loaded.path.display(),
                     library = %lib_path.display(),
                     library_id = %library_id,
+                    use_lfs,
                     "created library via save-as dialog"
                 );
                 // Mark the project file dirty so the user is prompted
@@ -1468,6 +1510,7 @@ impl Signex {
                     target: "signex::library",
                     project = %loaded.path.display(),
                     library = %lib_path.display(),
+                    use_lfs,
                     error = %e,
                     "create_library_at failed"
                 );

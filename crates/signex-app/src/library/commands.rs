@@ -44,10 +44,19 @@ pub fn open_library(state: &mut LibraryState, root: PathBuf) -> Result<(), Libra
 /// handles both the right-click "Add New ▸ Component Library"
 /// project-local case and "save my new symbol into a global library
 /// directory" shared case.
+///
+/// `use_lfs` (Stage 11 of `v0.9-snxlib-as-file-plan.md`) controls
+/// whether `LocalGitAdapter::init` writes a `.gitattributes` opting
+/// `*.step` / `*.stp` / `*.wrl` / `*.iges` into Git LFS at create
+/// time. The library-create UI surfaces this through the "Library
+/// Options" modal that pops up after the Save-As dialog; non-UI
+/// callers (tests, fixtures) pass `false` to stay independent of a
+/// local `git lfs` install.
 pub fn create_library_at(
     state: &mut LibraryState,
     project: &mut ProjectData,
     lib_path: PathBuf,
+    use_lfs: bool,
 ) -> Result<Uuid, LibraryError> {
     // Library directories must use the `.snxlib` extension so the
     // library detector elsewhere (ancestor walk, dock open dialog,
@@ -105,9 +114,11 @@ pub fn create_library_at(
         users: UsersConfig::default(),
     };
 
-    // LFS opt-in lands in Stage 11 — for now every UI-driven create
-    // goes off so we don't surprise users without `git lfs` installed.
-    let _adapter = LocalGitAdapter::init(&lib_path, manifest, LibraryInitOptions::default())?;
+    // LFS opt-in (Stage 11): the "Library Options" modal that pops up
+    // after the New Library Save-As dialog feeds `use_lfs` here. The
+    // adapter writes `.gitattributes` for `*.step`/`*.stp`/`*.wrl`/
+    // `*.iges` and stages it into the initial commit when `true`.
+    let _adapter = LocalGitAdapter::init(&lib_path, manifest, LibraryInitOptions { use_lfs })?;
 
     // 3. Mount via the existing `open_library` helper so the panel
     //    sees the new library immediately and the picker can pull
@@ -166,7 +177,10 @@ pub fn create_library(
         ));
     }
     let lib_path = project_dir.join(format!("{trimmed}.snxlib"));
-    create_library_at(state, project, lib_path)
+    // Legacy convenience wrapper — defaults LFS off so existing
+    // callers don't change behaviour. UI flows go through the
+    // "Library Options" modal which carries `use_lfs` explicitly.
+    create_library_at(state, project, lib_path, false)
 }
 
 /// Auto-mount every library referenced by `project.libraries`. Called

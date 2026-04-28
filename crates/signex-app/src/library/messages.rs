@@ -70,13 +70,24 @@ pub enum LibraryMessage {
     /// `project_path` is the project the library should attach to
     /// (the same file the original `CreateLibraryAt` carried);
     /// `lib_path` is the user's chosen `.snxlib/` directory path.
-    /// Calls `crate::library::commands::create_library_at` to do
-    /// the actual disk init + manifest + git scaffolding, then
-    /// registers it on the project's library list.
+    /// Opens the "Library Options" modal seeded with `(project_path,
+    /// lib_path, use_lfs = false)` so the user can opt into Git LFS
+    /// for binary 3D models before the adapter writes anything to
+    /// disk. Confirming the modal calls
+    /// `crate::library::commands::create_library_at`.
     CreateLibraryAtPath {
         project_path: std::path::PathBuf,
         lib_path: std::path::PathBuf,
     },
+    /// "Library Options" modal — toggle the "Use Git LFS for binary
+    /// 3D models" checkbox. Default is off.
+    LibraryCreateOptionsToggleLfs,
+    /// "Library Options" modal — Create Library button. Runs
+    /// `commands::create_library_at` with the modal's `use_lfs` flag.
+    LibraryCreateOptionsConfirm,
+    /// "Library Options" modal — Cancel button (or Esc). Drops the
+    /// modal state without creating anything.
+    LibraryCreateOptionsCancel,
     /// Dismiss the New Component modal without creating anything.
     CloseNewComponent,
     /// Live-edit of the New Component modal's "Internal PN" field.
