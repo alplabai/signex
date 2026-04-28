@@ -15,6 +15,7 @@ pub mod distributor;
 pub mod distributors;
 pub mod hash;
 pub mod identity;
+pub mod library_file;
 pub mod lifecycle;
 pub mod manifest;
 pub mod manufacturer;
@@ -45,6 +46,10 @@ pub use distributors::{
 };
 pub use hash::hash_row_content;
 pub use identity::{ComponentClass, InternalPn, Mpn, RowId};
+pub use library_file::{
+    FORMAT_TOKEN, LibraryFile, LibraryFileError, LibraryRow, LibrarySection, LibraryTable,
+    SnxlibManifest,
+};
 pub use lifecycle::LifecycleState;
 pub use manifest::{
     LibraryMeta, LibraryMode, Manifest, TableConfig, UserEntry, UsersConfig, WorkflowConfig,
