@@ -346,20 +346,24 @@ impl Signex {
                 self.handle_start_detached_window_drag(modal)
             }
             Message::StartMainWindowDrag => match self.ui_state.main_window_id {
-                Some(id) => iced::window::drag(id),
+                Some(id) => crate::chrome::start_window_drag(id),
                 None => Task::none(),
             },
             Message::StartMainWindowResize(direction) => match self.ui_state.main_window_id {
-                Some(id) => iced::window::drag_resize(id, direction),
+                Some(id) => crate::chrome::start_window_resize(id, direction),
                 None => Task::none(),
             },
             Message::StartDetachedModalResize { modal, direction } => {
                 // Find the OS window id hosting this modal, then ask
-                // iced/winit to start a resize drag in the requested
+                // the OS to start a resize drag in the requested
                 // direction. Same pattern as the main window —
                 // detached modals have `decorations: false`, so
                 // there's no OS frame to grab; the 6 px overlay
-                // strips are how we expose resize.
+                // strips are how we expose resize. Routed through
+                // `crate::chrome::start_window_resize` so the Win32
+                // SC_SIZE fallback applies here too — winit's own
+                // path silently no-ops on borderless windows after
+                // the first attempt.
                 let id = self.ui_state.windows.iter().find_map(|(id, kind)| {
                     if let super::state::WindowKind::DetachedModal(m) = kind {
                         if *m == modal {
@@ -369,7 +373,7 @@ impl Signex {
                     None
                 });
                 match id {
-                    Some(id) => iced::window::drag_resize(id, direction),
+                    Some(id) => crate::chrome::start_window_resize(id, direction),
                     None => Task::none(),
                 }
             }

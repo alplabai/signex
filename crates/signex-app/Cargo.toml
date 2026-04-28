@@ -65,4 +65,15 @@ winres = "0.1"
 # main window (which loses them when `decorations: false` strips the
 # WS_THICKFRAME DWM relies on). 0.61 aligns with what winit already pulls
 # so there's no extra copy in the dep graph.
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Dwm"] }
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Dwm",
+    # ReleaseCapture + SendMessageW + WM_SYSCOMMAND constants for the
+    # SC_MOVE / SC_SIZE drag fallback in `src/chrome.rs`. winit's own
+    # `drag_window` / `drag_resize_window` defer the `PostMessageW`
+    # via a thread executor and the message loses its connection to
+    # the user's button-down on borderless windows; sending
+    # WM_SYSCOMMAND ourselves bypasses that timing window.
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Input_KeyboardAndMouse",
+] }
