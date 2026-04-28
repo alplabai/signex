@@ -2,38 +2,67 @@
 //! [`LibraryAdapter`] trait objects into a single lookup surface for
 //! cross-library [`PrimitiveRef`] resolution.
 //!
-//! Per `v0.9-library-refactor-plan.md` §2.6 / §8 step C4, primitives are
-//! addressed by `(library_id, uuid)` tuples. When the editor or renderer
-//! holds a `Revision`, it carries `symbol_ref / footprint_ref / sim_ref`
-//! values whose `library_id` may point at *another* library entirely (the
-//! Altium Database-Library shape). `LibrarySet::mount` registers each open
-//! adapter under its own `library_id`, and `resolve_*` looks up the right
-//! adapter and asks it for the primitive.
+//! Per `v0.9-snxlib-as-file-plan.md` §2 Stage B, the primary mount
+//! key is the `.snxlib` *file path* (not the library_id). The
+//! Components Panel (§5) presents the same library_id across
+//! Project / Installed / Global lists — a library_id can therefore
+//! legitimately appear under multiple file paths in a single
+//! `LibrarySet`, so the duplicate-id check that used to gate
+//! mounting has moved out to the panel layer (where dedup happens
+//! at presentation time).
 //!
 //! ## Resolution semantics
 //!
 //! - A reference whose `library_id` isn't mounted resolves to `None` —
 //!   the editor surfaces this as "unresolved primitive — open dependent
-//!   library?" (plan §2.6).
+//!   library?".
 //! - A reference whose `library_id` IS mounted but whose primitive UUID
-//!   isn't in that adapter ALSO resolves to `None` — same UI surfacing.
-//! - The set holds owned `Box<dyn LibraryAdapter>` values; mounting moves
-//!   the adapter into the set. `unmount(library_id)` returns it back so the
-//!   UI can hand it off without keeping a phantom mount alive.
+//!   isn't in any of the matching adapters ALSO resolves to `None`.
+//! - When two adapters share a `library_id` (the "user copy-pasted a
+//!   library" case), [`Self::resolve_symbol`] / `_footprint` / `_sim`
+//!   pick the first match. UI dedup at the Components Panel level is
+//!   the right place to warn the user about the collision.
+//! - Adapters without an on-disk path (e.g. `DatabaseAdapter`) fall
+//!   back to keying by `library_id`; the duplicate-id error still
+//!   guards those.
 
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 use uuid::Uuid;
 
 use crate::adapter::{LibraryAdapter, LibraryError};
 use crate::primitive::{Footprint, PrimitiveRef, SimModel, Symbol};
 
-/// A bag of mounted libraries, keyed by `library_id`.
+/// Mount key for an adapter inside a [`LibrarySet`].
+///
+/// File-backed adapters (`LocalGitAdapter`) key by their absolute
+/// `.snxlib` file path so the same `library_id` mounted at two
+/// distinct on-disk locations is allowed. Path-less adapters
+/// (`DatabaseAdapter`) fall back to keying by `library_id`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum MountKey {
+    /// File-backed adapter — the `.snxlib` absolute path.
+    Path(PathBuf),
+    /// Path-less adapter — the adapter's `library_id`.
+    Id(Uuid),
+}
+
+impl MountKey {
+    fn for_adapter(adapter: &dyn LibraryAdapter) -> Self {
+        match adapter.library_file_path() {
+            Some(p) => MountKey::Path(p.to_path_buf()),
+            None => MountKey::Id(adapter.library_id()),
+        }
+    }
+}
+
+/// A bag of mounted libraries, keyed by [`MountKey`].
 ///
 /// `Default` constructs an empty set; call [`Self::mount`] to add adapters.
 #[derive(Default)]
 pub struct LibrarySet {
-    libs: HashMap<Uuid, Box<dyn LibraryAdapter>>,
+    libs: HashMap<MountKey, Box<dyn LibraryAdapter>>,
 }
 
 impl LibrarySet {
@@ -42,46 +71,56 @@ impl LibrarySet {
         Self::default()
     }
 
-    /// Mount a library — the adapter's [`LibraryAdapter::library_id`] is
-    /// used as the key.
+    /// Mount a library.
     ///
-    /// Returns `LibraryError::Conflict` when a library with the same
-    /// `library_id` is already mounted. Two `.snxlib/` directories with
-    /// duplicate `library_id`s (e.g. the user copy-pasted a library to
-    /// start a new one without regenerating the manifest UUID) would
-    /// otherwise have the second mount silently shadow the first, and
-    /// every cross-library `PrimitiveRef` for that id would resolve to
-    /// the wrong file. The caller surfaces the conflict to the UI so
-    /// the user can rename one of the libraries.
+    /// Returns `Conflict` when the same mount key is already in use:
+    /// duplicate `.snxlib` file path for file-backed adapters, or
+    /// duplicate `library_id` for path-less adapters. Two file-backed
+    /// adapters with the same `library_id` at *different* paths are
+    /// allowed — the Components Panel dedups by id at presentation
+    /// time.
     ///
-    /// To replace an existing mount intentionally, use
-    /// [`Self::remount`] which drops the old adapter and installs the
-    /// new one in one step.
+    /// Use [`Self::remount`] to replace an existing mount in one step.
     pub fn mount(&mut self, lib: Box<dyn LibraryAdapter>) -> Result<(), LibraryError> {
-        let id = lib.library_id();
-        if self.libs.contains_key(&id) {
-            return Err(LibraryError::Conflict(format!(
-                "library_id {id} is already mounted — duplicate library_id across two .snxlib/ \
-                 directories. Open only one, or regenerate the manifest UUID on the duplicate."
-            )));
+        let key = MountKey::for_adapter(lib.as_ref());
+        if self.libs.contains_key(&key) {
+            return Err(LibraryError::Conflict(match &key {
+                MountKey::Path(p) => format!(
+                    "library at {} is already mounted",
+                    p.display()
+                ),
+                MountKey::Id(id) => format!(
+                    "library_id {id} is already mounted — duplicate library_id on \
+                     a path-less adapter (DB or in-memory) suggests a misconfig"
+                ),
+            }));
         }
-        self.libs.insert(id, lib);
+        self.libs.insert(key, lib);
         Ok(())
     }
 
-    /// Replace whatever adapter is mounted at `lib.library_id` with
+    /// Replace whatever adapter is mounted at `lib`'s mount key with
     /// `lib`. Drops the previous adapter and returns it (or `None` if
-    /// no previous mount existed). Use [`Self::mount`] when you want
-    /// the duplicate-id case to be an explicit error.
+    /// no previous mount existed).
     pub fn remount(&mut self, lib: Box<dyn LibraryAdapter>) -> Option<Box<dyn LibraryAdapter>> {
-        let id = lib.library_id();
-        self.libs.insert(id, lib)
+        let key = MountKey::for_adapter(lib.as_ref());
+        self.libs.insert(key, lib)
     }
 
-    /// Unmount and return a previously-mounted library, or `None` if no
-    /// adapter is registered under that `library_id`.
+    /// Unmount the first adapter matching `library_id` and return it
+    /// (or `None` if no adapter is registered under that id).
+    ///
+    /// When two file-backed adapters share an id, the "first match"
+    /// is unspecified — callers needing a specific mount should use
+    /// [`Self::unmount_by_path`].
     pub fn unmount(&mut self, library_id: Uuid) -> Option<Box<dyn LibraryAdapter>> {
-        self.libs.remove(&library_id)
+        let key = self.find_key_for_id(library_id)?;
+        self.libs.remove(&key)
+    }
+
+    /// Unmount the file-backed adapter at `path`, returning it.
+    pub fn unmount_by_path(&mut self, path: &Path) -> Option<Box<dyn LibraryAdapter>> {
+        self.libs.remove(&MountKey::Path(path.to_path_buf()))
     }
 
     /// Number of mounted libraries.
@@ -94,57 +133,74 @@ impl LibrarySet {
         self.libs.is_empty()
     }
 
-    /// True if a library with this id is mounted.
+    /// True if any mounted adapter exposes the given `library_id`.
     pub fn contains(&self, library_id: Uuid) -> bool {
-        self.libs.contains_key(&library_id)
+        self.find_key_for_id(library_id).is_some()
     }
 
-    /// Borrow the mounted library, if any.
+    /// True if a file-backed adapter is mounted at `path`.
+    pub fn contains_path(&self, path: &Path) -> bool {
+        self.libs.contains_key(&MountKey::Path(path.to_path_buf()))
+    }
+
+    /// Borrow the first mounted adapter exposing `library_id`, if any.
     pub fn get(&self, library_id: Uuid) -> Option<&dyn LibraryAdapter> {
-        self.libs.get(&library_id).map(|b| b.as_ref())
+        let key = self.find_key_for_id(library_id)?;
+        self.libs.get(&key).map(|b| b.as_ref())
     }
 
-    /// Iterate over `library_id`s of mounted libraries.
+    /// Borrow the file-backed adapter mounted at `path`, if any.
+    pub fn get_by_path(&self, path: &Path) -> Option<&dyn LibraryAdapter> {
+        self.libs
+            .get(&MountKey::Path(path.to_path_buf()))
+            .map(|b| b.as_ref())
+    }
+
+    /// Iterate over `library_id`s of mounted libraries. Duplicates may
+    /// appear when two file-backed adapters share an id.
     pub fn library_ids(&self) -> impl Iterator<Item = Uuid> + '_ {
-        self.libs.keys().copied()
+        self.libs.values().map(|lib| lib.library_id())
+    }
+
+    /// Iterate over the file paths of file-backed mounts. Path-less
+    /// adapters are skipped.
+    pub fn library_paths(&self) -> impl Iterator<Item = &Path> + '_ {
+        self.libs.keys().filter_map(|k| match k {
+            MountKey::Path(p) => Some(p.as_path()),
+            MountKey::Id(_) => None,
+        })
     }
 
     /// Resolve a `PrimitiveRef` to the underlying [`Symbol`], if both the
     /// library and the primitive UUID exist.
     pub fn resolve_symbol(&self, r: &PrimitiveRef) -> Option<Symbol> {
-        self.libs.get(&r.library_id)?.get_symbol(r.uuid).ok()
+        let lib = self.find_adapter_for_id(r.library_id)?;
+        lib.get_symbol(r.uuid).ok()
     }
 
     /// Resolve a `PrimitiveRef` to the underlying [`Footprint`].
     pub fn resolve_footprint(&self, r: &PrimitiveRef) -> Option<Footprint> {
-        self.libs.get(&r.library_id)?.get_footprint(r.uuid).ok()
+        let lib = self.find_adapter_for_id(r.library_id)?;
+        lib.get_footprint(r.uuid).ok()
     }
 
     /// Resolve a `PrimitiveRef` to the underlying [`SimModel`].
     pub fn resolve_sim(&self, r: &PrimitiveRef) -> Option<SimModel> {
-        self.libs.get(&r.library_id)?.get_sim(r.uuid).ok()
+        let lib = self.find_adapter_for_id(r.library_id)?;
+        lib.get_sim(r.uuid).ok()
     }
 
     /// Filter a stream of references down to those that don't currently
-    /// resolve, regardless of primitive kind. The caller decides which
-    /// primitive flavour each reference is — the resolver tries all three
-    /// (symbol, footprint, sim) and keeps refs that miss in every flavour.
-    ///
-    /// This is the canonical helper for the "unresolved primitives" panel
-    /// the editor surfaces when a dependent library is closed.
+    /// resolve, regardless of primitive kind.
     pub fn unresolved_refs<'a, I>(&self, refs: I) -> Vec<PrimitiveRef>
     where
         I: IntoIterator<Item = &'a PrimitiveRef>,
     {
         refs.into_iter()
             .filter(|r| {
-                // Library is missing entirely → unresolved.
-                let Some(lib) = self.libs.get(&r.library_id) else {
+                let Some(lib) = self.find_adapter_for_id(r.library_id) else {
                     return true;
                 };
-                // Library is mounted; the ref is unresolved iff it doesn't
-                // exist as any of the three primitive kinds. Adapters use
-                // separate stores, so we have to ask each.
                 lib.get_symbol(r.uuid).is_err()
                     && lib.get_footprint(r.uuid).is_err()
                     && lib.get_sim(r.uuid).is_err()
@@ -152,13 +208,27 @@ impl LibrarySet {
             .copied()
             .collect()
     }
+
+    fn find_adapter_for_id(&self, library_id: Uuid) -> Option<&dyn LibraryAdapter> {
+        self.libs
+            .values()
+            .find(|lib| lib.library_id() == library_id)
+            .map(|b| b.as_ref())
+    }
+
+    fn find_key_for_id(&self, library_id: Uuid) -> Option<MountKey> {
+        self.libs
+            .iter()
+            .find(|(_, lib)| lib.library_id() == library_id)
+            .map(|(k, _)| k.clone())
+    }
 }
 
 impl std::fmt::Debug for LibrarySet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("LibrarySet")
             .field("mounted", &self.libs.len())
-            .field("ids", &self.libs.keys().copied().collect::<Vec<Uuid>>())
+            .field("keys", &self.libs.keys().collect::<Vec<&MountKey>>())
             .finish()
     }
 }
@@ -168,14 +238,15 @@ mod tests {
     use super::*;
     use crate::adapter::LibraryError;
     use crate::manifest::{LibraryMeta, LibraryMode, Manifest, UsersConfig, WorkflowConfig};
-    use crate::primitive::{PinElectricalType, PinOrientation, SymbolPin};
 
     /// Minimal in-memory adapter used to exercise resolver mechanics
-    /// without requiring the `local-git` feature. Holds a single symbol so
-    /// we can verify mount/resolve/unresolved-refs end-to-end.
+    /// without requiring the `local-git` feature. Optionally carries a
+    /// fake `library_file_path()` so tests can drive the path-keyed
+    /// branch of `MountKey`.
     struct FakeAdapter {
         manifest: Manifest,
         symbols: HashMap<Uuid, Symbol>,
+        path: Option<PathBuf>,
     }
 
     impl FakeAdapter {
@@ -193,6 +264,7 @@ mod tests {
                     tables: Vec::new(),
                 },
                 symbols: HashMap::new(),
+                path: None,
             }
         }
 
@@ -200,11 +272,20 @@ mod tests {
             self.symbols.insert(sym.uuid, sym);
             self
         }
+
+        fn with_path(mut self, path: impl Into<PathBuf>) -> Self {
+            self.path = Some(path.into());
+            self
+        }
     }
 
     impl LibraryAdapter for FakeAdapter {
         fn manifest(&self) -> &Manifest {
             &self.manifest
+        }
+
+        fn library_file_path(&self) -> Option<&Path> {
+            self.path.as_deref()
         }
 
         fn get_symbol(&self, uuid: Uuid) -> Result<Symbol, LibraryError> {
@@ -234,7 +315,7 @@ mod tests {
         let lib_id = Uuid::now_v7();
         let sym = fixture_symbol("OPAMP-DUAL-8");
         let sym_uuid = sym.uuid;
-        let adapter = FakeAdapter::new(lib_id).with_symbol(sym.clone());
+        let adapter = FakeAdapter::new(lib_id).with_symbol(sym);
         let mut set = LibrarySet::new();
         set.mount(Box::new(adapter)).unwrap();
 
@@ -311,14 +392,88 @@ mod tests {
         assert!(ids.contains(&b));
     }
 
+    /// Path-less adapters (DB/in-memory) keep the legacy duplicate-id
+    /// safety check — two of those with the same id is a config bug.
     #[test]
-    fn mount_rejects_duplicate_library_id() {
+    fn mount_rejects_duplicate_library_id_for_pathless_adapters() {
         let lib_id = Uuid::now_v7();
         let mut set = LibrarySet::new();
         set.mount(Box::new(FakeAdapter::new(lib_id))).unwrap();
         let dup = set.mount(Box::new(FakeAdapter::new(lib_id)));
         assert!(matches!(dup, Err(LibraryError::Conflict(_))));
         assert_eq!(set.len(), 1);
+    }
+
+    /// Two file-backed adapters sharing an id but at different paths
+    /// are allowed under the new model — the Components Panel dedups
+    /// at display time.
+    #[test]
+    fn mount_allows_duplicate_library_id_at_different_paths() {
+        let lib_id = Uuid::now_v7();
+        let mut set = LibrarySet::new();
+        set.mount(Box::new(
+            FakeAdapter::new(lib_id).with_path("/tmp/copy_a/lib.snxlib"),
+        ))
+        .unwrap();
+        set.mount(Box::new(
+            FakeAdapter::new(lib_id).with_path("/tmp/copy_b/lib.snxlib"),
+        ))
+        .expect("duplicate library_id at a different path is allowed");
+        assert_eq!(set.len(), 2);
+    }
+
+    /// Two file-backed adapters at the *same* path collide — that's
+    /// always a bug (mount the same .snxlib twice).
+    #[test]
+    fn mount_rejects_duplicate_path() {
+        let mut set = LibrarySet::new();
+        set.mount(Box::new(
+            FakeAdapter::new(Uuid::now_v7()).with_path("/tmp/x/lib.snxlib"),
+        ))
+        .unwrap();
+        let dup = set.mount(Box::new(
+            FakeAdapter::new(Uuid::now_v7()).with_path("/tmp/x/lib.snxlib"),
+        ));
+        assert!(matches!(dup, Err(LibraryError::Conflict(_))));
+        assert_eq!(set.len(), 1);
+    }
+
+    /// `unmount_by_path` removes a specific file-backed mount when
+    /// callers can't disambiguate by `library_id` alone.
+    #[test]
+    fn unmount_by_path_removes_specific_mount() {
+        let lib_id = Uuid::now_v7();
+        let path_a = PathBuf::from("/tmp/a/lib.snxlib");
+        let path_b = PathBuf::from("/tmp/b/lib.snxlib");
+        let mut set = LibrarySet::new();
+        set.mount(Box::new(FakeAdapter::new(lib_id).with_path(path_a.clone())))
+            .unwrap();
+        set.mount(Box::new(FakeAdapter::new(lib_id).with_path(path_b.clone())))
+            .unwrap();
+        assert_eq!(set.len(), 2);
+
+        let removed = set.unmount_by_path(&path_a);
+        assert!(removed.is_some());
+        assert_eq!(set.len(), 1);
+        assert!(!set.contains_path(&path_a));
+        assert!(set.contains_path(&path_b));
+        // Library_id still resolves through the surviving mount.
+        assert!(set.contains(lib_id));
+    }
+
+    /// `library_paths` lists file-backed mounts only; path-less
+    /// adapters are filtered out.
+    #[test]
+    fn library_paths_skips_pathless_mounts() {
+        let mut set = LibrarySet::new();
+        set.mount(Box::new(FakeAdapter::new(Uuid::now_v7()))).unwrap();
+        set.mount(Box::new(
+            FakeAdapter::new(Uuid::now_v7()).with_path("/tmp/p/lib.snxlib"),
+        ))
+        .unwrap();
+        let paths: Vec<&Path> = set.library_paths().collect();
+        assert_eq!(paths.len(), 1);
+        assert_eq!(paths[0], Path::new("/tmp/p/lib.snxlib"));
     }
 
     #[test]
@@ -334,7 +489,7 @@ mod tests {
             FakeAdapter::new(lib_id).with_symbol(first.clone()),
         ))
         .unwrap();
-        // remount under same library_id replaces the adapter and
+        // remount under same mount key replaces the adapter and
         // returns the previous one so the caller can decide to drop it
         // or hand it elsewhere.
         let prev = set.remount(Box::new(FakeAdapter::new(lib_id).with_symbol(second)));
