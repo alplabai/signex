@@ -266,6 +266,25 @@ pub enum LibraryMessage {
         row_id: RowId,
         column: String,
     },
+    /// Pick a lifecycle filter mode for the active Library Browser tab.
+    /// Drives which rows render in the grid (Stage 18 of
+    /// `v0.9-snxlib-as-file-plan.md` — surfaces `ComponentRow.state` as
+    /// a first-class browser filter).
+    BrowserSetLifecycleFilter {
+        library_path: PathBuf,
+        filter: super::state::LifecycleFilter,
+    },
+    /// Right-click on a Library Browser row → "Refresh Pricing".
+    /// Stage 18 stub — real distributor adapter wiring lands later.
+    BrowserRefreshPricing {
+        library_path: PathBuf,
+        table: String,
+        row_id: RowId,
+    },
+    /// Library node right-click → "Refresh All Pricing".
+    /// Stage 18 stub — touches every row in every cached table once
+    /// the per-row stub is fleshed out.
+    LibraryRefreshAllPricing(PathBuf),
     // ── Tools ▸ Document Options modal ──────────────────────────────
     /// Tools menu fired Document Options for the library at
     /// `library_path`. Opens the modal pre-filled with the library's
@@ -857,6 +876,10 @@ pub enum BrowserEditMsg {
     DeleteParam {
         key: String,
     },
+    /// Live edit of the comma-separated tags string (Stage 18). Stored
+    /// as `parameters["tags"]` on save — a free-form `ParamValue::Text`
+    /// preserves the raw user-typed list.
+    SetTags(String),
     /// Open the Symbol primitive picker scoped to this edit modal.
     OpenSymbolPicker,
     /// Open the Footprint primitive picker scoped to this edit modal.

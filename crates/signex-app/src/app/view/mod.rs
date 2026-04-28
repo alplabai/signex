@@ -363,6 +363,23 @@ impl Signex {
                 Message::Menu(crate::menu_bar::MenuMessage::AddLibraryFootprint),
             ));
             items.push(self.ctx_menu_sep());
+            // Stage 18 distributor refresh stub — fires
+            // `LibraryRefreshAllPricing` so the wiring is observable
+            // even before the real adapter loop ships. Resolves the
+            // clicked library's `.snxlib` file via the project tree.
+            if let Some(lib_path) = self.library_node_path_from_tree(path.as_slice()) {
+                items.push(self.ctx_menu_item_msg(
+                    None,
+                    "Refresh All Pricing",
+                    "",
+                    Message::Library(crate::library::LibraryMessage::LibraryRefreshAllPricing(
+                        lib_path,
+                    )),
+                ));
+            } else {
+                items.push(self.ctx_menu_item_disabled(None, "Refresh All Pricing", None));
+            }
+            items.push(self.ctx_menu_sep());
             let toggle_label = if node.expanded { "Collapse" } else { "Expand" };
             items.push(self.ctx_menu_item_msg(
                 None,
@@ -588,6 +605,26 @@ impl Signex {
         } else {
             self.ctx_menu_item_disabled(None, "Save", None)
         }
+    }
+
+    /// Resolve the on-disk `.snxlib` path for a project-tree library
+    /// node click. The tree path under the `Libraries` group is
+    /// `[project_idx, libraries_branch_idx, library_idx]` — the
+    /// matching project's `LibraryNodeInfo[library_idx].root` carries
+    /// the absolute path. Returns `None` when the path doesn't sit at
+    /// a library leaf (defensive — `view_project_tree_context_menu`
+    /// already gates on `is_library_node`, but the icon-by-depth
+    /// detection there isn't strict enough to skip the lookup).
+    fn library_node_path_from_tree(&self, tree_path: &[usize]) -> Option<std::path::PathBuf> {
+        let project_idx = *tree_path.first()?;
+        let library_idx = *tree_path.get(2)?;
+        self.document_state
+            .panel_ctx
+            .projects
+            .get(project_idx)?
+            .libraries
+            .get(library_idx)
+            .map(|lib| lib.root.clone())
     }
 
     /// Build the 26-wide icon column for a context-menu row. Mirrors

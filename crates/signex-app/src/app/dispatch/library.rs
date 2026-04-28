@@ -494,6 +494,52 @@ impl Signex {
                 }
                 Task::none()
             }
+            LibraryMessage::BrowserSetLifecycleFilter {
+                library_path,
+                filter,
+            } => {
+                if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
+                    state.lifecycle_filter = filter;
+                    // Drop the row selection so we never end up with a
+                    // selected row that the new filter has just hidden
+                    // — the side preview pane would otherwise render
+                    // a row the user can no longer see in the grid.
+                    state.selected_row = None;
+                }
+                Task::none()
+            }
+            LibraryMessage::BrowserRefreshPricing {
+                library_path,
+                table,
+                row_id,
+            } => {
+                // Stage 18 stub — the real adapter dispatch lands once
+                // `signex_library::DistributorAdapter::refresh_pricing`
+                // gets a row-binding loop. For now we log so the wiring
+                // path is observable when the user clicks the menu item.
+                tracing::info!(
+                    target: "signex::library",
+                    path = %library_path.display(),
+                    table = %table,
+                    row = %row_id,
+                    "TODO: distributor refresh wiring (BrowserRefreshPricing)"
+                );
+                Task::none()
+            }
+            LibraryMessage::LibraryRefreshAllPricing(library_path) => {
+                let count = self
+                    .library
+                    .library_at(&library_path)
+                    .map(|lib| lib.total_rows())
+                    .unwrap_or(0);
+                tracing::info!(
+                    target: "signex::library",
+                    path = %library_path.display(),
+                    rows = count,
+                    "TODO: distributor refresh wiring (LibraryRefreshAllPricing)"
+                );
+                Task::none()
+            }
             // ── Document Options modal (Tools ▸ Document Options) ──
             LibraryMessage::OpenDocumentOptions { library_path } => {
                 if let Some(lib) = self.library.library_at(&library_path) {
@@ -923,6 +969,10 @@ impl Signex {
                     modal.draft.parameters.remove(&key);
                     modal.param_buf.remove(&key);
                 }
+                BrowserEditMsg::SetTags(s) => {
+                    modal.tags_buf = s;
+                    modal.error = None;
+                }
                 BrowserEditMsg::OpenSymbolPicker => {
                     next = Some(Task::done(Message::Library(
                         LibraryMessage::OpenPrimitivePicker {
@@ -940,6 +990,19 @@ impl Signex {
                     )));
                 }
                 BrowserEditMsg::Save => {
+                    // Flush the tags buffer to `parameters["tags"]`
+                    // before snapshotting the draft. Empty buffer drops
+                    // the entry so we don't keep a dangling empty
+                    // string in the param map.
+                    let trimmed = modal.tags_buf.trim();
+                    if trimmed.is_empty() {
+                        modal.draft.parameters.remove("tags");
+                    } else {
+                        modal.draft.parameters.insert(
+                            "tags".to_string(),
+                            signex_library::ParamValue::Text(trimmed.to_string()),
+                        );
+                    }
                     save_request = Some((modal.address.clone(), modal.draft.clone()));
                 }
                 BrowserEditMsg::Cancel => {
