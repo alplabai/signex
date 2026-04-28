@@ -73,6 +73,85 @@ impl EditorAddress {
     }
 }
 
+/// Lifecycle visibility mode for the Library Browser grid.
+///
+/// Mirrors plan §6 "Lifecycle, tagging, distributors": rows tagged
+/// `Released`/`InReview`/`Draft` count as "active" for filtering, while
+/// `Deprecated` rows are tinted yellow when shown and `Obsolete` rows
+/// are hidden by default. Stage 18 surfaces these as a single dropdown
+/// pill in the browser header so users can pivot the visible row set
+/// without touching every row's lifecycle field.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LifecycleFilter {
+    /// Default — show `Released` / `InReview` / `Draft` and tint
+    /// `Deprecated`. Hides `Obsolete`.
+    ActiveAndPreferred,
+    /// Show only `Released` (the "preferred for new designs" subset
+    /// once admins promote rows out of `Draft`).
+    PreferredOnly,
+    /// Surface `Deprecated` rows alongside the default set — for
+    /// continuity / repair workflows.
+    IncludeDeprecated,
+    /// Show every row including `Obsolete`. The library admin's audit
+    /// view.
+    All,
+}
+
+impl LifecycleFilter {
+    /// Stable display label for the dropdown.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::ActiveAndPreferred => "Active + Preferred",
+            Self::PreferredOnly => "Preferred Only",
+            Self::IncludeDeprecated => "Incl. Deprecated",
+            Self::All => "All (incl. Obsolete)",
+        }
+    }
+
+    /// Every option in stable display order — drives the
+    /// `pick_list`'s value list.
+    pub const ALL: &'static [LifecycleFilter] = &[
+        LifecycleFilter::ActiveAndPreferred,
+        LifecycleFilter::PreferredOnly,
+        LifecycleFilter::IncludeDeprecated,
+        LifecycleFilter::All,
+    ];
+
+    /// Whether a row in `state` should render under this filter.
+    /// Deprecated rows render in the default filter but render tinted
+    /// (see `lifecycle_dot_color`). `LifecycleState` is
+    /// `#[non_exhaustive]` so the match falls through to the default
+    /// (active-but-not-preferred) bucket for any future variant.
+    pub fn allows(self, state: signex_library::LifecycleState) -> bool {
+        use signex_library::LifecycleState as L;
+        match (self, state) {
+            (Self::All, _) => true,
+            (Self::PreferredOnly, L::Released) => true,
+            (Self::PreferredOnly, _) => false,
+            (
+                Self::ActiveAndPreferred | Self::IncludeDeprecated,
+                L::Released | L::InReview | L::Draft,
+            ) => true,
+            (Self::IncludeDeprecated, L::Deprecated) => true,
+            (Self::ActiveAndPreferred, L::Deprecated) => false,
+            (_, L::Obsolete) => false,
+            _ => false,
+        }
+    }
+}
+
+impl Default for LifecycleFilter {
+    fn default() -> Self {
+        Self::ActiveAndPreferred
+    }
+}
+
+impl std::fmt::Display for LifecycleFilter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
+}
+
 /// Per-browser-tab state — owned by a single
 /// `TabKind::LibraryBrowser(path)` tab, keyed by the same `path` on
 /// `LibraryState::library_browsers`. Deliverable B adds the
@@ -90,6 +169,9 @@ pub struct LibraryBrowserState {
     pub selected_row: Option<RowId>,
     /// Filter text applied to row PN / MPN / manufacturer.
     pub search: String,
+    /// Lifecycle visibility filter (Stage 18). Defaults to
+    /// `ActiveAndPreferred` — hides obsolete rows, tints deprecated.
+    pub lifecycle_filter: LifecycleFilter,
     /// Edit Component Details modal — opened by double-clicking a row
     /// in the grid. `None` while closed.
     pub edit_modal: Option<EditRowModalState>,
@@ -110,6 +192,7 @@ impl LibraryBrowserState {
             active_table: None,
             selected_row: None,
             search: String::new(),
+            lifecycle_filter: LifecycleFilter::default(),
             edit_modal: None,
             cell_edit: HashMap::new(),
             delete_confirm: None,
@@ -138,6 +221,10 @@ pub struct EditRowModalState {
     /// by parameter name. Mirrors the `params_edit_buf` pattern used
     /// in the Component Preview tab.
     pub param_buf: HashMap<String, (String, String)>,
+    /// Live edit buffer for the comma-separated tags row (Stage 18).
+    /// Persisted to `parameters["tags"]` as `ParamValue::Text` on Save.
+    /// Seeded from the existing `parameters["tags"]` value at modal open.
+    pub tags_buf: String,
     /// Inline error text — surfaced if the save fails.
     pub error: Option<String>,
 }
@@ -159,10 +246,19 @@ impl EditRowModalState {
                 (k.clone(), (val, unit))
             })
             .collect();
+        // Seed the tags buffer from `parameters["tags"]` if present;
+        // tags live as a free-form `ParamValue::Text` keyed by "tags"
+        // (plan §6).
+        let tags_buf = match draft.parameters.get("tags") {
+            Some(signex_library::ParamValue::Text(s)) => s.clone(),
+            Some(other) => other.display(),
+            None => String::new(),
+        };
         Self {
             address,
             draft,
             param_buf,
+            tags_buf,
             error: None,
         }
     }
@@ -1139,5 +1235,113 @@ mod tests {
             updated: chrono::Utc::now(),
             content_hash: [0u8; 32],
         }
+    }
+
+    /// LifecycleFilter Released-only mode keeps `Released` rows and
+    /// drops every other state — guards plan §6's "preferred only"
+    /// pivot from drifting back to "active + preferred".
+    #[test]
+    fn lifecycle_filter_preferred_only_isolates_released() {
+        use signex_library::LifecycleState as L;
+        let f = LifecycleFilter::PreferredOnly;
+        assert!(f.allows(L::Released));
+        assert!(!f.allows(L::Draft));
+        assert!(!f.allows(L::InReview));
+        assert!(!f.allows(L::Deprecated));
+        assert!(!f.allows(L::Obsolete));
+    }
+
+    #[test]
+    fn lifecycle_filter_default_hides_obsolete_and_deprecated() {
+        use signex_library::LifecycleState as L;
+        let f = LifecycleFilter::default();
+        assert!(matches!(f, LifecycleFilter::ActiveAndPreferred));
+        assert!(f.allows(L::Released));
+        assert!(f.allows(L::InReview));
+        assert!(f.allows(L::Draft));
+        assert!(!f.allows(L::Deprecated));
+        assert!(!f.allows(L::Obsolete));
+    }
+
+    #[test]
+    fn lifecycle_filter_include_deprecated_keeps_deprecated_only() {
+        use signex_library::LifecycleState as L;
+        let f = LifecycleFilter::IncludeDeprecated;
+        assert!(f.allows(L::Released));
+        assert!(f.allows(L::Deprecated));
+        assert!(!f.allows(L::Obsolete));
+    }
+
+    #[test]
+    fn lifecycle_filter_all_admits_every_state() {
+        use signex_library::LifecycleState as L;
+        let f = LifecycleFilter::All;
+        for s in [
+            L::Released,
+            L::InReview,
+            L::Draft,
+            L::Deprecated,
+            L::Obsolete,
+        ] {
+            assert!(f.allows(s), "All filter should allow {s:?}");
+        }
+    }
+
+    #[test]
+    fn library_browser_state_defaults_lifecycle_filter() {
+        let s = LibraryBrowserState::new(PathBuf::from("/tmp/x.snxlib"));
+        assert!(matches!(
+            s.lifecycle_filter,
+            LifecycleFilter::ActiveAndPreferred
+        ));
+        assert!(s.search.is_empty());
+    }
+
+    /// `EditRowModalState::new` seeds `tags_buf` from
+    /// `parameters["tags"]` so the modal opens with the existing
+    /// tags rendered in the input — Stage 18 lifecycle/tag UX.
+    #[test]
+    fn edit_row_modal_state_seeds_tags_buffer() {
+        use signex_library::{
+            ComponentClass, DatasheetRef, InternalPn, LifecycleState, ManufacturerPart, ParamMap,
+            ParamValue, PinPadOverride, PlmReserved,
+        };
+        let _ = (PinPadOverride::new("1", "1"),);
+        let mut params = ParamMap::new();
+        params.insert(
+            "tags".to_string(),
+            ParamValue::Text("low-noise, RoHS".to_string()),
+        );
+        let row = ComponentRow {
+            row_id: Uuid::new_v4(),
+            internal_pn: InternalPn::new("R0805_10k"),
+            class: ComponentClass::generic(),
+            datasheet: DatasheetRef::default(),
+            state: LifecycleState::Draft,
+            symbol_ref: signex_library::PrimitiveRef::new(Uuid::nil(), Uuid::new_v4()),
+            footprint_ref: None,
+            sim_ref: None,
+            pin_map_overrides: Vec::new(),
+            primary_mpn: ManufacturerPart::draft("Mfr", "MPN"),
+            alternates: Vec::new(),
+            supply: Vec::new(),
+            parameters: params,
+            plm: PlmReserved::default(),
+            version: "0.0.1".into(),
+            released: false,
+            symbol_version: String::new(),
+            footprint_version: String::new(),
+            sim_version: String::new(),
+            created: chrono::Utc::now(),
+            updated: chrono::Utc::now(),
+            content_hash: [0u8; 32],
+        };
+        let address = EditorAddress::new(
+            PathBuf::from("/tmp/x.snxlib"),
+            "resistors".to_string(),
+            RowId::from_uuid(row.row_id),
+        );
+        let modal = EditRowModalState::new(address, row);
+        assert_eq!(modal.tags_buf, "low-noise, RoHS");
     }
 }

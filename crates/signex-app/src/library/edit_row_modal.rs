@@ -147,6 +147,17 @@ pub fn view<'a>(
         .padding(6)
         .size(12);
 
+    // Tags row (Stage 18) — comma-separated free-form tokens.
+    // The buffer flushes to `parameters["tags"]` on Save (see
+    // `handle_browser_edit_msg`); empty buffer drops the entry.
+    let tags_input = text_input("e.g. low-noise, RoHS, qualified", &edit.tags_buf)
+        .on_input({
+            let send = send.clone();
+            move |s| send(BrowserEditMsg::SetTags(s))
+        })
+        .padding(6)
+        .size(12);
+
     // Symbol / Footprint ref rows.
     let symbol_short = short_uuid(&edit.draft.symbol_ref.uuid);
     let symbol_label = if edit.draft.symbol_ref.uuid.is_nil() {
@@ -245,6 +256,8 @@ pub fn view<'a>(
         labelled("Datasheet URL", datasheet_input.into()),
         Space::new().height(8),
         mfr_mpn_row,
+        Space::new().height(8),
+        labelled("Tags (comma-separated)", tags_input.into()),
         Space::new().height(12),
         text("Symbol ref").size(10).color(muted),
         symbol_row,
@@ -391,11 +404,19 @@ fn view_params_section<'a>(
     });
     col = col.push(header_row);
 
-    if edit.draft.parameters.is_empty() {
+    // Stage 18: `tags` has its own dedicated input above this section,
+    // so we hide it from the parameters table to avoid a duplicate row.
+    let visible_params: BTreeMap<&String, &ParamValue> = edit
+        .draft
+        .parameters
+        .iter()
+        .filter(|(k, _)| k.as_str() != "tags")
+        .collect();
+    if visible_params.is_empty() {
         col = col.push(container(text("No parameters yet.").size(11).color(muted)).padding([8, 6]));
     } else {
         // Iterate in BTreeMap key order for stable layout.
-        let entries: BTreeMap<&String, &ParamValue> = edit.draft.parameters.iter().collect();
+        let entries = visible_params;
         for (key, value) in entries {
             let key_owned = key.clone();
             let (cur_value, cur_unit) = match edit.param_buf.get(&key_owned) {

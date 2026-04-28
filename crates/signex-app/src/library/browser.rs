@@ -26,20 +26,27 @@
 use std::collections::BTreeMap;
 
 use iced::widget::{
-    Column, Space, button, column, container, mouse_area, row, scrollable, text, text_input,
+    Column, Space, button, column, container, mouse_area, pick_list, row, scrollable, text,
+    text_input,
 };
 use iced::{Border, Element, Length, Theme};
-use signex_library::{ComponentRow, RowId};
+use signex_library::{ComponentRow, LifecycleState, RowId};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::messages::LibraryMessage;
-use super::state::{LibraryBrowserState, LibraryState, OpenLibrary};
+use super::state::{LibraryBrowserState, LibraryState, LifecycleFilter, OpenLibrary};
 
 const BROWSER_TEXT_SIZE: f32 = 11.0;
 const BROWSER_HEADER_SIZE: f32 = 10.0;
 const PREVIEW_PANE_WIDTH: f32 = 380.0;
 const MAX_PARAM_COLUMNS: usize = 4;
+/// Width reserved at the start of every grid row for the per-row
+/// lifecycle indicator dot (Stage 18). The header row uses an empty
+/// `Space` of the same width so column labels stay aligned with the
+/// row cells beneath them.
+const LIFECYCLE_DOT_GUTTER: f32 = 16.0;
+const LIFECYCLE_DOT_SIZE: f32 = 8.0;
 
 /// Render the Library Browser tab body. Returns an empty-state panel
 /// when the library isn't currently mounted (e.g. mount failed) so the
@@ -104,13 +111,12 @@ pub fn view<'a>(
         .unwrap_or(&[]);
 
     let needle = browser.search.trim().to_lowercase();
-    let visible: Vec<&ComponentRow> = if needle.is_empty() {
-        rows.iter().collect()
-    } else {
-        rows.iter()
-            .filter(|r| row_matches_filter(r, &needle))
-            .collect()
-    };
+    let lifecycle_filter = browser.lifecycle_filter;
+    let visible: Vec<&ComponentRow> = rows
+        .iter()
+        .filter(|r| lifecycle_filter.allows(r.state))
+        .filter(|r| needle.is_empty() || row_matches_filter(r, &needle))
+        .collect();
 
     let columns = derive_columns(rows);
 
@@ -240,12 +246,31 @@ fn view_header<'a>(
         .size(BROWSER_TEXT_SIZE)
         .width(Length::Fixed(220.0));
 
+    // Lifecycle filter pill — Stage 18 surfaces `ComponentRow.state`
+    // as a first-class browser filter so users can pivot between
+    // "preferred only", "include deprecated", etc. without touching
+    // every row's lifecycle field.
+    let library_for_lc = library_path.to_path_buf();
+    let lifecycle_picker = pick_list(
+        LifecycleFilter::ALL.to_vec(),
+        Some(browser.lifecycle_filter),
+        move |f| LibraryMessage::BrowserSetLifecycleFilter {
+            library_path: library_for_lc.clone(),
+            filter: f,
+        },
+    )
+    .placeholder("Lifecycle")
+    .padding(4)
+    .text_size(BROWSER_TEXT_SIZE);
+
     container(
         row![
             tab_strip,
             Space::new().width(6),
             plus_btn,
             Space::new().width(Length::Fill),
+            lifecycle_picker,
+            Space::new().width(8),
             search,
         ]
         .spacing(0)
@@ -268,14 +293,22 @@ enum ColumnKind {
     InternalPn,
     Manufacturer,
     Mpn,
+    /// Stage 18 — read-only column reading from `parameters["tags"]`.
+    /// Inline-editable through the leftmost cell-edit buffer pattern
+    /// is deferred to a polish pass; for now the canonical edit point
+    /// is the Edit Component Details modal.
+    Tags,
     Parameter(String),
 }
 
 /// Resolve the column list. Always: Internal PN / Manufacturer / MPN.
-/// Then up to [`MAX_PARAM_COLUMNS`] of the most-common parametric keys
-/// across `rows`.
+/// Then a Tags column (Stage 18) when *any* row carries a non-empty
+/// `parameters["tags"]`. Finally up to [`MAX_PARAM_COLUMNS`] of the
+/// most-common other parametric keys across `rows` — `tags` is excluded
+/// from that auto-derived set so the dedicated column doesn't render
+/// twice.
 fn derive_columns(rows: &[ComponentRow]) -> Vec<GridColumn> {
-    let mut columns: Vec<GridColumn> = Vec::with_capacity(3 + MAX_PARAM_COLUMNS);
+    let mut columns: Vec<GridColumn> = Vec::with_capacity(4 + MAX_PARAM_COLUMNS);
     columns.push(GridColumn {
         label: "Internal PN".to_string(),
         kind: ColumnKind::InternalPn,
@@ -292,9 +325,27 @@ fn derive_columns(rows: &[ComponentRow]) -> Vec<GridColumn> {
         width: 130.0,
     });
 
+    // Surface tags as a first-class column whenever the table has at
+    // least one tagged row. Saves the user from having to scroll
+    // sideways through the auto-derived parameter columns to find them.
+    let any_tagged = rows
+        .iter()
+        .any(|r| matches!(r.parameters.get("tags"), Some(v) if !v.display().is_empty()));
+    if any_tagged {
+        columns.push(GridColumn {
+            label: "Tags".to_string(),
+            kind: ColumnKind::Tags,
+            width: 160.0,
+        });
+    }
+
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
     for row in rows {
         for k in row.parameters.keys() {
+            if k == "tags" {
+                // Already surfaced via the dedicated Tags column.
+                continue;
+            }
             *counts.entry(k.clone()).or_insert(0) += 1;
         }
     }
@@ -308,6 +359,28 @@ fn derive_columns(rows: &[ComponentRow]) -> Vec<GridColumn> {
         });
     }
     columns
+}
+
+/// Per-lifecycle indicator dot colour. Matches plan §6:
+///
+/// * Released → green;
+/// * Draft / InReview → neutral grey ("active, but not preferred");
+/// * Deprecated → amber/yellow;
+/// * Obsolete → muted dark grey.
+///
+/// Centralised here so both the dot and any future lifecycle badge
+/// in the side preview pane can pull the same colour.
+fn lifecycle_dot_color(state: LifecycleState) -> iced::Color {
+    match state {
+        LifecycleState::Released => iced::Color::from_rgb(0.30, 0.78, 0.40),
+        LifecycleState::InReview => iced::Color::from_rgb(0.50, 0.65, 0.95),
+        LifecycleState::Draft => iced::Color::from_rgba(1.0, 1.0, 1.0, 0.45),
+        LifecycleState::Deprecated => iced::Color::from_rgb(0.96, 0.78, 0.10),
+        LifecycleState::Obsolete => iced::Color::from_rgba(1.0, 1.0, 1.0, 0.20),
+        // `LifecycleState` is `#[non_exhaustive]` — fall back to the
+        // muted "Draft" colour for any future state we haven't styled yet.
+        _ => iced::Color::from_rgba(1.0, 1.0, 1.0, 0.30),
+    }
 }
 
 fn shorten_label(key: &str) -> String {
@@ -345,7 +418,8 @@ fn view_grid<'a>(
     let selected = browser.selected_row;
 
     let header_row = {
-        let mut r = row![].spacing(0);
+        // 16-px gutter aligns with the per-row lifecycle dot below.
+        let mut r = row![Space::new().width(Length::Fixed(LIFECYCLE_DOT_GUTTER))].spacing(0);
         for c in columns {
             r = r.push(
                 container(text(c.label.clone()).size(BROWSER_HEADER_SIZE).color(muted))
@@ -383,31 +457,83 @@ fn view_grid<'a>(
         for r in rows {
             let row_id = RowId::from_uuid(r.row_id);
             let is_selected = selected == Some(row_id);
+            // Lifecycle tinting — deprecated rows render with a faint
+            // amber wash so the user spots them at a glance even when
+            // they're shown alongside released rows under the
+            // `IncludeDeprecated` filter (plan §6).
+            let lifecycle_tint =
+                matches!(r.state, LifecycleState::Deprecated).then(|| {
+                    iced::Background::Color(iced::Color::from_rgba(0.96, 0.80, 0.10, 0.10))
+                });
             let bg_color = if is_selected {
                 Some(iced::Background::Color(iced::Color::from_rgba(
                     0.30, 0.55, 0.85, 0.25,
                 )))
             } else {
-                None
+                lifecycle_tint
             };
 
-            let mut data_row = row![].spacing(0);
+            // Lifecycle indicator dot — Stage 18. Sits in the
+            // 16-px gutter mirrored on the header row.
+            let dot_color = lifecycle_dot_color(r.state);
+            let lifecycle_dot = container(Space::new())
+                .width(Length::Fixed(LIFECYCLE_DOT_SIZE))
+                .height(Length::Fixed(LIFECYCLE_DOT_SIZE))
+                .style(move |_: &Theme| iced::widget::container::Style {
+                    background: Some(iced::Background::Color(dot_color)),
+                    border: Border {
+                        width: 0.0,
+                        radius: (LIFECYCLE_DOT_SIZE / 2.0).into(),
+                        color: iced::Color::TRANSPARENT,
+                    },
+                    ..Default::default()
+                });
+            let lifecycle_cell = container(lifecycle_dot)
+                .width(Length::Fixed(LIFECYCLE_DOT_GUTTER))
+                .height(Length::Fill)
+                .center_y(Length::Fill)
+                .padding([0, 4]);
+
+            let mut data_row = row![lifecycle_cell].spacing(0);
             for c in columns {
                 let column_key = match &c.kind {
                     ColumnKind::InternalPn => "internal_pn".to_string(),
                     ColumnKind::Manufacturer => "manufacturer".to_string(),
                     ColumnKind::Mpn => "mpn".to_string(),
+                    ColumnKind::Tags => "parameters.tags".to_string(),
                     ColumnKind::Parameter(key) => format!("parameters.{key}"),
                 };
                 let row_value = match &c.kind {
                     ColumnKind::InternalPn => r.internal_pn.as_str().to_string(),
                     ColumnKind::Manufacturer => r.primary_mpn.manufacturer.clone(),
                     ColumnKind::Mpn => r.primary_mpn.mpn.clone(),
+                    ColumnKind::Tags => match r.parameters.get("tags") {
+                        Some(v) => v.display(),
+                        None => String::new(),
+                    },
                     ColumnKind::Parameter(key) => match r.parameters.get(key) {
                         Some(v) => v.display(),
                         None => String::new(),
                     },
                 };
+
+                // Tags render read-only for now — canonical edit point
+                // is the Edit Component Details modal (plan §6 calls
+                // tag editing a modal-only flow until a chip-input
+                // widget lands).
+                if matches!(c.kind, ColumnKind::Tags) {
+                    data_row = data_row.push(
+                        container(
+                            text(row_value)
+                                .size(BROWSER_TEXT_SIZE)
+                                .color(theme_ext::text_secondary(tokens)),
+                        )
+                        .padding([4, 6])
+                        .width(Length::Fixed(c.width)),
+                    );
+                    continue;
+                }
+
                 // Buffer wins over row when active.
                 let buf_key = (row_id, column_key.clone());
                 let cell_value = browser
@@ -447,6 +573,8 @@ fn view_grid<'a>(
             let table_for_msg = table.to_string();
             let library_for_open = library_for_msg.clone();
             let table_for_open = table_for_msg.clone();
+            let library_for_refresh = library_for_msg.clone();
+            let table_for_refresh = table_for_msg.clone();
             let row_container = container(data_row)
                 .padding([0, 0])
                 .width(Length::Fill)
@@ -466,6 +594,10 @@ fn view_grid<'a>(
             // on_press/on_double_click only fires on the gaps between
             // cells — that's fine for selection because the user is
             // clicking on a row, not a specific cell.
+            //
+            // Right-press fires the Stage 18 distributor refresh stub
+            // — tonight's wiring just emits a tracing log; the real
+            // adapter call lands when the row-binding loop is built.
             let row_widget = mouse_area(row_container)
                 .on_press(LibraryMessage::BrowserSelectRow {
                     library_path: library_for_msg,
@@ -475,6 +607,11 @@ fn view_grid<'a>(
                 .on_double_click(LibraryMessage::BrowserOpenEditModal {
                     library_path: library_for_open,
                     table: table_for_open,
+                    row_id,
+                })
+                .on_right_press(LibraryMessage::BrowserRefreshPricing {
+                    library_path: library_for_refresh,
+                    table: table_for_refresh,
                     row_id,
                 });
 
