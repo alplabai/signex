@@ -536,6 +536,7 @@ fn build_symbol_editor_panel_ctx(
             name: s.name.clone(),
             uuid: s.uuid,
             pin_count: s.pins.len(),
+            description: s.description.clone(),
         })
         .collect();
 
@@ -599,6 +600,11 @@ fn build_symbol_editor_panel_ctx(
     Some(SymbolEditorPanelContext {
         path,
         symbol_name: sym.name.clone(),
+        symbol_designator: sym.designator.clone(),
+        symbol_comment: sym.comment.clone(),
+        symbol_description: sym.description.clone(),
+        symbol_component_type: sym.component_type,
+        symbol_mirrored: sym.mirrored,
         symbol_uuid: sym.uuid,
         pins,
         graphics,

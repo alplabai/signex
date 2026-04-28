@@ -231,12 +231,28 @@ pub struct SymbolGraphic {
     pub stroke_width: f64,
 }
 
+/// Altium "Component Type" — drives BOM rules and schematic
+/// behaviour. `Standard` is the normal electrical component.
+/// `#[non_exhaustive]` because Altium ships a handful of niche types
+/// (Standard No BOM, Net Tie, etc.) — we add as needed.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[non_exhaustive]
+pub enum ComponentType {
+    #[default]
+    Standard,
+    Mechanical,
+    Graphical,
+    NetTie,
+    StandardNoBom,
+    Jumper,
+}
+
 /// Reusable schematic primitive. Bound by a `Component::symbol_ref`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Symbol {
     pub uuid: Uuid,
     /// Human-facing name ("OPAMP-DUAL-8") — independent of the binding
-    /// component's `internal_pn`.
+    /// component's `internal_pn`. Altium calls this "Design Item ID".
     pub name: String,
     /// Anchor point in symbol-local mm coordinates (typically `[0, 0]`).
     #[serde(default)]
@@ -247,8 +263,48 @@ pub struct Symbol {
     /// Default parameter values that flow to a binding component on first save.
     #[serde(default)]
     pub schematic_params: ParamMap,
+    /// Altium "Designator" — placeholder string used at schematic
+    /// place-time (e.g. `"U?"`, `"R?"`). The `?` is replaced by an
+    /// instance number during annotation.
+    #[serde(default = "default_designator")]
+    pub designator: String,
+    /// Altium "Comment" — passes through to the placed component's
+    /// Comment field. Often `*` (placeholder) or a value like
+    /// `"100k"` for a fixed resistor symbol.
+    #[serde(default = "default_comment")]
+    pub comment: String,
+    /// Free-text component description — surfaced in tooltips and
+    /// the Properties panel.
+    #[serde(default)]
+    pub description: String,
+    /// Altium "Component Type" — Standard / Mechanical / Graphical /
+    /// Net Tie / Standard (No BOM) / Jumper.
+    #[serde(default)]
+    pub component_type: ComponentType,
+    /// Whether the symbol is mirrored on the canvas (Altium
+    /// "Graphical ▸ Mirrored" toggle). Default false.
+    #[serde(default)]
+    pub mirrored: bool,
+    /// Optional per-symbol fill colour override (Altium "Local
+    /// Colors ▸ Fills"). `None` = inherit from theme.
+    #[serde(default)]
+    pub local_fill_color: Option<[u8; 4]>,
+    /// Optional per-symbol line/stroke colour override.
+    #[serde(default)]
+    pub local_line_color: Option<[u8; 4]>,
+    /// Optional per-symbol pin colour override.
+    #[serde(default)]
+    pub local_pin_color: Option<[u8; 4]>,
     pub created: DateTime<Utc>,
     pub updated: DateTime<Utc>,
+}
+
+fn default_designator() -> String {
+    "U?".to_string()
+}
+
+fn default_comment() -> String {
+    "*".to_string()
 }
 
 impl Symbol {
@@ -262,6 +318,14 @@ impl Symbol {
             pins: vec![SymbolPin::new("1", "1")],
             graphics: Vec::new(),
             schematic_params: ParamMap::new(),
+            designator: default_designator(),
+            comment: default_comment(),
+            description: String::new(),
+            component_type: ComponentType::default(),
+            mirrored: false,
+            local_fill_color: None,
+            local_line_color: None,
+            local_pin_color: None,
             created: now,
             updated: now,
         }
@@ -416,6 +480,14 @@ mod tests {
                 stroke_width: 0.15,
             }],
             schematic_params: ParamMap::new(),
+            designator: "U?".into(),
+            comment: "*".into(),
+            description: String::new(),
+            component_type: ComponentType::Standard,
+            mirrored: false,
+            local_fill_color: None,
+            local_line_color: None,
+            local_pin_color: None,
             created: Utc::now(),
             updated: Utc::now(),
         };

@@ -81,12 +81,13 @@ pub enum ActiveBarIcon {
     Glyph(&'static str),
 }
 
-/// Standard pixel size for an Active Bar button. Matches the
-/// schematic's bespoke active_bar.rs so the visual rhythm stays
-/// consistent across editors.
-const BTN_SIZE: f32 = 28.0;
-const ICON_SIZE: f32 = 18.0;
-const BAR_PADDING: f32 = 4.0;
+/// Pixel sizes — tightened to match the compact dark pill in
+/// Altium's reference SchLib screenshot. Buttons are 22 px square
+/// with 14 px icons; 3 px outer pad keeps the bar a single
+/// horizontal row.
+const BTN_SIZE: f32 = 22.0;
+const ICON_SIZE: f32 = 14.0;
+const BAR_PADDING: f32 = 3.0;
 const BAR_RADIUS: f32 = 4.0;
 
 /// Render the bar.

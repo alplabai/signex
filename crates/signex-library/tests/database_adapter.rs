@@ -61,20 +61,12 @@ where
 // ── Primitive CRUD over HTTP ─────────────────────────────────────────────
 
 fn fixture_symbol() -> Symbol {
-    Symbol {
-        uuid: Uuid::now_v7(),
-        name: "OPAMP-DUAL-8".into(),
-        anchor: [0.0, 0.0],
-        pins: vec![{
-            let mut p = SymbolPin::new("1", "OUT");
-            p.electrical = PinElectricalType::Output;
-            p
-        }],
-        graphics: Vec::new(),
-        schematic_params: ParamMap::new(),
-        created: chrono::Utc::now(),
-        updated: chrono::Utc::now(),
-    }
+    let mut s = Symbol::empty("OPAMP-DUAL-8");
+    s.pins.clear();
+    let mut p = SymbolPin::new("1", "OUT");
+    p.electrical = PinElectricalType::Output;
+    s.pins.push(p);
+    s
 }
 
 #[test]

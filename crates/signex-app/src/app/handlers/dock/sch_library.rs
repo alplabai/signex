@@ -145,6 +145,30 @@ impl Signex {
                 });
                 true
             }
+            crate::panels::PanelMsg::SymEditorSetSymbolDesignator(value) => {
+                let v = value.clone();
+                self.sym_editor_mutate_symbol(move |s| s.designator = v);
+                true
+            }
+            crate::panels::PanelMsg::SymEditorSetSymbolComment(value) => {
+                let v = value.clone();
+                self.sym_editor_mutate_symbol(move |s| s.comment = v);
+                true
+            }
+            crate::panels::PanelMsg::SymEditorSetSymbolDescription(value) => {
+                let v = value.clone();
+                self.sym_editor_mutate_symbol(move |s| s.description = v);
+                true
+            }
+            crate::panels::PanelMsg::SymEditorSetSymbolType(value) => {
+                let v = *value;
+                self.sym_editor_mutate_symbol(move |s| s.component_type = v);
+                true
+            }
+            crate::panels::PanelMsg::SymEditorToggleSymbolMirrored => {
+                self.sym_editor_mutate_symbol(|s| s.mirrored = !s.mirrored);
+                true
+            }
             crate::panels::PanelMsg::SymEditorSetDisplaySheetColor(color) => {
                 let color = *color;
                 self.sym_editor_mutate_display(|d| d.sheet_color = color);
@@ -226,6 +250,25 @@ impl Signex {
             return;
         };
         mutator(pin);
+        editor.dirty = true;
+        editor.canvas_cache.clear();
+        self.mark_active_symbol_tab_dirty();
+        self.refresh_panel_ctx();
+    }
+
+    /// Helper — apply a closure to the active symbol (`Symbol`) on
+    /// the active Symbol editor. Used by Properties Component
+    /// section edits (designator / comment / description / type /
+    /// mirrored). Runs the standard dirty/refresh cycle. No-op when
+    /// no Symbol editor is the active tab.
+    fn sym_editor_mutate_symbol<F>(&mut self, mutator: F)
+    where
+        F: FnOnce(&mut signex_library::Symbol),
+    {
+        let Some(editor) = self.active_symbol_editor_mut() else {
+            return;
+        };
+        mutator(editor.primitive_mut());
         editor.dirty = true;
         editor.canvas_cache.clear();
         self.mark_active_symbol_tab_dirty();

@@ -403,6 +403,17 @@ pub struct SymbolEditorPanelContext {
     pub path: std::path::PathBuf,
     /// The active symbol's `name` field (Altium "Design Item ID").
     pub symbol_name: String,
+    /// Altium "Designator" (e.g. `U?`).
+    pub symbol_designator: String,
+    /// Altium "Comment" (e.g. `*` or a fixed value).
+    pub symbol_comment: String,
+    /// Free-text description.
+    pub symbol_description: String,
+    /// Altium "Component Type" — `Standard / Mechanical / Graphical
+    /// / Net Tie / Standard (No BOM) / Jumper`.
+    pub symbol_component_type: signex_library::ComponentType,
+    /// Altium "Mirrored" toggle.
+    pub symbol_mirrored: bool,
     /// UUID of the active symbol — surfaced read-only on the panel.
     pub symbol_uuid: uuid::Uuid,
     /// Pin summaries for the active symbol — drives Properties panel
@@ -483,6 +494,8 @@ pub struct SymbolFileEntry {
     pub name: String,
     pub uuid: uuid::Uuid,
     pub pin_count: usize,
+    /// Free-text description — surfaced as the second tree column.
+    pub description: String,
 }
 
 /// Extended pin fields surfaced on the Properties panel — flows
@@ -981,6 +994,19 @@ pub enum PanelMsg {
     /// + the on-disk container's `display_name` when the active
     /// symbol is the only one in the file.
     SymEditorSetSymbolName(String),
+    /// Properties panel — edit the active symbol's designator
+    /// template (Altium "Designator", e.g. `U?`).
+    SymEditorSetSymbolDesignator(String),
+    /// Properties panel — edit the active symbol's comment
+    /// passthrough.
+    SymEditorSetSymbolComment(String),
+    /// Properties panel — edit the active symbol's free-text
+    /// description.
+    SymEditorSetSymbolDescription(String),
+    /// Properties panel — pick the active symbol's Component Type.
+    SymEditorSetSymbolType(signex_library::ComponentType),
+    /// Properties panel — toggle the active symbol's mirrored flag.
+    SymEditorToggleSymbolMirrored,
     /// Document Options (Properties pane when nothing is selected)
     /// — set the sheet background color preset on the containing
     /// `.snxlib`. All `.snxsym` tabs from the same library share.
@@ -1361,44 +1387,62 @@ fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     // ── File header ──
     col = col.push(
         container(
-            column![
-                text(format!(
-                    "File: {}",
-                    sym.path
-                        .file_name()
-                        .map(|s| s.to_string_lossy().into_owned())
-                        .unwrap_or_else(|| "<untitled>".to_string())
-                ))
-                .size(10)
-                .color(muted),
-                text(format!("Symbols: {}", sym.symbols_in_file.len()))
-                    .size(10)
-                    .color(muted),
-            ]
-            .spacing(2),
+            text(format!(
+                "{} ({} symbols)",
+                sym.path
+                    .file_name()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| "<untitled>".to_string()),
+                sym.symbols_in_file.len(),
+            ))
+            .size(10)
+            .color(muted),
         )
         .padding([4, 8]),
     );
     col = col.push(thin_sep(border_c));
 
-    // ── Symbols list ──
-    // The active symbol's row is followed by a tree-expander listing
-    // its parts (Altium "Part X / N" sub-rows) when the symbol is
-    // multi-part (max declared part_number > 1) or carries Part Zero
-    // pins. Click a part row to switch the editor's active_part.
+    // ── Column header — Altium SCH Library parity. Two columns:
+    //     Design Item ID | Description.
+    col = col.push(
+        container(
+            row![
+                text("Design Item ID")
+                    .size(10)
+                    .color(muted)
+                    .width(Length::FillPortion(3)),
+                text("Description")
+                    .size(10)
+                    .color(muted)
+                    .width(Length::FillPortion(4)),
+            ]
+            .spacing(6),
+        )
+        .padding([4, 8])
+        .width(Length::Fill),
+    );
+    col = col.push(thin_sep(border_c));
+
+    // ── Symbols tree ──
+    // Each symbol is a row showing Design Item ID + Description.
+    // Multi-part symbols (or symbols with Part Zero pins) expand
+    // under the active symbol with one row per part — click to
+    // switch active_part.
     for entry in &sym.symbols_in_file {
         let is_active = entry.idx == sym.active_idx;
         let label_color = if is_active { primary } else { muted };
         let bg_active = crate::styles::ti(ctx.tokens.selection);
         let row_msg = PanelMsg::SchLibrarySelectSymbol(entry.idx);
-        let pin_count_label = format!("{} pins", entry.pin_count);
         let row_btn = iced::widget::button(
             row![
                 text(entry.name.clone())
                     .size(11)
                     .color(label_color)
-                    .width(Length::Fill),
-                text(pin_count_label).size(10).color(muted),
+                    .width(Length::FillPortion(3)),
+                text(entry.description.clone())
+                    .size(10)
+                    .color(muted)
+                    .width(Length::FillPortion(4)),
             ]
             .spacing(6)
             .align_y(iced::Alignment::Center),
@@ -1426,12 +1470,8 @@ fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         );
         col = col.push(row_btn);
 
-        // Part tree-expander — only under the active symbol, only
-        // when there's something interesting to expand (multi-part
-        // OR carries Part Zero).
+        // Part tree-expander under the active multi-part symbol.
         if is_active && (sym.active_max_part > 1 || sym.active_has_part_zero) {
-            // Part Zero (shared) — only when the symbol has any
-            // part_number == 0 pins.
             if sym.active_has_part_zero {
                 col = col.push(part_tree_row(
                     "Part 0 (shared)",
@@ -1457,226 +1497,82 @@ fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
     col = col.push(thin_sep(border_c));
 
-    // ── Pins sub-list (Altium SchLib parity) — pins of the active
-    //    symbol with Designator / Name / Type columns. Click a row
-    //    to select that pin on the canvas; the Properties panel
-    //    picks up the selection.
-    col = col.push(
-        container(text("Pins").size(10).color(primary))
-            .padding([4, 8])
-            .width(Length::Fill),
-    );
-    if sym.pins.is_empty() {
-        col = col.push(
-            container(
-                text("No pins yet — switch to Add Pin and click on the canvas.")
-                    .size(10)
-                    .color(muted),
-            )
-            .padding([4, 8])
-            .width(Length::Fill),
-        );
-    } else {
-        // Header row.
-        col = col.push(
-            container(
-                row![
-                    text("#").size(10).color(muted).width(Length::Fixed(28.0)),
-                    text("Name").size(10).color(muted).width(Length::Fill),
-                    text("Type")
-                        .size(10)
-                        .color(muted)
-                        .width(Length::Fixed(80.0)),
-                ]
-                .spacing(6),
-            )
-            .padding([2, 8]),
-        );
-        for pin in &sym.pins {
-            let pin_idx = pin.idx;
-            let active_pin =
-                matches!(&sym.selected, SymbolEditorSelection::Pin(p) if p.idx == pin_idx);
-            let label_color = if active_pin { primary } else { muted };
-            let bg_active = crate::styles::ti(ctx.tokens.selection);
-            let pin_row_btn = iced::widget::button(
-                row![
-                    text(pin.number.clone())
-                        .size(10)
-                        .color(label_color)
-                        .width(Length::Fixed(28.0)),
-                    text(pin.name.clone())
-                        .size(10)
-                        .color(label_color)
-                        .width(Length::Fill),
-                    text(pin.electrical.clone())
-                        .size(9)
-                        .color(muted)
-                        .width(Length::Fixed(80.0)),
-                ]
-                .spacing(6)
-                .align_y(iced::Alignment::Center),
-            )
-            .padding([3, 8])
-            .width(Length::Fill)
-            .on_press(PanelMsg::SymEditorSelectPin(pin_idx))
-            .style(
-                move |_: &iced::Theme, status: iced::widget::button::Status| {
-                    iced::widget::button::Style {
-                        background: if active_pin {
-                            Some(iced::Background::Color(bg_active))
-                        } else if matches!(status, iced::widget::button::Status::Hovered) {
-                            Some(iced::Background::Color(iced::Color::from_rgba(
-                                1.0, 1.0, 1.0, 0.04,
-                            )))
-                        } else {
-                            None
-                        },
-                        border: iced::Border::default(),
-                        text_color: label_color,
-                        ..iced::widget::button::Style::default()
-                    }
-                },
-            );
-            col = col.push(pin_row_btn);
-        }
-    }
+    // Pins / Graphics sub-lists used to live here; per Altium SCH
+    // Library panel parity they belong on dedicated panels (Pins
+    // already shows in the Properties panel's Pin selection branch;
+    // a dedicated SCHLIB Filter / SCHLIB List pair lives on the
+    // bottom panel-tabs strip when that ships).
     col = col.push(thin_sep(border_c));
 
-    // ── Graphics sub-list (Altium SchLib parity) — every placed
-    //    graphic on the active symbol with a kind-derived label.
-    //    Click a row to select that graphic on the canvas; the
-    //    Properties panel picks up the per-shape edit fields.
-    col = col.push(
-        container(text("Graphics").size(10).color(primary))
-            .padding([4, 8])
-            .width(Length::Fill),
-    );
-    if sym.graphics.is_empty() {
-        col = col.push(
-            container(
-                text(
-                    "No graphics yet — pick Rectangle / Line / Circle from the toolbar and \
-                     click on the canvas.",
-                )
-                .size(10)
-                .color(muted),
-            )
-            .padding([4, 8])
-            .width(Length::Fill),
-        );
-    } else {
-        for g in &sym.graphics {
-            let g_idx = g.idx;
-            let label = match &g.kind {
-                GraphicKindSummary::Rectangle { .. } => "Rectangle",
-                GraphicKindSummary::Line { .. } => "Line",
-                GraphicKindSummary::Circle { .. } => "Circle",
-                GraphicKindSummary::Arc { .. } => "Arc",
-                GraphicKindSummary::Text { .. } => "Text",
+    // ── Action row: Place / Add / Delete / Edit (Altium parity) ──
+    let action_btn_style = move |is_primary: bool, enabled: bool| {
+        let text_color = if enabled { primary } else { muted };
+        move |_: &iced::Theme, status: iced::widget::button::Status| {
+            let bg_alpha = if !enabled {
+                0.02
+            } else if is_primary {
+                if matches!(status, iced::widget::button::Status::Hovered) {
+                    0.10
+                } else {
+                    0.04
+                }
+            } else if matches!(status, iced::widget::button::Status::Hovered) {
+                0.08
+            } else {
+                0.03
             };
-            let active_g =
-                matches!(&sym.selected, SymbolEditorSelection::Graphic(s) if s.idx == g_idx);
-            let label_color = if active_g { primary } else { muted };
-            let bg_active = crate::styles::ti(ctx.tokens.selection);
-            let g_row_btn = iced::widget::button(
-                row![
-                    text(format!("#{g_idx}"))
-                        .size(10)
-                        .color(label_color)
-                        .width(Length::Fixed(28.0)),
-                    text(label.to_string())
-                        .size(10)
-                        .color(label_color)
-                        .width(Length::Fill),
-                ]
-                .spacing(6)
-                .align_y(iced::Alignment::Center),
-            )
-            .padding([3, 8])
-            .width(Length::Fill)
-            .on_press(PanelMsg::SymEditorSelectGraphic(g_idx))
-            .style(
-                move |_: &iced::Theme, status: iced::widget::button::Status| {
-                    iced::widget::button::Style {
-                        background: if active_g {
-                            Some(iced::Background::Color(bg_active))
-                        } else if matches!(status, iced::widget::button::Status::Hovered) {
-                            Some(iced::Background::Color(iced::Color::from_rgba(
-                                1.0, 1.0, 1.0, 0.04,
-                            )))
-                        } else {
-                            None
-                        },
-                        border: iced::Border::default(),
-                        text_color: label_color,
-                        ..iced::widget::button::Style::default()
-                    }
+            iced::widget::button::Style {
+                background: Some(iced::Background::Color(iced::Color::from_rgba(
+                    1.0, 1.0, 1.0, bg_alpha,
+                ))),
+                border: iced::Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: border_c,
                 },
-            );
-            col = col.push(g_row_btn);
+                text_color,
+                ..iced::widget::button::Style::default()
+            }
         }
-    }
-    col = col.push(thin_sep(border_c));
+    };
 
-    // ── Action row: Add / Delete ──
-    let add_btn = iced::widget::button(text("Add Symbol").size(11).color(primary))
+    // Place — fires on the active symbol (would dispatch to schematic
+    // place flow when wired). Stub for now: greyed-out.
+    let place_btn = iced::widget::button(text("Place").size(11).color(muted))
+        .padding([4, 10])
+        .style(action_btn_style(true, false));
+
+    let add_btn = iced::widget::button(text("Add").size(11).color(primary))
         .padding([4, 10])
         .on_press(PanelMsg::SchLibraryAddSymbol)
-        .style(
-            move |_: &iced::Theme, status: iced::widget::button::Status| {
-                iced::widget::button::Style {
-                    background: Some(iced::Background::Color(
-                        if matches!(status, iced::widget::button::Status::Hovered) {
-                            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.08)
-                        } else {
-                            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.03)
-                        },
-                    )),
-                    border: iced::Border {
-                        width: 1.0,
-                        radius: 3.0.into(),
-                        color: border_c,
-                    },
-                    text_color: primary,
-                    ..iced::widget::button::Style::default()
-                }
-            },
-        );
+        .style(action_btn_style(false, true));
 
     let can_delete = sym.symbols_in_file.len() > 1;
     let delete_color = if can_delete { primary } else { muted };
     let mut delete_btn = iced::widget::button(text("Delete").size(11).color(delete_color))
         .padding([4, 10])
-        .style(
-            move |_: &iced::Theme, status: iced::widget::button::Status| {
-                iced::widget::button::Style {
-                    background: Some(iced::Background::Color(
-                        if matches!(status, iced::widget::button::Status::Hovered) && can_delete {
-                            iced::Color::from_rgba(1.0, 0.2, 0.2, 0.10)
-                        } else {
-                            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.03)
-                        },
-                    )),
-                    border: iced::Border {
-                        width: 1.0,
-                        radius: 3.0.into(),
-                        color: border_c,
-                    },
-                    text_color: delete_color,
-                    ..iced::widget::button::Style::default()
-                }
-            },
-        );
+        .style(action_btn_style(false, can_delete));
     if can_delete {
         delete_btn = delete_btn.on_press(PanelMsg::SchLibraryDeleteSymbol(sym.active_idx));
     }
 
+    // Edit — opens the active symbol in the standalone editor (for
+    // when the SCH Library panel is the only visible surface).
+    // Stub for now since the symbol is already open in its tab.
+    let edit_btn = iced::widget::button(text("Edit").size(11).color(muted))
+        .padding([4, 10])
+        .style(action_btn_style(false, false));
+
     col = col.push(
         container(
             row![
+                place_btn,
+                Space::new().width(4),
                 add_btn,
-                Space::new().width(6),
+                Space::new().width(4),
                 delete_btn,
+                Space::new().width(4),
+                edit_btn,
                 Space::new().width(Length::Fill),
             ]
             .align_y(iced::Alignment::Center),
@@ -2483,19 +2379,111 @@ fn view_symbol_editor_properties<'a>(
 
     match &sym.selected {
         SymbolEditorSelection::None => {
-            // ── Active Symbol section ──
-            // Symbol Name is editable via text_input.
-            let name_row: Element<'a, PanelMsg> = container(
+            // Helper — labelled text_input row.
+            let text_field = |label: &'a str,
+                              value: &'a str,
+                              placeholder: &'a str,
+                              on_input: fn(String) -> PanelMsg|
+             -> Element<'a, PanelMsg> {
+                container(
+                    row![
+                        text(label)
+                            .size(10)
+                            .color(muted)
+                            .width(Length::FillPortion(2)),
+                        iced::widget::text_input(placeholder, value)
+                            .padding([2, 4])
+                            .size(11)
+                            .on_input(on_input)
+                            .width(Length::FillPortion(3)),
+                    ]
+                    .spacing(4)
+                    .align_y(iced::Alignment::Center),
+                )
+                .padding([3, 8])
+                .width(Length::Fill)
+                .into()
+            };
+
+            // ── ▾ General ──
+            col = col.push(thin_sep(border_c));
+            col = col.push(container(text("General").size(11).color(primary)).padding([6, 8]));
+            col = col.push(text_field(
+                "Design Item ID",
+                sym.symbol_name.as_str(),
+                "Symbol name",
+                PanelMsg::SymEditorSetSymbolName,
+            ));
+            col = col.push(text_field(
+                "Designator",
+                sym.symbol_designator.as_str(),
+                "U?",
+                PanelMsg::SymEditorSetSymbolDesignator,
+            ));
+            col = col.push(text_field(
+                "Comment",
+                sym.symbol_comment.as_str(),
+                "*",
+                PanelMsg::SymEditorSetSymbolComment,
+            ));
+
+            // Part of Parts (Altium "Part B / of Parts: 2") — surfaces
+            // the multi-part picker the user already drives via the
+            // toolbar arrows or the SCH Library tree-expander.
+            let part_label = if sym.active_max_part > 1 {
+                format!(
+                    "Part {} / of Parts {}",
+                    sym.active_part, sym.active_max_part
+                )
+            } else {
+                "Single-part component".to_string()
+            };
+            col = col.push(prop_row_static("Part", part_label));
+
+            col = col.push(text_field(
+                "Description",
+                sym.symbol_description.as_str(),
+                "Free-form description",
+                PanelMsg::SymEditorSetSymbolDescription,
+            ));
+
+            // Type — Component Type pick_list.
+            use signex_library::ComponentType;
+            let type_options: &[(ComponentType, &str)] = &[
+                (ComponentType::Standard, "Standard"),
+                (ComponentType::Mechanical, "Mechanical"),
+                (ComponentType::Graphical, "Graphical"),
+                (ComponentType::NetTie, "Net Tie"),
+                (ComponentType::StandardNoBom, "Standard (No BOM)"),
+                (ComponentType::Jumper, "Jumper"),
+            ];
+            let labels: Vec<String> = type_options.iter().map(|(_, n)| n.to_string()).collect();
+            let current_label = type_options
+                .iter()
+                .find(|(t, _)| *t == sym.symbol_component_type)
+                .map(|(_, n)| n.to_string())
+                .unwrap_or_else(|| "Standard".to_string());
+            let lookup: Vec<(String, ComponentType)> = type_options
+                .iter()
+                .map(|(t, n)| (n.to_string(), *t))
+                .collect();
+            let type_picker = iced::widget::pick_list(labels, Some(current_label), move |chosen| {
+                let value = lookup
+                    .iter()
+                    .find(|(n, _)| n == &chosen)
+                    .map(|(_, t)| *t)
+                    .unwrap_or(ComponentType::Standard);
+                PanelMsg::SymEditorSetSymbolType(value)
+            })
+            .padding([2, 4])
+            .text_size(11);
+            let type_row: Element<'a, PanelMsg> = container(
                 row![
-                    text("Name")
+                    text("Type")
                         .size(10)
                         .color(muted)
                         .width(Length::FillPortion(2)),
-                    iced::widget::text_input("Symbol name", sym.symbol_name.as_str())
-                        .padding([2, 4])
-                        .size(11)
-                        .on_input(PanelMsg::SymEditorSetSymbolName)
-                        .width(Length::FillPortion(3)),
+                    container(type_picker).width(Length::FillPortion(3)),
                 ]
                 .spacing(4)
                 .align_y(iced::Alignment::Center),
@@ -2503,14 +2491,48 @@ fn view_symbol_editor_properties<'a>(
             .padding([3, 8])
             .width(Length::Fill)
             .into();
-            col = col.push(name_row);
+            col = col.push(type_row);
+
             col = col.push(prop_row_static("UUID", sym.symbol_uuid.to_string()));
             col = col.push(prop_row_static("Pins", sym.pins.len().to_string()));
-            // Sheet color / grid / unit live in Tools ▸ Document
-            // Options per Altium parity — they're document-level
-            // settings, not Component properties. The full Component
-            // properties layout (Designator / Comment / Description /
-            // Type / Parameters / Graphical) lands in a follow-up.
+
+            // ── ▾ Parameters (placeholder skeleton) ──
+            col = col.push(thin_sep(border_c));
+            col = col.push(container(text("Parameters").size(11).color(primary)).padding([6, 8]));
+            col = col.push(
+                container(
+                    text("(parameters editing lands in v0.9.x — the schema slot exists on Symbol::schematic_params)")
+                        .size(10)
+                        .color(muted),
+                )
+                .padding([3, 8])
+                .width(Length::Fill),
+            );
+
+            // ── ▾ Graphical ──
+            col = col.push(thin_sep(border_c));
+            col = col.push(container(text("Graphical").size(11).color(primary)).padding([6, 8]));
+            let mirrored_row: Element<'a, PanelMsg> = container(
+                row![
+                    text("Mirrored")
+                        .size(10)
+                        .color(muted)
+                        .width(Length::FillPortion(2)),
+                    iced::widget::checkbox(sym.symbol_mirrored)
+                        .size(14)
+                        .on_toggle(|_| PanelMsg::SymEditorToggleSymbolMirrored),
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([3, 8])
+            .width(Length::Fill)
+            .into();
+            col = col.push(mirrored_row);
+            col = col.push(prop_row_static(
+                "Local Colors",
+                "(picker lands in v0.9.x)".to_string(),
+            ));
         }
         SymbolEditorSelection::Pin(pin) => {
             let pin_idx = pin.idx;

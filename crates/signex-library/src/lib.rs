@@ -52,10 +52,10 @@ pub use manifest::{
 pub use manufacturer::{AlternateStatus, DistributorListing, ManufacturerPart};
 pub use param::{ParamMap, ParamValue};
 pub use primitive::{
-    Body3D, BodyShape, Drill, Footprint, FpGraphic, FpGraphicKind, LayerId, Pad, PadKind, PadShape,
-    PinElectricalType, PinOrientation, PinSymbolKind, Polygon, PrimitiveKind, PrimitiveRef,
-    SimKind, SimModel, StepAttachment, Symbol, SymbolFile, SymbolGraphic, SymbolGraphicKind,
-    SymbolPin,
+    Body3D, BodyShape, ComponentType, Drill, Footprint, FpGraphic, FpGraphicKind, LayerId, Pad,
+    PadKind, PadShape, PinElectricalType, PinOrientation, PinSymbolKind, Polygon, PrimitiveKind,
+    PrimitiveRef, SimKind, SimModel, StepAttachment, Symbol, SymbolFile, SymbolGraphic,
+    SymbolGraphicKind, SymbolPin,
 };
 pub use search::{Facet, FacetOp, SearchIndex, SearchQuery};
 #[cfg(feature = "search-tantivy")]
