@@ -31,7 +31,7 @@
 //!         selected: matches!(tool, Tool::Select),
 //!         on_press: Some(Msg::SetTool(Tool::Select)),
 //!         on_right_press: Some(Msg::OpenSelectMenu),
-//!         has_dropdown_indicator: true,
+//!         dropdown_indicator: Some(ActiveBarIcon::Svg(CHEVRON_SVG.clone())),
 //!     }),
 //!     ActiveBarItem::Separator,
 //!     // …
@@ -91,10 +91,12 @@ pub struct ActiveBarButton<M: 'static + Clone> {
     /// schematic's Wiring button: left-click draws, right-click
     /// opens the wire/bus/label picker).
     pub on_right_press: Option<M>,
-    /// `true` → render a small chevron in the bottom-right of the
-    /// button to advertise that it has a secondary (right-click)
-    /// action.
-    pub has_dropdown_indicator: bool,
+    /// Optional dropdown indicator rendered in the bottom-right
+    /// corner of the button. Pass an `ActiveBarIcon::Svg(...)` with
+    /// the editor's themed chevron handle to advertise the
+    /// secondary (right-click) action; pass `None` for buttons that
+    /// have no dropdown.
+    pub dropdown_indicator: Option<ActiveBarIcon>,
 }
 
 impl<M: 'static + Clone> Default for ActiveBarButton<M> {
@@ -106,7 +108,7 @@ impl<M: 'static + Clone> Default for ActiveBarButton<M> {
             selected: false,
             on_press: None,
             on_right_press: None,
-            has_dropdown_indicator: false,
+            dropdown_indicator: None,
         }
     }
 }
@@ -202,32 +204,64 @@ where
     let accent_c = theme_ext::accent_color(tokens);
     let border = theme_ext::border_color(tokens);
 
-    let icon_color = if !b.enabled {
-        Color { a: 0.4, ..muted_c }
+    // Disabled icons are tinted to a muted gray so they read as
+    // inactive. Enabled icons render with their natural SVG colors —
+    // overriding `svg::Style::color` would collapse multi-colored
+    // icons (e.g. the orange-fill / gray-stroke filter glyph) into a
+    // monochrome silhouette and erase per-icon brand colors.
+    let disabled_tint = Color { a: 0.4, ..muted_c };
+    // Glyph fallback (Unicode characters rendered as text) needs an
+    // explicit color in every state because text widgets do not
+    // inherit a "natural" fill the way SVGs do.
+    let glyph_color = if !b.enabled {
+        disabled_tint
     } else if b.selected {
         Color::WHITE
     } else {
         text_c
     };
 
+    let enabled_for_svg = b.enabled;
     let raw_icon: Element<'a, M> = match b.icon {
         ActiveBarIcon::Svg(handle) => svg(handle)
             .width(Length::Fixed(ICON_SIZE))
             .height(Length::Fixed(ICON_SIZE))
             .style(move |_: &Theme, _| iced::widget::svg::Style {
-                color: Some(icon_color),
+                color: if enabled_for_svg {
+                    None
+                } else {
+                    Some(disabled_tint)
+                },
             })
             .into(),
         ActiveBarIcon::Raster(handle) => image(handle)
             .width(Length::Fixed(ICON_SIZE))
             .height(Length::Fixed(ICON_SIZE))
             .into(),
-        ActiveBarIcon::Glyph(s) => text(s.to_string()).size(14).color(icon_color).into(),
+        ActiveBarIcon::Glyph(s) => text(s.to_string()).size(14).color(glyph_color).into(),
     };
 
     // Optional dropdown chevron in the bottom-right corner.
-    let icon_content: Element<'a, M> = if b.has_dropdown_indicator {
-        let chevron_color = Color { a: 0.7, ..muted_c };
+    let icon_content: Element<'a, M> = if let Some(indicator) = b.dropdown_indicator {
+        let indicator_enabled = b.enabled;
+        let indicator_el: Element<'a, M> = match indicator {
+            ActiveBarIcon::Svg(handle) => svg(handle)
+                .width(Length::Fixed(14.0))
+                .height(Length::Fixed(14.0))
+                .style(move |_: &Theme, _| iced::widget::svg::Style {
+                    color: if indicator_enabled {
+                        None
+                    } else {
+                        Some(disabled_tint)
+                    },
+                })
+                .into(),
+            ActiveBarIcon::Raster(handle) => image(handle)
+                .width(Length::Fixed(14.0))
+                .height(Length::Fixed(14.0))
+                .into(),
+            ActiveBarIcon::Glyph(s) => text(s.to_string()).size(10).color(glyph_color).into(),
+        };
         iced::widget::Stack::new()
             .push(
                 container(raw_icon)
@@ -237,7 +271,7 @@ where
                     .center_y(Length::Fixed(BTN_SIZE)),
             )
             .push(
-                container(text("\u{25BE}".to_string()).size(8).color(chevron_color))
+                container(indicator_el)
                     .width(Length::Fixed(BTN_SIZE))
                     .height(Length::Fixed(BTN_SIZE))
                     .align_x(iced::alignment::Horizontal::Right)

@@ -522,7 +522,10 @@ pub fn view_bar<'a>(
     // Helper — build a button item with the schematic editor's
     // standard pattern: left-click action + right-click dropdown +
     // chevron indicator. Selection-aware enable inferred from the
-    // left action through `action_enabled`.
+    // left action through `action_enabled`. The chevron uses the
+    // themed `chevron_45.svg` so its colour follows the active
+    // theme's accent and reads as a proper Altium-style triangle
+    // rather than a Unicode glyph.
     let btn = |icon: svg::Handle,
                selected: bool,
                left: ActiveBarMsg,
@@ -533,6 +536,11 @@ pub fn view_bar<'a>(
             ActiveBarMsg::Action(a) => action_enabled(a),
             _ => true,
         };
+        let dropdown_indicator = if right.is_some() {
+            Some(ActiveBarIcon::Svg(ic::icon_chevron_45(tid)))
+        } else {
+            None
+        };
         ActiveBarItem::Button(ActiveBarButton {
             icon: ActiveBarIcon::Svg(icon),
             tooltip: tooltip.to_string(),
@@ -540,7 +548,7 @@ pub fn view_bar<'a>(
             selected,
             on_press: Some(left),
             on_right_press: right.clone(),
-            has_dropdown_indicator: right.is_some(),
+            dropdown_indicator,
         })
     };
 
