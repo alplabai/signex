@@ -680,6 +680,28 @@ pub enum PrimitiveEditorMsg {
     /// Properties pane — overwrite the pin name string at index.
     SymbolSetPinName { idx: usize, name: String },
 
+    // ── View / camera (Altium-style pan/zoom/grid) ─────────
+    /// Right- or middle-button pan delta in screen pixels.
+    /// Updates `editor.camera.offset`.
+    SymbolPan { dx: f32, dy: f32 },
+    /// Mouse-wheel zoom centred on the cursor screen position
+    /// `(sx, sy)` in canvas-local pixels. Positive `delta` zooms
+    /// in, negative zooms out. Updates `editor.camera`.
+    SymbolZoom { sx: f32, sy: f32, delta: f32 },
+    /// Fit the active symbol's bounding box into the viewport.
+    /// Bound to the Home key + the Fit button on the toolbar.
+    SymbolFit,
+    /// Cursor world position in mm — drives the status footer X/Y
+    /// readout. `None` clears the readout when the cursor leaves.
+    SymbolCursorAt {
+        x_mm: Option<f64>,
+        y_mm: Option<f64>,
+    },
+    /// Toolbar / context-menu — pick the sheet background colour
+    /// preset (Black / White / Dark Gray / Light Gray / Cream),
+    /// matching Altium's per-document Sheet Color.
+    SymbolSetSheetColor(crate::panels::SheetColor),
+
     // ── Multi-part component ───────────────────────────────
     /// Toolbar — step the active sub-part down one (Altium "←
     /// Part" arrow). Clamps at `1`. Drives the canvas pin filter +
