@@ -35,6 +35,9 @@ use signex_library::{
     LibraryError, LibrarySet, LocalGitAdapter, PrimitiveKind, PrimitiveRef, PrimitiveSummary,
     RowId, SimModel, Symbol, TemplateRegistry, UseSite, WhereUsedIndex,
 };
+use signex_types::coord::Unit;
+
+use crate::panels::SheetColor;
 use uuid::Uuid;
 
 /// Identity for an open Component Preview tab — the lookup key for
@@ -278,6 +281,22 @@ impl LibraryState {
         self.open_libraries.iter_mut().find(|lib| lib.root == path)
     }
 
+    /// Find the open library whose root is an ancestor of `child_path`.
+    /// Used to resolve `.snxsym` / `.snxfpt` files back to the
+    /// `.snxlib/` they live inside, e.g. for sourcing per-library
+    /// canvas display settings ([`LibraryDisplaySettings`]).
+    pub fn containing_library(&self, child_path: &Path) -> Option<&OpenLibrary> {
+        self.open_libraries
+            .iter()
+            .find(|lib| child_path.starts_with(&lib.root))
+    }
+
+    pub fn containing_library_mut(&mut self, child_path: &Path) -> Option<&mut OpenLibrary> {
+        self.open_libraries
+            .iter_mut()
+            .find(|lib| child_path.starts_with(&lib.root))
+    }
+
     /// Open the `*.snxlib/` at `root`, mounting the adapter under its
     /// `library_id` on `set` and registering the display entry in
     /// `open_libraries`. Idempotent.
@@ -312,6 +331,7 @@ impl LibraryState {
             cached_symbols: Vec::new(),
             cached_footprints: Vec::new(),
             cached_sims: Vec::new(),
+            display: LibraryDisplaySettings::default(),
         };
         if let Some(adapter) = self.set.get(library_id)
             && let Err(e) = entry.reload_tables(adapter)
@@ -498,6 +518,41 @@ pub struct OpenLibrary {
     pub cached_symbols: Vec<PrimitiveSummary>,
     pub cached_footprints: Vec<PrimitiveSummary>,
     pub cached_sims: Vec<PrimitiveSummary>,
+    /// Per-library canvas display settings — Altium "Document
+    /// Options" parity. Shared across every `.snxsym` /
+    /// `.snxfpt` tab opened from this `.snxlib` (so a user
+    /// switching between symbols in the same library keeps the
+    /// same grid / unit / background colour). In-memory only as
+    /// of v0.9; v0.9.x can persist to `library.toml`.
+    pub display: LibraryDisplaySettings,
+}
+
+/// Per-library canvas + UI defaults shared across every primitive
+/// editor tab opened from the same `.snxlib`. See [`OpenLibrary::display`].
+#[derive(Debug, Clone, Copy)]
+pub struct LibraryDisplaySettings {
+    /// Coordinate display unit (mm / mil / inch / um) shown in the
+    /// per-tab status footer.
+    pub unit: Unit,
+    /// Visible grid spacing in mm. Cycled through
+    /// `crate::canvas::grid::GRID_SIZES_MM`.
+    pub grid_size_mm: f32,
+    /// Whether the visible dot grid renders.
+    pub grid_visible: bool,
+    /// Sheet background colour preset — Altium "Sheet Color"
+    /// (Black / White / Dark Gray / Light Gray / Cream).
+    pub sheet_color: SheetColor,
+}
+
+impl Default for LibraryDisplaySettings {
+    fn default() -> Self {
+        Self {
+            unit: Unit::Mm,
+            grid_size_mm: 2.54,
+            grid_visible: true,
+            sheet_color: SheetColor::default(),
+        }
+    }
 }
 
 impl OpenLibrary {
@@ -954,6 +1009,7 @@ mod tests {
             cached_symbols: Vec::new(),
             cached_footprints: Vec::new(),
             cached_sims: Vec::new(),
+            display: LibraryDisplaySettings::default(),
         };
         assert_eq!(lib.total_rows(), 0);
         lib.tables.insert("resistors".into(), Vec::new());

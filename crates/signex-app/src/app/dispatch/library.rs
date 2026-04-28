@@ -1959,6 +1959,59 @@ impl Signex {
             return Task::none();
         }
 
+        // Per-library display settings (sheet color, grid, unit)
+        // mutate `OpenLibrary.display` rather than the per-tab editor
+        // state — every primitive editor opened from the same
+        // `.snxlib` shares the same view settings (Altium "Document
+        // Options" parity). Run these before the editor-level
+        // dispatch so the editor closure doesn't see them.
+        match &msg {
+            PrimitiveEditorMsg::SymbolSetSheetColor(color) => {
+                let color = *color;
+                if let Some(lib) = self.library.containing_library_mut(&path) {
+                    lib.display.sheet_color = color;
+                }
+                self.invalidate_primitive_canvas_cache(&path);
+                return Task::none();
+            }
+            PrimitiveEditorMsg::SymbolToggleGrid => {
+                if let Some(lib) = self.library.containing_library_mut(&path) {
+                    lib.display.grid_visible = !lib.display.grid_visible;
+                }
+                self.invalidate_primitive_canvas_cache(&path);
+                return Task::none();
+            }
+            PrimitiveEditorMsg::SymbolCycleGridSize => {
+                if let Some(lib) = self.library.containing_library_mut(&path) {
+                    let sizes = crate::canvas::grid::GRID_SIZES_MM;
+                    let current_idx = sizes
+                        .iter()
+                        .position(|s| (s - lib.display.grid_size_mm).abs() < f32::EPSILON)
+                        .unwrap_or(2);
+                    let next_idx = (current_idx + 1) % sizes.len();
+                    lib.display.grid_size_mm = sizes[next_idx];
+                }
+                self.invalidate_primitive_canvas_cache(&path);
+                return Task::none();
+            }
+            PrimitiveEditorMsg::SymbolCycleUnit => {
+                if let Some(lib) = self.library.containing_library_mut(&path) {
+                    use signex_types::coord::Unit;
+                    lib.display.unit = match lib.display.unit {
+                        Unit::Mm => Unit::Mil,
+                        Unit::Mil => Unit::Inch,
+                        Unit::Inch => Unit::Micrometer,
+                        Unit::Micrometer => Unit::Mm,
+                    };
+                }
+                // Unit only affects the status footer text — no
+                // canvas redraw needed, but cache clear is harmless
+                // and keeps the message handling shape consistent.
+                return Task::none();
+            }
+            _ => {}
+        }
+
         // Symbol-only mutations.
         if let Some(editor) = self.document_state.symbol_editors.get_mut(&path) {
             apply_symbol_primitive_edit(editor, msg);
@@ -1977,6 +2030,19 @@ impl Signex {
             "primitive editor event: no matching tab state",
         );
         Task::none()
+    }
+
+    /// Clear the canvas cache for the primitive editor tab keyed by
+    /// `path`. Used by the per-library display-settings handlers so
+    /// the visible canvas redraws as soon as the user flips bg /
+    /// grid / etc.
+    fn invalidate_primitive_canvas_cache(&mut self, path: &std::path::Path) {
+        if let Some(editor) = self.document_state.symbol_editors.get_mut(path) {
+            editor.canvas_cache.clear();
+        }
+        if let Some(editor) = self.document_state.footprint_editors.get_mut(path) {
+            editor.canvas_cache.clear();
+        }
     }
 
     /// Write the primitive at `path` back to disk as JSON, commit
@@ -2362,10 +2428,16 @@ pub(crate) fn apply_symbol_primitive_edit(
                 _ => None,
             };
         }
-        PrimitiveEditorMsg::SymbolSetSheetColor(color) => {
-            editor.sheet_color = color;
-            editor.canvas_cache.clear();
-        }
+        // SymbolSetSheetColor / SymbolToggleGrid / SymbolCycleGridSize
+        // / SymbolCycleUnit are intercepted in handle_primitive_editor_event
+        // before this match runs — they mutate `OpenLibrary.display`,
+        // not the per-tab editor state. List them here so the
+        // dispatcher stays exhaustive across the enum (and matches
+        // the footprint catch-all).
+        PrimitiveEditorMsg::SymbolSetSheetColor(_)
+        | PrimitiveEditorMsg::SymbolToggleGrid
+        | PrimitiveEditorMsg::SymbolCycleGridSize
+        | PrimitiveEditorMsg::SymbolCycleUnit => {}
         // ── Multi-part component ────────────────────────────────
         PrimitiveEditorMsg::SymbolPrevPart => {
             if editor.active_part > 1 {
@@ -2601,6 +2673,9 @@ pub(crate) fn apply_footprint_primitive_edit(
         | PrimitiveEditorMsg::SymbolFit
         | PrimitiveEditorMsg::SymbolCursorAt { .. }
         | PrimitiveEditorMsg::SymbolSetSheetColor(_)
+        | PrimitiveEditorMsg::SymbolToggleGrid
+        | PrimitiveEditorMsg::SymbolCycleGridSize
+        | PrimitiveEditorMsg::SymbolCycleUnit
         | PrimitiveEditorMsg::Save => {}
     }
 }
