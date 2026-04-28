@@ -44,7 +44,7 @@ pub use messages::{
 };
 #[allow(unused_imports)]
 pub use state::{
-    ComponentEditorState, ComponentPreviewState, DeleteConfirmState, EditRowModalState,
-    LibraryBrowserState, LibraryState, OpenLibrary, PickerState, PreviewTab, PrimitivePickerState,
-    PrimitivePickerTarget,
+    ComponentEditorState, ComponentPreviewState, ComponentsMountSource, ComponentsPanelState,
+    DeleteConfirmState, EditRowModalState, LibraryBrowserState, LibraryState, OpenLibrary,
+    PickerState, PreviewTab, PrimitivePickerState, PrimitivePickerTarget,
 };

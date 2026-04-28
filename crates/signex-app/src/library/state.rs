@@ -368,6 +368,84 @@ pub struct LibraryState {
     /// Cleared on apply / re-scan / close-tab.
     #[allow(dead_code)]
     pub skipped_updates_for: std::collections::HashSet<PathBuf>,
+    /// Session-scoped "Installed" libraries — opened via the
+    /// Components Panel's "+ Add Library…" button (Stage 9 of
+    /// `v0.9-snxlib-as-file-plan.md` §3 mount-source 2). Wiped on app
+    /// close; the user can promote an entry to Global to make it
+    /// stick.
+    pub installed_libraries: Vec<PathBuf>,
+    /// Signex-wide "Global" libraries — persisted to
+    /// `<config_dir>/signex/global_libraries.toml` and re-mounted on
+    /// every app start (Stage 9 mount-source 3). The on-disk schema
+    /// lives in `panels::components_panel::global_prefs`.
+    pub global_libraries: Vec<crate::panels::components_panel::global_prefs::GlobalLibraryEntry>,
+    /// Components Panel UI state — collapsed sections + substring
+    /// filter. Stage 9 ships the simple substring matcher; the full
+    /// search syntax (plan §5) is polish work.
+    pub components_panel: ComponentsPanelState,
+}
+
+/// Three mount sources surfaced as collapsible sections inside the
+/// Components Panel (Stage 9 of `v0.9-snxlib-as-file-plan.md` §3).
+/// Drives section header rendering + the section-add button
+/// dispatch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ComponentsMountSource {
+    /// Auto-mounted from `Project.libraries` for any loaded project.
+    Project,
+    /// Session-scoped — opened via the Components Panel's
+    /// "+ Add Library…" button. Wiped on app close.
+    Installed,
+    /// Persisted across app launches via
+    /// `<config_dir>/signex/global_libraries.toml`.
+    Global,
+}
+
+impl ComponentsMountSource {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Project => "Project",
+            Self::Installed => "Installed",
+            Self::Global => "Global",
+        }
+    }
+
+    /// Section key — lower-case identifier used for the
+    /// `ComponentsPanelToggleSection` message + panel-state field
+    /// dispatch.
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Project => "project",
+            Self::Installed => "installed",
+            Self::Global => "global",
+        }
+    }
+
+    /// Every section in stable display order — Project on top,
+    /// Installed in the middle, Global last.
+    pub const ORDER: &'static [ComponentsMountSource] = &[
+        ComponentsMountSource::Project,
+        ComponentsMountSource::Installed,
+        ComponentsMountSource::Global,
+    ];
+}
+
+/// Per-source collapse + filter state for the Components Panel.
+/// Persists across panel re-renders but not across app restarts —
+/// cheap session-scoped UI flags.
+#[derive(Debug, Clone, Default)]
+pub struct ComponentsPanelState {
+    /// `true` while the named section is collapsed. Sections are
+    /// `"project"`, `"installed"`, `"global"`.
+    pub collapsed_project: bool,
+    pub collapsed_installed: bool,
+    pub collapsed_global: bool,
+    /// Substring filter applied to mpn / manufacturer / internal_pn
+    /// / library name. Empty = show everything. Stage 9 uses a
+    /// case-insensitive `contains` match across all three fields;
+    /// the rich `mpn:LM317 lifecycle:preferred` syntax (plan §5) is
+    /// a follow-up.
+    pub filter: String,
 }
 
 /// State for the Tools ▸ Document Options modal — keyed by the
@@ -427,6 +505,9 @@ impl Default for LibraryState {
             create_options: None,
             library_updates: None,
             skipped_updates_for: std::collections::HashSet::new(),
+            installed_libraries: Vec::new(),
+            global_libraries: Vec::new(),
+            components_panel: ComponentsPanelState::default(),
         }
     }
 }
@@ -639,6 +720,31 @@ impl LibraryState {
                 .then_with(|| a.row_id.cmp(&b.row_id))
         });
         keys
+    }
+
+    /// Classify how a mounted library got there — drives the
+    /// Components Panel section bucketing (Stage 9). Project
+    /// libraries take precedence over Installed/Global so a global
+    /// library that's also referenced by the active project
+    /// surfaces under the "Project" header.
+    pub fn mount_source_for(
+        &self,
+        path: &Path,
+        project_paths: &[PathBuf],
+    ) -> ComponentsMountSource {
+        if project_paths.iter().any(|p| p == path) {
+            return ComponentsMountSource::Project;
+        }
+        if self.installed_libraries.iter().any(|p| p == path) {
+            return ComponentsMountSource::Installed;
+        }
+        if self.global_libraries.iter().any(|e| e.path == path) {
+            return ComponentsMountSource::Global;
+        }
+        // Default: treat unknown mounts (e.g. a library opened via
+        // File ▸ Library ▸ Open Library… before Stage 9) as
+        // Installed so they still surface in the panel.
+        ComponentsMountSource::Installed
     }
 
     /// Existing editor for `(library_root, table, row_id)`, if any.

@@ -650,6 +650,146 @@ impl Signex {
                 self.library.library_updates = None;
                 Task::none()
             }
+
+            // ── Components Panel (Stage 9) ────────────────────────────
+            LibraryMessage::ComponentsPanelToggleSection(src) => {
+                use crate::library::state::ComponentsMountSource;
+                let p = &mut self.library.components_panel;
+                match src {
+                    ComponentsMountSource::Project => p.collapsed_project = !p.collapsed_project,
+                    ComponentsMountSource::Installed => {
+                        p.collapsed_installed = !p.collapsed_installed
+                    }
+                    ComponentsMountSource::Global => p.collapsed_global = !p.collapsed_global,
+                }
+                Task::none()
+            }
+            LibraryMessage::ComponentsPanelSetFilter(value) => {
+                self.library.components_panel.filter = value;
+                Task::none()
+            }
+            LibraryMessage::ComponentsPanelAddLibrary(source) => {
+                // Open `*.snxlib` directory picker — landing message is
+                // `ComponentsPanelAddLibraryAt` so the dispatcher knows
+                // which source bucket the result belongs to.
+                Task::perform(
+                    async {
+                        rfd::AsyncFileDialog::new()
+                            .set_title("Add Library (*.snxlib)")
+                            .pick_folder()
+                            .await
+                            .map(|f| f.path().to_path_buf())
+                    },
+                    move |path| {
+                        Message::Library(LibraryMessage::ComponentsPanelAddLibraryAt {
+                            source,
+                            path,
+                        })
+                    },
+                )
+            }
+            LibraryMessage::ComponentsPanelAddLibraryAt { source, path } => {
+                use crate::library::state::ComponentsMountSource;
+                let Some(path) = path else {
+                    return Task::none();
+                };
+                // Mount the library — same idempotent path the legacy
+                // File ▸ Library ▸ Open Library… flow uses.
+                if let Err(e) = commands::open_library(&mut self.library, path.clone()) {
+                    tracing::warn!(
+                        target: "signex::library",
+                        error = %e,
+                        path = %path.display(),
+                        "components-panel add-library failed"
+                    );
+                    return Task::none();
+                }
+                match source {
+                    ComponentsMountSource::Installed => {
+                        if !self.library.installed_libraries.contains(&path) {
+                            self.library.installed_libraries.push(path);
+                        }
+                    }
+                    ComponentsMountSource::Global => {
+                        match crate::panels::components_panel::global_prefs::add_path(path.clone())
+                        {
+                            Ok(updated) => {
+                                self.library.global_libraries = updated;
+                            }
+                            Err(e) => {
+                                tracing::warn!(
+                                    target: "signex::library",
+                                    error = %e,
+                                    "global_libraries.toml save failed"
+                                );
+                            }
+                        }
+                    }
+                    ComponentsMountSource::Project => {
+                        // Project section's "+ Add Library…" button is
+                        // not rendered in Stage 9 (project libs come
+                        // from `.snxprj`), but the dispatcher still
+                        // handles the variant for future wiring.
+                        tracing::info!(
+                            target: "signex::library",
+                            path = %path.display(),
+                            "TODO: add-library to active project (ComponentsMountSource::Project)"
+                        );
+                    }
+                }
+                Task::none()
+            }
+            LibraryMessage::ComponentsPanelPromoteToGlobal(path) => {
+                if let Some(idx) = self
+                    .library
+                    .installed_libraries
+                    .iter()
+                    .position(|p| p == &path)
+                {
+                    self.library.installed_libraries.remove(idx);
+                    match crate::panels::components_panel::global_prefs::add_path(path.clone()) {
+                        Ok(updated) => self.library.global_libraries = updated,
+                        Err(e) => {
+                            tracing::warn!(
+                                target: "signex::library",
+                                error = %e,
+                                "promote-to-global save failed"
+                            );
+                        }
+                    }
+                }
+                Task::none()
+            }
+            LibraryMessage::ComponentsPanelManageGlobal => {
+                tracing::info!(
+                    target: "signex::library",
+                    "TODO: open Global Libraries management dialog"
+                );
+                Task::none()
+            }
+            LibraryMessage::ComponentsPanelAddToProject { library_path } => {
+                tracing::info!(
+                    target: "signex::library",
+                    path = %library_path.display(),
+                    "TODO: add library to active project's Project.libraries"
+                );
+                Task::none()
+            }
+            LibraryMessage::ComponentsPanelPlace {
+                library_path,
+                table,
+                row_id,
+            } => {
+                // Stage 9 stub — the full ghost-component drag is polish
+                // work. Dispatch through the existing place handler so
+                // the row at least lands on the canvas via the picker
+                // path until ghost-drag ships.
+                Task::done(Message::Library(LibraryMessage::PlaceLibraryComponent {
+                    library_path,
+                    table,
+                    row_id,
+                }))
+            }
         }
     }
 
