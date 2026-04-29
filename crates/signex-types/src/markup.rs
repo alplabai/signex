@@ -1,21 +1,55 @@
-//! Rich text markup parser for Standard text rendering.
+//! Signex schematic-text markup.
 //!
-//! Standard uses markup in text fields:
-//! - `V_{CC}` → "V" normal + "CC" subscript
-//! - `V^{+}` → "V" normal + "+" superscript
-//! - `~{CS}` → "CS" with overbar
-//! - Combinations: `~{WR}_{0}` → "WR" overbar + "0" subscript
+//! Markdown-extension style — a small subset of standard Markdown plus
+//! Signex-specific extensions for technical typography:
+//!
+//!   `**bold**`           — bold span
+//!   `*italic*`           — italic span
+//!   `~~strike~~`         — strikethrough
+//!   `^superscript^`      — superscript (Signex extension; not GFM)
+//!   `~subscript~`        — subscript (Signex extension; not GFM)
+//!   `_~overbar~_`        — overbar (Signex extension; for active-low signal naming)
+//!   `[label](url)`       — link
+//!   `\X`                 — literal X (escape any sigil)
+//!
+//! Returns a flat `Vec<RichSegment>`. Spans don't nest in this version
+//! (matching the practical needs of schematic labels, component
+//! refdes/value/comments, pin names, and net names — none of which
+//! typically use nested formatting). If nesting becomes useful, the
+//! parser can be upgraded to a span tree without changing the public
+//! enum's variant set.
+//!
+//! Auto net names use the format `unnamed-<sheet>:<ref>:<pin>`. This
+//! is the canonical Signex spelling — it does not match any other
+//! EDA tool's auto-net format.
+//!
+//! Expression substitution (`${refdes:...}`, `@{...}`, `CELL()`,
+//! `NET_NAME(...)`) is preserved from the previous module — it is
+//! Altium-flavoured and was already independent of the Standard markup
+//! syntax.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+// ---------------------------------------------------------------------------
+// Rich text segments
+// ---------------------------------------------------------------------------
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RichSegment {
     Normal(String),
-    Subscript(String),
+    Bold(String),
+    Italic(String),
+    Strike(String),
     Superscript(String),
+    Subscript(String),
     Overbar(String),
+    Link { label: String, url: String },
 }
+
+// ---------------------------------------------------------------------------
+// Expression substitution context (unchanged from before — Altium-flavoured)
+// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Default)]
 pub struct ExpressionEvalContext<'a> {
@@ -28,28 +62,34 @@ pub struct ExpressionEvalContext<'a> {
     pub net_name_by_pin: Option<&'a HashMap<String, String>>,
 }
 
-/// Expand Standard `{name}` escape tokens to their literal characters.
-pub fn expand_standard_char_escapes(input: &str) -> String {
-    if !input.contains('{') {
-        return input.to_string();
-    }
+// ---------------------------------------------------------------------------
+// Auto net name — Signex format, not derived from any other EDA tool
+// ---------------------------------------------------------------------------
 
-    input
-        .replace("{slash}", "/")
-        .replace("{backslash}", "\\")
-        .replace("{tilde}", "~")
-        .replace("{colon}", ":")
-        .replace("{dollar}", "$")
-        .replace("{space}", " ")
-        .replace("{dblquote}", "\"")
-        .replace("{lt}", "<")
-        .replace("{gt}", ">")
-        .replace("{bar}", "|")
+/// Default name for an unnamed net.
+///
+/// Format: `unnamed-<sheet>:<ref>:<pin>`. Picks the lexicographically-
+/// smallest `(refdes, pin)` for determinism. Sheet defaults to empty
+/// string when the caller doesn't have a sheet context.
+pub fn auto_net_name(sheet: &str, pins: &[(String, String)]) -> Option<String> {
+    pins.iter()
+        .min_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)))
+        .map(|(r, p)| {
+            if sheet.is_empty() {
+                format!("unnamed-{r}:{p}")
+            } else {
+                format!("unnamed-{sheet}:{r}:{p}")
+            }
+        })
 }
 
-/// Evaluate a subset of Standard/Altium-style expression variables.
+// ---------------------------------------------------------------------------
+// Expression evaluator
+// ---------------------------------------------------------------------------
+
+/// Evaluate a subset of Altium-style expression variables.
 ///
-/// Supported today:
+/// Supported:
 /// - `${refdes:<key>}`
 /// - `@{<name>}`
 /// - `CELL()`
@@ -141,18 +181,17 @@ pub fn evaluate_expressions(input: &str, ctx: &ExpressionEvalContext<'_>) -> Str
     out
 }
 
-/// Standard-style unnamed net fallback: `Net-(<refdes>-Pad<pin>)`.
-///
-/// Uses lexicographically smallest `(refdes, pin)` pair for deterministic
-/// naming, matching the netlist side policy.
-pub fn standard_auto_net_name_from_pins(pins: &[(String, String)]) -> Option<String> {
-    pins.iter()
-        .min_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)))
-        .map(|(r, p)| format!("Net-({r}-Pad{p})"))
-}
+// ---------------------------------------------------------------------------
+// Markup parser
+// ---------------------------------------------------------------------------
 
-/// Parse Standard markup into rich text segments.
-pub fn parse_markup(input: &str) -> Vec<RichSegment> {
+/// Parse Signex markup into a flat list of rich segments.
+///
+/// Sigils are consumed in order; the parser is single-pass and does not
+/// handle nested formatting (e.g. `**_~OE~_**` produces a Bold segment
+/// containing the literal text `_~OE~_`). Use whichever decoration
+/// matters most semantically.
+pub fn parse_signex_markup(input: &str) -> Vec<RichSegment> {
     if input.is_empty() {
         return vec![];
     }
@@ -160,94 +199,243 @@ pub fn parse_markup(input: &str) -> Vec<RichSegment> {
     let bytes = input.as_bytes();
     let len = bytes.len();
     let mut segments = Vec::new();
-    let mut i = 0;
     let mut normal_buf = String::new();
+    let mut i = 0usize;
 
     while i < len {
-        match bytes[i] {
-            // Escaped markup sigils: \~ \_ \^ \$ \@ => literal sigil.
-            b'\\' if i + 1 < len => {
-                let next = bytes[i + 1];
-                if matches!(next, b'~' | b'_' | b'^' | b'$' | b'@' | b'{' | b'}') {
-                    normal_buf.push(next as char);
-                    i += 2;
-                    continue;
-                }
+        // Escape sequence: \X produces a literal X for any sigil character.
+        if bytes[i] == b'\\' && i + 1 < len {
+            let next = bytes[i + 1];
+            if matches!(next, b'*' | b'~' | b'^' | b'_' | b'\\' | b'[' | b']' | b'(' | b')') {
+                normal_buf.push(next as char);
+                i += 2;
+                continue;
+            }
+            normal_buf.push('\\');
+            i += 1;
+            continue;
+        }
 
-                // Keep the backslash when this is not a recognised escaped sigil.
-                normal_buf.push('\\');
-                i += 1;
-            }
-            // Overbar: ~{...}
-            b'~' if i + 1 < len && bytes[i + 1] == b'{' => {
-                if !normal_buf.is_empty() {
-                    segments.push(RichSegment::Normal(std::mem::take(&mut normal_buf)));
-                }
-                i += 2; // skip ~{
-                let content = read_group_content(bytes, &mut i, b'{', b'}');
+        // Overbar: _~text~_ (Signex extension). Check before subscript ~text~
+        // because the underscore disambiguates the longer form.
+        if bytes[i] == b'_' && i + 1 < len && bytes[i + 1] == b'~' {
+            if let Some((content, next_index)) = read_overbar(input, i + 2) {
+                flush_normal(&mut segments, &mut normal_buf);
                 segments.push(RichSegment::Overbar(content));
-            }
-            // Overbar alternative: ~(...) (Standard syntax help allows this form).
-            b'~' if i + 1 < len && bytes[i + 1] == b'(' => {
-                if !normal_buf.is_empty() {
-                    segments.push(RichSegment::Normal(std::mem::take(&mut normal_buf)));
-                }
-                i += 2; // skip ~(
-                let content = read_group_content(bytes, &mut i, b'(', b')');
-                segments.push(RichSegment::Overbar(content));
-            }
-            // Subscript: _{...}
-            b'_' if i + 1 < len && bytes[i + 1] == b'{' => {
-                if !normal_buf.is_empty() {
-                    segments.push(RichSegment::Normal(std::mem::take(&mut normal_buf)));
-                }
-                i += 2; // skip _{
-                let content = read_group_content(bytes, &mut i, b'{', b'}');
-                segments.push(RichSegment::Subscript(content));
-            }
-            // Superscript: ^{...}
-            b'^' if i + 1 < len && bytes[i + 1] == b'{' => {
-                if !normal_buf.is_empty() {
-                    segments.push(RichSegment::Normal(std::mem::take(&mut normal_buf)));
-                }
-                i += 2; // skip ^{
-                let content = read_group_content(bytes, &mut i, b'{', b'}');
-                segments.push(RichSegment::Superscript(content));
-            }
-            _ => {
-                // Regular character — handle multi-byte UTF-8
-                let ch = input[i..].chars().next().unwrap();
-                normal_buf.push(ch);
-                i += ch.len_utf8();
+                i = next_index;
+                continue;
             }
         }
+
+        // Bold: **text**
+        if bytes[i] == b'*' && i + 1 < len && bytes[i + 1] == b'*' {
+            if let Some((content, next_index)) = read_paired_double(input, i + 2, b'*') {
+                flush_normal(&mut segments, &mut normal_buf);
+                segments.push(RichSegment::Bold(content));
+                i = next_index;
+                continue;
+            }
+        }
+
+        // Italic: *text*
+        if bytes[i] == b'*' {
+            if let Some((content, next_index)) = read_paired_single(input, i + 1, b'*') {
+                flush_normal(&mut segments, &mut normal_buf);
+                segments.push(RichSegment::Italic(content));
+                i = next_index;
+                continue;
+            }
+        }
+
+        // Strikethrough: ~~text~~
+        if bytes[i] == b'~' && i + 1 < len && bytes[i + 1] == b'~' {
+            if let Some((content, next_index)) = read_paired_double(input, i + 2, b'~') {
+                flush_normal(&mut segments, &mut normal_buf);
+                segments.push(RichSegment::Strike(content));
+                i = next_index;
+                continue;
+            }
+        }
+
+        // Subscript: ~text~
+        if bytes[i] == b'~' {
+            if let Some((content, next_index)) = read_paired_single(input, i + 1, b'~') {
+                flush_normal(&mut segments, &mut normal_buf);
+                segments.push(RichSegment::Subscript(content));
+                i = next_index;
+                continue;
+            }
+        }
+
+        // Superscript: ^text^
+        if bytes[i] == b'^' {
+            if let Some((content, next_index)) = read_paired_single(input, i + 1, b'^') {
+                flush_normal(&mut segments, &mut normal_buf);
+                segments.push(RichSegment::Superscript(content));
+                i = next_index;
+                continue;
+            }
+        }
+
+        // Link: [label](url)
+        if bytes[i] == b'[' {
+            if let Some((label, after_label)) = read_paired_bracket(input, i + 1) {
+                if after_label < len && bytes[after_label] == b'(' {
+                    if let Some((url, next_index)) = read_paired_paren(input, after_label + 1) {
+                        flush_normal(&mut segments, &mut normal_buf);
+                        segments.push(RichSegment::Link { label, url });
+                        i = next_index;
+                        continue;
+                    }
+                }
+            }
+        }
+
+        // Plain character — multi-byte UTF-8 safe.
+        let ch = input[i..].chars().next().unwrap_or('\0');
+        if ch == '\0' {
+            break;
+        }
+        normal_buf.push(ch);
+        i += ch.len_utf8();
     }
 
-    if !normal_buf.is_empty() {
-        segments.push(RichSegment::Normal(normal_buf));
-    }
-
+    flush_normal(&mut segments, &mut normal_buf);
     segments
 }
 
-fn read_group_content(bytes: &[u8], i: &mut usize, open: u8, close: u8) -> String {
-    let start = *i;
-    let mut depth = 1;
-    while *i < bytes.len() && depth > 0 {
-        match bytes[*i] {
-            c if c == open => depth += 1,
-            c if c == close => depth -= 1,
-            _ => {}
-        }
-        if depth > 0 {
-            *i += 1;
-        }
+fn flush_normal(segments: &mut Vec<RichSegment>, buf: &mut String) {
+    if !buf.is_empty() {
+        segments.push(RichSegment::Normal(std::mem::take(buf)));
     }
-    let content = String::from_utf8_lossy(&bytes[start..*i]).to_string();
-    if *i < bytes.len() {
-        *i += 1; // skip closing }
+}
+
+/// Find the next single sigil byte and capture the content between.
+fn read_paired_single(input: &str, start: usize, sigil: u8) -> Option<(String, usize)> {
+    let bytes = input.as_bytes();
+    let mut i = start;
+    while i < bytes.len() {
+        if bytes[i] == b'\\' && i + 1 < bytes.len() {
+            i += 2;
+            continue;
+        }
+        if bytes[i] == sigil {
+            let raw = &input[start..i];
+            return Some((unescape(raw), i + 1));
+        }
+        let ch = input[i..].chars().next().unwrap_or('\0');
+        if ch == '\0' {
+            return None;
+        }
+        i += ch.len_utf8();
     }
-    content
+    None
+}
+
+/// Find a doubled sigil (e.g. `**` or `~~`) and capture the content between.
+fn read_paired_double(input: &str, start: usize, sigil: u8) -> Option<(String, usize)> {
+    let bytes = input.as_bytes();
+    let mut i = start;
+    while i + 1 < bytes.len() {
+        if bytes[i] == b'\\' && i + 1 < bytes.len() {
+            i += 2;
+            continue;
+        }
+        if bytes[i] == sigil && bytes[i + 1] == sigil {
+            let raw = &input[start..i];
+            return Some((unescape(raw), i + 2));
+        }
+        let ch = input[i..].chars().next().unwrap_or('\0');
+        if ch == '\0' {
+            return None;
+        }
+        i += ch.len_utf8();
+    }
+    None
+}
+
+/// Read the body of an overbar `_~ ... ~_` (already past the opening `_~`).
+fn read_overbar(input: &str, start: usize) -> Option<(String, usize)> {
+    let bytes = input.as_bytes();
+    let mut i = start;
+    while i + 1 < bytes.len() {
+        if bytes[i] == b'\\' && i + 1 < bytes.len() {
+            i += 2;
+            continue;
+        }
+        if bytes[i] == b'~' && bytes[i + 1] == b'_' {
+            let raw = &input[start..i];
+            return Some((unescape(raw), i + 2));
+        }
+        let ch = input[i..].chars().next().unwrap_or('\0');
+        if ch == '\0' {
+            return None;
+        }
+        i += ch.len_utf8();
+    }
+    None
+}
+
+fn read_paired_bracket(input: &str, start: usize) -> Option<(String, usize)> {
+    let bytes = input.as_bytes();
+    let mut i = start;
+    while i < bytes.len() {
+        if bytes[i] == b'\\' && i + 1 < bytes.len() {
+            i += 2;
+            continue;
+        }
+        if bytes[i] == b']' {
+            let raw = &input[start..i];
+            return Some((unescape(raw), i + 1));
+        }
+        let ch = input[i..].chars().next().unwrap_or('\0');
+        if ch == '\0' {
+            return None;
+        }
+        i += ch.len_utf8();
+    }
+    None
+}
+
+fn read_paired_paren(input: &str, start: usize) -> Option<(String, usize)> {
+    let bytes = input.as_bytes();
+    let mut i = start;
+    while i < bytes.len() {
+        if bytes[i] == b'\\' && i + 1 < bytes.len() {
+            i += 2;
+            continue;
+        }
+        if bytes[i] == b')' {
+            let raw = &input[start..i];
+            return Some((unescape(raw), i + 1));
+        }
+        let ch = input[i..].chars().next().unwrap_or('\0');
+        if ch == '\0' {
+            return None;
+        }
+        i += ch.len_utf8();
+    }
+    None
+}
+
+fn unescape(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let bytes = input.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'\\' && i + 1 < bytes.len() {
+            out.push(bytes[i + 1] as char);
+            i += 2;
+            continue;
+        }
+        let ch = input[i..].chars().next().unwrap_or('\0');
+        if ch == '\0' {
+            break;
+        }
+        out.push(ch);
+        i += ch.len_utf8();
+    }
+    out
 }
 
 fn read_braced(input: &str, start_index: usize) -> Option<(&str, usize)> {
@@ -361,6 +549,10 @@ fn eval_net_name(expr: &str, ctx: &ExpressionEvalContext<'_>) -> Option<String> 
     lookup_ci(ctx.net_name_by_pin, pin_key)
 }
 
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -368,47 +560,44 @@ mod tests {
     #[test]
     fn plain_text() {
         assert_eq!(
-            parse_markup("Hello"),
+            parse_signex_markup("Hello"),
             vec![RichSegment::Normal("Hello".into())]
         );
     }
 
     #[test]
-    fn empty() {
-        assert_eq!(parse_markup(""), Vec::<RichSegment>::new());
+    fn empty_input() {
+        assert_eq!(parse_signex_markup(""), Vec::<RichSegment>::new());
     }
 
     #[test]
-    fn subscript_vcc() {
+    fn bold() {
         assert_eq!(
-            parse_markup("V_{CC}"),
-            vec![
-                RichSegment::Normal("V".into()),
-                RichSegment::Subscript("CC".into()),
-            ]
+            parse_signex_markup("**bold**"),
+            vec![RichSegment::Bold("bold".into())]
         );
     }
 
     #[test]
-    fn overbar_cs() {
+    fn italic() {
         assert_eq!(
-            parse_markup("~{CS}"),
-            vec![RichSegment::Overbar("CS".into())]
+            parse_signex_markup("*italic*"),
+            vec![RichSegment::Italic("italic".into())]
         );
     }
 
     #[test]
-    fn overbar_parentheses_form() {
+    fn strike() {
         assert_eq!(
-            parse_markup("~(CLK)"),
-            vec![RichSegment::Overbar("CLK".into())]
+            parse_signex_markup("~~gone~~"),
+            vec![RichSegment::Strike("gone".into())]
         );
     }
 
     #[test]
     fn superscript() {
         assert_eq!(
-            parse_markup("V^{+}"),
+            parse_signex_markup("V^+^"),
             vec![
                 RichSegment::Normal("V".into()),
                 RichSegment::Superscript("+".into()),
@@ -417,48 +606,94 @@ mod tests {
     }
 
     #[test]
-    fn overbar_then_subscript() {
+    fn subscript() {
         assert_eq!(
-            parse_markup("~{WR}_{0}"),
+            parse_signex_markup("V~CC~"),
             vec![
-                RichSegment::Overbar("WR".into()),
+                RichSegment::Normal("V".into()),
+                RichSegment::Subscript("CC".into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn overbar() {
+        assert_eq!(
+            parse_signex_markup("_~RESET~_"),
+            vec![RichSegment::Overbar("RESET".into())]
+        );
+    }
+
+    #[test]
+    fn link() {
+        assert_eq!(
+            parse_signex_markup("[click](https://example.com)"),
+            vec![RichSegment::Link {
+                label: "click".into(),
+                url: "https://example.com".into(),
+            }]
+        );
+    }
+
+    #[test]
+    fn escape_sigils() {
+        // Escape sigils with backslash: each escape consumes exactly one
+        // sigil character. To escape a multi-char sigil like `~~`, escape
+        // each tilde individually.
+        assert_eq!(
+            parse_signex_markup(r"\*literal\*"),
+            vec![RichSegment::Normal("*literal*".into())]
+        );
+        assert_eq!(
+            parse_signex_markup(r"\~\~not strike\~\~"),
+            vec![RichSegment::Normal("~~not strike~~".into())]
+        );
+        assert_eq!(
+            parse_signex_markup(r"\_\~not overbar\~\_"),
+            vec![RichSegment::Normal("_~not overbar~_".into())]
+        );
+    }
+
+    #[test]
+    fn mixed_overbar_and_subscript() {
+        // _~OE~_~0~ → overbar OE + subscript 0
+        assert_eq!(
+            parse_signex_markup("_~OE~_~0~"),
+            vec![
+                RichSegment::Overbar("OE".into()),
                 RichSegment::Subscript("0".into()),
             ]
         );
     }
 
     #[test]
-    fn mixed_with_plain() {
+    fn unmatched_sigil_is_literal() {
+        // No closing sigil → consume as literal.
         assert_eq!(
-            parse_markup("I_{OUT} = 1A"),
-            vec![
-                RichSegment::Normal("I".into()),
-                RichSegment::Subscript("OUT".into()),
-                RichSegment::Normal(" = 1A".into()),
-            ]
+            parse_signex_markup("a*b"),
+            vec![RichSegment::Normal("a*b".into())]
         );
     }
 
     #[test]
-    fn no_markup_chars() {
-        // Lone ~ _ ^ without { are treated as normal text
+    fn auto_net_name_format_is_signex() {
+        let pins = vec![
+            ("U2".to_string(), "5".to_string()),
+            ("R1".to_string(), "2".to_string()),
+            ("R1".to_string(), "1".to_string()),
+        ];
+        // Format must be "unnamed-<sheet>:<ref>:<pin>" per the Apache-clean
+        // remediation. Must NOT match the historical Standard format string.
+        assert_eq!(auto_net_name("", &pins), Some("unnamed-R1:1".to_string()));
         assert_eq!(
-            parse_markup("a~b_c^d"),
-            vec![RichSegment::Normal("a~b_c^d".into())]
+            auto_net_name("PowerSupply", &pins),
+            Some("unnamed-PowerSupply:R1:1".to_string())
         );
     }
 
     #[test]
-    fn escaped_markup_is_literal() {
-        assert_eq!(
-            parse_markup("\\_{A} \\^{2} \\~{RST} \\${ROW} \\@{x+y}"),
-            vec![RichSegment::Normal("_{A} ^{2} ~{RST} ${ROW} @{x+y}".into())]
-        );
-    }
-
-    #[test]
-    fn expands_standard_char_escapes() {
-        assert_eq!(expand_standard_char_escapes("A{slash}B{dollar}C"), "A/B$C");
+    fn auto_net_name_empty_pins() {
+        assert_eq!(auto_net_name("", &[]), None);
     }
 
     #[test]
@@ -499,18 +734,5 @@ mod tests {
         let ctx = ExpressionEvalContext::default();
         let out = evaluate_expressions("${refdes:U1} @{foo} NET_NAME(1)", &ctx);
         assert_eq!(out, "${refdes:U1} @{foo} NET_NAME(1)");
-    }
-
-    #[test]
-    fn standard_auto_net_name_uses_lowest_pair() {
-        let pins = vec![
-            ("U2".to_string(), "5".to_string()),
-            ("R1".to_string(), "2".to_string()),
-            ("R1".to_string(), "1".to_string()),
-        ];
-        assert_eq!(
-            standard_auto_net_name_from_pins(&pins),
-            Some("Net-(R1-Pad1)".to_string())
-        );
     }
 }
