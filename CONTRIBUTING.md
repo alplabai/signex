@@ -13,7 +13,7 @@ with:
 
 - Steps to reproduce
 - Expected vs actual behavior
-- KiCad file that triggers the bug (if applicable)
+- A minimal `.snxsch` / `.snxpcb` that triggers the bug (if applicable)
 - Screenshot if it's a rendering issue
 
 ### Suggest Features
@@ -30,28 +30,27 @@ does something that Signex doesn't yet, that's a valid feature request.
 2. Comment on the issue to let us know you're working on it
 3. Fork, branch, code, PR (details below)
 
-### Improve KiCad Compatibility
+### Improve the KiCad Migration Path
 
-Signex reads and writes KiCad files. If you find a KiCad file that doesn't
-parse correctly, or if Signex's output causes issues when opened in KiCad,
-that's a high-priority bug. We especially value:
-
-- Test files from real projects (anonymized if needed)
-- KiCad version-specific edge cases
-- Round-trip issues (open in Signex, save, open in KiCad, something changed)
+KiCad import / export lives in the optional [signex-kicad-import](https://github.com/alplabai/signex-kicad-import)
+companion repo (GPL-3.0-or-later). PRs that improve KiCad parsing
+fidelity, fix migration round-trip issues, or expand the converter's
+coverage belong **there**, not in the main signex repo. The main repo
+is Apache-2.0 clean and contains no KiCad-derived code by design — see
+[docs/LICENSING.md](docs/LICENSING.md).
 
 ### Add Test Fixtures
 
-We maintain a corpus of real KiCad files in `tests/fixtures/`. Adding more
-fixtures from diverse projects improves our parser and writer coverage. If you
-have a KiCad project you're willing to share (or can create a minimal
-reproducer), PRs that add fixtures are very welcome.
+We maintain a corpus of native Signex `.snxsch` / `.snxpcb` files in
+`tests/fixtures/`. Adding more fixtures from diverse designs improves
+coverage. If you have a project you're willing to share (or can create
+a minimal reproducer), PRs that add fixtures are very welcome.
 
 ### Improve Rendering Fidelity
 
-If a schematic renders differently in Signex vs KiCad, that's a bug. Side-by-side
-screenshots comparing KiCad and Signex output are extremely helpful for
-identifying rendering discrepancies.
+Side-by-side screenshots comparing Signex's output to a reference
+(Altium Designer is the canonical reference for visual fidelity per
+the project's design rules) help identify rendering discrepancies.
 
 ## Development Setup
 
@@ -59,7 +58,6 @@ identifying rendering discrepancies.
 
 - **Rust 1.80+** (edition 2024)
 - A GPU supporting Vulkan, Metal, or DX12 (for wgpu)
-- A KiCad installation (for test files and visual comparison)
 
 ### Build and Run
 
@@ -119,11 +117,12 @@ docs: add KiCad 9 fixture for multi-sheet test
 
 | Crate | What goes here | Dependencies |
 |---|---|---|
-| `signex-types` | Domain types (schematic, PCB, net, layer, theme). **No rendering deps.** | serde, uuid |
-| `kicad-parser` | S-expression tokenizer + parsers for .kicad_sch/.kicad_pcb/.kicad_sym | signex-types |
-| `kicad-writer` | S-expression serializer (write KiCad format back) | signex-types |
+| `signex-types` | Domain types (schematic, PCB, net, layer, theme) + native `.snxsch`/`.snxpcb` format codec. **No rendering deps.** | serde, toml, uuid |
+| `signex-engine` | Edit engine. Open/save through `SnxSchematic` / `SnxPcb`. Multi-window history. | signex-types |
 | `signex-render` | Canvas draw routines, hit-testing. Bridges types to Iced Canvas calls. | signex-types |
 | `signex-widgets` | Custom Iced widgets (TreeView, symbol preview, theme extensions) | iced, iced_aw |
+| `signex-erc` / `signex-erc-dsl` | ERC rule engine + DSL compiler | signex-types |
+| `signex-output` | PDF, BOM, netlist exporters (non-KiCad formats) | signex-types |
 | `signex-app` | Main binary. Iced Application, panels, dock, menus, canvas, Active Bar. | everything above |
 
 **Rule:** `signex-types` has zero rendering dependencies. If you need to draw
@@ -139,11 +138,11 @@ codebase.
 Examples of good first contributions:
 
 - Add a missing keyboard shortcut
-- Fix a rendering discrepancy vs KiCad
-- Add a KiCad test fixture
+- Fix a rendering discrepancy
+- Add a test fixture for a corner case
 - Implement a menu item that's currently a stub
 - Improve an error message
-- Add a missing element type to the parser
+- Add a missing element type to the native format codec
 
 ## Code Style
 
@@ -160,6 +159,43 @@ the same [Apache-2.0 license](LICENSE) as the rest of the project.
 We require this so that the project can maintain a consistent license and offer
 Signex Pro under a separate commercial license without needing to re-negotiate
 with every contributor.
+
+## License compliance for contributions
+
+The main signex repo is **Apache-2.0 clean**. Patches must not introduce
+KiCad-derived code or any GPL-licensed dependency. KiCad import / export
+lives in the [signex-kicad-import](https://github.com/alplabai/signex-kicad-import)
+GPL-3.0-or-later companion repo — that's where KiCad-related work
+belongs. See [docs/LICENSING.md](docs/LICENSING.md) for the rationale
+behind the two-repo split.
+
+When you open a PR against the main `signex` repo, include this block
+in the PR description:
+
+```
+Source basis: [my own work | Signex's prior code | published format
+specs | other (specify)]
+LLM-assisted: [yes/no — if yes, list which models]
+KiCad source consulted: [yes/no — if yes, the PR belongs in
+signex-kicad-import, not here]
+```
+
+CI will check the PR description for this block (see
+`.github/workflows/license-guard.yml` and the PR-license-declaration
+workflow). If the third field is `yes`, CI rejects the PR with a
+pointer to the companion repo.
+
+Why this matters: large-language-model assistants that have been
+trained on KiCad source can inadvertently produce structurally
+derivative code even when generating "from scratch." If your LLM has
+been exposed to KiCad source, route the contribution to the GPL
+companion (where derivation is fine) rather than the Apache main repo.
+
+For reference, the License Guard CI also fails any push that
+introduces KiCad-flavoured identifiers (`kicad`, `KiCad`, `F_CU`,
+`B_CU`, `F_SILKS`, `tri_state`, `Net-(`, …) anywhere under `crates/`.
+This is a structural backstop on top of the PR-description self-
+declaration.
 
 ## Questions?
 
