@@ -1387,6 +1387,9 @@ fn row_to_symbol(row: SchComponentRow, extras: SymbolExtras) -> Symbol {
         fields,
         custom_properties: extras.custom_properties,
         pin_uuids: extras.pin_uuids,
+        library_id: None,
+        row_id: None,
+        library_version: String::new(),
         instances: extras.instances,
     }
 }

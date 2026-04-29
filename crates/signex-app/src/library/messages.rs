@@ -105,8 +105,6 @@ pub enum LibraryMessage {
     NewComponentSetTable(String),
     /// Live-edit of the modal's "Category" field.
     NewComponentSetCategory(String),
-    /// User picked a table in the New Component modal.
-    NewComponentSetTable(String),
     /// Submit the New Component modal — creates the draft, persists,
     /// opens the editor on the new component.
     NewComponentSubmit,

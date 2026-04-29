@@ -6,7 +6,7 @@
 //! returns a `Result`; non-fatal errors surface via `tracing::warn!`
 //! with structured fields, matching the rest of the codebase.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use signex_library::adapters::local_git::LibraryInitOptions;
 use signex_library::{
@@ -23,7 +23,7 @@ use signex_library::{
 use signex_types::project::{LibraryEntry, LibraryEntryKind, ProjectData};
 use uuid::Uuid;
 
-use super::state::{ComponentEditorState, EditorAddress, LibraryState};
+use super::state::LibraryState;
 
 /// Open a `*.snxlib/` and refresh its component list.
 pub fn open_library(state: &mut LibraryState, root: PathBuf) -> Result<(), LibraryError> {
@@ -120,9 +120,6 @@ pub fn create_library_at(
     // `*.iges` and stages it into the initial commit when `true`.
     let _adapter = LocalGitAdapter::init(&lib_path, manifest, LibraryInitOptions { use_lfs })?;
 
-    // 3. Mount via the existing `open_library` helper so the panel
-    //    sees the new library immediately and the picker can pull
-    //    its empty component list.
     state.open_library(lib_path.clone())?;
     if let Err(e) = state.refresh_components(&lib_path) {
         tracing::warn!(
@@ -216,100 +213,9 @@ pub fn auto_mount_project_libraries(state: &mut LibraryState, project: &ProjectD
     mounted
 }
 
-/// Build a fresh `ComponentEditorState` for the given `(library, id)`
-/// pair. The caller is responsible for opening the editor window and
-/// stashing the returned state under the new window's id.
-pub fn load_component_for_editor(
-    state: &mut LibraryState,
-    library_root: &Path,
-    id: ComponentId,
-) -> Result<ComponentEditorState, LibraryError> {
-    let library_id = state
-        .library_at(library_root)
-        .map(|lib| lib.library_id)
-        .ok_or_else(|| LibraryError::NotFound(library_root.display().to_string()))?;
-    let adapter = state
-        .set
-        .get(library_id)
-        .ok_or_else(|| LibraryError::NotFound(library_root.display().to_string()))?;
-    let component = adapter.get_component(id)?;
-    let review_required = adapter.manifest().workflow.review_required;
-    Ok(ComponentEditorState::from_head(
-        library_root.to_path_buf(),
-        component,
-        review_required,
-        &state.set,
-    ))
-}
-
-/// Save the editor's draft revision locally.
-// WS-I: tab-not-window — editors are addressed by
-// `EditorAddress(library_path, component_id)` instead of by window id.
-pub fn save_draft(state: &mut LibraryState, address: &EditorAddress) -> Result<(), LibraryError> {
-    let editor = state
-        .editors
-        .get_mut(address)
-        .ok_or_else(|| LibraryError::NotFound(format!("editor {address:?}")))?;
-    editor.draft.refresh_content_hash();
-    let library_root = editor.library_root.clone();
-    let id = editor.component_id;
-    let revision = editor.draft.clone();
-
-    let library_id = state
-        .library_at(&library_root)
-        .map(|lib| lib.library_id)
-        .ok_or_else(|| LibraryError::NotFound(library_root.display().to_string()))?;
-    let adapter = state
-        .set
-        .get(library_id)
-        .ok_or_else(|| LibraryError::NotFound(library_root.display().to_string()))?;
-    adapter.save_revision(id, revision, "save draft (signex-app phase 1)")?;
-    if let Err(e) = state.refresh_components(&library_root) {
-        tracing::warn!(target: "signex::library", path = %library_root.display(), error = %e, "post-save refresh failed");
-    }
-    Ok(())
-}
-
-/// Commit the current draft as a new revision.
-// WS-I: tab-not-window
-pub fn commit_revision(
-    state: &mut LibraryState,
-    address: &EditorAddress,
-    message: &str,
-) -> Result<Revision, LibraryError> {
-    let editor = state
-        .editors
-        .get_mut(address)
-        .ok_or_else(|| LibraryError::NotFound(format!("editor {address:?}")))?;
-    editor.draft.refresh_content_hash();
-    let library_root = editor.library_root.clone();
-    let id = editor.component_id;
-    let revision = editor.draft.clone();
-
-    let library_id = state
-        .library_at(&library_root)
-        .map(|lib| lib.library_id)
-        .ok_or_else(|| LibraryError::NotFound(library_root.display().to_string()))?;
-    let adapter = state
-        .set
-        .get(library_id)
-        .ok_or_else(|| LibraryError::NotFound(library_root.display().to_string()))?;
-    adapter.save_revision(id, revision.clone(), message)?;
-    Ok(revision)
-}
-
 // ─────────────────────────────────────────────────────────────────────
 // New Component create-flow (components are TSV rows in the DBLib model)
 // ─────────────────────────────────────────────────────────────────────
-
-// The create_component_row helper returns `LibraryError` directly —
-// validation cases (empty PN, missing table, missing library) are
-// reported as `LibraryError::Conflict` / `LibraryError::NotFound` so
-// the dispatcher's existing `Display`-based error surface works
-// unchanged. The bespoke `NewComponentError` enum from the WS-E
-// shape (which wrapped `LibraryError` plus `EmptyInternalPn` /
-// `NoLibrarySelected` variants) is gone — `LibraryError` already
-// covers the same surface area for the row-tier flow.
 
 /// Create a new component **row**:
 ///
@@ -358,7 +264,6 @@ pub fn create_component_row(
     // unbound refs, the row starts with sentinel `Uuid::nil()` and the
     // Component Preview surfaces an "Unbound — pick a symbol" prompt.
 
-    // 4. Build the row binding both primitives.
     let row_id = RowId::new();
     let now = chrono::Utc::now();
     let resolved_symbol = symbol_ref.unwrap_or_else(|| PrimitiveRef::new(library_id, Uuid::nil()));
@@ -398,8 +303,6 @@ pub fn create_component_row(
         .ok_or_else(|| LibraryError::NotFound(library_root.display().to_string()))?;
     adapter.insert_row(table, row, &commit_msg)?;
 
-    // Best-effort refresh of the cached component list. Failure here
-    // doesn't void the create — surface as a warning only.
     if let Err(e) = state.refresh_components(&library_root) {
         tracing::warn!(
             target: "signex::library",
@@ -437,7 +340,7 @@ pub fn list_components_filtered(
 }
 
 /// Stub: emit `tracing::info!` with the use-site coordinates the
-/// editor's Where-Used tab handed back.
+/// Where-Used handler hands back.
 pub fn jump_to_use_site(site: &signex_library::UseSite) {
     // `UseSite::version_pinned` is gone in the DBLib model — past
     // versions of a row are read from `git log` (LocalGit) or the
@@ -451,20 +354,3 @@ pub fn jump_to_use_site(site: &signex_library::UseSite) {
         "jump-to-use-site requested (phase-2 follow-up)"
     );
 }
-
-// WS-H: regression tests for `create_library` and
-// `auto_mount_project_libraries` are deferred until WS-A/B/E close
-// out — those workstreams broke `signex-app`'s test profile by
-// reshaping `Revision` (no more `pcb`/`shared`/`schematic` fields),
-// and the bin can't currently compile under `cargo test`. The
-// `signex-types` tests (`crates/signex-types/src/project.rs`)
-// cover the data-model side of WS-H end to end. Once WS-E lands
-// and the bin's test profile builds again, the file/dir-scoped
-// `create_library` smoke tests live here:
-//   - reject empty / path-separator names
-//   - smoke: create + manifest exists + project records entry
-//   - reject existing-dir clobber
-//   - auto-mount smoke: round-trip across sessions
-// (Local-tested at WS-H authoring time against a hand-rolled
-// LibraryState stub — kept off-tree so the merge doesn't fight
-// over WS-E's actual `LibraryState` shape.)

@@ -2,6 +2,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use thiserror::Error;
 use uuid::Uuid;
 
 // ---------------------------------------------------------------------------
@@ -306,5 +307,6 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
         sheets,
         variant_definitions: Vec::new(),
         active_variant: None,
+        libraries: Vec::new(),
     })
 }

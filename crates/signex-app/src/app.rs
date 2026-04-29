@@ -32,9 +32,6 @@ pub use contracts::{
     StatusBarRequest, TabContextAction, TabContextMenuState, TextEditState,
 };
 pub use documents::{
-    ComponentEditorTab, DrawMode, SchematicTabSession, TabDocument, TabInfo, TabKind, Tool,
-};
-pub use documents::{
     ComponentEditorTab, DrawMode, FootprintEditorState, SchematicTabSession, SymbolEditorState,
     TabDocument, TabInfo, TabKind, Tool,
 };

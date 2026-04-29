@@ -119,10 +119,14 @@ impl Signex {
                 (
                     WindowKind::ComponentEditor {
                         library_path,
-                        component_id,
+                        table,
+                        row_id,
                     },
                     crate::app::TabKind::ComponentEditor(ce),
-                ) if library_path == &ce.library_path && component_id == &ce.component_id => {
+                ) if library_path == &ce.library_path
+                    && table == &ce.table
+                    && row_id == &ce.row_id =>
+                {
                     Some(*id)
                 }
                 _ => None,
@@ -148,7 +152,8 @@ impl Signex {
                 .editors
                 .remove(&crate::library::state::EditorAddress::new(
                     ce.library_path.clone(),
-                    ce.component_id,
+                    ce.table.clone(),
+                    ce.row_id,
                 ));
         }
         // Standalone primitive editor tabs — drop the per-tab editor
@@ -232,5 +237,4 @@ impl Signex {
             A::Undock(idx) => Task::done(Message::UndockTab(idx)),
         }
     }
-
 }

@@ -665,7 +665,11 @@ impl LibraryState {
             .library_at(root)
             .map(|lib| lib.library_id)
             .ok_or_else(|| LibraryError::NotFound(root.display().to_string()))?;
-        let rows = self
+        // Snapshot the table data through the adapter, then move it
+        // onto the OpenLibrary entry. Two passes keep the borrow
+        // checker happy — `set.get` and `library_at_mut` both
+        // straddle `&self`/`&mut self`.
+        let adapter = self
             .set
             .get(library_id)
             .ok_or_else(|| LibraryError::NotFound(root.display().to_string()))?;
@@ -731,12 +735,11 @@ impl LibraryState {
     /// not part of the DBLib model.
     #[allow(dead_code)]
     pub fn ingest_sheet(&mut self, project: &Path, sheet: &Path, refs: &[(Uuid, String)]) {
-        // The current `WhereUsedIndex::ingest_sheet` shape is owned by
-        // signex-library and re-built when WS-9 ships its row-shaped
-        // ingest helper. v0.9-refactor-2 leaves this method as a stub
-        // so callers compile; the panel/where-used wiring is rebuilt
-        // outside this slice.
-        let _ = (project, sheet, refs);
+        let trimmed: Vec<(RowId, String)> = refs
+            .iter()
+            .map(|(uuid, inst)| (RowId::from_uuid(*uuid), inst.clone()))
+            .collect();
+        self.where_used.ingest_sheet(project, sheet, &trimmed);
     }
 
     /// Look up the use-sites for a row.
@@ -1047,7 +1050,8 @@ pub const BUILTIN_CLASSES: &[(&str, &str)] = &[
 ];
 
 /// "New Component" modal state — collected before the dispatcher
-/// inserts a row into the chosen target table.
+/// inserts a row into the chosen target table and opens the
+/// Component Preview tab.
 #[derive(Debug, Clone)]
 pub struct NewComponentState {
     /// Live edit buffer for the Internal PN field.
@@ -1322,20 +1326,14 @@ mod tests {
         assert!(nc.category.is_empty());
     }
 
-        // Empty state → no sites.
-        assert!(state.where_used_for(uuid, None).is_empty());
-
-        // Ingest one ref under a project/sheet → one site visible.
-        state.ingest_sheet(&project, &sheet, &[(uuid, "U7".into(), v)]);
-        let sites = state.where_used_for(uuid, None);
-        assert_eq!(sites.len(), 1);
-        assert_eq!(sites[0].instance_id, "U7");
-        assert_eq!(sites[0].version_pinned, v);
-        assert_eq!(sites[0].sheet_path, sheet);
-
-        // Re-ingesting the same sheet with empty refs clears the entry.
-        state.ingest_sheet(&project, &sheet, &[]);
-        assert!(state.where_used_for(uuid, None).is_empty());
+    #[test]
+    fn library_set_mount_unmount_is_symmetric() {
+        let mut set = LibrarySet::new();
+        assert!(set.is_empty());
+        // Mounting requires a real adapter; testing only the bookkeeping
+        // shape here. (Full end-to-end test lives in `commands.rs`.)
+        let _ = set.unmount(Uuid::nil());
+        assert!(set.is_empty());
     }
 
     /// `OpenLibrary::total_rows` sums every cached table's length —

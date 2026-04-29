@@ -20,9 +20,11 @@
 //! on Preview.
 
 pub mod datasheet_picker;
+pub mod footprint;
 pub mod params;
 pub mod preview;
 pub mod sim;
+pub mod standalone;
 pub mod supply;
 pub mod symbol;
 

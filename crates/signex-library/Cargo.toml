@@ -6,18 +6,6 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
-[features]
-default = []
-# Enables the 4 community distributor adapters (DigiKey/Mouser/LCSC/JLCPCB),
-# OS keyring-backed credential storage, and reqwest-based HTTP. See WS-C.
-distributors-community = [
-    "dep:keyring",
-    "dep:oauth2",
-    "dep:reqwest",
-    "dep:tokio",
-    "dep:dirs",
-]
-
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -29,15 +17,12 @@ thiserror = { workspace = true }
 anyhow = { workspace = true }
 url = { version = "2", features = ["serde"] }
 csv = "1.3"
-standard-parser = { workspace = true }
 
 # Heuristic AI-stub for symbol pinout extraction (WS-F).
-# Gated behind the `ai-stub` feature so the default build skips the
-# pdf-extract / regex compile cost.
 pdf-extract = { workspace = true, optional = true }
 regex = { workspace = true, optional = true }
 
-# Phase 1 WS-E: Tantivy search backend (gated behind `search-tantivy`).
+# Tantivy search backend (WS-E).
 tantivy = { workspace = true, optional = true }
 
 # Local + git adapter (WS-A).
@@ -63,13 +48,20 @@ tracing = { workspace = true }
 
 [features]
 default = []
-# Enables `signex_library::ai_stub` — heuristic pinout extraction from
-# datasheet PDFs (no LLM, no network calls). Pulls in `pdf-extract` and
-# `regex`. Real LLM-based synthesis is deferred to v3.x per LIBRARY_PLAN.
 ai-stub = ["dep:pdf-extract", "dep:regex"]
-# Enable the Tantivy-backed `TantivySearchIndex` impl of `SearchIndex`.
 search-tantivy = ["dep:tantivy"]
+local-git = ["dep:git2", "dep:walkdir"]
+database = ["dep:reqwest"]
+distributors-community = [
+    "dep:keyring",
+    "dep:oauth2",
+    "dep:reqwest",
+    "dep:tokio",
+    "dep:dirs",
+]
 
 [dev-dependencies]
 tempfile = "3"
 pdf-writer = { workspace = true }
+tokio = { workspace = true }
+wiremock = "0.6"
