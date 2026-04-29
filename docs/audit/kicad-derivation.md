@@ -122,6 +122,82 @@ the public KiCad source mirror. Each item scored:
 
 ---
 
+## Residual-mention catalog (post-cutover, 2026-04-29)
+
+After the v0.9.0 Apache-clean cutover landed, `git grep -niE
+"kicad|F_CU\b|B_CU\b|F_SILKS\b|tri_state|Net-\(" -- 'crates/'`
+returns ~291 hits across 62 files. **None of them are imports or
+function calls into the deleted `kicad-parser` / `kicad-writer`
+crates** — those were verified to be ZERO in the Phase 5 cutover.
+The residuals fall into seven categories below; each is allowed by
+the License Guard CI's regex (which targets imports + removed-API-
+surface re-introduction, not every substring containing "kicad").
+
+### A — Doc comments / historical reference
+
+Examples: `crates/signex-engine/src/transform.rs` (geometry conventions),
+`crates/signex-render/src/schematic/text.rs` (escape-convention rationale).
+Allowed because they document why code behaves a certain way; they
+don't compile to binary.
+
+### B — User-facing migration messages
+
+Examples: `crates/signex-app/src/app/handlers/document_files.rs:42`
+("Signex Community no longer opens KiCad files directly. Convert
+with the signex-kicad-import companion tool first."). Intentional —
+users migrating from KiCad need explicit guidance.
+
+### C — Public render-style enum variants
+
+`MultisheetStyle::KiCad`, `LabelStyle::KiCad`, `PowerPortStyle::KiCad`
+in `signex-types`. Variants serialise to disk; renaming is a
+backwards-incompatible change. Tracked for v1.x with a serde-alias
+migration: `MultisheetStyle::Foreign` (or similar) reading the old
+`"kicad"` string for compatibility.
+
+### D — `tri_state` string compares in label rendering
+
+5 sites in `signex-engine/src/sheet.rs`,
+`signex-output/src/svg/mod.rs`, `signex-render/src/schematic/label.rs`.
+On-disk label-shape encoding token. Renaming follows the same v1.x
+serde-alias migration path as Category C.
+
+### E — Vestigial state-field names
+
+Examples: `kicad_lib_dir`, `find_kicad_symbols_dir`,
+`list_kicad_libraries`, `escape_for_kicad`. Internal naming on
+post-cutover no-op or Signex-native code paths. Cleanup is mechanical
+(rename + cascade through callers); tracked for v0.9.x or v0.10
+polish.
+
+### F — Test data filenames
+
+`crates/chrome-catalog/src/main.rs` lines 996–1000 hold fixtures with
+names like `clean.kicad_sch`, `dirty.kicad_sch`. The chrome catalog
+tests file-icon rendering for foreign-format extensions (the file
+tree shows KiCad files as "convertible" with a distinct icon). Allowed.
+
+### G — File-dialog filter strings
+
+`crates/signex-app/src/app/handlers/menu/file_commands.rs` keeps
+`add_filter("KiCad Schematic", &["kicad_sch"])` so users can see
+their existing `.kicad_sch` files in the Open dialog; opening one
+returns the companion-tool migration message. Tracked as a v0.9.x
+polish item — better UX is to surface the migration prompt directly
+when the user picks a `.kicad_*` file rather than hiding it from
+the dialog.
+
+### License Guard reverification
+
+To confirm the post-cutover invariants:
+
+```bash
+# These should all return zero hits — the actual licensing invariant.
+git grep -nE 'use\s+(kicad_parser|kicad_writer)::' -- 'crates/**/*.rs'
+git grep -nE '^\s*kicad-(parser|writer)\s*=' -- 'crates/**/Cargo.toml' 'Cargo.toml'
+git grep -nE '\bPinElectricalType\b|\bkicad_auto_net_name_from_pins\b|\bparse_markup\s*\(|\bLayerId\s*\(' -- 'crates/**/*.rs'
+```
+
 ## Items needing follow-up if Seth provides a more granular list
 
 The strategy doc anticipated Seth supplying an exhaustive list. As of

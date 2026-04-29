@@ -153,11 +153,18 @@ v0.7.x and v0.8.0 as superseded:
 | v0.7.0 | 2026-04-22 | ⚠️ superseded | Contained KiCad-derived code; install v0.9+ for Apache-clean binary. |
 | v0.7.1 | 2026-04-24 | ⚠️ superseded | macOS Apple-Silicon ad-hoc codesign hotfix; still contains KiCad-derived code. |
 | v0.8.0 | 2026-04-26 | ⚠️ superseded | Output generation; still contains KiCad-derived code. |
-| v0.9.0 | (this release) | ✅ Apache-clean | First Apache-2.0-clean binary. Bundles the library subsystem (Library Browser + SCH Library editor + Component Editor) that was in flight on `feature/v0.9-snxlib-as-file` plus the Apache-clean cutover. KiCad I/O via optional companion. |
+| v0.9.0 | (this release) | ✅ Apache-clean | First Apache-2.0-clean binary. Apache-clean cutover only — native `.snxsch`/`.snxpcb` formats, KiCad I/O via optional companion. |
+| v0.10.0 | (next release) | — | Library & Polish — symbol/footprint editor, multi-symbol `.snxsym`, Component Editor, installers. Resumes the library subsystem work paused at `v0.9-snxlib-paused-2026-04-29` on top of v0.9.0's Apache-clean foundations. |
 
-(Note: v0.9.0 combines two streams — the library subsystem work was
-paused mid-flight for the issue-62 licensing remediation, then resumed
-on top of the Apache-clean foundation. Both ship in this release.)
+(Note: the library subsystem work that was in flight on
+`feature/v0.9-snxlib-as-file` is preserved at the
+`v0.9-snxlib-paused-2026-04-29` tag and resumes as v0.10.0. v0.9.0
+ships the licensing cutover only — that's the actual scope of the
+issue-62 remediation, and bundling 197 cross-cutting v0.9-stream
+commits onto the post-cutover dev was out of scope for the autonomous
+remediation run. Splitting the two efforts produces a clean,
+shippable v0.9.0 today and a clean v0.10.0 once the library work
+resumes on Apache-clean foundations.)
 
 ---
 
