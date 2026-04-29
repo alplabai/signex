@@ -21,6 +21,11 @@ pub fn view<'a>(
     tool: &Tool,
     grid_size_mm: f32,
     tokens: &ThemeTokens,
+    // v0.9.1 — when Some, render a small pill in the right slot
+    // before the zoom display. Used for "Saving…" while the
+    // off-thread disk write runs and for transient save-error
+    // messages.
+    save_message: Option<&str>,
 ) -> Element<'a, StatusBarRequest> {
     let coord_text = match unit {
         Unit::Mm => format!("X:{x:.2} Y:{y:.2}"),
@@ -44,6 +49,13 @@ pub fn view<'a>(
     let lbl = move |s: String| text(s).size(11).color(text_c);
     let dim = move |s: &'static str| text(s).size(11).color(muted_c);
 
+    let save_pill: Element<'a, StatusBarRequest> = match save_message {
+        Some(message) => container(text(message.to_string()).size(11).color(muted_c))
+            .padding([1, 6])
+            .into(),
+        None => container(text("")).padding(0).into(),
+    };
+
     let bar = row![
         lbl(coord_text),
         sep(),
@@ -62,6 +74,7 @@ pub fn view<'a>(
         sep(),
         lbl(format!("{tool}")),
         space::horizontal(),
+        save_pill,
         lbl(format!("{zoom:.0}%")),
         sep(),
         button(text(format!("{unit}")).size(11).color(text_c))

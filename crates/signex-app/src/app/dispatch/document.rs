@@ -51,11 +51,15 @@ impl Signex {
                 self.finish_update()
             }
             Message::SaveFile => {
-                self.handle_active_document_save_requested();
-                self.finish_update()
+                let task = self.handle_active_document_save_requested();
+                iced::Task::batch([task, self.finish_update()])
             }
             Message::SaveFileAs(path) => {
-                self.handle_active_document_save_as_requested(path);
+                let task = self.handle_active_document_save_as_requested(path);
+                iced::Task::batch([task, self.finish_update()])
+            }
+            Message::SaveFileFinished(path, result) => {
+                self.handle_active_document_save_finished(path, result);
                 self.finish_update()
             }
             Message::SchematicLoaded(sheet) => {
