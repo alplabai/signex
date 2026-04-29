@@ -76,6 +76,14 @@ impl Engine {
     }
 
     pub fn save_as(&mut self, path: &Path) -> Result<(), EngineError> {
+        // TODO(v0.9.1 perf): replace clone+serialise+write with a
+        // borrow-based path that runs off the UI thread. The clone
+        // here is ~50–100 ms on huge PCBs; serialisation is
+        // 200–500 ms; and the std::fs::write is sync. For v0.9.0 this
+        // ships as-is — large-PCB save still blocks the UI for the
+        // full duration. Async + zero-clone serialise are a
+        // documented follow-up tracked in CHANGELOG.md and
+        // project_issue_62_licensing.md memory.
         let snx = signex_types::format::SnxSchematic::new(self.document.clone());
         let content = snx
             .write_string()

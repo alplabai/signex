@@ -40,6 +40,23 @@ The library subsystem (Library Browser, SCH Library editor, Component Editor) th
 - One-way conversion: `.kicad_sch` / `.kicad_pcb` / `.kicad_pro` → `.snxsch` / `.snxpcb` / `.snxprj`. Originals remain intact.
 - Distributed independently — Apache consumers of Signex Community see no GPL aggregation in their build closure.
 
+### Performance (deferred to v0.9.1)
+
+**Async save** and **borrow-based serialise** were planned for v0.9.0 but
+are deferred to **v0.9.1** to bound the v0.9.0 release scope. The
+current `Engine::save_as` runs synchronously on the calling thread
+with a full document-clone before serialisation; on huge PCBs (~500K
+tracks) this blocks the UI for ~1–2 s on Ctrl+S. Tracked as a v0.9.1
+follow-up:
+
+- `Engine::save_as_async` returning an `iced::Task` that serialises +
+  writes off the UI thread.
+- Borrow-based `SnxSchematic::write_string_borrowed(&SchematicSheet)`
+  to skip the document-clone (~50–100 ms saving on huge PCBs).
+
+Schematics save instantly today; the perf work is targeted at the
+high-end PCB case.
+
 ### CI guards
 
 - `.github/workflows/license-guard.yml` — fails any push or PR that re-introduces `kicad-parser` / `kicad-writer` imports or removed KiCad-shaped types.
