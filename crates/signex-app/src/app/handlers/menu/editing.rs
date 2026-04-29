@@ -36,8 +36,8 @@ impl Signex {
             // cached, and on-disk project sheets), find references
             // that appear on more than one symbol across the project,
             // reset just those to `{prefix}?`. Other designators keep
-            // their current value. Saves unopened sheets through
-            // kicad-writer so the fix is project-wide.
+            // their current value. Saves unopened sheets through the
+            // engine's native `.snxsch` writer so the fix is project-wide.
             MenuMessage::AnnotateResetDuplicates => Some(self.handle_reset_duplicate_designators()),
             MenuMessage::AnnotateBack => {
                 crate::diagnostics::log_info(
