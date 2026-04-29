@@ -909,7 +909,7 @@ impl Signex {
             text(format!("Rename \"{}\"", current_name))
                 .size(11)
                 .color(text_muted),
-            text_input("new-name.standard_sch", &st.buffer)
+            text_input("new-name.snxsch", &st.buffer)
                 .on_input(Message::RenameBufferChanged)
                 .on_submit(Message::RenameSubmit)
                 .size(12)

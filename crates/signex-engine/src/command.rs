@@ -195,7 +195,7 @@ pub enum Command {
         y: f64,
     },
     /// File-order reorder — moves the given selection to the start or end
-    /// of each type vector. Standard schematic has no explicit z-order, so
+    /// of each type vector. schematic has no explicit z-order, so
     /// render order is file order; this command mutates that.
     ReorderObjects {
         items: Vec<SelectedItem>,

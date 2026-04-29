@@ -505,8 +505,8 @@ impl Signex {
                     (keyboard::Key::Named(keyboard::key::Named::Space), _) => {
                         Message::RotateSelected
                     }
-                    // Mirror: X key = horizontal flip (left-right) = Standard mirror_y
-                    //         Y key = vertical flip (top-bottom) = Standard mirror_x
+                    // Mirror: X key = horizontal flip (left-right) = mirror_y
+                    //         Y key = vertical flip (top-bottom) = mirror_x
                     (keyboard::Key::Character(c), m) if c == "x" && !m.command() => {
                         Message::MirrorSelectedY // X key = horizontal flip = toggle mirror_y
                     }

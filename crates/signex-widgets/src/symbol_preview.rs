@@ -131,8 +131,8 @@ impl canvas::Program<(), Theme> for SymbolPreview {
             let mid_x = (bx0 + bx1) / 2.0;
             let mid_y = (by0 + by1) / 2.0;
 
-            // Transform: Standard coords → frame coords
-            // Standard Y is inverted (positive down in Standard schematic)
+            // Transform: Library coords → frame coords
+            // Y is inverted (positive down in schematic)
             let tx = |x: f64, y: f64| -> Point {
                 Point::new(
                     cx + ((x - mid_x) * scale) as f32,

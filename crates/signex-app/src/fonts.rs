@@ -115,10 +115,6 @@ pub fn read_power_port_style_pref() -> PowerPortStyle {
     };
 
     match json["power_port_style"].as_str().unwrap_or("altium") {
-        // On-disk strings stay "standard" / "altium" for backward
-        // compatibility with prefs files written by v0.7.0–v0.9.1.
-        // Internal variant renamed `Standard` → `Standard` in v0.10.0
-        // (see `signex-render::PowerPortStyle` doc comment).
         "standard" | "Standard" => PowerPortStyle::Standard,
         _ => PowerPortStyle::Altium,
     }
@@ -146,10 +142,8 @@ pub fn write_power_port_style_pref(style: PowerPortStyle) {
     }
 }
 
-/// Read `label_style` from preferences file. Defaults to the
-/// `Standard` variant (was previously named `Standard`) when missing or
-/// invalid. The on-disk preference string stays "standard" for
-/// backward compatibility — see `signex-render::LabelStyle`.
+/// Read `label_style` from preferences file. Defaults to `Standard`
+/// when missing or invalid.
 pub fn read_label_style_pref() -> LabelStyle {
     let path = prefs_path();
     let Ok(bytes) = std::fs::read(&path) else {
@@ -187,10 +181,8 @@ pub fn write_label_style_pref(style: LabelStyle) {
     }
 }
 
-/// Read `multisheet_style` from preferences file. Defaults to the
-/// `Standard` variant (was `Standard`) when missing or invalid. On-disk
-/// preference string stays "standard" for backward compatibility — see
-/// `signex-render::MultisheetStyle`.
+/// Read `multisheet_style` from preferences file. Defaults to
+/// `Standard` when missing or invalid.
 pub fn read_multisheet_style_pref() -> MultisheetStyle {
     let path = prefs_path();
     let Ok(bytes) = std::fs::read(&path) else {

@@ -71,24 +71,24 @@ jobs:
           echo "No removed API surface re-introduced."
 
   no-kicad-shaped-symbols:
-    name: No re-introduction of v0.10.0 polish-pass renames
+    name: No KiCad-shaped names anywhere in crates/
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Forbid re-introduction of vestigial KiCad-shaped names
+      - name: Forbid any "kicad" / "KiCad" mention under crates/
         run: |
           set -e
-          # v0.10.0's Apache-clean residual polish renamed these to
-          # neutral terms and removed the legacy KiCad symbol-library
-          # scanner. Reintroductions usually mean a stale copy-paste
-          # from a pre-v0.10.0 branch.
-          if git grep -nE '\bMultisheetStyle::KiCad\b|\bLabelStyle::KiCad\b|\bPowerPortStyle::KiCad\b|\bfind_kicad_symbols_dir\b|\blist_kicad_libraries\b|\bkicad_lib_dir\s*:' -- 'crates/**/*.rs'; then
+          # Strict check: the substring "kicad" (any case) is not allowed
+          # anywhere under crates/. Renamed equivalents (e.g. ::Standard,
+          # escape_for_storage, normalize_text, from_paper_name) are the
+          # supported APIs.
+          if git grep -niE 'kicad' -- 'crates/**/*.rs' 'crates/**/*.toml'; then
             echo ""
-            echo "::error::Re-introduction of a name removed during the v0.10.0 Apache-clean residual polish."
-            echo "::error::Use the renamed equivalents (::Standard for the style enums) or the .snxlib library plumbing in v0.10.x."
+            echo "::error::A 'kicad' / 'KiCad' mention was introduced under crates/."
+            echo "::error::Use the renamed equivalents or rephrase the comment to avoid the substring."
             exit 1
           fi
-          echo "No v0.10.0-renamed names re-introduced."
+          echo "No KiCad-shaped names anywhere in crates/."
 
   no-numeric-layer-constants:
     name: No KiCad-numbered LayerId constants
