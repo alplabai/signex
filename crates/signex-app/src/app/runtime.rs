@@ -286,7 +286,7 @@ impl Signex {
         // accent and active_project-scoped handlers (ERC / annotate /
         // save-all) should track the user's tab focus, not the most
         // recently opened project. Tabs with no `project_id` (loose
-        // schematics opened without a `.standard_pro`) leave the pointer
+        // schematics opened without a `.snxprj`) leave the pointer
         // alone so the panel keeps showing whichever project was last
         // active. (#54 phase 2.4)
         if let Some(pid) = self

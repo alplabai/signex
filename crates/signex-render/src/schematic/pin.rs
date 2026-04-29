@@ -200,7 +200,7 @@ fn draw_pin(
         pin_color,
     );
 
-    // Small circle at the connection point (endpoint) — removed, Standard doesn't draw this
+    // Small circle at the connection point (endpoint) — removed; the historical convention doesn't draw this
 
     // Pin name is drawn near the symbol-side end of the pin.
     let font_size_mm = crate::SCHEMATIC_TEXT_EM_MM;
@@ -222,7 +222,7 @@ fn draw_pin(
             pin_nets,
         );
 
-        // Standard pin-name placement has two modes keyed on `pin_name_offset`:
+        // Pin-name placement has two modes keyed on `pin_name_offset`:
         //
         // * offset > 0  — name along the pin, INSIDE body, at
         //   `body_end + dir * offset`. Used by Device:R, Device:C, ICs etc.
@@ -230,13 +230,13 @@ fn draw_pin(
         //
         // * offset == 0 — name PERPENDICULAR to the pin at the tip, OUTSIDE
         //   body. Common on discrete-transistor symbols (NMOS/PMOS G/D/S).
-        //   Standard renders this with a small perpendicular gap so the
+        //   Renders with a small perpendicular gap so the
         //   character sits beside the pin line, not on top of it.
         let (np, h_align, v_align);
         if lib.pin_name_offset.abs() < 0.01 {
             // offset = 0: anchor at pin tip, text sits perpendicular
             // above/beside the pin.
-            let perp_gap = 0.508; // Standard default visual gap in mm
+            let perp_gap = 0.508; // Default visual gap in mm
             // World-space pin direction (body → tip) after instance transform.
             let (wdx, wdy) = instance_rotate_dir(sym, -dir_x, -dir_y);
             let (nwx, nwy) = instance_transform(sym, &pin.position);
@@ -302,7 +302,7 @@ fn draw_pin(
         // Render plain glyphs (no combining overline chars — those sit
         // flush against the cap-height). Any overbar segments are drawn as
         // a separate stroke above the text with a small visible gap, which
-        // matches Standard's look.
+        // matches the historical look.
         let (plain, overbars) = display_text_with_overbars(&evaluated_pin_name);
 
         // Determine whether the pin runs vertically on screen.
@@ -312,7 +312,7 @@ fn draw_pin(
         if is_vertical_pin {
             // Rotate the frame so text baseline is parallel to the pin.
             //
-            // Standard convention for downward pins (wdy < 0 = body above pin):
+            // Convention for downward pins (wdy < 0 = body above pin):
             //   CCW 90° (+π/2): rotated +X = screen UP.
             //   h_align = Left  → first char at np (body edge), text extends upward into IC.
             //   h_align = Right → last char at np, text extends upward into IC.
@@ -323,7 +323,7 @@ fn draw_pin(
             // frame.rotate uses Iced's convention: positive = CCW visual in
             // screen Y-down space.  For bottom-exiting pins (wdy < 0 = body
             // above) we want CCW visual so text reads A→D from body-edge
-            // upward (matching Standard).  Top-exiting pins use the mirror.
+            // upward (matching the historical).  Top-exiting pins use the mirror.
             let rot = if wdy < 0.0 {
                 -std::f32::consts::FRAC_PI_2 // CCW visual → bottom-to-top
             } else {
@@ -403,7 +403,7 @@ fn draw_pin(
         // Offset perpendicular to the pin so the number clears the pin line.
         // Horizontal pins → above line, text horizontal. Vertical pins → left
         // of line, text rotated -90° (CCW) so it reads along the pin axis,
-        // matching Standard's pin number orientation.
+        // matching the historical's pin number orientation.
         let (perp_sx, perp_sy, num_rotation) = if wdx.abs() >= wdy.abs() {
             (0.0_f32, -1.0_f32, 0.0_f32)
         } else {
@@ -443,10 +443,10 @@ fn draw_pin(
 }
 
 // ---------------------------------------------------------------------------
-// Pin shape decorators (mirroring Standard SCH_PAINTER pin shape logic)
+// Pin shape decorators (mirroring SCH_PAINTER pin shape logic)
 // ---------------------------------------------------------------------------
 
-/// Draw two connected segments A→B and B→C (Standard `triLine`).
+/// Draw two connected segments A→B and B→C (`triLine`).
 fn tri_line(
     frame: &mut canvas::Frame,
     a: iced::Point,

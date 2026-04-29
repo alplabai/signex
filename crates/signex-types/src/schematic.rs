@@ -567,7 +567,7 @@ pub struct ChildSheet {
 // Schematic drawing primitives
 // ---------------------------------------------------------------------------
 
-/// Optional RGBA override parsed from Standard's `(stroke ... (color r g b a))`.
+/// Optional RGBA override parsed from historical `(stroke ... (color r g b a))`.
 /// `None` means "use the theme's default drawing colour" — the renderer
 /// falls back to CanvasColors.outline. Stored per-drawing so users can
 /// recolour individual shapes without disturbing the sheet theme.

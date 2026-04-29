@@ -52,7 +52,7 @@ impl Signex {
             ActiveBarAction::PlaceNote | ActiveBarAction::PlaceTextFrame => {
                 // Altium: Text Frame = drag-rect bounded text (wraps),
                 // Note = Text Frame with a default fill / border.
-                // Standard stores these as `(text_box ...)` (Graphic::TextBox),
+                // Stored these as `(text_box ...)` (Graphic::TextBox),
                 // which is parsed/written today but not yet rendered or
                 // placeable interactively — see MASTER_PLAN.md v0.7 entry.
                 // For now we fall back to placing a plain TextNote so the

@@ -334,7 +334,7 @@ pub fn draw_child_sheet(
     // there with the body extending INWARD into the sheet so external wires
     // dock cleanly without any protruding stub.
     //
-    // Standard sheet-pin `rotation` is the OUTWARD direction (the way the pin
+    // Sheet-pin `rotation` is the OUTWARD direction (the way the pin
     // points away from the sheet body). Inward is therefore the opposite.
     //   rotation 0°   → outward +X (pin on right edge)  → inward -X
     //   rotation 180° → outward -X (pin on left  edge)  → inward +X

@@ -81,7 +81,7 @@ pub enum ProjectError {
         #[source]
         source: std::io::Error,
     },
-    #[error("unsupported project file extension: .{0} (Signex Community only opens .snxprj; convert Standard projects with the signex-standard-import companion)")]
+    #[error("unsupported project file extension: .{0} (Signex Community only opens .snxprj; convert legacy projects with the import companion tool first)")]
     UnsupportedExtension(String),
 }
 
@@ -93,9 +93,9 @@ pub enum ProjectError {
 /// nested schematics) is populated by walking the root schematic at runtime
 /// — this lightweight parser only sees the filenames present on disk.
 ///
-/// Standard project files (`.standard_pro`) are not supported in Signex Community.
-/// Users running Standard projects use the optional `signex-standard-import`
-/// GPL-3.0 companion tool to convert their files first.
+/// Only native `.snxprj` project files are supported. Foreign-format
+/// projects must be converted to `.snxprj` via the import companion
+/// tool before opening.
 pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
     let ext = path
         .extension()

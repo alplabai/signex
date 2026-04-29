@@ -25,7 +25,7 @@
 //!
 //! Expression substitution (`${refdes:...}`, `@{...}`, `CELL()`,
 //! `NET_NAME(...)`) is preserved from the previous module — it is
-//! Altium-flavoured and was already independent of the Standard markup
+//! Altium-flavoured and was already independent of the legacy markup
 //! syntax.
 
 use serde::{Deserialize, Serialize};
@@ -683,7 +683,7 @@ mod tests {
             ("R1".to_string(), "1".to_string()),
         ];
         // Format must be "unnamed-<sheet>:<ref>:<pin>" per the Apache-clean
-        // remediation. Must NOT match the historical Standard format string.
+        // remediation. Must NOT match the legacy format string.
         assert_eq!(auto_net_name("", &pins), Some("unnamed-R1:1".to_string()));
         assert_eq!(
             auto_net_name("PowerSupply", &pins),
