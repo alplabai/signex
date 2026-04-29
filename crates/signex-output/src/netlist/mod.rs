@@ -412,7 +412,7 @@ mod tests {
     fn build_test_context_with_2_symbols() -> ExportContext {
         // Minimal test context with 2 symbols
         use signex_types::schematic::{
-            LibPin, LibSymbol, Pin, PinElectricalType, PinShape, Point, SchematicSheet, Symbol,
+            LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Point, SchematicSheet, Symbol,
         };
         use std::collections::HashMap;
         use uuid::Uuid;
@@ -437,8 +437,8 @@ mod tests {
                     unit: 1,
                     body_style: 1,
                     pin: Pin {
-                        pin_type: PinElectricalType::Passive,
-                        shape: PinShape::Line,
+                        direction: PinDirection::Passive,
+                        shape_style: PinShapeStyle::Plain,
                         position: Point::new(0.0, 0.0),
                         number: "1".to_string(),
                         name: "~".to_string(),
@@ -453,8 +453,8 @@ mod tests {
                     unit: 1,
                     body_style: 1,
                     pin: Pin {
-                        pin_type: PinElectricalType::Passive,
-                        shape: PinShape::Line,
+                        direction: PinDirection::Passive,
+                        shape_style: PinShapeStyle::Plain,
                         position: Point::new(10.0, 0.0),
                         number: "2".to_string(),
                         name: "~".to_string(),
@@ -631,7 +631,7 @@ mod tests {
 
     fn build_test_context_with_labeled_wire() -> ExportContext {
         use signex_types::schematic::{
-            Label, LabelType, LibPin, LibSymbol, Pin, PinElectricalType, PinShape, Point,
+            Label, LabelType, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Point,
             SchematicSheet, Symbol, Wire,
         };
         use std::collections::HashMap;
@@ -656,8 +656,8 @@ mod tests {
                 unit: 1,
                 body_style: 1,
                 pin: Pin {
-                    pin_type: PinElectricalType::Passive,
-                    shape: PinShape::Line,
+                    direction: PinDirection::Passive,
+                    shape_style: PinShapeStyle::Plain,
                     position: Point::new(0.0, 0.0),
                     number: "1".to_string(),
                     name: "~".to_string(),
@@ -761,7 +761,7 @@ mod tests {
 
     fn build_test_context_with_2_connected_symbols() -> ExportContext {
         use signex_types::schematic::{
-            LibPin, LibSymbol, Pin, PinElectricalType, PinShape, Point, SchematicSheet, Symbol,
+            LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Point, SchematicSheet, Symbol,
             Wire,
         };
         use std::collections::HashMap;
@@ -787,8 +787,8 @@ mod tests {
                     unit: 1,
                     body_style: 1,
                     pin: Pin {
-                        pin_type: PinElectricalType::Passive,
-                        shape: PinShape::Line,
+                        direction: PinDirection::Passive,
+                        shape_style: PinShapeStyle::Plain,
                         position: Point::new(0.0, 0.0),
                         number: "1".to_string(),
                         name: "~".to_string(),
@@ -803,8 +803,8 @@ mod tests {
                     unit: 1,
                     body_style: 1,
                     pin: Pin {
-                        pin_type: PinElectricalType::Passive,
-                        shape: PinShape::Line,
+                        direction: PinDirection::Passive,
+                        shape_style: PinShapeStyle::Plain,
                         position: Point::new(10.0, 0.0),
                         number: "2".to_string(),
                         name: "~".to_string(),
@@ -922,7 +922,7 @@ mod tests {
 
     fn build_test_context_with_mid_wire_label() -> ExportContext {
         use signex_types::schematic::{
-            Label, LabelType, LibPin, LibSymbol, Pin, PinElectricalType, PinShape, Point,
+            Label, LabelType, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Point,
             SchematicSheet, Symbol, Wire,
         };
         use std::collections::HashMap;
@@ -947,8 +947,8 @@ mod tests {
                 unit: 1,
                 body_style: 1,
                 pin: Pin {
-                    pin_type: PinElectricalType::Passive,
-                    shape: PinShape::Line,
+                    direction: PinDirection::Passive,
+                    shape_style: PinShapeStyle::Plain,
                     position: Point::new(0.0, 0.0),
                     number: "1".to_string(),
                     name: "~".to_string(),
