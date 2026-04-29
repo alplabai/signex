@@ -1,0 +1,57 @@
+name: License Guard
+
+# Enforces the issue-62 Apache-clean invariants on every push and PR
+# to dev / main. The two checks below are the structural guarantee
+# that no KiCad-derived code or GPL-transitive dependency lands in
+# the main signex repo. KiCad I/O lives in the GPL-3.0 companion
+# repo signex-kicad-import.
+#
+# This workflow becomes "must-pass" once Phase 5 (cutover) completes.
+# Before then, it will surface known violations in crates/kicad-parser
+# and crates/kicad-writer that are scheduled for extraction.
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+
+jobs:
+  no-kicad-derivation:
+    name: No KiCad-derived strings in crates/
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Forbid KiCad-derived identifiers
+        run: |
+          set -e
+          PATTERN='kicad|KiCad|F_CU\b|B_CU\b|F_SILKS\b|F_MASK\b|F_PASTE\b|F_FAB\b|F_CRTYD\b|EDGE_CUTS\b|tri_state|Net-\('
+          if git grep -nE "$PATTERN" -- 'crates/**/*.rs' 'crates/**/*.toml' 'crates/**/Cargo.toml'; then
+            echo ""
+            echo "::error::KiCad-derived string detected. The main repo is Apache-2.0 clean — KiCad I/O lives in the signex-kicad-import companion repo."
+            echo "::error::Allowed locations: docs/audit/, .claude/PRPs/issue-62-*.md, this workflow file."
+            echo "::error::If you are working on KiCad import/export, push to https://github.com/alplabai/signex-kicad-import (GPL-3.0)."
+            exit 1
+          fi
+          echo "License Guard passed: no KiCad-derived identifiers in crates/."
+
+  cargo-deny:
+    name: cargo-deny license + transitive-dep audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+
+      - name: Check licenses
+        run: cargo deny --all-features check licenses
+
+      - name: Check advisories
+        run: cargo deny --all-features check advisories
+        continue-on-error: true  # informational only — security flags don't block
+
+      - name: Check sources
+        run: cargo deny --all-features check sources
+        continue-on-error: true
