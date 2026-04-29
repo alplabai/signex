@@ -94,6 +94,7 @@ The pre-release guard (`.claude/hooks/pre-release-guard.sh`) blocks step 4 with 
 - v0.7.1 — macOS Apple-Silicon launch fix (ad-hoc codesign the shipped `.app` bundle, #49) ✅
 - v0.8.0 — Output Generation (PDF, BOM, netlist, multi-project workspaces, dirty tracking, hierarchical-sheet polish, TabPill chrome) ✅
 - v0.9.0 — Apache-clean cutover (issue #62: native `.snxsch`/`.snxpcb` TOML+TSV formats, KiCad I/O moved to optional `signex-kicad-import` GPL-3.0 companion, signex-types Apache-clean — `PinDirection`/`SignexLayer`/Markdown markup) ✅
+- v0.9.1 — Async save + borrow-based serialise (`SnxSchematic`/`SnxPcb::write_string_borrowed`, `Engine::serialize_for_save` + `write_to_file`, `iced::Task::perform` save handler, "Saving…" status pill — huge-PCB Ctrl+S off the UI thread) ✅
 - v0.10.0 — Library & Polish (symbol/footprint editor, multi-symbol `.snxsym`, Component Editor, installers)
 - v1.0.0 — Community Preview (schematic-only early access)
 
