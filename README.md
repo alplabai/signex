@@ -48,9 +48,10 @@ formats one-way. Run it once against your project; open the resulting
 
 > **Status:** Early development — **v0.10.0 shipped** — Library Browser tab
 > scaffold. Double-clicking a `.snxlib` package now opens a read-only
-> browser tab listing its components. v0.10.1 (preview pane) and v0.10.2
-> (filter/search) follow as small follow-up releases; the SCH Library
-> editor + Component Editor land across v0.10.3–v0.10.9.
+> browser tab listing its components. The browser preview pane,
+> filter/search bar, SCH Library editor (pin properties, drawing tools,
+> multi-symbol containers), and Component Editor with Pick
+> Symbol/Footprint picker all land together as **v0.11**.
 > [Join the discussion](https://github.com/alplabai/signex/discussions) or check the [roadmap](#roadmap).
 
 ## Features
@@ -99,8 +100,9 @@ formats one-way. Run it once against your project; open the resulting
 
 | Version | Milestone |
 |---|---|
-| v0.9 | Apache-clean cutover — native `.snxsch` / `.snxpcb` formats, KiCad I/O moved to optional [signex-kicad-import](https://github.com/alplabai/signex-kicad-import) companion (issue #62) |
-| v0.10 | Library & Polish — symbol / footprint editor, multi-symbol `.snxsym`, Component Editor, installers |
+| v0.9 | Apache-clean cutover — native `.snxsch` / `.snxpcb` formats, KiCad I/O moved to optional [signex-kicad-import](https://github.com/alplabai/signex-kicad-import) companion |
+| v0.10 | Library Browser tab scaffold — read-only `.snxlib` table |
+| v0.11 | Library & Polish — browser preview pane + filter, SCH Library editor (pin properties, drawing tools, multi-symbol), Component Editor modal-edit, Pick Symbol/Footprint picker, filesystem auto-mount |
 | **v1.0** | **Community Preview** — schematic-only release |
 | **v2.0–v2.2** | **Community Release** — full PCB editor |
 | **v3.0** | **Pro Release** — Signal AI + collaboration |
@@ -176,8 +178,9 @@ cargo clippy --workspace -- -D warnings  # Lint
 | Full SCH Editor — copy/paste, labels, components, Active Bar | v0.6 | Done |
 | Validation + Multi-Window — ERC, annotation, pin matrix, undockable tabs | v0.7 | Done |
 | Output — PDF, BOM, netlist, multi-project workspaces, dirty tracking | v0.8 | Done |
-| Apache-clean cutover (issue #62) — native `.snxsch` / `.snxpcb` formats, KiCad I/O via companion | v0.9 | ✅ Done |
-| Library & Polish — Library Browser tab, SCH Library editor, multi-symbol `.snxsym`, Component Editor, installers | v0.10 | 🔄 In Progress (v0.10.0 shipped) |
+| Native file formats — `.snxsch` / `.snxpcb` TOML+TSV; KiCad I/O via signex-kicad-import companion | v0.9 | Done |
+| Library Browser tab — read-only `.snxlib` table | v0.10 | Done |
+| Library & Polish — browser preview + filter, SCH Library editor, Component Editor, picker, auto-mount | v0.11 | |
 | **Community Preview** — schematic-only editor | **v1.0** | |
 | PCB Viewer — GPU rendering, layers, cross-probe | v2.0 | |
 | PCB Routing + DRC + Output | v2.1–v2.2 | |
