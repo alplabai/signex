@@ -8,7 +8,7 @@ use signex_erc::{
     AnalysisScope, Applicability, Diagnostic, ErcContext, RuleDefinition, RuleId, RuleKind,
     RuleTarget, Severity,
 };
-use signex_types::schematic::{PinElectricalType, Point, SelectedItem, SelectedKind};
+use signex_types::schematic::{PinDirection, Point, SelectedItem, SelectedKind};
 
 use crate::ast::*;
 use crate::error::DslError;
@@ -447,49 +447,53 @@ fn fallback_kind(target: TargetKind) -> RuleKind {
     }
 }
 
-fn is_driving_pin(t: PinElectricalType) -> bool {
+fn is_driving_pin(t: PinDirection) -> bool {
     matches!(
         t,
-        PinElectricalType::Output
-            | PinElectricalType::PowerOut
-            | PinElectricalType::TriState
-            | PinElectricalType::OpenCollector
-            | PinElectricalType::OpenEmitter
+        PinDirection::Output
+            | PinDirection::PowerOutput
+            | PinDirection::ThreeStatable
+            | PinDirection::OpenDrainLow
+            | PinDirection::OpenDrainHigh
     )
 }
 
-fn parse_pin_type(s: &str) -> Option<PinElectricalType> {
+fn parse_pin_type(s: &str) -> Option<PinDirection> {
     match normalize(s).as_str() {
-        "input" => Some(PinElectricalType::Input),
-        "output" => Some(PinElectricalType::Output),
-        "bidirectional" => Some(PinElectricalType::Bidirectional),
-        "tristate" => Some(PinElectricalType::TriState),
-        "passive" => Some(PinElectricalType::Passive),
-        "free" => Some(PinElectricalType::Free),
-        "unspecified" => Some(PinElectricalType::Unspecified),
-        "powerin" => Some(PinElectricalType::PowerIn),
-        "powerout" => Some(PinElectricalType::PowerOut),
-        "opencollector" => Some(PinElectricalType::OpenCollector),
-        "openemitter" => Some(PinElectricalType::OpenEmitter),
-        "notconnected" => Some(PinElectricalType::NotConnected),
+        "input" => Some(PinDirection::Input),
+        "output" => Some(PinDirection::Output),
+        "bidirectional" => Some(PinDirection::Bidirectional),
+        "tristate" | "threestatable" => Some(PinDirection::ThreeStatable),
+        "passive" => Some(PinDirection::Passive),
+        "free" | "unspecified" | "unclassified" => Some(PinDirection::Unclassified),
+        "powerin" | "powerinput" => Some(PinDirection::PowerInput),
+        "powerout" | "poweroutput" => Some(PinDirection::PowerOutput),
+        "opencollector" | "opendrainlow" => Some(PinDirection::OpenDrainLow),
+        "openemitter" | "opendrainhigh" => Some(PinDirection::OpenDrainHigh),
+        "notconnected" | "donotconnect" => Some(PinDirection::DoNotConnect),
+        "groundreference" | "ground" => Some(PinDirection::GroundReference),
+        "differential" => Some(PinDirection::Differential),
+        "clock" => Some(PinDirection::Clock),
         _ => None,
     }
 }
 
-fn pin_type_name(t: PinElectricalType) -> &'static str {
+fn pin_type_name(t: PinDirection) -> &'static str {
     match t {
-        PinElectricalType::Input => "Input",
-        PinElectricalType::Output => "Output",
-        PinElectricalType::Bidirectional => "Bidirectional",
-        PinElectricalType::TriState => "TriState",
-        PinElectricalType::Passive => "Passive",
-        PinElectricalType::Free => "Free",
-        PinElectricalType::Unspecified => "Unspecified",
-        PinElectricalType::PowerIn => "PowerIn",
-        PinElectricalType::PowerOut => "PowerOut",
-        PinElectricalType::OpenCollector => "OpenCollector",
-        PinElectricalType::OpenEmitter => "OpenEmitter",
-        PinElectricalType::NotConnected => "NotConnected",
+        PinDirection::Input => "Input",
+        PinDirection::Output => "Output",
+        PinDirection::Bidirectional => "Bidirectional",
+        PinDirection::ThreeStatable => "ThreeStatable",
+        PinDirection::Passive => "Passive",
+        PinDirection::PowerInput => "PowerInput",
+        PinDirection::PowerOutput => "PowerOutput",
+        PinDirection::GroundReference => "GroundReference",
+        PinDirection::OpenDrainLow => "OpenDrainLow",
+        PinDirection::OpenDrainHigh => "OpenDrainHigh",
+        PinDirection::Differential => "Differential",
+        PinDirection::Clock => "Clock",
+        PinDirection::DoNotConnect => "DoNotConnect",
+        PinDirection::Unclassified => "Unclassified",
     }
 }
 
