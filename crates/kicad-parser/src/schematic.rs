@@ -9,7 +9,7 @@ use signex_types::property::SchematicProperty;
 use signex_types::schematic::{
     Bus, BusEntry, ChildSheet, FillType, GRID_MM, Graphic, HAlign, Junction, Label, LabelType,
     LibGraphic, LibPin, LibSymbol, NoConnect, PIN_LENGTH_MM, PIN_NAME_OFFSET_MM, Pin,
-    PinElectricalType, PinShape, Point, SCHEMATIC_TEXT_MM, SchDrawing, SchematicSheet,
+    PinDirection, PinShapeStyle, Point, SCHEMATIC_TEXT_MM, SchDrawing, SchematicSheet,
     SheetInstance, SheetPin, Symbol, SymbolInstance, TextNote, TextProp, VAlign, Wire,
 };
 
@@ -310,34 +310,34 @@ fn parse_valign(s: &str) -> VAlign {
     }
 }
 
-fn parse_pin_electrical_type(s: &str) -> PinElectricalType {
+fn parse_pin_electrical_type(s: &str) -> PinDirection {
     match s {
-        "input" => PinElectricalType::Input,
-        "output" => PinElectricalType::Output,
-        "bidirectional" => PinElectricalType::Bidirectional,
-        "tri_state" => PinElectricalType::TriState,
-        "passive" => PinElectricalType::Passive,
-        "free" => PinElectricalType::Free,
-        "power_in" => PinElectricalType::PowerIn,
-        "power_out" => PinElectricalType::PowerOut,
-        "open_collector" => PinElectricalType::OpenCollector,
-        "open_emitter" => PinElectricalType::OpenEmitter,
-        "no_connect" | "not_connected" => PinElectricalType::NotConnected,
-        _ => PinElectricalType::Unspecified,
+        "input" => PinDirection::Input,
+        "output" => PinDirection::Output,
+        "bidirectional" => PinDirection::Bidirectional,
+        "tri_state" => PinDirection::ThreeStatable,
+        "passive" => PinDirection::Passive,
+        "free" => PinDirection::Unclassified,
+        "power_in" => PinDirection::PowerInput,
+        "power_out" => PinDirection::PowerOutput,
+        "open_collector" => PinDirection::OpenDrainLow,
+        "open_emitter" => PinDirection::OpenDrainHigh,
+        "no_connect" | "not_connected" => PinDirection::DoNotConnect,
+        _ => PinDirection::Unclassified,
     }
 }
 
-fn parse_pin_shape(s: &str) -> PinShape {
+fn parse_pin_shape(s: &str) -> PinShapeStyle {
     match s {
-        "inverted" => PinShape::Inverted,
-        "clock" => PinShape::Clock,
-        "inverted_clock" => PinShape::InvertedClock,
-        "input_low" => PinShape::InputLow,
-        "clock_low" => PinShape::ClockLow,
-        "output_low" => PinShape::OutputLow,
-        "edge_clock_high" => PinShape::EdgeClockHigh,
-        "non_logic" => PinShape::NonLogic,
-        _ => PinShape::Line,
+        "inverted" => PinShapeStyle::InvertedBubble,
+        "clock" => PinShapeStyle::ClockTriangle,
+        "inverted_clock" => PinShapeStyle::InvertedClockBubble,
+        "input_low" => PinShapeStyle::InvertedBubble,
+        "clock_low" => PinShapeStyle::InvertedClockBubble,
+        "output_low" => PinShapeStyle::InvertedBubble,
+        "edge_clock_high" => PinShapeStyle::ClockTriangle,
+        "non_logic" => PinShapeStyle::Plain,
+        _ => PinShapeStyle::Plain,
     }
 }
 
@@ -719,8 +719,8 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
 
         // Parse pins
         for pin in sub.children().iter().filter(|c| c.keyword() == Some("pin")) {
-            let pin_type = parse_pin_electrical_type(pin.first_arg().unwrap_or("unspecified"));
-            let shape = parse_pin_shape(pin.arg(1).unwrap_or("line"));
+            let direction = parse_pin_electrical_type(pin.first_arg().unwrap_or("unspecified"));
+            let shape_style = parse_pin_shape(pin.arg(1).unwrap_or("line"));
             let (position, rotation) = parse_at(pin);
             let length = pin
                 .find("length")
@@ -749,8 +749,8 @@ pub(crate) fn parse_lib_symbol(symbol_node: &SExpr) -> LibSymbol {
                 unit,
                 body_style,
                 pin: Pin {
-                    pin_type,
-                    shape,
+                    direction,
+                    shape_style,
                     position,
                     rotation,
                     length,
@@ -1862,7 +1862,7 @@ mod tests {
     fn parse_legacy_not_connected_pin_type() {
         assert_eq!(
             parse_pin_electrical_type("not_connected"),
-            PinElectricalType::NotConnected
+            PinDirection::DoNotConnect
         );
     }
 

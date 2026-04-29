@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 
 use signex_render::schematic::{SchematicRenderSnapshot, instance_transform};
-use signex_types::schematic::{LabelType, PinElectricalType, Point};
+use signex_types::schematic::{LabelType, PinDirection, Point};
 use uuid::Uuid;
 
 // ---------------------------------------------------------------------------
@@ -51,9 +51,9 @@ impl PaperSize {
 #[derive(Debug, Clone, Copy)]
 pub struct ErcPin {
     pub world_pos: Point,
-    pub electrical_type: PinElectricalType,
-    /// `false` for `Free` and `NotConnected` pin types — those may be left
-    /// unconnected by design. DSL: `pin.required == true`.
+    pub electrical_type: PinDirection,
+    /// `false` for `Unclassified` and `DoNotConnect` pin types — those may be
+    /// left unconnected by design. DSL: `pin.required == true`.
     pub required: bool,
     /// `true` if a wire endpoint, bus endpoint, label, or no-connect marker
     /// sits at this pin's world-space tip. DSL: `pin.connected == false`.
@@ -151,9 +151,9 @@ pub struct ErcNet {
     /// DSL: `net.class == "i2c"`.
     pub class: String,
     /// Electrical types of every pin on this net. DSL: `has_pin_kind(...)`.
-    pub pin_types: Vec<PinElectricalType>,
-    /// `true` if any pin is Output / PowerOut / TriState / OpenCollector /
-    /// OpenEmitter. DSL: `has_driver()`.
+    pub pin_types: Vec<PinDirection>,
+    /// `true` if any pin is Output / PowerOutput / ThreeStatable /
+    /// OpenDrainLow / OpenDrainHigh. DSL: `has_driver()`.
     pub has_driver: bool,
     /// `true` if any pin is Passive (rough pull-up heuristic).
     /// DSL: `has_pullup()`.
@@ -292,12 +292,12 @@ impl ErcContext {
                         let connected =
                             point_is_connected(&world_pos, &wires, &buses, &labels, &no_connects);
                         let required = !matches!(
-                            lp.pin.pin_type,
-                            PinElectricalType::Free | PinElectricalType::NotConnected
+                            lp.pin.direction,
+                            PinDirection::Unclassified | PinDirection::DoNotConnect
                         );
                         ErcPin {
                             world_pos,
-                            electrical_type: lp.pin.pin_type,
+                            electrical_type: lp.pin.direction,
                             required,
                             connected,
                         }
@@ -416,7 +416,7 @@ fn derive_nets(
 
     // Group connected (non-no-connect) pins by net root.
     // No-connect pins are skipped — they're isolated by design.
-    let mut net_pins: HashMap<(i64, i64), Vec<PinElectricalType>> = HashMap::new();
+    let mut net_pins: HashMap<(i64, i64), Vec<PinDirection>> = HashMap::new();
     for sym in symbols {
         for pin in &sym.pins {
             // Only wire- or label-connected pins belong to a logical net.
@@ -437,12 +437,12 @@ fn derive_nets(
     all_roots.extend(net_labels.keys().copied());
     all_roots.extend(net_pins.keys().copied());
 
-    const DRIVING: &[PinElectricalType] = &[
-        PinElectricalType::Output,
-        PinElectricalType::PowerOut,
-        PinElectricalType::TriState,
-        PinElectricalType::OpenCollector,
-        PinElectricalType::OpenEmitter,
+    const DRIVING: &[PinDirection] = &[
+        PinDirection::Output,
+        PinDirection::PowerOutput,
+        PinDirection::ThreeStatable,
+        PinDirection::OpenDrainLow,
+        PinDirection::OpenDrainHigh,
     ];
 
     all_roots
@@ -470,7 +470,7 @@ fn derive_nets(
                 .unwrap_or_else(|| name.to_ascii_lowercase());
 
             let has_driver = pins.iter().any(|t| DRIVING.contains(t));
-            let has_pullup = pins.iter().any(|t| *t == PinElectricalType::Passive);
+            let has_pullup = pins.iter().any(|t| *t == PinDirection::Passive);
 
             ErcNet {
                 name,

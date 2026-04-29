@@ -11,7 +11,7 @@ use iced::widget::canvas::{self, LineCap, LineJoin, path};
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use signex_types::schematic::{LibSymbol, Pin, PinShape, Point, Symbol};
+use signex_types::schematic::{LibSymbol, Pin, PinShapeStyle, Point, Symbol};
 
 use super::ScreenTransform;
 use super::text::{display_text_with_overbars, draw_rich_text, evaluate_symbol_text_with_context};
@@ -175,9 +175,12 @@ fn draw_pin(
             .with_width(stroke_width)
     };
 
-    // INVERTED / INVERTED_CLOCK draw their own (shortened) line inside draw_pin_shape.
-    // All other shapes get the full pin line drawn here.
-    let shape_draws_own_line = matches!(pin.shape, PinShape::Inverted | PinShape::InvertedClock);
+    // INVERTED_BUBBLE / INVERTED_CLOCK_BUBBLE draw their own (shortened) line
+    // inside draw_pin_shape. All other shapes get the full pin line drawn here.
+    let shape_draws_own_line = matches!(
+        pin.shape_style,
+        PinShapeStyle::InvertedBubble | PinShapeStyle::InvertedClockBubble
+    );
     if !shape_draws_own_line {
         let path = canvas::Path::new(|b: &mut path::Builder| {
             b.move_to(p1);
@@ -187,7 +190,15 @@ fn draw_pin(
     }
 
     // Draw shape decorator at the connection end (p1).
-    draw_pin_shape(frame, p1, p2, pin.shape, stroke_width, transform, pin_color);
+    draw_pin_shape(
+        frame,
+        p1,
+        p2,
+        pin.shape_style,
+        stroke_width,
+        transform,
+        pin_color,
+    );
 
     // Small circle at the connection point (endpoint) — removed, Standard doesn't draw this
 
@@ -454,24 +465,24 @@ fn tri_line(
 
 /// Draw the pin shape decorator.
 ///
-/// Coordinate mapping vs Standard `SCH_PAINTER`:
-/// * `p1` = connection end (wire attaches here) = Standard `pos = GetPosition()`
-/// * `p2` = body end (at symbol body boundary)  = Standard `p0 = GetPinRoot()`
-/// * `bdx/bdy` = direction FROM body TOWARD connection = Standard `dir`
+/// Coordinate mapping (Signex):
+/// * `p1` = connection end (wire attaches here)
+/// * `p2` = body end (at symbol body boundary)
+/// * `bdx/bdy` = direction FROM body TOWARD connection
 ///
-/// All Standard decorators are anchored at `p0` (body end) — so we anchor at
-/// `p2`.  For `Inverted` and `InvertedClock`, this function also draws the
-/// shortened pin line; `draw_pin` skips the full line for those two shapes.
+/// Decorators are anchored at `p2` (body end). For `InvertedBubble` and
+/// `InvertedClockBubble`, this function also draws the shortened pin line;
+/// `draw_pin` skips the full line for those two shapes.
 fn draw_pin_shape(
     frame: &mut canvas::Frame,
     p1: iced::Point,
     p2: iced::Point,
-    shape: PinShape,
+    shape: PinShapeStyle,
     stroke_width: f32,
     transform: &ScreenTransform,
     color: Color,
 ) {
-    if matches!(shape, PinShape::Line) {
+    if matches!(shape, PinShapeStyle::Plain) {
         return;
     }
 
@@ -486,7 +497,7 @@ fn draw_pin_shape(
     let sdx = dx / len_px;
     let sdy = dy / len_px;
 
-    // Standard "dir": from body (p2) toward connection (p1).
+    // Direction from body (p2) toward connection (p1).
     let bdx = -sdx;
     let bdy = -sdy;
 
@@ -496,14 +507,8 @@ fn draw_pin_shape(
     let wing_x = bdy.abs(); // = |sdy|
     let wing_y = bdx.abs(); // = |sdx|
 
-    // Forward / low helpers for InputLow, ClockLow, OutputLow.
-    // Standard uses absolute screen-space -Y (up) for horizontal, -X (left) for vertical.
+    // Hysteresis / Schmitt orientation helpers.
     let is_horiz = bdx.abs() >= bdy.abs();
-    let (fwd_x, fwd_y) = if is_horiz {
-        (bdx, 0.0_f32)
-    } else {
-        (0.0_f32, bdy)
-    };
 
     // Decorator sizes in screen pixels.
     let radius = transform.world_len(0.508).max(2.0);
@@ -517,12 +522,10 @@ fn draw_pin_shape(
     let pt = |x: f32, y: f32| iced::Point::new(x, y);
 
     match shape {
-        PinShape::Line => unreachable!(),
+        PinShapeStyle::Plain => unreachable!(),
 
-        // ── INVERTED ─────────────────────────────────────────────────────────
         // Open circle just outside body (toward connection), then shortened line.
-        // Standard: DrawCircle(p0 + dir*radius, radius); DrawLine(p0+dir*diam, pos)
-        PinShape::Inverted => {
+        PinShapeStyle::InvertedBubble => {
             let cx = p2.x + bdx * radius;
             let cy = p2.y + bdy * radius;
             frame.stroke(&canvas::Path::circle(pt(cx, cy), radius), stroke);
@@ -533,10 +536,8 @@ fn draw_pin_shape(
             frame.stroke(&path, stroke);
         }
 
-        // ── CLOCK ────────────────────────────────────────────────────────────
         // Triangle at body end: ±perp wings, apex INTO the body.
-        // Standard: triLine(p0±perp*cs, p0 - dir*cs); full line drawn by caller.
-        PinShape::Clock => {
+        PinShapeStyle::ClockTriangle => {
             tri_line(
                 frame,
                 pt(p2.x + wing_x * clock_size, p2.y + wing_y * clock_size),
@@ -546,9 +547,8 @@ fn draw_pin_shape(
             );
         }
 
-        // ── INVERTED_CLOCK ───────────────────────────────────────────────────
-        // Clock triangle at body end + Inverted circle + shortened line.
-        PinShape::InvertedClock => {
+        // Clock triangle at body end + bubble + shortened line.
+        PinShapeStyle::InvertedClockBubble => {
             tri_line(
                 frame,
                 pt(p2.x + wing_x * clock_size, p2.y + wing_y * clock_size),
@@ -566,62 +566,12 @@ fn draw_pin_shape(
             frame.stroke(&path, stroke);
         }
 
-        // ── INPUT_LOW ────────────────────────────────────────────────────────
-        // IEEE active-low input: L-shape anchored at body end.
-        // Standard horiz: triLine(p0+(dir.x,0)*d, p0+(dir.x,-1)*d, p0)
-        // Standard vert:  triLine(p0+(0,dir.y)*d, p0+(-1,dir.y)*d, p0)
-        PinShape::InputLow => {
-            let ax = p2.x + fwd_x * diam;
-            let ay = p2.y + fwd_y * diam;
-            let (bx, by) = if is_horiz {
-                (ax, ay - diam) // -Y = up on screen
-            } else {
-                (ax - diam, ay) // -X = left on screen
-            };
-            tri_line(frame, pt(ax, ay), pt(bx, by), p2, stroke);
-        }
-
-        // ── CLOCK_LOW / EDGE_CLOCK_HIGH ──────────────────────────────────────
-        // Clock triangle + InputLow L-shape (Standard treats these identically).
-        PinShape::ClockLow | PinShape::EdgeClockHigh => {
-            tri_line(
-                frame,
-                pt(p2.x + wing_x * clock_size, p2.y + wing_y * clock_size),
-                pt(p2.x + sdx * clock_size, p2.y + sdy * clock_size),
-                pt(p2.x - wing_x * clock_size, p2.y - wing_y * clock_size),
-                stroke,
-            );
-            let ax = p2.x + fwd_x * diam;
-            let ay = p2.y + fwd_y * diam;
-            let (bx, by) = if is_horiz {
-                (ax, ay - diam)
-            } else {
-                (ax - diam, ay)
-            };
-            tri_line(frame, pt(ax, ay), pt(bx, by), p2, stroke);
-        }
-
-        // ── OUTPUT_LOW ───────────────────────────────────────────────────────
-        // IEEE active-low output: diagonal "flag" line.
-        // Standard horiz: line(p0 - (0,diam), p0 + dir.x*diam)
-        // Standard vert:  line(p0 - (diam,0), p0 + dir.y*diam)
-        PinShape::OutputLow => {
-            let (start, end_pt) = if is_horiz {
-                (pt(p2.x, p2.y - diam), pt(p2.x + bdx * diam, p2.y))
-            } else {
-                (pt(p2.x - diam, p2.y), pt(p2.x, p2.y + bdy * diam))
-            };
-            let path = canvas::Path::new(|b| {
-                b.move_to(start);
-                b.line_to(end_pt);
-            });
-            frame.stroke(&path, stroke);
-        }
-
-        // ── NON_LOGIC ────────────────────────────────────────────────────────
-        // X cross at body end using two diagonal lines.
-        // Standard: d1=(dir.x+dir.y, dir.y-dir.x), d2=(dir.x-dir.y, dir.x+dir.y)
-        PinShape::NonLogic => {
+        // Schmitt-trigger / hysteresis glyph: small loop at body end.
+        // Placeholder rendering — draws an X cross until a final glyph is chosen.
+        PinShapeStyle::HysteresisInput
+        | PinShapeStyle::HysteresisOutput
+        | PinShapeStyle::Schmitt => {
+            let _ = is_horiz; // reserved for orientation-aware glyph polish
             let d1x = bdx + bdy;
             let d1y = bdy - bdx;
             let d2x = bdx - bdy;
