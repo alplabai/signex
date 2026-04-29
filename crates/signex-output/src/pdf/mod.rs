@@ -103,7 +103,7 @@ pub struct PdfOptions {
     /// Live toggles (renderer honours the value):
     ///   `include_no_erc_markers`, `include_notes`.
     ///
-    /// Dormant toggles — Standard's schema has no equivalent concept,
+    /// Dormant toggles — the legacy schema has no equivalent concept,
     /// so these are stored for Altium-import parity but produce no
     /// observable difference today: `include_parameter_sets` (Altium
     /// parameter-set objects), `include_probes` (Altium probe
@@ -658,7 +658,7 @@ struct PdfTextRun {
 }
 
 fn pdf_markup_runs(input: &str) -> Vec<PdfTextRun> {
-    let expanded = normalize_standard_text(input);
+    let expanded = normalize_text(input);
     let segments = parse_signex_markup(&expanded);
     if segments.is_empty() {
         return vec![PdfTextRun {
@@ -716,11 +716,11 @@ fn pdf_markup_runs(input: &str) -> Vec<PdfTextRun> {
         .collect()
 }
 
-fn normalize_standard_text(input: &str) -> String {
+fn normalize_text(input: &str) -> String {
     let ctx = ExpressionEvalContext::default();
-    // Standard-specific char-escape expansion (`{slash}` → `/`, etc.) was removed
+    // Legacy char-escape expansion (`{slash}` → `/`, etc.) was removed
     // in Phase 2.3 of the Apache-clean remediation. Inputs no longer carry
-    // those tokens because the main repo no longer parses Standard files.
+    // those tokens because the main repo no longer parses legacy files.
     evaluate_expressions(input, &ctx)
 }
 
@@ -770,7 +770,7 @@ mod tests {
         ExportContext {
             sheets: (0..sheet_count)
                 .map(|i| SheetSnapshot {
-                    path: PathBuf::from(format!("sheet_{i}.standard_sch")),
+                    path: PathBuf::from(format!("sheet_{i}.snxsch")),
                     schematic: empty_sheet(),
                     sheet_name: format!("Sheet{i}"),
                     sheet_number: i + 1,

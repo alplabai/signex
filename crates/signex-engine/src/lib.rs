@@ -49,10 +49,9 @@ impl Engine {
 
     /// Open a `.snxsch` file from disk.
     ///
-    /// Files in foreign formats (e.g. Standard's `.standard_sch`) are not
-    /// readable directly by Signex Community; users with Standard
-    /// projects run the optional `signex-standard-import` GPL-3.0
-    /// companion tool to convert their files first.
+    /// Foreign-format schematics are not readable directly; users with
+    /// legacy projects must convert their files via the import companion
+    /// tool before opening here.
     pub fn open(path: &Path) -> Result<Self, EngineError> {
         let text = std::fs::read_to_string(path)
             .map_err(|error| EngineError::OpenFailed(anyhow::Error::msg(error.to_string())))?;
@@ -767,7 +766,7 @@ impl Engine {
             Command::AnnotateAll { mode } => {
                 use crate::command::AnnotateMode;
                 // Power ports (is_power == true, or reference starting with '#')
-                // are Standard net anchors, not components. Their references
+                // are net anchors, not components. Their references
                 // carry the net name, not a designator. Skip them in every
                 // phase so annotation only touches real parts.
                 let is_designator_target = |sym: &signex_types::schematic::Symbol| -> bool {
@@ -1014,7 +1013,7 @@ impl Engine {
                             }
                         }
                         // Drawings, junctions, NC, bus entries aren't
-                        // z-ordered in Standard schematic (no explicit
+                        // z-ordered in schematic (no explicit
                         // stacking). Left out intentionally.
                         _ => {}
                     }
@@ -1146,7 +1145,7 @@ mod tests {
         document.child_sheets.push(ChildSheet {
             uuid: uuid::Uuid::new_v4(),
             name: "Child".to_string(),
-            filename: "child.standard_sch".to_string(),
+            filename: "child.snxsch".to_string(),
             position: Point::new(10.0, 20.0),
             size: (30.0, 30.0),
             stroke_width: 0.12,
@@ -1180,7 +1179,7 @@ mod tests {
         let mut engine = Engine::new(document).unwrap();
         let result = engine
             .execute(Command::ReconcileChildSheetPins {
-                child_filename: "child.standard_sch".to_string(),
+                child_filename: "child.snxsch".to_string(),
                 ports: vec![
                     SheetPort {
                         name: "SDA".to_string(),
@@ -1218,7 +1217,7 @@ mod tests {
         document.child_sheets.push(ChildSheet {
             uuid: uuid::Uuid::new_v4(),
             name: "Child".to_string(),
-            filename: "child.standard_sch".to_string(),
+            filename: "child.snxsch".to_string(),
             position: Point::new(10.0, 20.0),
             size: (30.0, 30.0),
             stroke_width: 0.12,
@@ -1241,7 +1240,7 @@ mod tests {
         let mut engine = Engine::new(document).unwrap();
         let _ = engine
             .execute(Command::ReconcileChildSheetPins {
-                child_filename: "child.standard_sch".to_string(),
+                child_filename: "child.snxsch".to_string(),
                 ports: vec![SheetPort {
                     name: "SDA".to_string(),
                     direction: "output".to_string(),
@@ -1337,7 +1336,7 @@ mod tests {
         document.child_sheets.push(ChildSheet {
             uuid: sheet_uuid,
             name: "Child".to_string(),
-            filename: "child.standard_sch".to_string(),
+            filename: "child.snxsch".to_string(),
             position: Point::new(10.0, 20.0),
             size: (30.0, 30.0),
             stroke_width: 0.12,

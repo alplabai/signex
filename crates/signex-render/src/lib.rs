@@ -17,7 +17,7 @@ pub const IOSEVKA: iced::Font = iced::Font::with_name("Iosevka");
 pub use signex_types::schematic::SCHEMATIC_PT_TO_MM;
 pub use signex_types::schematic::SCHEMATIC_TEXT_MM;
 
-/// Standard stroke font stores "size" as cap-height; Iced TrueType uses em-square
+/// Legacy stroke font stores "size" as cap-height; Iced TrueType uses em-square
 /// (cap height ≈ 72 % of em). To render a stroke-font size at the same visual
 /// cap height, we draw it at em = size / 0.72. Use this value for BOTH the
 /// canvas font size AND any offset / hit-test math so they stay in sync —
@@ -27,10 +27,7 @@ pub const SCHEMATIC_TEXT_EM_MM: f64 = SCHEMATIC_TEXT_MM / 0.72;
 
 /// Power-port glyph style preference. `Standard` matches the rounded
 /// shapes typical of open-source schematic editors; `Altium` matches
-/// the Altium Designer signature look. The `Standard` variant was
-/// previously named `Standard` — renamed in v0.10.0 as part of the
-/// Apache-clean residual polish; the on-disk preference string and
-/// the user-facing dropdown label are unchanged.
+/// the Altium Designer signature look.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PowerPortStyle {
     Standard,
@@ -38,8 +35,8 @@ pub enum PowerPortStyle {
     Altium,
 }
 
-/// Net-label glyph style preference. Same `Standard` (was `Standard`) /
-/// `Altium` split as `PowerPortStyle`.
+/// Net-label glyph style preference. `Standard` / `Altium` split mirrors
+/// `PowerPortStyle`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LabelStyle {
     #[default]
@@ -53,9 +50,7 @@ pub enum LabelStyle {
 /// schematic. `Altium` mode draws sheets with Altium Designer's
 /// signature greenish palette when no per-sheet colour is set in the
 /// file. Per-sheet colours from the source file always win,
-/// regardless of the active style. The `Standard` variant was
-/// previously named `Standard` — see `PowerPortStyle` for the rename
-/// rationale.
+/// regardless of the active style.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MultisheetStyle {
     #[default]
@@ -63,8 +58,7 @@ pub enum MultisheetStyle {
     Altium,
 }
 
-/// Visible schematic grid rendering style. Mirrors Standard's Display
-/// Options preference (Dots / Lines / Small crosses).
+/// Visible schematic grid rendering style: dots, lines, or small crosses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum GridStyle {
     #[default]
@@ -81,10 +75,6 @@ impl GridStyle {
 impl std::fmt::Display for MultisheetStyle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            // User-facing dropdown label kept as "Standard" so users
-            // migrating from Standard files recognise the mode that
-            // matches their original layout. Internal variant name
-            // is `Standard` — see the type's doc comment.
             MultisheetStyle::Standard => write!(f, "Standard"),
             MultisheetStyle::Altium => write!(f, "Altium"),
         }

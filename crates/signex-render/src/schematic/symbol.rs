@@ -19,7 +19,7 @@ fn instance_transform(sym: &Symbol, local: &Point) -> (f64, f64) {
     super::instance_transform(sym, local)
 }
 
-/// Standard default symbol body stroke width in mm.
+/// Default symbol body stroke width in mm.
 const BODY_DEFAULT_WIDTH_MM: f64 = 0.15;
 
 /// Get the stroke width in screen pixels for a graphic element.
@@ -77,10 +77,10 @@ pub fn draw_symbol(
     body_fill_color: Color,
     _pin_color: Color,
 ) {
-    // Standard renders fills on a lower Z-layer than strokes.  In our single-pass
+    // Fills render on a lower Z-layer than strokes.  In our single-pass
     // canvas we replicate this by iterating the graphic list TWICE:
-    //   Pass 1 — background fills only      (like Standard LAYER_DEVICE_BACKGROUND)
-    //   Pass 2 — outline fills + all strokes (like Standard LAYER_DEVICE)
+    //   Pass 1 — background fills only      (like LAYER_DEVICE_BACKGROUND)
+    //   Pass 2 — outline fills + all strokes (like LAYER_DEVICE)
     // This prevents body background fills from painting over stroked shapes
     // that happen to reside in an earlier sub-symbol (e.g. Relay_SPDT_0_0 triangle).
     for pass in 0u8..2 {
@@ -228,7 +228,7 @@ pub fn draw_symbol(
                         .with_width(stroke_w);
                     frame.stroke(&canvas::Path::rectangle(top_left, box_size), stroke);
                     // Text inside the box — single-line, top-left aligned.
-                    // Multi-line wrap deferred; Standard writes text_box body
+                    // Multi-line wrap deferred; text_box body wrapping
                     // as a single wrapped string at parse time.
                     let font_mm = if *font_size <= 0.0 { 1.27 } else { *font_size };
                     let screen_font = transform.world_len(font_mm).abs();
@@ -452,7 +452,7 @@ fn draw_arc(
                 b.line_to(transform.to_screen_point(px, py));
             }
             // Close the chord for filled arcs (connects arc ends directly,
-            // not back through center — this is the correct Standard behavior)
+            // not back through center — this is the correct canonical behavior)
             if fill != FillType::None {
                 b.close();
             }
