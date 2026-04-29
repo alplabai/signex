@@ -75,3 +75,27 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
         continue-on-error: true
+
+  deny:
+    name: License + dependency audit (cargo-deny)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+
+      - name: Check licenses
+        run: cargo deny --all-features check licenses
+
+      - name: Check sources
+        run: cargo deny --all-features check sources
+        continue-on-error: true
+
+      - name: Check advisories
+        run: cargo deny --all-features check advisories
+        continue-on-error: true

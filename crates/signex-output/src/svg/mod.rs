@@ -7,8 +7,7 @@ use std::collections::HashMap;
 use std::fmt::Write as _;
 
 use signex_types::markup::{
-    ExpressionEvalContext, RichSegment, evaluate_expressions, expand_standard_char_escapes,
-    parse_markup,
+    ExpressionEvalContext, RichSegment, evaluate_expressions, parse_signex_markup,
 };
 use signex_types::schematic::{
     FillType, Graphic, HAlign, LabelType, LibSymbol, Pin, Point, SchDrawing, Symbol, TextProp,
@@ -1295,8 +1294,10 @@ fn normalize_standard_text(input: &str) -> String {
 }
 
 fn normalize_standard_text_with_ctx(input: &str, ctx: &ExpressionEvalContext<'_>) -> String {
-    let evaluated = evaluate_expressions(input, ctx);
-    expand_standard_char_escapes(&evaluated)
+    // Standard-specific char-escape expansion (`{slash}` → `/`, etc.) was removed
+    // in Phase 2.3 of the Apache-clean remediation. Inputs no longer carry
+    // those tokens because the main repo no longer parses Standard files.
+    evaluate_expressions(input, ctx)
 }
 
 #[derive(Clone, Copy)]
@@ -1334,13 +1335,17 @@ fn schematic_text_offset_net(spin: SpinStyle) -> (f64, f64) {
 
 fn schematic_text_offset_hier(text: &str, font_size_mm: f64, spin: SpinStyle) -> (f64, f64) {
     let dist = font_size_mm * 0.4
-        + (parse_markup(&normalize_standard_text(text))
+        + (parse_signex_markup(&normalize_standard_text(text))
             .iter()
             .map(|seg| match seg {
                 RichSegment::Normal(t)
+                | RichSegment::Bold(t)
+                | RichSegment::Italic(t)
+                | RichSegment::Strike(t)
                 | RichSegment::Subscript(t)
                 | RichSegment::Superscript(t)
                 | RichSegment::Overbar(t) => t.chars().count(),
+                RichSegment::Link { label, .. } => label.chars().count(),
             })
             .sum::<usize>() as f64)
             * font_size_mm
@@ -1534,7 +1539,7 @@ struct MarkupRun {
 
 fn markup_runs(input: &str) -> Vec<MarkupRun> {
     let expanded = normalize_standard_text(input);
-    let segments = parse_markup(&expanded);
+    let segments = parse_signex_markup(&expanded);
     if segments.is_empty() {
         return vec![MarkupRun {
             text: expanded,
@@ -1548,6 +1553,13 @@ fn markup_runs(input: &str) -> Vec<MarkupRun> {
         .into_iter()
         .map(|seg| match seg {
             RichSegment::Normal(t) => MarkupRun {
+                text: t,
+                scale: 1.0,
+                baseline_offset: 0.0,
+                overbar: false,
+            },
+            // TODO(v0.x): visual decoration for bold/italic/strike
+            RichSegment::Bold(t) | RichSegment::Italic(t) | RichSegment::Strike(t) => MarkupRun {
                 text: t,
                 scale: 1.0,
                 baseline_offset: 0.0,
@@ -1569,6 +1581,14 @@ fn markup_runs(input: &str) -> Vec<MarkupRun> {
                 text: t,
                 scale: 0.72,
                 baseline_offset: -0.34,
+                overbar: false,
+            },
+            // Links render as plain label text on the canvas — URL is ignored
+            // until link rendering ships in a later phase.
+            RichSegment::Link { label, .. } => MarkupRun {
+                text: label,
+                scale: 1.0,
+                baseline_offset: 0.0,
                 overbar: false,
             },
         })

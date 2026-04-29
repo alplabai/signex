@@ -9,7 +9,7 @@
 
 <p align="center">
   <a href="https://github.com/alplabai/signex/blob/dev/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License"></a>
-  <a href="https://github.com/alplabai/signex/releases/tag/v0.8.0"><img src="https://img.shields.io/badge/version-v0.8.0-green.svg" alt="Version"></a>
+  <a href="https://github.com/alplabai/signex/releases/tag/v0.9.0"><img src="https://img.shields.io/badge/version-v0.9.0-green.svg" alt="Version"></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.80%2B-orange.svg" alt="Rust"></a>
   <a href="https://github.com/alplabai/signex/wiki"><img src="https://img.shields.io/badge/wiki-user%20guide-blueviolet.svg" alt="Wiki"></a>
   <a href="https://github.com/alplabai/signex/discussions"><img src="https://img.shields.io/badge/discussions-join-brightgreen.svg" alt="Discussions"></a>
@@ -27,10 +27,17 @@
 
 ---
 
-Signex is a **KiCad-compatible** schematic and PCB editor built in Rust with
-GPU-accelerated rendering. It opens your existing KiCad projects, edits them
-through an Altium Designer-quality UI, and saves them back — so KiCad users
-get a better editor without leaving the ecosystem they trust.
+Signex is open-source EDA tooling built in Rust with GPU-accelerated
+rendering and an Altium Designer-quality UI — schematic + PCB editor,
+3D viewer, simulation, plugin system. Native file formats (`.snxsch`,
+`.snxpcb`) are line-diffable in git and ~5× smaller than the equivalent
+JSON.
+
+**Migrating from KiCad?** The optional [signex-kicad-import](https://github.com/alplabai/signex-kicad-import)
+companion tool (GPL-3.0-or-later, distributed independently) converts
+`.kicad_sch` / `.kicad_pcb` / `.kicad_pro` files to Signex's native
+formats one-way. Run it once against your project; open the resulting
+`.snxprj` in Signex.
 
 **Two editions from one codebase:**
 
@@ -39,16 +46,20 @@ get a better editor without leaving the ecosystem they trust.
 - **Signex Pro** (subscription) — adds Signal AI (Claude-powered design
   copilot), real-time collaboration, and Signex 365 cloud PLM
 
-> **Status:** Early development — v0.8.0 shipped (Output subsystem + multi-project workspaces + dirty
-> tracking + chrome refactor + hierarchical-sheet polish); next up v0.9 (Library & Polish — symbol /
-> footprint editor, installers). [Join the discussion](https://github.com/alplabai/signex/discussions)
-> or check the [roadmap](#roadmap).
+> **Status:** Early development — **v0.9.0 shipped** — Apache-clean cutover
+> ([issue #62](https://github.com/alplabai/signex/issues/62): native `.snxsch`/`.snxpcb` formats,
+> KiCad I/O moved to optional [signex-kicad-import](https://github.com/alplabai/signex-kicad-import)
+> companion, `signex-types` Apache-clean). Library & Polish (symbol/footprint editor, multi-symbol
+> `.snxsym`, Component Editor, installers) ships next as v0.10.
+> [Join the discussion](https://github.com/alplabai/signex/discussions) or check the [roadmap](#roadmap).
 
 ## Features
 
 **What works today (v0.1–v0.8):**
 
-- Open and render any KiCad schematic (.kicad_sch, .kicad_sym, .kicad_pro)
+- Open native Signex schematics (`.snxsch`, `.snxsym`, `.snxprj`); migrate
+  legacy KiCad files via the [signex-kicad-import](https://github.com/alplabai/signex-kicad-import)
+  companion tool
 - Full schematic editing: select, move, wire (W), bus (B), label (L),
   component placement (P), delete, rotate (Space), mirror (X/Y)
 - Advanced shape tools — Line, Rectangle, Circle, Arc (3-click), Polygon
@@ -69,7 +80,8 @@ get a better editor without leaving the ecosystem they trust.
 - F5 net-color palette, F8 ERC, F9 AutoFocus (dim unrelated objects)
 - Pin connection matrix (12×12, per-cell severity override)
 - Lasso + Inside/Outside/TouchingLine selection modes (Shift+S to cycle)
-- KiCad 8/9 format support with round-trip fidelity
+- Native `.snxsch` / `.snxpcb` formats — TOML envelope + TSV bulk blocks,
+  line-diffable, ~5× smaller than JSON, single file per design
 - 60fps pan/zoom on schematics with 500+ components
 - **Output (v0.8)** — PDF export with bookmarks + theme palette, Altium-spec
   BOM preview with column/variant pickers and CSV/HTML/XLSX export, KiCad
@@ -87,7 +99,8 @@ get a better editor without leaving the ecosystem they trust.
 
 | Version | Milestone |
 |---|---|
-| v0.9 | Library & Polish — symbol / footprint editor, installers |
+| v0.9 | Apache-clean cutover — native `.snxsch` / `.snxpcb` formats, KiCad I/O moved to optional [signex-kicad-import](https://github.com/alplabai/signex-kicad-import) companion (issue #62) |
+| v0.10 | Library & Polish — symbol / footprint editor, multi-symbol `.snxsym`, Component Editor, installers |
 | **v1.0** | **Community Preview** — schematic-only release |
 | **v2.0–v2.2** | **Community Release** — full PCB editor |
 | **v3.0** | **Pro Release** — Signal AI + collaboration |
@@ -163,7 +176,8 @@ cargo clippy --workspace -- -D warnings  # Lint
 | Full SCH Editor — copy/paste, labels, components, Active Bar | v0.6 | Done |
 | Validation + Multi-Window — ERC, annotation, pin matrix, undockable tabs | v0.7 | Done |
 | Output — PDF, BOM, netlist, multi-project workspaces, dirty tracking | v0.8 | Done |
-| Library & Polish — symbol/footprint editor, installers | v0.9 | **In Progress** |
+| Apache-clean cutover (issue #62) — native `.snxsch` / `.snxpcb` formats, KiCad I/O via companion | v0.9 | ✅ Done |
+| Library & Polish — symbol/footprint editor, multi-symbol `.snxsym`, Component Editor, installers | v0.10 | |
 | **Community Preview** — schematic-only editor | **v1.0** | |
 | PCB Viewer — GPU rendering, layers, cross-probe | v2.0 | |
 | PCB Routing + DRC + Output | v2.1–v2.2 | |
@@ -217,5 +231,14 @@ workflow, crate map, code style, and good first issues.
 ## License
 
 Signex Community Edition is licensed under the [Apache License 2.0](LICENSE).
+The main repository contains no GPL-derived code; Apache consumers (anyone
+embedding or linking against Signex) get a clean Apache codebase with no GPL
+aggregation in their build closure.
+
+KiCad migration is provided via the optional [signex-kicad-import](https://github.com/alplabai/signex-kicad-import)
+companion tool, which is **GPL-3.0-or-later** because it implements KiCad's
+file format with structure derived from KiCad's GPL-3.0 source. The two
+projects are distributed independently. See [docs/LICENSING.md](docs/LICENSING.md)
+for the full rationale and the audit trail behind the two-repo split.
 
 Copyright 2026 [Alp Lab AI](https://github.com/alplabai)

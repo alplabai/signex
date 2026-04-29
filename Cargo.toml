@@ -5,8 +5,6 @@ members = [
     "crates/signex-engine",
     "crates/signex-bom",
     "crates/signex-types",
-    "crates/kicad-parser",
-    "crates/kicad-writer",
     "crates/signex-render",
     "crates/signex-widgets",
     "crates/signex-erc",
@@ -33,6 +31,7 @@ iced_aw = { version = "0.13", default-features = false, features = [
 # Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+toml = "0.8"
 
 # Identity
 uuid = { version = "1.23.1", features = ["v4", "serde"] }
@@ -58,8 +57,6 @@ ttf-parser = "0.25"
 signex-types = { path = "crates/signex-types" }
 signex-engine = { path = "crates/signex-engine" }
 signex-bom = { path = "crates/signex-bom" }
-kicad-parser = { path = "crates/kicad-parser" }
-kicad-writer = { path = "crates/kicad-writer" }
 signex-render = { path = "crates/signex-render" }
 signex-widgets = { path = "crates/signex-widgets" }
 signex-erc = { path = "crates/signex-erc" }

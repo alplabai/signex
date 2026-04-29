@@ -1,0 +1,95 @@
+name: License Guard
+
+# Enforces the issue-62 Apache-clean invariants on every push and PR
+# to dev / main. Targets the actual derivation surface (imports, deps,
+# removed API surface) rather than every substring containing "kicad" —
+# the latter catches doc comments, migration messages, and stable
+# render-style enum variants that serialise to disk.
+#
+# Allowed residual `kicad` mentions are documented in
+# `docs/audit/kicad-derivation.md` §"Residual-mention catalog" with
+# rationale per category.
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+
+jobs:
+  no-kicad-imports:
+    name: No `use kicad_parser`/`use kicad_writer` in crates/
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Forbid kicad-parser / kicad-writer imports
+        run: |
+          set -e
+          if git grep -nE 'use\s+(kicad_parser|kicad_writer)::' -- 'crates/**/*.rs'; then
+            echo ""
+            echo "::error::Found 'use kicad_parser::' or 'use kicad_writer::' in crates/."
+            echo "::error::Those crates moved to the GPL-3.0 companion repo signex-kicad-import."
+            echo "::error::See docs/LICENSING.md for the rationale and CONTRIBUTING.md for routing."
+            exit 1
+          fi
+          echo "No KiCad-crate imports."
+
+  no-kicad-cargo-deps:
+    name: No `kicad-parser`/`kicad-writer` Cargo.toml deps
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Forbid kicad-parser / kicad-writer Cargo.toml deps
+        run: |
+          set -e
+          if git grep -nE '^\s*kicad-(parser|writer)\s*=' -- 'crates/**/Cargo.toml' 'Cargo.toml'; then
+            echo ""
+            echo "::error::Found a Cargo.toml dependency on kicad-parser / kicad-writer."
+            echo "::error::Those crates moved to the GPL-3.0 companion repo signex-kicad-import."
+            exit 1
+          fi
+          echo "No kicad-parser / kicad-writer Cargo.toml deps."
+
+  no-removed-kicad-api:
+    name: No re-introduction of removed KiCad-shaped API surface
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Forbid re-introduction of removed types and functions
+        run: |
+          set -e
+          # These names existed in pre-cutover signex-types and have
+          # been replaced. A reintroduction (e.g. via a copy-paste
+          # from the GPL companion) would regress the licensing
+          # invariant.
+          if git grep -nE '\bPinElectricalType\b|\bkicad_auto_net_name_from_pins\b|\bexpand_kicad_char_escapes\b|\bparse_markup\s*\(' -- 'crates/**/*.rs'; then
+            echo ""
+            echo "::error::Re-introduction of a KiCad-shaped API surface that was removed in the issue-62 cutover."
+            echo "::error::Use the Signex-curated equivalents instead (PinDirection, auto_net_name, parse_signex_markup)."
+            exit 1
+          fi
+          echo "No removed API surface re-introduced."
+
+  cargo-deny:
+    name: cargo-deny license + transitive-dep audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+
+      - name: Check licenses
+        run: cargo deny --all-features check licenses
+
+      - name: Check sources
+        run: cargo deny --all-features check sources
+        continue-on-error: true
+
+      - name: Check advisories
+        run: cargo deny --all-features check advisories
+        continue-on-error: true
