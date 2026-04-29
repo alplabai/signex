@@ -6,6 +6,27 @@ mod translate;
 
 use super::*;
 
+/// Library Browser preview-pane detail row — `Label  value`. Free
+/// helper because it doesn't need `self`; called from
+/// `view_library_browser` where the row body is built per selection.
+fn detail_row<'a>(
+    tokens: &signex_types::theme::ThemeTokens,
+    label: &'a str,
+    value: &'a str,
+) -> Element<'a, Message> {
+    row![
+        iced::widget::text(label)
+            .size(11)
+            .width(Length::Fixed(72.0))
+            .color(crate::styles::ti(tokens.text_secondary)),
+        iced::widget::text(value.to_string())
+            .size(11)
+            .color(crate::styles::ti(tokens.text)),
+    ]
+    .spacing(8)
+    .into()
+}
+
 // ── Submenu chevron — single source of truth ─────────────────────────
 //
 // Right-pointing angle quote (U+203A), NOT the BLACK RIGHT-POINTING
@@ -3586,13 +3607,23 @@ impl Signex {
         }
     }
 
-    /// v0.10.0 — read-only Library Browser tab body.
+    /// Library Browser tab body — table + filter + preview pane.
     ///
-    /// Layout: header strip (library name + component count) + a
-    /// virtualised-style table of components. Columns: Name, Value,
-    /// Footprint, Description. v0.10.1 adds a side preview pane;
-    /// v0.10.2 adds a filter bar above the table.
+    /// Maps to LIBRARY_PLAN.md §10 (Component Editor / Symbol tab —
+    /// the preview slice) and §11 item 4 (parametric / faceted picker
+    /// — the filter slice). The table is the canonical surface
+    /// (`feedback_library_browser_is_a_tab.md` — real libraries have
+    /// thousands of components, so this is a tab, not a panel grid).
+    ///
+    /// Layout: header strip → filter bar → split body where the table
+    /// occupies the left two-thirds and the preview pane the right
+    /// third. Selecting a row shows the bound `SymbolBody` in the
+    /// preview pane; v0.11 ships every component as unbound (sentinel
+    /// nil `symbol_uuid`) so the preview is a placeholder until the
+    /// picker (Phase C.8) fills bindings in.
     fn view_library_browser(&self) -> Element<'_, Message> {
+        use iced::widget::{mouse_area, scrollable, text_input, Space};
+
         let tokens = &self.document_state.panel_ctx.tokens;
         let Some(library) = self.active_library() else {
             return container(iced::widget::text("Library not loaded").size(13))
@@ -3601,13 +3632,47 @@ impl Signex {
                 .into();
         };
 
+        let filter = &self.document_state.library_browser_filter;
+        let filter_lower = filter.to_lowercase();
+
+        // Build the filtered view as (original_index, &component). We
+        // keep the original index so per-row messages can target the
+        // canonical Library.components slot once we wire editing in
+        // Phase C; the selection field stores the *filtered* index so
+        // the preview pane can resolve without redoing the filter.
+        let filtered: Vec<(usize, &signex_types::library::LibraryComponent)> = library
+            .components
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| {
+                if filter_lower.is_empty() {
+                    return true;
+                }
+                let haystack = [
+                    c.name.as_str(),
+                    c.value.as_str(),
+                    c.footprint_name.as_str(),
+                    c.description.as_str(),
+                ];
+                haystack.iter().any(|s| s.to_lowercase().contains(&filter_lower))
+            })
+            .collect();
+
         let header = {
             let title_text = if library.name.is_empty() {
                 "Library".to_string()
             } else {
                 library.name.clone()
             };
-            let count_text = format!("{} component(s)", library.components.len());
+            let count_text = if filter.is_empty() {
+                format!("{} component(s)", library.components.len())
+            } else {
+                format!(
+                    "{} of {} component(s)",
+                    filtered.len(),
+                    library.components.len()
+                )
+            };
             let mut title_row = column![
                 iced::widget::text(title_text)
                     .size(15)
@@ -3630,12 +3695,30 @@ impl Signex {
                 .style(crate::styles::panel_region(tokens))
         };
 
-        // Column widths chosen empirically for the v0.10.0 scaffold;
-        // v0.10.2 will swap the static layout for resizable columns
-        // backed by the filter UI.
-        const NAME_WIDTH: f32 = 220.0;
-        const VALUE_WIDTH: f32 = 140.0;
-        const FOOTPRINT_WIDTH: f32 = 180.0;
+        // Filter bar — substring match across name / value / footprint
+        // / description. LIBRARY_PLAN §11 item 4 reserves the slot for
+        // a parametric / faceted picker on top of the same UI surface
+        // post-v0.11.
+        let filter_bar = container(
+            row![
+                iced::widget::text("Filter")
+                    .size(11)
+                    .color(crate::styles::ti(tokens.text_secondary)),
+                text_input("name, value, footprint…", filter)
+                    .on_input(Message::LibraryBrowserFilterChanged)
+                    .size(12)
+                    .padding([4, 6])
+                    .width(Length::Fill),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([6, 14])
+        .width(Length::Fill);
+
+        const NAME_WIDTH: f32 = 200.0;
+        const VALUE_WIDTH: f32 = 120.0;
+        const FOOTPRINT_WIDTH: f32 = 160.0;
 
         let header_row = container(
             row![
@@ -3662,57 +3745,173 @@ impl Signex {
         .width(Length::Fill)
         .style(crate::styles::panel_region(tokens));
 
-        let mut rows: Vec<Element<'_, Message>> = Vec::with_capacity(library.components.len());
-        for component in &library.components {
+        let selected_filtered_index = self.document_state.library_browser_selection;
+        let mut rows: Vec<Element<'_, Message>> = Vec::with_capacity(filtered.len());
+        for (filtered_idx, (_orig_idx, component)) in filtered.iter().enumerate() {
             let name = if component.name.is_empty() {
                 "(unnamed)".to_string()
             } else {
                 component.name.clone()
             };
+            let is_selected = selected_filtered_index == Some(filtered_idx);
+            let row_content = container(
+                row![
+                    iced::widget::text(name)
+                        .size(12)
+                        .width(Length::Fixed(NAME_WIDTH))
+                        .color(crate::styles::ti(tokens.text)),
+                    iced::widget::text(component.value.clone())
+                        .size(12)
+                        .width(Length::Fixed(VALUE_WIDTH))
+                        .color(crate::styles::ti(tokens.text)),
+                    iced::widget::text(component.footprint_name.clone())
+                        .size(12)
+                        .width(Length::Fixed(FOOTPRINT_WIDTH))
+                        .color(crate::styles::ti(tokens.text)),
+                    iced::widget::text(component.description.clone())
+                        .size(12)
+                        .width(Length::Fill)
+                        .color(crate::styles::ti(tokens.text_secondary)),
+                ]
+                .spacing(8),
+            )
+            .padding([6, 14])
+            .width(Length::Fill)
+            .style(move |_: &iced::Theme| {
+                if is_selected {
+                    container::Style {
+                        background: Some(iced::Background::Color(crate::styles::ti(
+                            tokens.selection,
+                        ))),
+                        ..container::Style::default()
+                    }
+                } else {
+                    container::Style::default()
+                }
+            });
             rows.push(
-                container(
-                    row![
-                        iced::widget::text(name)
-                            .size(12)
-                            .width(Length::Fixed(NAME_WIDTH))
-                            .color(crate::styles::ti(tokens.text)),
-                        iced::widget::text(component.value.clone())
-                            .size(12)
-                            .width(Length::Fixed(VALUE_WIDTH))
-                            .color(crate::styles::ti(tokens.text)),
-                        iced::widget::text(component.footprint_name.clone())
-                            .size(12)
-                            .width(Length::Fixed(FOOTPRINT_WIDTH))
-                            .color(crate::styles::ti(tokens.text)),
-                        iced::widget::text(component.description.clone())
-                            .size(12)
-                            .width(Length::Fill)
-                            .color(crate::styles::ti(tokens.text_secondary)),
-                    ]
-                    .spacing(8),
-                )
-                .padding([6, 14])
-                .width(Length::Fill)
-                .into(),
+                mouse_area(row_content)
+                    .on_press(Message::LibraryBrowserSelectRow(filtered_idx))
+                    .into(),
             );
         }
 
-        let body: Element<'_, Message> = if rows.is_empty() {
+        let table_body: Element<'_, Message> = if rows.is_empty() {
+            let msg_text = if filter.is_empty() {
+                "No components in this library."
+            } else {
+                "No components match the filter."
+            };
             container(
-                iced::widget::text("No components in this library.")
+                iced::widget::text(msg_text)
                     .size(12)
                     .color(crate::styles::ti(tokens.text_secondary)),
             )
             .center(Length::Fill)
             .into()
         } else {
-            iced::widget::scrollable(column(rows).spacing(0))
+            scrollable(column(rows).spacing(0))
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .into()
         };
 
-        container(column![header, header_row, body].spacing(0))
+        // Preview pane — LIBRARY_PLAN §10 Symbol tab. Resolves the
+        // selection through the *filtered* view so the user always
+        // sees the row they clicked. v0.11 ships every component
+        // unbound (sentinel-nil `symbol_uuid`); when Phase C.8 wires
+        // the picker, the preview lights up with a `signex-render`
+        // call here without touching the surrounding chrome.
+        let preview_pane: Element<'_, Message> = {
+            let preview_body: Element<'_, Message> = match selected_filtered_index
+                .and_then(|idx| filtered.get(idx).map(|(_, c)| *c))
+            {
+                None => container(
+                    iced::widget::text("Select a component to preview")
+                        .size(12)
+                        .color(crate::styles::ti(tokens.text_secondary)),
+                )
+                .center(Length::Fill)
+                .into(),
+                Some(component) => {
+                    let display_name = if component.name.is_empty() {
+                        "(unnamed)".to_string()
+                    } else {
+                        component.name.clone()
+                    };
+                    let mut details = column![
+                        iced::widget::text(display_name)
+                            .size(14)
+                            .color(crate::styles::ti(tokens.text)),
+                    ]
+                    .spacing(6);
+                    if !component.value.is_empty() {
+                        details = details.push(detail_row(tokens, "Value", &component.value));
+                    }
+                    if !component.footprint_name.is_empty() {
+                        details = details.push(detail_row(
+                            tokens,
+                            "Footprint",
+                            &component.footprint_name,
+                        ));
+                    }
+                    if !component.description.is_empty() {
+                        details = details.push(
+                            iced::widget::text(component.description.clone())
+                                .size(11)
+                                .color(crate::styles::ti(tokens.text_secondary)),
+                        );
+                    }
+                    let symbol_status = if component.has_symbol_binding() {
+                        "Symbol bound"
+                    } else {
+                        "No symbol bound"
+                    };
+                    let footprint_status = if component.has_footprint_binding() {
+                        "Footprint bound"
+                    } else {
+                        "No footprint bound"
+                    };
+                    details = details.push(Space::new().height(Length::Fixed(8.0)));
+                    details = details.push(
+                        iced::widget::text(symbol_status)
+                            .size(11)
+                            .color(crate::styles::ti(tokens.text_secondary)),
+                    );
+                    details = details.push(
+                        iced::widget::text(footprint_status)
+                            .size(11)
+                            .color(crate::styles::ti(tokens.text_secondary)),
+                    );
+                    container(details)
+                        .padding(12)
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .into()
+                }
+            };
+            let preview_header = container(
+                iced::widget::text("Preview")
+                    .size(12)
+                    .color(crate::styles::ti(tokens.text_secondary)),
+            )
+            .padding([8, 14])
+            .width(Length::Fill)
+            .style(crate::styles::panel_region(tokens));
+            container(column![preview_header, preview_body].spacing(0))
+                .width(Length::Fixed(280.0))
+                .height(Length::Fill)
+                .style(crate::styles::panel_region(tokens))
+                .into()
+        };
+
+        let table_column = container(column![header_row, table_body].spacing(0))
+            .width(Length::Fill)
+            .height(Length::Fill);
+
+        let split = row![table_column, preview_pane].spacing(0);
+
+        container(column![header, filter_bar, split].spacing(0))
             .width(Length::Fill)
             .height(Length::Fill)
             .style(crate::styles::panel_region(tokens))

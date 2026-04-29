@@ -231,6 +231,8 @@ impl Signex {
                 pending_bom_options: None,
                 export_error: None,
                 bom_preview: None,
+                library_browser_filter: String::new(),
+                library_browser_selection: None,
             },
             interaction_state: InteractionState {
                 current_tool: Tool::Select,

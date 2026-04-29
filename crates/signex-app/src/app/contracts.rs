@@ -73,6 +73,14 @@ pub enum Message {
     Duplicate,
     SaveFile,
     SaveFileAs(PathBuf),
+    /// Library Browser — filter text changed (LIBRARY_PLAN §11 item 4).
+    /// Updates `document_state.library_browser_filter` and resets the
+    /// selection if the highlighted row is filtered out.
+    LibraryBrowserFilterChanged(String),
+    /// Library Browser — user clicked a row in the (filtered) component
+    /// table. Carries the index within the *filtered* view so the
+    /// preview pane resolves the same `LibraryComponent` the user saw.
+    LibraryBrowserSelectRow(usize),
     /// Async save (v0.9.1) finished. Carries the path that was saved
     /// and either `Ok(())` (clear the "Saving…" pill, mark engine
     /// path) or `Err(message)` (surface the error briefly in the

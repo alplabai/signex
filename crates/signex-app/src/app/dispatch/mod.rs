@@ -3,6 +3,7 @@ use iced::Task;
 use super::*;
 
 mod document;
+mod library_browser;
 mod overlay;
 mod routed;
 mod text_edit;
@@ -157,6 +158,9 @@ impl Signex {
             | Message::ModalDragEnd
             | Message::FocusAt { .. }
             | Message::ToggleAutoFocus => self.dispatch_overlay_message(message),
+            Message::LibraryBrowserFilterChanged(_) | Message::LibraryBrowserSelectRow(_) => {
+                self.dispatch_library_browser_message(message)
+            }
             Message::WindowResizedFor(id, w, h) => {
                 // Only main-window resizes drive layout math. Detached
                 // modal + undocked-tab windows have their own sizes

@@ -393,6 +393,20 @@ pub struct DocumentState {
     /// include flags / format / variant in the modal and clicks
     /// Export to drive `rfd::AsyncFileDialog` with the chosen options.
     pub bom_preview: Option<BomPreviewState>,
+    /// Live filter buffer for the active Library Browser tab. Maps
+    /// to LIBRARY_PLAN.md §11 item 4 (parametric / faceted picker) —
+    /// v0.11 ships a substring match across name / value / footprint;
+    /// the tantivy-backed parametric search lands post-v0.11. One
+    /// global buffer is enough for now: switching tabs reads from
+    /// here and the user re-types if needed.
+    pub library_browser_filter: String,
+    /// Index (within the *filtered* view) of the currently-selected
+    /// row in the Library Browser. `None` if nothing is selected. The
+    /// preview pane on the right of the table renders the bound
+    /// `SymbolBody` for whatever row this points at — in v0.11 every
+    /// row ships unbound (sentinel-nil `symbol_uuid`) so the preview
+    /// is a placeholder until the v0.11 picker fills the binding in.
+    pub library_browser_selection: Option<usize>,
 }
 
 /// Which sidebar tab is currently shown inside the BOM preview's
