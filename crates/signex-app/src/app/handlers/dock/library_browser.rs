@@ -111,7 +111,7 @@ impl Signex {
                     (
                         pin.pin.number.clone(),
                         pin.pin.name.clone(),
-                        format!("{:?}", pin.pin.pin_type),
+                        format!("{:?}", pin.pin.direction),
                     )
                 })
                 .collect();
