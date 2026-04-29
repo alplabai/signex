@@ -31,6 +31,7 @@ allow = [
     "0BSD",             # zero-clause BSD
     "WTFPL",
     "Unlicense",
+    "NCSA",             # University of Illinois/NCSA — BSD-3-equivalent, OSI-approved, Apache-compatible (libfuzzer-sys transitive)
 ]
 
 # Anything not in the allowlist is rejected. GPL / AGPL / LGPL / etc are
