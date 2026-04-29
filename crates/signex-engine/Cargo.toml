@@ -7,8 +7,6 @@ license.workspace = true
 
 [dependencies]
 signex-types = { workspace = true }
-standard-parser = { workspace = true }
-standard-writer = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 uuid = { workspace = true }

@@ -999,17 +999,26 @@ fn build_export_context(
                 let abs_path: PathBuf = project_dir.join(&entry.filename);
                 let schematic = match document_state.engines.get(&abs_path) {
                     Some(engine) => engine.document().clone(),
-                    None => match standard_parser::parse_schematic_file(&abs_path) {
-                        Ok(s) => s,
-                        Err(e) => {
-                            log::warn!(
-                                "Print preview: skipping sheet {} ({}): {e}",
-                                entry.name,
-                                abs_path.display()
-                            );
-                            continue;
+                    None => {
+                        let parse_result = std::fs::read_to_string(&abs_path)
+                            .map_err(anyhow::Error::from)
+                            .and_then(|text| {
+                                signex_types::format::SnxSchematic::parse(&text)
+                                    .map(|snx| snx.sheet)
+                                    .map_err(anyhow::Error::from)
+                            });
+                        match parse_result {
+                            Ok(s) => s,
+                            Err(e) => {
+                                log::warn!(
+                                    "Print preview: skipping sheet {} ({}): {e}",
+                                    entry.name,
+                                    abs_path.display()
+                                );
+                                continue;
+                            }
                         }
-                    },
+                    }
                 };
                 snapshots.push(SheetSnapshot {
                     path: abs_path,

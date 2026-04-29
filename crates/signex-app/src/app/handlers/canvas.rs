@@ -1496,7 +1496,14 @@ impl Signex {
             return;
         }
 
-        match standard_parser::parse_schematic_file(&path) {
+        let parse_result = std::fs::read_to_string(&path)
+            .map_err(anyhow::Error::from)
+            .and_then(|text| {
+                signex_types::format::SnxSchematic::parse(&text)
+                    .map(|snx| snx.sheet)
+                    .map_err(anyhow::Error::from)
+            });
+        match parse_result {
             Ok(sheet) => {
                 let title = path
                     .file_stem()

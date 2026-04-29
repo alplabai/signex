@@ -116,7 +116,12 @@ impl Signex {
                 if open_paths.contains(&path) || snapshots_by_path.contains_key(&path) {
                     continue;
                 }
-                let Ok(parsed) = standard_parser::parse_schematic_file(&path) else {
+                let Ok(text) = std::fs::read_to_string(&path) else {
+                    continue;
+                };
+                let Ok(parsed) =
+                    signex_types::format::SnxSchematic::parse(&text).map(|snx| snx.sheet)
+                else {
                     continue;
                 };
                 let snapshot =
@@ -323,15 +328,23 @@ impl Signex {
         let is_schematic = path
             .extension()
             .and_then(|e| e.to_str())
-            .map(|e| matches!(e, "standard_sch" | "snxsch"))
+            .map(|e| matches!(e, "snxsch"))
             .unwrap_or(false);
         if !is_schematic {
             return;
         }
 
-        let Ok(sheet) = standard_parser::parse_schematic_file(path) else {
+        let Ok(text) = std::fs::read_to_string(path) else {
             crate::diagnostics::log_info(format!(
-                "ERC navigation: failed to open sheet {}",
+                "ERC navigation: failed to read sheet {}",
+                path.display()
+            ));
+            return;
+        };
+        let Ok(sheet) = signex_types::format::SnxSchematic::parse(&text).map(|snx| snx.sheet)
+        else {
+            crate::diagnostics::log_info(format!(
+                "ERC navigation: failed to parse sheet {}",
                 path.display()
             ));
             return;
@@ -495,7 +508,16 @@ impl Signex {
             .unwrap_or_default();
         let mut disk_touched = 0usize;
         for sheet_path in unopened_sheet_paths {
-            let Ok(sheet) = standard_parser::parse_schematic_file(&sheet_path) else {
+            let Ok(text) = std::fs::read_to_string(&sheet_path) else {
+                crate::diagnostics::log_info(format!(
+                    "Annotate: failed to read unopened sheet {}",
+                    sheet_path.display()
+                ));
+                continue;
+            };
+            let Ok(sheet) =
+                signex_types::format::SnxSchematic::parse(&text).map(|snx| snx.sheet)
+            else {
                 crate::diagnostics::log_info(format!(
                     "Annotate: failed to parse unopened sheet {}",
                     sheet_path.display()
@@ -572,7 +594,8 @@ impl Signex {
     /// just those to `{prefix}?`. Everything else keeps its current
     /// value. Walks open tabs (live + cached engines) and every sheet
     /// in `project_data.sheets` not opened as a tab; unopened sheets
-    /// are re-saved through `standard-writer` so the fix is project-wide.
+    /// are re-saved through the native `.snxsch` writer so the fix is
+    /// project-wide.
     pub(crate) fn handle_reset_duplicate_designators(&mut self) -> Task<Message> {
         use std::collections::{HashMap, HashSet};
         use std::path::PathBuf;
@@ -635,7 +658,14 @@ impl Signex {
         let mut unopened: Vec<(PathBuf, signex_types::schematic::SchematicSheet)> =
             Vec::with_capacity(unopened_paths.len());
         for path in unopened_paths {
-            match standard_parser::parse_schematic_file(&path) {
+            let parse_result = std::fs::read_to_string(&path)
+                .map_err(anyhow::Error::from)
+                .and_then(|text| {
+                    signex_types::format::SnxSchematic::parse(&text)
+                        .map(|snx| snx.sheet)
+                        .map_err(anyhow::Error::from)
+                });
+            match parse_result {
                 Ok(sheet) => {
                     bump(&mut counts, &sheet);
                     unopened.push((path, sheet));
