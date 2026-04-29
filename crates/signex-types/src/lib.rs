@@ -1,6 +1,7 @@
 pub mod coord;
 pub mod format;
 pub mod layer;
+pub mod library;
 pub mod markup;
 pub mod net;
 pub mod pcb;
