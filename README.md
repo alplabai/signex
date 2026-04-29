@@ -47,8 +47,11 @@ formats one-way. Run it once against your project; open the resulting
   copilot), real-time collaboration, and Signex 365 cloud PLM
 
 > **Status:** Early development — v0.8.0 shipped (Output subsystem + multi-project workspaces + dirty
-> tracking + chrome refactor + hierarchical-sheet polish); next up v0.9 (Library & Polish — symbol /
-> footprint editor, installers). [Join the discussion](https://github.com/alplabai/signex/discussions)
+> tracking + chrome refactor + hierarchical-sheet polish); next up **v0.9 — Apache-clean cutover**
+> ([issue #62](https://github.com/alplabai/signex/issues/62): native `.snxsch`/`.snxpcb` formats,
+> KiCad I/O moved to optional [signex-kicad-import](https://github.com/alplabai/signex-kicad-import)
+> companion). Library & Polish (symbol/footprint editor, multi-symbol `.snxsym`, Component Editor,
+> installers) ships next as v0.10. [Join the discussion](https://github.com/alplabai/signex/discussions)
 > or check the [roadmap](#roadmap).
 
 ## Features
@@ -97,7 +100,8 @@ formats one-way. Run it once against your project; open the resulting
 
 | Version | Milestone |
 |---|---|
-| v0.9 | Library & Polish — symbol / footprint editor, installers |
+| v0.9 | Apache-clean cutover — native `.snxsch` / `.snxpcb` formats, KiCad I/O moved to optional [signex-kicad-import](https://github.com/alplabai/signex-kicad-import) companion (issue #62) |
+| v0.10 | Library & Polish — symbol / footprint editor, multi-symbol `.snxsym`, Component Editor, installers |
 | **v1.0** | **Community Preview** — schematic-only release |
 | **v2.0–v2.2** | **Community Release** — full PCB editor |
 | **v3.0** | **Pro Release** — Signal AI + collaboration |
@@ -173,7 +177,8 @@ cargo clippy --workspace -- -D warnings  # Lint
 | Full SCH Editor — copy/paste, labels, components, Active Bar | v0.6 | Done |
 | Validation + Multi-Window — ERC, annotation, pin matrix, undockable tabs | v0.7 | Done |
 | Output — PDF, BOM, netlist, multi-project workspaces, dirty tracking | v0.8 | Done |
-| Library & Polish — symbol/footprint editor, installers | v0.9 | **In Progress** |
+| Apache-clean cutover (issue #62) — native `.snxsch` / `.snxpcb` formats, KiCad I/O via companion | v0.9 | **In Progress** |
+| Library & Polish — symbol/footprint editor, multi-symbol `.snxsym`, Component Editor, installers | v0.10 | |
 | **Community Preview** — schematic-only editor | **v1.0** | |
 | PCB Viewer — GPU rendering, layers, cross-probe | v2.0 | |
 | PCB Routing + DRC + Output | v2.1–v2.2 | |
