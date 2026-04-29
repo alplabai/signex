@@ -1,6 +1,6 @@
 //! `/footprints` routes — primitive CRUD mirror of `routes::symbols`.
 //!
-//! Per `v0.9-library-refactor-plan.md` §9 Step D4. The wire format is the
+//! Per `v0.9-refactor-2-plan.md` §9 Step D4. The wire format is the
 //! JSON-serialised `Footprint` struct (which itself embeds `Body3D`, optional
 //! `StepAttachment`, and the pad list — all handled transparently by serde).
 

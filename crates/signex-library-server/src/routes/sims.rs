@@ -1,6 +1,6 @@
 //! `/sims` routes — primitive CRUD mirror of `routes::symbols`.
 //!
-//! Per `v0.9-library-refactor-plan.md` §9 Step D4. The wire format is the
+//! Per `v0.9-refactor-2-plan.md` §9 Step D4. The wire format is the
 //! JSON-serialised `SimModel` struct (SPICE/Verilog-A body + default
 //! pin → SPICE-node mapping).
 

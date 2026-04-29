@@ -1,6 +1,6 @@
 //! `Symbol` primitive — schematic-side reusable shape.
 //!
-//! Per `v0.9-library-refactor-plan.md` §2.1, a `Symbol` carries:
+//! Per `v0.9-refactor-2-plan.md` §2.1, a `Symbol` carries:
 //! - typed pin list (no more opaque `(symbol …)` blob),
 //! - drawing primitives (lines/rects/arcs/text),
 //! - default schematic parameters that flow onto a binding `Component`.

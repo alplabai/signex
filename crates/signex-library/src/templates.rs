@@ -1,7 +1,7 @@
 //! Parameter templates — class-typed schemas that constrain a component's
 //! `parameters` map.
 //!
-//! Per `v0.9-library-refactor-plan.md` §4, every `Component` has a class
+//! Per `v0.9-refactor-2-plan.md` §4, every `Component` has a class
 //! (e.g. "resistor", "opamp"); the matching template lists which parameters
 //! are required vs optional and what kind of value (text, number, measurement)
 //! each carries.

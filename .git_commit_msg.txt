@@ -1,0 +1,22 @@
+docs(library): align stale plan refs with v0.9-refactor-2 (DBLib model)
+
+Sweeps the remaining doc references that pointed at the predecessor
+v0.9-library-refactor-plan.md and retargets them at the canonical
+v0.9-refactor-2-plan.md (the table-row + standalone-primitive-tab
+spec the implementation actually follows). Also refreshes the
+synthetic ComponentEditor TabInfo.path comment in
+crates/signex-app/src/app/documents.rs to describe the real
+`<library_path>/<table>.tsv#<row_id>` fragment notation rather than
+the legacy `.snxprt`-per-component path retired by the DBLib refactor.
+
+Acceptance per v0.9-refactor-2-plan.md section 16:
+- Zero `kicad`/`KiCad` substrings under `crates/`.
+- `find . -name "*.snxprt"` empty — extension fully retired.
+- No `Revision` business-logic references in `crates/signex-library/src/`.
+- `.snxsym` / `.snxfpt` open as `TabKind::SymbolEditor` /
+  `TabKind::FootprintEditor`, never inside a Component Preview tab.
+- No `Co-Authored-By` lines on any commit on this branch.
+- No stale `// WS-A:` / `// WS-J:` / `// WS-K:` markers in source.
+
+Also bumps the v0.11.0 CHANGELOG header date to 2026-04-30
+(the actual ship date — prep commit was authored on 2026-04-29).

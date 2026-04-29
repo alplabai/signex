@@ -1,6 +1,6 @@
 //! Manufacturer-part + supply-chain types.
 //!
-//! Per `v0.9-library-refactor-plan.md` §2.4, every `Revision` carries a
+//! Per `v0.9-refactor-2-plan.md` §2.4, every `Revision` carries a
 //! `primary_mpn: ManufacturerPart`, a ranked list of `alternates`, and a list
 //! of `DistributorListing` entries describing where the part can be sourced.
 //!

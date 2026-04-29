@@ -1,7 +1,7 @@
 //! Body 3D editor pane.
 //!
 //! Sits in the right column of the Footprint tab (per
-//! `v0.9-library-refactor-plan.md` §11 step F3). Edits the
+//! `v0.9-refactor-2-plan.md` §11 step F3). Edits the
 //! [`signex_library::Body3D`] embedded on the active footprint
 //! primitive — the procedural 3D render in `preview3d.rs` rebuilds off
 //! these values on every frame.

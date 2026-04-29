@@ -1,6 +1,6 @@
 //! Reusable geometry primitives — `Symbol`, `Footprint`, `SimModel`.
 //!
-//! Per `v0.9-library-refactor-plan.md` §2, primitives are addressed by
+//! Per `v0.9-refactor-2-plan.md` §2, primitives are addressed by
 //! `(library_id, uuid)` tuples (a [`PrimitiveRef`]) and bound onto `Component`
 //! revisions. Two MPNs sharing a SOIC-8 footprint reference the same
 //! `Footprint` primitive — they don't carry their own copy.

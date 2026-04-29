@@ -1,7 +1,7 @@
 -- v0.9 library refactor (WS-C step C3) — primitive storage tables.
 --
 -- Reusable shape primitives (Symbol/Footprint/SimModel) addressed by a
--- (library_id, uuid) tuple per `v0.9-library-refactor-plan.md` §2 / §8.
+-- (library_id, uuid) tuple per `v0.9-refactor-2-plan.md` §2 / §8.
 --
 -- Mirrors the existing migrations' SQLite-friendly portability: stick to TEXT
 -- for UUIDs and JSON payloads so the same DDL applies to both SQLite and

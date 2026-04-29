@@ -19,9 +19,14 @@ pub struct ComponentEditorTab {
 // `ComponentEditor` carries its own `(library_path, table, row_id)`
 // payload that the dispatcher uses to look the editor state up out
 // of `LibraryState.editors`. The synthetic `TabInfo.path` for
-// ComponentEditor tabs is `<library_path>/<row_id>.snxprt` so undock
-// / "is this tab already undocked?" / per-tab visibility continue
-// to use a single PathBuf identity.
+// ComponentEditor tabs is `<library_path>/<table>.tsv#<row_id>`
+// (table-fragment notation, see
+// `LibraryState::component_tab_path`) so undock / "is this tab
+// already undocked?" / per-tab visibility continue to use a single
+// PathBuf identity. No `.tsv#<row>` file is ever written to disk —
+// the fragment is purely a tab-identity salt that points back at
+// the row inside the table file. Per `v0.9-refactor-2-plan.md` §2.2
+// the legacy `.snxprt`-per-component file format is fully retired.
 #[derive(Debug, Clone)]
 pub enum TabKind {
     Schematic,

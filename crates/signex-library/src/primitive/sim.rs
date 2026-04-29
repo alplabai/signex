@@ -1,6 +1,6 @@
 //! `SimModel` primitive — SPICE / Verilog-A model body, reusable across MPNs.
 //!
-//! Per `v0.9-library-refactor-plan.md` §2.3, a `SimModel` carries the model
+//! Per `v0.9-refactor-2-plan.md` §2.3, a `SimModel` carries the model
 //! body and a default symbol-pin → SPICE-node mapping. A binding `Component`
 //! references it via `Revision::sim_ref` and may override the node map for
 //! a specific MPN.

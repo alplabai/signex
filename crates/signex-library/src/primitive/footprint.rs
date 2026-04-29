@@ -1,6 +1,6 @@
 //! `Footprint` primitive — PCB-side reusable shape.
 //!
-//! Per `v0.9-library-refactor-plan.md` §2.2, a `Footprint` carries:
+//! Per `v0.9-refactor-2-plan.md` §2.2, a `Footprint` carries:
 //! - typed pad list,
 //! - courtyard polygon,
 //! - silk / fab graphics for both copper sides,

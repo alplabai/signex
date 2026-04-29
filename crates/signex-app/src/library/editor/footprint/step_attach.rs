@@ -4,7 +4,7 @@
 //! for [`signex_library::StepAttachment`]. Also exposes the small
 //! `view()` widget for the Footprint tab's Body 3D pane.
 //!
-//! Per `v0.9-library-refactor-plan.md` §11 step F5: the attachment is
+//! Per `v0.9-refactor-2-plan.md` §11 step F5: the attachment is
 //! content-hashed so two MPNs sharing identical STEP geometry
 //! de-duplicate to one file in `mylib.snxlib/step/`.
 

@@ -1,6 +1,6 @@
 //! `/symbols` routes — primitive CRUD for the v0.9 library refactor.
 //!
-//! Per `v0.9-library-refactor-plan.md` §9 Step D3, primitives are addressed by
+//! Per `v0.9-refactor-2-plan.md` §9 Step D3, primitives are addressed by
 //! `(library_id, uuid)` tuples. The wire format is the JSON-serialised
 //! `Symbol` struct from `signex-library`. Routes are bearer-token gated like
 //! the existing `/components` family — `router_with_state` slots them into

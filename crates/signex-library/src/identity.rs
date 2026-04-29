@@ -108,7 +108,7 @@ impl Mpn {
 
 /// Component class — picks the parameter template ("resistor", "opamp", …).
 ///
-/// Open string per `v0.9-library-refactor-plan.md` §4.1: users may add custom
+/// Open string per `v0.9-refactor-2-plan.md` §4.1: users may add custom
 /// classes; templates resolve dynamically through [`crate::TemplateRegistry`].
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
