@@ -1,27 +1,52 @@
 //! Selection overlay rendering -- draws highlight around selected elements.
 
+use std::cell::Cell;
+
 use iced::Color;
 use iced::widget::canvas;
 
 use signex_types::schematic::*;
+use signex_types::theme::CanvasColors;
 
 use super::{SchematicRenderSnapshot, ScreenTransform, field_display_pos};
+use crate::colors::to_iced;
 
-/// Selection outline color (Altium-style — thin outline, no fill).
-const SEL_COLOR: Color = Color {
+/// Default selection outline color (Altium-style green) used until a
+/// theme color is supplied via [`draw_selection_overlay`].
+const DEFAULT_SEL_COLOR: Color = Color {
     r: 0.2,
     g: 0.85,
     b: 0.2,
     a: 0.9,
 };
 
+thread_local! {
+    static SELECTION_COLOR: Cell<Color> = const { Cell::new(DEFAULT_SEL_COLOR) };
+}
+
+fn sel_color() -> Color {
+    SELECTION_COLOR.with(|c| c.get())
+}
+
+fn set_sel_color(color: Color) {
+    SELECTION_COLOR.with(|c| c.set(color));
+}
+
 /// Draw selection highlights for all selected items.
+///
+/// `text_edit_override`: when set, the selected text-note matching the
+/// uuid uses the supplied live text string (instead of its stored text)
+/// when computing its selection AABB, so the highlight grows / shrinks
+/// in real time as the user types in the inline editor.
 pub fn draw_selection_overlay(
     frame: &mut canvas::Frame,
     sheet: &SchematicRenderSnapshot,
     selected: &[SelectedItem],
     transform: &ScreenTransform,
+    colors: &CanvasColors,
+    text_edit_override: Option<(uuid::Uuid, &str)>,
 ) {
+    set_sel_color(to_iced(&colors.selection));
     for item in selected {
         match item.kind {
             SelectedKind::Symbol => {
@@ -64,7 +89,14 @@ pub fn draw_selection_overlay(
             }
             SelectedKind::TextNote => {
                 if let Some(tn) = sheet.text_notes.iter().find(|t| t.uuid == item.uuid) {
-                    draw_text_selection(frame, tn, transform);
+                    match text_edit_override {
+                        Some((edit_uuid, edit_text)) if edit_uuid == tn.uuid => {
+                            let mut live = tn.clone();
+                            live.text = edit_text.to_string();
+                            draw_text_selection(frame, &live, transform);
+                        }
+                        _ => draw_text_selection(frame, tn, transform),
+                    }
                 }
             }
             SelectedKind::ChildSheet => {
@@ -236,7 +268,7 @@ fn draw_power_port_selection(frame: &mut canvas::Frame, sym: &Symbol, transform:
     frame.stroke(
         &path,
         canvas::Stroke::default()
-            .with_color(SEL_COLOR)
+            .with_color(sel_color())
             .with_width(1.0),
     );
     let dot_sz = 2.0;
@@ -245,7 +277,7 @@ fn draw_power_port_selection(frame: &mut canvas::Frame, sym: &Symbol, transform:
             iced::Point::new(c.x - dot_sz, c.y - dot_sz),
             iced::Size::new(dot_sz * 2.0, dot_sz * 2.0),
         );
-        frame.fill(&grip, SEL_COLOR);
+        frame.fill(&grip, sel_color());
     }
 }
 
@@ -424,7 +456,7 @@ fn draw_symbol_selection(
     frame.stroke(
         &path,
         canvas::Stroke::default()
-            .with_color(SEL_COLOR)
+            .with_color(sel_color())
             .with_width(1.0),
     );
 
@@ -435,7 +467,7 @@ fn draw_symbol_selection(
             iced::Point::new(c.x - dot_sz, c.y - dot_sz),
             iced::Size::new(dot_sz * 2.0, dot_sz * 2.0),
         );
-        frame.fill(&grip, SEL_COLOR);
+        frame.fill(&grip, sel_color());
     }
 }
 
@@ -447,7 +479,7 @@ fn draw_wire_selection(frame: &mut canvas::Frame, w: &Wire, transform: &ScreenTr
     frame.stroke(
         &path,
         canvas::Stroke::default()
-            .with_color(SEL_COLOR)
+            .with_color(sel_color())
             .with_width(3.0),
     );
 
@@ -457,7 +489,7 @@ fn draw_wire_selection(frame: &mut canvas::Frame, w: &Wire, transform: &ScreenTr
             iced::Point::new(p.x - 3.0, p.y - 3.0),
             iced::Size::new(6.0, 6.0),
         );
-        frame.fill(&grip, SEL_COLOR);
+        frame.fill(&grip, sel_color());
     }
 }
 
@@ -469,7 +501,7 @@ fn draw_bus_selection(frame: &mut canvas::Frame, b: &Bus, transform: &ScreenTran
     frame.stroke(
         &path,
         canvas::Stroke::default()
-            .with_color(SEL_COLOR)
+            .with_color(sel_color())
             .with_width(4.0),
     );
     for p in &[s, e] {
@@ -477,7 +509,7 @@ fn draw_bus_selection(frame: &mut canvas::Frame, b: &Bus, transform: &ScreenTran
             iced::Point::new(p.x - 3.0, p.y - 3.0),
             iced::Size::new(6.0, 6.0),
         );
-        frame.fill(&grip, SEL_COLOR);
+        frame.fill(&grip, sel_color());
     }
 }
 
@@ -487,15 +519,9 @@ fn draw_label_selection(frame: &mut canvas::Frame, l: &Label, transform: &Screen
 }
 
 fn draw_text_selection(frame: &mut canvas::Frame, tn: &TextNote, transform: &ScreenTransform) {
-    let tw = tn.text.chars().count() as f64 * tn.font_size.max(1.27) * 0.7;
-    let th = tn.font_size.max(1.27) * 1.5;
-    let aabb = Aabb::new(
-        tn.position.x,
-        tn.position.y - th,
-        tn.position.x + tw,
-        tn.position.y + th * 0.5,
-    )
-    .expand(0.5);
+    // Tight outline that hugs the visible glyphs — no extra mm padding,
+    // otherwise the box looks shifted (especially below the descenders).
+    let aabb = super::text::text_note_aabb(tn);
     draw_rect_highlight(frame, &aabb, transform);
 }
 
@@ -517,7 +543,7 @@ fn draw_point_selection(frame: &mut canvas::Frame, x: f64, y: f64, transform: &S
     frame.stroke(
         &circle,
         canvas::Stroke::default()
-            .with_color(SEL_COLOR)
+            .with_color(sel_color())
             .with_width(1.5),
     );
 }
@@ -536,7 +562,7 @@ fn draw_rect_highlight(frame: &mut canvas::Frame, aabb: &Aabb, transform: &Scree
     frame.stroke(
         &rect,
         canvas::Stroke::default()
-            .with_color(SEL_COLOR)
+            .with_color(sel_color())
             .with_width(1.0),
     );
 
@@ -552,7 +578,7 @@ fn draw_rect_highlight(frame: &mut canvas::Frame, aabb: &Aabb, transform: &Scree
             iced::Point::new(p.x - dot_sz, p.y - dot_sz),
             iced::Size::new(dot_sz * 2.0, dot_sz * 2.0),
         );
-        frame.fill(&grip, SEL_COLOR);
+        frame.fill(&grip, sel_color());
     }
 }
 
@@ -595,7 +621,7 @@ fn draw_drawing_selection(
     transform: &ScreenTransform,
 ) {
     let stroke = canvas::Stroke::default()
-        .with_color(SEL_COLOR)
+        .with_color(sel_color())
         .with_width(2.0);
     match drawing {
         SchDrawing::Line { start, end, .. } => {

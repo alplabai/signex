@@ -11,6 +11,15 @@ impl Signex {
         };
 
         self.interaction_state.editing_text = None;
+        {
+            let canvas = self.interaction_state.active_canvas_mut();
+            if canvas.editing_text_uuid.is_some() {
+                canvas.editing_text_uuid = None;
+                canvas.editing_text_value = None;
+                canvas.clear_content_cache();
+                canvas.clear_overlay_cache();
+            }
+        }
         self.interaction_state.context_menu = None;
 
         if let Err(error) = self.open_document_path(path) {

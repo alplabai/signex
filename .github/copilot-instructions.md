@@ -38,3 +38,29 @@ Write comments in English and only when they add value. Comments should explain 
 All code must be written in English. Variable names, function names, comments, and other code elements should be in English. Avoid non-English characters or words in code because they can reduce readability and increase the chance of mistakes.
 
 Do not add yourself as a co-author; only the actual author should appear.
+
+## Clean-room policy (MANDATORY)
+
+This repository is being developed under **clean-room** conditions. The
+following names MUST NOT appear anywhere in this workspace's source code,
+comments, doc comments, log messages, panel labels, identifiers, file
+names, or test fixtures:
+
+- `KiCad`, `kicad`, `KICAD`
+- `.kicad_sch`, `.kicad_pcb`, `.kicad_sym`, `.kicad_pro`
+- Any other GPL-licensed EDA tool name (Eeschema, Pcbnew, etc.)
+
+Reasons:
+
+- This crate is licensed Apache-2.0. We must not contaminate it with
+  references that imply derivation from a GPL-3.0 source.
+- Any foreign-format import / conversion logic lives in a SEPARATE
+  companion repository. This workspace is format-agnostic.
+
+When you need to refer to a non-Signex format, write "foreign format",
+"imported document", or name the concrete neutral concept ("Center /
+Bottom alignment", "S-expression input", etc.). Never explain a behaviour
+by referencing where it came from.
+
+If you find an existing reference to those names, remove it as part of
+your edit. Do not preserve them "for context".

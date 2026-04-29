@@ -52,8 +52,12 @@ pub struct CanvasState {
     // ─── Double-click detection ───
     /// Timestamp of last left-click (for double-click detection).
     last_click_time: Option<std::time::Instant>,
-    /// World position of last left-click.
-    last_click_world: Option<(f64, f64)>,
+    /// Screen-space position of last left-click. Tracked in pixels
+    /// (not world units) so the double-click distance threshold stays
+    /// stable across zoom levels — at high zoom a few mm of world
+    /// space is huge on screen, at low zoom it's smaller than the
+    /// cursor itself, both making world-space thresholds unreliable.
+    last_click_screen: Option<(f32, f32)>,
 }
 
 // ─── SchematicCanvas (the Program) ────────────────────────────
@@ -147,6 +151,16 @@ pub struct SchematicCanvas {
     /// Two-click shape anchor + which shape is being drawn. Used by
     /// the rubber-band preview for Line / Rectangle / Circle.
     pub shape_anchor: Option<(signex_types::schematic::Point, ShapePreviewKind)>,
+    /// UUID of the text element currently being edited inline. The
+    /// canvas hides the underlying glyphs for this element so the
+    /// floating `text_input` overlay isn't double-rendered on top of
+    /// the static text. `None` when no inline edit is in progress.
+    pub editing_text_uuid: Option<uuid::Uuid>,
+    /// Live edited string for the inline text editor. Mirrored from the
+    /// app-side `editing_text` state so the selection overlay can grow
+    /// or shrink in real time as the user types — without it the box
+    /// stays sized to the original glyph width until submit.
+    pub editing_text_value: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -235,6 +249,8 @@ impl SchematicCanvas {
             polyline_points: Vec::new(),
             reorder_picker_armed: false,
             shape_anchor: None,
+            editing_text_uuid: None,
+            editing_text_value: None,
         }
     }
 
@@ -343,16 +359,23 @@ impl canvas::Program<Message> for SchematicCanvas {
                     let wx = world.x as f64;
                     let wy = world.y as f64;
 
-                    // Double-click detection (300ms, 3mm threshold)
+                    // Double-click detection — 450 ms time window
+                    // and an 8 px screen-space distance threshold.
+                    // Pixel-space keeps the gesture reliable at any
+                    // zoom level; the timing matches OS double-click
+                    // defaults (macOS/Windows) so the canvas feels
+                    // consistent with the rest of the app.
                     let now = std::time::Instant::now();
-                    if let (Some(last_time), Some(last_pos)) =
-                        (state.last_click_time, state.last_click_world)
+                    if let (Some(last_time), Some(last_screen)) =
+                        (state.last_click_time, state.last_click_screen)
                     {
                         let dt = now.duration_since(last_time);
-                        let dist = ((wx - last_pos.0).powi(2) + (wy - last_pos.1).powi(2)).sqrt();
-                        if dt.as_millis() < 300 && dist < 3.0 {
+                        let dx = cursor_pos.x - last_screen.0;
+                        let dy = cursor_pos.y - last_screen.1;
+                        let dist_px = (dx * dx + dy * dy).sqrt();
+                        if dt.as_millis() < 450 && dist_px < 8.0 {
                             state.last_click_time = None;
-                            state.last_click_world = None;
+                            state.last_click_screen = None;
                             state.select_drag_start = None;
                             state.click_on_selected = false;
                             return Some(canvas::Action::publish(Message::CanvasEvent(
@@ -366,7 +389,7 @@ impl canvas::Program<Message> for SchematicCanvas {
                         }
                     }
                     state.last_click_time = Some(now);
-                    state.last_click_world = Some((wx, wy));
+                    state.last_click_screen = Some((cursor_pos.x, cursor_pos.y));
 
                     // Classify the click target:
                     //   - hit an already-selected item  → defer click, prepare drag
@@ -808,6 +831,7 @@ impl canvas::Program<Message> for SchematicCanvas {
                     bounds,
                     focus_ref,
                     Some(&self.wire_color_overrides),
+                    self.editing_text_uuid,
                 );
             }
             frame.into_geometry()
@@ -830,6 +854,7 @@ impl canvas::Program<Message> for SchematicCanvas {
                         bounds,
                         focus_ref,
                         Some(&self.wire_color_overrides),
+                        self.editing_text_uuid,
                     );
                 }
             })
@@ -1023,6 +1048,12 @@ impl canvas::Program<Message> for SchematicCanvas {
                     snapshot,
                     &self.selected,
                     &transform,
+                    &self.canvas_colors,
+                    self.editing_text_uuid.and_then(|uuid| {
+                        self.editing_text_value
+                            .as_deref()
+                            .map(|text| (uuid, text))
+                    }),
                 );
                 // Altium-style ERC markers: filled circle + concentric
                 // stroke at each violation's world position, colored by

@@ -197,6 +197,15 @@ impl Signex {
         // session starts fresh instead of inheriting the previous one.
         self.document_state.panel_ctx.pre_placement = None;
         self.interaction_state.editing_text = None;
+        {
+            let canvas = self.interaction_state.active_canvas_mut();
+            if canvas.editing_text_uuid.is_some() {
+                canvas.editing_text_uuid = None;
+                canvas.editing_text_value = None;
+                canvas.clear_content_cache();
+                canvas.clear_overlay_cache();
+            }
+        }
         // Escape / right-click also cancels the net-colour pen, the
         // z-order reference picker, and any in-flight lasso —
         // Altium-parity "one terminator kills every armed mode".

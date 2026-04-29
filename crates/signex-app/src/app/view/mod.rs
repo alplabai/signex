@@ -3896,8 +3896,15 @@ impl Signex {
             // The canvas Program publishes its latest camera into this Cell each
             // frame — that's the only way to read it from outside the Program.
             let (cam_off_x, cam_off_y, cam_scale) = interaction.canvas.live_camera.get();
-            let canvas_local_x = edit_state.world_x as f32 * cam_scale + cam_off_x;
-            let canvas_local_y = edit_state.world_y as f32 * cam_scale + cam_off_y;
+            // Anchor the editor at the AABB top-left of the rendered glyphs
+            // (computed when edit started). This works for any
+            // justify_h / justify_v combination, including Center / Bottom
+            // notes — the old anchor-based offset landed up-and-to-the-side
+            // of the visible text for those.
+            // (Foreign-format imports are handled by a separate companion
+            // crate; this code path never sees those structures.)
+            let canvas_local_x = edit_state.world_min_x as f32 * cam_scale + cam_off_x;
+            let canvas_local_y = edit_state.world_min_y as f32 * cam_scale + cam_off_y;
             // Canvas top-left within the window: menu bar + tab bar above,
             // left dock + left resize handle (5px when shown) to the side.
             let tabs_h: f32 = if document.tabs.is_empty() { 0.0 } else { 28.0 };
@@ -3913,48 +3920,118 @@ impl Signex {
             };
             let left_handle_w: f32 = if has_left && !left_col { 5.0 } else { 0.0 };
             let x_canvas_origin: f32 = left_dock_w + left_handle_w;
-            // Font size in pixels matches the rendered label (10 pt ≈ 1.8 mm).
-            let font_px = (cam_scale * 1.8).clamp(10.0, 64.0);
-            // Estimate width from text length to keep the input snug.
-            let approx_w =
-                ((edit_state.text.chars().count() as f32 + 2.0) * font_px * 0.62).max(60.0);
-            // Offset the input so the baseline sits on top of the label text.
-            let abs_x = x_canvas_origin + canvas_local_x - 2.0;
-            let abs_y = y_canvas_origin + canvas_local_y - font_px - 2.0;
-            let paper_c = crate::styles::ti(document.panel_ctx.tokens.paper);
-            let text_c = crate::styles::ti(document.panel_ctx.tokens.text);
+            // Canvas right / bottom edges so the inline editor can be
+            // clipped against them — without this clamp the floating
+            // text_input bleeds over the side / bottom dock panels and
+            // status bar (overlays sit above docked widgets in z-order).
+            let has_right = document.dock.has_panels(PanelPosition::Right);
+            let right_col = document.dock.is_collapsed(PanelPosition::Right);
+            let right_dock_w: f32 = if !has_right {
+                0.0
+            } else if right_col {
+                28.0
+            } else {
+                ui.right_width
+            };
+            let right_handle_w: f32 = if has_right && !right_col { 5.0 } else { 0.0 };
+            let has_bottom = document.dock.has_panels(PanelPosition::Bottom);
+            let bottom_col = document.dock.is_collapsed(PanelPosition::Bottom);
+            let bottom_dock_h: f32 = if !has_bottom {
+                0.0
+            } else if bottom_col {
+                28.0
+            } else {
+                ui.bottom_height
+            };
+            let bottom_handle_h: f32 = if has_bottom && !bottom_col { 5.0 } else { 0.0 };
+            let (win_w, win_h) = ui.window_size;
+            let status_bar_h: f32 = 22.0;
+            let x_canvas_right: f32 = (win_w - right_dock_w - right_handle_w).max(x_canvas_origin);
+            let y_canvas_bottom: f32 =
+                (win_h - bottom_dock_h - bottom_handle_h - status_bar_h).max(y_canvas_origin);
+            // Match the renderer exactly: text notes draw at
+            // SCHEMATIC_TEXT_EM_MM em height, scaled by the camera. No
+            // clamp — the inline editor must agree with the canvas
+            // glyphs at every zoom level so the cursor sits on the
+            // baseline of the visible text.
+            let font_px = (cam_scale * edit_state.world_height as f32).max(1.0);
+            // Width = AABB width in screen pixels, with a tiny pad so the
+            // caret has room when the field is empty.
+            let aabb_w_px =
+                (edit_state.world_height as f32).max(1.0) * 0.0; // placeholder, real value below
+            let _ = aabb_w_px;
+            let approx_w = ((edit_state.text.chars().count() as f32 + 2.0)
+                * font_px
+                * 0.5)
+                .max(40.0);
+            // No vertical fudge: AABB top-left already accounts for em-box
+            // leading, so the input top sits exactly on the canvas glyph
+            // top.
+            let abs_x = x_canvas_origin + canvas_local_x;
+            // With `line_height(Relative(1.0))` the text_input's line-box
+            // is exactly `font_px` tall and its glyphs sit at the top of
+            // that box, matching `canvas::Text { align_y: Top }` used by
+            // the renderer. No vertical fudge needed.
+            let abs_y = y_canvas_origin + canvas_local_y;
+            // Clamp the editor to the canvas region. If the text-note
+            // anchor sits to the left of (or above) the canvas, push the
+            // overlay back inside and trim the available width / height
+            // by the same amount so it doesn't overpaint the side docks
+            // or status bar. Same on the right / bottom: never extend
+            // past the canvas edge.
+            let abs_x_clamped = abs_x.max(x_canvas_origin);
+            let abs_y_clamped = abs_y.max(y_canvas_origin);
+            let left_trim = (abs_x_clamped - abs_x).max(0.0);
+            let top_trim = (abs_y_clamped - abs_y).max(0.0);
+            let max_w = (x_canvas_right - abs_x_clamped).max(0.0);
+            let max_h = (y_canvas_bottom - abs_y_clamped).max(0.0);
+            let editor_visible = max_w > 1.0 && max_h > 1.0;
+            let approx_w = (approx_w - left_trim).clamp(1.0, max_w.max(1.0));
+            let _ = top_trim;
+            // Match the rendered text-note color so the editor reads as
+            // the same glyph, not as a panel-coloured input on top of it.
+            let body_c = signex_render::colors::to_iced(
+                &interaction.canvas.canvas_colors.body,
+            );
             let accent_c = crate::styles::ti(document.panel_ctx.tokens.accent);
+            let transparent = iced::Color::TRANSPARENT;
+            if editor_visible {
             layers.push(
                 column![
-                    iced::widget::Space::new().height(abs_y.max(0.0)),
+                    iced::widget::Space::new().height(abs_y_clamped.max(0.0)),
                     row![
-                        iced::widget::Space::new().width(abs_x.max(0.0)),
+                        iced::widget::Space::new().width(abs_x_clamped.max(0.0)),
                         container(
                             iced::widget::text_input("", &text)
                                 .on_input(Message::TextEditChanged)
                                 .on_submit(Message::TextEditSubmit)
                                 .size(font_px)
-                                .padding([1, 2])
+                                .line_height(iced::widget::text::LineHeight::Relative(1.0))
+                                .padding(0)
                                 .width(approx_w)
+                                .font(signex_render::canvas_font())
                                 .style(move |_: &iced::Theme, _status: iced::widget::text_input::Status| {
                                     iced::widget::text_input::Style {
-                                        background: iced::Background::Color(paper_c),
+                                        background: iced::Background::Color(transparent),
                                         border: iced::Border {
-                                            color: accent_c,
-                                            width: 1.0,
+                                            color: transparent,
+                                            width: 0.0,
                                             radius: 0.0.into(),
                                         },
-                                        icon: text_c,
-                                        placeholder: text_c,
-                                        value: text_c,
+                                        icon: body_c,
+                                        placeholder: body_c,
+                                        value: body_c,
                                         selection: accent_c,
                                     }
                                 }),
-                        ),
+                        )
+                        .max_width(max_w)
+                        .max_height(max_h),
                     ],
                 ]
                 .into(),
             );
+            }
         }
 
         if let Some(ab_menu) = interaction.active_bar_menu {

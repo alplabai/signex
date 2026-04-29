@@ -810,16 +810,7 @@ fn hit_label(lbl: &Label, wx: f64, wy: f64) -> bool {
 }
 
 fn hit_text_note(tn: &TextNote, wx: f64, wy: f64) -> bool {
-    let text_width = tn.text.chars().count() as f64 * tn.font_size.max(1.27) * 0.7;
-    let text_height = tn.font_size.max(1.27) * 1.5;
-    let aabb = Aabb::new(
-        tn.position.x,
-        tn.position.y - text_height,
-        tn.position.x + text_width,
-        tn.position.y + text_height * 0.5,
-    )
-    .expand(0.5);
-    aabb.contains(wx, wy)
+    super::text::text_note_aabb(tn).expand(0.5).contains(wx, wy)
 }
 
 fn hit_child_sheet(cs: &ChildSheet, wx: f64, wy: f64) -> bool {

@@ -305,6 +305,15 @@ impl Signex {
 
     pub(crate) fn sync_visible_document_from_active_tab(&mut self) {
         self.interaction_state.editing_text = None;
+        {
+            let canvas = self.interaction_state.active_canvas_mut();
+            if canvas.editing_text_uuid.is_some() {
+                canvas.editing_text_uuid = None;
+                canvas.editing_text_value = None;
+                canvas.clear_content_cache();
+                canvas.clear_overlay_cache();
+            }
+        }
 
         // Schematic tabs store their engine in `document_state.engines`,
         // keyed by the tab's path. PCB tabs still hold their board in

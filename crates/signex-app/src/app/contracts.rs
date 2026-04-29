@@ -540,10 +540,17 @@ pub struct TextEditState {
     pub kind: signex_types::schematic::SelectedKind,
     pub text: String,
     pub original_text: String,
-    /// World-space position of the object being edited (mm). Converted to
-    /// screen coords at render time so the inline editor tracks pan/zoom.
+    /// World-space anchor (mm) — kept for back-compat / commands.
     pub world_x: f64,
     pub world_y: f64,
+    /// World-space top-left of the rendered glyph bbox. Used by the
+    /// inline editor so the text_input overlay sits exactly on top of
+    /// where the canvas glyphs would be drawn, regardless of the
+    /// note's `justify_v` (Center / Bottom both supported).
+    pub world_min_x: f64,
+    pub world_min_y: f64,
+    /// World-space height of the rendered glyph box (mm).
+    pub world_height: f64,
 }
 
 #[derive(Debug, Clone)]

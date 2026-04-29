@@ -647,6 +647,11 @@ impl Signex {
                 // and returns to normal selection — same convention as most
                 // IDEs (Escape cancels, click elsewhere confirms).
                 if let Some(state) = self.interaction_state.editing_text.take() {
+                    let canvas = self.interaction_state.active_canvas_mut();
+                    canvas.editing_text_uuid = None;
+                    canvas.editing_text_value = None;
+                    canvas.clear_content_cache();
+                    canvas.clear_overlay_cache();
                     if state.text != state.original_text {
                         let stored = signex_render::schematic::text::escape_for_storage(&state.text);
                         let cmd = match state.kind {
@@ -1332,11 +1337,15 @@ impl Signex {
                                 .iter()
                                 .find(|l| l.uuid == hit.uuid)
                                 .map(|l| {
+                                    let aabb = signex_render::schematic::label::label_text_aabb(l);
                                     (
                                         l.text.clone(),
                                         SelectedKind::Label,
                                         l.position.x,
                                         l.position.y,
+                                        aabb.min_x,
+                                        aabb.min_y,
+                                        aabb.max_y - aabb.min_y,
                                     )
                                 }),
                             SelectedKind::TextNote => snapshot
@@ -1344,16 +1353,20 @@ impl Signex {
                                 .iter()
                                 .find(|t| t.uuid == hit.uuid)
                                 .map(|t| {
+                                    let aabb = signex_render::schematic::text::text_note_aabb(t);
                                     (
                                         t.text.clone(),
                                         SelectedKind::TextNote,
                                         t.position.x,
                                         t.position.y,
+                                        aabb.min_x,
+                                        aabb.min_y,
+                                        aabb.max_y - aabb.min_y,
                                     )
                                 }),
                             _ => None,
                         };
-                        if let Some((raw_text, kind, wx, wy)) = edit_info {
+                        if let Some((raw_text, kind, wx, wy, mx, my, h)) = edit_info {
                             // Show the user the visible form (e.g. "/OE"), not
                             // the escape-form storage form ("{slash}OE").
                             let display_text = expand_char_escapes(&raw_text);
@@ -1361,10 +1374,21 @@ impl Signex {
                                 uuid: hit.uuid,
                                 kind,
                                 original_text: display_text.clone(),
-                                text: display_text,
+                                text: display_text.clone(),
                                 world_x: wx,
                                 world_y: wy,
+                                world_min_x: mx,
+                                world_min_y: my,
+                                world_height: h,
                             });
+                            // Hide the underlying glyphs so the inline
+                            // editor isn't rendered on top of the
+                            // static canvas text.
+                            let canvas = self.interaction_state.active_canvas_mut();
+                            canvas.editing_text_uuid = Some(hit.uuid);
+                            canvas.editing_text_value = Some(display_text);
+                            canvas.clear_content_cache();
+                            canvas.clear_overlay_cache();
                         }
                     }
                 }

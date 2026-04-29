@@ -594,6 +594,10 @@ pub fn render_schematic(
     wire_color_overrides: Option<
         &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
     >,
+    // UUID of a text element currently being inline-edited; the
+    // renderer skips drawing the matching label / text note glyphs
+    // so the editor overlay isn't double-rendered on top.
+    hide_text_uuid: Option<uuid::Uuid>,
 ) {
     let body_color = to_iced(&colors.body);
     let body_fill_color = to_iced(&colors.body_fill);
@@ -671,6 +675,9 @@ pub fn render_schematic(
 
     // Z=7-9: Labels (net, global, hierarchical, power)
     for lbl in &sheet.labels {
+        if hide_text_uuid == Some(lbl.uuid) {
+            continue;
+        }
         let color = match lbl.label_type {
             LabelType::Net => to_iced(&colors.net_label),
             LabelType::Global => to_iced(&colors.global_label),
@@ -800,6 +807,9 @@ pub fn render_schematic(
 
     // Z=12: Text notes
     for tn in &sheet.text_notes {
+        if hide_text_uuid == Some(tn.uuid) {
+            continue;
+        }
         text::draw_text_note(
             frame,
             tn,

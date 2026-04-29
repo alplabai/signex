@@ -551,6 +551,63 @@ pub fn visible_char_count(input: &str) -> usize {
         .sum()
 }
 
+/// Approximate world-space AABB for a [`TextNote`] that matches what
+/// [`draw_text_note`] actually renders. Text notes are drawn at a
+/// fixed `SCHEMATIC_TEXT_EM_MM` glyph height regardless of the
+/// note's stored `font_size` (which can be wildly larger when
+/// imported from foreign formats), and their position anchor honours
+/// the note's `justify_h` / `justify_v` alignment. The selection
+/// outline and hit-test must use the same metrics or they end up
+/// many times larger than the visible glyphs. Multi-line notes
+/// (separated by `\n` after escape expansion) widen to the longest
+/// line and grow vertically per line.
+pub fn text_note_aabb(note: &TextNote) -> signex_types::schematic::Aabb {
+    // Use the same em size the renderer passes to iced. iced's
+    // `canvas::Text` reserves exactly `size` pixels of vertical space
+    // per line (the em-box), and aligns that box's top/centre/bottom
+    // to the anchor — so matching it here keeps the selection outline
+    // glued to the visible glyphs regardless of cap-vs-em ratios.
+    let em = crate::SCHEMATIC_TEXT_EM_MM;
+    // Per-glyph advance for the canvas font (Iosevka monospace).
+    // 0.5 em is a tighter, more accurate width for monospace.
+    const GLYPH_W_FACTOR: f64 = 0.5;
+    // Multi-line spacing in em.
+    const LINE_GAP: f64 = 1.0;
+
+    let expanded = expand_backslash_escapes(&expand_char_escapes(&note.text));
+    let lines: Vec<&str> = if expanded.is_empty() {
+        vec![""]
+    } else {
+        expanded.split('\n').collect()
+    };
+    let max_chars = lines
+        .iter()
+        .map(|line| visible_char_count(line))
+        .max()
+        .unwrap_or(0)
+        .max(1);
+    let tw = max_chars as f64 * em * GLYPH_W_FACTOR;
+    let total_h = em * (1.0 + LINE_GAP * (lines.len().saturating_sub(1)) as f64);
+
+    let (x0, x1) = match note.justify_h {
+        HAlign::Left => (note.position.x, note.position.x + tw),
+        HAlign::Center => (
+            note.position.x - tw * 0.5,
+            note.position.x + tw * 0.5,
+        ),
+        HAlign::Right => (note.position.x - tw, note.position.x),
+    };
+    let (y0, y1) = match note.justify_v {
+        VAlign::Top => (note.position.y, note.position.y + total_h),
+        VAlign::Center => (
+            note.position.y - total_h * 0.5,
+            note.position.y + total_h * 0.5,
+        ),
+        VAlign::Bottom => (note.position.y - total_h, note.position.y),
+    };
+    signex_types::schematic::Aabb::new(x0, y0, x1, y1)
+}
+
 /// Expand backslash escapes used inside text-note / multi-line fields:
 /// `\n` → newline, `\r` → CR (collapsed), `\t` → tab, `\\` → literal `\`.
 /// Unrecognised `\x` sequences are passed through unchanged.
