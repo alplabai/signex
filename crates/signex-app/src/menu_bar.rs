@@ -401,7 +401,7 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
                 ctx.has_schematic,
             ),
             leaf_if(
-                "Smart Paste",
+                "Paste Special",
                 Some("Shift+Ctrl+V"),
                 MenuMessage::SmartPaste,
                 ctx.has_schematic,

@@ -124,7 +124,7 @@ impl Signex {
         ));
         items.push(self.ctx_menu_item_kb(
             Some(ic::icon_dd_smart_paste(tid)),
-            "Smart Paste",
+            "Paste Special",
             "Shift+Ctrl+V",
             ContextAction::SmartPaste,
         ));
@@ -2581,7 +2581,7 @@ impl Signex {
         let header = iced::widget::mouse_area(
             container(
                 row![
-                    text("Parameter Manager").size(14).color(text_c),
+                    text("Parameters").size(14).color(text_c),
                     Space::new().width(iced::Length::Fill),
                     self.view_close_x(Message::CloseParameterManager),
                 ]

@@ -616,7 +616,7 @@ fn content_appearance<'a>(
     );
     col = col.push(Space::new().height(12));
     col = col.push(
-        text("Altium changes only rendering view. Standard preserves library symbol appearance.")
+        text("Restyled mode reshapes pin labels for rendering only. Standard preserves the library symbol's authored appearance.")
             .size(10)
             .color(TEXT_MUT),
     );
