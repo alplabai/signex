@@ -28,7 +28,7 @@ Insert at the **top** of the existing release body:
 > the codebase derive from KiCad's GPL-3.0 source and should have
 > been released under KiCad's reciprocal terms.
 >
-> From v0.10.0 onwards, KiCad I/O is moved to a separate
+> From v0.9.0 onwards, KiCad I/O is moved to a separate
 > GPL-3.0-licensed companion tool: [signex-kicad-import](https://github.com/alplabai/signex-kicad-import).
 > The main signex repository is Apache-2.0 clean and contains no
 > KiCad-derived code.
@@ -38,13 +38,13 @@ Insert at the **top** of the existing release body:
 >
 > **What this means for you:**
 > - This release **remains available** for historical use, but
->   please prefer v0.10.0 (or later) for new installations.
+>   please prefer v0.9.0 (or later) for new installations.
 > - If you have existing KiCad project files, install the
 >   companion tool [signex-kicad-import](https://github.com/alplabai/signex-kicad-import/releases)
 >   alongside Signex Community to convert them to the native
 >   `.snxsch` / `.snxpcb` formats.
 > - Apache consumers of Signex Community Edition (anyone embedding
->   or linking against it) get a clean Apache codebase from v0.10.0
+>   or linking against it) get a clean Apache codebase from v0.9.0
 >   forward — no GPL aggregation in their build closure.
 ```
 
@@ -62,21 +62,21 @@ Insert at the **top** of the existing release body (same wording, version-stampe
 > in error. Those parts derive from KiCad's GPL-3.0 source and
 > should have been released under KiCad's reciprocal terms.
 >
-> From v0.10.0 onwards, KiCad I/O lives in a separate GPL-3.0
+> From v0.9.0 onwards, KiCad I/O lives in a separate GPL-3.0
 > companion tool: [signex-kicad-import](https://github.com/alplabai/signex-kicad-import).
 > The main signex repository is Apache-2.0 clean.
 >
 > See issue [#62](https://github.com/alplabai/signex/issues/62) for
 > context. This release stays available for historical use; prefer
-> v0.10.0 (or later) for new installations. Existing KiCad project
+> v0.9.0 (or later) for new installations. Existing KiCad project
 > files convert via the companion tool.
 ```
 
 ---
 
-## v0.10.0 — release notes (when it ships)
+## v0.9.0 — release notes (when it ships)
 
-The v0.10.0 release notes will document the cutover. Suggested top-of-body block:
+The v0.9.0 release notes will document the cutover. Suggested top-of-body block:
 
 ```markdown
 ## Apache-2.0 clean cutover (issue #62)
@@ -150,15 +150,14 @@ v0.7.x and v0.8.0 as superseded:
 
 | Version | Date | Status | Notes |
 |---|---|---|---|
-| v0.7.0 | 2026-04-22 | ⚠️ superseded | Contained KiCad-derived code; install v0.10+ for Apache-clean binary. |
+| v0.7.0 | 2026-04-22 | ⚠️ superseded | Contained KiCad-derived code; install v0.9+ for Apache-clean binary. |
 | v0.7.1 | 2026-04-24 | ⚠️ superseded | macOS Apple-Silicon ad-hoc codesign hotfix; still contains KiCad-derived code. |
 | v0.8.0 | 2026-04-26 | ⚠️ superseded | Output generation; still contains KiCad-derived code. |
-| v0.9.0 | (not released — internal-only) | — | Library subsystem; never released publicly. |
-| v0.10.0 | (this release) | ✅ Apache-clean | First Apache-2.0-clean binary; KiCad I/O via optional companion. |
+| v0.9.0 | (this release) | ✅ Apache-clean | First Apache-2.0-clean binary. Bundles the library subsystem (Library Browser + SCH Library editor + Component Editor) that was in flight on `feature/v0.9-snxlib-as-file` plus the Apache-clean cutover. KiCad I/O via optional companion. |
 
-(Note: v0.9.0 was the in-flight library work that paused for the
-issue-62 remediation; the public sequence skips from v0.8.0 to
-v0.10.0 to mark the licensing transition.)
+(Note: v0.9.0 combines two streams — the library subsystem work was
+paused mid-flight for the issue-62 licensing remediation, then resumed
+on top of the Apache-clean foundation. Both ship in this release.)
 
 ---
 
@@ -168,8 +167,8 @@ v0.10.0 to mark the licensing transition.)
   before the existing changelog, not at the bottom.
 - GitHub Releases supports markdown — copy/paste should render the
   blockquote and admonition emoji as expected.
-- After the v0.10.0 release ships, issue [#62](https://github.com/alplabai/signex/issues/62)
-  can be closed with a final comment linking the v0.10.0 tag and
+- After the v0.9.0 release ships, issue [#62](https://github.com/alplabai/signex/issues/62)
+  can be closed with a final comment linking the v0.9.0 tag and
   the cutover commits.
 - The signex.dev website + Discord sticky also need the matching
   framing update — see Phase 7 communication drafts in
