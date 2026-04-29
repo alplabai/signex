@@ -198,6 +198,7 @@ impl Signex {
                     selected_lib_symbol: None,
                     components_split: 250.0,
                     project_tree: vec![],
+                    selected_tree_path: None,
                     selection_count: 0,
                     selected_uuid: None,
                     selected_kind: None,
@@ -274,6 +275,7 @@ impl Signex {
                 submenu_panel_hovered: false,
                 submenu_unhovered_since: None,
                 last_mouse_pos: (0.0, 0.0),
+                last_tree_click: None,
                 active_bar_menu: None,
                 selection_filters: crate::active_bar::SelectionFilter::ALL
                     .iter()
