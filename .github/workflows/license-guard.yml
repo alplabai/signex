@@ -95,16 +95,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Forbid F_CU = 0 / B_CU = 31 style constants
+      - name: Forbid F_CU = 0 / B_CU = 31 style const/static declarations
         run: |
           set -e
           # KiCad's pre-7 `PCB_LAYER_ID` used numeric constants for
           # layer ids (F_CU=0, B_CU=31, …). signex-types replaced
           # this with a semantic `SignexLayer` enum in v0.9.0; any
           # reintroduction of the numeric form is GPL-exposure.
-          if git grep -nE '\b(F_CU|B_CU|F_SILKS|B_SILKS|F_MASK|B_MASK)\s*[:=]\s*[0-9]' -- 'crates/**/*.rs'; then
+          #
+          # Pattern requires the `const`/`static` keyword immediately
+          # before the name so doc comments mentioning the historical
+          # constants in backticks (e.g. layer.rs's "//! `F_CU = 0`
+          # … was replaced") don't false-positive.
+          if git grep -nE '\b(?:pub\s+)?(?:const|static)\s+(F_CU|B_CU|F_SILKS|B_SILKS|F_MASK|B_MASK)\b' -- 'crates/**/*.rs'; then
             echo ""
-            echo "::error::KiCad-numbered layer-id constants (F_CU=0, B_CU=31, …) detected."
+            echo "::error::KiCad-numbered layer-id const/static declaration detected."
             echo "::error::Use signex_types::layer::SignexLayer instead — see crates/signex-types/src/layer.rs."
             exit 1
           fi
