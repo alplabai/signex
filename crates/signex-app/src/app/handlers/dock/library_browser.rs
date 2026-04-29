@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 
 use super::super::super::*;
 
@@ -75,24 +75,21 @@ impl Signex {
     fn append_library_symbols(
         library_path: &std::path::Path,
         library_name: &str,
-        library_entries: &mut Vec<crate::panels::LibrarySymbolEntry>,
-        loaded_symbols: &mut std::collections::HashMap<String, signex_types::schematic::LibSymbol>,
+        _library_entries: &mut Vec<crate::panels::LibrarySymbolEntry>,
+        _loaded_symbols: &mut std::collections::HashMap<
+            String,
+            signex_types::schematic::LibSymbol,
+        >,
     ) -> Result<()> {
-        let content = std::fs::read_to_string(library_path)
-            .with_context(|| format!("read {}", library_path.display()))?;
-        let parsed_library = kicad_parser::parse_symbol_lib(&content)
-            .with_context(|| format!("parse symbol library {}", library_name))?;
-
-        for (lib_id, lib_symbol) in parsed_library {
-            library_entries.push(crate::panels::LibrarySymbolEntry {
-                symbol_name: lib_id.rsplit(':').next().unwrap_or(&lib_id).to_string(),
-                library_name: library_name.to_string(),
-                pin_count: lib_symbol.pins.len(),
-                lib_id: lib_id.clone(),
-            });
-            loaded_symbols.insert(lib_id, lib_symbol);
-        }
-
+        // TODO(issue#62): port the legacy `.kicad_sym` library browser to
+        // the native `.snxlib`/`.snxsym` flow. Until then, the browser is
+        // a no-op for foreign libraries — KiCad-format libraries are no
+        // longer parsed in Signex Community.
+        crate::diagnostics::log_warning(format!(
+            "Skipping foreign symbol library {} ({}); convert with the signex-kicad-import companion to use it in Signex.",
+            library_name,
+            library_path.display(),
+        ));
         Ok(())
     }
 
@@ -111,7 +108,7 @@ impl Signex {
                     (
                         pin.pin.number.clone(),
                         pin.pin.name.clone(),
-                        format!("{:?}", pin.pin.pin_type),
+                        format!("{:?}", pin.pin.direction),
                     )
                 })
                 .collect();

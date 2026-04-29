@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use signex_types::markup::kicad_auto_net_name_from_pins;
+use signex_types::markup::auto_net_name;
 use signex_types::schematic::{LabelType, Point, Symbol, SymbolInstance};
 
 use crate::SheetSnapshot;
@@ -276,7 +276,7 @@ fn build_pin_net_lookup(sheets: &[SheetSnapshot]) -> HashMap<String, HashMap<Str
         }
         let auto = root_pins
             .get(&root)
-            .and_then(|pins| kicad_auto_net_name_from_pins(pins))
+            .and_then(|pins| auto_net_name("", pins))
             .unwrap_or_default();
         resolved_root_name.insert(root, auto);
     }
@@ -299,7 +299,7 @@ fn build_pin_net_lookup(sheets: &[SheetSnapshot]) -> HashMap<String, HashMap<Str
 mod tests {
     use super::*;
     use signex_types::schematic::{
-        LibPin, LibSymbol, Pin, PinElectricalType, PinShape, SchematicSheet, Symbol,
+        LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, SchematicSheet, Symbol,
     };
     use std::path::PathBuf;
 
@@ -328,7 +328,7 @@ mod tests {
     }
 
     #[test]
-    fn isolated_pin_uses_kicad_auto_net_name() {
+    fn isolated_pin_uses_signex_auto_net_name() {
         let symbol_uuid = uuid::Uuid::new_v4();
 
         let mut sheet = empty_sheet();
@@ -379,8 +379,8 @@ mod tests {
                     unit: 1,
                     body_style: 1,
                     pin: Pin {
-                        pin_type: PinElectricalType::Passive,
-                        shape: PinShape::Line,
+                        direction: PinDirection::Passive,
+                        shape_style: PinShapeStyle::Plain,
                         position: Point::new(0.0, 0.0),
                         rotation: 0.0,
                         length: 2.54,
@@ -409,6 +409,6 @@ mod tests {
         let pin_map = lookup
             .get(&symbol_uuid.to_string())
             .expect("symbol net map should exist");
-        assert_eq!(pin_map.get("1").cloned(), Some("Net-(R1-Pad1)".to_string()));
+        assert_eq!(pin_map.get("1").cloned(), Some("unnamed-R1:1".to_string()));
     }
 }

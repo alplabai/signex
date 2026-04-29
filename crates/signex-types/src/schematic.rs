@@ -15,18 +15,19 @@ pub const SCHEMATIC_TEXT_MM: f64 = 1.27;
 /// Altium schematic point → mm: 1 pt = 0.127 mm (10 pt = 1.27 mm).
 pub const SCHEMATIC_PT_TO_MM: f64 = 0.127;
 
-/// KiCad schematic grid step: 2.54 mm = 100 mils. Used as pin length,
+/// Schematic coarse grid step: 2.54 mm = 100 mils. Used as pin length,
 /// bus-entry size, and any other default that snaps to the coarse grid.
+/// Matches the long-standing EDA convention of 100-mil pin grids.
 pub const GRID_MM: f64 = 2.54;
 
-/// KiCad default pin line length in mm (one grid step).
+/// Default pin line length in mm (one coarse-grid step).
 pub const PIN_LENGTH_MM: f64 = GRID_MM;
 
-/// KiCad default offset from pin body-end to pin name text anchor.
+/// Default offset from pin body-end to pin name text anchor.
 pub const PIN_NAME_OFFSET_MM: f64 = 0.508;
 
 // ---------------------------------------------------------------------------
-// Point -- KiCad mm-space coordinate (f64). Copy-friendly.
+// Point — schematic mm-space coordinate (f64). Copy-friendly.
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -85,38 +86,68 @@ pub enum FillType {
 }
 
 // ---------------------------------------------------------------------------
-// Pin types
+// Pin types — Signex-curated, not derived from any specific EDA enum.
+// See crates/signex-types/docs/pin-design.md for the rationale behind
+// every variant choice (size, boundaries, names).
 // ---------------------------------------------------------------------------
 
+/// Pin electrical role.
+///
+/// Curated 14-variant set spanning generic digital pins, power pins,
+/// open-drain polarity-tagged outputs, plus Signex-original additions
+/// (`GroundReference`, `Differential`, `Clock`) that don't appear in
+/// other EDA tools' enums.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum PinElectricalType {
+pub enum PinDirection {
+    /// Drives signal in.
     Input,
+    /// Drives signal out.
     Output,
+    /// Drives signal both ways depending on context.
     Bidirectional,
-    TriState,
+    /// Tri-statable output — can be high-Z.
+    ThreeStatable,
+    /// Passive electrical (resistor / capacitor / inductor terminal).
     Passive,
-    Free,
-    Unspecified,
-    PowerIn,
-    PowerOut,
-    OpenCollector,
-    OpenEmitter,
-    NotConnected,
+    /// Power supply input pin.
+    PowerInput,
+    /// Power supply output pin (regulator output, battery positive, etc.).
+    PowerOutput,
+    /// Ground reference — Signex-original, distinguishes ground from generic power.
+    GroundReference,
+    /// Open-drain / open-collector, active-low output.
+    OpenDrainLow,
+    /// Open-drain / open-emitter, active-high output.
+    OpenDrainHigh,
+    /// Differential pair member — Signex-original (HSD-friendly).
+    Differential,
+    /// Clock pin — Signex-original (modeled as a direction, not a shape).
+    Clock,
+    /// Pin must remain unconnected (manufacturer-marked NC).
+    DoNotConnect,
+    /// Author has not classified the pin yet (default for new pins);
+    /// collapses what other EDA tools sometimes split into "free" vs
+    /// "unspecified".
+    Unclassified,
 }
 
+/// Pin graphic decoration on the symbol pin tip.
+///
+/// 7 variants — drops the per-direction "low" shape modifiers that
+/// other EDA tools include (since `PinDirection`'s `OpenDrainLow` /
+/// `OpenDrainHigh` carry that information already). Adds Schmitt /
+/// Hysteresis as Signex-original variants.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum PinShape {
-    Line,
-    Inverted,
-    Clock,
-    InvertedClock,
-    InputLow,
-    ClockLow,
-    OutputLow,
-    EdgeClockHigh,
-    NonLogic,
+pub enum PinShapeStyle {
+    Plain,
+    InvertedBubble,
+    ClockTriangle,
+    InvertedClockBubble,
+    HysteresisInput,
+    HysteresisOutput,
+    Schmitt,
 }
 
 // ---------------------------------------------------------------------------
@@ -332,8 +363,8 @@ pub enum Graphic {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Pin {
-    pub pin_type: PinElectricalType,
-    pub shape: PinShape,
+    pub direction: PinDirection,
+    pub shape_style: PinShapeStyle,
     pub position: Point,
     #[serde(default)]
     pub rotation: f64,

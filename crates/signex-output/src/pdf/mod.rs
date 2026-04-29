@@ -21,8 +21,7 @@
 
 use pdf_writer::{Finish, Name, Pdf, Rect, Ref};
 use signex_types::markup::{
-    ExpressionEvalContext, RichSegment, evaluate_expressions, expand_kicad_char_escapes,
-    parse_markup,
+    ExpressionEvalContext, RichSegment, evaluate_expressions, parse_signex_markup,
 };
 use thiserror::Error;
 
@@ -660,7 +659,7 @@ struct PdfTextRun {
 
 fn pdf_markup_runs(input: &str) -> Vec<PdfTextRun> {
     let expanded = normalize_kicad_text(input);
-    let segments = parse_markup(&expanded);
+    let segments = parse_signex_markup(&expanded);
     if segments.is_empty() {
         return vec![PdfTextRun {
             text: expanded,
@@ -674,6 +673,13 @@ fn pdf_markup_runs(input: &str) -> Vec<PdfTextRun> {
         .into_iter()
         .map(|seg| match seg {
             RichSegment::Normal(t) => PdfTextRun {
+                text: t,
+                scale: 1.0,
+                baseline_offset: 0.0,
+                overbar: false,
+            },
+            // TODO(v0.x): visual decoration for bold/italic/strike
+            RichSegment::Bold(t) | RichSegment::Italic(t) | RichSegment::Strike(t) => PdfTextRun {
                 text: t,
                 scale: 1.0,
                 baseline_offset: 0.0,
@@ -697,6 +703,14 @@ fn pdf_markup_runs(input: &str) -> Vec<PdfTextRun> {
                 baseline_offset: -0.34,
                 overbar: false,
             },
+            // Links render as plain label text on the canvas — URL is ignored
+            // until link rendering ships in a later phase.
+            RichSegment::Link { label, .. } => PdfTextRun {
+                text: label,
+                scale: 1.0,
+                baseline_offset: 0.0,
+                overbar: false,
+            },
         })
         .filter(|run| !run.text.is_empty())
         .collect()
@@ -704,8 +718,10 @@ fn pdf_markup_runs(input: &str) -> Vec<PdfTextRun> {
 
 fn normalize_kicad_text(input: &str) -> String {
     let ctx = ExpressionEvalContext::default();
-    let evaluated = evaluate_expressions(input, &ctx);
-    expand_kicad_char_escapes(&evaluated)
+    // KiCad-specific char-escape expansion (`{slash}` → `/`, etc.) was removed
+    // in Phase 2.3 of the Apache-clean remediation. Inputs no longer carry
+    // those tokens because the main repo no longer parses KiCad files.
+    evaluate_expressions(input, &ctx)
 }
 
 fn rotate_about(px: f32, py: f32, ox: f32, oy: f32, rotation_deg: f32) -> (f32, f32) {
