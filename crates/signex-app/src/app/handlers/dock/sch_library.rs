@@ -365,7 +365,7 @@ impl Signex {
     fn sym_editor_set_pin_electrical(
         &mut self,
         pin_idx: usize,
-        value: signex_library::PinElectricalType,
+        value: signex_library::PinDirection,
     ) {
         let Some(editor) = self.active_symbol_editor_mut() else {
             return;

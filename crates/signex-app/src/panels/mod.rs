@@ -907,7 +907,7 @@ pub enum PanelMsg {
     /// Not Connected / Unspecified).
     SymEditorSetPinElectrical {
         pin_idx: usize,
-        value: signex_library::PinElectricalType,
+        value: signex_library::PinDirection,
     },
     /// Properties panel — set a pin's orientation (Right / Up /
     /// Left / Down). Also updates the canvas cache so the pin
@@ -2561,27 +2561,27 @@ fn view_symbol_editor_properties<'a>(
 
             // ── Electrical Type (pick_list) ──
             let electrical_options = [
-                ("Input", signex_library::PinElectricalType::Input),
-                ("I/O", signex_library::PinElectricalType::Bidirectional),
-                ("Output", signex_library::PinElectricalType::Output),
+                ("Input", signex_library::PinDirection::Input),
+                ("I/O", signex_library::PinDirection::Bidirectional),
+                ("Output", signex_library::PinDirection::Output),
                 (
                     "Open Collector",
-                    signex_library::PinElectricalType::OpenCollector,
+                    signex_library::PinDirection::OpenCollector,
                 ),
-                ("Passive", signex_library::PinElectricalType::Passive),
-                ("HiZ", signex_library::PinElectricalType::Tristate),
+                ("Passive", signex_library::PinDirection::Passive),
+                ("HiZ", signex_library::PinDirection::Tristate),
                 (
                     "Open Emitter",
-                    signex_library::PinElectricalType::OpenEmitter,
+                    signex_library::PinDirection::OpenEmitter,
                 ),
-                ("Power", signex_library::PinElectricalType::Power),
+                ("Power", signex_library::PinDirection::Power),
                 (
                     "Not Connected",
-                    signex_library::PinElectricalType::NotConnected,
+                    signex_library::PinDirection::NotConnected,
                 ),
                 (
                     "Unspecified",
-                    signex_library::PinElectricalType::Unspecified,
+                    signex_library::PinDirection::Unspecified,
                 ),
             ];
             let current_label = electrical_options
@@ -2593,7 +2593,7 @@ fn view_symbol_editor_properties<'a>(
                 .iter()
                 .map(|(label, _)| label.to_string())
                 .collect();
-            let labels_for_msg: Vec<(String, signex_library::PinElectricalType)> =
+            let labels_for_msg: Vec<(String, signex_library::PinDirection)> =
                 electrical_options
                     .iter()
                     .map(|(label, v)| (label.to_string(), *v))
@@ -2604,7 +2604,7 @@ fn view_symbol_editor_properties<'a>(
                         .iter()
                         .find(|(label, _)| label == &chosen)
                         .map(|(_, v)| *v)
-                        .unwrap_or(signex_library::PinElectricalType::Unspecified);
+                        .unwrap_or(signex_library::PinDirection::Unspecified);
                     PanelMsg::SymEditorSetPinElectrical { pin_idx, value }
                 })
                 .padding([2, 4])

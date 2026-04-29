@@ -21,7 +21,7 @@ use signex_library::lifecycle::LifecycleState;
 use signex_library::manufacturer::ManufacturerPart;
 use signex_library::param::ParamMap;
 use signex_library::primitive::{
-    PinElectricalType, PinOrientation, PrimitiveKind, PrimitiveRef, SimKind, SimModel, Symbol,
+    PinDirection, PinOrientation, PrimitiveKind, PrimitiveRef, SimKind, SimModel, Symbol,
     SymbolPin,
 };
 use uuid::Uuid;
@@ -64,7 +64,7 @@ fn fixture_symbol() -> Symbol {
     let mut s = Symbol::empty("OPAMP-DUAL-8");
     s.pins.clear();
     let mut p = SymbolPin::new("1", "OUT");
-    p.electrical = PinElectricalType::Output;
+    p.electrical = PinDirection::Output;
     s.pins.push(p);
     s
 }

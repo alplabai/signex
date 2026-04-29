@@ -14,7 +14,7 @@ use crate::param::ParamMap;
 /// Electrical role of a pin — drives ERC and BOM rules.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[non_exhaustive]
-pub enum PinElectricalType {
+pub enum PinDirection {
     Input,
     Output,
     Bidirectional,
@@ -91,7 +91,7 @@ pub struct SymbolPin {
     pub number: String,
     /// Display label drawn next to the pin ("IN+", "VCC").
     pub name: String,
-    pub electrical: PinElectricalType,
+    pub electrical: PinDirection,
     /// Position of the pin's connection point in symbol-local mm coordinates.
     pub position: [f64; 2],
     pub orientation: PinOrientation,
@@ -172,7 +172,7 @@ impl SymbolPin {
         Self {
             number: number.into(),
             name: name.into(),
-            electrical: PinElectricalType::Unspecified,
+            electrical: PinDirection::Unspecified,
             position: [0.0, 0.0],
             orientation: PinOrientation::Right,
             length: 2.54,
@@ -476,7 +476,7 @@ mod tests {
             pins: vec![SymbolPin {
                 number: "1".into(),
                 name: "OUT_A".into(),
-                electrical: PinElectricalType::Output,
+                electrical: PinDirection::Output,
                 position: [0.0, 2.54],
                 orientation: PinOrientation::Right,
                 length: 2.54,
@@ -574,19 +574,19 @@ mod tests {
     #[test]
     fn pin_electrical_type_round_trip_all_variants() {
         for t in [
-            PinElectricalType::Input,
-            PinElectricalType::Output,
-            PinElectricalType::Bidirectional,
-            PinElectricalType::Power,
-            PinElectricalType::Passive,
-            PinElectricalType::OpenCollector,
-            PinElectricalType::OpenEmitter,
-            PinElectricalType::NotConnected,
-            PinElectricalType::Tristate,
-            PinElectricalType::Unspecified,
+            PinDirection::Input,
+            PinDirection::Output,
+            PinDirection::Bidirectional,
+            PinDirection::Power,
+            PinDirection::Passive,
+            PinDirection::OpenCollector,
+            PinDirection::OpenEmitter,
+            PinDirection::NotConnected,
+            PinDirection::Tristate,
+            PinDirection::Unspecified,
         ] {
             let json = serde_json::to_string(&t).unwrap();
-            let back: PinElectricalType = serde_json::from_str(&json).unwrap();
+            let back: PinDirection = serde_json::from_str(&json).unwrap();
             assert_eq!(t, back);
         }
     }

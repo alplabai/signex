@@ -30,6 +30,7 @@ allow = [
     "WTFPL",
     "Unlicense",
     "NCSA",             # University of Illinois/NCSA — BSD-3-equivalent, OSI-approved, Apache-compatible (libfuzzer-sys transitive)
+    "CDLA-Permissive-2.0", # Community Data License Agreement — Linux Foundation, OSI-style permissive (webpki-roots transitive via reqwest/sqlx)
 ]
 
 # Anything not in the allowlist is rejected. GPL / AGPL / LGPL / etc are

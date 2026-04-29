@@ -6,7 +6,7 @@
 //! `Footprint` primitive — they don't carry their own copy.
 //!
 //! Module layout matches the plan:
-//! - [`Symbol`] / [`SymbolPin`] / [`PinElectricalType`] / [`PinOrientation`]
+//! - [`Symbol`] / [`SymbolPin`] / [`PinDirection`] / [`PinOrientation`]
 //!   in [`symbol`]
 //! - [`Footprint`] / [`Pad`] / [`PadKind`] / [`PadShape`] / [`Body3D`] /
 //!   [`BodyShape`] / [`StepAttachment`] / [`Drill`] / [`Polygon`] /
@@ -26,7 +26,7 @@ pub use footprint::{
 pub use ref_::PrimitiveRef;
 pub use sim::{SimKind, SimModel};
 pub use symbol::{
-    ComponentType, PinElectricalType, PinOrientation, PinSymbolKind, Symbol, SymbolFile,
+    ComponentType, PinDirection, PinOrientation, PinSymbolKind, Symbol, SymbolFile,
     SymbolGraphic, SymbolGraphicKind, SymbolPin,
 };
 

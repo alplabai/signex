@@ -8,10 +8,10 @@
 //! the canvas + AI-stub apply behaviour the pre-refactor `SymbolDoc`
 //! had.
 
-use signex_library::{PinElectricalType, PinOrientation, Symbol, SymbolGraphicKind, SymbolPin};
+use signex_library::{PinDirection, PinOrientation, Symbol, SymbolGraphicKind, SymbolPin};
 
 /// Coarse pin classification — kept independent of the canonical
-/// [`PinElectricalType`] so the AI-stub heuristic can hand back a
+/// [`PinDirection`] so the AI-stub heuristic can hand back a
 /// limited subset.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PinKind {
