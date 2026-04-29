@@ -1,6 +1,6 @@
 -- Signex library DB-flavour initial schema.
 --
--- Tables (per LIBRARY_PLAN §7 + WS-B contract):
+-- Tables (per v0.9-library-plan.md §7 + WS-B contract):
 --   components        — one row per logical component (uuid, internal_pn, head version)
 --   revisions         — one row per (component_uuid, version) — full revision JSON blob
 --   parameters        — flattened (component_uuid, version, key) for fast facet queries

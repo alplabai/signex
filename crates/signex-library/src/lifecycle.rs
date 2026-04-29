@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-/// LIBRARY_PLAN §4 lifecycle states.
+/// v0.9-library-plan.md §4 lifecycle states.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum LifecycleState {

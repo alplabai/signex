@@ -1,6 +1,6 @@
 //! Heuristic pinout extractor — datasheet PDF → guessed pin list.
 //!
-//! Per LIBRARY_PLAN §11.3 the **real** LLM-based symbol synthesis is deferred
+//! Per v0.9-library-plan.md §11.3 the **real** LLM-based symbol synthesis is deferred
 //! to v3.x. This module provides a deliberately dumb, deterministic stub:
 //!
 //! 1. Run [`pdf_extract::extract_text_from_mem`] over the bytes.

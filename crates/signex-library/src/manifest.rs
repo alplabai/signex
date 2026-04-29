@@ -1,4 +1,4 @@
-//! `library.toml` schema for `*.snxlib/` directories. Mirrors LIBRARY_PLAN §13
+//! `library.toml` schema for `*.snxlib/` directories. Mirrors v0.9-library-plan.md §13
 //! and `v0.9-refactor-2-plan.md` §3 (Altium DBLib model).
 //!
 //! Adds the `[[tables]]` config section per `v0.9-refactor-2-plan.md` §6

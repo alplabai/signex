@@ -1,4 +1,4 @@
-//! `DistributorAdapter` — vendor metadata + pricing lookup. LIBRARY_PLAN §14a.4.
+//! `DistributorAdapter` — vendor metadata + pricing lookup. v0.9-library-plan.md §14a.4.
 
 use std::collections::BTreeMap;
 

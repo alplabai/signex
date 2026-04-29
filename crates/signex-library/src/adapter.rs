@@ -35,7 +35,7 @@ pub enum LibraryError {
     Backend(String),
 }
 
-/// Field-sets per LIBRARY_PLAN §8 — locking granularity.
+/// Field-sets per v0.9-library-plan.md §8 — locking granularity.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum FieldSet {
     Symbol,

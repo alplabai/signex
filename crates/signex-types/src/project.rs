@@ -42,7 +42,7 @@ pub enum LibraryEntryKind {
 /// iterates this list at open-time and mounts each library via the
 /// matching adapter (currently `LocalGitAdapter` for all three kinds).
 ///
-/// See `docs/internal/docs/LIBRARY_PLAN.md` for the data-model
+/// See `docs/internal/docs/v0.9-library-plan.md` for the data-model
 /// rationale.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LibraryEntry {

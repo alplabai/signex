@@ -1,7 +1,7 @@
 //! Acceptance tests for `TantivySearchIndex`.
 //!
 //! The full Tantivy rewrite for the DBLib model is deferred (see
-//! `docs/internal/docs/LIBRARY_PLAN.md`); the index needs only to
+//! `docs/internal/docs/v0.9-library-plan.md`); the index needs only to
 //! compile and accept [`ComponentRow`] payloads for now. The
 //! corpus-level tests below build rows directly and verify
 //! text/numeric query paths against the row schema.

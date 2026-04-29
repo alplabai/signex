@@ -5,7 +5,7 @@
 //! don't need vendor lookups (e.g. CI builds of `signex-app` that ship
 //! without distributor integrations).
 //!
-//! See `docs/internal/docs/LIBRARY_PLAN.md` → §14a Distributor Data Sources.
+//! See `docs/internal/docs/v0.9-library-plan.md` → §14a Distributor Data Sources.
 
 pub mod cache;
 pub mod digikey;

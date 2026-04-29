@@ -1,6 +1,6 @@
 //! Settings → Library → Distributor APIs panel.
 //!
-//! Spec (LIBRARY_PLAN §14a.2):
+//! Spec (v0.9-library-plan.md §14a.2):
 //!
 //! - DigiKey: OAuth2 PKCE — Phase 1 stubs the connect button.
 //! - Mouser: API key in keyring — Phase 1 takes the user's key in

@@ -18,7 +18,7 @@ use chrono::Utc;
 
 use crate::distributor::DistributorPart;
 
-/// 24-hour TTL per `LIBRARY_PLAN.md` §14a.4.
+/// 24-hour TTL per `v0.9-library-plan.md` §14a.4.
 pub const DEFAULT_TTL: Duration = Duration::from_secs(60 * 60 * 24);
 
 #[derive(Debug, thiserror::Error)]

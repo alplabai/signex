@@ -110,7 +110,7 @@ pub fn config_path_for_dir(base: &std::path::Path) -> PathBuf {
     base.join("signex").join(FILE_NAME)
 }
 
-/// Load the persisted preferred-order list. Returns the LIBRARY_PLAN
+/// Load the persisted preferred-order list. Returns the v0.9-library-plan.md
 /// default when the file is missing/empty/corrupt — startup is
 /// best-effort.
 pub fn load_preferred_order() -> Vec<DistributorSource> {
