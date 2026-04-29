@@ -150,12 +150,16 @@ structure is a healthier outcome for both projects than the original
   same KiCad-derivation as v0.7.0. Marked superseded.
 - **v0.8.0** (2026-04-26) — released with KiCad-derived code under
   Apache-2.0 in error. Marked superseded.
-- **v0.9.0** (forthcoming) — first Apache-clean release. Bundles the
-  Apache-clean cutover, native `.snxsch` / `.snxpcb` formats, and the
-  library subsystem (Library Browser, SCH Library editor, Component
-  Editor) that was in flight on `feature/v0.9-snxlib-as-file` before
-  the licensing remediation. KiCad I/O via the optional
-  `signex-kicad-import` companion.
+- **v0.9.0** (forthcoming) — first Apache-clean release. Apache-clean
+  cutover only: native `.snxsch` / `.snxpcb` formats + signex-types
+  Apache-clean enums + KiCad I/O moved to the optional
+  `signex-kicad-import` GPL-3.0 companion. Library subsystem work
+  ships separately as v0.10.0.
+- **v0.10.0** (next release after v0.9.0) — Library & Polish: symbol /
+  footprint editor, multi-symbol `.snxsym` containers, Component
+  Editor, Library Browser, installers. Resumes the work paused at
+  `v0.9-snxlib-paused-2026-04-29` on top of v0.9.0's Apache-clean
+  foundations.
 
 The v0.7.0–v0.8.0 binaries remain available on GitHub Releases for
 historical use but are flagged with the licensing notice. Please prefer
