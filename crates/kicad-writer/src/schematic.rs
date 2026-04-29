@@ -35,34 +35,39 @@ fn fill_type_str(f: FillType) -> &'static str {
     }
 }
 
-fn pin_electrical_str(t: PinElectricalType) -> &'static str {
+fn pin_electrical_str(t: PinDirection) -> &'static str {
     match t {
-        PinElectricalType::Input => "input",
-        PinElectricalType::Output => "output",
-        PinElectricalType::Bidirectional => "bidirectional",
-        PinElectricalType::TriState => "tri_state",
-        PinElectricalType::Passive => "passive",
-        PinElectricalType::Free => "free",
-        PinElectricalType::Unspecified => "unspecified",
-        PinElectricalType::PowerIn => "power_in",
-        PinElectricalType::PowerOut => "power_out",
-        PinElectricalType::OpenCollector => "open_collector",
-        PinElectricalType::OpenEmitter => "open_emitter",
-        PinElectricalType::NotConnected => "no_connect",
+        PinDirection::Input => "input",
+        PinDirection::Output => "output",
+        PinDirection::Bidirectional => "bidirectional",
+        PinDirection::ThreeStatable => "tri_state",
+        PinDirection::Passive => "passive",
+        PinDirection::PowerInput => "power_in",
+        PinDirection::PowerOutput => "power_out",
+        PinDirection::OpenDrainLow => "open_collector",
+        PinDirection::OpenDrainHigh => "open_emitter",
+        PinDirection::DoNotConnect => "no_connect",
+        // GroundReference / Differential / Clock / Unclassified — Signex
+        // additions or unmapped variants. KiCad's narrower vocabulary lacks
+        // direct equivalents, so emit "unspecified" as a safe default.
+        PinDirection::GroundReference
+        | PinDirection::Differential
+        | PinDirection::Clock
+        | PinDirection::Unclassified => "unspecified",
     }
 }
 
-fn pin_shape_str(s: PinShape) -> &'static str {
+fn pin_shape_str(s: PinShapeStyle) -> &'static str {
     match s {
-        PinShape::Line => "line",
-        PinShape::Inverted => "inverted",
-        PinShape::Clock => "clock",
-        PinShape::InvertedClock => "inverted_clock",
-        PinShape::InputLow => "input_low",
-        PinShape::ClockLow => "clock_low",
-        PinShape::OutputLow => "output_low",
-        PinShape::EdgeClockHigh => "edge_clock_high",
-        PinShape::NonLogic => "non_logic",
+        PinShapeStyle::Plain => "line",
+        PinShapeStyle::InvertedBubble => "inverted",
+        PinShapeStyle::ClockTriangle => "clock",
+        PinShapeStyle::InvertedClockBubble => "inverted_clock",
+        // Hysteresis* / Schmitt have no KiCad equivalent — emit plain "line"
+        // so the file stays well-formed; the visual is lost on export.
+        PinShapeStyle::HysteresisInput
+        | PinShapeStyle::HysteresisOutput
+        | PinShapeStyle::Schmitt => "line",
     }
 }
 
@@ -496,8 +501,8 @@ fn lib_graphic_node(graphic: &Graphic) -> SExpr {
 
 fn lib_pin_node(pin: &Pin) -> SExpr {
     let mut items = vec![
-        raw(pin_electrical_str(pin.pin_type)),
-        raw(pin_shape_str(pin.shape)),
+        raw(pin_electrical_str(pin.direction)),
+        raw(pin_shape_str(pin.shape_style)),
         at_node(pin.position.x, pin.position.y, Some(pin.rotation)),
         node("length", vec![atom(pin.length)]),
     ];
@@ -1087,7 +1092,7 @@ mod tests {
     #[test]
     fn writes_not_connected_pins_as_no_connect() {
         assert_eq!(
-            pin_electrical_str(PinElectricalType::NotConnected),
+            pin_electrical_str(PinDirection::DoNotConnect),
             "no_connect"
         );
     }
@@ -1338,8 +1343,8 @@ mod tests {
     #[test]
     fn writes_hidden_lib_pin_flag() {
         let pin = Pin {
-            pin_type: PinElectricalType::NotConnected,
-            shape: PinShape::Line,
+            direction: PinDirection::DoNotConnect,
+            shape_style: PinShapeStyle::Plain,
             position: Point { x: 20.32, y: 0.0 },
             rotation: 0.0,
             length: 0.0,
