@@ -30,26 +30,6 @@
     <string>????</string>
     <key>CFBundleDocumentTypes</key>
     <array>
-        <dict>
-            <key>CFBundleTypeName</key>
-            <string>KiCad Schematic</string>
-            <key>CFBundleTypeExtensions</key>
-            <array>
-                <string>kicad_sch</string>
-            </array>
-            <key>CFBundleTypeRole</key>
-            <string>Editor</string>
-        </dict>
-        <dict>
-            <key>CFBundleTypeName</key>
-            <string>KiCad Project</string>
-            <key>CFBundleTypeExtensions</key>
-            <array>
-                <string>kicad_pro</string>
-            </array>
-            <key>CFBundleTypeRole</key>
-            <string>Editor</string>
-        </dict>
         <!-- Signex native file formats. Each entry pairs a UTI with its
              bundled .icns (produced by installer/build-file-icons.sh) so
              macOS Finder paints the correct per-type icon. -->
