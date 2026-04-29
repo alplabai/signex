@@ -47,12 +47,20 @@ impl Engine {
         })
     }
 
+    /// Open a `.snxsch` file from disk.
+    ///
+    /// Files in foreign formats (e.g. KiCad's `.kicad_sch`) are not
+    /// readable directly by Signex Community; users with KiCad
+    /// projects run the optional `signex-kicad-import` GPL-3.0
+    /// companion tool to convert their files first.
     pub fn open(path: &Path) -> Result<Self, EngineError> {
-        let document = kicad_parser::parse_schematic_file(path)
+        let text = std::fs::read_to_string(path)
+            .map_err(|error| EngineError::OpenFailed(anyhow::Error::msg(error.to_string())))?;
+        let snx = signex_types::format::SnxSchematic::parse(&text)
             .map_err(|error| EngineError::OpenFailed(anyhow::Error::msg(error.to_string())))?;
 
         Ok(Self {
-            document,
+            document: snx.sheet,
             path: Some(path.to_path_buf()),
             history: Vec::new(),
             redo_stack: Vec::new(),
@@ -68,7 +76,10 @@ impl Engine {
     }
 
     pub fn save_as(&mut self, path: &Path) -> Result<(), EngineError> {
-        let content = kicad_writer::write_schematic(&self.document);
+        let snx = signex_types::format::SnxSchematic::new(self.document.clone());
+        let content = snx
+            .write_string()
+            .map_err(|error| EngineError::SaveFailed(std::io::Error::other(error.to_string())))?;
         std::fs::write(path, content).map_err(EngineError::SaveFailed)?;
         self.path = Some(path.to_path_buf());
         Ok(())
