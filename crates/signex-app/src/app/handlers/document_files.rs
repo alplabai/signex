@@ -36,9 +36,13 @@ impl Signex {
             .and_then(|extension| extension.to_str())
             .unwrap_or("");
         match ext {
-            "standard_pro" | "snxprj" => self.open_project_file(path)?,
-            "standard_sch" | "snxsch" => self.open_schematic_file(path)?,
-            "standard_pcb" | "snxpcb" => self.open_pcb_file(path)?,
+            "snxprj" => self.open_project_file(path)?,
+            "snxsch" => self.open_schematic_file(path)?,
+            "snxpcb" => self.open_pcb_file(path)?,
+            "standard_pro" | "standard_sch" | "standard_pcb" => anyhow::bail!(
+                "Signex Community no longer opens Standard files directly. \
+                 Convert with the signex-standard-import companion tool first."
+            ),
             _ => anyhow::bail!("unsupported file type: .{ext}"),
         }
 
@@ -71,7 +75,7 @@ impl Signex {
             self.document_state.active_project = Some(id);
             return Ok(id);
         }
-        let data = standard_parser::parse_project(project_path)
+        let data = signex_types::project::parse_project(project_path)
             .with_context(|| format!("parse project {}", project_path.display()))?;
         let id = self.document_state.mint_project_id();
         self.document_state
@@ -88,14 +92,14 @@ impl Signex {
     fn open_schematic_file(&mut self, path: PathBuf) -> Result<()> {
         // Try to load the companion project so the schematic tab gets
         // a `project_id` via `project_for_path`. Best-effort: a missing
-        // or unparseable `.standard_pro` doesn't block opening the loose
+        // or unparseable `.snxprj` doesn't block opening the loose
         // schematic.
         if let Some(dir) = path.parent() {
             let stem = path
                 .file_stem()
                 .and_then(|segment| segment.to_str())
                 .unwrap_or("");
-            let companion = dir.join(format!("{stem}.standard_pro"));
+            let companion = dir.join(format!("{stem}.snxprj"));
             if companion.exists()
                 && let Err(error) = self.load_or_activate_project(&companion)
             {
@@ -115,15 +119,21 @@ impl Signex {
             self.attach_parked_schematic_tab(path, title);
             return Ok(());
         }
-        let sheet = standard_parser::parse_schematic_file(&path)
-            .with_context(|| format!("parse schematic {}", path.display()))?;
+        let text = std::fs::read_to_string(&path)
+            .with_context(|| format!("read schematic {}", path.display()))?;
+        let sheet = signex_types::format::SnxSchematic::parse(&text)
+            .with_context(|| format!("parse schematic {}", path.display()))?
+            .sheet;
         self.open_schematic_tab(path, title, sheet);
         Ok(())
     }
 
     fn open_pcb_file(&mut self, path: PathBuf) -> Result<()> {
-        let board = standard_parser::parse_pcb_file(&path)
-            .with_context(|| format!("parse pcb {}", path.display()))?;
+        let text = std::fs::read_to_string(&path)
+            .with_context(|| format!("read pcb {}", path.display()))?;
+        let board = signex_types::format::SnxPcb::parse(&text)
+            .with_context(|| format!("parse pcb {}", path.display()))?
+            .board;
         // Same companion-project resolution as `open_schematic_file` so
         // the PCB tab can resolve `project_id` for project-scoped
         // handlers.
@@ -132,7 +142,7 @@ impl Signex {
                 .file_stem()
                 .and_then(|segment| segment.to_str())
                 .unwrap_or("");
-            let companion = dir.join(format!("{stem}.standard_pro"));
+            let companion = dir.join(format!("{stem}.snxprj"));
             if companion.exists()
                 && let Err(error) = self.load_or_activate_project(&companion)
             {
