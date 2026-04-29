@@ -550,56 +550,114 @@ Run locally: `cargo deny check licenses`.
 
 **Branch**: `chore/apache-clean-formats` off `dev`.
 
+**Format family**: TOML manifest + TSV bulk blocks. Same shape as `.snxlib` / `.snxsym` / `.snxfpt` (already on the v0.9 branch). One writer, one parser, one mental model. Bulk numeric data (components, wires, tracks, vias, pads) lives in TSV blocks inside multi-line literal strings; hierarchical data (sheets, zones with variable-vertex polygons, stackup config) lives in TOML proper. Compactness ends up roughly equal to KiCad's S-expression format without inheriting any of its grammar.
+
 #### 3.1.1 Schema
 
-`.snxsch` (JSON):
+`.snxsch` (TOML + TSV):
 
-```json
-{
-  "format": "snxsch/1",
-  "library_id": "0192a8c0-…",
-  "page_size": { "width_mm": 297.0, "height_mm": 210.0 },
-  "title_block": { … },
-  "sheets": [
-    {
-      "name": "Power Supply",
-      "uuid": "…",
-      "graphics": [ /* wires, junctions, labels, no-connects */ ],
-      "components": [ /* placed component instances */ ]
-    }
-  ],
-  "lib_symbols": [ /* shared symbol cache for this design */ ]
-}
+```toml
+format = "snxsch/1"
+schematic_id = "0192a8c0-…"
+project_id   = "0192a000-…"
+
+[[sheets]]
+name = "Power Supply"
+uuid = "01926e3a-…"
+page = "A4"
+
+[sheets.components]
+content = """
+ref  library          pos_x  pos_y  rotation  value     mpn
+U1   lm2596.snxsym    50800  25400  0         LM2596    LM2596S-ADJ
+R1   res-0603.snxsym  51000  26000  90        10k
+"""
+
+[sheets.wires]
+content = """
+net   start_x  start_y  end_x   end_y
+VIN   10000    20000    30000   20000
+VCC   30000    20000    50000   20000
+"""
+
+[sheets.labels]
+content = """
+text  pos_x  pos_y  rotation  kind
+VIN   10000  20000  0         local
+"""
+
+[sheets.junctions]
+content = """
+pos_x  pos_y
+30000  20000
+"""
+
+# additional [[sheets]] blocks…
 ```
 
-`.snxpcb` (JSON):
+`.snxpcb` (TOML + TSV):
 
-```json
-{
-  "format": "snxpcb/1",
-  "library_id": "0192a8c0-…",
-  "stackup": { "layer_kinds": [ "TopCopper", "InnerCopper(1)", … ] },
-  "footprints": [ … ],
-  "tracks": [ … ],
-  "vias": [ … ],
-  "zones": [ … ]
-}
+```toml
+format = "snxpcb/1"
+pcb_id = "0192a8c0-…"
+
+[stackup]
+layers = ["TopCopper", "InnerCopper(1)", "InnerCopper(2)", "BottomCopper"]
+thickness_mm = 1.6
+
+[footprints]
+content = """
+ref  library             pos_x   pos_y   rotation  layer
+U1   stm32f407.snxfpt    50000   25000   0         TopCopper
+R1   res-0603.snxfpt     80000   30000   90        TopCopper
+"""
+
+[pads]
+content = """
+footprint_ref  pin   pos_x   pos_y   shape       layers
+U1             1     50500   25000   roundrect   TopCopper
+"""
+
+[tracks]
+content = """
+net   layer         width   start_x  start_y  end_x    end_y
+GND   BottomCopper  254000  100000   200000   300000   200000
+"""
+
+[vias]
+content = """
+net  pos_x   pos_y   drill   diameter  layers
+GND  100000  200000  300000  600000    TopCopper..BottomCopper
+"""
+
+[[zones]]
+net = "GND"
+layer = "BottomCopper"
+polygon = [[10000,20000], [30000,20000], [30000,40000], [10000,40000]]
 ```
 
-`.snxprj` already exists from earlier work — stays.
+`.snxprj` already exists from earlier work — stays as TOML.
+
+Each TSV block has a fixed column schema declared in Rust as a `#[derive(SnxTable)]` struct (the row-derive macro from `crates/signex-library/src/library_file.rs` on the v0.9 branch, lifted into a shared crate). The macro generates `columns()`, `parse_row(...)`, and `write_row(...)` so adding a column is a one-place edit.
 
 #### 3.1.2 Tests
 
-`crates/signex-types/tests/format_round_trip.rs` — for every Signex-native data type, round-trip through JSON, assert byte-equal serialisation.
+`crates/signex-types/tests/format_round_trip.rs` — for every Signex-native data type, round-trip through TOML+TSV, assert byte-equal serialisation. Cover: empty sheet, single-component sheet, multi-sheet schematic, PCB with all entity kinds.
 
 #### 3.1.3 Commit
 
 ```
-feat(types): native .snxsch / .snxpcb JSON formats
+feat(types): native .snxsch / .snxpcb TOML+TSV formats
 
 Stage 3.1 of issue-62 remediation. signex-types defines the
-canonical Signex schema for schematic + PCB persistence; engine
-and app rewire onto it in Stages 3.2–3.3.
+canonical Signex schema for schematic + PCB persistence using a
+TOML manifest + TSV bulk-block layout (same family as .snxlib /
+.snxsym / .snxfpt). Engine and app rewire onto it in Stages 3.2–3.3.
+
+Format choice rationale: line-diffable for git, ~5x smaller than
+JSON, no S-expression-shaped grammar that could re-introduce
+KiCad-derivation exposure. Same writer/parser as .snxlib reduces
+maintenance to a single format family.
 ```
 
 ### 3.2 Engine + app rewiring (~1.5 weeks)
@@ -610,16 +668,25 @@ and app rewire onto it in Stages 3.2–3.3.
 
 ```rust
 // crates/signex-engine/src/persistence.rs
+//
+// Save/load uses the shared snx-format crate which combines:
+// - toml::* for the TOML envelope (sheets, stackup, zones)
+// - SnxTable derive for TSV bulk blocks (components, wires,
+//   tracks, vias, pads)
+// The same crate backs .snxlib / .snxsym / .snxfpt on the v0.9
+// branch — one format family, one parser, one writer.
+
 pub fn save_schematic(path: &Path, schematic: &Schematic) -> Result<(), Error> {
-    let json = serde_json::to_string_pretty(schematic)?;
-    std::fs::write(path, json)?;
+    let snx = snx_format::SnxSchematic::from(schematic);
+    let text = snx.write_string()?;
+    std::fs::write(path, text)?;
     Ok(())
 }
 
 pub fn load_schematic(path: &Path) -> Result<Schematic, Error> {
-    let bytes = std::fs::read(path)?;
-    let schematic: Schematic = serde_json::from_slice(&bytes)?;
-    Ok(schematic)
+    let text = std::fs::read_to_string(path)?;
+    let snx = snx_format::SnxSchematic::parse(&text)?;
+    Ok(snx.into())
 }
 ```
 
@@ -647,12 +714,13 @@ cargo test -p signex-app file_commands
 refactor(engine,app): native .snxsch / .snxpcb persistence
 
 Stage 3.2 of issue-62 remediation. Engine save/load go through
-serde_json over the Signex-native schema. App file dialogs filter
+the shared snx-format crate (TOML manifest + TSV bulk blocks,
+same family as .snxlib/.snxsym/.snxfpt). App file dialogs filter
 on *.snxsch / *.snxpcb / *.snxprj only.
 
-Test fixtures migrated from .kicad_sch via the signex-kicad-import
-companion tool (Stage 4). Originals kept alongside for one transition
-release; deleted in Stage 5.
+Test fixtures replaced with Signex-original equivalents that
+exercise the same code paths (per Q3 decision); no KiCad-demo
+fixtures retained.
 ```
 
 ### 3.3 First-run migration shim (~3 days)
@@ -1068,3 +1136,5 @@ jobs:
 | 2026-04-29 | Q3 (test fixtures): replace KiCad-demo-derived fixtures with Signex-original equivalents that exercise equivalent code paths. | Caner |
 | 2026-04-29 | Q4 (third-party parser): conditional on maintenance + lossless coverage. Search outcome: only `kiutils-rs` (MIT, last commit 2026-03-29) clears the bar but has 7 stars and a sole maintainer. Stayed with two-repo GPL companion structure (Q4=B); the structural-derivation residual risk argument trumps maintenance test alone. Documented in `docs/audit/third-party-kicad-parsers.md`. | Claude (lower-risk path per autonomous instructions) |
 | 2026-04-29 | Phase 0 outputs committed on `chore/apache-clean-phase-0`. Tags: `audit-baseline-2026-04-29` → dev tip `0e74ebc`; `v0.9-snxlib-paused-2026-04-29` → `bbc68ce`. | Claude |
+| 2026-04-29 | Phase 1 audit identified important scope correction: `LayerId`/`F_CU` etc are isolated to `crates/signex-types/src/layer.rs` (not propagated through workspace). Phase 2.1 reduces from ~3 days to a single-file rewrite. | Claude |
+| 2026-04-29 | Format choice for `.snxsch` / `.snxpcb`: TOML envelope + TSV bulk blocks (same family as `.snxlib`/`.snxsym`/`.snxfpt`). DSL was considered as the most-compact alternative and rejected on (1) structural-derivation risk — any tight nested line-oriented grammar ends up close to S-expression shape — and (2) maintenance cost (custom lexer/parser/writer per evolution vs. zero with TOML+TSV). Same format family across all five Signex file types reduces to one writer + one parser + one set of edge-case tests. | Caner + Claude |
