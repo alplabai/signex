@@ -299,7 +299,7 @@ fn build_pin_net_lookup(sheets: &[SheetSnapshot]) -> HashMap<String, HashMap<Str
 mod tests {
     use super::*;
     use signex_types::schematic::{
-        LibPin, LibSymbol, Pin, PinElectricalType, PinShape, SchematicSheet, Symbol,
+        LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, SchematicSheet, Symbol,
     };
     use std::path::PathBuf;
 
@@ -379,8 +379,8 @@ mod tests {
                     unit: 1,
                     body_style: 1,
                     pin: Pin {
-                        pin_type: PinElectricalType::Passive,
-                        shape: PinShape::Line,
+                        direction: PinDirection::Passive,
+                        shape_style: PinShapeStyle::Plain,
                         position: Point::new(0.0, 0.0),
                         rotation: 0.0,
                         length: 2.54,
