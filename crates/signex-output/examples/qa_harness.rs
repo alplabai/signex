@@ -1,7 +1,7 @@
-//! QA harness — exercise every v0.8 exporter against a real Standard project
-//! and report sizes / sheet counts / validation issues.
+//! QA harness — exercise every v0.8 exporter against a real Signex
+//! project and report sizes / sheet counts / validation issues.
 //!
-//! Usage: `cargo run --example qa_harness -p signex-output -- <project.standard_pro> [out_dir]`
+//! Usage: `cargo run --example qa_harness -p signex-output -- <project.snxprj> [out_dir]`
 //!
 //! Reads the project, walks every sheet via the same logic the app uses,
 //! drives PdfExporter / NetlistExporter / BomExporter (CSV / HTML / XLSX),
@@ -15,13 +15,15 @@ use signex_output::{
     NetlistExporter, NetlistOptions, PdfExporter, PdfOptions, ProjectMetadata, SheetSnapshot,
     rollup,
 };
+use signex_types::format::SnxSchematic;
+use signex_types::project::parse_project;
 
 fn main() {
     let mut args = std::env::args().skip(1);
     let project_path = match args.next() {
         Some(p) => PathBuf::from(p),
         None => {
-            eprintln!("usage: qa_harness <project.standard_pro> [out_dir]");
+            eprintln!("usage: qa_harness <project.snxprj> [out_dir]");
             std::process::exit(2);
         }
     };
@@ -33,7 +35,7 @@ fn main() {
     println!("project: {}", project_path.display());
     println!("out_dir: {}", out_dir.display());
 
-    let project = standard_parser::parse_project(&project_path).expect("parse project");
+    let project = parse_project(&project_path).expect("parse project");
     let project_dir = project_path.parent().expect("project parent");
 
     println!(
@@ -46,8 +48,15 @@ fn main() {
     let mut snapshots: Vec<SheetSnapshot> = Vec::new();
     for (i, entry) in project.sheets.iter().enumerate() {
         let abs = project_dir.join(&entry.filename);
-        let parsed = match standard_parser::parse_schematic_file(&abs) {
-            Ok(s) => s,
+        let text = match std::fs::read_to_string(&abs) {
+            Ok(t) => t,
+            Err(e) => {
+                eprintln!("  ! read {}: {e}", abs.display());
+                continue;
+            }
+        };
+        let parsed = match SnxSchematic::parse(&text) {
+            Ok(snx) => snx.sheet,
             Err(e) => {
                 eprintln!("  ! parse {}: {e}", abs.display());
                 continue;
