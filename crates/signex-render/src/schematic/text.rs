@@ -6,8 +6,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use signex_types::markup::{
-    ExpressionEvalContext, RichSegment, evaluate_expressions, kicad_auto_net_name_from_pins,
-    parse_markup,
+    ExpressionEvalContext, RichSegment, auto_net_name, evaluate_expressions, parse_signex_markup,
 };
 use signex_types::schematic::{HAlign, Symbol, TextNote, TextProp, VAlign};
 
@@ -30,7 +29,7 @@ pub fn display_text_content(input: &str) -> String {
     // KiCad uses inside multi-line text notes.
     let expanded = expand_backslash_escapes(&expand_char_escapes(input));
 
-    let segments = parse_markup(&expanded);
+    let segments = parse_signex_markup(&expanded);
     if segments.is_empty() {
         return expanded;
     }
@@ -38,10 +37,16 @@ pub fn display_text_content(input: &str) -> String {
     let mut out = String::new();
     for segment in segments {
         match segment {
+            // TODO(v0.x): visual decoration for bold/italic/strike
             RichSegment::Normal(text)
+            | RichSegment::Bold(text)
+            | RichSegment::Italic(text)
+            | RichSegment::Strike(text)
             | RichSegment::Subscript(text)
             | RichSegment::Superscript(text) => out.push_str(&text),
             RichSegment::Overbar(text) => out.push_str(&overbar_text(&text)),
+            // Links render as plain label text — URL is ignored on canvas.
+            RichSegment::Link { label, .. } => out.push_str(&label),
         }
     }
     out
@@ -79,7 +84,7 @@ fn run_pair_kerning(prev: RichRunKind, next: RichRunKind, size: f32) -> f32 {
 
 fn rich_runs(input: &str) -> Vec<RichRun> {
     let expanded = expand_backslash_escapes(&expand_char_escapes(input));
-    let segments = parse_markup(&expanded);
+    let segments = parse_signex_markup(&expanded);
     if segments.is_empty() {
         return vec![RichRun {
             text: expanded,
@@ -98,6 +103,16 @@ fn rich_runs(input: &str) -> Vec<RichRun> {
                 baseline_offset: 0.0,
                 kind: RichRunKind::Normal,
             },
+            // TODO(v0.x): visual decoration for bold/italic/strike — fall back
+            // to Normal styling for now; visual decoration is a later phase.
+            RichSegment::Bold(text) | RichSegment::Italic(text) | RichSegment::Strike(text) => {
+                RichRun {
+                    text,
+                    scale: 1.0,
+                    baseline_offset: 0.0,
+                    kind: RichRunKind::Normal,
+                }
+            }
             RichSegment::Overbar(text) => RichRun {
                 text,
                 scale: 1.0,
@@ -115,6 +130,14 @@ fn rich_runs(input: &str) -> Vec<RichRun> {
                 scale: 0.72,
                 baseline_offset: -0.34,
                 kind: RichRunKind::Superscript,
+            },
+            // Links render as plain label text on the canvas — URL is ignored
+            // until link rendering ships in a later phase.
+            RichSegment::Link { label, .. } => RichRun {
+                text: label,
+                scale: 1.0,
+                baseline_offset: 0.0,
+                kind: RichRunKind::Normal,
             },
         })
         .filter(|run| !run.text.is_empty())
@@ -368,7 +391,7 @@ pub fn build_symbol_pin_net_lookup(
         }
         let auto = root_pins
             .get(&root)
-            .and_then(|pins| kicad_auto_net_name_from_pins(pins))
+            .and_then(|pins| auto_net_name("", pins))
             .unwrap_or_default();
         resolved_root_name.insert(root, auto);
     }
@@ -465,7 +488,7 @@ pub fn draw_rich_text(
 /// the combining-overline U+0305 which sits flush to the cap-height.
 pub fn display_text_with_overbars(input: &str) -> (String, Vec<(usize, usize)>) {
     let expanded = expand_char_escapes(input);
-    let segments = parse_markup(&expanded);
+    let segments = parse_signex_markup(&expanded);
     if segments.is_empty() {
         return (expanded, Vec::new());
     }
@@ -475,7 +498,11 @@ pub fn display_text_with_overbars(input: &str) -> (String, Vec<(usize, usize)>) 
     let mut char_cursor: usize = 0;
     for segment in segments {
         match segment {
+            // TODO(v0.x): visual decoration for bold/italic/strike
             RichSegment::Normal(text)
+            | RichSegment::Bold(text)
+            | RichSegment::Italic(text)
+            | RichSegment::Strike(text)
             | RichSegment::Subscript(text)
             | RichSegment::Superscript(text) => {
                 let n = text.chars().count();
@@ -488,6 +515,12 @@ pub fn display_text_with_overbars(input: &str) -> (String, Vec<(usize, usize)>) 
                 plain.push_str(&text);
                 char_cursor += n;
             }
+            // Links render as plain label text — URL is ignored on canvas.
+            RichSegment::Link { label, .. } => {
+                let n = label.chars().count();
+                plain.push_str(&label);
+                char_cursor += n;
+            }
         }
     }
     (plain, overbars)
@@ -498,17 +531,22 @@ pub fn display_text_with_overbars(input: &str) -> (String, Vec<(usize, usize)>) 
 /// label/port geometry so the body rectangle matches the visible text.
 pub fn visible_char_count(input: &str) -> usize {
     let expanded = expand_char_escapes(input);
-    let segments = parse_markup(&expanded);
+    let segments = parse_signex_markup(&expanded);
     if segments.is_empty() {
         return expanded.chars().count();
     }
     segments
         .iter()
         .map(|s| match s {
+            // TODO(v0.x): visual decoration for bold/italic/strike
             RichSegment::Normal(t)
+            | RichSegment::Bold(t)
+            | RichSegment::Italic(t)
+            | RichSegment::Strike(t)
             | RichSegment::Subscript(t)
             | RichSegment::Superscript(t)
             | RichSegment::Overbar(t) => t.chars().count(),
+            RichSegment::Link { label, .. } => label.chars().count(),
         })
         .sum()
 }
@@ -732,7 +770,8 @@ mod tests {
 
     #[test]
     fn subscript_keeps_same_baseline_as_normal() {
-        let runs = super::rich_runs("DIVIDED-S_{3}");
+        // Signex subscript syntax: ~3~ (was KiCad-style _{3} pre-Phase-2.3).
+        let runs = super::rich_runs("DIVIDED-S~3~");
         let s_run = runs
             .iter()
             .find(|run| run.kind == RichRunKind::Normal && run.text.ends_with('S'))
