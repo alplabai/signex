@@ -1,14 +1,11 @@
 # Pin design rationale
 
 Documents why `signex-types::schematic::PinDirection` and
-`PinShapeStyle` look the way they do, and how the variant set differs
-from KiCad's `ELECTRICAL_PINTYPE` / `GRAPHIC_PINSHAPE`.
+`PinShapeStyle` look the way they do.
 
-The previous Signex versions exposed `PinElectricalType` (12 variants,
-identical canonical strings to KiCad's enum) and `PinShape` (9
-variants, same set as KiCad's). Those types were strong derivations
-of KiCad's `pin_type.h` headers and were removed in the issue #62
-Apache-clean remediation.
+The current variant set is Signex-curated; earlier prototypes used
+shape-derivative enum sets that were replaced during the Apache-clean
+cutover.
 
 ## `PinDirection` — 14 variants
 
@@ -84,11 +81,11 @@ existed long before any one of them — but the Signex curation is:
 
 ## Round-trip with foreign formats
 
-When Signex Community reads a foreign file (e.g. via the
-`signex-kicad-import` companion tool), a translation layer maps the
-foreign tool's enum to Signex's curated set. Some information loss
-is acceptable in that direction — for example, `Free` and
-`Unspecified` from KiCad both collapse to `Unclassified` in Signex.
+When Signex Community reads a converted foreign file (via the import
+companion tool), a translation layer maps the source enum to Signex's
+curated set. Some information loss is acceptable in that direction —
+e.g. multiple "free" / "unspecified" variants in source files collapse
+to `Unclassified` in Signex.
 
 Going the other way (Signex → foreign format), Signex-original
 variants (`GroundReference`, `Differential`, `Clock`,
