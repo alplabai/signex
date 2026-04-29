@@ -122,7 +122,7 @@ xcuserdata/
 
 # Custom rules (everything added below won't be overriden by 'Generate .gitignore File' if you use 'Update' option)
 
-# Claude Code local settings
-.claude/settings.local.json 
+# Claude Code working directory — kept local, not tracked.
+.claude/
 .github/copilot-instructions.md
 status.txt
