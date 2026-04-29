@@ -7,8 +7,6 @@ license.workspace = true
 
 [dependencies]
 signex-types = { workspace = true }
-kicad-parser = { workspace = true }
-kicad-writer = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 uuid = { workspace = true }
