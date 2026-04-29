@@ -2212,6 +2212,9 @@ mod tests {
             fields: Default::default(),
             custom_properties: Vec::new(),
             pin_uuids: Default::default(),
+            library_id: None,
+            row_id: None,
+            library_version: String::new(),
             instances: Vec::new(),
         }
     }
