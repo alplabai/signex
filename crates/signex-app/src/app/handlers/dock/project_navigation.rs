@@ -625,11 +625,8 @@ impl Signex {
             return Ok(());
         }
 
-        if filename.ends_with(".kicad_sch") || filename.ends_with(".snxsch") {
-            let title = filename
-                .trim_end_matches(".kicad_sch")
-                .trim_end_matches(".snxsch")
-                .to_string();
+        if filename.ends_with(".snxsch") {
+            let title = filename.trim_end_matches(".snxsch").to_string();
             // If we parked an engine for this file (closed while dirty),
             // restore it instead of reparsing — Altium parity. Re-parsing
             // would silently discard the user's in-memory edits, which is
@@ -640,21 +637,31 @@ impl Signex {
                 self.attach_parked_schematic_tab(file_path, title);
                 return Ok(());
             }
-            let schematic = kicad_parser::parse_schematic_file(&file_path)
-                .with_context(|| format!("parse schematic {}", file_path.display()))?;
+            let text = std::fs::read_to_string(&file_path)
+                .with_context(|| format!("read schematic {}", file_path.display()))?;
+            let schematic = signex_types::format::SnxSchematic::parse(&text)
+                .with_context(|| format!("parse schematic {}", file_path.display()))?
+                .sheet;
             self.open_schematic_tab(file_path, title, schematic);
             return Ok(());
         }
 
-        if filename.ends_with(".kicad_pcb") || filename.ends_with(".snxpcb") {
-            let board = kicad_parser::parse_pcb_file(&file_path)
-                .with_context(|| format!("parse pcb {}", file_path.display()))?;
-            let title = filename
-                .trim_end_matches(".kicad_pcb")
-                .trim_end_matches(".snxpcb")
-                .to_string();
+        if filename.ends_with(".snxpcb") {
+            let text = std::fs::read_to_string(&file_path)
+                .with_context(|| format!("read pcb {}", file_path.display()))?;
+            let board = signex_types::format::SnxPcb::parse(&text)
+                .with_context(|| format!("parse pcb {}", file_path.display()))?
+                .board;
+            let title = filename.trim_end_matches(".snxpcb").to_string();
             self.open_pcb_tab(file_path, title, board);
             return Ok(());
+        }
+
+        if filename.ends_with(".kicad_sch") || filename.ends_with(".kicad_pcb") {
+            anyhow::bail!(
+                "Signex Community no longer opens KiCad files directly. \
+                 Convert with the signex-kicad-import companion tool first."
+            );
         }
 
         anyhow::bail!("unsupported project tree document: {filename}")

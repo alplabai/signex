@@ -2587,8 +2587,11 @@ impl super::super::Signex {
                 if open_paths.contains(&file_path) {
                     continue;
                 }
-                if let Ok(parsed) = kicad_parser::parse_schematic_file(&file_path) {
-                    let title = sheet_entry.name.trim_end_matches(".kicad_sch").to_string();
+                if let Ok(text) = std::fs::read_to_string(&file_path)
+                    && let Ok(parsed) =
+                        signex_types::format::SnxSchematic::parse(&text).map(|snx| snx.sheet)
+                {
+                    let title = sheet_entry.name.trim_end_matches(".snxsch").to_string();
                     owned_sheets.push((title, parsed));
                 }
             }
