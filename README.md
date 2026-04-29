@@ -9,7 +9,7 @@
 
 <p align="center">
   <a href="https://github.com/alplabai/signex/blob/dev/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License"></a>
-  <a href="https://github.com/alplabai/signex/releases/tag/v0.9.1"><img src="https://img.shields.io/badge/version-v0.9.1-green.svg" alt="Version"></a>
+  <a href="https://github.com/alplabai/signex/releases/tag/v0.10.0"><img src="https://img.shields.io/badge/version-v0.10.0-green.svg" alt="Version"></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.80%2B-orange.svg" alt="Rust"></a>
   <a href="https://github.com/alplabai/signex/wiki"><img src="https://img.shields.io/badge/wiki-user%20guide-blueviolet.svg" alt="Wiki"></a>
   <a href="https://github.com/alplabai/signex/discussions"><img src="https://img.shields.io/badge/discussions-join-brightgreen.svg" alt="Discussions"></a>
@@ -46,11 +46,11 @@ formats one-way. Run it once against your project; open the resulting
 - **Signex Pro** (subscription) — adds Signal AI (Claude-powered design
   copilot), real-time collaboration, and Signex 365 cloud PLM
 
-> **Status:** Early development — **v0.9.1 shipped** — async save + borrow-based
-> serialise. Builds on the v0.9.0 Apache-clean cutover
-> ([issue #62](https://github.com/alplabai/signex/issues/62)); huge-PCB Ctrl+S
-> no longer blocks the UI. Library & Polish (symbol/footprint editor,
-> multi-symbol `.snxsym`, Component Editor, installers) ships next as v0.10.
+> **Status:** Early development — **v0.10.0 shipped** — Library Browser tab
+> scaffold. Double-clicking a `.snxlib` package now opens a read-only
+> browser tab listing its components. v0.10.1 (preview pane) and v0.10.2
+> (filter/search) follow as small follow-up releases; the SCH Library
+> editor + Component Editor land across v0.10.3–v0.10.9.
 > [Join the discussion](https://github.com/alplabai/signex/discussions) or check the [roadmap](#roadmap).
 
 ## Features
@@ -177,7 +177,7 @@ cargo clippy --workspace -- -D warnings  # Lint
 | Validation + Multi-Window — ERC, annotation, pin matrix, undockable tabs | v0.7 | Done |
 | Output — PDF, BOM, netlist, multi-project workspaces, dirty tracking | v0.8 | Done |
 | Apache-clean cutover (issue #62) — native `.snxsch` / `.snxpcb` formats, KiCad I/O via companion | v0.9 | ✅ Done |
-| Library & Polish — symbol/footprint editor, multi-symbol `.snxsym`, Component Editor, installers | v0.10 | |
+| Library & Polish — Library Browser tab, SCH Library editor, multi-symbol `.snxsym`, Component Editor, installers | v0.10 | 🔄 In Progress (v0.10.0 shipped) |
 | **Community Preview** — schematic-only editor | **v1.0** | |
 | PCB Viewer — GPU rendering, layers, cross-probe | v2.0 | |
 | PCB Routing + DRC + Output | v2.1–v2.2 | |
