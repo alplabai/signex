@@ -130,7 +130,7 @@ pub fn build_net_graph(sheet: &SchematicSheet, symbols: &[Symbol]) -> NetGraph {
                     // FIX 1: Use proper pin position transform instead of just sym.position
                     let global_pos = transform_pin_position(sym, &lib_pin.pin.position);
                     let key = pos_key(global_pos);
-                    let pin_type = format!("{:?}", lib_pin.pin.pin_type).to_lowercase();
+                    let pin_type = format!("{:?}", lib_pin.pin.direction).to_lowercase();
                     pin_positions.insert(
                         key.clone(),
                         (sym.reference.clone(), lib_pin.pin.number.clone(), pin_type),

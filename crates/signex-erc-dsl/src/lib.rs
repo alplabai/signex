@@ -56,7 +56,7 @@ mod tests {
     use std::collections::HashMap;
 
     use signex_erc::context::{ErcContext, ErcNet, ErcPin, ErcSymbol, PaperSize};
-    use signex_types::schematic::{PinElectricalType, Point};
+    use signex_types::schematic::{PinDirection, Point};
 
     use super::*;
 
@@ -73,7 +73,7 @@ mod tests {
                 is_power: false,
                 pins: vec![ErcPin {
                     world_pos: Point::new(10.0, 10.0),
-                    electrical_type: PinElectricalType::Output,
+                    electrical_type: PinDirection::Output,
                     required: true,
                     connected: true,
                 }],
@@ -89,7 +89,7 @@ mod tests {
             nets: vec![ErcNet {
                 name: "I2C_SDA".to_string(),
                 class: "i2c".to_string(),
-                pin_types: vec![PinElectricalType::Output],
+                pin_types: vec![PinDirection::Output],
                 has_driver: true,
                 has_pullup: false,
             }],
