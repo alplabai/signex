@@ -9,7 +9,7 @@
 
 <p align="center">
   <a href="https://github.com/alplabai/signex/blob/dev/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License"></a>
-  <a href="https://github.com/alplabai/signex/releases/tag/v0.9.0"><img src="https://img.shields.io/badge/version-v0.9.0-green.svg" alt="Version"></a>
+  <a href="https://github.com/alplabai/signex/releases/tag/v0.9.1"><img src="https://img.shields.io/badge/version-v0.9.1-green.svg" alt="Version"></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.80%2B-orange.svg" alt="Rust"></a>
   <a href="https://github.com/alplabai/signex/wiki"><img src="https://img.shields.io/badge/wiki-user%20guide-blueviolet.svg" alt="Wiki"></a>
   <a href="https://github.com/alplabai/signex/discussions"><img src="https://img.shields.io/badge/discussions-join-brightgreen.svg" alt="Discussions"></a>
@@ -46,11 +46,11 @@ formats one-way. Run it once against your project; open the resulting
 - **Signex Pro** (subscription) — adds Signal AI (Claude-powered design
   copilot), real-time collaboration, and Signex 365 cloud PLM
 
-> **Status:** Early development — **v0.9.0 shipped** — Apache-clean cutover
-> ([issue #62](https://github.com/alplabai/signex/issues/62): native `.snxsch`/`.snxpcb` formats,
-> KiCad I/O moved to optional [signex-kicad-import](https://github.com/alplabai/signex-kicad-import)
-> companion, `signex-types` Apache-clean). Library & Polish (symbol/footprint editor, multi-symbol
-> `.snxsym`, Component Editor, installers) ships next as v0.10.
+> **Status:** Early development — **v0.9.1 shipped** — async save + borrow-based
+> serialise. Builds on the v0.9.0 Apache-clean cutover
+> ([issue #62](https://github.com/alplabai/signex/issues/62)); huge-PCB Ctrl+S
+> no longer blocks the UI. Library & Polish (symbol/footprint editor,
+> multi-symbol `.snxsym`, Component Editor, installers) ships next as v0.10.
 > [Join the discussion](https://github.com/alplabai/signex/discussions) or check the [roadmap](#roadmap).
 
 ## Features

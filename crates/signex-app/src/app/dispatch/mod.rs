@@ -48,6 +48,7 @@ impl Signex {
             | Message::Duplicate
             | Message::SaveFile
             | Message::SaveFileAs(_)
+            | Message::SaveFileFinished(_, _)
             | Message::SchematicLoaded(_)
             | Message::ExportPdfOpenDialog
             | Message::ExportPdfFinished(_)
