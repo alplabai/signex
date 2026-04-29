@@ -3548,6 +3548,8 @@ impl Signex {
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .into()
+        } else if self.has_active_library() {
+            self.view_library_browser()
         } else {
             // Distinguish "nothing loaded at all" from "project loaded,
             // but no document picked yet" — the second case is what
@@ -3582,6 +3584,139 @@ impl Signex {
             ))
             .into()
         }
+    }
+
+    /// v0.10.0 — read-only Library Browser tab body.
+    ///
+    /// Layout: header strip (library name + component count) + a
+    /// virtualised-style table of components. Columns: Name, Value,
+    /// Footprint, Description. v0.10.1 adds a side preview pane;
+    /// v0.10.2 adds a filter bar above the table.
+    fn view_library_browser(&self) -> Element<'_, Message> {
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let Some(library) = self.active_library() else {
+            return container(iced::widget::text("Library not loaded").size(13))
+                .center(Length::Fill)
+                .style(crate::styles::panel_region(tokens))
+                .into();
+        };
+
+        let header = {
+            let title_text = if library.name.is_empty() {
+                "Library".to_string()
+            } else {
+                library.name.clone()
+            };
+            let count_text = format!("{} component(s)", library.components.len());
+            let mut title_row = column![
+                iced::widget::text(title_text)
+                    .size(15)
+                    .color(crate::styles::ti(tokens.text)),
+                iced::widget::text(count_text)
+                    .size(11)
+                    .color(crate::styles::ti(tokens.text_secondary)),
+            ]
+            .spacing(2);
+            if !library.description.is_empty() {
+                title_row = title_row.push(
+                    iced::widget::text(library.description.clone())
+                        .size(11)
+                        .color(crate::styles::ti(tokens.text_secondary)),
+                );
+            }
+            container(title_row)
+                .padding([10, 14])
+                .width(Length::Fill)
+                .style(crate::styles::panel_region(tokens))
+        };
+
+        // Column widths chosen empirically for the v0.10.0 scaffold;
+        // v0.10.2 will swap the static layout for resizable columns
+        // backed by the filter UI.
+        const NAME_WIDTH: f32 = 220.0;
+        const VALUE_WIDTH: f32 = 140.0;
+        const FOOTPRINT_WIDTH: f32 = 180.0;
+
+        let header_row = container(
+            row![
+                iced::widget::text("Name")
+                    .size(12)
+                    .width(Length::Fixed(NAME_WIDTH))
+                    .color(crate::styles::ti(tokens.text_secondary)),
+                iced::widget::text("Value")
+                    .size(12)
+                    .width(Length::Fixed(VALUE_WIDTH))
+                    .color(crate::styles::ti(tokens.text_secondary)),
+                iced::widget::text("Footprint")
+                    .size(12)
+                    .width(Length::Fixed(FOOTPRINT_WIDTH))
+                    .color(crate::styles::ti(tokens.text_secondary)),
+                iced::widget::text("Description")
+                    .size(12)
+                    .width(Length::Fill)
+                    .color(crate::styles::ti(tokens.text_secondary)),
+            ]
+            .spacing(8),
+        )
+        .padding([8, 14])
+        .width(Length::Fill)
+        .style(crate::styles::panel_region(tokens));
+
+        let mut rows: Vec<Element<'_, Message>> = Vec::with_capacity(library.components.len());
+        for component in &library.components {
+            let name = if component.name.is_empty() {
+                "(unnamed)".to_string()
+            } else {
+                component.name.clone()
+            };
+            rows.push(
+                container(
+                    row![
+                        iced::widget::text(name)
+                            .size(12)
+                            .width(Length::Fixed(NAME_WIDTH))
+                            .color(crate::styles::ti(tokens.text)),
+                        iced::widget::text(component.value.clone())
+                            .size(12)
+                            .width(Length::Fixed(VALUE_WIDTH))
+                            .color(crate::styles::ti(tokens.text)),
+                        iced::widget::text(component.footprint_name.clone())
+                            .size(12)
+                            .width(Length::Fixed(FOOTPRINT_WIDTH))
+                            .color(crate::styles::ti(tokens.text)),
+                        iced::widget::text(component.description.clone())
+                            .size(12)
+                            .width(Length::Fill)
+                            .color(crate::styles::ti(tokens.text_secondary)),
+                    ]
+                    .spacing(8),
+                )
+                .padding([6, 14])
+                .width(Length::Fill)
+                .into(),
+            );
+        }
+
+        let body: Element<'_, Message> = if rows.is_empty() {
+            container(
+                iced::widget::text("No components in this library.")
+                    .size(12)
+                    .color(crate::styles::ti(tokens.text_secondary)),
+            )
+            .center(Length::Fill)
+            .into()
+        } else {
+            iced::widget::scrollable(column(rows).spacing(0))
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into()
+        };
+
+        container(column![header, header_row, body].spacing(0))
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(crate::styles::panel_region(tokens))
+            .into()
     }
 
     fn dismiss_layer(on_press: Message) -> Element<'static, Message> {

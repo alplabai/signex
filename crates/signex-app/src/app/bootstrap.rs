@@ -72,14 +72,6 @@ impl Signex {
         let sch_canvas = SchematicCanvas::new();
         let pcb_canvas = crate::pcb_canvas::PcbCanvas::new();
         let grid_size_mm = crate::canvas::grid::GRID_SIZES_MM[1]; // 1.27mm (Altium default, 50 mil)
-        let standard_lib_dir = helpers::find_standard_symbols_dir();
-        let mut standard_libraries = standard_lib_dir
-            .as_deref()
-            .map(helpers::list_standard_libraries)
-            .unwrap_or_default();
-        if !standard_libraries.is_empty() {
-            standard_libraries.insert(0, helpers::ALL_LIBRARIES.to_string());
-        }
 
         let mut app = Self {
             ui_state: UiState {
@@ -190,7 +182,6 @@ impl Signex {
                     canvas_font_italic: false,
                     canvas_font_popup_open: false,
                     properties_tab: 0,
-                    standard_libraries,
                     active_library: None,
                     library_symbols: vec![],
                     selected_component: None,
@@ -198,6 +189,7 @@ impl Signex {
                     selected_lib_symbol: None,
                     components_split: 250.0,
                     project_tree: vec![],
+                    selected_tree_path: None,
                     selection_count: 0,
                     selected_uuid: None,
                     selected_kind: None,
@@ -232,7 +224,6 @@ impl Signex {
                     custom_paper_h_mm: 210.0,
                     sheet_color: crate::panels::SheetColor::default(),
                 },
-                standard_lib_dir,
                 loaded_lib: std::collections::HashMap::new(),
                 preview: None,
                 pending_pdf_options: None,
@@ -274,6 +265,7 @@ impl Signex {
                 submenu_panel_hovered: false,
                 submenu_unhovered_since: None,
                 last_mouse_pos: (0.0, 0.0),
+                last_tree_click: None,
                 active_bar_menu: None,
                 selection_filters: crate::active_bar::SelectionFilter::ALL
                     .iter()
