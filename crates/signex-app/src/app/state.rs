@@ -710,6 +710,14 @@ pub struct InteractionState {
     /// zones without the menu collapsing mid-traversal.
     pub submenu_unhovered_since: Option<std::time::Instant>,
     pub last_mouse_pos: (f32, f32),
+    /// Most recent project-tree row click — `(path, timestamp)`. Used
+    /// to detect double-clicks: a `TreeMsg::Select` for a path within
+    /// `TREE_DOUBLE_CLICK_WINDOW` of a previous click on the same
+    /// path opens the file. Single clicks just highlight via
+    /// `panel_ctx.selected_tree_path`. Cleared whenever the panel ctx
+    /// is rebuilt from disk-state changes that invalidate the path
+    /// indices. `None` when no row has been clicked yet this session.
+    pub last_tree_click: Option<(Vec<usize>, std::time::Instant)>,
     pub active_bar_menu: Option<crate::active_bar::ActiveBarMenu>,
     pub selection_filters: std::collections::HashSet<crate::active_bar::SelectionFilter>,
     /// User-defined custom filter presets (capped at
