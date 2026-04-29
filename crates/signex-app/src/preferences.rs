@@ -532,7 +532,7 @@ fn content_appearance<'a>(
             .width(200),
             Space::new().width(Length::Fill),
             iced::widget::pick_list(
-                [PowerPortStyle::Altium, PowerPortStyle::KiCad],
+                [PowerPortStyle::Altium, PowerPortStyle::Standard],
                 Some(draft_power_port_style),
                 PrefMsg::DraftPowerPortStyle,
             )
@@ -560,7 +560,7 @@ fn content_appearance<'a>(
             .width(200),
             Space::new().width(Length::Fill),
             iced::widget::pick_list(
-                [LabelStyle::KiCad, LabelStyle::Altium],
+                [LabelStyle::Standard, LabelStyle::Altium],
                 Some(draft_label_style),
                 PrefMsg::DraftLabelStyle,
             )
@@ -585,7 +585,7 @@ fn content_appearance<'a>(
             .width(200),
             Space::new().width(Length::Fill),
             iced::widget::pick_list(
-                [MultisheetStyle::KiCad, MultisheetStyle::Altium],
+                [MultisheetStyle::Standard, MultisheetStyle::Altium],
                 Some(draft_multisheet_style),
                 PrefMsg::DraftMultisheetStyle,
             )

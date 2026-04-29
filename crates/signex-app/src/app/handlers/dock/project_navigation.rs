@@ -703,13 +703,6 @@ impl Signex {
             return Ok(());
         }
 
-        if filename.ends_with(".kicad_sch") || filename.ends_with(".kicad_pcb") {
-            anyhow::bail!(
-                "Signex Community no longer opens KiCad files directly. \
-                 Convert with the signex-kicad-import companion tool first."
-            );
-        }
-
         anyhow::bail!("unsupported project tree document: {filename}")
     }
 }

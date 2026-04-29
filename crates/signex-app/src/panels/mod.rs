@@ -240,8 +240,10 @@ pub struct PanelContext {
     /// Whether the canvas font picker popup is open.
     pub canvas_font_popup_open: bool,
     pub properties_tab: usize, // 0=General, 1=Parameters
-    // Components panel
-    pub kicad_libraries: Vec<String>,
+    // Components panel — repopulated by the v0.10.x `.snxlib` library
+    // plumbing. The legacy KiCad `.kicad_sym` scanner that previously
+    // fed these was removed in v0.10.0 (Apache-clean residual polish);
+    // the panel now shows a placeholder until the new plumbing lands.
     pub active_library: Option<String>,
     /// Browser entries from the selected library or aggregated catalog.
     pub library_symbols: Vec<LibrarySymbolEntry>,
@@ -990,19 +992,11 @@ fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     // ── TOP: Library selector + component list (scrollable) ──
     let mut list_col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
 
-    list_col = list_col.push(
-        container(
-            iced::widget::pick_list(
-                ctx.kicad_libraries.clone(),
-                ctx.active_library.clone(),
-                PanelMsg::SelectLibrary,
-            )
-            .placeholder("Select a library...")
-            .text_size(11)
-            .width(Length::Fill),
-        )
-        .padding([4, 8]),
-    );
+    // The legacy KiCad symbol-library dropdown was removed in v0.10.0
+    // alongside the Apache-clean residual polish. v0.10.x replaces the
+    // entry point with the `.snxlib`-driven Library Browser tab; the
+    // search box below still works against any future `library_symbols`
+    // source.
 
     // Search filter input
     list_col = list_col.push(
