@@ -132,6 +132,7 @@ impl Signex {
             .panel_ctx
             .child_sheet_stroke_width_buf
             .clone();
+        let selected_tree_path = self.document_state.panel_ctx.selected_tree_path.clone();
         let component_filter = self.document_state.panel_ctx.component_filter.clone();
         let collapsed_sections = self.document_state.panel_ctx.collapsed_sections.clone();
         let pre_placement = self.document_state.panel_ctx.pre_placement.clone();
@@ -240,6 +241,7 @@ impl Signex {
             selected_lib_symbol,
             components_split,
             project_tree: vec![],
+            selected_tree_path,
             selection_count,
             selected_uuid,
             selected_kind,
