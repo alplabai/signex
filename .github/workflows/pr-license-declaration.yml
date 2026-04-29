@@ -1,0 +1,55 @@
+name: PR License Declaration
+
+# Enforces the Phase 8 contributor self-declaration block in every
+# PR description against dev / main. PRs whose description is
+# missing the block, or whose author marked "KiCad source consulted:
+# yes," are blocked — those contributions belong in the GPL-3.0
+# companion repo signex-kicad-import, not here.
+#
+# See CONTRIBUTING.md and docs/LICENSING.md for the rationale.
+
+on:
+  pull_request:
+    branches: [dev, main]
+    types: [opened, edited, reopened, synchronize]
+
+jobs:
+  check-declaration:
+    name: PR-description self-declaration
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify required fields are present
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -e
+          missing=()
+          for field in "Source basis:" "LLM-assisted:" "KiCad source consulted:"; do
+            if ! echo "$BODY" | grep -qF "$field"; then
+              missing+=("$field")
+            fi
+          done
+
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::PR description is missing the required license-compliance block."
+            echo "::error::Missing fields: ${missing[*]}"
+            echo "::error::See .github/pull_request_template.md for the template."
+            exit 1
+          fi
+
+          echo "License-compliance block present."
+
+      - name: Block PRs that consult KiCad source
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -e
+          if echo "$BODY" | grep -qiE "KiCad source consulted:\s*yes"; then
+            echo "::error::This PR's description states 'KiCad source consulted: yes'."
+            echo "::error::KiCad-derived contributions belong in the GPL-3.0-or-later companion repo:"
+            echo "::error::  https://github.com/alplabai/signex-kicad-import"
+            echo "::error::See docs/LICENSING.md for the rationale behind the two-repo split."
+            exit 1
+          fi
+
+          echo "PR is Apache-clean per the self-declaration."
