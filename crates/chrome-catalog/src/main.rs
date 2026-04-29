@@ -993,11 +993,11 @@ fn bom_properties_sidebar<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
 fn tree_row_demo<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     let mut col: Column<'a, Message> = Column::new().spacing(2);
     for (label, open, dirty, active) in [
-        ("clean.kicad_sch", false, false, false),
-        ("open.kicad_sch", true, false, false),
-        ("dirty.kicad_sch", true, true, false),
-        ("active.kicad_sch", true, false, true),
-        ("active+dirty.kicad_sch", true, true, true),
+        ("clean.snxsch", false, false, false),
+        ("open.snxsch", true, false, false),
+        ("dirty.snxsch", true, true, false),
+        ("active.snxsch", true, false, true),
+        ("active+dirty.snxsch", true, true, true),
     ] {
         col = col.push(tree_row(label, open, dirty, active, tokens));
     }

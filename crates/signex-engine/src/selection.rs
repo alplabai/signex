@@ -581,7 +581,7 @@ impl Engine {
 // Arc geometry helper
 // ---------------------------------------------------------------------------
 
-/// Circle through three non-collinear points — converts KiCad's
+/// Circle through three non-collinear points — converts the historical
 /// (start, mid, end) arc storage into (center, radius, angles).
 fn circumcircle(a: (f64, f64), b: (f64, f64), c: (f64, f64)) -> Option<(f64, f64, f64)> {
     let (ax, ay) = a;

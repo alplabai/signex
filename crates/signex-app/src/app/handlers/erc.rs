@@ -39,7 +39,7 @@ impl Signex {
         // First pass: collect every sheet's snapshot keyed by BOTH its
         // absolute path AND its bare filename. BadHierSheetPin looks up
         // children by the filename stored on the parent's sheet symbol,
-        // which is often just the basename (e.g. "power.kicad_sch").
+        // which is often just the basename (e.g. "power.snxsch").
         let mut snapshots_by_path: std::collections::HashMap<
             std::path::PathBuf,
             signex_render::schematic::SchematicRenderSnapshot,

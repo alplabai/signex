@@ -141,7 +141,7 @@ pub fn run_with_dsl(
 }
 
 /// Run ERC for a schematic in the context of a whole project. Cross-sheet
-/// rules consult `children` keyed by the child's KiCad filename as it appears
+/// rules consult `children` keyed by the child filename as it appears
 /// on the parent's sheet symbol. Pass an empty map for top-only runs.
 pub fn run_with_project(
     snapshot: &SchematicRenderSnapshot,

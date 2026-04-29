@@ -1,7 +1,7 @@
 //! Label rendering — net labels, global labels, hierarchical labels.
 //!
 //! Reference: signex Tauri app schematicDrawHelpers.ts::drawLabels()
-//! and KiCad sch_painter.cpp SCH_LABEL render.
+//! and historical SCH_LABEL render.
 //!
 //! Net label:   Plain text at anchor. No shape. Bottom-aligned.
 //! Global:      Arrow/pentagon shape. Shape type from label.shape field.

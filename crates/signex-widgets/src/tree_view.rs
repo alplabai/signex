@@ -92,13 +92,10 @@ pub enum TreeIcon {
 //    `crates/signex-app/assets/icons/files/`. Reached cross-crate via
 //    `include_bytes!` so one copy of the artwork serves both the
 //    tree view and the .ico/.icns raster pipeline.
-//  * **KiCad handoff formats** — `.kicad_sch` / `.kicad_pcb` /
-//    `.kicad_sym` / `.kicad_mod` render with the matching Signex-
-//    brand glyph (same chamfered silhouette + amber wedge), so the
-//    project tree stays visually consistent regardless of whether
-//    files are native or KiCad. The `TreeIcon::Schematic` / `::Pcb`
-//    variants remain in the enum for backward-compat but now share
-//    the `.snxsch` / `.snxpcb` SVGs.
+//  * **Legacy aliases** — `TreeIcon::Schematic` / `::Pcb` remain in
+//    the enum for backward-compat with older call sites that
+//    construct them directly; both share the `.snxsch` / `.snxpcb`
+//    glyphs.
 
 // Per-variant `OnceLock` cache. iced handles are Arc-backed so
 // cloning a cached handle into every render frame is near-free.
@@ -149,11 +146,7 @@ impl TreeIcon {
             Self::Sheet => cached_svg_handle!(SVG_TREE_SHEET),
             Self::Net => cached_svg_handle!(SVG_TREE_NET),
             Self::Pin => cached_svg_handle!(SVG_TREE_PIN),
-            // KiCad handoff formats — share the Signex-brand glyph
-            // for visual consistency in the project tree. The enum
-            // variants remain for backward-compat with older call
-            // sites that construct `TreeIcon::Schematic/::Pcb`
-            // directly.
+            // Legacy aliases — share the Signex glyphs.
             Self::Schematic => cached_svg_handle!(SVG_SNX_SCHEMATIC),
             Self::Pcb => cached_svg_handle!(SVG_SNX_PCB),
             // Signex native `.snx***` family.
@@ -171,11 +164,9 @@ impl TreeIcon {
         }
     }
 
-    /// Pick a `TreeIcon` for a filename. Both Signex `.snx***` and
-    /// KiCad `.kicad_*` extensions route to the same Signex-brand
-    /// glyph family so the project tree reads as one cohesive visual
-    /// family regardless of whether the underlying file is native or
-    /// KiCad. Unknown extensions fall back to `File`.
+    /// Pick a `TreeIcon` for a filename. Native Signex `.snx***`
+    /// files route to the matching Signex-brand glyph; unknown
+    /// extensions fall back to `File`.
     pub fn for_path(filename: &str) -> Self {
         let lower = filename.to_ascii_lowercase();
         if let Some(ext) = lower.rsplit('.').next() {
@@ -192,15 +183,6 @@ impl TreeIcon {
                 "snxmat" => Self::Material,
                 "snxcfg" => Self::Config,
                 "snxmod" => Self::Model,
-                // KiCad handoff formats — map to the matching Signex
-                // glyph. `.kicad_sym` is a symbol library (multiple
-                // symbols) so it pairs with the library glyph;
-                // `.kicad_mod` is a single footprint.
-                "kicad_pro" => Self::SnxProject,
-                "kicad_sch" => Self::SnxSchematic,
-                "kicad_pcb" => Self::SnxPcb,
-                "kicad_sym" => Self::SnxLibrary,
-                "kicad_mod" => Self::SnxFootprint,
                 _ => Self::File,
             }
         } else {
@@ -445,8 +427,7 @@ fn render_node(
     }
 
     // Icon — full-colour bundled SVG. Cached per variant; render via
-    // `iced::widget::svg`. KiCad handoff formats share glyphs with
-    // their Signex-native counterparts (see `TreeIcon::svg`).
+    // `iced::widget::svg`.
     //
     // Active-project marker: when this row is the accented root in a
     // multi-project workspace (`node.accent && depth == 0`), tint the

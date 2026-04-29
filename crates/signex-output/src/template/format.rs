@@ -1,7 +1,7 @@
 //! `.snxsht` user-template parser/emitter — placeholder.
 //!
-//! The legacy implementation was a KiCad-style S-expression parser
-//! built on top of `kicad-parser::sexpr`. As part of the issue #62
+//! The legacy implementation was a cross-style S-expression parser
+//! built on the legacy S-expression layer (since removed). As part of the cutover
 //! Apache-clean cutover that codepath was removed; user-defined
 //! templates will return when `.snxsht` is reimplemented on top of
 //! Signex's native TOML-based format.

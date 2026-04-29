@@ -543,7 +543,7 @@ fn content_appearance<'a>(
     );
     col = col.push(Space::new().height(12));
     col = col.push(
-        text("Altium changes only rendering view. KiCad preserves library symbol appearance.")
+        text("Altium changes only rendering view. Standard preserves library symbol appearance.")
             .size(10)
             .color(TEXT_MUT),
     );

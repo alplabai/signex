@@ -218,7 +218,7 @@ impl Signex {
 /// Symbols and their pins are intentionally excluded — this matches Altium's
 /// "Select » Connection" behaviour which picks net geometry only.
 ///
-/// Endpoints are quantised to 0.001 mm (1 nm in KiCad-space integer units)
+/// Endpoints are quantised to 0.001 mm (1 nm in integer units)
 /// and stored in a HashSet — lookup is O(1), so the overall walk is
 /// O(N · passes) instead of the naive O(P²·N²). Critical for power nets
 /// with hundreds of wires.
@@ -230,7 +230,7 @@ fn expand_to_net(
     use std::collections::HashSet;
 
     // Quantise to 0.001 mm so endpoints compare as exact integer keys.
-    // KiCad schematic coordinates are multiples of 0.01 mm at worst, so
+    // schematic coordinates are multiples of 0.01 mm at worst, so
     // a 0.001 mm bucket is tight enough to avoid false unions.
     let key = |p: &Point| -> (i64, i64) {
         ((p.x * 1000.0).round() as i64, (p.y * 1000.0).round() as i64)

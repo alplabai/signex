@@ -11,12 +11,8 @@ impl Signex {
                         .set_title("Open Project or Schematic")
                         .add_filter("Signex Project", &["snxprj"])
                         .add_filter("Signex Schematic", &["snxsch"])
-                        .add_filter("KiCad Schematic", &["kicad_sch"])
-                        .add_filter("KiCad Project", &["kicad_pro"])
-                        .add_filter(
-                            "All Supported",
-                            &["snxprj", "snxsch", "kicad_sch", "kicad_pro"],
-                        )
+                        .add_filter("Signex Library", &["snxlib"])
+                        .add_filter("All Supported", &["snxprj", "snxsch", "snxlib"])
                         .add_filter("All files", &["*"])
                         .pick_file()
                         .await
@@ -30,7 +26,6 @@ impl Signex {
                     rfd::AsyncFileDialog::new()
                         .set_title("Save Schematic As")
                         .add_filter("Signex Schematic", &["snxsch"])
-                        .add_filter("KiCad Schematic", &["kicad_sch"])
                         .save_file()
                         .await
                         .map(|file| file.path().to_path_buf())

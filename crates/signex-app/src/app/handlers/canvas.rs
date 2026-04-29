@@ -7,7 +7,7 @@ use super::super::helpers::constrain_segments;
 use super::super::*;
 
 /// Default stroke width applied when the user hasn't edited the
-/// pre_placement Width value yet. KiCad's "default line width"
+/// pre_placement Width value yet. "default line width"
 /// is ~0.15 mm in schematics; showing 0 in the properties panel
 /// used to confuse users because the line was still visible
 /// (renderer substitutes its own default for 0).
@@ -403,7 +403,7 @@ impl Signex {
                 // Active Bar and is now clicking a wire. Union-find the
                 // whole connected net and apply the colour (or clear it
                 // if alpha == 0). Colours stay in app state so the
-                // .kicad_sch round-trips unchanged — KiCad has no
+                // .snxsch round-trips unchanged — There is no
                 // notion of per-wire override colours.
                 if let Some(pending) = self.ui_state.pending_net_color {
                     // Snap the click point to the grid before hit
@@ -648,7 +648,7 @@ impl Signex {
                 // IDEs (Escape cancels, click elsewhere confirms).
                 if let Some(state) = self.interaction_state.editing_text.take() {
                     if state.text != state.original_text {
-                        let stored = signex_render::schematic::text::escape_for_kicad(&state.text);
+                        let stored = signex_render::schematic::text::escape_for_storage(&state.text);
                         let cmd = match state.kind {
                             signex_types::schematic::SelectedKind::Label => {
                                 Some(signex_engine::Command::UpdateText {
@@ -1074,7 +1074,7 @@ impl Signex {
                 // stored `position`) lands on a grid dot after the move, not
                 // just the drag delta. Snapping only the delta preserves an
                 // off-grid origin; users expect the endpoint to be on-grid
-                // like KiCad/Altium do.
+                // matching Altium do.
                 let (dx, dy) = if self.ui_state.snap_enabled {
                     let gs = self.ui_state.grid_size_mm as f64;
                     let primary = self
@@ -1355,7 +1355,7 @@ impl Signex {
                         };
                         if let Some((raw_text, kind, wx, wy)) = edit_info {
                             // Show the user the visible form (e.g. "/OE"), not
-                            // the KiCad-escaped storage form ("{slash}OE").
+                            // the escape-form storage form ("{slash}OE").
                             let display_text = expand_char_escapes(&raw_text);
                             self.interaction_state.editing_text = Some(TextEditState {
                                 uuid: hit.uuid,

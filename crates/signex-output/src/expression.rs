@@ -398,7 +398,7 @@ mod tests {
         );
 
         let ctx_sheet = SheetSnapshot {
-            path: PathBuf::from("sheet_1.kicad_sch"),
+            path: PathBuf::from("sheet_1.snxsch"),
             schematic: sheet,
             sheet_name: "Sheet1".to_string(),
             sheet_number: 1,

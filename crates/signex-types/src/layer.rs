@@ -3,13 +3,9 @@
 //! Variants are **semantic** — they describe a layer's purpose
 //! (top copper, bottom silkscreen, courtyard, etc.), not its bit
 //! position in any particular EDA tool's internal layer set.
-//! The previous version of this module exposed `LayerId(u8)` plus
-//! pre-KiCad-7 numeric constants (`F_CU = 0`, `B_CU = 31`, …) that
-//! mirrored KiCad's `PCB_LAYER_ID` numbering; those have been
-//! removed as part of the issue #62 Apache-clean remediation.
-//! Concrete `u8` IDs for any future foreign-format I/O are produced
-//! by the `signex-kicad-import` companion crate's translation layer
-//! and do not live in this Apache codebase.
+//! Concrete `u8` IDs for foreign-format I/O are produced by the
+//! companion import tool's translation layer and do not live in
+//! this codebase.
 
 use serde::{Deserialize, Serialize};
 

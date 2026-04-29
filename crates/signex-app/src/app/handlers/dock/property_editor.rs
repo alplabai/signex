@@ -120,9 +120,9 @@ impl Signex {
                 );
             }
             crate::panels::PanelMsg::EditLabelText(uuid, new_text) => {
-                // Users type `/` in the Properties panel; persist the KiCad
+                // Users type `/` in the Properties panel; persist the legacy
                 // escape token so the stored schematic round-trips cleanly.
-                let stored = signex_render::schematic::text::escape_for_kicad(new_text);
+                let stored = signex_render::schematic::text::escape_for_storage(new_text);
                 self.apply_engine_command(
                     signex_engine::Command::UpdateText {
                         target: signex_engine::TextTarget::Label(*uuid),
@@ -133,7 +133,7 @@ impl Signex {
                 );
             }
             crate::panels::PanelMsg::EditTextNoteText(uuid, new_text) => {
-                let stored = signex_render::schematic::text::escape_for_kicad(new_text);
+                let stored = signex_render::schematic::text::escape_for_storage(new_text);
                 self.apply_engine_command(
                     signex_engine::Command::UpdateText {
                         target: signex_engine::TextTarget::TextNote(*uuid),

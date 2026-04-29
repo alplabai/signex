@@ -283,7 +283,7 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
                 ctx.has_schematic,
             ),
             leaf_if(
-                "Netlist (KiCad .net)...",
+                "Netlist (.net)...",
                 None,
                 MenuMessage::ExportNetlist,
                 ctx.has_schematic,

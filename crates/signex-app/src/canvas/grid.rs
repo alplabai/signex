@@ -139,7 +139,7 @@ pub fn draw_grid(
     let dot_radius = (minor_screen * 0.06).clamp(0.5, 1.6);
 
     let style = signex_render::grid_style();
-    // Small-cross arm length in screen pixels (KiCad-style "+").
+    // Small-cross arm length in screen pixels (Cross-style "+").
     let cross_arm = (minor_screen * 0.18).clamp(1.5, 4.0);
     let minor_stroke = canvas::Stroke::default()
         .with_color(dot_color)

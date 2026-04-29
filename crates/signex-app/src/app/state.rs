@@ -145,7 +145,7 @@ pub struct UiState {
     /// the cursor turns into a paint-bucket over the canvas and the
     /// next click on a wire floods that color across every connected
     /// wire. Cleared after the click applies, or by Escape. Colors are
-    /// render-time only — they do NOT write back to the .kicad_sch.
+    /// render-time only — they do NOT write back to the .snxsch.
     pub pending_net_color: Option<signex_types::theme::Color>,
     /// Per-wire color overrides keyed by wire uuid. Populated by the
     /// net-color click; consulted when drawing wires. Not serialised.
@@ -304,7 +304,7 @@ impl std::fmt::Display for ProjectId {
 }
 
 /// One loaded project in the multi-project workspace. `path` is the
-/// canonical identity (`.kicad_pro` / `.snxprj` location on disk); `data`
+/// canonical identity (`.snxprj` / `.snxprj` location on disk); `data`
 /// is the parsed project contents. Multiple projects with different
 /// `path`s coexist in `DocumentState.projects`; two identical `path`s
 /// at once is a loader bug (existing `open_project_file` de-dupes).
@@ -358,7 +358,7 @@ pub struct DocumentState {
     /// the v0.10.x `.snxlib` library plumbing; kept here so the
     /// canvas-side place-component flow can resolve a symbol by id
     /// independently of which panel populated it. Was previously
-    /// also fed by the legacy KiCad `.kicad_sym` scanner that v0.10.0
+    /// also fed by the legacy symbol-library scanner that v0.10.0
     /// removed (Apache-clean residual polish).
     #[allow(dead_code)]
     pub loaded_lib: std::collections::HashMap<String, signex_types::schematic::LibSymbol>,

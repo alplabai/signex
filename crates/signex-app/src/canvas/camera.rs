@@ -1,6 +1,6 @@
 //! Camera system — Altium-style pan/zoom with cursor-centered scaling.
 //!
-//! World coordinates are in mm (KiCad internal units).
+//! World coordinates are in mm (internal units).
 //! Screen coordinates are in pixels.
 
 use iced::{Point, Rectangle};
