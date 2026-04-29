@@ -25,30 +25,41 @@ pub use signex_types::schematic::SCHEMATIC_TEXT_MM;
 /// `screen_font`) silently breaks label/pin/text anchors.
 pub const SCHEMATIC_TEXT_EM_MM: f64 = SCHEMATIC_TEXT_MM / 0.72;
 
+/// Power-port glyph style preference. `Standard` matches the rounded
+/// shapes typical of open-source schematic editors; `Altium` matches
+/// the Altium Designer signature look. The `Standard` variant was
+/// previously named `KiCad` — renamed in v0.10.0 as part of the
+/// Apache-clean residual polish; the on-disk preference string and
+/// the user-facing dropdown label are unchanged.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PowerPortStyle {
-    KiCad,
+    Standard,
     #[default]
     Altium,
 }
 
+/// Net-label glyph style preference. Same `Standard` (was `KiCad`) /
+/// `Altium` split as `PowerPortStyle`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LabelStyle {
     #[default]
-    KiCad,
+    Standard,
     Altium,
 }
 
-/// How hierarchical child sheets render. KiCad mode keeps each sheet's
-/// stroke/fill colour from the source file (with theme component-body
-/// fallback) so the sheet blends with the rest of the schematic. Altium
-/// mode draws sheets with Altium Designer's signature greenish palette
-/// when no per-sheet colour is set in the file. Per-sheet colours from
-/// the source file always win, regardless of the active style.
+/// How hierarchical child sheets render. `Standard` mode keeps each
+/// sheet's stroke/fill colour from the source file (with theme
+/// component-body fallback) so the sheet blends with the rest of the
+/// schematic. `Altium` mode draws sheets with Altium Designer's
+/// signature greenish palette when no per-sheet colour is set in the
+/// file. Per-sheet colours from the source file always win,
+/// regardless of the active style. The `Standard` variant was
+/// previously named `KiCad` — see `PowerPortStyle` for the rename
+/// rationale.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MultisheetStyle {
     #[default]
-    KiCad,
+    Standard,
     Altium,
 }
 
@@ -70,7 +81,11 @@ impl GridStyle {
 impl std::fmt::Display for MultisheetStyle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            MultisheetStyle::KiCad => write!(f, "KiCad"),
+            // User-facing dropdown label kept as "KiCad" so users
+            // migrating from KiCad files recognise the mode that
+            // matches their original layout. Internal variant name
+            // is `Standard` — see the type's doc comment.
+            MultisheetStyle::Standard => write!(f, "KiCad"),
             MultisheetStyle::Altium => write!(f, "Altium"),
         }
     }
@@ -89,7 +104,7 @@ impl std::fmt::Display for GridStyle {
 impl std::fmt::Display for LabelStyle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LabelStyle::KiCad => write!(f, "KiCad"),
+            LabelStyle::Standard => write!(f, "KiCad"),
             LabelStyle::Altium => write!(f, "Altium"),
         }
     }
@@ -98,7 +113,7 @@ impl std::fmt::Display for LabelStyle {
 impl std::fmt::Display for PowerPortStyle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            PowerPortStyle::KiCad => write!(f, "KiCad"),
+            PowerPortStyle::Standard => write!(f, "KiCad"),
             PowerPortStyle::Altium => write!(f, "Altium"),
         }
     }
@@ -144,8 +159,8 @@ fn canvas_text_config() -> &'static RwLock<CanvasTextConfig> {
             bold: false,
             italic: false,
             power_port_style: PowerPortStyle::Altium,
-            label_style: LabelStyle::KiCad,
-            multisheet_style: MultisheetStyle::KiCad,
+            label_style: LabelStyle::Standard,
+            multisheet_style: MultisheetStyle::Standard,
             grid_style: GridStyle::Dots,
         })
     })
@@ -197,7 +212,7 @@ pub fn label_style() -> LabelStyle {
     canvas_text_config()
         .read()
         .map(|c| c.label_style)
-        .unwrap_or(LabelStyle::KiCad)
+        .unwrap_or(LabelStyle::Standard)
 }
 
 pub fn set_multisheet_style(style: MultisheetStyle) {
@@ -210,7 +225,7 @@ pub fn multisheet_style() -> MultisheetStyle {
     canvas_text_config()
         .read()
         .map(|c| c.multisheet_style)
-        .unwrap_or(MultisheetStyle::KiCad)
+        .unwrap_or(MultisheetStyle::Standard)
 }
 
 pub fn set_grid_style(style: GridStyle) {
