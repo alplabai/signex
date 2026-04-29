@@ -173,10 +173,6 @@ impl Signex {
             "snxsch" => self.open_schematic_file(path)?,
             "snxpcb" => self.open_pcb_file(path)?,
             "snxlib" => self.open_library_file(path)?,
-            "standard_pro" | "standard_sch" | "standard_pcb" => anyhow::bail!(
-                "Signex Community no longer opens Standard files directly. \
-                 Convert with the signex-standard-import companion tool first."
-            ),
             _ => anyhow::bail!("unsupported file type: .{ext}"),
         }
 

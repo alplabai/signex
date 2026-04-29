@@ -703,13 +703,6 @@ impl Signex {
             return Ok(());
         }
 
-        if filename.ends_with(".standard_sch") || filename.ends_with(".standard_pcb") {
-            anyhow::bail!(
-                "Signex Community no longer opens Standard files directly. \
-                 Convert with the signex-standard-import companion tool first."
-            );
-        }
-
         anyhow::bail!("unsupported project tree document: {filename}")
     }
 }

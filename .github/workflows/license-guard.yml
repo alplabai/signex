@@ -70,6 +70,66 @@ jobs:
           fi
           echo "No removed API surface re-introduced."
 
+  no-kicad-shaped-symbols:
+    name: No re-introduction of v0.10.0 polish-pass renames
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Forbid re-introduction of vestigial KiCad-shaped names
+        run: |
+          set -e
+          # v0.10.0's Apache-clean residual polish renamed these to
+          # neutral terms and removed the legacy KiCad symbol-library
+          # scanner. Reintroductions usually mean a stale copy-paste
+          # from a pre-v0.10.0 branch.
+          if git grep -nE '\bMultisheetStyle::KiCad\b|\bLabelStyle::KiCad\b|\bPowerPortStyle::KiCad\b|\bfind_kicad_symbols_dir\b|\blist_kicad_libraries\b|\bkicad_lib_dir\s*:' -- 'crates/**/*.rs'; then
+            echo ""
+            echo "::error::Re-introduction of a name removed during the v0.10.0 Apache-clean residual polish."
+            echo "::error::Use the renamed equivalents (::Standard for the style enums) or the .snxlib library plumbing in v0.10.x."
+            exit 1
+          fi
+          echo "No v0.10.0-renamed names re-introduced."
+
+  no-numeric-layer-constants:
+    name: No KiCad-numbered LayerId constants
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Forbid F_CU = 0 / B_CU = 31 style constants
+        run: |
+          set -e
+          # KiCad's pre-7 `PCB_LAYER_ID` used numeric constants for
+          # layer ids (F_CU=0, B_CU=31, …). signex-types replaced
+          # this with a semantic `SignexLayer` enum in v0.9.0; any
+          # reintroduction of the numeric form is GPL-exposure.
+          if git grep -nE '\b(F_CU|B_CU|F_SILKS|B_SILKS|F_MASK|B_MASK)\s*[:=]\s*[0-9]' -- 'crates/**/*.rs'; then
+            echo ""
+            echo "::error::KiCad-numbered layer-id constants (F_CU=0, B_CU=31, …) detected."
+            echo "::error::Use signex_types::layer::SignexLayer instead — see crates/signex-types/src/layer.rs."
+            exit 1
+          fi
+          echo "No KiCad-numbered layer constants."
+
+  no-kicad-net-name-format:
+    name: No KiCad auto-net-name format string
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Forbid Net-(<r>-Pad<p>) format string
+        run: |
+          set -e
+          # KiCad's auto-generated unnamed-net format. v0.9.0
+          # replaced it with `unnamed-<sheet>:<ref>:<pin>`. A
+          # reintroduction would regress the format-design
+          # cleanroom we built.
+          if git grep -nE 'Net-\([^)]*-Pad' -- 'crates/**/*.rs'; then
+            echo ""
+            echo "::error::KiCad auto-net-name format string Net-(...-Pad...) detected."
+            echo "::error::Use signex_types::net::auto_net_name instead."
+            exit 1
+          fi
+          echo "No KiCad auto-net-name format string."
+
   cargo-deny:
     name: cargo-deny license + transitive-dep audit
     runs-on: ubuntu-latest

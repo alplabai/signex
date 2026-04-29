@@ -104,7 +104,6 @@ impl Signex {
 
         let canvas_font_popup_open = self.document_state.panel_ctx.canvas_font_popup_open;
         let properties_tab = self.document_state.panel_ctx.properties_tab;
-        let standard_libraries = self.document_state.panel_ctx.standard_libraries.clone();
         let active_library = self.document_state.panel_ctx.active_library.clone();
         let library_symbols = self.document_state.panel_ctx.library_symbols.clone();
         let selected_component = self.document_state.panel_ctx.selected_component.clone();
@@ -233,7 +232,6 @@ impl Signex {
             canvas_font_italic: self.ui_state.canvas_font_italic,
             canvas_font_popup_open,
             properties_tab,
-            standard_libraries,
             active_library,
             library_symbols,
             selected_component,
