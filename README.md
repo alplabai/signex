@@ -9,7 +9,7 @@
 
 <p align="center">
   <a href="https://github.com/alplabai/signex/blob/dev/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License"></a>
-  <a href="https://github.com/alplabai/signex/releases/tag/v0.8.0"><img src="https://img.shields.io/badge/version-v0.8.0-green.svg" alt="Version"></a>
+  <a href="https://github.com/alplabai/signex/releases/tag/v0.9.0"><img src="https://img.shields.io/badge/version-v0.9.0-green.svg" alt="Version"></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.80%2B-orange.svg" alt="Rust"></a>
   <a href="https://github.com/alplabai/signex/wiki"><img src="https://img.shields.io/badge/wiki-user%20guide-blueviolet.svg" alt="Wiki"></a>
   <a href="https://github.com/alplabai/signex/discussions"><img src="https://img.shields.io/badge/discussions-join-brightgreen.svg" alt="Discussions"></a>
@@ -46,13 +46,12 @@ formats one-way. Run it once against your project; open the resulting
 - **Signex Pro** (subscription) — adds Signal AI (Claude-powered design
   copilot), real-time collaboration, and Signex 365 cloud PLM
 
-> **Status:** Early development — v0.8.0 shipped (Output subsystem + multi-project workspaces + dirty
-> tracking + chrome refactor + hierarchical-sheet polish); next up **v0.9 — Apache-clean cutover**
+> **Status:** Early development — **v0.9.0 shipped** — Apache-clean cutover
 > ([issue #62](https://github.com/alplabai/signex/issues/62): native `.snxsch`/`.snxpcb` formats,
 > KiCad I/O moved to optional [signex-kicad-import](https://github.com/alplabai/signex-kicad-import)
-> companion). Library & Polish (symbol/footprint editor, multi-symbol `.snxsym`, Component Editor,
-> installers) ships next as v0.10. [Join the discussion](https://github.com/alplabai/signex/discussions)
-> or check the [roadmap](#roadmap).
+> companion, `signex-types` Apache-clean). Library & Polish (symbol/footprint editor, multi-symbol
+> `.snxsym`, Component Editor, installers) ships next as v0.10.
+> [Join the discussion](https://github.com/alplabai/signex/discussions) or check the [roadmap](#roadmap).
 
 ## Features
 
@@ -177,7 +176,7 @@ cargo clippy --workspace -- -D warnings  # Lint
 | Full SCH Editor — copy/paste, labels, components, Active Bar | v0.6 | Done |
 | Validation + Multi-Window — ERC, annotation, pin matrix, undockable tabs | v0.7 | Done |
 | Output — PDF, BOM, netlist, multi-project workspaces, dirty tracking | v0.8 | Done |
-| Apache-clean cutover (issue #62) — native `.snxsch` / `.snxpcb` formats, KiCad I/O via companion | v0.9 | **In Progress** |
+| Apache-clean cutover (issue #62) — native `.snxsch` / `.snxpcb` formats, KiCad I/O via companion | v0.9 | ✅ Done |
 | Library & Polish — symbol/footprint editor, multi-symbol `.snxsym`, Component Editor, installers | v0.10 | |
 | **Community Preview** — schematic-only editor | **v1.0** | |
 | PCB Viewer — GPU rendering, layers, cross-probe | v2.0 | |
