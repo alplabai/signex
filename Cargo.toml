@@ -33,6 +33,7 @@ iced_aw = { version = "0.13", default-features = false, features = [
 # Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+toml = "0.8"
 
 # Identity
 uuid = { version = "1.23.1", features = ["v4", "serde"] }
