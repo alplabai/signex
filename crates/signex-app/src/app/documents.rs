@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use signex_types::library::Library;
 use signex_types::pcb::PcbBoard;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -67,13 +68,17 @@ impl SchematicTabSession {
 
 /// Per-tab auxiliary document payload. Schematic tabs keep their
 /// engine in `DocumentState::engines` (keyed by path) rather than in
-/// this enum; currently only PCB tabs carry a document here. Kept as
+/// this enum; PCB and Library tabs carry their document here. Kept as
 /// an enum so future tab kinds (symbol editor, footprint editor, 3D
 /// viewer) can slot in without reshaping callers.
 #[derive(Debug)]
 #[allow(dead_code, clippy::large_enum_variant)]
 pub enum TabDocument {
     Pcb(PcbBoard),
+    /// `.snxlib` package opened in the read-only Library Browser tab.
+    /// The browser reads `library.components` to populate the table;
+    /// edits are out of scope until v0.10.7+ wires Component Editor.
+    Library(Library),
 }
 
 impl TabDocument {
@@ -81,6 +86,15 @@ impl TabDocument {
     pub fn as_pcb(&self) -> Option<&PcbBoard> {
         match self {
             Self::Pcb(board) => Some(board),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn as_library(&self) -> Option<&Library> {
+        match self {
+            Self::Library(library) => Some(library),
+            _ => None,
         }
     }
 }

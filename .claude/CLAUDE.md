@@ -95,7 +95,17 @@ The pre-release guard (`.claude/hooks/pre-release-guard.sh`) blocks step 4 with 
 - v0.8.0 — Output Generation (PDF, BOM, netlist, multi-project workspaces, dirty tracking, hierarchical-sheet polish, TabPill chrome) ✅
 - v0.9.0 — Apache-clean cutover (issue #62: native `.snxsch`/`.snxpcb` TOML+TSV formats, KiCad I/O moved to optional `signex-kicad-import` GPL-3.0 companion, signex-types Apache-clean — `PinDirection`/`SignexLayer`/Markdown markup) ✅
 - v0.9.1 — Async save + borrow-based serialise (`SnxSchematic`/`SnxPcb::write_string_borrowed`, `Engine::serialize_for_save` + `write_to_file`, `iced::Task::perform` save handler, "Saving…" status pill — huge-PCB Ctrl+S off the UI thread) ✅
-- v0.10.0 — Library & Polish (symbol/footprint editor, multi-symbol `.snxsym`, Component Editor, installers)
+- v0.10.x — Library & Polish (split into 10 small sub-releases — see `project_v010_library_plan.md` memory)
+  - v0.10.0 — Library Browser tab scaffold (table only, read-only) ✅
+  - v0.10.1 — Browser preview pane (symbol render in side pane on row click)
+  - v0.10.2 — Browser filter / search bar
+  - v0.10.3 — SCH Library editor scaffold (left-dock panel + symbol list + read-only canvas)
+  - v0.10.4 — Pin Properties (add / edit / delete + full pin properties dialog)
+  - v0.10.5 — Drawing tools (Line / Rectangle / Circle on `.snxsym` canvas)
+  - v0.10.6 — Multi-symbol container + part_number schema + async save (.snxsym)
+  - v0.10.7 — Component Editor modal-edit (single-component property dialog)
+  - v0.10.8 — Inline-edit on Library Browser table + Pick Symbol/Footprint picker (mounted libs)
+  - v0.10.9 — Filesystem auto-mount for unmounted picker hits
 - v1.0.0 — Community Preview (schematic-only early access)
 
 ### Schematic Polish
