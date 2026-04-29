@@ -6,9 +6,15 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
-## [0.11.0] — 2026-04-30
+> **In flight:** the v0.11 Library & Polish milestone is being
+> implemented on `feature/v0.11-library`. The draft section below
+> will move under a `## [0.11.0] — <date>` header once §16 acceptance
+> smoke tests all pass and the tag is cut. Until then this is a
+> work-in-progress changelog, not a shipped release.
 
-The **v0.11 Library & Polish** release. Restores the full library subsystem implementation that was developed on the v0.9 branch (2026-04-26 → 2026-04-29) and parked when the Apache-clean cutover took priority. The original 169-commit chain is preserved on the `v0.9-snxlib-paused-2026-04-29` and `v0.10-library-cherry-pick-2026-04-29` tags; this release squashes the `crates/` tree of that chain onto the post-cutover dev as a single restoration unit, with all Apache-clean invariants enforced.
+### v0.11 — Library & Polish (draft)
+
+The **v0.11 Library & Polish** milestone. Restores the full library subsystem implementation that was developed on the v0.9 branch (2026-04-26 → 2026-04-29) and parked when the Apache-clean cutover took priority. The original 169-commit chain is preserved on the `v0.9-snxlib-paused-2026-04-29` and `v0.10-library-cherry-pick-2026-04-29` tags; this release squashes the `crates/` tree of that chain onto the post-cutover dev as a single restoration unit, with all Apache-clean invariants enforced.
 
 The library subsystem follows the **DBLib model** specified in the v0.9 plan series (`docs/internal/docs/v0.9-library-plan.md` → `v0.9-library-refactor-plan.md` → `v0.9-refactor-2-plan.md`): components live as **rows in TSV tables** (`tables/<category>.tsv`) rather than per-component files; symbols, footprints, and sim models stay as standalone editable primitive files (`.snxsym`, `.snxfpt`, `.snxsim`) addressed by UUID; component rows reference primitives by `(library_id, uuid)` tuples. The same column schema serialises to TSV (LocalGit) or JSONB rows (Database) — one wire format, two backends.
 
