@@ -3,12 +3,19 @@ use iced::Task;
 
 use super::super::super::*;
 
+/// Maximum time between two single clicks on the same project-tree
+/// row that still counts as a double-click. Mirrors the OS-default
+/// double-click interval; iced doesn't expose the system value, so
+/// we hardcode a Windows-flavoured 500 ms here. The interval applies
+/// per-row — switching rows mid-window resets the latch.
+const TREE_DOUBLE_CLICK_WINDOW: std::time::Duration = std::time::Duration::from_millis(500);
+
 impl Signex {
     pub(super) fn handle_dock_project_navigation_panel_message(
         &mut self,
         panel_msg: &crate::panels::PanelMsg,
     ) -> bool {
-        use signex_widgets::tree_view::{TreeIcon, TreeMsg, get_node};
+        use signex_widgets::tree_view::TreeMsg;
 
         match panel_msg {
             crate::panels::PanelMsg::Tree(TreeMsg::Toggle(path)) => {
@@ -19,25 +26,26 @@ impl Signex {
                 true
             }
             crate::panels::PanelMsg::Tree(TreeMsg::Select(path)) => {
-                let selected_node =
-                    get_node(self.document_state.panel_ctx.project_tree.as_slice(), path);
-                if let Some(node) = selected_node
-                    && matches!(
-                        node.icon,
-                        TreeIcon::Schematic
-                            | TreeIcon::Pcb
-                            | TreeIcon::SnxSchematic
-                            | TreeIcon::SnxPcb
-                            | TreeIcon::SnxProject
-                            | TreeIcon::SnxFootprint
-                            | TreeIcon::SnxSimulation
-                            | TreeIcon::SnxLibrary
-                            | TreeIcon::SnxSymbol
-                    )
-                    && let Err(error) =
-                        self.open_project_tree_document(path, node.label.clone())
-                {
-                    crate::diagnostics::log_error("Failed to open project tree document", &error);
+                // Single click highlights, double click on the same row
+                // opens. iced 0.14's button captures both press + release
+                // before a mouse_area `on_double_click` can see them, so
+                // the double-click is detected at this layer via a
+                // small click-time window — see `TREE_DOUBLE_CLICK_WINDOW`.
+                self.document_state.panel_ctx.selected_tree_path = Some(path.clone());
+
+                let now = std::time::Instant::now();
+                let is_double_click = self
+                    .interaction_state
+                    .last_tree_click
+                    .as_ref()
+                    .is_some_and(|(prev_path, prev_at)| {
+                        prev_path == path
+                            && now.duration_since(*prev_at) <= TREE_DOUBLE_CLICK_WINDOW
+                    });
+                self.interaction_state.last_tree_click = Some((path.clone(), now));
+
+                if is_double_click {
+                    self.open_tree_path_if_document(path);
                 }
                 true
             }
@@ -58,6 +66,36 @@ impl Signex {
         }
     }
 
+    /// Open the document at `tree_path` if its icon marks it as a
+    /// document leaf. Single source of truth for the icon-gate the
+    /// `TreeMsg::Select` (double-click) handler and the right-click
+    /// `Open` context-menu action share.
+    fn open_tree_path_if_document(&mut self, tree_path: &[usize]) {
+        use signex_widgets::tree_view::{TreeIcon, get_node};
+        let Some(node) = get_node(self.document_state.panel_ctx.project_tree.as_slice(), tree_path)
+        else {
+            return;
+        };
+        let opens = matches!(
+            node.icon,
+            TreeIcon::Schematic
+                | TreeIcon::Pcb
+                | TreeIcon::SnxSchematic
+                | TreeIcon::SnxPcb
+                | TreeIcon::SnxProject
+                | TreeIcon::SnxFootprint
+                | TreeIcon::SnxSimulation
+                | TreeIcon::SnxLibrary
+                | TreeIcon::SnxSymbol
+        );
+        if opens
+            && let Err(error) =
+                self.open_project_tree_document(tree_path, node.label.clone())
+        {
+            crate::diagnostics::log_error("Failed to open project tree document", &error);
+        }
+    }
+
     fn dispatch_show_project_tree_context_menu(&mut self, path: Option<Vec<usize>>) {
         let (x, y) = self.interaction_state.last_mouse_pos;
         self.interaction_state.context_menu = None;
@@ -70,7 +108,6 @@ impl Signex {
         action: crate::app::ProjectTreeAction,
     ) -> Task<Message> {
         use crate::app::ProjectTreeAction;
-        use signex_widgets::tree_view::TreeMsg;
 
         // Dismiss the menu first — every action either takes effect
         // instantly or triggers a follow-up error, and a lingering
@@ -79,12 +116,10 @@ impl Signex {
 
         match action {
             ProjectTreeAction::OpenNode(path) => {
-                // Reuse the existing leaf-open path. Wrapping the inner
-                // call in the same PanelMsg handler keeps the icon-gate
-                // logic (only schematic / pcb / snx* leaves open) in
-                // one place.
-                let msg = crate::panels::PanelMsg::Tree(TreeMsg::Select(path));
-                self.handle_dock_project_navigation_panel_message(&msg);
+                // Right-click → Open menu always opens regardless of
+                // the double-click latch. Mirror the icon-gate from
+                // the Select handler so non-document leaves stay no-op.
+                self.open_tree_path_if_document(&path);
             }
             ProjectTreeAction::ToggleNode(path) => {
                 signex_widgets::tree_view::toggle(
@@ -657,11 +692,15 @@ impl Signex {
             return Ok(());
         }
 
-        if filename.ends_with(".standard_sch") || filename.ends_with(".standard_pcb") {
-            anyhow::bail!(
-                "Signex Community no longer opens Standard files directly. \
-                 Convert with the signex-standard-import companion tool first."
-            );
+        if filename.ends_with(".snxlib") {
+            let text = std::fs::read_to_string(&file_path)
+                .with_context(|| format!("read library {}", file_path.display()))?;
+            let library = signex_types::format::SnxLibrary::parse(&text)
+                .with_context(|| format!("parse library {}", file_path.display()))?
+                .library;
+            let title = filename.trim_end_matches(".snxlib").to_string();
+            self.open_library_tab(file_path, title, library);
+            return Ok(());
         }
 
         anyhow::bail!("unsupported project tree document: {filename}")

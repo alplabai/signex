@@ -2100,6 +2100,201 @@ fn row_to_via(row: PcbViaRow) -> Via {
 }
 
 // ---------------------------------------------------------------------------
+// Library (.snxlib)
+// ---------------------------------------------------------------------------
+//
+// Same TOML+TSV envelope as `.snxsch` and `.snxpcb`. The manifest at
+// the top names the package; a single `[components]` TSV block
+// enumerates the rows. v0.10.0 ships only the read-only browser
+// surface — the writer round-trips so future sub-releases (Component
+// Editor, inline-edit, picker) can save back without reshaping the
+// schema.
+
+/// Current `.snxlib` format version. Bumping this is a wire-format
+/// break.
+pub const SNXLIB_FORMAT_V1: &str = "snxlib/1";
+
+/// Bulk row for one [`crate::library::LibraryComponent`] in the
+/// `[components]` block. v0.10.0 keeps every column flat; nested data
+/// (parameter dictionaries, distributor SKUs) is reserved for later
+/// sub-releases via a sibling extras table.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LibraryComponentRow {
+    pub uuid: Uuid,
+    pub name: String,
+    pub value: String,
+    pub footprint_name: String,
+    pub description: String,
+    pub symbol_uuid: Uuid,
+    pub footprint_uuid: Uuid,
+}
+
+impl SnxTable for LibraryComponentRow {
+    fn columns() -> &'static [&'static str] {
+        &[
+            "uuid",
+            "name",
+            "value",
+            "footprint",
+            "description",
+            "symbol_uuid",
+            "footprint_uuid",
+        ]
+    }
+
+    fn to_row(&self) -> Vec<String> {
+        vec![
+            self.uuid.to_string(),
+            self.name.clone(),
+            self.value.clone(),
+            self.footprint_name.clone(),
+            self.description.clone(),
+            self.symbol_uuid.to_string(),
+            self.footprint_uuid.to_string(),
+        ]
+    }
+
+    fn from_row(values: &[&str], block: &str, row: usize) -> Result<Self, FormatError> {
+        Ok(LibraryComponentRow {
+            uuid: parse_uuid(values[0], block, row, "uuid")?,
+            name: values[1].to_string(),
+            value: values[2].to_string(),
+            footprint_name: values[3].to_string(),
+            description: values[4].to_string(),
+            symbol_uuid: parse_uuid(values[5], block, row, "symbol_uuid")?,
+            footprint_uuid: parse_uuid(values[6], block, row, "footprint_uuid")?,
+        })
+    }
+}
+
+fn component_to_row(c: &crate::library::LibraryComponent) -> LibraryComponentRow {
+    LibraryComponentRow {
+        uuid: c.uuid,
+        name: c.name.clone(),
+        value: c.value.clone(),
+        footprint_name: c.footprint_name.clone(),
+        description: c.description.clone(),
+        symbol_uuid: c.symbol_uuid,
+        footprint_uuid: c.footprint_uuid,
+    }
+}
+
+fn row_to_component(row: LibraryComponentRow) -> crate::library::LibraryComponent {
+    crate::library::LibraryComponent {
+        uuid: row.uuid,
+        name: row.name,
+        value: row.value,
+        footprint_name: row.footprint_name,
+        description: row.description,
+        symbol_uuid: row.symbol_uuid,
+        footprint_uuid: row.footprint_uuid,
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct LibManifest {
+    format: String,
+    library_id: Uuid,
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    description: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct LibRaw {
+    format: String,
+    library_id: Uuid,
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    description: String,
+    #[serde(default)]
+    components: Option<TsvBody>,
+}
+
+/// On-disk envelope for `.snxlib` files. `library` is the
+/// reconstituted in-memory package; the TOML+TSV decomposition only
+/// matters at the disk boundary.
+#[derive(Debug, Clone)]
+pub struct SnxLibrary {
+    pub format: String,
+    pub library: crate::library::Library,
+}
+
+impl SnxLibrary {
+    /// Wrap a [`crate::library::Library`] for serialisation as the
+    /// current format version.
+    pub fn new(library: crate::library::Library) -> Self {
+        Self {
+            format: SNXLIB_FORMAT_V1.to_string(),
+            library,
+        }
+    }
+
+    /// Serialise to a TOML+TSV string. Owned-form helper — delegates
+    /// to the borrow path so the hot save path can skip the clone.
+    pub fn write_string(&self) -> Result<String, FormatError> {
+        Self::write_string_borrowed(&self.format, &self.library)
+    }
+
+    /// Borrow-based serialise — no clone of the in-memory library.
+    /// Same shape as the `.snxsch` / `.snxpcb` borrow writers so v0.9.1's
+    /// async-save plumbing can drop into the library save path
+    /// unchanged in v0.10.6.
+    pub fn write_string_borrowed(
+        format: &str,
+        library: &crate::library::Library,
+    ) -> Result<String, FormatError> {
+        let mut out = String::new();
+
+        let manifest = LibManifest {
+            format: format.to_string(),
+            library_id: library.uuid,
+            name: library.name.clone(),
+            description: library.description.clone(),
+        };
+        out.push_str(&toml::to_string_pretty(&manifest)?);
+        out.push('\n');
+
+        let component_rows: Vec<LibraryComponentRow> =
+            library.components.iter().map(component_to_row).collect();
+        write_tsv_section(&mut out, "components", &component_rows);
+
+        Ok(out)
+    }
+
+    /// Parse a TOML+TSV string from disk.
+    pub fn parse(input: &str) -> Result<Self, FormatError> {
+        let raw: LibRaw = toml::from_str(input)?;
+
+        if raw.format != SNXLIB_FORMAT_V1 {
+            return Err(FormatError::UnsupportedVersion {
+                found: raw.format,
+                expected: SNXLIB_FORMAT_V1.to_string(),
+            });
+        }
+
+        let component_rows = match raw.components {
+            Some(b) => parse_tsv_block::<LibraryComponentRow>("components", &b.content)?,
+            None => Vec::new(),
+        };
+
+        let library = crate::library::Library {
+            uuid: raw.library_id,
+            name: raw.name,
+            description: raw.description,
+            components: component_rows.into_iter().map(row_to_component).collect(),
+        };
+
+        Ok(SnxLibrary {
+            format: raw.format,
+            library,
+        })
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -2660,5 +2855,93 @@ mod tests {
         let owned = SnxPcb::new(board.clone()).write_string().unwrap();
         let borrowed = SnxPcb::write_string_borrowed(SNXPCB_FORMAT_V1, &board).unwrap();
         assert_eq!(owned, borrowed, "pcb borrow path drift from owned path");
+    }
+
+    fn sample_library() -> crate::library::Library {
+        crate::library::Library {
+            uuid: Uuid::parse_str("0192a8c0-aaaa-7000-8000-000000000001").unwrap(),
+            name: "Resistors Standard".into(),
+            description: "Generic 0603 resistors".into(),
+            components: vec![
+                crate::library::LibraryComponent {
+                    uuid: Uuid::parse_str("0192a8c0-bbbb-7000-8000-000000000001").unwrap(),
+                    name: "R 0603 1k".into(),
+                    value: "1k".into(),
+                    footprint_name: "R_0603".into(),
+                    description: "1k resistor 0603".into(),
+                    symbol_uuid: Uuid::nil(),
+                    footprint_uuid: Uuid::nil(),
+                },
+                crate::library::LibraryComponent {
+                    uuid: Uuid::parse_str("0192a8c0-bbbb-7000-8000-000000000002").unwrap(),
+                    name: "R 0603 10k".into(),
+                    value: "10k".into(),
+                    footprint_name: "R_0603".into(),
+                    description: "10k resistor 0603".into(),
+                    symbol_uuid: Uuid::nil(),
+                    footprint_uuid: Uuid::nil(),
+                },
+            ],
+        }
+    }
+
+    #[test]
+    fn snxlibrary_round_trip_preserves_components() {
+        let library = sample_library();
+        let text = SnxLibrary::new(library.clone()).write_string().unwrap();
+        let parsed = SnxLibrary::parse(&text).unwrap();
+        assert_eq!(parsed.format, SNXLIB_FORMAT_V1);
+        assert_eq!(parsed.library, library);
+    }
+
+    #[test]
+    fn snxlibrary_borrow_matches_owned() {
+        let library = sample_library();
+        let owned = SnxLibrary::new(library.clone()).write_string().unwrap();
+        let borrowed = SnxLibrary::write_string_borrowed(SNXLIB_FORMAT_V1, &library).unwrap();
+        assert_eq!(owned, borrowed, "library borrow path drift from owned path");
+    }
+
+    #[test]
+    fn snxlibrary_rejects_unknown_version() {
+        let bad = "format = \"snxlib/9999\"\nlibrary_id = \"00000000-0000-0000-0000-000000000000\"\n";
+        let err = SnxLibrary::parse(bad).expect_err("future-version library should fail");
+        assert!(matches!(err, FormatError::UnsupportedVersion { .. }));
+    }
+
+    #[test]
+    fn shipped_sample_library_parses() {
+        // Workspace ships `assets/samples/library/resistors-standard.snxlib`
+        // for the v0.10.0 Library Browser smoke test. This guards the
+        // sample against parser drift — if either side changes
+        // shape the test will surface it before the user sees a
+        // toast on launch.
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../assets/samples/library/resistors-standard.snxlib");
+        let text = std::fs::read_to_string(&path).unwrap_or_else(|err| {
+            panic!(
+                "shipped sample library should exist at {}: {err}",
+                path.display()
+            )
+        });
+        let parsed = SnxLibrary::parse(&text)
+            .unwrap_or_else(|err| panic!("sample should parse: {err}"));
+        assert_eq!(parsed.format, SNXLIB_FORMAT_V1);
+        assert_eq!(parsed.library.name, "Resistors Standard");
+        assert_eq!(parsed.library.components.len(), 3);
+        assert_eq!(parsed.library.components[0].name, "R 0603 1k");
+    }
+
+    #[test]
+    fn snxlibrary_parses_empty_components_block() {
+        let library = crate::library::Library {
+            uuid: Uuid::nil(),
+            name: "Empty".into(),
+            description: String::new(),
+            components: Vec::new(),
+        };
+        let text = SnxLibrary::new(library.clone()).write_string().unwrap();
+        let parsed = SnxLibrary::parse(&text).unwrap();
+        assert_eq!(parsed.library, library);
     }
 }

@@ -240,8 +240,10 @@ pub struct PanelContext {
     /// Whether the canvas font picker popup is open.
     pub canvas_font_popup_open: bool,
     pub properties_tab: usize, // 0=General, 1=Parameters
-    // Components panel
-    pub standard_libraries: Vec<String>,
+    // Components panel — repopulated by the v0.10.x `.snxlib` library
+    // plumbing. The legacy Standard `.standard_sym` scanner that previously
+    // fed these was removed in v0.10.0 (Apache-clean residual polish);
+    // the panel now shows a placeholder until the new plumbing lands.
     pub active_library: Option<String>,
     /// Browser entries from the selected library or aggregated catalog.
     pub library_symbols: Vec<LibrarySymbolEntry>,
@@ -255,6 +257,11 @@ pub struct PanelContext {
     pub components_split: f32,
     /// Persistent project tree — toggle state survives across renders.
     pub project_tree: Vec<TreeNode>,
+    /// Currently highlighted project-tree row. Set by single-click;
+    /// double-click on the same row opens the file. `None` when no row
+    /// has been clicked since the last refresh. Path indices into
+    /// `project_tree` (matches the `TreeMsg::Select(path)` payload).
+    pub selected_tree_path: Option<Vec<usize>>,
     // Selection info for Properties panel
     /// How many items are currently selected.
     pub selection_count: usize,
@@ -953,11 +960,13 @@ fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         // first row doesn't sit flush against the panel's tab-strip
         // border (matches the breathing room Altium leaves below its
         // panel tabs).
-        container(
-            TreeView::new(&ctx.project_tree, &ctx.tokens)
-                .view()
-                .map(PanelMsg::Tree),
-        )
+        container({
+            let mut tv = TreeView::new(&ctx.project_tree, &ctx.tokens);
+            if let Some(sel) = ctx.selected_tree_path.as_deref() {
+                tv = tv.selected(sel);
+            }
+            tv.view().map(PanelMsg::Tree)
+        })
         .padding(iced::Padding {
             top: 6.0,
             right: 0.0,
@@ -983,19 +992,11 @@ fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     // ── TOP: Library selector + component list (scrollable) ──
     let mut list_col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
 
-    list_col = list_col.push(
-        container(
-            iced::widget::pick_list(
-                ctx.standard_libraries.clone(),
-                ctx.active_library.clone(),
-                PanelMsg::SelectLibrary,
-            )
-            .placeholder("Select a library...")
-            .text_size(11)
-            .width(Length::Fill),
-        )
-        .padding([4, 8]),
-    );
+    // The legacy Standard symbol-library dropdown was removed in v0.10.0
+    // alongside the Apache-clean residual polish. v0.10.x replaces the
+    // entry point with the `.snxlib`-driven Library Browser tab; the
+    // search box below still works against any future `library_symbols`
+    // source.
 
     // Search filter input
     list_col = list_col.push(

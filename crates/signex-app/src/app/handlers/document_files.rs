@@ -172,10 +172,7 @@ impl Signex {
             "snxprj" => self.open_project_file(path)?,
             "snxsch" => self.open_schematic_file(path)?,
             "snxpcb" => self.open_pcb_file(path)?,
-            "standard_pro" | "standard_sch" | "standard_pcb" => anyhow::bail!(
-                "Signex Community no longer opens Standard files directly. \
-                 Convert with the signex-standard-import companion tool first."
-            ),
+            "snxlib" => self.open_library_file(path)?,
             _ => anyhow::bail!("unsupported file type: .{ext}"),
         }
 
@@ -287,6 +284,26 @@ impl Signex {
             .map(|stem| stem.to_string_lossy().to_string())
             .unwrap_or_else(|| "PCB".to_string());
         self.open_pcb_tab(path, title, board);
+        Ok(())
+    }
+
+    /// v0.10.0 — open a `.snxlib` package as a Library Browser tab.
+    /// Read-only: the table view in `view_center` renders the parsed
+    /// library directly. No companion-project resolution because
+    /// library packages aren't currently scoped to a project (a
+    /// library lives anywhere on the filesystem and is mounted across
+    /// projects in v0.10.8+).
+    fn open_library_file(&mut self, path: PathBuf) -> Result<()> {
+        let text = std::fs::read_to_string(&path)
+            .with_context(|| format!("read library {}", path.display()))?;
+        let library = signex_types::format::SnxLibrary::parse(&text)
+            .with_context(|| format!("parse library {}", path.display()))?
+            .library;
+        let title = path
+            .file_stem()
+            .map(|stem| stem.to_string_lossy().to_string())
+            .unwrap_or_else(|| "Library".to_string());
+        self.open_library_tab(path, title, library);
         Ok(())
     }
 }
