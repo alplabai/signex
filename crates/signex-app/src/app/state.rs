@@ -175,6 +175,15 @@ pub struct UiState {
     /// (later) undocked tabs. `SecondaryWindowClosed` removes entries so
     /// the detached content reattaches to the main window.
     pub windows: std::collections::HashMap<iced::window::Id, WindowKind>,
+    /// Paths whose async save (v0.9.1 perf path) is currently running
+    /// off the UI thread. Drives the "Saving…" pill in the status bar
+    /// and is cleared on `Message::SaveFileFinished`. Failed saves
+    /// stay in `save_error` for a few seconds so the operator sees
+    /// what happened.
+    pub saving_paths: std::collections::HashSet<std::path::PathBuf>,
+    /// Last save error message and the time it was set. The status
+    /// bar shows this briefly, then `tick_save_error` clears it.
+    pub save_error: Option<(String, std::time::Instant)>,
 }
 
 /// Role of a non-main window opened by Signex. Phase 2 adds detached
@@ -573,9 +582,7 @@ impl DocumentState {
     /// project that parented them at load time).
     pub fn project_for_path(&self, path: &std::path::Path) -> Option<&LoadedProject> {
         let dir = path.parent()?;
-        self.projects
-            .iter()
-            .find(|p| p.path.parent() == Some(dir))
+        self.projects.iter().find(|p| p.path.parent() == Some(dir))
     }
 
     /// Convenience: currently-active project. Returns `None` when the

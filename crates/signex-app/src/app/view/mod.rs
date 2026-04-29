@@ -3143,6 +3143,23 @@ impl Signex {
             ui.bottom_height,
         );
 
+        // v0.9.1 status bar: show "Saving…" while the off-thread
+        // disk write is in flight, fall through to a stale
+        // `save_error` message for ~3 s otherwise. `save_message` is
+        // borrowed; status_bar::view treats `None` as "render the
+        // normal bar".
+        let save_message: Option<&str> = if !ui.saving_paths.is_empty() {
+            Some("Saving…")
+        } else if let Some((msg, t)) = ui.save_error.as_ref() {
+            if t.elapsed() < std::time::Duration::from_secs(3) {
+                Some(msg.as_str())
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         let status = status_bar::view(
             ui.cursor_x,
             ui.cursor_y,
@@ -3153,6 +3170,7 @@ impl Signex {
             &interaction.current_tool,
             ui.grid_size_mm,
             &document.panel_ctx.tokens,
+            save_message,
         )
         .map(Message::StatusBar);
 
