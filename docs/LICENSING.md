@@ -112,6 +112,41 @@ CI gates that enforce the post-cutover state:
 - `deny.toml` — `cargo-deny` config rejecting GPL / AGPL / LGPL /
   unlicensed crates from the transitive dependency closure.
 
+## LLM context discipline
+
+Post-cutover development on this repository uses LLM-assisted workflows.
+That comes with a specific operational rule: **KiCad source code is
+never placed in an agent's context window, prompt, retrieval index,
+or reference material when work is being produced for this repo**. The
+LLM is given only the existing `signex` codebase plus internal
+specifications (audit docs, format design notes, type schemas) when
+asked to refactor, write new code, or design new types.
+
+This matters for the derivation question. Copyright derivation
+attaches at the point of authorship — what the author had in front of
+them when producing the work. An LLM asked to refactor an Apache-2.0
+codebase, given only that codebase as input, produces output derived
+from that input. Training-data exposure is a separate concern that
+does not by itself create a derivation chain to any specific GPL
+project — that is the working consensus of the relevant case law (the
+GitHub Copilot litigation has narrowed rather than broadened that
+theory) and is also the assumption every permissively-licensed Rust
+project relying on LLM-assisted development implicitly makes.
+
+The discipline is a process rule, not a marketing claim. It shapes
+agent prompts, retrieval scopes, and the contributor declaration
+block. PRs to this repo include the explicit `KiCad source consulted:
+[yes/no]` declaration; "yes" routes the PR to the companion repo
+instead.
+
+If you are reviewing this codebase and have a specific file or specific
+lines you believe are derivative of KiCad source despite the above —
+that is actionable feedback we want. The broader claim "any
+LLM-assisted refactor of formerly-derivative code remains derivative"
+is, as far as we can see, not the legal standard, and accepting it
+would make permissively-licensed software impossible to develop with
+modern code-LLMs at all.
+
 ## Contributing
 
 Patches to the main `signex` repo must not contain KiCad-derived code.
@@ -150,16 +185,23 @@ structure is a healthier outcome for both projects than the original
   same KiCad-derivation as v0.7.0. Marked superseded.
 - **v0.8.0** (2026-04-26) — released with KiCad-derived code under
   Apache-2.0 in error. Marked superseded.
-- **v0.9.0** (forthcoming) — first Apache-clean release. Apache-clean
+- **v0.9.0** (2026-04-29) — first Apache-clean release. Apache-clean
   cutover only: native `.snxsch` / `.snxpcb` formats + signex-types
   Apache-clean enums + KiCad I/O moved to the optional
   `signex-kicad-import` GPL-3.0 companion. Library subsystem work
-  ships separately as v0.10.0.
-- **v0.10.0** (next release after v0.9.0) — Library & Polish: symbol /
-  footprint editor, multi-symbol `.snxsym` containers, Component
-  Editor, Library Browser, installers. Resumes the work paused at
-  `v0.9-snxlib-paused-2026-04-29` on top of v0.9.0's Apache-clean
-  foundations.
+  ships separately starting at v0.10.0.
+- **v0.9.1** (2026-04-29) — async save + borrow-based serialise patch.
+  No licensing surface change; same Apache-clean invariants as v0.9.0.
+- **v0.10.0** (2026-04-29) — Library Browser tab scaffold (read-only
+  table over `.snxlib` packages) bundled with an Apache-clean residual
+  polish pass: vestigial KiCad-shaped state field and helper names
+  renamed to neutral terms, neutral name for the
+  `MultisheetStyle::KiCad` enum variant, License-Guard regex tightened
+  with additional forbidden patterns, this LLM-context-discipline
+  section added. First slice of the v0.10 Library milestone;
+  remaining sub-releases (v0.10.1–v0.10.9) build the SCH Library
+  editor, Pin Properties dialog, drawing tools, multi-symbol
+  containers, and Component Editor on top of the same foundations.
 
 The v0.7.0–v0.8.0 binaries remain available on GitHub Releases for
 historical use but are flagged with the licensing notice. Please prefer

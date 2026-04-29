@@ -115,7 +115,11 @@ pub fn read_power_port_style_pref() -> PowerPortStyle {
     };
 
     match json["power_port_style"].as_str().unwrap_or("altium") {
-        "kicad" | "KiCad" => PowerPortStyle::KiCad,
+        // On-disk strings stay "kicad" / "altium" for backward
+        // compatibility with prefs files written by v0.7.0–v0.9.1.
+        // Internal variant renamed `KiCad` → `Standard` in v0.10.0
+        // (see `signex-render::PowerPortStyle` doc comment).
+        "kicad" | "KiCad" => PowerPortStyle::Standard,
         _ => PowerPortStyle::Altium,
     }
 }
@@ -133,7 +137,7 @@ pub fn write_power_port_style_pref(style: PowerPortStyle) {
         .unwrap_or(serde_json::json!({}));
 
     json["power_port_style"] = serde_json::Value::String(match style {
-        PowerPortStyle::KiCad => "kicad".to_string(),
+        PowerPortStyle::Standard => "kicad".to_string(),
         PowerPortStyle::Altium => "altium".to_string(),
     });
 
@@ -142,20 +146,22 @@ pub fn write_power_port_style_pref(style: PowerPortStyle) {
     }
 }
 
-/// Read `label_style` from preferences file.
-/// Defaults to `KiCad` when missing or invalid.
+/// Read `label_style` from preferences file. Defaults to the
+/// `Standard` variant (was previously named `KiCad`) when missing or
+/// invalid. The on-disk preference string stays "kicad" for
+/// backward compatibility — see `signex-render::LabelStyle`.
 pub fn read_label_style_pref() -> LabelStyle {
     let path = prefs_path();
     let Ok(bytes) = std::fs::read(&path) else {
-        return LabelStyle::KiCad;
+        return LabelStyle::Standard;
     };
     let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
-        return LabelStyle::KiCad;
+        return LabelStyle::Standard;
     };
 
     match json["label_style"].as_str().unwrap_or("kicad") {
         "altium" | "Altium" => LabelStyle::Altium,
-        _ => LabelStyle::KiCad,
+        _ => LabelStyle::Standard,
     }
 }
 
@@ -172,7 +178,7 @@ pub fn write_label_style_pref(style: LabelStyle) {
         .unwrap_or(serde_json::json!({}));
 
     json["label_style"] = serde_json::Value::String(match style {
-        LabelStyle::KiCad => "kicad".to_string(),
+        LabelStyle::Standard => "kicad".to_string(),
         LabelStyle::Altium => "altium".to_string(),
     });
 
@@ -181,20 +187,22 @@ pub fn write_label_style_pref(style: LabelStyle) {
     }
 }
 
-/// Read `multisheet_style` from preferences file.
-/// Defaults to `KiCad` when missing or invalid.
+/// Read `multisheet_style` from preferences file. Defaults to the
+/// `Standard` variant (was `KiCad`) when missing or invalid. On-disk
+/// preference string stays "kicad" for backward compatibility — see
+/// `signex-render::MultisheetStyle`.
 pub fn read_multisheet_style_pref() -> MultisheetStyle {
     let path = prefs_path();
     let Ok(bytes) = std::fs::read(&path) else {
-        return MultisheetStyle::KiCad;
+        return MultisheetStyle::Standard;
     };
     let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
-        return MultisheetStyle::KiCad;
+        return MultisheetStyle::Standard;
     };
 
     match json["multisheet_style"].as_str().unwrap_or("kicad") {
         "altium" | "Altium" => MultisheetStyle::Altium,
-        _ => MultisheetStyle::KiCad,
+        _ => MultisheetStyle::Standard,
     }
 }
 
@@ -211,7 +219,7 @@ pub fn write_multisheet_style_pref(style: MultisheetStyle) {
         .unwrap_or(serde_json::json!({}));
 
     json["multisheet_style"] = serde_json::Value::String(match style {
-        MultisheetStyle::KiCad => "kicad".to_string(),
+        MultisheetStyle::Standard => "kicad".to_string(),
         MultisheetStyle::Altium => "altium".to_string(),
     });
 

@@ -289,7 +289,7 @@ pub fn draw_child_sheet(
                 iced::alignment::Vertical::Bottom,
             )
         }
-        crate::MultisheetStyle::KiCad => {
+        crate::MultisheetStyle::Standard => {
             // Below the box: name closest to the border, filename underneath.
             let name_y = br.y + label_gap;
             let file_y = name_y + font_size + label_gap;
