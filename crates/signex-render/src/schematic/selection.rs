@@ -133,7 +133,7 @@ fn draw_text_prop_selection(
 ) {
     use signex_types::schematic::{HAlign, VAlign};
     let fs = crate::SCHEMATIC_TEXT_EM_MM;
-    // `visible_char_count` drops KiCad `{slash}`-style escapes; Iosevka's
+    // `visible_char_count` drops `{slash}`-style escapes; Iosevka's
     // advance width is ≈0.55 em, so use the same coefficient the text
     // renderer uses below so bbox and glyphs line up.
     let tw = super::text::visible_char_count(content) as f64 * fs * 0.55;

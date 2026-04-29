@@ -167,7 +167,7 @@ impl Signex {
             // Net-color palette — arms pending_net_color so the next
             // canvas click on a wire floods its whole net with the
             // selected colour. Colours stay in app state only; nothing
-            // is written back to the .kicad_sch so KiCad round-trips
+            // is written back to the .snxsch so legacy formats round-trip
             // unchanged.
             ActiveBarAction::NetColorBlue
             | ActiveBarAction::NetColorLightGreen

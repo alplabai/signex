@@ -218,7 +218,7 @@ impl SvgRenderContext {
             ));
         }
 
-        // KiCad's "no_connect" X markers map to Altium's "No-ERC
+        // "no_connect" X markers map to Altium's "No-ERC
         // Markers" — render them only when the user kept the toggle
         // on. Altium's checklist hides these from the printed PDF
         // for cleaner deliverables.
@@ -272,7 +272,7 @@ impl SvgRenderContext {
                 v_align,
                 rotation_deg: rot,
                 fill_rgb: label_colour(label.label_type, palette),
-                text: normalize_kicad_text(&label.text),
+                text: normalize_text(&label.text),
             });
         }
 
@@ -290,7 +290,7 @@ impl SvgRenderContext {
                     v_align: valign_to_svg(note.justify_v),
                     rotation_deg: note.rotation as f32,
                     fill_rgb: palette.note_text,
-                    text: normalize_kicad_text(&note.text),
+                    text: normalize_text(&note.text),
                 });
             }
         }
@@ -325,7 +325,7 @@ impl SvgRenderContext {
                     v_align: SvgTextVAlign::Top,
                     rotation_deg: 0.0,
                     fill_rgb: palette.child_sheet_text,
-                    text: normalize_kicad_text(&child.name),
+                    text: normalize_text(&child.name),
                 });
             }
             if !child.filename.is_empty() {
@@ -338,7 +338,7 @@ impl SvgRenderContext {
                     v_align: SvgTextVAlign::Top,
                     rotation_deg: 0.0,
                     fill_rgb: palette.child_sheet_stroke,
-                    text: normalize_kicad_text(&child.filename),
+                    text: normalize_text(&child.filename),
                 });
             }
         }
@@ -414,7 +414,7 @@ impl SvgRenderContext {
                     v_align: valign_to_svg(field_effective_style(ref_text, sym).2),
                     rotation_deg: field_effective_style(ref_text, sym).0 as f32,
                     fill_rgb: palette.reference,
-                    text: normalize_kicad_text_with_ctx(&sym.reference, &symbol_eval_ctx),
+                    text: normalize_text_with_ctx(&sym.reference, &symbol_eval_ctx),
                 });
             }
 
@@ -431,7 +431,7 @@ impl SvgRenderContext {
                     v_align: valign_to_svg(field_effective_style(val_text, sym).2),
                     rotation_deg: field_effective_style(val_text, sym).0 as f32,
                     fill_rgb: palette.value,
-                    text: normalize_kicad_text_with_ctx(&sym.value, &symbol_eval_ctx),
+                    text: normalize_text_with_ctx(&sym.value, &symbol_eval_ctx),
                 });
             }
         }
@@ -820,7 +820,7 @@ fn push_symbol_lib_graphics(
                     v_align: SvgTextVAlign::Top,
                     rotation_deg: *rotation as f32,
                     fill_rgb: (0.15, 0.15, 0.15),
-                    text: normalize_kicad_text(text),
+                    text: normalize_text(text),
                 });
             }
             Graphic::TextBox {
@@ -863,7 +863,7 @@ fn push_symbol_lib_graphics(
                     v_align: SvgTextVAlign::Top,
                     rotation_deg: 0.0,
                     fill_rgb: (0.15, 0.15, 0.15),
-                    text: normalize_kicad_text(text),
+                    text: normalize_text(text),
                 });
             }
         }
@@ -997,7 +997,7 @@ fn push_symbol_pins(
                 v_align,
                 rotation_deg,
                 fill_rgb: palette.pin,
-                text: normalize_kicad_text_with_ctx(&pin.name, &pin_eval_ctx),
+                text: normalize_text_with_ctx(&pin.name, &pin_eval_ctx),
             });
         }
 
@@ -1026,7 +1026,7 @@ fn push_symbol_pins(
                 v_align: SvgTextVAlign::Center,
                 rotation_deg: 0.0,
                 fill_rgb: palette.field_text,
-                text: normalize_kicad_text_with_ctx(&pin.number, &pin_eval_ctx),
+                text: normalize_text_with_ctx(&pin.number, &pin_eval_ctx),
             });
         }
     }
@@ -1245,7 +1245,7 @@ fn fill_to_rgb(
 ) -> Option<(f32, f32, f32)> {
     match fill {
         FillType::None => None,
-        // KiCad's "Outline" fill means "fill with the stroke
+        // "Outline" fill means "fill with the stroke
         // colour" — produces solid-shape glyphs like the anode
         // triangle of a diode. "Background" fills with the
         // theme's symbol body tint.
@@ -1289,14 +1289,14 @@ fn symbol_eval_variables(sym: &Symbol) -> HashMap<String, String> {
     vars
 }
 
-fn normalize_kicad_text(input: &str) -> String {
-    normalize_kicad_text_with_ctx(input, &ExpressionEvalContext::default())
+fn normalize_text(input: &str) -> String {
+    normalize_text_with_ctx(input, &ExpressionEvalContext::default())
 }
 
-fn normalize_kicad_text_with_ctx(input: &str, ctx: &ExpressionEvalContext<'_>) -> String {
-    // KiCad-specific char-escape expansion (`{slash}` → `/`, etc.) was removed
+fn normalize_text_with_ctx(input: &str, ctx: &ExpressionEvalContext<'_>) -> String {
+    // Legacy char-escape expansion (`{slash}` → `/`, etc.) was removed
     // in Phase 2.3 of the Apache-clean remediation. Inputs no longer carry
-    // those tokens because the main repo no longer parses KiCad files.
+    // those tokens because the main repo no longer parses legacy files.
     evaluate_expressions(input, ctx)
 }
 
@@ -1335,7 +1335,7 @@ fn schematic_text_offset_net(spin: SpinStyle) -> (f64, f64) {
 
 fn schematic_text_offset_hier(text: &str, font_size_mm: f64, spin: SpinStyle) -> (f64, f64) {
     let dist = font_size_mm * 0.4
-        + (parse_signex_markup(&normalize_kicad_text(text))
+        + (parse_signex_markup(&normalize_text(text))
             .iter()
             .map(|seg| match seg {
                 RichSegment::Normal(t)
@@ -1538,7 +1538,7 @@ struct MarkupRun {
 }
 
 fn markup_runs(input: &str) -> Vec<MarkupRun> {
-    let expanded = normalize_kicad_text(input);
+    let expanded = normalize_text(input);
     let segments = parse_signex_markup(&expanded);
     if segments.is_empty() {
         return vec![MarkupRun {
@@ -1842,7 +1842,7 @@ mod tests {
 
     fn empty_sheet_snapshot() -> SheetSnapshot {
         SheetSnapshot {
-            path: PathBuf::from("test.kicad_sch"),
+            path: PathBuf::from("test.snxsch"),
             schematic: SchematicSheet {
                 uuid: Uuid::nil(),
                 version: 0,

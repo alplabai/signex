@@ -9,11 +9,12 @@ impl PageSize {
         s.split_whitespace().next().unwrap_or(s).trim()
     }
 
-    /// Parse a KiCad `(paper "...")` string into a `PageSize`.
+    /// Parse a paper-name string into a `PageSize`.
     ///
-    /// KiCad uses strings like `"A4"`, `"A3"`, `"A"`, `"B"`, `"USLetter"`,
-    /// `"USLegal"`. Unknown strings fall back to `IsoA4`.
-    pub fn from_kicad_str(s: &str) -> Self {
+    /// Recognised strings: `"A0"–"A5"`, `"B5"`, `"A"–"E"` (ANSI),
+    /// `"USLetter"` / `"Letter"`, `"USLegal"` / `"Legal"`, `"Tabloid"`.
+    /// Unknown strings fall back to `IsoA4`.
+    pub fn from_paper_name(s: &str) -> Self {
         match Self::paper_base_token(s) {
             "A0" => PageSize::IsoA0,
             "A1" => PageSize::IsoA1,
@@ -42,12 +43,11 @@ impl PageSize {
         }
     }
 
-    /// Derive orientation from a KiCad paper-size string.
+    /// Derive orientation from a paper-name string.
     ///
-    /// KiCad schematics default to landscape for A-series except A4 which is
-    /// portrait, and landscape for all ANSI sizes. The `portrait` flag in the
-    /// KiCad `(paper ...)` node overrides this; pass it when present.
-    pub fn default_orientation_for_kicad(s: &str) -> Orientation {
+    /// Defaults to landscape; an inline `"portrait"` / `"landscape"` token
+    /// in the input overrides the default.
+    pub fn default_orientation_for_paper_name(s: &str) -> Orientation {
         let lower = s.to_ascii_lowercase();
         if lower.contains("portrait") {
             Orientation::Portrait
@@ -144,37 +144,37 @@ mod tests {
     }
 
     #[test]
-    fn kicad_paper_strings_round_trip() {
-        assert!(matches!(PageSize::from_kicad_str("A4"), PageSize::IsoA4));
-        assert!(matches!(PageSize::from_kicad_str("A3"), PageSize::IsoA3));
-        assert!(matches!(PageSize::from_kicad_str("A"), PageSize::AnsiA));
+    fn paper_name_strings_round_trip() {
+        assert!(matches!(PageSize::from_paper_name("A4"), PageSize::IsoA4));
+        assert!(matches!(PageSize::from_paper_name("A3"), PageSize::IsoA3));
+        assert!(matches!(PageSize::from_paper_name("A"), PageSize::AnsiA));
         assert!(matches!(
-            PageSize::from_kicad_str("USLetter"),
+            PageSize::from_paper_name("USLetter"),
             PageSize::UsLetter
         ));
         // Unknown string falls back to A4.
         assert!(matches!(
-            PageSize::from_kicad_str("unknown"),
+            PageSize::from_paper_name("unknown"),
             PageSize::IsoA4
         ));
     }
 
     #[test]
-    fn kicad_orientation_defaults() {
+    fn orientation_defaults() {
         assert!(matches!(
-            PageSize::default_orientation_for_kicad("A4"),
+            PageSize::default_orientation_for_paper_name("A4"),
             Orientation::Landscape
         ));
         assert!(matches!(
-            PageSize::default_orientation_for_kicad("A3"),
+            PageSize::default_orientation_for_paper_name("A3"),
             Orientation::Landscape
         ));
         assert!(matches!(
-            PageSize::default_orientation_for_kicad("A"),
+            PageSize::default_orientation_for_paper_name("A"),
             Orientation::Landscape
         ));
         assert!(matches!(
-            PageSize::default_orientation_for_kicad("A4 portrait"),
+            PageSize::default_orientation_for_paper_name("A4 portrait"),
             Orientation::Portrait
         ));
     }

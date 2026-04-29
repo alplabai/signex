@@ -13,9 +13,9 @@ use signex_types::schematic::{Bus, BusEntry, Wire};
 
 use super::ScreenTransform;
 
-/// KiCad default wire stroke width in mm (when wire.stroke_width == 0.0).
+/// Default wire stroke width in mm (when wire.stroke_width == 0.0).
 pub(crate) const WIRE_DEFAULT_WIDTH_MM: f64 = 0.15;
-/// KiCad default bus stroke width in mm.
+/// Default bus stroke width in mm.
 const BUS_DEFAULT_WIDTH_MM: f64 = 0.5;
 
 // ---------------------------------------------------------------------------
@@ -94,7 +94,7 @@ pub fn draw_wires(
 }
 
 /// Draw a bus (thick line, no chaining needed — buses are already polylines
-/// in KiCad but are represented as individual segments here).
+/// in the source format but are represented as individual segments here).
 pub fn draw_bus(frame: &mut canvas::Frame, bus: &Bus, transform: &ScreenTransform, color: Color) {
     let p1 = transform.to_screen_point(bus.start.x, bus.start.y);
     let p2 = transform.to_screen_point(bus.end.x, bus.end.y);

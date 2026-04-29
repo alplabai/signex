@@ -1,7 +1,7 @@
 //! Text substitution — resolves `${TITLE}`, `${DATE}`, `${REV}`, etc.
 //!
 //! See `OUTPUT_PLAN.md` §5. Resolved at render time only, never baked into
-//! the KiCad file — `.kicad_sch` stores literal `${TITLE}` strings so the
+//! the source file — `.snxsch` stores literal `${TITLE}` strings so the
 //! round-trip stays lossless.
 //!
 //! **Rules:**
@@ -159,7 +159,7 @@ mod tests {
     fn ctx<'a>(m: &'a ProjectMetadata) -> SubstitutionContext<'a> {
         SubstitutionContext {
             metadata: m,
-            filename: "PowerSupply.kicad_sch".into(),
+            filename: "PowerSupply.snxsch".into(),
             sheet_name: "Analog".into(),
             sheet_number: 2,
             sheet_count: 5,
@@ -180,7 +180,7 @@ mod tests {
         assert_eq!(resolve("${REVISION}", &c), "B");
         assert_eq!(resolve("${DATE}", &c), "2026-04-22");
         assert_eq!(resolve("${COMPANY}", &c), "Alp Lab AB");
-        assert_eq!(resolve("${FILENAME}", &c), "PowerSupply.kicad_sch");
+        assert_eq!(resolve("${FILENAME}", &c), "PowerSupply.snxsch");
         assert_eq!(resolve("${SHEETNAME}", &c), "Analog");
         assert_eq!(
             resolve("Sheet ${SHEETNUMBER} of ${SHEETCOUNT}", &c),

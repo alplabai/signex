@@ -144,7 +144,7 @@ pub struct SheetInfo {
 #[derive(Debug, Clone)]
 pub struct ProjectPanelInfo {
     pub id: crate::app::ProjectId,
-    /// Display name (project stem — "MyBoard" from "MyBoard.kicad_pro").
+    /// Display name (project stem — "MyBoard" from "MyBoard.snxprj").
     pub name: String,
     /// Root schematic filename shown as the "project file" under each
     /// root, when present.
@@ -241,7 +241,7 @@ pub struct PanelContext {
     pub canvas_font_popup_open: bool,
     pub properties_tab: usize, // 0=General, 1=Parameters
     // Components panel — repopulated by the v0.10.x `.snxlib` library
-    // plumbing. The legacy KiCad `.kicad_sym` scanner that previously
+    // plumbing. The legacy symbol-library scanner that previously
     // fed these was removed in v0.10.0 (Apache-clean residual polish);
     // the panel now shows a placeholder until the new plumbing lands.
     pub active_library: Option<String>,
@@ -462,7 +462,7 @@ pub struct PrePlacementData {
     pub cursor_x_mm: f64,
     pub cursor_y_mm: f64,
     /// Stroke width for the shape tools (Line / Rect / Circle / Arc /
-    /// Polygon). 0 = KiCad default ≈ 0.15 mm.
+    /// Polygon). 0 = default ≈ 0.15 mm.
     pub shape_width_mm: f64,
     /// Fill style for shapes that support it (Rect / Circle / Polygon).
     pub shape_fill: signex_types::schematic::FillType,
@@ -992,7 +992,7 @@ fn view_components<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     // ── TOP: Library selector + component list (scrollable) ──
     let mut list_col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
 
-    // The legacy KiCad symbol-library dropdown was removed in v0.10.0
+    // The legacy symbol-library dropdown was removed in v0.10.0
     // alongside the Apache-clean residual polish. v0.10.x replaces the
     // entry point with the `.snxlib`-driven Library Browser tab; the
     // search box below still works against any future `library_symbols`
@@ -2007,7 +2007,7 @@ fn view_selected_element_properties<'a>(
             }
         }
         Some(signex_types::schematic::SelectedKind::Label) => {
-            // Net Name stored in KiCad escapes `/` as `{slash}`. Show the
+            // Net names are stored with escape forms `/` as `{slash}`. Show the
             // visible form in the panel; the edit handler re-escapes on save.
             let label_text = signex_render::schematic::text::expand_char_escapes(&get("Text"));
             let position = get("Position");

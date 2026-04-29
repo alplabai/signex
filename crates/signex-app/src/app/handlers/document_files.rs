@@ -188,7 +188,7 @@ impl Signex {
     /// Append a `LoadedProject` for `project_path` to the workspace if
     /// it isn't already loaded, then make it active. De-dupes by path
     /// so re-opening the same project just switches activity. Used by
-    /// both `open_project_file` (direct .kicad_pro open) and the
+    /// both `open_project_file` (direct .snxprj open) and the
     /// companion-project path inside `open_schematic_file` /
     /// `open_pcb_file`. Returns the resolved `ProjectId`.
     fn load_or_activate_project(

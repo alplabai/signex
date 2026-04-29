@@ -227,7 +227,7 @@ fn qa_bom(ctx: &ExportContext, out_dir: &Path, grouping: BomGrouping, label: &st
                     path.display()
                 );
                 // Print errors only (warnings are usually 1×missing MPN
-                // per component which is verbose and expected on KiCad
+                // per component which is verbose and historical
                 // projects without MPN fields populated).
                 if format == BomFormat::Csv {
                     use signex_output::BomIssueSeverity;

@@ -13,10 +13,9 @@
 //! `.snxprj` (project) is unchanged and uses its own pre-existing
 //! format. Stays as-is.
 //!
-//! These types are the canonical Signex schema. KiCad I/O — when it
-//! returns via the `signex-kicad-import` companion repo (GPL-3.0) —
-//! translates to/from these types at the file-format boundary; no
-//! KiCad-shaped types live in this Apache codebase.
+//! These types are the canonical Signex schema. Foreign-format I/O,
+//! when present, translates to/from these types at the file-format
+//! boundary in a separate companion crate.
 
 use std::collections::BTreeMap;
 

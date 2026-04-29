@@ -1679,7 +1679,7 @@ impl Signex {
             column![].spacing(2).padding([8, 12]);
         if project_sheets.is_empty() {
             file_list = file_list.push(
-                text("No project loaded — load a .kicad_pro to pick files.")
+                text("No project loaded — load a .snxprj to pick files.")
                     .size(11)
                     .color(text_muted),
             );
@@ -3553,7 +3553,7 @@ impl Signex {
         } else {
             // Distinguish "nothing loaded at all" from "project loaded,
             // but no document picked yet" — the second case is what
-            // the user sees right after opening a .kicad_pro before
+            // the user sees right after opening a .snxprj before
             // clicking any node in the project tree.
             let (title, hint) = if self.document_state.active_project.is_some() {
                 (

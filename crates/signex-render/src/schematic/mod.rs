@@ -415,7 +415,7 @@ pub(super) fn is_angle_between_ccw(start: f64, mid: f64, end: f64) -> bool {
 /// Return symbol field display position.
 ///
 /// In our data model, field positions are stored as absolute schematic
-/// coordinates from `.kicad_sch` and should be rendered directly.
+/// coordinates from `.snxsch` and should be rendered directly.
 pub(super) fn field_display_pos(
     prop_pos: &signex_types::schematic::Point,
     _sym: &signex_types::schematic::Symbol,
@@ -423,17 +423,17 @@ pub(super) fn field_display_pos(
     (prop_pos.x, prop_pos.y)
 }
 
-/// Compute KiCad-like effective field draw properties under symbol transform.
+/// Compute effective field draw properties under symbol transform.
 ///
 /// Returns `(draw_rotation_deg, effective_h_align, effective_v_align)`.
 ///
-/// Mirrors two pieces of KiCad behaviour:
+/// Mirrors two pieces of canonical behaviour:
 /// 1. `SCH_FIELD::GetDrawRotation()` — for symbols at 0°/180° (`y1 == 0`)
 ///    the stored field angle is used directly; for 90°/270° the angle is
 ///    toggled between 0° and 90° so vertically-rotated symbols still
 ///    render horizontal text when the field's stored angle is 90°.
 ///    180°→0° and 270°→90° are folded for readability.
-/// 2. `SCH_FIELD::GetEffectiveJustify()` — KiCad mirrors the field's
+/// 2. `SCH_FIELD::GetEffectiveJustify()` — We mirror the field's
 ///    justify whenever the symbol's transform flips an axis. Concretely,
 ///    a 180°-rotated symbol turns left→right and top→bottom; the mirror
 ///    flags add an extra flip on the corresponding axis. Without this,
@@ -466,7 +466,7 @@ pub(super) fn field_effective_style(
     // Effective justify: count flips on each axis from the symbol's
     // transform; an odd count flips the corresponding alignment.
     // - rotation 180°: flips both H and V.
-    // - mirror_y (mirror about X-axis in KiCad convention): flips H.
+    // - mirror_y (mirror about X-axis in canonical convention): flips H.
     // - mirror_x (mirror about Y-axis): flips V.
     let h_flips = (sym_rot == 180) as u8 + sym.mirror_y as u8;
     let v_flips = (sym_rot == 180) as u8 + sym.mirror_x as u8;
@@ -560,7 +560,7 @@ pub fn instance_transform(
     sym: &signex_types::schematic::Symbol,
     local: &signex_types::schematic::Point,
 ) -> (f64, f64) {
-    // Step 1: Flip Y — KiCad library coords are Y-up, schematic is Y-down.
+    // Step 1: Flip Y — Library-source coords are Y-up, schematic is Y-down.
     let x = local.x;
     let y = -local.y;
     // Step 2: Rotate by NEGATIVE angle.
@@ -569,7 +569,7 @@ pub fn instance_transform(
     let sin = rad.sin();
     let rx = x * cos - y * sin;
     let ry = x * sin + y * cos;
-    // Step 3: Mirror applied AFTER rotation (KiCad convention).
+    // Step 3: Mirror applied AFTER rotation (historical convention).
     let rx = if sym.mirror_y { -rx } else { rx };
     let ry = if sym.mirror_x { -ry } else { ry };
     // Step 4: Translate to world position.
@@ -766,10 +766,10 @@ pub fn render_schematic(
     }
 
     // Z=11b: Child sheets (hierarchical sheets). Each sheet's outline and
-    // body fill are read from the .kicad_sch file when the source provides
+    // body fill are read from the .snxsch file when the source provides
     // `(stroke (color ...))` / `(fill (color ...))`. When no override is
     // present we fall back to a sensible default that depends on the active
-    // label style: KiCad mode keeps the theme's component body palette so
+    // label style: Standard mode keeps the theme's component body palette so
     // sheets blend with the rest of the schematic; Altium mode uses the
     // signature green sheet-symbol palette from Altium Designer.
     let altium_mode = matches!(crate::multisheet_style(), crate::MultisheetStyle::Altium);

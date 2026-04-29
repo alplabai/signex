@@ -17,7 +17,7 @@ impl Signex {
     }
 
     pub(crate) fn handle_undo_requested(&mut self) {
-        // Net-colour floods aren't persisted to the KiCad document so
+        // Net-colour floods aren't persisted to the schematic document so
         // they don't enter the engine's history. Check the app-level
         // net_color_undo stack first; only fall through to the engine
         // when no net-colour action is pending.
@@ -136,7 +136,7 @@ impl Signex {
 /// Returns `None` when the edit is incompatible with the drawing
 /// variant (e.g. `ArcRadius` on a Rect). Arc edits convert the
 /// Altium-style (center, radius, start/end angle) fields back to
-/// KiCad's stored (start, mid, end) triple.
+/// the stored (start, mid, end) triple.
 fn apply_drawing_edit(
     current: signex_types::schematic::SchDrawing,
     edit: crate::app::contracts::DrawingFieldEdit,

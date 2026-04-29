@@ -221,7 +221,7 @@ impl SchematicCanvas {
             placement_paused: false,
             draw_mode: crate::app::DrawMode::Ortho90,
             snap_enabled: true,
-            // Altium default is 1.27 mm (50 mil); also matches KiCad's default schematic grid step.
+            // Altium default is 1.27 mm (50 mil); also matches the default schematic grid step.
             snap_grid_mm: 1.27,
             visible_grid_mm: 1.27,
             paper_width_mm: 297.0,
