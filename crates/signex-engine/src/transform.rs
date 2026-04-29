@@ -334,7 +334,7 @@ impl Engine {
                     if let Some(ref mut ref_text) = symbol.ref_text {
                         ref_text.rotation =
                             (ref_text.rotation + angle_degrees).rem_euclid(360.0);
-                        // Manual field rotation overrides the autoplace.
+                        // Manual field rotation overrides Standard's autoplace.
                         symbol.fields_autoplaced = false;
                         true
                     } else {
@@ -388,14 +388,14 @@ impl Engine {
 }
 
 /// Reposition the visible Reference and Value fields on the side of the
-/// symbol body with the fewest pins, mirroring historical `AutoplaceFields`
+/// symbol body with the fewest pins, mirroring Standard's `AutoplaceFields`
 /// behaviour. Fields are stacked vertically and given a justify/rotation
 /// that always renders horizontally.
 /// Re-run autoplace on every symbol whose `fields_autoplaced` flag is set.
 ///
 /// Kept available for callers that want to migrate stale layouts; not
-/// invoked automatically because historical  layouts already match
-/// the autoplace output and re-running ours can shift them.
+/// invoked automatically because Standard-saved layouts already match
+/// Standard's autoplace output and re-running ours can shift them.
 pub fn autoplace_all_marked_fields(document: &mut signex_types::schematic::SchematicSheet) {
     let lib_symbols = document.lib_symbols.clone();
     for symbol in &mut document.symbols {
@@ -413,7 +413,7 @@ fn autoplace_fields(symbol: &mut signex_types::schematic::Symbol, lib: &signex_t
 
     // 1a. Body bbox in world space (graphics only). Used as the geometric
     //     reference for pin-side classification — its centre is the natural
-    //     pivot, just matching the existing `SCH_SYMBOL::GetBodyBoundingBox()`.
+    //     pivot, just like Standard's `SCH_SYMBOL::GetBodyBoundingBox()`.
     let mut body_bbox: Option<(f64, f64, f64, f64)> = None;
     let extend = |bbox: &mut Option<(f64, f64, f64, f64)>, x: f64, y: f64| match bbox {
         None => *bbox = Some((x, y, x, y)),
@@ -470,7 +470,7 @@ fn autoplace_fields(symbol: &mut signex_types::schematic::Symbol, lib: &signex_t
     // 2. Count pins on each side by the world-space position of each pin's
     //    connection point relative to the body bbox centre. Using the body
     //    centre (not the outer centre) keeps the classification independent
-    //    of the pin lengths the user happens to have, matching the historical's
+    //    of the pin lengths the user happens to have, matching Standard's
     //    AutoplaceFields side-selection.
     let (mut pins_right, mut pins_left, mut pins_top, mut pins_bottom) = (0u32, 0u32, 0u32, 0u32);
     for p in &lib.pins {
@@ -490,7 +490,7 @@ fn autoplace_fields(symbol: &mut signex_types::schematic::Symbol, lib: &signex_t
     }
 
     // 3. Pick the side with the fewest pins. Ties resolved Right > Left > Top > Bottom
-    //    to match the preference for horizontal placement.
+    //    to match Standard's preference for horizontal placement.
     #[derive(Clone, Copy)]
     enum Side { Right, Left, Top, Bottom }
     let candidates = [
@@ -523,7 +523,7 @@ fn autoplace_fields(symbol: &mut signex_types::schematic::Symbol, lib: &signex_t
     }
 
     // 5. Anchor and per-field justify. Fields are always stacked vertically.
-    //    `line_height` is roughly 1.6 * text_size; using the first
+    //    `line_height` is roughly Standard's 1.6 * text_size; using the first
     //    visible field's font size keeps it scale-correct.
     //
     //    Justify-V is chosen so the field block sits cleanly outside the
@@ -532,10 +532,10 @@ fn autoplace_fields(symbol: &mut signex_types::schematic::Symbol, lib: &signex_t
     //    on horizontal sides where the block straddles cy symmetrically.
     let font_size = fields[0].font_size.max(0.1);
     let line_height = font_size * 1.6;
-    // the AutoplaceFields keeps roughly two text-heights of clearance
+    // Standard's AutoplaceFields keeps roughly two text-heights of clearance
     // between the body bbox and the closest field so the stack visibly
     // separates from the symbol. A single text-height was still cramped
-    // compared to the reference rendering.
+    // compared to Standard's reference rendering.
     let margin = (font_size * 2.0).max(1.016);
     let n = fields.len() as f64;
 
@@ -561,11 +561,11 @@ fn autoplace_fields(symbol: &mut signex_types::schematic::Symbol, lib: &signex_t
         Side::Bottom => (cx, max_y + margin, HAlign::Center, VAlign::Top),
     };
 
-    // 6. Field rotation follows the AutoplaceFields convention:
+    // 6. Field rotation follows Standard's AutoplaceFields convention:
     //    horizontal text is achieved by writing 90° when the symbol is
-    //    rotated 90°/270° (because the legacy GetDrawRotation toggles), and
+    //    rotated 90°/270° (because Standard's GetDrawRotation toggles), and
     //    0° otherwise. The renderer reads this with the same toggle, and
-    //    Legacy software opens the saved file rendering the text horizontally.
+    //    Standard opens the saved file rendering the text horizontally.
     let sym_rot = symbol.rotation.rem_euclid(360.0).round() as i32;
     let field_rotation = if matches!(sym_rot, 90 | 270) { 90.0 } else { 0.0 };
 
@@ -634,7 +634,7 @@ fn graphic_extent_points(g: &signex_types::schematic::Graphic) -> Vec<(f64, f64)
 /// Rotate `(x, y)` around `(cx, cy)` by `angle_deg` using the same screen
 /// convention as `signex_render::instance_transform` (Y-down schematic
 /// coordinates, positive `angle_deg` = visual CCW rotation as seen by the
-/// user, matching the canonical rotate command).
+/// user, matching Standard's rotate command).
 ///
 /// In a Y-down coordinate space the standard rotation matrix gives a visual
 /// CW rotation, so we negate the angle to recover the expected visual CCW.

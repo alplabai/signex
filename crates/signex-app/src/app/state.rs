@@ -15,6 +15,10 @@ pub struct Signex {
     pub ui_state: UiState,
     pub document_state: DocumentState,
     pub interaction_state: InteractionState,
+    /// v0.9 Library subsystem state. Borrowed independently of
+    /// `document_state` so the library dispatcher can mutate it
+    /// without colliding with schematic / PCB engine borrows.
+    pub library: crate::library::LibraryState,
 }
 
 pub struct UiState {
@@ -145,7 +149,7 @@ pub struct UiState {
     /// the cursor turns into a paint-bucket over the canvas and the
     /// next click on a wire floods that color across every connected
     /// wire. Cleared after the click applies, or by Escape. Colors are
-    /// render-time only — they do NOT write back to the .snxsch.
+    /// render-time only — they do NOT write back to the .standard_sch.
     pub pending_net_color: Option<signex_types::theme::Color>,
     /// Per-wire color overrides keyed by wire uuid. Populated by the
     /// net-color click; consulted when drawing wires. Not serialised.
@@ -175,15 +179,6 @@ pub struct UiState {
     /// (later) undocked tabs. `SecondaryWindowClosed` removes entries so
     /// the detached content reattaches to the main window.
     pub windows: std::collections::HashMap<iced::window::Id, WindowKind>,
-    /// Paths whose async save (v0.9.1 perf path) is currently running
-    /// off the UI thread. Drives the "Saving…" pill in the status bar
-    /// and is cleared on `Message::SaveFileFinished`. Failed saves
-    /// stay in `save_error` for a few seconds so the operator sees
-    /// what happened.
-    pub saving_paths: std::collections::HashSet<std::path::PathBuf>,
-    /// Last save error message and the time it was set. The status
-    /// bar shows this briefly, then `tick_save_error` clears it.
-    pub save_error: Option<(String, std::time::Instant)>,
 }
 
 /// Role of a non-main window opened by Signex. Phase 2 adds detached
@@ -205,6 +200,14 @@ pub enum WindowKind {
     /// floating panel past the main window edge. Closing the OS window
     /// reattaches the panel to its last dock region.
     DetachedPanel(crate::panels::PanelKind),
+    /// v0.9-refactor-2 Component Preview — one window per open row.
+    /// The preview's full state lives in `Signex::library.editors`
+    /// keyed by `EditorAddress(library_path, table, row_id)`.
+    ComponentEditor {
+        library_path: std::path::PathBuf,
+        table: String,
+        row_id: signex_library::RowId,
+    },
 }
 
 /// Kind of z-order picker currently armed. Drives the first-click
@@ -291,11 +294,7 @@ pub enum AnnotateOrder {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct ProjectId(u32);
 
-impl ProjectId {
-    pub fn raw(self) -> u32 {
-        self.0
-    }
-}
+impl ProjectId {}
 
 impl std::fmt::Display for ProjectId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -304,7 +303,7 @@ impl std::fmt::Display for ProjectId {
 }
 
 /// One loaded project in the multi-project workspace. `path` is the
-/// canonical identity (`.snxprj` / `.snxprj` location on disk); `data`
+/// canonical identity (`.standard_pro` / `.snxprj` location on disk); `data`
 /// is the parsed project contents. Multiple projects with different
 /// `path`s coexist in `DocumentState.projects`; two identical `path`s
 /// at once is a loader bug (existing `open_project_file` de-dupes).
@@ -327,6 +326,15 @@ pub struct DocumentState {
     /// `engine_for_window`. Save-as rekeys an entry via
     /// `rekey_engine(old, new)`.
     pub engines: std::collections::HashMap<PathBuf, signex_engine::Engine>,
+    /// Per-tab state for open `.snxsym` document tabs. Keyed by the
+    /// file path stored on `TabInfo.path` for matching
+    /// `TabKind::SymbolEditor(path)` tabs. Insert on
+    /// `LibraryMessage::OpenPrimitiveEditor`; drop in
+    /// `close_tab_at_index` alongside the engine cleanup.
+    pub symbol_editors: std::collections::HashMap<PathBuf, super::SymbolEditorState>,
+    /// Per-tab state for open `.snxfpt` document tabs. Keyed the same
+    /// way as `symbol_editors`.
+    pub footprint_editors: std::collections::HashMap<PathBuf, super::FootprintEditorState>,
     /// The path of the schematic the main window is currently editing.
     /// `active_engine()` reads `engines.get(active_path)`. `None` means
     /// no schematic tab is active (e.g. a PCB tab is active, or nothing
@@ -354,13 +362,7 @@ pub struct DocumentState {
     /// as "no longer loaded").
     pub next_project_id: u32,
     pub panel_ctx: crate::panels::PanelContext,
-    /// Cache of `LibSymbol` records indexed by lib_id. Populated by
-    /// the v0.10.x `.snxlib` library plumbing; kept here so the
-    /// canvas-side place-component flow can resolve a symbol by id
-    /// independently of which panel populated it. Was previously
-    /// also fed by the legacy symbol-library scanner that v0.10.0
-    /// removed (Apache-clean residual polish).
-    #[allow(dead_code)]
+    pub standard_lib_dir: Option<PathBuf>,
     pub loaded_lib: std::collections::HashMap<String, signex_types::schematic::LibSymbol>,
     /// Print-preview overlay state. `Some` while the preview dialog is
     /// open. Doubles as the unified PDF Export modal — `File → Export
@@ -579,10 +581,6 @@ impl DocumentState {
         self.projects.iter().find(|p| p.id == id)
     }
 
-    pub fn project_by_id_mut(&mut self, id: ProjectId) -> Option<&mut LoadedProject> {
-        self.projects.iter_mut().find(|p| p.id == id)
-    }
-
     /// Resolve the project that contains a file at this path. Used for
     /// per-tab project scoping (tabs store a path, we resolve to the
     /// project that parented them at load time).
@@ -716,14 +714,6 @@ pub struct InteractionState {
     /// zones without the menu collapsing mid-traversal.
     pub submenu_unhovered_since: Option<std::time::Instant>,
     pub last_mouse_pos: (f32, f32),
-    /// Most recent project-tree row click — `(path, timestamp)`. Used
-    /// to detect double-clicks: a `TreeMsg::Select` for a path within
-    /// `TREE_DOUBLE_CLICK_WINDOW` of a previous click on the same
-    /// path opens the file. Single clicks just highlight via
-    /// `panel_ctx.selected_tree_path`. Cleared whenever the panel ctx
-    /// is rebuilt from disk-state changes that invalidate the path
-    /// indices. `None` when no row has been clicked yet this session.
-    pub last_tree_click: Option<(Vec<usize>, std::time::Instant)>,
     pub active_bar_menu: Option<crate::active_bar::ActiveBarMenu>,
     pub selection_filters: std::collections::HashSet<crate::active_bar::SelectionFilter>,
     /// User-defined custom filter presets (capped at

@@ -92,10 +92,13 @@ pub enum TreeIcon {
 //    `crates/signex-app/assets/icons/files/`. Reached cross-crate via
 //    `include_bytes!` so one copy of the artwork serves both the
 //    tree view and the .ico/.icns raster pipeline.
-//  * **Legacy aliases** — `TreeIcon::Schematic` / `::Pcb` remain in
-//    the enum for backward-compat with older call sites that
-//    construct them directly; both share the `.snxsch` / `.snxpcb`
-//    glyphs.
+//  * **Standard handoff formats** — `.standard_sch` / `.standard_pcb` /
+//    `.standard_sym` / `.standard_mod` render with the matching Signex-
+//    brand glyph (same chamfered silhouette + amber wedge), so the
+//    project tree stays visually consistent regardless of whether
+//    files are native or Standard. The `TreeIcon::Schematic` / `::Pcb`
+//    variants remain in the enum for backward-compat but now share
+//    the `.snxsch` / `.snxpcb` SVGs.
 
 // Per-variant `OnceLock` cache. iced handles are Arc-backed so
 // cloning a cached handle into every render frame is near-free.
@@ -107,29 +110,29 @@ macro_rules! cached_svg_handle {
 }
 
 // Generic tree icons (SVG).
-const SVG_TREE_FOLDER:      &[u8] = include_bytes!("../assets/tree-icons/folder.svg");
+const SVG_TREE_FOLDER: &[u8] = include_bytes!("../assets/tree-icons/folder.svg");
 const SVG_TREE_FOLDER_OPEN: &[u8] = include_bytes!("../assets/tree-icons/folder_open.svg");
-const SVG_TREE_FILE:        &[u8] = include_bytes!("../assets/tree-icons/file.svg");
-const SVG_TREE_LIBRARY:     &[u8] = include_bytes!("../assets/tree-icons/library.svg");
-const SVG_TREE_COMPONENT:   &[u8] = include_bytes!("../assets/tree-icons/component.svg");
-const SVG_TREE_SHEET:       &[u8] = include_bytes!("../assets/tree-icons/sheet.svg");
-const SVG_TREE_NET:         &[u8] = include_bytes!("../assets/tree-icons/net.svg");
-const SVG_TREE_PIN:         &[u8] = include_bytes!("../assets/tree-icons/pin.svg");
-const SVG_TREE_PACKAGE:     &[u8] = include_bytes!("../assets/tree-icons/package.svg");
-const SVG_TREE_MATERIAL:    &[u8] = include_bytes!("../assets/tree-icons/material.svg");
-const SVG_TREE_CONFIG:      &[u8] = include_bytes!("../assets/tree-icons/config.svg");
-const SVG_TREE_MODEL:       &[u8] = include_bytes!("../assets/tree-icons/model.svg");
+const SVG_TREE_FILE: &[u8] = include_bytes!("../assets/tree-icons/file.svg");
+const SVG_TREE_LIBRARY: &[u8] = include_bytes!("../assets/tree-icons/library.svg");
+const SVG_TREE_COMPONENT: &[u8] = include_bytes!("../assets/tree-icons/component.svg");
+const SVG_TREE_SHEET: &[u8] = include_bytes!("../assets/tree-icons/sheet.svg");
+const SVG_TREE_NET: &[u8] = include_bytes!("../assets/tree-icons/net.svg");
+const SVG_TREE_PIN: &[u8] = include_bytes!("../assets/tree-icons/pin.svg");
+const SVG_TREE_PACKAGE: &[u8] = include_bytes!("../assets/tree-icons/package.svg");
+const SVG_TREE_MATERIAL: &[u8] = include_bytes!("../assets/tree-icons/material.svg");
+const SVG_TREE_CONFIG: &[u8] = include_bytes!("../assets/tree-icons/config.svg");
+const SVG_TREE_MODEL: &[u8] = include_bytes!("../assets/tree-icons/model.svg");
 
 // Signex native `.snx***` file family (SVG). Shared with the
 // installer's file-association artwork; update both paths together
 // if the asset layout changes.
-const SVG_SNX_PROJECT:    &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxprj.svg");
-const SVG_SNX_SCHEMATIC:  &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxsch.svg");
-const SVG_SNX_PCB:        &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxpcb.svg");
-const SVG_SNX_FOOTPRINT:  &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxfpt.svg");
+const SVG_SNX_PROJECT: &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxprj.svg");
+const SVG_SNX_SCHEMATIC: &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxsch.svg");
+const SVG_SNX_PCB: &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxpcb.svg");
+const SVG_SNX_FOOTPRINT: &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxfpt.svg");
 const SVG_SNX_SIMULATION: &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxsim.svg");
-const SVG_SNX_LIBRARY:    &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxlib.svg");
-const SVG_SNX_SYMBOL:     &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxsym.svg");
+const SVG_SNX_LIBRARY: &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxlib.svg");
+const SVG_SNX_SYMBOL: &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxsym.svg");
 
 impl TreeIcon {
     /// Return the cached SVG handle for this icon. Each variant
@@ -146,7 +149,11 @@ impl TreeIcon {
             Self::Sheet => cached_svg_handle!(SVG_TREE_SHEET),
             Self::Net => cached_svg_handle!(SVG_TREE_NET),
             Self::Pin => cached_svg_handle!(SVG_TREE_PIN),
-            // Legacy aliases — share the Signex glyphs.
+            // Standard handoff formats — share the Signex-brand glyph
+            // for visual consistency in the project tree. The enum
+            // variants remain for backward-compat with older call
+            // sites that construct `TreeIcon::Schematic/::Pcb`
+            // directly.
             Self::Schematic => cached_svg_handle!(SVG_SNX_SCHEMATIC),
             Self::Pcb => cached_svg_handle!(SVG_SNX_PCB),
             // Signex native `.snx***` family.
@@ -164,9 +171,11 @@ impl TreeIcon {
         }
     }
 
-    /// Pick a `TreeIcon` for a filename. Native Signex `.snx***`
-    /// files route to the matching Signex-brand glyph; unknown
-    /// extensions fall back to `File`.
+    /// Pick a `TreeIcon` for a filename. Both Signex `.snx***` and
+    /// Standard `.standard_*` extensions route to the same Signex-brand
+    /// glyph family so the project tree reads as one cohesive visual
+    /// family regardless of whether the underlying file is native or
+    /// Standard. Unknown extensions fall back to `File`.
     pub fn for_path(filename: &str) -> Self {
         let lower = filename.to_ascii_lowercase();
         if let Some(ext) = lower.rsplit('.').next() {
@@ -183,6 +192,15 @@ impl TreeIcon {
                 "snxmat" => Self::Material,
                 "snxcfg" => Self::Config,
                 "snxmod" => Self::Model,
+                // Standard handoff formats — map to the matching Signex
+                // glyph. `.standard_sym` is a symbol library (multiple
+                // symbols) so it pairs with the library glyph;
+                // `.standard_mod` is a single footprint.
+                "standard_pro" => Self::SnxProject,
+                "standard_sch" => Self::SnxSchematic,
+                "standard_pcb" => Self::SnxPcb,
+                "standard_sym" => Self::SnxLibrary,
+                "standard_mod" => Self::SnxFootprint,
                 _ => Self::File,
             }
         } else {
@@ -427,7 +445,8 @@ fn render_node(
     }
 
     // Icon — full-colour bundled SVG. Cached per variant; render via
-    // `iced::widget::svg`.
+    // `iced::widget::svg`. Standard handoff formats share glyphs with
+    // their Signex-native counterparts (see `TreeIcon::svg`).
     //
     // Active-project marker: when this row is the accented root in a
     // multi-project workspace (`node.accent && depth == 0`), tint the
@@ -566,8 +585,7 @@ fn render_node(
     // Right-click → tree-scoped context menu. `mouse_area` wraps the
     // button so left-press still reaches the button's `on_press`; only
     // `on_right_press` is intercepted here.
-    let row_element = mouse_area(row_btn)
-        .on_right_press(TreeMsg::ContextMenu(path.to_vec()));
+    let row_element = mouse_area(row_btn).on_right_press(TreeMsg::ContextMenu(path.to_vec()));
     col = col.push(row_element);
 
     // Expanded children

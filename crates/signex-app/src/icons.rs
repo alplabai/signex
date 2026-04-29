@@ -84,14 +84,12 @@ macro_rules! canonical_icon {
 
 // ─── Flat top-level (active-bar, dock, and shape_* shapes) ─────────
 
-canonical_icon!(icon_addpart, "addpart.svg");
 canonical_icon!(icon_align, "align.svg");
 canonical_icon!(icon_chevron_45, "chevron_45.svg");
 canonical_icon!(icon_close, "close.svg");
 canonical_icon!(icon_collapse_down, "collapse_down.svg");
 canonical_icon!(icon_collapse_left, "collapse_left.svg");
 canonical_icon!(icon_collapse_right, "collapse_right.svg");
-canonical_icon!(icon_collapse_up, "collapse_up.svg");
 canonical_icon!(icon_component, "component.svg");
 canonical_icon!(icon_directives, "directives.svg");
 canonical_icon!(icon_expand_left, "expand_left.svg");
@@ -100,21 +98,17 @@ canonical_icon!(icon_filter, "filter.svg");
 canonical_icon!(icon_harness, "harness.svg");
 canonical_icon!(icon_move, "move.svg");
 canonical_icon!(icon_netcolor, "netcolor.svg");
-canonical_icon!(icon_noconnect, "noconnect.svg");
 canonical_icon!(icon_port, "port.svg");
 canonical_icon!(icon_power, "power.svg");
 canonical_icon!(icon_select, "select.svg");
 canonical_icon!(icon_shape_arc, "shape_arc.svg");
 canonical_icon!(icon_shape_circle, "shape_circle.svg");
-canonical_icon!(icon_shape_elliptical_arc, "shape_elliptical_arc.svg");
 canonical_icon!(icon_shape_line, "shape_line.svg");
 canonical_icon!(icon_shape_polygon, "shape_polygon.svg");
 canonical_icon!(icon_shape_rect, "shape_rect.svg");
 canonical_icon!(icon_shapes, "shapes.svg");
 canonical_icon!(icon_sheetsym, "sheetsym.svg");
-canonical_icon!(icon_sheetsymbol, "sheetsymbol.svg");
 canonical_icon!(icon_text, "text.svg");
-canonical_icon!(icon_undock, "undock.svg");
 canonical_icon!(icon_wire, "wire.svg");
 
 // ─── Chrome (window controls, search) ──────────────────────────────
@@ -123,7 +117,6 @@ canonical_icon!(icon_chrome_search, "chrome/search.svg");
 canonical_icon!(icon_chrome_window_close, "chrome/window_close.svg");
 canonical_icon!(icon_chrome_window_max, "chrome/window_max.svg");
 canonical_icon!(icon_chrome_window_min, "chrome/window_min.svg");
-canonical_icon!(icon_chrome_window_restore, "chrome/window_restore.svg");
 
 // ─── Dropdown (active-bar group menus) ─────────────────────────────
 
@@ -180,7 +173,6 @@ canonical_icon!(icon_dd_no_erc, "dropdown/no_erc.svg");
 canonical_icon!(icon_dd_note, "dropdown/note.svg");
 canonical_icon!(icon_dd_off_sheet, "dropdown/off_sheet.svg");
 canonical_icon!(icon_dd_open_child_sheet, "dropdown/open_child_sheet.svg");
-canonical_icon!(icon_dd_other, "dropdown/other.svg");
 canonical_icon!(icon_dd_param_set, "dropdown/param_set.svg");
 canonical_icon!(icon_dd_part_actions, "dropdown/part_actions.svg");
 canonical_icon!(icon_dd_paste, "dropdown/paste.svg");

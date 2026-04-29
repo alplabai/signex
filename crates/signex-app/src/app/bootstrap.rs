@@ -59,6 +59,7 @@ impl Signex {
                 let mut d = DockArea::new();
                 d.add_panel(PanelPosition::Left, PanelKind::Projects);
                 d.add_panel(PanelPosition::Left, PanelKind::Components);
+                d.add_panel(PanelPosition::Left, PanelKind::Library);
                 d.add_panel(PanelPosition::Left, PanelKind::Signal);
                 d.add_panel(PanelPosition::Right, PanelKind::Properties);
                 d.add_panel(PanelPosition::Right, PanelKind::Messages);
@@ -72,6 +73,14 @@ impl Signex {
         let sch_canvas = SchematicCanvas::new();
         let pcb_canvas = crate::pcb_canvas::PcbCanvas::new();
         let grid_size_mm = crate::canvas::grid::GRID_SIZES_MM[1]; // 1.27mm (Altium default, 50 mil)
+        let standard_lib_dir = helpers::find_standard_symbols_dir();
+        let mut standard_libraries = standard_lib_dir
+            .as_deref()
+            .map(helpers::list_standard_libraries)
+            .unwrap_or_default();
+        if !standard_libraries.is_empty() {
+            standard_libraries.insert(0, helpers::ALL_LIBRARIES.to_string());
+        }
 
         let mut app = Self {
             ui_state: UiState {
@@ -129,8 +138,6 @@ impl Signex {
                 tab_dragging: None,
                 main_window_id: None,
                 windows: std::collections::HashMap::new(),
-                saving_paths: std::collections::HashSet::new(),
-                save_error: None,
                 move_selection: crate::app::state::MoveSelectionState::default(),
                 net_color_palette_open: false,
                 parameter_manager_open: false,
@@ -149,6 +156,8 @@ impl Signex {
                 tabs: vec![],
                 active_tab: 0,
                 engines: std::collections::HashMap::new(),
+                symbol_editors: std::collections::HashMap::new(),
+                footprint_editors: std::collections::HashMap::new(),
                 active_path: None,
                 projects: Vec::new(),
                 active_project: None,
@@ -182,6 +191,7 @@ impl Signex {
                     canvas_font_italic: false,
                     canvas_font_popup_open: false,
                     properties_tab: 0,
+                    standard_libraries,
                     active_library: None,
                     library_symbols: vec![],
                     selected_component: None,
@@ -189,7 +199,6 @@ impl Signex {
                     selected_lib_symbol: None,
                     components_split: 250.0,
                     project_tree: vec![],
-                    selected_tree_path: None,
                     selection_count: 0,
                     selected_uuid: None,
                     selected_kind: None,
@@ -223,7 +232,9 @@ impl Signex {
                     custom_paper_w_mm: 297.0,
                     custom_paper_h_mm: 210.0,
                     sheet_color: crate::panels::SheetColor::default(),
+                    symbol_editor: None,
                 },
+                standard_lib_dir,
                 loaded_lib: std::collections::HashMap::new(),
                 preview: None,
                 pending_pdf_options: None,
@@ -265,7 +276,6 @@ impl Signex {
                 submenu_panel_hovered: false,
                 submenu_unhovered_since: None,
                 last_mouse_pos: (0.0, 0.0),
-                last_tree_click: None,
                 active_bar_menu: None,
                 selection_filters: crate::active_bar::SelectionFilter::ALL
                     .iter()
@@ -278,7 +288,13 @@ impl Signex {
                 pending_power: None,
                 pending_port: None,
             },
+            library: crate::library::LibraryState::default(),
         };
+        // v0.9 Stage 9: load + mount globally-configured libraries
+        // before the first frame so the Components Panel's Global
+        // section is populated from the get-go.
+        app.library.global_libraries =
+            crate::panels::components_panel::global_prefs::load_and_mount_all(&mut app.library);
         signex_render::set_canvas_font_name(&app.ui_state.canvas_font_name);
         signex_render::set_canvas_font_size(app.ui_state.canvas_font_size);
         signex_render::set_canvas_font_style(
@@ -505,8 +521,8 @@ impl Signex {
                     (keyboard::Key::Named(keyboard::key::Named::Space), _) => {
                         Message::RotateSelected
                     }
-                    // Mirror: X key = horizontal flip (left-right) = mirror_y
-                    //         Y key = vertical flip (top-bottom) = mirror_x
+                    // Mirror: X key = horizontal flip (left-right) = Standard mirror_y
+                    //         Y key = vertical flip (top-bottom) = Standard mirror_x
                     (keyboard::Key::Character(c), m) if c == "x" && !m.command() => {
                         Message::MirrorSelectedY // X key = horizontal flip = toggle mirror_y
                     }

@@ -357,6 +357,9 @@ mod tests {
             custom_properties: vec![],
             pin_uuids: HashMap::new(),
             instances: vec![],
+            library_id: None,
+            row_id: None,
+            library_version: String::new(),
         });
 
         sheet.lib_symbols.insert(
@@ -398,7 +401,7 @@ mod tests {
         );
 
         let ctx_sheet = SheetSnapshot {
-            path: PathBuf::from("sheet_1.snxsch"),
+            path: PathBuf::from("sheet_1.standard_sch"),
             schematic: sheet,
             sheet_name: "Sheet1".to_string(),
             sheet_number: 1,

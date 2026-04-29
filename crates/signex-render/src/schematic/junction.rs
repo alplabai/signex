@@ -7,7 +7,7 @@ use signex_types::schematic::{Junction, NoConnect};
 
 use super::ScreenTransform;
 
-/// Default junction diameter when not specified (1.0mm → 0.5mm radius).
+/// Standard default junction diameter when not specified (1.0mm → 0.5mm radius).
 const JUNCTION_DEFAULT_DIAMETER_MM: f64 = 1.0;
 
 /// Draw a junction as a filled circle at its position.
@@ -18,7 +18,7 @@ pub fn draw_junction(
     color: Color,
 ) {
     let center = transform.to_screen_point(junction.position.x, junction.position.y);
-    // Use diameter from file if non-zero, else default 1.0mm
+    // Use diameter from file if non-zero, else Standard default 1.0mm
     let diameter = if junction.diameter > 0.0 {
         junction.diameter
     } else {

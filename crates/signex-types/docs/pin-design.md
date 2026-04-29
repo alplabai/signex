@@ -1,11 +1,14 @@
 # Pin design rationale
 
 Documents why `signex-types::schematic::PinDirection` and
-`PinShapeStyle` look the way they do.
+`PinShapeStyle` look the way they do, and how the variant set differs
+from Standard's `ELECTRICAL_PINTYPE` / `GRAPHIC_PINSHAPE`.
 
-The current variant set is Signex-curated; earlier prototypes used
-shape-derivative enum sets that were replaced during the Apache-clean
-cutover.
+The previous Signex versions exposed `PinElectricalType` (12 variants,
+identical canonical strings to Standard's enum) and `PinShape` (9
+variants, same set as Standard's). Those types were strong derivations
+of Standard's `pin_type.h` headers and were removed in the issue #62
+Apache-clean remediation.
 
 ## `PinDirection` — 14 variants
 
@@ -81,11 +84,11 @@ existed long before any one of them — but the Signex curation is:
 
 ## Round-trip with foreign formats
 
-When Signex Community reads a converted foreign file (via the import
-companion tool), a translation layer maps the source enum to Signex's
-curated set. Some information loss is acceptable in that direction —
-e.g. multiple "free" / "unspecified" variants in source files collapse
-to `Unclassified` in Signex.
+When Signex Community reads a foreign file (e.g. via the
+`signex-standard-import` companion tool), a translation layer maps the
+foreign tool's enum to Signex's curated set. Some information loss
+is acceptable in that direction — for example, `Free` and
+`Unspecified` from Standard both collapse to `Unclassified` in Signex.
 
 Going the other way (Signex → foreign format), Signex-original
 variants (`GroundReference`, `Differential`, `Clock`,

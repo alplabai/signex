@@ -1,0 +1,31 @@
+class = "inductor"
+description = "Fixed-value inductor"
+
+[[required_params]]
+name = "value"
+kind = "measurement"
+unit = "H"
+
+[[required_params]]
+name = "tolerance"
+kind = "measurement"
+unit = "%"
+
+[[required_params]]
+name = "current_max"
+kind = "measurement"
+unit = "A"
+
+[[optional_params]]
+name = "dcr"
+kind = "measurement"
+unit = "ohm"
+
+[[optional_params]]
+name = "self_resonant_frequency"
+kind = "measurement"
+unit = "Hz"
+
+[[optional_params]]
+name = "package"
+kind = "text"

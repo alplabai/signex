@@ -118,7 +118,7 @@ impl Signex {
             async {
                 rfd::AsyncFileDialog::new()
                     .set_title("Export Netlist")
-                    .add_filter("Netlist", &["net"])
+                    .add_filter("Standard Netlist", &["net"])
                     .set_file_name("schematic.net")
                     .save_file()
                     .await
@@ -550,8 +550,8 @@ impl Signex {
                 .first()
                 .map(|s| s.schematic.paper_size.as_str())
                 .unwrap_or("A4");
-            let page_size = PageSize::from_paper_name(paper_str);
-            let orientation = PageSize::default_orientation_for_paper_name(paper_str);
+            let page_size = PageSize::from_standard_str(paper_str);
+            let orientation = PageSize::default_orientation_for_standard(paper_str);
             let palette = signex_output::SchematicPalette::from(
                 &signex_types::theme::canvas_colors(self.ui_state.theme_id),
             );
@@ -987,7 +987,7 @@ fn build_export_context(
     // than just the open tabs. Sheets currently opened as tabs use the
     // live engine snapshot (so unsaved edits show in the preview);
     // unopened sheets are read straight from disk via the parser. If
-    // the active document isn't tied to a project (loose .snxsch),
+    // the active document isn't tied to a project (loose .standard_sch),
     // we fall back to the engines map so a single-sheet preview still
     // works.
     let sheets: Vec<SheetSnapshot> =

@@ -167,7 +167,7 @@ impl Signex {
             // Net-color palette — arms pending_net_color so the next
             // canvas click on a wire floods its whole net with the
             // selected colour. Colours stay in app state only; nothing
-            // is written back to the .snxsch so legacy formats round-trip
+            // is written back to the .standard_sch so Standard round-trips
             // unchanged.
             ActiveBarAction::NetColorBlue
             | ActiveBarAction::NetColorLightGreen
@@ -289,6 +289,9 @@ impl Signex {
                 custom_properties: Vec::new(),
                 pin_uuids: std::collections::HashMap::new(),
                 instances: Vec::new(),
+                library_id: None,
+                row_id: None,
+                library_version: String::new(),
             });
     }
 }

@@ -39,7 +39,7 @@ impl Signex {
         // First pass: collect every sheet's snapshot keyed by BOTH its
         // absolute path AND its bare filename. BadHierSheetPin looks up
         // children by the filename stored on the parent's sheet symbol,
-        // which is often just the basename (e.g. "power.snxsch").
+        // which is often just the basename (e.g. "power.standard_sch").
         let mut snapshots_by_path: std::collections::HashMap<
             std::path::PathBuf,
             signex_render::schematic::SchematicRenderSnapshot,
@@ -884,10 +884,31 @@ impl Signex {
             return Task::none();
         };
         let path = tab.path.clone();
+        // Component Preview tabs undock to a window with
+        // `WindowKind::ComponentEditor` so the editor view dispatch
+        // picks it up. Schematic / PCB tabs use
+        // `WindowKind::UndockedTab` as before.
+        let component_editor = tab.kind.as_component_editor().cloned();
+
         // Don't re-undock a tab that already has a window.
-        if self.ui_state.windows.values().any(
-            |k| matches!(k, super::super::state::WindowKind::UndockedTab { path: p, .. } if p == &path),
-        ) {
+        let already_undocked = match component_editor.as_ref() {
+            Some(ce) => self.ui_state.windows.values().any(|k| {
+                matches!(
+                    k,
+                    super::super::state::WindowKind::ComponentEditor {
+                        library_path,
+                        table,
+                        row_id,
+                    } if library_path == &ce.library_path
+                        && table == &ce.table
+                        && row_id == &ce.row_id
+                )
+            }),
+            None => self.ui_state.windows.values().any(
+                |k| matches!(k, super::super::state::WindowKind::UndockedTab { path: p, .. } if p == &path),
+            ),
+        };
+        if already_undocked {
             return Task::none();
         }
         let title = tab.title.clone();
@@ -911,6 +932,21 @@ impl Signex {
         });
         // Stash immediately so the first frame in the new window has a
         // target; `UndockedTabOpened` refreshes the title afterwards.
+        if let Some(ce) = component_editor {
+            self.ui_state.windows.insert(
+                id,
+                super::super::state::WindowKind::ComponentEditor {
+                    library_path: ce.library_path.clone(),
+                    table: ce.table.clone(),
+                    row_id: ce.row_id,
+                },
+            );
+            // Component Editor windows don't need the
+            // `UndockedTabOpened` follow-up (no per-window canvas to
+            // wire); the editor view picks the entry up directly off
+            // `library.editors` via the address it already has.
+            return open_task.discard();
+        }
         self.ui_state.windows.insert(
             id,
             super::super::state::WindowKind::UndockedTab {
@@ -1123,7 +1159,7 @@ impl Signex {
             }
         });
         match id {
-            Some(id) => iced::window::drag(id),
+            Some(id) => crate::chrome::start_window_drag(id),
             None => Task::none(),
         }
     }

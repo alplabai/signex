@@ -55,7 +55,7 @@ pub fn hit_test(sheet: &SchematicRenderSnapshot, wx: f64, wy: f64) -> Option<Sel
     // selects the field, not the whole symbol). Power ports are an exception:
     // their val_text is rendered as part of the port by the built-in power
     // renderer, so clicking anywhere on the glyph should select the whole
-    // port — not a phantom val_text hit region tracking the stored text
+    // port — not a phantom val_text hit region tracking Standard's stored text
     // position (often offset below the visible body).
     for sym in &sheet.symbols {
         if sym.is_power {

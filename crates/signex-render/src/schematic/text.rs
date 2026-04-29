@@ -22,11 +22,11 @@ pub fn display_text_content(input: &str) -> String {
         out
     }
 
-    // Reserved characters are escaped with path/markup significance as {name} tokens
+    // Standard escapes characters with path/markup significance as {name} tokens
     // (e.g. `{slash}` for `/`). Expand before parsing markup so the literal
     // characters appear in the rendered glyphs instead of the escape source.
     // Also fold backslash-escapes (`\n` → newline, `\\` → backslash) that
-    // We use inside multi-line text notes.
+    // Standard uses inside multi-line text notes.
     let expanded = expand_backslash_escapes(&expand_char_escapes(input));
 
     let segments = parse_signex_markup(&expanded);
@@ -73,7 +73,7 @@ const GLYPH_ADVANCE_FACTOR: f32 = 0.55;
 
 fn run_pair_kerning(prev: RichRunKind, next: RichRunKind, size: f32) -> f32 {
     match (prev, next) {
-        // We keep suffix indices visually tight to the preceding glyph.
+        // Standard keeps suffix indices visually tight to the preceding glyph.
         (
             RichRunKind::Normal | RichRunKind::Overbar,
             RichRunKind::Subscript | RichRunKind::Superscript,
@@ -437,7 +437,7 @@ pub fn draw_rich_text(
 
     // Vertical alignment: defer to iced's canvas::Text align_y so the glyph's
     // visual center / top / bottom lands exactly on `anchor.y`. This is what
-    // the renderer assumes — the anchor is the field's pivot — and it
+    // Standard's renderer assumes — the anchor is the field's pivot — and it
     // matters the most for rotated fields, where any pre-rotation Y offset
     // turns into a visible horizontal shift after the rotate-around-anchor
     // transform below.
@@ -551,7 +551,7 @@ pub fn visible_char_count(input: &str) -> usize {
         .sum()
 }
 
-/// Expand backslash escapes used inside text-note / multi-line fields:
+/// Expand Standard backslash escapes used inside text-note / multi-line fields:
 /// `\n` → newline, `\r` → CR (collapsed), `\t` → tab, `\\` → literal `\`.
 /// Unrecognised `\x` sequences are passed through unchanged.
 pub fn expand_backslash_escapes(input: &str) -> String {
@@ -596,9 +596,9 @@ pub fn expand_backslash_escapes(input: &str) -> String {
     out
 }
 
-/// Replace `{name}` escape tokens with their literal character.
+/// Replace Standard `{name}` escape tokens with their literal character.
 ///
-/// We use these so the raw `/` (hierarchical path separator) and a few
+/// Standard uses these so the raw `/` (hierarchical path separator) and a few
 /// other reserved characters don't have to appear in label/pin text streams.
 pub fn expand_char_escapes(input: &str) -> String {
     if !input.contains('{') {
@@ -613,12 +613,10 @@ pub fn expand_char_escapes(input: &str) -> String {
     out
 }
 
-/// Inverse of `expand_char_escapes` — replace literal reserved characters
-/// with their `{name}` escape tokens so text round-trips through the writer
-/// unambiguously. The escape syntax (`{slash}`, `{backslash}`, …) was
-/// inherited from a historical handoff format; new files round-trip
-/// identically through the native `.snxsch` TOML+TSV writer.
-pub fn escape_for_storage(input: &str) -> String {
+/// Inverse of `expand_char_escapes` — replace literal reserved characters with
+/// their `{name}` Standard escape tokens so the text round-trips through the
+/// S-expression writer unambiguously.
+pub fn escape_for_standard(input: &str) -> String {
     let mut out = String::with_capacity(input.len());
     for ch in input.chars() {
         match ch {
@@ -688,10 +686,10 @@ pub fn draw_text_note(
 /// caller via [`field_display_pos`].
 ///
 /// `mirror_x`: true when the parent symbol has `mirror x` (flips Y axis),
-/// which causes the renderer to flip the horizontal justification of the field text
+/// which causes Standard to flip the horizontal justification of the field text
 /// (SCH_FIELD::GetEffectiveJustify). Pass `sym.mirror_x`.
 ///
-/// Rotation: legacy field angles are CCW-positive in their Y-down screen
+/// Rotation: Standard field angles are CCW-positive in their Y-down screen
 /// space. Iced `frame.rotate()` is CW-positive, so we negate the angle.
 pub fn draw_text_prop(
     frame: &mut canvas::Frame,
@@ -739,7 +737,7 @@ pub fn draw_text_prop(
         VAlign::Bottom => iced::alignment::Vertical::Bottom,
     };
 
-    // Iced CW-positive, Y-down; legacy field angles are CCW.
+    // Iced CW-positive, Y-down; Standard field angles are CCW.
     let rad = -(draw_rotation.to_radians() as f32);
 
     draw_rich_text(
@@ -772,7 +770,7 @@ mod tests {
 
     #[test]
     fn subscript_keeps_same_baseline_as_normal() {
-        // Signex subscript syntax: ~3~ (was cross-style _{3} pre-Phase-2.3).
+        // Signex subscript syntax: ~3~ (was Standard-style _{3} pre-Phase-2.3).
         let runs = super::rich_runs("DIVIDED-S~3~");
         let s_run = runs
             .iter()

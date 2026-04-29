@@ -1,0 +1,30 @@
+class = "capacitor"
+description = "Fixed-value capacitor"
+
+[[required_params]]
+name = "value"
+kind = "measurement"
+unit = "F"
+
+[[required_params]]
+name = "tolerance"
+kind = "measurement"
+unit = "%"
+
+[[required_params]]
+name = "voltage_max"
+kind = "measurement"
+unit = "V"
+
+[[optional_params]]
+name = "dielectric"
+kind = "text"
+
+[[optional_params]]
+name = "esr"
+kind = "measurement"
+unit = "ohm"
+
+[[optional_params]]
+name = "package"
+kind = "text"

@@ -72,6 +72,10 @@ pub enum DockMessage {
     /// Re-dock a floating panel to a specific region.
     DockFloatingTo(usize, PanelPosition),
     Panel(PanelMsg),
+    /// v0.9 Library panel message — wraps `crate::library::LibraryMessage`
+    /// when the Library panel is active inside a dock region. The
+    /// dispatcher unwraps this back into `Message::Library(_)`.
+    Library(crate::library::LibraryMessage),
 }
 
 /// A panel floating as an overlay window.
@@ -314,6 +318,11 @@ impl DockArea {
             }
             // Panel messages are handled by app.rs before reaching here.
             DockMessage::Panel(_) => {}
+            DockMessage::Library(_) => {
+                // Routed by `handle_dock_message` directly into the
+                // library subsystem before reaching this update path.
+                // Reaching here is harmless — no dock state to mutate.
+            }
         }
     }
 
@@ -349,6 +358,7 @@ impl DockArea {
         &'a self,
         position: PanelPosition,
         ctx: &'a panels::PanelContext,
+        library: &'a crate::library::LibraryState,
     ) -> Element<'a, DockMessage> {
         let region = match position {
             PanelPosition::Left => &self.left,
@@ -451,15 +461,12 @@ impl DockArea {
                 // corners flip to the bottom. Inverse of doc tabs.
                 accent_position: signex_widgets::tab_pill::AccentPosition::Top,
             };
-            let inner = container(text(label).size(11).color(text_c))
-                .padding([4, 10]);
-            let tab = mouse_area(signex_widgets::tab_pill::TabPill::new(
-                inner, pill_style,
-            ))
-            .on_enter(DockMessage::TabHoverEnter(position, i))
-            .on_exit(DockMessage::TabHoverExit(position, i))
-            .on_press(DockMessage::TabDragStart(position, i))
-            .on_release(DockMessage::TabClick(position, i));
+            let inner = container(text(label).size(11).color(text_c)).padding([4, 10]);
+            let tab = mouse_area(signex_widgets::tab_pill::TabPill::new(inner, pill_style))
+                .on_enter(DockMessage::TabHoverEnter(position, i))
+                .on_exit(DockMessage::TabHoverExit(position, i))
+                .on_press(DockMessage::TabDragStart(position, i))
+                .on_release(DockMessage::TabClick(position, i));
 
             tab_row = tab_row.push(tab);
         }
@@ -526,7 +533,28 @@ impl DockArea {
         // Panel content
         let content: Element<'_, DockMessage> =
             if let Some(panel) = region.panels.get(region.active) {
-                panels::view_panel(*panel, ctx).map(DockMessage::Panel)
+                match *panel {
+                    PanelKind::Library => {
+                        // v0.9 Library panel — content lives in the
+                        // library subsystem, not in `panels::view_panel`.
+                        // Wrap the LibraryMessage in DockMessage::Library
+                        // so the dispatcher can route it back out.
+                        crate::library::panel::view(library, &ctx.tokens)
+                            .map(DockMessage::Library)
+                    }
+                    PanelKind::Components => {
+                        // v0.9 Stage 9 Components Panel — three mount
+                        // sources (Project / Installed / Global) read
+                        // through `library_state` directly, not
+                        // through the legacy `PanelContext`. Project
+                        // library paths are derived from
+                        // `ctx.projects[].libraries[].root` so the
+                        // dock signature stays narrow.
+                        panels::components_panel::view(library, ctx, &ctx.tokens)
+                            .map(DockMessage::Library)
+                    }
+                    _ => panels::view_panel(*panel, ctx).map(DockMessage::Panel),
+                }
             } else {
                 text("").into()
             };
@@ -645,6 +673,7 @@ impl DockArea {
         &'a self,
         idx: usize,
         ctx: &'a panels::PanelContext,
+        library: &'a crate::library::LibraryState,
     ) -> Option<Element<'a, DockMessage>> {
         let fp = self.floating.get(idx)?;
         let kind = fp.kind;
@@ -671,7 +700,16 @@ impl DockArea {
             .on_press(DockMessage::StartDragFloating(idx))
             .on_release(DockMessage::FloatingDragEnd(idx));
 
-        let content = panels::view_panel(kind, ctx).map(DockMessage::Panel);
+        let content: Element<'a, DockMessage> = match kind {
+            PanelKind::Library => {
+                crate::library::panel::view(library, &ctx.tokens).map(DockMessage::Library)
+            }
+            PanelKind::Components => {
+                panels::components_panel::view(library, ctx, &ctx.tokens)
+                    .map(DockMessage::Library)
+            }
+            _ => panels::view_panel(kind, ctx).map(DockMessage::Panel),
+        };
 
         let panel_widget = container(
             column![

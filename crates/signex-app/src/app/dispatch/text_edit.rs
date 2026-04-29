@@ -16,9 +16,9 @@ impl Signex {
                     && state.text != state.original_text
                 {
                     // User typed the visible form (e.g. "/OE"). Re-escape
-                    // reserved characters back to escape tokens before the
+                    // reserved characters back to Standard tokens before the
                     // engine persists the change.
-                    let stored = signex_render::schematic::text::escape_for_storage(&state.text);
+                    let stored = signex_render::schematic::text::escape_for_standard(&state.text);
                     let engine_command = match state.kind {
                         signex_types::schematic::SelectedKind::Label => {
                             signex_engine::Command::UpdateText {

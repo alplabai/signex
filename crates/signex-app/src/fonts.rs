@@ -142,8 +142,8 @@ pub fn write_power_port_style_pref(style: PowerPortStyle) {
     }
 }
 
-/// Read `label_style` from preferences file. Defaults to `Standard`
-/// when missing or invalid.
+/// Read `label_style` from preferences file.
+/// Defaults to `Standard` when missing or invalid.
 pub fn read_label_style_pref() -> LabelStyle {
     let path = prefs_path();
     let Ok(bytes) = std::fs::read(&path) else {
@@ -181,8 +181,8 @@ pub fn write_label_style_pref(style: LabelStyle) {
     }
 }
 
-/// Read `multisheet_style` from preferences file. Defaults to
-/// `Standard` when missing or invalid.
+/// Read `multisheet_style` from preferences file.
+/// Defaults to `Standard` when missing or invalid.
 pub fn read_multisheet_style_pref() -> MultisheetStyle {
     let path = prefs_path();
     let Ok(bytes) = std::fs::read(&path) else {
@@ -499,6 +499,8 @@ fn panel_kind_key(k: crate::panels::PanelKind) -> &'static str {
         Wiki => "wiki",
         LayerStack => "layer_stack",
         NetClasses => "net_classes",
+        Library => "library",
+        SchLibrary => "sch_library",
     }
 }
 
@@ -525,6 +527,7 @@ fn parse_panel_kind(s: &str) -> Option<crate::panels::PanelKind> {
         "wiki" => Wiki,
         "layer_stack" => LayerStack,
         "net_classes" => NetClasses,
+        "library" => Library,
         _ => return None,
     })
 }

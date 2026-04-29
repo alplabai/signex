@@ -20,18 +20,24 @@ pub enum PrefNav {
     SchematicEditor,
     /// Electrical Rule Check — per-rule severity override.
     Erc,
+    /// v0.9 Library settings — Distributor APIs, lifecycle defaults.
+    LibraryDistributors,
     // Future: Editor, Shortcuts, ...
 }
 
 impl PrefNav {
-    pub const ALL: &'static [PrefNav] =
-        &[PrefNav::Appearance, PrefNav::SchematicEditor, PrefNav::Erc];
+    pub const ALL: &'static [PrefNav] = &[
+        PrefNav::Appearance,
+        PrefNav::Erc,
+        PrefNav::LibraryDistributors,
+    ];
 
     pub fn label(self) -> &'static str {
         match self {
             PrefNav::Appearance => "Appearance",
             PrefNav::SchematicEditor => "Schematic Editor",
             PrefNav::Erc => "Electrical Rules",
+            PrefNav::LibraryDistributors => "Distributor APIs",
         }
     }
 
@@ -40,6 +46,7 @@ impl PrefNav {
             PrefNav::Appearance => "System",
             PrefNav::SchematicEditor => "Editors",
             PrefNav::Erc => "Validation",
+            PrefNav::LibraryDistributors => "Library",
         }
     }
 }
@@ -79,6 +86,12 @@ pub enum PrefMsg {
     DraftErcSeverity(signex_erc::RuleKind, signex_erc::Severity),
     /// Clear every ERC severity override — reset to defaults.
     ResetErcSeverities,
+    /// Library → Distributor APIs pane forwarded a settings message.
+    /// Folded into `PrefMsg` so the Preferences modal can mount the
+    /// live panel as a first-class pane without breaking the
+    /// existing `Message::PreferencesMsg` plumbing. The handler
+    /// re-dispatches via `Message::Library(LibraryMessage::Settings)`.
+    LibrarySettings(crate::library::messages::SettingsMsg),
 }
 
 // ─── Dialog sizes ─────────────────────────────────────────────
@@ -128,6 +141,8 @@ pub fn view<'a>(
     custom_name: Option<&'a str>,
     dirty: bool,
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
+    distributor_settings: &'a crate::library::state::DistributorSettings,
+    panel_tokens: &'a signex_types::theme::ThemeTokens,
 ) -> Element<'a, PrefMsg> {
     let dialog = build_dialog(
         nav,
@@ -141,6 +156,8 @@ pub fn view<'a>(
         custom_name,
         dirty,
         erc_overrides,
+        distributor_settings,
+        panel_tokens,
     );
 
     container(
@@ -180,6 +197,8 @@ fn build_dialog<'a>(
     custom_name: Option<&'a str>,
     dirty: bool,
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
+    distributor_settings: &'a crate::library::state::DistributorSettings,
+    panel_tokens: &'a signex_types::theme::ThemeTokens,
 ) -> Element<'a, PrefMsg> {
     // ── Header ──
     let header = container(
@@ -225,6 +244,8 @@ fn build_dialog<'a>(
             draft_grid_style,
             custom_name,
             erc_overrides,
+            distributor_settings,
+            panel_tokens,
         ),
     ]
     .width(Length::Fill)
@@ -347,6 +368,7 @@ fn nav_item<'a>(item: PrefNav, active: PrefNav) -> Element<'a, PrefMsg> {
 
 // ─── Right content ────────────────────────────────────────────
 
+#[allow(clippy::too_many_arguments)]
 fn build_content<'a>(
     nav: PrefNav,
     draft_theme: ThemeId,
@@ -358,6 +380,8 @@ fn build_content<'a>(
     draft_grid_style: GridStyle,
     custom_name: Option<&'a str>,
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
+    distributor_settings: &'a crate::library::state::DistributorSettings,
+    panel_tokens: &'a signex_types::theme::ThemeTokens,
 ) -> Element<'a, PrefMsg> {
     let inner = match nav {
         PrefNav::Appearance => content_appearance(
@@ -371,6 +395,18 @@ fn build_content<'a>(
         ),
         PrefNav::SchematicEditor => content_schematic_editor(draft_grid_style),
         PrefNav::Erc => content_erc(erc_overrides),
+        // Library → Distributor APIs — the library subsystem owns
+        // the actual form
+        // (`crate::library::settings::distributor_apis::view`); we
+        // re-emit its `LibraryMessage::Settings(_)` wrapper as
+        // `PrefMsg::LibrarySettings(_)` so the Preferences modal's
+        // single message bus stays cohesive. The handler in
+        // `app/handlers/preferences.rs` re-dispatches via
+        // `Message::Library` to keep the canonical settings state on
+        // `LibraryState.settings`.
+        PrefNav::LibraryDistributors => {
+            content_library_distributors(distributor_settings, panel_tokens)
+        }
     };
 
     container(scrollable(inner).width(Length::Fill))
@@ -381,6 +417,43 @@ fn build_content<'a>(
             background: Some(Background::Color(CONTENT_BG)),
             ..container::Style::default()
         })
+        .into()
+}
+
+// ─── Library Distributor APIs page (live) ─────────────────
+
+/// Mount the live Distributor APIs panel inside the Preferences modal.
+///
+/// The panel emits `LibraryMessage::Settings(_)`; we wrap every
+/// message in `PrefMsg::LibrarySettings(_)` so the modal's outer
+/// `Message::PreferencesMsg(_)` map stays a single layer. The
+/// `app/handlers/preferences.rs` handler unwraps and re-dispatches
+/// via `Message::Library` so the canonical state writeback runs
+/// through the same dispatcher the Tools-menu surface uses.
+fn content_library_distributors<'a>(
+    settings: &'a crate::library::state::DistributorSettings,
+    tokens: &'a signex_types::theme::ThemeTokens,
+) -> Element<'a, PrefMsg> {
+    let header: Element<'a, PrefMsg> = column![
+        section_title("Library — Distributor APIs"),
+        Space::new().height(8),
+    ]
+    .padding([16, 20])
+    .into();
+
+    // The library panel returns `Element<'a, LibraryMessage>`. We
+    // map to `PrefMsg::LibrarySettings` for every Settings sub-
+    // variant; non-Settings library messages are ignored (they're
+    // never produced by `distributor_apis::view`).
+    let pane =
+        crate::library::settings::distributor_apis::view(settings, tokens).map(|lm| match lm {
+            crate::library::messages::LibraryMessage::Settings(s) => PrefMsg::LibrarySettings(s),
+            // distributor_apis::view never produces anything else.
+            _ => PrefMsg::Close,
+        });
+
+    column![header, container(pane).padding([0, 20]).width(Length::Fill)]
+        .spacing(0)
         .into()
 }
 

@@ -244,7 +244,7 @@ pub(crate) fn build_bookmarks(
                     }
                 }
                 if opts.bookmark_pins {
-                    // Historical formats don't store per-pin physical positions
+                    // Standard doesn't store per-pin physical positions
                     // separately from the parent symbol — render a
                     // pin entry per symbol-pin pair using the symbol
                     // anchor as the destination. Coarse but matches
@@ -305,7 +305,7 @@ pub(crate) fn emit_bookmarks(
             outline.last(bookmark_id(last));
         }
         // /Count = total visible items so the panel opens fully
-        // expanded — matches what Altium ship.
+        // expanded — matches what Standard eeschema and Altium ship.
         outline.count(bookmarks.len() as i32);
         outline.finish();
     }
@@ -476,6 +476,9 @@ mod tests {
             instances: vec![],
             footprint: String::new(),
             datasheet: String::new(),
+            library_id: None,
+            row_id: None,
+            library_version: String::new(),
         });
         sheet.labels.push(Label {
             uuid: uuid::Uuid::nil(),
@@ -490,7 +493,7 @@ mod tests {
         });
         ExportContext {
             sheets: vec![SheetSnapshot {
-                path: std::path::PathBuf::from("a.snxsch"),
+                path: std::path::PathBuf::from("a.standard_sch"),
                 schematic: sheet,
                 sheet_name: "Power".to_string(),
                 sheet_number: 1,
@@ -678,6 +681,9 @@ mod tests {
             instances: vec![],
             footprint: String::new(),
             datasheet: String::new(),
+            library_id: None,
+            row_id: None,
+            library_version: String::new(),
         };
         sym.pin_uuids.insert("1".to_string(), uuid::Uuid::nil());
         sym.pin_uuids.insert("2".to_string(), uuid::Uuid::nil());
@@ -685,7 +691,7 @@ mod tests {
 
         let ctx = ExportContext {
             sheets: vec![SheetSnapshot {
-                path: std::path::PathBuf::from("a.snxsch"),
+                path: std::path::PathBuf::from("a.standard_sch"),
                 schematic: sheet,
                 sheet_name: "Sheet1".to_string(),
                 sheet_number: 1,
@@ -749,9 +755,12 @@ mod tests {
                     instances: vec![],
                     footprint: String::new(),
                     datasheet: String::new(),
+                    library_id: None,
+                    row_id: None,
+                    library_version: String::new(),
                 });
                 sheets.push(SheetSnapshot {
-                    path: std::path::PathBuf::from(format!("sheet_{i}.snxsch")),
+                    path: std::path::PathBuf::from(format!("sheet_{i}.standard_sch")),
                     schematic: sheet,
                     sheet_name: format!("Sheet{}", i + 1),
                     sheet_number: i + 1,

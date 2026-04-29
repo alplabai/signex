@@ -481,6 +481,9 @@ mod tests {
             custom_properties: Vec::new(),
             pin_uuids: std::collections::HashMap::new(),
             instances: Vec::new(),
+            library_id: None,
+            row_id: None,
+            library_version: String::new(),
         }
     }
 

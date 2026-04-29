@@ -10,6 +10,10 @@ impl Signex {
                 self.finish_update()
             }
             Message::DeleteSelected => {
+                // Delete falls through to the schematic engine; the
+                // Component Preview tab is read-only and Footprint
+                // editing happens in the standalone `.snxfpt` tab,
+                // which owns its own delete handling.
                 self.handle_selection_delete_requested();
                 self.finish_update()
             }
@@ -55,11 +59,11 @@ impl Signex {
                 iced::Task::batch([task, self.finish_update()])
             }
             Message::SaveFileAs(path) => {
-                let task = self.handle_active_document_save_as_requested(path);
-                iced::Task::batch([task, self.finish_update()])
+                self.handle_active_document_save_as_requested(path);
+                self.finish_update()
             }
-            Message::SaveFileFinished(path, result) => {
-                self.handle_active_document_save_finished(path, result);
+            Message::SavePrimitiveAs { from_path, to_path } => {
+                self.handle_save_primitive_as(&from_path, &to_path);
                 self.finish_update()
             }
             Message::SchematicLoaded(sheet) => {

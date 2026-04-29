@@ -234,18 +234,29 @@ impl Signex {
         // - Container branch: everything else with children (Source
         //   Documents, Libraries, Settings folders).
         let is_root = path.len() == 1;
-        let is_openable_leaf = matches!(
-            node.icon,
-            TreeIcon::Schematic
-                | TreeIcon::Pcb
-                | TreeIcon::SnxSchematic
-                | TreeIcon::SnxPcb
-                | TreeIcon::SnxProject
-                | TreeIcon::SnxFootprint
-                | TreeIcon::SnxSimulation
-                | TreeIcon::SnxLibrary
-                | TreeIcon::SnxSymbol
-        );
+        // Library leaves under the project tree's
+        // `Libraries ▸ <name>.snxlib` row carry the SnxLibrary icon.
+        // The right-click menu for those rows is the Altium-style
+        // `Add New ▸ Component / Symbol / Footprint` submenu,
+        // which is distinct from the per-file open / explore / rename
+        // menu the rest of the openable-leaf icons share. Detect by
+        // icon + tree depth — the Libraries group sits two levels
+        // below the project root
+        // (path = `[project_idx, libraries_idx, library_idx]`).
+        let is_library_node = matches!(node.icon, TreeIcon::SnxLibrary) && path.len() == 3;
+        let is_openable_leaf = !is_library_node
+            && matches!(
+                node.icon,
+                TreeIcon::Schematic
+                    | TreeIcon::Pcb
+                    | TreeIcon::SnxSchematic
+                    | TreeIcon::SnxPcb
+                    | TreeIcon::SnxProject
+                    | TreeIcon::SnxFootprint
+                    | TreeIcon::SnxSimulation
+                    | TreeIcon::SnxLibrary
+                    | TreeIcon::SnxSymbol
+            );
         let is_container = !node.children.is_empty();
         let has_schematic = panel_ctx.has_schematic;
 
@@ -265,7 +276,11 @@ impl Signex {
                 .and_then(|p| p.path.parent())
                 .is_some();
 
-            items.push(self.ctx_menu_item_disabled(None, "Make Project Available Online...", Some("v3.4")));
+            items.push(self.ctx_menu_item_disabled(
+                None,
+                "Make Project Available Online...",
+                Some("v3.4"),
+            ));
             items.push(self.ctx_menu_item_disabled(None, "Validate Project", Some("v0.9")));
             let active_submenu = self.interaction_state.context_submenu;
             items.push(self.ctx_menu_item_submenu(
@@ -274,7 +289,11 @@ impl Signex {
                 ContextSubmenu::AddNewToProject,
                 active_submenu == Some(ContextSubmenu::AddNewToProject),
             ));
-            items.push(self.ctx_menu_item_disabled(None, "Add Existing to Project...", Some("v0.9")));
+            items.push(self.ctx_menu_item_disabled(
+                None,
+                "Add Existing to Project...",
+                Some("v0.9"),
+            ));
             items.push(self.save_menu_item(has_schematic));
             items.push(self.ctx_menu_item_disabled(None, "Rename...", Some("v0.9")));
             items.push(self.ctx_menu_sep());
@@ -306,13 +325,74 @@ impl Signex {
             });
             items.push(self.ctx_menu_sep());
             items.push(self.ctx_menu_item_disabled(None, "Variants...", Some("v1.1")));
-            items.push(self.ctx_menu_item_disabled(None, "History & Version Control", Some(SUBMENU_ARROW)));
+            items.push(self.ctx_menu_item_disabled(
+                None,
+                "History & Version Control",
+                Some(SUBMENU_ARROW),
+            ));
             items.push(self.ctx_menu_sep());
             items.push(self.ctx_menu_item_disabled(None, "Project Packager...", Some("v4.2")));
             items.push(self.ctx_menu_item_disabled(None, "Project Releaser...", Some("v5.2")));
             items.push(self.ctx_menu_sep());
             items.push(self.ctx_menu_item_disabled(None, "Share...", Some("v3.4")));
             items.push(self.ctx_menu_item_disabled(None, "Project Options...", Some("v0.9")));
+        } else if is_library_node {
+            // Library node menu — mirrors Altium's "Add New ▸"
+            // submenu: Component opens the New Component modal;
+            // Symbol / Footprint mint a fresh primitive via the
+            // adapter and open it as a standalone editor tab
+            // (see `handle_add_library_primitive`). The basic
+            // expand / refresh actions stay so empty libraries are
+            // still navigable from the keyboard.
+            items.push(self.ctx_menu_item_msg(
+                None,
+                "Add New ▸ Component",
+                "",
+                Message::Menu(crate::menu_bar::MenuMessage::AddLibraryComponent),
+            ));
+            items.push(self.ctx_menu_item_msg(
+                None,
+                "Add New ▸ Symbol",
+                "",
+                Message::Menu(crate::menu_bar::MenuMessage::AddLibrarySymbol),
+            ));
+            items.push(self.ctx_menu_item_msg(
+                None,
+                "Add New ▸ Footprint",
+                "",
+                Message::Menu(crate::menu_bar::MenuMessage::AddLibraryFootprint),
+            ));
+            items.push(self.ctx_menu_sep());
+            // Stage 18 distributor refresh stub — fires
+            // `LibraryRefreshAllPricing` so the wiring is observable
+            // even before the real adapter loop ships. Resolves the
+            // clicked library's `.snxlib` file via the project tree.
+            if let Some(lib_path) = self.library_node_path_from_tree(path.as_slice()) {
+                items.push(self.ctx_menu_item_msg(
+                    None,
+                    "Refresh All Pricing",
+                    "",
+                    Message::Library(crate::library::LibraryMessage::LibraryRefreshAllPricing(
+                        lib_path,
+                    )),
+                ));
+            } else {
+                items.push(self.ctx_menu_item_disabled(None, "Refresh All Pricing", None));
+            }
+            items.push(self.ctx_menu_sep());
+            let toggle_label = if node.expanded { "Collapse" } else { "Expand" };
+            items.push(self.ctx_menu_item_msg(
+                None,
+                toggle_label,
+                "",
+                Message::ProjectTreeAction(A::ToggleNode(path.clone())),
+            ));
+            items.push(self.ctx_menu_item_msg(
+                None,
+                "Refresh",
+                "",
+                Message::ProjectTreeAction(A::Refresh),
+            ));
         } else if is_openable_leaf {
             // Sheet / PCB / library leaf — Altium's per-document menu.
             // Rows match the Altium screenshot exactly: Open + Explore
@@ -334,11 +414,8 @@ impl Signex {
                 .and_then(|tab| tab.path.file_name())
                 .and_then(|f| f.to_str())
                 .zip(
-                    signex_widgets::tree_view::get_node(
-                        panel_ctx.project_tree.as_slice(),
-                        path,
-                    )
-                    .map(|n| n.label.as_str()),
+                    signex_widgets::tree_view::get_node(panel_ctx.project_tree.as_slice(), path)
+                        .map(|n| n.label.as_str()),
                 )
                 .is_some_and(|(active_name, clicked_label)| active_name == clicked_label);
 
@@ -390,7 +467,11 @@ impl Signex {
                 self.ctx_menu_item_disabled(None, "Print...", None)
             });
             items.push(self.ctx_menu_item_disabled(None, "Show Differences...", Some("v4.3")));
-            items.push(self.ctx_menu_item_disabled(None, "History & Version Control", Some(SUBMENU_ARROW)));
+            items.push(self.ctx_menu_item_disabled(
+                None,
+                "History & Version Control",
+                Some(SUBMENU_ARROW),
+            ));
         } else if is_container {
             // Source Documents / Libraries / Settings folders. These have
             // no Altium direct analogue (Altium groups these under the
@@ -446,10 +527,7 @@ impl Signex {
     /// "others" to close). The split / tile / merge rows from
     /// Altium's screenshot are intentionally left out: Signex's
     /// editor doesn't support split-pane layout yet.
-    fn view_tab_context_menu(
-        &self,
-        ctx: &crate::app::TabContextMenuState,
-    ) -> Element<'_, Message> {
+    fn view_tab_context_menu(&self, ctx: &crate::app::TabContextMenuState) -> Element<'_, Message> {
         use crate::app::TabContextAction as A;
 
         let panel_ctx = &self.document_state.panel_ctx;
@@ -466,11 +544,10 @@ impl Signex {
         // does too) — undocking a sole tab leaves the main window
         // empty, which is fine.
         use super::state::WindowKind;
-        let already_undocked = self
-            .ui_state
-            .windows
-            .values()
-            .any(|kind| matches!(kind, WindowKind::UndockedTab { path, .. } if *path == tab.path));
+        let already_undocked =
+            self.ui_state.windows.values().any(
+                |kind| matches!(kind, WindowKind::UndockedTab { path, .. } if *path == tab.path),
+            );
 
         items.push(self.ctx_menu_item_msg(
             None,
@@ -528,6 +605,26 @@ impl Signex {
         } else {
             self.ctx_menu_item_disabled(None, "Save", None)
         }
+    }
+
+    /// Resolve the on-disk `.snxlib` path for a project-tree library
+    /// node click. The tree path under the `Libraries` group is
+    /// `[project_idx, libraries_branch_idx, library_idx]` — the
+    /// matching project's `LibraryNodeInfo[library_idx].root` carries
+    /// the absolute path. Returns `None` when the path doesn't sit at
+    /// a library leaf (defensive — `view_project_tree_context_menu`
+    /// already gates on `is_library_node`, but the icon-by-depth
+    /// detection there isn't strict enough to skip the lookup).
+    fn library_node_path_from_tree(&self, tree_path: &[usize]) -> Option<std::path::PathBuf> {
+        let project_idx = *tree_path.first()?;
+        let library_idx = *tree_path.get(2)?;
+        self.document_state
+            .panel_ctx
+            .projects
+            .get(project_idx)?
+            .libraries
+            .get(library_idx)
+            .map(|lib| lib.root.clone())
     }
 
     /// Build the 26-wide icon column for a context-menu row. Mirrors
@@ -941,21 +1038,26 @@ impl Signex {
                 ));
             }
             ContextSubmenu::AddNewToProject => {
-                // Altium parity: this is the master "Add New" picker for
-                // the active project. Every entry below requires
-                // project-file write support (v0.9) plus the matching
-                // editor — none ship in v0.8, so each row carries a
-                // version badge and stays disabled. The submenu still
-                // launches so the user can see what's coming.
+                // Altium parity: this is the master "Add New" picker
+                // for the active project. The Component Library row
+                // wires through to `commands::create_library`; the
+                // other rows stay version-badged stubs until their
+                // respective editors land.
                 items.push(self.ctx_menu_item_disabled(
                     Some(ic::icon_dd_wire(tid)),
                     "Schematic",
                     Some("v0.9"),
                 ));
-                items.push(self.ctx_menu_item_disabled(
+                // Component Library is the Altium-style replacement
+                // for the legacy "Schematic Library" row. Wired
+                // through the menu bridge so the existing menu
+                // dispatcher resolves the active project and emits
+                // `LibraryMessage::CreateLibraryAt(...)`.
+                items.push(self.ctx_menu_item_msg(
                     Some(ic::icon_component(tid)),
-                    "Schematic Library",
-                    Some("v0.9"),
+                    "Component Library",
+                    "",
+                    Message::Menu(crate::menu_bar::MenuMessage::AddComponentLibrary),
                 ));
                 items.push(self.ctx_menu_item_disabled(
                     Some(ic::icon_dd_part_actions(tid)),
@@ -1113,10 +1215,10 @@ impl Signex {
     fn view_print_preview_inner(&self, draggable: bool) -> Element<'_, Message> {
         use crate::app::state::{ModalId, PdfPreviewTab};
         use crate::app::view::dialogs::{
-            close_x_button, detached_header, draggable_header, MODAL_HEADER_HEIGHT,
-            MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE,
+            MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE, close_x_button,
+            detached_header, draggable_header,
         };
-        use iced::widget::{button, column, container, row, text, Space};
+        use iced::widget::{Space, button, column, container, row, text};
         let theme_id = self.ui_state.theme_id;
 
         let preview = match &self.document_state.preview {
@@ -1132,7 +1234,9 @@ impl Signex {
         // Header — same chrome as every other modal.
         let header_content: Element<'_, Message> = container(
             row![
-                text("Export PDF").size(MODAL_HEADER_TITLE_SIZE).color(text_c),
+                text("Export PDF")
+                    .size(MODAL_HEADER_TITLE_SIZE)
+                    .color(text_c),
                 Space::new().width(Length::Fill),
                 close_x_button(Message::PrintPreviewClose, theme_id, text_muted),
             ]
@@ -1208,12 +1312,9 @@ impl Signex {
     /// the active tab, fill that fades for inactive. `is_last=true`
     /// on the rightmost so the trailing border doesn't double up
     /// against an adjacent tab's left edge.
-    fn view_pdf_tab_strip(
-        &self,
-        active: crate::app::state::PdfPreviewTab,
-    ) -> Element<'_, Message> {
+    fn view_pdf_tab_strip(&self, active: crate::app::state::PdfPreviewTab) -> Element<'_, Message> {
         use crate::app::state::PdfPreviewTab;
-        use iced::widget::{container, mouse_area, row, text, Space};
+        use iced::widget::{Space, container, mouse_area, row, text};
         use signex_widgets::tab_pill::{AccentPosition, TabPill, TabPillStyle};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
@@ -1244,8 +1345,7 @@ impl Signex {
                 is_last,
                 accent_position: AccentPosition::Bottom,
             };
-            let inner = container(text(label).size(12).color(label_color))
-                .padding([6, 18]);
+            let inner = container(text(label).size(12).color(label_color)).padding([6, 18]);
             mouse_area(TabPill::new(inner, style))
                 .on_press(Message::PrintPreviewSetTab(this))
                 .interaction(iced::mouse::Interaction::Pointer)
@@ -1271,8 +1371,8 @@ impl Signex {
         preview: &crate::app::state::PreviewState,
     ) -> Element<'_, Message> {
         use iced::widget::{
-            button, checkbox, column, container, image, mouse_area, row, scrollable, text,
-            text_input, Space,
+            Space, button, checkbox, column, container, image, mouse_area, row, scrollable, text,
+            text_input,
         };
         let tokens = &self.document_state.panel_ctx.tokens;
         let panel_bg = crate::styles::ti(tokens.panel_bg);
@@ -1320,17 +1420,26 @@ impl Signex {
             text("Colour").size(11).color(text_muted),
             mode_button(
                 "Color",
-                matches!(preview.pdf_options.colour_mode, signex_output::ColourMode::Colour),
+                matches!(
+                    preview.pdf_options.colour_mode,
+                    signex_output::ColourMode::Colour
+                ),
                 Message::PrintPreviewSetColourMode(signex_output::ColourMode::Colour),
             ),
             mode_button(
                 "Gray",
-                matches!(preview.pdf_options.colour_mode, signex_output::ColourMode::Grayscale),
+                matches!(
+                    preview.pdf_options.colour_mode,
+                    signex_output::ColourMode::Grayscale
+                ),
                 Message::PrintPreviewSetColourMode(signex_output::ColourMode::Grayscale),
             ),
             mode_button(
                 "B/W",
-                matches!(preview.pdf_options.colour_mode, signex_output::ColourMode::BlackAndWhite),
+                matches!(
+                    preview.pdf_options.colour_mode,
+                    signex_output::ColourMode::BlackAndWhite
+                ),
                 Message::PrintPreviewSetColourMode(signex_output::ColourMode::BlackAndWhite),
             ),
         ]
@@ -1341,17 +1450,26 @@ impl Signex {
             text("Pages").size(11).color(text_muted),
             mode_button(
                 "All",
-                matches!(preview.pdf_options.page_range, signex_output::PageRange::All),
+                matches!(
+                    preview.pdf_options.page_range,
+                    signex_output::PageRange::All
+                ),
                 Message::PrintPreviewSetPageRangeAll,
             ),
             mode_button(
                 "Current",
-                matches!(preview.pdf_options.page_range, signex_output::PageRange::Current),
+                matches!(
+                    preview.pdf_options.page_range,
+                    signex_output::PageRange::Current
+                ),
                 Message::PrintPreviewSetPageRangeCurrent,
             ),
             mode_button(
                 "Specific",
-                matches!(preview.pdf_options.page_range, signex_output::PageRange::Specific(_)),
+                matches!(
+                    preview.pdf_options.page_range,
+                    signex_output::PageRange::Specific(_)
+                ),
                 Message::PrintPreviewSetPageRangeSpecific,
             ),
         ]
@@ -1366,9 +1484,9 @@ impl Signex {
                 text("Page").size(11).color(text_muted),
                 text_input("1", &preview.specific_page_input)
                     .on_input(Message::PrintPreviewSetSpecificPageInput)
-                .padding([4, 8])
-                .size(12)
-                .width(80),
+                    .padding([4, 8])
+                    .size(12)
+                    .width(80),
             ]
             .spacing(8)
             .align_y(iced::Alignment::Center)
@@ -1611,7 +1729,7 @@ impl Signex {
         &self,
         preview: &crate::app::state::PreviewState,
     ) -> Element<'_, Message> {
-        use iced::widget::{column, scrollable, Space};
+        use iced::widget::{Space, column, scrollable};
         let body = column![
             self.view_pdf_files_section(preview),
             Space::new().height(10),
@@ -1655,7 +1773,7 @@ impl Signex {
         &self,
         preview: &crate::app::state::PreviewState,
     ) -> Element<'_, Message> {
-        use iced::widget::{button, checkbox, column, container, row, scrollable, text, Space};
+        use iced::widget::{Space, button, checkbox, column, container, row, scrollable, text};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
@@ -1679,7 +1797,7 @@ impl Signex {
             column![].spacing(2).padding([8, 12]);
         if project_sheets.is_empty() {
             file_list = file_list.push(
-                text("No project loaded — load a .snxprj to pick files.")
+                text("No project loaded — load a .standard_pro to pick files.")
                     .size(11)
                     .color(text_muted),
             );
@@ -1758,30 +1876,23 @@ impl Signex {
         &self,
         preview: &crate::app::state::PreviewState,
     ) -> Element<'_, Message> {
-        use iced::widget::{checkbox, column, container, row, text, Space};
+        use iced::widget::{Space, checkbox, column, container, row, text};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let opts = &preview.pdf_options;
 
-        let variant_label = opts
-            .variant
-            .clone()
-            .unwrap_or_else(|| "Base".to_string());
+        let variant_label = opts.variant.clone().unwrap_or_else(|| "Base".to_string());
         let mut variant_options: Vec<String> = vec!["Base".to_string()];
         variant_options.extend(preview.variants.clone());
         variant_options.dedup();
-        let variant_picker = iced::widget::pick_list(
-            variant_options,
-            Some(variant_label),
-            |s| {
-                if s.eq_ignore_ascii_case("Base") {
-                    Message::PrintPreviewSetVariant(None)
-                } else {
-                    Message::PrintPreviewSetVariant(Some(s))
-                }
-            },
-        )
+        let variant_picker = iced::widget::pick_list(variant_options, Some(variant_label), |s| {
+            if s.eq_ignore_ascii_case("Base") {
+                Message::PrintPreviewSetVariant(None)
+            } else {
+                Message::PrintPreviewSetVariant(Some(s))
+            }
+        })
         .text_size(11)
         .width(220);
 
@@ -1840,7 +1951,7 @@ impl Signex {
         preview: &crate::app::state::PreviewState,
     ) -> Element<'_, Message> {
         use crate::app::state::PdfQuality;
-        use iced::widget::{checkbox, column, container, row, text, Space};
+        use iced::widget::{Space, checkbox, column, container, row, text};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
@@ -1893,9 +2004,21 @@ impl Signex {
             row![
                 Space::new().width(14),
                 column![
-                    lbl_check("Pins", opts.bookmark_pins, Message::PrintPreviewSetBookmarkPins),
-                    lbl_check("Net Labels", opts.bookmark_net_labels, Message::PrintPreviewSetBookmarkNetLabels),
-                    lbl_check("Ports", opts.bookmark_ports, Message::PrintPreviewSetBookmarkPorts),
+                    lbl_check(
+                        "Pins",
+                        opts.bookmark_pins,
+                        Message::PrintPreviewSetBookmarkPins
+                    ),
+                    lbl_check(
+                        "Net Labels",
+                        opts.bookmark_net_labels,
+                        Message::PrintPreviewSetBookmarkNetLabels
+                    ),
+                    lbl_check(
+                        "Ports",
+                        opts.bookmark_ports,
+                        Message::PrintPreviewSetBookmarkPorts
+                    ),
                 ]
                 .spacing(2),
             ],
@@ -1916,19 +2039,47 @@ impl Signex {
         let schematics_include_col = column![
             text("Schematics include").size(11).color(text_c),
             Space::new().height(4),
-            lbl_check("No-ERC Markers", opts.include_no_erc_markers, Message::PrintPreviewSetIncludeNoErcMarkers),
-            lbl_check("Parameter Sets", opts.include_parameter_sets, Message::PrintPreviewSetIncludeParameterSets),
-            lbl_check("Probes", opts.include_probes, Message::PrintPreviewSetIncludeProbes),
-            lbl_check("Blankets", opts.include_blankets, Message::PrintPreviewSetIncludeBlankets),
-            lbl_check("Notes", opts.include_notes, Message::PrintPreviewSetIncludeNotes),
+            lbl_check(
+                "No-ERC Markers",
+                opts.include_no_erc_markers,
+                Message::PrintPreviewSetIncludeNoErcMarkers
+            ),
+            lbl_check(
+                "Parameter Sets",
+                opts.include_parameter_sets,
+                Message::PrintPreviewSetIncludeParameterSets
+            ),
+            lbl_check(
+                "Probes",
+                opts.include_probes,
+                Message::PrintPreviewSetIncludeProbes
+            ),
+            lbl_check(
+                "Blankets",
+                opts.include_blankets,
+                Message::PrintPreviewSetIncludeBlankets
+            ),
+            lbl_check(
+                "Notes",
+                opts.include_notes,
+                Message::PrintPreviewSetIncludeNotes
+            ),
             row![
                 Space::new().width(14),
-                lbl_check("Collapsed notes", opts.include_collapsed_notes, Message::PrintPreviewSetIncludeCollapsedNotes),
+                lbl_check(
+                    "Collapsed notes",
+                    opts.include_collapsed_notes,
+                    Message::PrintPreviewSetIncludeCollapsedNotes
+                ),
             ],
             Space::new().height(8),
             text("Quality").size(11).color(text_c),
             iced::widget::pick_list(
-                vec![PdfQuality::Draft72, PdfQuality::Medium300, PdfQuality::High600],
+                vec![
+                    PdfQuality::Draft72,
+                    PdfQuality::Medium300,
+                    PdfQuality::High600
+                ],
                 Some(preview.quality),
                 Message::PrintPreviewSetQuality,
             )
@@ -1949,15 +2100,45 @@ impl Signex {
         let sch_color_col = column![
             text("Schematics Color Mode").size(11).color(text_c),
             Space::new().height(4),
-            radio("Color", signex_output::ColourMode::Colour, opts.colour_mode, Message::PrintPreviewSetColourMode),
-            radio("Greyscale", signex_output::ColourMode::Grayscale, opts.colour_mode, Message::PrintPreviewSetColourMode),
-            radio("Monochrome", signex_output::ColourMode::BlackAndWhite, opts.colour_mode, Message::PrintPreviewSetColourMode),
+            radio(
+                "Color",
+                signex_output::ColourMode::Colour,
+                opts.colour_mode,
+                Message::PrintPreviewSetColourMode
+            ),
+            radio(
+                "Greyscale",
+                signex_output::ColourMode::Grayscale,
+                opts.colour_mode,
+                Message::PrintPreviewSetColourMode
+            ),
+            radio(
+                "Monochrome",
+                signex_output::ColourMode::BlackAndWhite,
+                opts.colour_mode,
+                Message::PrintPreviewSetColourMode
+            ),
             Space::new().height(8),
             text("PCB Color Mode").size(11).color(text_c),
             Space::new().height(4),
-            radio("Color", signex_output::ColourMode::Colour, opts.pcb_colour_mode, Message::PrintPreviewSetPcbColourMode),
-            radio("Greyscale", signex_output::ColourMode::Grayscale, opts.pcb_colour_mode, Message::PrintPreviewSetPcbColourMode),
-            radio("Monochrome", signex_output::ColourMode::BlackAndWhite, opts.pcb_colour_mode, Message::PrintPreviewSetPcbColourMode),
+            radio(
+                "Color",
+                signex_output::ColourMode::Colour,
+                opts.pcb_colour_mode,
+                Message::PrintPreviewSetPcbColourMode
+            ),
+            radio(
+                "Greyscale",
+                signex_output::ColourMode::Grayscale,
+                opts.pcb_colour_mode,
+                Message::PrintPreviewSetPcbColourMode
+            ),
+            radio(
+                "Monochrome",
+                signex_output::ColourMode::BlackAndWhite,
+                opts.pcb_colour_mode,
+                Message::PrintPreviewSetPcbColourMode
+            ),
         ]
         .spacing(2);
 
@@ -2001,6 +2182,34 @@ impl Signex {
                         .padding(8)
                         .into()
                 }
+                // Detached Component Preview window — render the same
+                // editor surface as the inline tab. The editor state
+                // is keyed by `EditorAddress(library_path, table,
+                // row_id)` so the inline + detached cases share a
+                // single state owner.
+                super::state::WindowKind::ComponentEditor {
+                    library_path,
+                    table,
+                    row_id,
+                } => {
+                    let tokens = &self.document_state.panel_ctx.tokens;
+                    let address = crate::library::state::EditorAddress::new(
+                        library_path.clone(),
+                        table.clone(),
+                        *row_id,
+                    );
+                    if let Some(editor) = self.library.editors.get(&address) {
+                        crate::library::editor::view(editor, &self.library, tokens, address)
+                            .map(Message::Library)
+                    } else {
+                        // Window mapping exists but the editor state
+                        // has been dropped (rare race during teardown
+                        // — the tab close path can run ahead of the
+                        // OS window close). Render an empty container
+                        // so the daemon doesn't panic.
+                        iced::widget::container(iced::widget::Space::new()).into()
+                    }
+                }
             };
         }
         self.view_main_for(window_id)
@@ -2024,15 +2233,18 @@ impl Signex {
         // glyphs that were removed when the tab right-click menu
         // landed.
         let pill_style = TabPillStyle {
-            fill: iced::Color { a: 0.88, ..active_bg },
+            fill: iced::Color {
+                a: 0.88,
+                ..active_bg
+            },
             border: crate::styles::ti(tokens.border),
             accent,
             is_active: true,
             is_last: true,
             accent_position: AccentPosition::Bottom,
         };
-        let inner = container(row![text(title.to_string()).size(11).color(text_c)])
-            .padding([4, 10]);
+        let inner =
+            container(row![text(title.to_string()).size(11).color(text_c)]).padding([4, 10]);
         let pill = TabPill::new(inner, pill_style);
         // Anchor near the cursor (right + below) so the pointer
         // remains visible while the ghost trails it.
@@ -2397,7 +2609,7 @@ impl Signex {
                 .height(iced::Length::Fixed(560.0)),
             )
             .style(crate::styles::modal_card(tokens))
-        .clip(true)
+            .clip(true)
             .into();
         };
         let doc = engine.document();
@@ -3006,28 +3218,27 @@ impl Signex {
     /// emitting `StartDetachedModalResize { modal, direction }`
     /// so it dispatches to the right OS window. Used as a stack
     /// layer above the modal's body in `view_detached_modal`.
-    fn detached_modal_resize_overlay<'a>(
-        modal: super::state::ModalId,
-    ) -> Element<'a, Message> {
+    fn detached_modal_resize_overlay<'a>(modal: super::state::ModalId) -> Element<'a, Message> {
         use iced::mouse::Interaction;
         use iced::widget::{Space, column, mouse_area, row};
         use iced::window::Direction;
 
         const EDGE: f32 = 6.0;
 
-        let straight =
-            move |direction: Direction, cursor: Interaction, horizontal: bool|
-                -> Element<'a, Message> {
-                let (w, h) = if horizontal {
-                    (Length::Fill, Length::Fixed(EDGE))
-                } else {
-                    (Length::Fixed(EDGE), Length::Fill)
-                };
-                mouse_area(Space::new().width(w).height(h))
-                    .on_press(Message::StartDetachedModalResize { modal, direction })
-                    .interaction(cursor)
-                    .into()
+        let straight = move |direction: Direction,
+                             cursor: Interaction,
+                             horizontal: bool|
+              -> Element<'a, Message> {
+            let (w, h) = if horizontal {
+                (Length::Fill, Length::Fixed(EDGE))
+            } else {
+                (Length::Fixed(EDGE), Length::Fill)
             };
+            mouse_area(Space::new().width(w).height(h))
+                .on_press(Message::StartDetachedModalResize { modal, direction })
+                .interaction(cursor)
+                .into()
+        };
         let corner = move |direction: Direction, cursor: Interaction| -> Element<'a, Message> {
             mouse_area(
                 Space::new()
@@ -3143,23 +3354,6 @@ impl Signex {
             ui.bottom_height,
         );
 
-        // v0.9.1 status bar: show "Saving…" while the off-thread
-        // disk write is in flight, fall through to a stale
-        // `save_error` message for ~3 s otherwise. `save_message` is
-        // borrowed; status_bar::view treats `None` as "render the
-        // normal bar".
-        let save_message: Option<&str> = if !ui.saving_paths.is_empty() {
-            Some("Saving…")
-        } else if let Some((msg, t)) = ui.save_error.as_ref() {
-            if t.elapsed() < std::time::Duration::from_secs(3) {
-                Some(msg.as_str())
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
         let status = status_bar::view(
             ui.cursor_x,
             ui.cursor_y,
@@ -3170,7 +3364,6 @@ impl Signex {
             &interaction.current_tool,
             ui.grid_size_mm,
             &document.panel_ctx.tokens,
-            save_message,
         )
         .map(Message::StatusBar);
 
@@ -3222,9 +3415,7 @@ impl Signex {
             container(iced::widget::Space::new())
                 .width(Length::Fill)
                 .height(1)
-                .style(crate::styles::chrome_separator(
-                    &document.panel_ctx.tokens,
-                )),
+                .style(crate::styles::chrome_separator(&document.panel_ctx.tokens)),
         );
         if !document.tabs.is_empty() && !visible_paths.is_empty() {
             // Resolve "really dragging" — Some only after the
@@ -3262,9 +3453,7 @@ impl Signex {
             let placeholder = container(iced::widget::Space::new())
                 .width(Length::Fill)
                 .height(26)
-                .style(crate::styles::toolbar_strip(
-                    &document.panel_ctx.tokens,
-                ));
+                .style(crate::styles::toolbar_strip(&document.panel_ctx.tokens));
             main = main.push(placeholder);
         }
         let main = main
@@ -3303,7 +3492,26 @@ impl Signex {
             || ui.erc_dialog_open
             || !document.dock.floating.is_empty()
             || dragging_tab
-            || ui.net_color_custom.show;
+            || ui.net_color_custom.show
+            // Library-side modals (New Component, Place Component picker,
+            // Pick Symbol/Footprint primitive picker) can be triggered
+            // from non-canvas contexts — e.g. the Library Browser tab's
+            // Add Component button. Without these flags the overlay
+            // Stack would never be built and the modal layer in
+            // collect_overlays would silently no-op.
+            || self.library.new_component.is_some()
+            || self.library.picker.is_some()
+            || self.library.primitive_picker.is_some()
+            || self.library.close_library_confirm.is_some()
+            || self.library.document_options.is_some()
+            || self.library.recovery.is_some()
+            || self.library.create_options.is_some()
+            || self.library.library_updates.is_some()
+            || self
+                .library
+                .library_browsers
+                .values()
+                .any(|s| s.edit_modal.is_some() || s.delete_confirm.is_some());
 
         if needs_overlay {
             let mut overlays = self.collect_overlays();
@@ -3318,9 +3526,7 @@ impl Signex {
                 let (mx, my) = interaction.last_mouse_pos;
                 let dx = mx - ox;
                 let dy = my - oy;
-                if dx * dx + dy * dy
-                    > DRAG_GHOST_THRESHOLD_PX * DRAG_GHOST_THRESHOLD_PX
-                {
+                if dx * dx + dy * dy > DRAG_GHOST_THRESHOLD_PX * DRAG_GHOST_THRESHOLD_PX {
                     overlays.push(self.view_tab_drag_ghost(&tab.title));
                 }
             }
@@ -3430,7 +3636,7 @@ impl Signex {
         let panel = self
             .document_state
             .dock
-            .view_region(pos, &self.document_state.panel_ctx)
+            .view_region(pos, &self.document_state.panel_ctx, &self.library)
             .map(Message::Dock);
         let width = if !has_panels {
             0.0
@@ -3458,7 +3664,7 @@ impl Signex {
         let panel = self
             .document_state
             .dock
-            .view_region(pos, &self.document_state.panel_ctx)
+            .view_region(pos, &self.document_state.panel_ctx, &self.library)
             .map(Message::Dock);
         let height = if !has_panels {
             0.0
@@ -3511,6 +3717,101 @@ impl Signex {
 
     fn view_center(&self, window_id: iced::window::Id) -> Element<'_, Message> {
         let is_main = self.ui_state.main_window_id == Some(window_id);
+
+        // When the active tab is a Component Preview, render the
+        // editor inside the main window's content pane. The same
+        // surface lights up via the `WindowKind::ComponentEditor`
+        // branch in `view()` when the user undocks the tab into its
+        // own OS window.
+        if is_main
+            && let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
+            && let Some(editor_id) = active_tab.kind.as_component_editor()
+        {
+            let tokens = &self.document_state.panel_ctx.tokens;
+            let address = crate::library::state::EditorAddress::new(
+                editor_id.library_path.clone(),
+                editor_id.table.clone(),
+                editor_id.row_id,
+            );
+            return if let Some(editor) = self.library.editors.get(&address) {
+                crate::library::editor::view(editor, &self.library, tokens, address)
+                    .map(Message::Library)
+            } else {
+                container(
+                    column![
+                        iced::widget::text("Component Editor — state not yet loaded")
+                            .size(13)
+                            .color(crate::styles::ti(tokens.text_secondary)),
+                    ]
+                    .spacing(4)
+                    .align_x(iced::Alignment::Center),
+                )
+                .center(Length::Fill)
+                .style(crate::styles::panel_region(tokens))
+                .into()
+            };
+        }
+
+        // Standalone primitive editor tabs. `.snxsym` / `.snxfpt`
+        // open as main-window document tabs alongside `.snxsch` /
+        // `.snxpcb`. Lookup is path-keyed via
+        // `DocumentState.symbol_editors` / `footprint_editors`.
+        if is_main
+            && let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
+        {
+            if let Some(path) = active_tab.kind.as_symbol_editor()
+                && let Some(editor) = self.document_state.symbol_editors.get(path)
+            {
+                let panel_ctx = &self.document_state.panel_ctx;
+                // Per-library display settings — Altium-style
+                // Document Options. Resolve the `.snxlib/` ancestor
+                // of the symbol's path so every primitive editor
+                // opened from the same library shares the same
+                // grid / unit / background. Lone-file edits (no
+                // mounted library) get safe defaults.
+                let display = self
+                    .library
+                    .containing_library(path)
+                    .map(|lib| lib.display)
+                    .unwrap_or_default();
+                let theme_id = self.ui_state.theme_id;
+                return crate::library::editor::standalone::view_symbol(
+                    editor, panel_ctx, display, theme_id,
+                )
+                .map(Message::Library);
+            }
+            if let Some(path) = active_tab.kind.as_footprint_editor()
+                && let Some(editor) = self.document_state.footprint_editors.get(path)
+            {
+                let tokens = &self.document_state.panel_ctx.tokens;
+                return crate::library::editor::standalone::view_footprint(editor, tokens)
+                    .map(Message::Library);
+            }
+            // Library Browser tab — `.snxlib` opened as a main-window
+            // tab. Per-tab state lives in
+            // `LibraryState.library_browsers` keyed by the same path
+            // that lives on `TabInfo.path`.
+            if let Some(path) = active_tab.kind.as_library_browser() {
+                let tokens = &self.document_state.panel_ctx.tokens;
+                if let Some(browser) = self.library.library_browsers.get(path) {
+                    return crate::library::browser::view(path, &self.library, browser, tokens)
+                        .map(Message::Library);
+                } else {
+                    // Fallback when somehow the browser-state map is
+                    // out of sync with the tabs vector. Keeps the tab
+                    // renderable rather than crashing.
+                    return container(
+                        iced::widget::text("Library Browser — state not yet loaded")
+                            .size(13)
+                            .color(crate::styles::ti(tokens.text_secondary)),
+                    )
+                    .center(Length::Fill)
+                    .style(crate::styles::panel_region(tokens))
+                    .into();
+                }
+            }
+        }
+
         let has_schematic = if is_main {
             self.has_active_schematic()
         } else {
@@ -3548,12 +3849,10 @@ impl Signex {
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .into()
-        } else if self.has_active_library() {
-            self.view_library_browser()
         } else {
             // Distinguish "nothing loaded at all" from "project loaded,
             // but no document picked yet" — the second case is what
-            // the user sees right after opening a .snxprj before
+            // the user sees right after opening a .standard_pro before
             // clicking any node in the project tree.
             let (title, hint) = if self.document_state.active_project.is_some() {
                 (
@@ -3584,139 +3883,6 @@ impl Signex {
             ))
             .into()
         }
-    }
-
-    /// v0.10.0 — read-only Library Browser tab body.
-    ///
-    /// Layout: header strip (library name + component count) + a
-    /// virtualised-style table of components. Columns: Name, Value,
-    /// Footprint, Description. v0.10.1 adds a side preview pane;
-    /// v0.10.2 adds a filter bar above the table.
-    fn view_library_browser(&self) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
-        let Some(library) = self.active_library() else {
-            return container(iced::widget::text("Library not loaded").size(13))
-                .center(Length::Fill)
-                .style(crate::styles::panel_region(tokens))
-                .into();
-        };
-
-        let header = {
-            let title_text = if library.name.is_empty() {
-                "Library".to_string()
-            } else {
-                library.name.clone()
-            };
-            let count_text = format!("{} component(s)", library.components.len());
-            let mut title_row = column![
-                iced::widget::text(title_text)
-                    .size(15)
-                    .color(crate::styles::ti(tokens.text)),
-                iced::widget::text(count_text)
-                    .size(11)
-                    .color(crate::styles::ti(tokens.text_secondary)),
-            ]
-            .spacing(2);
-            if !library.description.is_empty() {
-                title_row = title_row.push(
-                    iced::widget::text(library.description.clone())
-                        .size(11)
-                        .color(crate::styles::ti(tokens.text_secondary)),
-                );
-            }
-            container(title_row)
-                .padding([10, 14])
-                .width(Length::Fill)
-                .style(crate::styles::panel_region(tokens))
-        };
-
-        // Column widths chosen empirically for the v0.10.0 scaffold;
-        // v0.10.2 will swap the static layout for resizable columns
-        // backed by the filter UI.
-        const NAME_WIDTH: f32 = 220.0;
-        const VALUE_WIDTH: f32 = 140.0;
-        const FOOTPRINT_WIDTH: f32 = 180.0;
-
-        let header_row = container(
-            row![
-                iced::widget::text("Name")
-                    .size(12)
-                    .width(Length::Fixed(NAME_WIDTH))
-                    .color(crate::styles::ti(tokens.text_secondary)),
-                iced::widget::text("Value")
-                    .size(12)
-                    .width(Length::Fixed(VALUE_WIDTH))
-                    .color(crate::styles::ti(tokens.text_secondary)),
-                iced::widget::text("Footprint")
-                    .size(12)
-                    .width(Length::Fixed(FOOTPRINT_WIDTH))
-                    .color(crate::styles::ti(tokens.text_secondary)),
-                iced::widget::text("Description")
-                    .size(12)
-                    .width(Length::Fill)
-                    .color(crate::styles::ti(tokens.text_secondary)),
-            ]
-            .spacing(8),
-        )
-        .padding([8, 14])
-        .width(Length::Fill)
-        .style(crate::styles::panel_region(tokens));
-
-        let mut rows: Vec<Element<'_, Message>> = Vec::with_capacity(library.components.len());
-        for component in &library.components {
-            let name = if component.name.is_empty() {
-                "(unnamed)".to_string()
-            } else {
-                component.name.clone()
-            };
-            rows.push(
-                container(
-                    row![
-                        iced::widget::text(name)
-                            .size(12)
-                            .width(Length::Fixed(NAME_WIDTH))
-                            .color(crate::styles::ti(tokens.text)),
-                        iced::widget::text(component.value.clone())
-                            .size(12)
-                            .width(Length::Fixed(VALUE_WIDTH))
-                            .color(crate::styles::ti(tokens.text)),
-                        iced::widget::text(component.footprint_name.clone())
-                            .size(12)
-                            .width(Length::Fixed(FOOTPRINT_WIDTH))
-                            .color(crate::styles::ti(tokens.text)),
-                        iced::widget::text(component.description.clone())
-                            .size(12)
-                            .width(Length::Fill)
-                            .color(crate::styles::ti(tokens.text_secondary)),
-                    ]
-                    .spacing(8),
-                )
-                .padding([6, 14])
-                .width(Length::Fill)
-                .into(),
-            );
-        }
-
-        let body: Element<'_, Message> = if rows.is_empty() {
-            container(
-                iced::widget::text("No components in this library.")
-                    .size(12)
-                    .color(crate::styles::ti(tokens.text_secondary)),
-            )
-            .center(Length::Fill)
-            .into()
-        } else {
-            iced::widget::scrollable(column(rows).spacing(0))
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .into()
-        };
-
-        container(column![header, header_row, body].spacing(0))
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .style(crate::styles::panel_region(tokens))
-            .into()
     }
 
     fn dismiss_layer(on_press: Message) -> Element<'static, Message> {
@@ -3768,19 +3934,23 @@ impl Signex {
         // window (see `handle_print_preview_requested → handle_detach_modal`)
         // so it can be dragged outside the app's client area. Only fall
         // back to the in-window overlay if the OS window failed to open.
-        let preview_detached = ui
-            .windows
-            .values()
-            .any(|kind| matches!(kind, super::state::WindowKind::DetachedModal(super::state::ModalId::PrintPreview)));
+        let preview_detached = ui.windows.values().any(|kind| {
+            matches!(
+                kind,
+                super::state::WindowKind::DetachedModal(super::state::ModalId::PrintPreview)
+            )
+        });
         if document.preview.is_some() && !preview_detached {
             layers.push(self.view_print_preview());
         }
 
         // BOM preview overlay — same detach-first pattern as Print Preview.
-        let bom_detached = ui
-            .windows
-            .values()
-            .any(|kind| matches!(kind, super::state::WindowKind::DetachedModal(super::state::ModalId::BomPreview)));
+        let bom_detached = ui.windows.values().any(|kind| {
+            matches!(
+                kind,
+                super::state::WindowKind::DetachedModal(super::state::ModalId::BomPreview)
+            )
+        });
         if document.bom_preview.is_some() && !bom_detached {
             layers.push(self.view_bom_preview());
         }
@@ -4329,7 +4499,11 @@ impl Signex {
         }
 
         for i in 0..document.dock.floating.len() {
-            if let Some(panel_widget) = document.dock.view_floating_panel(i, &document.panel_ctx) {
+            if let Some(panel_widget) =
+                document
+                    .dock
+                    .view_floating_panel(i, &document.panel_ctx, &self.library)
+            {
                 let fp = &document.dock.floating[i];
                 // No clamp — panels follow Altium behaviour and may be
                 // dragged anywhere, even past the window edge. The OS clips
@@ -4354,6 +4528,8 @@ impl Signex {
                 ui.custom_theme.as_ref().map(|c| c.name.as_str()),
                 ui.preferences_dirty,
                 &ui.erc_severity_override,
+                &self.library.settings,
+                &document.panel_ctx.tokens,
             )
             .map(Message::PreferencesMsg);
             layers.push(pref_view);
@@ -4394,6 +4570,228 @@ impl Signex {
         }
         if ui.erc_dialog_open && !modal_detached(super::state::ModalId::ErcDialog) {
             layers.push(self.view_erc_dialog());
+        }
+
+        // v0.9 Library — picker modal overlay. Centered + dismiss-on-
+        // ESC handled via the close X. Modal-detached path lands in
+        // Phase 2 once Library overlays opt into the modal-id system.
+        if let Some(picker) = self.library.picker.as_ref() {
+            let card =
+                crate::library::picker::view(&self.library, picker, &document.panel_ctx.tokens)
+                    .map(Message::Library);
+            // Wrap the centered card on a dim backdrop.
+            let backdrop = container(card)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x(Length::Fill)
+                .center_y(Length::Fill)
+                .style(|_: &iced::Theme| iced::widget::container::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgba(
+                        0.0, 0.0, 0.0, 0.45,
+                    ))),
+                    ..Default::default()
+                });
+            layers.push(backdrop.into());
+        }
+
+        // New Component modal — same overlay shape as the picker.
+        // Opened by File ▸ Library ▸ New Component… and from the
+        // project tree's library-node right-click menu.
+        if let Some(nc) = self.library.new_component.as_ref() {
+            let card =
+                crate::library::new_component::view(&self.library, nc, &document.panel_ctx.tokens)
+                    .map(Message::Library);
+            let backdrop = container(card)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x(Length::Fill)
+                .center_y(Length::Fill)
+                .style(|_: &iced::Theme| iced::widget::container::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgba(
+                        0.0, 0.0, 0.0, 0.45,
+                    ))),
+                    ..Default::default()
+                });
+            layers.push(backdrop.into());
+        }
+
+        // Edit Component Details modal (Deliverable B). One per
+        // browser tab; iterate to find the one with a live `edit_modal`.
+        for (lib_path, browser_state) in &self.library.library_browsers {
+            if let Some(edit) = browser_state.edit_modal.as_ref() {
+                let card = crate::library::edit_row_modal::view(
+                    lib_path.as_path(),
+                    edit,
+                    &document.panel_ctx.tokens,
+                )
+                .map(Message::Library);
+                let backdrop = container(card)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .center_x(Length::Fill)
+                    .center_y(Length::Fill)
+                    .style(|_: &iced::Theme| iced::widget::container::Style {
+                        background: Some(iced::Background::Color(iced::Color::from_rgba(
+                            0.0, 0.0, 0.0, 0.45,
+                        ))),
+                        ..Default::default()
+                    });
+                layers.push(backdrop.into());
+                break; // only one edit modal at a time
+            }
+        }
+
+        // Delete Selected confirm modal (Deliverable D).
+        for (lib_path, browser_state) in &self.library.library_browsers {
+            if let Some(confirm) = browser_state.delete_confirm.as_ref() {
+                let card = crate::library::edit_row_modal::view_delete_confirm(
+                    lib_path.as_path(),
+                    confirm,
+                    &document.panel_ctx.tokens,
+                )
+                .map(Message::Library);
+                let backdrop = container(card)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .center_x(Length::Fill)
+                    .center_y(Length::Fill)
+                    .style(|_: &iced::Theme| iced::widget::container::Style {
+                        background: Some(iced::Background::Color(iced::Color::from_rgba(
+                            0.0, 0.0, 0.0, 0.45,
+                        ))),
+                        ..Default::default()
+                    });
+                layers.push(backdrop.into());
+                break;
+            }
+        }
+
+        // Primitive picker (Pick Symbol / Pick Footprint).
+        if let Some(picker) = self.library.primitive_picker.as_ref() {
+            let card = crate::library::primitive_picker::view(
+                &self.library,
+                picker,
+                &document.panel_ctx.tokens,
+            )
+            .map(Message::Library);
+            let backdrop = container(card)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x(Length::Fill)
+                .center_y(Length::Fill)
+                .style(|_: &iced::Theme| iced::widget::container::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgba(
+                        0.0, 0.0, 0.0, 0.45,
+                    ))),
+                    ..Default::default()
+                });
+            layers.push(backdrop.into());
+        }
+
+        // Tools ▸ Document Options modal — Altium SchLib parity.
+        if let Some(state) = self.library.document_options.as_ref() {
+            let card = crate::library::document_options::view(state, &document.panel_ctx.tokens)
+                .map(Message::Library);
+            let backdrop = container(card)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x(Length::Fill)
+                .center_y(Length::Fill)
+                .style(|_: &iced::Theme| iced::widget::container::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgba(
+                        0.0, 0.0, 0.0, 0.45,
+                    ))),
+                    ..Default::default()
+                });
+            layers.push(backdrop.into());
+        }
+
+        // "Library Options" modal — Stage 11 of
+        // `v0.9-snxlib-as-file-plan.md`. Pops between the New Library
+        // Save-As dialog and the actual `LocalGitAdapter::init` so the
+        // user can opt into Git LFS for binary 3D models before
+        // anything hits disk.
+        if let Some(state) = self.library.create_options.as_ref() {
+            let card = crate::library::create_options::view(state, &document.panel_ctx.tokens)
+                .map(Message::Library);
+            let backdrop = container(card)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x(Length::Fill)
+                .center_y(Length::Fill)
+                .style(|_: &iced::Theme| iced::widget::container::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgba(
+                        0.0, 0.0, 0.0, 0.45,
+                    ))),
+                    ..Default::default()
+                });
+            layers.push(backdrop.into());
+        }
+
+        // Close-Library — Unsaved Drafts confirm modal.
+        if let Some(confirm) = self.library.close_library_confirm.as_ref() {
+            let card = crate::library::close_prompt::view(
+                &self.library,
+                confirm,
+                &document.panel_ctx.tokens,
+            )
+            .map(Message::Library);
+            let backdrop = container(card)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x(Length::Fill)
+                .center_y(Length::Fill)
+                .style(|_: &iced::Theme| iced::widget::container::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgba(
+                        0.0, 0.0, 0.0, 0.45,
+                    ))),
+                    ..Default::default()
+                });
+            layers.push(backdrop.into());
+        }
+
+        // Library recovery dialog (Stage 10). Surfaces missing-snxlib,
+        // missing-.git, and broken primitive bindings as user-facing
+        // modals instead of silent log lines.
+        if let Some(dialog) = self.library.recovery.as_ref() {
+            let card = crate::library::recovery::view(dialog, &document.panel_ctx.tokens)
+                .map(Message::Library);
+            let backdrop = container(card)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x(Length::Fill)
+                .center_y(Length::Fill)
+                .style(|_: &iced::Theme| iced::widget::container::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgba(
+                        0.0, 0.0, 0.0, 0.45,
+                    ))),
+                    ..Default::default()
+                });
+            layers.push(backdrop.into());
+        }
+
+        // "Library Updates Available" modal (Stage 16 §3.5).
+        // Opened on schematic open under Team workflow mode when a
+        // placed Symbol's `library_version` drifts from the source
+        // row's current `ComponentRow.version`. The corresponding
+        // `needs_overlay` predicate above must include
+        // `library_updates.is_some()` — without it the click target
+        // never paints (memory: needs_overlay-predicate-gates-modal).
+        if let Some(state) = self.library.library_updates.as_ref() {
+            let card = crate::library::updates_dialog::view(state, &document.panel_ctx.tokens)
+                .map(Message::Library);
+            let backdrop = container(card)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x(Length::Fill)
+                .center_y(Length::Fill)
+                .style(|_: &iced::Theme| iced::widget::container::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgba(
+                        0.0, 0.0, 0.0, 0.45,
+                    ))),
+                    ..Default::default()
+                });
+            layers.push(backdrop.into());
         }
 
         layers

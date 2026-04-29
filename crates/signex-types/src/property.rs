@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 
 use crate::schematic::{Point, TextProp};
 
-/// Captures property metadata without forcing all callers off the legacy
+/// Captures Standard property metadata without forcing all callers off the legacy
 /// key/value field map at once.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SchematicProperty {
@@ -19,12 +19,12 @@ pub struct SchematicProperty {
     pub show_name: Option<bool>,
     #[serde(default)]
     pub do_not_autoplace: Option<bool>,
-    /// Property-level variant values: variant_name -> value.
+    /// Standard 10 property-level variant values: variant_name -> value.
     #[serde(default)]
     pub variant_overrides: BTreeMap<String, String>,
 }
 
-/// Captures footprint property metadata while preserving the legacy
+/// Captures Standard footprint property metadata while preserving the legacy
 /// footprint `reference` and `value` compatibility fields.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PcbProperty {

@@ -13,9 +13,10 @@
 //! `.snxprj` (project) is unchanged and uses its own pre-existing
 //! format. Stays as-is.
 //!
-//! These types are the canonical Signex schema. Foreign-format I/O,
-//! when present, translates to/from these types at the file-format
-//! boundary in a separate companion crate.
+//! These types are the canonical Signex schema. Standard I/O — when it
+//! returns via the `signex-standard-import` companion repo (GPL-3.0) —
+//! translates to/from these types at the file-format boundary; no
+//! Standard-shaped types live in this Apache codebase.
 
 use std::collections::BTreeMap;
 
@@ -961,38 +962,18 @@ impl SnxSchematic {
     }
 
     /// Serialise to a TOML+TSV string for writing to disk.
-    ///
-    /// Owned-form helper — clones the format string then delegates to
-    /// the borrow-based writer. Prefer
-    /// [`SnxSchematic::write_string_borrowed`] on the hot save path
-    /// where `&SchematicSheet` is already in hand: it skips the
-    /// `self.sheet.clone()` that the engine would otherwise pay to
-    /// produce a `SnxSchematic` value, which is a 50–100 ms savings on
-    /// huge documents.
     pub fn write_string(&self) -> Result<String, FormatError> {
-        Self::write_string_borrowed(&self.format, &self.sheet)
-    }
-
-    /// Borrow-based serialise — no clone of the in-memory sheet.
-    ///
-    /// This is the version the async-save path uses. The caller still
-    /// owns the `SchematicSheet`; serialisation reads it through `&`
-    /// and produces an owned `String` of bytes ready for `fs::write`.
-    pub fn write_string_borrowed(
-        format: &str,
-        sheet: &SchematicSheet,
-    ) -> Result<String, FormatError> {
         let mut out = String::new();
 
         // Manifest header — emit as a small TOML document.
         let manifest = SchManifest {
-            format: format.to_string(),
-            schematic_id: sheet.uuid,
-            version: sheet.version,
-            generator: sheet.generator.clone(),
-            generator_version: sheet.generator_version.clone(),
-            paper_size: sheet.paper_size.clone(),
-            root_sheet_page: sheet.root_sheet_page.clone(),
+            format: self.format.clone(),
+            schematic_id: self.sheet.uuid,
+            version: self.sheet.version,
+            generator: self.sheet.generator.clone(),
+            generator_version: self.sheet.generator_version.clone(),
+            paper_size: self.sheet.paper_size.clone(),
+            root_sheet_page: self.sheet.root_sheet_page.clone(),
         };
         out.push_str(&toml::to_string_pretty(&manifest)?);
         out.push('\n');
@@ -1000,11 +981,15 @@ impl SnxSchematic {
         // Bulk TSV blocks. Each is `[sheets.<entity>]` with a single
         // `content` key holding a literal multi-line string.
         let component_rows: Vec<SchComponentRow> =
-            sheet.symbols.iter().map(symbol_to_row).collect();
-        let wire_rows: Vec<SchWireRow> = sheet.wires.iter().map(wire_to_row).collect();
-        let junction_rows: Vec<SchJunctionRow> =
-            sheet.junctions.iter().map(junction_to_row).collect();
-        let label_rows: Vec<SchLabelRow> = sheet.labels.iter().map(label_to_row).collect();
+            self.sheet.symbols.iter().map(symbol_to_row).collect();
+        let wire_rows: Vec<SchWireRow> = self.sheet.wires.iter().map(wire_to_row).collect();
+        let junction_rows: Vec<SchJunctionRow> = self
+            .sheet
+            .junctions
+            .iter()
+            .map(junction_to_row)
+            .collect();
+        let label_rows: Vec<SchLabelRow> = self.sheet.labels.iter().map(label_to_row).collect();
 
         write_tsv_section(&mut out, "sheets.components", &component_rows);
         write_tsv_section(&mut out, "sheets.wires", &wire_rows);
@@ -1019,14 +1004,15 @@ impl SnxSchematic {
         // Hand-rolled per-section serialization breaks here because
         // the inner HashMaps render as their own `[fields]` sub-
         // tables which would attach to the wrong parent path.
-        let symbols_extras: BTreeMap<String, SymbolExtras> = sheet
+        let symbols_extras: BTreeMap<String, SymbolExtras> = self
+            .sheet
             .symbols
             .iter()
             .map(|s| (s.uuid.to_string(), SymbolExtras::from_symbol(s)))
             .filter(|(_, e)| !e.is_default())
             .collect();
 
-        let sheet_extras = SheetExtras::from_sheet(sheet);
+        let sheet_extras = SheetExtras::from_sheet(&self.sheet);
         let sheet_extras_opt = if sheet_extras.is_default() {
             None
         } else {
@@ -1401,6 +1387,9 @@ fn row_to_symbol(row: SchComponentRow, extras: SymbolExtras) -> Symbol {
         fields,
         custom_properties: extras.custom_properties,
         pin_uuids: extras.pin_uuids,
+        library_id: None,
+        row_id: None,
+        library_version: String::new(),
         instances: extras.instances,
     }
 }
@@ -1510,31 +1499,16 @@ impl SnxPcb {
     }
 
     /// Serialise to a TOML+TSV string for writing to disk.
-    ///
-    /// Owned-form helper. Prefer [`SnxPcb::write_string_borrowed`] on
-    /// the hot save path where `&PcbBoard` is already in hand: it
-    /// skips the `self.board.clone()` that the engine would otherwise
-    /// pay to wrap a board into a `SnxPcb`. On 500 K-track boards the
-    /// outer clone alone runs 50–100 ms.
     pub fn write_string(&self) -> Result<String, FormatError> {
-        Self::write_string_borrowed(&self.format, &self.board)
-    }
-
-    /// Borrow-based serialise — no clone of the in-memory board.
-    ///
-    /// This is the version the async-save path uses. The caller still
-    /// owns the `PcbBoard`; serialisation reads it through `&` and
-    /// produces an owned `String` of bytes ready for `fs::write`.
-    pub fn write_string_borrowed(format: &str, board: &PcbBoard) -> Result<String, FormatError> {
         let mut out = String::new();
 
         // Manifest header.
         let manifest = PcbManifest {
-            format: format.to_string(),
-            pcb_id: board.uuid,
-            version: board.version,
-            generator: board.generator.clone(),
-            thickness: board.thickness,
+            format: self.format.clone(),
+            pcb_id: self.board.uuid,
+            version: self.board.version,
+            generator: self.board.generator.clone(),
+            thickness: self.board.thickness,
         };
         out.push_str(&toml::to_string_pretty(&manifest)?);
         out.push('\n');
@@ -1543,7 +1517,7 @@ impl SnxPcb {
         // toml's serializer produces the correct `[stackup]`/`[nets]`
         // headers and any inner sub-tables (PcbSetup) attach to the
         // right parent path.
-        if !board.layers.is_empty() || !board.nets.is_empty() {
+        if !self.board.layers.is_empty() || !self.board.nets.is_empty() {
             #[derive(Serialize)]
             struct StackupWrapper<'a> {
                 #[serde(skip_serializing_if = "Option::is_none")]
@@ -1561,36 +1535,43 @@ impl SnxPcb {
             struct NetsBlock<'a> {
                 entries: &'a [crate::pcb::NetDef],
             }
-            let stackup = if board.layers.is_empty() {
+            let stackup = if self.board.layers.is_empty() {
                 None
             } else {
                 Some(StackBlock {
-                    layers: board.layers.iter().map(|l| l.name.clone()).collect(),
-                    setup: board.setup.as_ref(),
+                    layers: self.board.layers.iter().map(|l| l.name.clone()).collect(),
+                    setup: self.board.setup.as_ref(),
                 })
             };
-            let nets = if board.nets.is_empty() {
+            let nets = if self.board.nets.is_empty() {
                 None
             } else {
                 Some(NetsBlock {
-                    entries: &board.nets,
+                    entries: &self.board.nets,
                 })
             };
             out.push('\n');
-            out.push_str(&toml::to_string_pretty(&StackupWrapper { stackup, nets })?);
+            out.push_str(&toml::to_string_pretty(&StackupWrapper {
+                stackup,
+                nets,
+            })?);
         }
 
         // TSV blocks: footprints, pads, tracks, vias.
-        let footprint_rows: Vec<PcbFootprintRow> =
-            board.footprints.iter().map(footprint_to_row).collect();
+        let footprint_rows: Vec<PcbFootprintRow> = self
+            .board
+            .footprints
+            .iter()
+            .map(footprint_to_row)
+            .collect();
         let mut pad_rows: Vec<PcbPadRow> = Vec::new();
-        for fp in &board.footprints {
+        for fp in &self.board.footprints {
             for pad in &fp.pads {
                 pad_rows.push(pad_to_row(pad, &fp.reference));
             }
         }
-        let track_rows: Vec<PcbTrackRow> = board.segments.iter().map(track_to_row).collect();
-        let via_rows: Vec<PcbViaRow> = board.vias.iter().map(via_to_row).collect();
+        let track_rows: Vec<PcbTrackRow> = self.board.segments.iter().map(track_to_row).collect();
+        let via_rows: Vec<PcbViaRow> = self.board.vias.iter().map(via_to_row).collect();
 
         write_tsv_section(&mut out, "footprints", &footprint_rows);
         write_tsv_section(&mut out, "pads", &pad_rows);
@@ -1599,33 +1580,35 @@ impl SnxPcb {
 
         // Zones — full struct array (each zone serialises naturally
         // under `[[zones]]` with its own uuid scalar).
-        if !board.zones.is_empty() {
+        if !self.board.zones.is_empty() {
             #[derive(Serialize)]
             struct ZonesWrapper<'a> {
                 zones: &'a [Zone],
             }
             out.push('\n');
             out.push_str(&toml::to_string_pretty(&ZonesWrapper {
-                zones: &board.zones,
+                zones: &self.board.zones,
             })?);
         }
 
         // Footprint extras / pad extras / board extras — wrap in a
         // single `[extras]` tree so toml's serializer produces the
         // correct nested-table headers.
-        let extras = PcbExtras::from_board(board);
+        let extras = PcbExtras::from_board(&self.board);
         let footprints = extras.footprints;
         let pads = extras.pads;
-        let board_extras =
-            if extras.outline.is_empty() && extras.graphics.is_empty() && extras.texts.is_empty() {
-                None
-            } else {
-                Some(BoardExtras {
-                    outline: extras.outline,
-                    graphics: extras.graphics,
-                    texts: extras.texts,
-                })
-            };
+        let board_extras = if extras.outline.is_empty()
+            && extras.graphics.is_empty()
+            && extras.texts.is_empty()
+        {
+            None
+        } else {
+            Some(BoardExtras {
+                outline: extras.outline,
+                graphics: extras.graphics,
+                texts: extras.texts,
+            })
+        };
         if !footprints.is_empty() || !pads.is_empty() || board_extras.is_some() {
             #[derive(Serialize)]
             struct ExtrasWrapper {
@@ -1695,17 +1678,10 @@ impl SnxPcb {
             .collect();
 
         for prow in pad_rows {
-            let extra = extras
-                .pads
-                .get(&prow.uuid.to_string())
-                .cloned()
-                .unwrap_or_default();
+            let extra = extras.pads.get(&prow.uuid.to_string()).cloned().unwrap_or_default();
             let pad = row_to_pad(prow.clone(), extra);
             // attach to footprint by ref
-            if let Some(fp) = footprints
-                .iter_mut()
-                .find(|f| f.reference == prow.footprint_ref)
-            {
+            if let Some(fp) = footprints.iter_mut().find(|f| f.reference == prow.footprint_ref) {
                 fp.pads.push(pad);
             } else {
                 // Orphan pad — preserve as a synthetic footprint
@@ -2099,201 +2075,6 @@ fn row_to_via(row: PcbViaRow) -> Via {
 }
 
 // ---------------------------------------------------------------------------
-// Library (.snxlib)
-// ---------------------------------------------------------------------------
-//
-// Same TOML+TSV envelope as `.snxsch` and `.snxpcb`. The manifest at
-// the top names the package; a single `[components]` TSV block
-// enumerates the rows. v0.10.0 ships only the read-only browser
-// surface — the writer round-trips so future sub-releases (Component
-// Editor, inline-edit, picker) can save back without reshaping the
-// schema.
-
-/// Current `.snxlib` format version. Bumping this is a wire-format
-/// break.
-pub const SNXLIB_FORMAT_V1: &str = "snxlib/1";
-
-/// Bulk row for one [`crate::library::LibraryComponent`] in the
-/// `[components]` block. v0.10.0 keeps every column flat; nested data
-/// (parameter dictionaries, distributor SKUs) is reserved for later
-/// sub-releases via a sibling extras table.
-#[derive(Debug, Clone, PartialEq)]
-pub struct LibraryComponentRow {
-    pub uuid: Uuid,
-    pub name: String,
-    pub value: String,
-    pub footprint_name: String,
-    pub description: String,
-    pub symbol_uuid: Uuid,
-    pub footprint_uuid: Uuid,
-}
-
-impl SnxTable for LibraryComponentRow {
-    fn columns() -> &'static [&'static str] {
-        &[
-            "uuid",
-            "name",
-            "value",
-            "footprint",
-            "description",
-            "symbol_uuid",
-            "footprint_uuid",
-        ]
-    }
-
-    fn to_row(&self) -> Vec<String> {
-        vec![
-            self.uuid.to_string(),
-            self.name.clone(),
-            self.value.clone(),
-            self.footprint_name.clone(),
-            self.description.clone(),
-            self.symbol_uuid.to_string(),
-            self.footprint_uuid.to_string(),
-        ]
-    }
-
-    fn from_row(values: &[&str], block: &str, row: usize) -> Result<Self, FormatError> {
-        Ok(LibraryComponentRow {
-            uuid: parse_uuid(values[0], block, row, "uuid")?,
-            name: values[1].to_string(),
-            value: values[2].to_string(),
-            footprint_name: values[3].to_string(),
-            description: values[4].to_string(),
-            symbol_uuid: parse_uuid(values[5], block, row, "symbol_uuid")?,
-            footprint_uuid: parse_uuid(values[6], block, row, "footprint_uuid")?,
-        })
-    }
-}
-
-fn component_to_row(c: &crate::library::LibraryComponent) -> LibraryComponentRow {
-    LibraryComponentRow {
-        uuid: c.uuid,
-        name: c.name.clone(),
-        value: c.value.clone(),
-        footprint_name: c.footprint_name.clone(),
-        description: c.description.clone(),
-        symbol_uuid: c.symbol_uuid,
-        footprint_uuid: c.footprint_uuid,
-    }
-}
-
-fn row_to_component(row: LibraryComponentRow) -> crate::library::LibraryComponent {
-    crate::library::LibraryComponent {
-        uuid: row.uuid,
-        name: row.name,
-        value: row.value,
-        footprint_name: row.footprint_name,
-        description: row.description,
-        symbol_uuid: row.symbol_uuid,
-        footprint_uuid: row.footprint_uuid,
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct LibManifest {
-    format: String,
-    library_id: Uuid,
-    #[serde(default)]
-    name: String,
-    #[serde(default)]
-    description: String,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-struct LibRaw {
-    format: String,
-    library_id: Uuid,
-    #[serde(default)]
-    name: String,
-    #[serde(default)]
-    description: String,
-    #[serde(default)]
-    components: Option<TsvBody>,
-}
-
-/// On-disk envelope for `.snxlib` files. `library` is the
-/// reconstituted in-memory package; the TOML+TSV decomposition only
-/// matters at the disk boundary.
-#[derive(Debug, Clone)]
-pub struct SnxLibrary {
-    pub format: String,
-    pub library: crate::library::Library,
-}
-
-impl SnxLibrary {
-    /// Wrap a [`crate::library::Library`] for serialisation as the
-    /// current format version.
-    pub fn new(library: crate::library::Library) -> Self {
-        Self {
-            format: SNXLIB_FORMAT_V1.to_string(),
-            library,
-        }
-    }
-
-    /// Serialise to a TOML+TSV string. Owned-form helper — delegates
-    /// to the borrow path so the hot save path can skip the clone.
-    pub fn write_string(&self) -> Result<String, FormatError> {
-        Self::write_string_borrowed(&self.format, &self.library)
-    }
-
-    /// Borrow-based serialise — no clone of the in-memory library.
-    /// Same shape as the `.snxsch` / `.snxpcb` borrow writers so v0.9.1's
-    /// async-save plumbing can drop into the library save path
-    /// unchanged in v0.10.6.
-    pub fn write_string_borrowed(
-        format: &str,
-        library: &crate::library::Library,
-    ) -> Result<String, FormatError> {
-        let mut out = String::new();
-
-        let manifest = LibManifest {
-            format: format.to_string(),
-            library_id: library.uuid,
-            name: library.name.clone(),
-            description: library.description.clone(),
-        };
-        out.push_str(&toml::to_string_pretty(&manifest)?);
-        out.push('\n');
-
-        let component_rows: Vec<LibraryComponentRow> =
-            library.components.iter().map(component_to_row).collect();
-        write_tsv_section(&mut out, "components", &component_rows);
-
-        Ok(out)
-    }
-
-    /// Parse a TOML+TSV string from disk.
-    pub fn parse(input: &str) -> Result<Self, FormatError> {
-        let raw: LibRaw = toml::from_str(input)?;
-
-        if raw.format != SNXLIB_FORMAT_V1 {
-            return Err(FormatError::UnsupportedVersion {
-                found: raw.format,
-                expected: SNXLIB_FORMAT_V1.to_string(),
-            });
-        }
-
-        let component_rows = match raw.components {
-            Some(b) => parse_tsv_block::<LibraryComponentRow>("components", &b.content)?,
-            None => Vec::new(),
-        };
-
-        let library = crate::library::Library {
-            uuid: raw.library_id,
-            name: raw.name,
-            description: raw.description,
-            components: component_rows.into_iter().map(row_to_component).collect(),
-        };
-
-        Ok(SnxLibrary {
-            format: raw.format,
-            library,
-        })
-    }
-}
-
-// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -2368,8 +2149,7 @@ mod tests {
     #[test]
     fn rejects_wrong_format_version() {
         // Hand-craft a TOML document with an unsupported version token.
-        let bad =
-            "format = \"snxsch/99\"\nschematic_id = \"00000000-0000-0000-0000-000000000000\"\n";
+        let bad = "format = \"snxsch/99\"\nschematic_id = \"00000000-0000-0000-0000-000000000000\"\n";
         let err = SnxSchematic::parse(bad).expect_err("must reject");
         match err {
             FormatError::UnsupportedVersion { found, expected } => {
@@ -2432,6 +2212,9 @@ mod tests {
             fields: Default::default(),
             custom_properties: Vec::new(),
             pin_uuids: Default::default(),
+            library_id: None,
+            row_id: None,
+            library_version: String::new(),
             instances: Vec::new(),
         }
     }
@@ -2649,7 +2432,11 @@ mod tests {
         assert_eq!(back.board.footprints[0].pads.len(), 2);
         assert_eq!(back.board.footprints[0].pads[0].number, "1");
         assert_eq!(
-            back.board.footprints[0].pads[0].net.as_ref().unwrap().name,
+            back.board.footprints[0].pads[0]
+                .net
+                .as_ref()
+                .unwrap()
+                .name,
             "VCC"
         );
 
@@ -2689,7 +2476,8 @@ mod tests {
         assert!(lines[0].contains("pos_x"));
         assert!(lines[0].contains("diameter"));
         // round-trip
-        let parsed: Vec<SchJunctionRow> = parse_tsv_block("sheets.junctions", &body).unwrap();
+        let parsed: Vec<SchJunctionRow> =
+            parse_tsv_block("sheets.junctions", &body).unwrap();
         assert_eq!(parsed.len(), 2);
         assert_eq!(parsed[0].pos_x, 100);
         assert_eq!(parsed[1].pos_x, 30000000);
@@ -2731,7 +2519,8 @@ mod tests {
         let mut sym = sample_symbol();
         sym.fields
             .insert("MPN".to_string(), "LM2596S-5.0".to_string());
-        sym.fields.insert("Tolerance".to_string(), "1%".to_string());
+        sym.fields
+            .insert("Tolerance".to_string(), "1%".to_string());
         sym.dnp = true;
         sheet.symbols.push(sym);
 
@@ -2743,204 +2532,5 @@ mod tests {
         // Tolerance survived through extras.
         assert_eq!(recovered.fields.get("Tolerance").unwrap(), "1%");
         assert!(recovered.dnp);
-    }
-
-    // v0.9.1 perf path — borrow-based serialise must produce
-    // byte-identical output to the owned-form serialise. The async
-    // save path in `signex-engine::Engine::serialize_for_save` and
-    // `Engine::write_to_file` relies on this equivalence so legacy
-    // saves stay bit-stable while new saves skip the big clone.
-    #[test]
-    fn schematic_borrow_matches_owned_serialise() {
-        let mut sheet = empty_sheet();
-        sheet.symbols.push(sample_symbol());
-        sheet.wires.push(sample_wire(10.0, 20.0, 30.0, 20.0));
-        sheet.wires.push(sample_wire(30.0, 20.0, 30.0, 40.0));
-        sheet.junctions.push(Junction {
-            uuid: Uuid::parse_str("0192a8c0-0002-7000-8000-000000000001").unwrap(),
-            position: SchPoint { x: 30.0, y: 20.0 },
-            diameter: 0.5,
-        });
-        sheet.labels.push(Label {
-            uuid: Uuid::parse_str("0192a8c0-0003-7000-8000-000000000001").unwrap(),
-            text: "VIN".to_string(),
-            position: SchPoint { x: 10.0, y: 20.0 },
-            rotation: 0.0,
-            label_type: LType::Net,
-            shape: String::new(),
-            font_size: 1.27,
-            justify: HAlign::Left,
-            justify_v: VAlign::Bottom,
-        });
-
-        let owned = SnxSchematic::new(sheet.clone()).write_string().unwrap();
-        let borrowed = SnxSchematic::write_string_borrowed(SNXSCH_FORMAT_V1, &sheet).unwrap();
-        assert_eq!(
-            owned, borrowed,
-            "schematic borrow path drift from owned path"
-        );
-    }
-
-    #[test]
-    fn pcb_borrow_matches_owned_serialise() {
-        let mut board = empty_board();
-
-        let pad1 = Pad {
-            uuid: Uuid::parse_str("0192a8c0-0011-7000-8000-000000000001").unwrap(),
-            number: "1".into(),
-            pad_type: PadType::Smd,
-            shape: PadShape::RoundRect,
-            position: PcbPoint { x: 50.5, y: 25.0 },
-            size: PcbPoint { x: 1.0, y: 0.6 },
-            drill: None,
-            layers: vec!["TopCopper".into()],
-            net: Some(PadNet {
-                number: 1,
-                name: "VCC".into(),
-            }),
-            roundrect_ratio: 0.25,
-        };
-        let footprint = Footprint {
-            uuid: Uuid::parse_str("0192a8c0-0010-7000-8000-000000000001").unwrap(),
-            reference: "U1".into(),
-            value: "STM32F407".into(),
-            footprint_id: "stm32f407.snxfpt".into(),
-            position: PcbPoint { x: 50.0, y: 25.0 },
-            rotation: 0.0,
-            layer: "TopCopper".into(),
-            locked: false,
-            pads: vec![pad1],
-            graphics: Vec::new(),
-            properties: Vec::new(),
-        };
-        board.footprints.push(footprint);
-        board.segments.push(Segment {
-            uuid: Uuid::parse_str("0192a8c0-0020-7000-8000-000000000001").unwrap(),
-            start: PcbPoint { x: 100.0, y: 200.0 },
-            end: PcbPoint { x: 150.0, y: 200.0 },
-            width: 0.254,
-            layer: "BottomCopper".into(),
-            net: 1,
-        });
-        board.vias.push(Via {
-            uuid: Uuid::parse_str("0192a8c0-0030-7000-8000-000000000001").unwrap(),
-            position: PcbPoint { x: 100.0, y: 200.0 },
-            diameter: 0.6,
-            drill: 0.3,
-            layers: vec!["TopCopper".into(), "BottomCopper".into()],
-            net: 1,
-            via_type: ViaType::Through,
-        });
-        board.zones.push(Zone {
-            uuid: Uuid::parse_str("0192a8c0-0040-7000-8000-000000000001").unwrap(),
-            net: 2,
-            net_name: "GND".into(),
-            layer: "BottomCopper".into(),
-            outline: vec![
-                PcbPoint { x: 10.0, y: 20.0 },
-                PcbPoint { x: 30.0, y: 20.0 },
-                PcbPoint { x: 30.0, y: 40.0 },
-                PcbPoint { x: 10.0, y: 40.0 },
-            ],
-            priority: 0,
-            fill_type: String::new(),
-            thermal_relief: false,
-            thermal_gap: 0.0,
-            thermal_width: 0.0,
-            clearance: 0.0,
-            min_thickness: 0.0,
-        });
-
-        let owned = SnxPcb::new(board.clone()).write_string().unwrap();
-        let borrowed = SnxPcb::write_string_borrowed(SNXPCB_FORMAT_V1, &board).unwrap();
-        assert_eq!(owned, borrowed, "pcb borrow path drift from owned path");
-    }
-
-    fn sample_library() -> crate::library::Library {
-        crate::library::Library {
-            uuid: Uuid::parse_str("0192a8c0-aaaa-7000-8000-000000000001").unwrap(),
-            name: "Resistors Standard".into(),
-            description: "Generic 0603 resistors".into(),
-            components: vec![
-                crate::library::LibraryComponent {
-                    uuid: Uuid::parse_str("0192a8c0-bbbb-7000-8000-000000000001").unwrap(),
-                    name: "R 0603 1k".into(),
-                    value: "1k".into(),
-                    footprint_name: "R_0603".into(),
-                    description: "1k resistor 0603".into(),
-                    symbol_uuid: Uuid::nil(),
-                    footprint_uuid: Uuid::nil(),
-                },
-                crate::library::LibraryComponent {
-                    uuid: Uuid::parse_str("0192a8c0-bbbb-7000-8000-000000000002").unwrap(),
-                    name: "R 0603 10k".into(),
-                    value: "10k".into(),
-                    footprint_name: "R_0603".into(),
-                    description: "10k resistor 0603".into(),
-                    symbol_uuid: Uuid::nil(),
-                    footprint_uuid: Uuid::nil(),
-                },
-            ],
-        }
-    }
-
-    #[test]
-    fn snxlibrary_round_trip_preserves_components() {
-        let library = sample_library();
-        let text = SnxLibrary::new(library.clone()).write_string().unwrap();
-        let parsed = SnxLibrary::parse(&text).unwrap();
-        assert_eq!(parsed.format, SNXLIB_FORMAT_V1);
-        assert_eq!(parsed.library, library);
-    }
-
-    #[test]
-    fn snxlibrary_borrow_matches_owned() {
-        let library = sample_library();
-        let owned = SnxLibrary::new(library.clone()).write_string().unwrap();
-        let borrowed = SnxLibrary::write_string_borrowed(SNXLIB_FORMAT_V1, &library).unwrap();
-        assert_eq!(owned, borrowed, "library borrow path drift from owned path");
-    }
-
-    #[test]
-    fn snxlibrary_rejects_unknown_version() {
-        let bad = "format = \"snxlib/9999\"\nlibrary_id = \"00000000-0000-0000-0000-000000000000\"\n";
-        let err = SnxLibrary::parse(bad).expect_err("future-version library should fail");
-        assert!(matches!(err, FormatError::UnsupportedVersion { .. }));
-    }
-
-    #[test]
-    fn shipped_sample_library_parses() {
-        // Workspace ships `assets/samples/library/resistors-standard.snxlib`
-        // for the v0.10.0 Library Browser smoke test. This guards the
-        // sample against parser drift — if either side changes
-        // shape the test will surface it before the user sees a
-        // toast on launch.
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../assets/samples/library/resistors-standard.snxlib");
-        let text = std::fs::read_to_string(&path).unwrap_or_else(|err| {
-            panic!(
-                "shipped sample library should exist at {}: {err}",
-                path.display()
-            )
-        });
-        let parsed = SnxLibrary::parse(&text)
-            .unwrap_or_else(|err| panic!("sample should parse: {err}"));
-        assert_eq!(parsed.format, SNXLIB_FORMAT_V1);
-        assert_eq!(parsed.library.name, "Resistors Standard");
-        assert_eq!(parsed.library.components.len(), 3);
-        assert_eq!(parsed.library.components[0].name, "R 0603 1k");
-    }
-
-    #[test]
-    fn snxlibrary_parses_empty_components_block() {
-        let library = crate::library::Library {
-            uuid: Uuid::nil(),
-            name: "Empty".into(),
-            description: String::new(),
-            components: Vec::new(),
-        };
-        let text = SnxLibrary::new(library.clone()).write_string().unwrap();
-        let parsed = SnxLibrary::parse(&text).unwrap();
-        assert_eq!(parsed.library, library);
     }
 }
