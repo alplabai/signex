@@ -73,6 +73,12 @@ pub enum Message {
     Duplicate,
     SaveFile,
     SaveFileAs(PathBuf),
+    /// Async save (v0.9.1) finished. Carries the path that was saved
+    /// and either `Ok(())` (clear the "Saving…" pill, mark engine
+    /// path) or `Err(message)` (surface the error briefly in the
+    /// status bar). The handler clears the path from
+    /// `ui_state.saving_paths`.
+    SaveFileFinished(PathBuf, Result<(), String>),
     CycleDrawMode,
     CancelDrawing,
     TogglePanelList,
