@@ -118,15 +118,14 @@ Depends: libc6, libgcc-s1, libxkbcommon0, libxkbcommon-x11-0, libwayland-client0
 Installed-Size: $INSTALLED_SIZE
 Maintainer: alpCaner <alpcaner92@gmail.com>
 Homepage: https://github.com/alplabai/signex
-Description: AI-first EDA editor with KiCad round-trip
- Signex is a KiCad-compatible electronics design automation editor with
- an Altium-inspired interaction layer. It opens KiCad projects, edits
- them through a faster UI, and saves them back without format drift.
+Description: AI-first EDA editor
+ Signex is an electronics design automation editor with an
+ Altium-inspired interaction layer and native `.snx***` file
+ formats.
 CONTROL_EOF
 
-# .desktop entry for menu integration. MimeType covers the KiCad
-# handoff types plus all seven Signex native extensions declared in
-# `usr/share/mime/packages/signex.xml`.
+# .desktop entry for menu integration. MimeType covers the Signex
+# native extensions declared in `usr/share/mime/packages/signex.xml`.
 cat > "$PKG_DIR/usr/share/applications/signex.desktop" <<DESKTOP_EOF
 [Desktop Entry]
 Type=Application
@@ -135,7 +134,7 @@ Comment=AI-first EDA editor
 Exec=/usr/bin/signex %F
 Terminal=false
 Categories=Development;Electronics;Engineering;
-MimeType=application/x-kicad-schematic;application/x-kicad-project;application/vnd.alpcaner.signex.snxprj;application/vnd.alpcaner.signex.snxsch;application/vnd.alpcaner.signex.snxpcb;application/vnd.alpcaner.signex.snxfpt;application/vnd.alpcaner.signex.snxsim;application/vnd.alpcaner.signex.snxlib;application/vnd.alpcaner.signex.snxsym;application/vnd.alpcaner.signex.snxpkg;application/vnd.alpcaner.signex.snxmat;application/vnd.alpcaner.signex.snxcfg;application/vnd.alpcaner.signex.snxmod;
+MimeType=application/vnd.alpcaner.signex.snxprj;application/vnd.alpcaner.signex.snxsch;application/vnd.alpcaner.signex.snxpcb;application/vnd.alpcaner.signex.snxfpt;application/vnd.alpcaner.signex.snxsim;application/vnd.alpcaner.signex.snxlib;application/vnd.alpcaner.signex.snxsym;application/vnd.alpcaner.signex.snxpkg;application/vnd.alpcaner.signex.snxmat;application/vnd.alpcaner.signex.snxcfg;application/vnd.alpcaner.signex.snxmod;
 StartupNotify=true
 DESKTOP_EOF
 
