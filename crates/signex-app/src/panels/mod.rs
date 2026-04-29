@@ -255,6 +255,11 @@ pub struct PanelContext {
     pub components_split: f32,
     /// Persistent project tree — toggle state survives across renders.
     pub project_tree: Vec<TreeNode>,
+    /// Currently highlighted project-tree row. Set by single-click;
+    /// double-click on the same row opens the file. `None` when no row
+    /// has been clicked since the last refresh. Path indices into
+    /// `project_tree` (matches the `TreeMsg::Select(path)` payload).
+    pub selected_tree_path: Option<Vec<usize>>,
     // Selection info for Properties panel
     /// How many items are currently selected.
     pub selection_count: usize,
@@ -953,11 +958,13 @@ fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         // first row doesn't sit flush against the panel's tab-strip
         // border (matches the breathing room Altium leaves below its
         // panel tabs).
-        container(
-            TreeView::new(&ctx.project_tree, &ctx.tokens)
-                .view()
-                .map(PanelMsg::Tree),
-        )
+        container({
+            let mut tv = TreeView::new(&ctx.project_tree, &ctx.tokens);
+            if let Some(sel) = ctx.selected_tree_path.as_deref() {
+                tv = tv.selected(sel);
+            }
+            tv.view().map(PanelMsg::Tree)
+        })
         .padding(iced::Padding {
             top: 6.0,
             right: 0.0,
