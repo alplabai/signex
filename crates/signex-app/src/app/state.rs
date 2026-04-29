@@ -354,7 +354,13 @@ pub struct DocumentState {
     /// as "no longer loaded").
     pub next_project_id: u32,
     pub panel_ctx: crate::panels::PanelContext,
-    pub kicad_lib_dir: Option<PathBuf>,
+    /// Cache of `LibSymbol` records indexed by lib_id. Populated by
+    /// the v0.10.x `.snxlib` library plumbing; kept here so the
+    /// canvas-side place-component flow can resolve a symbol by id
+    /// independently of which panel populated it. Was previously
+    /// also fed by the legacy KiCad `.kicad_sym` scanner that v0.10.0
+    /// removed (Apache-clean residual polish).
+    #[allow(dead_code)]
     pub loaded_lib: std::collections::HashMap<String, signex_types::schematic::LibSymbol>,
     /// Print-preview overlay state. `Some` while the preview dialog is
     /// open. Doubles as the unified PDF Export modal — `File → Export

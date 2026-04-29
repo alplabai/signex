@@ -173,10 +173,6 @@ impl Signex {
             "snxsch" => self.open_schematic_file(path)?,
             "snxpcb" => self.open_pcb_file(path)?,
             "snxlib" => self.open_library_file(path)?,
-            "kicad_pro" | "kicad_sch" | "kicad_pcb" => anyhow::bail!(
-                "Signex Community no longer opens KiCad files directly. \
-                 Convert with the signex-kicad-import companion tool first."
-            ),
             _ => anyhow::bail!("unsupported file type: .{ext}"),
         }
 

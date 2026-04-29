@@ -69,6 +69,7 @@ pub fn log_info(message: impl AsRef<str>) {
     info!("{}", message.as_ref());
 }
 
+#[allow(dead_code)]
 pub fn log_warning(message: impl AsRef<str>) {
     warn!("{}", message.as_ref());
 }
