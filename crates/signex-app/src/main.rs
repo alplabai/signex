@@ -11,6 +11,7 @@ mod dock;
 mod find_replace;
 mod fonts;
 mod icons;
+mod keyboard_shortcuts_modal;
 mod library;
 mod menu_bar;
 mod panels;

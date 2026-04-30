@@ -106,6 +106,7 @@ impl Signex {
                 main_window_scale: 1.0,
                 panel_list_open: false,
                 preferences_open: false,
+                keyboard_shortcuts_open: false,
                 find_replace: crate::find_replace::FindReplaceState::default(),
                 preferences_nav: crate::preferences::PrefNav::Appearance,
                 preferences_draft_theme: ThemeId::Signex,
@@ -438,8 +439,10 @@ impl Signex {
             .with((
                 self.ui_state.find_replace.open,
                 self.ui_state.command_palette.open,
+                self.ui_state.keyboard_shortcuts_open,
             ))
-            .map(|((find_replace_open, palette_open), event)| match event {
+            .map(
+                |((find_replace_open, palette_open, kbd_shortcuts_open), event)| match event {
                 keyboard::Event::KeyPressed {
                     key, modifiers: m, ..
                 } => {
@@ -510,11 +513,19 @@ impl Signex {
                     {
                         Message::FindReplaceMsg(crate::find_replace::FindReplaceMsg::Close)
                     }
+                    (keyboard::Key::Named(keyboard::key::Named::Escape), _)
+                        if kbd_shortcuts_open =>
+                    {
+                        Message::CloseKeyboardShortcuts
+                    }
                     (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
                         Message::Tool(ToolMessage::SelectTool(Tool::Select))
                     }
                     (keyboard::Key::Named(keyboard::key::Named::Home), _) => {
                         Message::CanvasEvent(CanvasEvent::FitAll)
+                    }
+                    (keyboard::Key::Named(keyboard::key::Named::F1), _) => {
+                        Message::Menu(MenuMessage::OpenKeyboardShortcuts)
                     }
                     (keyboard::Key::Named(keyboard::key::Named::F8), _) => Message::RunErc,
                     (keyboard::Key::Named(keyboard::key::Named::F9), _) => Message::ToggleAutoFocus,

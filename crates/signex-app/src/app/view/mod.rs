@@ -3506,6 +3506,7 @@ impl Signex {
             || ui.panel_list_open
             || ui.find_replace.open
             || ui.preferences_open
+            || ui.keyboard_shortcuts_open
             || ui.rename_dialog.is_some()
             || ui.remove_dialog.is_some()
             || ui.project_close_confirm.is_some()
@@ -4792,6 +4793,12 @@ impl Signex {
             let dialog = crate::find_replace::view(&ui.find_replace, &document.panel_ctx.tokens)
                 .map(Message::FindReplaceMsg);
             layers.push(dialog);
+        }
+
+        if ui.keyboard_shortcuts_open {
+            layers.push(crate::keyboard_shortcuts_modal::view(
+                &document.panel_ctx.tokens,
+            ));
         }
 
         if ui.rename_dialog.is_some() {

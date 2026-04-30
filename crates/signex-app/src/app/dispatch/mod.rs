@@ -120,6 +120,7 @@ impl Signex {
             | Message::OpenReplace
             | Message::OpenPreferences
             | Message::ClosePreferences
+            | Message::CloseKeyboardShortcuts
             | Message::PreferencesNav(_)
             | Message::PreferencesMsg(_)
             | Message::FindReplaceMsg(_)

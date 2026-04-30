@@ -173,6 +173,10 @@ pub enum MenuMessage {
     // Tools
     /// Open the Preferences dialog.
     OpenPreferences,
+    /// Open the Keyboard Shortcuts reference modal — a single page
+    /// listing every binding from `shortcuts.rs`, callable from
+    /// Help ▸ Keyboard Shortcuts and from F1.
+    OpenKeyboardShortcuts,
     /// Tools ▸ New Part — bumps the active `.snxsym` symbol's max
     /// `part_number` by one and switches the editor's active_part to
     /// the new value. No-op when no Symbol editor is the active tab.
@@ -614,7 +618,12 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
         menu_template(vec![
             leaf_stub("About Signex", None, mc),
             separator(mc),
-            leaf_stub("Keyboard Shortcuts", None, mc),
+            leaf(
+                "Keyboard Shortcuts",
+                Some("F1"),
+                MenuMessage::OpenKeyboardShortcuts,
+                mc,
+            ),
         ]),
     );
 

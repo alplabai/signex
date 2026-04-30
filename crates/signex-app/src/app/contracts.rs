@@ -148,6 +148,9 @@ pub enum Message {
     TickContextSubmenuHover,
     ContextAction(ContextAction),
     OpenPreferences,
+    /// Close the Help ▸ Keyboard Shortcuts modal — fired by the close
+    /// chrome ✕ and by Esc dismiss handling.
+    CloseKeyboardShortcuts,
     OpenFind,
     OpenReplace,
     ClosePreferences,

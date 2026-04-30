@@ -21,6 +21,10 @@ impl Signex {
             Message::OpenReplace => self.handle_find_replace_open_requested(true),
             Message::OpenPreferences => self.handle_preferences_open_requested(),
             Message::ClosePreferences => self.handle_preferences_close_requested(),
+            Message::CloseKeyboardShortcuts => {
+                self.ui_state.keyboard_shortcuts_open = false;
+                Task::none()
+            }
             Message::PreferencesNav(nav) => self.handle_preferences_navigation_requested(nav),
             Message::PreferencesMsg(msg) => self.handle_preferences_message(msg),
             Message::FindReplaceMsg(msg) => self.handle_find_replace_message(msg),
