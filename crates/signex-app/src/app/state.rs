@@ -179,6 +179,10 @@ pub struct UiState {
     /// (later) undocked tabs. `SecondaryWindowClosed` removes entries so
     /// the detached content reattaches to the main window.
     pub windows: std::collections::HashMap<iced::window::Id, WindowKind>,
+    /// Command palette state — query / dropdown open flag / selected
+    /// row. The chrome-strip search bar is the always-rendered input;
+    /// `open` gates the dropdown overlay only.
+    pub command_palette: super::command_palette::CommandPaletteState,
 }
 
 /// Role of a non-main window opened by Signex. Phase 2 adds detached

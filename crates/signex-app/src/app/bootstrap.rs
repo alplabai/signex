@@ -150,6 +150,7 @@ impl Signex {
                 lasso_polygon: None,
                 net_color_undo: Vec::new(),
                 net_color_custom: crate::app::state::NetColorCustomState::default(),
+                command_palette: crate::app::command_palette::CommandPaletteState::default(),
             },
             document_state: DocumentState {
                 dock,
@@ -425,11 +426,39 @@ impl Signex {
         use iced::keyboard;
 
         let kbd = keyboard::listen()
-            .with(self.ui_state.find_replace.open)
-            .map(|(find_replace_open, event)| match event {
+            .with((
+                self.ui_state.find_replace.open,
+                self.ui_state.command_palette.open,
+            ))
+            .map(|((find_replace_open, palette_open), event)| match event {
                 keyboard::Event::KeyPressed {
                     key, modifiers: m, ..
-                } => match (key.as_ref(), m) {
+                } => {
+                    // Command palette captures most input while open so
+                    // typing into the search field doesn't fire tool
+                    // shortcuts (`p`, `w`, `l`, …). Only navigation
+                    // and dismiss keys leak through.
+                    if palette_open {
+                        return match (key.as_ref(), m) {
+                            (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
+                                Message::CommandPaletteClose
+                            }
+                            (keyboard::Key::Named(keyboard::key::Named::ArrowDown), _) => {
+                                Message::CommandPaletteMoveSelection(1)
+                            }
+                            (keyboard::Key::Named(keyboard::key::Named::ArrowUp), _) => {
+                                Message::CommandPaletteMoveSelection(-1)
+                            }
+                            // Toggle: Ctrl+Shift+P while open closes.
+                            (keyboard::Key::Character(c), m)
+                                if c == "P" && m.command() && m.shift() =>
+                            {
+                                Message::CommandPaletteClose
+                            }
+                            _ => Message::Noop,
+                        };
+                    }
+                    match (key.as_ref(), m) {
                     (keyboard::Key::Character(c), m) if c == "q" && m.command() => {
                         Message::UnitCycled
                     }
@@ -452,9 +481,10 @@ impl Signex {
                     (keyboard::Key::Character(c), m) if c == "p" && m.command() && !m.shift() => {
                         Message::PrintPreviewRequested
                     }
-                    // Ctrl+Shift+P: Export PDF options dialog
+                    // Ctrl+Shift+P: open command palette (VS Code parity).
+                    // Export PDF stays reachable via File ▸ Export ▸ PDF…
                     (keyboard::Key::Character(c), m) if c == "P" && m.command() && m.shift() => {
-                        Message::ExportPdfOpenDialog
+                        Message::CommandPaletteOpen
                     }
                     // Ctrl+, open Preferences
                     (keyboard::Key::Character(c), m) if c == "," && m.command() => {
@@ -578,7 +608,8 @@ impl Signex {
                         Message::PrePlacementTab
                     }
                     _ => Message::Noop,
-                },
+                    }
+                }
                 _ => Message::Noop,
             });
 

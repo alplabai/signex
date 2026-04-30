@@ -1,4 +1,4 @@
-use iced::widget::{canvas, column, container, row};
+use iced::widget::{canvas, column, container, row, text_input};
 use iced::{Element, Length};
 
 mod dialogs;
@@ -3086,9 +3086,10 @@ impl Signex {
             left: 8.0,
         });
 
-        // Search bar placeholder — visual only for now. Matches VS Code's
-        // central command palette peek: rounded rect with search icon
-        // and muted prompt text.
+        // Chrome-strip command palette input — VS Code-style fuzzy
+        // search over commands, placed symbols, and project files. The
+        // text_input is always rendered; the dropdown overlay is gated
+        // on `command_palette.open` and rendered by `collect_overlays`.
         let search_icon =
             svg(h_search.clone())
                 .width(12)
@@ -3096,15 +3097,36 @@ impl Signex {
                 .style(move |_: &iced::Theme, _| svg::Style {
                     color: Some(muted_c),
                 });
+        let palette_input = text_input(
+            "Search files, symbols, commands…",
+            &self.ui_state.command_palette.query,
+        )
+        .id(crate::app::command_palette::COMMAND_PALETTE_INPUT_ID.clone())
+        .on_input(Message::CommandPaletteQueryChanged)
+        .on_submit(Message::CommandPaletteExecuteSelected)
+        .padding(iced::Padding::ZERO)
+        .size(11)
+        .width(Length::Fill)
+        .style(move |_: &iced::Theme, _status: text_input::Status| text_input::Style {
+            // Outer container owns the chrome border + bg, so the
+            // input itself is transparent. Without this the input's
+            // default frame paints on top of the container's
+            // rounded rect and the corners look doubled.
+            background: Background::Color(Color::TRANSPARENT),
+            border: Border {
+                color: Color::TRANSPARENT,
+                width: 0.0,
+                radius: 0.0.into(),
+            },
+            icon: text_c,
+            placeholder: muted_c,
+            value: text_c,
+            selection: Color { a: 0.4, ..text_c },
+        });
         let search_bar: Element<'_, Message> = container(
-            row![
-                search_icon,
-                text("Search files, symbols, commands…")
-                    .size(11)
-                    .color(muted_c),
-            ]
-            .spacing(8)
-            .align_y(Alignment::Center),
+            row![search_icon, palette_input]
+                .spacing(8)
+                .align_y(Alignment::Center),
         )
         .padding(iced::Padding {
             top: 0.0,
@@ -3511,7 +3533,8 @@ impl Signex {
                 .library
                 .library_browsers
                 .values()
-                .any(|s| s.edit_modal.is_some() || s.delete_confirm.is_some());
+                .any(|s| s.edit_modal.is_some() || s.delete_confirm.is_some())
+            || ui.command_palette.open;
 
         if needs_overlay {
             let mut overlays = self.collect_overlays();
@@ -3883,6 +3906,140 @@ impl Signex {
             ))
             .into()
         }
+    }
+
+    /// Result list for the chrome-strip command palette. Anchored
+    /// below the chrome strip; scoring + ranking happens in the
+    /// `command_palette` module so this view stays a thin renderer.
+    fn view_command_palette_dropdown(&self) -> Element<'_, Message> {
+        use crate::app::command_palette::{
+            CommandSource, MAX_RESULTS, build_catalog, rank_results,
+        };
+        use iced::widget::{Space, button, column, container, row, scrollable, text};
+        use iced::{Alignment, Background, Border, Color};
+
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let muted_c = crate::styles::ti(tokens.text_secondary);
+        let panel_bg = crate::styles::ti(tokens.panel_bg);
+        let border_c = crate::styles::ti(tokens.border);
+        let accent_c = crate::styles::ti(tokens.accent);
+        let hover_c = crate::styles::ti(tokens.hover);
+
+        let catalog = build_catalog(self);
+        let ranked = rank_results(&catalog, &self.ui_state.command_palette.query);
+        let total = ranked.len();
+        let selected = self.ui_state.command_palette.selected_index.min(total.saturating_sub(1));
+
+        let mut rows: Vec<Element<'_, Message>> = Vec::with_capacity(MAX_RESULTS.min(total));
+        for (display_idx, &(catalog_idx, _score)) in ranked.iter().take(MAX_RESULTS).enumerate() {
+            let entry = &catalog[catalog_idx];
+            let is_active = display_idx == selected;
+            let row_bg = if is_active {
+                Some(Background::Color(hover_c))
+            } else {
+                None
+            };
+            let source_label = match entry.source {
+                CommandSource::Command => "Command",
+                CommandSource::Symbol => "Symbol",
+                CommandSource::File => "File",
+            };
+            let label_col = column![
+                text(entry.label.clone()).size(12).color(text_c),
+                text(if entry.detail.is_empty() {
+                    String::new()
+                } else {
+                    entry.detail.clone()
+                })
+                .size(10)
+                .color(muted_c),
+            ]
+            .spacing(2)
+            .width(Length::Fill);
+            let row_inner = row![
+                label_col,
+                text(source_label).size(10).color(muted_c),
+            ]
+            .spacing(10)
+            .align_y(Alignment::Center);
+            let btn = button(row_inner)
+                .width(Length::Fill)
+                .padding([6, 12])
+                .on_press(Message::CommandPaletteSelect(display_idx))
+                .style(move |_: &iced::Theme, status: button::Status| {
+                    let bg = match status {
+                        button::Status::Hovered | button::Status::Pressed => {
+                            Some(Background::Color(hover_c))
+                        }
+                        _ => row_bg,
+                    };
+                    button::Style {
+                        background: bg,
+                        border: Border {
+                            width: if is_active { 1.0 } else { 0.0 },
+                            radius: 3.0.into(),
+                            color: if is_active { accent_c } else { Color::TRANSPARENT },
+                        },
+                        text_color: text_c,
+                        ..button::Style::default()
+                    }
+                });
+            rows.push(btn.into());
+        }
+
+        let body: Element<'_, Message> = if total == 0 {
+            container(
+                text("No results")
+                    .size(12)
+                    .color(muted_c),
+            )
+            .padding([12, 14])
+            .width(Length::Fill)
+            .into()
+        } else {
+            let list = column(rows).spacing(2).padding(4);
+            scrollable(list).height(Length::Shrink).into()
+        };
+
+        // Footer when there are more matches than we render.
+        let footer: Element<'_, Message> = if total > MAX_RESULTS {
+            container(
+                text(format!(
+                    "{} more results — refine query",
+                    total - MAX_RESULTS
+                ))
+                .size(10)
+                .color(muted_c),
+            )
+            .padding([4, 14])
+            .width(Length::Fill)
+            .into()
+        } else {
+            Space::new().height(0).into()
+        };
+
+        let card_w = 520.0_f32;
+        let card = container(column![body, footer])
+            .width(card_w)
+            .max_height(360.0)
+            .padding(0)
+            .style(move |_: &iced::Theme| container::Style {
+                background: Some(Background::Color(panel_bg)),
+                border: Border {
+                    color: border_c,
+                    width: 1.0,
+                    radius: 6.0.into(),
+                },
+                ..container::Style::default()
+            });
+
+        let (ww, _wh) = self.ui_state.window_size;
+        let x = ((ww - card_w) / 2.0).max(8.0);
+        // Drop just below the chrome strip with a small gap so the
+        // card visually detaches from the menu bar.
+        let y = crate::menu_bar::MENU_BAR_HEIGHT + 4.0;
+        super::view::translate::Translate::new(card, (x, y)).into()
     }
 
     fn dismiss_layer(on_press: Message) -> Element<'static, Message> {
@@ -4768,6 +4925,14 @@ impl Signex {
                     ..Default::default()
                 });
             layers.push(backdrop.into());
+        }
+
+        // Command palette dropdown (Ctrl+Shift+P). Rendered last so it
+        // sits above every other modal layer; click-outside dismisses
+        // via the standard dismiss_layer pattern.
+        if ui.command_palette.open {
+            layers.push(Self::dismiss_layer(Message::CommandPaletteClose));
+            layers.push(self.view_command_palette_dropdown());
         }
 
         // "Library Updates Available" modal (Stage 16 §3.5).

@@ -471,6 +471,28 @@ pub enum Message {
     /// shot. See `crate::library::LibraryMessage` for the inner
     /// shape.
     Library(crate::library::LibraryMessage),
+    /// Open the command palette dropdown and focus the chrome-strip
+    /// search bar. Bound to Ctrl+Shift+P. Idempotent — already-open
+    /// keeps state, just refocuses the input.
+    CommandPaletteOpen,
+    /// Close the dropdown without executing. Bound to Esc and to
+    /// click-outside. Leaves the chrome-strip input visible (it's the
+    /// always-on placeholder) but unfocused; query is preserved so a
+    /// re-open continues where the user left off.
+    CommandPaletteClose,
+    /// Live query update from the chrome-strip text_input. Resets the
+    /// selected row to 0 because the result list reorders on every
+    /// keystroke.
+    CommandPaletteQueryChanged(String),
+    /// Move the highlighted row by `delta` (clamped to result count).
+    /// Wired to ArrowUp / ArrowDown when the palette is open.
+    CommandPaletteMoveSelection(i32),
+    /// Click on a specific row in the dropdown — sets selected_index
+    /// and executes in one shot.
+    CommandPaletteSelect(usize),
+    /// Execute the currently selected entry. Wired to Enter and to
+    /// `text_input::on_submit`.
+    CommandPaletteExecuteSelected,
     Noop,
 }
 

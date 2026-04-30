@@ -63,6 +63,10 @@ The library subsystem follows the **DBLib model** specified in the v0.9 plan ser
 - `CDLA-Permissive-2.0` added to the `deny.toml` allowlist for `webpki-roots` (transitive via `reqwest` + `sqlx`).
 - `.gitattributes` adds binary patterns for `.pdf`, `.step`, `.wrl`, `.png`.
 
+### Added — UX polish (v0.11 over-Altium wins)
+
+- **Command palette** (UX_IMPROVEMENTS_OVER_ALTIUM §4.1) — `Ctrl+Shift+P` focuses the chrome-strip search bar and opens a fuzzy-match dropdown over every menu action, every panel-open command, every placed designator, and every project file. Sublime-text-style scoring (word-boundary + contiguous + literal-substring bonuses, length penalty); arrow keys navigate, Enter executes, Esc / click-outside dismisses. Caps the result list at 10 with a "More results — refine query" footer. Replaces the old static placeholder. Export PDF stays reachable via File ▸ Export ▸ PDF…
+
 ### Changed
 
 - **`PinElectricalType` → `PinDirection`** in the new `signex-library` crate to satisfy the License Guard's `no-removed-kicad-api` strict job. Variant set unchanged. Note: this is a different enum from `signex_types::schematic::PinDirection` (which has Signex-original variants); the two coexist as path-qualified `signex_library::PinDirection` vs `signex_types::schematic::PinDirection`. Consolidating them is a follow-up refactor.

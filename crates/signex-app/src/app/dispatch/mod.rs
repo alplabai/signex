@@ -2,6 +2,7 @@ use iced::Task;
 
 use super::*;
 
+mod command_palette;
 mod document;
 pub(crate) mod library;
 mod overlay;
@@ -642,6 +643,14 @@ impl Signex {
             }
             Message::UpdateDrawingField(uuid, edit) => self.handle_update_drawing_field(uuid, edit),
             Message::Library(msg) => self.dispatch_library_message(msg),
+            Message::CommandPaletteOpen
+            | Message::CommandPaletteClose
+            | Message::CommandPaletteQueryChanged(_)
+            | Message::CommandPaletteMoveSelection(_)
+            | Message::CommandPaletteSelect(_)
+            | Message::CommandPaletteExecuteSelected => {
+                self.dispatch_command_palette_message(message)
+            }
             Message::Noop => Task::none(),
         }
     }
