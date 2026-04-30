@@ -411,8 +411,13 @@ impl Signex {
                 value,
             } => {
                 if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
-                    state.search = value;
+                    state.search = value.clone();
                 }
+                // Write-through so reopening this library next session
+                // restores the same filter — UX_IMPROVEMENTS §1.1.
+                // Per-path scoping prevents two libraries from
+                // sharing the same search term.
+                crate::fonts::write_library_browser_search(&library_path, &value);
                 Task::none()
             }
             LibraryMessage::BrowserSortColumn {
@@ -831,11 +836,23 @@ impl Signex {
             names.first().map(|s| (*s).clone())
         });
 
+        // Hydrate persisted search query for this library (per-path,
+        // not global) the first time a browser tab opens this session.
+        // Reading the prefs file every open is fine — single-digit
+        // milliseconds and only on user gesture.
+        let persisted_search = crate::fonts::read_library_browser_searches()
+            .remove(&path)
+            .unwrap_or_default();
+
         let entry = self
             .library
             .library_browsers
             .entry(path.clone())
-            .or_insert_with(|| crate::library::state::LibraryBrowserState::new(path.clone()));
+            .or_insert_with(|| {
+                let mut s = crate::library::state::LibraryBrowserState::new(path.clone());
+                s.search = persisted_search;
+                s
+            });
 
         if entry.active_table.is_none() {
             entry.active_table = default_table;
