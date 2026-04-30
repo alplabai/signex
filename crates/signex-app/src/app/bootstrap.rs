@@ -288,6 +288,9 @@ impl Signex {
                 last_tool: std::collections::HashMap::new(),
                 pending_power: None,
                 pending_port: None,
+                hover_symbol_uuid: None,
+                hover_started_at: None,
+                hover_screen_pos: None,
             },
             library: crate::library::LibraryState::default(),
         };
@@ -714,6 +717,31 @@ impl Signex {
             Subscription::none()
         };
 
-        Subscription::batch([kbd, mouse_sub, window_close, window_resize, hover_tick])
+        // Hover-tooltip wake tick. The tooltip overlay only shows
+        // after the cursor has dwelled on a placed symbol for 250 ms
+        // — without a periodic re-render, the view layer would never
+        // notice the threshold crossing once the cursor stopped
+        // moving (no mouse events → no redraw). This fires until the
+        // user moves off the symbol; once the tooltip is up, normal
+        // CursorMoved events keep it tracking the cursor.
+        let symbol_hover_active = self.interaction_state.hover_symbol_uuid.is_some()
+            && self
+                .interaction_state
+                .hover_started_at
+                .is_some_and(|t| t.elapsed() < std::time::Duration::from_millis(400));
+        let hover_tooltip_tick = if symbol_hover_active {
+            iced::time::every(std::time::Duration::from_millis(80)).map(|_| Message::Noop)
+        } else {
+            Subscription::none()
+        };
+
+        Subscription::batch([
+            kbd,
+            mouse_sub,
+            window_close,
+            window_resize,
+            hover_tick,
+            hover_tooltip_tick,
+        ])
     }
 }

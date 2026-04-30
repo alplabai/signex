@@ -66,6 +66,7 @@ The library subsystem follows the **DBLib model** specified in the v0.9 plan ser
 ### Added — UX polish (v0.11 over-Altium wins)
 
 - **Command palette** (UX_IMPROVEMENTS_OVER_ALTIUM §4.1) — `Ctrl+Shift+P` focuses the chrome-strip search bar and opens a fuzzy-match dropdown over every menu action, every panel-open command, every placed designator, and every project file. Sublime-text-style scoring (word-boundary + contiguous + literal-substring bonuses, length penalty); arrow keys navigate, Enter executes, Esc / click-outside dismisses. Caps the result list at 10 with a "More results — refine query" footer. Replaces the old static placeholder. Export PDF stays reachable via File ▸ Export ▸ PDF…
+- **Hover tooltip on placed symbols** (UX_IMPROVEMENTS_OVER_ALTIUM §3.4) — dwelling the cursor on a placed schematic symbol for 250 ms now opens a small floating card showing designator + value + footprint + library id. Card tracks the cursor with a 16 px bottom-right offset (auto-flips at the right/bottom edges); vanishes when the cursor leaves the symbol. Click-through is preserved — the tooltip never blocks the next click. Symbol-only by design; wires/labels carry no library metadata worth surfacing.
 
 ### Changed
 

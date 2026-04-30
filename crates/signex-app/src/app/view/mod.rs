@@ -3534,7 +3534,16 @@ impl Signex {
                 .library_browsers
                 .values()
                 .any(|s| s.edit_modal.is_some() || s.delete_confirm.is_some())
-            || ui.command_palette.open;
+            || ui.command_palette.open
+            // Hover tooltip — needs the overlay stack to render even
+            // when no other modal is open; otherwise `view_hover_tooltip`
+            // produces an Element that's silently dropped on every
+            // frame the user hovers a symbol over a bare canvas.
+            // Mirrors the needs_overlay-predicate-gates-modal pattern.
+            || (interaction.hover_symbol_uuid.is_some()
+                && interaction
+                    .hover_started_at
+                    .is_some_and(|t| t.elapsed() >= std::time::Duration::from_millis(250)));
 
         if needs_overlay {
             let mut overlays = self.collect_overlays();
@@ -3906,6 +3915,92 @@ impl Signex {
             ))
             .into()
         }
+    }
+
+    /// Hover tooltip card showing the placed symbol's designator,
+    /// value, footprint, and library id. Only paints after the cursor
+    /// has dwelled on a Symbol hit for >= 250 ms — gates impulsive
+    /// motion from popping the card. Returns None when the gate
+    /// hasn't tripped, when no schematic is active, or when the
+    /// uuid no longer resolves (e.g. the symbol was deleted while
+    /// the dwell timer was running).
+    fn view_hover_tooltip(&self) -> Option<Element<'_, Message>> {
+        use iced::widget::{column, container, text};
+        use iced::{Background, Border, Color};
+
+        let interaction = &self.interaction_state;
+        let uuid = interaction.hover_symbol_uuid?;
+        let started = interaction.hover_started_at?;
+        if started.elapsed() < std::time::Duration::from_millis(250) {
+            return None;
+        }
+        let (sx, sy) = interaction.hover_screen_pos?;
+        let active_path = self.document_state.active_path.as_ref()?;
+        let engine = self.document_state.engines.get(active_path)?;
+        let symbol = engine.document().symbols.iter().find(|s| s.uuid == uuid)?;
+
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let muted_c = crate::styles::ti(tokens.text_secondary);
+        let panel_bg = crate::styles::ti(tokens.panel_bg);
+        let border_c = crate::styles::ti(tokens.border);
+
+        // Field row helper: muted label + primary value, fixed label
+        // width so values align across rows.
+        let field = |label: &'static str, value: String| -> Element<'_, Message> {
+            iced::widget::row![
+                text(label).size(10).color(muted_c).width(60),
+                text(value).size(11).color(text_c),
+            ]
+            .spacing(6)
+            .into()
+        };
+
+        let mut rows: Vec<Element<'_, Message>> = Vec::with_capacity(4);
+        rows.push(field("Designator", symbol.reference.clone()));
+        if !symbol.value.is_empty() {
+            rows.push(field("Value", symbol.value.clone()));
+        }
+        if !symbol.footprint.is_empty() {
+            rows.push(field("Footprint", symbol.footprint.clone()));
+        }
+        if !symbol.lib_id.is_empty() {
+            rows.push(field("Library", symbol.lib_id.clone()));
+        }
+
+        let card = container(column(rows).spacing(3))
+            .padding([8, 12])
+            .style(move |_: &iced::Theme| container::Style {
+                background: Some(Background::Color(panel_bg)),
+                border: Border {
+                    color: border_c,
+                    width: 1.0,
+                    radius: 4.0.into(),
+                },
+                ..container::Style::default()
+            });
+
+        // Offset to bottom-right so the card never sits directly under
+        // the cursor — keeps the underlying symbol visible and avoids
+        // hover flicker when the tooltip itself enters the cursor's
+        // hover rectangle.
+        const OFFSET: f32 = 16.0;
+        let (ww, wh) = self.ui_state.window_size;
+        // Conservative card-size estimate for edge clamping. The
+        // actual size depends on font metrics so this is a guess
+        // intended to keep the card on-screen near the right/bottom
+        // edges; the iced layout will still render at its true size.
+        const ESTIMATED_W: f32 = 240.0;
+        const ESTIMATED_H: f32 = 96.0;
+        let mut x = sx + OFFSET;
+        let mut y = sy + OFFSET;
+        if x + ESTIMATED_W > ww {
+            x = (sx - OFFSET - ESTIMATED_W).max(0.0);
+        }
+        if y + ESTIMATED_H > wh {
+            y = (sy - OFFSET - ESTIMATED_H).max(0.0);
+        }
+        Some(super::view::translate::Translate::new(card, (x, y)).into())
     }
 
     /// Result list for the chrome-strip command palette. Anchored
@@ -4933,6 +5028,16 @@ impl Signex {
         if ui.command_palette.open {
             layers.push(Self::dismiss_layer(Message::CommandPaletteClose));
             layers.push(self.view_command_palette_dropdown());
+        }
+
+        // Hover tooltip — appears 250 ms after the cursor lands on a
+        // placed symbol. Uses no `dismiss_layer` because the tooltip
+        // is purely informational; click-through is desirable so a
+        // visible card never blocks the user's next click on the
+        // canvas. Symbol-only by design — wires/labels carry no
+        // library metadata worth surfacing.
+        if let Some(tooltip) = self.view_hover_tooltip() {
+            layers.push(tooltip);
         }
 
         // "Library Updates Available" modal (Stage 16 §3.5).

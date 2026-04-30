@@ -733,6 +733,20 @@ pub struct InteractionState {
     pub last_tool: std::collections::HashMap<String, crate::active_bar::ActiveBarAction>,
     pub pending_power: Option<(String, String)>,
     pub pending_port: Option<(signex_types::schematic::LabelType, String)>,
+    /// Uuid of the placed symbol the cursor is currently hovering over,
+    /// if any. Set/cleared by the canvas `CursorAt` handler. Drives the
+    /// hover tooltip overlay (designator + value + footprint + lib_id).
+    pub hover_symbol_uuid: Option<uuid::Uuid>,
+    /// Wall-clock timestamp at which `hover_symbol_uuid` was first set
+    /// to its current value. Used by the view to gate the tooltip
+    /// behind a 250 ms delay so hovering is a deliberate gesture.
+    /// Resets when the hovered uuid changes.
+    pub hover_started_at: Option<std::time::Instant>,
+    /// Last-known window-relative cursor position while hovering a
+    /// symbol — drives the tooltip's screen-space placement so the
+    /// card tracks the cursor (offset to bottom-right by ~16 px so it
+    /// doesn't obscure the symbol).
+    pub hover_screen_pos: Option<(f32, f32)>,
 }
 
 impl InteractionState {
