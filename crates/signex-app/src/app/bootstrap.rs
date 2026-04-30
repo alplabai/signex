@@ -333,7 +333,13 @@ impl Signex {
     }
 
     pub fn title(&self, _id: iced::window::Id) -> String {
-        format!("Signex {}", env!("CARGO_PKG_VERSION"))
+        let version = env!("CARGO_PKG_VERSION");
+        let dirty_count = self.document_state.dirty_paths.len();
+        if dirty_count == 0 {
+            format!("Signex {version}")
+        } else {
+            format!("• Signex {version} — {dirty_count} unsaved")
+        }
     }
 
     pub fn theme(&self, _id: iced::window::Id) -> Option<Theme> {
