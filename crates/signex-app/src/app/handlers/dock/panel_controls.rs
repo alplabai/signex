@@ -42,6 +42,9 @@ impl Signex {
             crate::panels::PanelMsg::FocusErcViolation(idx) => {
                 let _ = self.handle_focus_erc_diagnostic_index(*idx);
             }
+            crate::panels::PanelMsg::ErcQuickFix(idx) => {
+                let _ = self.handle_erc_quick_fix(*idx);
+            }
             crate::panels::PanelMsg::FocusPrevErcDiagnostic => {
                 let _ = self.handle_focus_erc_diagnostic_offset(-1);
             }

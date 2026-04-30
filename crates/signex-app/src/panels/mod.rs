@@ -230,6 +230,12 @@ pub struct ErcDiagnosticEntry {
     pub sheet_path: std::path::PathBuf,
     pub severity: ErcSeverityLite,
     pub rule_label: &'static str,
+    /// Underlying rule kind — drives the Quick Fix chip's label and
+    /// per-rule action (UnusedPin → place a NoConnect; others →
+    /// zoom + select on the canvas). Carrying it here means the panel
+    /// view can decide both the label and the dispatch with no
+    /// extra lookup against `erc_violations_by_path`.
+    pub rule_kind: signex_erc::RuleKind,
     pub message: String,
     pub world_x: f64,
     pub world_y: f64,
@@ -816,6 +822,11 @@ pub enum PanelMsg {
     FocusPrevErcDiagnostic,
     /// Focus next ERC diagnostic row in the global list.
     FocusNextErcDiagnostic,
+    /// User clicked the Quick Fix chip on an ERC violation row. Routes
+    /// to a per-rule handler — UnusedPin places a NoConnect at the
+    /// pin, every other rule falls back to "zoom + select" (same as
+    /// clicking the row body).
+    ErcQuickFix(usize),
     ToggleGrid,
     ToggleSnap,
     PropertiesTab(usize),
@@ -6159,44 +6170,68 @@ fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         } else {
             None
         };
+        // Quick Fix chip label per rule kind (UX_IMPROVEMENTS_OVER_ALTIUM
+        // §4.4). Only `UnusedPin` has a true mutating fix today —
+        // place a NoConnect at the dangling pin. Every other rule's
+        // chip is a fast "zoom + select" alias for the row click,
+        // so the user has a one-click path to the offending item
+        // even when the row's text is long enough that the click
+        // target's centre lands far from the cursor.
+        let quick_fix_label = match v.rule_kind {
+            signex_erc::RuleKind::UnusedPin => "Add No-Connect",
+            _ => "Show on Canvas",
+        };
         col = col.push(
-            iced::widget::button(
-                row![
-                    text(sev_label).size(9).color(sev_color),
-                    Space::new().width(4).height(Length::Shrink),
-                    text(v.rule_label)
-                        .size(9)
-                        .color(theme_ext::text_primary(&ctx.tokens)),
-                    Space::new().width(6).height(Length::Shrink),
-                    text(v.message.clone())
+            row![
+                iced::widget::button(
+                    row![
+                        text(sev_label).size(9).color(sev_color),
+                        Space::new().width(4).height(Length::Shrink),
+                        text(v.rule_label)
+                            .size(9)
+                            .color(theme_ext::text_primary(&ctx.tokens)),
+                        Space::new().width(6).height(Length::Shrink),
+                        text(v.message.clone())
+                            .size(9)
+                            .color(theme_ext::text_secondary(&ctx.tokens)),
+                        Space::new().width(6).height(Length::Shrink),
+                        text(format!(
+                            "{}  ({:.2}, {:.2})  {}",
+                            v.sheet_name,
+                            v.world_x,
+                            v.world_y,
+                            v.sheet_path.display()
+                        ))
                         .size(9)
                         .color(theme_ext::text_secondary(&ctx.tokens)),
-                    Space::new().width(6).height(Length::Shrink),
-                    text(format!(
-                        "{}  ({:.2}, {:.2})  {}",
-                        v.sheet_name,
-                        v.world_x,
-                        v.world_y,
-                        v.sheet_path.display()
-                    ))
-                    .size(9)
-                    .color(theme_ext::text_secondary(&ctx.tokens)),
-                ]
-                .align_y(iced::Alignment::Center)
-                .width(Length::Fill),
-            )
-            .width(Length::Fill)
-            .padding([2, 6])
-            .on_press(PanelMsg::FocusErcViolation(v.global_index))
-            .style(
-                move |_theme: &Theme, status: iced::widget::button::Status| {
-                    let base = crate::styles::menu_item(&ctx.tokens)(_theme, status);
-                    iced::widget::button::Style {
-                        background: row_bg.clone().or(base.background),
-                        ..base
-                    }
-                },
-            ),
+                    ]
+                    .align_y(iced::Alignment::Center)
+                    .width(Length::Fill),
+                )
+                .width(Length::Fill)
+                .padding([2, 6])
+                .on_press(PanelMsg::FocusErcViolation(v.global_index))
+                .style(
+                    move |_theme: &Theme, status: iced::widget::button::Status| {
+                        let base = crate::styles::menu_item(&ctx.tokens)(_theme, status);
+                        iced::widget::button::Style {
+                            background: row_bg.clone().or(base.background),
+                            ..base
+                        }
+                    },
+                ),
+                Space::new().width(6).height(Length::Shrink),
+                iced::widget::button(
+                    text(quick_fix_label)
+                        .size(9)
+                        .color(theme_ext::text_primary(&ctx.tokens)),
+                )
+                .padding([2, 8])
+                .on_press(PanelMsg::ErcQuickFix(v.global_index))
+                .style(crate::styles::menu_item(&ctx.tokens)),
+            ]
+            .align_y(iced::Alignment::Center)
+            .width(Length::Fill),
         );
     }
 

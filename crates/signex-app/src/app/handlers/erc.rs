@@ -270,6 +270,7 @@ impl Signex {
                             _ => crate::panels::ErcSeverityLite::Info,
                         },
                         rule_label: v.rule.label(),
+                        rule_kind: v.rule,
                         message: v.message.clone(),
                         world_x: v.location.x,
                         world_y: v.location.y,
@@ -292,6 +293,55 @@ impl Signex {
         let len = entries.len() as isize;
         let next = (current + delta).rem_euclid(len) as usize;
         self.handle_focus_erc_diagnostic_index(next)
+    }
+
+    /// Quick Fix dispatch from the Messages-panel chip.
+    /// `UnusedPin` places a `NoConnect` at the violation's world
+    /// coords and re-runs ERC so the row disappears immediately;
+    /// every other rule falls back to the row-click "zoom + select"
+    /// path, which is exactly the affordance the user wants 90% of
+    /// the time even without a mutating fix.
+    pub(crate) fn handle_erc_quick_fix(&mut self, index: usize) -> Task<Message> {
+        let entries = self.build_erc_diagnostic_entries();
+        if entries.is_empty() {
+            return Task::none();
+        }
+        let clamped = index.min(entries.len() - 1);
+        let target = entries[clamped].clone();
+
+        // Open + activate the violation's sheet first, regardless of
+        // rule kind — the engine command path operates on the active
+        // engine, and even the non-mutating rules want the canvas to
+        // scroll to the offending point.
+        self.ensure_sheet_open_and_active(&target.sheet_path);
+
+        match target.rule_kind {
+            signex_erc::RuleKind::UnusedPin => {
+                let nc = signex_types::schematic::NoConnect {
+                    uuid: uuid::Uuid::new_v4(),
+                    position: signex_types::schematic::Point::new(
+                        target.world_x,
+                        target.world_y,
+                    ),
+                };
+                self.apply_engine_command(
+                    signex_engine::Command::PlaceNoConnect { no_connect: nc },
+                    false,
+                    false,
+                );
+                // Re-run ERC so the cleared violation drops out of
+                // the panel without forcing the user to press F8.
+                let _ = self.handle_run_erc();
+                // Focus the cleared point so the new NoConnect marker
+                // is visible — a small but reassuring "the fix landed
+                // here" cue.
+                self.handle_focus_at(target.world_x, target.world_y, None)
+            }
+            _ => {
+                self.ui_state.erc_focus_global_index = Some(clamped);
+                self.handle_focus_at(target.world_x, target.world_y, target.select)
+            }
+        }
     }
 
     pub(crate) fn handle_focus_erc_diagnostic_index(&mut self, index: usize) -> Task<Message> {
