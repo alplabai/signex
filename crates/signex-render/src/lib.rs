@@ -5,9 +5,10 @@
 //! just pure rendering functions.
 
 pub mod colors;
-// Schematic + PCB renderer modules are intentionally absent on
-// `feature/v0.12-cleanroom-rewrite`. They are reintroduced in
-// Wave 1 (mod.rs skeleton) and filled in by Waves 2–5. See
+pub mod schematic;
+// `pub mod pcb;` was deleted in Wave 0 of the v0.12 cleanroom rewrite.
+// PCB rendering is on the post-v0.12 roadmap and will be reintroduced
+// from a Signex-only PCB spec when that phase begins. See
 // `docs/internal/CLEANROOM_REWRITE_PLAN.md`.
 
 use std::sync::{OnceLock, RwLock};
