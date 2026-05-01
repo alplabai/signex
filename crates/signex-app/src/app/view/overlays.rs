@@ -56,7 +56,7 @@ impl Signex {
         let preview_detached = ui
             .windows
             .values()
-            .any(|kind| matches!(kind, super::state::WindowKind::DetachedModal(super::state::ModalId::PrintPreview)));
+            .any(|kind| matches!(kind, super::states::WindowKind::DetachedModal(super::states::ModalId::PrintPreview)));
         if document.preview.is_some() && !preview_detached {
             layers.push(self.view_print_preview());
         }
@@ -65,7 +65,7 @@ impl Signex {
         let bom_detached = ui
             .windows
             .values()
-            .any(|kind| matches!(kind, super::state::WindowKind::DetachedModal(super::state::ModalId::BomPreview)));
+            .any(|kind| matches!(kind, super::states::WindowKind::DetachedModal(super::states::ModalId::BomPreview)));
         if document.bom_preview.is_some() && !bom_detached {
             layers.push(self.view_bom_preview());
         }
@@ -582,7 +582,7 @@ impl Signex {
                 .windows
                 .values()
                 .filter_map(|w| match w {
-                    super::state::WindowKind::DetachedPanel(k) => Some(*k),
+                    super::states::WindowKind::DetachedPanel(k) => Some(*k),
                     _ => None,
                 })
                 .collect();
@@ -741,21 +741,21 @@ impl Signex {
         // owns the view. Without this guard the user sees the modal in
         // both the main window and the popped-out window at the same
         // time.
-        let modal_detached = |m: super::state::ModalId| -> bool {
+        let modal_detached = |m: super::states::ModalId| -> bool {
             ui.windows
                 .values()
-                .any(|kind| matches!(kind, super::state::WindowKind::DetachedModal(x) if *x == m))
+                .any(|kind| matches!(kind, super::states::WindowKind::DetachedModal(x) if *x == m))
         };
 
-        if ui.annotate.dialog_open && !modal_detached(super::state::ModalId::AnnotateDialog) {
+        if ui.annotate.dialog_open && !modal_detached(super::states::ModalId::AnnotateDialog) {
             layers.push(self.view_annotate_dialog());
         }
         if ui.annotate.reset_confirm
-            && !modal_detached(super::state::ModalId::AnnotateResetConfirm)
+            && !modal_detached(super::states::ModalId::AnnotateResetConfirm)
         {
             layers.push(self.view_annotate_reset_confirm());
         }
-        if ui.erc.dialog_open && !modal_detached(super::state::ModalId::ErcDialog) {
+        if ui.erc.dialog_open && !modal_detached(super::states::ModalId::ErcDialog) {
             layers.push(self.view_erc_dialog());
         }
 

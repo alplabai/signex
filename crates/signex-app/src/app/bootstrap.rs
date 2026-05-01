@@ -114,7 +114,7 @@ impl Signex {
                 rename_dialog: None,
                 remove_dialog: None,
                 project_close_confirm: None,
-                erc: crate::app::state::ErcState {
+                erc: crate::app::states::ErcState {
                     violations: Vec::new(),
                     violations_by_path: std::collections::HashMap::new(),
                     focus_global_index: None,
@@ -122,19 +122,19 @@ impl Signex {
                     dialog_open: false,
                     pin_matrix_overrides: crate::fonts::read_pin_matrix_overrides(),
                 },
-                annotate: crate::app::state::AnnotateState {
+                annotate: crate::app::states::AnnotateState {
                     dialog_open: false,
-                    order: crate::app::state::AnnotateOrder::AcrossThenDown,
+                    order: crate::app::states::AnnotateOrder::AcrossThenDown,
                     reset_confirm: false,
                     locked: std::collections::HashSet::new(),
                 },
-                net_color: crate::app::state::NetColorState {
+                net_color: crate::app::states::NetColorState {
                     colors_by_net: std::collections::HashMap::new(),
                     palette_open: false,
                     pending_color: None,
                     wire_color_overrides: std::collections::HashMap::new(),
                     undo: Vec::new(),
-                    custom: crate::app::state::NetColorCustomState::default(),
+                    custom: crate::app::states::NetColorCustomState::default(),
                 },
                 auto_focus: false,
                 modal_offsets: std::collections::HashMap::new(),
@@ -144,7 +144,7 @@ impl Signex {
                 windows: std::collections::HashMap::new(),
                 saving_paths: std::collections::HashSet::new(),
                 save_error: None,
-                move_selection: crate::app::state::MoveSelectionState::default(),
+                move_selection: crate::app::states::MoveSelectionState::default(),
                 parameter_manager_open: false,
                 reorder_picker: None,
                 selection_mode: signex_render::schematic::hit_test::SelectionMode::default(),

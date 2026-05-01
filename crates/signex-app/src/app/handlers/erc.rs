@@ -583,12 +583,12 @@ impl Signex {
         // from the moment they open — no in-window overlay, no drag-off
         // dance. `handle_detach_modal` is idempotent, so re-opening
         // while a window already exists just no-ops.
-        self.handle_detach_modal(super::super::state::ModalId::AnnotateDialog)
+        self.handle_detach_modal(super::super::states::ModalId::AnnotateDialog)
     }
 
     pub(crate) fn handle_close_annotate_dialog(&mut self) -> Task<Message> {
         self.ui_state.annotate.dialog_open = false;
-        self.close_detached_modal(super::super::state::ModalId::AnnotateDialog)
+        self.close_detached_modal(super::super::states::ModalId::AnnotateDialog)
     }
 
     /// Altium's "Reset Duplicate Designators" — find references that
@@ -817,7 +817,7 @@ impl Signex {
 
     pub(crate) fn handle_annotate_order_changed(
         &mut self,
-        order: super::super::state::AnnotateOrder,
+        order: super::super::states::AnnotateOrder,
     ) -> Task<Message> {
         self.ui_state.annotate.order = order;
         Task::none()
@@ -826,12 +826,12 @@ impl Signex {
     pub(crate) fn handle_open_erc_dialog(&mut self) -> Task<Message> {
         self.ui_state.erc.dialog_open = true;
         self.interaction_state.context_menu = None;
-        self.handle_detach_modal(super::super::state::ModalId::ErcDialog)
+        self.handle_detach_modal(super::super::states::ModalId::ErcDialog)
     }
 
     pub(crate) fn handle_close_erc_dialog(&mut self) -> Task<Message> {
         self.ui_state.erc.dialog_open = false;
-        self.close_detached_modal(super::super::state::ModalId::ErcDialog)
+        self.close_detached_modal(super::super::states::ModalId::ErcDialog)
     }
 
     pub(crate) fn handle_erc_severity_changed(
@@ -853,17 +853,17 @@ impl Signex {
 
     pub(crate) fn handle_open_annotate_reset_confirm(&mut self) -> Task<Message> {
         self.ui_state.annotate.reset_confirm = true;
-        self.handle_detach_modal(super::super::state::ModalId::AnnotateResetConfirm)
+        self.handle_detach_modal(super::super::states::ModalId::AnnotateResetConfirm)
     }
 
     pub(crate) fn handle_close_annotate_reset_confirm(&mut self) -> Task<Message> {
         self.ui_state.annotate.reset_confirm = false;
-        self.close_detached_modal(super::super::state::ModalId::AnnotateResetConfirm)
+        self.close_detached_modal(super::super::states::ModalId::AnnotateResetConfirm)
     }
 
     pub(crate) fn handle_modal_drag_start(
         &mut self,
-        modal: super::super::state::ModalId,
+        modal: super::super::states::ModalId,
         x: f32,
         y: f32,
     ) -> Task<Message> {
@@ -888,7 +888,7 @@ impl Signex {
         let path = tab.path.clone();
         // Don't re-undock a tab that already has a window.
         if self.ui_state.windows.values().any(
-            |k| matches!(k, super::super::state::WindowKind::UndockedTab { path: p, .. } if p == &path),
+            |k| matches!(k, super::super::states::WindowKind::UndockedTab { path: p, .. } if p == &path),
         ) {
             return Task::none();
         }
@@ -915,7 +915,7 @@ impl Signex {
         // target; `UndockedTabOpened` refreshes the title afterwards.
         self.ui_state.windows.insert(
             id,
-            super::super::state::WindowKind::UndockedTab {
+            super::super::states::WindowKind::UndockedTab {
                 path: path.clone(),
                 title,
             },
@@ -946,7 +946,7 @@ impl Signex {
         });
         self.ui_state
             .windows
-            .insert(id, super::super::state::WindowKind::DetachedPanel(kind));
+            .insert(id, super::super::states::WindowKind::DetachedPanel(kind));
         open_task.map(move |settled_id| Message::DetachedPanelOpened {
             kind,
             id: settled_id,
@@ -960,9 +960,9 @@ impl Signex {
     /// open rendering an orphaned modal body.
     pub(crate) fn close_detached_modal(
         &mut self,
-        modal: super::super::state::ModalId,
+        modal: super::super::states::ModalId,
     ) -> Task<Message> {
-        use super::super::state::WindowKind;
+        use super::super::states::WindowKind;
         let maybe_id = self.ui_state.windows.iter().find_map(|(id, kind)| {
             if matches!(kind, WindowKind::DetachedModal(m) if *m == modal) {
                 Some(*id)
@@ -984,13 +984,13 @@ impl Signex {
     /// the OS) since we don't know where to anchor absent monitor query.
     pub(crate) fn handle_detach_modal(
         &mut self,
-        modal: super::super::state::ModalId,
+        modal: super::super::states::ModalId,
     ) -> Task<Message> {
-        use super::super::state::ModalId;
+        use super::super::states::ModalId;
         // Don't open a second window for the same modal — treat detach
         // on an already-detached modal as a no-op.
         if self.ui_state.windows.values().any(
-            |kind| matches!(kind, super::super::state::WindowKind::DetachedModal(m) if *m == modal),
+            |kind| matches!(kind, super::super::states::WindowKind::DetachedModal(m) if *m == modal),
         ) {
             return Task::none();
         }
@@ -1023,7 +1023,7 @@ impl Signex {
         // the entry the detached window would render empty.
         self.ui_state
             .windows
-            .insert(id, super::super::state::WindowKind::DetachedModal(modal));
+            .insert(id, super::super::states::WindowKind::DetachedModal(modal));
         // When the OS finishes opening the window, forward the id so the
         // update can double-check and clear any leftover drag state.
         open_task.map(move |settled_id| Message::DetachedModalOpened {
@@ -1033,12 +1033,12 @@ impl Signex {
     }
 
     pub(crate) fn handle_open_move_selection_dialog(&mut self) -> Task<Message> {
-        self.ui_state.move_selection = super::super::state::MoveSelectionState {
+        self.ui_state.move_selection = super::super::states::MoveSelectionState {
             open: true,
             dx: "0".to_string(),
             dy: "0".to_string(),
         };
-        self.handle_detach_modal(super::super::state::ModalId::MoveSelection)
+        self.handle_detach_modal(super::super::states::ModalId::MoveSelection)
     }
 
     pub(crate) fn handle_close_move_selection_dialog(&mut self) -> Task<Message> {
@@ -1114,9 +1114,9 @@ impl Signex {
     /// title bar.
     pub(crate) fn handle_start_detached_window_drag(
         &mut self,
-        modal: super::super::state::ModalId,
+        modal: super::super::states::ModalId,
     ) -> Task<Message> {
-        use super::super::state::WindowKind;
+        use super::super::states::WindowKind;
         let id = self.ui_state.windows.iter().find_map(|(id, kind)| {
             if matches!(kind, WindowKind::DetachedModal(m) if *m == modal) {
                 Some(*id)

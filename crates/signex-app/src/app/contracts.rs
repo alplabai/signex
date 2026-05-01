@@ -166,7 +166,7 @@ pub enum Message {
     /// Dismiss the Annotate dialog without applying.
     CloseAnnotateDialog,
     /// Change the Annotate dialog's order-of-processing choice.
-    AnnotateOrderChanged(super::state::AnnotateOrder),
+    AnnotateOrderChanged(super::states::AnnotateOrder),
     /// Show the ERC modal (severity matrix + pin-compatibility matrix).
     OpenErcDialog,
     /// Dismiss the ERC dialog.
@@ -180,7 +180,7 @@ pub enum Message {
     /// User pressed the title bar of a modal at window-space (x, y) — begin
     /// dragging it. The next DragMove events update its offset.
     ModalDragStart {
-        modal: super::state::ModalId,
+        modal: super::states::ModalId,
         x: f32,
         y: f32,
     },
@@ -213,13 +213,13 @@ pub enum Message {
     /// Pop a modal out of the main window into its own OS window. Altium
     /// triggers this when the user drags the modal's title bar past the
     /// main window edge, or clicks the pop-out icon in the title bar.
-    DetachModal(super::state::ModalId),
+    DetachModal(super::states::ModalId),
     /// Fired after `window::open` resolves for a detached modal — stores
     /// the new window's id in `ui_state.windows` so `view(id)` can render
     /// it and `SecondaryWindowClosed` can reattach when the user dismisses
     /// the window.
     DetachedModalOpened {
-        modal: super::state::ModalId,
+        modal: super::states::ModalId,
         id: iced::window::Id,
     },
     /// Pop a document tab into its own OS window (Altium-style tab
@@ -250,7 +250,7 @@ pub enum Message {
     /// window drag for the window hosting this modal. Lets the user move
     /// the detached modal even though `decorations: false` removed the
     /// native title bar.
-    StartDetachedWindowDrag(super::state::ModalId),
+    StartDetachedWindowDrag(super::states::ModalId),
     /// User pressed on empty chrome (menu-bar row outside buttons) — start
     /// an OS-level window drag for the main borderless window. The chrome
     /// is the replacement for the OS title bar.
@@ -266,7 +266,7 @@ pub enum Message {
     /// the modals couldn't be resized because `decorations: false`
     /// strips the OS chrome.
     StartDetachedModalResize {
-        modal: super::state::ModalId,
+        modal: super::states::ModalId,
         direction: iced::window::Direction,
     },
     /// Custom min/max/close buttons in the borderless main-window chrome.
@@ -386,7 +386,7 @@ pub enum Message {
     BomPreviewColumnResizeEnd,
     /// User clicked a Properties-sidebar tab (General / Columns) in
     /// the BOM preview modal.
-    BomPreviewSetSidebarTab(super::state::BomSidebarTab),
+    BomPreviewSetSidebarTab(super::states::BomSidebarTab),
     /// User clicked Export in the BOM preview modal — drives the file
     /// dialog with the live options.
     BomPreviewExport,
@@ -420,7 +420,7 @@ pub enum Message {
     PrintPreviewClose,
     /// User clicked the Preview / Settings tab inside the unified
     /// Export PDF modal.
-    PrintPreviewSetTab(super::state::PdfPreviewTab),
+    PrintPreviewSetTab(super::states::PdfPreviewTab),
     /// User pressed mouse-down on the preview viewport — kicks off
     /// pan-drag. The handler reads the cursor from
     /// `interaction_state.last_mouse_pos` rather than carrying it on
@@ -450,7 +450,7 @@ pub enum Message {
     PrintPreviewSetIncludeBlankets(bool),
     PrintPreviewSetIncludeNotes(bool),
     PrintPreviewSetIncludeCollapsedNotes(bool),
-    PrintPreviewSetQuality(super::state::PdfQuality),
+    PrintPreviewSetQuality(super::states::PdfQuality),
     PrintPreviewSetBookmarkZoom(f32),
     PrintPreviewSetGenerateNetsInfo(bool),
     PrintPreviewSetBookmarkPins(bool),

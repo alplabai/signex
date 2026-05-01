@@ -249,7 +249,7 @@ impl Signex {
                     .is_empty()
                 {
                     self.ui_state.reorder_picker =
-                        Some(super::super::super::state::ReorderPicker::Above);
+                        Some(super::super::super::states::ReorderPicker::Above);
                     self.interaction_state
                         .active_canvas_mut()
                         .reorder_picker_armed = true;
@@ -270,7 +270,7 @@ impl Signex {
                     .is_empty()
                 {
                     self.ui_state.reorder_picker =
-                        Some(super::super::super::state::ReorderPicker::Below);
+                        Some(super::super::super::states::ReorderPicker::Below);
                     self.interaction_state
                         .active_canvas_mut()
                         .reorder_picker_armed = true;

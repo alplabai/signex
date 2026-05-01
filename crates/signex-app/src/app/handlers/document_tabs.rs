@@ -104,7 +104,7 @@ impl Signex {
         // too — otherwise it'd be an orphan showing "No document open"
         // indefinitely. The window's `SecondaryWindowClosed` cleans up
         // `canvases[id]` + `ui_state.windows[id]`.
-        use crate::app::state::WindowKind;
+        use crate::app::states::WindowKind;
         let orphan_window_ids: Vec<iced::window::Id> = self
             .ui_state
             .windows

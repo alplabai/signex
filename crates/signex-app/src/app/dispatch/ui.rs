@@ -102,7 +102,7 @@ impl Signex {
         window_id: iced::window::Id,
         event: crate::canvas::CanvasEvent,
     ) -> iced::Task<Message> {
-        use crate::app::state::WindowKind;
+        use crate::app::states::WindowKind;
         use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 
         // Main window → run the handler directly on the legacy canvas.

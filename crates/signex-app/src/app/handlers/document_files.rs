@@ -203,7 +203,7 @@ impl Signex {
     fn load_or_activate_project(
         &mut self,
         project_path: &std::path::Path,
-    ) -> Result<crate::app::state::ProjectId> {
+    ) -> Result<crate::app::states::ProjectId> {
         if let Some(existing) = self
             .document_state
             .projects
@@ -219,7 +219,7 @@ impl Signex {
         let id = self.document_state.mint_project_id();
         self.document_state
             .projects
-            .push(super::super::state::LoadedProject {
+            .push(super::super::states::LoadedProject {
                 id,
                 path: project_path.to_path_buf(),
                 data,

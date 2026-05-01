@@ -8,7 +8,7 @@
 use iced::widget::{Column, Row, Space, button, column, container, row, scrollable, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
-use crate::app::state::AnnotateOrder;
+use crate::app::states::AnnotateOrder;
 use crate::app::{Message, Signex};
 
 const BACKDROP: Color = Color::from_rgba(0.0, 0.0, 0.0, 0.55);
@@ -61,7 +61,7 @@ impl Signex {
         let offset = self
             .ui_state
             .modal_offsets
-            .get(&super::super::state::ModalId::AnnotateDialog)
+            .get(&super::super::states::ModalId::AnnotateDialog)
             .copied()
             .unwrap_or((0.0, 0.0));
         wrap_modal(
@@ -117,11 +117,11 @@ impl Signex {
         let header = if draggable {
             draggable_header(
                 header_content,
-                super::super::state::ModalId::AnnotateDialog,
+                super::super::states::ModalId::AnnotateDialog,
                 self.interaction_state.last_mouse_pos,
             )
         } else {
-            detached_header(header_content, super::super::state::ModalId::AnnotateDialog)
+            detached_header(header_content, super::super::states::ModalId::AnnotateDialog)
         };
 
         // ── Left column: Schematic Annotation Configuration ──
@@ -611,7 +611,7 @@ impl Signex {
         let offset = self
             .ui_state
             .modal_offsets
-            .get(&super::super::state::ModalId::AnnotateResetConfirm)
+            .get(&super::super::states::ModalId::AnnotateResetConfirm)
             .copied()
             .unwrap_or((0.0, 0.0));
         wrap_modal(dialog, offset, self.ui_state.window_size, (420.0, 180.0))
@@ -646,13 +646,13 @@ impl Signex {
         let header = if draggable {
             draggable_header(
                 header_content,
-                super::super::state::ModalId::AnnotateResetConfirm,
+                super::super::states::ModalId::AnnotateResetConfirm,
                 self.interaction_state.last_mouse_pos,
             )
         } else {
             detached_header(
                 header_content,
-                super::super::state::ModalId::AnnotateResetConfirm,
+                super::super::states::ModalId::AnnotateResetConfirm,
             )
         };
         let dialog = container(
@@ -695,7 +695,7 @@ impl Signex {
         let offset = self
             .ui_state
             .modal_offsets
-            .get(&super::super::state::ModalId::ErcDialog)
+            .get(&super::super::states::ModalId::ErcDialog)
             .copied()
             .unwrap_or((0.0, 0.0));
         wrap_modal(dialog, offset, self.ui_state.window_size, (1000.0, 600.0))
@@ -730,11 +730,11 @@ impl Signex {
         let header = if draggable {
             draggable_header(
                 header_content,
-                super::super::state::ModalId::ErcDialog,
+                super::super::states::ModalId::ErcDialog,
                 self.interaction_state.last_mouse_pos,
             )
         } else {
-            detached_header(header_content, super::super::state::ModalId::ErcDialog)
+            detached_header(header_content, super::super::states::ModalId::ErcDialog)
         };
 
         // Per-rule severity grid. 11 rules × 4 severities.
@@ -858,7 +858,7 @@ impl Signex {
         let offset = self
             .ui_state
             .modal_offsets
-            .get(&super::super::state::ModalId::RenameDialog)
+            .get(&super::super::states::ModalId::RenameDialog)
             .copied()
             .unwrap_or((0.0, 0.0));
         wrap_modal(dialog, offset, self.ui_state.window_size, (420.0, 200.0))
@@ -895,7 +895,7 @@ impl Signex {
         let _ = border_c;
         let header = draggable_header(
             header_content,
-            super::super::state::ModalId::RenameDialog,
+            super::super::states::ModalId::RenameDialog,
             self.interaction_state.last_mouse_pos,
         );
 
@@ -950,7 +950,7 @@ impl Signex {
         let offset = self
             .ui_state
             .modal_offsets
-            .get(&super::super::state::ModalId::RemoveDialog)
+            .get(&super::super::states::ModalId::RemoveDialog)
             .copied()
             .unwrap_or((0.0, 0.0));
         wrap_modal(dialog, offset, self.ui_state.window_size, (560.0, 260.0))
@@ -984,7 +984,7 @@ impl Signex {
         let _ = border_c;
         let header = draggable_header(
             header_content,
-            super::super::state::ModalId::RemoveDialog,
+            super::super::states::ModalId::RemoveDialog,
             self.interaction_state.last_mouse_pos,
         );
 
@@ -1076,7 +1076,7 @@ impl Signex {
         let offset = self
             .ui_state
             .modal_offsets
-            .get(&super::super::state::ModalId::BomPreview)
+            .get(&super::super::states::ModalId::BomPreview)
             .copied()
             .unwrap_or((0.0, 0.0));
         wrap_modal(dialog, offset, self.ui_state.window_size, (modal_w, modal_h))
@@ -1115,11 +1115,11 @@ impl Signex {
         let header = if draggable {
             draggable_header(
                 header_content,
-                super::super::state::ModalId::BomPreview,
+                super::super::states::ModalId::BomPreview,
                 self.interaction_state.last_mouse_pos,
             )
         } else {
-            detached_header(header_content, super::super::state::ModalId::BomPreview)
+            detached_header(header_content, super::super::states::ModalId::BomPreview)
         };
 
         // Pill style mirrors the main-app right-side Properties
@@ -1719,7 +1719,7 @@ impl Signex {
 
         // Properties sidebar — General / Columns tabs, collapsible
         // sections inside.
-        use crate::app::state::BomSidebarTab;
+        use crate::app::states::BomSidebarTab;
         let sidebar_tab = preview.sidebar_tab;
         let tab_pill = |label: &'static str, target: BomSidebarTab| -> Element<'_, Message> {
             let on = sidebar_tab == target;
@@ -1990,7 +1990,7 @@ impl Signex {
         let _ = border_c;
         let header = draggable_header(
             header_content,
-            super::super::state::ModalId::RenameDialog,
+            super::super::states::ModalId::RenameDialog,
             self.interaction_state.last_mouse_pos,
         );
 
@@ -2225,7 +2225,7 @@ pub(in crate::app::view) fn wrap_modal<'a>(
 /// drag. Uses the last known mouse position as the drag anchor.
 pub(in crate::app::view) fn draggable_header<'a>(
     header_content: Element<'a, Message>,
-    modal: super::super::state::ModalId,
+    modal: super::super::states::ModalId,
     last_mouse: (f32, f32),
 ) -> Element<'a, Message> {
     iced::widget::mouse_area(header_content)
@@ -2242,7 +2242,7 @@ pub(in crate::app::view) fn draggable_header<'a>(
 /// bar for detached modals opened with `decorations: false`.
 pub(in crate::app::view) fn detached_header<'a>(
     header_content: Element<'a, Message>,
-    modal: super::super::state::ModalId,
+    modal: super::super::states::ModalId,
 ) -> Element<'a, Message> {
     iced::widget::mouse_area(header_content)
         .on_press(Message::StartDetachedWindowDrag(modal))

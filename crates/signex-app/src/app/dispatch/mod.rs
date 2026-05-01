@@ -208,7 +208,7 @@ impl Signex {
                 // next view frame. Phase 3 will add undocked-tab cleanup
                 // here too.
                 if let Some(kind) = self.ui_state.windows.remove(&id) {
-                    use super::state::{ModalId, WindowKind};
+                    use super::states::{ModalId, WindowKind};
                     match kind {
                         WindowKind::DetachedModal(modal) => match modal {
                             ModalId::AnnotateDialog => self.ui_state.annotate.dialog_open = false,
@@ -254,7 +254,7 @@ impl Signex {
             Message::DetachedModalOpened { modal, id } => {
                 self.ui_state
                     .windows
-                    .insert(id, super::state::WindowKind::DetachedModal(modal));
+                    .insert(id, super::states::WindowKind::DetachedModal(modal));
                 // Any lingering drag state belongs to the main window —
                 // once the modal is popped out, the OS handles window
                 // drags directly.
@@ -278,7 +278,7 @@ impl Signex {
                     .unwrap_or_default();
                 self.ui_state.windows.insert(
                     id,
-                    super::state::WindowKind::UndockedTab {
+                    super::states::WindowKind::UndockedTab {
                         path: path.clone(),
                         title,
                     },
@@ -328,7 +328,7 @@ impl Signex {
             Message::DetachedPanelOpened { kind, id } => {
                 self.ui_state
                     .windows
-                    .insert(id, super::state::WindowKind::DetachedPanel(kind));
+                    .insert(id, super::states::WindowKind::DetachedPanel(kind));
                 Task::none()
             }
             Message::StartDetachedWindowDrag(modal) => {
@@ -350,7 +350,7 @@ impl Signex {
                 // there's no OS frame to grab; the 6 px overlay
                 // strips are how we expose resize.
                 let id = self.ui_state.windows.iter().find_map(|(id, kind)| {
-                    if let super::state::WindowKind::DetachedModal(m) = kind {
+                    if let super::states::WindowKind::DetachedModal(m) = kind {
                         if *m == modal {
                             return Some(*id);
                         }
@@ -377,7 +377,7 @@ impl Signex {
             Message::OpenMoveSelectionDialog => self.handle_open_move_selection_dialog(),
             Message::CloseMoveSelectionDialog => {
                 let _ = self.handle_close_move_selection_dialog();
-                self.close_detached_modal(super::state::ModalId::MoveSelection)
+                self.close_detached_modal(super::states::ModalId::MoveSelection)
             }
             Message::MoveSelectionDxChanged(s) => {
                 self.ui_state.move_selection.dx = s;
@@ -390,11 +390,11 @@ impl Signex {
             Message::MoveSelectionApply => self.handle_move_selection_apply(),
             Message::OpenNetColorPalette => {
                 self.ui_state.net_color.palette_open = true;
-                self.handle_detach_modal(super::state::ModalId::NetColorPalette)
+                self.handle_detach_modal(super::states::ModalId::NetColorPalette)
             }
             Message::CloseNetColorPalette => {
                 self.ui_state.net_color.palette_open = false;
-                self.close_detached_modal(super::state::ModalId::NetColorPalette)
+                self.close_detached_modal(super::states::ModalId::NetColorPalette)
             }
             Message::NetColorSet { net, color } => {
                 if let Some(c) = color {
@@ -409,11 +409,11 @@ impl Signex {
             }
             Message::OpenParameterManager => {
                 self.ui_state.parameter_manager_open = true;
-                self.handle_detach_modal(super::state::ModalId::ParameterManager)
+                self.handle_detach_modal(super::states::ModalId::ParameterManager)
             }
             Message::CloseParameterManager => {
                 self.ui_state.parameter_manager_open = false;
-                self.close_detached_modal(super::state::ModalId::ParameterManager)
+                self.close_detached_modal(super::states::ModalId::ParameterManager)
             }
             Message::ParameterManagerEdit {
                 symbol_uuid,

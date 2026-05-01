@@ -17,7 +17,7 @@ const DEFAULT_SHAPE_STROKE_MM: f64 = 0.15;
 /// pre_placement slot (TAB-configured) so shape tools pick up the
 /// user's Width/Fill edits when committing the next click.
 fn pre_placement_shape(
-    doc: &super::super::state::DocumentState,
+    doc: &super::super::states::DocumentState,
 ) -> (f64, signex_types::schematic::FillType) {
     doc.panel_ctx
         .pre_placement
@@ -162,7 +162,7 @@ impl Signex {
         // Skip if this tab is already undocked (owned by another window).
         let tab = self.document_state.tabs.get(idx)?;
         if self.ui_state.windows.values().any(
-            |k| matches!(k, super::super::state::WindowKind::UndockedTab { path, .. } if path == &tab.path),
+            |k| matches!(k, super::super::states::WindowKind::UndockedTab { path, .. } if path == &tab.path),
         ) {
             return None;
         }
@@ -208,14 +208,14 @@ impl Signex {
         &self,
         cursor_x: f32,
         cursor_y: f32,
-    ) -> Option<super::super::state::ModalId> {
+    ) -> Option<super::super::states::ModalId> {
         let (modal, _, _) = self.ui_state.modal_dragging?;
         // Skip if it's already detached — another path owns it now.
         if self
             .ui_state
             .windows
             .values()
-            .any(|k| matches!(k, super::super::state::WindowKind::DetachedModal(m) if *m == modal))
+            .any(|k| matches!(k, super::super::states::WindowKind::DetachedModal(m) if *m == modal))
         {
             return None;
         }
@@ -609,10 +609,10 @@ impl Signex {
                         );
                         if let Some(reference) = hit {
                             let direction = match picker {
-                                super::super::state::ReorderPicker::Above => {
+                                super::super::states::ReorderPicker::Above => {
                                     signex_engine::ReorderDirection::JustAbove(reference.uuid)
                                 }
-                                super::super::state::ReorderPicker::Below => {
+                                super::super::states::ReorderPicker::Below => {
                                     signex_engine::ReorderDirection::JustBelow(reference.uuid)
                                 }
                             };

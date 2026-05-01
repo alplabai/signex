@@ -28,7 +28,7 @@ impl Signex {
             .style(crate::styles::modal_header_strip(tokens)),
         )
         .on_press(Message::StartDetachedWindowDrag(
-            super::state::ModalId::MoveSelection,
+            super::states::ModalId::MoveSelection,
         ))
         .interaction(iced::mouse::Interaction::Grab);
 
@@ -176,7 +176,7 @@ impl Signex {
             .style(crate::styles::modal_header_strip(tokens)),
         )
         .on_press(Message::StartDetachedWindowDrag(
-            super::state::ModalId::NetColorPalette,
+            super::states::ModalId::NetColorPalette,
         ))
         .interaction(iced::mouse::Interaction::Grab);
 
@@ -342,7 +342,7 @@ impl Signex {
             .style(crate::styles::modal_header_strip(tokens)),
         )
         .on_press(Message::StartDetachedWindowDrag(
-            super::state::ModalId::ParameterManager,
+            super::states::ModalId::ParameterManager,
         ))
         .interaction(iced::mouse::Interaction::Grab);
 
@@ -735,8 +735,8 @@ impl Signex {
         super::view::translate::Translate::new(card_capturing, (x, y)).into()
     }
 
-    pub(super) fn view_detached_modal(&self, modal: super::state::ModalId) -> Element<'_, Message> {
-        use super::state::ModalId;
+    pub(super) fn view_detached_modal(&self, modal: super::states::ModalId) -> Element<'_, Message> {
+        use super::states::ModalId;
         match modal {
             ModalId::AnnotateDialog => self.view_annotate_dialog_body(),
             ModalId::ErcDialog => self.view_erc_dialog_body(),
@@ -799,7 +799,7 @@ impl Signex {
     /// so it dispatches to the right OS window. Used as a stack
     /// layer above the modal's body in `view_detached_modal`.
     fn detached_modal_resize_overlay<'a>(
-        modal: super::state::ModalId,
+        modal: super::states::ModalId,
     ) -> Element<'a, Message> {
         use iced::mouse::Interaction;
         use iced::widget::{Space, column, mouse_area, row};

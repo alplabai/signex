@@ -221,7 +221,7 @@ impl Signex {
             .iter()
             .position(|c| matches!(c, signex_output::BomColumn::Designator))
             .map(|idx| (idx, true));
-        self.document_state.bom_preview = Some(crate::app::state::BomPreviewState {
+        self.document_state.bom_preview = Some(crate::app::states::BomPreviewState {
             options: opts,
             table,
             variants,
@@ -231,9 +231,9 @@ impl Signex {
             column_hover: None,
             column_widths: std::collections::HashMap::new(),
             column_resize: None,
-            sidebar_tab: crate::app::state::BomSidebarTab::General,
+            sidebar_tab: crate::app::states::BomSidebarTab::General,
         });
-        self.handle_detach_modal(crate::app::state::ModalId::BomPreview)
+        self.handle_detach_modal(crate::app::states::ModalId::BomPreview)
     }
 
     pub(crate) fn handle_bom_preview_set_grouping(&mut self, grouping: BomGrouping) {
@@ -379,7 +379,7 @@ impl Signex {
         self.document_state.pending_bom_options = Some(options);
         self.document_state.bom_preview = None;
         let close_window =
-            self.close_detached_modal(crate::app::state::ModalId::BomPreview);
+            self.close_detached_modal(crate::app::states::ModalId::BomPreview);
 
         let dialog = Task::perform(
             async move {
@@ -407,9 +407,9 @@ impl Signex {
         self.document_state.bom_preview = None;
         self.ui_state
             .modal_offsets
-            .remove(&crate::app::state::ModalId::BomPreview);
+            .remove(&crate::app::states::ModalId::BomPreview);
         self.ui_state.modal_dragging = None;
-        self.close_detached_modal(crate::app::state::ModalId::BomPreview)
+        self.close_detached_modal(crate::app::states::ModalId::BomPreview)
     }
 
     /// Build (or rebuild) the BomTable from the current document
@@ -566,7 +566,7 @@ impl Signex {
         // Open-modal default quality is Medium — same value seeded
         // into `PreviewState.quality` below, so the very first
         // rasterisation matches what the picker shows.
-        let initial_quality = crate::app::state::PdfQuality::Medium300;
+        let initial_quality = crate::app::states::PdfQuality::Medium300;
         let pages = PreviewRasterizer.rasterize(
             &ctx,
             &PreviewOptions {
@@ -620,14 +620,14 @@ impl Signex {
                     .collect()
             })
             .unwrap_or_default();
-        self.document_state.preview = Some(crate::app::state::PreviewState {
+        self.document_state.preview = Some(crate::app::states::PreviewState {
             pages,
             page_handles,
             selected: 0,
             pdf_options: pdf_opts,
             specific_page_input: "1".to_string(),
             zoom: 1.0,
-            active_tab: crate::app::state::PdfPreviewTab::Preview,
+            active_tab: crate::app::states::PdfPreviewTab::Preview,
             pan: (0.0, 0.0),
             panning: None,
             selected_files,
@@ -637,7 +637,7 @@ impl Signex {
         // Altium parity: open Print Preview / Export PDF as its own OS
         // window so the user can drag it off the app's client area —
         // matches the Annotate / ERC modals.
-        self.handle_detach_modal(crate::app::state::ModalId::PrintPreview)
+        self.handle_detach_modal(crate::app::states::ModalId::PrintPreview)
     }
 
     pub(crate) fn handle_print_preview_select_page(&mut self, idx: usize) {
@@ -785,10 +785,10 @@ impl Signex {
         // — matches Annotate / ERC close behaviour.
         self.ui_state
             .modal_offsets
-            .remove(&crate::app::state::ModalId::PrintPreview);
+            .remove(&crate::app::states::ModalId::PrintPreview);
         self.ui_state.modal_dragging = None;
         // Close the detached OS window if the modal was popped out.
-        self.close_detached_modal(crate::app::state::ModalId::PrintPreview)
+        self.close_detached_modal(crate::app::states::ModalId::PrintPreview)
     }
 
     /// Public alias so the dispatcher can poke a re-rasterise after
@@ -881,15 +881,15 @@ impl Signex {
     pub(crate) fn handle_print_preview_zoom(&mut self, delta_y: f32) {
         if let Some(preview) = self.document_state.preview.as_mut() {
             let factor = if delta_y > 0.0 {
-                crate::app::state::PreviewState::ZOOM_STEP
+                crate::app::states::PreviewState::ZOOM_STEP
             } else if delta_y < 0.0 {
-                1.0 / crate::app::state::PreviewState::ZOOM_STEP
+                1.0 / crate::app::states::PreviewState::ZOOM_STEP
             } else {
                 return;
             };
             preview.zoom = (preview.zoom * factor).clamp(
-                crate::app::state::PreviewState::ZOOM_MIN,
-                crate::app::state::PreviewState::ZOOM_MAX,
+                crate::app::states::PreviewState::ZOOM_MIN,
+                crate::app::states::PreviewState::ZOOM_MAX,
             );
             if preview.zoom <= 1.0 {
                 preview.pan = (0.0, 0.0);
@@ -897,7 +897,7 @@ impl Signex {
         }
     }
 
-    pub(crate) fn handle_print_preview_set_tab(&mut self, tab: crate::app::state::PdfPreviewTab) {
+    pub(crate) fn handle_print_preview_set_tab(&mut self, tab: crate::app::states::PdfPreviewTab) {
         if let Some(preview) = self.document_state.preview.as_mut() {
             preview.active_tab = tab;
         }
@@ -978,7 +978,7 @@ impl Signex {
 /// Snapshot every open engine as a `SheetSnapshot`, active engine first.
 /// Returns `None` if there is no active engine.
 fn build_export_context(
-    document_state: &crate::app::state::DocumentState,
+    document_state: &crate::app::states::DocumentState,
 ) -> Option<ExportContext> {
     let active_path = document_state.active_path.as_ref()?;
     let active_engine = document_state.engines.get(active_path)?;

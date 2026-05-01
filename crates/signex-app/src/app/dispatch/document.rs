@@ -381,7 +381,7 @@ impl Signex {
                                 None => 120.0,
                             }
                         });
-                    p.column_resize = Some(crate::app::state::ColumnResizeState {
+                    p.column_resize = Some(crate::app::states::ColumnResizeState {
                         idx,
                         start_x: cursor_x,
                         start_width,

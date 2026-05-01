@@ -81,7 +81,7 @@ impl Signex {
     /// export completes. In-window flavour wraps the body in `wrap_modal`
     /// for backdrop + drag-to-position.
     pub(super) fn view_print_preview(&self) -> Element<'_, Message> {
-        use crate::app::state::ModalId;
+        use crate::app::states::ModalId;
         use crate::app::view::dialogs::wrap_modal;
         let body = self.view_print_preview_inner(true);
         let offset = self
@@ -105,7 +105,7 @@ impl Signex {
     }
 
     fn view_print_preview_inner(&self, draggable: bool) -> Element<'_, Message> {
-        use crate::app::state::{ModalId, PdfPreviewTab};
+        use crate::app::states::{ModalId, PdfPreviewTab};
         use crate::app::view::dialogs::{
             close_x_button, detached_header, draggable_header, MODAL_HEADER_HEIGHT,
             MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE,
@@ -204,9 +204,9 @@ impl Signex {
     /// against an adjacent tab's left edge.
     fn view_pdf_tab_strip(
         &self,
-        active: crate::app::state::PdfPreviewTab,
+        active: crate::app::states::PdfPreviewTab,
     ) -> Element<'_, Message> {
-        use crate::app::state::PdfPreviewTab;
+        use crate::app::states::PdfPreviewTab;
         use iced::widget::{container, mouse_area, row, text, Space};
         use signex_widgets::tab_pill::{AccentPosition, TabPill, TabPillStyle};
         let tokens = &self.document_state.panel_ctx.tokens;
@@ -262,7 +262,7 @@ impl Signex {
     /// rail on the left, pan/zoom viewport on the right.
     fn view_pdf_preview_tab(
         &self,
-        preview: &crate::app::state::PreviewState,
+        preview: &crate::app::states::PreviewState,
     ) -> Element<'_, Message> {
         use iced::widget::{
             button, checkbox, column, container, image, mouse_area, row, scrollable, text,
@@ -603,7 +603,7 @@ impl Signex {
     /// rasterizer and exporter stay in lockstep with the UI.
     fn view_pdf_settings_tab(
         &self,
-        preview: &crate::app::state::PreviewState,
+        preview: &crate::app::states::PreviewState,
     ) -> Element<'_, Message> {
         use iced::widget::{column, scrollable, Space};
         let body = column![
@@ -647,7 +647,7 @@ impl Signex {
     /// Settings → Choose Project Files.
     fn view_pdf_files_section(
         &self,
-        preview: &crate::app::state::PreviewState,
+        preview: &crate::app::states::PreviewState,
     ) -> Element<'_, Message> {
         use iced::widget::{button, checkbox, column, container, row, scrollable, text, Space};
         let tokens = &self.document_state.panel_ctx.tokens;
@@ -750,7 +750,7 @@ impl Signex {
     /// Settings → Structure Settings.
     fn view_pdf_structure_section(
         &self,
-        preview: &crate::app::state::PreviewState,
+        preview: &crate::app::states::PreviewState,
     ) -> Element<'_, Message> {
         use iced::widget::{checkbox, column, container, row, text, Space};
         let tokens = &self.document_state.panel_ctx.tokens;
@@ -831,9 +831,9 @@ impl Signex {
     /// Settings → Additional PDF Settings.
     fn view_pdf_additional_section(
         &self,
-        preview: &crate::app::state::PreviewState,
+        preview: &crate::app::states::PreviewState,
     ) -> Element<'_, Message> {
-        use crate::app::state::PdfQuality;
+        use crate::app::states::PdfQuality;
         use iced::widget::{checkbox, column, container, row, text, Space};
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);

@@ -110,7 +110,7 @@ pub struct TabInfo {
     /// without a matching project (lone file open, project closed
     /// mid-session) carries `None`. Per-project actions (Close
     /// Project) filter tabs by this id.
-    pub project_id: Option<super::state::ProjectId>,
+    pub project_id: Option<super::states::ProjectId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

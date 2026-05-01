@@ -455,7 +455,7 @@ impl Signex {
         // OS window. Single-tab workspaces still show the row (Altium
         // does too) — undocking a sole tab leaves the main window
         // empty, which is fine.
-        use super::state::WindowKind;
+        use super::states::WindowKind;
         let already_undocked = self
             .ui_state
             .windows

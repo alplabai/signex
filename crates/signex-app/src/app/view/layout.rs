@@ -321,7 +321,7 @@ impl Signex {
             .windows
             .values()
             .filter_map(|kind| match kind {
-                super::state::WindowKind::UndockedTab { path, .. } => Some(path.clone()),
+                super::states::WindowKind::UndockedTab { path, .. } => Some(path.clone()),
                 _ => None,
             })
             .collect();
@@ -345,7 +345,7 @@ impl Signex {
                 .collect()
         } else {
             match ui.windows.get(&window_id) {
-                Some(super::state::WindowKind::UndockedTab { path, .. }) => {
+                Some(super::states::WindowKind::UndockedTab { path, .. }) => {
                     std::iter::once(path.clone()).collect()
                 }
                 _ => std::collections::HashSet::new(),

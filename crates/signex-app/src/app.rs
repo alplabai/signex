@@ -22,7 +22,7 @@ mod load_gateway;
 mod mutation_gateway;
 mod runtime;
 mod selection_request;
-mod state;
+mod states;
 mod view;
 
 pub use contracts::{
@@ -32,11 +32,11 @@ pub use contracts::{
     StatusBarRequest, TabContextAction, TabContextMenuState, TextEditState,
 };
 pub use documents::{DrawMode, SchematicTabSession, TabDocument, TabInfo, Tool};
-pub use state::{DocumentState, InteractionState, ProjectId, Signex, UiState};
+pub use states::{DocumentState, InteractionState, ProjectId, Signex, UiState};
 
 // Re-exported so modal dialogs outside `state` can reference the type.
 #[allow(unused_imports)]
-pub use state::AnnotateOrder;
+pub use states::AnnotateOrder;
 
 impl Signex {
     pub fn update(&mut self, message: Message) -> Task<Message> {
