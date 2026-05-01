@@ -442,10 +442,21 @@ impl Signex {
                 self.ui_state.command_palette.open,
                 self.ui_state.keyboard_shortcuts_open,
                 self.ui_state.first_run_tour_open,
+                self.ui_state.preferences_open,
+                self.ui_state.annotate_dialog_open,
+                self.ui_state.erc_dialog_open,
             ))
             .map(
                 |(
-                    (find_replace_open, palette_open, kbd_shortcuts_open, first_run_tour_open),
+                    (
+                        find_replace_open,
+                        palette_open,
+                        kbd_shortcuts_open,
+                        first_run_tour_open,
+                        prefs_open,
+                        annotate_open,
+                        erc_open,
+                    ),
                     event,
                 )| match event {
                 keyboard::Event::KeyPressed {
@@ -527,6 +538,19 @@ impl Signex {
                         if first_run_tour_open =>
                     {
                         Message::DismissFirstRunTour
+                    }
+                    // Esc closes the deepest open modal first (UX §1.3).
+                    // The order here goes "user-facing top → bottom":
+                    // ERC, then Annotate, then Preferences. Once those
+                    // are closed, Esc falls through to the tool reset.
+                    (keyboard::Key::Named(keyboard::key::Named::Escape), _) if erc_open => {
+                        Message::CloseErcDialog
+                    }
+                    (keyboard::Key::Named(keyboard::key::Named::Escape), _) if annotate_open => {
+                        Message::CloseAnnotateDialog
+                    }
+                    (keyboard::Key::Named(keyboard::key::Named::Escape), _) if prefs_open => {
+                        Message::ClosePreferences
                     }
                     (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
                         Message::Tool(ToolMessage::SelectTool(Tool::Select))
