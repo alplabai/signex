@@ -72,7 +72,10 @@ impl Signex {
 
         let sch_canvas = SchematicCanvas::new();
         let pcb_canvas = crate::pcb_canvas::PcbCanvas::new();
-        let grid_size_mm = crate::canvas::grid::GRID_SIZES_MM[1]; // 1.27mm (Altium default, 50 mil)
+        // Default to the 50-mil Altium grid; user-set value overrides
+        // through the prefs file (UX §1.5 — last-used grid persists).
+        let grid_size_mm = crate::fonts::read_grid_size_mm_pref()
+            .unwrap_or(crate::canvas::grid::GRID_SIZES_MM[1]);
         let standard_lib_dir = helpers::find_standard_symbols_dir();
         let mut standard_libraries = standard_lib_dir
             .as_deref()
@@ -84,10 +87,13 @@ impl Signex {
 
         let mut app = Self {
             ui_state: UiState {
-                theme_id: ThemeId::Signex,
-                unit: Unit::Mm,
-                grid_visible: true,
-                snap_enabled: true,
+                // Persisted user-toggleable state (UX §1.5). Reads
+                // fall back to defaults when the prefs file is absent
+                // or the key missing — same as a fresh install.
+                theme_id: crate::fonts::read_theme_pref(),
+                unit: crate::fonts::read_unit_pref(),
+                grid_visible: crate::fonts::read_grid_visible_pref(),
+                snap_enabled: crate::fonts::read_snap_enabled_pref(),
                 cursor_x: 0.0,
                 cursor_y: 0.0,
                 zoom: 100.0,

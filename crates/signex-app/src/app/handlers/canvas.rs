@@ -1486,6 +1486,7 @@ impl Signex {
             Unit::Inch => Unit::Micrometer,
             Unit::Micrometer => Unit::Mm,
         };
+        crate::fonts::write_unit_pref(self.ui_state.unit);
     }
 
     fn resolve_child_sheet_path(&self, child_filename: &str) -> Option<std::path::PathBuf> {

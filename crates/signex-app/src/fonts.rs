@@ -12,6 +12,8 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 
 use signex_render::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
+use signex_types::coord::Unit;
+use signex_types::theme::ThemeId;
 
 /// Default UI font family name. Used when no preference file is found.
 pub const DEFAULT_UI_FONT: &str = "Roboto";
@@ -252,6 +254,159 @@ pub fn write_grid_style_pref(style: GridStyle) {
         GridStyle::Lines => "lines".to_string(),
         GridStyle::SmallCrosses => "crosses".to_string(),
     });
+    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
+        let _ = std::fs::write(&path, serialized);
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Session-state prefs (UX_IMPROVEMENTS_OVER_ALTIUM §1.5)
+// ──────────────────────────────────────────────────────────────────────────
+//
+// Each user-toggleable knob persists across sessions so the editor
+// reopens to the state the user left it in. Reads return safe defaults
+// when the prefs file is absent or the key missing — the same as a
+// fresh install.
+
+/// Read the last-applied theme. Defaults to `ThemeId::Signex`.
+pub fn read_theme_pref() -> ThemeId {
+    let path = prefs_path();
+    let Ok(bytes) = std::fs::read(&path) else {
+        return ThemeId::Signex;
+    };
+    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        return ThemeId::Signex;
+    };
+    json.get("theme")
+        .cloned()
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or(ThemeId::Signex)
+}
+
+/// Persist theme without clobbering other preference keys.
+pub fn write_theme_pref(theme: ThemeId) {
+    let path = prefs_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let mut json: serde_json::Value = std::fs::read(&path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or(serde_json::json!({}));
+    if let Ok(value) = serde_json::to_value(theme) {
+        json["theme"] = value;
+    }
+    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
+        let _ = std::fs::write(&path, serialized);
+    }
+}
+
+/// Read the last-active coordinate unit. Defaults to `Unit::Mm`.
+pub fn read_unit_pref() -> Unit {
+    let path = prefs_path();
+    let Ok(bytes) = std::fs::read(&path) else {
+        return Unit::Mm;
+    };
+    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        return Unit::Mm;
+    };
+    json.get("unit")
+        .cloned()
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or(Unit::Mm)
+}
+
+/// Persist coordinate unit without clobbering other preference keys.
+pub fn write_unit_pref(unit: Unit) {
+    let path = prefs_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let mut json: serde_json::Value = std::fs::read(&path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or(serde_json::json!({}));
+    if let Ok(value) = serde_json::to_value(unit) {
+        json["unit"] = value;
+    }
+    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
+        let _ = std::fs::write(&path, serialized);
+    }
+}
+
+/// Read the last grid-visible toggle. Defaults to `true`.
+pub fn read_grid_visible_pref() -> bool {
+    let path = prefs_path();
+    let Ok(bytes) = std::fs::read(&path) else {
+        return true;
+    };
+    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        return true;
+    };
+    json["grid_visible"].as_bool().unwrap_or(true)
+}
+
+pub fn write_grid_visible_pref(visible: bool) {
+    let path = prefs_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let mut json: serde_json::Value = std::fs::read(&path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or(serde_json::json!({}));
+    json["grid_visible"] = serde_json::Value::Bool(visible);
+    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
+        let _ = std::fs::write(&path, serialized);
+    }
+}
+
+/// Read the last snap-enabled toggle. Defaults to `true`.
+pub fn read_snap_enabled_pref() -> bool {
+    let path = prefs_path();
+    let Ok(bytes) = std::fs::read(&path) else {
+        return true;
+    };
+    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        return true;
+    };
+    json["snap_enabled"].as_bool().unwrap_or(true)
+}
+
+pub fn write_snap_enabled_pref(enabled: bool) {
+    let path = prefs_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let mut json: serde_json::Value = std::fs::read(&path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or(serde_json::json!({}));
+    json["snap_enabled"] = serde_json::Value::Bool(enabled);
+    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
+        let _ = std::fs::write(&path, serialized);
+    }
+}
+
+/// Read the last grid size (mm). Returns `None` when missing so the
+/// caller can fall back to the engine's preferred default.
+pub fn read_grid_size_mm_pref() -> Option<f32> {
+    let path = prefs_path();
+    let bytes = std::fs::read(&path).ok()?;
+    let json: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+    json["grid_size_mm"].as_f64().map(|v| v as f32)
+}
+
+pub fn write_grid_size_mm_pref(grid_size_mm: f32) {
+    let path = prefs_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let mut json: serde_json::Value = std::fs::read(&path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or(serde_json::json!({}));
+    json["grid_size_mm"] = serde_json::json!(grid_size_mm);
     if let Ok(serialized) = serde_json::to_string_pretty(&json) {
         let _ = std::fs::write(&path, serialized);
     }

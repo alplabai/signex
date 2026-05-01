@@ -253,6 +253,7 @@ impl Signex {
                 self.interaction_state.active_canvas_mut().snap_grid_mm = *size as f64;
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
+                crate::fonts::write_grid_size_mm_pref(*size);
             }
             crate::panels::PanelMsg::SetVisibleGridSize(size) => {
                 self.ui_state.visible_grid_mm = *size;

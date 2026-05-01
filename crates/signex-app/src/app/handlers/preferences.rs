@@ -99,6 +99,7 @@ impl Signex {
                 crate::fonts::write_label_style_pref(self.ui_state.label_style);
                 crate::fonts::write_multisheet_style_pref(self.ui_state.multisheet_style);
                 crate::fonts::write_grid_style_pref(self.ui_state.grid_style);
+                crate::fonts::write_theme_pref(self.ui_state.theme_id);
                 self.ui_state.preferences_dirty = false;
             }
             PrefMsg::DraftTheme(id) => {
