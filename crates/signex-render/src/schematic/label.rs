@@ -1,13 +1,17 @@
 //! Label rendering — net labels, global labels, hierarchical labels.
 //!
-//! Behaviour spec: `docs/RENDERING_RULES.md::sch-labels` —
-//! the Signex internal rendering rule set, derived from observed
-//! `.kicad_sch` rendering behaviour and Altium parity goals.
+//! Behaviour spec: `docs/RENDERING_RULES.md::sch-labels` — the
+//! Signex internal rendering rule set, sourced from Signex's own
+//! `.snxsch` schematic format and Altium parity goals (see
+//! `docs/UX_REFERENCE_ALTIUM.md`).
 //!
 //! Net label:   Plain text at anchor. No shape. Bottom-aligned.
 //! Global:      Arrow / pentagon shape per `label.shape` field.
 //! Hier:        Pentagon (flag) shape.
 //! Power:       Rendered via LibSymbol in symbol pass — skip here.
+//!
+//! NOTE: This module is flagged for clean-room rewrite — see
+//! `docs/internal/CLEANROOM_REWRITE_PLAN.md`.
 
 use iced::Color;
 use iced::widget::canvas::{self, path};
