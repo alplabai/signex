@@ -116,9 +116,13 @@ pub fn view<'a>(
 
     let needle = browser.search.trim().to_lowercase();
     let lifecycle_filter = browser.lifecycle_filter;
+    let class_filter = browser.class_filter.as_deref();
     let mut visible: Vec<&ComponentRow> = rows
         .iter()
         .filter(|r| lifecycle_filter.allows(r.state))
+        .filter(|r| {
+            class_filter.map_or(true, |cls| r.class.as_str() == cls)
+        })
         .filter(|r| needle.is_empty() || row_matches_filter(r, &needle))
         .collect();
 
@@ -601,6 +605,9 @@ fn view_table_sidebar<'a>(
         } else {
             format!("{}  ·  {}", entry.label, entry.key)
         };
+        let is_active_class = browser.class_filter.as_deref() == Some(entry.key.as_str());
+        let library_for_filter = lib_pb.clone();
+        let key_for_filter = entry.key.clone();
         let library_for_rename = lib_pb.clone();
         let library_for_delete = lib_pb.clone();
         let key_for_rename = entry.key.clone();
@@ -659,25 +666,49 @@ fn view_table_sidebar<'a>(
                     ..iced::widget::button::Style::default()
                 }
             });
-        let class_row = row![
-            container(
-                text(label_text)
-                    .size(BROWSER_TEXT_SIZE)
-                    .color(text_c)
-                    .width(Length::Fill),
-            )
-            .padding(iced::Padding {
-                top: 4.0,
-                right: 6.0,
-                bottom: 4.0,
-                left: 12.0,
-            })
-            .width(Length::Fill),
-            rename_btn,
-            delete_btn,
-        ]
-        .align_y(iced::Alignment::Center)
-        .width(Length::Fill);
+        let class_active_bg = active_bg;
+        let class_btn = button(
+            text(label_text)
+                .size(BROWSER_TEXT_SIZE)
+                .color(text_c)
+                .width(Length::Fill),
+        )
+        .padding(iced::Padding {
+            top: 4.0,
+            right: 6.0,
+            bottom: 4.0,
+            left: 12.0,
+        })
+        .width(Length::Fill)
+        .on_press(LibraryMessage::BrowserClassFilterClicked {
+            library_path: library_for_filter,
+            key: key_for_filter,
+        })
+        .style(move |_: &Theme, status: iced::widget::button::Status| {
+            let bg = if is_active_class {
+                Some(class_active_bg)
+            } else {
+                match status {
+                    iced::widget::button::Status::Hovered => {
+                        Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04))
+                    }
+                    _ => None,
+                }
+            };
+            iced::widget::button::Style {
+                background: bg.map(iced::Background::Color),
+                text_color: text_c,
+                border: Border {
+                    width: 0.0,
+                    radius: 0.0.into(),
+                    color: iced::Color::TRANSPARENT,
+                },
+                ..iced::widget::button::Style::default()
+            }
+        });
+        let class_row = row![class_btn, rename_btn, delete_btn,]
+            .align_y(iced::Alignment::Center)
+            .width(Length::Fill);
         col = col.push(class_row);
     }
 

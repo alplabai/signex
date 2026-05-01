@@ -172,6 +172,11 @@ pub struct LibraryBrowserState {
     /// Lifecycle visibility filter (Stage 18). Defaults to
     /// `ActiveAndPreferred` — hides obsolete rows, tints deprecated.
     pub lifecycle_filter: LifecycleFilter,
+    /// When `Some`, the right-side component grid only shows rows
+    /// whose `class` field matches this exact key. Toggled by
+    /// clicking a class row in the left sidebar — clicking the
+    /// same row twice clears the filter.
+    pub class_filter: Option<String>,
     /// Edit Component Details modal — opened by double-clicking a row
     /// in the grid. `None` while closed.
     pub edit_modal: Option<EditRowModalState>,
@@ -256,6 +261,7 @@ impl LibraryBrowserState {
             selected_row: None,
             search: String::new(),
             lifecycle_filter: LifecycleFilter::default(),
+            class_filter: None,
             edit_modal: None,
             cell_edit: HashMap::new(),
             delete_confirm: None,

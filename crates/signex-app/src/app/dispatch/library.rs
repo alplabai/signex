@@ -1005,6 +1005,18 @@ impl Signex {
                 }
                 Task::none()
             }
+            LibraryMessage::BrowserClassFilterClicked { library_path, key } => {
+                if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
+                    state.class_filter = match state.class_filter.as_deref() {
+                        Some(current) if current == key => None,
+                        _ => Some(key.clone()),
+                    };
+                    // Reset selected_row in case the previously-selected row
+                    // is filtered out.
+                    state.selected_row = None;
+                }
+                Task::none()
+            }
             LibraryMessage::BrowserRefreshPricing {
                 library_path,
                 table,

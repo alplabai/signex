@@ -406,6 +406,12 @@ pub enum LibraryMessage {
         library_path: PathBuf,
         filter: super::state::LifecycleFilter,
     },
+    /// Toggle the per-class filter. `Some(key)` sets it; passing
+    /// the currently-active key flips back to `None`.
+    BrowserClassFilterClicked {
+        library_path: PathBuf,
+        key: String,
+    },
     /// Right-click on a Library Browser row → "Refresh Pricing".
     /// Stage 18 stub — real distributor adapter wiring lands later.
     BrowserRefreshPricing {
