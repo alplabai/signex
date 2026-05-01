@@ -288,28 +288,28 @@ pub fn parse_tsv_block<R: SnxTable>(block: &str, content: &str) -> Result<Vec<R>
 // ---------------------------------------------------------------------------
 
 fn parse_i64(value: &str, block: &str, row: usize, field: &str) -> Result<i64, FormatError> {
-    value.parse().map_err(|e: std::num::ParseIntError| {
-        FormatError::TsvFieldParse {
+    value
+        .parse()
+        .map_err(|e: std::num::ParseIntError| FormatError::TsvFieldParse {
             block: block.to_string(),
             row,
             field: field.to_string(),
             message: e.to_string(),
-        }
-    })
+        })
 }
 
 fn parse_f64(value: &str, block: &str, row: usize, field: &str) -> Result<f64, FormatError> {
     if value.is_empty() {
         return Ok(0.0);
     }
-    value.parse().map_err(|e: std::num::ParseFloatError| {
-        FormatError::TsvFieldParse {
+    value
+        .parse()
+        .map_err(|e: std::num::ParseFloatError| FormatError::TsvFieldParse {
             block: block.to_string(),
             row,
             field: field.to_string(),
             message: e.to_string(),
-        }
-    })
+        })
 }
 
 fn parse_uuid(value: &str, block: &str, row: usize, field: &str) -> Result<Uuid, FormatError> {
@@ -983,12 +983,8 @@ impl SnxSchematic {
         let component_rows: Vec<SchComponentRow> =
             self.sheet.symbols.iter().map(symbol_to_row).collect();
         let wire_rows: Vec<SchWireRow> = self.sheet.wires.iter().map(wire_to_row).collect();
-        let junction_rows: Vec<SchJunctionRow> = self
-            .sheet
-            .junctions
-            .iter()
-            .map(junction_to_row)
-            .collect();
+        let junction_rows: Vec<SchJunctionRow> =
+            self.sheet.junctions.iter().map(junction_to_row).collect();
         let label_rows: Vec<SchLabelRow> = self.sheet.labels.iter().map(label_to_row).collect();
 
         write_tsv_section(&mut out, "sheets.components", &component_rows);
@@ -1206,6 +1202,8 @@ struct SymbolExtras {
     #[serde(default)]
     fields_autoplaced: bool,
     #[serde(default)]
+    fields_user_placed: bool,
+    #[serde(default)]
     dnp: bool,
     #[serde(default = "default_true")]
     in_bom: bool,
@@ -1238,6 +1236,7 @@ impl SymbolExtras {
             && self.unit == 1
             && !self.is_power
             && !self.fields_autoplaced
+            && !self.fields_user_placed
             && !self.dnp
             && self.in_bom
             && self.on_board
@@ -1260,6 +1259,7 @@ impl SymbolExtras {
             unit: s.unit,
             is_power: s.is_power,
             fields_autoplaced: s.fields_autoplaced,
+            fields_user_placed: s.fields_user_placed,
             dnp: s.dnp,
             in_bom: s.in_bom,
             on_board: s.on_board,
@@ -1379,6 +1379,7 @@ fn row_to_symbol(row: SchComponentRow, extras: SymbolExtras) -> Symbol {
         ref_text: extras.ref_text,
         val_text: extras.val_text,
         fields_autoplaced: extras.fields_autoplaced,
+        fields_user_placed: extras.fields_user_placed,
         dnp: extras.dnp,
         in_bom: extras.in_bom,
         on_board: extras.on_board,
@@ -1551,19 +1552,12 @@ impl SnxPcb {
                 })
             };
             out.push('\n');
-            out.push_str(&toml::to_string_pretty(&StackupWrapper {
-                stackup,
-                nets,
-            })?);
+            out.push_str(&toml::to_string_pretty(&StackupWrapper { stackup, nets })?);
         }
 
         // TSV blocks: footprints, pads, tracks, vias.
-        let footprint_rows: Vec<PcbFootprintRow> = self
-            .board
-            .footprints
-            .iter()
-            .map(footprint_to_row)
-            .collect();
+        let footprint_rows: Vec<PcbFootprintRow> =
+            self.board.footprints.iter().map(footprint_to_row).collect();
         let mut pad_rows: Vec<PcbPadRow> = Vec::new();
         for fp in &self.board.footprints {
             for pad in &fp.pads {
@@ -1597,18 +1591,16 @@ impl SnxPcb {
         let extras = PcbExtras::from_board(&self.board);
         let footprints = extras.footprints;
         let pads = extras.pads;
-        let board_extras = if extras.outline.is_empty()
-            && extras.graphics.is_empty()
-            && extras.texts.is_empty()
-        {
-            None
-        } else {
-            Some(BoardExtras {
-                outline: extras.outline,
-                graphics: extras.graphics,
-                texts: extras.texts,
-            })
-        };
+        let board_extras =
+            if extras.outline.is_empty() && extras.graphics.is_empty() && extras.texts.is_empty() {
+                None
+            } else {
+                Some(BoardExtras {
+                    outline: extras.outline,
+                    graphics: extras.graphics,
+                    texts: extras.texts,
+                })
+            };
         if !footprints.is_empty() || !pads.is_empty() || board_extras.is_some() {
             #[derive(Serialize)]
             struct ExtrasWrapper {
@@ -1678,10 +1670,17 @@ impl SnxPcb {
             .collect();
 
         for prow in pad_rows {
-            let extra = extras.pads.get(&prow.uuid.to_string()).cloned().unwrap_or_default();
+            let extra = extras
+                .pads
+                .get(&prow.uuid.to_string())
+                .cloned()
+                .unwrap_or_default();
             let pad = row_to_pad(prow.clone(), extra);
             // attach to footprint by ref
-            if let Some(fp) = footprints.iter_mut().find(|f| f.reference == prow.footprint_ref) {
+            if let Some(fp) = footprints
+                .iter_mut()
+                .find(|f| f.reference == prow.footprint_ref)
+            {
                 fp.pads.push(pad);
             } else {
                 // Orphan pad — preserve as a synthetic footprint
@@ -2149,7 +2148,8 @@ mod tests {
     #[test]
     fn rejects_wrong_format_version() {
         // Hand-craft a TOML document with an unsupported version token.
-        let bad = "format = \"snxsch/99\"\nschematic_id = \"00000000-0000-0000-0000-000000000000\"\n";
+        let bad =
+            "format = \"snxsch/99\"\nschematic_id = \"00000000-0000-0000-0000-000000000000\"\n";
         let err = SnxSchematic::parse(bad).expect_err("must reject");
         match err {
             FormatError::UnsupportedVersion { found, expected } => {
@@ -2204,6 +2204,7 @@ mod tests {
             ref_text: None,
             val_text: None,
             fields_autoplaced: false,
+            fields_user_placed: false,
             dnp: false,
             in_bom: true,
             on_board: true,
@@ -2432,11 +2433,7 @@ mod tests {
         assert_eq!(back.board.footprints[0].pads.len(), 2);
         assert_eq!(back.board.footprints[0].pads[0].number, "1");
         assert_eq!(
-            back.board.footprints[0].pads[0]
-                .net
-                .as_ref()
-                .unwrap()
-                .name,
+            back.board.footprints[0].pads[0].net.as_ref().unwrap().name,
             "VCC"
         );
 
@@ -2476,8 +2473,7 @@ mod tests {
         assert!(lines[0].contains("pos_x"));
         assert!(lines[0].contains("diameter"));
         // round-trip
-        let parsed: Vec<SchJunctionRow> =
-            parse_tsv_block("sheets.junctions", &body).unwrap();
+        let parsed: Vec<SchJunctionRow> = parse_tsv_block("sheets.junctions", &body).unwrap();
         assert_eq!(parsed.len(), 2);
         assert_eq!(parsed[0].pos_x, 100);
         assert_eq!(parsed[1].pos_x, 30000000);
@@ -2519,8 +2515,7 @@ mod tests {
         let mut sym = sample_symbol();
         sym.fields
             .insert("MPN".to_string(), "LM2596S-5.0".to_string());
-        sym.fields
-            .insert("Tolerance".to_string(), "1%".to_string());
+        sym.fields.insert("Tolerance".to_string(), "1%".to_string());
         sym.dnp = true;
         sheet.symbols.push(sym);
 

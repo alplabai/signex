@@ -210,7 +210,10 @@ pub fn parse_signex_markup(input: &str) -> Vec<RichSegment> {
         // Escape sequence: \X produces a literal X for any sigil character.
         if bytes[i] == b'\\' && i + 1 < len {
             let next = bytes[i + 1];
-            if matches!(next, b'*' | b'~' | b'^' | b'_' | b'\\' | b'[' | b']' | b'(' | b')') {
+            if matches!(
+                next,
+                b'*' | b'~' | b'^' | b'_' | b'\\' | b'[' | b']' | b'(' | b')'
+            ) {
                 normal_buf.push(next as char);
                 i += 2;
                 continue;
