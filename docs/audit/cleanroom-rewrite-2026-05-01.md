@@ -225,11 +225,11 @@ them in this PR.
 | 3 — label / symbol / field_style | ✅ done | `fd138f04` | full body + field rules |
 | 4 — hit_test (spatial-hash) | ✅ done | `2ee07e2d` | O(k) bucketing + render-order Z-rule |
 | 5 — selection overlay + render() | ✅ done | `2ee07e2d` | dashed-rect outline; one-shot render entry |
-| 6 — consumer wire-up | 🟡 partial | _this commit_ | signex-erc green; signex-app has ~70 errors remaining (Viewport field shape, PcbRenderSnapshot fields, RenderInvalidation per-primitive flags, RenderLayers methods, render_schematic). Shims added for the easy renames. |
-| 7 — verification + License Guard CI | ⏸ blocked | — | Awaiting Wave 6 close. |
-| 8 — PR + issue #62 reply | ⏸ blocked | — | Awaiting Wave 6 close. |
+| 6 — consumer wire-up | ✅ done | `aa7ee807` | signex-app + signex-erc both green via deprecated v0.11 compat shims; full punch list closed. |
+| 7 — verification + License Guard CI | ✅ done | `aa7ee807` | Two new CI jobs added: `no-standard-as-comment-word-in-renderer` + `no-kicad-published-format-substrings`. |
+| 8 — PR ready-for-review | ✅ done | _this commit_ | PR #79 flipped from draft to ready. |
 
-## Outcome (Waves 0–6 partial, frozen 2026-05-01)
+## Outcome (Waves 0–8 complete, 2026-05-01)
 
 - Files deleted: 11 (10 schematic/ + pcb.rs)
 - Files added: 14 (mod + viewport + util + 11 primitives + new pcb stub)
@@ -237,18 +237,29 @@ them in this PR.
 - LOC trimmed in `signex-engine`: ~252 (autoplace + helpers); ~150 re-added for the v0.12 autoplace
 - New `Symbol::fields_user_placed` field (one-line types addition; backwards-compat via `#[serde(default)]`)
 - Workspace test count delta: +52 new render tests; signex-engine + signex-types tests unchanged.
-- Verification status:
-  - `cargo build -p signex-render` ✓
-  - `cargo test -p signex-render --lib` ✓ (52 tests)
+- Verification status (Wave 7 close):
+  - `cargo build --workspace` ✓
+  - `cargo test --workspace --lib` ✓ (356+ tests pass: 52 render +
+    40 types + 86 erc + 174 output + 4 engine + others)
   - `cargo clippy -p signex-render --lib --no-deps -- -D warnings` ✓
   - `cargo fmt --check` ✓
-  - `cargo build -p signex-engine` ✓
-  - `cargo build -p signex-erc` ✓
-  - `cargo build -p signex-types` ✓
-  - `cargo build -p signex-app` ❌ (~70 errors — see below)
-  - `cargo build --workspace` ❌ (gated by signex-app)
+  - License Guard rules locally checked against current tree:
+    `no-standard-as-comment-word-in-renderer` ✓,
+    `no-kicad-published-format-substrings` ✓
 
-## Wave 6 — what remains for signex-app
+## Wave 6 close — how the 70-error punch list was resolved
+
+The Wave 6 partial commit (`3e329c03`) and the Wave 6+7 close
+(`aa7ee807`) together resolved every error pattern listed below.
+The strategy across the board was **deprecated v0.11 compatibility
+shims in signex-render**, allowing the v0.11 consumer call sites to
+keep compiling against the redesigned API; v0.13 will cull the
+shims as consumers migrate to the new names.
+
+(Original — historical reference for the patterns that needed
+fixing during Wave 6 close.)
+
+## Wave 6 — punch-list snapshot (resolved)
 
 The 70 remaining `signex-app` errors cluster into a handful of
 patterns. Each pattern is a follow-up commit that doesn't
@@ -304,7 +315,7 @@ re-touch the renderer:
 Each pattern is mechanical. Estimated wall time for a focused
 follow-up session: ~3 hours.
 
-## Sign-off (Wave 5 close, Wave 6 partial)
+## Sign-off (Waves 0–8 complete)
 
 Cleanroom rewrite of `signex-render::schematic` and
 `signex-engine::autoplace_fields` completed against
@@ -313,8 +324,9 @@ third-party EDA tool source code, no third-party file format
 specifications, no contaminated agent-context skills consulted
 during this session.
 
-Wave 6 is partial; Wave 7 (verification + CI) and Wave 8 (PR)
-are deferred until Wave 6 closes. The branch
-`feature/v0.12-cleanroom-rewrite` is pushed for review.
+The full v0.12 cleanroom rewrite ships in PR #79 against `dev`.
+After merge to `dev` → `main` and a v0.12.0 tag, the issue #62
+reply at `.claude/PRPs/issue-62-reply-draft-v3.md` may be posted —
+update the `<merge_sha>` placeholder first.
 
-The audit doc is the PR description when Wave 8 reaches GitHub.
+This audit doc is the PR description.
