@@ -26,7 +26,7 @@ const SELECTION_WEIGHT_FACTOR: f64 = 1.5;
 /// the bus's UUID is in the snapshot's selection set.
 pub fn draw_bus(frame: &mut Frame, bus: &Bus, ctx: &RenderContext<'_>) {
     let bbox = bus_aabb(bus);
-    if !aabbs_overlap(&bbox, &ctx.viewport.visible_world_bounds()) {
+    if !aabbs_overlap(&bbox, &ctx.visible_world_bounds()) {
         return;
     }
 
@@ -43,7 +43,7 @@ pub fn draw_bus(frame: &mut Frame, bus: &Bus, ctx: &RenderContext<'_>) {
         } else {
             1.0
         };
-    let width_px = (width_world * ctx.viewport.zoom_px_per_mm).max(1.0) as f32;
+    let width_px = (width_world * ctx.viewport.zoom_px_per_mm()).max(1.0) as f32;
 
     let colour = if selected {
         iced_color(&ctx.theme().selection)

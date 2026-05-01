@@ -569,6 +569,8 @@ impl Signex {
                 self.ui_state.selection_mode = match self.ui_state.selection_mode {
                     SelectionMode::Inside => SelectionMode::Touching,
                     SelectionMode::Touching => SelectionMode::Inside,
+                    SelectionMode::Single => SelectionMode::Inside,
+                    _ => SelectionMode::Inside,
                 };
                 crate::diagnostics::log_info(format!(
                     "Selection mode: {:?}",

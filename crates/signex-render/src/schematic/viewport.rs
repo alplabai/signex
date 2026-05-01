@@ -1,93 +1,131 @@
 //! World ↔ screen transform for the schematic canvas.
 //!
 //! Replaces the old `ScreenTransform` type (deleted in Wave 0). Carries
-//! the canvas size, world-space pan centre, and a world-units-per-pixel
-//! zoom, plus the conversions every primitive needs.
+//! the canvas size, screen-pixel pan offset, and a scalar zoom factor
+//! (`scale` = pixels per world millimetre), plus the conversions every
+//! primitive needs.
 //!
 //! Coordinates: world space is millimetres, Y-down (matching
 //! `signex_types::schematic::Point`); screen space is iced pixels with
-//! origin at the canvas top-left.
+//! origin at the canvas top-left. The mapping is
+//!
+//! ```text
+//! screen.x = world.x * scale + offset_x
+//! screen.y = world.y * scale + offset_y
+//! ```
+//!
+//! Field layout matches the v0.11 `ScreenTransform` so existing callers
+//! (`signex-app::canvas`, the PCB canvas, panel previews) construct
+//! `Viewport` with the same struct-literal shape they used before.
 
 use signex_types::schematic::{Aabb, Point};
 
+/// Helper trait so [`Viewport::world_to_screen`] accepts both a
+/// [`Point`] and a `(f64, f64)` pair (v0.11 call shape).
+pub trait IntoWorldPoint {
+    fn into_world_point(self) -> Point;
+}
+
+impl IntoWorldPoint for Point {
+    #[inline]
+    fn into_world_point(self) -> Point {
+        self
+    }
+}
+
+impl IntoWorldPoint for (f64, f64) {
+    #[inline]
+    fn into_world_point(self) -> Point {
+        Point::new(self.0, self.1)
+    }
+}
+
 /// World ↔ screen transform — see module doc.
+///
+/// Field layout matches the v0.11 `ScreenTransform` so existing
+/// struct-literal callers (`ScreenTransform { offset_x, offset_y, scale }`)
+/// continue to compile against the v0.12 alias. Canvas size is **not**
+/// stored on the viewport — primitives that need to know the visible
+/// region pass it explicitly (see [`visible_world_bounds`]) or read it
+/// from the active iced [`Frame`](iced::widget::canvas::Frame).
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[must_use]
 pub struct Viewport {
-    /// Canvas size in pixels (width, height).
-    pub size: iced::Size,
-    /// World coordinate that maps to the canvas centre.
-    pub centre_world: Point,
-    /// Zoom factor — pixels per world millimetre. `> 0`. A value of
-    /// `10.0` means each world millimetre paints 10 screen pixels.
-    pub zoom_px_per_mm: f64,
+    /// Screen-pixel pan offset on the X axis.
+    pub offset_x: f32,
+    /// Screen-pixel pan offset on the Y axis.
+    pub offset_y: f32,
+    /// Scalar zoom — screen pixels per world millimetre. Must be `> 0`.
+    pub scale: f32,
 }
 
 impl Viewport {
-    /// Build a viewport. `zoom_px_per_mm` must be `> 0`; zero or
-    /// negative values clamp to a small positive epsilon to avoid NaN
-    /// downstream.
+    /// Build a viewport. `scale` must be `> 0`; non-positive values clamp
+    /// to a small positive epsilon to avoid NaN downstream.
     #[inline]
-    pub fn new(size: iced::Size, centre_world: Point, zoom_px_per_mm: f64) -> Self {
+    pub fn new(offset_x: f32, offset_y: f32, scale: f32) -> Self {
         Self {
-            size,
-            centre_world,
-            zoom_px_per_mm: zoom_px_per_mm.max(1e-6),
+            offset_x,
+            offset_y,
+            scale: if scale > 0.0 { scale } else { 1e-6 },
         }
     }
 
-    /// World mm per screen pixel — the inverse of `zoom_px_per_mm`.
-    /// Useful for converting hit-test tolerances.
+    /// World mm per screen pixel.
     #[inline]
     pub fn world_per_pixel(&self) -> f64 {
-        1.0 / self.zoom_px_per_mm
+        1.0 / self.scale as f64
     }
 
-    /// Project a world point onto canvas pixels. iced uses `f32`
-    /// pixel coordinates, so a final cast happens at the boundary;
-    /// internal math is `f64` to keep mm→pixel precision honest.
-    pub fn world_to_screen(&self, p: Point) -> iced::Point {
-        let dx = (p.x - self.centre_world.x) * self.zoom_px_per_mm;
-        let dy = (p.y - self.centre_world.y) * self.zoom_px_per_mm;
-        let cx = self.size.width as f64 * 0.5 + dx;
-        let cy = self.size.height as f64 * 0.5 + dy;
-        iced::Point::new(cx as f32, cy as f32)
+    /// Pixels per world millimetre, as `f64` for math precision.
+    #[inline]
+    pub fn zoom_px_per_mm(&self) -> f64 {
+        self.scale as f64
     }
 
-    /// Inverse of [`Self::world_to_screen`]. Rounds-trip at f32 pixel
-    /// precision; callers that need sub-pixel accuracy should keep
-    /// world-space coordinates and re-render.
-    pub fn screen_to_world(&self, p: iced::Point) -> Point {
-        let dx = (p.x as f64 - self.size.width as f64 * 0.5) * self.world_per_pixel();
-        let dy = (p.y as f64 - self.size.height as f64 * 0.5) * self.world_per_pixel();
-        Point::new(self.centre_world.x + dx, self.centre_world.y + dy)
-    }
-
-    /// World-space rectangle currently visible on the canvas. Useful
-    /// for primitive-level frustum culling so primitives outside the
-    /// viewport skip tessellation.
-    pub fn visible_world_bounds(&self) -> Aabb {
-        let half_w = self.size.width as f64 * 0.5 * self.world_per_pixel();
-        let half_h = self.size.height as f64 * 0.5 * self.world_per_pixel();
-        Aabb::new(
-            self.centre_world.x - half_w,
-            self.centre_world.y - half_h,
-            self.centre_world.x + half_w,
-            self.centre_world.y + half_h,
+    /// Project a world point onto canvas pixels.
+    ///
+    /// Accepts either a [`Point`] or a `(x, y)` pair via the
+    /// [`IntoWorldPoint`] trait so v0.11 callers (`world_to_screen(x, y)`)
+    /// continue to compile without converting their tuples first.
+    #[inline]
+    pub fn world_to_screen(&self, p: impl IntoWorldPoint) -> iced::Point {
+        let p = p.into_world_point();
+        iced::Point::new(
+            p.x as f32 * self.scale + self.offset_x,
+            p.y as f32 * self.scale + self.offset_y,
         )
+    }
+
+    /// Inverse of [`Self::world_to_screen`].
+    #[inline]
+    pub fn screen_to_world(&self, p: iced::Point) -> Point {
+        Point::new(
+            ((p.x - self.offset_x) / self.scale) as f64,
+            ((p.y - self.offset_y) / self.scale) as f64,
+        )
+    }
+
+    /// World-space rectangle currently visible inside a canvas of the
+    /// given pixel size. Used by primitive-level frustum culling so
+    /// off-screen items skip tessellation.
+    pub fn visible_world_bounds(&self, size: iced::Size) -> Aabb {
+        let tl = self.screen_to_world(iced::Point::new(0.0, 0.0));
+        let br = self.screen_to_world(iced::Point::new(size.width, size.height));
+        Aabb::new(tl.x, tl.y, br.x, br.y)
     }
 }
 
 impl Default for Viewport {
-    /// 800×600 canvas, world origin at the centre, zoom = 10 px / mm.
-    /// Default exists to make tests cheap; production callers always
-    /// pass a real size from `iced::widget::canvas::layout`.
+    /// Origin at the canvas top-left, zoom 10 px / mm. Cheap default
+    /// for tests; production callers always pass real values from the
+    /// canvas layout.
     #[inline]
     fn default() -> Self {
         Self {
-            size: iced::Size::new(800.0, 600.0),
-            centre_world: Point::ZERO,
-            zoom_px_per_mm: 10.0,
+            offset_x: 0.0,
+            offset_y: 0.0,
+            scale: 10.0,
         }
     }
 }
@@ -102,9 +140,6 @@ mod tests {
         let world = Point::new(1.27, -2.54);
         let screen = v.world_to_screen(world);
         let back = v.screen_to_world(screen);
-        // iced::Point holds f32, so the round-trip is bounded by half
-        // a world-pixel = world_per_pixel * 0.5 ≈ 0.05 mm at the
-        // default 10 px/mm zoom; assert well inside that.
         let tol = v.world_per_pixel();
         assert!(
             (back.x - world.x).abs() < tol,
@@ -120,23 +155,24 @@ mod tests {
 
     #[test]
     fn world_per_pixel_is_inverse_of_zoom() {
-        let v = Viewport::new(iced::Size::new(100.0, 100.0), Point::ZERO, 5.0);
+        let v = Viewport::new(0.0, 0.0, 5.0);
         assert!((v.world_per_pixel() - 0.2).abs() < 1e-9);
     }
 
     #[test]
     fn visible_bounds_widen_when_zoom_drops() {
-        let zoomed_in = Viewport::new(iced::Size::new(100.0, 100.0), Point::ZERO, 50.0);
-        let zoomed_out = Viewport::new(iced::Size::new(100.0, 100.0), Point::ZERO, 5.0);
-        let in_bounds = zoomed_in.visible_world_bounds();
-        let out_bounds = zoomed_out.visible_world_bounds();
+        let size = iced::Size::new(100.0, 100.0);
+        let zoomed_in = Viewport::new(50.0, 50.0, 50.0);
+        let zoomed_out = Viewport::new(50.0, 50.0, 5.0);
+        let in_bounds = zoomed_in.visible_world_bounds(size);
+        let out_bounds = zoomed_out.visible_world_bounds(size);
         assert!(out_bounds.width() > in_bounds.width());
         assert!(out_bounds.height() > in_bounds.height());
     }
 
     #[test]
     fn near_zero_zoom_clamps_without_nan() {
-        let v = Viewport::new(iced::Size::new(10.0, 10.0), Point::ZERO, 0.0);
+        let v = Viewport::new(0.0, 0.0, 0.0);
         let p = v.world_to_screen(Point::new(1.0, 1.0));
         assert!(p.x.is_finite());
         assert!(p.y.is_finite());

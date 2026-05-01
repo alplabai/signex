@@ -16,6 +16,9 @@ use iced::{Color, Rectangle, Renderer, Theme};
 pub use camera::Camera;
 pub use grid::GridState;
 
+#[allow(deprecated)]
+use signex_render::schematic::SchematicSheetExt as _;
+
 use crate::app::Message;
 
 // ─── Canvas State (per-canvas mutable state) ──────────────────
@@ -1030,7 +1033,8 @@ impl canvas::Program<Message> for SchematicCanvas {
                 // top of wires and symbols but under the selection
                 // highlight.
                 for m in &self.erc_markers {
-                    let (sx, sy) = transform.world_to_screen(m.x, m.y);
+                    let _wp = transform.world_to_screen((m.x as f64, m.y as f64));
+                    let (sx, sy) = (_wp.x, _wp.y);
                     let (fill, stroke) = match m.severity {
                         ErcMarkerSeverity::Error => (
                             Color::from_rgba(0.95, 0.25, 0.25, 0.6),
@@ -1562,7 +1566,7 @@ impl canvas::Program<Message> for SchematicCanvas {
                         scale: state.camera.scale,
                     };
                     let ghost_color = Color::from_rgba(0.3, 0.8, 1.0, 0.7);
-                    signex_render::schematic::text::draw_text_note(
+                    signex_render::schematic::text::draw_text_note_preview(
                         &mut frame,
                         &preview,
                         &ghost_transform,
@@ -1594,7 +1598,7 @@ impl canvas::Program<Message> for SchematicCanvas {
                     };
                     let ghost_color = Color::from_rgba(0.3, 0.8, 1.0, 0.7);
                     let ghost_fill = Color::from_rgba(0.3, 0.8, 1.0, 0.15);
-                    signex_render::schematic::label::draw_label(
+                    signex_render::schematic::label::draw_label_preview(
                         &mut frame,
                         &preview_label,
                         &ghost_transform,
@@ -1664,8 +1668,9 @@ impl canvas::Program<Message> for SchematicCanvas {
             {
                 let dx = (current.0 - origin.0) as f32;
                 let dy = (current.1 - origin.1) as f32;
-                if let Some(render_cache) = self.active_render_cache() {
-                    let preview = render_cache.prepared_preview();
+                if let Some(render_cache) = self.active_render_cache()
+                    && let Some(preview) = render_cache.prepared_preview()
+                {
                     for sel in &self.selected {
                         if matches!(
                             sel.kind,
@@ -1686,11 +1691,12 @@ impl canvas::Program<Message> for SchematicCanvas {
                             if let (Some((anchor_x, anchor_y)), Some((field_x, field_y))) =
                                 (anchor_pos, moved_pos)
                             {
-                                let anchor = state
-                                    .camera
-                                    .world_to_screen(iced::Point::new(anchor_x, anchor_y), bounds);
+                                let anchor = state.camera.world_to_screen(
+                                    iced::Point::new(anchor_x as f32, anchor_y as f32),
+                                    bounds,
+                                );
                                 let moved = state.camera.world_to_screen(
-                                    iced::Point::new(field_x + dx, field_y + dy),
+                                    iced::Point::new(field_x as f32 + dx, field_y as f32 + dy),
                                     bounds,
                                 );
 

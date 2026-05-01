@@ -39,6 +39,45 @@ const GLYPH_ASPECT: f64 = 0.6;
 
 const SELECTION_WEIGHT_FACTOR: f64 = 1.5;
 
+/// **Deprecated v0.12 placement-preview helper.** Paints a single
+/// label ghost in caller-chosen stroke + fill colours, without needing
+/// a snapshot. v0.12: only the stroke colour is honoured (flag fill
+/// is left transparent). Used by signex-app's placement tools.
+#[deprecated(since = "0.12.0", note = "build a RenderContext and call draw_label")]
+pub fn draw_label_preview(
+    frame: &mut Frame,
+    label: &Label,
+    viewport: &super::Viewport,
+    stroke_color: iced::Color,
+    _fill_color: iced::Color,
+) {
+    if label.text.is_empty() || matches!(label.label_type, LabelType::Power) {
+        return;
+    }
+    let pos = viewport.world_to_screen(label.position);
+    if !point_finite(pos) {
+        return;
+    }
+    let mm = if label.font_size > 0.0 {
+        label.font_size
+    } else {
+        DEFAULT_TEXT_MM
+    };
+    let scale = crate::canvas_font_size_scale() as f64;
+    let em_mm = mm / 0.72;
+    let size_px = (em_mm * viewport.zoom_px_per_mm() * scale) as f32;
+    super::text::draw_rotated_text(
+        frame,
+        &label.text,
+        pos,
+        label.rotation,
+        size_px,
+        stroke_color,
+        label.justify,
+        label.justify_v,
+    );
+}
+
 /// Render a single label into the content layer's frame. Power labels
 /// are silently skipped (the parent symbol owns their visuals).
 pub fn draw_label(frame: &mut Frame, label: &Label, ctx: &RenderContext<'_>) {
@@ -50,7 +89,7 @@ pub fn draw_label(frame: &mut Frame, label: &Label, ctx: &RenderContext<'_>) {
     }
 
     let bbox = label_aabb(label);
-    if !aabbs_overlap(&bbox, &ctx.viewport.visible_world_bounds()) {
+    if !aabbs_overlap(&bbox, &ctx.visible_world_bounds()) {
         return;
     }
 
@@ -137,7 +176,7 @@ fn draw_flag_label(
         builder.close();
     });
 
-    let stroke_px = (0.15 * ctx.viewport.zoom_px_per_mm).max(1.0) as f32;
+    let stroke_px = (0.15 * ctx.viewport.zoom_px_per_mm()).max(1.0) as f32;
     let stroke_factor = if selected {
         SELECTION_WEIGHT_FACTOR
     } else {

@@ -58,7 +58,7 @@ pub fn draw_pin(
 
     // Frustum cull.
     let bbox = pin_aabb(pin, transform);
-    if !aabbs_overlap(&bbox, &ctx.viewport.visible_world_bounds()) {
+    if !aabbs_overlap(&bbox, &ctx.visible_world_bounds()) {
         return;
     }
 
@@ -69,7 +69,7 @@ pub fn draw_pin(
     }
 
     let pin_colour = iced_color(&ctx.theme().pin);
-    let stroke_px = (PIN_STROKE_MM * ctx.viewport.zoom_px_per_mm).max(1.0) as f32;
+    let stroke_px = (PIN_STROKE_MM * ctx.viewport.zoom_px_per_mm()).max(1.0) as f32;
     let stroke = Stroke::default()
         .with_width(stroke_px)
         .with_color(pin_colour);
@@ -194,7 +194,7 @@ fn bubble_at(
     if !point_finite(centre_s) {
         return;
     }
-    let r_px = (radius_mm * ctx.viewport.zoom_px_per_mm).max(1.0) as f32;
+    let r_px = (radius_mm * ctx.viewport.zoom_px_per_mm()).max(1.0) as f32;
     frame.stroke(&Path::circle(centre_s, r_px), stroke);
 }
 

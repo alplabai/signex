@@ -20,7 +20,11 @@ use signex_types::schematic::{
     Aabb, Point, SchDrawing, SelectedItem, SelectedKind, point_to_segment_dist,
 };
 
-use super::{SchematicSnapshot, SelectionMode};
+// Re-export at the v0.11 path so consumers that imported
+// `signex_render::schematic::hit_test::SelectionMode` continue to compile.
+pub use super::SelectionMode;
+
+use super::SchematicSnapshot;
 
 /// Spatial-hash cell size in millimetres. Sized to comfortably enclose
 /// the typical schematic primitive (≈ 1 cell per pin or junction);
@@ -198,11 +202,12 @@ pub fn hit_test(
 }
 
 /// **Deprecated v0.12 shim.** Polygon hit-test approximated as an AABB
-/// crossing query.
+/// crossing query. Accepts any iterable of `(x, y)` pairs to match
+/// the v0.11 call shape (signex-app builds polygons as `Vec<(f64, f64)>`).
 #[deprecated(since = "0.12.0", note = "build a HitIndex once and call hit_test_box")]
 pub fn hit_test_polygon(
     sheet: &signex_types::schematic::SchematicSheet,
-    poly: &[Point],
+    poly: &[(f64, f64)],
 ) -> Vec<SelectedItem> {
     if poly.is_empty() {
         return Vec::new();
@@ -211,11 +216,11 @@ pub fn hit_test_polygon(
     let mut min_y = f64::INFINITY;
     let mut max_x = f64::NEG_INFINITY;
     let mut max_y = f64::NEG_INFINITY;
-    for p in poly {
-        min_x = min_x.min(p.x);
-        min_y = min_y.min(p.y);
-        max_x = max_x.max(p.x);
-        max_y = max_y.max(p.y);
+    for (px, py) in poly {
+        min_x = min_x.min(*px);
+        min_y = min_y.min(*py);
+        max_x = max_x.max(*px);
+        max_y = max_y.max(*py);
     }
     let theme = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
     let snap = SchematicSnapshot::new(sheet, &theme);
@@ -224,30 +229,22 @@ pub fn hit_test_polygon(
         &index,
         &snap,
         Aabb::new(min_x, min_y, max_x, max_y),
-        SelectionMode::Crossing,
+        SelectionMode::Touching,
     )
 }
 
-/// **Deprecated v0.12 shim.** Rect-mode hit test — `crossing == true`
-/// matches `SelectionMode::Crossing`, otherwise `Enclosing`.
+/// **Deprecated v0.12 shim.** Rect-mode hit test — takes an Aabb and
+/// `SelectionMode` directly, matching the v0.11 call shape.
 #[deprecated(since = "0.12.0", note = "build a HitIndex once and call hit_test_box")]
 pub fn hit_test_rect_mode(
     sheet: &signex_types::schematic::SchematicSheet,
-    min_x: f64,
-    min_y: f64,
-    max_x: f64,
-    max_y: f64,
-    crossing: bool,
+    rect: &Aabb,
+    mode: SelectionMode,
 ) -> Vec<SelectedItem> {
     let theme = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
     let snap = SchematicSnapshot::new(sheet, &theme);
     let index = HitIndex::build(&snap);
-    let mode = if crossing {
-        SelectionMode::Crossing
-    } else {
-        SelectionMode::Enclosing
-    };
-    box_query(&index, &snap, Aabb::new(min_x, min_y, max_x, max_y), mode)
+    box_query(&index, &snap, *rect, mode)
 }
 
 /// Public hit-test entry — see [`super::hit_test_point`].
@@ -399,14 +396,14 @@ fn primitive_hit_box(
             (item_bbox.min_x + item_bbox.max_x) * 0.5,
             (item_bbox.min_y + item_bbox.max_y) * 0.5,
         ),
-        SelectionMode::Enclosing => {
+        SelectionMode::Inside => {
             // Item fully inside the query box.
             box_world.min_x <= item_bbox.min_x
                 && box_world.max_x >= item_bbox.max_x
                 && box_world.min_y <= item_bbox.min_y
                 && box_world.max_y >= item_bbox.max_y
         }
-        SelectionMode::Crossing => super::util::aabbs_overlap(item_bbox, box_world),
+        SelectionMode::Touching => super::util::aabbs_overlap(item_bbox, box_world),
     }
 }
 
@@ -482,8 +479,8 @@ mod tests {
         let snap = SchematicSnapshot::new(&sheet, &theme);
         let index = HitIndex::build(&snap);
         let q = Aabb::new(0.0, 0.0, 3.0, 3.0);
-        let hits_enclose = box_query(&index, &snap, q, SelectionMode::Enclosing);
-        let hits_cross = box_query(&index, &snap, q, SelectionMode::Crossing);
+        let hits_enclose = box_query(&index, &snap, q, SelectionMode::Inside);
+        let hits_cross = box_query(&index, &snap, q, SelectionMode::Touching);
         assert_eq!(hits_enclose.len(), 1);
         assert_eq!(hits_enclose[0].uuid, inside_uuid);
         assert_eq!(hits_cross.len(), 2);

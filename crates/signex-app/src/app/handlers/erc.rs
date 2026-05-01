@@ -95,9 +95,7 @@ impl Signex {
                 continue;
             }
             if let Some(engine) = self.document_state.engines.get(&tab.path) {
-                let snapshot = signex_render::schematic::SchematicRenderSnapshot::from_sheet(
-                    engine.document(),
-                );
+                let snapshot = engine.document().clone();
                 push_snap(
                     tab.path.clone(),
                     snapshot,
@@ -124,8 +122,7 @@ impl Signex {
                 else {
                     continue;
                 };
-                let snapshot =
-                    signex_render::schematic::SchematicRenderSnapshot::from_sheet(&parsed);
+                let snapshot = parsed.clone();
                 push_snap(path, snapshot, &mut snapshots_by_path, &mut children);
             }
         }

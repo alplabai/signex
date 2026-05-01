@@ -166,6 +166,64 @@ jobs:
           fi
           echo "No KiCad C++ class names or .cpp file references."
 
+  no-standard-as-comment-word-in-renderer:
+    name: No bare `Standard` as a comment word in renderer / engine
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Forbid `\bStandard\b` substring in signex-render / signex-engine
+        run: |
+          set -e
+          # The v0.10.0 "Standard" rename of KiCad-class names was a
+          # cosmetic substitution that left structural derivation in
+          # place. The v0.12 cleanroom rewrite removed those references
+          # and forbids reintroduction; future contributions must use
+          # neutral terms or reference `docs/RENDERING_RULES.md`
+          # directly. The `Standard` literal in render-style enum
+          # variant names (`PowerPortStyle::Standard`,
+          # `LabelStyle::Standard`, `MultisheetStyle::Standard`) is
+          # whitelisted because it serialises to disk and renaming
+          # would break user files.
+          MATCHES=$(git grep -nE '\bStandard\b' -- 'crates/signex-render/' 'crates/signex-engine/' || true)
+          if [ -n "$MATCHES" ]; then
+            # Whitelist: render-style enum variant declarations + their
+            # Display impls. Anything else is a comment-word euphemism
+            # and fails the rule.
+            FILTERED=$(echo "$MATCHES" | grep -vE '(PowerPortStyle::Standard|LabelStyle::Standard|MultisheetStyle::Standard|"Standard"|^[^:]+:[0-9]+:[[:space:]]+Standard,[[:space:]]*$|Standard => write)' || true)
+            if [ -n "$FILTERED" ]; then
+              echo "$FILTERED"
+              echo ""
+              echo "::error::Bare 'Standard' comment-word detected in signex-render / signex-engine."
+              echo "::error::Source comments must describe behaviour without the v0.10.0 Standard euphemism."
+              echo "::error::Reference docs/RENDERING_RULES.md, IEEE-Std-91, or Altium parity instead."
+              exit 1
+            fi
+          fi
+          echo "No bare 'Standard' comment-words in renderer / engine."
+
+  no-kicad-published-format-substrings:
+    name: No `.kicad_sch` / `.kicad_pcb` / `.kicad_sym` literals
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Forbid published KiCad file-format extension substrings
+        run: |
+          set -e
+          # The Apache-clean Signex repo doesn't read or write KiCad
+          # files; the GPL-3.0 companion does. Any literal containing
+          # `.kicad_sch` / `.kicad_pcb` / `.kicad_sym` (test fixture
+          # filenames, error messages, file dialogs) signals a probable
+          # GPL-companion code drift. Use `.snxsch` / `.snxpcb` / `.snxsym`
+          # in the Apache crates.
+          if git grep -nE '\.kicad_(sch|pcb|sym)\b' -- 'crates/**/*.rs' 'crates/**/*.toml'; then
+            echo ""
+            echo "::error::Published KiCad file-format extension substring detected in crates/."
+            echo "::error::This Apache crate doesn't interop with KiCad files. Use the Signex"
+            echo "::error::extensions (.snxsch / .snxpcb / .snxsym) for fixtures and messages."
+            exit 1
+          fi
+          echo "No KiCad published-format substrings."
+
   no-derivation-attribution-markers:
     name: No DeepWiki / KiCad-mirror-source markers
     runs-on: ubuntu-latest
