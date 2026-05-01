@@ -13,8 +13,9 @@ use crate::toolbar::ToolMessage;
 
 mod actions;
 mod bootstrap;
+pub mod command_palette;
 pub mod contracts;
-mod dispatch;
+pub(crate) mod dispatch;
 mod documents;
 mod handlers;
 mod helpers;
@@ -23,15 +24,19 @@ mod mutation_gateway;
 mod runtime;
 mod selection_request;
 mod state;
-mod view;
+pub(crate) mod view;
 
 pub use contracts::{
-    ContextAction, ContextMenuState, ContextSubmenu, DragTarget, Message,
-    ProjectCloseChoice, ProjectCloseConfirmState, ProjectTreeAction,
-    ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState, RenameDialogState,
-    StatusBarRequest, TabContextAction, TabContextMenuState, TextEditState,
+    ContextAction, ContextMenuState, ContextSubmenu, DragTarget, EnableVersionControlState,
+    Message, ProjectCloseChoice, ProjectCloseConfirmState, ProjectOptionsState,
+    ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState,
+    RenameDialogState, StatusBarRequest, TabContextAction, TabContextMenuState, TextEditState,
+    TrackItem, VersionControlScope,
 };
-pub use documents::{DrawMode, SchematicTabSession, TabDocument, TabInfo, Tool};
+pub use documents::{
+    ComponentEditorTab, DrawMode, FootprintEditorState, SchematicTabSession, SymbolEditorState,
+    TabDocument, TabInfo, TabKind, Tool,
+};
 pub use state::{DocumentState, InteractionState, ProjectId, Signex, UiState};
 
 // Re-exported so modal dialogs outside `state` can reference the type.

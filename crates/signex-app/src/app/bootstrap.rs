@@ -59,6 +59,7 @@ impl Signex {
                 let mut d = DockArea::new();
                 d.add_panel(PanelPosition::Left, PanelKind::Projects);
                 d.add_panel(PanelPosition::Left, PanelKind::Components);
+                d.add_panel(PanelPosition::Left, PanelKind::Library);
                 d.add_panel(PanelPosition::Left, PanelKind::Signal);
                 d.add_panel(PanelPosition::Right, PanelKind::Properties);
                 d.add_panel(PanelPosition::Right, PanelKind::Messages);
@@ -71,14 +72,28 @@ impl Signex {
 
         let sch_canvas = SchematicCanvas::new();
         let pcb_canvas = crate::pcb_canvas::PcbCanvas::new();
-        let grid_size_mm = crate::canvas::grid::GRID_SIZES_MM[1]; // 1.27mm (Altium default, 50 mil)
+        // Default to the 50-mil Altium grid; user-set value overrides
+        // through the prefs file (UX §1.5 — last-used grid persists).
+        let grid_size_mm = crate::fonts::read_grid_size_mm_pref()
+            .unwrap_or(crate::canvas::grid::GRID_SIZES_MM[1]);
+        let standard_lib_dir = helpers::find_standard_symbols_dir();
+        let mut standard_libraries = standard_lib_dir
+            .as_deref()
+            .map(helpers::list_standard_libraries)
+            .unwrap_or_default();
+        if !standard_libraries.is_empty() {
+            standard_libraries.insert(0, helpers::ALL_LIBRARIES.to_string());
+        }
 
         let mut app = Self {
             ui_state: UiState {
-                theme_id: ThemeId::Signex,
-                unit: Unit::Mm,
-                grid_visible: true,
-                snap_enabled: true,
+                // Persisted user-toggleable state (UX §1.5). Reads
+                // fall back to defaults when the prefs file is absent
+                // or the key missing — same as a fresh install.
+                theme_id: crate::fonts::read_theme_pref(),
+                unit: crate::fonts::read_unit_pref(),
+                grid_visible: crate::fonts::read_grid_visible_pref(),
+                snap_enabled: crate::fonts::read_snap_enabled_pref(),
                 cursor_x: 0.0,
                 cursor_y: 0.0,
                 zoom: 100.0,
@@ -86,6 +101,8 @@ impl Signex {
                 visible_grid_mm: 1.27,
                 snap_hotspots: true,
                 ui_font_name: crate::fonts::read_ui_font_pref(),
+                component_classes: crate::fonts::read_component_classes_pref(),
+                preferences_draft_component_classes: crate::fonts::read_component_classes_pref(),
                 canvas_font_name: crate::fonts::DEFAULT_CANVAS_FONT.to_string(),
                 canvas_font_size: 11.0,
                 canvas_font_bold: false,
@@ -97,6 +114,8 @@ impl Signex {
                 main_window_scale: 1.0,
                 panel_list_open: false,
                 preferences_open: false,
+                keyboard_shortcuts_open: false,
+                first_run_tour_open: !crate::fonts::read_first_run_tour_dismissed(),
                 find_replace: crate::find_replace::FindReplaceState::default(),
                 preferences_nav: crate::preferences::PrefNav::Appearance,
                 preferences_draft_theme: ThemeId::Signex,
@@ -114,6 +133,8 @@ impl Signex {
                 rename_dialog: None,
                 remove_dialog: None,
                 project_close_confirm: None,
+                project_options: None,
+                enable_version_control: None,
                 erc_violations: Vec::new(),
                 erc_violations_by_path: std::collections::HashMap::new(),
                 erc_focus_global_index: None,
@@ -129,8 +150,6 @@ impl Signex {
                 tab_dragging: None,
                 main_window_id: None,
                 windows: std::collections::HashMap::new(),
-                saving_paths: std::collections::HashSet::new(),
-                save_error: None,
                 move_selection: crate::app::state::MoveSelectionState::default(),
                 net_color_palette_open: false,
                 parameter_manager_open: false,
@@ -143,12 +162,15 @@ impl Signex {
                 lasso_polygon: None,
                 net_color_undo: Vec::new(),
                 net_color_custom: crate::app::state::NetColorCustomState::default(),
+                command_palette: crate::app::command_palette::CommandPaletteState::default(),
             },
             document_state: DocumentState {
                 dock,
                 tabs: vec![],
                 active_tab: 0,
                 engines: std::collections::HashMap::new(),
+                symbol_editors: std::collections::HashMap::new(),
+                footprint_editors: std::collections::HashMap::new(),
                 active_path: None,
                 projects: Vec::new(),
                 active_project: None,
@@ -176,12 +198,15 @@ impl Signex {
                     visible_grid_mm: 1.27,
                     snap_hotspots: true,
                     ui_font_name: crate::fonts::read_ui_font_pref(),
+                    component_classes: crate::fonts::read_component_classes_pref(),
                     canvas_font_name: crate::fonts::DEFAULT_CANVAS_FONT.to_string(),
                     canvas_font_size: 11.0,
                     canvas_font_bold: false,
                     canvas_font_italic: false,
                     canvas_font_popup_open: false,
+
                     properties_tab: 0,
+                    standard_libraries,
                     active_library: None,
                     library_symbols: vec![],
                     selected_component: None,
@@ -189,7 +214,6 @@ impl Signex {
                     selected_lib_symbol: None,
                     components_split: 250.0,
                     project_tree: vec![],
-                    selected_tree_path: None,
                     selection_count: 0,
                     selected_uuid: None,
                     selected_kind: None,
@@ -203,7 +227,7 @@ impl Signex {
                     child_sheet_border_advanced_open: false,
                     child_sheet_fill_advanced_open: false,
                     child_sheet_stroke_width_buf: None,
-                    component_filter: String::new(),
+                    component_filter: crate::fonts::read_component_filter(),
                     collapsed_sections: std::collections::HashSet::new(),
                     pre_placement: None,
                     erc_diagnostics: Vec::new(),
@@ -223,7 +247,11 @@ impl Signex {
                     custom_paper_w_mm: 297.0,
                     custom_paper_h_mm: 210.0,
                     sheet_color: crate::panels::SheetColor::default(),
+                    symbol_editor: None,
+                    history: crate::panels::history::HistoryPanelState::default(),
                 },
+                history: crate::panels::history::HistoryPanelState::default(),
+                standard_lib_dir,
                 loaded_lib: std::collections::HashMap::new(),
                 preview: None,
                 pending_pdf_options: None,
@@ -277,8 +305,17 @@ impl Signex {
                 last_tool: std::collections::HashMap::new(),
                 pending_power: None,
                 pending_port: None,
+                hover_symbol_uuid: None,
+                hover_started_at: None,
+                hover_screen_pos: None,
             },
+            library: crate::library::LibraryState::default(),
         };
+        // v0.9 Stage 9: load + mount globally-configured libraries
+        // before the first frame so the Components Panel's Global
+        // section is populated from the get-go.
+        app.library.global_libraries =
+            crate::panels::components_panel::global_prefs::load_and_mount_all(&mut app.library);
         signex_render::set_canvas_font_name(&app.ui_state.canvas_font_name);
         signex_render::set_canvas_font_size(app.ui_state.canvas_font_size);
         signex_render::set_canvas_font_style(
@@ -313,7 +350,13 @@ impl Signex {
     }
 
     pub fn title(&self, _id: iced::window::Id) -> String {
-        format!("Signex {}", env!("CARGO_PKG_VERSION"))
+        let version = env!("CARGO_PKG_VERSION");
+        let dirty_count = self.document_state.dirty_paths.len();
+        if dirty_count == 0 {
+            format!("Signex {version}")
+        } else {
+            format!("• Signex {version} — {dirty_count} unsaved")
+        }
     }
 
     pub fn theme(&self, _id: iced::window::Id) -> Option<Theme> {
@@ -409,11 +452,56 @@ impl Signex {
         use iced::keyboard;
 
         let kbd = keyboard::listen()
-            .with(self.ui_state.find_replace.open)
-            .map(|(find_replace_open, event)| match event {
+            .with((
+                self.ui_state.find_replace.open,
+                self.ui_state.command_palette.open,
+                self.ui_state.keyboard_shortcuts_open,
+                self.ui_state.first_run_tour_open,
+                self.ui_state.preferences_open,
+                self.ui_state.annotate_dialog_open,
+                self.ui_state.erc_dialog_open,
+            ))
+            .map(
+                |(
+                    (
+                        find_replace_open,
+                        palette_open,
+                        kbd_shortcuts_open,
+                        first_run_tour_open,
+                        prefs_open,
+                        annotate_open,
+                        erc_open,
+                    ),
+                    event,
+                )| match event {
                 keyboard::Event::KeyPressed {
                     key, modifiers: m, ..
-                } => match (key.as_ref(), m) {
+                } => {
+                    // Command palette captures most input while open so
+                    // typing into the search field doesn't fire tool
+                    // shortcuts (`p`, `w`, `l`, …). Only navigation
+                    // and dismiss keys leak through.
+                    if palette_open {
+                        return match (key.as_ref(), m) {
+                            (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
+                                Message::CommandPaletteClose
+                            }
+                            (keyboard::Key::Named(keyboard::key::Named::ArrowDown), _) => {
+                                Message::CommandPaletteMoveSelection(1)
+                            }
+                            (keyboard::Key::Named(keyboard::key::Named::ArrowUp), _) => {
+                                Message::CommandPaletteMoveSelection(-1)
+                            }
+                            // Toggle: Ctrl+Shift+P while open closes.
+                            (keyboard::Key::Character(c), m)
+                                if c == "P" && m.command() && m.shift() =>
+                            {
+                                Message::CommandPaletteClose
+                            }
+                            _ => Message::Noop,
+                        };
+                    }
+                    match (key.as_ref(), m) {
                     (keyboard::Key::Character(c), m) if c == "q" && m.command() => {
                         Message::UnitCycled
                     }
@@ -436,9 +524,10 @@ impl Signex {
                     (keyboard::Key::Character(c), m) if c == "p" && m.command() && !m.shift() => {
                         Message::PrintPreviewRequested
                     }
-                    // Ctrl+Shift+P: Export PDF options dialog
+                    // Ctrl+Shift+P: open command palette (VS Code parity).
+                    // Export PDF stays reachable via File ▸ Export ▸ PDF…
                     (keyboard::Key::Character(c), m) if c == "P" && m.command() && m.shift() => {
-                        Message::ExportPdfOpenDialog
+                        Message::CommandPaletteOpen
                     }
                     // Ctrl+, open Preferences
                     (keyboard::Key::Character(c), m) if c == "," && m.command() => {
@@ -455,11 +544,37 @@ impl Signex {
                     {
                         Message::FindReplaceMsg(crate::find_replace::FindReplaceMsg::Close)
                     }
+                    (keyboard::Key::Named(keyboard::key::Named::Escape), _)
+                        if kbd_shortcuts_open =>
+                    {
+                        Message::CloseKeyboardShortcuts
+                    }
+                    (keyboard::Key::Named(keyboard::key::Named::Escape), _)
+                        if first_run_tour_open =>
+                    {
+                        Message::DismissFirstRunTour
+                    }
+                    // Esc closes the deepest open modal first (UX §1.3).
+                    // The order here goes "user-facing top → bottom":
+                    // ERC, then Annotate, then Preferences. Once those
+                    // are closed, Esc falls through to the tool reset.
+                    (keyboard::Key::Named(keyboard::key::Named::Escape), _) if erc_open => {
+                        Message::CloseErcDialog
+                    }
+                    (keyboard::Key::Named(keyboard::key::Named::Escape), _) if annotate_open => {
+                        Message::CloseAnnotateDialog
+                    }
+                    (keyboard::Key::Named(keyboard::key::Named::Escape), _) if prefs_open => {
+                        Message::ClosePreferences
+                    }
                     (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
                         Message::Tool(ToolMessage::SelectTool(Tool::Select))
                     }
                     (keyboard::Key::Named(keyboard::key::Named::Home), _) => {
                         Message::CanvasEvent(CanvasEvent::FitAll)
+                    }
+                    (keyboard::Key::Named(keyboard::key::Named::F1), _) => {
+                        Message::Menu(MenuMessage::OpenKeyboardShortcuts)
                     }
                     (keyboard::Key::Named(keyboard::key::Named::F8), _) => Message::RunErc,
                     (keyboard::Key::Named(keyboard::key::Named::F9), _) => Message::ToggleAutoFocus,
@@ -562,7 +677,8 @@ impl Signex {
                         Message::PrePlacementTab
                     }
                     _ => Message::Noop,
-                },
+                    }
+                }
                 _ => Message::Noop,
             });
 
@@ -667,6 +783,31 @@ impl Signex {
             Subscription::none()
         };
 
-        Subscription::batch([kbd, mouse_sub, window_close, window_resize, hover_tick])
+        // Hover-tooltip wake tick. The tooltip overlay only shows
+        // after the cursor has dwelled on a placed symbol for 250 ms
+        // — without a periodic re-render, the view layer would never
+        // notice the threshold crossing once the cursor stopped
+        // moving (no mouse events → no redraw). This fires until the
+        // user moves off the symbol; once the tooltip is up, normal
+        // CursorMoved events keep it tracking the cursor.
+        let symbol_hover_active = self.interaction_state.hover_symbol_uuid.is_some()
+            && self
+                .interaction_state
+                .hover_started_at
+                .is_some_and(|t| t.elapsed() < std::time::Duration::from_millis(900));
+        let hover_tooltip_tick = if symbol_hover_active {
+            iced::time::every(std::time::Duration::from_millis(80)).map(|_| Message::Noop)
+        } else {
+            Subscription::none()
+        };
+
+        Subscription::batch([
+            kbd,
+            mouse_sub,
+            window_close,
+            window_resize,
+            hover_tick,
+            hover_tooltip_tick,
+        ])
     }
 }

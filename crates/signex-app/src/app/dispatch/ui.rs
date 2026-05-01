@@ -8,6 +8,7 @@ impl Signex {
             Message::ThemeChanged(id) => {
                 self.ui_state.theme_id = id;
                 self.update_canvas_theme();
+                crate::fonts::write_theme_pref(id);
                 self.finish_update()
             }
             Message::UnitCycled | Message::StatusBar(StatusBarRequest::CycleUnit) => {
@@ -21,6 +22,7 @@ impl Signex {
                 self.interaction_state.pcb_canvas.grid_visible = self.ui_state.grid_visible;
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
+                crate::fonts::write_grid_visible_pref(self.ui_state.grid_visible);
                 self.finish_update()
             }
             Message::DragStart(target) => {
@@ -62,13 +64,29 @@ impl Signex {
                 self.ui_state.snap_enabled = !self.ui_state.snap_enabled;
                 self.interaction_state.active_canvas_mut().snap_enabled =
                     self.ui_state.snap_enabled;
+                crate::fonts::write_snap_enabled_pref(self.ui_state.snap_enabled);
                 self.finish_update()
             }
             Message::StatusBar(StatusBarRequest::TogglePanelList) => {
                 self.dispatch_overlay_message(Message::TogglePanelList)
             }
-            Message::CanvasEvent(event) => self.handle_canvas_interaction_event(event),
+            Message::StatusBar(StatusBarRequest::OpenPropertiesForSelection) => self
+                .dispatch_overlay_message(Message::Menu(MenuMessage::OpenPropertiesPanel)),
+            Message::CanvasEvent(event) => {
+                // First user gesture on the canvas dismisses the
+                // first-run tour card (UX §4.3). Cheap inline check —
+                // false branch when the card is already dismissed.
+                if self.ui_state.first_run_tour_open {
+                    self.ui_state.first_run_tour_open = false;
+                    crate::fonts::write_first_run_tour_dismissed(true);
+                }
+                self.handle_canvas_interaction_event(event)
+            }
             Message::CanvasEventInWindow { window_id, event } => {
+                if self.ui_state.first_run_tour_open {
+                    self.ui_state.first_run_tour_open = false;
+                    crate::fonts::write_first_run_tour_dismissed(true);
+                }
                 self.handle_canvas_event_in_window(window_id, event)
             }
             _ => unreachable!("dispatch_ui_message received non-ui message"),

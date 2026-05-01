@@ -1,0 +1,14 @@
+class = "generic"
+description = "Generic component — minimal required parameters"
+
+[[optional_params]]
+name = "value"
+kind = "text"
+
+[[optional_params]]
+name = "package"
+kind = "text"
+
+[[optional_params]]
+name = "rating"
+kind = "text"

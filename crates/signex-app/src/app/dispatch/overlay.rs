@@ -21,6 +21,15 @@ impl Signex {
             Message::OpenReplace => self.handle_find_replace_open_requested(true),
             Message::OpenPreferences => self.handle_preferences_open_requested(),
             Message::ClosePreferences => self.handle_preferences_close_requested(),
+            Message::CloseKeyboardShortcuts => {
+                self.ui_state.keyboard_shortcuts_open = false;
+                Task::none()
+            }
+            Message::DismissFirstRunTour => {
+                self.ui_state.first_run_tour_open = false;
+                crate::fonts::write_first_run_tour_dismissed(true);
+                Task::none()
+            }
             Message::PreferencesNav(nav) => self.handle_preferences_navigation_requested(nav),
             Message::PreferencesMsg(msg) => self.handle_preferences_message(msg),
             Message::FindReplaceMsg(msg) => self.handle_find_replace_message(msg),
@@ -169,6 +178,40 @@ impl Signex {
             Message::RemoveConfirm(choice) => self.handle_remove_confirm(choice),
             Message::CloseRemoveDialog => {
                 self.ui_state.remove_dialog = None;
+                Task::none()
+            }
+            Message::AddExistingFilePicked { project_idx, paths } => {
+                self.handle_add_existing_file_picked(project_idx, paths);
+                Task::none()
+            }
+            Message::AddNewSchematicPicked { project_idx, path } => {
+                self.handle_add_new_schematic_picked(project_idx, path);
+                Task::none()
+            }
+            Message::CloseProjectOptions => {
+                self.ui_state.project_options = None;
+                Task::none()
+            }
+            Message::EnableVersionControlToggleLfs => {
+                if let Some(s) = self.ui_state.enable_version_control.as_mut() {
+                    s.use_lfs = !s.use_lfs;
+                }
+                Task::none()
+            }
+            Message::EnableVersionControlToggleItem(idx) => {
+                if let Some(s) = self.ui_state.enable_version_control.as_mut() {
+                    if let Some(item) = s.items.get_mut(idx) {
+                        item.tracked = !item.tracked;
+                    }
+                }
+                Task::none()
+            }
+            Message::EnableVersionControlConfirm => {
+                self.handle_enable_version_control_confirm();
+                Task::none()
+            }
+            Message::CloseEnableVersionControl => {
+                self.ui_state.enable_version_control = None;
                 Task::none()
             }
             Message::OpenContextSubmenu(kind) => {

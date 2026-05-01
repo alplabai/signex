@@ -9,9 +9,11 @@
 //! Format: `{"ui_font": "Roboto"}`
 
 use std::path::PathBuf;
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 
 use signex_render::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
+use signex_types::coord::Unit;
+use signex_types::theme::ThemeId;
 
 /// Default UI font family name. Used when no preference file is found.
 pub const DEFAULT_UI_FONT: &str = "Roboto";
@@ -19,6 +21,96 @@ pub const DEFAULT_UI_FONT: &str = "Roboto";
 /// Default canvas (schematic / PCB) font family name.
 /// Iosevka is bundled in `assets/fonts/` and loaded at startup.
 pub const DEFAULT_CANVAS_FONT: &str = "Iosevka";
+
+/// Default seed component class list — used when `prefs.json` carries
+/// no `component_classes` array (fresh install / user hasn't customised
+/// the list yet). The first element of each tuple is the canonical key
+/// stored on `ComponentRow.class`; the second is the user-facing label
+/// shown in pickers and editors. Users can add / rename / delete via
+/// Preferences ▸ Component Classes; the customised list persists as
+/// the `component_classes` array in `prefs.json`.
+pub const DEFAULT_COMPONENT_CLASSES: &[(&str, &str)] = &[
+    ("resistor", "Resistor"),
+    ("capacitor", "Capacitor"),
+    ("inductor", "Inductor"),
+    ("diode", "Diode"),
+    ("led", "LED"),
+    ("transistor_bjt", "Transistor — BJT"),
+    ("transistor_mosfet", "Transistor — MOSFET"),
+    ("transistor_jfet", "Transistor — JFET"),
+    ("opamp", "Op-Amp"),
+    ("comparator", "Comparator"),
+    ("regulator_linear", "Regulator — Linear"),
+    ("regulator_switching", "Regulator — Switching"),
+    ("mcu", "MCU"),
+    ("logic", "Logic"),
+    ("memory", "Memory"),
+    ("connector", "Connector"),
+    ("switch", "Switch"),
+    ("relay", "Relay"),
+    ("crystal", "Crystal / Oscillator"),
+    ("transformer", "Transformer"),
+    ("fuse", "Fuse"),
+    ("antenna", "Antenna"),
+    ("display", "Display"),
+    ("sensor", "Sensor"),
+    ("motor", "Motor"),
+    ("battery", "Battery"),
+    ("generic", "Generic"),
+];
+
+/// One entry in the user's component-class list. Persisted as a JSON
+/// object `{ "key": "...", "label": "..." }` inside the
+/// `component_classes` array in `prefs.json`. `key` is the canonical
+/// machine identifier stored on `ComponentRow.class`; `label` is the
+/// human-readable name surfaced in pickers.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ComponentClassEntry {
+    pub key: String,
+    pub label: String,
+}
+
+/// Materialise the seed list as owned `ComponentClassEntry` values.
+pub fn default_component_classes() -> Vec<ComponentClassEntry> {
+    DEFAULT_COMPONENT_CLASSES
+        .iter()
+        .map(|(k, l)| ComponentClassEntry {
+            key: (*k).to_string(),
+            label: (*l).to_string(),
+        })
+        .collect()
+}
+
+/// Build an [`iced::Font`] that targets the given family name. iced's
+/// `Font::with_name` requires `&'static str` because the renderer
+/// caches by family name, but the Preferences panel hands us font
+/// names as runtime `String`s. The intern map below leaks one
+/// `&'static str` per unique family name ever resolved during a
+/// session — bounded by the small set of fonts a user actually picks,
+/// so the cumulative leak is negligible. Used for surfaces that need
+/// the canvas font (Iosevka by default) — e.g. the symbol hover
+/// tooltip.
+pub fn iced_font_for_family(name: &str) -> iced::Font {
+    static INTERN: OnceLock<Mutex<std::collections::HashMap<String, &'static str>>> =
+        OnceLock::new();
+    let map_lock = INTERN.get_or_init(|| Mutex::new(std::collections::HashMap::new()));
+    // `unwrap_or_else(|e| e.into_inner())` recovers from a poisoned
+    // mutex — the inner value is still valid (a HashMap of leaked
+    // names; nothing in flight here can corrupt it). Using
+    // `.unwrap()` would panic the UI thread on every subsequent
+    // tooltip render after any unrelated panic that happened to
+    // hold this lock.
+    let mut map = map_lock.lock().unwrap_or_else(|e| e.into_inner());
+    let static_name: &'static str = match map.get(name) {
+        Some(s) => *s,
+        None => {
+            let leaked: &'static str = Box::leak(name.to_string().into_boxed_str());
+            map.insert(name.to_string(), leaked);
+            leaked
+        }
+    };
+    iced::Font::with_name(static_name)
+}
 
 // ──────────────────────────────────────────────────────────────────────────
 // System font enumeration
@@ -103,6 +195,50 @@ pub fn write_ui_font_pref(font_name: &str) {
     }
 }
 
+/// Read the user's component-class list from the prefs file. Falls
+/// back to [`default_component_classes`] only when the file is
+/// absent / malformed, or when the `component_classes` key is
+/// missing entirely (a fresh install). A user who has the array
+/// present and empty is honored verbatim — the New Component
+/// surface handles the "no classes defined" case at the point of
+/// use, so saving an empty list and reading it back round-trips
+/// faithfully.
+pub fn read_component_classes_pref() -> Vec<ComponentClassEntry> {
+    let path = prefs_path();
+    let Ok(bytes) = std::fs::read(&path) else {
+        return default_component_classes();
+    };
+    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        return default_component_classes();
+    };
+    let Some(arr) = json["component_classes"].as_array() else {
+        return default_component_classes();
+    };
+    arr.iter()
+        .filter_map(|v| serde_json::from_value(v.clone()).ok())
+        .collect()
+}
+
+/// Persist `classes` to the `component_classes` array in prefs.json
+/// without clobbering other preference keys. Silent on I/O failure
+/// — preferences are best-effort.
+pub fn write_component_classes_pref(classes: &[ComponentClassEntry]) {
+    let path = prefs_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let mut json: serde_json::Value = std::fs::read(&path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or(serde_json::json!({}));
+    if let Ok(value) = serde_json::to_value(classes) {
+        json["component_classes"] = value;
+    }
+    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
+        let _ = std::fs::write(&path, serialized);
+    }
+}
+
 /// Read `power_port_style` from preferences file.
 /// Defaults to `Altium` when missing or invalid.
 pub fn read_power_port_style_pref() -> PowerPortStyle {
@@ -115,10 +251,6 @@ pub fn read_power_port_style_pref() -> PowerPortStyle {
     };
 
     match json["power_port_style"].as_str().unwrap_or("altium") {
-        // On-disk strings stay "standard" / "altium" for backward
-        // compatibility with prefs files written by v0.7.0–v0.9.1.
-        // Internal variant renamed `Standard` → `Standard` in v0.10.0
-        // (see `signex-render::PowerPortStyle` doc comment).
         "standard" | "Standard" => PowerPortStyle::Standard,
         _ => PowerPortStyle::Altium,
     }
@@ -146,10 +278,8 @@ pub fn write_power_port_style_pref(style: PowerPortStyle) {
     }
 }
 
-/// Read `label_style` from preferences file. Defaults to the
-/// `Standard` variant (was previously named `Standard`) when missing or
-/// invalid. The on-disk preference string stays "standard" for
-/// backward compatibility — see `signex-render::LabelStyle`.
+/// Read `label_style` from preferences file.
+/// Defaults to `Standard` when missing or invalid.
 pub fn read_label_style_pref() -> LabelStyle {
     let path = prefs_path();
     let Ok(bytes) = std::fs::read(&path) else {
@@ -187,10 +317,8 @@ pub fn write_label_style_pref(style: LabelStyle) {
     }
 }
 
-/// Read `multisheet_style` from preferences file. Defaults to the
-/// `Standard` variant (was `Standard`) when missing or invalid. On-disk
-/// preference string stays "standard" for backward compatibility — see
-/// `signex-render::MultisheetStyle`.
+/// Read `multisheet_style` from preferences file.
+/// Defaults to `Standard` when missing or invalid.
 pub fn read_multisheet_style_pref() -> MultisheetStyle {
     let path = prefs_path();
     let Ok(bytes) = std::fs::read(&path) else {
@@ -260,6 +388,159 @@ pub fn write_grid_style_pref(style: GridStyle) {
         GridStyle::Lines => "lines".to_string(),
         GridStyle::SmallCrosses => "crosses".to_string(),
     });
+    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
+        let _ = std::fs::write(&path, serialized);
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Session-state prefs (UX_IMPROVEMENTS_OVER_ALTIUM §1.5)
+// ──────────────────────────────────────────────────────────────────────────
+//
+// Each user-toggleable knob persists across sessions so the editor
+// reopens to the state the user left it in. Reads return safe defaults
+// when the prefs file is absent or the key missing — the same as a
+// fresh install.
+
+/// Read the last-applied theme. Defaults to `ThemeId::Signex`.
+pub fn read_theme_pref() -> ThemeId {
+    let path = prefs_path();
+    let Ok(bytes) = std::fs::read(&path) else {
+        return ThemeId::Signex;
+    };
+    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        return ThemeId::Signex;
+    };
+    json.get("theme")
+        .cloned()
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or(ThemeId::Signex)
+}
+
+/// Persist theme without clobbering other preference keys.
+pub fn write_theme_pref(theme: ThemeId) {
+    let path = prefs_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let mut json: serde_json::Value = std::fs::read(&path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or(serde_json::json!({}));
+    if let Ok(value) = serde_json::to_value(theme) {
+        json["theme"] = value;
+    }
+    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
+        let _ = std::fs::write(&path, serialized);
+    }
+}
+
+/// Read the last-active coordinate unit. Defaults to `Unit::Mm`.
+pub fn read_unit_pref() -> Unit {
+    let path = prefs_path();
+    let Ok(bytes) = std::fs::read(&path) else {
+        return Unit::Mm;
+    };
+    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        return Unit::Mm;
+    };
+    json.get("unit")
+        .cloned()
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or(Unit::Mm)
+}
+
+/// Persist coordinate unit without clobbering other preference keys.
+pub fn write_unit_pref(unit: Unit) {
+    let path = prefs_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let mut json: serde_json::Value = std::fs::read(&path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or(serde_json::json!({}));
+    if let Ok(value) = serde_json::to_value(unit) {
+        json["unit"] = value;
+    }
+    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
+        let _ = std::fs::write(&path, serialized);
+    }
+}
+
+/// Read the last grid-visible toggle. Defaults to `true`.
+pub fn read_grid_visible_pref() -> bool {
+    let path = prefs_path();
+    let Ok(bytes) = std::fs::read(&path) else {
+        return true;
+    };
+    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        return true;
+    };
+    json["grid_visible"].as_bool().unwrap_or(true)
+}
+
+pub fn write_grid_visible_pref(visible: bool) {
+    let path = prefs_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let mut json: serde_json::Value = std::fs::read(&path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or(serde_json::json!({}));
+    json["grid_visible"] = serde_json::Value::Bool(visible);
+    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
+        let _ = std::fs::write(&path, serialized);
+    }
+}
+
+/// Read the last snap-enabled toggle. Defaults to `true`.
+pub fn read_snap_enabled_pref() -> bool {
+    let path = prefs_path();
+    let Ok(bytes) = std::fs::read(&path) else {
+        return true;
+    };
+    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        return true;
+    };
+    json["snap_enabled"].as_bool().unwrap_or(true)
+}
+
+pub fn write_snap_enabled_pref(enabled: bool) {
+    let path = prefs_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let mut json: serde_json::Value = std::fs::read(&path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or(serde_json::json!({}));
+    json["snap_enabled"] = serde_json::Value::Bool(enabled);
+    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
+        let _ = std::fs::write(&path, serialized);
+    }
+}
+
+/// Read the last grid size (mm). Returns `None` when missing so the
+/// caller can fall back to the engine's preferred default.
+pub fn read_grid_size_mm_pref() -> Option<f32> {
+    let path = prefs_path();
+    let bytes = std::fs::read(&path).ok()?;
+    let json: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+    json["grid_size_mm"].as_f64().map(|v| v as f32)
+}
+
+pub fn write_grid_size_mm_pref(grid_size_mm: f32) {
+    let path = prefs_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let mut json: serde_json::Value = std::fs::read(&path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or(serde_json::json!({}));
+    json["grid_size_mm"] = serde_json::json!(grid_size_mm);
     if let Ok(serialized) = serde_json::to_string_pretty(&json) {
         let _ = std::fs::write(&path, serialized);
     }
@@ -507,6 +788,9 @@ fn panel_kind_key(k: crate::panels::PanelKind) -> &'static str {
         Wiki => "wiki",
         LayerStack => "layer_stack",
         NetClasses => "net_classes",
+        Library => "library",
+        SchLibrary => "sch_library",
+        History => "history",
     }
 }
 
@@ -533,6 +817,9 @@ fn parse_panel_kind(s: &str) -> Option<crate::panels::PanelKind> {
         "wiki" => Wiki,
         "layer_stack" => LayerStack,
         "net_classes" => NetClasses,
+        "library" => Library,
+        "sch_library" => SchLibrary,
+        "history" => History,
         _ => return None,
     })
 }
@@ -599,6 +886,137 @@ pub fn write_pin_matrix_overrides(
         );
     }
     json["pin_matrix"] = serde_json::Value::Object(obj);
+    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
+        let _ = std::fs::write(&path, serialized);
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// First-run tour (UX_IMPROVEMENTS_OVER_ALTIUM §4.3)
+// ──────────────────────────────────────────────────────────────────────────
+
+/// Has the user dismissed the first-run tour card? Default `false` so a
+/// fresh install shows the card on first launch; once dismissed (via the
+/// X button, Esc, or any canvas interaction) the flag flips to `true`
+/// and stays that way for the lifetime of the prefs file.
+pub fn read_first_run_tour_dismissed() -> bool {
+    let path = prefs_path();
+    let Ok(bytes) = std::fs::read(&path) else {
+        return false;
+    };
+    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        return false;
+    };
+    json["first_run_tour_dismissed"].as_bool().unwrap_or(false)
+}
+
+/// Persist the dismissal flag without clobbering other keys.
+pub fn write_first_run_tour_dismissed(dismissed: bool) {
+    let path = prefs_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let mut json: serde_json::Value = std::fs::read(&path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or(serde_json::json!({}));
+    json["first_run_tour_dismissed"] = serde_json::Value::Bool(dismissed);
+    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
+        let _ = std::fs::write(&path, serialized);
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Persistent search queries (UX_IMPROVEMENTS_OVER_ALTIUM §1.1)
+// ──────────────────────────────────────────────────────────────────────────
+
+/// Read the last-typed Components-panel filter, if any. Empty string
+/// when missing or malformed — that's the same as a fresh session for
+/// the panel.
+pub fn read_component_filter() -> String {
+    let path = prefs_path();
+    let Ok(bytes) = std::fs::read(&path) else {
+        return String::new();
+    };
+    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        return String::new();
+    };
+    json["component_filter"]
+        .as_str()
+        .unwrap_or("")
+        .to_string()
+}
+
+/// Persist the Components-panel filter without clobbering other keys.
+pub fn write_component_filter(query: &str) {
+    let path = prefs_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let mut json: serde_json::Value = std::fs::read(&path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or(serde_json::json!({}));
+    json["component_filter"] = serde_json::Value::String(query.to_string());
+    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
+        let _ = std::fs::write(&path, serialized);
+    }
+}
+
+/// Read the persisted per-`.snxlib` Library Browser search queries.
+/// Keyed by the absolute path's display string; entries for libraries
+/// that no longer exist on disk are harmless — they're loaded but only
+/// touched again when the user reopens that library.
+pub fn read_library_browser_searches() -> std::collections::HashMap<PathBuf, String> {
+    let mut out = std::collections::HashMap::new();
+    let path = prefs_path();
+    let Ok(bytes) = std::fs::read(&path) else {
+        return out;
+    };
+    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        return out;
+    };
+    let Some(obj) = json.get("library_browser_searches").and_then(|v| v.as_object())
+    else {
+        return out;
+    };
+    for (k, v) in obj {
+        let Some(s) = v.as_str() else { continue };
+        if s.is_empty() {
+            continue;
+        }
+        out.insert(PathBuf::from(k), s.to_string());
+    }
+    out
+}
+
+/// Persist a single library's search query. Reading the existing map
+/// from disk first means concurrent updates to other libraries don't
+/// stomp each other (same-process only — cross-process serialisation
+/// is out of scope for prefs).
+pub fn write_library_browser_search(library_path: &std::path::Path, query: &str) {
+    let path = prefs_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let mut json: serde_json::Value = std::fs::read(&path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or(serde_json::json!({}));
+    let key = library_path.display().to_string();
+    let map = json
+        .as_object_mut()
+        .expect("prefs root is always an object");
+    let entry = map
+        .entry("library_browser_searches".to_string())
+        .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+    if let Some(obj) = entry.as_object_mut() {
+        if query.is_empty() {
+            obj.remove(&key);
+        } else {
+            obj.insert(key, serde_json::Value::String(query.to_string()));
+        }
+    }
     if let Ok(serialized) = serde_json::to_string_pretty(&json) {
         let _ = std::fs::write(&path, serialized);
     }

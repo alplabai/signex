@@ -423,22 +423,25 @@ pub(super) fn field_display_pos(
     (prop_pos.x, prop_pos.y)
 }
 
-/// Compute Standard-like effective field draw properties under symbol transform.
+/// Compute the effective field draw properties under the parent symbol's transform.
 ///
 /// Returns `(draw_rotation_deg, effective_h_align, effective_v_align)`.
 ///
-/// Mirrors two pieces of Standard behaviour:
-/// 1. `SCH_FIELD::GetDrawRotation()` — for symbols at 0°/180° (`y1 == 0`)
-///    the stored field angle is used directly; for 90°/270° the angle is
+/// Spec: `docs/RENDERING_RULES.md::field-rotation-and-justify`.
+/// The behaviour codified here matches what users see when a field is
+/// drawn under a rotated or mirrored symbol; it falls out of two rules:
+/// 1. **Draw rotation folding.** For symbols at 0° / 180° the stored
+///    field angle is used directly. For 90° / 270° the angle is
 ///    toggled between 0° and 90° so vertically-rotated symbols still
 ///    render horizontal text when the field's stored angle is 90°.
 ///    180°→0° and 270°→90° are folded for readability.
-/// 2. `SCH_FIELD::GetEffectiveJustify()` — Standard mirrors the field's
-///    justify whenever the symbol's transform flips an axis. Concretely,
-///    a 180°-rotated symbol turns left→right and top→bottom; the mirror
-///    flags add an extra flip on the corresponding axis. Without this,
-///    a `justify left` field stored to the *left* of a 180°-rotated body
-///    anchors on its left edge and visibly grows back through the body.
+/// 2. **Justify-flip on axis flip.** When the symbol's transform flips
+///    an axis, the field's stored justify must flip on that axis too.
+///    A 180°-rotated symbol turns left→right and top→bottom; the
+///    mirror flags add an extra flip on the corresponding axis. Without
+///    this, a `justify left` field stored to the *left* of a
+///    180°-rotated body would anchor on its left edge and visibly
+///    grow back through the body.
 pub(super) fn field_effective_style(
     prop: &signex_types::schematic::TextProp,
     sym: &signex_types::schematic::Symbol,

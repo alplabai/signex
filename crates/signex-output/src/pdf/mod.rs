@@ -136,8 +136,9 @@ pub struct PdfOptions {
     /// Schematic-element colour palette. The unified Print Preview
     /// passes the active theme's `CanvasColors` here so PDF wires /
     /// symbols / labels match the on-screen schematic. Default is
-    /// the classic eeschema palette so existing direct-export
-    /// callers keep their historical look.
+    /// the legacy `SchematicPalette::classic()` (cream paper / dark-
+    /// blue wires) so existing direct-export callers keep their
+    /// historical look.
     pub palette: SchematicPalette,
 }
 
@@ -903,6 +904,9 @@ mod tests {
             instances: vec![],
             footprint: String::new(),
             datasheet: String::new(),
+            library_id: None,
+            row_id: None,
+            library_version: String::new(),
         });
 
         // Add one label.
@@ -1145,6 +1149,9 @@ mod tests {
             instances: vec![],
             footprint: String::new(),
             datasheet: String::new(),
+            library_id: None,
+            row_id: None,
+            library_version: String::new(),
         });
         let mut ctx = sample_ctx(1);
         ctx.sheets[0].schematic = sheet;

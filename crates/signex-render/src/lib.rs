@@ -25,12 +25,6 @@ pub use signex_types::schematic::SCHEMATIC_TEXT_MM;
 /// `screen_font`) silently breaks label/pin/text anchors.
 pub const SCHEMATIC_TEXT_EM_MM: f64 = SCHEMATIC_TEXT_MM / 0.72;
 
-/// Power-port glyph style preference. `Standard` matches the rounded
-/// shapes typical of open-source schematic editors; `Altium` matches
-/// the Altium Designer signature look. The `Standard` variant was
-/// previously named `Standard` — renamed in v0.10.0 as part of the
-/// Apache-clean residual polish; the on-disk preference string and
-/// the user-facing dropdown label are unchanged.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PowerPortStyle {
     Standard,
@@ -38,8 +32,6 @@ pub enum PowerPortStyle {
     Altium,
 }
 
-/// Net-label glyph style preference. Same `Standard` (was `Standard`) /
-/// `Altium` split as `PowerPortStyle`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LabelStyle {
     #[default]
@@ -47,15 +39,12 @@ pub enum LabelStyle {
     Altium,
 }
 
-/// How hierarchical child sheets render. `Standard` mode keeps each
-/// sheet's stroke/fill colour from the source file (with theme
-/// component-body fallback) so the sheet blends with the rest of the
-/// schematic. `Altium` mode draws sheets with Altium Designer's
-/// signature greenish palette when no per-sheet colour is set in the
-/// file. Per-sheet colours from the source file always win,
-/// regardless of the active style. The `Standard` variant was
-/// previously named `Standard` — see `PowerPortStyle` for the rename
-/// rationale.
+/// How hierarchical child sheets render. Standard mode keeps each sheet's
+/// stroke/fill colour from the source file (with theme component-body
+/// fallback) so the sheet blends with the rest of the schematic. Altium
+/// mode draws sheets with Altium Designer's signature greenish palette
+/// when no per-sheet colour is set in the file. Per-sheet colours from
+/// the source file always win, regardless of the active style.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MultisheetStyle {
     #[default]
@@ -81,10 +70,6 @@ impl GridStyle {
 impl std::fmt::Display for MultisheetStyle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            // User-facing dropdown label kept as "Standard" so users
-            // migrating from Standard files recognise the mode that
-            // matches their original layout. Internal variant name
-            // is `Standard` — see the type's doc comment.
             MultisheetStyle::Standard => write!(f, "Standard"),
             MultisheetStyle::Altium => write!(f, "Altium"),
         }
