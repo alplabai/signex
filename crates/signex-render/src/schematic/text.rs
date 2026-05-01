@@ -685,12 +685,13 @@ pub fn draw_text_note(
 /// `display_pos`: resolved display position for the field text, computed by
 /// caller via [`field_display_pos`].
 ///
-/// `mirror_x`: true when the parent symbol has `mirror x` (flips Y axis),
-/// which causes Standard to flip the horizontal justification of the field text
-/// (SCH_FIELD::GetEffectiveJustify). Pass `sym.mirror_x`.
+/// `mirror_x`: true when the parent symbol has `mirror x` (flips the
+/// Y axis), which flips the horizontal justification of the field
+/// text per the rule in `field_effective_style`. Pass `sym.mirror_x`.
 ///
-/// Rotation: Standard field angles are CCW-positive in their Y-down screen
-/// space. Iced `frame.rotate()` is CW-positive, so we negate the angle.
+/// Rotation convention: stored field angles are CCW-positive in the
+/// schematic's Y-down screen space. Iced `frame.rotate()` is
+/// CW-positive, so we negate the angle when handing it to iced.
 pub fn draw_text_prop(
     frame: &mut canvas::Frame,
     content: &str,

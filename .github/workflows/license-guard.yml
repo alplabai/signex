@@ -135,6 +135,58 @@ jobs:
           fi
           echo "No KiCad auto-net-name format string."
 
+  no-kicad-cpp-class-names:
+    name: No KiCad C++ class / file references in source comments
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Forbid SCH_PAINTER / SCH_FIELD / sch_painter.cpp / etc.
+        run: |
+          set -e
+          # KiCad's C++ implementation uses specific class names
+          # (SCH_PAINTER, SCH_FIELD, SCH_SYMBOL, LIB_SYMBOL, …) and
+          # filenames (sch_painter.cpp, sch_symbol.cpp, …). Comments
+          # in `crates/` referencing these are derivation-shaped
+          # attributions in our own words and were scrubbed during
+          # the 2026-05-01 comment cleanup. Going forward, source
+          # comments must describe behaviour in neutral language and
+          # reference docs/RENDERING_RULES.md for the spec.
+          #
+          # NOTE: The bitflag constant `LIB_SYMBOLS` (plural,
+          # without scope operator) is allowed — it's our own
+          # bitflag name. Only `LIB_SYMBOL::` and `LIB_PIN::`
+          # (singular + scope, the C++ form) are forbidden.
+          if git grep -nE '\bSCH_(PAINTER|FIELD|LABEL|PIN|SYMBOL|LINE|RECTANGLE|JUNCTION|BUS|WIRE|TEXT|SHEET|MARKER)\b|\bLIB_(SYMBOL|PIN|FIELD|TEXT)::|\b(sch_painter|sch_symbol\.cpp|sch_label\.cpp|sch_pin\.cpp|lib_symbol\.cpp)\b|\beeschema/' -- 'crates/**/*.rs' 'crates/**/*.toml'; then
+            echo ""
+            echo "::error::KiCad C++ class name or .cpp file reference detected in crates/."
+            echo "::error::Source comments must describe behaviour in neutral terms and"
+            echo "::error::reference docs/RENDERING_RULES.md for the rendering spec."
+            echo "::error::See docs/audit/comments-scrub-2026-05-01.md for context."
+            exit 1
+          fi
+          echo "No KiCad C++ class names or .cpp file references."
+
+  no-derivation-attribution-markers:
+    name: No DeepWiki / KiCad-mirror-source markers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Forbid "DeepWiki" / "KiCad mirror source" / etc. anywhere in repo
+        run: |
+          set -e
+          # Specific markers that appeared in pre-v0.9.0 agent-context
+          # skill docs as derivation attribution. They have no
+          # legitimate use in Signex source / docs and any future
+          # appearance would signal a regression of the agent-context
+          # discipline documented in docs/LICENSING.md.
+          if git grep -niE 'DeepWiki|KiCad mirror source|extracted from KiCad|based on KiCad source' -- ':!docs/audit/' ':!.github/workflows/license-guard.yml' ':!docs/LICENSING.md'; then
+            echo ""
+            echo "::error::Derivation-attribution marker (DeepWiki / KiCad-mirror-source / etc.) detected."
+            echo "::error::These have no legitimate use in source or docs outside the audit trail."
+            exit 1
+          fi
+          echo "No derivation-attribution markers."
+
   cargo-deny:
     name: cargo-deny license + transitive-dep audit
     runs-on: ubuntu-latest

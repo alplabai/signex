@@ -304,8 +304,8 @@ pub(crate) fn emit_bookmarks(
         if let Some(&last) = top_level.last() {
             outline.last(bookmark_id(last));
         }
-        // /Count = total visible items so the panel opens fully
-        // expanded — matches what Standard eeschema and Altium ship.
+        // /Count = total visible items so the bookmarks panel opens
+        // fully expanded by default, matching common EDA exporters.
         outline.count(bookmarks.len() as i32);
         outline.finish();
     }

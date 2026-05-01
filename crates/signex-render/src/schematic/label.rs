@@ -1,10 +1,11 @@
 //! Label rendering — net labels, global labels, hierarchical labels.
 //!
-//! Reference: signex Tauri app schematicDrawHelpers.ts::drawLabels()
-//! and Standard sch_painter.cpp SCH_LABEL render.
+//! Behaviour spec: `docs/RENDERING_RULES.md::sch-labels` —
+//! the Signex internal rendering rule set, derived from observed
+//! `.kicad_sch` rendering behaviour and Altium parity goals.
 //!
 //! Net label:   Plain text at anchor. No shape. Bottom-aligned.
-//! Global:      Arrow/pentagon shape. Shape type from label.shape field.
+//! Global:      Arrow / pentagon shape per `label.shape` field.
 //! Hier:        Pentagon (flag) shape.
 //! Power:       Rendered via LibSymbol in symbol pass — skip here.
 

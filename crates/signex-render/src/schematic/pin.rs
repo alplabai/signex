@@ -443,10 +443,13 @@ fn draw_pin(
 }
 
 // ---------------------------------------------------------------------------
-// Pin shape decorators (mirroring Standard SCH_PAINTER pin shape logic)
+// Pin shape decorators — IEEE-Std-91 graphical conventions for pin
+// modifiers (inverter bubble, clock arrow, low-active markers, etc.).
+// Spec: `docs/RENDERING_RULES.md::pin-shape-decorators`.
 // ---------------------------------------------------------------------------
 
-/// Draw two connected segments A→B and B→C (Standard `triLine`).
+/// Draw two connected segments A→B and B→C — used as a building
+/// block for clock-arrow and low-edge decorators below.
 fn tri_line(
     frame: &mut canvas::Frame,
     a: iced::Point,
