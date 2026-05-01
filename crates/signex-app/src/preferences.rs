@@ -4,7 +4,7 @@
 //! Left side: tree of settings categories.
 //! Right side: settings panel for the selected category.
 
-use iced::widget::{Space, button, column, container, row, scrollable, text};
+use iced::widget::{Column, Space, button, column, container, row, scrollable, text, text_input};
 use iced::{Background, Border, Color, Element, Length, Theme};
 use signex_render::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
 use signex_types::theme::ThemeId;
@@ -22,6 +22,11 @@ pub enum PrefNav {
     Erc,
     /// v0.9 Library settings — Distributor APIs, lifecycle defaults.
     LibraryDistributors,
+    /// User-editable component-class registry — surfaces in the New
+    /// Component / Edit Component class dropdowns. Backed by
+    /// `prefs.json::component_classes`; defaults seed from
+    /// `fonts::default_component_classes` on a fresh install.
+    ComponentClasses,
     // Future: Editor, Shortcuts, ...
 }
 
@@ -30,6 +35,7 @@ impl PrefNav {
         PrefNav::Appearance,
         PrefNav::Erc,
         PrefNav::LibraryDistributors,
+        PrefNav::ComponentClasses,
     ];
 
     pub fn label(self) -> &'static str {
@@ -38,6 +44,7 @@ impl PrefNav {
             PrefNav::SchematicEditor => "Schematic Editor",
             PrefNav::Erc => "Electrical Rules",
             PrefNav::LibraryDistributors => "Distributor APIs",
+            PrefNav::ComponentClasses => "Component Classes",
         }
     }
 
@@ -47,6 +54,7 @@ impl PrefNav {
             PrefNav::SchematicEditor => "Editors",
             PrefNav::Erc => "Validation",
             PrefNav::LibraryDistributors => "Library",
+            PrefNav::ComponentClasses => "Library",
         }
     }
 }
@@ -92,6 +100,25 @@ pub enum PrefMsg {
     /// existing `Message::PreferencesMsg` plumbing. The handler
     /// re-dispatches via `Message::Library(LibraryMessage::Settings)`.
     LibrarySettings(crate::library::messages::SettingsMsg),
+    /// Component-class editor messages — all edits land on the
+    /// `preferences_draft_component_classes` mirror so Cancel /
+    /// Discard reverts cleanly. Save copies the draft into the live
+    /// `component_classes` list and persists via
+    /// `fonts::write_component_classes_pref`.
+    ComponentClassEditKey {
+        index: usize,
+        key: String,
+    },
+    ComponentClassEditLabel {
+        index: usize,
+        label: String,
+    },
+    ComponentClassAdd,
+    ComponentClassRemove {
+        index: usize,
+    },
+    /// Reset the draft list to the seed defaults (`DEFAULT_COMPONENT_CLASSES`).
+    ComponentClassResetDefaults,
 }
 
 // ─── Dialog sizes ─────────────────────────────────────────────
@@ -143,6 +170,7 @@ pub fn view<'a>(
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
     distributor_settings: &'a crate::library::state::DistributorSettings,
     panel_tokens: &'a signex_types::theme::ThemeTokens,
+    draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
 ) -> Element<'a, PrefMsg> {
     let dialog = build_dialog(
         nav,
@@ -158,6 +186,7 @@ pub fn view<'a>(
         erc_overrides,
         distributor_settings,
         panel_tokens,
+        draft_component_classes,
     );
 
     container(
@@ -199,6 +228,7 @@ fn build_dialog<'a>(
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
     distributor_settings: &'a crate::library::state::DistributorSettings,
     panel_tokens: &'a signex_types::theme::ThemeTokens,
+    draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
 ) -> Element<'a, PrefMsg> {
     // ── Header ──
     let header = container(
@@ -246,6 +276,7 @@ fn build_dialog<'a>(
             erc_overrides,
             distributor_settings,
             panel_tokens,
+            draft_component_classes,
         ),
     ]
     .width(Length::Fill)
@@ -382,6 +413,7 @@ fn build_content<'a>(
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
     distributor_settings: &'a crate::library::state::DistributorSettings,
     panel_tokens: &'a signex_types::theme::ThemeTokens,
+    draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
 ) -> Element<'a, PrefMsg> {
     let inner = match nav {
         PrefNav::Appearance => content_appearance(
@@ -407,6 +439,7 @@ fn build_content<'a>(
         PrefNav::LibraryDistributors => {
             content_library_distributors(distributor_settings, panel_tokens)
         }
+        PrefNav::ComponentClasses => content_component_classes(draft_component_classes),
     };
 
     container(scrollable(inner).width(Length::Fill))
@@ -1100,4 +1133,138 @@ fn severity_bg(sev: signex_erc::Severity) -> Color {
         signex_erc::Severity::Info => Color::from_rgb(0.20, 0.36, 0.58),
         signex_erc::Severity::Off => Color::from_rgb(0.28, 0.28, 0.32),
     }
+}
+
+// ─── Component Classes editor ─────────────────────────────────
+
+fn content_component_classes<'a>(
+    classes: &'a [crate::fonts::ComponentClassEntry],
+) -> Element<'a, PrefMsg> {
+    let header = column![
+        text("Component Classes").size(15).color(TEXT_PRI),
+        text("Edit the class registry shown in New Component / Edit Component pickers. Stored in prefs.json::component_classes.")
+            .size(11)
+            .color(TEXT_MUT),
+    ]
+    .spacing(6);
+
+    let column_header = row![
+        container(text("Key").size(11).color(TEXT_MUT))
+            .width(Length::FillPortion(2)),
+        container(text("Label").size(11).color(TEXT_MUT))
+            .width(Length::FillPortion(3)),
+        container(Space::new()).width(80),
+    ]
+    .spacing(8)
+    .padding([4, 0]);
+
+    let mut rows: Vec<Element<'a, PrefMsg>> = Vec::with_capacity(classes.len());
+    for (idx, entry) in classes.iter().enumerate() {
+        let key_input = text_input("class_key", entry.key.as_str())
+            .on_input(move |s| PrefMsg::ComponentClassEditKey { index: idx, key: s })
+            .padding(5)
+            .size(12)
+            .width(Length::FillPortion(2));
+        let label_input = text_input("Label", entry.label.as_str())
+            .on_input(move |s| PrefMsg::ComponentClassEditLabel {
+                index: idx,
+                label: s,
+            })
+            .padding(5)
+            .size(12)
+            .width(Length::FillPortion(3));
+        let remove_btn = button(
+            container(text("Remove").size(11).color(Color::WHITE))
+                .padding([4, 10])
+                .center_x(Length::Fill),
+        )
+        .on_press(PrefMsg::ComponentClassRemove { index: idx })
+        .style(move |_: &Theme, status: button::Status| {
+            let bg = match status {
+                button::Status::Hovered | button::Status::Pressed => BTN_DANGER_HOV,
+                _ => BTN_DANGER,
+            };
+            button::Style {
+                background: Some(Background::Color(bg)),
+                text_color: Color::WHITE,
+                border: Border {
+                    radius: 3.0.into(),
+                    ..Border::default()
+                },
+                ..button::Style::default()
+            }
+        })
+        .width(80);
+
+        rows.push(
+            row![key_input, label_input, remove_btn]
+                .spacing(8)
+                .align_y(iced::Alignment::Center)
+                .into(),
+        );
+    }
+
+    let body: Element<'a, PrefMsg> = if rows.is_empty() {
+        text("No classes defined. Click \"+ Add Class\" to add one or \"Reset to Defaults\" to restore the seed list.")
+            .size(11)
+            .color(TEXT_MUT)
+            .into()
+    } else {
+        Column::with_children(rows).spacing(6).into()
+    };
+
+    let add_btn = button(
+        container(text("+ Add Class").size(11).color(Color::WHITE)).padding([5, 12]),
+    )
+    .on_press(PrefMsg::ComponentClassAdd)
+    .style(move |_: &Theme, status: button::Status| {
+        let bg = match status {
+            button::Status::Hovered | button::Status::Pressed => BTN_IMPORT_HOV,
+            _ => BTN_IMPORT,
+        };
+        button::Style {
+            background: Some(Background::Color(bg)),
+            text_color: Color::WHITE,
+            border: Border {
+                radius: 3.0.into(),
+                ..Border::default()
+            },
+            ..button::Style::default()
+        }
+    });
+
+    let reset_btn = button(
+        container(text("Reset to Defaults").size(11).color(TEXT_PRI)).padding([5, 12]),
+    )
+    .on_press(PrefMsg::ComponentClassResetDefaults)
+    .style(move |_: &Theme, status: button::Status| {
+        let bg = match status {
+            button::Status::Hovered | button::Status::Pressed => Color::from_rgb(0.22, 0.22, 0.26),
+            _ => Color::from_rgb(0.18, 0.18, 0.21),
+        };
+        button::Style {
+            background: Some(Background::Color(bg)),
+            text_color: TEXT_PRI,
+            border: Border {
+                width: 1.0,
+                color: SEP,
+                radius: 3.0.into(),
+            },
+            ..button::Style::default()
+        }
+    });
+
+    let toolbar = row![
+        add_btn,
+        Space::new().width(8),
+        reset_btn,
+        Space::new().width(Length::Fill),
+    ]
+    .spacing(0)
+    .align_y(iced::Alignment::Center);
+
+    column![header, column_header, body, Space::new().height(8), toolbar]
+        .spacing(10)
+        .padding(20)
+        .into()
 }

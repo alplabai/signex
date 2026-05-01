@@ -1020,35 +1020,6 @@ pub struct PickerState {
 // New Component flow
 // ─────────────────────────────────────────────────────────────────────
 
-/// Built-in component classes — keep this list in sync with
-/// `v0.9-refactor-2-plan.md`. The string is what gets stored on
-/// `ComponentRow::class`; the label is what the picker shows.
-pub const BUILTIN_CLASSES: &[(&str, &str)] = &[
-    ("resistor", "Resistor"),
-    ("capacitor", "Capacitor"),
-    ("inductor", "Inductor"),
-    ("diode", "Diode"),
-    ("led", "LED"),
-    ("transistor_bjt", "Transistor — BJT"),
-    ("transistor_mosfet", "Transistor — MOSFET"),
-    ("transistor_jfet", "Transistor — JFET"),
-    ("opamp", "Op-Amp"),
-    ("comparator", "Comparator"),
-    ("regulator_linear", "Regulator — Linear"),
-    ("regulator_switching", "Regulator — Switching"),
-    ("mcu", "MCU"),
-    ("logic", "Logic"),
-    ("memory", "Memory"),
-    ("adc", "ADC"),
-    ("dac", "DAC"),
-    ("connector", "Connector"),
-    ("crystal", "Crystal"),
-    ("oscillator", "Oscillator"),
-    ("sensor", "Sensor"),
-    ("mechanical", "Mechanical"),
-    ("generic", "Generic"),
-];
-
 /// "New Component" modal state — collected before the dispatcher
 /// inserts a row into the chosen target table and opens the
 /// Component Preview tab.

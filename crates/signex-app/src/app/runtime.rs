@@ -275,6 +275,7 @@ impl Signex {
             visible_grid_mm: self.ui_state.visible_grid_mm,
             snap_hotspots: self.ui_state.snap_hotspots,
             ui_font_name: self.ui_state.ui_font_name.clone(),
+            component_classes: self.ui_state.component_classes.clone(),
             canvas_font_name: self.ui_state.canvas_font_name.clone(),
             canvas_font_size: self.ui_state.canvas_font_size,
             canvas_font_bold: self.ui_state.canvas_font_bold,

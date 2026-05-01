@@ -22,6 +22,65 @@ pub const DEFAULT_UI_FONT: &str = "Roboto";
 /// Iosevka is bundled in `assets/fonts/` and loaded at startup.
 pub const DEFAULT_CANVAS_FONT: &str = "Iosevka";
 
+/// Default seed component class list — used when `prefs.json` carries
+/// no `component_classes` array (fresh install / user hasn't customised
+/// the list yet). The first element of each tuple is the canonical key
+/// stored on `ComponentRow.class`; the second is the user-facing label
+/// shown in pickers and editors. Users can add / rename / delete via
+/// Preferences ▸ Component Classes; the customised list persists as
+/// the `component_classes` array in `prefs.json`.
+pub const DEFAULT_COMPONENT_CLASSES: &[(&str, &str)] = &[
+    ("resistor", "Resistor"),
+    ("capacitor", "Capacitor"),
+    ("inductor", "Inductor"),
+    ("diode", "Diode"),
+    ("led", "LED"),
+    ("transistor_bjt", "Transistor — BJT"),
+    ("transistor_mosfet", "Transistor — MOSFET"),
+    ("transistor_jfet", "Transistor — JFET"),
+    ("opamp", "Op-Amp"),
+    ("comparator", "Comparator"),
+    ("regulator_linear", "Regulator — Linear"),
+    ("regulator_switching", "Regulator — Switching"),
+    ("mcu", "MCU"),
+    ("logic", "Logic"),
+    ("memory", "Memory"),
+    ("connector", "Connector"),
+    ("switch", "Switch"),
+    ("relay", "Relay"),
+    ("crystal", "Crystal / Oscillator"),
+    ("transformer", "Transformer"),
+    ("fuse", "Fuse"),
+    ("antenna", "Antenna"),
+    ("display", "Display"),
+    ("sensor", "Sensor"),
+    ("motor", "Motor"),
+    ("battery", "Battery"),
+    ("generic", "Generic"),
+];
+
+/// One entry in the user's component-class list. Persisted as a JSON
+/// object `{ "key": "...", "label": "..." }` inside the
+/// `component_classes` array in `prefs.json`. `key` is the canonical
+/// machine identifier stored on `ComponentRow.class`; `label` is the
+/// human-readable name surfaced in pickers.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ComponentClassEntry {
+    pub key: String,
+    pub label: String,
+}
+
+/// Materialise the seed list as owned `ComponentClassEntry` values.
+pub fn default_component_classes() -> Vec<ComponentClassEntry> {
+    DEFAULT_COMPONENT_CLASSES
+        .iter()
+        .map(|(k, l)| ComponentClassEntry {
+            key: (*k).to_string(),
+            label: (*l).to_string(),
+        })
+        .collect()
+}
+
 /// Build an [`iced::Font`] that targets the given family name. iced's
 /// `Font::with_name` requires `&'static str` because the renderer
 /// caches by family name, but the Preferences panel hands us font
@@ -125,6 +184,54 @@ pub fn write_ui_font_pref(font_name: &str) {
 
     json["ui_font"] = serde_json::Value::String(font_name.to_string());
 
+    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
+        let _ = std::fs::write(&path, serialized);
+    }
+}
+
+/// Read the user's component-class list from the prefs file. Falls
+/// back to [`default_component_classes`] when the file is absent /
+/// malformed, when the array is missing, or when it parses to an
+/// empty list (a deliberately-cleared list would round-trip as the
+/// seed — preventing a user who deletes every class from being stuck
+/// with no options at all).
+pub fn read_component_classes_pref() -> Vec<ComponentClassEntry> {
+    let path = prefs_path();
+    let Ok(bytes) = std::fs::read(&path) else {
+        return default_component_classes();
+    };
+    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        return default_component_classes();
+    };
+    let Some(arr) = json["component_classes"].as_array() else {
+        return default_component_classes();
+    };
+    let parsed: Vec<ComponentClassEntry> = arr
+        .iter()
+        .filter_map(|v| serde_json::from_value(v.clone()).ok())
+        .collect();
+    if parsed.is_empty() {
+        default_component_classes()
+    } else {
+        parsed
+    }
+}
+
+/// Persist `classes` to the `component_classes` array in prefs.json
+/// without clobbering other preference keys. Silent on I/O failure
+/// — preferences are best-effort.
+pub fn write_component_classes_pref(classes: &[ComponentClassEntry]) {
+    let path = prefs_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let mut json: serde_json::Value = std::fs::read(&path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or(serde_json::json!({}));
+    if let Ok(value) = serde_json::to_value(classes) {
+        json["component_classes"] = value;
+    }
     if let Ok(serialized) = serde_json::to_string_pretty(&json) {
         let _ = std::fs::write(&path, serialized);
     }

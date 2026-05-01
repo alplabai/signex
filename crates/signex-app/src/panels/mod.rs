@@ -285,6 +285,11 @@ pub struct PanelContext {
     pub snap_hotspots: bool,
     /// UI font family name (shown in settings; applies on restart).
     pub ui_font_name: String,
+    /// User-editable component-class registry mirrored from
+    /// `UiState.component_classes`. Read by the New Component modal's
+    /// class dropdown so the picker reflects whatever the user has
+    /// added / renamed / removed in Preferences ▸ Component Classes.
+    pub component_classes: Vec<crate::fonts::ComponentClassEntry>,
     /// Canvas font family name (Iosevka by default; applies immediately).
     pub canvas_font_name: String,
     /// Canvas font size in px (applied immediately as a global scale).

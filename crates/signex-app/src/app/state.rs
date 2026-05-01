@@ -33,6 +33,17 @@ pub struct UiState {
     pub visible_grid_mm: f32,
     pub snap_hotspots: bool,
     pub ui_font_name: String,
+    /// User-editable component-class registry. Loaded from
+    /// `prefs.json::component_classes` at boot; falls back to
+    /// [`crate::fonts::default_component_classes`] when absent.
+    /// Surfaced in Preferences ▸ Component Classes (add / rename /
+    /// delete) and consumed by the New Component modal's class
+    /// dropdown so users can extend the list without recompiling.
+    pub component_classes: Vec<crate::fonts::ComponentClassEntry>,
+    /// Draft mirror used by Preferences for cancel/discard
+    /// semantics — mutated as the user edits, copied back into
+    /// `component_classes` + persisted on Save.
+    pub preferences_draft_component_classes: Vec<crate::fonts::ComponentClassEntry>,
     pub canvas_font_name: String,
     pub canvas_font_size: f32,
     pub canvas_font_bold: bool,

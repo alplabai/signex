@@ -10,6 +10,8 @@ impl Signex {
         self.ui_state.preferences_draft_power_port_style = self.ui_state.power_port_style;
         self.ui_state.preferences_draft_label_style = self.ui_state.label_style;
         self.ui_state.preferences_draft_multisheet_style = self.ui_state.multisheet_style;
+        self.ui_state.preferences_draft_component_classes =
+            self.ui_state.component_classes.clone();
         self.ui_state.preferences_dirty = false;
         self.ui_state.panel_list_open = false;
         self.interaction_state.context_menu = None;
@@ -51,6 +53,8 @@ impl Signex {
                 self.ui_state.preferences_draft_power_port_style = self.ui_state.power_port_style;
                 self.ui_state.preferences_draft_label_style = self.ui_state.label_style;
                 self.ui_state.preferences_draft_multisheet_style = self.ui_state.multisheet_style;
+                self.ui_state.preferences_draft_component_classes =
+                    self.ui_state.component_classes.clone();
                 self.ui_state.preferences_dirty = false;
                 self.ui_state.preferences_open = false;
                 let tokens = if self.ui_state.theme_id == ThemeId::Custom {
@@ -100,6 +104,29 @@ impl Signex {
                 crate::fonts::write_multisheet_style_pref(self.ui_state.multisheet_style);
                 crate::fonts::write_grid_style_pref(self.ui_state.grid_style);
                 crate::fonts::write_theme_pref(self.ui_state.theme_id);
+                // Component classes — keep entries with non-empty keys
+                // and labels, dedupe by key (last write wins) so the
+                // dropdown never shows blanks or duplicates.
+                let mut sanitised: Vec<crate::fonts::ComponentClassEntry> = Vec::new();
+                for entry in &self.ui_state.preferences_draft_component_classes {
+                    let key = entry.key.trim();
+                    let label = entry.label.trim();
+                    if key.is_empty() || label.is_empty() {
+                        continue;
+                    }
+                    if let Some(existing) = sanitised.iter_mut().find(|e| e.key == key) {
+                        existing.label = label.to_string();
+                    } else {
+                        sanitised.push(crate::fonts::ComponentClassEntry {
+                            key: key.to_string(),
+                            label: label.to_string(),
+                        });
+                    }
+                }
+                self.ui_state.component_classes = sanitised.clone();
+                self.ui_state.preferences_draft_component_classes = sanitised.clone();
+                self.document_state.panel_ctx.component_classes = sanitised.clone();
+                crate::fonts::write_component_classes_pref(&sanitised);
                 self.ui_state.preferences_dirty = false;
             }
             PrefMsg::DraftTheme(id) => {
@@ -301,6 +328,42 @@ impl Signex {
                 return self.dispatch_library_message(
                     crate::library::messages::LibraryMessage::Settings(settings_msg),
                 );
+            }
+            PrefMsg::ComponentClassEditKey { index, key } => {
+                if let Some(entry) =
+                    self.ui_state.preferences_draft_component_classes.get_mut(index)
+                {
+                    entry.key = key;
+                    self.ui_state.preferences_dirty = true;
+                }
+            }
+            PrefMsg::ComponentClassEditLabel { index, label } => {
+                if let Some(entry) =
+                    self.ui_state.preferences_draft_component_classes.get_mut(index)
+                {
+                    entry.label = label;
+                    self.ui_state.preferences_dirty = true;
+                }
+            }
+            PrefMsg::ComponentClassAdd => {
+                self.ui_state
+                    .preferences_draft_component_classes
+                    .push(crate::fonts::ComponentClassEntry {
+                        key: String::new(),
+                        label: String::new(),
+                    });
+                self.ui_state.preferences_dirty = true;
+            }
+            PrefMsg::ComponentClassRemove { index } => {
+                if index < self.ui_state.preferences_draft_component_classes.len() {
+                    self.ui_state.preferences_draft_component_classes.remove(index);
+                    self.ui_state.preferences_dirty = true;
+                }
+            }
+            PrefMsg::ComponentClassResetDefaults => {
+                self.ui_state.preferences_draft_component_classes =
+                    crate::fonts::default_component_classes();
+                self.ui_state.preferences_dirty = true;
             }
         }
 

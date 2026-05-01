@@ -14,7 +14,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
 use super::messages::{BrowserEditMsg, LibraryMessage};
-use super::state::{BUILTIN_CLASSES, DeleteConfirmState, EditRowModalState};
+use super::state::{DeleteConfirmState, EditRowModalState};
 
 const MODAL_W: f32 = 720.0;
 const MODAL_H: f32 = 640.0;
@@ -57,6 +57,7 @@ pub fn view<'a>(
     library_path: &'a std::path::Path,
     edit: &'a EditRowModalState,
     tokens: &'a ThemeTokens,
+    classes: &'a [crate::fonts::ComponentClassEntry],
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
@@ -88,11 +89,11 @@ pub fn view<'a>(
         .padding(6)
         .size(12);
 
-    let class_picks: Vec<ClassPick> = BUILTIN_CLASSES
+    let class_picks: Vec<ClassPick> = classes
         .iter()
-        .map(|(key, label)| ClassPick {
-            key: (*key).to_string(),
-            label: (*label).to_string(),
+        .map(|entry| ClassPick {
+            key: entry.key.clone(),
+            label: entry.label.clone(),
         })
         .collect();
     let selected_class = class_picks

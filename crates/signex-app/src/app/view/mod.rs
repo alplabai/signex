@@ -4867,6 +4867,7 @@ impl Signex {
                 &ui.erc_severity_override,
                 &self.library.settings,
                 &document.panel_ctx.tokens,
+                &ui.preferences_draft_component_classes,
             )
             .map(Message::PreferencesMsg);
             layers.push(pref_view);
@@ -4953,6 +4954,7 @@ impl Signex {
                 nc,
                 &document.panel_ctx.tokens,
                 self.ui_state.theme_id,
+                &self.ui_state.component_classes,
             )
             .map(Message::Library);
             let backdrop = container(card)
@@ -4977,6 +4979,7 @@ impl Signex {
                     lib_path.as_path(),
                     edit,
                     &document.panel_ctx.tokens,
+                    &self.ui_state.component_classes,
                 )
                 .map(Message::Library);
                 let backdrop = container(card)

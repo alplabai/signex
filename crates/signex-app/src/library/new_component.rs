@@ -33,7 +33,7 @@ use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::theme_ext;
 
 use super::messages::LibraryMessage;
-use super::state::{BUILTIN_CLASSES, LibraryState, NewComponentState, PrimitivePickerTarget};
+use super::state::{LibraryState, NewComponentState, PrimitivePickerTarget};
 use crate::app::view::dialogs::{
     MODAL_CLOSE_X_HIT_H, MODAL_CLOSE_X_HIT_W, MODAL_CLOSE_X_HOVER, MODAL_CLOSE_X_ICON,
     MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE,
@@ -90,6 +90,7 @@ pub fn view<'a>(
     nc: &'a NewComponentState,
     tokens: &'a ThemeTokens,
     theme_id: ThemeId,
+    classes: &'a [crate::fonts::ComponentClassEntry],
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
@@ -194,11 +195,15 @@ pub fn view<'a>(
     };
 
     // Class picker ───────────────────────────────────────────
-    let class_picks: Vec<ClassPick> = BUILTIN_CLASSES
+    // Source of truth is the user's `prefs.json::component_classes`
+    // list (seeded from `fonts::default_component_classes` on a fresh
+    // install). Edits land via Preferences ▸ Component Classes; this
+    // view just renders whatever the panel-ctx currently mirrors.
+    let class_picks: Vec<ClassPick> = classes
         .iter()
-        .map(|(key, label)| ClassPick {
-            key: (*key).to_string(),
-            label: (*label).to_string(),
+        .map(|entry| ClassPick {
+            key: entry.key.clone(),
+            label: entry.label.clone(),
         })
         .collect();
     let selected_class_pick = class_picks
