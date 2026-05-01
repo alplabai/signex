@@ -156,7 +156,7 @@ pub enum Message {
     /// `ui_state.window_size`.
     WindowResizedFor(iced::window::Id, f32, f32),
     /// Run the ERC engine against the active schematic snapshot and populate
-    /// `ui_state.erc_violations`. Bound to F8.
+    /// `ui_state.erc.violations`. Bound to F8.
     RunErc,
     /// Auto-annotate every unannotated symbol (reference ends in `?`).
     /// Three modes: incremental, reset+renumber, reset-only.

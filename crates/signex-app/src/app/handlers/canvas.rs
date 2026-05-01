@@ -405,7 +405,7 @@ impl Signex {
                 // if alpha == 0). Colours stay in app state so the
                 // .snxsch round-trips unchanged — There is no
                 // notion of per-wire override colours.
-                if let Some(pending) = self.ui_state.pending_net_color {
+                if let Some(pending) = self.ui_state.net_color.pending_color {
                     // Snap the click point to the grid before hit
                     // testing so the click lands where the pen ghost
                     // previewed. Without this the cursor's raw world
@@ -555,12 +555,12 @@ impl Signex {
                         let mut diff = false;
                         for uuid in &net_wire_uuids {
                             if pending.a == 0 {
-                                if self.ui_state.wire_color_overrides.contains_key(uuid) {
+                                if self.ui_state.net_color.wire_color_overrides.contains_key(uuid) {
                                     diff = true;
                                     break;
                                 }
                             } else {
-                                match self.ui_state.wire_color_overrides.get(uuid) {
+                                match self.ui_state.net_color.wire_color_overrides.get(uuid) {
                                     Some(c) if *c == pending => {}
                                     _ => {
                                         diff = true;
@@ -571,18 +571,19 @@ impl Signex {
                         }
                         if diff {
                             self.ui_state
-                                .net_color_undo
-                                .push(self.ui_state.wire_color_overrides.clone());
+                                .net_color
+                                .undo
+                                .push(self.ui_state.net_color.wire_color_overrides.clone());
                             for uuid in net_wire_uuids {
                                 if pending.a == 0 {
-                                    self.ui_state.wire_color_overrides.remove(&uuid);
+                                    self.ui_state.net_color.wire_color_overrides.remove(&uuid);
                                 } else {
-                                    self.ui_state.wire_color_overrides.insert(uuid, pending);
+                                    self.ui_state.net_color.wire_color_overrides.insert(uuid, pending);
                                 }
                             }
                             self.interaction_state
                                 .active_canvas_mut()
-                                .wire_color_overrides = self.ui_state.wire_color_overrides.clone();
+                                .wire_color_overrides = self.ui_state.net_color.wire_color_overrides.clone();
                             self.interaction_state
                                 .active_canvas_mut()
                                 .clear_content_cache();

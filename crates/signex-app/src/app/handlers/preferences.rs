@@ -280,15 +280,15 @@ impl Signex {
             PrefMsg::DraftErcSeverity(rule, severity) => {
                 let default_sev = rule.default_severity();
                 if severity == default_sev {
-                    self.ui_state.erc_severity_override.remove(&rule);
+                    self.ui_state.erc.severity_override.remove(&rule);
                 } else {
-                    self.ui_state.erc_severity_override.insert(rule, severity);
+                    self.ui_state.erc.severity_override.insert(rule, severity);
                 }
-                crate::fonts::write_erc_severity_overrides(&self.ui_state.erc_severity_override);
+                crate::fonts::write_erc_severity_overrides(&self.ui_state.erc.severity_override);
             }
             PrefMsg::ResetErcSeverities => {
-                self.ui_state.erc_severity_override.clear();
-                crate::fonts::write_erc_severity_overrides(&self.ui_state.erc_severity_override);
+                self.ui_state.erc.severity_override.clear();
+                crate::fonts::write_erc_severity_overrides(&self.ui_state.erc.severity_override);
             }
         }
 

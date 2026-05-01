@@ -27,9 +27,9 @@ impl Signex {
                 self.refresh_panel_ctx();
             }
             crate::panels::PanelMsg::ClearErc => {
-                self.ui_state.erc_violations.clear();
-                self.ui_state.erc_violations_by_path.clear();
-                self.ui_state.erc_focus_global_index = None;
+                self.ui_state.erc.violations.clear();
+                self.ui_state.erc.violations_by_path.clear();
+                self.ui_state.erc.focus_global_index = None;
                 self.interaction_state
                     .active_canvas_mut()
                     .erc_markers

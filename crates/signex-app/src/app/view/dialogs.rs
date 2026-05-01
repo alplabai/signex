@@ -137,7 +137,7 @@ impl Signex {
                         order_radio(
                             "Up Then Across",
                             AnnotateOrder::UpThenAcross,
-                            self.ui_state.annotate_order,
+                            self.ui_state.annotate.order,
                             text_c,
                             border_c,
                         ),
@@ -145,7 +145,7 @@ impl Signex {
                         order_radio(
                             "Across Then Down",
                             AnnotateOrder::AcrossThenDown,
-                            self.ui_state.annotate_order,
+                            self.ui_state.annotate.order,
                             text_c,
                             border_c,
                         ),
@@ -156,7 +156,7 @@ impl Signex {
                         order_radio(
                             "Down Then Across",
                             AnnotateOrder::DownThenAcross,
-                            self.ui_state.annotate_order,
+                            self.ui_state.annotate.order,
                             text_c,
                             border_c,
                         ),
@@ -164,7 +164,7 @@ impl Signex {
                         order_radio(
                             "Across Then Up",
                             AnnotateOrder::AcrossThenUp,
-                            self.ui_state.annotate_order,
+                            self.ui_state.annotate.order,
                             text_c,
                             border_c,
                         ),
@@ -174,7 +174,7 @@ impl Signex {
                 .spacing(0)
                 .width(Length::FillPortion(3)),
                 Space::new().width(8),
-                order_preview(self.ui_state.annotate_order, text_c, text_muted, border_c),
+                order_preview(self.ui_state.annotate.order, text_c, text_muted, border_c),
             ]
             .align_y(iced::Alignment::Start)
             .spacing(0),
@@ -419,7 +419,7 @@ impl Signex {
         ]
         .padding([4, 8]);
 
-        let locked_set = &self.ui_state.annotate_locked;
+        let locked_set = &self.ui_state.annotate.locked;
         let mut rows_col: iced::widget::Column<'_, Message> =
             column![].spacing(0).width(Length::Fill);
         if proposed.is_empty() {
@@ -755,7 +755,8 @@ impl Signex {
         for rule in ALL_RULES {
             let current = self
                 .ui_state
-                .erc_severity_override
+                .erc
+                .severity_override
                 .get(rule)
                 .copied()
                 .unwrap_or_else(|| rule.default_severity());
@@ -809,7 +810,7 @@ impl Signex {
                 .size(10)
                 .color(text_muted),
             Space::new().height(8),
-            container(pin_matrix_view(tokens, &self.ui_state.pin_matrix_overrides))
+            container(pin_matrix_view(tokens, &self.ui_state.erc.pin_matrix_overrides))
                 .padding(8)
                 .width(Length::Fill)
                 .style(move |_: &Theme| container::Style {
@@ -2537,7 +2538,7 @@ pub(super) struct AnnotatePreviewEntry {
     pub current: String,
     pub proposed: String,
     /// Symbol uuid — lets the row's lock checkbox toggle the global
-    /// `ui_state.annotate_locked` set without re-looking-up the symbol.
+    /// `ui_state.annotate.locked` set without re-looking-up the symbol.
     pub uuid: uuid::Uuid,
 }
 

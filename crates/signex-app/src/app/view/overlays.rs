@@ -73,7 +73,7 @@ impl Signex {
         // Custom net-colour picker. Bespoke modal (not the iced_aw
         // ColorPicker) because the user needs a quick-pick palette +
         // precise RGB inputs side-by-side.
-        if ui.net_color_custom.show {
+        if ui.net_color.custom.show {
             layers.push(Self::dismiss_layer(Message::NetColorCustomShow(false)));
             layers.push(self.view_net_color_custom_picker());
         }
@@ -83,7 +83,7 @@ impl Signex {
         // the modal and make the dialog look broken.
         let has_blocking_modal = document.export_error.is_some()
             || document.preview.is_some()
-            || ui.net_color_custom.show;
+            || ui.net_color.custom.show;
         if has_blocking_modal {
             return layers;
         }
@@ -151,7 +151,7 @@ impl Signex {
             // Active Bar overlay is only painted on the main window, so
             // the main canvas's selection set is the right gate.
             let bar_has_selection = !interaction.canvas.selected.is_empty();
-            let bar_has_net_colors = !ui.net_colors.is_empty();
+            let bar_has_net_colors = !ui.net_color.colors_by_net.is_empty();
             let bar = crate::active_bar::view_bar(
                 interaction.current_tool,
                 interaction.draw_mode,
@@ -321,7 +321,7 @@ impl Signex {
 
         if let Some(ab_menu) = interaction.active_bar_menu {
             let has_selection = !interaction.canvas.selected.is_empty();
-            let has_net_colors = !ui.net_colors.is_empty();
+            let has_net_colors = !ui.net_color.colors_by_net.is_empty();
             let dropdown = crate::active_bar::view_dropdown(
                 ab_menu,
                 &document.panel_ctx.tokens,
@@ -715,7 +715,7 @@ impl Signex {
                 ui.preferences_draft_grid_style,
                 ui.custom_theme.as_ref().map(|c| c.name.as_str()),
                 ui.preferences_dirty,
-                &ui.erc_severity_override,
+                &ui.erc.severity_override,
             )
             .map(Message::PreferencesMsg);
             layers.push(pref_view);
@@ -747,14 +747,15 @@ impl Signex {
                 .any(|kind| matches!(kind, super::state::WindowKind::DetachedModal(x) if *x == m))
         };
 
-        if ui.annotate_dialog_open && !modal_detached(super::state::ModalId::AnnotateDialog) {
+        if ui.annotate.dialog_open && !modal_detached(super::state::ModalId::AnnotateDialog) {
             layers.push(self.view_annotate_dialog());
         }
-        if ui.annotate_reset_confirm && !modal_detached(super::state::ModalId::AnnotateResetConfirm)
+        if ui.annotate.reset_confirm
+            && !modal_detached(super::state::ModalId::AnnotateResetConfirm)
         {
             layers.push(self.view_annotate_reset_confirm());
         }
-        if ui.erc_dialog_open && !modal_detached(super::state::ModalId::ErcDialog) {
+        if ui.erc.dialog_open && !modal_detached(super::state::ModalId::ErcDialog) {
             layers.push(self.view_erc_dialog());
         }
 

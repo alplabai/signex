@@ -437,12 +437,12 @@ impl Signex {
             || ui.remove_dialog.is_some()
             || ui.project_close_confirm.is_some()
             || document.bom_preview.is_some()
-            || ui.annotate_dialog_open
-            || ui.annotate_reset_confirm
-            || ui.erc_dialog_open
+            || ui.annotate.dialog_open
+            || ui.annotate.reset_confirm
+            || ui.erc.dialog_open
             || !document.dock.floating.is_empty()
             || dragging_tab
-            || ui.net_color_custom.show;
+            || ui.net_color.custom.show;
 
         if needs_overlay {
             let mut overlays = self.collect_overlays();

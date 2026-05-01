@@ -12,7 +12,7 @@ impl Signex {
     /// on screen.
     pub(crate) fn handle_run_erc(&mut self) -> Task<Message> {
         let dsl_eval_fns = self.load_project_dsl_eval_fns();
-        let overrides = self.ui_state.erc_severity_override.clone();
+        let overrides = self.ui_state.erc.severity_override.clone();
         let apply_overrides =
             |mut violations: Vec<signex_erc::Violation>| -> Vec<signex_erc::Violation> {
                 for v in &mut violations {
@@ -158,10 +158,11 @@ impl Signex {
             .tabs
             .get(self.document_state.active_tab)
             .map(|t| t.path.clone());
-        self.ui_state.erc_violations_by_path = by_path;
-        self.ui_state.erc_focus_global_index = self
+        self.ui_state.erc.violations_by_path = by_path;
+        self.ui_state.erc.focus_global_index = self
             .ui_state
-            .erc_violations_by_path
+            .erc
+            .violations_by_path
             .values()
             .any(|v| !v.is_empty())
             .then_some(0);
@@ -219,7 +220,7 @@ impl Signex {
         active_path: Option<&std::path::PathBuf>,
     ) {
         let violations = active_path
-            .and_then(|p| self.ui_state.erc_violations_by_path.get(p))
+            .and_then(|p| self.ui_state.erc.violations_by_path.get(p))
             .cloned()
             .unwrap_or_default();
         self.interaction_state.active_canvas_mut().erc_markers = violations
@@ -238,13 +239,14 @@ impl Signex {
         self.interaction_state
             .active_canvas_mut()
             .clear_overlay_cache();
-        self.ui_state.erc_violations = violations;
+        self.ui_state.erc.violations = violations;
     }
 
     pub(crate) fn build_erc_diagnostic_entries(&self) -> Vec<crate::panels::ErcDiagnosticEntry> {
         let mut paths: Vec<_> = self
             .ui_state
-            .erc_violations_by_path
+            .erc
+            .violations_by_path
             .keys()
             .cloned()
             .collect();
@@ -256,7 +258,7 @@ impl Signex {
                 .file_name()
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_else(|| path.display().to_string());
-            if let Some(list) = self.ui_state.erc_violations_by_path.get(&path) {
+            if let Some(list) = self.ui_state.erc.violations_by_path.get(&path) {
                 for v in list {
                     out.push(crate::panels::ErcDiagnosticEntry {
                         global_index: out.len(),
@@ -285,10 +287,10 @@ impl Signex {
     pub(crate) fn handle_focus_erc_diagnostic_offset(&mut self, delta: isize) -> Task<Message> {
         let entries = self.build_erc_diagnostic_entries();
         if entries.is_empty() {
-            self.ui_state.erc_focus_global_index = None;
+            self.ui_state.erc.focus_global_index = None;
             return Task::none();
         }
-        let current = self.ui_state.erc_focus_global_index.unwrap_or(0) as isize;
+        let current = self.ui_state.erc.focus_global_index.unwrap_or(0) as isize;
         let len = entries.len() as isize;
         let next = (current + delta).rem_euclid(len) as usize;
         self.handle_focus_erc_diagnostic_index(next)
@@ -297,7 +299,7 @@ impl Signex {
     pub(crate) fn handle_focus_erc_diagnostic_index(&mut self, index: usize) -> Task<Message> {
         let entries = self.build_erc_diagnostic_entries();
         if entries.is_empty() {
-            self.ui_state.erc_focus_global_index = None;
+            self.ui_state.erc.focus_global_index = None;
             return Task::none();
         }
         let clamped = index.min(entries.len() - 1);
@@ -306,7 +308,7 @@ impl Signex {
         // Ensure the target sheet is open and active before focusing its point.
         self.ensure_sheet_open_and_active(&target.sheet_path);
 
-        self.ui_state.erc_focus_global_index = Some(clamped);
+        self.ui_state.erc.focus_global_index = Some(clamped);
         self.handle_focus_at(target.world_x, target.world_y, target.select)
     }
 
@@ -442,7 +444,7 @@ impl Signex {
         }
 
         // Pass B: apply to cached (non-active) tabs via the shared counter.
-        let locked = self.ui_state.annotate_locked.clone();
+        let locked = self.ui_state.annotate.locked.clone();
         let mut any_cached_changed = false;
         let active_idx = self.document_state.active_tab;
         let paths: Vec<(usize, PathBuf)> = self
@@ -565,7 +567,7 @@ impl Signex {
             self.refresh_panel_ctx();
         }
 
-        self.ui_state.annotate_reset_confirm = false;
+        self.ui_state.annotate.reset_confirm = false;
         crate::diagnostics::log_info(format!(
             "Annotated symbols across {} sheet(s) ({:?})",
             tab_count.max(1),
@@ -575,7 +577,7 @@ impl Signex {
     }
 
     pub(crate) fn handle_open_annotate_dialog(&mut self) -> Task<Message> {
-        self.ui_state.annotate_dialog_open = true;
+        self.ui_state.annotate.dialog_open = true;
         self.interaction_state.context_menu = None;
         // Altium parity: these big modals live in their own OS window
         // from the moment they open — no in-window overlay, no drag-off
@@ -585,7 +587,7 @@ impl Signex {
     }
 
     pub(crate) fn handle_close_annotate_dialog(&mut self) -> Task<Message> {
-        self.ui_state.annotate_dialog_open = false;
+        self.ui_state.annotate.dialog_open = false;
         self.close_detached_modal(super::super::state::ModalId::AnnotateDialog)
     }
 
@@ -817,18 +819,18 @@ impl Signex {
         &mut self,
         order: super::super::state::AnnotateOrder,
     ) -> Task<Message> {
-        self.ui_state.annotate_order = order;
+        self.ui_state.annotate.order = order;
         Task::none()
     }
 
     pub(crate) fn handle_open_erc_dialog(&mut self) -> Task<Message> {
-        self.ui_state.erc_dialog_open = true;
+        self.ui_state.erc.dialog_open = true;
         self.interaction_state.context_menu = None;
         self.handle_detach_modal(super::super::state::ModalId::ErcDialog)
     }
 
     pub(crate) fn handle_close_erc_dialog(&mut self) -> Task<Message> {
-        self.ui_state.erc_dialog_open = false;
+        self.ui_state.erc.dialog_open = false;
         self.close_detached_modal(super::super::state::ModalId::ErcDialog)
     }
 
@@ -839,23 +841,23 @@ impl Signex {
     ) -> Task<Message> {
         if severity == rule.default_severity() {
             // Match default → remove override so the map stays minimal.
-            self.ui_state.erc_severity_override.remove(&rule);
+            self.ui_state.erc.severity_override.remove(&rule);
         } else {
-            self.ui_state.erc_severity_override.insert(rule, severity);
+            self.ui_state.erc.severity_override.insert(rule, severity);
         }
         // Persist so the override survives restart. Silent on I/O errors —
         // this is a preference, not critical state.
-        crate::fonts::write_erc_severity_overrides(&self.ui_state.erc_severity_override);
+        crate::fonts::write_erc_severity_overrides(&self.ui_state.erc.severity_override);
         Task::none()
     }
 
     pub(crate) fn handle_open_annotate_reset_confirm(&mut self) -> Task<Message> {
-        self.ui_state.annotate_reset_confirm = true;
+        self.ui_state.annotate.reset_confirm = true;
         self.handle_detach_modal(super::super::state::ModalId::AnnotateResetConfirm)
     }
 
     pub(crate) fn handle_close_annotate_reset_confirm(&mut self) -> Task<Message> {
-        self.ui_state.annotate_reset_confirm = false;
+        self.ui_state.annotate.reset_confirm = false;
         self.close_detached_modal(super::super::state::ModalId::AnnotateResetConfirm)
     }
 

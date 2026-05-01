@@ -211,16 +211,16 @@ impl Signex {
                     use super::state::{ModalId, WindowKind};
                     match kind {
                         WindowKind::DetachedModal(modal) => match modal {
-                            ModalId::AnnotateDialog => self.ui_state.annotate_dialog_open = false,
+                            ModalId::AnnotateDialog => self.ui_state.annotate.dialog_open = false,
                             ModalId::AnnotateResetConfirm => {
-                                self.ui_state.annotate_reset_confirm = false
+                                self.ui_state.annotate.reset_confirm = false
                             }
-                            ModalId::ErcDialog => self.ui_state.erc_dialog_open = false,
+                            ModalId::ErcDialog => self.ui_state.erc.dialog_open = false,
                             ModalId::Preferences => self.ui_state.preferences_open = false,
                             ModalId::FindReplace => self.ui_state.find_replace.open = false,
                             ModalId::MoveSelection => self.ui_state.move_selection.open = false,
                             ModalId::NetColorPalette => {
-                                self.ui_state.net_color_palette_open = false
+                                self.ui_state.net_color.palette_open = false
                             }
                             ModalId::ParameterManager => {
                                 self.ui_state.parameter_manager_open = false
@@ -389,18 +389,18 @@ impl Signex {
             }
             Message::MoveSelectionApply => self.handle_move_selection_apply(),
             Message::OpenNetColorPalette => {
-                self.ui_state.net_color_palette_open = true;
+                self.ui_state.net_color.palette_open = true;
                 self.handle_detach_modal(super::state::ModalId::NetColorPalette)
             }
             Message::CloseNetColorPalette => {
-                self.ui_state.net_color_palette_open = false;
+                self.ui_state.net_color.palette_open = false;
                 self.close_detached_modal(super::state::ModalId::NetColorPalette)
             }
             Message::NetColorSet { net, color } => {
                 if let Some(c) = color {
-                    self.ui_state.net_colors.insert(net, c);
+                    self.ui_state.net_color.colors_by_net.insert(net, c);
                 } else {
-                    self.ui_state.net_colors.remove(&net);
+                    self.ui_state.net_color.colors_by_net.remove(&net);
                 }
                 self.interaction_state
                     .active_canvas_mut()
@@ -421,31 +421,31 @@ impl Signex {
                 value,
             } => self.handle_parameter_manager_edit(symbol_uuid, key, value),
             Message::AnnotateToggleLock(uuid) => {
-                if self.ui_state.annotate_locked.contains(&uuid) {
-                    self.ui_state.annotate_locked.remove(&uuid);
+                if self.ui_state.annotate.locked.contains(&uuid) {
+                    self.ui_state.annotate.locked.remove(&uuid);
                 } else {
-                    self.ui_state.annotate_locked.insert(uuid);
+                    self.ui_state.annotate.locked.insert(uuid);
                 }
                 Task::none()
             }
             Message::NetColorCustomShow(show) => {
-                self.ui_state.net_color_custom.show = show;
+                self.ui_state.net_color.custom.show = show;
                 Task::none()
             }
             Message::NetColorCustomDraft(c) => {
-                self.ui_state.net_color_custom.draft = c;
+                self.ui_state.net_color.custom.draft = c;
                 Task::none()
             }
             Message::NetColorCustomSubmit(c) => {
-                self.ui_state.net_color_custom.show = false;
-                self.ui_state.net_color_custom.draft = c;
+                self.ui_state.net_color.custom.show = false;
+                self.ui_state.net_color.custom.draft = c;
                 let color = signex_types::theme::Color {
                     r: (c.r * 255.0).round() as u8,
                     g: (c.g * 255.0).round() as u8,
                     b: (c.b * 255.0).round() as u8,
                     a: 255,
                 };
-                self.ui_state.pending_net_color = Some(color);
+                self.ui_state.net_color.pending_color = Some(color);
                 self.interaction_state.active_canvas_mut().pending_net_color = Some(color);
                 Task::none()
             }
@@ -454,7 +454,7 @@ impl Signex {
                 // text_input doesn't reject intermediate values like
                 // the empty string while the user types.
                 let parsed = s.trim().parse::<u16>().unwrap_or(0).min(255) as u8;
-                let draft = &mut self.ui_state.net_color_custom.draft;
+                let draft = &mut self.ui_state.net_color.custom.draft;
                 let v = parsed as f32 / 255.0;
                 match chan {
                     super::contracts::Channel::R => draft.r = v,
@@ -606,6 +606,7 @@ impl Signex {
                     .unwrap_or(Severity::Off);
                 let current = self
                     .ui_state
+                    .erc
                     .pin_matrix_overrides
                     .get(&key)
                     .copied()
@@ -617,11 +618,11 @@ impl Signex {
                     Severity::Off => Severity::Error,
                 };
                 if next == baseline {
-                    self.ui_state.pin_matrix_overrides.remove(&key);
+                    self.ui_state.erc.pin_matrix_overrides.remove(&key);
                 } else {
-                    self.ui_state.pin_matrix_overrides.insert(key, next);
+                    self.ui_state.erc.pin_matrix_overrides.insert(key, next);
                 }
-                crate::fonts::write_pin_matrix_overrides(&self.ui_state.pin_matrix_overrides);
+                crate::fonts::write_pin_matrix_overrides(&self.ui_state.erc.pin_matrix_overrides);
                 Task::none()
             }
             Message::UpdateDrawingField(uuid, edit) => self.handle_update_drawing_field(uuid, edit),

@@ -70,43 +70,11 @@ pub struct UiState {
     /// close request that intersects `dirty_paths`. Cleared on any
     /// of the three button choices.
     pub project_close_confirm: Option<crate::app::ProjectCloseConfirmState>,
-    /// ERC results for the currently-visible sheet. Driven by the
-    /// per-sheet cache below — switching tabs repoints this at the
-    /// cached violations for that sheet, so markers and the Messages
-    /// panel always match what's on the canvas.
-    pub erc_violations: Vec<signex_erc::Violation>,
-    /// Per-sheet ERC violation cache, keyed by the sheet's on-disk
-    /// file path. Run ERC populates this for every sheet in the
-    /// project; tab switches point `erc_violations` at the matching
-    /// entry without rerunning the analysis.
-    pub erc_violations_by_path:
-        std::collections::HashMap<std::path::PathBuf, Vec<signex_erc::Violation>>,
-    /// Global cursor into the flattened ERC diagnostics list spanning all
-    /// sheets in `erc_violations_by_path`. Used by next/prev navigation.
-    pub erc_focus_global_index: Option<usize>,
-    /// Per-rule severity override — if empty, the rule's default is used.
-    pub erc_severity_override:
-        std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
-    /// Net-color overrides keyed by net-label text. Superseded by the
-    /// per-wire `wire_color_overrides` map below which the Active-Bar
-    /// net-colour flood populates; kept here so a future net-name
-    /// palette (maybe the F5 dialog) can cross-reference it without
-    /// another round-trip through state plumbing.
-    #[allow(dead_code)]
-    pub net_colors: std::collections::HashMap<String, signex_types::theme::Color>,
+    pub erc: ErcState,
+    pub annotate: AnnotateState,
+    pub net_color: NetColorState,
     /// AutoFocus mode — when true, non-selected items dim on the canvas.
     pub auto_focus: bool,
-    /// Annotate dialog open flag. When true, the Annotate-Schematics modal
-    /// covers the canvas with its preview + confirm-apply UI.
-    pub annotate_dialog_open: bool,
-    /// Annotate dialog: order-of-processing choice. Controls the iteration
-    /// order used to assign sequential numbers.
-    pub annotate_order: AnnotateOrder,
-    /// ERC dialog open flag — opens the full severity-matrix + pin-matrix UI.
-    pub erc_dialog_open: bool,
-    /// Reset-and-renumber confirmation modal. When true, the Design →
-    /// Reset menu item shows a confirm before discarding every number.
-    pub annotate_reset_confirm: bool,
     /// Per-modal offset in window pixels from the centered position.
     /// Updated when the user drags the title bar. Persists until the app
     /// closes so reopening a dialog lands where it was last placed.
@@ -120,51 +88,20 @@ pub struct UiState {
     pub tab_dragging: Option<(usize, f32, f32)>,
     /// Move-Selection dialog state (Altium's numeric ΔX / ΔY move).
     pub move_selection: MoveSelectionState,
-    /// F5 Net Color palette state — open flag and transient edit buffer.
-    pub net_color_palette_open: bool,
     /// Parameter Manager dialog state.
     pub parameter_manager_open: bool,
     /// Active "pick a reference item" mode for z-order operations
     /// (BringToFrontOf / SendToBackOf). When Some, the next canvas click
     /// resolves the reference uuid and submits the Reorder command.
     pub reorder_picker: Option<ReorderPicker>,
-    /// Pin-connection matrix overrides — sparse map keyed by (row, col)
-    /// pin-type index. Any entry present replaces the default severity
-    /// for that pair; missing entries fall back to the hard-coded
-    /// baseline in `pin_matrix_view`. Persisted alongside the ERC
-    /// severity map.
-    pub pin_matrix_overrides: std::collections::HashMap<(u8, u8), signex_erc::Severity>,
-    /// Symbols whose designator the user locked against reannotation.
-    /// Exposed as per-row checkboxes in the Annotate dialog; the engine
-    /// skips these uuids in `annotate_with_seed_and_locks`.
-    pub annotate_locked: std::collections::HashSet<uuid::Uuid>,
     /// Altium-style rubber-band selection mode. Drives how the box
     /// drag classifies hits (Inside / Outside / TouchingLine).
     pub selection_mode: signex_render::schematic::hit_test::SelectionMode,
-    /// Net-color override armed from the Active Bar palette. When Some,
-    /// the cursor turns into a paint-bucket over the canvas and the
-    /// next click on a wire floods that color across every connected
-    /// wire. Cleared after the click applies, or by Escape. Colors are
-    /// render-time only — they do NOT write back to the .snxsch.
-    pub pending_net_color: Option<signex_types::theme::Color>,
-    /// Per-wire color overrides keyed by wire uuid. Populated by the
-    /// net-color click; consulted when drawing wires. Not serialised.
-    pub wire_color_overrides: std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
     /// Altium-style lasso in flight. `Some(points)` means the user
     /// started a lasso — each canvas click appends a vertex; a
     /// double-click or a click on the first vertex closes the polygon
     /// and commits the selection. Escape or right-click cancels.
     pub lasso_polygon: Option<Vec<signex_types::schematic::Point>>,
-    /// App-level undo stack for net-color floods. Each entry is the
-    /// full `wire_color_overrides` map captured before an action —
-    /// popping one restores the previous state. This is separate from
-    /// the engine's undo because net colours are render-only and
-    /// shouldn't mix with document mutations.
-    pub net_color_undo: Vec<std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>>,
-    /// Custom net-color picker state. When `show = true`, a floating
-    /// iced_aw ColorPicker appears anchored to the Active Bar button;
-    /// `draft` is the user's pending pick — committed on OK.
-    pub net_color_custom: NetColorCustomState,
     /// Id of the primary app window — set once `iced::window::open` for
     /// the main window resolves. Every `view(id)` call checks this to
     /// decide whether it's rendering the main shell or a secondary
@@ -184,6 +121,78 @@ pub struct UiState {
     /// Last save error message and the time it was set. The status
     /// bar shows this briefly, then `tick_save_error` clears it.
     pub save_error: Option<(String, std::time::Instant)>,
+}
+
+pub struct ErcState {
+    /// ERC results for the currently-visible sheet. Driven by the
+    /// per-sheet cache below — switching tabs repoints this at the
+    /// cached violations for that sheet, so markers and the Messages
+    /// panel always match what's on the canvas.
+    pub violations: Vec<signex_erc::Violation>,
+    /// Per-sheet ERC violation cache, keyed by the sheet's on-disk
+    /// file path. Run ERC populates this for every sheet in the
+    /// project; tab switches point `violations` at the matching
+    /// entry without rerunning the analysis.
+    pub violations_by_path: std::collections::HashMap<std::path::PathBuf, Vec<signex_erc::Violation>>,
+    /// Global cursor into the flattened ERC diagnostics list spanning all
+    /// sheets in `violations_by_path`. Used by next/prev navigation.
+    pub focus_global_index: Option<usize>,
+    /// Per-rule severity override — if empty, the rule's default is used.
+    pub severity_override: std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
+    /// ERC dialog open flag — opens the full severity-matrix + pin-matrix UI.
+    pub dialog_open: bool,
+    /// Pin-connection matrix overrides — sparse map keyed by (row, col)
+    /// pin-type index. Any entry present replaces the default severity
+    /// for that pair; missing entries fall back to the hard-coded
+    /// baseline in `pin_matrix_view`. Persisted alongside the ERC
+    /// severity map.
+    pub pin_matrix_overrides: std::collections::HashMap<(u8, u8), signex_erc::Severity>,
+}
+
+pub struct AnnotateState {
+    /// Annotate dialog open flag. When true, the Annotate-Schematics modal
+    /// covers the canvas with its preview + confirm-apply UI.
+    pub dialog_open: bool,
+    /// Annotate dialog: order-of-processing choice. Controls the iteration
+    /// order used to assign sequential numbers.
+    pub order: AnnotateOrder,
+    /// Reset-and-renumber confirmation modal. When true, the Design →
+    /// Reset menu item shows a confirm before discarding every number.
+    pub reset_confirm: bool,
+    /// Symbols whose designator the user locked against reannotation.
+    /// Exposed as per-row checkboxes in the Annotate dialog; the engine
+    /// skips these uuids in `annotate_with_seed_and_locks`.
+    pub locked: std::collections::HashSet<uuid::Uuid>,
+}
+
+pub struct NetColorState {
+    /// Net-color overrides keyed by net-label text. Superseded by the
+    /// per-wire `wire_color_overrides` map below which the Active-Bar
+    /// net-colour flood populates; kept here so a future net-name
+    /// palette can cross-reference it without another round-trip.
+    #[allow(dead_code)]
+    pub colors_by_net: std::collections::HashMap<String, signex_types::theme::Color>,
+    /// F5 Net Color palette state — open flag and transient edit buffer.
+    pub palette_open: bool,
+    /// Net-color override armed from the Active Bar palette. When Some,
+    /// the cursor turns into a paint-bucket over the canvas and the
+    /// next click on a wire floods that color across every connected
+    /// wire. Cleared after the click applies, or by Escape. Colors are
+    /// render-time only — they do NOT write back to the .snxsch.
+    pub pending_color: Option<signex_types::theme::Color>,
+    /// Per-wire color overrides keyed by wire uuid. Populated by the
+    /// net-color click; consulted when drawing wires. Not serialised.
+    pub wire_color_overrides: std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
+    /// App-level undo stack for net-color floods. Each entry is the
+    /// full `wire_color_overrides` map captured before an action —
+    /// popping one restores the previous state. This is separate from
+    /// the engine's undo because net colours are render-only and
+    /// shouldn't mix with document mutations.
+    pub undo: Vec<std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>>,
+    /// Custom net-color picker state. When `show = true`, a floating
+    /// picker appears anchored to the Active Bar button; `draft` is
+    /// the user's pending pick — committed on OK.
+    pub custom: NetColorCustomState,
 }
 
 /// Role of a non-main window opened by Signex. Phase 2 adds detached

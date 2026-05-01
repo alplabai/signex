@@ -25,7 +25,7 @@ impl Signex {
             Message::PreferencesMsg(msg) => self.handle_preferences_message(msg),
             Message::FindReplaceMsg(msg) => self.handle_find_replace_message(msg),
             Message::RunErc => {
-                let close_task = if self.ui_state.erc_dialog_open {
+                let close_task = if self.ui_state.erc.dialog_open {
                     self.handle_close_erc_dialog()
                 } else {
                     Task::none()
@@ -65,14 +65,14 @@ impl Signex {
                     || canvas.placement_paused
                     || self.interaction_state.pending_power.is_some()
                     || self.interaction_state.pending_port.is_some()
-                    || self.ui_state.pending_net_color.is_some()
+                    || self.ui_state.net_color.pending_color.is_some()
                     || self.ui_state.reorder_picker.is_some()
                     || self.ui_state.lasso_polygon.is_some();
                 if placement_active {
                     self.clear_transient_schematic_tool_state();
                     self.interaction_state.current_tool = Tool::Select;
                     // Drop any app-level armed mode too.
-                    self.ui_state.pending_net_color = None;
+                    self.ui_state.net_color.pending_color = None;
                     self.interaction_state.active_canvas_mut().pending_net_color = None;
                     self.ui_state.reorder_picker = None;
                     self.interaction_state

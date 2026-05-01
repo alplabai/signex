@@ -120,7 +120,7 @@ pub struct SchematicCanvas {
     /// uuid set without reaching back into app state.
     pub auto_focus: bool,
     /// ERC violations to highlight on the canvas — Altium-style marker
-    /// dots + primary-item halos. Synced from `ui_state.erc_violations`
+    /// dots + primary-item halos. Synced from `ui_state.erc.violations`
     /// after each ERC run so the overlay renders without the canvas
     /// reaching back into app state.
     pub erc_markers: Vec<ErcMarker>,
@@ -130,7 +130,7 @@ pub struct SchematicCanvas {
     /// Drives the pen cursor drawn over the canvas.
     pub pending_net_color: Option<signex_types::theme::Color>,
     /// Per-wire colour overrides consulted when drawing wires. Synced
-    /// from `ui_state.wire_color_overrides` on every canvas rebuild.
+    /// from `ui_state.net_color.wire_color_overrides` on every canvas rebuild.
     pub wire_color_overrides: std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
     /// In-flight lasso polygon in world space. Synced from
     /// `ui_state.lasso_polygon` so the overlay draw can render the

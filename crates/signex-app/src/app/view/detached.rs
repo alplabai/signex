@@ -226,7 +226,7 @@ impl Signex {
             );
         } else {
             for net in nets {
-                let current = self.ui_state.net_colors.get(&net).copied();
+                let current = self.ui_state.net_color.colors_by_net.get(&net).copied();
                 let mut swatches = row![].spacing(4).align_y(iced::Alignment::Center);
                 for (r, g, b) in PALETTE {
                     let is_current = current.is_some_and(|c| c.r == *r && c.g == *g && c.b == *b);
@@ -481,7 +481,7 @@ impl Signex {
         let text_c = crate::styles::ti(tokens.text);
         let text_muted = crate::styles::ti(tokens.text_secondary);
         let border_c = crate::styles::ti(tokens.border);
-        let draft = self.ui_state.net_color_custom.draft;
+        let draft = self.ui_state.net_color.custom.draft;
 
         // Expanded 48-swatch palette arranged as 6 cols × 8 rows so
         // the Quick Pick grid fills the modal's left column. First

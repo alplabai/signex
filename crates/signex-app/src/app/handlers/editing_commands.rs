@@ -19,10 +19,10 @@ impl Signex {
     pub(crate) fn handle_undo_requested(&mut self) {
         // Net-colour floods aren't persisted to the schematic document so
         // they don't enter the engine's history. Check the app-level
-        // net_color_undo stack first; only fall through to the engine
+        // Net-color undo stack first; only fall through to the engine
         // when no net-colour action is pending.
-        if let Some(prev) = self.ui_state.net_color_undo.pop() {
-            self.ui_state.wire_color_overrides = prev.clone();
+        if let Some(prev) = self.ui_state.net_color.undo.pop() {
+            self.ui_state.net_color.wire_color_overrides = prev.clone();
             self.interaction_state
                 .active_canvas_mut()
                 .wire_color_overrides = prev;

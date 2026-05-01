@@ -257,7 +257,7 @@ impl Signex {
             collapsed_sections,
             pre_placement,
             erc_diagnostics,
-            erc_focus_index: self.ui_state.erc_focus_global_index,
+            erc_focus_index: self.ui_state.erc.focus_global_index,
             diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
             diagnostics: crate::diagnostics::recent_entries(),
             selection_filters: self.interaction_state.selection_filters.clone(),

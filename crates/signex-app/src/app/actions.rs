@@ -209,7 +209,7 @@ impl Signex {
         // Escape / right-click also cancels the net-colour pen, the
         // z-order reference picker, and any in-flight lasso —
         // Altium-parity "one terminator kills every armed mode".
-        self.ui_state.pending_net_color = None;
+        self.ui_state.net_color.pending_color = None;
         self.interaction_state.active_canvas_mut().pending_net_color = None;
         self.ui_state.reorder_picker = None;
         self.interaction_state
