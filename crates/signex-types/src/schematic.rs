@@ -439,13 +439,13 @@ pub struct Symbol {
     // picker), the dispatcher tags it with the row's identity + version
     // so re-opening the schematic can detect drift against the library's
     // current row version.  All three fields are `#[serde(default)]` so
-    // legacy `.snxsch` / `.standard_sch` files (and Standard-imported sheets,
-    // which have no notion of a Signex library) load cleanly with
+    // legacy `.snxsch` files (and any sheet imported from a foreign
+    // format that has no notion of a Signex library) load cleanly with
     // `library_id = None`, `row_id = None`, `version = ""`.
     // ─────────────────────────────────────────────────────────────────────
-    /// Source library for this placed Symbol.  `None` for Standard-imported
-    /// sheets, hand-built primitives, or any Symbol that wasn't placed
-    /// via a `.snxlib` row.
+    /// Source library for this placed Symbol.  `None` for sheets imported
+    /// from a foreign format, hand-built primitives, or any Symbol that
+    /// wasn't placed via a `.snxlib` row.
     #[serde(default)]
     pub library_id: Option<Uuid>,
     /// Row identity inside the source library — points at the
@@ -595,10 +595,10 @@ pub struct ChildSheet {
 // Schematic drawing primitives
 // ---------------------------------------------------------------------------
 
-/// Optional RGBA override parsed from Standard's `(stroke ... (color r g b a))`.
-/// `None` means "use the theme's default drawing colour" — the renderer
-/// falls back to CanvasColors.outline. Stored per-drawing so users can
-/// recolour individual shapes without disturbing the sheet theme.
+/// Optional RGBA override for an individual `SchDrawing`. `None` means
+/// "use the theme's default drawing colour" — the renderer falls back to
+/// `CanvasColors.outline`. Stored per-drawing so users can recolour
+/// individual shapes without disturbing the sheet theme.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct StrokeColor {
     pub r: u8,

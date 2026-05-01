@@ -5,8 +5,10 @@
 //! just pure rendering functions.
 
 pub mod colors;
-pub mod pcb;
-pub mod schematic;
+// Schematic + PCB renderer modules are intentionally absent on
+// `feature/v0.12-cleanroom-rewrite`. They are reintroduced in
+// Wave 1 (mod.rs skeleton) and filled in by Waves 2–5. See
+// `docs/internal/CLEANROOM_REWRITE_PLAN.md`.
 
 use std::sync::{OnceLock, RwLock};
 
@@ -17,7 +19,7 @@ pub const IOSEVKA: iced::Font = iced::Font::with_name("Iosevka");
 pub use signex_types::schematic::SCHEMATIC_PT_TO_MM;
 pub use signex_types::schematic::SCHEMATIC_TEXT_MM;
 
-/// Standard stroke font stores "size" as cap-height; Iced TrueType uses em-square
+/// Stroke fonts store "size" as cap-height; Iced TrueType uses em-square
 /// (cap height ≈ 72 % of em). To render a stroke-font size at the same visual
 /// cap height, we draw it at em = size / 0.72. Use this value for BOTH the
 /// canvas font size AND any offset / hit-test math so they stay in sync —
@@ -27,7 +29,7 @@ pub const SCHEMATIC_TEXT_EM_MM: f64 = SCHEMATIC_TEXT_MM / 0.72;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PowerPortStyle {
-    Standard,
+    Classic,
     #[default]
     Altium,
 }
@@ -35,11 +37,11 @@ pub enum PowerPortStyle {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LabelStyle {
     #[default]
-    Standard,
+    Classic,
     Altium,
 }
 
-/// How hierarchical child sheets render. Standard mode keeps each sheet's
+/// How hierarchical child sheets render. Classic mode keeps each sheet's
 /// stroke/fill colour from the source file (with theme component-body
 /// fallback) so the sheet blends with the rest of the schematic. Altium
 /// mode draws sheets with Altium Designer's signature greenish palette
@@ -48,12 +50,12 @@ pub enum LabelStyle {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MultisheetStyle {
     #[default]
-    Standard,
+    Classic,
     Altium,
 }
 
-/// Visible schematic grid rendering style. Mirrors Standard's Display
-/// Options preference (Dots / Lines / Small crosses).
+/// Visible schematic grid rendering style — Dots, Lines, or
+/// Small crosses, selectable from the schematic display preferences.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum GridStyle {
     #[default]
@@ -70,7 +72,7 @@ impl GridStyle {
 impl std::fmt::Display for MultisheetStyle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            MultisheetStyle::Standard => write!(f, "Standard"),
+            MultisheetStyle::Classic => write!(f, "Classic"),
             MultisheetStyle::Altium => write!(f, "Altium"),
         }
     }
@@ -89,7 +91,7 @@ impl std::fmt::Display for GridStyle {
 impl std::fmt::Display for LabelStyle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LabelStyle::Standard => write!(f, "Standard"),
+            LabelStyle::Classic => write!(f, "Classic"),
             LabelStyle::Altium => write!(f, "Altium"),
         }
     }
@@ -98,7 +100,7 @@ impl std::fmt::Display for LabelStyle {
 impl std::fmt::Display for PowerPortStyle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            PowerPortStyle::Standard => write!(f, "Standard"),
+            PowerPortStyle::Classic => write!(f, "Classic"),
             PowerPortStyle::Altium => write!(f, "Altium"),
         }
     }
@@ -144,8 +146,8 @@ fn canvas_text_config() -> &'static RwLock<CanvasTextConfig> {
             bold: false,
             italic: false,
             power_port_style: PowerPortStyle::Altium,
-            label_style: LabelStyle::Standard,
-            multisheet_style: MultisheetStyle::Standard,
+            label_style: LabelStyle::Classic,
+            multisheet_style: MultisheetStyle::Classic,
             grid_style: GridStyle::Dots,
         })
     })
@@ -197,7 +199,7 @@ pub fn label_style() -> LabelStyle {
     canvas_text_config()
         .read()
         .map(|c| c.label_style)
-        .unwrap_or(LabelStyle::Standard)
+        .unwrap_or(LabelStyle::Classic)
 }
 
 pub fn set_multisheet_style(style: MultisheetStyle) {
@@ -210,7 +212,7 @@ pub fn multisheet_style() -> MultisheetStyle {
     canvas_text_config()
         .read()
         .map(|c| c.multisheet_style)
-        .unwrap_or(MultisheetStyle::Standard)
+        .unwrap_or(MultisheetStyle::Classic)
 }
 
 pub fn set_grid_style(style: GridStyle) {
