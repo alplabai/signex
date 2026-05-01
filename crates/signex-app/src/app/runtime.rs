@@ -55,8 +55,7 @@ impl Signex {
             // Also refresh the dirty bit — the user may have just
             // saved/edited the active file without switching tabs.
             if let Some(p) = self.document_state.history.active_path.clone() {
-                self.document_state.history.dirty =
-                    self.document_state.dirty_paths.contains(&p);
+                self.document_state.history.dirty = self.document_state.dirty_paths.contains(&p);
             }
             self.document_state.panel_ctx.history = self.document_state.history.clone();
             return Task::none();
@@ -73,8 +72,7 @@ impl Signex {
                 self.document_state.history.dirty = false;
                 self.document_state.history.mode =
                     crate::panels::history::HistoryRenderMode::NoActiveFile;
-                self.document_state.panel_ctx.history =
-                    self.document_state.history.clone();
+                self.document_state.panel_ctx.history = self.document_state.history.clone();
                 Task::none()
             }
             Some(HistoryTarget::Untracked { full_path }) => {
@@ -83,8 +81,7 @@ impl Signex {
                     self.document_state.dirty_paths.contains(&full_path);
                 self.document_state.history.mode =
                     crate::panels::history::HistoryRenderMode::NoRepo;
-                self.document_state.panel_ctx.history =
-                    self.document_state.history.clone();
+                self.document_state.panel_ctx.history = self.document_state.history.clone();
                 Task::none()
             }
             Some(HistoryTarget::Tracked {
@@ -97,8 +94,7 @@ impl Signex {
                 self.document_state.history.loading = true;
                 self.document_state.history.mode =
                     crate::panels::history::HistoryRenderMode::Loading;
-                self.document_state.panel_ctx.history =
-                    self.document_state.history.clone();
+                self.document_state.panel_ctx.history = self.document_state.history.clone();
 
                 let generation = self.document_state.history.generation;
                 let response_path = full_path.clone();
@@ -281,8 +277,10 @@ impl Signex {
             self.document_state.panel_ctx.child_sheet_border_picker_open;
         let child_sheet_fill_picker_open =
             self.document_state.panel_ctx.child_sheet_fill_picker_open;
-        let child_sheet_border_advanced_open =
-            self.document_state.panel_ctx.child_sheet_border_advanced_open;
+        let child_sheet_border_advanced_open = self
+            .document_state
+            .panel_ctx
+            .child_sheet_border_advanced_open;
         let child_sheet_fill_advanced_open =
             self.document_state.panel_ctx.child_sheet_fill_advanced_open;
         let child_sheet_stroke_width_buf = self
@@ -613,8 +611,9 @@ enum HistoryTarget {
 impl HistoryTarget {
     fn full_path(&self) -> &std::path::Path {
         match self {
-            HistoryTarget::Tracked { full_path, .. }
-            | HistoryTarget::Untracked { full_path } => full_path.as_path(),
+            HistoryTarget::Tracked { full_path, .. } | HistoryTarget::Untracked { full_path } => {
+                full_path.as_path()
+            }
         }
     }
 }
@@ -875,4 +874,3 @@ fn graphic_kind_to_summary(
         },
     }
 }
-

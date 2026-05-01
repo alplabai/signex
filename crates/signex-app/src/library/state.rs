@@ -1159,7 +1159,6 @@ pub struct CloseLibraryConfirmState {
     pub dirty_editors: Vec<EditorAddress>,
 }
 
-
 // ─────────────────────────────────────────────────────────────────────
 // Component Preview
 // ─────────────────────────────────────────────────────────────────────

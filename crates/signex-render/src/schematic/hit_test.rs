@@ -14,7 +14,7 @@
 //! traverse them in reverse so the topmost item wins. Render order
 //! comes from [`super::render`] and is documented in [`build_index`].
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use signex_types::schematic::{
     Aabb, Point, SchDrawing, SelectedItem, SelectedKind, point_to_segment_dist,
@@ -77,11 +77,37 @@ impl HitIndex {
             );
         }
         for s in &sheet.symbols {
-            if let Some(lib) = snapshot.lib_symbol(&s.lib_id) {
+            // Always index a symbol — even when its lib_id is missing,
+            // the user must be able to click + delete + relink it.
+            // Missing-lib instances get a small fallback box.
+            let bbox = match snapshot.lib_symbol(&s.lib_id) {
+                Some(lib) => super::symbol::symbol_aabb(s, lib),
+                None => super::symbol::missing_symbol_aabb(s),
+            };
+            index.insert(s.uuid, SelectedKind::Symbol, bbox);
+
+            // Per-field index entries so SymbolRefField / SymbolValField
+            // selections (e.g. field-drag) can hit-test independently
+            // from the symbol body.
+            if let Some(field_box) = super::symbol::ref_field_aabb(s) {
+                index.insert(s.uuid, SelectedKind::SymbolRefField, field_box);
+            }
+            if let Some(field_box) = super::symbol::val_field_aabb(s) {
+                index.insert(s.uuid, SelectedKind::SymbolValField, field_box);
+            }
+        }
+        // Hierarchical child sheets and their pins.
+        for cs in &sheet.child_sheets {
+            index.insert(
+                cs.uuid,
+                SelectedKind::ChildSheet,
+                super::symbol::child_sheet_aabb(cs),
+            );
+            for pin in &cs.pins {
                 index.insert(
-                    s.uuid,
-                    SelectedKind::Symbol,
-                    super::symbol::symbol_aabb(s, lib),
+                    pin.uuid,
+                    SelectedKind::SheetPin,
+                    super::symbol::sheet_pin_aabb(pin),
                 );
             }
         }
@@ -134,13 +160,14 @@ impl HitIndex {
     }
 
     fn entries_in_aabb(&self, bbox: &Aabb) -> Vec<&HitEntry> {
-        let mut seen: Vec<usize> = Vec::new();
+        // HashSet dedup keeps the spatial-hash benefit on dense queries
+        // — a Vec.contains scan would be O(k²) once large primitives
+        // span many cells, undoing the bucketing.
+        let mut seen: HashSet<usize> = HashSet::new();
         for cell in cells_for_aabb(bbox) {
             if let Some(ids) = self.buckets.get(&cell) {
                 for id in ids {
-                    if !seen.contains(id) {
-                        seen.push(*id);
-                    }
+                    seen.insert(*id);
                 }
             }
         }
@@ -345,19 +372,30 @@ fn primitive_hit_point(
         | SelectedKind::SymbolRefField
         | SelectedKind::SymbolValField => {
             // For body-shaped primitives we use AABB containment as a
-            // first-pass hit. Wave 4 keeps this simple; future tuning
-            // can replace each arm with a tighter shape test.
+            // first-pass hit. Future tuning can replace each arm with
+            // a tighter shape test (per-pixel overlap, body polygon).
             let bbox = match item.kind {
                 SelectedKind::Symbol => snapshot
                     .sheet
                     .symbols
                     .iter()
                     .find(|s| s.uuid == item.uuid)
-                    .and_then(|s| {
-                        snapshot
-                            .lib_symbol(&s.lib_id)
-                            .map(|lib| super::symbol::symbol_aabb(s, lib))
+                    .map(|s| match snapshot.lib_symbol(&s.lib_id) {
+                        Some(lib) => super::symbol::symbol_aabb(s, lib),
+                        None => super::symbol::missing_symbol_aabb(s),
                     }),
+                SelectedKind::SymbolRefField => snapshot
+                    .sheet
+                    .symbols
+                    .iter()
+                    .find(|s| s.uuid == item.uuid)
+                    .and_then(super::symbol::ref_field_aabb),
+                SelectedKind::SymbolValField => snapshot
+                    .sheet
+                    .symbols
+                    .iter()
+                    .find(|s| s.uuid == item.uuid)
+                    .and_then(super::symbol::val_field_aabb),
                 SelectedKind::Label => snapshot
                     .sheet
                     .labels
@@ -376,6 +414,18 @@ fn primitive_hit_point(
                     .iter()
                     .find(|d| drawing_uuid(d) == item.uuid)
                     .map(super::drawing::drawing_aabb),
+                SelectedKind::ChildSheet => snapshot
+                    .sheet
+                    .child_sheets
+                    .iter()
+                    .find(|cs| cs.uuid == item.uuid)
+                    .map(super::symbol::child_sheet_aabb),
+                SelectedKind::SheetPin => snapshot
+                    .sheet
+                    .child_sheets
+                    .iter()
+                    .find_map(|cs| cs.pins.iter().find(|p| p.uuid == item.uuid))
+                    .map(super::symbol::sheet_pin_aabb),
                 _ => None,
             };
             bbox.map(|b| b.expand(tol).contains(p.x, p.y))
@@ -490,5 +540,23 @@ mod tests {
     fn cells_for_aabb_returns_at_least_one_cell() {
         let cells = cells_for_aabb(&Aabb::new(0.0, 0.0, 0.0, 0.0));
         assert!(!cells.is_empty());
+    }
+
+    #[test]
+    fn dedup_returns_each_entry_once_when_query_spans_many_cells() {
+        // M-1 regression: the previous Vec.contains dedup was O(k²)
+        // and would also produce duplicates when a single primitive
+        // overlapped many cells. With HashSet dedup, a tall vertical
+        // wire spanning many cells still yields exactly one entry.
+        let tall = make_wire((0.0, 0.0), (0.0, 100.0));
+        let target = tall.uuid;
+        let sheet = snap_with_wires(vec![tall]);
+        let theme = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+        let snap = SchematicSnapshot::new(&sheet, &theme);
+        let index = HitIndex::build(&snap);
+        let q = Aabb::new(-1.0, -1.0, 1.0, 101.0);
+        let hits = box_query(&index, &snap, q, SelectionMode::Touching);
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].uuid, target);
     }
 }

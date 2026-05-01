@@ -682,14 +682,12 @@ impl Signex {
                     return Task::none();
                 }
                 self.document_state.history.loading = false;
-                self.document_state.history.mode =
-                    crate::panels::history::HistoryRenderMode::Ready;
+                self.document_state.history.mode = crate::panels::history::HistoryRenderMode::Ready;
                 self.document_state.history.entries = match result {
                     Ok(entries) => entries,
                     Err(_) => Vec::new(),
                 };
-                self.document_state.panel_ctx.history =
-                    self.document_state.history.clone();
+                self.document_state.panel_ctx.history = self.document_state.history.clone();
                 Task::none()
             }
             Message::Noop => Task::none(),

@@ -169,12 +169,21 @@ impl Signex {
         // HashMap storage: an open schematic tab always has its engine
         // resident in `document_state.engines`.
         if let Some(engine) = self.document_state.active_engine() {
-            if let Some(cache) = self.interaction_state.active_canvas_mut().render_cache.as_mut() {
+            if let Some(cache) = self
+                .interaction_state
+                .active_canvas_mut()
+                .render_cache
+                .as_mut()
+            {
                 cache.update_from_sheet(engine.document(), invalidation);
             } else {
-                self.interaction_state.active_canvas_mut().set_render_cache(Some(
-                    signex_render::schematic::SchematicRenderCache::from_sheet(engine.document()),
-                ));
+                self.interaction_state
+                    .active_canvas_mut()
+                    .set_render_cache(Some(
+                        signex_render::schematic::SchematicRenderCache::from_sheet(
+                            engine.document(),
+                        ),
+                    ));
             }
             return;
         }
@@ -233,10 +242,7 @@ impl Signex {
     /// canvas reflects the parked sheet's current state.
     pub(crate) fn attach_parked_schematic_tab(&mut self, path: PathBuf, title: String) {
         self.park_active_schematic_session();
-        let project_id = self
-            .document_state
-            .project_for_path(&path)
-            .map(|p| p.id);
+        let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
         // The parked engine is, by definition, dirty — `close_tab_now`
         // only keeps engines for paths in `dirty_paths`. Mirror that
         // into the new tab so the chrome (red dot, etc.) stays
@@ -261,10 +267,7 @@ impl Signex {
 
     pub(crate) fn open_pcb_tab(&mut self, path: PathBuf, title: String, board: PcbBoard) {
         self.park_active_schematic_session();
-        let project_id = self
-            .document_state
-            .project_for_path(&path)
-            .map(|p| p.id);
+        let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
         self.document_state.tabs.push(TabInfo {
             title,
             path,
@@ -293,10 +296,7 @@ impl Signex {
             .as_ref()
             .map(|p| self.document_state.engines.contains_key(p))
             .unwrap_or(false);
-        let is_pcb = matches!(
-            self.active_tab_cached_document(),
-            Some(TabDocument::Pcb(_))
-        );
+        let is_pcb = matches!(self.active_tab_cached_document(), Some(TabDocument::Pcb(_)));
 
         if is_schematic {
             if self.activate_active_schematic_session() {
@@ -319,12 +319,21 @@ impl Signex {
         // `handlers/document_tabs.rs`, which explicitly prunes the
         // closing tab's entry. GitHub issue #51.
         self.document_state.active_path = None;
-        self.interaction_state.active_canvas_mut().set_render_cache(None);
+        self.interaction_state
+            .active_canvas_mut()
+            .set_render_cache(None);
         self.interaction_state.active_canvas_mut().selected.clear();
-        self.interaction_state.active_canvas_mut().wire_preview.clear();
+        self.interaction_state
+            .active_canvas_mut()
+            .wire_preview
+            .clear();
         self.interaction_state.active_canvas_mut().drawing_mode = false;
-        self.interaction_state.active_canvas_mut().clear_content_cache();
-        self.interaction_state.active_canvas_mut().clear_overlay_cache();
+        self.interaction_state
+            .active_canvas_mut()
+            .clear_content_cache();
+        self.interaction_state
+            .active_canvas_mut()
+            .clear_overlay_cache();
         self.interaction_state.current_tool = Tool::Select;
     }
 
@@ -379,7 +388,9 @@ impl Signex {
         if clear_bg_cache {
             self.interaction_state.active_canvas_mut().clear_bg_cache();
         }
-        self.interaction_state.active_canvas_mut().clear_content_cache();
+        self.interaction_state
+            .active_canvas_mut()
+            .clear_content_cache();
 
         let _ = commit_to_active_tab;
 

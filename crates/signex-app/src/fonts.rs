@@ -941,10 +941,7 @@ pub fn read_component_filter() -> String {
     let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
         return String::new();
     };
-    json["component_filter"]
-        .as_str()
-        .unwrap_or("")
-        .to_string()
+    json["component_filter"].as_str().unwrap_or("").to_string()
 }
 
 /// Persist the Components-panel filter without clobbering other keys.
@@ -976,7 +973,9 @@ pub fn read_library_browser_searches() -> std::collections::HashMap<PathBuf, Str
     let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
         return out;
     };
-    let Some(obj) = json.get("library_browser_searches").and_then(|v| v.as_object())
+    let Some(obj) = json
+        .get("library_browser_searches")
+        .and_then(|v| v.as_object())
     else {
         return out;
     };

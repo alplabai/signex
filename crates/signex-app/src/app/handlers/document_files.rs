@@ -422,7 +422,9 @@ impl Signex {
         // Migrate the dirty marker too — `dirty_paths` is keyed on
         // path so it has to follow the rename.
         if self.document_state.dirty_paths.remove(from_path) {
-            self.document_state.dirty_paths.insert(to_path.to_path_buf());
+            self.document_state
+                .dirty_paths
+                .insert(to_path.to_path_buf());
         }
 
         // Now write the file at the new path. `atomic_write` inside
@@ -469,10 +471,9 @@ impl Signex {
         // mounted library is a no-op). Bail on failure: an invalid
         // library directory shouldn't poison the project's library list.
         if self.library.library_at(lib_dir).is_none() {
-            if let Err(e) = crate::library::commands::open_library(
-                &mut self.library,
-                lib_dir.to_path_buf(),
-            ) {
+            if let Err(e) =
+                crate::library::commands::open_library(&mut self.library, lib_dir.to_path_buf())
+            {
                 tracing::warn!(
                     target: "signex::library",
                     path = %lib_dir.display(),
@@ -539,11 +540,14 @@ impl Signex {
             )
         };
 
-        loaded.data.libraries.push(signex_types::project::LibraryEntry {
-            path: stored_path,
-            kind,
-            library_id,
-        });
+        loaded
+            .data
+            .libraries
+            .push(signex_types::project::LibraryEntry {
+                path: stored_path,
+                kind,
+                library_id,
+            });
 
         // Mark the `.snxprj` dirty so the project tree's red dot lights
         // up and the project-close prompt asks the user to persist the

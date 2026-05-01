@@ -117,15 +117,32 @@ fn item_aabb(
             .iter()
             .find(|n| n.uuid == item.uuid)
             .map(no_connect::no_connect_aabb),
-        SelectedKind::Symbol => sheet
+        SelectedKind::Symbol => sheet.symbols.iter().find(|s| s.uuid == item.uuid).map(|s| {
+            match snapshot.lib_symbol(&s.lib_id) {
+                Some(lib) => symbol::symbol_aabb(s, lib),
+                None => symbol::missing_symbol_aabb(s),
+            }
+        }),
+        SelectedKind::SymbolRefField => sheet
             .symbols
             .iter()
             .find(|s| s.uuid == item.uuid)
-            .and_then(|s| {
-                snapshot
-                    .lib_symbol(&s.lib_id)
-                    .map(|lib| symbol::symbol_aabb(s, lib))
-            }),
+            .and_then(symbol::ref_field_aabb),
+        SelectedKind::SymbolValField => sheet
+            .symbols
+            .iter()
+            .find(|s| s.uuid == item.uuid)
+            .and_then(symbol::val_field_aabb),
+        SelectedKind::ChildSheet => sheet
+            .child_sheets
+            .iter()
+            .find(|cs| cs.uuid == item.uuid)
+            .map(symbol::child_sheet_aabb),
+        SelectedKind::SheetPin => sheet
+            .child_sheets
+            .iter()
+            .find_map(|cs| cs.pins.iter().find(|p| p.uuid == item.uuid))
+            .map(symbol::sheet_pin_aabb),
         SelectedKind::Label => sheet
             .labels
             .iter()
@@ -151,13 +168,6 @@ fn item_aabb(
                 uuid == item.uuid
             })
             .map(drawing::drawing_aabb),
-        // The remaining selection kinds (ChildSheet, SheetPin, the two
-        // symbol-field kinds) outline against the parent symbol; those
-        // get bespoke outlines in a follow-up release.
-        SelectedKind::ChildSheet
-        | SelectedKind::SheetPin
-        | SelectedKind::SymbolRefField
-        | SelectedKind::SymbolValField => None,
     }
 }
 

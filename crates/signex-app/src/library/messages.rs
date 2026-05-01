@@ -247,7 +247,9 @@ pub enum LibraryMessage {
     /// Fired by the Component Preview tab's right-click context menu
     /// on the Symbol / Footprint render panes; routed to the
     /// standalone `.snxsym` / `.snxfpt` document tab.
-    OpenPrimitiveEditor { path: PathBuf },
+    OpenPrimitiveEditor {
+        path: PathBuf,
+    },
     /// Inner Component Preview message — keyed by
     /// `(library_path, table, row_id)`.
     EditorEvent {
@@ -351,7 +353,9 @@ pub enum LibraryMessage {
         row_id: RowId,
     },
     /// User dismissed the delete confirm modal without deleting.
-    BrowserDeleteRowCancel { library_path: PathBuf },
+    BrowserDeleteRowCancel {
+        library_path: PathBuf,
+    },
     /// Open the Symbol/Footprint primitive picker modal. `target`
     /// determines what happens when the user picks something.
     OpenPrimitivePicker {
@@ -427,7 +431,9 @@ pub enum LibraryMessage {
     /// Tools menu fired Document Options for the library at
     /// `library_path`. Opens the modal pre-filled with the library's
     /// current display settings.
-    OpenDocumentOptions { library_path: PathBuf },
+    OpenDocumentOptions {
+        library_path: PathBuf,
+    },
     /// Modal — pick a new sheet color preset.
     DocumentOptionsSetSheetColor(crate::panels::SheetColor),
     /// Modal — toggle the visible-grid checkbox.

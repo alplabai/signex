@@ -103,8 +103,7 @@ pub fn save(entries: &[GlobalLibraryEntry]) -> Result<(), String> {
     };
     let text = toml::to_string_pretty(&file)
         .map_err(|e| format!("serialise global_libraries.toml: {e}"))?;
-    std::fs::write(&path, text)
-        .map_err(|e| format!("write {}: {}", path.display(), e))?;
+    std::fs::write(&path, text).map_err(|e| format!("write {}: {}", path.display(), e))?;
     Ok(())
 }
 
@@ -157,7 +156,9 @@ pub fn mount_all(library_state: &mut crate::library::LibraryState, entries: &[Gl
 
 /// One-shot "load and mount" — used by the bootstrap path so callers
 /// don't have to remember the two-step dance.
-pub fn load_and_mount_all(library_state: &mut crate::library::LibraryState) -> Vec<GlobalLibraryEntry> {
+pub fn load_and_mount_all(
+    library_state: &mut crate::library::LibraryState,
+) -> Vec<GlobalLibraryEntry> {
     let entries = load();
     mount_all(library_state, &entries);
     entries

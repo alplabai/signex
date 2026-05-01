@@ -181,7 +181,11 @@ impl LibraryUpdatesState {
     /// No-op when the uuid isn't present (e.g. the user dismissed and
     /// re-scanned).
     pub fn toggle(&mut self, symbol_uuid: Uuid) {
-        if let Some(e) = self.entries.iter_mut().find(|e| e.symbol_uuid == symbol_uuid) {
+        if let Some(e) = self
+            .entries
+            .iter_mut()
+            .find(|e| e.symbol_uuid == symbol_uuid)
+        {
             e.selected = !e.selected;
         }
     }
@@ -303,14 +307,20 @@ fn render_entry_row<'a>(
         row![
             cb,
             Space::new().width(8),
-            container(text(format!("{}{}", prefix, entry.ref_des)).size(12).color(text_c))
-                .width(Length::Fixed(96.0)),
-            container(text(&entry.library_name).size(11).color(muted))
-                .width(Length::Fixed(160.0)),
             container(
-                text(format!("{} \u{2192} {}", entry.current_version, entry.latest_version))
-                    .size(11)
-                    .color(text_c),
+                text(format!("{}{}", prefix, entry.ref_des))
+                    .size(12)
+                    .color(text_c)
+            )
+            .width(Length::Fixed(96.0)),
+            container(text(&entry.library_name).size(11).color(muted)).width(Length::Fixed(160.0)),
+            container(
+                text(format!(
+                    "{} \u{2192} {}",
+                    entry.current_version, entry.latest_version
+                ))
+                .size(11)
+                .color(text_c),
             )
             .width(Length::Fill),
             container(text(entry.bump_kind.label()).size(10).color(badge_color))

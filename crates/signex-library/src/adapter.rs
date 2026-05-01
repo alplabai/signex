@@ -229,12 +229,7 @@ pub trait LibraryAdapter: Send + Sync {
     /// `new` already does (no silent overwrite). The new name is
     /// validated for filename-safe characters at the adapter
     /// boundary.
-    fn rename_table(
-        &self,
-        _old: &str,
-        _new: &str,
-        _msg: &str,
-    ) -> Result<(), LibraryError> {
+    fn rename_table(&self, _old: &str, _new: &str, _msg: &str) -> Result<(), LibraryError> {
         Err(LibraryError::Backend(
             "rename_table not implemented for this adapter".into(),
         ))
@@ -313,9 +308,7 @@ pub trait LibraryAdapter: Send + Sync {
                 "class {old_key:?} not found"
             )));
         }
-        if new_entry.key != old_key
-            && classes.iter().any(|c| c.key == new_entry.key)
-        {
+        if new_entry.key != old_key && classes.iter().any(|c| c.key == new_entry.key) {
             return Err(LibraryError::Conflict(format!(
                 "class with key {:?} already exists",
                 new_entry.key

@@ -33,14 +33,55 @@ const BUBBLE_DIAM_FACTOR: f64 = 0.30;
 const TRIANGLE_DEPTH_FACTOR: f64 = 0.40;
 const SLASH_HALF_FACTOR: f64 = 0.30;
 
+/// Per-symbol hints that bulk-toggle pin name / number visibility and
+/// override the default name offset. Threaded through from
+/// [`super::symbol::draw_symbol`] so the parent's `LibSymbol` flags
+/// override per-pin defaults — addresses M-2 from the v0.12 review.
+#[derive(Debug, Clone, Copy)]
+pub struct PinDrawHints {
+    pub show_pin_names: bool,
+    pub show_pin_numbers: bool,
+    pub pin_name_offset_mm: f64,
+}
+
+impl Default for PinDrawHints {
+    #[inline]
+    fn default() -> Self {
+        Self {
+            show_pin_names: true,
+            show_pin_numbers: true,
+            pin_name_offset_mm: PIN_NAME_OFFSET_MM,
+        }
+    }
+}
+
 /// Render a single pin into the content layer's frame.
 ///
 /// Hidden pins (`!pin.visible`) early-return; the renderer never paints
 /// hidden pins, but [`pin_aabb`] still includes them for hit-testing.
+///
+/// Calls without per-symbol hints get [`PinDrawHints::default()`] —
+/// `show_pin_names = true`, `show_pin_numbers = true`,
+/// `pin_name_offset_mm = PIN_NAME_OFFSET_MM`. New code should call
+/// [`draw_pin_with_hints`] from the symbol render pass so the parent
+/// `LibSymbol`'s visibility toggles win.
 pub fn draw_pin(
     frame: &mut Frame,
     pin: &Pin,
     transform: &SymbolTransform,
+    ctx: &RenderContext<'_>,
+) {
+    draw_pin_with_hints(frame, pin, transform, &PinDrawHints::default(), ctx);
+}
+
+/// Render a single pin with explicit per-symbol hints. See [`draw_pin`]
+/// for the default-hints variant and [`PinDrawHints`] for the field
+/// semantics.
+pub fn draw_pin_with_hints(
+    frame: &mut Frame,
+    pin: &Pin,
+    transform: &SymbolTransform,
+    hints: &PinDrawHints,
     ctx: &RenderContext<'_>,
 ) {
     if !pin.visible {
@@ -81,21 +122,71 @@ pub fn draw_pin(
     draw_decorator(frame, pin, transform, body_w, tip_w, stroke, ctx);
 
     // Name + number text.
-    draw_pin_text(frame, pin, transform, body_w, tip_w, ctx);
+    draw_pin_text(frame, pin, transform, body_w, tip_w, hints, ctx);
 }
 
-/// World-space AABB of a pin (shaft only — decorators stay within
-/// the shaft length so the shaft's bbox is conservative enough for
-/// frustum + spatial-hash bucketing).
+/// World-space AABB of a pin, including its decorator and name/number
+/// text. Used by frustum culling so the bubble / slash / hysteresis
+/// triangle and the text run don't get clipped at the viewport edge,
+/// and by hit-test so clicks on the name/number register.
+///
+/// The bounding box is computed by transforming a small set of
+/// extreme points in pin-local space (shaft endpoints, perpendicular
+/// half-extents at body and tip, and the name anchor offset) so the
+/// result remains correct under any parent rotation / mirror.
 pub(crate) fn pin_aabb(pin: &Pin, transform: &SymbolTransform) -> Aabb {
-    let body = transform.apply(pin.position);
     let dir = direction_unit(pin.rotation);
-    let tip_local = Point::new(
-        pin.position.x + pin.length * dir.x,
-        pin.position.y + pin.length * dir.y,
+    let length = pin.length;
+
+    // Perpendicular margin covers the slash decorator (`SLASH_HALF_FACTOR
+    // × length`) and a generous text-height for pin names painted
+    // beside the shaft.
+    let perp_margin = (length * SLASH_HALF_FACTOR).max(signex_types::schematic::SCHEMATIC_TEXT_MM);
+    // Axial margin covers the bubble decorator's outer edge plus the
+    // pin-name anchor offset — both extend past `pin.position` along
+    // the negative-axis direction.
+    let axial_margin_body = length * BUBBLE_DIAM_FACTOR
+        + signex_types::schematic::PIN_NAME_OFFSET_MM
+        + signex_types::schematic::SCHEMATIC_TEXT_MM * 0.6 * pin.name.chars().count().max(1) as f64;
+
+    // Local extreme points (Y-up library space). Perpendicular axis is
+    // (-dir.y, dir.x).
+    let perp = Point::new(-dir.y, dir.x);
+    let body = pin.position;
+    let tip_local = Point::new(body.x + length * dir.x, body.y + length * dir.y);
+    let body_extended = Point::new(
+        body.x - dir.x * axial_margin_body,
+        body.y - dir.y * axial_margin_body,
     );
-    let tip = transform.apply(tip_local);
-    Aabb::new(body.x, body.y, tip.x, tip.y)
+    let candidates_local = [
+        body,
+        tip_local,
+        body_extended,
+        // Perpendicular extents at body and tip.
+        Point::new(body.x + perp.x * perp_margin, body.y + perp.y * perp_margin),
+        Point::new(body.x - perp.x * perp_margin, body.y - perp.y * perp_margin),
+        Point::new(
+            tip_local.x + perp.x * perp_margin,
+            tip_local.y + perp.y * perp_margin,
+        ),
+        Point::new(
+            tip_local.x - perp.x * perp_margin,
+            tip_local.y - perp.y * perp_margin,
+        ),
+    ];
+
+    let mut min_x = f64::INFINITY;
+    let mut min_y = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+    for p in candidates_local {
+        let w = transform.apply(p);
+        min_x = min_x.min(w.x);
+        min_y = min_y.min(w.y);
+        max_x = max_x.max(w.x);
+        max_y = max_y.max(w.y);
+    }
+    Aabb::new(min_x, min_y, max_x, max_y)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -109,13 +200,13 @@ fn draw_decorator(
     ctx: &RenderContext<'_>,
 ) {
     use PinShapeStyle as PS;
+    let _ = tip_w; // kept for future per-decorator placement variants
     match pin.shape_style {
         PS::Plain => {}
         PS::InvertedBubble => bubble_at(frame, body_w, pin.length, ctx, stroke),
         PS::ClockTriangle => triangle_at(
             frame,
             body_w,
-            tip_w,
             pin.rotation,
             transform,
             pin.length,
@@ -128,7 +219,6 @@ fn draw_decorator(
             triangle_at(
                 frame,
                 body_w,
-                tip_w,
                 pin.rotation,
                 transform,
                 pin.length,
@@ -140,7 +230,6 @@ fn draw_decorator(
         PS::HysteresisInput => triangle_at(
             frame,
             tip_w,
-            body_w,
             pin.rotation,
             transform,
             pin.length,
@@ -161,7 +250,6 @@ fn draw_decorator(
             triangle_at(
                 frame,
                 body_w,
-                tip_w,
                 pin.rotation,
                 transform,
                 pin.length,
@@ -202,7 +290,6 @@ fn bubble_at(
 fn triangle_at(
     frame: &mut Frame,
     apex_w: Point,
-    base_dir_anchor_w: Point,
     pin_rotation_local: f64,
     transform: &SymbolTransform,
     pin_length_mm: f64,
@@ -253,8 +340,6 @@ fn triangle_at(
     if !point_finite(apex_s) || !point_finite(a_s) || !point_finite(b_s) {
         return;
     }
-    // Suppress unused-variable warning while preserving signature.
-    let _ = base_dir_anchor_w;
 
     let path = Path::new(|builder| {
         builder.move_to(apex_s);
@@ -301,54 +386,103 @@ fn slash_at(
 fn draw_pin_text(
     frame: &mut Frame,
     pin: &Pin,
-    transform: &SymbolTransform,
+    _transform: &SymbolTransform,
     body_w: Point,
     tip_w: Point,
+    hints: &PinDrawHints,
     ctx: &RenderContext<'_>,
 ) {
-    use signex_types::schematic::{HAlign, VAlign};
     let font_mm = signex_types::schematic::SCHEMATIC_TEXT_MM;
     let size_px = mm_to_text_pixels(font_mm, ctx);
     let color = iced_color(&ctx.theme().pin);
-    let folded_rot = transform.apply_angle(pin.rotation);
 
-    if pin.name_visible && !pin.name.is_empty() {
-        let anchor_local = Point::new(
-            pin.position.x - PIN_NAME_OFFSET_MM * pin.rotation.to_radians().cos(),
-            pin.position.y - PIN_NAME_OFFSET_MM * pin.rotation.to_radians().sin(),
-        );
-        let anchor_w = transform.apply(anchor_local);
+    // Reduce the world-space pin direction to one of {right, up, left,
+    // down}. We use this to (a) place the name anchor in the correct
+    // perpendicular / axial direction after the parent transform, and
+    // (b) pick a horizontal-text rotation + justify that reads
+    // correctly regardless of how the parent rotates / mirrors.
+    let dir_w = Point::new(tip_w.x - body_w.x, tip_w.y - body_w.y);
+    let len = (dir_w.x * dir_w.x + dir_w.y * dir_w.y).sqrt().max(1e-9);
+    let dx = dir_w.x / len;
+    let dy = dir_w.y / len;
+
+    if hints.show_pin_names && pin.name_visible && !pin.name.is_empty() {
+        // Name anchor: PIN_NAME_OFFSET_MM along the *opposite* of the
+        // pin's world-direction so the text lands inside the body.
+        let offset = hints.pin_name_offset_mm.max(0.0);
+        let anchor_w = Point::new(body_w.x - dx * offset, body_w.y - dy * offset);
         let anchor_s = ctx.viewport.world_to_screen(anchor_w);
         if point_finite(anchor_s) {
+            // Always render horizontally — whichever side of the body the
+            // name lands on, choose justify so the text grows away from
+            // the body. (Reads top-down for vertical pins via VAlign.)
+            let (justify_h, justify_v) = name_justify_for_direction(dx, dy);
             draw_rotated_text(
-                frame,
-                &pin.name,
-                anchor_s,
-                folded_rot,
-                size_px,
-                color,
-                HAlign::Right,
-                VAlign::Center,
+                frame, &pin.name, anchor_s, 0.0, size_px, color, justify_h, justify_v,
             );
         }
     }
 
-    if pin.number_visible && !pin.number.is_empty() {
-        // Number sits along the shaft midpoint, offset slightly above.
+    if hints.show_pin_numbers && pin.number_visible && !pin.number.is_empty() {
+        // Number sits along the shaft midpoint, offset perpendicular
+        // to the shaft so the digits don't overlap the stroke.
         let mid_w = Point::new((body_w.x + tip_w.x) * 0.5, (body_w.y + tip_w.y) * 0.5);
         let anchor_s = ctx.viewport.world_to_screen(mid_w);
         if point_finite(anchor_s) {
+            let (justify_h, justify_v) = number_justify_for_direction(dx, dy);
             draw_rotated_text(
                 frame,
                 &pin.number,
                 anchor_s,
-                folded_rot,
+                0.0,
                 size_px,
                 color,
-                HAlign::Center,
-                VAlign::Bottom,
+                justify_h,
+                justify_v,
             );
         }
+    }
+}
+
+/// Pick (HAlign, VAlign) so a horizontal pin-name run grows *away*
+/// from the body, given the pin's world-direction unit vector.
+fn name_justify_for_direction(
+    dx: f64,
+    dy: f64,
+) -> (
+    signex_types::schematic::HAlign,
+    signex_types::schematic::VAlign,
+) {
+    use signex_types::schematic::{HAlign, VAlign};
+    if dx.abs() >= dy.abs() {
+        if dx >= 0.0 {
+            (HAlign::Right, VAlign::Center) // pin →; name to left of body
+        } else {
+            (HAlign::Left, VAlign::Center) // pin ←; name to right of body
+        }
+    } else if dy >= 0.0 {
+        (HAlign::Center, VAlign::Bottom) // pin ↓ (screen); name above body
+    } else {
+        (HAlign::Center, VAlign::Top) // pin ↑ (screen); name below body
+    }
+}
+
+/// Pick (HAlign, VAlign) for the pin number — sits perpendicular to the
+/// shaft midpoint, on the "above" side relative to the pin direction.
+fn number_justify_for_direction(
+    dx: f64,
+    dy: f64,
+) -> (
+    signex_types::schematic::HAlign,
+    signex_types::schematic::VAlign,
+) {
+    use signex_types::schematic::{HAlign, VAlign};
+    if dx.abs() >= dy.abs() {
+        // Horizontal pin — number above the shaft.
+        (HAlign::Center, VAlign::Bottom)
+    } else {
+        // Vertical pin — number to the right of the shaft.
+        (HAlign::Left, VAlign::Center)
     }
 }
 

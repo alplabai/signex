@@ -119,16 +119,10 @@ impl Signex {
                 );
             }
             ProjectTreeAction::ExpandAll => {
-                set_expanded_recursive(
-                    &mut self.document_state.panel_ctx.project_tree,
-                    true,
-                );
+                set_expanded_recursive(&mut self.document_state.panel_ctx.project_tree, true);
             }
             ProjectTreeAction::CollapseAll => {
-                set_expanded_recursive(
-                    &mut self.document_state.panel_ctx.project_tree,
-                    false,
-                );
+                set_expanded_recursive(&mut self.document_state.panel_ctx.project_tree, false);
             }
             ProjectTreeAction::Refresh => {
                 self.document_state.panel_ctx.project_tree =
@@ -224,27 +218,23 @@ impl Signex {
              `.snxlib` directories.",
             project_dir.display()
         );
-        self.ui_state.enable_version_control =
-            Some(crate::app::EnableVersionControlState {
-                scope: crate::app::VersionControlScope::Project,
-                project_path: project.path.clone(),
-                project_dir: project_dir.to_path_buf(),
-                project_name: project.data.name.clone(),
-                items,
-                use_lfs: false,
-                intro_text,
-                error: None,
-            });
+        self.ui_state.enable_version_control = Some(crate::app::EnableVersionControlState {
+            scope: crate::app::VersionControlScope::Project,
+            project_path: project.path.clone(),
+            project_dir: project_dir.to_path_buf(),
+            project_name: project.data.name.clone(),
+            items,
+            use_lfs: false,
+            intro_text,
+            error: None,
+        });
     }
 
     /// v0.11 library-node: open the same Enable Version Control modal
     /// scoped to a single `.snxlib` directory rather than the whole
     /// project tree. The library context-menu only surfaces this when
     /// the library's `root_dir` has no `.git/` already.
-    pub(crate) fn open_library_enable_version_control_dialog(
-        &mut self,
-        tree_path: Vec<usize>,
-    ) {
+    pub(crate) fn open_library_enable_version_control_dialog(&mut self, tree_path: Vec<usize>) {
         // Tree path under a project's `Libraries` group is
         // `[project_idx, libraries_branch_idx, library_idx]` — see
         // `library_node_path_from_tree` for the canonical lookup.
@@ -284,17 +274,16 @@ impl Signex {
         // `project_path` is purely informational; point it at a
         // `library.toml` (whether it exists yet or not) inside the
         // library so the modal can mirror the project-scope pattern.
-        self.ui_state.enable_version_control =
-            Some(crate::app::EnableVersionControlState {
-                scope: crate::app::VersionControlScope::Library,
-                project_path: root_dir.join("library.toml"),
-                project_dir: root_dir,
-                project_name: library_name,
-                items,
-                use_lfs: false,
-                intro_text,
-                error: None,
-            });
+        self.ui_state.enable_version_control = Some(crate::app::EnableVersionControlState {
+            scope: crate::app::VersionControlScope::Library,
+            project_path: root_dir.join("library.toml"),
+            project_dir: root_dir,
+            project_name: library_name,
+            items,
+            use_lfs: false,
+            intro_text,
+            error: None,
+        });
     }
 
     pub(crate) fn handle_enable_version_control_confirm(&mut self) {
@@ -380,12 +369,11 @@ impl Signex {
         };
 
         if !dirty.is_empty() {
-            self.ui_state.project_close_confirm =
-                Some(crate::app::ProjectCloseConfirmState {
-                    tree_path: tree_path.to_vec(),
-                    project_name: project.data.name.clone(),
-                    dirty_paths: dirty,
-                });
+            self.ui_state.project_close_confirm = Some(crate::app::ProjectCloseConfirmState {
+                tree_path: tree_path.to_vec(),
+                project_name: project.data.name.clone(),
+                dirty_paths: dirty,
+            });
             return Task::none();
         }
 
@@ -401,12 +389,7 @@ impl Signex {
         let Some(&project_idx) = tree_path.first() else {
             return Task::none();
         };
-        let Some(target_id) = self
-            .document_state
-            .projects
-            .get(project_idx)
-            .map(|p| p.id)
-        else {
+        let Some(target_id) = self.document_state.projects.get(project_idx).map(|p| p.id) else {
             return Task::none();
         };
 
@@ -522,7 +505,9 @@ impl Signex {
                     let listing: Vec<String> = failed
                         .iter()
                         .filter_map(|p| {
-                            p.file_name().and_then(|s| s.to_str()).map(|s| s.to_string())
+                            p.file_name()
+                                .and_then(|s| s.to_str())
+                                .map(|s| s.to_string())
                         })
                         .collect();
                     self.document_state.export_error = Some(format!(
@@ -648,9 +633,7 @@ impl Signex {
             .get(self.document_state.active_tab)
             .map(|t| t.project_id == Some(project_id))
             .unwrap_or(false);
-        if !active_belongs
-            && let Some(root) = schematic_root
-        {
+        if !active_belongs && let Some(root) = schematic_root {
             let path = project_dir.join(&root);
             if path.exists() {
                 self.handle_document_file_opened(Some(path));
@@ -664,10 +647,7 @@ impl Signex {
     /// scoped to schematic / PCB / library extensions. Picked paths
     /// land in [`Message::AddExistingFilePicked`]; the handler copies
     /// any outside the project directory in turn and opens each.
-    pub(crate) fn add_existing_to_project(
-        &mut self,
-        tree_path: Vec<usize>,
-    ) -> iced::Task<Message> {
+    pub(crate) fn add_existing_to_project(&mut self, tree_path: Vec<usize>) -> iced::Task<Message> {
         let Some(&project_idx) = tree_path.first() else {
             return iced::Task::none();
         };
@@ -704,10 +684,7 @@ impl Signex {
     /// directory; result returns through [`Message::AddNewSchematicPicked`].
     /// The handler writes a blank `.snxsch`, registers the entry on
     /// the project, and marks the .snxprj dirty.
-    pub(crate) fn add_new_schematic(
-        &mut self,
-        tree_path: Vec<usize>,
-    ) -> iced::Task<Message> {
+    pub(crate) fn add_new_schematic(&mut self, tree_path: Vec<usize>) -> iced::Task<Message> {
         let Some(&project_idx) = tree_path.first() else {
             return iced::Task::none();
         };
@@ -874,11 +851,7 @@ impl Signex {
     /// inserted (the caller flips the project dirty bit on `true`).
     /// Files already referenced are skipped — re-adding the same file
     /// is a no-op rather than a duplicate row.
-    fn register_project_file(
-        &mut self,
-        project_idx: usize,
-        file_path: &std::path::Path,
-    ) -> bool {
+    fn register_project_file(&mut self, project_idx: usize, file_path: &std::path::Path) -> bool {
         let Some(loaded) = self.document_state.projects.get_mut(project_idx) else {
             return false;
         };
@@ -934,19 +907,17 @@ impl Signex {
             }
             "snxlib" => {
                 let entry_path = std::path::PathBuf::from(&filename);
-                if loaded
-                    .data
-                    .libraries
-                    .iter()
-                    .any(|e| e.path == entry_path)
-                {
+                if loaded.data.libraries.iter().any(|e| e.path == entry_path) {
                     return false;
                 }
-                loaded.data.libraries.push(signex_types::project::LibraryEntry {
-                    path: entry_path,
-                    kind: signex_types::project::LibraryEntryKind::ProjectLocal,
-                    library_id: None,
-                });
+                loaded
+                    .data
+                    .libraries
+                    .push(signex_types::project::LibraryEntry {
+                        path: entry_path,
+                        kind: signex_types::project::LibraryEntryKind::ProjectLocal,
+                        library_id: None,
+                    });
                 true
             }
             _ => {
@@ -986,10 +957,7 @@ impl Signex {
     /// index picks which project's directory to resolve against, so a
     /// leaf under project B isn't accidentally resolved against project
     /// A's parent directory.
-    fn tree_path_to_file_path(
-        &self,
-        tree_path: &[usize],
-    ) -> Option<std::path::PathBuf> {
+    fn tree_path_to_file_path(&self, tree_path: &[usize]) -> Option<std::path::PathBuf> {
         let node = signex_widgets::tree_view::get_node(
             self.document_state.panel_ctx.project_tree.as_slice(),
             tree_path,
@@ -1190,9 +1158,7 @@ impl Signex {
             loaded.path = new_prj.clone();
             loaded.data.name = new_stem.to_string();
             // schematic_root / pcb_file are basename strings.
-            if loaded.data.schematic_root.as_deref()
-                == Some(&format!("{old_stem}.snxsch"))
-            {
+            if loaded.data.schematic_root.as_deref() == Some(&format!("{old_stem}.snxsch")) {
                 loaded.data.schematic_root = Some(format!("{new_stem}.snxsch"));
             }
             if loaded.data.pcb_file.as_deref() == Some(&format!("{old_stem}.snxpcb")) {
@@ -1301,9 +1267,7 @@ impl Signex {
                 mutated = true;
             }
         }
-        if mutated
-            && let Some(p) = project_path
-        {
+        if mutated && let Some(p) = project_path {
             // Match Add Existing — Remove from Project also dirties the
             // .snxprj so the project root row gets the red dot until
             // the user saves the metadata change. The on-disk file
@@ -1321,11 +1285,7 @@ impl Signex {
         }
     }
 
-    fn open_project_tree_document(
-        &mut self,
-        tree_path: &[usize],
-        filename: String,
-    ) -> Result<()> {
+    fn open_project_tree_document(&mut self, tree_path: &[usize], filename: String) -> Result<()> {
         // Multi-project: walk to the owning project via tree_path[0]
         // instead of the active project, so clicking a leaf inside
         // project B opens B's file even when A is the active project.
@@ -1417,10 +1377,7 @@ impl Signex {
 
 /// Recursively set every node's `expanded` state — used by
 /// Expand all / Collapse all menu items.
-fn set_expanded_recursive(
-    nodes: &mut [signex_widgets::tree_view::TreeNode],
-    expanded: bool,
-) {
+fn set_expanded_recursive(nodes: &mut [signex_widgets::tree_view::TreeNode], expanded: bool) {
     for node in nodes {
         node.expanded = expanded;
         set_expanded_recursive(&mut node.children, expanded);
@@ -1610,10 +1567,7 @@ pub(crate) fn collect_track_items_for_library(
     // Manifest-shaped files at the library root. Only surface them
     // when present — bare-bones libraries may carry only the
     // `.snxlib` file without a sidecar config.
-    let files: &[(&str, &str)] = &[
-        ("library.toml", "Config"),
-        ("components.tsv", "Components"),
-    ];
+    let files: &[(&str, &str)] = &[("library.toml", "Config"), ("components.tsv", "Components")];
     for (name, label) in files {
         let abs = root_dir.join(name);
         if !abs.exists() {

@@ -630,8 +630,7 @@ impl canvas::Program<Message> for SchematicCanvas {
                         // normally.
                         if pan_just_started {
                             return Some(
-                                canvas::Action::publish(Message::CloseContextMenu)
-                                    .and_capture(),
+                                canvas::Action::publish(Message::CloseContextMenu).and_capture(),
                             );
                         }
                         return Some(

@@ -183,11 +183,7 @@ impl ColumnType {
     /// unknown type names or malformed `enum:` payloads.
     pub fn parse_token(s: &str) -> Result<Self, ColumnTypeParseError> {
         if let Some(rest) = s.strip_prefix("enum:") {
-            let values: Vec<String> = rest
-                .split(',')
-                .map(str::trim)
-                .map(str::to_string)
-                .collect();
+            let values: Vec<String> = rest.split(',').map(str::trim).map(str::to_string).collect();
             if values.is_empty() || values.iter().any(String::is_empty) {
                 return Err(ColumnTypeParseError::EmptyEnum);
             }
@@ -810,7 +806,10 @@ tsv = '''
             tables,
         };
         let err = lib.write().unwrap_err();
-        assert!(matches!(err, LibraryFileError::DisallowedControlInCell { .. }));
+        assert!(matches!(
+            err,
+            LibraryFileError::DisallowedControlInCell { .. }
+        ));
     }
 
     #[test]
@@ -829,7 +828,10 @@ tsv = '''
             tables,
         };
         let err = lib.write().unwrap_err();
-        assert!(matches!(err, LibraryFileError::DisallowedControlInCell { .. }));
+        assert!(matches!(
+            err,
+            LibraryFileError::DisallowedControlInCell { .. }
+        ));
     }
 
     #[test]
@@ -906,7 +908,14 @@ tsv = '''
         let r = &lib.tables["resistors"];
         assert_eq!(
             r.columns,
-            vec!["internal_pn", "mpn", "manufacturer", "value", "tolerance", "package"]
+            vec![
+                "internal_pn",
+                "mpn",
+                "manufacturer",
+                "value",
+                "tolerance",
+                "package"
+            ]
         );
         assert_eq!(r.rows.len(), 2);
         assert_eq!(r.rows[0].cells["mpn"], "RC0603FR-0710KL");
@@ -915,7 +924,13 @@ tsv = '''
         let u = &lib.tables["regulators_5v"];
         assert_eq!(
             u.columns,
-            vec!["internal_pn", "mpn", "manufacturer", "package", "iout_max_a"]
+            vec![
+                "internal_pn",
+                "mpn",
+                "manufacturer",
+                "package",
+                "iout_max_a"
+            ]
         );
         assert_eq!(u.rows[0].cells["mpn"], "LM7805");
     }
@@ -933,7 +948,8 @@ tsv = '''
         };
         let mut row = LibraryRow::default();
         row.cells.insert("a".into(), "alpha".into());
-        row.cells.insert("ghost".into(), "should not surface".into());
+        row.cells
+            .insert("ghost".into(), "should not surface".into());
         assert_eq!(table.cell(&row, "a"), Some("alpha"));
         assert_eq!(table.cell(&row, "ghost"), None);
     }
@@ -948,11 +964,14 @@ tsv = '''
             make_row(&["mpn", "tags"], &["", "automotive"]),
         ];
         let mut tables = BTreeMap::new();
-        tables.insert("misc".to_string(), LibraryTable {
-            columns,
-            rows,
-            column_types: BTreeMap::new(),
-        });
+        tables.insert(
+            "misc".to_string(),
+            LibraryTable {
+                columns,
+                rows,
+                column_types: BTreeMap::new(),
+            },
+        );
         let lib = LibraryFile {
             manifest: fixture_manifest(),
             tables,

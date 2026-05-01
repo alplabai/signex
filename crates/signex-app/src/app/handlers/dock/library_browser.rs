@@ -76,10 +76,7 @@ impl Signex {
         library_path: &std::path::Path,
         library_name: &str,
         _library_entries: &mut Vec<crate::panels::LibrarySymbolEntry>,
-        _loaded_symbols: &mut std::collections::HashMap<
-            String,
-            signex_types::schematic::LibSymbol,
-        >,
+        _loaded_symbols: &mut std::collections::HashMap<String, signex_types::schematic::LibSymbol>,
     ) -> Result<()> {
         // TODO(issue#62): port the legacy `.standard_sym` library browser to
         // the native `.snxlib`/`.snxsym` flow. Until then, the browser is

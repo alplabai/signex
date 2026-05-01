@@ -688,14 +688,14 @@ impl LibraryAdapter for LocalGitAdapter {
         let old_owned = old.to_string();
         let new_trimmed = new.trim().to_string();
         if new_trimmed.is_empty() {
-            return Err(LibraryError::Backend(
-                "table name cannot be empty".into(),
-            ));
+            return Err(LibraryError::Backend("table name cannot be empty".into()));
         }
-        if new_trimmed
-            .chars()
-            .any(|c| matches!(c, '/' | '\\' | '.' | ':' | '*' | '?' | '"' | '<' | '>' | '|'))
-        {
+        if new_trimmed.chars().any(|c| {
+            matches!(
+                c,
+                '/' | '\\' | '.' | ':' | '*' | '?' | '"' | '<' | '>' | '|'
+            )
+        }) {
             return Err(LibraryError::Backend(format!(
                 "table name {new_trimmed:?} contains illegal characters"
             )));
@@ -738,9 +738,9 @@ impl LibraryAdapter for LocalGitAdapter {
                 // atomic and is robust under future reorganisation.
                 use std::collections::btree_map::Entry;
                 match lf.tables.entry(owned.clone()) {
-                    Entry::Vacant(_) => Err(LibraryError::NotFound(format!(
-                        "table {owned:?} not found"
-                    ))),
+                    Entry::Vacant(_) => {
+                        Err(LibraryError::NotFound(format!("table {owned:?} not found")))
+                    }
                     Entry::Occupied(occ) if !occ.get().rows.is_empty() => {
                         Err(LibraryError::Conflict(format!(
                             "table {owned:?} is not empty ({} rows)",
@@ -868,10 +868,12 @@ impl LibraryAdapter for LocalGitAdapter {
         // identifiers — keeps round-trips through the TOML key safe and
         // avoids surprising the user with a name they can't see in
         // their file browser.
-        if trimmed
-            .chars()
-            .any(|c| matches!(c, '/' | '\\' | '.' | ':' | '*' | '?' | '"' | '<' | '>' | '|'))
-        {
+        if trimmed.chars().any(|c| {
+            matches!(
+                c,
+                '/' | '\\' | '.' | ':' | '*' | '?' | '"' | '<' | '>' | '|'
+            )
+        }) {
             return Err(LibraryError::Backend(format!(
                 "table name {trimmed:?} contains illegal characters"
             )));
@@ -998,9 +1000,9 @@ impl LibraryAdapter for LocalGitAdapter {
                 })?;
                 let target = row_id.as_uuid().to_string();
                 let before = entry.rows.len();
-                entry
-                    .rows
-                    .retain(|r| r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) != Some(target.as_str()));
+                entry.rows.retain(|r| {
+                    r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) != Some(target.as_str())
+                });
                 if entry.rows.len() == before {
                     return Err(LibraryError::NotFound(format!(
                         "row {row_id} in table {table_owned}"
@@ -1196,8 +1198,8 @@ impl LibraryAdapter for LocalGitAdapter {
 fn commit_to_history_entry(commit: &git2::Commit<'_>) -> HistoryEntry {
     let author = commit.author();
     let secs = author.when().seconds();
-    let time = chrono::DateTime::<chrono::Utc>::from_timestamp(secs, 0)
-        .unwrap_or_else(chrono::Utc::now);
+    let time =
+        chrono::DateTime::<chrono::Utc>::from_timestamp(secs, 0).unwrap_or_else(chrono::Utc::now);
     let raw = commit.message().unwrap_or("");
     let (subject, body) = match raw.find("\n\n") {
         Some(i) => (raw[..i].trim_end().to_string(), raw[i + 2..].to_string()),
@@ -1349,9 +1351,7 @@ fn write_lfs_attributes(root_dir: &Path) -> Result<(), LibraryError> {
          # Written at library-create time when LFS opt-in was selected.\n",
     );
     for ext in LFS_EXTENSIONS {
-        text.push_str(&format!(
-            "*.{ext} filter=lfs diff=lfs merge=lfs -text\n"
-        ));
+        text.push_str(&format!("*.{ext} filter=lfs diff=lfs merge=lfs -text\n"));
     }
     fs::write(&path, text)?;
     Ok(())

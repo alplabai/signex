@@ -297,11 +297,7 @@ impl Signex {
     /// Pick a path under `<root>/symbols/` that doesn't collide with
     /// an existing file on disk OR an in-memory editor tab. Tries
     /// `<base>.snxsym` first, then `<base>-2.snxsym`, `<base>-3`, etc.
-    fn unique_new_symbol_path(
-        &self,
-        root: &std::path::Path,
-        base: &str,
-    ) -> std::path::PathBuf {
+    fn unique_new_symbol_path(&self, root: &std::path::Path, base: &str) -> std::path::PathBuf {
         let dir = root.join("symbols");
         let mut name = format!("{base}.snxsym");
         let mut path = dir.join(&name);
@@ -321,11 +317,7 @@ impl Signex {
     }
 
     /// Counterpart to `unique_new_symbol_path` for footprints.
-    fn unique_new_footprint_path(
-        &self,
-        root: &std::path::Path,
-        base: &str,
-    ) -> std::path::PathBuf {
+    fn unique_new_footprint_path(&self, root: &std::path::Path, base: &str) -> std::path::PathBuf {
         let dir = root.join("footprints");
         let mut name = format!("{base}.snxfpt");
         let mut path = dir.join(&name);
@@ -369,10 +361,7 @@ impl Signex {
                     file.symbols[0].name.clone()
                 }
             });
-        let project_id = self
-            .document_state
-            .project_for_path(&path)
-            .map(|p| p.id);
+        let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
 
         let mut state = crate::app::SymbolEditorState::new(path.clone(), file);
         state.dirty = true;
@@ -407,13 +396,9 @@ impl Signex {
             .file_stem()
             .map(|s| s.to_string_lossy().into_owned())
             .unwrap_or_else(|| primitive.name.clone());
-        let project_id = self
-            .document_state
-            .project_for_path(&path)
-            .map(|p| p.id);
+        let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
 
-        let mut state =
-            crate::app::FootprintEditorState::new(path.clone(), primitive);
+        let mut state = crate::app::FootprintEditorState::new(path.clone(), primitive);
         state.dirty = true;
         self.document_state
             .footprint_editors

@@ -826,10 +826,7 @@ fn close_btn<'a>(theme_id: ThemeId) -> Element<'a, PrefMsg> {
     .padding(0)
     .on_press(PrefMsg::Close)
     .style(move |_: &Theme, status: button::Status| {
-        let hovered = matches!(
-            status,
-            button::Status::Hovered | button::Status::Pressed
-        );
+        let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
         button::Style {
             background: if hovered {
                 Some(Background::Color(MODAL_CLOSE_X_HOVER))
@@ -1154,20 +1151,20 @@ fn content_component_classes<'a>(
 ) -> Element<'a, PrefMsg> {
     let header = column![
         text("Default Component Classes").size(15).color(TEXT_PRI),
-        text("Seeds the class registry of newly-created libraries. \
+        text(
+            "Seeds the class registry of newly-created libraries. \
               Per-library edits live inside each .snxlib's manifest \
               (forthcoming Library Properties pane); this list \
-              controls only what new libraries inherit.")
-            .size(11)
-            .color(TEXT_MUT),
+              controls only what new libraries inherit."
+        )
+        .size(11)
+        .color(TEXT_MUT),
     ]
     .spacing(6);
 
     let column_header = row![
-        container(text("Key").size(11).color(TEXT_MUT))
-            .width(Length::FillPortion(2)),
-        container(text("Label").size(11).color(TEXT_MUT))
-            .width(Length::FillPortion(3)),
+        container(text("Key").size(11).color(TEXT_MUT)).width(Length::FillPortion(2)),
+        container(text("Label").size(11).color(TEXT_MUT)).width(Length::FillPortion(3)),
         container(Space::new()).width(80),
     ]
     .spacing(8)
@@ -1228,46 +1225,46 @@ fn content_component_classes<'a>(
         Column::with_children(rows).spacing(6).into()
     };
 
-    let add_btn = button(
-        container(text("+ Add Class").size(11).color(Color::WHITE)).padding([5, 12]),
-    )
-    .on_press(PrefMsg::ComponentClassAdd)
-    .style(move |_: &Theme, status: button::Status| {
-        let bg = match status {
-            button::Status::Hovered | button::Status::Pressed => BTN_IMPORT_HOV,
-            _ => BTN_IMPORT,
-        };
-        button::Style {
-            background: Some(Background::Color(bg)),
-            text_color: Color::WHITE,
-            border: Border {
-                radius: 3.0.into(),
-                ..Border::default()
-            },
-            ..button::Style::default()
-        }
-    });
+    let add_btn =
+        button(container(text("+ Add Class").size(11).color(Color::WHITE)).padding([5, 12]))
+            .on_press(PrefMsg::ComponentClassAdd)
+            .style(move |_: &Theme, status: button::Status| {
+                let bg = match status {
+                    button::Status::Hovered | button::Status::Pressed => BTN_IMPORT_HOV,
+                    _ => BTN_IMPORT,
+                };
+                button::Style {
+                    background: Some(Background::Color(bg)),
+                    text_color: Color::WHITE,
+                    border: Border {
+                        radius: 3.0.into(),
+                        ..Border::default()
+                    },
+                    ..button::Style::default()
+                }
+            });
 
-    let reset_btn = button(
-        container(text("Reset to Defaults").size(11).color(TEXT_PRI)).padding([5, 12]),
-    )
-    .on_press(PrefMsg::ComponentClassResetDefaults)
-    .style(move |_: &Theme, status: button::Status| {
-        let bg = match status {
-            button::Status::Hovered | button::Status::Pressed => Color::from_rgb(0.22, 0.22, 0.26),
-            _ => Color::from_rgb(0.18, 0.18, 0.21),
-        };
-        button::Style {
-            background: Some(Background::Color(bg)),
-            text_color: TEXT_PRI,
-            border: Border {
-                width: 1.0,
-                color: SEP,
-                radius: 3.0.into(),
-            },
-            ..button::Style::default()
-        }
-    });
+    let reset_btn =
+        button(container(text("Reset to Defaults").size(11).color(TEXT_PRI)).padding([5, 12]))
+            .on_press(PrefMsg::ComponentClassResetDefaults)
+            .style(move |_: &Theme, status: button::Status| {
+                let bg = match status {
+                    button::Status::Hovered | button::Status::Pressed => {
+                        Color::from_rgb(0.22, 0.22, 0.26)
+                    }
+                    _ => Color::from_rgb(0.18, 0.18, 0.21),
+                };
+                button::Style {
+                    background: Some(Background::Color(bg)),
+                    text_color: TEXT_PRI,
+                    border: Border {
+                        width: 1.0,
+                        color: SEP,
+                        radius: 3.0.into(),
+                    },
+                    ..button::Style::default()
+                }
+            });
 
     let toolbar = row![
         add_btn,
