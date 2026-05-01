@@ -85,10 +85,7 @@ impl LibrarySet {
         let key = MountKey::for_adapter(lib.as_ref());
         if self.libs.contains_key(&key) {
             return Err(LibraryError::Conflict(match &key {
-                MountKey::Path(p) => format!(
-                    "library at {} is already mounted",
-                    p.display()
-                ),
+                MountKey::Path(p) => format!("library at {} is already mounted", p.display()),
                 MountKey::Id(id) => format!(
                     "library_id {id} is already mounted — duplicate library_id on \
                      a path-less adapter (DB or in-memory) suggests a misconfig"
@@ -466,7 +463,8 @@ mod tests {
     #[test]
     fn library_paths_skips_pathless_mounts() {
         let mut set = LibrarySet::new();
-        set.mount(Box::new(FakeAdapter::new(Uuid::now_v7()))).unwrap();
+        set.mount(Box::new(FakeAdapter::new(Uuid::now_v7())))
+            .unwrap();
         set.mount(Box::new(
             FakeAdapter::new(Uuid::now_v7()).with_path("/tmp/p/lib.snxlib"),
         ))

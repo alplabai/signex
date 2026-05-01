@@ -70,8 +70,9 @@ impl Signex {
             Message::StatusBar(StatusBarRequest::TogglePanelList) => {
                 self.dispatch_overlay_message(Message::TogglePanelList)
             }
-            Message::StatusBar(StatusBarRequest::OpenPropertiesForSelection) => self
-                .dispatch_overlay_message(Message::Menu(MenuMessage::OpenPropertiesPanel)),
+            Message::StatusBar(StatusBarRequest::OpenPropertiesForSelection) => {
+                self.dispatch_overlay_message(Message::Menu(MenuMessage::OpenPropertiesPanel))
+            }
             Message::CanvasEvent(event) => {
                 // First user gesture on the canvas dismisses the
                 // first-run tour card (UX §4.3). Cheap inline check —

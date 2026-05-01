@@ -539,8 +539,7 @@ impl DockArea {
                         // library subsystem, not in `panels::view_panel`.
                         // Wrap the LibraryMessage in DockMessage::Library
                         // so the dispatcher can route it back out.
-                        crate::library::panel::view(library, &ctx.tokens)
-                            .map(DockMessage::Library)
+                        crate::library::panel::view(library, &ctx.tokens).map(DockMessage::Library)
                     }
                     PanelKind::Components => {
                         // v0.9 Stage 9 Components Panel — three mount
@@ -705,8 +704,7 @@ impl DockArea {
                 crate::library::panel::view(library, &ctx.tokens).map(DockMessage::Library)
             }
             PanelKind::Components => {
-                panels::components_panel::view(library, ctx, &ctx.tokens)
-                    .map(DockMessage::Library)
+                panels::components_panel::view(library, ctx, &ctx.tokens).map(DockMessage::Library)
             }
             _ => panels::view_panel(kind, ctx).map(DockMessage::Panel),
         };

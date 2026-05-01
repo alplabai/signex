@@ -1,9 +1,12 @@
 //! World ↔ screen transform for the schematic canvas.
 //!
-//! Replaces the old `ScreenTransform` type (deleted in Wave 0). Carries
-//! the canvas size, screen-pixel pan offset, and a scalar zoom factor
-//! (`scale` = pixels per world millimetre), plus the conversions every
-//! primitive needs.
+//! Replaces the old `ScreenTransform` type (deleted in Wave 0). Stores
+//! a screen-pixel pan offset and a scalar zoom factor (`scale` = pixels
+//! per world millimetre); canvas size is supplied separately to
+//! [`Viewport::visible_world_bounds`] / [`super::RenderContext`] when
+//! frustum culling needs it. The struct itself is intentionally
+//! lightweight so v0.11 callers' `ScreenTransform { ... }` literals
+//! continue to work unchanged.
 //!
 //! Coordinates: world space is millimetres, Y-down (matching
 //! `signex_types::schematic::Point`); screen space is iced pixels with
@@ -56,6 +59,11 @@ pub struct Viewport {
     /// Screen-pixel pan offset on the Y axis.
     pub offset_y: f32,
     /// Scalar zoom — screen pixels per world millimetre. Must be `> 0`.
+    /// [`Viewport::new`] clamps non-positive values to `1e-6`; direct
+    /// field writes (`viewport.scale = 0.0`) bypass the clamp, so
+    /// callers that mutate this field after construction must validate
+    /// it themselves. The conversions [`Self::world_to_screen`] /
+    /// [`Self::screen_to_world`] don't re-clamp at call time (hot path).
     pub scale: f32,
 }
 

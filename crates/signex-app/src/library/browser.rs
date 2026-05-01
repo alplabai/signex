@@ -120,9 +120,7 @@ pub fn view<'a>(
     let mut visible: Vec<&ComponentRow> = rows
         .iter()
         .filter(|r| lifecycle_filter.allows(r.state))
-        .filter(|r| {
-            class_filter.map_or(true, |cls| r.class.as_str() == cls)
-        })
+        .filter(|r| class_filter.map_or(true, |cls| r.class.as_str() == cls))
         .filter(|r| needle.is_empty() || row_matches_filter(r, &needle))
         .collect();
 
@@ -193,9 +191,9 @@ pub fn view<'a>(
             ..iced::widget::container::Style::default()
         });
     row![table_sidebar, separator, right]
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .into()
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
 }
 
 // ─── Header (tab strip + search) ────────────────────────────────────
@@ -229,12 +227,7 @@ fn view_table_sidebar<'a>(
         .width(Length::Fill);
 
     col = col.push(
-        container(
-            text("Tables")
-                .size(11)
-                .color(muted),
-        )
-        .padding(iced::Padding {
+        container(text("Tables").size(11).color(muted)).padding(iced::Padding {
             top: 0.0,
             right: 8.0,
             bottom: 4.0,
@@ -351,8 +344,14 @@ fn view_table_sidebar<'a>(
                     ..iced::widget::button::Style::default()
                 });
             let mut form = column![
-                row![name_input, Space::new().width(4), cancel, Space::new().width(2), confirm,]
-                    .align_y(iced::Alignment::Center),
+                row![
+                    name_input,
+                    Space::new().width(4),
+                    cancel,
+                    Space::new().width(2),
+                    confirm,
+                ]
+                .align_y(iced::Alignment::Center),
             ]
             .spacing(2)
             .padding([4, 8]);
@@ -419,76 +418,68 @@ fn view_table_sidebar<'a>(
         // resulting Conflict error surfaces in the banner above.
         let library_for_del = lib_pb.clone();
         let table_for_del = (*name).clone();
-        let delete_btn = button(
-            text("×")
-                .size(BROWSER_TEXT_SIZE + 1.0)
-                .color(muted),
-        )
-        .padding([3, 8])
-        .on_press(LibraryMessage::BrowserDeleteTable {
-            library_path: library_for_del,
-            table: table_for_del,
-        })
-        .style(move |_: &Theme, status: iced::widget::button::Status| {
-            let (bg, fg) = match status {
-                iced::widget::button::Status::Hovered
-                | iced::widget::button::Status::Pressed => (
-                    Some(iced::Background::Color(iced::Color::from_rgba(
-                        0.78, 0.22, 0.22, 1.0,
-                    ))),
-                    iced::Color::WHITE,
-                ),
-                _ => (None, muted),
-            };
-            iced::widget::button::Style {
-                background: bg,
-                text_color: fg,
-                border: Border {
-                    width: 0.0,
-                    radius: 2.0.into(),
-                    color: iced::Color::TRANSPARENT,
-                },
-                ..iced::widget::button::Style::default()
-            }
-        });
+        let delete_btn = button(text("×").size(BROWSER_TEXT_SIZE + 1.0).color(muted))
+            .padding([3, 8])
+            .on_press(LibraryMessage::BrowserDeleteTable {
+                library_path: library_for_del,
+                table: table_for_del,
+            })
+            .style(move |_: &Theme, status: iced::widget::button::Status| {
+                let (bg, fg) = match status {
+                    iced::widget::button::Status::Hovered
+                    | iced::widget::button::Status::Pressed => (
+                        Some(iced::Background::Color(iced::Color::from_rgba(
+                            0.78, 0.22, 0.22, 1.0,
+                        ))),
+                        iced::Color::WHITE,
+                    ),
+                    _ => (None, muted),
+                };
+                iced::widget::button::Style {
+                    background: bg,
+                    text_color: fg,
+                    border: Border {
+                        width: 0.0,
+                        radius: 2.0.into(),
+                        color: iced::Color::TRANSPARENT,
+                    },
+                    ..iced::widget::button::Style::default()
+                }
+            });
 
         // ✎ rename trigger — sibling to × so click routing stays
         // unambiguous. Switches the row into the inline rename
         // form above.
         let library_for_rename = lib_pb.clone();
         let table_for_rename = (*name).clone();
-        let rename_btn = button(
-            text("\u{270E}")
-                .size(BROWSER_TEXT_SIZE)
-                .color(muted),
-        )
-        .padding([3, 6])
-        .on_press(LibraryMessage::BrowserBeginRenameTable {
-            library_path: library_for_rename,
-            table: table_for_rename,
-        })
-        .style(move |_: &Theme, status: iced::widget::button::Status| {
-            let (bg, fg) = match status {
-                iced::widget::button::Status::Hovered
-                | iced::widget::button::Status::Pressed => (
-                    Some(iced::Background::Color(iced::Color::from_rgba(
-                        1.0, 1.0, 1.0, 0.10,
-                    ))),
-                    iced::Color::WHITE,
-                ),
-                _ => (None, muted),
-            };
-            iced::widget::button::Style {
-                background: bg,
-                text_color: fg,
-                border: Border {
-                    width: 0.0,
-                    radius: 2.0.into(),
-                    color: iced::Color::TRANSPARENT,
-                },
-                ..iced::widget::button::Style::default()
-            }
-        });
+        let rename_btn = button(text("\u{270E}").size(BROWSER_TEXT_SIZE).color(muted))
+            .padding([3, 6])
+            .on_press(LibraryMessage::BrowserBeginRenameTable {
+                library_path: library_for_rename,
+                table: table_for_rename,
+            })
+            .style(move |_: &Theme, status: iced::widget::button::Status| {
+                let (bg, fg) = match status {
+                    iced::widget::button::Status::Hovered
+                    | iced::widget::button::Status::Pressed => (
+                        Some(iced::Background::Color(iced::Color::from_rgba(
+                            1.0, 1.0, 1.0, 0.10,
+                        ))),
+                        iced::Color::WHITE,
+                    ),
+                    _ => (None, muted),
+                };
+                iced::widget::button::Style {
+                    background: bg,
+                    text_color: fg,
+                    border: Border {
+                        width: 0.0,
+                        radius: 2.0.into(),
+                        color: iced::Color::TRANSPARENT,
+                    },
+                    ..iced::widget::button::Style::default()
+                }
+            });
 
         let row_with_actions = row![row_btn, rename_btn, delete_btn,]
             .align_y(iced::Alignment::Center)
@@ -591,8 +582,7 @@ fn view_table_sidebar<'a>(
             let form = column![
                 key_input,
                 label_input,
-                row![cancel, Space::new().width(2), confirm,]
-                    .align_y(iced::Alignment::Center),
+                row![cancel, Space::new().width(2), confirm,].align_y(iced::Alignment::Center),
             ]
             .spacing(2)
             .padding([4, 8]);
@@ -736,22 +726,26 @@ fn view_table_sidebar<'a>(
                 })
                 .padding(3)
                 .size(BROWSER_TEXT_SIZE);
-            let confirm = button(text("Create").size(BROWSER_TEXT_SIZE).color(iced::Color::WHITE))
-                .padding([3, 8])
-                .on_press(LibraryMessage::BrowserConfirmAddClass {
-                    library_path: library_for_confirm,
-                })
-                .style(|_: &Theme, _| iced::widget::button::Style {
-                    background: Some(iced::Background::Color(iced::Color::from_rgb(
-                        0.18, 0.36, 0.58,
-                    ))),
-                    text_color: iced::Color::WHITE,
-                    border: Border {
-                        radius: 2.0.into(),
-                        ..Border::default()
-                    },
-                    ..iced::widget::button::Style::default()
-                });
+            let confirm = button(
+                text("Create")
+                    .size(BROWSER_TEXT_SIZE)
+                    .color(iced::Color::WHITE),
+            )
+            .padding([3, 8])
+            .on_press(LibraryMessage::BrowserConfirmAddClass {
+                library_path: library_for_confirm,
+            })
+            .style(|_: &Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(iced::Color::from_rgb(
+                    0.18, 0.36, 0.58,
+                ))),
+                text_color: iced::Color::WHITE,
+                border: Border {
+                    radius: 2.0.into(),
+                    ..Border::default()
+                },
+                ..iced::widget::button::Style::default()
+            });
             let cancel = button(text("Cancel").size(BROWSER_TEXT_SIZE).color(text_c))
                 .padding([3, 8])
                 .on_press(LibraryMessage::BrowserCancelAddClass {
@@ -771,8 +765,7 @@ fn view_table_sidebar<'a>(
             let mut form = column![
                 key_input,
                 label_input,
-                row![cancel, Space::new().width(4), confirm,]
-                    .align_y(iced::Alignment::Center),
+                row![cancel, Space::new().width(4), confirm,].align_y(iced::Alignment::Center),
             ]
             .spacing(2)
             .padding([4, 8]);
@@ -834,23 +827,27 @@ fn view_table_sidebar<'a>(
                 })
                 .padding(4)
                 .size(BROWSER_TEXT_SIZE);
-            let confirm = button(text("Create").size(BROWSER_TEXT_SIZE).color(iced::Color::WHITE))
-                .padding([4, 10])
-                .on_press(LibraryMessage::BrowserConfirmAddTable {
-                    library_path: library_for_confirm,
-                })
-                .style(|_: &Theme, _| iced::widget::button::Style {
-                    background: Some(iced::Background::Color(iced::Color::from_rgb(
-                        0.18, 0.36, 0.58,
-                    ))),
-                    text_color: iced::Color::WHITE,
-                    border: Border {
-                        width: 0.0,
-                        radius: 3.0.into(),
-                        color: iced::Color::TRANSPARENT,
-                    },
-                    ..iced::widget::button::Style::default()
-                });
+            let confirm = button(
+                text("Create")
+                    .size(BROWSER_TEXT_SIZE)
+                    .color(iced::Color::WHITE),
+            )
+            .padding([4, 10])
+            .on_press(LibraryMessage::BrowserConfirmAddTable {
+                library_path: library_for_confirm,
+            })
+            .style(|_: &Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(iced::Color::from_rgb(
+                    0.18, 0.36, 0.58,
+                ))),
+                text_color: iced::Color::WHITE,
+                border: Border {
+                    width: 0.0,
+                    radius: 3.0.into(),
+                    color: iced::Color::TRANSPARENT,
+                },
+                ..iced::widget::button::Style::default()
+            });
             let cancel = button(text("Cancel").size(BROWSER_TEXT_SIZE).color(text_c))
                 .padding([4, 10])
                 .on_press(LibraryMessage::BrowserCancelAddTable {
@@ -870,8 +867,7 @@ fn view_table_sidebar<'a>(
                 });
             let mut form = column![
                 name_input,
-                row![cancel, Space::new().width(4), confirm,]
-                    .align_y(iced::Alignment::Center),
+                row![cancel, Space::new().width(4), confirm,].align_y(iced::Alignment::Center),
             ]
             .spacing(4)
             .padding([6, 12]);
@@ -1280,10 +1276,8 @@ fn view_grid<'a>(
             // amber wash so the user spots them at a glance even when
             // they're shown alongside released rows under the
             // `IncludeDeprecated` filter (plan §6).
-            let lifecycle_tint =
-                matches!(r.state, LifecycleState::Deprecated).then(|| {
-                    iced::Background::Color(iced::Color::from_rgba(0.96, 0.80, 0.10, 0.10))
-                });
+            let lifecycle_tint = matches!(r.state, LifecycleState::Deprecated)
+                .then(|| iced::Background::Color(iced::Color::from_rgba(0.96, 0.80, 0.10, 0.10)));
             let bg_color = if is_selected {
                 Some(iced::Background::Color(iced::Color::from_rgba(
                     0.30, 0.55, 0.85, 0.25,

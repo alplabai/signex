@@ -29,7 +29,9 @@ pub struct NetlistOutput {
 
 #[derive(Debug, Error)]
 pub enum NetlistError {
-    #[error("netlist export is not yet available in Signex Community; the Standard-format emitter has moved to the signex-standard-import companion repo (issue #62)")]
+    #[error(
+        "netlist export is not yet available in Signex Community; the Standard-format emitter has moved to the signex-standard-import companion repo (issue #62)"
+    )]
     NotImplemented,
 }
 

@@ -1122,9 +1122,9 @@ impl Signex {
                     Some(ic::icon_dd_wire(tid)),
                     "Schematic",
                     "",
-                    Message::ProjectTreeAction(
-                        crate::app::ProjectTreeAction::AddNewSchematic(target_path),
-                    ),
+                    Message::ProjectTreeAction(crate::app::ProjectTreeAction::AddNewSchematic(
+                        target_path,
+                    )),
                 ));
                 // Component Library is the Altium-style replacement
                 // for the legacy "Schematic Library" row. Wired
@@ -3185,22 +3185,24 @@ impl Signex {
         .padding(iced::Padding::ZERO)
         .size(11)
         .width(Length::Fill)
-        .style(move |_: &iced::Theme, _status: text_input::Status| text_input::Style {
-            // Outer container owns the chrome border + bg, so the
-            // input itself is transparent. Without this the input's
-            // default frame paints on top of the container's
-            // rounded rect and the corners look doubled.
-            background: Background::Color(Color::TRANSPARENT),
-            border: Border {
-                color: Color::TRANSPARENT,
-                width: 0.0,
-                radius: 0.0.into(),
+        .style(
+            move |_: &iced::Theme, _status: text_input::Status| text_input::Style {
+                // Outer container owns the chrome border + bg, so the
+                // input itself is transparent. Without this the input's
+                // default frame paints on top of the container's
+                // rounded rect and the corners look doubled.
+                background: Background::Color(Color::TRANSPARENT),
+                border: Border {
+                    color: Color::TRANSPARENT,
+                    width: 0.0,
+                    radius: 0.0.into(),
+                },
+                icon: text_c,
+                placeholder: muted_c,
+                value: text_c,
+                selection: Color { a: 0.4, ..text_c },
             },
-            icon: text_c,
-            placeholder: muted_c,
-            value: text_c,
-            selection: Color { a: 0.4, ..text_c },
-        });
+        );
         let search_bar: Element<'_, Message> = container(
             row![search_icon, palette_input]
                 .spacing(8)
@@ -4145,7 +4147,11 @@ impl Signex {
         let catalog = build_catalog(self);
         let ranked = rank_results(&catalog, &self.ui_state.command_palette.query);
         let total = ranked.len();
-        let selected = self.ui_state.command_palette.selected_index.min(total.saturating_sub(1));
+        let selected = self
+            .ui_state
+            .command_palette
+            .selected_index
+            .min(total.saturating_sub(1));
 
         let mut rows: Vec<Element<'_, Message>> = Vec::with_capacity(MAX_RESULTS.min(total));
         for (display_idx, &(catalog_idx, _score)) in ranked.iter().take(MAX_RESULTS).enumerate() {
@@ -4173,12 +4179,9 @@ impl Signex {
             ]
             .spacing(2)
             .width(Length::Fill);
-            let row_inner = row![
-                label_col,
-                text(source_label).size(10).color(muted_c),
-            ]
-            .spacing(10)
-            .align_y(Alignment::Center);
+            let row_inner = row![label_col, text(source_label).size(10).color(muted_c),]
+                .spacing(10)
+                .align_y(Alignment::Center);
             let btn = button(row_inner)
                 .width(Length::Fill)
                 .padding([6, 12])
@@ -4195,7 +4198,11 @@ impl Signex {
                         border: Border {
                             width: if is_active { 1.0 } else { 0.0 },
                             radius: 3.0.into(),
-                            color: if is_active { accent_c } else { Color::TRANSPARENT },
+                            color: if is_active {
+                                accent_c
+                            } else {
+                                Color::TRANSPARENT
+                            },
                         },
                         text_color: text_c,
                         ..button::Style::default()
@@ -4205,14 +4212,10 @@ impl Signex {
         }
 
         let body: Element<'_, Message> = if total == 0 {
-            container(
-                text("No results")
-                    .size(12)
-                    .color(muted_c),
-            )
-            .padding([12, 14])
-            .width(Length::Fill)
-            .into()
+            container(text("No results").size(12).color(muted_c))
+                .padding([12, 14])
+                .width(Length::Fill)
+                .into()
         } else {
             let list = column(rows).spacing(2).padding(4);
             scrollable(list).height(Length::Shrink).into()

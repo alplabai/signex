@@ -161,7 +161,7 @@ impl Signex {
                 hidden: false,
             }),
             fields_autoplaced: true,
-           fields_user_placed: false,
+            fields_user_placed: false,
             dnp: false,
             in_bom: true,
             on_board: true,

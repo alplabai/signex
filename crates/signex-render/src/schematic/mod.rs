@@ -103,6 +103,7 @@ pub mod wire;
 
 mod util;
 
+pub use hit_test::HitIndex;
 pub use viewport::Viewport;
 
 // ---------------------------------------------------------------------------
@@ -213,9 +214,12 @@ pub fn instance_transform(symbol: &Symbol, local_point: &Point) -> (f64, f64) {
 
 /// Errors the schematic renderer surfaces at module boundaries.
 ///
-/// Library code returns `Result<_, RenderError>` for fallible entries;
-/// `signex-app` decides whether to surface a Signal-AI diagnostic, log
-/// to the messages panel, or quietly skip the offending element.
+/// Library code returns `Result<_, RenderError>` (or
+/// `Result<_, Vec<RenderError>>` for the partial-render case) so
+/// `signex-app` can surface a Signal-AI diagnostic, log to the
+/// messages panel, or quietly skip the offending element. The
+/// renderer always paints what it can and reports issues alongside
+/// — partial render is preferred over a blank canvas.
 ///
 /// `#[non_exhaustive]` because new variants are expected (e.g. when the
 /// PCB renderer reintroduces itself or when symbol-pinning detects
@@ -224,9 +228,10 @@ pub fn instance_transform(symbol: &Symbol, local_point: &Point) -> (f64, f64) {
 #[non_exhaustive]
 pub enum RenderError {
     /// A `Symbol::lib_id` does not appear in
-    /// `SchematicSheet::lib_symbols`. The renderer skips the symbol;
-    /// this variant exists so consumers can attach context (e.g. an ERC
-    /// violation) without parsing log strings.
+    /// `SchematicSheet::lib_symbols`. The renderer paints a small
+    /// placeholder marker at `symbol.position` so the user can still
+    /// click + delete + relink the broken instance, and reports the
+    /// missing lib_id back to the caller.
     #[error("missing library symbol for lib_id `{0}`")]
     MissingLibSymbol(String),
 
@@ -235,10 +240,6 @@ pub enum RenderError {
     /// hour-glass paths.
     #[error("malformed transform: {0}")]
     MalformedTransform(&'static str),
-
-    /// The snapshot has no sheet to render (caller passed a placeholder).
-    #[error("empty snapshot")]
-    EmptySnapshot,
 }
 
 // ---------------------------------------------------------------------------
@@ -298,9 +299,11 @@ impl RenderInvalidation {
     // alias to "content layer dirty" — the safest, smallest superset
     // that preserves correctness without splitting layers further.
 
-    /// **Deprecated v0.12 alias.** v0.11 per-primitive flag — now
-    /// triggers the full content-layer rebuild.
-    pub const PAPER: Self = Self::FULL;
+    /// **Deprecated v0.12 alias.** v0.11's PAPER flag invalidated only
+    /// the paper / title-block. The new 3-layer cache puts those in
+    /// the *background* layer, so v0.12 maps PAPER → BACKGROUND_ONLY
+    /// (no over-invalidation of content + overlay).
+    pub const PAPER: Self = Self::BACKGROUND_ONLY;
     /// **Deprecated v0.12 alias.** v0.11 per-primitive flag.
     pub const WIRES: Self = Self::CONTENT_ONLY;
     /// **Deprecated v0.12 alias.** v0.11 per-primitive flag.
@@ -328,6 +331,14 @@ impl RenderInvalidation {
     pub const CONTENT_ONLY: Self = Self {
         background: false,
         content: true,
+        overlay: false,
+    };
+
+    /// Background-only invalidation (paper / title-block / page outline).
+    /// Used by [`Self::PAPER`].
+    pub const BACKGROUND_ONLY: Self = Self {
+        background: true,
+        content: false,
         overlay: false,
     };
 
@@ -721,24 +732,29 @@ pub fn draw_power_port_preview(
 /// **everything** — useful for one-shot exports (e.g. the print-preview
 /// or PDF backend) where layered caching isn't needed.
 ///
+/// On `Ok(())`, every primitive painted successfully. On
+/// `Err(Vec<RenderError>)`, the renderer **still painted what it
+/// could** — the frame is partial, never blank — and the returned list
+/// names the elements that were skipped or stubbed. Typical behaviour:
+/// a symbol whose `lib_id` is missing from the sheet renders as a small
+/// placeholder marker at its position, and one
+/// [`RenderError::MissingLibSymbol`] is appended to the result.
+///
 /// # Example
 ///
 /// ```ignore
 /// let snapshot = SchematicSnapshot::new(&sheet, &theme);
-/// schematic::render(frame, &snapshot, &viewport)?;
+/// if let Err(errors) = schematic::render(frame, &snapshot, &viewport) {
+///     for e in errors { tracing::warn!("render: {e}"); }
+/// }
 /// ```
 pub fn render(
     frame: &mut iced::widget::canvas::Frame,
     snapshot: &SchematicSnapshot<'_>,
     viewport: &Viewport,
-) -> Result<(), RenderError> {
-    if snapshot.sheet.symbols.is_empty()
-        && snapshot.sheet.wires.is_empty()
-        && snapshot.sheet.labels.is_empty()
-    {
-        // Empty sheet — nothing to paint, but not an error.
-    }
+) -> Result<(), Vec<RenderError>> {
     let ctx = RenderContext::new(snapshot, viewport);
+    let mut errors: Vec<RenderError> = Vec::new();
 
     // Render order — bottom layer first. Hit-test reverses this so
     // the topmost item wins under a click. See
@@ -759,10 +775,10 @@ pub fn render(
         match snapshot.lib_symbol(&s.lib_id) {
             Some(lib) => symbol::draw_symbol(frame, s, lib, &ctx),
             None => {
-                // Surface the missing lib symbol but don't abort the
-                // whole frame — partial render is preferable to a
-                // blank canvas.
-                return Err(RenderError::MissingLibSymbol(s.lib_id.clone()));
+                // Paint a placeholder so the user can still see + click
+                // the broken instance and fix the lib_id.
+                draw_missing_symbol_placeholder(frame, s, &ctx);
+                errors.push(RenderError::MissingLibSymbol(s.lib_id.clone()));
             }
         }
     }
@@ -781,14 +797,49 @@ pub fn render(
 
     selection::render_selection_overlay(frame, snapshot, viewport);
 
-    Ok(())
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors)
+    }
+}
+
+/// Paint a small "broken-symbol" marker at `symbol.position`. Used when
+/// a placed symbol's `lib_id` is missing from the sheet's `lib_symbols`
+/// map so the user can still click + delete + relink the instance.
+fn draw_missing_symbol_placeholder(
+    frame: &mut iced::widget::canvas::Frame,
+    symbol: &Symbol,
+    ctx: &RenderContext<'_>,
+) {
+    use iced::widget::canvas::{Path, Stroke};
+    let centre = ctx.viewport.world_to_screen(symbol.position);
+    if !centre.x.is_finite() || !centre.y.is_finite() {
+        return;
+    }
+    // 2.54 mm half-size — same as the `Symbol::content_bounds` fallback
+    // box in `signex-types::SchematicSheet::content_bounds`.
+    let half_px = (2.54 * ctx.viewport.zoom_px_per_mm()).max(8.0) as f32;
+    let colour = util::iced_color(&ctx.theme().no_connect);
+    let stroke = Stroke::default().with_width(1.5).with_color(colour);
+    let path = Path::new(|builder| {
+        builder.move_to(iced::Point::new(centre.x - half_px, centre.y - half_px));
+        builder.line_to(iced::Point::new(centre.x + half_px, centre.y - half_px));
+        builder.line_to(iced::Point::new(centre.x + half_px, centre.y + half_px));
+        builder.line_to(iced::Point::new(centre.x - half_px, centre.y + half_px));
+        builder.close();
+        // Diagonal X across the box.
+        builder.move_to(iced::Point::new(centre.x - half_px, centre.y - half_px));
+        builder.line_to(iced::Point::new(centre.x + half_px, centre.y + half_px));
+        builder.move_to(iced::Point::new(centre.x + half_px, centre.y - half_px));
+        builder.line_to(iced::Point::new(centre.x - half_px, centre.y + half_px));
+    });
+    frame.stroke(&path, stroke);
 }
 
 // ---------------------------------------------------------------------------
 // Public hit-test entry
 // ---------------------------------------------------------------------------
-
-pub use hit_test::HitIndex;
 
 /// Single-click hit test. Returns the topmost item under `point_world`
 /// per the render-order Z-rule (latest-rendered = topmost; see

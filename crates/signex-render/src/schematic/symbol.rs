@@ -13,7 +13,7 @@ use signex_types::schematic::{
 };
 
 use super::field_style::field_effective_style;
-use super::pin::draw_pin;
+use super::pin::{PinDrawHints, draw_pin_with_hints};
 use super::text::{draw_rotated_text, mm_to_text_pixels};
 use super::util::{aabbs_overlap, iced_color, point_finite};
 use super::{RenderContext, SymbolTransform};
@@ -48,7 +48,18 @@ pub fn draw_symbol(frame: &mut Frame, symbol: &Symbol, lib: &LibSymbol, ctx: &Re
         draw_graphic(frame, &lib_graphic.graphic, &transform, selected, ctx);
     }
 
-    // 2. Pins.
+    // 2. Pins. Bulk visibility / offset toggles flow from the parent
+    //    LibSymbol so per-pin defaults can be overridden at the symbol
+    //    level (e.g. resistors have `show_pin_names = false`).
+    let pin_hints = PinDrawHints {
+        show_pin_names: lib.show_pin_names,
+        show_pin_numbers: lib.show_pin_numbers,
+        pin_name_offset_mm: if lib.pin_name_offset > 0.0 {
+            lib.pin_name_offset
+        } else {
+            signex_types::schematic::PIN_NAME_OFFSET_MM
+        },
+    };
     for lib_pin in &lib.pins {
         if lib_pin.unit != 0 && lib_pin.unit != symbol.unit {
             continue;
@@ -56,7 +67,7 @@ pub fn draw_symbol(frame: &mut Frame, symbol: &Symbol, lib: &LibSymbol, ctx: &Re
         if lib_pin.body_style != 0 && lib_pin.body_style != 1 {
             continue;
         }
-        draw_pin(frame, &lib_pin.pin, &transform, ctx);
+        draw_pin_with_hints(frame, &lib_pin.pin, &transform, &pin_hints, ctx);
     }
 
     // 3. Visible fields (reference + value).
@@ -440,6 +451,83 @@ fn body_stroke<'a>(
     Stroke::default().with_width(px).with_color(colour)
 }
 
+/// World-space AABB enclosing the symbol's *reference* field text, or
+/// `None` when the symbol has no `ref_text` slot. Used by hit-test and
+/// the selection overlay so a SymbolRefField selection paints an
+/// outline around just the field.
+pub(crate) fn ref_field_aabb(symbol: &Symbol) -> Option<Aabb> {
+    let prop = symbol.ref_text.as_ref()?;
+    if prop.hidden {
+        return None;
+    }
+    Some(field_text_aabb(symbol, &symbol.reference, prop))
+}
+
+/// World-space AABB for the symbol's *value* field text. See
+/// [`ref_field_aabb`] for the convention.
+pub(crate) fn val_field_aabb(symbol: &Symbol) -> Option<Aabb> {
+    let prop = symbol.val_text.as_ref()?;
+    if prop.hidden {
+        return None;
+    }
+    Some(field_text_aabb(symbol, &symbol.value, prop))
+}
+
+/// Coarse world-space AABB for an arbitrary field on the symbol.
+fn field_text_aabb(symbol: &Symbol, text: &str, prop: &signex_types::schematic::TextProp) -> Aabb {
+    let transform = SymbolTransform::from_symbol(symbol);
+    let world_pos = transform.apply(prop.position);
+    let mm = if prop.font_size > 0.0 {
+        prop.font_size
+    } else {
+        signex_types::schematic::SCHEMATIC_TEXT_MM
+    };
+    let glyph_w_mm = 0.6 * mm * text.chars().count().max(1) as f64;
+    let glyph_h_mm = mm;
+    let folded_rot = transform.apply_angle(prop.rotation);
+    super::text::approx_text_aabb(world_pos, glyph_w_mm, glyph_h_mm, folded_rot)
+}
+
+/// Fallback AABB for a placed symbol whose `lib_id` is missing from
+/// the sheet's `lib_symbols` map. Used by hit-test + the
+/// missing-symbol placeholder painter so the user can still click on a
+/// broken instance and fix it.
+pub(crate) fn missing_symbol_aabb(symbol: &Symbol) -> Aabb {
+    let half = signex_types::schematic::GRID_MM;
+    Aabb::new(
+        symbol.position.x - half,
+        symbol.position.y - half,
+        symbol.position.x + half,
+        symbol.position.y + half,
+    )
+}
+
+/// World-space AABB of a hierarchical child sheet. The sheet renders
+/// as a rectangle anchored at `position` with `size = (width, height)`.
+pub(crate) fn child_sheet_aabb(cs: &signex_types::schematic::ChildSheet) -> Aabb {
+    Aabb::new(
+        cs.position.x,
+        cs.position.y,
+        cs.position.x + cs.size.0,
+        cs.position.y + cs.size.1,
+    )
+}
+
+/// World-space AABB of a single sheet pin. Pins live in
+/// `child_sheet.pins[]`; their position is already in world space (the
+/// sheet symbol's `position` is the same coordinate system). Returns a
+/// small box around the pin so hit-test + selection overlay have a
+/// clickable target.
+pub(crate) fn sheet_pin_aabb(pin: &signex_types::schematic::SheetPin) -> Aabb {
+    let half = signex_types::schematic::GRID_MM * 0.5;
+    Aabb::new(
+        pin.position.x - half,
+        pin.position.y - half,
+        pin.position.x + half,
+        pin.position.y + half,
+    )
+}
+
 /// Coarse world-space AABB enclosing a placed symbol (body graphics +
 /// pin endpoints). Used by frustum culling and Wave 4 hit-test.
 pub(crate) fn symbol_aabb(symbol: &Symbol, lib: &LibSymbol) -> Aabb {
@@ -628,6 +716,49 @@ mod tests {
         let bbox = symbol_aabb(&sym, &lib);
         // Empty lib (no unit-1 graphics) → fallback ±1.27 mm box.
         assert!(bbox.width() < 10.0);
+    }
+
+    #[test]
+    fn missing_symbol_aabb_is_finite_grid_size_box() {
+        // H-3 regression: a placed symbol with a missing lib_id used
+        // to be skipped from the hit-index entirely. Now it returns a
+        // grid-sized fallback box centred on the symbol's position so
+        // the user can still click + delete + relink the broken
+        // instance.
+        let mut sym = placed(0.0);
+        sym.position = Point::new(10.0, -5.0);
+        let bbox = missing_symbol_aabb(&sym);
+        assert!(bbox.contains(10.0, -5.0));
+        // 2 × GRID_MM = 5.08 mm — small enough to be visibly a
+        // placeholder box, large enough to be reliably clickable.
+        assert!(bbox.width() > 0.0 && bbox.width() <= 6.0);
+    }
+
+    #[test]
+    fn ref_field_aabb_returns_none_when_no_ref_text_slot() {
+        let sym = placed(0.0);
+        // Default `placed()` builds a symbol without ref_text/val_text.
+        assert!(ref_field_aabb(&sym).is_none());
+        assert!(val_field_aabb(&sym).is_none());
+    }
+
+    #[test]
+    fn ref_field_aabb_includes_field_position_when_present() {
+        // Edge case: stored field at +5, +0; the aabb must contain
+        // that anchor after the symbol transform folds.
+        let mut sym = placed(0.0);
+        sym.ref_text = Some(signex_types::schematic::TextProp {
+            position: Point::new(5.0, 0.0),
+            rotation: 0.0,
+            font_size: 1.27,
+            justify_h: signex_types::schematic::HAlign::Left,
+            justify_v: signex_types::schematic::VAlign::Center,
+            hidden: false,
+        });
+        sym.reference = "R1".to_string();
+        let bbox = ref_field_aabb(&sym).expect("ref text slot is set");
+        // World position: Y-up library negation → (5, 0) at identity.
+        assert!(bbox.contains(5.0, 0.0));
     }
 
     #[test]

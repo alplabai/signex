@@ -66,7 +66,9 @@ pub enum CommandAction {
     /// Focus a placed symbol on the canvas by reference designator.
     /// Resolution to world coords happens in the dispatcher because
     /// only it has the engine reference.
-    FocusSymbol { reference: String },
+    FocusSymbol {
+        reference: String,
+    },
 }
 
 /// Build the full catalog from the live app state. Cheap: O(menu) +
@@ -246,7 +248,10 @@ pub fn fuzzy_score(query: &str, target: &str) -> Option<i32> {
             } else {
                 let prev = t_orig[i - 1];
                 prev.is_whitespace()
-                    || matches!(prev, '_' | '-' | '/' | '\\' | '.' | ':' | '(' | ')' | '[' | ']')
+                    || matches!(
+                        prev,
+                        '_' | '-' | '/' | '\\' | '.' | ':' | '(' | ')' | '[' | ']'
+                    )
                     || (prev.is_lowercase() && t_orig[i].is_uppercase())
             };
             if at_word_boundary {
@@ -328,7 +333,10 @@ fn menu_command_table() -> &'static [(&'static str, MenuMessage)] {
         ("Annotate Schematics", MenuMessage::Annotate),
         ("Annotate Quietly", MenuMessage::AnnotateQuietly),
         ("Reset Annotations", MenuMessage::AnnotateReset),
-        ("Reset Duplicate Annotations", MenuMessage::AnnotateResetDuplicates),
+        (
+            "Reset Duplicate Annotations",
+            MenuMessage::AnnotateResetDuplicates,
+        ),
         ("Force Annotate All", MenuMessage::AnnotateForceAll),
         ("Back-Annotate from PCB", MenuMessage::AnnotateBack),
         ("Annotate Sheets", MenuMessage::AnnotateSheets),
@@ -375,7 +383,10 @@ mod tests {
     fn contiguous_outscores_split() {
         let cont = fuzzy_score("save", "Save File").unwrap();
         let split = fuzzy_score("save", "Set Animation Variant Edit").unwrap();
-        assert!(cont > split, "contiguous should beat split: {cont} vs {split}");
+        assert!(
+            cont > split,
+            "contiguous should beat split: {cont} vs {split}"
+        );
     }
 
     #[test]

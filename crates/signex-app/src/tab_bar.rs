@@ -122,14 +122,12 @@ pub fn view<'a>(
             ..iced::widget::container::Style::default()
         });
     container(iced::widget::column![
-        container(bar)
-            .width(Length::Fill)
-            .padding(iced::Padding {
-                top: 2.0,
-                right: 6.0,
-                bottom: 0.0,
-                left: 6.0,
-            }),
+        container(bar).width(Length::Fill).padding(iced::Padding {
+            top: 2.0,
+            right: 6.0,
+            bottom: 0.0,
+            left: 6.0,
+        }),
         baseline,
     ])
     .width(Length::Fill)
@@ -143,11 +141,7 @@ pub fn view<'a>(
 /// like floating labels — the strip showed through). Active uses
 /// `tokens.hover` at full alpha; inactive 0.35× the same; drag
 /// tints with theme accent at 22 %.
-fn pill_fill(
-    tokens: &ThemeTokens,
-    is_active: bool,
-    is_dragging: bool,
-) -> iced::Color {
+fn pill_fill(tokens: &ThemeTokens, is_active: bool, is_dragging: bool) -> iced::Color {
     let tab_active = styles::ti(tokens.hover);
     let accent = styles::ti(tokens.accent);
     if is_dragging {

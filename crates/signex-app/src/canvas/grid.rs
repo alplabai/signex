@@ -161,10 +161,8 @@ pub fn draw_grid(
             if wx >= 0.0 {
                 let sx = camera.world_to_screen(Point::new(wx, 0.0), bounds).x;
                 if sx >= 0.0 && sx <= bounds.width && line_y_top < line_y_bot {
-                    let line = canvas::Path::line(
-                        Point::new(sx, line_y_top),
-                        Point::new(sx, line_y_bot),
-                    );
+                    let line =
+                        canvas::Path::line(Point::new(sx, line_y_top), Point::new(sx, line_y_bot));
                     frame.stroke(&line, minor_stroke);
                 }
             }
@@ -265,7 +263,8 @@ pub fn draw_grid(
     while my <= wy_max {
         let sy = camera.world_to_screen(Point::new(0.0, my), bounds).y;
         if sy >= 0.0 && sy <= bounds.height && line_x_left < line_x_right {
-            let line = canvas::Path::line(Point::new(line_x_left, sy), Point::new(line_x_right, sy));
+            let line =
+                canvas::Path::line(Point::new(line_x_left, sy), Point::new(line_x_right, sy));
             frame.stroke(&line, stroke);
         }
         my += major_mm;

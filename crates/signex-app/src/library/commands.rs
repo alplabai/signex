@@ -155,14 +155,13 @@ pub fn create_library_at(
     // tree never showed the new library and the user had to delete
     // the orphan folder manually.
     let project_dir = PathBuf::from(&project.dir);
-    let (entry_path, entry_kind) =
-        if !project_dir.as_os_str().is_empty()
-            && let Ok(rel) = lib_path.strip_prefix(&project_dir)
-        {
-            (rel.to_path_buf(), LibraryEntryKind::ProjectLocal)
-        } else {
-            (lib_path.clone(), LibraryEntryKind::Shared)
-        };
+    let (entry_path, entry_kind) = if !project_dir.as_os_str().is_empty()
+        && let Ok(rel) = lib_path.strip_prefix(&project_dir)
+    {
+        (rel.to_path_buf(), LibraryEntryKind::ProjectLocal)
+    } else {
+        (lib_path.clone(), LibraryEntryKind::Shared)
+    };
 
     project.libraries.push(LibraryEntry {
         path: entry_path,

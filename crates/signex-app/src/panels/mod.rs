@@ -1639,10 +1639,7 @@ pub fn build_project_tree(ctx: &PanelContext) -> Vec<TreeNode> {
         return vec![];
     }
 
-    ctx.projects
-        .iter()
-        .map(project_root_node)
-        .collect()
+    ctx.projects.iter().map(project_root_node).collect()
 }
 
 /// One project root — "Source Documents" / "Libraries" / "Settings".
@@ -2605,19 +2602,10 @@ fn view_symbol_editor_properties<'a>(
                 ),
                 ("Passive", signex_library::PinDirection::Passive),
                 ("HiZ", signex_library::PinDirection::Tristate),
-                (
-                    "Open Emitter",
-                    signex_library::PinDirection::OpenEmitter,
-                ),
+                ("Open Emitter", signex_library::PinDirection::OpenEmitter),
                 ("Power", signex_library::PinDirection::Power),
-                (
-                    "Not Connected",
-                    signex_library::PinDirection::NotConnected,
-                ),
-                (
-                    "Unspecified",
-                    signex_library::PinDirection::Unspecified,
-                ),
+                ("Not Connected", signex_library::PinDirection::NotConnected),
+                ("Unspecified", signex_library::PinDirection::Unspecified),
             ];
             let current_label = electrical_options
                 .iter()
@@ -2628,11 +2616,10 @@ fn view_symbol_editor_properties<'a>(
                 .iter()
                 .map(|(label, _)| label.to_string())
                 .collect();
-            let labels_for_msg: Vec<(String, signex_library::PinDirection)> =
-                electrical_options
-                    .iter()
-                    .map(|(label, v)| (label.to_string(), *v))
-                    .collect();
+            let labels_for_msg: Vec<(String, signex_library::PinDirection)> = electrical_options
+                .iter()
+                .map(|(label, v)| (label.to_string(), *v))
+                .collect();
             let electrical_picker =
                 iced::widget::pick_list(labels, Some(current_label), move |chosen: String| {
                     let value = labels_for_msg
@@ -6789,10 +6776,7 @@ fn view_child_sheet_properties<'a>(
         "{:.2}, {:.2}",
         child_sheet.position.x, child_sheet.position.y
     );
-    let size = format!(
-        "{:.1} x {:.1} mm",
-        child_sheet.size.0, child_sheet.size.1
-    );
+    let size = format!("{:.1} x {:.1} mm", child_sheet.size.0, child_sheet.size.1);
 
     let stroke_width = child_sheet.stroke_width;
     let stroke_color = child_sheet.stroke_color;
@@ -6948,7 +6932,9 @@ fn child_sheet_color_row<'a>(
     let swatch_button = iced::widget::button(
         row![
             swatch,
-            text(label_text).size(10).color(Color::from_rgb(0.90, 0.90, 0.92)),
+            text(label_text)
+                .size(10)
+                .color(Color::from_rgb(0.90, 0.90, 0.92)),
         ]
         .spacing(8)
         .align_y(iced::Alignment::Center),
@@ -7006,18 +6992,18 @@ fn child_sheet_color_row<'a>(
 
     // ── Inline preset palette (rendered below the row, full width) ──
     let presets: [(&str, [u8; 3]); 12] = [
-        ("Black",       [0x00, 0x00, 0x00]),
-        ("Dark Gray",   [0x40, 0x40, 0x40]),
-        ("Gray",        [0x80, 0x80, 0x80]),
-        ("White",       [0xFF, 0xFF, 0xFF]),
-        ("Red",         [0xC0, 0x39, 0x2B]),
-        ("Orange",      [0xE6, 0x7E, 0x22]),
-        ("Yellow",      [0xF1, 0xC4, 0x0F]),
-        ("Olive",       [0xB4, 0xA5, 0x58]),
-        ("Green",       [0x27, 0xAE, 0x60]),
-        ("Teal",        [0x16, 0xA0, 0x85]),
-        ("Blue",        [0x29, 0x80, 0xB9]),
-        ("Purple",      [0x8E, 0x44, 0xAD]),
+        ("Black", [0x00, 0x00, 0x00]),
+        ("Dark Gray", [0x40, 0x40, 0x40]),
+        ("Gray", [0x80, 0x80, 0x80]),
+        ("White", [0xFF, 0xFF, 0xFF]),
+        ("Red", [0xC0, 0x39, 0x2B]),
+        ("Orange", [0xE6, 0x7E, 0x22]),
+        ("Yellow", [0xF1, 0xC4, 0x0F]),
+        ("Olive", [0xB4, 0xA5, 0x58]),
+        ("Green", [0x27, 0xAE, 0x60]),
+        ("Teal", [0x16, 0xA0, 0x85]),
+        ("Blue", [0x29, 0x80, 0xB9]),
+        ("Purple", [0x8E, 0x44, 0xAD]),
     ];
 
     // 6 columns × 2 rows of preset swatches; each cell stretches
@@ -7124,18 +7110,20 @@ fn child_sheet_stroke_width_row<'a>(
         .width(120)
         .on_input(move |s| PanelMsg::ChildSheetStrokeWidthTyping(sheet_id, s))
         .on_submit(PanelMsg::CommitChildSheetStrokeWidth(sheet_id))
-        .style(move |_theme: &Theme, _status| iced::widget::text_input::Style {
-            background: Background::Color(Color::from_rgba(0.07, 0.07, 0.08, 1.0)),
-            border: Border {
-                width: 1.0,
-                color: border_c,
-                radius: 2.0.into(),
+        .style(
+            move |_theme: &Theme, _status| iced::widget::text_input::Style {
+                background: Background::Color(Color::from_rgba(0.07, 0.07, 0.08, 1.0)),
+                border: Border {
+                    width: 1.0,
+                    color: border_c,
+                    radius: 2.0.into(),
+                },
+                icon: Color::from_rgba(0.7, 0.7, 0.7, 1.0),
+                placeholder: Color::from_rgba(0.5, 0.5, 0.5, 1.0),
+                value: Color::from_rgb(0.95, 0.95, 0.96),
+                selection: Color::from_rgba(0.24, 0.62, 0.97, 0.4),
             },
-            icon: Color::from_rgba(0.7, 0.7, 0.7, 1.0),
-            placeholder: Color::from_rgba(0.5, 0.5, 0.5, 1.0),
-            value: Color::from_rgb(0.95, 0.95, 0.96),
-            selection: Color::from_rgba(0.24, 0.62, 0.97, 0.4),
-        });
+        );
 
     container(
         row![

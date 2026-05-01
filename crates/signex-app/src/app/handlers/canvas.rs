@@ -321,18 +321,11 @@ impl Signex {
                     .active_canvas()
                     .active_snapshot()
                     .and_then(|snap| {
-                        signex_render::schematic::hit_test::hit_test(
-                            snap,
-                            x as f64,
-                            y as f64,
-                        )
+                        signex_render::schematic::hit_test::hit_test(snap, x as f64, y as f64)
                     })
                     .and_then(|hit| {
-                        matches!(
-                            hit.kind,
-                            signex_types::schematic::SelectedKind::Symbol
-                        )
-                        .then_some(hit.uuid)
+                        matches!(hit.kind, signex_types::schematic::SelectedKind::Symbol)
+                            .then_some(hit.uuid)
                     });
                 if hover_uuid != self.interaction_state.hover_symbol_uuid {
                     self.interaction_state.hover_symbol_uuid = hover_uuid;
@@ -687,7 +680,8 @@ impl Signex {
                 // IDEs (Escape cancels, click elsewhere confirms).
                 if let Some(state) = self.interaction_state.editing_text.take() {
                     if state.text != state.original_text {
-                        let stored = signex_render::schematic::text::escape_for_standard(&state.text);
+                        let stored =
+                            signex_render::schematic::text::escape_for_standard(&state.text);
                         let cmd = match state.kind {
                             signex_types::schematic::SelectedKind::Label => {
                                 Some(signex_engine::Command::UpdateText {
@@ -810,7 +804,7 @@ impl Signex {
                                     hidden: false,
                                 }),
                                 fields_autoplaced: true,
-                               fields_user_placed: false,
+                                fields_user_placed: false,
                                 dnp: false,
                                 in_bom: false,
                                 on_board: true,

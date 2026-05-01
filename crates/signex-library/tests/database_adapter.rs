@@ -21,8 +21,7 @@ use signex_library::lifecycle::LifecycleState;
 use signex_library::manufacturer::ManufacturerPart;
 use signex_library::param::ParamMap;
 use signex_library::primitive::{
-    PinDirection, PinOrientation, PrimitiveKind, PrimitiveRef, SimKind, SimModel, Symbol,
-    SymbolPin,
+    PinDirection, PinOrientation, PrimitiveKind, PrimitiveRef, SimKind, SimModel, Symbol, SymbolPin,
 };
 use uuid::Uuid;
 use wiremock::matchers::{header, method, path, query_param};

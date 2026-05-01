@@ -360,7 +360,11 @@ pub(crate) fn row_to_record(row: &ComponentRow) -> Result<Vec<String>, LibraryEr
         // are the back-compat defaults for rows that haven't been
         // touched since the bump-on-save convention landed.
         row.version.clone(),
-        if row.released { "true".into() } else { "false".into() },
+        if row.released {
+            "true".into()
+        } else {
+            "false".into()
+        },
         row.symbol_version.clone(),
         row.footprint_version.clone(),
         row.sim_version.clone(),

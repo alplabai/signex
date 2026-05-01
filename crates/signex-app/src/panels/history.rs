@@ -91,12 +91,7 @@ pub fn view_history<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             border,
             panel_bg,
         ),
-        HistoryRenderMode::Loading => message_card(
-            "Loading history…",
-            muted,
-            border,
-            panel_bg,
-        ),
+        HistoryRenderMode::Loading => message_card("Loading history…", muted, border, panel_bg),
         HistoryRenderMode::Ready => {
             let mut col: Column<'a, PanelMsg> = column![].spacing(6);
 
@@ -121,7 +116,10 @@ pub fn view_history<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     };
 
     let body = container(inner).padding(8).width(Length::Fill);
-    scrollable(body).width(Length::Fill).height(Length::Fill).into()
+    scrollable(body)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
 }
 
 /// Single muted card used by the empty/no-repo/loading states.

@@ -316,10 +316,7 @@ impl Signex {
             signex_erc::RuleKind::UnusedPin => {
                 let nc = signex_types::schematic::NoConnect {
                     uuid: uuid::Uuid::new_v4(),
-                    position: signex_types::schematic::Point::new(
-                        target.world_x,
-                        target.world_y,
-                    ),
+                    position: signex_types::schematic::Point::new(target.world_x, target.world_y),
                 };
                 self.apply_engine_command(
                     signex_engine::Command::PlaceNoConnect { no_connect: nc },
@@ -562,8 +559,7 @@ impl Signex {
                 ));
                 continue;
             };
-            let Ok(sheet) =
-                signex_types::format::SnxSchematic::parse(&text).map(|snx| snx.sheet)
+            let Ok(sheet) = signex_types::format::SnxSchematic::parse(&text).map(|snx| snx.sheet)
             else {
                 crate::diagnostics::log_info(format!(
                     "Annotate: failed to parse unopened sheet {}",

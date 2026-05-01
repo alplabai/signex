@@ -6,9 +6,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use signex_bom::{
-    BomComponent, BomContext, BomEngineOptions, build_table, validate_table,
-};
+use signex_bom::{BomComponent, BomContext, BomEngineOptions, build_table, validate_table};
 use thiserror::Error;
 
 use crate::{ExportContext, Exporter};
@@ -19,11 +17,11 @@ mod xlsx;
 
 pub use csv::emit as csv_emit;
 pub use html::emit as html_emit;
-pub use xlsx::emit as xlsx_emit;
 pub use signex_bom::{
     BomGrouping, BomIssueSeverity, BomMetadata, BomRow, BomRule, BomRuleOptions, BomTable,
     BomValidationIssue, BomValidationReport,
 };
+pub use xlsx::emit as xlsx_emit;
 
 // ============================================================================
 // Public API
@@ -491,7 +489,9 @@ mod tests {
     #[test]
     fn variant_fitted_prefers_property_override() {
         let mut symbol = test_symbol();
-        symbol.fields.insert("Fitted".to_string(), "yes".to_string());
+        symbol
+            .fields
+            .insert("Fitted".to_string(), "yes".to_string());
 
         let mut fitted_property = SchematicProperty {
             key: "Fitted".to_string(),
@@ -614,7 +614,10 @@ mod tests {
 
     #[test]
     fn bom_format_resolves_from_output_path() {
-        assert_eq!(BomFormat::from_output_path(Path::new("bom.csv")), BomFormat::Csv);
+        assert_eq!(
+            BomFormat::from_output_path(Path::new("bom.csv")),
+            BomFormat::Csv
+        );
         assert_eq!(
             BomFormat::from_output_path(Path::new("bom.xlsx")),
             BomFormat::Xlsx
@@ -631,6 +634,9 @@ mod tests {
             BomFormat::from_output_path(Path::new("bom.unknown")),
             BomFormat::Csv
         );
-        assert_eq!(BomFormat::from_output_path(Path::new("bom")), BomFormat::Csv);
+        assert_eq!(
+            BomFormat::from_output_path(Path::new("bom")),
+            BomFormat::Csv
+        );
     }
 }

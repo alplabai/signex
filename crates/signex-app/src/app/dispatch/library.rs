@@ -160,7 +160,10 @@ impl Signex {
                 }
                 Task::none()
             }
-            LibraryMessage::BrowserSetNewTableName { library_path, value } => {
+            LibraryMessage::BrowserSetNewTableName {
+                library_path,
+                value,
+            } => {
                 if let Some(state) = self.library.library_browsers.get_mut(&library_path)
                     && let Some(draft) = state.adding_table.as_mut()
                 {
@@ -175,7 +178,10 @@ impl Signex {
                 }
                 Task::none()
             }
-            LibraryMessage::BrowserDeleteTable { library_path, table } => {
+            LibraryMessage::BrowserDeleteTable {
+                library_path,
+                table,
+            } => {
                 let library_id = match self.library.library_at(&library_path) {
                     Some(lib) => lib.library_id,
                     None => return Task::none(),
@@ -214,14 +220,20 @@ impl Signex {
                 }
                 Task::none()
             }
-            LibraryMessage::BrowserBeginRenameTable { library_path, table } => {
+            LibraryMessage::BrowserBeginRenameTable {
+                library_path,
+                table,
+            } => {
                 if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
                     s.renaming_table = Some((table.clone(), table));
                     s.rename_error = None;
                 }
                 Task::none()
             }
-            LibraryMessage::BrowserSetRenameName { library_path, value } => {
+            LibraryMessage::BrowserSetRenameName {
+                library_path,
+                value,
+            } => {
                 if let Some(s) = self.library.library_browsers.get_mut(&library_path)
                     && let Some((_, buf)) = s.renaming_table.as_mut()
                 {
@@ -244,7 +256,10 @@ impl Signex {
                 }
                 Task::none()
             }
-            LibraryMessage::BrowserSetNewClassKey { library_path, value } => {
+            LibraryMessage::BrowserSetNewClassKey {
+                library_path,
+                value,
+            } => {
                 if let Some(s) = self.library.library_browsers.get_mut(&library_path)
                     && let Some(d) = s.adding_class.as_mut()
                 {
@@ -253,7 +268,10 @@ impl Signex {
                 }
                 Task::none()
             }
-            LibraryMessage::BrowserSetNewClassLabel { library_path, value } => {
+            LibraryMessage::BrowserSetNewClassLabel {
+                library_path,
+                value,
+            } => {
                 if let Some(s) = self.library.library_browsers.get_mut(&library_path)
                     && let Some(d) = s.adding_class.as_mut()
                 {
@@ -357,7 +375,10 @@ impl Signex {
                 }
                 Task::none()
             }
-            LibraryMessage::BrowserSetRenameClassKey { library_path, value } => {
+            LibraryMessage::BrowserSetRenameClassKey {
+                library_path,
+                value,
+            } => {
                 if let Some(s) = self.library.library_browsers.get_mut(&library_path)
                     && let Some((_, k, _)) = s.renaming_class.as_mut()
                 {
@@ -366,7 +387,10 @@ impl Signex {
                 }
                 Task::none()
             }
-            LibraryMessage::BrowserSetRenameClassLabel { library_path, value } => {
+            LibraryMessage::BrowserSetRenameClassLabel {
+                library_path,
+                value,
+            } => {
                 if let Some(s) = self.library.library_browsers.get_mut(&library_path)
                     && let Some((_, _, l)) = s.renaming_class.as_mut()
                 {
@@ -596,10 +620,9 @@ impl Signex {
                     Some(a) => a,
                     None => return Task::none(),
                 };
-                if let Err(error) = adapter.create_empty_table(
-                    &trimmed,
-                    &format!("create empty table {trimmed}"),
-                ) {
+                if let Err(error) =
+                    adapter.create_empty_table(&trimmed, &format!("create empty table {trimmed}"))
+                {
                     if let Some(slot) = self.library.new_component.as_mut()
                         && let Some(d) = slot.creating_table.as_mut()
                     {
@@ -1129,9 +1152,7 @@ impl Signex {
                 }
                 Task::none()
             }
-            LibraryMessage::RecoveryGitMissing(choice) => {
-                handle_recovery_git_missing(self, choice)
-            }
+            LibraryMessage::RecoveryGitMissing(choice) => handle_recovery_git_missing(self, choice),
             LibraryMessage::RecoveryBrokenBinding(choice) => {
                 handle_recovery_broken_binding(self, choice)
             }
@@ -2411,8 +2432,11 @@ impl Signex {
                 // down. Without this, Cancel + reconnect lets the
                 // first worker's outcome stomp on the second flow's
                 // state.
-                self.library.settings.digikey_flow_generation =
-                    self.library.settings.digikey_flow_generation.wrapping_add(1);
+                self.library.settings.digikey_flow_generation = self
+                    .library
+                    .settings
+                    .digikey_flow_generation
+                    .wrapping_add(1);
                 let generation = self.library.settings.digikey_flow_generation;
                 self.library.settings.digikey_in_flight = true;
                 self.library.settings.digikey_status = Some("Waiting for browser…".to_string());
@@ -2466,8 +2490,11 @@ impl Signex {
                 // Then clear the in-flight flag — the user is now free
                 // to start a fresh OAuth attempt without the old
                 // worker's outcome leaking into the new flow.
-                self.library.settings.digikey_flow_generation =
-                    self.library.settings.digikey_flow_generation.wrapping_add(1);
+                self.library.settings.digikey_flow_generation = self
+                    .library
+                    .settings
+                    .digikey_flow_generation
+                    .wrapping_add(1);
                 self.library.settings.digikey_cancel = None;
                 self.library.settings.digikey_in_flight = false;
                 self.library.settings.digikey_status = Some("Cancelled".to_string());
@@ -2935,9 +2962,7 @@ impl Signex {
         // — same gate as the top-level `Message::SaveFile` path uses.
         if matches!(msg, PrimitiveEditorMsg::Save) {
             if !path.exists() {
-                return crate::app::handlers::document_files::spawn_save_as_for_new_primitive(
-                    path,
-                );
+                return crate::app::handlers::document_files::spawn_save_as_for_new_primitive(path);
             }
             self.save_primitive_tab_at(&path);
             return Task::none();
@@ -3147,11 +3172,7 @@ impl Signex {
             .library
             .open_libraries
             .iter()
-            .find(|lib| {
-                lib.root_dir()
-                    .map(|d| path.starts_with(d))
-                    .unwrap_or(false)
-            });
+            .find(|lib| lib.root_dir().map(|d| path.starts_with(d)).unwrap_or(false));
         let Some(lib) = lib else {
             return;
         };
@@ -3180,11 +3201,8 @@ impl Signex {
             .library
             .open_libraries
             .iter()
-            .find(|lib| {
-                lib.root_dir()
-                    .map(|d| path.starts_with(d))
-                    .unwrap_or(false)
-            }) {
+            .find(|lib| lib.root_dir().map(|d| path.starts_with(d)).unwrap_or(false))
+        {
             Some(lib) => lib.library_id,
             None => return,
         };
@@ -4182,7 +4200,10 @@ pub(crate) fn route_open_error(
 }
 
 /// Handle the user's choice from the *Library missing* recovery dialog.
-fn handle_recovery_library_missing(app: &mut Signex, choice: LibraryMissingChoice) -> Task<Message> {
+fn handle_recovery_library_missing(
+    app: &mut Signex,
+    choice: LibraryMissingChoice,
+) -> Task<Message> {
     match choice {
         LibraryMissingChoice::Cancel => {
             app.library.recovery = None;
@@ -4275,10 +4296,7 @@ fn handle_recovery_git_missing(app: &mut Signex, choice: GitMissingChoice) -> Ta
 /// therefore only knows how to close the dialog; the actual rebind /
 /// remove-row flows queue behind the detection plumbing. The dialog
 /// surface itself ships now so the overlay layer is in place.
-fn handle_recovery_broken_binding(
-    app: &mut Signex,
-    _choice: BrokenBindingChoice,
-) -> Task<Message> {
+fn handle_recovery_broken_binding(app: &mut Signex, _choice: BrokenBindingChoice) -> Task<Message> {
     app.library.recovery = None;
     Task::none()
 }
@@ -4311,29 +4329,26 @@ impl Signex {
         // Snapshot the placed-Symbol identity tuples first so we can
         // mutate the engine in the apply loop below without holding
         // the engine borrow across the library-set lookups.
-        let symbol_refs: Vec<(uuid::Uuid, String, uuid::Uuid, RowId, String)> = match self
-            .document_state
-            .engines
-            .get(&schematic_path)
-        {
-            Some(engine) => engine
-                .document()
-                .symbols
-                .iter()
-                .filter_map(|s| {
-                    let library_id = s.library_id?;
-                    let row_uuid = s.row_id?;
-                    Some((
-                        s.uuid,
-                        s.reference.clone(),
-                        library_id,
-                        RowId::from_uuid(row_uuid),
-                        s.library_version.clone(),
-                    ))
-                })
-                .collect(),
-            None => return,
-        };
+        let symbol_refs: Vec<(uuid::Uuid, String, uuid::Uuid, RowId, String)> =
+            match self.document_state.engines.get(&schematic_path) {
+                Some(engine) => engine
+                    .document()
+                    .symbols
+                    .iter()
+                    .filter_map(|s| {
+                        let library_id = s.library_id?;
+                        let row_uuid = s.row_id?;
+                        Some((
+                            s.uuid,
+                            s.reference.clone(),
+                            library_id,
+                            RowId::from_uuid(row_uuid),
+                            s.library_version.clone(),
+                        ))
+                    })
+                    .collect(),
+                None => return,
+            };
 
         if symbol_refs.is_empty() {
             return;
@@ -4437,16 +4452,17 @@ impl Signex {
             let mut document = engine.document().clone();
             let mut applied = 0usize;
             for symbol in &mut document.symbols {
-                if let Some((_, latest)) = personal_apply
-                    .iter()
-                    .find(|(uuid, _)| uuid == &symbol.uuid)
+                if let Some((_, latest)) =
+                    personal_apply.iter().find(|(uuid, _)| uuid == &symbol.uuid)
                 {
                     symbol.library_version = latest.clone();
                     applied += 1;
                 }
             }
             engine.set_document(document);
-            self.document_state.dirty_paths.insert(schematic_path.clone());
+            self.document_state
+                .dirty_paths
+                .insert(schematic_path.clone());
             tracing::info!(
                 target: "signex::library",
                 schematic = %schematic_path.display(),
@@ -4500,7 +4516,9 @@ impl Signex {
                 }
             }
             engine.set_document(document);
-            self.document_state.dirty_paths.insert(schematic_path.clone());
+            self.document_state
+                .dirty_paths
+                .insert(schematic_path.clone());
         }
         // If some entries were left unchecked, treat the schematic as
         // "still has skipped drift" so the status bar keeps its

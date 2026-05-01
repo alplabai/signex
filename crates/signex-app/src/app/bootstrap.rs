@@ -74,8 +74,8 @@ impl Signex {
         let pcb_canvas = crate::pcb_canvas::PcbCanvas::new();
         // Default to the 50-mil Altium grid; user-set value overrides
         // through the prefs file (UX §1.5 — last-used grid persists).
-        let grid_size_mm = crate::fonts::read_grid_size_mm_pref()
-            .unwrap_or(crate::canvas::grid::GRID_SIZES_MM[1]);
+        let grid_size_mm =
+            crate::fonts::read_grid_size_mm_pref().unwrap_or(crate::canvas::grid::GRID_SIZES_MM[1]);
         let standard_lib_dir = helpers::find_standard_symbols_dir();
         let mut standard_libraries = standard_lib_dir
             .as_deref()
@@ -474,213 +474,246 @@ impl Signex {
                     ),
                     event,
                 )| match event {
-                keyboard::Event::KeyPressed {
-                    key, modifiers: m, ..
-                } => {
-                    // Command palette captures most input while open so
-                    // typing into the search field doesn't fire tool
-                    // shortcuts (`p`, `w`, `l`, …). Only navigation
-                    // and dismiss keys leak through.
-                    if palette_open {
-                        return match (key.as_ref(), m) {
-                            (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
-                                Message::CommandPaletteClose
+                    keyboard::Event::KeyPressed {
+                        key, modifiers: m, ..
+                    } => {
+                        // Command palette captures most input while open so
+                        // typing into the search field doesn't fire tool
+                        // shortcuts (`p`, `w`, `l`, …). Only navigation
+                        // and dismiss keys leak through.
+                        if palette_open {
+                            return match (key.as_ref(), m) {
+                                (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
+                                    Message::CommandPaletteClose
+                                }
+                                (keyboard::Key::Named(keyboard::key::Named::ArrowDown), _) => {
+                                    Message::CommandPaletteMoveSelection(1)
+                                }
+                                (keyboard::Key::Named(keyboard::key::Named::ArrowUp), _) => {
+                                    Message::CommandPaletteMoveSelection(-1)
+                                }
+                                // Toggle: Ctrl+Shift+P while open closes.
+                                (keyboard::Key::Character(c), m)
+                                    if c == "P" && m.command() && m.shift() =>
+                                {
+                                    Message::CommandPaletteClose
+                                }
+                                _ => Message::Noop,
+                            };
+                        }
+                        match (key.as_ref(), m) {
+                            (keyboard::Key::Character(c), m) if c == "q" && m.command() => {
+                                Message::UnitCycled
                             }
-                            (keyboard::Key::Named(keyboard::key::Named::ArrowDown), _) => {
-                                Message::CommandPaletteMoveSelection(1)
+                            (keyboard::Key::Character(c), m)
+                                if c == "g" && !m.command() && !m.shift() =>
+                            {
+                                Message::GridCycle
                             }
-                            (keyboard::Key::Named(keyboard::key::Named::ArrowUp), _) => {
-                                Message::CommandPaletteMoveSelection(-1)
+                            (keyboard::Key::Character(c), m) if c == "w" && !m.command() => {
+                                Message::Tool(ToolMessage::SelectTool(Tool::Wire))
                             }
-                            // Toggle: Ctrl+Shift+P while open closes.
+                            (keyboard::Key::Character(c), m) if c == "b" && !m.command() => {
+                                Message::Tool(ToolMessage::SelectTool(Tool::Bus))
+                            }
+                            (keyboard::Key::Character(c), m) if c == "l" && !m.command() => {
+                                Message::Tool(ToolMessage::SelectTool(Tool::Label))
+                            }
+                            (keyboard::Key::Character(c), m) if c == "p" && !m.command() => {
+                                Message::Tool(ToolMessage::SelectTool(Tool::Component))
+                            }
+                            // Ctrl+P: Print Preview
+                            (keyboard::Key::Character(c), m)
+                                if c == "p" && m.command() && !m.shift() =>
+                            {
+                                Message::PrintPreviewRequested
+                            }
+                            // Ctrl+Shift+P: open command palette (VS Code parity).
+                            // Export PDF stays reachable via File ▸ Export ▸ PDF…
                             (keyboard::Key::Character(c), m)
                                 if c == "P" && m.command() && m.shift() =>
                             {
-                                Message::CommandPaletteClose
+                                Message::CommandPaletteOpen
                             }
-                            _ => Message::Noop,
-                        };
-                    }
-                    match (key.as_ref(), m) {
-                    (keyboard::Key::Character(c), m) if c == "q" && m.command() => {
-                        Message::UnitCycled
-                    }
-                    (keyboard::Key::Character(c), m) if c == "g" && !m.command() && !m.shift() => {
-                        Message::GridCycle
-                    }
-                    (keyboard::Key::Character(c), m) if c == "w" && !m.command() => {
-                        Message::Tool(ToolMessage::SelectTool(Tool::Wire))
-                    }
-                    (keyboard::Key::Character(c), m) if c == "b" && !m.command() => {
-                        Message::Tool(ToolMessage::SelectTool(Tool::Bus))
-                    }
-                    (keyboard::Key::Character(c), m) if c == "l" && !m.command() => {
-                        Message::Tool(ToolMessage::SelectTool(Tool::Label))
-                    }
-                    (keyboard::Key::Character(c), m) if c == "p" && !m.command() => {
-                        Message::Tool(ToolMessage::SelectTool(Tool::Component))
-                    }
-                    // Ctrl+P: Print Preview
-                    (keyboard::Key::Character(c), m) if c == "p" && m.command() && !m.shift() => {
-                        Message::PrintPreviewRequested
-                    }
-                    // Ctrl+Shift+P: open command palette (VS Code parity).
-                    // Export PDF stays reachable via File ▸ Export ▸ PDF…
-                    (keyboard::Key::Character(c), m) if c == "P" && m.command() && m.shift() => {
-                        Message::CommandPaletteOpen
-                    }
-                    // Ctrl+, open Preferences
-                    (keyboard::Key::Character(c), m) if c == "," && m.command() => {
-                        Message::OpenPreferences
-                    }
-                    (keyboard::Key::Character(c), m) if c == "f" && m.command() => {
-                        Message::OpenFind
-                    }
-                    (keyboard::Key::Character(c), m) if c == "h" && m.command() => {
-                        Message::OpenReplace
-                    }
-                    (keyboard::Key::Named(keyboard::key::Named::Escape), _)
-                        if find_replace_open =>
-                    {
-                        Message::FindReplaceMsg(crate::find_replace::FindReplaceMsg::Close)
-                    }
-                    (keyboard::Key::Named(keyboard::key::Named::Escape), _)
-                        if kbd_shortcuts_open =>
-                    {
-                        Message::CloseKeyboardShortcuts
-                    }
-                    (keyboard::Key::Named(keyboard::key::Named::Escape), _)
-                        if first_run_tour_open =>
-                    {
-                        Message::DismissFirstRunTour
-                    }
-                    // Esc closes the deepest open modal first (UX §1.3).
-                    // The order here goes "user-facing top → bottom":
-                    // ERC, then Annotate, then Preferences. Once those
-                    // are closed, Esc falls through to the tool reset.
-                    (keyboard::Key::Named(keyboard::key::Named::Escape), _) if erc_open => {
-                        Message::CloseErcDialog
-                    }
-                    (keyboard::Key::Named(keyboard::key::Named::Escape), _) if annotate_open => {
-                        Message::CloseAnnotateDialog
-                    }
-                    (keyboard::Key::Named(keyboard::key::Named::Escape), _) if prefs_open => {
-                        Message::ClosePreferences
-                    }
-                    (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
-                        Message::Tool(ToolMessage::SelectTool(Tool::Select))
-                    }
-                    (keyboard::Key::Named(keyboard::key::Named::Home), _) => {
-                        Message::CanvasEvent(CanvasEvent::FitAll)
-                    }
-                    (keyboard::Key::Named(keyboard::key::Named::F1), _) => {
-                        Message::Menu(MenuMessage::OpenKeyboardShortcuts)
-                    }
-                    (keyboard::Key::Named(keyboard::key::Named::F8), _) => Message::RunErc,
-                    (keyboard::Key::Named(keyboard::key::Named::F9), _) => Message::ToggleAutoFocus,
-                    // F5: Net color palette (Altium convention).
-                    (keyboard::Key::Named(keyboard::key::Named::F5), _) => {
-                        Message::OpenNetColorPalette
-                    }
-                    // Shift+S: cycle rubber-band selection mode
-                    // (Inside → Outside → TouchingLine).
-                    (keyboard::Key::Character(c), m) if c == "S" && m.shift() && !m.command() => {
-                        Message::CycleSelectionMode
-                    }
-                    // Enter also closes the in-flight lasso (in
-                    // addition to a second canvas click). Useful
-                    // when the user's cursor is somewhere they'd
-                    // rather not drop a final vertex.
-                    (keyboard::Key::Named(keyboard::key::Named::Enter), _) => Message::LassoCommit,
-                    // Alt+A: annotate (Altium convention, incremental)
-                    (keyboard::Key::Character(c), m) if c == "a" && m.alt() => {
-                        Message::Annotate(signex_engine::AnnotateMode::Incremental)
-                    }
-                    // Shift+Alt+A: reset and renumber
-                    (keyboard::Key::Character(c), m) if c == "a" && m.alt() && m.shift() => {
-                        Message::Annotate(signex_engine::AnnotateMode::ResetAndRenumber)
-                    }
-                    // Delete selected
-                    (keyboard::Key::Named(keyboard::key::Named::Delete), _) => {
-                        Message::DeleteSelected
-                    }
-                    // Undo/Redo
-                    (keyboard::Key::Character(c), m) if c == "z" && m.command() && !m.shift() => {
-                        Message::Undo
-                    }
-                    (keyboard::Key::Character(c), m) if c == "y" && m.command() => Message::Redo,
-                    (keyboard::Key::Character(c), m) if c == "z" && m.command() && m.shift() => {
-                        Message::Redo
-                    }
-                    // Shift+Space: cycle draw mode (90-degree -> 45-degree -> Free)
-                    (keyboard::Key::Named(keyboard::key::Named::Space), m) if m.shift() => {
-                        Message::CycleDrawMode
-                    }
-                    // Space: rotate selected symbol (Altium convention)
-                    (keyboard::Key::Named(keyboard::key::Named::Space), _) => {
-                        Message::RotateSelected
-                    }
-                    // Mirror: X key = horizontal flip (left-right) = Standard mirror_y
-                    //         Y key = vertical flip (top-bottom) = Standard mirror_x
-                    (keyboard::Key::Character(c), m) if c == "x" && !m.command() => {
-                        Message::MirrorSelectedY // X key = horizontal flip = toggle mirror_y
-                    }
-                    (keyboard::Key::Character(c), m) if c == "y" && !m.command() => {
-                        Message::MirrorSelectedX // Y key = vertical flip = toggle mirror_x
-                    }
-                    // Ctrl+S save
-                    (keyboard::Key::Character(c), m) if c == "s" && m.command() => {
-                        Message::SaveFile
-                    }
-                    // Ctrl+A select all
-                    (keyboard::Key::Character(c), m) if c == "a" && m.command() => {
-                        Message::Selection(selection_request::SelectionRequest::SelectAll)
-                    }
-                    // Ctrl+1-8 store selection memory, Alt+1-8 recall selection memory
-                    (keyboard::Key::Character(c), m) if m.command() && !m.alt() => {
-                        match selection_slot_from_key(c) {
-                            Some(slot) => {
-                                Message::Selection(selection_request::SelectionRequest::StoreSlot {
-                                    slot,
-                                })
+                            // Ctrl+, open Preferences
+                            (keyboard::Key::Character(c), m) if c == "," && m.command() => {
+                                Message::OpenPreferences
+                            }
+                            (keyboard::Key::Character(c), m) if c == "f" && m.command() => {
+                                Message::OpenFind
+                            }
+                            (keyboard::Key::Character(c), m) if c == "h" && m.command() => {
+                                Message::OpenReplace
+                            }
+                            (keyboard::Key::Named(keyboard::key::Named::Escape), _)
+                                if find_replace_open =>
+                            {
+                                Message::FindReplaceMsg(crate::find_replace::FindReplaceMsg::Close)
+                            }
+                            (keyboard::Key::Named(keyboard::key::Named::Escape), _)
+                                if kbd_shortcuts_open =>
+                            {
+                                Message::CloseKeyboardShortcuts
+                            }
+                            (keyboard::Key::Named(keyboard::key::Named::Escape), _)
+                                if first_run_tour_open =>
+                            {
+                                Message::DismissFirstRunTour
+                            }
+                            // Esc closes the deepest open modal first (UX §1.3).
+                            // The order here goes "user-facing top → bottom":
+                            // ERC, then Annotate, then Preferences. Once those
+                            // are closed, Esc falls through to the tool reset.
+                            (keyboard::Key::Named(keyboard::key::Named::Escape), _) if erc_open => {
+                                Message::CloseErcDialog
+                            }
+                            (keyboard::Key::Named(keyboard::key::Named::Escape), _)
+                                if annotate_open =>
+                            {
+                                Message::CloseAnnotateDialog
+                            }
+                            (keyboard::Key::Named(keyboard::key::Named::Escape), _)
+                                if prefs_open =>
+                            {
+                                Message::ClosePreferences
+                            }
+                            (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
+                                Message::Tool(ToolMessage::SelectTool(Tool::Select))
+                            }
+                            (keyboard::Key::Named(keyboard::key::Named::Home), _) => {
+                                Message::CanvasEvent(CanvasEvent::FitAll)
+                            }
+                            (keyboard::Key::Named(keyboard::key::Named::F1), _) => {
+                                Message::Menu(MenuMessage::OpenKeyboardShortcuts)
+                            }
+                            (keyboard::Key::Named(keyboard::key::Named::F8), _) => Message::RunErc,
+                            (keyboard::Key::Named(keyboard::key::Named::F9), _) => {
+                                Message::ToggleAutoFocus
+                            }
+                            // F5: Net color palette (Altium convention).
+                            (keyboard::Key::Named(keyboard::key::Named::F5), _) => {
+                                Message::OpenNetColorPalette
+                            }
+                            // Shift+S: cycle rubber-band selection mode
+                            // (Inside → Outside → TouchingLine).
+                            (keyboard::Key::Character(c), m)
+                                if c == "S" && m.shift() && !m.command() =>
+                            {
+                                Message::CycleSelectionMode
+                            }
+                            // Enter also closes the in-flight lasso (in
+                            // addition to a second canvas click). Useful
+                            // when the user's cursor is somewhere they'd
+                            // rather not drop a final vertex.
+                            (keyboard::Key::Named(keyboard::key::Named::Enter), _) => {
+                                Message::LassoCommit
+                            }
+                            // Alt+A: annotate (Altium convention, incremental)
+                            (keyboard::Key::Character(c), m) if c == "a" && m.alt() => {
+                                Message::Annotate(signex_engine::AnnotateMode::Incremental)
+                            }
+                            // Shift+Alt+A: reset and renumber
+                            (keyboard::Key::Character(c), m)
+                                if c == "a" && m.alt() && m.shift() =>
+                            {
+                                Message::Annotate(signex_engine::AnnotateMode::ResetAndRenumber)
+                            }
+                            // Delete selected
+                            (keyboard::Key::Named(keyboard::key::Named::Delete), _) => {
+                                Message::DeleteSelected
+                            }
+                            // Undo/Redo
+                            (keyboard::Key::Character(c), m)
+                                if c == "z" && m.command() && !m.shift() =>
+                            {
+                                Message::Undo
+                            }
+                            (keyboard::Key::Character(c), m) if c == "y" && m.command() => {
+                                Message::Redo
+                            }
+                            (keyboard::Key::Character(c), m)
+                                if c == "z" && m.command() && m.shift() =>
+                            {
+                                Message::Redo
+                            }
+                            // Shift+Space: cycle draw mode (90-degree -> 45-degree -> Free)
+                            (keyboard::Key::Named(keyboard::key::Named::Space), m) if m.shift() => {
+                                Message::CycleDrawMode
+                            }
+                            // Space: rotate selected symbol (Altium convention)
+                            (keyboard::Key::Named(keyboard::key::Named::Space), _) => {
+                                Message::RotateSelected
+                            }
+                            // Mirror: X key = horizontal flip (left-right) = Standard mirror_y
+                            //         Y key = vertical flip (top-bottom) = Standard mirror_x
+                            (keyboard::Key::Character(c), m) if c == "x" && !m.command() => {
+                                Message::MirrorSelectedY // X key = horizontal flip = toggle mirror_y
+                            }
+                            (keyboard::Key::Character(c), m) if c == "y" && !m.command() => {
+                                Message::MirrorSelectedX // Y key = vertical flip = toggle mirror_x
+                            }
+                            // Ctrl+S save
+                            (keyboard::Key::Character(c), m) if c == "s" && m.command() => {
+                                Message::SaveFile
+                            }
+                            // Ctrl+A select all
+                            (keyboard::Key::Character(c), m) if c == "a" && m.command() => {
+                                Message::Selection(selection_request::SelectionRequest::SelectAll)
+                            }
+                            // Ctrl+1-8 store selection memory, Alt+1-8 recall selection memory
+                            (keyboard::Key::Character(c), m) if m.command() && !m.alt() => {
+                                match selection_slot_from_key(c) {
+                                    Some(slot) => Message::Selection(
+                                        selection_request::SelectionRequest::StoreSlot { slot },
+                                    ),
+                                    _ => Message::Noop,
+                                }
+                            }
+                            (keyboard::Key::Character(c), m) if m.alt() && !m.command() => {
+                                match selection_slot_from_key(c) {
+                                    Some(slot) => Message::Selection(
+                                        selection_request::SelectionRequest::RecallSlot { slot },
+                                    ),
+                                    _ => Message::Noop,
+                                }
+                            }
+                            // Ctrl+C copy, Ctrl+X cut
+                            (keyboard::Key::Character(c), m) if c == "c" && m.command() => {
+                                Message::Copy
+                            }
+                            (keyboard::Key::Character(c), m) if c == "x" && m.command() => {
+                                Message::Cut
+                            }
+                            // Shift+Ctrl+V smart paste
+                            (keyboard::Key::Character(c), m)
+                                if c == "v" && m.command() && m.shift() =>
+                            {
+                                Message::SmartPaste
+                            }
+                            // Ctrl+V paste
+                            (keyboard::Key::Character(c), m) if c == "v" && m.command() => {
+                                Message::Paste
+                            }
+                            // Ctrl+D duplicate
+                            (keyboard::Key::Character(c), m) if c == "d" && m.command() => {
+                                Message::Duplicate
+                            }
+                            // Shift+Ctrl+G -- toggle grid visibility
+                            (keyboard::Key::Character(c), m)
+                                if c == "g" && m.command() && m.shift() =>
+                            {
+                                Message::GridToggle
+                            }
+                            // Tab -- pre-placement properties (only during active tool)
+                            (keyboard::Key::Named(keyboard::key::Named::Tab), _) => {
+                                Message::PrePlacementTab
                             }
                             _ => Message::Noop,
                         }
-                    }
-                    (keyboard::Key::Character(c), m) if m.alt() && !m.command() => {
-                        match selection_slot_from_key(c) {
-                            Some(slot) => Message::Selection(
-                                selection_request::SelectionRequest::RecallSlot { slot },
-                            ),
-                            _ => Message::Noop,
-                        }
-                    }
-                    // Ctrl+C copy, Ctrl+X cut
-                    (keyboard::Key::Character(c), m) if c == "c" && m.command() => Message::Copy,
-                    (keyboard::Key::Character(c), m) if c == "x" && m.command() => Message::Cut,
-                    // Shift+Ctrl+V smart paste
-                    (keyboard::Key::Character(c), m) if c == "v" && m.command() && m.shift() => {
-                        Message::SmartPaste
-                    }
-                    // Ctrl+V paste
-                    (keyboard::Key::Character(c), m) if c == "v" && m.command() => Message::Paste,
-                    // Ctrl+D duplicate
-                    (keyboard::Key::Character(c), m) if c == "d" && m.command() => {
-                        Message::Duplicate
-                    }
-                    // Shift+Ctrl+G -- toggle grid visibility
-                    (keyboard::Key::Character(c), m) if c == "g" && m.command() && m.shift() => {
-                        Message::GridToggle
-                    }
-                    // Tab -- pre-placement properties (only during active tool)
-                    (keyboard::Key::Named(keyboard::key::Named::Tab), _) => {
-                        Message::PrePlacementTab
                     }
                     _ => Message::Noop,
-                    }
-                }
-                _ => Message::Noop,
-            });
+                },
+            );
 
         // Mouse events for drag-to-resize/floating-drag.
         // Subscribing to cursor move only while dragging avoids per-frame

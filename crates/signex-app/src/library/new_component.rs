@@ -195,39 +195,43 @@ pub fn view<'a>(
             .on_submit(LibraryMessage::NewComponentConfirmCreateTable)
             .padding(6)
             .size(12);
-        let confirm_btn =
-            button(container(text("Create").size(11).color(text_c)).padding([4, 12]))
-                .on_press(LibraryMessage::NewComponentConfirmCreateTable)
-                .style(move |_: &Theme, _| iced::widget::button::Style {
-                    background: Some(iced::Background::Color(iced::Color::from_rgb(
-                        0.18, 0.36, 0.58,
-                    ))),
-                    text_color: iced::Color::WHITE,
-                    border: Border {
-                        width: 0.0,
-                        radius: 3.0.into(),
-                        ..Border::default()
-                    },
-                    ..iced::widget::button::Style::default()
-                });
-        let cancel_btn =
-            button(container(text("Cancel").size(11).color(text_c)).padding([4, 12]))
-                .on_press(LibraryMessage::NewComponentCancelCreateTable)
-                .style(move |_: &Theme, _| iced::widget::button::Style {
-                    background: Some(iced::Background::Color(iced::Color::from_rgba(
-                        1.0, 1.0, 1.0, 0.04,
-                    ))),
-                    text_color: text_c,
-                    border: Border {
-                        width: 1.0,
-                        radius: 3.0.into(),
-                        color: border,
-                    },
-                    ..iced::widget::button::Style::default()
-                });
+        let confirm_btn = button(container(text("Create").size(11).color(text_c)).padding([4, 12]))
+            .on_press(LibraryMessage::NewComponentConfirmCreateTable)
+            .style(move |_: &Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(iced::Color::from_rgb(
+                    0.18, 0.36, 0.58,
+                ))),
+                text_color: iced::Color::WHITE,
+                border: Border {
+                    width: 0.0,
+                    radius: 3.0.into(),
+                    ..Border::default()
+                },
+                ..iced::widget::button::Style::default()
+            });
+        let cancel_btn = button(container(text("Cancel").size(11).color(text_c)).padding([4, 12]))
+            .on_press(LibraryMessage::NewComponentCancelCreateTable)
+            .style(move |_: &Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(iced::Color::from_rgba(
+                    1.0, 1.0, 1.0, 0.04,
+                ))),
+                text_color: text_c,
+                border: Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: border,
+                },
+                ..iced::widget::button::Style::default()
+            });
         let mut form = column![
-            row![name_input, Space::new().width(6), cancel_btn, Space::new().width(6), confirm_btn,]
-                .align_y(iced::Alignment::Center),
+            row![
+                name_input,
+                Space::new().width(6),
+                cancel_btn,
+                Space::new().width(6),
+                confirm_btn,
+            ]
+            .align_y(iced::Alignment::Center),
         ]
         .spacing(4);
         if let Some(err) = draft.error.as_ref() {
@@ -247,22 +251,21 @@ pub fn view<'a>(
         .placeholder("Select table…")
         .padding(6)
         .text_size(12);
-        let new_table_btn = button(
-            container(text("+ New Table…").size(11).color(text_c)).padding([4, 10]),
-        )
-        .on_press(LibraryMessage::NewComponentBeginCreateTable)
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                1.0, 1.0, 1.0, 0.04,
-            ))),
-            text_color: text_c,
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: border,
-            },
-            ..iced::widget::button::Style::default()
-        });
+        let new_table_btn =
+            button(container(text("+ New Table…").size(11).color(text_c)).padding([4, 10]))
+                .on_press(LibraryMessage::NewComponentBeginCreateTable)
+                .style(move |_: &Theme, _| iced::widget::button::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgba(
+                        1.0, 1.0, 1.0, 0.04,
+                    ))),
+                    text_color: text_c,
+                    border: Border {
+                        width: 1.0,
+                        radius: 3.0.into(),
+                        color: border,
+                    },
+                    ..iced::widget::button::Style::default()
+                });
         row![picker, Space::new().width(6), new_table_btn,]
             .align_y(iced::Alignment::Center)
             .into()
@@ -387,28 +390,27 @@ pub fn view<'a>(
     } else {
         "Advanced ▾ — pick a custom destination table"
     };
-    let advanced_toggle = button(
-        container(text(advanced_label).size(11).color(muted)).padding([2, 0]),
-    )
-    .on_press(LibraryMessage::NewComponentToggleAdvanced)
-    .style(move |_: &Theme, status: iced::widget::button::Status| {
-        let bg = match status {
-            iced::widget::button::Status::Hovered => Some(iced::Background::Color(
-                iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04),
-            )),
-            _ => None,
-        };
-        iced::widget::button::Style {
-            background: bg,
-            text_color: muted,
-            border: Border {
-                width: 0.0,
-                radius: 0.0.into(),
-                ..Border::default()
-            },
-            ..iced::widget::button::Style::default()
-        }
-    });
+    let advanced_toggle =
+        button(container(text(advanced_label).size(11).color(muted)).padding([2, 0]))
+            .on_press(LibraryMessage::NewComponentToggleAdvanced)
+            .style(move |_: &Theme, status: iced::widget::button::Status| {
+                let bg = match status {
+                    iced::widget::button::Status::Hovered => Some(iced::Background::Color(
+                        iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04),
+                    )),
+                    _ => None,
+                };
+                iced::widget::button::Style {
+                    background: bg,
+                    text_color: muted,
+                    border: Border {
+                        width: 0.0,
+                        radius: 0.0.into(),
+                        ..Border::default()
+                    },
+                    ..iced::widget::button::Style::default()
+                }
+            });
 
     let mut form = column![
         labelled("Internal PN", pn_input.into()),
@@ -520,10 +522,7 @@ pub fn view<'a>(
 /// close: white glyph, full header-height hit-box, Windows-native red
 /// hover. Kept local because the shared helper is `Message`-typed
 /// only.
-fn close_x<'a>(
-    message: LibraryMessage,
-    theme_id: ThemeId,
-) -> Element<'a, LibraryMessage> {
+fn close_x<'a>(message: LibraryMessage, theme_id: ThemeId) -> Element<'a, LibraryMessage> {
     let handle = crate::icons::icon_chrome_window_close(theme_id);
     button(
         container(
