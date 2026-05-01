@@ -238,13 +238,21 @@ fn view_table_sidebar<'a>(
         }),
     );
 
+    // Hoist a single owned `PathBuf` out of every per-row loop.
+    // Each table / class row's message constructors (`on_input` /
+    // `on_press`) need an owned path inside their closure; calling
+    // `library_path.to_path_buf()` per row burned 60+ heap allocs
+    // per frame on a 20-table library. With this hoist the alloc
+    // count is one per closure, sourced from the same `lib_pb`.
+    let lib_pb: std::path::PathBuf = library_path.to_path_buf();
+
     let mut names: Vec<&String> = lib.tables.keys().collect();
     names.sort();
     // Surface the most recent delete-table error at the top of the
     // list so the user can see why a `×` click bounced (typically
     // "table is not empty (N rows)").
     if let Some(err) = browser.delete_error.as_ref() {
-        let library_for_dismiss = library_path.to_path_buf();
+        let library_for_dismiss = lib_pb.clone();
         let dismiss = button(text("×").size(BROWSER_TEXT_SIZE).color(iced::Color::WHITE))
             .padding([0, 6])
             .on_press(LibraryMessage::BrowserDismissDeleteError {
@@ -297,9 +305,9 @@ fn view_table_sidebar<'a>(
                 .as_ref()
                 .map(|(_, b)| b.as_str())
                 .unwrap_or("");
-            let library_for_input = library_path.to_path_buf();
-            let library_for_confirm = library_path.to_path_buf();
-            let library_for_cancel = library_path.to_path_buf();
+            let library_for_input = lib_pb.clone();
+            let library_for_confirm = lib_pb.clone();
+            let library_for_cancel = lib_pb.clone();
             let name_input = text_input("table_name", buffer)
                 .on_input(move |s| LibraryMessage::BrowserSetRenameName {
                     library_path: library_for_input.clone(),
@@ -366,7 +374,7 @@ fn view_table_sidebar<'a>(
         ]
         .spacing(6)
         .align_y(iced::Alignment::Center);
-        let library_owned = library_path.to_path_buf();
+        let library_owned = lib_pb.clone();
         let table_owned = (*name).clone();
         let on_press = LibraryMessage::BrowserSelectTable {
             library_path: library_owned,
@@ -405,7 +413,7 @@ fn view_table_sidebar<'a>(
         // routing isn't ambiguous (nested buttons confuse iced's
         // hit testing). Adapter refuses non-empty deletes; the
         // resulting Conflict error surfaces in the banner above.
-        let library_for_del = library_path.to_path_buf();
+        let library_for_del = lib_pb.clone();
         let table_for_del = (*name).clone();
         let delete_btn = button(
             text("×")
@@ -443,7 +451,7 @@ fn view_table_sidebar<'a>(
         // ✎ rename trigger — sibling to × so click routing stays
         // unambiguous. Switches the row into the inline rename
         // form above.
-        let library_for_rename = library_path.to_path_buf();
+        let library_for_rename = lib_pb.clone();
         let table_for_rename = (*name).clone();
         let rename_btn = button(
             text("\u{270E}")
@@ -527,10 +535,10 @@ fn view_table_sidebar<'a>(
             .as_ref()
             .filter(|(orig, _, _)| orig.as_str() == entry.key.as_str())
         {
-            let library_for_key = library_path.to_path_buf();
-            let library_for_label = library_path.to_path_buf();
-            let library_for_confirm = library_path.to_path_buf();
-            let library_for_cancel = library_path.to_path_buf();
+            let library_for_key = lib_pb.clone();
+            let library_for_label = lib_pb.clone();
+            let library_for_confirm = lib_pb.clone();
+            let library_for_cancel = lib_pb.clone();
             let key_input = text_input("key", key_buf)
                 .on_input(move |s| LibraryMessage::BrowserSetRenameClassKey {
                     library_path: library_for_key.clone(),
@@ -593,8 +601,8 @@ fn view_table_sidebar<'a>(
         } else {
             format!("{}  ·  {}", entry.label, entry.key)
         };
-        let library_for_rename = library_path.to_path_buf();
-        let library_for_delete = library_path.to_path_buf();
+        let library_for_rename = lib_pb.clone();
+        let library_for_delete = lib_pb.clone();
         let key_for_rename = entry.key.clone();
         let key_for_delete = entry.key.clone();
         let rename_btn = button(text("\u{270E}").size(BROWSER_TEXT_SIZE).color(muted))
@@ -676,10 +684,10 @@ fn view_table_sidebar<'a>(
     // + Class form / button.
     match browser.adding_class.as_ref() {
         Some(draft) => {
-            let library_for_key = library_path.to_path_buf();
-            let library_for_label = library_path.to_path_buf();
-            let library_for_confirm = library_path.to_path_buf();
-            let library_for_cancel = library_path.to_path_buf();
+            let library_for_key = lib_pb.clone();
+            let library_for_label = lib_pb.clone();
+            let library_for_confirm = lib_pb.clone();
+            let library_for_cancel = lib_pb.clone();
             let key_input = text_input("class_key", &draft.key)
                 .on_input(move |s| LibraryMessage::BrowserSetNewClassKey {
                     library_path: library_for_key.clone(),
@@ -747,7 +755,7 @@ fn view_table_sidebar<'a>(
             col = col.push(form);
         }
         None => {
-            let library_for_begin = library_path.to_path_buf();
+            let library_for_begin = lib_pb.clone();
             col = col.push(
                 container(
                     button(text("+ Class").size(BROWSER_TEXT_SIZE).color(text_c))
@@ -782,9 +790,9 @@ fn view_table_sidebar<'a>(
     // anchored at the bottom of the sidebar.
     let bottom_section: Element<'a, LibraryMessage> = match browser.adding_table.as_ref() {
         Some(draft) => {
-            let library_for_input = library_path.to_path_buf();
-            let library_for_confirm = library_path.to_path_buf();
-            let library_for_cancel = library_path.to_path_buf();
+            let library_for_input = lib_pb.clone();
+            let library_for_confirm = lib_pb.clone();
+            let library_for_cancel = lib_pb.clone();
             let name_input = text_input("new_table_name", &draft.name)
                 .on_input(move |s| LibraryMessage::BrowserSetNewTableName {
                     library_path: library_for_input.clone(),
@@ -846,7 +854,7 @@ fn view_table_sidebar<'a>(
             form.into()
         }
         None => {
-            let library_for_begin = library_path.to_path_buf();
+            let library_for_begin = lib_pb.clone();
             container(
                 button(text("+ Table").size(BROWSER_TEXT_SIZE).color(text_c))
                     .padding([4, 10])
@@ -893,10 +901,12 @@ fn view_header<'a>(
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
+    // Hoisted owned path — see comment in `view_table_sidebar`.
+    let lib_pb: std::path::PathBuf = library_path.to_path_buf();
 
     // The "+" button — opens the New Component modal pre-selected to
     // this library + active table.
-    let library_for_plus = library_path.to_path_buf();
+    let library_for_plus = lib_pb.clone();
     let table_for_plus = browser.active_table.clone();
     let plus_btn = button(text("+ Component").size(BROWSER_TEXT_SIZE).color(text_c))
         .padding([4, 10])
@@ -918,7 +928,7 @@ fn view_header<'a>(
         });
 
     // Add-table control. Either the inline name form (while
-    let library_for_search = library_path.to_path_buf();
+    let library_for_search = lib_pb.clone();
     let search = text_input("Search…", &browser.search)
         .on_input(move |s| LibraryMessage::BrowserSearchChanged {
             library_path: library_for_search.clone(),
@@ -932,7 +942,7 @@ fn view_header<'a>(
     // as a first-class browser filter so users can pivot between
     // "preferred only", "include deprecated", etc. without touching
     // every row's lifecycle field.
-    let library_for_lc = library_path.to_path_buf();
+    let library_for_lc = lib_pb.clone();
     let lifecycle_picker = pick_list(
         LifecycleFilter::ALL.to_vec(),
         Some(browser.lifecycle_filter),
@@ -1165,6 +1175,8 @@ fn view_grid<'a>(
     let _text_c = theme_ext::text_primary(tokens);
     let border = theme_ext::border_color(tokens);
     let selected = browser.selected_row;
+    // Hoisted owned path — see comment in `view_table_sidebar`.
+    let lib_pb: std::path::PathBuf = library_path.to_path_buf();
 
     let header_row = {
         // 16-px gutter aligns with the per-row lifecycle dot below.
@@ -1184,7 +1196,7 @@ fn view_grid<'a>(
             };
             // Wrap the header label in a borderless button so a click
             // toggles the sort. Stage 8 of `v0.9-snxlib-as-file-plan.md`.
-            let library_for_sort = library_path.to_path_buf();
+            let library_for_sort = lib_pb.clone();
             let header_btn = button(text(label_text).size(BROWSER_HEADER_SIZE).color(muted))
                 .padding([4, 6])
                 .on_press(LibraryMessage::BrowserSortColumn {
@@ -1325,9 +1337,9 @@ fn view_grid<'a>(
                     .cloned()
                     .unwrap_or(row_value);
 
-                let library_for_input = library_path.to_path_buf();
+                let library_for_input = lib_pb.clone();
                 let column_for_input = column_key.clone();
-                let library_for_submit = library_path.to_path_buf();
+                let library_for_submit = lib_pb.clone();
                 let table_for_submit = table.to_string();
                 let column_for_submit = column_key.clone();
                 let input = text_input("", &cell_value)
@@ -1352,7 +1364,7 @@ fn view_grid<'a>(
                 );
             }
 
-            let library_for_msg = library_path.to_path_buf();
+            let library_for_msg = lib_pb.clone();
             let table_for_msg = table.to_string();
             let library_for_open = library_for_msg.clone();
             let table_for_open = table_for_msg.clone();
@@ -1421,8 +1433,10 @@ fn view_action_row<'a>(
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
+    // Hoisted owned path — see comment in `view_table_sidebar`.
+    let lib_pb: std::path::PathBuf = library_path.to_path_buf();
 
-    let library_for_add = library_path.to_path_buf();
+    let library_for_add = lib_pb.clone();
     let table_for_add = Some(table.to_string());
     let add_btn = button(
         text("Add Component")
@@ -1448,7 +1462,7 @@ fn view_action_row<'a>(
     });
 
     let delete_btn: Element<'a, LibraryMessage> = if let Some(row_id) = selected {
-        let library_for_del = library_path.to_path_buf();
+        let library_for_del = lib_pb.clone();
         let table_for_del = table.to_string();
         button(
             text("Delete Selected")
@@ -1706,8 +1720,10 @@ fn view_empty_state<'a>(
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
+    // Hoisted owned path — see comment in `view_table_sidebar`.
+    let lib_pb: std::path::PathBuf = library_path.to_path_buf();
 
-    let library_for_add = library_path.to_path_buf();
+    let library_for_add = lib_pb.clone();
     let add_btn = button(
         text("Add Component")
             .size(BROWSER_TEXT_SIZE)

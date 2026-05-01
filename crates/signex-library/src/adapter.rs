@@ -261,6 +261,75 @@ pub trait LibraryAdapter: Send + Sync {
         ))
     }
 
+    /// Atomic helper — append a class. The default implementation
+    /// is a `library_classes` + `update_library_classes` round-trip
+    /// (which acquires the lock twice and can't be made atomic
+    /// without backend support). Adapters that own the manifest
+    /// in-memory (e.g. `LocalGitAdapter` via `mutate_library_file`)
+    /// should override with a single-borrow read-modify-write.
+    /// Errors `Conflict` when a class with the same key already
+    /// exists.
+    fn add_library_class(
+        &self,
+        entry: crate::library_file::ClassEntry,
+        msg: &str,
+    ) -> Result<(), LibraryError> {
+        let mut classes = self.library_classes();
+        if classes.iter().any(|c| c.key == entry.key) {
+            return Err(LibraryError::Conflict(format!(
+                "class with key {:?} already exists",
+                entry.key
+            )));
+        }
+        classes.push(entry);
+        self.update_library_classes(classes, msg)
+    }
+
+    /// Atomic helper — remove a class by key. Default goes through
+    /// the same two-step pattern as `add_library_class`. No-op when
+    /// the key isn't present.
+    fn remove_library_class(&self, key: &str, msg: &str) -> Result<(), LibraryError> {
+        let mut classes = self.library_classes();
+        let before = classes.len();
+        classes.retain(|c| c.key != key);
+        if classes.len() == before {
+            return Ok(());
+        }
+        self.update_library_classes(classes, msg)
+    }
+
+    /// Atomic helper — rename a class. `old_key` must currently
+    /// exist; `new_entry.key` must not collide with any *other*
+    /// class. Default pattern matches the other helpers.
+    fn rename_library_class(
+        &self,
+        old_key: &str,
+        new_entry: crate::library_file::ClassEntry,
+        msg: &str,
+    ) -> Result<(), LibraryError> {
+        let mut classes = self.library_classes();
+        if !classes.iter().any(|c| c.key == old_key) {
+            return Err(LibraryError::NotFound(format!(
+                "class {old_key:?} not found"
+            )));
+        }
+        if new_entry.key != old_key
+            && classes.iter().any(|c| c.key == new_entry.key)
+        {
+            return Err(LibraryError::Conflict(format!(
+                "class with key {:?} already exists",
+                new_entry.key
+            )));
+        }
+        for c in classes.iter_mut() {
+            if c.key == old_key {
+                *c = new_entry.clone();
+                break;
+            }
+        }
+        self.update_library_classes(classes, msg)
+    }
+
     /// Read every row from the named table.
     fn read_table(&self, _name: &str) -> Result<Vec<ComponentRow>, LibraryError> {
         Err(LibraryError::Backend(

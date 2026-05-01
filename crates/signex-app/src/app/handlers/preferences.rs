@@ -123,10 +123,17 @@ impl Signex {
                         });
                     }
                 }
-                self.ui_state.component_classes = sanitised.clone();
-                self.ui_state.preferences_draft_component_classes = sanitised.clone();
-                self.document_state.panel_ctx.component_classes = sanitised.clone();
+                // Persist first (the prefs writer borrows by ref so
+                // it can run before any moves), then move `sanitised`
+                // into the live registry. The draft + panel-ctx
+                // mirrors clone from the field rather than from
+                // `sanitised` so we drop one redundant clone.
                 crate::fonts::write_component_classes_pref(&sanitised);
+                self.ui_state.component_classes = sanitised;
+                self.ui_state.preferences_draft_component_classes =
+                    self.ui_state.component_classes.clone();
+                self.document_state.panel_ctx.component_classes =
+                    self.ui_state.component_classes.clone();
                 self.ui_state.preferences_dirty = false;
             }
             PrefMsg::DraftTheme(id) => {

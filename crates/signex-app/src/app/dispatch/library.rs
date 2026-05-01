@@ -293,22 +293,19 @@ impl Signex {
                     Some(a) => a,
                     None => return Task::none(),
                 };
-                let mut classes = adapter.library_classes();
-                if classes.iter().any(|c| c.key == key) {
-                    if let Some(s) = self.library.library_browsers.get_mut(&library_path)
-                        && let Some(d) = s.adding_class.as_mut()
-                    {
-                        d.error = Some(format!("A class with key {key:?} already exists."));
-                    }
-                    return Task::none();
-                }
-                classes.push(signex_library::ClassEntry {
-                    key: key.clone(),
-                    label,
-                });
-                if let Err(error) =
-                    adapter.update_library_classes(classes, &format!("add class {key}"))
-                {
+                // Atomic add — `add_library_class` does the
+                // duplicate-key check + push inside one
+                // `mutate_library_file` borrow on LocalGitAdapter
+                // (and the trait default falls back to the legacy
+                // two-step path for adapters without single-borrow
+                // support).
+                if let Err(error) = adapter.add_library_class(
+                    signex_library::ClassEntry {
+                        key: key.clone(),
+                        label,
+                    },
+                    &format!("add class {key}"),
+                ) {
                     if let Some(s) = self.library.library_browsers.get_mut(&library_path)
                         && let Some(d) = s.adding_class.as_mut()
                     {
@@ -331,10 +328,8 @@ impl Signex {
                     Some(a) => a,
                     None => return Task::none(),
                 };
-                let mut classes = adapter.library_classes();
-                classes.retain(|c| c.key != key);
                 if let Err(error) =
-                    adapter.update_library_classes(classes, &format!("delete class {key}"))
+                    adapter.remove_library_class(&key, &format!("delete class {key}"))
                 {
                     if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
                         s.class_error = Some(error.to_string());
@@ -410,24 +405,20 @@ impl Signex {
                     Some(a) => a,
                     None => return Task::none(),
                 };
-                let mut classes = adapter.library_classes();
-                if new_key != orig && classes.iter().any(|c| c.key == new_key) {
-                    if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
-                        s.class_error =
-                            Some(format!("A class with key {new_key:?} already exists."));
-                    }
-                    return Task::none();
-                }
-                for c in classes.iter_mut() {
-                    if c.key == orig {
-                        c.key = new_key.clone();
-                        c.label = new_label.clone();
-                        break;
-                    }
-                }
-                if let Err(error) =
-                    adapter.update_library_classes(classes, &format!("rename class {orig} → {new_key}"))
-                {
+                // Atomic rename — `rename_library_class` does the
+                // existence check + duplicate check + replace inside
+                // a single `mutate_library_file` borrow on the
+                // LocalGitAdapter (and falls back to the trait
+                // default's two-step on adapters without
+                // single-borrow support).
+                if let Err(error) = adapter.rename_library_class(
+                    &orig,
+                    signex_library::ClassEntry {
+                        key: new_key.clone(),
+                        label: new_label,
+                    },
+                    &format!("rename class {orig} → {new_key}"),
+                ) {
                     if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
                         s.class_error = Some(error.to_string());
                     }

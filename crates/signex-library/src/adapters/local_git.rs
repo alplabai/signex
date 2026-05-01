@@ -731,22 +731,27 @@ impl LibraryAdapter for LocalGitAdapter {
         let fallback = format!("delete table {owned}");
         self.mutate_library_file(
             move |lf| {
-                let entry = match lf.tables.get(&owned) {
-                    Some(t) => t,
-                    None => {
-                        return Err(LibraryError::NotFound(format!(
-                            "table {owned:?} not found"
-                        )));
+                // Single-pass check + remove via `entry()` — avoids
+                // the read-then-write borrow pattern that NLL only
+                // tolerates because the first borrow ends at the
+                // `if`. Using `entry()` keeps the BTreeMap touch
+                // atomic and is robust under future reorganisation.
+                use std::collections::btree_map::Entry;
+                match lf.tables.entry(owned.clone()) {
+                    Entry::Vacant(_) => Err(LibraryError::NotFound(format!(
+                        "table {owned:?} not found"
+                    ))),
+                    Entry::Occupied(occ) if !occ.get().rows.is_empty() => {
+                        Err(LibraryError::Conflict(format!(
+                            "table {owned:?} is not empty ({} rows)",
+                            occ.get().rows.len()
+                        )))
                     }
-                };
-                if !entry.rows.is_empty() {
-                    return Err(LibraryError::Conflict(format!(
-                        "table {owned:?} is not empty ({} rows)",
-                        entry.rows.len()
-                    )));
+                    Entry::Occupied(occ) => {
+                        occ.remove();
+                        Ok(())
+                    }
                 }
-                lf.tables.remove(&owned);
-                Ok(())
             },
             msg,
             &fallback,
@@ -773,6 +778,84 @@ impl LibraryAdapter for LocalGitAdapter {
             },
             msg,
             "update class registry",
+        )
+    }
+
+    fn add_library_class(
+        &self,
+        entry: crate::library_file::ClassEntry,
+        msg: &str,
+    ) -> Result<(), LibraryError> {
+        // Atomic override of the trait default — read + check +
+        // append all happen inside one `mutate_library_file` borrow
+        // so concurrent callers can't interleave a duplicate add.
+        let fallback = format!("add class {}", entry.key);
+        self.mutate_library_file(
+            move |lf| {
+                if lf.manifest.classes.iter().any(|c| c.key == entry.key) {
+                    return Err(LibraryError::Conflict(format!(
+                        "class with key {:?} already exists",
+                        entry.key
+                    )));
+                }
+                lf.manifest.classes.push(entry);
+                Ok(())
+            },
+            msg,
+            &fallback,
+        )
+    }
+
+    fn remove_library_class(&self, key: &str, msg: &str) -> Result<(), LibraryError> {
+        let owned_key = key.to_string();
+        let fallback = format!("remove class {owned_key}");
+        self.mutate_library_file(
+            move |lf| {
+                let before = lf.manifest.classes.len();
+                lf.manifest.classes.retain(|c| c.key != owned_key);
+                // Never error when the key is missing — keeps the
+                // UI's "× delete" idempotent.
+                let _ = before;
+                Ok(())
+            },
+            msg,
+            &fallback,
+        )
+    }
+
+    fn rename_library_class(
+        &self,
+        old_key: &str,
+        new_entry: crate::library_file::ClassEntry,
+        msg: &str,
+    ) -> Result<(), LibraryError> {
+        let owned_old = old_key.to_string();
+        let fallback = format!("rename class {owned_old} → {}", new_entry.key);
+        self.mutate_library_file(
+            move |lf| {
+                if !lf.manifest.classes.iter().any(|c| c.key == owned_old) {
+                    return Err(LibraryError::NotFound(format!(
+                        "class {owned_old:?} not found"
+                    )));
+                }
+                if new_entry.key != owned_old
+                    && lf.manifest.classes.iter().any(|c| c.key == new_entry.key)
+                {
+                    return Err(LibraryError::Conflict(format!(
+                        "class with key {:?} already exists",
+                        new_entry.key
+                    )));
+                }
+                for c in lf.manifest.classes.iter_mut() {
+                    if c.key == owned_old {
+                        *c = new_entry.clone();
+                        break;
+                    }
+                }
+                Ok(())
+            },
+            msg,
+            &fallback,
         )
     }
 

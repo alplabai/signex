@@ -168,6 +168,20 @@ pub fn enable_project_version_control(
     index
         .write()
         .map_err(|e| LibraryError::Backend(format!("git index write: {e}")))?;
+    // Refuse to land an empty initial commit. A `git status` after
+    // such a commit would treat every later-added file as untracked
+    // and confuse anyone reading the log. The realistic path here
+    // is "user clicked Enable Version Control on a freshly-minted
+    // project that hasn't been saved yet" — surface that as an
+    // actionable error instead of papering over it with a no-op
+    // commit.
+    if index.is_empty() {
+        return Err(LibraryError::Backend(
+            "project directory has no files to commit — save the project first, \
+             then re-enable version control"
+                .into(),
+        ));
+    }
     let tree_oid = index
         .write_tree()
         .map_err(|e| LibraryError::Backend(format!("git write tree: {e}")))?;
