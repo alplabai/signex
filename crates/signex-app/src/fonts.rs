@@ -94,7 +94,13 @@ pub fn iced_font_for_family(name: &str) -> iced::Font {
     static INTERN: OnceLock<Mutex<std::collections::HashMap<String, &'static str>>> =
         OnceLock::new();
     let map_lock = INTERN.get_or_init(|| Mutex::new(std::collections::HashMap::new()));
-    let mut map = map_lock.lock().unwrap();
+    // `unwrap_or_else(|e| e.into_inner())` recovers from a poisoned
+    // mutex — the inner value is still valid (a HashMap of leaked
+    // names; nothing in flight here can corrupt it). Using
+    // `.unwrap()` would panic the UI thread on every subsequent
+    // tooltip render after any unrelated panic that happened to
+    // hold this lock.
+    let mut map = map_lock.lock().unwrap_or_else(|e| e.into_inner());
     let static_name: &'static str = match map.get(name) {
         Some(s) => *s,
         None => {
@@ -190,11 +196,13 @@ pub fn write_ui_font_pref(font_name: &str) {
 }
 
 /// Read the user's component-class list from the prefs file. Falls
-/// back to [`default_component_classes`] when the file is absent /
-/// malformed, when the array is missing, or when it parses to an
-/// empty list (a deliberately-cleared list would round-trip as the
-/// seed — preventing a user who deletes every class from being stuck
-/// with no options at all).
+/// back to [`default_component_classes`] only when the file is
+/// absent / malformed, or when the `component_classes` key is
+/// missing entirely (a fresh install). A user who has the array
+/// present and empty is honored verbatim — the New Component
+/// surface handles the "no classes defined" case at the point of
+/// use, so saving an empty list and reading it back round-trips
+/// faithfully.
 pub fn read_component_classes_pref() -> Vec<ComponentClassEntry> {
     let path = prefs_path();
     let Ok(bytes) = std::fs::read(&path) else {
@@ -206,15 +214,9 @@ pub fn read_component_classes_pref() -> Vec<ComponentClassEntry> {
     let Some(arr) = json["component_classes"].as_array() else {
         return default_component_classes();
     };
-    let parsed: Vec<ComponentClassEntry> = arr
-        .iter()
+    arr.iter()
         .filter_map(|v| serde_json::from_value(v.clone()).ok())
-        .collect();
-    if parsed.is_empty() {
-        default_component_classes()
-    } else {
-        parsed
-    }
+        .collect()
 }
 
 /// Persist `classes` to the `component_classes` array in prefs.json

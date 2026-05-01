@@ -1371,10 +1371,19 @@ mod tests {
     fn init_creates_snxlib_file_and_repo() {
         let dir = tempfile::tempdir().unwrap();
         let path = fixture_snxlib_path(&dir, "Test");
+        // Default `LibraryInitOptions` flips `enable_git` off; this
+        // test predates that change and asserts `.git/` presence.
+        // Pass an explicit opts struct with version control on so the
+        // assertion still describes meaningful behaviour. The
+        // `LibraryInitOptions::default()` path (git off) is now the
+        // dominant case but doesn't have a `.git` to check.
         let _adapter = LocalGitAdapter::init(
             &path,
             fixture_snx_manifest("Test"),
-            LibraryInitOptions::default(),
+            LibraryInitOptions {
+                enable_git: true,
+                use_lfs: false,
+            },
         )
         .expect("init succeeds");
         assert!(path.exists(), "expected .snxlib file at {path:?}");
@@ -1406,7 +1415,10 @@ mod tests {
         let adapter = LocalGitAdapter::init(
             &path,
             fixture_snx_manifest("Lfs"),
-            LibraryInitOptions { use_lfs: true },
+            LibraryInitOptions {
+                enable_git: true,
+                use_lfs: true,
+            },
         )
         .unwrap();
         let attrs = adapter.root().join(GITATTRIBUTES_FILE);

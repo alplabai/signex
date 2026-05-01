@@ -111,6 +111,7 @@ pub fn enable_project_version_control(
         LibraryError::Backend(format!("create project dir {}: {e}", project_dir.display()))
     })?;
 
+    let mut wrote_lfs_attributes = false;
     if use_lfs {
         let attributes = "\
 *.step filter=lfs diff=lfs merge=lfs -text\n\
@@ -120,10 +121,23 @@ pub fn enable_project_version_control(
         std::fs::write(project_dir.join(".gitattributes"), attributes).map_err(|e| {
             LibraryError::Backend(format!("write .gitattributes: {e}"))
         })?;
+        wrote_lfs_attributes = true;
     }
 
-    let repo = git2::Repository::init(project_dir)
-        .map_err(|e| LibraryError::Backend(format!("git init: {e}")))?;
+    // Helper that removes the orphan `.gitattributes` if subsequent
+    // git ops fail — we don't want a non-version-controlled
+    // directory to keep an LFS-tracking file that has no `.git/` to
+    // give it meaning.
+    let cleanup = |dir: &std::path::Path, wrote: bool| {
+        if wrote {
+            let _ = std::fs::remove_file(dir.join(".gitattributes"));
+        }
+    };
+
+    let repo = git2::Repository::init(project_dir).map_err(|e| {
+        cleanup(project_dir, wrote_lfs_attributes);
+        LibraryError::Backend(format!("git init: {e}"))
+    })?;
 
     // Identity for the commit — same fallback the LocalGitAdapter
     // uses (env GIT_AUTHOR_NAME / EMAIL → repo config → "signex").

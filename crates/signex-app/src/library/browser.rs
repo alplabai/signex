@@ -516,12 +516,17 @@ fn view_table_sidebar<'a>(
         .unwrap_or_default();
 
     for entry in &classes_list {
-        let is_renaming = browser
+        // `if let` guards both branches in one shot — the rename
+        // form draws when this row is the renaming target;
+        // otherwise the static row + ✎/× buttons render below.
+        // Using a bare `.unwrap()` after a separate `is_some_and`
+        // check is a reliability footgun if the surrounding
+        // control flow ever changes.
+        if let Some((_, key_buf, label_buf)) = browser
             .renaming_class
             .as_ref()
-            .is_some_and(|(orig, _, _)| orig.as_str() == entry.key.as_str());
-        if is_renaming {
-            let (_, key_buf, label_buf) = browser.renaming_class.as_ref().unwrap();
+            .filter(|(orig, _, _)| orig.as_str() == entry.key.as_str())
+        {
             let library_for_key = library_path.to_path_buf();
             let library_for_label = library_path.to_path_buf();
             let library_for_confirm = library_path.to_path_buf();

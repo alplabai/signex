@@ -59,7 +59,7 @@ fn init_adapter(
 ) -> (PathBuf, LocalGitAdapter) {
     let file = snxlib_path(dir.path(), name);
     let manifest = empty_snx_manifest(name, review_required);
-    let adapter = LocalGitAdapter::init(&file, manifest, LibraryInitOptions::default())
+    let adapter = LocalGitAdapter::init(&file, manifest, LibraryInitOptions { enable_git: true, use_lfs: false })
         .expect("init succeeds");
     (file, adapter)
 }
@@ -72,7 +72,7 @@ fn init_open_round_trip_empty_library() {
     let file = snxlib_path(dir.path(), "Empty");
     let manifest = empty_snx_manifest("Empty", false);
     let library_id = manifest.library_id;
-    let adapter = LocalGitAdapter::init(&file, manifest, LibraryInitOptions::default()).unwrap();
+    let adapter = LocalGitAdapter::init(&file, manifest, LibraryInitOptions { enable_git: true, use_lfs: false }).unwrap();
     assert_eq!(adapter.manifest().library.name, "Empty");
     assert!(file.exists(), "expected .snxlib file at {file:?}");
     assert!(file.parent().unwrap().join(".git").is_dir());
@@ -90,13 +90,13 @@ fn init_refuses_existing_library() {
     LocalGitAdapter::init(
         &file,
         empty_snx_manifest("X", false),
-        LibraryInitOptions::default(),
+        LibraryInitOptions { enable_git: true, use_lfs: false },
     )
     .unwrap();
     let err = LocalGitAdapter::init(
         &file,
         empty_snx_manifest("X", false),
-        LibraryInitOptions::default(),
+        LibraryInitOptions { enable_git: true, use_lfs: false },
     )
     .unwrap_err();
     assert!(matches!(err, LibraryError::Conflict(_)));
@@ -175,7 +175,7 @@ fn library_id_returns_manifest_id() {
     let file = snxlib_path(dir.path(), "Id");
     let manifest = empty_snx_manifest("Id", false);
     let expected = manifest.library_id;
-    let adapter = LocalGitAdapter::init(&file, manifest, LibraryInitOptions::default()).unwrap();
+    let adapter = LocalGitAdapter::init(&file, manifest, LibraryInitOptions { enable_git: true, use_lfs: false }).unwrap();
     assert_eq!(adapter.library_id(), expected);
 }
 
@@ -380,9 +380,9 @@ fn library_set_resolves_across_two_local_libs() {
     assert_ne!(lib_a, lib_b);
 
     let adapter_a =
-        LocalGitAdapter::init(&file_a, manifest_a, LibraryInitOptions::default()).unwrap();
+        LocalGitAdapter::init(&file_a, manifest_a, LibraryInitOptions { enable_git: true, use_lfs: false }).unwrap();
     let adapter_b =
-        LocalGitAdapter::init(&file_b, manifest_b, LibraryInitOptions::default()).unwrap();
+        LocalGitAdapter::init(&file_b, manifest_b, LibraryInitOptions { enable_git: true, use_lfs: false }).unwrap();
 
     // Each library gets its own symbol with the SAME local UUID — so a
     // resolver that ignores library_id would pick the wrong one. The test
@@ -481,7 +481,7 @@ fn local_git_round_trip_row() {
     let manifest = empty_snx_manifest("RowRT", false);
     let lib_id = manifest.library_id;
     let adapter =
-        LocalGitAdapter::init(&file, manifest, LibraryInitOptions::default()).unwrap();
+        LocalGitAdapter::init(&file, manifest, LibraryInitOptions { enable_git: true, use_lfs: false }).unwrap();
 
     let row = fixture_row("R10K", "resistor", lib_id);
     let row_id = RowId::from_uuid(row.row_id);
@@ -525,7 +525,7 @@ fn local_git_iter_rows_across_tables() {
     let manifest = empty_snx_manifest("IterRows", false);
     let lib_id = manifest.library_id;
     let adapter =
-        LocalGitAdapter::init(&file, manifest, LibraryInitOptions::default()).unwrap();
+        LocalGitAdapter::init(&file, manifest, LibraryInitOptions { enable_git: true, use_lfs: false }).unwrap();
 
     let r1 = fixture_row("R10K", "resistor", lib_id);
     let r2 = fixture_row("R47K", "resistor", lib_id);
@@ -566,7 +566,7 @@ fn local_git_read_row_by_pn() {
     let manifest = empty_snx_manifest("ByPN", false);
     let lib_id = manifest.library_id;
     let adapter =
-        LocalGitAdapter::init(&file, manifest, LibraryInitOptions::default()).unwrap();
+        LocalGitAdapter::init(&file, manifest, LibraryInitOptions { enable_git: true, use_lfs: false }).unwrap();
 
     let target = fixture_row("R10K", "resistor", lib_id);
     let other = fixture_row("R47K", "resistor", lib_id);
@@ -595,7 +595,7 @@ fn local_git_commits_with_message() {
     let manifest = empty_snx_manifest("Commits", false);
     let lib_id = manifest.library_id;
     let adapter =
-        LocalGitAdapter::init(&file, manifest, LibraryInitOptions::default()).unwrap();
+        LocalGitAdapter::init(&file, manifest, LibraryInitOptions { enable_git: true, use_lfs: false }).unwrap();
 
     let row = fixture_row("R10K", "resistor", lib_id);
     adapter.insert_row("resistors", row, "msg-XYZ").unwrap();
@@ -624,6 +624,7 @@ fn snx_manifest_with_mode(name: &str, mode: WorkflowMode) -> SnxlibManifest {
             ..Default::default()
         },
         users: UsersConfig::default(),
+        classes: Vec::new(),
     }
 }
 
@@ -636,7 +637,7 @@ fn cascade_personal_mode_auto_bumps_bound_row() {
     let file = snxlib_path(dir.path(), "CascadeP");
     let manifest = snx_manifest_with_mode("CascadeP", WorkflowMode::Personal);
     let lib_id = manifest.library_id;
-    let adapter = LocalGitAdapter::init(&file, manifest, LibraryInitOptions::default()).unwrap();
+    let adapter = LocalGitAdapter::init(&file, manifest, LibraryInitOptions { enable_git: true, use_lfs: false }).unwrap();
 
     // Save symbol v0.0.1 — no rows yet, cascade is a no-op here.
     let mut sym = fixture_symbol("OPAMP-V1");
@@ -677,7 +678,7 @@ fn cascade_team_mode_leaves_released_row_stale() {
     let file = snxlib_path(dir.path(), "CascadeT");
     let manifest = snx_manifest_with_mode("CascadeT", WorkflowMode::Team);
     let lib_id = manifest.library_id;
-    let adapter = LocalGitAdapter::init(&file, manifest, LibraryInitOptions::default()).unwrap();
+    let adapter = LocalGitAdapter::init(&file, manifest, LibraryInitOptions { enable_git: true, use_lfs: false }).unwrap();
 
     let mut sym = fixture_symbol("OPAMP-V1");
     sym.version = "1.0.0".into();
@@ -731,7 +732,7 @@ fn cascade_team_mode_unreleased_row_auto_bumps() {
     let file = snxlib_path(dir.path(), "CascadeTU");
     let manifest = snx_manifest_with_mode("CascadeTU", WorkflowMode::Team);
     let lib_id = manifest.library_id;
-    let adapter = LocalGitAdapter::init(&file, manifest, LibraryInitOptions::default()).unwrap();
+    let adapter = LocalGitAdapter::init(&file, manifest, LibraryInitOptions { enable_git: true, use_lfs: false }).unwrap();
 
     let mut sym = fixture_symbol("OPAMP-V1");
     sym.version = "1.0.0".into();
@@ -768,7 +769,7 @@ fn cascade_footprint_personal_mode_auto_bumps_bound_row() {
     let file = snxlib_path(dir.path(), "CascadeF");
     let manifest = snx_manifest_with_mode("CascadeF", WorkflowMode::Personal);
     let lib_id = manifest.library_id;
-    let adapter = LocalGitAdapter::init(&file, manifest, LibraryInitOptions::default()).unwrap();
+    let adapter = LocalGitAdapter::init(&file, manifest, LibraryInitOptions { enable_git: true, use_lfs: false }).unwrap();
 
     let mut fp = fixture_footprint("SOIC-8");
     fp.version = "0.0.1".into();
