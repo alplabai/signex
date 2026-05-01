@@ -212,12 +212,14 @@ impl Signex {
             // Already version-controlled — nothing to enable.
             return;
         }
+        let items = collect_track_items(project_dir, &project.data);
         self.ui_state.enable_version_control =
             Some(crate::app::EnableVersionControlState {
                 project_path: project.path.clone(),
                 project_dir: project_dir.to_path_buf(),
                 project_name: project.data.name.clone(),
                 use_lfs: false,
+                items,
                 error: None,
             });
     }
@@ -226,7 +228,8 @@ impl Signex {
         let Some(state) = self.ui_state.enable_version_control.clone() else {
             return;
         };
-        match try_init_project_repo(&state.project_dir, state.use_lfs) {
+        let gitignore = build_gitignore_body(&state.items);
+        match try_init_project_repo(&state.project_dir, state.use_lfs, gitignore.as_deref()) {
             Ok(()) => {
                 self.ui_state.enable_version_control = None;
                 self.refresh_panel_ctx();
@@ -1416,10 +1419,108 @@ fn blank_schematic_sheet_for_new_doc() -> signex_types::schematic::SchematicShee
 
 /// Thin wrapper around `signex_library::enable_project_version_control`
 /// — kept here so the dispatch handler can stay synchronous and
-/// surface the `LibraryError` as a user-facing string.
+/// surface the `LibraryError` as a user-facing string. `gitignore`
+/// is the body of the `.gitignore` to write before init (one line
+/// per pattern, trailing newline); `None` skips the write entirely
+/// so the previous "track everything" path stays bit-identical.
 fn try_init_project_repo(
     project_dir: &std::path::Path,
     use_lfs: bool,
+    gitignore: Option<&str>,
 ) -> Result<(), signex_library::LibraryError> {
-    signex_library::enable_project_version_control(project_dir, use_lfs)
+    signex_library::enable_project_version_control(project_dir, use_lfs, gitignore)
+}
+
+/// Walk the project's known files and produce one
+/// [`crate::app::TrackItem`] row per `.snxsch` / `.snxpcb` /
+/// project-local `.snxlib` entry. The picker treats every item as
+/// **tracked** by default; the user opts out per-row to generate
+/// `.gitignore` patterns at confirm time. Shared / global library
+/// entries are skipped — they live outside the project dir and
+/// can't be ignored relative to it.
+fn collect_track_items(
+    project_dir: &std::path::Path,
+    data: &signex_types::project::ProjectData,
+) -> Vec<crate::app::TrackItem> {
+    use crate::app::{TrackItem, TrackItemKind};
+    use signex_types::project::LibraryEntryKind;
+
+    let mut items: Vec<TrackItem> = Vec::new();
+    let mut seen: std::collections::HashSet<std::path::PathBuf> =
+        std::collections::HashSet::new();
+    let push = |items: &mut Vec<TrackItem>,
+                seen: &mut std::collections::HashSet<std::path::PathBuf>,
+                rel_str: &str,
+                kind: TrackItemKind| {
+        let absolute = project_dir.join(rel_str);
+        if !seen.insert(absolute.clone()) {
+            return;
+        }
+        items.push(TrackItem {
+            absolute,
+            relative: rel_str.replace('\\', "/"),
+            kind,
+            tracked: true,
+        });
+    };
+
+    if let Some(root) = data.schematic_root.as_deref() {
+        if !root.is_empty() {
+            push(&mut items, &mut seen, root, TrackItemKind::Schematic);
+        }
+    }
+    for sheet in &data.sheets {
+        if !sheet.filename.is_empty() {
+            push(
+                &mut items,
+                &mut seen,
+                &sheet.filename,
+                TrackItemKind::Schematic,
+            );
+        }
+    }
+    if let Some(pcb) = data.pcb_file.as_deref() {
+        if !pcb.is_empty() {
+            push(&mut items, &mut seen, pcb, TrackItemKind::Pcb);
+        }
+    }
+    for lib in &data.libraries {
+        if lib.kind == LibraryEntryKind::ProjectLocal {
+            let rel = lib.path.to_string_lossy().to_string();
+            if !rel.is_empty() {
+                push(&mut items, &mut seen, &rel, TrackItemKind::Library);
+            }
+        }
+    }
+    items.sort_by(|a, b| a.relative.cmp(&b.relative));
+    items
+}
+
+/// Compose the `.gitignore` body from the picker's unchecked rows.
+/// Returns `None` when every item is tracked — keeps the
+/// pre-picker behaviour (no `.gitignore` written) so existing
+/// projects don't silently grow an empty file. Patterns are
+/// anchored to the project root with a leading `/`; library
+/// directories carry a trailing `/` so the pattern only matches
+/// the directory and not a same-named file. Includes a one-line
+/// header comment so the file's provenance is visible.
+fn build_gitignore_body(items: &[crate::app::TrackItem]) -> Option<String> {
+    use crate::app::TrackItemKind;
+    let untracked: Vec<&crate::app::TrackItem> =
+        items.iter().filter(|it| !it.tracked).collect();
+    if untracked.is_empty() {
+        return None;
+    }
+    let mut body = String::from(
+        "# Generated by Signex — Enable Version Control. Edit freely.\n",
+    );
+    for item in untracked {
+        body.push('/');
+        body.push_str(&item.relative);
+        if matches!(item.kind, TrackItemKind::Library) {
+            body.push('/');
+        }
+        body.push('\n');
+    }
+    Some(body)
 }

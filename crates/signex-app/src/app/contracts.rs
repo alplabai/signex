@@ -152,6 +152,10 @@ pub enum Message {
     CloseProjectOptions,
     /// Toggle the LFS checkbox on the Enable Version Control modal.
     EnableVersionControlToggleLfs,
+    /// Toggle a per-item checkbox in the Enable Version Control
+    /// modal's tracking-scope picker. Index points into
+    /// [`EnableVersionControlState::items`].
+    EnableVersionControlToggleItem(usize),
     /// Confirm — runs `git init` + initial commit at the project
     /// dir, refreshes the panel ctx so any in-tree dirty markers
     /// reflect the new state.
@@ -785,10 +789,9 @@ pub struct RenameDialogState {
 /// from the project root context menu when the project directory
 /// has no `.git/` yet. Confirm runs `git2::Repository::init` at
 /// `project_dir`, optionally writes `.gitattributes` for binary-
-/// model LFS, and stages an initial commit covering the entire
-/// tree. The per-item tracking-scope picker (track only specific
-/// schematics / libraries) is deferred to a follow-up iteration —
-/// this minimum version tracks the whole project tree.
+/// model LFS, generates a `.gitignore` covering any items the
+/// user unchecked in the per-item tracking-scope picker, and
+/// stages an initial commit covering the remaining tree.
 #[derive(Debug, Clone)]
 pub struct EnableVersionControlState {
     pub project_path: std::path::PathBuf,
@@ -797,10 +800,38 @@ pub struct EnableVersionControlState {
     /// "Track binary 3D models via Git LFS" checkbox. Off by
     /// default; only writes `.gitattributes` when on.
     pub use_lfs: bool,
+    /// Per-item tracking-scope picker rows — one entry per
+    /// `.snxsch` / `.snxpcb` / `.snxlib` discovered in the project
+    /// tree. The `.snxprj` is always tracked and not surfaced as a
+    /// row. Items the user unchecks become `.gitignore` patterns.
+    pub items: Vec<TrackItem>,
     /// Last error from a confirm attempt — surfaces inline so the
     /// user can fix the cause (LFS not installed, etc.) and retry
     /// without reopening the modal.
     pub error: Option<String>,
+}
+
+/// Kind discriminant for a per-item row in the Enable Version
+/// Control tracking-scope picker. Drives the leading icon and
+/// `.gitignore` pattern shape (file vs directory) at confirm time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TrackItemKind {
+    Schematic,
+    Pcb,
+    Library,
+}
+
+/// One row in the Enable Version Control tracking-scope picker.
+/// `relative` is the path relative to the project directory in
+/// forward-slash form — used both as the display string and as
+/// the `.gitignore` pattern (with a leading `/` to anchor to the
+/// project root, plus a trailing `/` for `Library` directories).
+#[derive(Debug, Clone)]
+pub struct TrackItem {
+    pub absolute: std::path::PathBuf,
+    pub relative: String,
+    pub kind: TrackItemKind,
+    pub tracked: bool,
 }
 
 /// State for the read-only "Project Options" modal — the v0.9 surface

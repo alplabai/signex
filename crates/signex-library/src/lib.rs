@@ -86,9 +86,10 @@ pub use adapters::local_git::LocalGitAdapter;
 /// Project-level "Enable Version Control" helper. Runs
 /// `git2::Repository::init` at `project_dir`, optionally writes a
 /// `.gitattributes` opting common binary-model extensions (`*.step`,
-/// `*.stp`, `*.wrl`, `*.iges`) into Git LFS, then stages every
-/// tracked file and creates the initial commit "chore: enable
-/// version control".
+/// `*.stp`, `*.wrl`, `*.iges`) into Git LFS, optionally writes a
+/// `.gitignore` (`gitignore` arg) for any items the per-project
+/// tracking-scope picker unchecked, then stages every tracked file
+/// and creates the initial commit "chore: enable version control".
 ///
 /// Used by `signex-app` so the per-project Enable Version Control
 /// flow doesn't need to pull `git2` in directly. Errors propagate
@@ -98,6 +99,7 @@ pub use adapters::local_git::LocalGitAdapter;
 pub fn enable_project_version_control(
     project_dir: &std::path::Path,
     use_lfs: bool,
+    gitignore: Option<&str>,
 ) -> Result<(), adapter::LibraryError> {
     use adapter::LibraryError;
 
@@ -124,18 +126,35 @@ pub fn enable_project_version_control(
         wrote_lfs_attributes = true;
     }
 
-    // Helper that removes the orphan `.gitattributes` if subsequent
+    let mut wrote_gitignore = false;
+    if let Some(body) = gitignore {
+        std::fs::write(project_dir.join(".gitignore"), body).map_err(|e| {
+            // Roll back the `.gitattributes` we just wrote so a
+            // failed init never leaves an orphan LFS-tracking file
+            // behind.
+            if wrote_lfs_attributes {
+                let _ = std::fs::remove_file(project_dir.join(".gitattributes"));
+            }
+            LibraryError::Backend(format!("write .gitignore: {e}"))
+        })?;
+        wrote_gitignore = true;
+    }
+
+    // Helper that removes orphan files written above if subsequent
     // git ops fail — we don't want a non-version-controlled
-    // directory to keep an LFS-tracking file that has no `.git/` to
-    // give it meaning.
-    let cleanup = |dir: &std::path::Path, wrote: bool| {
-        if wrote {
+    // directory to keep `.gitattributes` / `.gitignore` files that
+    // have no `.git/` to give them meaning.
+    let cleanup = |dir: &std::path::Path, wrote_lfs: bool, wrote_ignore: bool| {
+        if wrote_lfs {
             let _ = std::fs::remove_file(dir.join(".gitattributes"));
+        }
+        if wrote_ignore {
+            let _ = std::fs::remove_file(dir.join(".gitignore"));
         }
     };
 
     let repo = git2::Repository::init(project_dir).map_err(|e| {
-        cleanup(project_dir, wrote_lfs_attributes);
+        cleanup(project_dir, wrote_lfs_attributes, wrote_gitignore);
         LibraryError::Backend(format!("git init: {e}"))
     })?;
 

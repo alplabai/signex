@@ -1093,7 +1093,7 @@ impl Signex {
             ModalId::PrintPreview => iced::Size::new(1100.0, 780.0),
             ModalId::BomPreview => iced::Size::new(1180.0, 760.0),
             ModalId::ProjectOptions => iced::Size::new(520.0, 360.0),
-            ModalId::EnableVersionControl => iced::Size::new(520.0, 320.0),
+            ModalId::EnableVersionControl => iced::Size::new(560.0, 480.0),
         };
 
         let (id, open_task) = iced::window::open(iced::window::Settings {

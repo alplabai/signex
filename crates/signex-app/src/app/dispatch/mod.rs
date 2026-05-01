@@ -145,6 +145,7 @@ impl Signex {
             | Message::AddNewSchematicPicked { .. }
             | Message::CloseProjectOptions
             | Message::EnableVersionControlToggleLfs
+            | Message::EnableVersionControlToggleItem(_)
             | Message::EnableVersionControlConfirm
             | Message::CloseEnableVersionControl
             | Message::OpenContextSubmenu(_)

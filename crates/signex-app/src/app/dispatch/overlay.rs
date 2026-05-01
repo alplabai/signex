@@ -198,6 +198,14 @@ impl Signex {
                 }
                 Task::none()
             }
+            Message::EnableVersionControlToggleItem(idx) => {
+                if let Some(s) = self.ui_state.enable_version_control.as_mut() {
+                    if let Some(it) = s.items.get_mut(idx) {
+                        it.tracked = !it.tracked;
+                    }
+                }
+                Task::none()
+            }
             Message::EnableVersionControlConfirm => {
                 self.handle_enable_version_control_confirm();
                 Task::none()
