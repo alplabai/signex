@@ -432,6 +432,10 @@ pub struct DocumentState {
     /// include flags / format / variant in the modal and clicks
     /// Export to drive `rfd::AsyncFileDialog` with the chosen options.
     pub bom_preview: Option<BomPreviewState>,
+    /// Right-dock History panel state — current generation counter,
+    /// last loaded entries, the path the load was issued for. Driven
+    /// by `Message::HistoryLoaded` and re-targeted on tab switch.
+    pub history: crate::panels::history::HistoryPanelState,
 }
 
 /// Which sidebar tab is currently shown inside the BOM preview's

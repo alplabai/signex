@@ -12,6 +12,7 @@ use signex_widgets::tree_view::{TreeIcon, TreeMsg, TreeNode, TreeView};
 use std::sync::OnceLock;
 
 pub mod components_panel;
+pub mod history;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[allow(dead_code)]
@@ -45,6 +46,10 @@ pub enum PanelKind {
     /// editor's `active_idx`. Visible whenever a Symbol editor tab
     /// is focused.
     SchLibrary,
+    /// VSCode-style per-file Git history. Right-dock surface that
+    /// follows the active tab and shows the file's last 50 commits
+    /// via `signex_widgets::history_pane`.
+    History,
 }
 
 /// All available panel kinds for the panel list button.
@@ -71,6 +76,7 @@ pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::Todo,
     PanelKind::Wiki,
     PanelKind::SchLibrary,
+    PanelKind::History,
 ];
 
 impl PanelKind {
@@ -122,6 +128,7 @@ impl PanelKind {
             PanelKind::OutputJobs => "Output Jobs",
             PanelKind::Library => "Library",
             PanelKind::SchLibrary => "SCH Library",
+            PanelKind::History => "History",
         }
     }
 }
@@ -401,6 +408,11 @@ pub struct PanelContext {
     /// without the in-tab editor having to embed its own properties pane.
     /// `None` for any other tab kind.
     pub symbol_editor: Option<SymbolEditorPanelContext>,
+    /// Per-file Git history snapshot for the right-dock History
+    /// panel. Mirrored from [`crate::app::DocumentState::history`]
+    /// each refresh; the panel reads it directly without holding a
+    /// borrow into the document state.
+    pub history: history::HistoryPanelState,
 }
 
 /// Context handed to the right-dock Properties panel and the SCH-Library
@@ -1185,6 +1197,7 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
             ctx,
         ),
         PanelKind::SchLibrary => view_sch_library(ctx),
+        PanelKind::History => return history::view_history(ctx),
     };
 
     scrollable(content).width(Length::Fill).into()

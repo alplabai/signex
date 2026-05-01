@@ -537,6 +537,19 @@ pub enum Message {
     /// Execute the currently selected entry. Wired to Enter and to
     /// `text_input::on_submit`.
     CommandPaletteExecuteSelected,
+    /// Async result of a per-file Git history load issued by the
+    /// right-dock History panel. `generation` is the value of
+    /// `DocumentState.history.generation` at the time the load was
+    /// kicked off; the handler discards stale results whose
+    /// generation no longer matches the current counter (the user
+    /// has switched tabs since). `path` is the file the load
+    /// targeted, surfaced for diagnostic logging only — the
+    /// generation token is the authoritative staleness check.
+    HistoryLoaded {
+        generation: u32,
+        path: std::path::PathBuf,
+        result: Result<Vec<signex_widgets::HistoryEntry>, String>,
+    },
     Noop,
 }
 

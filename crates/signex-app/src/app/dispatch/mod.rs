@@ -667,6 +667,29 @@ impl Signex {
             | Message::CommandPaletteExecuteSelected => {
                 self.dispatch_command_palette_message(message)
             }
+            Message::HistoryLoaded {
+                generation,
+                path: _,
+                result,
+            } => {
+                // Drop stale results from a previous tab — the
+                // generation token compares cheaply and is the
+                // authoritative staleness check (the path field
+                // is informational only).
+                if generation != self.document_state.history.generation {
+                    return Task::none();
+                }
+                self.document_state.history.loading = false;
+                self.document_state.history.mode =
+                    crate::panels::history::HistoryRenderMode::Ready;
+                self.document_state.history.entries = match result {
+                    Ok(entries) => entries,
+                    Err(_) => Vec::new(),
+                };
+                self.document_state.panel_ctx.history =
+                    self.document_state.history.clone();
+                Task::none()
+            }
             Message::Noop => Task::none(),
         }
     }

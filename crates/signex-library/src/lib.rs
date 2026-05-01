@@ -219,6 +219,166 @@ pub fn enable_project_version_control(
     Ok(())
 }
 
+/// Walk the commit graph at `project_dir` and return up to 50
+/// commits that touched `rel_path` (relative to `project_dir`).
+///
+/// Mirrors [`crate::adapters::local_git::LocalGitAdapter::history`]
+/// but works on **any** git repository — not just library-rooted
+/// ones. Used by `signex-app`'s right-dock History panel to show
+/// the active tab's file history regardless of whether the file
+/// lives inside a `.snxlib` or in a plain Signex project.
+///
+/// Returns `Ok(vec![])` when the path has no commits yet (fresh
+/// repo, untracked file, unborn HEAD). Returns
+/// `Err(LibraryError::NotFound)` when `project_dir` has no `.git/`.
+#[cfg(feature = "local-git")]
+pub fn project_file_history(
+    project_dir: &std::path::Path,
+    rel_path: &std::path::Path,
+) -> Result<Vec<adapter::HistoryEntry>, adapter::LibraryError> {
+    use adapter::{HistoryEntry, LibraryError};
+    use std::path::Path;
+
+    const MAX_ENTRIES: usize = 50;
+
+    if !project_dir.join(".git").exists() {
+        return Err(LibraryError::NotFound(format!(
+            "no .git/ at {}",
+            project_dir.display()
+        )));
+    }
+
+    // Normalise the pathspec: strip a leading `project_dir` prefix
+    // when the caller passed an absolute path, otherwise take
+    // `rel_path` verbatim. Use forward slashes so libgit2's pathspec
+    // matches on Windows the same way it does on POSIX.
+    let rel_buf = if rel_path.is_absolute() {
+        rel_path
+            .strip_prefix(project_dir)
+            .map_err(|_| {
+                LibraryError::NotFound(format!(
+                    "history: {} is not under {}",
+                    rel_path.display(),
+                    project_dir.display(),
+                ))
+            })?
+            .to_path_buf()
+    } else {
+        rel_path.to_path_buf()
+    };
+    let rel_str = rel_buf.to_string_lossy().replace('\\', "/");
+
+    let repo = git2::Repository::open(project_dir)
+        .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
+
+    let mut walk = repo
+        .revwalk()
+        .map_err(|e| LibraryError::Backend(format!("git revwalk: {e}")))?;
+    walk.set_sorting(git2::Sort::TIME | git2::Sort::TOPOLOGICAL)
+        .map_err(|e| LibraryError::Backend(format!("git revwalk sort: {e}")))?;
+
+    // Unborn HEAD (fresh repo, no commits yet) is "no history",
+    // not an error. libgit2 reports this as either UnbornBranch
+    // (when HEAD points at an unborn ref) or NotFound (when HEAD
+    // itself can't be peeled). Both surfaces fold to an empty Vec
+    // so the History panel can render a "No commits yet" card.
+    match walk.push_head() {
+        Ok(()) => {}
+        Err(e)
+            if matches!(
+                e.code(),
+                git2::ErrorCode::UnbornBranch | git2::ErrorCode::NotFound
+            ) || e.class() == git2::ErrorClass::Reference =>
+        {
+            // Unborn HEAD: libgit2 reports either UnbornBranch (POSIX
+            // path), NotFound (some macOS variants), or a generic
+            // Reference-class error on Windows where HEAD points at
+            // `refs/heads/master` which doesn't exist yet. All three
+            // surfaces fold to an empty Vec so the History panel can
+            // render a "No commits yet" card.
+            return Ok(Vec::new());
+        }
+        Err(e) => return Err(LibraryError::Backend(format!("git push head: {e}"))),
+    }
+
+    let mut entries: Vec<HistoryEntry> = Vec::new();
+    for oid_res in walk {
+        if entries.len() >= MAX_ENTRIES {
+            break;
+        }
+        let oid =
+            oid_res.map_err(|e| LibraryError::Backend(format!("git revwalk oid: {e}")))?;
+        let commit = repo
+            .find_commit(oid)
+            .map_err(|e| LibraryError::Backend(format!("git find commit: {e}")))?;
+
+        if !commit_touches_path(&repo, &commit, &rel_str)? {
+            continue;
+        }
+
+        entries.push(commit_to_history_entry(&commit));
+    }
+
+    // Local helpers — duplicated from local_git.rs deliberately so
+    // this routine doesn't depend on adapter internals (the adapter
+    // version is library-rooted; this one walks any repo).
+    fn commit_to_history_entry(commit: &git2::Commit<'_>) -> HistoryEntry {
+        let author = commit.author();
+        let secs = author.when().seconds();
+        let time = chrono::DateTime::<chrono::Utc>::from_timestamp(secs, 0)
+            .unwrap_or_else(chrono::Utc::now);
+        let raw = commit.message().unwrap_or("");
+        let (subject, body) = match raw.find("\n\n") {
+            Some(i) => (raw[..i].trim_end().to_string(), raw[i + 2..].to_string()),
+            None => (raw.trim_end().to_string(), String::new()),
+        };
+        HistoryEntry {
+            sha: commit.id().to_string(),
+            author_name: author.name().unwrap_or_default().to_string(),
+            author_email: author.email().unwrap_or_default().to_string(),
+            time,
+            subject,
+            body,
+            parent_shas: commit.parent_ids().map(|id| id.to_string()).collect(),
+            files_changed: Vec::new(),
+            additions: 0,
+            deletions: 0,
+        }
+    }
+
+    fn commit_touches_path(
+        repo: &git2::Repository,
+        commit: &git2::Commit<'_>,
+        rel_path: &str,
+    ) -> Result<bool, LibraryError> {
+        let new_tree = commit
+            .tree()
+            .map_err(|e| LibraryError::Backend(format!("git commit tree: {e}")))?;
+
+        if commit.parent_count() == 0 {
+            return Ok(new_tree.get_path(Path::new(rel_path)).is_ok());
+        }
+
+        let mut diff_opts = git2::DiffOptions::new();
+        diff_opts.pathspec(rel_path);
+
+        for parent in commit.parents() {
+            let old_tree = parent
+                .tree()
+                .map_err(|e| LibraryError::Backend(format!("git parent tree: {e}")))?;
+            let diff = repo
+                .diff_tree_to_tree(Some(&old_tree), Some(&new_tree), Some(&mut diff_opts))
+                .map_err(|e| LibraryError::Backend(format!("git diff: {e}")))?;
+            if diff.deltas().len() > 0 {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    Ok(entries)
+}
+
 #[cfg(test)]
 mod smoke {
     #[test]
