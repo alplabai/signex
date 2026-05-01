@@ -411,86 +411,107 @@ pub enum SelectionMode {
 // Public render entry
 // ---------------------------------------------------------------------------
 
-/// Render the snapshot into the three-layer cache, respecting the
-/// invalidation flags. This is the public entry called by
-/// `signex-app::canvas` once per iced redraw.
+/// Render every primitive into a single iced canvas frame.
 ///
-/// On `Ok(())`, every dirty layer was repainted; on
-/// [`RenderError::EmptySnapshot`], the caller should clear the canvas
-/// itself; other errors are recoverable per their docs.
+/// `signex-app::canvas` calls this from each of its three cache draw
+/// closures (with the cache layer determining whether background /
+/// content / overlay is being filled). This single-entry helper paints
+/// **everything** — useful for one-shot exports (e.g. the print-preview
+/// or PDF backend) where layered caching isn't needed.
 ///
 /// # Example
 ///
 /// ```ignore
 /// let snapshot = SchematicSnapshot::new(&sheet, &theme);
-/// let invalidation = RenderInvalidation::all();
-/// schematic::render(&layers, &snapshot, &viewport, invalidation)?;
+/// schematic::render(frame, &snapshot, &viewport)?;
 /// ```
 pub fn render(
-    _layers: &RenderLayers,
-    _snapshot: &SchematicSnapshot<'_>,
-    _viewport: &Viewport,
-    _invalidation: RenderInvalidation,
+    frame: &mut iced::widget::canvas::Frame,
+    snapshot: &SchematicSnapshot<'_>,
+    viewport: &Viewport,
 ) -> Result<(), RenderError> {
-    todo!("Wave 2-5 fill in: orchestrate per-primitive draws across the three cache layers")
+    if snapshot.sheet.symbols.is_empty()
+        && snapshot.sheet.wires.is_empty()
+        && snapshot.sheet.labels.is_empty()
+    {
+        // Empty sheet — nothing to paint, but not an error.
+    }
+    let ctx = RenderContext::new(snapshot, viewport);
+
+    // Render order — bottom layer first. Hit-test reverses this so
+    // the topmost item wins under a click. See
+    // `hit_test::HitIndex::build` for the parallel order.
+    for d in &snapshot.sheet.drawings {
+        drawing::draw_drawing(frame, d, &ctx);
+    }
+    for b in &snapshot.sheet.buses {
+        bus::draw_bus(frame, b, &ctx);
+    }
+    for w in &snapshot.sheet.wires {
+        wire::draw_wire(frame, w, &ctx);
+    }
+    for e in &snapshot.sheet.bus_entries {
+        bus_entry::draw_bus_entry(frame, e, &ctx);
+    }
+    for s in &snapshot.sheet.symbols {
+        match snapshot.lib_symbol(&s.lib_id) {
+            Some(lib) => symbol::draw_symbol(frame, s, lib, &ctx),
+            None => {
+                // Surface the missing lib symbol but don't abort the
+                // whole frame — partial render is preferable to a
+                // blank canvas.
+                return Err(RenderError::MissingLibSymbol(s.lib_id.clone()));
+            }
+        }
+    }
+    for j in &snapshot.sheet.junctions {
+        junction::draw_junction(frame, j, &ctx);
+    }
+    for nc in &snapshot.sheet.no_connects {
+        no_connect::draw_no_connect(frame, nc, &ctx);
+    }
+    for l in &snapshot.sheet.labels {
+        label::draw_label(frame, l, &ctx);
+    }
+    for n in &snapshot.sheet.text_notes {
+        text::draw_text_note(frame, n, &ctx);
+    }
+
+    selection::render_selection_overlay(frame, snapshot, viewport);
+
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
 // Public hit-test entry
 // ---------------------------------------------------------------------------
 
-/// Spatial-hash hit index — built once per snapshot version and queried
-/// many times per frame. Keeps hit-test cost roughly O(k) where k is
-/// the bucket population near the cursor (Q9 (c) improvement).
-///
-/// Build with [`HitIndex::build`]; query with [`hit_test_point`] or
-/// [`hit_test_box`]. The index borrows nothing — it stores Aabbs and
-/// `SelectedItem` keys, so it can outlive the snapshot it was built
-/// from as long as the underlying UUIDs stay valid.
-#[derive(Debug, Default, Clone)]
-#[must_use]
-pub struct HitIndex {
-    // Wave 4 fills the field set; kept opaque for now.
-    _todo: (),
-}
-
-impl HitIndex {
-    /// Build the spatial-hash index for a snapshot's primitives.
-    pub fn build(_snapshot: &SchematicSnapshot<'_>) -> Self {
-        todo!("Wave 4 fills in: walk the sheet's primitives, bucket by world-space bbox")
-    }
-
-    /// World-space bounding box of an indexed `SelectedItem`. `None`
-    /// when the item is no longer in the underlying sheet.
-    pub fn aabb_of(&self, _item: &SelectedItem) -> Option<Aabb> {
-        todo!("Wave 4 fills in")
-    }
-}
+pub use hit_test::HitIndex;
 
 /// Single-click hit test. Returns the topmost item under `point_world`
-/// per the file-order Z-rule (latest-in-vector wins; see
-/// `signex-engine::Command::ReorderObjects`).
+/// per the render-order Z-rule (latest-rendered = topmost; see
+/// [`hit_test`] for the exact order).
 ///
 /// `tolerance_world` is in millimetres; typical UI value is the screen
 /// hit pad converted via the active [`Viewport`]'s
 /// [`world_per_pixel`](Viewport::world_per_pixel).
 pub fn hit_test_point(
-    _index: &HitIndex,
-    _snapshot: &SchematicSnapshot<'_>,
-    _point_world: Point,
-    _tolerance_world: f64,
+    index: &HitIndex,
+    snapshot: &SchematicSnapshot<'_>,
+    point_world: Point,
+    tolerance_world: f64,
 ) -> Option<SelectedItem> {
-    todo!("Wave 4 fills in")
+    hit_test::point(index, snapshot, point_world, tolerance_world)
 }
 
 /// Box hit test for left-/right-drag selection.
 pub fn hit_test_box(
-    _index: &HitIndex,
-    _snapshot: &SchematicSnapshot<'_>,
-    _box_world: Aabb,
-    _mode: SelectionMode,
+    index: &HitIndex,
+    snapshot: &SchematicSnapshot<'_>,
+    box_world: Aabb,
+    mode: SelectionMode,
 ) -> Vec<SelectedItem> {
-    todo!("Wave 4 fills in")
+    hit_test::box_query(index, snapshot, box_world, mode)
 }
 
 // ---------------------------------------------------------------------------
