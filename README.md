@@ -155,6 +155,18 @@ signex/
 - **Canvas for schematic, Shader for PCB.** CPU tessellation for schematics, GPU instanced rendering for 100K+ PCB elements.
 - **Types crate has zero rendering deps.** Clean separation between domain and display.
 
+## Hardware Requirements
+
+Signex uses [wgpu](https://wgpu.rs) for hardware-accelerated rendering and
+expects a modern GPU with effective Vulkan 1.1 (Linux), DirectX 12 (Windows),
+or Metal (macOS) support. In practice this means **a GPU released around 2014
+or later** — Intel HD Graphics 4400+, NVIDIA GeForce 600-series and newer, AMD
+Radeon HD 7000-series and newer, or any Apple Silicon Mac.
+
+Older GPUs that only expose legacy OpenGL may still launch the app via the
+fallback path, but expect rendering glitches such as overlapping panels and
+broken layout — these GPUs are not supported.
+
 ## Building
 
 **Prerequisites:** Rust 1.80+ and a GPU supporting Vulkan, Metal, or DX12.
