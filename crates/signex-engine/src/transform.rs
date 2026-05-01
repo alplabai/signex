@@ -411,9 +411,9 @@ pub fn autoplace_all_marked_fields(document: &mut signex_types::schematic::Schem
 fn autoplace_fields(symbol: &mut signex_types::schematic::Symbol, lib: &signex_types::schematic::LibSymbol) {
     use signex_types::schematic::{HAlign, VAlign};
 
-    // 1a. Body bbox in world space (graphics only). Used as the geometric
-    //     reference for pin-side classification — its centre is the natural
-    //     pivot, just like Standard's `SCH_SYMBOL::GetBodyBoundingBox()`.
+    // 1a. Body bbox in world space (graphics only). Used as the
+    //     geometric reference for pin-side classification — its centre
+    //     is the natural pivot for autoplaced field positions.
     let mut body_bbox: Option<(f64, f64, f64, f64)> = None;
     let extend = |bbox: &mut Option<(f64, f64, f64, f64)>, x: f64, y: f64| match bbox {
         None => *bbox = Some((x, y, x, y)),

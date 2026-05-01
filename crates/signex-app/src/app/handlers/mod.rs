@@ -7,6 +7,7 @@ pub mod document_tabs;
 pub mod editing_commands;
 pub mod erc;
 pub mod find_replace;
+pub mod library_place;
 pub mod menu;
 pub mod preferences;
 pub mod selection_workflow;

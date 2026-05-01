@@ -270,6 +270,7 @@ impl Signex {
                             _ => crate::panels::ErcSeverityLite::Info,
                         },
                         rule_label: v.rule.label(),
+                        rule_kind: v.rule,
                         message: v.message.clone(),
                         world_x: v.location.x,
                         world_y: v.location.y,
@@ -292,6 +293,55 @@ impl Signex {
         let len = entries.len() as isize;
         let next = (current + delta).rem_euclid(len) as usize;
         self.handle_focus_erc_diagnostic_index(next)
+    }
+
+    /// Quick Fix dispatch from the Messages-panel chip.
+    /// `UnusedPin` places a `NoConnect` at the violation's world
+    /// coords and re-runs ERC so the row disappears immediately;
+    /// every other rule falls back to the row-click "zoom + select"
+    /// path, which is exactly the affordance the user wants 90% of
+    /// the time even without a mutating fix.
+    pub(crate) fn handle_erc_quick_fix(&mut self, index: usize) -> Task<Message> {
+        let entries = self.build_erc_diagnostic_entries();
+        if entries.is_empty() {
+            return Task::none();
+        }
+        let clamped = index.min(entries.len() - 1);
+        let target = entries[clamped].clone();
+
+        // Open + activate the violation's sheet first, regardless of
+        // rule kind — the engine command path operates on the active
+        // engine, and even the non-mutating rules want the canvas to
+        // scroll to the offending point.
+        self.ensure_sheet_open_and_active(&target.sheet_path);
+
+        match target.rule_kind {
+            signex_erc::RuleKind::UnusedPin => {
+                let nc = signex_types::schematic::NoConnect {
+                    uuid: uuid::Uuid::new_v4(),
+                    position: signex_types::schematic::Point::new(
+                        target.world_x,
+                        target.world_y,
+                    ),
+                };
+                self.apply_engine_command(
+                    signex_engine::Command::PlaceNoConnect { no_connect: nc },
+                    false,
+                    false,
+                );
+                // Re-run ERC so the cleared violation drops out of
+                // the panel without forcing the user to press F8.
+                let _ = self.handle_run_erc();
+                // Focus the cleared point so the new NoConnect marker
+                // is visible — a small but reassuring "the fix landed
+                // here" cue.
+                self.handle_focus_at(target.world_x, target.world_y, None)
+            }
+            _ => {
+                self.ui_state.erc_focus_global_index = Some(clamped);
+                self.handle_focus_at(target.world_x, target.world_y, target.select)
+            }
+        }
     }
 
     pub(crate) fn handle_focus_erc_diagnostic_index(&mut self, index: usize) -> Task<Message> {
@@ -884,10 +934,31 @@ impl Signex {
             return Task::none();
         };
         let path = tab.path.clone();
+        // Component Preview tabs undock to a window with
+        // `WindowKind::ComponentEditor` so the editor view dispatch
+        // picks it up. Schematic / PCB tabs use
+        // `WindowKind::UndockedTab` as before.
+        let component_editor = tab.kind.as_component_editor().cloned();
+
         // Don't re-undock a tab that already has a window.
-        if self.ui_state.windows.values().any(
-            |k| matches!(k, super::super::state::WindowKind::UndockedTab { path: p, .. } if p == &path),
-        ) {
+        let already_undocked = match component_editor.as_ref() {
+            Some(ce) => self.ui_state.windows.values().any(|k| {
+                matches!(
+                    k,
+                    super::super::state::WindowKind::ComponentEditor {
+                        library_path,
+                        table,
+                        row_id,
+                    } if library_path == &ce.library_path
+                        && table == &ce.table
+                        && row_id == &ce.row_id
+                )
+            }),
+            None => self.ui_state.windows.values().any(
+                |k| matches!(k, super::super::state::WindowKind::UndockedTab { path: p, .. } if p == &path),
+            ),
+        };
+        if already_undocked {
             return Task::none();
         }
         let title = tab.title.clone();
@@ -911,6 +982,21 @@ impl Signex {
         });
         // Stash immediately so the first frame in the new window has a
         // target; `UndockedTabOpened` refreshes the title afterwards.
+        if let Some(ce) = component_editor {
+            self.ui_state.windows.insert(
+                id,
+                super::super::state::WindowKind::ComponentEditor {
+                    library_path: ce.library_path.clone(),
+                    table: ce.table.clone(),
+                    row_id: ce.row_id,
+                },
+            );
+            // Component Editor windows don't need the
+            // `UndockedTabOpened` follow-up (no per-window canvas to
+            // wire); the editor view picks the entry up directly off
+            // `library.editors` via the address it already has.
+            return open_task.discard();
+        }
         self.ui_state.windows.insert(
             id,
             super::super::state::WindowKind::UndockedTab {
@@ -1006,6 +1092,8 @@ impl Signex {
             ModalId::RemoveDialog => iced::Size::new(560.0, 260.0),
             ModalId::PrintPreview => iced::Size::new(1100.0, 780.0),
             ModalId::BomPreview => iced::Size::new(1180.0, 760.0),
+            ModalId::ProjectOptions => iced::Size::new(520.0, 360.0),
+            ModalId::EnableVersionControl => iced::Size::new(560.0, 480.0),
         };
 
         let (id, open_task) = iced::window::open(iced::window::Settings {
@@ -1123,7 +1211,7 @@ impl Signex {
             }
         });
         match id {
-            Some(id) => iced::window::drag(id),
+            Some(id) => crate::chrome::start_window_drag(id),
             None => Task::none(),
         }
     }

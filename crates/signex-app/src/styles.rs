@@ -48,74 +48,6 @@ pub fn chrome_separator(
     }
 }
 
-/// Pill geometry shared between the document tab bar and the panel
-/// tab strip: top-only rounded corners, no bottom border (iced 0.14
-/// can't draw per-side borders, so the outer accent strip + tab bg
-/// fill stand in for the missing top/side divider). Output is a
-/// closure suitable for `container.style(...)`.
-///
-/// `is_active`, `is_hovered`, `is_dragging` drive the fill colour:
-///   - dragging → 22 % alpha tint of the theme accent
-///   - active   → `tokens.hover` (full alpha)
-///   - hovered  → `tokens.hover` × 0.70 alpha
-///   - default  → `tokens.hover` × 0.35 alpha
-pub fn tab_pill(
-    tokens: &ThemeTokens,
-    is_active: bool,
-    is_dragging: bool,
-    is_hovered: bool,
-) -> impl Fn(&Theme) -> container::Style + 'static {
-    let tab_active = ti(tokens.hover);
-    let accent = ti(tokens.accent);
-    let inactive_fill = iced::Color {
-        a: tab_active.a * 0.35,
-        ..tab_active
-    };
-    let hover_fill = iced::Color {
-        a: tab_active.a * 0.70,
-        ..tab_active
-    };
-    let drag_fill = iced::Color { a: 0.22, ..accent };
-    move |_: &Theme| container::Style {
-        background: Some(Background::Color(if is_dragging {
-            drag_fill
-        } else if is_active {
-            tab_active
-        } else if is_hovered {
-            hover_fill
-        } else {
-            inactive_fill
-        })),
-        // No border (the bottom edge would otherwise draw across
-        // the underline). Top-only radius gives the pill a subtle
-        // chrome lift without rounding into the underline strip.
-        border: Border {
-            width: 0.0,
-            radius: iced::border::Radius::default()
-                .top_left(3.0)
-                .top_right(3.0),
-            color: Color::TRANSPARENT,
-        },
-        ..container::Style::default()
-    }
-}
-
-/// Outer accent-line wrapper for a tab pill: a 2 px high strip whose
-/// background is the accent colour (active) or transparent (inactive).
-/// Pair with `tab_pill` via a 2 px bottom padding on the wrapping
-/// container so the strip peeks below the pill as the active marker.
-pub fn tab_pill_underline(
-    tokens: &ThemeTokens,
-    is_active: bool,
-) -> impl Fn(&Theme) -> container::Style + 'static {
-    let accent = ti(tokens.accent);
-    let line = if is_active { accent } else { Color::TRANSPARENT };
-    move |_: &Theme| container::Style {
-        background: Some(Background::Color(line)),
-        ..container::Style::default()
-    }
-}
-
 /// Toolbar / menu bar strip
 pub fn toolbar_strip(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 'static {
     let bg = ti(tokens.toolbar_bg);
@@ -381,55 +313,6 @@ pub fn dock_zone_highlight(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container
 
 // ─── Button styles ────────────────────────────────────────────
 
-/// Container-based dock tab (used with mouse_area for drag-to-undock).
-///
-/// Altium-style flat tabs: active tab gets a hover background + accent
-/// underline (added by the caller via `tab_underline`). Inactive tabs are
-/// plain text — no border box. Iced 0.14 `Border` is uniform on all four
-/// sides, so any border here would draw the unwanted bottom edge too.
-/// Drag-aware wrapper — flags the currently-dragged tab with a thick
-/// accent border + tinted background so the user gets visual
-/// feedback on the tab they grabbed.
-pub fn dock_tab_container_dragging(
-    tokens: &ThemeTokens,
-    is_active: bool,
-    is_dragging: bool,
-    is_hovered: bool,
-) -> impl Fn(&Theme) -> container::Style + 'static {
-    let tab_active = ti(tokens.hover);
-    let border_c = ti(tokens.border);
-    let accent = ti(tokens.accent);
-    let inactive_fill = iced::Color {
-        a: tab_active.a * 0.35,
-        ..tab_active
-    };
-    // Hover fill sits between inactive and active so hovering an
-    // inactive tab reads as a lift without being confused with the
-    // selected tab. Matches Altium's subtle tab hover.
-    let hover_fill = iced::Color {
-        a: tab_active.a * 0.70,
-        ..tab_active
-    };
-    let drag_fill = iced::Color { a: 0.22, ..accent };
-    move |_: &Theme| container::Style {
-        background: Some(Background::Color(if is_dragging {
-            drag_fill
-        } else if is_active {
-            tab_active
-        } else if is_hovered {
-            hover_fill
-        } else {
-            inactive_fill
-        })),
-        border: Border {
-            width: if is_dragging { 2.0 } else { 1.0 },
-            radius: 0.0.into(),
-            color: if is_dragging { accent } else { border_c },
-        },
-        ..container::Style::default()
-    }
-}
-
 #[allow(dead_code)]
 pub fn dock_tab_container(
     tokens: &ThemeTokens,
@@ -505,13 +388,5 @@ pub fn menu_item(
             text_color: text,
             ..button::Style::default()
         }
-    }
-}
-
-/// Accent-colored underline container (used below active dock tabs).
-pub fn tab_underline(color: Color) -> impl Fn(&Theme) -> container::Style + 'static {
-    move |_: &Theme| container::Style {
-        background: Some(Background::Color(color)),
-        ..container::Style::default()
     }
 }

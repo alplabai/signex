@@ -15,6 +15,10 @@ pub struct Signex {
     pub ui_state: UiState,
     pub document_state: DocumentState,
     pub interaction_state: InteractionState,
+    /// v0.9 Library subsystem state. Borrowed independently of
+    /// `document_state` so the library dispatcher can mutate it
+    /// without colliding with schematic / PCB engine borrows.
+    pub library: crate::library::LibraryState,
 }
 
 pub struct UiState {
@@ -29,6 +33,17 @@ pub struct UiState {
     pub visible_grid_mm: f32,
     pub snap_hotspots: bool,
     pub ui_font_name: String,
+    /// User-editable component-class registry. Loaded from
+    /// `prefs.json::component_classes` at boot; falls back to
+    /// [`crate::fonts::default_component_classes`] when absent.
+    /// Surfaced in Preferences ▸ Component Classes (add / rename /
+    /// delete) and consumed by the New Component modal's class
+    /// dropdown so users can extend the list without recompiling.
+    pub component_classes: Vec<crate::fonts::ComponentClassEntry>,
+    /// Draft mirror used by Preferences for cancel/discard
+    /// semantics — mutated as the user edits, copied back into
+    /// `component_classes` + persisted on Save.
+    pub preferences_draft_component_classes: Vec<crate::fonts::ComponentClassEntry>,
     pub canvas_font_name: String,
     pub canvas_font_size: f32,
     pub canvas_font_bold: bool,
@@ -46,6 +61,16 @@ pub struct UiState {
     pub main_window_scale: f32,
     pub panel_list_open: bool,
     pub preferences_open: bool,
+    /// Help ▸ Keyboard Shortcuts modal — flat reference table over
+    /// every binding registered in `crate::shortcuts::SHORTCUTS`.
+    /// Toggled from the Help menu and from F1.
+    pub keyboard_shortcuts_open: bool,
+    /// First-run tour overlay — a single dismissible card shown only
+    /// before the user has dismissed it once. Initial value is read
+    /// from prefs in `bootstrap`; transitions to `false` on the first
+    /// dismiss gesture and the prefs file flips to "dismissed" so the
+    /// card never reappears. Closes UX §4.3.
+    pub first_run_tour_open: bool,
     pub find_replace: crate::find_replace::FindReplaceState,
     pub preferences_nav: crate::preferences::PrefNav,
     pub preferences_draft_theme: ThemeId,
@@ -70,6 +95,13 @@ pub struct UiState {
     /// close request that intersects `dirty_paths`. Cleared on any
     /// of the three button choices.
     pub project_close_confirm: Option<crate::app::ProjectCloseConfirmState>,
+    /// v0.9 read-only Project Options metadata modal — `Some` while
+    /// the user has the right-click → Project Options… popup open.
+    pub project_options: Option<crate::app::ProjectOptionsState>,
+    /// v0.11 Enable Version Control modal — opened from the
+    /// project root context menu when the project dir has no
+    /// `.git/` yet.
+    pub enable_version_control: Option<crate::app::EnableVersionControlState>,
     /// ERC results for the currently-visible sheet. Driven by the
     /// per-sheet cache below — switching tabs repoints this at the
     /// cached violations for that sheet, so markers and the Messages
@@ -175,15 +207,10 @@ pub struct UiState {
     /// (later) undocked tabs. `SecondaryWindowClosed` removes entries so
     /// the detached content reattaches to the main window.
     pub windows: std::collections::HashMap<iced::window::Id, WindowKind>,
-    /// Paths whose async save (v0.9.1 perf path) is currently running
-    /// off the UI thread. Drives the "Saving…" pill in the status bar
-    /// and is cleared on `Message::SaveFileFinished`. Failed saves
-    /// stay in `save_error` for a few seconds so the operator sees
-    /// what happened.
-    pub saving_paths: std::collections::HashSet<std::path::PathBuf>,
-    /// Last save error message and the time it was set. The status
-    /// bar shows this briefly, then `tick_save_error` clears it.
-    pub save_error: Option<(String, std::time::Instant)>,
+    /// Command palette state — query / dropdown open flag / selected
+    /// row. The chrome-strip search bar is the always-rendered input;
+    /// `open` gates the dropdown overlay only.
+    pub command_palette: super::command_palette::CommandPaletteState,
 }
 
 /// Role of a non-main window opened by Signex. Phase 2 adds detached
@@ -205,6 +232,14 @@ pub enum WindowKind {
     /// floating panel past the main window edge. Closing the OS window
     /// reattaches the panel to its last dock region.
     DetachedPanel(crate::panels::PanelKind),
+    /// v0.9-refactor-2 Component Preview — one window per open row.
+    /// The preview's full state lives in `Signex::library.editors`
+    /// keyed by `EditorAddress(library_path, table, row_id)`.
+    ComponentEditor {
+        library_path: std::path::PathBuf,
+        table: String,
+        row_id: signex_library::RowId,
+    },
 }
 
 /// Kind of z-order picker currently armed. Drives the first-click
@@ -267,6 +302,11 @@ pub enum ModalId {
     PrintPreview,
     /// BOM Export preview modal (File → Export → Bill of Materials…).
     BomPreview,
+    /// Project Options metadata modal (Projects-panel root → Project Options...).
+    ProjectOptions,
+    /// Enable Version Control confirm modal (Projects-panel root →
+    /// Enable Version Control...).
+    EnableVersionControl,
 }
 
 /// Order in which symbols are visited during Annotate. Mirrors Altium's
@@ -291,11 +331,7 @@ pub enum AnnotateOrder {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct ProjectId(u32);
 
-impl ProjectId {
-    pub fn raw(self) -> u32 {
-        self.0
-    }
-}
+impl ProjectId {}
 
 impl std::fmt::Display for ProjectId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -327,6 +363,15 @@ pub struct DocumentState {
     /// `engine_for_window`. Save-as rekeys an entry via
     /// `rekey_engine(old, new)`.
     pub engines: std::collections::HashMap<PathBuf, signex_engine::Engine>,
+    /// Per-tab state for open `.snxsym` document tabs. Keyed by the
+    /// file path stored on `TabInfo.path` for matching
+    /// `TabKind::SymbolEditor(path)` tabs. Insert on
+    /// `LibraryMessage::OpenPrimitiveEditor`; drop in
+    /// `close_tab_at_index` alongside the engine cleanup.
+    pub symbol_editors: std::collections::HashMap<PathBuf, super::SymbolEditorState>,
+    /// Per-tab state for open `.snxfpt` document tabs. Keyed the same
+    /// way as `symbol_editors`.
+    pub footprint_editors: std::collections::HashMap<PathBuf, super::FootprintEditorState>,
     /// The path of the schematic the main window is currently editing.
     /// `active_engine()` reads `engines.get(active_path)`. `None` means
     /// no schematic tab is active (e.g. a PCB tab is active, or nothing
@@ -354,13 +399,7 @@ pub struct DocumentState {
     /// as "no longer loaded").
     pub next_project_id: u32,
     pub panel_ctx: crate::panels::PanelContext,
-    /// Cache of `LibSymbol` records indexed by lib_id. Populated by
-    /// the v0.10.x `.snxlib` library plumbing; kept here so the
-    /// canvas-side place-component flow can resolve a symbol by id
-    /// independently of which panel populated it. Was previously
-    /// also fed by the legacy Standard `.standard_sym` scanner that v0.10.0
-    /// removed (Apache-clean residual polish).
-    #[allow(dead_code)]
+    pub standard_lib_dir: Option<PathBuf>,
     pub loaded_lib: std::collections::HashMap<String, signex_types::schematic::LibSymbol>,
     /// Print-preview overlay state. `Some` while the preview dialog is
     /// open. Doubles as the unified PDF Export modal — `File → Export
@@ -393,6 +432,10 @@ pub struct DocumentState {
     /// include flags / format / variant in the modal and clicks
     /// Export to drive `rfd::AsyncFileDialog` with the chosen options.
     pub bom_preview: Option<BomPreviewState>,
+    /// Right-dock History panel state — current generation counter,
+    /// last loaded entries, the path the load was issued for. Driven
+    /// by `Message::HistoryLoaded` and re-targeted on tab switch.
+    pub history: crate::panels::history::HistoryPanelState,
 }
 
 /// Which sidebar tab is currently shown inside the BOM preview's
@@ -579,10 +622,6 @@ impl DocumentState {
         self.projects.iter().find(|p| p.id == id)
     }
 
-    pub fn project_by_id_mut(&mut self, id: ProjectId) -> Option<&mut LoadedProject> {
-        self.projects.iter_mut().find(|p| p.id == id)
-    }
-
     /// Resolve the project that contains a file at this path. Used for
     /// per-tab project scoping (tabs store a path, we resolve to the
     /// project that parented them at load time).
@@ -716,13 +755,14 @@ pub struct InteractionState {
     /// zones without the menu collapsing mid-traversal.
     pub submenu_unhovered_since: Option<std::time::Instant>,
     pub last_mouse_pos: (f32, f32),
-    /// Most recent project-tree row click — `(path, timestamp)`. Used
-    /// to detect double-clicks: a `TreeMsg::Select` for a path within
-    /// `TREE_DOUBLE_CLICK_WINDOW` of a previous click on the same
-    /// path opens the file. Single clicks just highlight via
-    /// `panel_ctx.selected_tree_path`. Cleared whenever the panel ctx
-    /// is rebuilt from disk-state changes that invalidate the path
-    /// indices. `None` when no row has been clicked yet this session.
+    /// Project-tree click memo for the home-grown double-click gate.
+    /// First click on an openable leaf records `(path, instant)`; the
+    /// second click on the same path within `TREE_DOUBLE_CLICK_WINDOW`
+    /// opens the document. Anything else (different path, expired
+    /// timer, intervening folder toggle) just refreshes the memo.
+    /// Iced's `button` widget consumes mouse events before iced 0.14
+    /// surfaces a built-in `on_double_click` for them, so we time the
+    /// clicks ourselves at the app layer.
     pub last_tree_click: Option<(Vec<usize>, std::time::Instant)>,
     pub active_bar_menu: Option<crate::active_bar::ActiveBarMenu>,
     pub selection_filters: std::collections::HashSet<crate::active_bar::SelectionFilter>,
@@ -739,6 +779,20 @@ pub struct InteractionState {
     pub last_tool: std::collections::HashMap<String, crate::active_bar::ActiveBarAction>,
     pub pending_power: Option<(String, String)>,
     pub pending_port: Option<(signex_types::schematic::LabelType, String)>,
+    /// Uuid of the placed symbol the cursor is currently hovering over,
+    /// if any. Set/cleared by the canvas `CursorAt` handler. Drives the
+    /// hover tooltip overlay (designator + value + footprint + lib_id).
+    pub hover_symbol_uuid: Option<uuid::Uuid>,
+    /// Wall-clock timestamp at which `hover_symbol_uuid` was first set
+    /// to its current value. Used by the view to gate the tooltip
+    /// behind a 250 ms delay so hovering is a deliberate gesture.
+    /// Resets when the hovered uuid changes.
+    pub hover_started_at: Option<std::time::Instant>,
+    /// Last-known window-relative cursor position while hovering a
+    /// symbol — drives the tooltip's screen-space placement so the
+    /// card tracks the cursor (offset to bottom-right by ~16 px so it
+    /// doesn't obscure the symbol).
+    pub hover_screen_pos: Option<(f32, f32)>,
 }
 
 impl InteractionState {

@@ -101,6 +101,34 @@ pub enum MenuMessage {
     ExportPdf,
     ExportNetlist,
     ExportBom,
+    /// File ▸ Library ▸ Open Library… (v0.9 Phase 1).
+    LibraryOpenLibrary,
+    /// File ▸ Library ▸ Place Component… (v0.9 Phase 1).
+    LibraryPlaceComponent,
+    /// Project tree → right-click → Add New to Project ▸ Component
+    /// Library. Emitted from `view_context_submenu` for the project
+    /// root; the dispatcher resolves the active project and forwards
+    /// to `LibraryMessage::CreateLibraryAt(project_root)`.
+    AddComponentLibrary,
+    /// Library node → right-click → Add New ▸ Component. Emitted
+    /// from `view_project_tree_context_menu` when the user right-
+    /// clicks a library node; the dispatcher folds it into the
+    /// existing `LibraryMessage::NewComponent` modal flow.
+    AddLibraryComponent,
+    /// Library node → right-click → Add New ▸ Symbol. Resolves the
+    /// clicked library, mints `Symbol::empty()` via the mounted
+    /// adapter, and opens the new `.snxsym` as a standalone editor
+    /// tab. See `handle_add_library_primitive`.
+    AddLibrarySymbol,
+    /// Library node → right-click → Add New ▸ Footprint. Same flow
+    /// as `AddLibrarySymbol` but mints `Footprint::empty()` and
+    /// opens a `.snxfpt` tab.
+    AddLibraryFootprint,
+    /// Legacy File ▸ Library ▸ New Component… — preserved only as
+    /// a thunk for the old menu wiring; the menu bar no longer
+    /// surfaces it. Component creation lives on the project tree
+    /// (see `AddLibraryComponent`).
+    LibraryNewComponent,
     // Edit
     Undo,
     Redo,
@@ -145,6 +173,24 @@ pub enum MenuMessage {
     // Tools
     /// Open the Preferences dialog.
     OpenPreferences,
+    /// Open the Keyboard Shortcuts reference modal — a single page
+    /// listing every binding from `shortcuts.rs`, callable from
+    /// Help ▸ Keyboard Shortcuts and from F1.
+    OpenKeyboardShortcuts,
+    /// Tools ▸ New Part — bumps the active `.snxsym` symbol's max
+    /// `part_number` by one and switches the editor's active_part to
+    /// the new value. No-op when no Symbol editor is the active tab.
+    ToolsNewPart,
+    /// Tools ▸ Remove Part — drops the active part on the active
+    /// `.snxsym` symbol; pins on that part are demoted to part 1 so
+    /// the data survives. No-op when only one part exists or no
+    /// Symbol editor is the active tab.
+    ToolsRemovePart,
+    /// Tools ▸ Document Options... — opens the Document Options modal
+    /// for the active `.snxlib` (sheet color / grid / unit). Mirrors
+    /// Altium's Tools ▸ Document Options entry. No-op when not on
+    /// a SchLib tab.
+    ToolsDocumentOptions,
 }
 
 /// Context passed into `view` so each menu leaf can decide whether to
@@ -297,10 +343,29 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
         ]),
     );
 
+    // v0.9 Library submenu — open / place. New-component creation
+    // moved to the project tree → right-click → Library ▸ Add New
+    // ▸ Component flow, so File ▸ Library only carries "open
+    // libraries outside the active project" + the canvas-side place
+    // picker.
+    let library_menu = Item::with_menu(
+        submenu_item_btn("Library", mc),
+        menu_template(vec![
+            leaf("Open Library...", None, MenuMessage::LibraryOpenLibrary, mc),
+            separator(mc),
+            leaf_if(
+                "Place Component...",
+                None,
+                MenuMessage::LibraryPlaceComponent,
+                ctx.has_schematic,
+            ),
+        ]),
+    );
+
     let file_menu = Item::with_menu(
         root_btn("File", mc),
         menu_template(vec![
-            leaf_stub("New Project", Some("Ctrl+N"), mc),
+            leaf("New Project", Some("Ctrl+N"), MenuMessage::NewProject, mc),
             leaf("Open...", Some("Ctrl+O"), MenuMessage::OpenProject, mc),
             separator(mc),
             leaf_if("Save", Some("Ctrl+S"), MenuMessage::Save, ctx.has_schematic),
@@ -310,6 +375,8 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
                 MenuMessage::SaveAs,
                 ctx.has_schematic,
             ),
+            separator(mc),
+            library_menu,
             separator(mc),
             // Print Preview... previously lived here as a top-level
             // leaf duplicating Export → PDF's shortcut. Consolidated
@@ -338,7 +405,7 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
                 ctx.has_schematic,
             ),
             leaf_if(
-                "Smart Paste",
+                "Paste Special",
                 Some("Shift+Ctrl+V"),
                 MenuMessage::SmartPaste,
                 ctx.has_schematic,
@@ -511,6 +578,22 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
             leaf_stub("Design Rule Check", None, mc),
             leaf_stub("Net Inspector", None, mc),
             separator(mc),
+            // Multi-part component flow — only meaningful when the
+            // active tab is a `.snxsym` standalone editor; the
+            // dispatcher silently no-ops on non-Symbol tabs.
+            leaf("New Part", None, MenuMessage::ToolsNewPart, mc),
+            leaf("Remove Part", None, MenuMessage::ToolsRemovePart, mc),
+            separator(mc),
+            // Document Options — Altium SchLib parity. Sheet color
+            // / grid / unit per `.snxlib`. Greyed when not on a
+            // primitive editor tab.
+            leaf(
+                "Document Options...",
+                None,
+                MenuMessage::ToolsDocumentOptions,
+                mc,
+            ),
+            separator(mc),
             leaf(
                 "Preferences...",
                 Some("Ctrl+,"),
@@ -535,7 +618,12 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
         menu_template(vec![
             leaf_stub("About Signex", None, mc),
             separator(mc),
-            leaf_stub("Keyboard Shortcuts", None, mc),
+            leaf(
+                "Keyboard Shortcuts",
+                Some("F1"),
+                MenuMessage::OpenKeyboardShortcuts,
+                mc,
+            ),
         ]),
     );
 

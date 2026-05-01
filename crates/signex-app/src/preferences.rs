@@ -4,11 +4,17 @@
 //! Left side: tree of settings categories.
 //! Right side: settings panel for the selected category.
 
-use iced::widget::{Space, button, column, container, row, scrollable, text};
+use iced::widget::{
+    Column, Space, button, column, container, row, scrollable, svg, text, text_input,
+};
 use iced::{Background, Border, Color, Element, Length, Theme};
 use signex_render::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
 use signex_types::theme::ThemeId;
 
+use crate::app::view::dialogs::{
+    MODAL_CLOSE_X_HIT_H, MODAL_CLOSE_X_HIT_W, MODAL_CLOSE_X_HOVER, MODAL_CLOSE_X_ICON,
+    MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE,
+};
 use crate::fonts;
 
 // ─── Navigation Items ─────────────────────────────────────────
@@ -16,30 +22,46 @@ use crate::fonts;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PrefNav {
     Appearance,
-    /// Schematic Editor — display options (grid style, etc.).
-    SchematicEditor,
     /// Electrical Rule Check — per-rule severity override.
     Erc,
+    /// v0.9 Library settings — Distributor APIs, lifecycle defaults.
+    LibraryDistributors,
+    /// User-editable component-class registry — surfaces in the New
+    /// Component / Edit Component class dropdowns. Backed by
+    /// `prefs.json::component_classes`; defaults seed from
+    /// `fonts::default_component_classes` on a fresh install.
+    ComponentClasses,
     // Future: Editor, Shortcuts, ...
 }
 
 impl PrefNav {
-    pub const ALL: &'static [PrefNav] =
-        &[PrefNav::Appearance, PrefNav::SchematicEditor, PrefNav::Erc];
+    pub const ALL: &'static [PrefNav] = &[
+        PrefNav::Appearance,
+        PrefNav::Erc,
+        PrefNav::LibraryDistributors,
+        PrefNav::ComponentClasses,
+    ];
 
     pub fn label(self) -> &'static str {
         match self {
             PrefNav::Appearance => "Appearance",
-            PrefNav::SchematicEditor => "Schematic Editor",
             PrefNav::Erc => "Electrical Rules",
+            PrefNav::LibraryDistributors => "Distributor APIs",
+            // Now a *seed* pane — the actual class registry is
+            // per-library inside each `.snxlib`'s manifest. This
+            // list is what every newly-created library gets seeded
+            // with, so users can establish a personal taxonomy
+            // baseline once and have new libraries inherit it.
+            PrefNav::ComponentClasses => "Default Component Classes",
         }
     }
 
     pub fn group(self) -> &'static str {
         match self {
             PrefNav::Appearance => "System",
-            PrefNav::SchematicEditor => "Editors",
             PrefNav::Erc => "Validation",
+            PrefNav::LibraryDistributors => "Library",
+            PrefNav::ComponentClasses => "Library",
         }
     }
 }
@@ -79,6 +101,31 @@ pub enum PrefMsg {
     DraftErcSeverity(signex_erc::RuleKind, signex_erc::Severity),
     /// Clear every ERC severity override — reset to defaults.
     ResetErcSeverities,
+    /// Library → Distributor APIs pane forwarded a settings message.
+    /// Folded into `PrefMsg` so the Preferences modal can mount the
+    /// live panel as a first-class pane without breaking the
+    /// existing `Message::PreferencesMsg` plumbing. The handler
+    /// re-dispatches via `Message::Library(LibraryMessage::Settings)`.
+    LibrarySettings(crate::library::messages::SettingsMsg),
+    /// Component-class editor messages — all edits land on the
+    /// `preferences_draft_component_classes` mirror so Cancel /
+    /// Discard reverts cleanly. Save copies the draft into the live
+    /// `component_classes` list and persists via
+    /// `fonts::write_component_classes_pref`.
+    ComponentClassEditKey {
+        index: usize,
+        key: String,
+    },
+    ComponentClassEditLabel {
+        index: usize,
+        label: String,
+    },
+    ComponentClassAdd,
+    ComponentClassRemove {
+        index: usize,
+    },
+    /// Reset the draft list to the seed defaults (`DEFAULT_COMPONENT_CLASSES`).
+    ComponentClassResetDefaults,
 }
 
 // ─── Dialog sizes ─────────────────────────────────────────────
@@ -128,6 +175,10 @@ pub fn view<'a>(
     custom_name: Option<&'a str>,
     dirty: bool,
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
+    distributor_settings: &'a crate::library::state::DistributorSettings,
+    panel_tokens: &'a signex_types::theme::ThemeTokens,
+    draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
+    theme_id: ThemeId,
 ) -> Element<'a, PrefMsg> {
     let dialog = build_dialog(
         nav,
@@ -141,6 +192,10 @@ pub fn view<'a>(
         custom_name,
         dirty,
         erc_overrides,
+        distributor_settings,
+        panel_tokens,
+        draft_component_classes,
+        theme_id,
     );
 
     container(
@@ -180,20 +235,27 @@ fn build_dialog<'a>(
     custom_name: Option<&'a str>,
     dirty: bool,
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
+    distributor_settings: &'a crate::library::state::DistributorSettings,
+    panel_tokens: &'a signex_types::theme::ThemeTokens,
+    draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
+    theme_id: ThemeId,
 ) -> Element<'a, PrefMsg> {
-    // ── Header ──
+    // ── Header ── canonical modal chrome (28px, asymmetric padding,
+    // SVG close-X with red hover) — same shape every other modal in
+    // the app uses so the chrome stays consistent across surfaces.
     let header = container(
         row![
-            text("Preferences").size(14).color(TEXT_PRI),
+            text("Preferences")
+                .size(MODAL_HEADER_TITLE_SIZE)
+                .color(TEXT_PRI),
             Space::new().width(Length::Fill),
-            close_btn(),
+            close_btn(theme_id),
         ]
-        .align_y(iced::Alignment::Center)
-        .spacing(8),
+        .align_y(iced::Alignment::Center),
     )
     .width(Length::Fill)
-    .height(HDR_H)
-    .padding([0, 14])
+    .height(MODAL_HEADER_HEIGHT)
+    .padding(MODAL_HEADER_PADDING)
     .style(move |_: &Theme| container::Style {
         background: Some(Background::Color(HDR_BG)),
         border: Border {
@@ -225,6 +287,9 @@ fn build_dialog<'a>(
             draft_grid_style,
             custom_name,
             erc_overrides,
+            distributor_settings,
+            panel_tokens,
+            draft_component_classes,
         ),
     ]
     .width(Length::Fill)
@@ -347,6 +412,7 @@ fn nav_item<'a>(item: PrefNav, active: PrefNav) -> Element<'a, PrefMsg> {
 
 // ─── Right content ────────────────────────────────────────────
 
+#[allow(clippy::too_many_arguments)]
 fn build_content<'a>(
     nav: PrefNav,
     draft_theme: ThemeId,
@@ -358,6 +424,9 @@ fn build_content<'a>(
     draft_grid_style: GridStyle,
     custom_name: Option<&'a str>,
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
+    distributor_settings: &'a crate::library::state::DistributorSettings,
+    panel_tokens: &'a signex_types::theme::ThemeTokens,
+    draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
 ) -> Element<'a, PrefMsg> {
     let inner = match nav {
         PrefNav::Appearance => content_appearance(
@@ -369,8 +438,20 @@ fn build_content<'a>(
             draft_multisheet_style,
             custom_name,
         ),
-        PrefNav::SchematicEditor => content_schematic_editor(draft_grid_style),
         PrefNav::Erc => content_erc(erc_overrides),
+        // Library → Distributor APIs — the library subsystem owns
+        // the actual form
+        // (`crate::library::settings::distributor_apis::view`); we
+        // re-emit its `LibraryMessage::Settings(_)` wrapper as
+        // `PrefMsg::LibrarySettings(_)` so the Preferences modal's
+        // single message bus stays cohesive. The handler in
+        // `app/handlers/preferences.rs` re-dispatches via
+        // `Message::Library` to keep the canonical settings state on
+        // `LibraryState.settings`.
+        PrefNav::LibraryDistributors => {
+            content_library_distributors(distributor_settings, panel_tokens)
+        }
+        PrefNav::ComponentClasses => content_component_classes(draft_component_classes),
     };
 
     container(scrollable(inner).width(Length::Fill))
@@ -381,6 +462,43 @@ fn build_content<'a>(
             background: Some(Background::Color(CONTENT_BG)),
             ..container::Style::default()
         })
+        .into()
+}
+
+// ─── Library Distributor APIs page (live) ─────────────────
+
+/// Mount the live Distributor APIs panel inside the Preferences modal.
+///
+/// The panel emits `LibraryMessage::Settings(_)`; we wrap every
+/// message in `PrefMsg::LibrarySettings(_)` so the modal's outer
+/// `Message::PreferencesMsg(_)` map stays a single layer. The
+/// `app/handlers/preferences.rs` handler unwraps and re-dispatches
+/// via `Message::Library` so the canonical state writeback runs
+/// through the same dispatcher the Tools-menu surface uses.
+fn content_library_distributors<'a>(
+    settings: &'a crate::library::state::DistributorSettings,
+    tokens: &'a signex_types::theme::ThemeTokens,
+) -> Element<'a, PrefMsg> {
+    let header: Element<'a, PrefMsg> = column![
+        section_title("Library — Distributor APIs"),
+        Space::new().height(8),
+    ]
+    .padding([16, 20])
+    .into();
+
+    // The library panel returns `Element<'a, LibraryMessage>`. We
+    // map to `PrefMsg::LibrarySettings` for every Settings sub-
+    // variant; non-Settings library messages are ignored (they're
+    // never produced by `distributor_apis::view`).
+    let pane =
+        crate::library::settings::distributor_apis::view(settings, tokens).map(|lm| match lm {
+            crate::library::messages::LibraryMessage::Settings(s) => PrefMsg::LibrarySettings(s),
+            // distributor_apis::view never produces anything else.
+            _ => PrefMsg::Close,
+        });
+
+    column![header, container(pane).padding([0, 20]).width(Length::Fill)]
+        .spacing(0)
         .into()
 }
 
@@ -543,7 +661,7 @@ fn content_appearance<'a>(
     );
     col = col.push(Space::new().height(12));
     col = col.push(
-        text("Altium changes only rendering view. Standard preserves library symbol appearance.")
+        text("Restyled mode reshapes pin labels for rendering only. Standard preserves the library symbol's authored appearance.")
             .size(10)
             .color(TEXT_MUT),
     );
@@ -588,39 +706,6 @@ fn content_appearance<'a>(
                 [MultisheetStyle::Standard, MultisheetStyle::Altium],
                 Some(draft_multisheet_style),
                 PrefMsg::DraftMultisheetStyle,
-            )
-            .text_size(12)
-            .width(200),
-        ]
-        .align_y(iced::Alignment::Center),
-    );
-    col = col.push(Space::new().height(20));
-
-    col.into()
-}
-
-// ─── Schematic Editor page ────────────────────────────────────
-
-fn content_schematic_editor<'a>(draft_grid_style: GridStyle) -> Element<'a, PrefMsg> {
-    let mut col = column![].spacing(0).padding([16, 20]);
-
-    col = col.push(section_title("Grid Display"));
-    col = col.push(Space::new().height(10));
-    col = col.push(
-        row![
-            column![
-                text("Style").size(12).color(TEXT_PRI),
-                text("How the visible schematic grid is drawn at each grid point.")
-                    .size(10)
-                    .color(TEXT_MUT),
-            ]
-            .spacing(3)
-            .width(260),
-            Space::new().width(Length::Fill),
-            iced::widget::pick_list(
-                [GridStyle::Dots, GridStyle::Lines, GridStyle::SmallCrosses],
-                Some(draft_grid_style),
-                PrefMsg::DraftGridStyle,
             )
             .text_size(12)
             .width(200),
@@ -717,21 +802,54 @@ fn theme_card<'a>(
     .into()
 }
 
-fn close_btn<'a>() -> Element<'a, PrefMsg> {
-    button(text("✕").size(14).color(TEXT_MUT))
-        .padding([2, 8])
-        .on_press(PrefMsg::Close)
-        .style(move |_: &Theme, status: button::Status| {
-            let tc = match status {
-                button::Status::Hovered => Color::WHITE,
-                _ => TEXT_MUT,
-            };
-            button::Style {
-                text_color: tc,
-                ..button::Style::default()
-            }
-        })
-        .into()
+/// Canonical close-X — same SVG glyph and red hover footprint as the
+/// shared `view::dialogs::close_x_button`, generic over the modal's
+/// message type so this version can compose into a `PrefMsg`
+/// element. Matches the main-window chrome close (white glyph,
+/// 46×28 hit-box, top-right rounded hover, Windows-native red).
+fn close_btn<'a>(theme_id: ThemeId) -> Element<'a, PrefMsg> {
+    let handle = crate::icons::icon_chrome_window_close(theme_id);
+    button(
+        container(
+            svg(handle)
+                .width(MODAL_CLOSE_X_ICON)
+                .height(MODAL_CLOSE_X_ICON)
+                .style(move |_: &Theme, _| svg::Style {
+                    color: Some(Color::WHITE),
+                }),
+        )
+        .width(MODAL_CLOSE_X_HIT_W)
+        .height(MODAL_CLOSE_X_HIT_H)
+        .align_x(iced::alignment::Horizontal::Center)
+        .align_y(iced::alignment::Vertical::Center),
+    )
+    .padding(0)
+    .on_press(PrefMsg::Close)
+    .style(move |_: &Theme, status: button::Status| {
+        let hovered = matches!(
+            status,
+            button::Status::Hovered | button::Status::Pressed
+        );
+        button::Style {
+            background: if hovered {
+                Some(Background::Color(MODAL_CLOSE_X_HOVER))
+            } else {
+                None
+            },
+            text_color: Color::WHITE,
+            border: Border {
+                radius: iced::border::Radius {
+                    top_left: 0.0,
+                    top_right: 4.0,
+                    bottom_left: 0.0,
+                    bottom_right: 0.0,
+                },
+                ..Border::default()
+            },
+            ..button::Style::default()
+        }
+    })
+    .into()
 }
 
 /// Dynamic footer: Save + Close (clean) or ⚠ + Discard + Save (dirty).
@@ -1027,4 +1145,141 @@ fn severity_bg(sev: signex_erc::Severity) -> Color {
         signex_erc::Severity::Info => Color::from_rgb(0.20, 0.36, 0.58),
         signex_erc::Severity::Off => Color::from_rgb(0.28, 0.28, 0.32),
     }
+}
+
+// ─── Component Classes editor ─────────────────────────────────
+
+fn content_component_classes<'a>(
+    classes: &'a [crate::fonts::ComponentClassEntry],
+) -> Element<'a, PrefMsg> {
+    let header = column![
+        text("Default Component Classes").size(15).color(TEXT_PRI),
+        text("Seeds the class registry of newly-created libraries. \
+              Per-library edits live inside each .snxlib's manifest \
+              (forthcoming Library Properties pane); this list \
+              controls only what new libraries inherit.")
+            .size(11)
+            .color(TEXT_MUT),
+    ]
+    .spacing(6);
+
+    let column_header = row![
+        container(text("Key").size(11).color(TEXT_MUT))
+            .width(Length::FillPortion(2)),
+        container(text("Label").size(11).color(TEXT_MUT))
+            .width(Length::FillPortion(3)),
+        container(Space::new()).width(80),
+    ]
+    .spacing(8)
+    .padding([4, 0]);
+
+    let mut rows: Vec<Element<'a, PrefMsg>> = Vec::with_capacity(classes.len());
+    for (idx, entry) in classes.iter().enumerate() {
+        let key_input = text_input("class_key", entry.key.as_str())
+            .on_input(move |s| PrefMsg::ComponentClassEditKey { index: idx, key: s })
+            .padding(5)
+            .size(12)
+            .width(Length::FillPortion(2));
+        let label_input = text_input("Label", entry.label.as_str())
+            .on_input(move |s| PrefMsg::ComponentClassEditLabel {
+                index: idx,
+                label: s,
+            })
+            .padding(5)
+            .size(12)
+            .width(Length::FillPortion(3));
+        let remove_btn = button(
+            container(text("Remove").size(11).color(Color::WHITE))
+                .padding([4, 10])
+                .center_x(Length::Fill),
+        )
+        .on_press(PrefMsg::ComponentClassRemove { index: idx })
+        .style(move |_: &Theme, status: button::Status| {
+            let bg = match status {
+                button::Status::Hovered | button::Status::Pressed => BTN_DANGER_HOV,
+                _ => BTN_DANGER,
+            };
+            button::Style {
+                background: Some(Background::Color(bg)),
+                text_color: Color::WHITE,
+                border: Border {
+                    radius: 3.0.into(),
+                    ..Border::default()
+                },
+                ..button::Style::default()
+            }
+        })
+        .width(80);
+
+        rows.push(
+            row![key_input, label_input, remove_btn]
+                .spacing(8)
+                .align_y(iced::Alignment::Center)
+                .into(),
+        );
+    }
+
+    let body: Element<'a, PrefMsg> = if rows.is_empty() {
+        text("No classes defined. Click \"+ Add Class\" to add one or \"Reset to Defaults\" to restore the seed list.")
+            .size(11)
+            .color(TEXT_MUT)
+            .into()
+    } else {
+        Column::with_children(rows).spacing(6).into()
+    };
+
+    let add_btn = button(
+        container(text("+ Add Class").size(11).color(Color::WHITE)).padding([5, 12]),
+    )
+    .on_press(PrefMsg::ComponentClassAdd)
+    .style(move |_: &Theme, status: button::Status| {
+        let bg = match status {
+            button::Status::Hovered | button::Status::Pressed => BTN_IMPORT_HOV,
+            _ => BTN_IMPORT,
+        };
+        button::Style {
+            background: Some(Background::Color(bg)),
+            text_color: Color::WHITE,
+            border: Border {
+                radius: 3.0.into(),
+                ..Border::default()
+            },
+            ..button::Style::default()
+        }
+    });
+
+    let reset_btn = button(
+        container(text("Reset to Defaults").size(11).color(TEXT_PRI)).padding([5, 12]),
+    )
+    .on_press(PrefMsg::ComponentClassResetDefaults)
+    .style(move |_: &Theme, status: button::Status| {
+        let bg = match status {
+            button::Status::Hovered | button::Status::Pressed => Color::from_rgb(0.22, 0.22, 0.26),
+            _ => Color::from_rgb(0.18, 0.18, 0.21),
+        };
+        button::Style {
+            background: Some(Background::Color(bg)),
+            text_color: TEXT_PRI,
+            border: Border {
+                width: 1.0,
+                color: SEP,
+                radius: 3.0.into(),
+            },
+            ..button::Style::default()
+        }
+    });
+
+    let toolbar = row![
+        add_btn,
+        Space::new().width(8),
+        reset_btn,
+        Space::new().width(Length::Fill),
+    ]
+    .spacing(0)
+    .align_y(iced::Alignment::Center);
+
+    column![header, column_header, body, Space::new().height(8), toolbar]
+        .spacing(10)
+        .padding(20)
+        .into()
 }

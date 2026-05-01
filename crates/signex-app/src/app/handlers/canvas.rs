@@ -308,6 +308,45 @@ impl Signex {
                 self.ui_state.cursor_x = x as f64;
                 self.ui_state.cursor_y = y as f64;
                 self.ui_state.zoom = zoom_pct;
+                // Hover detection: fast hit-test against the active
+                // schematic snapshot so the tooltip overlay (in
+                // `view::collect_overlays`) can show after a 250 ms
+                // dwell on a placed symbol. Snapshot lookups are cheap
+                // (Vec scan keyed by world bounds), so doing this on
+                // every cursor tick is fine. Other hit kinds (wires,
+                // labels) intentionally fall through — only Symbol
+                // hovers carry library metadata worth surfacing.
+                let hover_uuid: Option<uuid::Uuid> = self
+                    .interaction_state
+                    .active_canvas()
+                    .active_snapshot()
+                    .and_then(|snap| {
+                        signex_render::schematic::hit_test::hit_test(
+                            snap,
+                            x as f64,
+                            y as f64,
+                        )
+                    })
+                    .and_then(|hit| {
+                        matches!(
+                            hit.kind,
+                            signex_types::schematic::SelectedKind::Symbol
+                        )
+                        .then_some(hit.uuid)
+                    });
+                if hover_uuid != self.interaction_state.hover_symbol_uuid {
+                    self.interaction_state.hover_symbol_uuid = hover_uuid;
+                    self.interaction_state.hover_started_at =
+                        hover_uuid.map(|_| std::time::Instant::now());
+                }
+                // Track screen position for the tooltip's translate
+                // offset on every move, even if the symbol is the
+                // same (the card follows the cursor).
+                self.interaction_state.hover_screen_pos = if hover_uuid.is_some() {
+                    Some(self.interaction_state.last_mouse_pos)
+                } else {
+                    None
+                };
                 // Lasso auto-sample: while a lasso is anchored (>= 1
                 // vertex already committed), sample a new vertex each
                 // time the cursor moves more than SAMPLE_MIN from the
@@ -780,6 +819,9 @@ impl Signex {
                                 custom_properties: Vec::new(),
                                 pin_uuids: std::collections::HashMap::new(),
                                 instances: Vec::new(),
+                                library_id: None,
+                                row_id: None,
+                                library_version: String::new(),
                             };
                             self.apply_engine_command(
                                 signex_engine::Command::PlaceSymbol { symbol: sym },
@@ -1444,6 +1486,7 @@ impl Signex {
             Unit::Inch => Unit::Micrometer,
             Unit::Micrometer => Unit::Mm,
         };
+        crate::fonts::write_unit_pref(self.ui_state.unit);
     }
 
     fn resolve_child_sheet_path(&self, child_filename: &str) -> Option<std::path::PathBuf> {

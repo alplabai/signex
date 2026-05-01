@@ -42,6 +42,9 @@ impl Signex {
             crate::panels::PanelMsg::FocusErcViolation(idx) => {
                 let _ = self.handle_focus_erc_diagnostic_index(*idx);
             }
+            crate::panels::PanelMsg::ErcQuickFix(idx) => {
+                let _ = self.handle_erc_quick_fix(*idx);
+            }
             crate::panels::PanelMsg::FocusPrevErcDiagnostic => {
                 let _ = self.handle_focus_erc_diagnostic_offset(-1);
             }
@@ -66,6 +69,9 @@ impl Signex {
             }
             crate::panels::PanelMsg::ComponentFilter(filter) => {
                 self.document_state.panel_ctx.component_filter = filter.clone();
+                // Write-through so the next session opens the panel
+                // with the same filter applied — UX_IMPROVEMENTS §1.1.
+                crate::fonts::write_component_filter(filter);
             }
             crate::panels::PanelMsg::ToggleSection(key) => {
                 let key = key.clone();
@@ -247,6 +253,7 @@ impl Signex {
                 self.interaction_state.active_canvas_mut().snap_grid_mm = *size as f64;
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
+                crate::fonts::write_grid_size_mm_pref(*size);
             }
             crate::panels::PanelMsg::SetVisibleGridSize(size) => {
                 self.ui_state.visible_grid_mm = *size;

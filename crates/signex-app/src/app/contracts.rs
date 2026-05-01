@@ -57,6 +57,12 @@ pub enum Message {
     DragMove(f32, f32),
     DragEnd,
     FileOpened(Option<PathBuf>),
+    /// File ▸ New Project — destination picked by the Save-As dialog.
+    /// `None` when the user cancelled the picker; on `Some(path)` the
+    /// handler writes a fresh `<stem>.snxprj` (empty marker file — the
+    /// parser is directory-driven) plus a blank `<stem>.snxsch` next
+    /// to it, then loads the project + opens the schematic tab.
+    NewProjectFile(Option<PathBuf>),
     #[allow(dead_code)]
     SchematicLoaded(Box<SchematicSheet>),
     DeleteSelected,
@@ -73,12 +79,17 @@ pub enum Message {
     Duplicate,
     SaveFile,
     SaveFileAs(PathBuf),
-    /// Async save (v0.9.1) finished. Carries the path that was saved
-    /// and either `Ok(())` (clear the "Saving…" pill, mark engine
-    /// path) or `Err(message)` (surface the error briefly in the
-    /// status bar). The handler clears the path from
-    /// `ui_state.saving_paths`.
-    SaveFileFinished(PathBuf, Result<(), String>),
+    /// User picked a destination from the Save-As dialog spawned the
+    /// first time a freshly-minted `.snxsym` / `.snxfpt` editor tab is
+    /// saved (the in-memory tab opened by `Add New ▸ Symbol` /
+    /// `Add New ▸ Footprint`). Re-keys the editor + tab from the
+    /// suggested path to the user's choice, then writes the file.
+    /// `from_path` is the suggested in-memory path the editor is
+    /// currently keyed under; `to_path` is the rfd result.
+    SavePrimitiveAs {
+        from_path: PathBuf,
+        to_path: PathBuf,
+    },
     CycleDrawMode,
     CancelDrawing,
     TogglePanelList,
@@ -121,6 +132,37 @@ pub enum Message {
     RemoveConfirm(RemoveChoice),
     /// Dismiss the Remove modal without applying.
     CloseRemoveDialog,
+    /// Result of the `Add Existing to Project…` file picker. Carries
+    /// the owning project's index plus the user's picks (`None` on
+    /// cancel, otherwise one or more paths from `pick_files`) so the
+    /// handler can copy each into the project directory in turn.
+    AddExistingFilePicked {
+        project_idx: usize,
+        paths: Option<Vec<std::path::PathBuf>>,
+    },
+    /// Result of the `Add New ▸ Schematic` Save-As dialog. `None`
+    /// when the user cancelled; on `Some(path)` the handler writes
+    /// a blank `.snxsch`, registers it on the project, and marks
+    /// the .snxprj dirty.
+    AddNewSchematicPicked {
+        project_idx: usize,
+        path: Option<std::path::PathBuf>,
+    },
+    /// Dismiss the Project Options metadata modal.
+    CloseProjectOptions,
+    /// Toggle the LFS checkbox on the Enable Version Control modal.
+    EnableVersionControlToggleLfs,
+    /// Toggle the per-item "Track" checkbox on the Enable Version
+    /// Control modal. Index is into `EnableVersionControlState::items`.
+    /// Untracked items are written into a generated `.gitignore` at
+    /// confirm time so they sit outside the initial commit.
+    EnableVersionControlToggleItem(usize),
+    /// Confirm — runs `git init` + initial commit at the project
+    /// dir, refreshes the panel ctx so any in-tree dirty markers
+    /// reflect the new state.
+    EnableVersionControlConfirm,
+    /// Dismiss the Enable Version Control modal without writing.
+    CloseEnableVersionControl,
     /// Expand a click-to-open submenu inside the right-click context
     /// menu (Place or Align). Toggles off when the same kind is fired
     /// twice, otherwise replaces the current submenu.
@@ -143,6 +185,13 @@ pub enum Message {
     TickContextSubmenuHover,
     ContextAction(ContextAction),
     OpenPreferences,
+    /// Close the Help ▸ Keyboard Shortcuts modal — fired by the close
+    /// chrome ✕ and by Esc dismiss handling.
+    CloseKeyboardShortcuts,
+    /// Dismiss the first-run tour card and persist the flag so it
+    /// never reappears. Fired by the card's ✕ button, by Esc, and by
+    /// the first canvas interaction after launch.
+    DismissFirstRunTour,
     OpenFind,
     OpenReplace,
     ClosePreferences,
@@ -461,6 +510,46 @@ pub enum Message {
     PrintPreviewSetPcbColourMode(signex_output::ColourMode),
     /// User clicked the OK button on the export-error modal.
     DismissExportError,
+    /// v0.9 Library subsystem message — folded under one variant so
+    /// the dispatcher can route to `library_dispatch::handle` in one
+    /// shot. See `crate::library::LibraryMessage` for the inner
+    /// shape.
+    Library(crate::library::LibraryMessage),
+    /// Open the command palette dropdown and focus the chrome-strip
+    /// search bar. Bound to Ctrl+Shift+P. Idempotent — already-open
+    /// keeps state, just refocuses the input.
+    CommandPaletteOpen,
+    /// Close the dropdown without executing. Bound to Esc and to
+    /// click-outside. Leaves the chrome-strip input visible (it's the
+    /// always-on placeholder) but unfocused; query is preserved so a
+    /// re-open continues where the user left off.
+    CommandPaletteClose,
+    /// Live query update from the chrome-strip text_input. Resets the
+    /// selected row to 0 because the result list reorders on every
+    /// keystroke.
+    CommandPaletteQueryChanged(String),
+    /// Move the highlighted row by `delta` (clamped to result count).
+    /// Wired to ArrowUp / ArrowDown when the palette is open.
+    CommandPaletteMoveSelection(i32),
+    /// Click on a specific row in the dropdown — sets selected_index
+    /// and executes in one shot.
+    CommandPaletteSelect(usize),
+    /// Execute the currently selected entry. Wired to Enter and to
+    /// `text_input::on_submit`.
+    CommandPaletteExecuteSelected,
+    /// Async result of a per-file Git history load issued by the
+    /// right-dock History panel. `generation` is the value of
+    /// `DocumentState.history.generation` at the time the load was
+    /// kicked off; the handler discards stale results whose
+    /// generation no longer matches the current counter (the user
+    /// has switched tabs since). `path` is the file the load
+    /// targeted, surfaced for diagnostic logging only — the
+    /// generation token is the authoritative staleness check.
+    HistoryLoaded {
+        generation: u32,
+        path: std::path::PathBuf,
+        result: Result<Vec<signex_widgets::HistoryEntry>, String>,
+    },
     Noop,
 }
 
@@ -665,6 +754,35 @@ pub enum ProjectTreeAction {
     /// indices are ignored so the action is safe to fire from any node
     /// underneath a project root.
     CloseProject(Vec<usize>),
+    /// v0.9 project-root: run ERC across the project. Promotes the
+    /// project to active, opens its `schematic_root` if no schematic
+    /// from this project is currently active, then dispatches the
+    /// existing ERC dialog.
+    ValidateProject(Vec<usize>),
+    /// v0.9 project-root: open the rename modal seeded with the
+    /// project name (the `.snxprj` stem). Submit renames the trio
+    /// `<old>.snxprj` / `<old>.snxsch` / `<old>.snxpcb` in lockstep.
+    OpenProjectRenameDialog(Vec<usize>),
+    /// v0.9 project-root: open the Project Options metadata modal.
+    OpenProjectOptions(Vec<usize>),
+    /// v0.9 project-root: open a file dialog and add the picked file
+    /// to the project. Files outside the project directory are copied
+    /// in; files already inside just trigger a tree refresh.
+    AddExistingToProject(Vec<usize>),
+    /// v0.9 project-root → Add New ▸ Schematic. Spawns a Save-As
+    /// dialog scoped to the project directory; the result writes a
+    /// blank `.snxsch`, registers it as a SheetEntry, marks the
+    /// project dirty, and refreshes the tree (no tab opens).
+    AddNewSchematic(Vec<usize>),
+    /// v0.11 project-root: open the Enable Version Control confirm
+    /// modal. Runs `git init` at the project dir, optionally seeds
+    /// `.gitattributes` for binary-model LFS, and creates the
+    /// initial commit covering the entire project tree. Only
+    /// enabled when the project dir has no `.git/` already.
+    OpenEnableVersionControl(Vec<usize>),
+    /// Right-click on a plain-files `.snxlib` node → opens the
+    /// Enable Version Control modal scoped to that library directory.
+    OpenLibraryEnableVersionControl(Vec<usize>),
 }
 
 /// State for the rename modal. Tracks the target file, the live
@@ -676,6 +794,96 @@ pub struct RenameDialogState {
     pub tree_path: Vec<usize>,
     pub buffer: String,
     pub error: Option<String>,
+    /// `true` when this rename targets the project root — the submit
+    /// handler renames the `<old>.snxprj` plus the companion
+    /// `<old>.snxsch` / `<old>.snxpcb` (whichever exist on disk) so the
+    /// trio stays grouped under the new project name. `false` is the
+    /// per-file rename used by sheet leaves.
+    pub is_project_rename: bool,
+}
+
+/// One file/directory entry surfaced on the Enable Version Control
+/// picker. The user can opt items out of the initial commit by
+/// untoggling `tracked`; untracked entries get written into a
+/// generated `.gitignore` so they sit outside the repo from day one.
+#[derive(Debug, Clone)]
+pub struct TrackItem {
+    pub absolute: std::path::PathBuf,
+    pub relative: String,
+    /// Short kind badge ("Schematic", "PCB", "Library", "Folder",
+    /// "Config", etc.) shown next to the path in the picker.
+    pub label: String,
+    /// True for directory entries — drives trailing-slash in the
+    /// generated `.gitignore` pattern.
+    pub is_directory: bool,
+    pub tracked: bool,
+}
+
+/// Whether the Enable Version Control modal is initialising a
+/// project repo (whole-project tree) or a library repo (a single
+/// `.snxlib` directory). Branches the confirm handler so it can
+/// run `git init` against the right working tree and emit the
+/// scope-appropriate log line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VersionControlScope {
+    Project,
+    Library,
+}
+
+/// State for the "Enable Version Control" confirm modal — opened
+/// from the project root context menu when the project directory
+/// has no `.git/` yet, or from a plain-files `.snxlib` node's
+/// right-click menu. Confirm runs `git2::Repository::init` at
+/// `project_dir`, optionally writes `.gitattributes` for binary-
+/// model LFS, generates a `.gitignore` from the unticked items,
+/// and stages an initial commit covering the picked subset.
+#[derive(Debug, Clone)]
+pub struct EnableVersionControlState {
+    /// Whether this dialog is scoped to a project (the `.snxprj` +
+    /// surrounding tree) or to a library directory (a single
+    /// `.snxlib` and its `symbols/` / `footprints/` siblings).
+    pub scope: VersionControlScope,
+    /// For `Project`: path to the `.snxprj` file. For `Library`:
+    /// path to the `library.toml` (or equivalent manifest) inside
+    /// the library directory — used only for display.
+    pub project_path: std::path::PathBuf,
+    /// Working tree root the new repo will live at. For projects
+    /// this is the `.snxprj` parent; for libraries the `.snxlib`
+    /// parent (i.e. the library's root_dir).
+    pub project_dir: std::path::PathBuf,
+    /// Display name for the modal header. Project: project name.
+    /// Library: filename stem of the `.snxlib` (e.g. "MyLib").
+    pub project_name: String,
+    /// Per-entry tracking picker — tickable rows for each top-level
+    /// schematic / pcb / library (project scope) or each top-level
+    /// manifest / subdirectory (library scope). Untracked rows get
+    /// written into `.gitignore` at confirm time.
+    pub items: Vec<TrackItem>,
+    /// "Track binary 3D models via Git LFS" checkbox. Off by
+    /// default; only writes `.gitattributes` when on.
+    pub use_lfs: bool,
+    /// Pre-formatted intro paragraph that interpolates the working
+    /// tree path. Computed once at modal-open time so the view
+    /// doesn't allocate a fresh `String` on every render frame.
+    pub intro_text: String,
+    /// Last error from a confirm attempt — surfaces inline so the
+    /// user can fix the cause (LFS not installed, etc.) and retry
+    /// without reopening the modal.
+    pub error: Option<String>,
+}
+
+/// State for the read-only "Project Options" modal — the v0.9 surface
+/// is a metadata summary (name / dir / schematic root / pcb file /
+/// libraries). Editing happens through the dedicated rename / library
+/// flows; a future revision can promote this to a full editor.
+#[derive(Debug, Clone)]
+pub struct ProjectOptionsState {
+    pub project_idx: usize,
+    pub name: String,
+    pub directory: String,
+    pub schematic_root: Option<String>,
+    pub pcb_file: Option<String>,
+    pub library_count: usize,
 }
 
 /// State for the "Remove from Project" modal. `Delete` removes the file
@@ -703,4 +911,7 @@ pub enum StatusBarRequest {
     ToggleGrid,
     ToggleSnap,
     TogglePanelList,
+    /// Click on the selection-summary segment opens the Properties panel
+    /// scoped to the current selection.
+    OpenPropertiesForSelection,
 }

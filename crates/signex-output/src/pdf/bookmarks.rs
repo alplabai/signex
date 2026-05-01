@@ -304,8 +304,8 @@ pub(crate) fn emit_bookmarks(
         if let Some(&last) = top_level.last() {
             outline.last(bookmark_id(last));
         }
-        // /Count = total visible items so the panel opens fully
-        // expanded — matches what Standard eeschema and Altium ship.
+        // /Count = total visible items so the bookmarks panel opens
+        // fully expanded by default, matching common EDA exporters.
         outline.count(bookmarks.len() as i32);
         outline.finish();
     }
@@ -476,6 +476,9 @@ mod tests {
             instances: vec![],
             footprint: String::new(),
             datasheet: String::new(),
+            library_id: None,
+            row_id: None,
+            library_version: String::new(),
         });
         sheet.labels.push(Label {
             uuid: uuid::Uuid::nil(),
@@ -678,6 +681,9 @@ mod tests {
             instances: vec![],
             footprint: String::new(),
             datasheet: String::new(),
+            library_id: None,
+            row_id: None,
+            library_version: String::new(),
         };
         sym.pin_uuids.insert("1".to_string(), uuid::Uuid::nil());
         sym.pin_uuids.insert("2".to_string(), uuid::Uuid::nil());
@@ -749,6 +755,9 @@ mod tests {
                     instances: vec![],
                     footprint: String::new(),
                     datasheet: String::new(),
+                    library_id: None,
+                    row_id: None,
+                    library_version: String::new(),
                 });
                 sheets.push(SheetSnapshot {
                     path: std::path::PathBuf::from(format!("sheet_{i}.standard_sch")),

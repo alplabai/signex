@@ -1,9 +1,7 @@
 # cargo-deny configuration for signex
 #
-# Enforces issue-62 Apache-clean licensing: the main repo's transitive
-# dependency closure may not contain GPL / AGPL / unlicensed crates.
-# KiCad I/O lives in the GPL-3.0 companion repo signex-kicad-import,
-# which has its own deny.toml configured for GPL-compatible licenses.
+# Enforces Apache-clean licensing: the main repo's transitive dependency
+# closure may not contain GPL / AGPL / unlicensed crates.
 #
 # Run locally: `cargo deny check licenses`
 
@@ -32,6 +30,7 @@ allow = [
     "WTFPL",
     "Unlicense",
     "NCSA",             # University of Illinois/NCSA — BSD-3-equivalent, OSI-approved, Apache-compatible (libfuzzer-sys transitive)
+    "CDLA-Permissive-2.0", # Community Data License Agreement — Linux Foundation, OSI-style permissive (webpki-roots transitive via reqwest/sqlx)
 ]
 
 # Anything not in the allowlist is rejected. GPL / AGPL / LGPL / etc are

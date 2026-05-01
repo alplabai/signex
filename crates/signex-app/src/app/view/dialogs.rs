@@ -26,31 +26,31 @@ const BACKDROP: Color = Color::from_rgba(0.0, 0.0, 0.0, 0.55);
 /// rename modals; 28 keeps the header tight relative to the body.
 /// Close-X follows the same height so there's no empty strip below
 /// the button.
-pub(in crate::app::view) const MODAL_HEADER_HEIGHT: f32 = 28.0;
+pub(crate) const MODAL_HEADER_HEIGHT: f32 = 28.0;
 /// Asymmetric padding inside the modal header strip: zero on the right
 /// so the close-X sits flush against the rounded corner (its own
 /// top-right radius matches `MODAL_CORNER_RADIUS`); zero top/bottom so
 /// the X fills the strip's full height; left inset matched to the
 /// modal body padding (16 px) so the title left-aligns with the
 /// body's first text column.
-pub(in crate::app::view) const MODAL_HEADER_PADDING: iced::Padding = iced::Padding {
+pub(crate) const MODAL_HEADER_PADDING: iced::Padding = iced::Padding {
     top: 0.0,
     right: 0.0,
     bottom: 0.0,
     left: 16.0,
 };
 /// Title text size in the modal header.
-pub(in crate::app::view) const MODAL_HEADER_TITLE_SIZE: f32 = 13.0;
+pub(crate) const MODAL_HEADER_TITLE_SIZE: f32 = 13.0;
 /// Close-X hit-box width — same width the chrome close uses
 /// (`view::view_main_window_chrome::chrome_btn`).
-pub(in crate::app::view) const MODAL_CLOSE_X_HIT_W: f32 = 46.0;
+pub(crate) const MODAL_CLOSE_X_HIT_W: f32 = 46.0;
 /// Close-X hit-box height — also matches the chrome close (full
 /// menu-bar height) so the modal X is pixel-identical to the OS-window X.
-pub(in crate::app::view) const MODAL_CLOSE_X_HIT_H: f32 = MODAL_HEADER_HEIGHT;
+pub(crate) const MODAL_CLOSE_X_HIT_H: f32 = MODAL_HEADER_HEIGHT;
 /// SVG glyph size for the close-X. Same value the chrome close uses.
-pub(in crate::app::view) const MODAL_CLOSE_X_ICON: f32 = 14.0;
+pub(crate) const MODAL_CLOSE_X_ICON: f32 = 14.0;
 /// Hover background for the close-X (Windows-native destructive red).
-pub(in crate::app::view) const MODAL_CLOSE_X_HOVER: Color =
+pub(crate) const MODAL_CLOSE_X_HOVER: Color =
     Color::from_rgba(0.78, 0.22, 0.22, 1.0);
 
 impl Signex {
@@ -877,11 +877,14 @@ impl Signex {
         let error_c = Color::from_rgb(0.90, 0.35, 0.30);
 
         let theme_id = self.ui_state.theme_id;
+        let title = if st.is_project_rename {
+            "Rename Project"
+        } else {
+            "Rename File"
+        };
         let header_content: Element<'_, Message> = container(
             row![
-                text("Rename File")
-                    .size(MODAL_HEADER_TITLE_SIZE)
-                    .color(text_c),
+                text(title).size(MODAL_HEADER_TITLE_SIZE).color(text_c),
                 Space::new().width(Length::Fill),
                 close_x_button(Message::CloseRenameDialog, theme_id, text_muted),
             ]
@@ -898,18 +901,33 @@ impl Signex {
             self.interaction_state.last_mouse_pos,
         );
 
-        let current_name = st
-            .target_path
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("")
-            .to_string();
+        let current_label = if st.is_project_rename {
+            st.target_path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_string()
+        } else {
+            st.target_path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_string()
+        };
+        let placeholder = if st.is_project_rename {
+            "new-project-name"
+        } else {
+            "new-name.snxsch"
+        };
+        let prompt = if st.is_project_rename {
+            format!("Rename project \"{}\"", current_label)
+        } else {
+            format!("Rename \"{}\"", current_label)
+        };
 
         let mut body: iced::widget::Column<'_, Message> = column![
-            text(format!("Rename \"{}\"", current_name))
-                .size(11)
-                .color(text_muted),
-            text_input("new-name.standard_sch", &st.buffer)
+            text(prompt).size(11).color(text_muted),
+            text_input(placeholder, &st.buffer)
                 .on_input(Message::RenameBufferChanged)
                 .on_submit(Message::RenameSubmit)
                 .size(12)
@@ -938,6 +956,241 @@ impl Signex {
                 .padding([10, 14]),
             ]
             .width(420),
+        )
+        .style(crate::styles::modal_card(tokens))
+        .clip(true);
+        dialog.into()
+    }
+
+    pub(super) fn view_project_options_dialog(&self) -> Element<'_, Message> {
+        let dialog = self.view_project_options_dialog_body();
+        let offset = self
+            .ui_state
+            .modal_offsets
+            .get(&super::super::state::ModalId::ProjectOptions)
+            .copied()
+            .unwrap_or((0.0, 0.0));
+        wrap_modal(dialog, offset, self.ui_state.window_size, (520.0, 360.0))
+    }
+
+    fn view_project_options_dialog_body(&self) -> Element<'_, Message> {
+        let Some(ref st) = self.ui_state.project_options else {
+            return container(Space::new()).into();
+        };
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let theme_id = self.ui_state.theme_id;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border_c = crate::styles::ti(tokens.border);
+
+        let header_content: Element<'_, Message> = container(
+            row![
+                text("Project Options")
+                    .size(MODAL_HEADER_TITLE_SIZE)
+                    .color(text_c),
+                Space::new().width(Length::Fill),
+                close_x_button(Message::CloseProjectOptions, theme_id, text_muted),
+            ]
+            .align_y(iced::Alignment::Center),
+        )
+        .padding(MODAL_HEADER_PADDING)
+        .height(MODAL_HEADER_HEIGHT)
+        .style(crate::styles::modal_header_strip(tokens))
+        .into();
+        let header = draggable_header(
+            header_content,
+            super::super::state::ModalId::ProjectOptions,
+            self.interaction_state.last_mouse_pos,
+        );
+
+        let row_field = |label: &str, value: String| -> Element<'_, Message> {
+            row![
+                container(text(label.to_string()).size(11).color(text_muted))
+                    .width(Length::Fixed(140.0)),
+                text(value).size(12).color(text_c),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center)
+            .into()
+        };
+
+        let body = column![
+            row_field("Name", st.name.clone()),
+            row_field("Directory", st.directory.clone()),
+            row_field(
+                "Schematic root",
+                st.schematic_root
+                    .clone()
+                    .unwrap_or_else(|| "—".to_string())
+            ),
+            row_field(
+                "PCB",
+                st.pcb_file.clone().unwrap_or_else(|| "—".to_string())
+            ),
+            row_field("Libraries", st.library_count.to_string()),
+        ]
+        .spacing(10);
+
+        let dialog = container(
+            column![
+                header,
+                container(body).padding([14, 16]),
+                container(
+                    row![
+                        Space::new().width(Length::Fill),
+                        primary_button("Close", Some(Message::CloseProjectOptions), border_c),
+                    ]
+                    .align_y(iced::Alignment::Center),
+                )
+                .padding([10, 14]),
+            ]
+            .width(520),
+        )
+        .style(crate::styles::modal_card(tokens))
+        .clip(true);
+        dialog.into()
+    }
+
+    pub(super) fn view_enable_version_control_dialog(&self) -> Element<'_, Message> {
+        let dialog = self.view_enable_version_control_dialog_body();
+        let offset = self
+            .ui_state
+            .modal_offsets
+            .get(&super::super::state::ModalId::EnableVersionControl)
+            .copied()
+            .unwrap_or((0.0, 0.0));
+        wrap_modal(dialog, offset, self.ui_state.window_size, (520.0, 320.0))
+    }
+
+    fn view_enable_version_control_dialog_body(&self) -> Element<'_, Message> {
+        use iced::widget::checkbox;
+        let Some(ref st) = self.ui_state.enable_version_control else {
+            return container(Space::new()).into();
+        };
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let theme_id = self.ui_state.theme_id;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border_c = crate::styles::ti(tokens.border);
+
+        let header_content: Element<'_, Message> = container(
+            row![
+                text("Enable Version Control")
+                    .size(MODAL_HEADER_TITLE_SIZE)
+                    .color(text_c),
+                Space::new().width(Length::Fill),
+                close_x_button(Message::CloseEnableVersionControl, theme_id, text_muted),
+            ]
+            .align_y(iced::Alignment::Center),
+        )
+        .padding(MODAL_HEADER_PADDING)
+        .height(MODAL_HEADER_HEIGHT)
+        .style(crate::styles::modal_header_strip(tokens))
+        .into();
+        let header = draggable_header(
+            header_content,
+            super::super::state::ModalId::EnableVersionControl,
+            self.interaction_state.last_mouse_pos,
+        );
+
+        let scope = st.scope;
+        let intro = text(st.intro_text.as_str()).size(11).color(text_muted);
+        let summary_label = match scope {
+            crate::app::VersionControlScope::Project => "Project",
+            crate::app::VersionControlScope::Library => "Library",
+        };
+        let summary = text(format!("{summary_label}: {}", st.project_name))
+            .size(12)
+            .color(text_c);
+
+        // Per-row track toggles. Surfaced as a column (no scrollable
+        // — typical project / library layouts have <20 entries) so
+        // the modal sizing stays predictable.
+        let items_text_c = text_c;
+        let items_text_muted = text_muted;
+        let mut items_col = column![].spacing(4);
+        if !st.items.is_empty() {
+            items_col = items_col.push(
+                text("Track in repository")
+                    .size(11)
+                    .color(items_text_muted),
+            );
+            for (idx, item) in st.items.iter().enumerate() {
+                let cb: Element<'_, Message> = checkbox(item.tracked)
+                    .size(13)
+                    .on_toggle(move |_| Message::EnableVersionControlToggleItem(idx))
+                    .into();
+                let row_widget = row![
+                    cb,
+                    Space::new().width(8),
+                    text(item.relative.clone()).size(11).color(items_text_c),
+                    Space::new().width(Length::Fill),
+                    text(item.label.clone()).size(10).color(items_text_muted),
+                ]
+                .align_y(iced::Alignment::Center);
+                items_col = items_col.push(row_widget);
+            }
+        }
+
+        let lfs_check: Element<'_, Message> = checkbox(st.use_lfs)
+            .size(14)
+            .on_toggle(|_| Message::EnableVersionControlToggleLfs)
+            .into();
+        let lfs_row = row![
+            lfs_check,
+            Space::new().width(8),
+            column![
+                text("Track binary 3D models via Git LFS")
+                    .size(12)
+                    .color(text_c),
+                text("Routes `*.step / *.stp / *.wrl / *.iges` through Git LFS. Requires `git lfs` locally.")
+                    .size(10)
+                    .color(text_muted),
+            ]
+            .spacing(2),
+        ]
+        .align_y(iced::Alignment::Start);
+
+        let mut body_col = column![summary, intro].spacing(10);
+        if !st.items.is_empty() {
+            body_col = body_col.push(Space::new().height(2));
+            body_col = body_col.push(items_col);
+        }
+        body_col = body_col.push(Space::new().height(6));
+        body_col = body_col.push(lfs_row);
+        if let Some(err) = st.error.as_ref() {
+            body_col = body_col.push(
+                text(err.clone())
+                    .size(11)
+                    .color(iced::Color::from_rgb(0.85, 0.3, 0.3)),
+            );
+        }
+
+        let dialog = container(
+            column![
+                header,
+                container(body_col).padding([14, 16]),
+                container(
+                    row![
+                        Space::new().width(Length::Fill),
+                        secondary_button(
+                            "Cancel",
+                            Message::CloseEnableVersionControl,
+                            text_c,
+                            border_c,
+                        ),
+                        Space::new().width(8),
+                        primary_button(
+                            "Enable",
+                            Some(Message::EnableVersionControlConfirm),
+                            border_c,
+                        ),
+                    ]
+                    .align_y(iced::Alignment::Center),
+                )
+                .padding([10, 14]),
+            ]
+            .width(520),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
