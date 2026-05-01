@@ -220,6 +220,24 @@ pub struct LibraryBrowserState {
     /// Most recent rename error (e.g. duplicate target name).
     /// Surfaces inline next to the rename input.
     pub rename_error: Option<String>,
+    /// In-flight `+ Class` form — `Some` while the user is typing
+    /// a new class key + label. Confirm dispatches
+    /// `update_library_classes` with the appended row.
+    pub adding_class: Option<NewClassDraft>,
+    /// In-flight class rename — `(original_key, key_buffer, label_buffer)`.
+    pub renaming_class: Option<(String, String, String)>,
+    /// Most recent class-edit error (validation, duplicate key, etc).
+    pub class_error: Option<String>,
+}
+
+/// `+ Class` inline form state — separate key + label inputs since
+/// the canonical class identifier (`key`) is distinct from the
+/// human-readable display label.
+#[derive(Debug, Clone, Default)]
+pub struct NewClassDraft {
+    pub key: String,
+    pub label: String,
+    pub error: Option<String>,
 }
 
 /// Active sort key + direction for the Library Browser grid.
@@ -246,6 +264,9 @@ impl LibraryBrowserState {
             delete_error: None,
             renaming_table: None,
             rename_error: None,
+            adding_class: None,
+            renaming_class: None,
+            class_error: None,
         }
     }
 

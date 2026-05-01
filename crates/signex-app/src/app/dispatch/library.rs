@@ -237,6 +237,208 @@ impl Signex {
                 }
                 Task::none()
             }
+            LibraryMessage::BrowserBeginAddClass { library_path } => {
+                if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
+                    s.adding_class = Some(crate::library::state::NewClassDraft::default());
+                    s.class_error = None;
+                }
+                Task::none()
+            }
+            LibraryMessage::BrowserSetNewClassKey { library_path, value } => {
+                if let Some(s) = self.library.library_browsers.get_mut(&library_path)
+                    && let Some(d) = s.adding_class.as_mut()
+                {
+                    d.key = value;
+                    d.error = None;
+                }
+                Task::none()
+            }
+            LibraryMessage::BrowserSetNewClassLabel { library_path, value } => {
+                if let Some(s) = self.library.library_browsers.get_mut(&library_path)
+                    && let Some(d) = s.adding_class.as_mut()
+                {
+                    d.label = value;
+                    d.error = None;
+                }
+                Task::none()
+            }
+            LibraryMessage::BrowserCancelAddClass { library_path } => {
+                if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
+                    s.adding_class = None;
+                }
+                Task::none()
+            }
+            LibraryMessage::BrowserConfirmAddClass { library_path } => {
+                let Some(state) = self.library.library_browsers.get(&library_path).cloned() else {
+                    return Task::none();
+                };
+                let Some(draft) = state.adding_class.clone() else {
+                    return Task::none();
+                };
+                let key = draft.key.trim().to_string();
+                let label = draft.label.trim().to_string();
+                if key.is_empty() || label.is_empty() {
+                    if let Some(s) = self.library.library_browsers.get_mut(&library_path)
+                        && let Some(d) = s.adding_class.as_mut()
+                    {
+                        d.error = Some("Both key and label are required.".into());
+                    }
+                    return Task::none();
+                }
+                let library_id = match self.library.library_at(&library_path) {
+                    Some(lib) => lib.library_id,
+                    None => return Task::none(),
+                };
+                let adapter = match self.library.set.get(library_id) {
+                    Some(a) => a,
+                    None => return Task::none(),
+                };
+                let mut classes = adapter.library_classes();
+                if classes.iter().any(|c| c.key == key) {
+                    if let Some(s) = self.library.library_browsers.get_mut(&library_path)
+                        && let Some(d) = s.adding_class.as_mut()
+                    {
+                        d.error = Some(format!("A class with key {key:?} already exists."));
+                    }
+                    return Task::none();
+                }
+                classes.push(signex_library::ClassEntry {
+                    key: key.clone(),
+                    label,
+                });
+                if let Err(error) =
+                    adapter.update_library_classes(classes, &format!("add class {key}"))
+                {
+                    if let Some(s) = self.library.library_browsers.get_mut(&library_path)
+                        && let Some(d) = s.adding_class.as_mut()
+                    {
+                        d.error = Some(error.to_string());
+                    }
+                    return Task::none();
+                }
+                if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
+                    s.adding_class = None;
+                    s.class_error = None;
+                }
+                Task::none()
+            }
+            LibraryMessage::BrowserDeleteClass { library_path, key } => {
+                let library_id = match self.library.library_at(&library_path) {
+                    Some(lib) => lib.library_id,
+                    None => return Task::none(),
+                };
+                let adapter = match self.library.set.get(library_id) {
+                    Some(a) => a,
+                    None => return Task::none(),
+                };
+                let mut classes = adapter.library_classes();
+                classes.retain(|c| c.key != key);
+                if let Err(error) =
+                    adapter.update_library_classes(classes, &format!("delete class {key}"))
+                {
+                    if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
+                        s.class_error = Some(error.to_string());
+                    }
+                }
+                Task::none()
+            }
+            LibraryMessage::BrowserBeginRenameClass { library_path, key } => {
+                let library_id = match self.library.library_at(&library_path) {
+                    Some(lib) => lib.library_id,
+                    None => return Task::none(),
+                };
+                let label = self
+                    .library
+                    .set
+                    .get(library_id)
+                    .and_then(|adapter| {
+                        adapter.library_classes().into_iter().find(|c| c.key == key)
+                    })
+                    .map(|c| c.label)
+                    .unwrap_or_default();
+                if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
+                    s.renaming_class = Some((key.clone(), key, label));
+                    s.class_error = None;
+                }
+                Task::none()
+            }
+            LibraryMessage::BrowserSetRenameClassKey { library_path, value } => {
+                if let Some(s) = self.library.library_browsers.get_mut(&library_path)
+                    && let Some((_, k, _)) = s.renaming_class.as_mut()
+                {
+                    *k = value;
+                    s.class_error = None;
+                }
+                Task::none()
+            }
+            LibraryMessage::BrowserSetRenameClassLabel { library_path, value } => {
+                if let Some(s) = self.library.library_browsers.get_mut(&library_path)
+                    && let Some((_, _, l)) = s.renaming_class.as_mut()
+                {
+                    *l = value;
+                    s.class_error = None;
+                }
+                Task::none()
+            }
+            LibraryMessage::BrowserCancelRenameClass { library_path } => {
+                if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
+                    s.renaming_class = None;
+                    s.class_error = None;
+                }
+                Task::none()
+            }
+            LibraryMessage::BrowserConfirmRenameClass { library_path } => {
+                let Some(state) = self.library.library_browsers.get(&library_path).cloned() else {
+                    return Task::none();
+                };
+                let Some((orig, new_key, new_label)) = state.renaming_class.clone() else {
+                    return Task::none();
+                };
+                let new_key = new_key.trim().to_string();
+                let new_label = new_label.trim().to_string();
+                if new_key.is_empty() || new_label.is_empty() {
+                    if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
+                        s.class_error = Some("Both key and label are required.".into());
+                    }
+                    return Task::none();
+                }
+                let library_id = match self.library.library_at(&library_path) {
+                    Some(lib) => lib.library_id,
+                    None => return Task::none(),
+                };
+                let adapter = match self.library.set.get(library_id) {
+                    Some(a) => a,
+                    None => return Task::none(),
+                };
+                let mut classes = adapter.library_classes();
+                if new_key != orig && classes.iter().any(|c| c.key == new_key) {
+                    if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
+                        s.class_error =
+                            Some(format!("A class with key {new_key:?} already exists."));
+                    }
+                    return Task::none();
+                }
+                for c in classes.iter_mut() {
+                    if c.key == orig {
+                        c.key = new_key.clone();
+                        c.label = new_label.clone();
+                        break;
+                    }
+                }
+                if let Err(error) =
+                    adapter.update_library_classes(classes, &format!("rename class {orig} → {new_key}"))
+                {
+                    if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
+                        s.class_error = Some(error.to_string());
+                    }
+                    return Task::none();
+                }
+                if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
+                    s.renaming_class = None;
+                    s.class_error = None;
+                }
+                Task::none()
+            }
             LibraryMessage::BrowserConfirmRenameTable { library_path } => {
                 let Some(state) = self.library.library_browsers.get(&library_path).cloned() else {
                     return Task::none();

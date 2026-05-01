@@ -96,7 +96,7 @@ pub fn view<'a>(
     // pane = filters/search + grid + actions + preview. Mirrors a DB
     // browser so users can scan their library inventory at a glance
     // and pivot between tables without horizontal scrolling.
-    let table_sidebar = view_table_sidebar(library_path, lib, browser, tokens);
+    let table_sidebar = view_table_sidebar(library_path, library_state, lib, browser, tokens);
     let header = view_header(library_path, lib, browser, tokens);
 
     // Body — left grid, right preview pane.
@@ -204,6 +204,7 @@ pub fn view<'a>(
 /// user can drop rows individually before deletion lands.
 fn view_table_sidebar<'a>(
     library_path: &'a std::path::Path,
+    library_state: &'a LibraryState,
     lib: &'a OpenLibrary,
     browser: &'a LibraryBrowserState,
     tokens: &'a ThemeTokens,
@@ -481,6 +482,295 @@ fn view_table_sidebar<'a>(
             .align_y(iced::Alignment::Center)
             .width(Length::Fill);
         col = col.push(row_with_actions);
+    }
+
+    // ─── Classes section ───────────────────────────────────────────
+    // Classes are the per-library taxonomy backing the New Component
+    // class dropdown. Listed below tables so the sidebar reads as
+    // "library inventory: tables (data) + classes (taxonomy)".
+    col = col.push(Space::new().height(12));
+    col = col.push(
+        container(text("Classes").size(11).color(muted)).padding(iced::Padding {
+            top: 0.0,
+            right: 8.0,
+            bottom: 4.0,
+            left: 12.0,
+        }),
+    );
+
+    if let Some(err) = browser.class_error.as_ref() {
+        col = col.push(
+            container(
+                text(err.clone())
+                    .size(BROWSER_TEXT_SIZE)
+                    .color(iced::Color::from_rgb(0.85, 0.3, 0.3)),
+            )
+            .padding([2, 12]),
+        );
+    }
+
+    let classes_list = library_state
+        .set
+        .get(lib.library_id)
+        .map(|adapter| adapter.library_classes())
+        .unwrap_or_default();
+
+    for entry in &classes_list {
+        let is_renaming = browser
+            .renaming_class
+            .as_ref()
+            .is_some_and(|(orig, _, _)| orig.as_str() == entry.key.as_str());
+        if is_renaming {
+            let (_, key_buf, label_buf) = browser.renaming_class.as_ref().unwrap();
+            let library_for_key = library_path.to_path_buf();
+            let library_for_label = library_path.to_path_buf();
+            let library_for_confirm = library_path.to_path_buf();
+            let library_for_cancel = library_path.to_path_buf();
+            let key_input = text_input("key", key_buf)
+                .on_input(move |s| LibraryMessage::BrowserSetRenameClassKey {
+                    library_path: library_for_key.clone(),
+                    value: s,
+                })
+                .padding(3)
+                .size(BROWSER_TEXT_SIZE);
+            let label_input = text_input("label", label_buf)
+                .on_input(move |s| LibraryMessage::BrowserSetRenameClassLabel {
+                    library_path: library_for_label.clone(),
+                    value: s,
+                })
+                .on_submit(LibraryMessage::BrowserConfirmRenameClass {
+                    library_path: library_for_confirm.clone(),
+                })
+                .padding(3)
+                .size(BROWSER_TEXT_SIZE);
+            let confirm = button(text("✓").size(BROWSER_TEXT_SIZE).color(iced::Color::WHITE))
+                .padding([3, 6])
+                .on_press(LibraryMessage::BrowserConfirmRenameClass {
+                    library_path: library_for_confirm,
+                })
+                .style(|_: &Theme, _| iced::widget::button::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgb(
+                        0.18, 0.36, 0.58,
+                    ))),
+                    text_color: iced::Color::WHITE,
+                    border: Border {
+                        width: 0.0,
+                        radius: 2.0.into(),
+                        ..Border::default()
+                    },
+                    ..iced::widget::button::Style::default()
+                });
+            let cancel = button(text("×").size(BROWSER_TEXT_SIZE).color(text_c))
+                .padding([3, 6])
+                .on_press(LibraryMessage::BrowserCancelRenameClass {
+                    library_path: library_for_cancel,
+                })
+                .style(|_: &Theme, _| iced::widget::button::Style {
+                    background: None,
+                    text_color: iced::Color::WHITE,
+                    border: Border::default(),
+                    ..iced::widget::button::Style::default()
+                });
+            let form = column![
+                key_input,
+                label_input,
+                row![cancel, Space::new().width(2), confirm,]
+                    .align_y(iced::Alignment::Center),
+            ]
+            .spacing(2)
+            .padding([4, 8]);
+            col = col.push(form);
+            continue;
+        }
+
+        let label_text = if entry.label == entry.key {
+            entry.key.clone()
+        } else {
+            format!("{}  ·  {}", entry.label, entry.key)
+        };
+        let library_for_rename = library_path.to_path_buf();
+        let library_for_delete = library_path.to_path_buf();
+        let key_for_rename = entry.key.clone();
+        let key_for_delete = entry.key.clone();
+        let rename_btn = button(text("\u{270E}").size(BROWSER_TEXT_SIZE).color(muted))
+            .padding([3, 6])
+            .on_press(LibraryMessage::BrowserBeginRenameClass {
+                library_path: library_for_rename,
+                key: key_for_rename,
+            })
+            .style(move |_: &Theme, status: iced::widget::button::Status| {
+                let (bg, fg) = match status {
+                    iced::widget::button::Status::Hovered
+                    | iced::widget::button::Status::Pressed => (
+                        Some(iced::Background::Color(iced::Color::from_rgba(
+                            1.0, 1.0, 1.0, 0.10,
+                        ))),
+                        iced::Color::WHITE,
+                    ),
+                    _ => (None, muted),
+                };
+                iced::widget::button::Style {
+                    background: bg,
+                    text_color: fg,
+                    border: Border {
+                        radius: 2.0.into(),
+                        ..Border::default()
+                    },
+                    ..iced::widget::button::Style::default()
+                }
+            });
+        let delete_btn = button(text("×").size(BROWSER_TEXT_SIZE + 1.0).color(muted))
+            .padding([3, 8])
+            .on_press(LibraryMessage::BrowserDeleteClass {
+                library_path: library_for_delete,
+                key: key_for_delete,
+            })
+            .style(move |_: &Theme, status: iced::widget::button::Status| {
+                let (bg, fg) = match status {
+                    iced::widget::button::Status::Hovered
+                    | iced::widget::button::Status::Pressed => (
+                        Some(iced::Background::Color(iced::Color::from_rgba(
+                            0.78, 0.22, 0.22, 1.0,
+                        ))),
+                        iced::Color::WHITE,
+                    ),
+                    _ => (None, muted),
+                };
+                iced::widget::button::Style {
+                    background: bg,
+                    text_color: fg,
+                    border: Border {
+                        radius: 2.0.into(),
+                        ..Border::default()
+                    },
+                    ..iced::widget::button::Style::default()
+                }
+            });
+        let class_row = row![
+            container(
+                text(label_text)
+                    .size(BROWSER_TEXT_SIZE)
+                    .color(text_c)
+                    .width(Length::Fill),
+            )
+            .padding(iced::Padding {
+                top: 4.0,
+                right: 6.0,
+                bottom: 4.0,
+                left: 12.0,
+            })
+            .width(Length::Fill),
+            rename_btn,
+            delete_btn,
+        ]
+        .align_y(iced::Alignment::Center)
+        .width(Length::Fill);
+        col = col.push(class_row);
+    }
+
+    // + Class form / button.
+    match browser.adding_class.as_ref() {
+        Some(draft) => {
+            let library_for_key = library_path.to_path_buf();
+            let library_for_label = library_path.to_path_buf();
+            let library_for_confirm = library_path.to_path_buf();
+            let library_for_cancel = library_path.to_path_buf();
+            let key_input = text_input("class_key", &draft.key)
+                .on_input(move |s| LibraryMessage::BrowserSetNewClassKey {
+                    library_path: library_for_key.clone(),
+                    value: s,
+                })
+                .padding(3)
+                .size(BROWSER_TEXT_SIZE);
+            let label_input = text_input("Label", &draft.label)
+                .on_input(move |s| LibraryMessage::BrowserSetNewClassLabel {
+                    library_path: library_for_label.clone(),
+                    value: s,
+                })
+                .on_submit(LibraryMessage::BrowserConfirmAddClass {
+                    library_path: library_for_confirm.clone(),
+                })
+                .padding(3)
+                .size(BROWSER_TEXT_SIZE);
+            let confirm = button(text("Create").size(BROWSER_TEXT_SIZE).color(iced::Color::WHITE))
+                .padding([3, 8])
+                .on_press(LibraryMessage::BrowserConfirmAddClass {
+                    library_path: library_for_confirm,
+                })
+                .style(|_: &Theme, _| iced::widget::button::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgb(
+                        0.18, 0.36, 0.58,
+                    ))),
+                    text_color: iced::Color::WHITE,
+                    border: Border {
+                        radius: 2.0.into(),
+                        ..Border::default()
+                    },
+                    ..iced::widget::button::Style::default()
+                });
+            let cancel = button(text("Cancel").size(BROWSER_TEXT_SIZE).color(text_c))
+                .padding([3, 8])
+                .on_press(LibraryMessage::BrowserCancelAddClass {
+                    library_path: library_for_cancel,
+                })
+                .style(|_: &Theme, _| iced::widget::button::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgba(
+                        1.0, 1.0, 1.0, 0.04,
+                    ))),
+                    text_color: iced::Color::WHITE,
+                    border: Border {
+                        radius: 2.0.into(),
+                        ..Border::default()
+                    },
+                    ..iced::widget::button::Style::default()
+                });
+            let mut form = column![
+                key_input,
+                label_input,
+                row![cancel, Space::new().width(4), confirm,]
+                    .align_y(iced::Alignment::Center),
+            ]
+            .spacing(2)
+            .padding([4, 8]);
+            if let Some(err) = draft.error.as_ref() {
+                form = form.push(
+                    text(err.clone())
+                        .size(BROWSER_TEXT_SIZE)
+                        .color(iced::Color::from_rgb(0.85, 0.3, 0.3)),
+                );
+            }
+            col = col.push(form);
+        }
+        None => {
+            let library_for_begin = library_path.to_path_buf();
+            col = col.push(
+                container(
+                    button(text("+ Class").size(BROWSER_TEXT_SIZE).color(text_c))
+                        .padding([4, 10])
+                        .width(Length::Fill)
+                        .on_press(LibraryMessage::BrowserBeginAddClass {
+                            library_path: library_for_begin,
+                        })
+                        .style(|_: &Theme, _| iced::widget::button::Style {
+                            background: Some(iced::Background::Color(iced::Color::from_rgba(
+                                1.0, 1.0, 1.0, 0.04,
+                            ))),
+                            text_color: iced::Color::WHITE,
+                            border: Border {
+                                radius: 3.0.into(),
+                                ..Border::default()
+                            },
+                            ..iced::widget::button::Style::default()
+                        }),
+                )
+                .padding(iced::Padding {
+                    top: 4.0,
+                    right: 8.0,
+                    bottom: 6.0,
+                    left: 8.0,
+                }),
+            );
+        }
     }
 
     // Inline `+ Table` form / button — same lifecycle as before, now

@@ -177,6 +177,56 @@ pub enum LibraryMessage {
     BrowserConfirmRenameTable {
         library_path: PathBuf,
     },
+    /// Sidebar `+ Class` — opens the inline create form on
+    /// `LibraryBrowserState.adding_class`.
+    BrowserBeginAddClass {
+        library_path: PathBuf,
+    },
+    BrowserSetNewClassKey {
+        library_path: PathBuf,
+        value: String,
+    },
+    BrowserSetNewClassLabel {
+        library_path: PathBuf,
+        value: String,
+    },
+    BrowserCancelAddClass {
+        library_path: PathBuf,
+    },
+    /// Append the new class to the library's `[[classes]]` block via
+    /// `update_library_classes` and refresh.
+    BrowserConfirmAddClass {
+        library_path: PathBuf,
+    },
+    /// Per-row `×` delete — drops the matching class from the
+    /// library's `[[classes]]` block. Components referencing the
+    /// class by key keep their stored class string; the dropdown
+    /// just stops surfacing it.
+    BrowserDeleteClass {
+        library_path: PathBuf,
+        key: String,
+    },
+    /// Sidebar `✎` rename for a class row — flips the matching row
+    /// into edit mode (key + label inputs).
+    BrowserBeginRenameClass {
+        library_path: PathBuf,
+        key: String,
+    },
+    BrowserSetRenameClassKey {
+        library_path: PathBuf,
+        value: String,
+    },
+    BrowserSetRenameClassLabel {
+        library_path: PathBuf,
+        value: String,
+    },
+    BrowserCancelRenameClass {
+        library_path: PathBuf,
+    },
+    /// Confirm — writes the renamed class via `update_library_classes`.
+    BrowserConfirmRenameClass {
+        library_path: PathBuf,
+    },
     /// Live-edit of the modal's "Category" field.
     NewComponentSetCategory(String),
     /// Submit the New Component modal — creates the draft, persists,
