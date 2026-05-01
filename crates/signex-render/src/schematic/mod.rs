@@ -61,6 +61,47 @@ mod util;
 pub use viewport::Viewport;
 
 // ---------------------------------------------------------------------------
+// v0.11 → v0.12 compatibility aliases.
+//
+// The cleanroom rewrite redesigned the public API (Stage 1 Q2 = b).
+// These aliases let the v0.11 surface keep compiling against
+// `signex-app` while the consumer-side rename lands in a follow-up
+// PR. The aliases are deprecated; remove them in v0.13 once
+// `signex-app` no longer imports the old names.
+// ---------------------------------------------------------------------------
+
+/// **Deprecated v0.12 alias.** v0.11's `SchematicRenderSnapshot` was
+/// owned and equivalent to [`signex_types::SchematicSheet`]; we alias
+/// it to that to keep most consumer code compiling. New rendering
+/// code should construct a borrow-based [`SchematicSnapshot`] per
+/// frame instead.
+#[deprecated(
+    since = "0.12.0",
+    note = "use SchematicSnapshot (borrow-based) or SchematicSheet (owned)"
+)]
+pub type SchematicRenderSnapshot = SchematicSheet;
+
+/// **Deprecated v0.12 alias.** Use [`RenderLayers`].
+#[deprecated(since = "0.12.0", note = "use RenderLayers")]
+pub type SchematicRenderCache = RenderLayers;
+
+/// **Deprecated v0.12 alias.** Use [`Viewport`].
+#[deprecated(since = "0.12.0", note = "use Viewport")]
+pub type ScreenTransform = Viewport;
+
+/// **Deprecated v0.12 helper.** Apply a placed symbol's transform to
+/// a library-space point. New code should use
+/// `SymbolTransform::from_symbol(sym).apply(point)`.
+#[deprecated(
+    since = "0.12.0",
+    note = "use SymbolTransform::from_symbol(sym).apply(point)"
+)]
+pub fn instance_transform(symbol: &Symbol, local_point: &Point) -> (f64, f64) {
+    let world = SymbolTransform::from_symbol(symbol).apply(*local_point);
+    (world.x, world.y)
+}
+
+// ---------------------------------------------------------------------------
 // Errors
 // ---------------------------------------------------------------------------
 
@@ -122,7 +163,7 @@ pub struct RenderInvalidation {
 }
 
 impl RenderInvalidation {
-    /// All three layers dirty.
+    /// All three layers dirty. v0.11 also exposed this as `FULL`.
     #[inline]
     pub const fn all() -> Self {
         Self {
@@ -131,6 +172,20 @@ impl RenderInvalidation {
             overlay: true,
         }
     }
+
+    /// **Deprecated v0.12 alias** for [`Self::all`].
+    pub const FULL: Self = Self {
+        background: true,
+        content: true,
+        overlay: true,
+    };
+
+    /// **Deprecated v0.12 alias** for the default (all-clean) state.
+    pub const NONE: Self = Self {
+        background: false,
+        content: false,
+        overlay: false,
+    };
 
     /// Only the overlay layer is dirty — the typical hot path when the
     /// user changes selection, hovers, or moves a placement preview.
@@ -218,8 +273,8 @@ impl Default for RenderOptions {
     fn default() -> Self {
         Self {
             power_port_style: crate::PowerPortStyle::Altium,
-            label_style: crate::LabelStyle::Classic,
-            multisheet_style: crate::MultisheetStyle::Classic,
+            label_style: crate::LabelStyle::Standard,
+            multisheet_style: crate::MultisheetStyle::Standard,
             grid_style: crate::GridStyle::Dots,
             net_color_overlay: false,
             autofocus_dim: 1.0,

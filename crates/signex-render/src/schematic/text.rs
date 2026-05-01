@@ -21,6 +21,38 @@ use super::util::{iced_color, point_finite};
 /// Matches `signex_types::schematic::SCHEMATIC_TEXT_MM`.
 pub const DEFAULT_TEXT_MM: f64 = signex_types::schematic::SCHEMATIC_TEXT_MM;
 
+// ---------------------------------------------------------------------------
+// v0.11 → v0.12 compatibility shims (pass-through identity).
+//
+// v0.11 had an `expand_char_escapes` helper that converted backslash-
+// style escape sequences (`~FOO~` → overbar markup) into iced-friendly
+// glyph runs, and a matching `escape_for_standard` that round-tripped
+// the user's typed text back to the storage form. The new renderer
+// will eventually take these on through a Signex-original markup spec
+// (post-v0.12); for now both are identity functions so consumer code
+// keeps compiling. Field text round-trips visually unchanged.
+// ---------------------------------------------------------------------------
+
+/// **Deprecated v0.12 shim.** Pass-through; previously decoded
+/// backslash escapes for display.
+#[deprecated(
+    since = "0.12.0",
+    note = "v0.13 will replace this with a Signex markup spec; identity for now"
+)]
+pub fn expand_char_escapes(text: &str) -> String {
+    text.to_string()
+}
+
+/// **Deprecated v0.12 shim.** Pass-through; previously encoded
+/// display text back to storage form.
+#[deprecated(
+    since = "0.12.0",
+    note = "v0.13 will replace this with a Signex markup spec; identity for now"
+)]
+pub fn escape_for_standard(text: &str) -> String {
+    text.to_string()
+}
+
 /// Render a single free text note. Hidden notes early-return.
 pub fn draw_text_note(frame: &mut Frame, note: &TextNote, ctx: &RenderContext<'_>) {
     if note.text.is_empty() {

@@ -5,11 +5,10 @@
 //! just pure rendering functions.
 
 pub mod colors;
+pub mod pcb;
 pub mod schematic;
-// `pub mod pcb;` was deleted in Wave 0 of the v0.12 cleanroom rewrite.
-// PCB rendering is on the post-v0.12 roadmap and will be reintroduced
-// from a Signex-only PCB spec when that phase begins. See
-// `docs/internal/CLEANROOM_REWRITE_PLAN.md`.
+// PCB rendering surface is a v0.12 stub — the full Signex-spec PCB
+// renderer lands post-v0.12. See `docs/internal/CLEANROOM_REWRITE_PLAN.md`.
 
 use std::sync::{OnceLock, RwLock};
 
@@ -30,7 +29,7 @@ pub const SCHEMATIC_TEXT_EM_MM: f64 = SCHEMATIC_TEXT_MM / 0.72;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PowerPortStyle {
-    Classic,
+    Standard,
     #[default]
     Altium,
 }
@@ -38,7 +37,7 @@ pub enum PowerPortStyle {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LabelStyle {
     #[default]
-    Classic,
+    Standard,
     Altium,
 }
 
@@ -51,7 +50,7 @@ pub enum LabelStyle {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MultisheetStyle {
     #[default]
-    Classic,
+    Standard,
     Altium,
 }
 
@@ -73,7 +72,7 @@ impl GridStyle {
 impl std::fmt::Display for MultisheetStyle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            MultisheetStyle::Classic => write!(f, "Classic"),
+            MultisheetStyle::Standard => write!(f, "Standard"),
             MultisheetStyle::Altium => write!(f, "Altium"),
         }
     }
@@ -92,7 +91,7 @@ impl std::fmt::Display for GridStyle {
 impl std::fmt::Display for LabelStyle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LabelStyle::Classic => write!(f, "Classic"),
+            LabelStyle::Standard => write!(f, "Standard"),
             LabelStyle::Altium => write!(f, "Altium"),
         }
     }
@@ -101,7 +100,7 @@ impl std::fmt::Display for LabelStyle {
 impl std::fmt::Display for PowerPortStyle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            PowerPortStyle::Classic => write!(f, "Classic"),
+            PowerPortStyle::Standard => write!(f, "Standard"),
             PowerPortStyle::Altium => write!(f, "Altium"),
         }
     }
@@ -147,8 +146,8 @@ fn canvas_text_config() -> &'static RwLock<CanvasTextConfig> {
             bold: false,
             italic: false,
             power_port_style: PowerPortStyle::Altium,
-            label_style: LabelStyle::Classic,
-            multisheet_style: MultisheetStyle::Classic,
+            label_style: LabelStyle::Standard,
+            multisheet_style: MultisheetStyle::Standard,
             grid_style: GridStyle::Dots,
         })
     })
@@ -200,7 +199,7 @@ pub fn label_style() -> LabelStyle {
     canvas_text_config()
         .read()
         .map(|c| c.label_style)
-        .unwrap_or(LabelStyle::Classic)
+        .unwrap_or(LabelStyle::Standard)
 }
 
 pub fn set_multisheet_style(style: MultisheetStyle) {
@@ -213,7 +212,7 @@ pub fn multisheet_style() -> MultisheetStyle {
     canvas_text_config()
         .read()
         .map(|c| c.multisheet_style)
-        .unwrap_or(MultisheetStyle::Classic)
+        .unwrap_or(MultisheetStyle::Standard)
 }
 
 pub fn set_grid_style(style: GridStyle) {
