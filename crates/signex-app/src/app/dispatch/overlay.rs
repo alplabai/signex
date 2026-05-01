@@ -180,6 +180,14 @@ impl Signex {
                 self.ui_state.remove_dialog = None;
                 Task::none()
             }
+            Message::AddExistingFilePicked { project_idx, paths } => {
+                self.handle_add_existing_file_picked(project_idx, paths);
+                Task::none()
+            }
+            Message::CloseProjectOptions => {
+                self.ui_state.project_options = None;
+                Task::none()
+            }
             Message::OpenContextSubmenu(kind) => {
                 // Click-to-open. Toggles off if the same kind is fired
                 // again so the header row works as a collapse handle.

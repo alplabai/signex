@@ -84,6 +84,9 @@ pub struct UiState {
     /// close request that intersects `dirty_paths`. Cleared on any
     /// of the three button choices.
     pub project_close_confirm: Option<crate::app::ProjectCloseConfirmState>,
+    /// v0.9 read-only Project Options metadata modal — `Some` while
+    /// the user has the right-click → Project Options… popup open.
+    pub project_options: Option<crate::app::ProjectOptionsState>,
     /// ERC results for the currently-visible sheet. Driven by the
     /// per-sheet cache below — switching tabs repoints this at the
     /// cached violations for that sheet, so markers and the Messages
@@ -284,6 +287,8 @@ pub enum ModalId {
     PrintPreview,
     /// BOM Export preview modal (File → Export → Bill of Materials…).
     BomPreview,
+    /// Project Options metadata modal (Projects-panel root → Project Options...).
+    ProjectOptions,
 }
 
 /// Order in which symbols are visited during Annotate. Mirrors Altium's

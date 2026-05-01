@@ -37,6 +37,7 @@ impl Signex {
             | Message::CancelDrawing
             | Message::Tool(_) => self.dispatch_tool_message(message),
             Message::FileOpened(_)
+            | Message::NewProjectFile(_)
             | Message::DeleteSelected
             | Message::Undo
             | Message::Redo
@@ -140,6 +141,8 @@ impl Signex {
             | Message::CloseRenameDialog
             | Message::RemoveConfirm(_)
             | Message::CloseRemoveDialog
+            | Message::AddExistingFilePicked { .. }
+            | Message::CloseProjectOptions
             | Message::OpenContextSubmenu(_)
             | Message::HoverContextSubmenu(_)
             | Message::LeaveContextSubmenu
@@ -233,6 +236,9 @@ impl Signex {
                             ModalId::RemoveDialog => self.ui_state.remove_dialog = None,
                             ModalId::PrintPreview => self.document_state.preview = None,
                             ModalId::BomPreview => self.document_state.bom_preview = None,
+                            ModalId::ProjectOptions => {
+                                self.ui_state.project_options = None;
+                            }
                         },
                         // Closing an undocked-tab window is the reattach
                         // gesture — the tab itself stays in

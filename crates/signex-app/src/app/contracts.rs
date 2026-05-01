@@ -57,6 +57,12 @@ pub enum Message {
     DragMove(f32, f32),
     DragEnd,
     FileOpened(Option<PathBuf>),
+    /// File ▸ New Project — destination picked by the Save-As dialog.
+    /// `None` when the user cancelled the picker; on `Some(path)` the
+    /// handler writes a fresh `<stem>.snxprj` (empty marker file — the
+    /// parser is directory-driven) plus a blank `<stem>.snxsch` next
+    /// to it, then loads the project + opens the schematic tab.
+    NewProjectFile(Option<PathBuf>),
     #[allow(dead_code)]
     SchematicLoaded(Box<SchematicSheet>),
     DeleteSelected,
@@ -126,6 +132,16 @@ pub enum Message {
     RemoveConfirm(RemoveChoice),
     /// Dismiss the Remove modal without applying.
     CloseRemoveDialog,
+    /// Result of the `Add Existing to Project…` file picker. Carries
+    /// the owning project's index plus the user's picks (`None` on
+    /// cancel, otherwise one or more paths from `pick_files`) so the
+    /// handler can copy each into the project directory in turn.
+    AddExistingFilePicked {
+        project_idx: usize,
+        paths: Option<Vec<std::path::PathBuf>>,
+    },
+    /// Dismiss the Project Options metadata modal.
+    CloseProjectOptions,
     /// Expand a click-to-open submenu inside the right-click context
     /// menu (Place or Align). Toggles off when the same kind is fired
     /// twice, otherwise replaces the current submenu.
@@ -704,6 +720,21 @@ pub enum ProjectTreeAction {
     /// indices are ignored so the action is safe to fire from any node
     /// underneath a project root.
     CloseProject(Vec<usize>),
+    /// v0.9 project-root: run ERC across the project. Promotes the
+    /// project to active, opens its `schematic_root` if no schematic
+    /// from this project is currently active, then dispatches the
+    /// existing ERC dialog.
+    ValidateProject(Vec<usize>),
+    /// v0.9 project-root: open the rename modal seeded with the
+    /// project name (the `.snxprj` stem). Submit renames the trio
+    /// `<old>.snxprj` / `<old>.snxsch` / `<old>.snxpcb` in lockstep.
+    OpenProjectRenameDialog(Vec<usize>),
+    /// v0.9 project-root: open the Project Options metadata modal.
+    OpenProjectOptions(Vec<usize>),
+    /// v0.9 project-root: open a file dialog and add the picked file
+    /// to the project. Files outside the project directory are copied
+    /// in; files already inside just trigger a tree refresh.
+    AddExistingToProject(Vec<usize>),
 }
 
 /// State for the rename modal. Tracks the target file, the live
@@ -715,6 +746,26 @@ pub struct RenameDialogState {
     pub tree_path: Vec<usize>,
     pub buffer: String,
     pub error: Option<String>,
+    /// `true` when this rename targets the project root — the submit
+    /// handler renames the `<old>.snxprj` plus the companion
+    /// `<old>.snxsch` / `<old>.snxpcb` (whichever exist on disk) so the
+    /// trio stays grouped under the new project name. `false` is the
+    /// per-file rename used by sheet leaves.
+    pub is_project_rename: bool,
+}
+
+/// State for the read-only "Project Options" modal — the v0.9 surface
+/// is a metadata summary (name / dir / schematic root / pcb file /
+/// libraries). Editing happens through the dedicated rename / library
+/// flows; a future revision can promote this to a full editor.
+#[derive(Debug, Clone)]
+pub struct ProjectOptionsState {
+    pub project_idx: usize,
+    pub name: String,
+    pub directory: String,
+    pub schematic_root: Option<String>,
+    pub pcb_file: Option<String>,
+    pub library_count: usize,
 }
 
 /// State for the "Remove from Project" modal. `Delete` removes the file

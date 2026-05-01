@@ -183,6 +183,11 @@ pub struct ProjectPanelInfo {
     /// Whether this is the currently-active project — drives accent
     /// styling on the root node.
     pub is_active: bool,
+    /// `.snxprj` dirty state — flips when in-memory project metadata
+    /// (sheet list / pcb / libraries) has changed and not yet been
+    /// written via `write_project`. Drives the red dirty indicator
+    /// on the project root row so the user knows Save is pending.
+    pub is_dirty: bool,
 }
 
 /// Per-library bundle for the project tree's `Libraries` group.
@@ -1719,6 +1724,7 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
 
     TreeNode::branch(project.name.clone(), TreeIcon::Folder, children)
         .with_accent(project.is_active)
+        .with_dirty(project.is_dirty)
 }
 
 fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {

@@ -365,7 +365,7 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
     let file_menu = Item::with_menu(
         root_btn("File", mc),
         menu_template(vec![
-            leaf_stub("New Project", Some("Ctrl+N"), mc),
+            leaf("New Project", Some("Ctrl+N"), MenuMessage::NewProject, mc),
             leaf("Open...", Some("Ctrl+O"), MenuMessage::OpenProject, mc),
             separator(mc),
             leaf_if("Save", Some("Ctrl+S"), MenuMessage::Save, ctx.has_schematic),

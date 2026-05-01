@@ -18,6 +18,71 @@ impl Signex {
         }
     }
 
+    pub(crate) fn handle_new_project_file(&mut self, path: Option<PathBuf>) {
+        let Some(path) = path else { return };
+
+        self.interaction_state.editing_text = None;
+        self.interaction_state.context_menu = None;
+
+        if let Err(error) = self.create_new_project(&path) {
+            crate::diagnostics::log_error("Failed to create new project", &error);
+        }
+    }
+
+    /// Create a brand-new `.snxprj` at `path` plus a blank companion
+    /// `<stem>.snxsch` in the same directory, then load the project and
+    /// open the schematic as a tab. The `.snxprj` is written empty —
+    /// `parse_project` is directory-driven and ignores file content.
+    fn create_new_project(&mut self, project_path: &std::path::Path) -> Result<()> {
+        if project_path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.eq_ignore_ascii_case("snxprj"))
+            != Some(true)
+        {
+            anyhow::bail!(
+                "new project path must end in .snxprj (got {})",
+                project_path.display()
+            );
+        }
+        let dir = project_path
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("project path has no parent directory"))?;
+        let stem = project_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .ok_or_else(|| anyhow::anyhow!("project path has no file stem"))?
+            .to_string();
+
+        std::fs::create_dir_all(dir)
+            .with_context(|| format!("create project directory {}", dir.display()))?;
+
+        std::fs::write(project_path, b"")
+            .with_context(|| format!("write project file {}", project_path.display()))?;
+
+        let sch_path = dir.join(format!("{stem}.snxsch"));
+        if !sch_path.exists() {
+            let sheet = blank_schematic_sheet();
+            let serialised = signex_types::format::SnxSchematic::new(sheet)
+                .write_string()
+                .context("serialise blank schematic")?;
+            std::fs::write(&sch_path, serialised.as_bytes())
+                .with_context(|| format!("write blank schematic {}", sch_path.display()))?;
+        }
+
+        self.open_document_path(project_path.to_path_buf())?;
+        if sch_path.exists() {
+            // Best-effort: surface the schematic tab so the new project
+            // lands the user on a drawable canvas. Errors here just
+            // leave them on the Welcome view.
+            if let Err(error) = self.open_document_path(sch_path) {
+                crate::diagnostics::log_error("Open new project schematic", &error);
+            }
+        }
+        self.refresh_panel_ctx();
+        Ok(())
+    }
+
     pub(crate) fn handle_active_document_save_requested(&mut self) -> iced::Task<Message> {
         match self.save_active_document() {
             Ok(task) => task,
@@ -216,7 +281,62 @@ impl Signex {
             let path = self.active_tab_path().unwrap_or_default();
             crate::diagnostics::log_info(format!("[save] Wrote {}", path.display()));
         }
+        // Save the active project's `.snxprj` if it's dirty (right-
+        // click → Add Existing flips the dirty bit). Best-effort: a
+        // failure here is logged but doesn't block the schematic save.
+        self.save_active_project_if_dirty();
         Ok(iced::Task::none())
+    }
+
+    /// Persist the active project's `.snxprj` JSON when its dirty bit
+    /// is set in `dirty_paths`. No-op if no project is active or the
+    /// project file isn't dirty.
+    fn save_active_project_if_dirty(&mut self) {
+        let Some(project_id) = self.document_state.active_project else {
+            return;
+        };
+        let project_path = match self
+            .document_state
+            .projects
+            .iter()
+            .find(|p| p.id == project_id)
+        {
+            Some(p) => p.path.clone(),
+            None => return,
+        };
+        if !self.document_state.dirty_paths.contains(&project_path) {
+            return;
+        }
+        let data = match self
+            .document_state
+            .projects
+            .iter()
+            .find(|p| p.id == project_id)
+        {
+            Some(p) => p.data.clone(),
+            None => return,
+        };
+        match signex_types::project::write_project(&project_path, &data) {
+            Ok(()) => {
+                self.document_state.dirty_paths.remove(&project_path);
+                crate::diagnostics::log_info(format!(
+                    "[save] Wrote project {}",
+                    project_path.display()
+                ));
+                // Rebuild the panel ctx so the project root row drops
+                // its dirty marker. Without this, the cached
+                // `ProjectPanelInfo.is_dirty` snapshot stays `true`
+                // until the next user action triggers a refresh and
+                // the red dot lingers despite the file being clean.
+                self.refresh_panel_ctx();
+            }
+            Err(error) => {
+                crate::diagnostics::log_error(
+                    "Failed to save project file",
+                    &anyhow::anyhow!("{}", error),
+                );
+            }
+        }
     }
 
     fn save_active_document_as(&mut self, path: PathBuf) -> Result<()> {
@@ -492,4 +612,32 @@ pub(crate) fn spawn_save_as_for_new_primitive(suggested: PathBuf) -> iced::Task<
             None => Message::Noop,
         },
     )
+}
+
+/// Build the bare-minimum [`SchematicSheet`] used as the starting state
+/// for File ▸ New Project. Only the fields that don't have a serde
+/// default need explicit values; everything else falls through to the
+/// per-field defaults the writer/parser already round-trip.
+fn blank_schematic_sheet() -> signex_types::schematic::SchematicSheet {
+    signex_types::schematic::SchematicSheet {
+        uuid: uuid::Uuid::new_v4(),
+        version: 1,
+        generator: "signex".into(),
+        generator_version: env!("CARGO_PKG_VERSION").into(),
+        paper_size: "A4".into(),
+        root_sheet_page: "1".into(),
+        symbols: Vec::new(),
+        wires: Vec::new(),
+        junctions: Vec::new(),
+        labels: Vec::new(),
+        child_sheets: Vec::new(),
+        no_connects: Vec::new(),
+        text_notes: Vec::new(),
+        buses: Vec::new(),
+        bus_entries: Vec::new(),
+        drawings: Vec::new(),
+        no_erc_directives: Vec::new(),
+        title_block: Default::default(),
+        lib_symbols: Default::default(),
+    }
 }

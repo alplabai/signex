@@ -150,6 +150,18 @@ impl Signex {
             ProjectTreeAction::CloseProject(tree_path) => {
                 return self.close_project_at_tree_path(&tree_path);
             }
+            ProjectTreeAction::ValidateProject(tree_path) => {
+                return self.run_validate_project(tree_path);
+            }
+            ProjectTreeAction::OpenProjectRenameDialog(tree_path) => {
+                self.open_project_rename_dialog(tree_path);
+            }
+            ProjectTreeAction::OpenProjectOptions(tree_path) => {
+                self.open_project_options_dialog(tree_path);
+            }
+            ProjectTreeAction::AddExistingToProject(tree_path) => {
+                return self.add_existing_to_project(tree_path);
+            }
         }
         Task::none()
     }
@@ -391,7 +403,282 @@ impl Signex {
             tree_path,
             buffer: filename,
             error: None,
+            is_project_rename: false,
         });
+    }
+
+    /// Open the rename modal seeded with the project name (the `.snxprj`
+    /// file stem). On submit, [`handle_rename_submit`] sees
+    /// `is_project_rename = true` and renames the trio
+    /// `<old>.snxprj` / `<old>.snxsch` / `<old>.snxpcb` together.
+    pub(crate) fn open_project_rename_dialog(&mut self, tree_path: Vec<usize>) {
+        let Some(&project_idx) = tree_path.first() else {
+            return;
+        };
+        let Some(project) = self.document_state.projects.get(project_idx) else {
+            return;
+        };
+        let target_path = project.path.clone();
+        let stem = target_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_string();
+        self.ui_state.rename_dialog = Some(crate::app::RenameDialogState {
+            target_path,
+            tree_path,
+            buffer: stem,
+            error: None,
+            is_project_rename: true,
+        });
+    }
+
+    pub(crate) fn open_project_options_dialog(&mut self, tree_path: Vec<usize>) {
+        let Some(&project_idx) = tree_path.first() else {
+            return;
+        };
+        let Some(project) = self.document_state.projects.get(project_idx) else {
+            return;
+        };
+        self.ui_state.project_options = Some(crate::app::ProjectOptionsState {
+            project_idx,
+            name: project.data.name.clone(),
+            directory: project.data.dir.clone(),
+            schematic_root: project.data.schematic_root.clone(),
+            pcb_file: project.data.pcb_file.clone(),
+            library_count: project.data.libraries.len(),
+        });
+    }
+
+    /// Validate Project — promote the project to active, ensure its
+    /// root schematic is open, then dispatch the existing ERC dialog.
+    /// `tree_path[0]` is the owning project; we open the schematic
+    /// root if no tab from this project is currently active so the
+    /// ERC engine targets the right sheet.
+    pub(crate) fn run_validate_project(&mut self, tree_path: Vec<usize>) -> iced::Task<Message> {
+        let Some(&project_idx) = tree_path.first() else {
+            return iced::Task::none();
+        };
+        let project = match self.document_state.projects.get(project_idx) {
+            Some(p) => p,
+            None => return iced::Task::none(),
+        };
+        let project_id = project.id;
+        let project_dir = match project.path.parent() {
+            Some(d) => d.to_path_buf(),
+            None => return iced::Task::none(),
+        };
+        let schematic_root = project.data.schematic_root.clone();
+        self.document_state.active_project = Some(project_id);
+
+        // If the active tab already belongs to this project we're good;
+        // otherwise open the schematic_root so ERC has a sheet to walk.
+        let active_belongs = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .map(|t| t.project_id == Some(project_id))
+            .unwrap_or(false);
+        if !active_belongs
+            && let Some(root) = schematic_root
+        {
+            let path = project_dir.join(&root);
+            if path.exists() {
+                self.handle_document_file_opened(Some(path));
+            }
+        }
+        self.refresh_panel_ctx();
+        self.update(Message::OpenErcDialog)
+    }
+
+    /// `Add Existing to Project…` — open a multi-select file picker
+    /// scoped to schematic / PCB / library extensions. Picked paths
+    /// land in [`Message::AddExistingFilePicked`]; the handler copies
+    /// any outside the project directory in turn and opens each.
+    pub(crate) fn add_existing_to_project(
+        &mut self,
+        tree_path: Vec<usize>,
+    ) -> iced::Task<Message> {
+        let Some(&project_idx) = tree_path.first() else {
+            return iced::Task::none();
+        };
+        if self.document_state.projects.get(project_idx).is_none() {
+            return iced::Task::none();
+        }
+        iced::Task::perform(
+            async {
+                rfd::AsyncFileDialog::new()
+                    .set_title("Add Existing to Project")
+                    .add_filter(
+                        "All Supported",
+                        &["snxsch", "snxpcb", "snxlib", "snxsym", "snxfpt"],
+                    )
+                    .add_filter("Signex Schematic", &["snxsch"])
+                    .add_filter("Signex PCB", &["snxpcb"])
+                    .add_filter("Signex Library", &["snxlib"])
+                    .add_filter("Signex Symbol", &["snxsym"])
+                    .add_filter("Signex Footprint", &["snxfpt"])
+                    .pick_files()
+                    .await
+                    .map(|files| {
+                        files
+                            .into_iter()
+                            .map(|file| file.path().to_path_buf())
+                            .collect::<Vec<_>>()
+                    })
+            },
+            move |paths| Message::AddExistingFilePicked { project_idx, paths },
+        )
+    }
+
+    pub(crate) fn handle_add_existing_file_picked(
+        &mut self,
+        project_idx: usize,
+        paths: Option<Vec<std::path::PathBuf>>,
+    ) {
+        let Some(paths) = paths else { return };
+        let (project_dir, project_path) = match self
+            .document_state
+            .projects
+            .get(project_idx)
+            .and_then(|p| p.path.parent().map(|d| (d.to_path_buf(), p.path.clone())))
+        {
+            Some(pair) => pair,
+            None => return,
+        };
+        let mut any_added = false;
+        for path in paths {
+            let final_path = if path.starts_with(&project_dir) {
+                path
+            } else {
+                let Some(file_name) = path.file_name() else {
+                    continue;
+                };
+                let dest = project_dir.join(file_name);
+                if dest.exists() {
+                    crate::diagnostics::log_error(
+                        "Add Existing: destination already exists",
+                        &anyhow::anyhow!("{}", dest.display()),
+                    );
+                    continue;
+                }
+                if let Err(error) = std::fs::copy(&path, &dest) {
+                    crate::diagnostics::log_error(
+                        "Add Existing: copy failed",
+                        &anyhow::anyhow!("{}", error),
+                    );
+                    continue;
+                }
+                dest
+            };
+            if self.register_project_file(project_idx, &final_path) {
+                any_added = true;
+            }
+        }
+        if any_added {
+            // Mark the .snxprj dirty so the user knows to save. The
+            // file copy already touched disk (irreversible) but the
+            // project's *list* of children only persists once Save
+            // writes the JSON .snxprj.
+            self.document_state.dirty_paths.insert(project_path);
+        }
+        self.refresh_panel_ctx();
+    }
+
+    /// Push a freshly added file into the project's in-memory model so
+    /// the tree picks it up. Returns `true` when something was actually
+    /// inserted (the caller flips the project dirty bit on `true`).
+    /// Files already referenced are skipped — re-adding the same file
+    /// is a no-op rather than a duplicate row.
+    fn register_project_file(
+        &mut self,
+        project_idx: usize,
+        file_path: &std::path::Path,
+    ) -> bool {
+        let Some(loaded) = self.document_state.projects.get_mut(project_idx) else {
+            return false;
+        };
+        let filename = match file_path.file_name().and_then(|s| s.to_str()) {
+            Some(name) => name.to_string(),
+            None => return false,
+        };
+        let stem = file_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_string();
+        let ext = file_path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        match ext.as_str() {
+            "snxsch" => {
+                if loaded.data.sheets.iter().any(|s| s.filename == filename) {
+                    return false;
+                }
+                loaded.data.sheets.push(signex_types::project::SheetEntry {
+                    name: stem,
+                    filename,
+                    symbols_count: 0,
+                    wires_count: 0,
+                    labels_count: 0,
+                });
+                if loaded.data.schematic_root.is_none() {
+                    loaded.data.schematic_root =
+                        loaded.data.sheets.last().map(|s| s.filename.clone());
+                }
+                true
+            }
+            "snxpcb" => {
+                if loaded.data.pcb_file.as_deref() == Some(filename.as_str()) {
+                    return false;
+                }
+                if loaded.data.pcb_file.is_some() {
+                    crate::diagnostics::log_error(
+                        "Add Existing: project already has a PCB file",
+                        &anyhow::anyhow!(
+                            "kept existing {:?}, ignoring {}",
+                            loaded.data.pcb_file,
+                            filename,
+                        ),
+                    );
+                    return false;
+                }
+                loaded.data.pcb_file = Some(filename);
+                true
+            }
+            "snxlib" => {
+                let entry_path = std::path::PathBuf::from(&filename);
+                if loaded
+                    .data
+                    .libraries
+                    .iter()
+                    .any(|e| e.path == entry_path)
+                {
+                    return false;
+                }
+                loaded.data.libraries.push(signex_types::project::LibraryEntry {
+                    path: entry_path,
+                    kind: signex_types::project::LibraryEntryKind::ProjectLocal,
+                    library_id: None,
+                });
+                true
+            }
+            _ => {
+                // .snxsym / .snxfpt are owned by a library; adding them
+                // direct to a project doesn't fit the data model. Log
+                // and skip — the user should add the parent .snxlib.
+                crate::diagnostics::log_error(
+                    "Add Existing: unsupported file type for project tree",
+                    &anyhow::anyhow!(
+                        ".{} files belong inside a .snxlib library, not the project root",
+                        ext,
+                    ),
+                );
+                false
+            }
+        }
     }
 
     fn open_remove_dialog(&mut self, tree_path: Vec<usize>) {
@@ -433,6 +720,10 @@ impl Signex {
         let Some(state) = self.ui_state.rename_dialog.clone() else {
             return iced::Task::none();
         };
+
+        if state.is_project_rename {
+            return self.handle_project_rename_submit(&state);
+        }
 
         let new_name = state.buffer.trim();
         if new_name.is_empty() {
@@ -528,6 +819,136 @@ impl Signex {
         }
     }
 
+    /// Project-root rename — `state.target_path` is the project's
+    /// `.snxprj`; the buffer is the new *stem*. We rename the trio
+    /// `<old>.snxprj` / `<old>.snxsch` / `<old>.snxpcb` together so
+    /// `parse_project`'s directory probe still resolves the schematic
+    /// + pcb after the rename.
+    fn handle_project_rename_submit(
+        &mut self,
+        state: &crate::app::RenameDialogState,
+    ) -> iced::Task<Message> {
+        let new_stem = state.buffer.trim();
+        if new_stem.is_empty() {
+            self.set_rename_error("Name cannot be empty.");
+            return iced::Task::none();
+        }
+        if new_stem.contains(['/', '\\', '.']) {
+            self.set_rename_error("Name cannot contain '/', '\\', or '.'.");
+            return iced::Task::none();
+        }
+        let dir = match state.target_path.parent() {
+            Some(d) => d.to_path_buf(),
+            None => {
+                self.set_rename_error("Project file has no parent directory.");
+                return iced::Task::none();
+            }
+        };
+        let old_stem = match state.target_path.file_stem().and_then(|s| s.to_str()) {
+            Some(s) => s.to_string(),
+            None => {
+                self.set_rename_error("Project file has no stem.");
+                return iced::Task::none();
+            }
+        };
+        if new_stem == old_stem {
+            self.ui_state.rename_dialog = None;
+            return iced::Task::none();
+        }
+        let new_prj = dir.join(format!("{new_stem}.snxprj"));
+        if new_prj.exists() {
+            self.set_rename_error("A project with that name already exists.");
+            return iced::Task::none();
+        }
+        // Companion schematic / pcb files — rename whichever exist.
+        let companions: [(&str, &str); 2] = [("snxsch", "snxsch"), ("snxpcb", "snxpcb")];
+        let mut renamed: Vec<(std::path::PathBuf, std::path::PathBuf)> = Vec::new();
+        // Rename the .snxprj first; if any subsequent rename fails we
+        // try to roll back so the user isn't left with a half-renamed
+        // project.
+        if let Err(e) = std::fs::rename(&state.target_path, &new_prj) {
+            self.set_rename_error(&format!("Rename failed: {e}"));
+            return iced::Task::none();
+        }
+        renamed.push((state.target_path.clone(), new_prj.clone()));
+        for (ext, _) in companions {
+            let old_companion = dir.join(format!("{old_stem}.{ext}"));
+            if !old_companion.exists() {
+                continue;
+            }
+            let new_companion = dir.join(format!("{new_stem}.{ext}"));
+            if new_companion.exists() {
+                // Roll back partial renames.
+                for (from, to) in renamed.iter().rev() {
+                    let _ = std::fs::rename(to, from);
+                }
+                self.set_rename_error(
+                    "A companion file with the new name already exists; aborting.",
+                );
+                return iced::Task::none();
+            }
+            if let Err(e) = std::fs::rename(&old_companion, &new_companion) {
+                for (from, to) in renamed.iter().rev() {
+                    let _ = std::fs::rename(to, from);
+                }
+                self.set_rename_error(&format!("Rename failed for .{ext}: {e}"));
+                return iced::Task::none();
+            }
+            renamed.push((old_companion, new_companion));
+        }
+
+        // Update in-memory project + open tabs / engines for every
+        // path that just moved.
+        let owner_idx = state.tree_path.first().copied();
+        if let Some(idx) = owner_idx
+            && let Some(loaded) = self.document_state.projects.get_mut(idx)
+        {
+            loaded.path = new_prj.clone();
+            loaded.data.name = new_stem.to_string();
+            // schematic_root / pcb_file are basename strings.
+            if loaded.data.schematic_root.as_deref()
+                == Some(&format!("{old_stem}.snxsch"))
+            {
+                loaded.data.schematic_root = Some(format!("{new_stem}.snxsch"));
+            }
+            if loaded.data.pcb_file.as_deref() == Some(&format!("{old_stem}.snxpcb")) {
+                loaded.data.pcb_file = Some(format!("{new_stem}.snxpcb"));
+            }
+            for entry in loaded.data.sheets.iter_mut() {
+                if entry.filename == format!("{old_stem}.snxsch") {
+                    entry.filename = format!("{new_stem}.snxsch");
+                }
+                if entry.name == old_stem {
+                    entry.name = new_stem.to_string();
+                }
+            }
+        }
+
+        for (from, to) in &renamed {
+            for tab in self.document_state.tabs.iter_mut() {
+                if tab.path == *from {
+                    tab.path = to.clone();
+                    if let Some(stem) = to.file_stem().and_then(|s| s.to_str()) {
+                        tab.title = stem.to_string();
+                    }
+                }
+            }
+            if let Some(engine) = self.document_state.engines.remove(from) {
+                self.document_state.engines.insert(to.clone(), engine);
+            }
+            if self.document_state.active_path.as_ref() == Some(from) {
+                self.document_state.active_path = Some(to.clone());
+            }
+            if self.document_state.dirty_paths.remove(from) {
+                self.document_state.dirty_paths.insert(to.clone());
+            }
+        }
+
+        self.ui_state.rename_dialog = None;
+        self.refresh_panel_ctx();
+        iced::Task::none()
+    }
+
     pub(crate) fn handle_remove_confirm(
         &mut self,
         choice: crate::app::RemoveChoice,
@@ -568,6 +989,8 @@ impl Signex {
         // re-discovers the file, until proper project-write support
         // lands. (#54)
         let owner_idx = state.tree_path.first().copied();
+        let mut mutated = false;
+        let mut project_path: Option<std::path::PathBuf> = None;
         if let Some(filename) = state
             .target_path
             .file_name()
@@ -576,16 +999,34 @@ impl Signex {
             && let Some(idx) = owner_idx
             && let Some(loaded) = self.document_state.projects.get_mut(idx)
         {
+            project_path = Some(loaded.path.clone());
+            let before = loaded.data.sheets.len();
             loaded
                 .data
                 .sheets
                 .retain(|entry| entry.filename != filename);
+            if loaded.data.sheets.len() != before {
+                mutated = true;
+            }
             if loaded.data.schematic_root.as_deref() == Some(filename.as_str()) {
                 loaded.data.schematic_root = None;
+                mutated = true;
             }
             if loaded.data.pcb_file.as_deref() == Some(filename.as_str()) {
                 loaded.data.pcb_file = None;
+                mutated = true;
             }
+        }
+        if mutated
+            && let Some(p) = project_path
+        {
+            // Match Add Existing — Remove from Project also dirties the
+            // .snxprj so the project root row gets the red dot until
+            // the user saves the metadata change. The on-disk file
+            // delete already happened above when DeleteFile was picked;
+            // the dirty bit only tracks the project's *list* of
+            // children, which lives in the .snxprj.
+            self.document_state.dirty_paths.insert(p);
         }
 
         self.refresh_panel_ctx();

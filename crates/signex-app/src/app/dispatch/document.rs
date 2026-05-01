@@ -9,6 +9,10 @@ impl Signex {
                 self.handle_document_file_opened(path);
                 self.finish_update()
             }
+            Message::NewProjectFile(path) => {
+                self.handle_new_project_file(path);
+                self.finish_update()
+            }
             Message::DeleteSelected => {
                 // Delete falls through to the schematic engine; the
                 // Component Preview tab is read-only and Footprint

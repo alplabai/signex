@@ -131,6 +131,7 @@ impl Signex {
                 rename_dialog: None,
                 remove_dialog: None,
                 project_close_confirm: None,
+                project_options: None,
                 erc_violations: Vec::new(),
                 erc_violations_by_path: std::collections::HashMap::new(),
                 erc_focus_global_index: None,

@@ -275,13 +275,33 @@ impl Signex {
                 .and_then(|idx| self.document_state.projects.get(*idx))
                 .and_then(|p| p.path.parent())
                 .is_some();
+            // Save is enabled when *either* a schematic is active
+            // (saves the schematic) *or* the right-clicked project's
+            // .snxprj is dirty (saves the project metadata after an
+            // Add Existing). The combined gate keeps Save reachable
+            // when the user has only added files and hasn't opened
+            // any schematic tab.
+            let project_path = path
+                .first()
+                .and_then(|idx| self.document_state.projects.get(*idx))
+                .map(|p| p.path.clone());
+            let project_is_dirty = project_path
+                .as_ref()
+                .map(|p| self.document_state.dirty_paths.contains(p))
+                .unwrap_or(false);
+            let can_save = has_schematic || project_is_dirty;
 
             items.push(self.ctx_menu_item_disabled(
                 None,
                 "Make Project Available Online...",
                 Some("v3.4"),
             ));
-            items.push(self.ctx_menu_item_disabled(None, "Validate Project", Some("v0.9")));
+            items.push(self.ctx_menu_item_msg(
+                None,
+                "Validate Project",
+                "",
+                Message::ProjectTreeAction(A::ValidateProject(path.clone())),
+            ));
             let active_submenu = self.interaction_state.context_submenu;
             items.push(self.ctx_menu_item_submenu(
                 None,
@@ -289,13 +309,19 @@ impl Signex {
                 ContextSubmenu::AddNewToProject,
                 active_submenu == Some(ContextSubmenu::AddNewToProject),
             ));
-            items.push(self.ctx_menu_item_disabled(
+            items.push(self.ctx_menu_item_msg(
                 None,
                 "Add Existing to Project...",
-                Some("v0.9"),
+                "",
+                Message::ProjectTreeAction(A::AddExistingToProject(path.clone())),
             ));
-            items.push(self.save_menu_item(has_schematic));
-            items.push(self.ctx_menu_item_disabled(None, "Rename...", Some("v0.9")));
+            items.push(self.save_menu_item(can_save));
+            items.push(self.ctx_menu_item_msg(
+                None,
+                "Rename...",
+                "",
+                Message::ProjectTreeAction(A::OpenProjectRenameDialog(path.clone())),
+            ));
             items.push(self.ctx_menu_sep());
             items.push(if has_tabs {
                 self.ctx_menu_item_msg(
@@ -335,7 +361,12 @@ impl Signex {
             items.push(self.ctx_menu_item_disabled(None, "Project Releaser...", Some("v5.2")));
             items.push(self.ctx_menu_sep());
             items.push(self.ctx_menu_item_disabled(None, "Share...", Some("v3.4")));
-            items.push(self.ctx_menu_item_disabled(None, "Project Options...", Some("v0.9")));
+            items.push(self.ctx_menu_item_msg(
+                None,
+                "Project Options...",
+                "",
+                Message::ProjectTreeAction(A::OpenProjectOptions(path.clone())),
+            ));
         } else if is_library_node {
             // Library node menu — mirrors Altium's "Add New ▸"
             // submenu: Component opens the New Component modal;
@@ -3228,7 +3259,8 @@ impl Signex {
             ModalId::Preferences
             | ModalId::FindReplace
             | ModalId::RenameDialog
-            | ModalId::RemoveDialog => {
+            | ModalId::RemoveDialog
+            | ModalId::ProjectOptions => {
                 iced::widget::container(iced::widget::text("Detached modal"))
                     .padding(20)
                     .into()
@@ -3511,6 +3543,7 @@ impl Signex {
             || ui.rename_dialog.is_some()
             || ui.remove_dialog.is_some()
             || ui.project_close_confirm.is_some()
+            || ui.project_options.is_some()
             || document.bom_preview.is_some()
             || ui.annotate_dialog_open
             || ui.annotate_reset_confirm
@@ -4814,6 +4847,9 @@ impl Signex {
         }
         if ui.project_close_confirm.is_some() {
             layers.push(self.view_project_close_confirm());
+        }
+        if ui.project_options.is_some() {
+            layers.push(self.view_project_options_dialog());
         }
 
         // Skip overlay rendering for any modal whose detached OS window

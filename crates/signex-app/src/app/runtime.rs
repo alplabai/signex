@@ -143,6 +143,7 @@ impl Signex {
                         .collect(),
                     libraries,
                     is_active: Some(p.id) == active_id,
+                    is_dirty: dirty_paths.contains(&p.path),
                 }
             })
             .collect();

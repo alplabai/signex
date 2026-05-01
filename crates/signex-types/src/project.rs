@@ -240,17 +240,21 @@ pub enum ProjectError {
     UnsupportedExtension(String),
 }
 
-/// Parse a `.snxprj` project file and discover the root schematic + companion PCB.
+/// Parse a `.snxprj` project file. Two paths:
 ///
-/// This is a directory-walk parser: it reads the project filename to find the
-/// project name, then probes the same directory for `<name>.snxsch` and
-/// `<name>.snxpcb`. The full sheet tree (used by the project tree to show
-/// nested schematics) is populated by walking the root schematic at runtime
-/// — this lightweight parser only sees the filenames present on disk.
+/// 1. **JSON content** — newer projects ship a serialized [`ProjectData`]
+///    inside the file. We deserialize it directly and patch `dir` to
+///    match the file's actual location (so projects keep working when
+///    copied to a different folder).
+/// 2. **Empty / legacy marker** — older `.snxprj` files were empty
+///    markers; the parser inferred everything from the directory
+///    (probe for `<name>.snxsch` / `<name>.snxpcb`). We keep that
+///    fallback so existing projects keep loading.
 ///
-/// Standard project files (`.standard_pro`) are not supported in Signex Community.
-/// Users running Standard projects use the optional `signex-standard-import`
-/// GPL-3.0 companion tool to convert their files first.
+/// Standard project files (`.standard_pro`) are not supported in Signex
+/// Community. Users running Standard projects use the optional
+/// `signex-standard-import` GPL-3.0 companion tool to convert their files
+/// first.
 pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
     let ext = path
         .extension()
@@ -269,7 +273,31 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
         .unwrap_or("Untitled")
         .to_string();
 
-    // Schematic root: prefer .snxsch in the project directory.
+    // JSON-backed projects: deserialize ProjectData directly. We don't
+    // care if the persisted `dir` is stale (projects move); patch it to
+    // the parent of the path the user actually opened.
+    let bytes = std::fs::read(path).map_err(|source| ProjectError::Io {
+        path: path.display().to_string(),
+        source,
+    })?;
+    let trimmed = std::str::from_utf8(&bytes)
+        .map(|s| s.trim_start())
+        .unwrap_or("");
+    if trimmed.starts_with('{') {
+        if let Ok(mut data) = serde_json::from_slice::<ProjectData>(&bytes) {
+            data.dir = dir.to_string_lossy().to_string();
+            // Project name in the file is informational; the on-disk
+            // filename is authoritative so renaming the .snxprj outside
+            // the app doesn't desync the displayed name.
+            data.name = project_name;
+            return Ok(data);
+        }
+        // Falls through to directory probe if JSON parse fails; the
+        // user's project is still recoverable from disk layout.
+    }
+
+    // Legacy/empty marker — directory-driven probe (the original
+    // pre-JSON behaviour).
     let snx_sch_name = format!("{}.snxsch", project_name);
     let schematic_root = if dir.join(&snx_sch_name).exists() {
         Some(snx_sch_name)
@@ -277,7 +305,6 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
         None
     };
 
-    // Companion PCB.
     let snx_pcb_name = format!("{}.snxpcb", project_name);
     let pcb_file = if dir.join(&snx_pcb_name).exists() {
         Some(snx_pcb_name)
@@ -285,9 +312,6 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
         None
     };
 
-    // The detailed sheet tree (counts, names, child sheets) is populated
-    // lazily by the engine when a schematic is opened. The project parser
-    // returns the root entry only.
     let sheets = match &schematic_root {
         Some(root_name) => vec![SheetEntry {
             name: project_name.clone(),
@@ -308,5 +332,19 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
         variant_definitions: Vec::new(),
         active_variant: None,
         libraries: Vec::new(),
+    })
+}
+
+/// Serialize `data` to `path` as pretty JSON. Companion of
+/// [`parse_project`] for the JSON-backed branch — newly-added sheets,
+/// PCB, and libraries persist through this writer.
+pub fn write_project(path: &Path, data: &ProjectData) -> Result<(), ProjectError> {
+    let json = serde_json::to_vec_pretty(data).map_err(|err| ProjectError::Io {
+        path: path.display().to_string(),
+        source: std::io::Error::other(err.to_string()),
+    })?;
+    std::fs::write(path, json).map_err(|source| ProjectError::Io {
+        path: path.display().to_string(),
+        source,
     })
 }

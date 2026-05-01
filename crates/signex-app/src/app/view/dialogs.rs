@@ -877,11 +877,14 @@ impl Signex {
         let error_c = Color::from_rgb(0.90, 0.35, 0.30);
 
         let theme_id = self.ui_state.theme_id;
+        let title = if st.is_project_rename {
+            "Rename Project"
+        } else {
+            "Rename File"
+        };
         let header_content: Element<'_, Message> = container(
             row![
-                text("Rename File")
-                    .size(MODAL_HEADER_TITLE_SIZE)
-                    .color(text_c),
+                text(title).size(MODAL_HEADER_TITLE_SIZE).color(text_c),
                 Space::new().width(Length::Fill),
                 close_x_button(Message::CloseRenameDialog, theme_id, text_muted),
             ]
@@ -898,18 +901,33 @@ impl Signex {
             self.interaction_state.last_mouse_pos,
         );
 
-        let current_name = st
-            .target_path
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("")
-            .to_string();
+        let current_label = if st.is_project_rename {
+            st.target_path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_string()
+        } else {
+            st.target_path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_string()
+        };
+        let placeholder = if st.is_project_rename {
+            "new-project-name"
+        } else {
+            "new-name.snxsch"
+        };
+        let prompt = if st.is_project_rename {
+            format!("Rename project \"{}\"", current_label)
+        } else {
+            format!("Rename \"{}\"", current_label)
+        };
 
         let mut body: iced::widget::Column<'_, Message> = column![
-            text(format!("Rename \"{}\"", current_name))
-                .size(11)
-                .color(text_muted),
-            text_input("new-name.standard_sch", &st.buffer)
+            text(prompt).size(11).color(text_muted),
+            text_input(placeholder, &st.buffer)
                 .on_input(Message::RenameBufferChanged)
                 .on_submit(Message::RenameSubmit)
                 .size(12)
@@ -938,6 +956,95 @@ impl Signex {
                 .padding([10, 14]),
             ]
             .width(420),
+        )
+        .style(crate::styles::modal_card(tokens))
+        .clip(true);
+        dialog.into()
+    }
+
+    pub(super) fn view_project_options_dialog(&self) -> Element<'_, Message> {
+        let dialog = self.view_project_options_dialog_body();
+        let offset = self
+            .ui_state
+            .modal_offsets
+            .get(&super::super::state::ModalId::ProjectOptions)
+            .copied()
+            .unwrap_or((0.0, 0.0));
+        wrap_modal(dialog, offset, self.ui_state.window_size, (520.0, 360.0))
+    }
+
+    fn view_project_options_dialog_body(&self) -> Element<'_, Message> {
+        let Some(ref st) = self.ui_state.project_options else {
+            return container(Space::new()).into();
+        };
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let theme_id = self.ui_state.theme_id;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border_c = crate::styles::ti(tokens.border);
+
+        let header_content: Element<'_, Message> = container(
+            row![
+                text("Project Options")
+                    .size(MODAL_HEADER_TITLE_SIZE)
+                    .color(text_c),
+                Space::new().width(Length::Fill),
+                close_x_button(Message::CloseProjectOptions, theme_id, text_muted),
+            ]
+            .align_y(iced::Alignment::Center),
+        )
+        .padding(MODAL_HEADER_PADDING)
+        .height(MODAL_HEADER_HEIGHT)
+        .style(crate::styles::modal_header_strip(tokens))
+        .into();
+        let header = draggable_header(
+            header_content,
+            super::super::state::ModalId::ProjectOptions,
+            self.interaction_state.last_mouse_pos,
+        );
+
+        let row_field = |label: &str, value: String| -> Element<'_, Message> {
+            row![
+                container(text(label.to_string()).size(11).color(text_muted))
+                    .width(Length::Fixed(140.0)),
+                text(value).size(12).color(text_c),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center)
+            .into()
+        };
+
+        let body = column![
+            row_field("Name", st.name.clone()),
+            row_field("Directory", st.directory.clone()),
+            row_field(
+                "Schematic root",
+                st.schematic_root
+                    .clone()
+                    .unwrap_or_else(|| "—".to_string())
+            ),
+            row_field(
+                "PCB",
+                st.pcb_file.clone().unwrap_or_else(|| "—".to_string())
+            ),
+            row_field("Libraries", st.library_count.to_string()),
+        ]
+        .spacing(10);
+
+        let dialog = container(
+            column![
+                header,
+                container(body).padding([14, 16]),
+                container(
+                    row![
+                        Space::new().width(Length::Fill),
+                        primary_button("Close", Some(Message::CloseProjectOptions), border_c),
+                    ]
+                    .align_y(iced::Alignment::Center),
+                )
+                .padding([10, 14]),
+            ]
+            .width(520),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);

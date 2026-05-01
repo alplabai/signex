@@ -28,7 +28,7 @@ mod view;
 
 pub use contracts::{
     ContextAction, ContextMenuState, ContextSubmenu, DragTarget, Message,
-    ProjectCloseChoice, ProjectCloseConfirmState, ProjectTreeAction,
+    ProjectCloseChoice, ProjectCloseConfirmState, ProjectOptionsState, ProjectTreeAction,
     ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState, RenameDialogState,
     StatusBarRequest, TabContextAction, TabContextMenuState, TextEditState,
 };

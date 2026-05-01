@@ -11,12 +11,7 @@ impl Signex {
                         .set_title("Open Project or Schematic")
                         .add_filter("Signex Project", &["snxprj"])
                         .add_filter("Signex Schematic", &["snxsch"])
-                        .add_filter("Standard Schematic", &["standard_sch"])
-                        .add_filter("Standard Project", &["standard_pro"])
-                        .add_filter(
-                            "All Supported",
-                            &["snxprj", "snxsch", "standard_sch", "standard_pro"],
-                        )
+                        .add_filter("All Supported", &["snxprj", "snxsch"])
                         .add_filter("All files", &["*"])
                         .pick_file()
                         .await
@@ -30,14 +25,24 @@ impl Signex {
                     rfd::AsyncFileDialog::new()
                         .set_title("Save Schematic As")
                         .add_filter("Signex Schematic", &["snxsch"])
-                        .add_filter("Standard Schematic", &["standard_sch"])
                         .save_file()
                         .await
                         .map(|file| file.path().to_path_buf())
                 },
                 |path| path.map(Message::SaveFileAs).unwrap_or(Message::Noop),
             )),
-            MenuMessage::NewProject => Some(Task::none()),
+            MenuMessage::NewProject => Some(Task::perform(
+                async {
+                    rfd::AsyncFileDialog::new()
+                        .set_title("New Signex Project")
+                        .set_file_name("Untitled.snxprj")
+                        .add_filter("Signex Project", &["snxprj"])
+                        .save_file()
+                        .await
+                        .map(|file| file.path().to_path_buf())
+                },
+                Message::NewProjectFile,
+            )),
             MenuMessage::PrintPreview => Some(self.update(Message::PrintPreviewRequested)),
             MenuMessage::ExportPdf => Some(self.update(Message::ExportPdfOpenDialog)),
             MenuMessage::ExportNetlist => self.handle_export_netlist_requested(),
