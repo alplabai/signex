@@ -175,6 +175,45 @@ impl Signex {
                 }
                 Task::none()
             }
+            LibraryMessage::BrowserDeleteTable { library_path, table } => {
+                let library_id = match self.library.library_at(&library_path) {
+                    Some(lib) => lib.library_id,
+                    None => return Task::none(),
+                };
+                let adapter = match self.library.set.get(library_id) {
+                    Some(a) => a,
+                    None => return Task::none(),
+                };
+                if let Err(error) =
+                    adapter.delete_empty_table(&table, &format!("delete empty table {table}"))
+                {
+                    if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
+                        s.delete_error = Some(error.to_string());
+                    }
+                    return Task::none();
+                }
+                if let Err(e) = self.library.refresh_components(&library_path) {
+                    tracing::warn!(
+                        target: "signex::library",
+                        path = %library_path.display(),
+                        error = %e,
+                        "refresh after delete table failed"
+                    );
+                }
+                if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
+                    s.delete_error = None;
+                    if s.active_table.as_deref() == Some(table.as_str()) {
+                        s.active_table = None;
+                    }
+                }
+                Task::none()
+            }
+            LibraryMessage::BrowserDismissDeleteError { library_path } => {
+                if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
+                    s.delete_error = None;
+                }
+                Task::none()
+            }
             LibraryMessage::BrowserConfirmAddTable { library_path } => {
                 let Some(state) = self.library.library_browsers.get(&library_path).cloned() else {
                     return Task::none();

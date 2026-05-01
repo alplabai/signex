@@ -145,6 +145,18 @@ pub enum LibraryMessage {
     BrowserConfirmAddTable {
         library_path: PathBuf,
     },
+    /// Delete an empty table from the strip's per-tab `×` button.
+    /// Adapter refuses non-empty deletes with `Conflict`; the error
+    /// surfaces in `LibraryBrowserState.delete_error` so the strip
+    /// can show "table is not empty" inline.
+    BrowserDeleteTable {
+        library_path: PathBuf,
+        table: String,
+    },
+    /// Dismiss the inline delete-table error message.
+    BrowserDismissDeleteError {
+        library_path: PathBuf,
+    },
     /// Live-edit of the modal's "Category" field.
     NewComponentSetCategory(String),
     /// Submit the New Component modal — creates the draft, persists,

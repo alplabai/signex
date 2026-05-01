@@ -4950,12 +4950,37 @@ impl Signex {
         // Opened by File ▸ Library ▸ New Component… and from the
         // project tree's library-node right-click menu.
         if let Some(nc) = self.library.new_component.as_ref() {
+            // Class registry is per-library: use the picked library's
+            // manifest classes. Falls back to the user's prefs default
+            // when no library is selected yet (the dropdown still
+            // disables until a library is picked, but this keeps the
+            // type signatures honest).
+            let library_classes: Vec<crate::fonts::ComponentClassEntry> = nc
+                .library_idx
+                .and_then(|i| self.library.open_libraries.get(i))
+                .and_then(|lib| self.library.set.get(lib.library_id))
+                .map(|adapter| {
+                    adapter
+                        .library_classes()
+                        .into_iter()
+                        .map(|c| crate::fonts::ComponentClassEntry {
+                            key: c.key,
+                            label: c.label,
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            let classes_to_show = if library_classes.is_empty() {
+                self.ui_state.component_classes.clone()
+            } else {
+                library_classes
+            };
             let card = crate::library::new_component::view(
                 &self.library,
                 nc,
                 &document.panel_ctx.tokens,
                 self.ui_state.theme_id,
-                &self.ui_state.component_classes,
+                classes_to_show,
             )
             .map(Message::Library);
             let backdrop = container(card)
@@ -4976,11 +5001,36 @@ impl Signex {
         // browser tab; iterate to find the one with a live `edit_modal`.
         for (lib_path, browser_state) in &self.library.library_browsers {
             if let Some(edit) = browser_state.edit_modal.as_ref() {
+                // Class registry is per-library — read from the
+                // editing library's manifest. Falls back to the
+                // user's prefs default when the library has no
+                // classes registered yet (older libraries created
+                // before the per-library registry shipped).
+                let row_classes: Vec<crate::fonts::ComponentClassEntry> = self
+                    .library
+                    .library_at(lib_path)
+                    .and_then(|lib| self.library.set.get(lib.library_id))
+                    .map(|adapter| {
+                        adapter
+                            .library_classes()
+                            .into_iter()
+                            .map(|c| crate::fonts::ComponentClassEntry {
+                                key: c.key,
+                                label: c.label,
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let row_classes = if row_classes.is_empty() {
+                    self.ui_state.component_classes.clone()
+                } else {
+                    row_classes
+                };
                 let card = crate::library::edit_row_modal::view(
                     lib_path.as_path(),
                     edit,
                     &document.panel_ctx.tokens,
-                    &self.ui_state.component_classes,
+                    row_classes,
                 )
                 .map(Message::Library);
                 let backdrop = container(card)

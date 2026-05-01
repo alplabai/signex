@@ -224,6 +224,27 @@ pub trait LibraryAdapter: Send + Sync {
         ))
     }
 
+    /// Per-library class registry — the source of truth for the New
+    /// Component / Edit Component class dropdowns. Adapters that
+    /// don't carry a manifest return an empty list.
+    fn library_classes(&self) -> Vec<crate::library_file::ClassEntry> {
+        Vec::new()
+    }
+
+    /// Persist the class registry. The UI calls this from the
+    /// Library Properties pane (Add / Rename / Delete class). Default
+    /// implementation surfaces a `Backend` error so adapters that
+    /// don't support manifest mutation are detectable.
+    fn update_library_classes(
+        &self,
+        _classes: Vec<crate::library_file::ClassEntry>,
+        _msg: &str,
+    ) -> Result<(), LibraryError> {
+        Err(LibraryError::Backend(
+            "update_library_classes not implemented for this adapter".into(),
+        ))
+    }
+
     /// Read every row from the named table.
     fn read_table(&self, _name: &str) -> Result<Vec<ComponentRow>, LibraryError> {
         Err(LibraryError::Backend(

@@ -50,7 +50,12 @@ impl PrefNav {
             PrefNav::SchematicEditor => "Schematic Editor",
             PrefNav::Erc => "Electrical Rules",
             PrefNav::LibraryDistributors => "Distributor APIs",
-            PrefNav::ComponentClasses => "Component Classes",
+            // Now a *seed* pane — the actual class registry is
+            // per-library inside each `.snxlib`'s manifest. This
+            // list is what every newly-created library gets seeded
+            // with, so users can establish a personal taxonomy
+            // baseline once and have new libraries inherit it.
+            PrefNav::ComponentClasses => "Default Component Classes",
         }
     }
 
@@ -1186,8 +1191,11 @@ fn content_component_classes<'a>(
     classes: &'a [crate::fonts::ComponentClassEntry],
 ) -> Element<'a, PrefMsg> {
     let header = column![
-        text("Component Classes").size(15).color(TEXT_PRI),
-        text("Edit the class registry shown in New Component / Edit Component pickers. Stored in prefs.json::component_classes.")
+        text("Default Component Classes").size(15).color(TEXT_PRI),
+        text("Seeds the class registry of newly-created libraries. \
+              Per-library edits live inside each .snxlib's manifest \
+              (forthcoming Library Properties pane); this list \
+              controls only what new libraries inherit.")
             .size(11)
             .color(TEXT_MUT),
     ]

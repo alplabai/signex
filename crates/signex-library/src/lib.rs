@@ -55,8 +55,8 @@ pub use distributors::{
 pub use hash::hash_row_content;
 pub use identity::{ComponentClass, InternalPn, Mpn, RowId};
 pub use library_file::{
-    FORMAT_TOKEN, LibraryFile, LibraryFileError, LibraryRow, LibrarySection, LibraryTable,
-    SnxlibManifest,
+    ClassEntry, FORMAT_TOKEN, LibraryFile, LibraryFileError, LibraryRow, LibrarySection,
+    LibraryTable, SnxlibManifest,
 };
 pub use lifecycle::LifecycleState;
 pub use manifest::{

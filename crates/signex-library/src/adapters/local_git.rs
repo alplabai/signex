@@ -711,6 +711,29 @@ impl LibraryAdapter for LocalGitAdapter {
         )
     }
 
+    fn library_classes(&self) -> Vec<crate::library_file::ClassEntry> {
+        let guard = match self.library_file.read() {
+            Ok(g) => g,
+            Err(_) => return Vec::new(),
+        };
+        guard.manifest.classes.clone()
+    }
+
+    fn update_library_classes(
+        &self,
+        classes: Vec<crate::library_file::ClassEntry>,
+        msg: &str,
+    ) -> Result<(), LibraryError> {
+        self.mutate_library_file(
+            move |lf| {
+                lf.manifest.classes = classes;
+                Ok(())
+            },
+            msg,
+            "update class registry",
+        )
+    }
+
     fn create_empty_table(&self, name: &str, msg: &str) -> Result<(), LibraryError> {
         let trimmed = name.trim();
         if trimmed.is_empty() {
@@ -1290,6 +1313,7 @@ mod tests {
             mode: LibraryMode::default(),
             workflow: WorkflowConfig::default(),
             users: UsersConfig::default(),
+            classes: Vec::new(),
         }
     }
 

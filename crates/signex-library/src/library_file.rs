@@ -67,6 +67,24 @@ pub struct SnxlibManifest {
     pub workflow: WorkflowConfig,
     #[serde(default)]
     pub users: UsersConfig,
+    /// User-editable class registry — shown in the New Component
+    /// modal's Class dropdown for components in this library.
+    /// Empty by default; the New Library flow seeds the list from
+    /// the user's `prefs.json::component_classes` so freshly-created
+    /// libraries start with the user's preferred taxonomy. Edits
+    /// land via the (forthcoming) Library Properties pane and
+    /// persist as `[[classes]]` entries inside the `.snxlib`.
+    #[serde(default)]
+    pub classes: Vec<ClassEntry>,
+}
+
+/// One row of the per-library class registry. `key` is the canonical
+/// machine identifier stored on `ComponentRow.class`; `label` is the
+/// human-readable name surfaced in pickers.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClassEntry {
+    pub key: String,
+    pub label: String,
 }
 
 /// `[library]` block — human-readable name + description. The `library_id`
@@ -312,6 +330,8 @@ impl LibraryFile {
             #[serde(default)]
             users: UsersConfig,
             #[serde(default)]
+            classes: Vec<ClassEntry>,
+            #[serde(default)]
             tables: BTreeMap<String, RawTable>,
         }
         #[derive(Deserialize)]
@@ -352,6 +372,7 @@ impl LibraryFile {
                 mode: raw.mode,
                 workflow: raw.workflow,
                 users: raw.users,
+                classes: raw.classes,
             },
             tables,
         })
@@ -564,6 +585,7 @@ mod tests {
             mode: LibraryMode::default(),
             workflow: WorkflowConfig::default(),
             users: UsersConfig::default(),
+            classes: Vec::new(),
         }
     }
 

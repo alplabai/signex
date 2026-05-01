@@ -557,6 +557,7 @@ mod tests {
             },
             workflow: WorkflowConfig::default(),
             users: UsersConfig::default(),
+            classes: Vec::new(),
         };
         let adapter = DatabaseAdapter::from_snxlib(manifest).unwrap();
         assert_eq!(adapter.base_url(), "https://example.com/api");
@@ -575,6 +576,7 @@ mod tests {
             mode: LibraryMode::default(), // LocalGit — wrong for DB adapter
             workflow: WorkflowConfig::default(),
             users: UsersConfig::default(),
+            classes: Vec::new(),
         };
         match DatabaseAdapter::from_snxlib(manifest) {
             Err(LibraryError::Backend(_)) => {}

@@ -206,6 +206,11 @@ pub struct LibraryBrowserState {
     /// the adapter and switches `active_table` to the new row.
     /// Cancel just clears the field without writing.
     pub adding_table: Option<NewTableDraft>,
+    /// Error from the most recent `× Delete Table` click. Adapter
+    /// refuses non-empty deletes with `Conflict`; we render the
+    /// message inline alongside the strip until the user dismisses
+    /// it or clicks anywhere else.
+    pub delete_error: Option<String>,
 }
 
 /// Active sort key + direction for the Library Browser grid.
@@ -229,6 +234,7 @@ impl LibraryBrowserState {
             delete_confirm: None,
             sort_by: None,
             adding_table: None,
+            delete_error: None,
         }
     }
 

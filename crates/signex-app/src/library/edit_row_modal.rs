@@ -57,7 +57,7 @@ pub fn view<'a>(
     library_path: &'a std::path::Path,
     edit: &'a EditRowModalState,
     tokens: &'a ThemeTokens,
-    classes: &'a [crate::fonts::ComponentClassEntry],
+    classes: Vec<crate::fonts::ComponentClassEntry>,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);

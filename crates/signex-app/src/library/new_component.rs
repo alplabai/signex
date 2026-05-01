@@ -90,7 +90,7 @@ pub fn view<'a>(
     nc: &'a NewComponentState,
     tokens: &'a ThemeTokens,
     theme_id: ThemeId,
-    classes: &'a [crate::fonts::ComponentClassEntry],
+    classes: Vec<crate::fonts::ComponentClassEntry>,
 ) -> Element<'a, LibraryMessage> {
     let text_c = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);

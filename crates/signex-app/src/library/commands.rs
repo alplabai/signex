@@ -102,6 +102,18 @@ pub fn create_library_at(
     }
 
     let library_id = Uuid::now_v7();
+    // Seed the per-library class registry from the user's
+    // `prefs.json::component_classes` so freshly-created libraries
+    // start with the user's preferred taxonomy. The user can edit
+    // the registry per-library afterwards via the Library
+    // Properties pane (which then writes back to this `.snxlib`).
+    let seed_classes: Vec<signex_library::ClassEntry> = crate::fonts::read_component_classes_pref()
+        .into_iter()
+        .map(|e| signex_library::ClassEntry {
+            key: e.key,
+            label: e.label,
+        })
+        .collect();
     let manifest = SnxlibManifest {
         format: FORMAT_TOKEN.into(),
         library_id,
@@ -114,6 +126,7 @@ pub fn create_library_at(
         mode: Default::default(),
         workflow: WorkflowConfig::default(),
         users: UsersConfig::default(),
+        classes: seed_classes,
     };
 
     // LFS opt-in (Stage 11): the "Library Options" modal that pops up

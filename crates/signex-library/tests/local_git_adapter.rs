@@ -41,6 +41,7 @@ fn empty_snx_manifest(name: &str, review_required: bool) -> SnxlibManifest {
             ..Default::default()
         },
         users: UsersConfig::default(),
+        classes: Vec::new(),
     }
 }
 
