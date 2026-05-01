@@ -250,6 +250,95 @@ fn view_header<'a>(
             ..iced::widget::button::Style::default()
         });
 
+    // Add-table control. Either the inline name form (while
+    // `adding_table` is Some) or a single "+ Table" button that
+    // opens it. Replacing the strip with a modal felt heavy; this
+    // keeps the action one click away.
+    let add_table_section: Element<'_, LibraryMessage> = match browser.adding_table.as_ref() {
+        Some(draft) => {
+            let library_for_input = library_path.to_path_buf();
+            let library_for_confirm = library_path.to_path_buf();
+            let library_for_cancel = library_path.to_path_buf();
+            let name_input = text_input("new_table_name", &draft.name)
+                .on_input(move |s| LibraryMessage::BrowserSetNewTableName {
+                    library_path: library_for_input.clone(),
+                    value: s,
+                })
+                .on_submit(LibraryMessage::BrowserConfirmAddTable {
+                    library_path: library_for_confirm.clone(),
+                })
+                .padding(4)
+                .size(BROWSER_TEXT_SIZE)
+                .width(Length::Fixed(160.0));
+            let confirm = button(text("Create").size(BROWSER_TEXT_SIZE).color(iced::Color::WHITE))
+                .padding([4, 10])
+                .on_press(LibraryMessage::BrowserConfirmAddTable {
+                    library_path: library_for_confirm,
+                })
+                .style(|_: &Theme, _| iced::widget::button::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgb(
+                        0.18, 0.36, 0.58,
+                    ))),
+                    text_color: iced::Color::WHITE,
+                    border: Border {
+                        width: 0.0,
+                        radius: 3.0.into(),
+                        color: iced::Color::TRANSPARENT,
+                    },
+                    ..iced::widget::button::Style::default()
+                });
+            let cancel = button(text("Cancel").size(BROWSER_TEXT_SIZE).color(text_c))
+                .padding([4, 10])
+                .on_press(LibraryMessage::BrowserCancelAddTable {
+                    library_path: library_for_cancel,
+                })
+                .style(|_: &Theme, _| iced::widget::button::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgba(
+                        1.0, 1.0, 1.0, 0.04,
+                    ))),
+                    text_color: iced::Color::WHITE,
+                    border: Border {
+                        width: 0.0,
+                        radius: 3.0.into(),
+                        color: iced::Color::TRANSPARENT,
+                    },
+                    ..iced::widget::button::Style::default()
+                });
+            let mut row_form = row![name_input, Space::new().width(4), cancel, Space::new().width(4), confirm,]
+                .align_y(iced::Alignment::Center);
+            if let Some(err) = draft.error.as_ref() {
+                row_form = row_form.push(Space::new().width(8));
+                row_form = row_form.push(
+                    text(err.clone())
+                        .size(BROWSER_TEXT_SIZE)
+                        .color(iced::Color::from_rgb(0.85, 0.3, 0.3)),
+                );
+            }
+            row_form.into()
+        }
+        None => {
+            let library_for_begin = library_path.to_path_buf();
+            button(text("+ Table").size(BROWSER_TEXT_SIZE).color(text_c))
+                .padding([4, 10])
+                .on_press(LibraryMessage::BrowserBeginAddTable {
+                    library_path: library_for_begin,
+                })
+                .style(|_: &Theme, _| iced::widget::button::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgba(
+                        1.0, 1.0, 1.0, 0.04,
+                    ))),
+                    text_color: iced::Color::WHITE,
+                    border: Border {
+                        width: 0.0,
+                        radius: 3.0.into(),
+                        color: iced::Color::TRANSPARENT,
+                    },
+                    ..iced::widget::button::Style::default()
+                })
+                .into()
+        }
+    };
+
     let library_for_search = library_path.to_path_buf();
     let search = text_input("Search…", &browser.search)
         .on_input(move |s| LibraryMessage::BrowserSearchChanged {
@@ -282,6 +371,8 @@ fn view_header<'a>(
             tab_strip,
             Space::new().width(6),
             plus_btn,
+            Space::new().width(8),
+            add_table_section,
             Space::new().width(Length::Fill),
             lifecycle_picker,
             Space::new().width(8),

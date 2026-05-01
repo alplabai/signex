@@ -377,15 +377,55 @@ pub fn view<'a>(
     ]
     .align_y(iced::Alignment::Center);
 
-    let form = column![
+    // Advanced disclosure — for first-time users, the Table picker
+    // is just noise: it auto-resolves from Class via
+    // `manifest.table_for_class(class)` at submit time. Power users
+    // who need custom routing (multi-class TSV / non-default
+    // filename) flip Advanced open and pick a destination.
+    let advanced_label = if nc.advanced_open {
+        "Advanced ▴ — hide table routing"
+    } else {
+        "Advanced ▾ — pick a custom destination table"
+    };
+    let advanced_toggle = button(
+        container(text(advanced_label).size(11).color(muted)).padding([2, 0]),
+    )
+    .on_press(LibraryMessage::NewComponentToggleAdvanced)
+    .style(move |_: &Theme, status: iced::widget::button::Status| {
+        let bg = match status {
+            iced::widget::button::Status::Hovered => Some(iced::Background::Color(
+                iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04),
+            )),
+            _ => None,
+        };
+        iced::widget::button::Style {
+            background: bg,
+            text_color: muted,
+            border: Border {
+                width: 0.0,
+                radius: 0.0.into(),
+                ..Border::default()
+            },
+            ..iced::widget::button::Style::default()
+        }
+    });
+
+    let mut form = column![
         labelled("Internal PN", pn_input.into()),
         Space::new().height(8),
         labelled("Library", lib_picker),
         Space::new().height(8),
-        labelled("Table", table_picker),
-        Space::new().height(8),
         labelled("Class", class_picker),
         Space::new().height(8),
+    ];
+    if nc.advanced_open {
+        form = form.push(labelled("Table", table_picker));
+        form = form.push(Space::new().height(8));
+    }
+    let form = form.push(advanced_toggle).push(Space::new().height(8));
+
+    let form = column![
+        form,
         labelled("Symbol ref", symbol_row.into()),
         Space::new().height(8),
         labelled("Footprint ref", footprint_row.into()),

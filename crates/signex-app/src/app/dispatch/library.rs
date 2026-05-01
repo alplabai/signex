@@ -154,6 +154,88 @@ impl Signex {
                 }
                 Task::none()
             }
+            LibraryMessage::BrowserBeginAddTable { library_path } => {
+                if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
+                    state.adding_table = Some(crate::library::state::NewTableDraft::default());
+                }
+                Task::none()
+            }
+            LibraryMessage::BrowserSetNewTableName { library_path, value } => {
+                if let Some(state) = self.library.library_browsers.get_mut(&library_path)
+                    && let Some(draft) = state.adding_table.as_mut()
+                {
+                    draft.name = value;
+                    draft.error = None;
+                }
+                Task::none()
+            }
+            LibraryMessage::BrowserCancelAddTable { library_path } => {
+                if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
+                    state.adding_table = None;
+                }
+                Task::none()
+            }
+            LibraryMessage::BrowserConfirmAddTable { library_path } => {
+                let Some(state) = self.library.library_browsers.get(&library_path).cloned() else {
+                    return Task::none();
+                };
+                let Some(draft) = state.adding_table.as_ref().cloned() else {
+                    return Task::none();
+                };
+                let trimmed = draft.name.trim().to_string();
+                if trimmed.is_empty() {
+                    if let Some(s) = self.library.library_browsers.get_mut(&library_path)
+                        && let Some(d) = s.adding_table.as_mut()
+                    {
+                        d.error = Some("Table name cannot be empty.".into());
+                    }
+                    return Task::none();
+                }
+                let library_id = match self.library.library_at(&library_path) {
+                    Some(lib) => lib.library_id,
+                    None => return Task::none(),
+                };
+                let adapter = match self.library.set.get(library_id) {
+                    Some(a) => a,
+                    None => return Task::none(),
+                };
+                if let Err(error) =
+                    adapter.create_empty_table(&trimmed, &format!("create empty table {trimmed}"))
+                {
+                    if let Some(s) = self.library.library_browsers.get_mut(&library_path)
+                        && let Some(d) = s.adding_table.as_mut()
+                    {
+                        d.error = Some(error.to_string());
+                    }
+                    return Task::none();
+                }
+                if let Err(e) = self.library.refresh_components(&library_path) {
+                    tracing::warn!(
+                        target: "signex::library",
+                        path = %library_path.display(),
+                        error = %e,
+                        "refresh after add table failed"
+                    );
+                }
+                if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
+                    s.adding_table = None;
+                    s.active_table = Some(trimmed);
+                }
+                Task::none()
+            }
+            LibraryMessage::NewComponentToggleAdvanced => {
+                if let Some(nc) = self.library.new_component.as_mut() {
+                    nc.advanced_open = !nc.advanced_open;
+                    if !nc.advanced_open {
+                        // Closing the disclosure also clears any
+                        // in-flight + New Table form so the user
+                        // doesn't reopen Advanced and find a stale
+                        // half-typed name.
+                        nc.creating_table = None;
+                    }
+                }
+                Task::none()
+            }
             LibraryMessage::NewComponentBeginCreateTable => {
                 if let Some(nc) = self.library.new_component.as_mut() {
                     nc.creating_table = Some(crate::library::state::NewTableDraft::default());
@@ -1007,6 +1089,7 @@ impl Signex {
             footprint_ref: None,
             error: None,
             creating_table: None,
+            advanced_open: false,
         });
         Task::none()
     }

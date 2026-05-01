@@ -213,6 +213,17 @@ pub trait LibraryAdapter: Send + Sync {
         ))
     }
 
+    /// Delete the table `name` from the library. Adapters MUST refuse
+    /// when the table still contains rows — Manage Tables uses this
+    /// surface and the user can drop rows individually first. Returns
+    /// `NotFound` when the table doesn't exist, `Conflict` when it's
+    /// non-empty.
+    fn delete_empty_table(&self, _name: &str, _msg: &str) -> Result<(), LibraryError> {
+        Err(LibraryError::Backend(
+            "delete_empty_table not implemented for this adapter".into(),
+        ))
+    }
+
     /// Read every row from the named table.
     fn read_table(&self, _name: &str) -> Result<Vec<ComponentRow>, LibraryError> {
         Err(LibraryError::Backend(

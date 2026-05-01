@@ -656,6 +656,33 @@ impl LibraryAdapter for LocalGitAdapter {
         Ok(names)
     }
 
+    fn delete_empty_table(&self, name: &str, msg: &str) -> Result<(), LibraryError> {
+        let owned = name.to_string();
+        let fallback = format!("delete table {owned}");
+        self.mutate_library_file(
+            move |lf| {
+                let entry = match lf.tables.get(&owned) {
+                    Some(t) => t,
+                    None => {
+                        return Err(LibraryError::NotFound(format!(
+                            "table {owned:?} not found"
+                        )));
+                    }
+                };
+                if !entry.rows.is_empty() {
+                    return Err(LibraryError::Conflict(format!(
+                        "table {owned:?} is not empty ({} rows)",
+                        entry.rows.len()
+                    )));
+                }
+                lf.tables.remove(&owned);
+                Ok(())
+            },
+            msg,
+            &fallback,
+        )
+    }
+
     fn create_empty_table(&self, name: &str, msg: &str) -> Result<(), LibraryError> {
         let trimmed = name.trim();
         if trimmed.is_empty() {

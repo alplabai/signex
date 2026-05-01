@@ -115,6 +115,31 @@ pub enum LibraryMessage {
     /// adapter, refreshes the components cache, switches the modal's
     /// `table` selection to the freshly-minted name.
     NewComponentConfirmCreateTable,
+    /// Toggle the Advanced ▾ disclosure on the New Component modal —
+    /// shows / hides the Table picker + `+ New Table…` so the basic
+    /// form stays clean for first-time users.
+    NewComponentToggleAdvanced,
+    /// Library Browser tab strip → "+ Add Table". Flips the
+    /// browser into add-table mode where the strip's right edge
+    /// shows a name input + Confirm/Cancel.
+    BrowserBeginAddTable {
+        library_path: PathBuf,
+    },
+    /// Live-edit of the `+ Add Table` name buffer.
+    BrowserSetNewTableName {
+        library_path: PathBuf,
+        value: String,
+    },
+    /// Cancel the inline `+ Add Table` form without writing.
+    BrowserCancelAddTable {
+        library_path: PathBuf,
+    },
+    /// Confirm `+ Add Table` — calls `create_empty_table` on the
+    /// adapter, refreshes the browser cache, switches the active
+    /// tab to the new table.
+    BrowserConfirmAddTable {
+        library_path: PathBuf,
+    },
     /// Live-edit of the modal's "Category" field.
     NewComponentSetCategory(String),
     /// Submit the New Component modal — creates the draft, persists,

@@ -199,6 +199,13 @@ pub struct LibraryBrowserState {
     /// stricter validation when needed; the auto-detect path keeps
     /// untyped legacy tables sorting sanely.
     pub sort_by: Option<BrowserSort>,
+    /// In-flight `+ Add Table` inline form. `None` while the regular
+    /// tab strip is showing; `Some(NewTableDraft)` while the user is
+    /// typing a fresh table name. Confirm dispatches
+    /// `BrowserConfirmAddTable` which calls `create_empty_table` on
+    /// the adapter and switches `active_table` to the new row.
+    /// Cancel just clears the field without writing.
+    pub adding_table: Option<NewTableDraft>,
 }
 
 /// Active sort key + direction for the Library Browser grid.
@@ -221,6 +228,7 @@ impl LibraryBrowserState {
             cell_edit: HashMap::new(),
             delete_confirm: None,
             sort_by: None,
+            adding_table: None,
         }
     }
 
@@ -1055,6 +1063,13 @@ pub struct NewComponentState {
     /// `create_empty_table` against the active library and switches
     /// the picker to the new table; Cancel just clears this field.
     pub creating_table: Option<NewTableDraft>,
+    /// "Advanced ▾" disclosure flag — hides the Table picker by
+    /// default so first-time users only see Library + Class + PN +
+    /// Pick Symbol/Footprint. The Table picker auto-resolves to
+    /// `manifest.table_for_class(class)` at submit time when the
+    /// disclosure stays closed; opening it lets power users pick a
+    /// custom routing or mint a new table inline.
+    pub advanced_open: bool,
 }
 
 /// Inline form state for "+ New Table…" inside the New Component
@@ -1078,6 +1093,7 @@ impl Default for NewComponentState {
             footprint_ref: None,
             error: None,
             creating_table: None,
+            advanced_open: false,
         }
     }
 }
@@ -1089,6 +1105,7 @@ pub struct CloseLibraryConfirmState {
     pub library_name: String,
     pub dirty_editors: Vec<EditorAddress>,
 }
+
 
 // ─────────────────────────────────────────────────────────────────────
 // Component Preview
