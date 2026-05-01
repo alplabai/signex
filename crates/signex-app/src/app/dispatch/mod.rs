@@ -142,6 +142,7 @@ impl Signex {
             | Message::RemoveConfirm(_)
             | Message::CloseRemoveDialog
             | Message::AddExistingFilePicked { .. }
+            | Message::AddNewSchematicPicked { .. }
             | Message::CloseProjectOptions
             | Message::OpenContextSubmenu(_)
             | Message::HoverContextSubmenu(_)

@@ -618,6 +618,10 @@ pub(crate) fn spawn_save_as_for_new_primitive(suggested: PathBuf) -> iced::Task<
 /// for File ▸ New Project. Only the fields that don't have a serde
 /// default need explicit values; everything else falls through to the
 /// per-field defaults the writer/parser already round-trip.
+pub(crate) fn blank_schematic_sheet_for_new_doc() -> signex_types::schematic::SchematicSheet {
+    blank_schematic_sheet()
+}
+
 fn blank_schematic_sheet() -> signex_types::schematic::SchematicSheet {
     signex_types::schematic::SchematicSheet {
         uuid: uuid::Uuid::new_v4(),

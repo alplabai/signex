@@ -184,6 +184,10 @@ impl Signex {
                 self.handle_add_existing_file_picked(project_idx, paths);
                 Task::none()
             }
+            Message::AddNewSchematicPicked { project_idx, path } => {
+                self.handle_add_new_schematic_picked(project_idx, path);
+                Task::none()
+            }
             Message::CloseProjectOptions => {
                 self.ui_state.project_options = None;
                 Task::none()

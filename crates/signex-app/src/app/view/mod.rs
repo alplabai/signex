@@ -1,7 +1,7 @@
 use iced::widget::{canvas, column, container, row, text_input};
 use iced::{Element, Length};
 
-mod dialogs;
+pub(crate) mod dialogs;
 mod translate;
 
 use super::*;
@@ -1074,10 +1074,23 @@ impl Signex {
                 // wires through to `commands::create_library`; the
                 // other rows stay version-badged stubs until their
                 // respective editors land.
-                items.push(self.ctx_menu_item_disabled(
+                // The right-clicked project lives at `tree_path[0]`
+                // for any `AddNewToProject` submenu item — resolve it
+                // off the captured menu state so the action targets
+                // the right project even when another is active.
+                let target_path = self
+                    .interaction_state
+                    .project_tree_context_menu
+                    .as_ref()
+                    .and_then(|m| m.path.clone())
+                    .unwrap_or_default();
+                items.push(self.ctx_menu_item_msg(
                     Some(ic::icon_dd_wire(tid)),
                     "Schematic",
-                    Some("v0.9"),
+                    "",
+                    Message::ProjectTreeAction(
+                        crate::app::ProjectTreeAction::AddNewSchematic(target_path),
+                    ),
                 ));
                 // Component Library is the Altium-style replacement
                 // for the legacy "Schematic Library" row. Wired
@@ -3579,7 +3592,7 @@ impl Signex {
             || (interaction.hover_symbol_uuid.is_some()
                 && interaction
                     .hover_started_at
-                    .is_some_and(|t| t.elapsed() >= std::time::Duration::from_millis(250)));
+                    .is_some_and(|t| t.elapsed() >= std::time::Duration::from_millis(700)));
 
         if needs_overlay {
             let mut overlays = self.collect_overlays();
@@ -3967,7 +3980,7 @@ impl Signex {
         let interaction = &self.interaction_state;
         let uuid = interaction.hover_symbol_uuid?;
         let started = interaction.hover_started_at?;
-        if started.elapsed() < std::time::Duration::from_millis(250) {
+        if started.elapsed() < std::time::Duration::from_millis(700) {
             return None;
         }
         let (sx, sy) = interaction.hover_screen_pos?;
@@ -3980,15 +3993,45 @@ impl Signex {
         let muted_c = crate::styles::ti(tokens.text_secondary);
         let panel_bg = crate::styles::ti(tokens.panel_bg);
         let border_c = crate::styles::ti(tokens.border);
+        // Match the schematic's own font (Iosevka by default; whatever
+        // the user picked under Preferences ▸ Canvas Font) so the
+        // tooltip reads as "this is data from the canvas" rather than
+        // floating Roboto chrome. We reuse the same `IOSEVKA` Font
+        // constant signex-render uses for canvas text so the lookup
+        // hits the embedded TTF (not whatever the system fontconfig
+        // falls back to for `Family::Name`).
+        let canvas_font_name: &str = &self.document_state.panel_ctx.canvas_font_name;
+        let canvas_font = if canvas_font_name == crate::fonts::DEFAULT_CANVAS_FONT
+            || canvas_font_name.is_empty()
+        {
+            signex_render::IOSEVKA
+        } else {
+            crate::fonts::iced_font_for_family(canvas_font_name)
+        };
 
-        // Field row helper: muted label + primary value, fixed label
-        // width so values align across rows.
+        // Single row style — label in a fixed gutter, value fills the
+        // remaining card width and wraps onto further lines on its
+        // own when the payload is long. Keeps the rhythm uniform
+        // across short (Designator / Value) and long (Footprint /
+        // Library) fields without an inline-vs-stacked split.
+        const CARD_W: f32 = 260.0;
+        const LABEL_W: f32 = 60.0;
         let field = |label: &'static str, value: String| -> Element<'_, Message> {
             iced::widget::row![
-                text(label).size(10).color(muted_c).width(60),
-                text(value).size(11).color(text_c),
+                text(label)
+                    .font(canvas_font)
+                    .size(11)
+                    .color(muted_c)
+                    .width(LABEL_W),
+                text(value)
+                    .font(canvas_font)
+                    .size(12)
+                    .color(text_c)
+                    .width(Length::Fill),
             ]
-            .spacing(6)
+            .spacing(4)
+            .width(Length::Fill)
+            .align_y(iced::Alignment::Start)
             .into()
         };
 
@@ -4005,7 +4048,13 @@ impl Signex {
         }
 
         let card = container(column(rows).spacing(3))
-            .padding([8, 12])
+            .padding(iced::Padding {
+                top: 8.0,
+                right: 14.0,
+                bottom: 8.0,
+                left: 10.0,
+            })
+            .width(Length::Fixed(CARD_W))
             .style(move |_: &iced::Theme| container::Style {
                 background: Some(Background::Color(panel_bg)),
                 border: Border {
@@ -4026,8 +4075,8 @@ impl Signex {
         // actual size depends on font metrics so this is a guess
         // intended to keep the card on-screen near the right/bottom
         // edges; the iced layout will still render at its true size.
-        const ESTIMATED_W: f32 = 240.0;
-        const ESTIMATED_H: f32 = 96.0;
+        const ESTIMATED_W: f32 = CARD_W;
+        const ESTIMATED_H: f32 = 110.0;
         let mut x = sx + OFFSET;
         let mut y = sy + OFFSET;
         if x + ESTIMATED_W > ww {
@@ -4899,9 +4948,13 @@ impl Signex {
         // Opened by File ▸ Library ▸ New Component… and from the
         // project tree's library-node right-click menu.
         if let Some(nc) = self.library.new_component.as_ref() {
-            let card =
-                crate::library::new_component::view(&self.library, nc, &document.panel_ctx.tokens)
-                    .map(Message::Library);
+            let card = crate::library::new_component::view(
+                &self.library,
+                nc,
+                &document.panel_ctx.tokens,
+                self.ui_state.theme_id,
+            )
+            .map(Message::Library);
             let backdrop = container(card)
                 .width(Length::Fill)
                 .height(Length::Fill)

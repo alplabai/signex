@@ -140,6 +140,14 @@ pub enum Message {
         project_idx: usize,
         paths: Option<Vec<std::path::PathBuf>>,
     },
+    /// Result of the `Add New ▸ Schematic` Save-As dialog. `None`
+    /// when the user cancelled; on `Some(path)` the handler writes
+    /// a blank `.snxsch`, registers it on the project, and marks
+    /// the .snxprj dirty.
+    AddNewSchematicPicked {
+        project_idx: usize,
+        path: Option<std::path::PathBuf>,
+    },
     /// Dismiss the Project Options metadata modal.
     CloseProjectOptions,
     /// Expand a click-to-open submenu inside the right-click context
@@ -735,6 +743,11 @@ pub enum ProjectTreeAction {
     /// to the project. Files outside the project directory are copied
     /// in; files already inside just trigger a tree refresh.
     AddExistingToProject(Vec<usize>),
+    /// v0.9 project-root → Add New ▸ Schematic. Spawns a Save-As
+    /// dialog scoped to the project directory; the result writes a
+    /// blank `.snxsch`, registers it as a SheetEntry, marks the
+    /// project dirty, and refreshes the tree (no tab opens).
+    AddNewSchematic(Vec<usize>),
 }
 
 /// State for the rename modal. Tracks the target file, the live

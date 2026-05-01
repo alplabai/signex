@@ -477,6 +477,7 @@ fn render_node(
     let mut label = text(node.label.clone())
         .size(FONT_SZ)
         .color(txt_c)
+        .line_height(iced::widget::text::LineHeight::Relative(1.0))
         .wrapping(iced::widget::text::Wrapping::None);
     if node.accent && depth == 0 {
         label = label.font(iced::Font {

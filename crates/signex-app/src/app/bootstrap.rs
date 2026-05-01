@@ -286,6 +286,7 @@ impl Signex {
                 submenu_panel_hovered: false,
                 submenu_unhovered_since: None,
                 last_mouse_pos: (0.0, 0.0),
+                last_tree_click: None,
                 active_bar_menu: None,
                 selection_filters: crate::active_bar::SelectionFilter::ALL
                     .iter()
@@ -786,7 +787,7 @@ impl Signex {
             && self
                 .interaction_state
                 .hover_started_at
-                .is_some_and(|t| t.elapsed() < std::time::Duration::from_millis(400));
+                .is_some_and(|t| t.elapsed() < std::time::Duration::from_millis(900));
         let hover_tooltip_tick = if symbol_hover_active {
             iced::time::every(std::time::Duration::from_millis(80)).map(|_| Message::Noop)
         } else {

@@ -21,8 +21,8 @@ impl Signex {
             crate::panels::PanelMsg::Tree(TreeMsg::Select(path)) => {
                 let selected_node =
                     get_node(self.document_state.panel_ctx.project_tree.as_slice(), path);
-                if let Some(node) = selected_node
-                    && matches!(
+                let is_openable = selected_node.is_some_and(|node| {
+                    matches!(
                         node.icon,
                         TreeIcon::Schematic
                             | TreeIcon::Pcb
@@ -34,10 +34,36 @@ impl Signex {
                             | TreeIcon::SnxLibrary
                             | TreeIcon::SnxSymbol
                     )
-                    && let Err(error) =
-                        self.open_project_tree_document(path, node.label.clone())
-                {
-                    crate::diagnostics::log_error("Failed to open project tree document", &error);
+                });
+                if !is_openable {
+                    self.interaction_state.last_tree_click = None;
+                    return true;
+                }
+                // Double-click gate — first click memos the path; the
+                // second click on the *same* path within the window
+                // actually opens the file. Otherwise the memo just
+                // updates so the next tick is treated as the first
+                // click of a fresh sequence.
+                const TREE_DOUBLE_CLICK_WINDOW: std::time::Duration =
+                    std::time::Duration::from_millis(500);
+                let now = std::time::Instant::now();
+                let is_double = matches!(
+                    &self.interaction_state.last_tree_click,
+                    Some((prev, t)) if prev == path && now.duration_since(*t) <= TREE_DOUBLE_CLICK_WINDOW
+                );
+                if is_double {
+                    self.interaction_state.last_tree_click = None;
+                    if let Some(node) = selected_node
+                        && let Err(error) =
+                            self.open_project_tree_document(path, node.label.clone())
+                    {
+                        crate::diagnostics::log_error(
+                            "Failed to open project tree document",
+                            &error,
+                        );
+                    }
+                } else {
+                    self.interaction_state.last_tree_click = Some((path.clone(), now));
                 }
                 true
             }
@@ -161,6 +187,9 @@ impl Signex {
             }
             ProjectTreeAction::AddExistingToProject(tree_path) => {
                 return self.add_existing_to_project(tree_path);
+            }
+            ProjectTreeAction::AddNewSchematic(tree_path) => {
+                return self.add_new_schematic(tree_path);
             }
         }
         Task::none()
@@ -529,6 +558,121 @@ impl Signex {
             },
             move |paths| Message::AddExistingFilePicked { project_idx, paths },
         )
+    }
+
+    /// `Add New ▸ Schematic` — Save-As dialog scoped to the project
+    /// directory; result returns through [`Message::AddNewSchematicPicked`].
+    /// The handler writes a blank `.snxsch`, registers the entry on
+    /// the project, and marks the .snxprj dirty.
+    pub(crate) fn add_new_schematic(
+        &mut self,
+        tree_path: Vec<usize>,
+    ) -> iced::Task<Message> {
+        let Some(&project_idx) = tree_path.first() else {
+            return iced::Task::none();
+        };
+        let project_dir = match self
+            .document_state
+            .projects
+            .get(project_idx)
+            .and_then(|p| p.path.parent().map(|d| d.to_path_buf()))
+        {
+            Some(d) => d,
+            None => return iced::Task::none(),
+        };
+        let default_name = unique_name_in(&project_dir, "Sheet", "snxsch");
+        iced::Task::perform(
+            async move {
+                rfd::AsyncFileDialog::new()
+                    .set_title("Add New Schematic to Project")
+                    .set_directory(&project_dir)
+                    .set_file_name(&default_name)
+                    .add_filter("Signex Schematic", &["snxsch"])
+                    .save_file()
+                    .await
+                    .map(|file| file.path().to_path_buf())
+            },
+            move |path| Message::AddNewSchematicPicked { project_idx, path },
+        )
+    }
+
+    pub(crate) fn handle_add_new_schematic_picked(
+        &mut self,
+        project_idx: usize,
+        path: Option<std::path::PathBuf>,
+    ) {
+        let Some(path) = path else { return };
+        // Force the .snxsch extension so users typing "Foo" don't end up
+        // with a bare `Foo` file the directory probe / extension match
+        // ignores.
+        let path = if path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.eq_ignore_ascii_case("snxsch"))
+            != Some(true)
+        {
+            let mut p = path.into_os_string();
+            p.push(".snxsch");
+            std::path::PathBuf::from(p)
+        } else {
+            path
+        };
+        let project_dir = match self
+            .document_state
+            .projects
+            .get(project_idx)
+            .and_then(|p| p.path.parent().map(|d| d.to_path_buf()))
+        {
+            Some(d) => d,
+            None => return,
+        };
+        let project_path = match self
+            .document_state
+            .projects
+            .get(project_idx)
+            .map(|p| p.path.clone())
+        {
+            Some(p) => p,
+            None => return,
+        };
+        if !path.starts_with(&project_dir) {
+            crate::diagnostics::log_error(
+                "Add New Schematic: destination outside project directory",
+                &anyhow::anyhow!("{}", path.display()),
+            );
+            return;
+        }
+        if path.exists() {
+            crate::diagnostics::log_error(
+                "Add New Schematic: destination already exists",
+                &anyhow::anyhow!("{}", path.display()),
+            );
+            return;
+        }
+        // Build a blank sheet through the same helper File ▸ New
+        // Project uses so the on-disk format stays in lockstep.
+        let sheet = blank_schematic_sheet_for_new_doc();
+        let serialised = match signex_types::format::SnxSchematic::new(sheet).write_string() {
+            Ok(s) => s,
+            Err(e) => {
+                crate::diagnostics::log_error(
+                    "Add New Schematic: serialise blank sheet",
+                    &anyhow::anyhow!("{}", e),
+                );
+                return;
+            }
+        };
+        if let Err(e) = std::fs::write(&path, serialised.as_bytes()) {
+            crate::diagnostics::log_error(
+                "Add New Schematic: write blank sheet",
+                &anyhow::anyhow!("{}", e),
+            );
+            return;
+        }
+        if self.register_project_file(project_idx, &path) {
+            self.document_state.dirty_paths.insert(project_path);
+        }
+        self.refresh_panel_ctx();
     }
 
     pub(crate) fn handle_add_existing_file_picked(
@@ -1198,4 +1342,26 @@ fn reveal_in_file_manager(path: &std::path::Path) -> anyhow::Result<()> {
             .map_err(|e| anyhow::anyhow!("xdg-open failed to spawn: {e}"))?;
         Ok(())
     }
+}
+
+/// Pick a filename under `dir` that doesn't collide with anything on
+/// disk. Tries `<base>.<ext>`, then `<base>2.<ext>`, `<base>3.<ext>`,
+/// etc. Used to seed the Add-New-Schematic Save-As dialog so the user
+/// doesn't have to dodge an existing file by hand.
+fn unique_name_in(dir: &std::path::Path, base: &str, ext: &str) -> String {
+    let primary = format!("{base}.{ext}");
+    if !dir.join(&primary).exists() {
+        return primary;
+    }
+    for n in 2..=999 {
+        let name = format!("{base}{n}.{ext}");
+        if !dir.join(&name).exists() {
+            return name;
+        }
+    }
+    primary
+}
+
+fn blank_schematic_sheet_for_new_doc() -> signex_types::schematic::SchematicSheet {
+    super::super::document_files::blank_schematic_sheet_for_new_doc()
 }

@@ -120,19 +120,15 @@ pub fn create_library_at(
     // `*.iges` and stages it into the initial commit when `true`.
     let _adapter = LocalGitAdapter::init(&lib_path, manifest, LibraryInitOptions { use_lfs })?;
 
-    state.open_library(lib_path.clone())?;
-    if let Err(e) = state.refresh_components(&lib_path) {
-        tracing::warn!(
-            target: "signex::library",
-            path = %lib_path.display(),
-            error = %e,
-            "freshly-created library failed initial refresh"
-        );
-    }
-
-    // Pick LibraryEntryKind based on whether the library lives inside
-    // the project's directory. Project-local entries store a relative
-    // path so a project move doesn't break the binding.
+    // Register the library on the project FIRST — the on-disk
+    // `.snxlib` is the source of truth, and the project should
+    // reference it whether the runtime open/refresh succeeds or
+    // not. Putting open_library before this push meant any
+    // open-time error (LFS not installed, transient git lock,
+    // permission glitch on a fresh dir) bailed the function early
+    // with the file already on disk but no LibraryEntry — so the
+    // tree never showed the new library and the user had to delete
+    // the orphan folder manually.
     let project_dir = PathBuf::from(&project.dir);
     let (entry_path, entry_kind) =
         if !project_dir.as_os_str().is_empty()
@@ -148,6 +144,25 @@ pub fn create_library_at(
         kind: entry_kind,
         library_id: Some(library_id),
     });
+
+    // Best-effort runtime mount + initial component-cache refresh.
+    // Errors here downgrade to warnings so the entry stays
+    // registered and the user can retry from the tree later.
+    if let Err(e) = state.open_library(lib_path.clone()) {
+        tracing::warn!(
+            target: "signex::library",
+            path = %lib_path.display(),
+            error = %e,
+            "freshly-created library failed initial open — entry registered, retry from tree"
+        );
+    } else if let Err(e) = state.refresh_components(&lib_path) {
+        tracing::warn!(
+            target: "signex::library",
+            path = %lib_path.display(),
+            error = %e,
+            "freshly-created library failed initial refresh"
+        );
+    }
 
     Ok(library_id)
 }

@@ -733,6 +733,15 @@ pub struct InteractionState {
     /// zones without the menu collapsing mid-traversal.
     pub submenu_unhovered_since: Option<std::time::Instant>,
     pub last_mouse_pos: (f32, f32),
+    /// Project-tree click memo for the home-grown double-click gate.
+    /// First click on an openable leaf records `(path, instant)`; the
+    /// second click on the same path within `TREE_DOUBLE_CLICK_WINDOW`
+    /// opens the document. Anything else (different path, expired
+    /// timer, intervening folder toggle) just refreshes the memo.
+    /// Iced's `button` widget consumes mouse events before iced 0.14
+    /// surfaces a built-in `on_double_click` for them, so we time the
+    /// clicks ourselves at the app layer.
+    pub last_tree_click: Option<(Vec<usize>, std::time::Instant)>,
     pub active_bar_menu: Option<crate::active_bar::ActiveBarMenu>,
     pub selection_filters: std::collections::HashSet<crate::active_bar::SelectionFilter>,
     /// User-defined custom filter presets (capped at
