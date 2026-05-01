@@ -150,6 +150,14 @@ pub enum Message {
     },
     /// Dismiss the Project Options metadata modal.
     CloseProjectOptions,
+    /// Toggle the LFS checkbox on the Enable Version Control modal.
+    EnableVersionControlToggleLfs,
+    /// Confirm — runs `git init` + initial commit at the project
+    /// dir, refreshes the panel ctx so any in-tree dirty markers
+    /// reflect the new state.
+    EnableVersionControlConfirm,
+    /// Dismiss the Enable Version Control modal without writing.
+    CloseEnableVersionControl,
     /// Expand a click-to-open submenu inside the right-click context
     /// menu (Place or Align). Toggles off when the same kind is fired
     /// twice, otherwise replaces the current submenu.
@@ -748,6 +756,12 @@ pub enum ProjectTreeAction {
     /// blank `.snxsch`, registers it as a SheetEntry, marks the
     /// project dirty, and refreshes the tree (no tab opens).
     AddNewSchematic(Vec<usize>),
+    /// v0.11 project-root: open the Enable Version Control confirm
+    /// modal. Runs `git init` at the project dir, optionally seeds
+    /// `.gitattributes` for binary-model LFS, and creates the
+    /// initial commit covering the entire project tree. Only
+    /// enabled when the project dir has no `.git/` already.
+    OpenEnableVersionControl(Vec<usize>),
 }
 
 /// State for the rename modal. Tracks the target file, the live
@@ -765,6 +779,28 @@ pub struct RenameDialogState {
     /// trio stays grouped under the new project name. `false` is the
     /// per-file rename used by sheet leaves.
     pub is_project_rename: bool,
+}
+
+/// State for the "Enable Version Control" confirm modal — opened
+/// from the project root context menu when the project directory
+/// has no `.git/` yet. Confirm runs `git2::Repository::init` at
+/// `project_dir`, optionally writes `.gitattributes` for binary-
+/// model LFS, and stages an initial commit covering the entire
+/// tree. The per-item tracking-scope picker (track only specific
+/// schematics / libraries) is deferred to a follow-up iteration —
+/// this minimum version tracks the whole project tree.
+#[derive(Debug, Clone)]
+pub struct EnableVersionControlState {
+    pub project_path: std::path::PathBuf,
+    pub project_dir: std::path::PathBuf,
+    pub project_name: String,
+    /// "Track binary 3D models via Git LFS" checkbox. Off by
+    /// default; only writes `.gitattributes` when on.
+    pub use_lfs: bool,
+    /// Last error from a confirm attempt — surfaces inline so the
+    /// user can fix the cause (LFS not installed, etc.) and retry
+    /// without reopening the modal.
+    pub error: Option<String>,
 }
 
 /// State for the read-only "Project Options" modal — the v0.9 surface

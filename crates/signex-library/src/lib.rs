@@ -83,6 +83,95 @@ pub use where_used::{UseSite, WhereUsedIndex};
 #[cfg(feature = "local-git")]
 pub use adapters::local_git::LocalGitAdapter;
 
+/// Project-level "Enable Version Control" helper. Runs
+/// `git2::Repository::init` at `project_dir`, optionally writes a
+/// `.gitattributes` opting common binary-model extensions (`*.step`,
+/// `*.stp`, `*.wrl`, `*.iges`) into Git LFS, then stages every
+/// tracked file and creates the initial commit "chore: enable
+/// version control".
+///
+/// Used by `signex-app` so the per-project Enable Version Control
+/// flow doesn't need to pull `git2` in directly. Errors propagate
+/// through the existing [`adapter::LibraryError`] variants so the UI
+/// can surface them in one place.
+#[cfg(feature = "local-git")]
+pub fn enable_project_version_control(
+    project_dir: &std::path::Path,
+    use_lfs: bool,
+) -> Result<(), adapter::LibraryError> {
+    use adapter::LibraryError;
+
+    if project_dir.join(".git").exists() {
+        return Err(LibraryError::Conflict(format!(
+            "{} already has a .git directory",
+            project_dir.display()
+        )));
+    }
+    std::fs::create_dir_all(project_dir).map_err(|e| {
+        LibraryError::Backend(format!("create project dir {}: {e}", project_dir.display()))
+    })?;
+
+    if use_lfs {
+        let attributes = "\
+*.step filter=lfs diff=lfs merge=lfs -text\n\
+*.stp filter=lfs diff=lfs merge=lfs -text\n\
+*.wrl filter=lfs diff=lfs merge=lfs -text\n\
+*.iges filter=lfs diff=lfs merge=lfs -text\n";
+        std::fs::write(project_dir.join(".gitattributes"), attributes).map_err(|e| {
+            LibraryError::Backend(format!("write .gitattributes: {e}"))
+        })?;
+    }
+
+    let repo = git2::Repository::init(project_dir)
+        .map_err(|e| LibraryError::Backend(format!("git init: {e}")))?;
+
+    // Identity for the commit — same fallback the LocalGitAdapter
+    // uses (env GIT_AUTHOR_NAME / EMAIL → repo config → "signex").
+    let cfg = repo.config().ok();
+    let sig_name = std::env::var("GIT_AUTHOR_NAME")
+        .ok()
+        .or_else(|| {
+            cfg.as_ref()
+                .and_then(|c| c.get_string("user.name").ok())
+        })
+        .unwrap_or_else(|| "signex".to_string());
+    let sig_email = std::env::var("GIT_AUTHOR_EMAIL")
+        .ok()
+        .or_else(|| {
+            cfg.as_ref()
+                .and_then(|c| c.get_string("user.email").ok())
+        })
+        .unwrap_or_else(|| "signex@localhost".to_string());
+    let sig = git2::Signature::now(&sig_name, &sig_email)
+        .map_err(|e| LibraryError::Backend(format!("git signature: {e}")))?;
+
+    let mut index = repo
+        .index()
+        .map_err(|e| LibraryError::Backend(format!("git index: {e}")))?;
+    index
+        .add_all(["."].iter(), git2::IndexAddOption::DEFAULT, None)
+        .map_err(|e| LibraryError::Backend(format!("git add .: {e}")))?;
+    index
+        .write()
+        .map_err(|e| LibraryError::Backend(format!("git index write: {e}")))?;
+    let tree_oid = index
+        .write_tree()
+        .map_err(|e| LibraryError::Backend(format!("git write tree: {e}")))?;
+    let tree = repo
+        .find_tree(tree_oid)
+        .map_err(|e| LibraryError::Backend(format!("git find tree: {e}")))?;
+    repo.commit(
+        Some("HEAD"),
+        &sig,
+        &sig,
+        "chore: enable version control",
+        &tree,
+        &[],
+    )
+    .map_err(|e| LibraryError::Backend(format!("git initial commit: {e}")))?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod smoke {
     #[test]

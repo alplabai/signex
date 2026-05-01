@@ -191,8 +191,56 @@ impl Signex {
             ProjectTreeAction::AddNewSchematic(tree_path) => {
                 return self.add_new_schematic(tree_path);
             }
+            ProjectTreeAction::OpenEnableVersionControl(tree_path) => {
+                self.open_enable_version_control_dialog(tree_path);
+            }
         }
         Task::none()
+    }
+
+    pub(crate) fn open_enable_version_control_dialog(&mut self, tree_path: Vec<usize>) {
+        let Some(&project_idx) = tree_path.first() else {
+            return;
+        };
+        let Some(project) = self.document_state.projects.get(project_idx) else {
+            return;
+        };
+        let Some(project_dir) = project.path.parent() else {
+            return;
+        };
+        if project_dir.join(".git").exists() {
+            // Already version-controlled — nothing to enable.
+            return;
+        }
+        self.ui_state.enable_version_control =
+            Some(crate::app::EnableVersionControlState {
+                project_path: project.path.clone(),
+                project_dir: project_dir.to_path_buf(),
+                project_name: project.data.name.clone(),
+                use_lfs: false,
+                error: None,
+            });
+    }
+
+    pub(crate) fn handle_enable_version_control_confirm(&mut self) {
+        let Some(state) = self.ui_state.enable_version_control.clone() else {
+            return;
+        };
+        match try_init_project_repo(&state.project_dir, state.use_lfs) {
+            Ok(()) => {
+                self.ui_state.enable_version_control = None;
+                self.refresh_panel_ctx();
+                crate::diagnostics::log_info(format!(
+                    "[git] initialised repository at {}",
+                    state.project_dir.display()
+                ));
+            }
+            Err(error) => {
+                if let Some(s) = self.ui_state.enable_version_control.as_mut() {
+                    s.error = Some(error.to_string());
+                }
+            }
+        }
     }
 
     /// Close every tab backed by the project whose root is at
@@ -1364,4 +1412,14 @@ fn unique_name_in(dir: &std::path::Path, base: &str, ext: &str) -> String {
 
 fn blank_schematic_sheet_for_new_doc() -> signex_types::schematic::SchematicSheet {
     super::super::document_files::blank_schematic_sheet_for_new_doc()
+}
+
+/// Thin wrapper around `signex_library::enable_project_version_control`
+/// — kept here so the dispatch handler can stay synchronous and
+/// surface the `LibraryError` as a user-facing string.
+fn try_init_project_repo(
+    project_dir: &std::path::Path,
+    use_lfs: bool,
+) -> Result<(), signex_library::LibraryError> {
+    signex_library::enable_project_version_control(project_dir, use_lfs)
 }

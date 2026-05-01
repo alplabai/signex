@@ -192,6 +192,20 @@ impl Signex {
                 self.ui_state.project_options = None;
                 Task::none()
             }
+            Message::EnableVersionControlToggleLfs => {
+                if let Some(s) = self.ui_state.enable_version_control.as_mut() {
+                    s.use_lfs = !s.use_lfs;
+                }
+                Task::none()
+            }
+            Message::EnableVersionControlConfirm => {
+                self.handle_enable_version_control_confirm();
+                Task::none()
+            }
+            Message::CloseEnableVersionControl => {
+                self.ui_state.enable_version_control = None;
+                Task::none()
+            }
             Message::OpenContextSubmenu(kind) => {
                 // Click-to-open. Toggles off if the same kind is fired
                 // again so the header row works as a collapse handle.

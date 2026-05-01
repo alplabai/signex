@@ -98,6 +98,10 @@ pub struct UiState {
     /// v0.9 read-only Project Options metadata modal — `Some` while
     /// the user has the right-click → Project Options… popup open.
     pub project_options: Option<crate::app::ProjectOptionsState>,
+    /// v0.11 Enable Version Control modal — opened from the
+    /// project root context menu when the project dir has no
+    /// `.git/` yet.
+    pub enable_version_control: Option<crate::app::EnableVersionControlState>,
     /// ERC results for the currently-visible sheet. Driven by the
     /// per-sheet cache below — switching tabs repoints this at the
     /// cached violations for that sheet, so markers and the Messages
@@ -300,6 +304,9 @@ pub enum ModalId {
     BomPreview,
     /// Project Options metadata modal (Projects-panel root → Project Options...).
     ProjectOptions,
+    /// Enable Version Control confirm modal (Projects-panel root →
+    /// Enable Version Control...).
+    EnableVersionControl,
 }
 
 /// Order in which symbols are visited during Annotate. Mirrors Altium's

@@ -367,6 +367,25 @@ impl Signex {
                 "",
                 Message::ProjectTreeAction(A::OpenProjectOptions(path.clone())),
             ));
+            // Enable Version Control — only surfaced when the
+            // project dir has no `.git/` yet. After opt-in the row
+            // disappears (the project already has version control;
+            // future per-file tracking edits live in a different
+            // surface).
+            let no_git_yet = path
+                .first()
+                .and_then(|idx| self.document_state.projects.get(*idx))
+                .and_then(|p| p.path.parent())
+                .map(|dir| !dir.join(".git").exists())
+                .unwrap_or(false);
+            if no_git_yet {
+                items.push(self.ctx_menu_item_msg(
+                    None,
+                    "Enable Version Control...",
+                    "",
+                    Message::ProjectTreeAction(A::OpenEnableVersionControl(path.clone())),
+                ));
+            }
         } else if is_library_node {
             // Library node menu — mirrors Altium's "Add New ▸"
             // submenu: Component opens the New Component modal;
@@ -3273,7 +3292,8 @@ impl Signex {
             | ModalId::FindReplace
             | ModalId::RenameDialog
             | ModalId::RemoveDialog
-            | ModalId::ProjectOptions => {
+            | ModalId::ProjectOptions
+            | ModalId::EnableVersionControl => {
                 iced::widget::container(iced::widget::text("Detached modal"))
                     .padding(20)
                     .into()
@@ -3557,6 +3577,7 @@ impl Signex {
             || ui.remove_dialog.is_some()
             || ui.project_close_confirm.is_some()
             || ui.project_options.is_some()
+            || ui.enable_version_control.is_some()
             || document.bom_preview.is_some()
             || ui.annotate_dialog_open
             || ui.annotate_reset_confirm
@@ -4901,6 +4922,9 @@ impl Signex {
         }
         if ui.project_options.is_some() {
             layers.push(self.view_project_options_dialog());
+        }
+        if ui.enable_version_control.is_some() {
+            layers.push(self.view_enable_version_control_dialog());
         }
 
         // Skip overlay rendering for any modal whose detached OS window

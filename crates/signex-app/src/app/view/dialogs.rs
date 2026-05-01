@@ -1051,6 +1051,120 @@ impl Signex {
         dialog.into()
     }
 
+    pub(super) fn view_enable_version_control_dialog(&self) -> Element<'_, Message> {
+        let dialog = self.view_enable_version_control_dialog_body();
+        let offset = self
+            .ui_state
+            .modal_offsets
+            .get(&super::super::state::ModalId::EnableVersionControl)
+            .copied()
+            .unwrap_or((0.0, 0.0));
+        wrap_modal(dialog, offset, self.ui_state.window_size, (520.0, 320.0))
+    }
+
+    fn view_enable_version_control_dialog_body(&self) -> Element<'_, Message> {
+        use iced::widget::checkbox;
+        let Some(ref st) = self.ui_state.enable_version_control else {
+            return container(Space::new()).into();
+        };
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let theme_id = self.ui_state.theme_id;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border_c = crate::styles::ti(tokens.border);
+
+        let header_content: Element<'_, Message> = container(
+            row![
+                text("Enable Version Control")
+                    .size(MODAL_HEADER_TITLE_SIZE)
+                    .color(text_c),
+                Space::new().width(Length::Fill),
+                close_x_button(Message::CloseEnableVersionControl, theme_id, text_muted),
+            ]
+            .align_y(iced::Alignment::Center),
+        )
+        .padding(MODAL_HEADER_PADDING)
+        .height(MODAL_HEADER_HEIGHT)
+        .style(crate::styles::modal_header_strip(tokens))
+        .into();
+        let header = draggable_header(
+            header_content,
+            super::super::state::ModalId::EnableVersionControl,
+            self.interaction_state.last_mouse_pos,
+        );
+
+        let intro = text(format!(
+            "Initialise a Git repository at {} and stage every file in \
+             the project as the first commit. From then on, every save \
+             commits through libgit2 — including library mutations \
+             inside the project's `.snxlib` directories.",
+            st.project_dir.display()
+        ))
+        .size(11)
+        .color(text_muted);
+        let summary = text(format!("Project: {}", st.project_name))
+            .size(12)
+            .color(text_c);
+
+        let lfs_check: Element<'_, Message> = checkbox(st.use_lfs)
+            .size(14)
+            .on_toggle(|_| Message::EnableVersionControlToggleLfs)
+            .into();
+        let lfs_row = row![
+            lfs_check,
+            Space::new().width(8),
+            column![
+                text("Track binary 3D models via Git LFS")
+                    .size(12)
+                    .color(text_c),
+                text("Routes `*.step / *.stp / *.wrl / *.iges` through Git LFS. Requires `git lfs` locally.")
+                    .size(10)
+                    .color(text_muted),
+            ]
+            .spacing(2),
+        ]
+        .align_y(iced::Alignment::Start);
+
+        let mut body_col = column![summary, intro, Space::new().height(6), lfs_row].spacing(10);
+        if let Some(err) = st.error.as_ref() {
+            body_col = body_col.push(
+                text(err.clone())
+                    .size(11)
+                    .color(iced::Color::from_rgb(0.85, 0.3, 0.3)),
+            );
+        }
+
+        let dialog = container(
+            column![
+                header,
+                container(body_col).padding([14, 16]),
+                container(
+                    row![
+                        Space::new().width(Length::Fill),
+                        secondary_button(
+                            "Cancel",
+                            Message::CloseEnableVersionControl,
+                            text_c,
+                            border_c,
+                        ),
+                        Space::new().width(8),
+                        primary_button(
+                            "Enable",
+                            Some(Message::EnableVersionControlConfirm),
+                            border_c,
+                        ),
+                    ]
+                    .align_y(iced::Alignment::Center),
+                )
+                .padding([10, 14]),
+            ]
+            .width(520),
+        )
+        .style(crate::styles::modal_card(tokens))
+        .clip(true);
+        dialog.into()
+    }
+
     pub(super) fn view_remove_dialog(&self) -> Element<'_, Message> {
         let dialog = self.view_remove_dialog_body();
         let offset = self

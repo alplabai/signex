@@ -144,6 +144,9 @@ impl Signex {
             | Message::AddExistingFilePicked { .. }
             | Message::AddNewSchematicPicked { .. }
             | Message::CloseProjectOptions
+            | Message::EnableVersionControlToggleLfs
+            | Message::EnableVersionControlConfirm
+            | Message::CloseEnableVersionControl
             | Message::OpenContextSubmenu(_)
             | Message::HoverContextSubmenu(_)
             | Message::LeaveContextSubmenu
@@ -239,6 +242,9 @@ impl Signex {
                             ModalId::BomPreview => self.document_state.bom_preview = None,
                             ModalId::ProjectOptions => {
                                 self.ui_state.project_options = None;
+                            }
+                            ModalId::EnableVersionControl => {
+                                self.ui_state.enable_version_control = None;
                             }
                         },
                         // Closing an undocked-tab window is the reattach
