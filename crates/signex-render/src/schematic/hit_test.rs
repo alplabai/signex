@@ -170,6 +170,86 @@ fn drawing_uuid(d: &SchDrawing) -> uuid::Uuid {
     }
 }
 
+// ---------------------------------------------------------------------------
+// v0.11 → v0.12 compatibility shims.
+//
+// v0.11 callers reach this module directly with a SchematicSheet
+// (which now `pub type` aliases to SchematicRenderSnapshot). To keep
+// those call sites compiling, the v0.11 entry points are provided as
+// thin shims that build a fresh `HitIndex` per call. New code should
+// construct the index once and call `point` / `box_query` repeatedly.
+// ---------------------------------------------------------------------------
+
+/// **Deprecated v0.12 shim.** Builds a `HitIndex` per call and runs a
+/// point query. New code should keep an index alive across frames.
+#[deprecated(
+    since = "0.12.0",
+    note = "build a HitIndex once and call hit_test_point"
+)]
+pub fn hit_test(
+    sheet: &signex_types::schematic::SchematicSheet,
+    world_x: f64,
+    world_y: f64,
+) -> Option<SelectedItem> {
+    let theme = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+    let snap = SchematicSnapshot::new(sheet, &theme);
+    let index = HitIndex::build(&snap);
+    point(&index, &snap, Point::new(world_x, world_y), 0.5)
+}
+
+/// **Deprecated v0.12 shim.** Polygon hit-test approximated as an AABB
+/// crossing query.
+#[deprecated(since = "0.12.0", note = "build a HitIndex once and call hit_test_box")]
+pub fn hit_test_polygon(
+    sheet: &signex_types::schematic::SchematicSheet,
+    poly: &[Point],
+) -> Vec<SelectedItem> {
+    if poly.is_empty() {
+        return Vec::new();
+    }
+    let mut min_x = f64::INFINITY;
+    let mut min_y = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+    for p in poly {
+        min_x = min_x.min(p.x);
+        min_y = min_y.min(p.y);
+        max_x = max_x.max(p.x);
+        max_y = max_y.max(p.y);
+    }
+    let theme = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+    let snap = SchematicSnapshot::new(sheet, &theme);
+    let index = HitIndex::build(&snap);
+    box_query(
+        &index,
+        &snap,
+        Aabb::new(min_x, min_y, max_x, max_y),
+        SelectionMode::Crossing,
+    )
+}
+
+/// **Deprecated v0.12 shim.** Rect-mode hit test — `crossing == true`
+/// matches `SelectionMode::Crossing`, otherwise `Enclosing`.
+#[deprecated(since = "0.12.0", note = "build a HitIndex once and call hit_test_box")]
+pub fn hit_test_rect_mode(
+    sheet: &signex_types::schematic::SchematicSheet,
+    min_x: f64,
+    min_y: f64,
+    max_x: f64,
+    max_y: f64,
+    crossing: bool,
+) -> Vec<SelectedItem> {
+    let theme = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+    let snap = SchematicSnapshot::new(sheet, &theme);
+    let index = HitIndex::build(&snap);
+    let mode = if crossing {
+        SelectionMode::Crossing
+    } else {
+        SelectionMode::Enclosing
+    };
+    box_query(&index, &snap, Aabb::new(min_x, min_y, max_x, max_y), mode)
+}
+
 /// Public hit-test entry — see [`super::hit_test_point`].
 pub fn point(
     index: &HitIndex,
