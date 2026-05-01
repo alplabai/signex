@@ -92,7 +92,11 @@ pub fn view<'a>(
         return view_empty_state(library_path, lib, tokens);
     }
 
-    // Tab strip + search header.
+    // Master-detail layout: left pane lists tables (vertical), right
+    // pane = filters/search + grid + actions + preview. Mirrors a DB
+    // browser so users can scan their library inventory at a glance
+    // and pivot between tables without horizontal scrolling.
+    let table_sidebar = view_table_sidebar(library_path, lib, browser, tokens);
     let header = view_header(library_path, lib, browser, tokens);
 
     // Body — left grid, right preview pane.
@@ -165,7 +169,7 @@ pub fn view<'a>(
     ]
     .height(Length::Fill);
 
-    column![
+    let right = column![
         header,
         container(body)
             .padding(8)
@@ -174,87 +178,121 @@ pub fn view<'a>(
     ]
     .spacing(0)
     .width(Length::Fill)
+    .height(Length::Fill);
+
+    let border_c = theme_ext::border_color(tokens);
+    let separator = container(Space::new())
+        .width(Length::Fixed(1.0))
+        .height(Length::Fill)
+        .style(move |_: &Theme| iced::widget::container::Style {
+            background: Some(iced::Background::Color(border_c)),
+            ..iced::widget::container::Style::default()
+        });
+    row![table_sidebar, separator, right]
+    .width(Length::Fill)
     .height(Length::Fill)
     .into()
 }
 
 // ─── Header (tab strip + search) ────────────────────────────────────
 
-fn view_header<'a>(
+/// Vertical table sidebar — replaces the old horizontal tab strip
+/// with a database-style master pane: each table is one row, the
+/// active one highlights, and `+ Table` (plus the inline create
+/// form) anchors at the bottom. Per-tab × delete still ships with
+/// the next iteration; for now an empty table is selectable and the
+/// user can drop rows individually before deletion lands.
+fn view_table_sidebar<'a>(
     library_path: &'a std::path::Path,
     lib: &'a OpenLibrary,
     browser: &'a LibraryBrowserState,
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
+    const SIDEBAR_W: f32 = 200.0;
     let text_c = theme_ext::text_primary(tokens);
+    let muted = theme_ext::text_secondary(tokens);
+    let active_bg = iced::Color::from_rgba(1.0, 1.0, 1.0, 0.10);
 
-    let mut tab_strip = row![].spacing(2).align_y(iced::Alignment::Center);
+    let mut col = column![]
+        .spacing(2)
+        .padding(iced::Padding {
+            top: 6.0,
+            right: 0.0,
+            bottom: 6.0,
+            left: 0.0,
+        })
+        .width(Length::Fill);
+
+    col = col.push(
+        container(
+            text("Tables")
+                .size(11)
+                .color(muted),
+        )
+        .padding(iced::Padding {
+            top: 0.0,
+            right: 8.0,
+            bottom: 4.0,
+            left: 12.0,
+        }),
+    );
 
     let mut names: Vec<&String> = lib.tables.keys().collect();
     names.sort();
-
     for name in &names {
         let is_active = browser.active_table.as_deref() == Some(name.as_str());
-        let label = format!(
-            "{} ({})",
-            name,
-            lib.tables.get(*name).map(|v| v.len()).unwrap_or(0)
-        );
+        let count = lib.tables.get(*name).map(|v| v.len()).unwrap_or(0);
+        let row_label = row![
+            text((*name).clone())
+                .size(BROWSER_TEXT_SIZE)
+                .color(text_c)
+                .width(Length::Fill),
+            text(format!("{count}"))
+                .size(BROWSER_TEXT_SIZE)
+                .color(muted),
+        ]
+        .spacing(6)
+        .align_y(iced::Alignment::Center);
         let library_owned = library_path.to_path_buf();
         let table_owned = (*name).clone();
         let on_press = LibraryMessage::BrowserSelectTable {
             library_path: library_owned,
             table: table_owned,
         };
-        let bg_color = if is_active {
-            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.10)
-        } else {
-            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.02)
-        };
-        let tab_btn = button(text(label).size(BROWSER_TEXT_SIZE).color(text_c))
-            .padding([4, 12])
+        let bg_color = if is_active { Some(active_bg) } else { None };
+        let row_btn = button(row_label)
+            .padding(iced::Padding {
+                top: 5.0,
+                right: 12.0,
+                bottom: 5.0,
+                left: 12.0,
+            })
+            .width(Length::Fill)
             .on_press(on_press)
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(bg_color)),
-                text_color: text_c,
-                border: Border {
-                    width: 0.0,
-                    radius: 3.0.into(),
-                    color: iced::Color::TRANSPARENT,
-                },
-                ..iced::widget::button::Style::default()
+            .style(move |_: &Theme, status: iced::widget::button::Status| {
+                let bg = bg_color.or_else(|| match status {
+                    iced::widget::button::Status::Hovered => {
+                        Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04))
+                    }
+                    _ => None,
+                });
+                iced::widget::button::Style {
+                    background: bg.map(iced::Background::Color),
+                    text_color: text_c,
+                    border: Border {
+                        width: 0.0,
+                        radius: 0.0.into(),
+                        color: iced::Color::TRANSPARENT,
+                    },
+                    ..iced::widget::button::Style::default()
+                }
             });
-        tab_strip = tab_strip.push(tab_btn);
+        col = col.push(row_btn);
     }
 
-    // The "+" button — opens the New Component modal pre-selected to
-    // this library + active table.
-    let library_for_plus = library_path.to_path_buf();
-    let table_for_plus = browser.active_table.clone();
-    let plus_btn = button(text("+").size(BROWSER_TEXT_SIZE).color(text_c))
-        .padding([4, 10])
-        .on_press(LibraryMessage::BrowserAddComponent {
-            library_path: library_for_plus,
-            table: table_for_plus,
-        })
-        .style(|_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                1.0, 1.0, 1.0, 0.04,
-            ))),
-            text_color: iced::Color::WHITE,
-            border: Border {
-                width: 0.0,
-                radius: 3.0.into(),
-                color: iced::Color::TRANSPARENT,
-            },
-            ..iced::widget::button::Style::default()
-        });
-
-    // Add-table control. Either the inline name form (while
-    // `adding_table` is Some) or a single "+ Table" button that
-    // opens it. Replacing the strip with a modal felt heavy; this
-    // keeps the action one click away.
-    let add_table_section: Element<'_, LibraryMessage> = match browser.adding_table.as_ref() {
+    // Inline `+ Table` form / button — same lifecycle as before, now
+    // anchored at the bottom of the sidebar.
+    let bottom_section: Element<'a, LibraryMessage> = match browser.adding_table.as_ref() {
         Some(draft) => {
             let library_for_input = library_path.to_path_buf();
             let library_for_confirm = library_path.to_path_buf();
@@ -268,8 +306,7 @@ fn view_header<'a>(
                     library_path: library_for_confirm.clone(),
                 })
                 .padding(4)
-                .size(BROWSER_TEXT_SIZE)
-                .width(Length::Fixed(160.0));
+                .size(BROWSER_TEXT_SIZE);
             let confirm = button(text("Create").size(BROWSER_TEXT_SIZE).color(iced::Color::WHITE))
                 .padding([4, 10])
                 .on_press(LibraryMessage::BrowserConfirmAddTable {
@@ -304,41 +341,95 @@ fn view_header<'a>(
                     },
                     ..iced::widget::button::Style::default()
                 });
-            let mut row_form = row![name_input, Space::new().width(4), cancel, Space::new().width(4), confirm,]
-                .align_y(iced::Alignment::Center);
+            let mut form = column![
+                name_input,
+                row![cancel, Space::new().width(4), confirm,]
+                    .align_y(iced::Alignment::Center),
+            ]
+            .spacing(4)
+            .padding([6, 12]);
             if let Some(err) = draft.error.as_ref() {
-                row_form = row_form.push(Space::new().width(8));
-                row_form = row_form.push(
+                form = form.push(
                     text(err.clone())
                         .size(BROWSER_TEXT_SIZE)
                         .color(iced::Color::from_rgb(0.85, 0.3, 0.3)),
                 );
             }
-            row_form.into()
+            form.into()
         }
         None => {
             let library_for_begin = library_path.to_path_buf();
-            button(text("+ Table").size(BROWSER_TEXT_SIZE).color(text_c))
-                .padding([4, 10])
-                .on_press(LibraryMessage::BrowserBeginAddTable {
-                    library_path: library_for_begin,
-                })
-                .style(|_: &Theme, _| iced::widget::button::Style {
-                    background: Some(iced::Background::Color(iced::Color::from_rgba(
-                        1.0, 1.0, 1.0, 0.04,
-                    ))),
-                    text_color: iced::Color::WHITE,
-                    border: Border {
-                        width: 0.0,
-                        radius: 3.0.into(),
-                        color: iced::Color::TRANSPARENT,
-                    },
-                    ..iced::widget::button::Style::default()
-                })
-                .into()
+            container(
+                button(text("+ Table").size(BROWSER_TEXT_SIZE).color(text_c))
+                    .padding([4, 10])
+                    .width(Length::Fill)
+                    .on_press(LibraryMessage::BrowserBeginAddTable {
+                        library_path: library_for_begin,
+                    })
+                    .style(|_: &Theme, _| iced::widget::button::Style {
+                        background: Some(iced::Background::Color(iced::Color::from_rgba(
+                            1.0, 1.0, 1.0, 0.04,
+                        ))),
+                        text_color: iced::Color::WHITE,
+                        border: Border {
+                            width: 0.0,
+                            radius: 3.0.into(),
+                            color: iced::Color::TRANSPARENT,
+                        },
+                        ..iced::widget::button::Style::default()
+                    }),
+            )
+            .padding(iced::Padding {
+                top: 4.0,
+                right: 8.0,
+                bottom: 6.0,
+                left: 8.0,
+            })
+            .into()
         }
     };
 
+    col = col.push(Space::new().height(Length::Fill));
+    col = col.push(bottom_section);
+
+    container(col)
+        .width(Length::Fixed(SIDEBAR_W))
+        .height(Length::Fill)
+        .into()
+}
+
+fn view_header<'a>(
+    library_path: &'a std::path::Path,
+    _lib: &'a OpenLibrary,
+    browser: &'a LibraryBrowserState,
+    tokens: &'a ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    let text_c = theme_ext::text_primary(tokens);
+
+    // The "+" button — opens the New Component modal pre-selected to
+    // this library + active table.
+    let library_for_plus = library_path.to_path_buf();
+    let table_for_plus = browser.active_table.clone();
+    let plus_btn = button(text("+ Component").size(BROWSER_TEXT_SIZE).color(text_c))
+        .padding([4, 10])
+        .on_press(LibraryMessage::BrowserAddComponent {
+            library_path: library_for_plus,
+            table: table_for_plus,
+        })
+        .style(|_: &Theme, _| iced::widget::button::Style {
+            background: Some(iced::Background::Color(iced::Color::from_rgba(
+                1.0, 1.0, 1.0, 0.04,
+            ))),
+            text_color: iced::Color::WHITE,
+            border: Border {
+                width: 0.0,
+                radius: 3.0.into(),
+                color: iced::Color::TRANSPARENT,
+            },
+            ..iced::widget::button::Style::default()
+        });
+
+    // Add-table control. Either the inline name form (while
     let library_for_search = library_path.to_path_buf();
     let search = text_input("Search…", &browser.search)
         .on_input(move |s| LibraryMessage::BrowserSearchChanged {
@@ -368,11 +459,7 @@ fn view_header<'a>(
 
     container(
         row![
-            tab_strip,
-            Space::new().width(6),
             plus_btn,
-            Space::new().width(8),
-            add_table_section,
             Space::new().width(Length::Fill),
             lifecycle_picker,
             Space::new().width(8),
