@@ -3,15 +3,20 @@
 //! Entry point for the Iced 0.14 + wgpu application.
 
 mod app;
-mod canvas;
 mod diagnostics;
-mod dock;
 mod find_replace;
-mod panels;
-mod pcb_canvas;
 mod preferences;
 mod shortcuts;
 mod undo;
+
+#[path = "editor/canvas/mod.rs"]
+mod canvas;
+#[path = "editor/dock/mod.rs"]
+mod dock;
+#[path = "editor/panels/mod.rs"]
+mod panels;
+#[path = "editor/pcb_canvas.rs"]
+mod pcb_canvas;
 
 #[path = "theme/fonts.rs"]
 mod fonts;
