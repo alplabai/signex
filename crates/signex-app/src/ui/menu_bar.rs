@@ -26,32 +26,32 @@ use crate::styles;
 /// `python installer/build-wordmark.py` after editing the source SVGs.
 static BRAND_WORDMARK_WHITE_1X: LazyLock<image::Handle> = LazyLock::new(|| {
     image::Handle::from_bytes(
-        include_bytes!("../assets/brand/generated/wordmark-white-1x.png").as_slice(),
+        include_bytes!("../../assets/brand/generated/wordmark-white-1x.png").as_slice(),
     )
 });
 static BRAND_WORDMARK_WHITE_2X: LazyLock<image::Handle> = LazyLock::new(|| {
     image::Handle::from_bytes(
-        include_bytes!("../assets/brand/generated/wordmark-white-2x.png").as_slice(),
+        include_bytes!("../../assets/brand/generated/wordmark-white-2x.png").as_slice(),
     )
 });
 static BRAND_WORDMARK_WHITE_3X: LazyLock<image::Handle> = LazyLock::new(|| {
     image::Handle::from_bytes(
-        include_bytes!("../assets/brand/generated/wordmark-white-3x.png").as_slice(),
+        include_bytes!("../../assets/brand/generated/wordmark-white-3x.png").as_slice(),
     )
 });
 static BRAND_WORDMARK_BLACK_1X: LazyLock<image::Handle> = LazyLock::new(|| {
     image::Handle::from_bytes(
-        include_bytes!("../assets/brand/generated/wordmark-black-1x.png").as_slice(),
+        include_bytes!("../../assets/brand/generated/wordmark-black-1x.png").as_slice(),
     )
 });
 static BRAND_WORDMARK_BLACK_2X: LazyLock<image::Handle> = LazyLock::new(|| {
     image::Handle::from_bytes(
-        include_bytes!("../assets/brand/generated/wordmark-black-2x.png").as_slice(),
+        include_bytes!("../../assets/brand/generated/wordmark-black-2x.png").as_slice(),
     )
 });
 static BRAND_WORDMARK_BLACK_3X: LazyLock<image::Handle> = LazyLock::new(|| {
     image::Handle::from_bytes(
-        include_bytes!("../assets/brand/generated/wordmark-black-3x.png").as_slice(),
+        include_bytes!("../../assets/brand/generated/wordmark-black-3x.png").as_slice(),
     )
 });
 
