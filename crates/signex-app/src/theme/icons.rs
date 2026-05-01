@@ -76,7 +76,7 @@ fn tinted_handle(canonical: &'static [u8], theme: ThemeId) -> svg::Handle {
 macro_rules! canonical_icon {
     ($name:ident, $path:literal) => {
         pub fn $name(theme: ThemeId) -> svg::Handle {
-            const BYTES: &[u8] = include_bytes!(concat!("../assets/icons/", $path));
+            const BYTES: &[u8] = include_bytes!(concat!("../../assets/icons/", $path));
             tinted_handle(BYTES, theme)
         }
     };

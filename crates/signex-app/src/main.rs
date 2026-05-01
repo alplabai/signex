@@ -7,14 +7,18 @@ mod canvas;
 mod diagnostics;
 mod dock;
 mod find_replace;
-mod fonts;
-mod icons;
 mod panels;
 mod pcb_canvas;
 mod preferences;
 mod shortcuts;
-mod styles;
 mod undo;
+
+#[path = "theme/fonts.rs"]
+mod fonts;
+#[path = "theme/icons.rs"]
+mod icons;
+#[path = "theme/styles.rs"]
+mod styles;
 
 #[path = "ui/active_bar.rs"]
 mod active_bar;
