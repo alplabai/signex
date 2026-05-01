@@ -38,7 +38,7 @@ const SELECTION_WEIGHT_FACTOR: f64 = 1.5;
 /// ```
 pub fn draw_wire(frame: &mut Frame, wire: &Wire, ctx: &RenderContext<'_>) {
     let bbox = wire_aabb(wire);
-    let visible = ctx.viewport.visible_world_bounds();
+    let visible = ctx.visible_world_bounds();
     if !aabbs_overlap(&bbox, &visible) {
         return;
     }
@@ -56,7 +56,7 @@ pub fn draw_wire(frame: &mut Frame, wire: &Wire, ctx: &RenderContext<'_>) {
         } else {
             1.0
         };
-    let width_px = (width_world * ctx.viewport.zoom_px_per_mm).max(1.0) as f32;
+    let width_px = (width_world * ctx.viewport.zoom_px_per_mm()).max(1.0) as f32;
 
     let colour = if selected {
         iced_color(&ctx.theme().selection)

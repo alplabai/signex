@@ -53,6 +53,47 @@ pub fn escape_for_standard(text: &str) -> String {
     text.to_string()
 }
 
+/// **Deprecated v0.12 placement-preview helper.** Paints a single
+/// text note in the caller's chosen colour without needing a snapshot
+/// context — used by signex-app's placement tools that render a
+/// translucent ghost of the about-to-be-placed object.
+#[deprecated(
+    since = "0.12.0",
+    note = "build a RenderContext and call draw_text_note"
+)]
+pub fn draw_text_note_preview(
+    frame: &mut Frame,
+    note: &TextNote,
+    viewport: &super::Viewport,
+    color: iced::Color,
+) {
+    if note.text.is_empty() {
+        return;
+    }
+    let pos = viewport.world_to_screen(note.position);
+    if !point_finite(pos) {
+        return;
+    }
+    let mm = if note.font_size > 0.0 {
+        note.font_size
+    } else {
+        DEFAULT_TEXT_MM
+    };
+    let scale = crate::canvas_font_size_scale() as f64;
+    let em_mm = mm / 0.72;
+    let size_px = (em_mm * viewport.zoom_px_per_mm() * scale) as f32;
+    draw_rotated_text(
+        frame,
+        &note.text,
+        pos,
+        note.rotation,
+        size_px,
+        color,
+        note.justify_h,
+        note.justify_v,
+    );
+}
+
 /// Render a single free text note. Hidden notes early-return.
 pub fn draw_text_note(frame: &mut Frame, note: &TextNote, ctx: &RenderContext<'_>) {
     if note.text.is_empty() {
@@ -97,7 +138,7 @@ pub(crate) fn mm_to_text_pixels(stored_mm: f64, ctx: &RenderContext<'_>) -> f32 
     };
     let scale = crate::canvas_font_size_scale() as f64;
     let em_mm = mm / 0.72;
-    (em_mm * ctx.viewport.zoom_px_per_mm * scale) as f32
+    (em_mm * ctx.viewport.zoom_px_per_mm() * scale) as f32
 }
 
 /// Draw a single line of text with rotation + alignment, anchored at

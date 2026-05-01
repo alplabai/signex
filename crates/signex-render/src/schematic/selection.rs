@@ -18,6 +18,22 @@ use super::{RenderContext, SchematicSnapshot, Viewport};
 /// off the body so it doesn't overlap stroked geometry.
 pub const SELECTION_PADDING_MM: f64 = 0.762;
 
+/// **Deprecated v0.12 alias** of [`render_selection_overlay`] using
+/// the v0.11 4-argument signature `(frame, sheet, &[SelectedItem], &Viewport)`.
+/// `selected` is consulted for emphasis even though the snapshot's
+/// own selection slice is normally what the renderer reads.
+#[deprecated(since = "0.12.0", note = "use render_selection_overlay")]
+pub fn draw_selection_overlay(
+    frame: &mut Frame,
+    sheet: &signex_types::schematic::SchematicSheet,
+    selected: &[signex_types::schematic::SelectedItem],
+    viewport: &Viewport,
+) {
+    let theme = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+    let snap = SchematicSnapshot::new(sheet, &theme).with_selection(selected);
+    render_selection_overlay(frame, &snap, viewport);
+}
+
 /// Render the selection overlay for `snapshot.selection`.
 ///
 /// Iterates the snapshot's selection list, looks up each item's

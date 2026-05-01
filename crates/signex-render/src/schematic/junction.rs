@@ -20,7 +20,7 @@ pub const JUNCTION_DEFAULT_DIAMETER_MM: f64 = 0.9144;
 pub fn draw_junction(frame: &mut Frame, junction: &Junction, ctx: &RenderContext<'_>) {
     let radius_mm = effective_diameter_mm(junction) * 0.5;
     let bbox = junction_aabb(junction);
-    if !aabbs_overlap(&bbox, &ctx.viewport.visible_world_bounds()) {
+    if !aabbs_overlap(&bbox, &ctx.visible_world_bounds()) {
         return;
     }
 
@@ -28,7 +28,7 @@ pub fn draw_junction(frame: &mut Frame, junction: &Junction, ctx: &RenderContext
     if !point_finite(centre) {
         return;
     }
-    let radius_px = (radius_mm * ctx.viewport.zoom_px_per_mm).max(1.0) as f32;
+    let radius_px = (radius_mm * ctx.viewport.zoom_px_per_mm()).max(1.0) as f32;
 
     let selected = ctx.is_selected(&SelectedItem::new(junction.uuid, SelectedKind::Junction));
     let colour = if selected {

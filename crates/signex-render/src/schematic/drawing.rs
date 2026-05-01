@@ -27,7 +27,7 @@ const SELECTION_WEIGHT_FACTOR: f64 = 1.5;
 /// are private to keep the call surface small.
 pub fn draw_drawing(frame: &mut Frame, drawing: &SchDrawing, ctx: &RenderContext<'_>) {
     let bbox = drawing_aabb(drawing);
-    if !aabbs_overlap(&bbox, &ctx.viewport.visible_world_bounds()) {
+    if !aabbs_overlap(&bbox, &ctx.visible_world_bounds()) {
         return;
     }
 
@@ -168,7 +168,7 @@ fn draw_circle(
     if !point_finite(c) {
         return;
     }
-    let r_px = (radius * ctx.viewport.zoom_px_per_mm).max(0.5) as f32;
+    let r_px = (radius * ctx.viewport.zoom_px_per_mm()).max(0.5) as f32;
     let path = Path::circle(c, r_px);
     if let Some(color) = fill_colour(fill, stroke_color, ctx) {
         frame.fill(&path, color);
@@ -201,7 +201,7 @@ fn draw_arc(
     };
 
     let centre_screen = ctx.viewport.world_to_screen(Point::new(cx_w, cy_w));
-    let r_px = (r_w * ctx.viewport.zoom_px_per_mm).max(0.5) as f32;
+    let r_px = (r_w * ctx.viewport.zoom_px_per_mm()).max(0.5) as f32;
     let a0 = (start.y - cy_w).atan2(start.x - cx_w);
     let am = (mid.y - cy_w).atan2(mid.x - cx_w);
     let a1 = (end.y - cy_w).atan2(end.x - cx_w);
@@ -326,7 +326,7 @@ fn build_stroke<'a>(
         } else {
             1.0
         };
-    let px = (scaled * ctx.viewport.zoom_px_per_mm).max(1.0) as f32;
+    let px = (scaled * ctx.viewport.zoom_px_per_mm()).max(1.0) as f32;
     let colour = if selected {
         iced_color(&ctx.theme().selection)
     } else if let Some(sc) = stroke_color {

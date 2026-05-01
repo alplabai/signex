@@ -28,7 +28,7 @@ const SELECTION_WEIGHT_FACTOR: f64 = 1.5;
 pub fn draw_symbol(frame: &mut Frame, symbol: &Symbol, lib: &LibSymbol, ctx: &RenderContext<'_>) {
     // Coarse cull against viewport bounds using a generous bbox.
     let bbox = symbol_aabb(symbol, lib);
-    if !aabbs_overlap(&bbox, &ctx.viewport.visible_world_bounds()) {
+    if !aabbs_overlap(&bbox, &ctx.visible_world_bounds()) {
         return;
     }
 
@@ -315,7 +315,7 @@ fn draw_circle(
     if !point_finite(centre_s) {
         return;
     }
-    let r_px = (radius_mm * ctx.viewport.zoom_px_per_mm).max(0.5) as f32;
+    let r_px = (radius_mm * ctx.viewport.zoom_px_per_mm()).max(0.5) as f32;
     let path = Path::circle(centre_s, r_px);
     if matches!(fill, FillType::Background) {
         frame.fill(&path, fill_colour);
@@ -436,7 +436,7 @@ fn body_stroke<'a>(
         } else {
             1.0
         };
-    let px = (scaled * ctx.viewport.zoom_px_per_mm).max(1.0) as f32;
+    let px = (scaled * ctx.viewport.zoom_px_per_mm()).max(1.0) as f32;
     Stroke::default().with_width(px).with_color(colour)
 }
 

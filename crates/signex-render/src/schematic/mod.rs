@@ -41,6 +41,51 @@
 use signex_types::schematic::{Aabb, Point, SchematicSheet, SelectedItem, Symbol};
 use signex_types::theme::CanvasColors;
 
+/// **Deprecated v0.12 extension trait** that exposes the v0.11
+/// per-field accessors as inherent methods on `SchematicSheet`. Old
+/// callers (e.g. `signex-app`'s field-drag preview) reach for
+/// `sheet.symbol_position(uuid)` etc. — import this trait at the
+/// call site to keep them compiling.
+#[allow(deprecated)]
+pub trait SchematicSheetExt {
+    /// World-space position of the placed symbol identified by
+    /// `uuid`. `None` when no such symbol exists.
+    fn symbol_position(&self, uuid: uuid::Uuid) -> Option<(f64, f64)>;
+
+    /// World-space position of the *reference* field on the placed
+    /// symbol identified by `uuid`, or `None` when the symbol has no
+    /// stored reference text or doesn't exist.
+    fn symbol_reference_position(&self, uuid: uuid::Uuid) -> Option<(f64, f64)>;
+
+    /// World-space position of the *value* field on the placed
+    /// symbol identified by `uuid`.
+    fn symbol_value_position(&self, uuid: uuid::Uuid) -> Option<(f64, f64)>;
+}
+
+#[allow(deprecated)]
+impl SchematicSheetExt for SchematicSheet {
+    fn symbol_position(&self, uuid: uuid::Uuid) -> Option<(f64, f64)> {
+        self.symbols
+            .iter()
+            .find(|s| s.uuid == uuid)
+            .map(|s| (s.position.x, s.position.y))
+    }
+    fn symbol_reference_position(&self, uuid: uuid::Uuid) -> Option<(f64, f64)> {
+        self.symbols
+            .iter()
+            .find(|s| s.uuid == uuid)
+            .and_then(|s| s.ref_text.as_ref())
+            .map(|t| (t.position.x, t.position.y))
+    }
+    fn symbol_value_position(&self, uuid: uuid::Uuid) -> Option<(f64, f64)> {
+        self.symbols
+            .iter()
+            .find(|s| s.uuid == uuid)
+            .and_then(|s| s.val_text.as_ref())
+            .map(|t| (t.position.x, t.position.y))
+    }
+}
+
 pub mod bus;
 pub mod bus_entry;
 pub mod drawing;
@@ -71,19 +116,80 @@ pub use viewport::Viewport;
 // ---------------------------------------------------------------------------
 
 /// **Deprecated v0.12 alias.** v0.11's `SchematicRenderSnapshot` was
-/// owned and equivalent to [`signex_types::SchematicSheet`]; we alias
-/// it to that to keep most consumer code compiling. New rendering
-/// code should construct a borrow-based [`SchematicSnapshot`] per
-/// frame instead.
+/// equivalent to an owned [`signex_types::SchematicSheet`]; the alias
+/// keeps the v0.11 type identifier compiling. Construct a wrapper
+/// directly via `sheet.clone()` instead of the legacy
+/// `SchematicRenderSnapshot::from_sheet(...)` helper.
 #[deprecated(
     since = "0.12.0",
     note = "use SchematicSnapshot (borrow-based) or SchematicSheet (owned)"
 )]
 pub type SchematicRenderSnapshot = SchematicSheet;
 
-/// **Deprecated v0.12 alias.** Use [`RenderLayers`].
+/// **Deprecated v0.12 wrapper** for the v0.11 `SchematicRenderCache`.
+///
+/// Stores the iced canvas caches (background / content / overlay) and
+/// — for v0.11 compat — a bundled sheet so callers that ask for
+/// `cache.snapshot()` can retrieve the last sheet the cache rebuilt
+/// against. New code should pass a fresh [`SchematicSnapshot`] into
+/// [`render`] per frame.
+#[derive(Default)]
 #[deprecated(since = "0.12.0", note = "use RenderLayers")]
-pub type SchematicRenderCache = RenderLayers;
+pub struct SchematicRenderCache {
+    layers: RenderLayers,
+    sheet: Option<SchematicSheet>,
+    preview: Option<SchematicSheet>,
+}
+
+#[allow(deprecated)]
+impl SchematicRenderCache {
+    /// Build a cache from a sheet — stores a clone of the sheet so
+    /// `cache.snapshot()` can be queried later.
+    pub fn from_sheet(sheet: &SchematicSheet) -> Self {
+        Self {
+            layers: RenderLayers::default(),
+            sheet: Some(sheet.clone()),
+            preview: None,
+        }
+    }
+
+    /// Update the cached sheet and clear the iced caches according to
+    /// `invalidation`.
+    pub fn update_from_sheet(&mut self, sheet: &SchematicSheet, invalidation: RenderInvalidation) {
+        self.sheet = Some(sheet.clone());
+        invalidation.clear_into(&self.layers);
+    }
+
+    /// The most recently snapshotted sheet — panics when the cache
+    /// was constructed via `Default` and never received a sheet.
+    /// Maintains v0.11's call shape (some callers rely on a `&Sheet`
+    /// rather than `Option<&Sheet>`).
+    pub fn snapshot(&self) -> &SchematicSheet {
+        self.sheet
+            .as_ref()
+            .expect("RenderCache::snapshot called before from_sheet/update_from_sheet")
+    }
+
+    /// Optional ghost-preview snapshot for tools that paint a hover
+    /// preview (placement, drag). v0.12: always `None`; consumers
+    /// should paint previews directly on the overlay frame.
+    pub fn prepared_preview(&self) -> Option<&SchematicSheet> {
+        self.preview.as_ref()
+    }
+
+    /// Direct access to the layered iced canvas caches.
+    pub fn layers(&self) -> &RenderLayers {
+        &self.layers
+    }
+}
+
+#[allow(deprecated)]
+impl std::fmt::Debug for SchematicRenderCache {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SchematicRenderCache")
+            .finish_non_exhaustive()
+    }
+}
 
 /// **Deprecated v0.12 alias.** Use [`Viewport`].
 #[deprecated(since = "0.12.0", note = "use Viewport")]
@@ -187,6 +293,44 @@ impl RenderInvalidation {
         overlay: false,
     };
 
+    // v0.11 per-primitive invalidation flags. The new API is 3-layer
+    // (background/content/overlay) instead, so all per-primitive flags
+    // alias to "content layer dirty" — the safest, smallest superset
+    // that preserves correctness without splitting layers further.
+
+    /// **Deprecated v0.12 alias.** v0.11 per-primitive flag — now
+    /// triggers the full content-layer rebuild.
+    pub const PAPER: Self = Self::FULL;
+    /// **Deprecated v0.12 alias.** v0.11 per-primitive flag.
+    pub const WIRES: Self = Self::CONTENT_ONLY;
+    /// **Deprecated v0.12 alias.** v0.11 per-primitive flag.
+    pub const SYMBOLS: Self = Self::CONTENT_ONLY;
+    /// **Deprecated v0.12 alias.** v0.11 per-primitive flag.
+    pub const LIB_SYMBOLS: Self = Self::CONTENT_ONLY;
+    /// **Deprecated v0.12 alias.** v0.11 per-primitive flag.
+    pub const LABELS: Self = Self::CONTENT_ONLY;
+    /// **Deprecated v0.12 alias.** v0.11 per-primitive flag.
+    pub const JUNCTIONS: Self = Self::CONTENT_ONLY;
+    /// **Deprecated v0.12 alias.** v0.11 per-primitive flag.
+    pub const NO_CONNECTS: Self = Self::CONTENT_ONLY;
+    /// **Deprecated v0.12 alias.** v0.11 per-primitive flag.
+    pub const TEXT_NOTES: Self = Self::CONTENT_ONLY;
+    /// **Deprecated v0.12 alias.** v0.11 per-primitive flag.
+    pub const DRAWINGS: Self = Self::CONTENT_ONLY;
+    /// **Deprecated v0.12 alias.** v0.11 per-primitive flag.
+    pub const CHILD_SHEETS: Self = Self::CONTENT_ONLY;
+    /// **Deprecated v0.12 alias.** v0.11 per-primitive flag.
+    pub const BUS_ENTRIES: Self = Self::CONTENT_ONLY;
+    /// **Deprecated v0.12 alias.** v0.11 per-primitive flag.
+    pub const BUSES: Self = Self::CONTENT_ONLY;
+
+    /// Helper used by the per-primitive aliases above.
+    pub const CONTENT_ONLY: Self = Self {
+        background: false,
+        content: true,
+        overlay: false,
+    };
+
     /// Only the overlay layer is dirty — the typical hot path when the
     /// user changes selection, hovers, or moves a placement preview.
     #[inline]
@@ -217,6 +361,27 @@ impl RenderInvalidation {
         if self.overlay {
             layers.overlay.clear();
         }
+    }
+}
+
+impl std::ops::BitOr for RenderInvalidation {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, rhs: Self) -> Self {
+        Self {
+            background: self.background | rhs.background,
+            content: self.content | rhs.content,
+            overlay: self.overlay | rhs.overlay,
+        }
+    }
+}
+
+impl std::ops::BitOrAssign for RenderInvalidation {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: Self) {
+        self.background |= rhs.background;
+        self.content |= rhs.content;
+        self.overlay |= rhs.overlay;
     }
 }
 
@@ -408,18 +573,41 @@ impl SymbolTransform {
 // ---------------------------------------------------------------------------
 
 /// Per-frame, per-primitive context. Bundles the snapshot, viewport,
-/// and a few render-time helpers so primitive functions don't need
-/// six-argument signatures.
+/// canvas size (for frustum culling), and a few render-time helpers so
+/// primitive functions don't need six-argument signatures.
 #[derive(Debug, Clone, Copy)]
 pub struct RenderContext<'a> {
     pub snapshot: &'a SchematicSnapshot<'a>,
     pub viewport: &'a Viewport,
+    pub canvas_size: iced::Size,
 }
 
 impl<'a> RenderContext<'a> {
+    /// Build a context for a frame. `canvas_size` comes from the iced
+    /// canvas widget's bounds. Defaults to `(0, 0)` when called from
+    /// non-canvas contexts (e.g. a unit test); primitives gracefully
+    /// skip culling in that case.
     #[inline]
     pub fn new(snapshot: &'a SchematicSnapshot<'a>, viewport: &'a Viewport) -> Self {
-        Self { snapshot, viewport }
+        Self {
+            snapshot,
+            viewport,
+            canvas_size: iced::Size::ZERO,
+        }
+    }
+
+    /// Build a context with an explicit canvas size.
+    #[inline]
+    pub fn with_size(
+        snapshot: &'a SchematicSnapshot<'a>,
+        viewport: &'a Viewport,
+        canvas_size: iced::Size,
+    ) -> Self {
+        Self {
+            snapshot,
+            viewport,
+            canvas_size,
+        }
     }
 
     /// Convenience: theme palette for the active sheet.
@@ -438,6 +626,22 @@ impl<'a> RenderContext<'a> {
     pub fn is_selected(&self, item: &SelectedItem) -> bool {
         self.snapshot.selection.contains(item)
     }
+
+    /// World-space rectangle currently visible — what every primitive
+    /// frustum-culls against. When `canvas_size` is zero (test
+    /// fixtures) we return an "everything visible" `Aabb` so primitives
+    /// don't accidentally skip rendering.
+    pub fn visible_world_bounds(&self) -> signex_types::schematic::Aabb {
+        if self.canvas_size.width <= 0.0 || self.canvas_size.height <= 0.0 {
+            return signex_types::schematic::Aabb::new(
+                f64::NEG_INFINITY,
+                f64::NEG_INFINITY,
+                f64::INFINITY,
+                f64::INFINITY,
+            );
+        }
+        self.viewport.visible_world_bounds(self.canvas_size)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -447,24 +651,67 @@ impl<'a> RenderContext<'a> {
 /// Which selection rule applies to a hit-test query.
 ///
 /// - `Single` — single click; topmost item at the cursor wins.
-/// - `Enclosing` — left-to-right drag; only items fully inside the
-///   query box are returned.
-/// - `Crossing` — right-to-left drag; items overlapping the query
-///   box are returned.
+/// - `Inside` — left-to-right drag (Altium "Inside" / AutoCAD
+///   "enclosing"); only items fully inside the query box are returned.
+/// - `Touching` — right-to-left drag (Altium "Touching" / AutoCAD
+///   "crossing"); items overlapping the query box are returned.
 ///
 /// The two box modes match the Altium / AutoCAD convention documented
 /// in `docs/UX_REFERENCE_ALTIUM.md::3.1`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum SelectionMode {
     Single,
-    Enclosing,
-    Crossing,
+    /// Left-to-right drag — fully-enclosing selection.
+    #[default]
+    Inside,
+    /// Right-to-left drag — overlap-touching selection.
+    Touching,
 }
 
 // ---------------------------------------------------------------------------
 // Public render entry
 // ---------------------------------------------------------------------------
+
+/// **Deprecated v0.12 alias** for [`render`] using the v0.11 7-argument
+/// signature. The `_canvas_bounds`, `_focus_ref`, and
+/// `_color_overrides` arguments are accepted for source compatibility
+/// and currently ignored — the new render path bakes theme into the
+/// snapshot. Consumers should migrate to [`render`] over time.
+#[allow(deprecated)]
+#[deprecated(
+    since = "0.12.0",
+    note = "use schematic::render with a SchematicSnapshot"
+)]
+pub fn render_schematic(
+    frame: &mut iced::widget::canvas::Frame,
+    sheet: &SchematicSheet,
+    viewport: &Viewport,
+    theme: &CanvasColors,
+    _canvas_bounds: iced::Rectangle,
+    _focus_ref: Option<&std::collections::HashSet<uuid::Uuid>>,
+    _color_overrides: Option<&std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>>,
+) {
+    let snapshot = SchematicSnapshot::new(sheet, theme);
+    let _ = render(frame, &snapshot, viewport);
+}
+
+/// **Deprecated v0.12 shim** of the old `draw_power_port_preview`
+/// helper. v0.11 painted a translucent symbol ghost during placement;
+/// v0.12's tooling paints previews directly on the overlay frame, so
+/// this shim is a no-op pending a Wave-7 placement-tool refactor.
+#[deprecated(
+    since = "0.12.0",
+    note = "ghost previews paint directly on the overlay frame"
+)]
+pub fn draw_power_port_preview(
+    _frame: &mut iced::widget::canvas::Frame,
+    _symbol: &Symbol,
+    _viewport: &Viewport,
+    _color: iced::Color,
+) {
+    // Intentional no-op for v0.12 — see doc.
+}
 
 /// Render every primitive into a single iced canvas frame.
 ///

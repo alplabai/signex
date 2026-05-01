@@ -810,6 +810,7 @@ impl Signex {
                                     hidden: false,
                                 }),
                                 fields_autoplaced: true,
+                               fields_user_placed: false,
                                 dnp: false,
                                 in_bom: false,
                                 on_board: true,

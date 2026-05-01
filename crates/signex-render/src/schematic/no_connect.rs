@@ -21,7 +21,7 @@ const SELECTION_WEIGHT_FACTOR: f64 = 1.5;
 /// Render a single no-connect marker into the content layer's frame.
 pub fn draw_no_connect(frame: &mut Frame, nc: &NoConnect, ctx: &RenderContext<'_>) {
     let bbox = no_connect_aabb(nc);
-    if !aabbs_overlap(&bbox, &ctx.viewport.visible_world_bounds()) {
+    if !aabbs_overlap(&bbox, &ctx.visible_world_bounds()) {
         return;
     }
 
@@ -46,7 +46,7 @@ pub fn draw_no_connect(frame: &mut Frame, nc: &NoConnect, ctx: &RenderContext<'_
         } else {
             1.0
         };
-    let width_px = (width_world * ctx.viewport.zoom_px_per_mm).max(1.0) as f32;
+    let width_px = (width_world * ctx.viewport.zoom_px_per_mm()).max(1.0) as f32;
 
     let colour = if selected {
         iced_color(&ctx.theme().selection)
