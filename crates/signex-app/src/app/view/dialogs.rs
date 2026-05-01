@@ -1059,11 +1059,10 @@ impl Signex {
             .get(&super::super::state::ModalId::EnableVersionControl)
             .copied()
             .unwrap_or((0.0, 0.0));
-        wrap_modal(dialog, offset, self.ui_state.window_size, (560.0, 480.0))
+        wrap_modal(dialog, offset, self.ui_state.window_size, (520.0, 320.0))
     }
 
     fn view_enable_version_control_dialog_body(&self) -> Element<'_, Message> {
-        use crate::app::TrackItemKind;
         use iced::widget::checkbox;
         let Some(ref st) = self.ui_state.enable_version_control else {
             return container(Space::new()).into();
@@ -1094,10 +1093,44 @@ impl Signex {
             self.interaction_state.last_mouse_pos,
         );
 
+        let scope = st.scope;
         let intro = text(st.intro_text.as_str()).size(11).color(text_muted);
-        let summary = text(format!("Project: {}", st.project_name))
+        let summary_label = match scope {
+            crate::app::VersionControlScope::Project => "Project",
+            crate::app::VersionControlScope::Library => "Library",
+        };
+        let summary = text(format!("{summary_label}: {}", st.project_name))
             .size(12)
             .color(text_c);
+
+        // Per-row track toggles. Surfaced as a column (no scrollable
+        // — typical project / library layouts have <20 entries) so
+        // the modal sizing stays predictable.
+        let items_text_c = text_c;
+        let items_text_muted = text_muted;
+        let mut items_col = column![].spacing(4);
+        if !st.items.is_empty() {
+            items_col = items_col.push(
+                text("Track in repository")
+                    .size(11)
+                    .color(items_text_muted),
+            );
+            for (idx, item) in st.items.iter().enumerate() {
+                let cb: Element<'_, Message> = checkbox(item.tracked)
+                    .size(13)
+                    .on_toggle(move |_| Message::EnableVersionControlToggleItem(idx))
+                    .into();
+                let row_widget = row![
+                    cb,
+                    Space::new().width(8),
+                    text(item.relative.clone()).size(11).color(items_text_c),
+                    Space::new().width(Length::Fill),
+                    text(item.label.clone()).size(10).color(items_text_muted),
+                ]
+                .align_y(iced::Alignment::Center);
+                items_col = items_col.push(row_widget);
+            }
+        }
 
         let lfs_check: Element<'_, Message> = checkbox(st.use_lfs)
             .size(14)
@@ -1118,77 +1151,13 @@ impl Signex {
         ]
         .align_y(iced::Alignment::Start);
 
-        let tracked_count = st.items.iter().filter(|it| it.tracked).count();
-        let total_count = st.items.len();
-        let picker_header = if total_count == 0 {
-            text(
-                "No schematics, PCBs, or libraries detected — the \
-                 `.snxprj` will still be tracked.",
-            )
-            .size(10)
-            .color(text_muted)
-        } else {
-            text(format!(
-                "Tracked items ({}/{}). Untick to keep an item out of \
-                 version control via `.gitignore`.",
-                tracked_count, total_count
-            ))
-            .size(10)
-            .color(text_muted)
-        };
-
-        let mut items_col: Column<'_, Message> = column![].spacing(4);
-        for (idx, item) in st.items.iter().enumerate() {
-            let kind_label = match item.kind {
-                TrackItemKind::Schematic => "Schematic",
-                TrackItemKind::Pcb => "PCB",
-                TrackItemKind::Library => "Library",
-            };
-            let row_check: Element<'_, Message> = checkbox(item.tracked)
-                .size(14)
-                .on_toggle(move |_| Message::EnableVersionControlToggleItem(idx))
-                .into();
-            let row_el = row![
-                row_check,
-                Space::new().width(8),
-                column![
-                    text(item.relative.clone()).size(12).color(text_c),
-                    text(kind_label).size(10).color(text_muted),
-                ]
-                .spacing(1),
-            ]
-            .align_y(iced::Alignment::Start);
-            items_col = items_col.push(row_el);
+        let mut body_col = column![summary, intro].spacing(10);
+        if !st.items.is_empty() {
+            body_col = body_col.push(Space::new().height(2));
+            body_col = body_col.push(items_col);
         }
-        let items_view: Element<'_, Message> = if total_count == 0 {
-            container(Space::new().height(0)).into()
-        } else {
-            container(scrollable(items_col).height(Length::Fixed(180.0)))
-                .padding([4, 4])
-                .style(move |_: &Theme| container::Style {
-                    background: Some(Background::Color(Color::from_rgba(
-                        1.0, 1.0, 1.0, 0.02,
-                    ))),
-                    border: Border {
-                        width: 1.0,
-                        radius: 4.0.into(),
-                        color: border_c,
-                    },
-                    ..container::Style::default()
-                })
-                .into()
-        };
-
-        let mut body_col = column![
-            summary,
-            intro,
-            Space::new().height(2),
-            lfs_row,
-            Space::new().height(4),
-            picker_header,
-            items_view,
-        ]
-        .spacing(8);
+        body_col = body_col.push(Space::new().height(6));
+        body_col = body_col.push(lfs_row);
         if let Some(err) = st.error.as_ref() {
             body_col = body_col.push(
                 text(err.clone())
@@ -1221,7 +1190,7 @@ impl Signex {
                 )
                 .padding([10, 14]),
             ]
-            .width(560),
+            .width(520),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);

@@ -430,6 +430,21 @@ impl Signex {
                 items.push(self.ctx_menu_item_disabled(None, "Refresh All Pricing", None));
             }
             items.push(self.ctx_menu_sep());
+            // Enable Version Control on the library directory itself —
+            // mirrors the project-root row, but scoped to the
+            // `.snxlib` parent. Hidden once the library has a `.git/`.
+            if let Some(lib_file) = self.library_node_path_from_tree(path.as_slice())
+                && let Some(lib_dir) = lib_file.parent()
+                && !lib_dir.join(".git").exists()
+            {
+                items.push(self.ctx_menu_item_msg(
+                    None,
+                    "Enable Version Control...",
+                    "",
+                    Message::ProjectTreeAction(A::OpenLibraryEnableVersionControl(path.clone())),
+                ));
+                items.push(self.ctx_menu_sep());
+            }
             let toggle_label = if node.expanded { "Collapse" } else { "Expand" };
             items.push(self.ctx_menu_item_msg(
                 None,

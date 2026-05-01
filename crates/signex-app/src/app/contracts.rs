@@ -152,9 +152,10 @@ pub enum Message {
     CloseProjectOptions,
     /// Toggle the LFS checkbox on the Enable Version Control modal.
     EnableVersionControlToggleLfs,
-    /// Toggle a per-item checkbox in the Enable Version Control
-    /// modal's tracking-scope picker. Index points into
-    /// [`EnableVersionControlState::items`].
+    /// Toggle the per-item "Track" checkbox on the Enable Version
+    /// Control modal. Index is into `EnableVersionControlState::items`.
+    /// Untracked items are written into a generated `.gitignore` at
+    /// confirm time so they sit outside the initial commit.
     EnableVersionControlToggleItem(usize),
     /// Confirm — runs `git init` + initial commit at the project
     /// dir, refreshes the panel ctx so any in-tree dirty markers
@@ -766,6 +767,9 @@ pub enum ProjectTreeAction {
     /// initial commit covering the entire project tree. Only
     /// enabled when the project dir has no `.git/` already.
     OpenEnableVersionControl(Vec<usize>),
+    /// Right-click on a plain-files `.snxlib` node → opens the
+    /// Enable Version Control modal scoped to that library directory.
+    OpenLibraryEnableVersionControl(Vec<usize>),
 }
 
 /// State for the rename modal. Tracks the target file, the live
@@ -785,57 +789,74 @@ pub struct RenameDialogState {
     pub is_project_rename: bool,
 }
 
-/// State for the "Enable Version Control" confirm modal — opened
-/// from the project root context menu when the project directory
-/// has no `.git/` yet. Confirm runs `git2::Repository::init` at
-/// `project_dir`, optionally writes `.gitattributes` for binary-
-/// model LFS, generates a `.gitignore` covering any items the
-/// user unchecked in the per-item tracking-scope picker, and
-/// stages an initial commit covering the remaining tree.
-#[derive(Debug, Clone)]
-pub struct EnableVersionControlState {
-    pub project_path: std::path::PathBuf,
-    pub project_dir: std::path::PathBuf,
-    pub project_name: String,
-    /// "Track binary 3D models via Git LFS" checkbox. Off by
-    /// default; only writes `.gitattributes` when on.
-    pub use_lfs: bool,
-    /// Per-item tracking-scope picker rows — one entry per
-    /// `.snxsch` / `.snxpcb` / `.snxlib` discovered in the project
-    /// tree. The `.snxprj` is always tracked and not surfaced as a
-    /// row. Items the user unchecks become `.gitignore` patterns.
-    pub items: Vec<TrackItem>,
-    /// Last error from a confirm attempt — surfaces inline so the
-    /// user can fix the cause (LFS not installed, etc.) and retry
-    /// without reopening the modal.
-    pub error: Option<String>,
-    /// Pre-formatted intro paragraph that interpolates `project_dir`.
-    /// Computed once at modal-open time so the view doesn't allocate
-    /// a fresh `String` on every render frame.
-    pub intro_text: String,
-}
-
-/// Kind discriminant for a per-item row in the Enable Version
-/// Control tracking-scope picker. Drives the leading icon and
-/// `.gitignore` pattern shape (file vs directory) at confirm time.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TrackItemKind {
-    Schematic,
-    Pcb,
-    Library,
-}
-
-/// One row in the Enable Version Control tracking-scope picker.
-/// `relative` is the path relative to the project directory in
-/// forward-slash form — used both as the display string and as
-/// the `.gitignore` pattern (with a leading `/` to anchor to the
-/// project root, plus a trailing `/` for `Library` directories).
+/// One file/directory entry surfaced on the Enable Version Control
+/// picker. The user can opt items out of the initial commit by
+/// untoggling `tracked`; untracked entries get written into a
+/// generated `.gitignore` so they sit outside the repo from day one.
 #[derive(Debug, Clone)]
 pub struct TrackItem {
     pub absolute: std::path::PathBuf,
     pub relative: String,
-    pub kind: TrackItemKind,
+    /// Short kind badge ("Schematic", "PCB", "Library", "Folder",
+    /// "Config", etc.) shown next to the path in the picker.
+    pub label: String,
+    /// True for directory entries — drives trailing-slash in the
+    /// generated `.gitignore` pattern.
+    pub is_directory: bool,
     pub tracked: bool,
+}
+
+/// Whether the Enable Version Control modal is initialising a
+/// project repo (whole-project tree) or a library repo (a single
+/// `.snxlib` directory). Branches the confirm handler so it can
+/// run `git init` against the right working tree and emit the
+/// scope-appropriate log line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VersionControlScope {
+    Project,
+    Library,
+}
+
+/// State for the "Enable Version Control" confirm modal — opened
+/// from the project root context menu when the project directory
+/// has no `.git/` yet, or from a plain-files `.snxlib` node's
+/// right-click menu. Confirm runs `git2::Repository::init` at
+/// `project_dir`, optionally writes `.gitattributes` for binary-
+/// model LFS, generates a `.gitignore` from the unticked items,
+/// and stages an initial commit covering the picked subset.
+#[derive(Debug, Clone)]
+pub struct EnableVersionControlState {
+    /// Whether this dialog is scoped to a project (the `.snxprj` +
+    /// surrounding tree) or to a library directory (a single
+    /// `.snxlib` and its `symbols/` / `footprints/` siblings).
+    pub scope: VersionControlScope,
+    /// For `Project`: path to the `.snxprj` file. For `Library`:
+    /// path to the `library.toml` (or equivalent manifest) inside
+    /// the library directory — used only for display.
+    pub project_path: std::path::PathBuf,
+    /// Working tree root the new repo will live at. For projects
+    /// this is the `.snxprj` parent; for libraries the `.snxlib`
+    /// parent (i.e. the library's root_dir).
+    pub project_dir: std::path::PathBuf,
+    /// Display name for the modal header. Project: project name.
+    /// Library: filename stem of the `.snxlib` (e.g. "MyLib").
+    pub project_name: String,
+    /// Per-entry tracking picker — tickable rows for each top-level
+    /// schematic / pcb / library (project scope) or each top-level
+    /// manifest / subdirectory (library scope). Untracked rows get
+    /// written into `.gitignore` at confirm time.
+    pub items: Vec<TrackItem>,
+    /// "Track binary 3D models via Git LFS" checkbox. Off by
+    /// default; only writes `.gitattributes` when on.
+    pub use_lfs: bool,
+    /// Pre-formatted intro paragraph that interpolates the working
+    /// tree path. Computed once at modal-open time so the view
+    /// doesn't allocate a fresh `String` on every render frame.
+    pub intro_text: String,
+    /// Last error from a confirm attempt — surfaces inline so the
+    /// user can fix the cause (LFS not installed, etc.) and retry
+    /// without reopening the modal.
+    pub error: Option<String>,
 }
 
 /// State for the read-only "Project Options" modal — the v0.9 surface

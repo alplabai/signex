@@ -31,7 +31,7 @@ pub use contracts::{
     Message, ProjectCloseChoice, ProjectCloseConfirmState, ProjectOptionsState,
     ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState,
     RenameDialogState, StatusBarRequest, TabContextAction, TabContextMenuState, TextEditState,
-    TrackItem, TrackItemKind,
+    TrackItem, VersionControlScope,
 };
 pub use documents::{
     ComponentEditorTab, DrawMode, FootprintEditorState, SchematicTabSession, SymbolEditorState,
