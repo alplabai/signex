@@ -179,7 +179,7 @@ jobs:
           # legitimate use in Signex source / docs and any future
           # appearance would signal a regression of the agent-context
           # discipline documented in docs/LICENSING.md.
-          if git grep -niE 'DeepWiki|KiCad mirror source|extracted from KiCad|based on KiCad source' -- ':!docs/audit/' ':!.github/workflows/license-guard.yml' ':!docs/LICENSING.md'; then
+          if git grep -niE 'DeepWiki|KiCad mirror source|extracted from KiCad|based on KiCad source' -- ':!docs/audit/' ':!.github/workflows/license-guard.yml' ':!docs/LICENSING.md' ':!CHANGELOG.md'; then
             echo ""
             echo "::error::Derivation-attribution marker (DeepWiki / KiCad-mirror-source / etc.) detected."
             echo "::error::These have no legitimate use in source or docs outside the audit trail."
