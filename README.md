@@ -9,7 +9,7 @@
 
 <p align="center">
   <a href="https://github.com/alplabai/signex/blob/dev/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License"></a>
-  <a href="https://github.com/alplabai/signex/releases/tag/v0.10.0"><img src="https://img.shields.io/badge/version-v0.10.0-green.svg" alt="Version"></a>
+  <a href="https://github.com/alplabai/signex/releases/tag/v0.11.0"><img src="https://img.shields.io/badge/version-v0.11.0-green.svg" alt="Version"></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-1.80%2B-orange.svg" alt="Rust"></a>
   <a href="https://github.com/alplabai/signex/wiki"><img src="https://img.shields.io/badge/wiki-user%20guide-blueviolet.svg" alt="Wiki"></a>
   <a href="https://github.com/alplabai/signex/discussions"><img src="https://img.shields.io/badge/discussions-join-brightgreen.svg" alt="Discussions"></a>
@@ -46,13 +46,16 @@ formats one-way. Run it once against your project; open the resulting
 - **Signex Pro** (subscription) — adds Signal AI (Claude-powered design
   copilot), real-time collaboration, and Signex 365 cloud PLM
 
-> **Status:** Early development — **v0.10.0 shipped** — Library Browser tab
-> scaffold. The full **v0.11 Library & Polish** milestone (DBLib data
-> model, SCH Library / Footprint editors as standalone tabs,
-> Component Preview tab, Pick Symbol/Footprint picker, distributor
-> adapters) is in flight on `feature/v0.11-library` — implementation
-> work continues; tag deferred until the §16 acceptance smoke tests
-> all pass.
+> **Status:** Early development — **v0.11.0 shipped** — full DBLib
+> library subsystem (rows in TSV tables + UUID-keyed primitive
+> files, distributor adapters, Library Browser tab with master-
+> detail layout, SCH Library / Footprint editors as standalone
+> tabs, Pick Symbol / Footprint picker, filesystem auto-mount,
+> per-file Git history panel, per-item tracking-scope picker on
+> Enable Version Control, per-class filter, hardware requirements
+> documented). The next milestone is **v0.12.0** — a clean-room
+> reimplementation of the schematic renderer + autoplace from
+> Signex-only specifications.
 > [Join the discussion](https://github.com/alplabai/signex/discussions) or check the [roadmap](#roadmap).
 
 ## Features
