@@ -1103,7 +1103,9 @@ mod tests {
             position: Point::new(10.0, 20.0),
             size: (30.0, 30.0),
             stroke_width: 0.12,
-            fill: FillType::None, stroke_color: None, fill_color: None,
+            fill: FillType::None,
+            stroke_color: None,
+            fill_color: None,
             fields_autoplaced: false,
             pins: vec![
                 SheetPin {
@@ -1173,7 +1175,9 @@ mod tests {
             position: Point::new(10.0, 20.0),
             size: (30.0, 30.0),
             stroke_width: 0.12,
-            fill: FillType::None, stroke_color: None, fill_color: None,
+            fill: FillType::None,
+            stroke_color: None,
+            fill_color: None,
             fields_autoplaced: false,
             pins: vec![SheetPin {
                 uuid: moved_uuid,
@@ -1221,7 +1225,9 @@ mod tests {
             position: Point::new(10.0, 20.0),
             size: (30.0, 30.0),
             stroke_width: 0.12,
-            fill: FillType::None, stroke_color: None, fill_color: None,
+            fill: FillType::None,
+            stroke_color: None,
+            fill_color: None,
             fields_autoplaced: false,
             pins: vec![SheetPin {
                 uuid: pin_uuid,

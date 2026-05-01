@@ -413,6 +413,13 @@ pub struct Symbol {
     pub val_text: Option<TextProp>,
     #[serde(default)]
     pub fields_autoplaced: bool,
+    /// `true` when the user has manually placed at least one field on
+    /// this symbol; the autoplacer will skip the symbol so user
+    /// positioning is never silently overwritten on a subsequent
+    /// rotate / mirror. Set when a field is dragged or has its
+    /// rotation manually edited.
+    #[serde(default)]
+    pub fields_user_placed: bool,
     #[serde(default)]
     pub dnp: bool,
     #[serde(default = "default_true")]

@@ -56,6 +56,8 @@ pub mod text;
 pub mod viewport;
 pub mod wire;
 
+mod util;
+
 pub use viewport::Viewport;
 
 // ---------------------------------------------------------------------------

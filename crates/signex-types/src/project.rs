@@ -236,7 +236,9 @@ pub enum ProjectError {
         #[source]
         source: std::io::Error,
     },
-    #[error("unsupported project file extension: .{0} (Signex Community only opens .snxprj; convert Standard projects with the signex-standard-import companion)")]
+    #[error(
+        "unsupported project file extension: .{0} (Signex Community only opens .snxprj; convert Standard projects with the signex-standard-import companion)"
+    )]
     UnsupportedExtension(String),
 }
 

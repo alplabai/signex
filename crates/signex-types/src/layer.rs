@@ -135,20 +135,20 @@ impl SignexLayer {
 // ---------------------------------------------------------------------------
 
 pub const DEFAULT_LAYER_COLORS: &[(SignexLayer, [u8; 4])] = &[
-    (SignexLayer::TopCopper, [0xC8, 0x00, 0x00, 0xFF]),       // red
-    (SignexLayer::BottomCopper, [0x00, 0x00, 0xC8, 0xFF]),    // blue
-    (SignexLayer::TopSilk, [0xC8, 0xC8, 0x00, 0xFF]),         // yellow
-    (SignexLayer::BottomSilk, [0x80, 0x00, 0x80, 0xFF]),      // purple
-    (SignexLayer::TopSolderMask, [0xC8, 0x00, 0xC8, 0x80]),   // magenta semi
+    (SignexLayer::TopCopper, [0xC8, 0x00, 0x00, 0xFF]), // red
+    (SignexLayer::BottomCopper, [0x00, 0x00, 0xC8, 0xFF]), // blue
+    (SignexLayer::TopSilk, [0xC8, 0xC8, 0x00, 0xFF]),   // yellow
+    (SignexLayer::BottomSilk, [0x80, 0x00, 0x80, 0xFF]), // purple
+    (SignexLayer::TopSolderMask, [0xC8, 0x00, 0xC8, 0x80]), // magenta semi
     (SignexLayer::BottomSolderMask, [0x00, 0xC8, 0xC8, 0x80]), // cyan semi
-    (SignexLayer::TopPaste, [0x80, 0x80, 0x00, 0xC0]),        // dark yellow
-    (SignexLayer::BottomPaste, [0x00, 0x80, 0x80, 0xC0]),     // teal
-    (SignexLayer::TopAssembly, [0x80, 0x80, 0x80, 0xFF]),     // grey
-    (SignexLayer::BottomAssembly, [0x60, 0x60, 0x60, 0xFF]),  // dark grey
-    (SignexLayer::TopCourtyard, [0xC0, 0xC0, 0xC0, 0xFF]),    // light grey
+    (SignexLayer::TopPaste, [0x80, 0x80, 0x00, 0xC0]),  // dark yellow
+    (SignexLayer::BottomPaste, [0x00, 0x80, 0x80, 0xC0]), // teal
+    (SignexLayer::TopAssembly, [0x80, 0x80, 0x80, 0xFF]), // grey
+    (SignexLayer::BottomAssembly, [0x60, 0x60, 0x60, 0xFF]), // dark grey
+    (SignexLayer::TopCourtyard, [0xC0, 0xC0, 0xC0, 0xFF]), // light grey
     (SignexLayer::BottomCourtyard, [0xA0, 0xA0, 0xA0, 0xFF]), // mid grey
-    (SignexLayer::BoardOutline, [0xFF, 0xFF, 0x00, 0xFF]),    // bright yellow
-    (SignexLayer::KeepOut, [0xFF, 0x00, 0xFF, 0xFF]),         // bright magenta
+    (SignexLayer::BoardOutline, [0xFF, 0xFF, 0x00, 0xFF]), // bright yellow
+    (SignexLayer::KeepOut, [0xFF, 0x00, 0xFF, 0xFF]),   // bright magenta
 ];
 
 // ---------------------------------------------------------------------------
