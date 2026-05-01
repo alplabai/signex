@@ -684,6 +684,48 @@ impl LibraryAdapter for LocalGitAdapter {
         Ok(names)
     }
 
+    fn rename_table(&self, old: &str, new: &str, msg: &str) -> Result<(), LibraryError> {
+        let old_owned = old.to_string();
+        let new_trimmed = new.trim().to_string();
+        if new_trimmed.is_empty() {
+            return Err(LibraryError::Backend(
+                "table name cannot be empty".into(),
+            ));
+        }
+        if new_trimmed
+            .chars()
+            .any(|c| matches!(c, '/' | '\\' | '.' | ':' | '*' | '?' | '"' | '<' | '>' | '|'))
+        {
+            return Err(LibraryError::Backend(format!(
+                "table name {new_trimmed:?} contains illegal characters"
+            )));
+        }
+        if old_owned == new_trimmed {
+            return Ok(());
+        }
+        let new_owned = new_trimmed;
+        let fallback = format!("rename table {old_owned} → {new_owned}");
+        self.mutate_library_file(
+            move |lf| {
+                if !lf.tables.contains_key(&old_owned) {
+                    return Err(LibraryError::NotFound(format!(
+                        "table {old_owned:?} not found"
+                    )));
+                }
+                if lf.tables.contains_key(&new_owned) {
+                    return Err(LibraryError::Conflict(format!(
+                        "table {new_owned:?} already exists"
+                    )));
+                }
+                let entry = lf.tables.remove(&old_owned).expect("contains_key checked");
+                lf.tables.insert(new_owned, entry);
+                Ok(())
+            },
+            msg,
+            &fallback,
+        )
+    }
+
     fn delete_empty_table(&self, name: &str, msg: &str) -> Result<(), LibraryError> {
         let owned = name.to_string();
         let fallback = format!("delete table {owned}");

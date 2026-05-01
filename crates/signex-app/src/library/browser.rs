@@ -239,9 +239,121 @@ fn view_table_sidebar<'a>(
 
     let mut names: Vec<&String> = lib.tables.keys().collect();
     names.sort();
+    // Surface the most recent delete-table error at the top of the
+    // list so the user can see why a `×` click bounced (typically
+    // "table is not empty (N rows)").
+    if let Some(err) = browser.delete_error.as_ref() {
+        let library_for_dismiss = library_path.to_path_buf();
+        let dismiss = button(text("×").size(BROWSER_TEXT_SIZE).color(iced::Color::WHITE))
+            .padding([0, 6])
+            .on_press(LibraryMessage::BrowserDismissDeleteError {
+                library_path: library_for_dismiss,
+            })
+            .style(|_: &Theme, _| iced::widget::button::Style {
+                background: None,
+                text_color: iced::Color::WHITE,
+                border: Border::default(),
+                ..iced::widget::button::Style::default()
+            });
+        let banner = container(
+            row![
+                text(err.clone())
+                    .size(BROWSER_TEXT_SIZE)
+                    .color(iced::Color::WHITE)
+                    .width(Length::Fill),
+                dismiss,
+            ]
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([4, 8])
+        .style(|_: &Theme| iced::widget::container::Style {
+            background: Some(iced::Background::Color(iced::Color::from_rgb(
+                0.55, 0.18, 0.18,
+            ))),
+            border: Border {
+                radius: 3.0.into(),
+                ..Border::default()
+            },
+            ..iced::widget::container::Style::default()
+        });
+        col = col.push(container(banner).padding([2, 8]));
+    }
+
     for name in &names {
         let is_active = browser.active_table.as_deref() == Some(name.as_str());
         let count = lib.tables.get(*name).map(|v| v.len()).unwrap_or(0);
+        let is_renaming = browser
+            .renaming_table
+            .as_ref()
+            .is_some_and(|(orig, _)| orig.as_str() == name.as_str());
+
+        // Rename mode: replace the whole row with a text input +
+        // confirm/cancel buttons. Submit on Enter; Esc closes from
+        // the Library Browser tab's escape handler (TODO).
+        if is_renaming {
+            let buffer = browser
+                .renaming_table
+                .as_ref()
+                .map(|(_, b)| b.as_str())
+                .unwrap_or("");
+            let library_for_input = library_path.to_path_buf();
+            let library_for_confirm = library_path.to_path_buf();
+            let library_for_cancel = library_path.to_path_buf();
+            let name_input = text_input("table_name", buffer)
+                .on_input(move |s| LibraryMessage::BrowserSetRenameName {
+                    library_path: library_for_input.clone(),
+                    value: s,
+                })
+                .on_submit(LibraryMessage::BrowserConfirmRenameTable {
+                    library_path: library_for_confirm.clone(),
+                })
+                .padding(4)
+                .size(BROWSER_TEXT_SIZE);
+            let confirm = button(text("✓").size(BROWSER_TEXT_SIZE).color(iced::Color::WHITE))
+                .padding([4, 8])
+                .on_press(LibraryMessage::BrowserConfirmRenameTable {
+                    library_path: library_for_confirm,
+                })
+                .style(|_: &Theme, _| iced::widget::button::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgb(
+                        0.18, 0.36, 0.58,
+                    ))),
+                    text_color: iced::Color::WHITE,
+                    border: Border {
+                        width: 0.0,
+                        radius: 2.0.into(),
+                        color: iced::Color::TRANSPARENT,
+                    },
+                    ..iced::widget::button::Style::default()
+                });
+            let cancel = button(text("×").size(BROWSER_TEXT_SIZE).color(text_c))
+                .padding([4, 8])
+                .on_press(LibraryMessage::BrowserCancelRenameTable {
+                    library_path: library_for_cancel,
+                })
+                .style(|_: &Theme, _| iced::widget::button::Style {
+                    background: None,
+                    text_color: iced::Color::WHITE,
+                    border: Border::default(),
+                    ..iced::widget::button::Style::default()
+                });
+            let mut form = column![
+                row![name_input, Space::new().width(4), cancel, Space::new().width(2), confirm,]
+                    .align_y(iced::Alignment::Center),
+            ]
+            .spacing(2)
+            .padding([4, 8]);
+            if let Some(err) = browser.rename_error.as_ref() {
+                form = form.push(
+                    text(err.clone())
+                        .size(BROWSER_TEXT_SIZE)
+                        .color(iced::Color::from_rgb(0.85, 0.3, 0.3)),
+                );
+            }
+            col = col.push(form);
+            continue;
+        }
+
         let row_label = row![
             text((*name).clone())
                 .size(BROWSER_TEXT_SIZE)
@@ -257,13 +369,13 @@ fn view_table_sidebar<'a>(
         let table_owned = (*name).clone();
         let on_press = LibraryMessage::BrowserSelectTable {
             library_path: library_owned,
-            table: table_owned,
+            table: table_owned.clone(),
         };
         let bg_color = if is_active { Some(active_bg) } else { None };
         let row_btn = button(row_label)
             .padding(iced::Padding {
                 top: 5.0,
-                right: 12.0,
+                right: 6.0,
                 bottom: 5.0,
                 left: 12.0,
             })
@@ -287,7 +399,88 @@ fn view_table_sidebar<'a>(
                     ..iced::widget::button::Style::default()
                 }
             });
-        col = col.push(row_btn);
+
+        // × delete button — sibling to the select button so click
+        // routing isn't ambiguous (nested buttons confuse iced's
+        // hit testing). Adapter refuses non-empty deletes; the
+        // resulting Conflict error surfaces in the banner above.
+        let library_for_del = library_path.to_path_buf();
+        let table_for_del = (*name).clone();
+        let delete_btn = button(
+            text("×")
+                .size(BROWSER_TEXT_SIZE + 1.0)
+                .color(muted),
+        )
+        .padding([3, 8])
+        .on_press(LibraryMessage::BrowserDeleteTable {
+            library_path: library_for_del,
+            table: table_for_del,
+        })
+        .style(move |_: &Theme, status: iced::widget::button::Status| {
+            let (bg, fg) = match status {
+                iced::widget::button::Status::Hovered
+                | iced::widget::button::Status::Pressed => (
+                    Some(iced::Background::Color(iced::Color::from_rgba(
+                        0.78, 0.22, 0.22, 1.0,
+                    ))),
+                    iced::Color::WHITE,
+                ),
+                _ => (None, muted),
+            };
+            iced::widget::button::Style {
+                background: bg,
+                text_color: fg,
+                border: Border {
+                    width: 0.0,
+                    radius: 2.0.into(),
+                    color: iced::Color::TRANSPARENT,
+                },
+                ..iced::widget::button::Style::default()
+            }
+        });
+
+        // ✎ rename trigger — sibling to × so click routing stays
+        // unambiguous. Switches the row into the inline rename
+        // form above.
+        let library_for_rename = library_path.to_path_buf();
+        let table_for_rename = (*name).clone();
+        let rename_btn = button(
+            text("\u{270E}")
+                .size(BROWSER_TEXT_SIZE)
+                .color(muted),
+        )
+        .padding([3, 6])
+        .on_press(LibraryMessage::BrowserBeginRenameTable {
+            library_path: library_for_rename,
+            table: table_for_rename,
+        })
+        .style(move |_: &Theme, status: iced::widget::button::Status| {
+            let (bg, fg) = match status {
+                iced::widget::button::Status::Hovered
+                | iced::widget::button::Status::Pressed => (
+                    Some(iced::Background::Color(iced::Color::from_rgba(
+                        1.0, 1.0, 1.0, 0.10,
+                    ))),
+                    iced::Color::WHITE,
+                ),
+                _ => (None, muted),
+            };
+            iced::widget::button::Style {
+                background: bg,
+                text_color: fg,
+                border: Border {
+                    width: 0.0,
+                    radius: 2.0.into(),
+                    color: iced::Color::TRANSPARENT,
+                },
+                ..iced::widget::button::Style::default()
+            }
+        });
+
+        let row_with_actions = row![row_btn, rename_btn, delete_btn,]
+            .align_y(iced::Alignment::Center)
+            .width(Length::Fill);
+        col = col.push(row_with_actions);
     }
 
     // Inline `+ Table` form / button — same lifecycle as before, now

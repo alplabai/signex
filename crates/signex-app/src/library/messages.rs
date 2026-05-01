@@ -157,6 +157,26 @@ pub enum LibraryMessage {
     BrowserDismissDeleteError {
         library_path: PathBuf,
     },
+    /// Sidebar `✎` rename button — flip the matching row into edit
+    /// mode (text input replaces label).
+    BrowserBeginRenameTable {
+        library_path: PathBuf,
+        table: String,
+    },
+    /// Live-edit of the inline rename buffer.
+    BrowserSetRenameName {
+        library_path: PathBuf,
+        value: String,
+    },
+    /// Cancel the inline rename without writing.
+    BrowserCancelRenameTable {
+        library_path: PathBuf,
+    },
+    /// Confirm — calls `rename_table` on the adapter, swaps every
+    /// in-memory reference to the table over to the new name.
+    BrowserConfirmRenameTable {
+        library_path: PathBuf,
+    },
     /// Live-edit of the modal's "Category" field.
     NewComponentSetCategory(String),
     /// Submit the New Component modal — creates the draft, persists,

@@ -224,6 +224,22 @@ pub trait LibraryAdapter: Send + Sync {
         ))
     }
 
+    /// Rename a table — `old` → `new`, preserving every row inside.
+    /// Returns `NotFound` when `old` doesn't exist, `Conflict` when
+    /// `new` already does (no silent overwrite). The new name is
+    /// validated for filename-safe characters at the adapter
+    /// boundary.
+    fn rename_table(
+        &self,
+        _old: &str,
+        _new: &str,
+        _msg: &str,
+    ) -> Result<(), LibraryError> {
+        Err(LibraryError::Backend(
+            "rename_table not implemented for this adapter".into(),
+        ))
+    }
+
     /// Per-library class registry — the source of truth for the New
     /// Component / Edit Component class dropdowns. Adapters that
     /// don't carry a manifest return an empty list.

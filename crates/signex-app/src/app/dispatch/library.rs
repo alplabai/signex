@@ -214,6 +214,78 @@ impl Signex {
                 }
                 Task::none()
             }
+            LibraryMessage::BrowserBeginRenameTable { library_path, table } => {
+                if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
+                    s.renaming_table = Some((table.clone(), table));
+                    s.rename_error = None;
+                }
+                Task::none()
+            }
+            LibraryMessage::BrowserSetRenameName { library_path, value } => {
+                if let Some(s) = self.library.library_browsers.get_mut(&library_path)
+                    && let Some((_, buf)) = s.renaming_table.as_mut()
+                {
+                    *buf = value;
+                    s.rename_error = None;
+                }
+                Task::none()
+            }
+            LibraryMessage::BrowserCancelRenameTable { library_path } => {
+                if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
+                    s.renaming_table = None;
+                    s.rename_error = None;
+                }
+                Task::none()
+            }
+            LibraryMessage::BrowserConfirmRenameTable { library_path } => {
+                let Some(state) = self.library.library_browsers.get(&library_path).cloned() else {
+                    return Task::none();
+                };
+                let Some((old_name, new_buf)) = state.renaming_table.clone() else {
+                    return Task::none();
+                };
+                let new_trimmed = new_buf.trim().to_string();
+                if new_trimmed == old_name {
+                    if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
+                        s.renaming_table = None;
+                    }
+                    return Task::none();
+                }
+                let library_id = match self.library.library_at(&library_path) {
+                    Some(lib) => lib.library_id,
+                    None => return Task::none(),
+                };
+                let adapter = match self.library.set.get(library_id) {
+                    Some(a) => a,
+                    None => return Task::none(),
+                };
+                if let Err(error) = adapter.rename_table(
+                    &old_name,
+                    &new_trimmed,
+                    &format!("rename table {old_name} → {new_trimmed}"),
+                ) {
+                    if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
+                        s.rename_error = Some(error.to_string());
+                    }
+                    return Task::none();
+                }
+                if let Err(e) = self.library.refresh_components(&library_path) {
+                    tracing::warn!(
+                        target: "signex::library",
+                        path = %library_path.display(),
+                        error = %e,
+                        "refresh after rename table failed"
+                    );
+                }
+                if let Some(s) = self.library.library_browsers.get_mut(&library_path) {
+                    s.renaming_table = None;
+                    s.rename_error = None;
+                    if s.active_table.as_deref() == Some(old_name.as_str()) {
+                        s.active_table = Some(new_trimmed);
+                    }
+                }
+                Task::none()
+            }
             LibraryMessage::BrowserConfirmAddTable { library_path } => {
                 let Some(state) = self.library.library_browsers.get(&library_path).cloned() else {
                     return Task::none();

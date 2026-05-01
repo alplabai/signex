@@ -211,6 +211,15 @@ pub struct LibraryBrowserState {
     /// message inline alongside the strip until the user dismisses
     /// it or clicks anywhere else.
     pub delete_error: Option<String>,
+    /// In-flight rename — `(original_name, edit_buffer)`. While
+    /// `Some`, the matching sidebar row renders a text input
+    /// instead of the static label. Confirm dispatches a
+    /// `rename_table` against the adapter; Cancel clears the field
+    /// without writing.
+    pub renaming_table: Option<(String, String)>,
+    /// Most recent rename error (e.g. duplicate target name).
+    /// Surfaces inline next to the rename input.
+    pub rename_error: Option<String>,
 }
 
 /// Active sort key + direction for the Library Browser grid.
@@ -235,6 +244,8 @@ impl LibraryBrowserState {
             sort_by: None,
             adding_table: None,
             delete_error: None,
+            renaming_table: None,
+            rename_error: None,
         }
     }
 
