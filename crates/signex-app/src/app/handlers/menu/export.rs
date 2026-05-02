@@ -63,10 +63,8 @@ impl Signex {
         if let Some(files) = self.document_state.pending_pdf_files.take() {
             ctx.sheets.retain(|s| files.contains(&s.path));
             if ctx.sheets.is_empty() {
-                self.document_state.export_error = Some(
-                    "Cannot export PDF: no files selected in the Settings tab."
-                        .to_string(),
-                );
+                self.document_state.export_error =
+                    Some("Cannot export PDF: no files selected in the Settings tab.".to_string());
                 return Task::none();
             }
         }
@@ -118,7 +116,7 @@ impl Signex {
             async {
                 rfd::AsyncFileDialog::new()
                     .set_title("Export Netlist")
-                    .add_filter("Netlist", &["net"])
+                    .add_filter("Standard Netlist", &["net"])
                     .set_file_name("schematic.net")
                     .save_file()
                     .await
@@ -221,7 +219,7 @@ impl Signex {
             .iter()
             .position(|c| matches!(c, signex_output::BomColumn::Designator))
             .map(|idx| (idx, true));
-        self.document_state.bom_preview = Some(crate::app::states::BomPreviewState {
+        self.document_state.bom_preview = Some(crate::app::state::BomPreviewState {
             options: opts,
             table,
             variants,
@@ -231,9 +229,9 @@ impl Signex {
             column_hover: None,
             column_widths: std::collections::HashMap::new(),
             column_resize: None,
-            sidebar_tab: crate::app::states::BomSidebarTab::General,
+            sidebar_tab: crate::app::state::BomSidebarTab::General,
         });
-        self.handle_detach_modal(crate::app::states::ModalId::BomPreview)
+        self.handle_detach_modal(crate::app::state::ModalId::BomPreview)
     }
 
     pub(crate) fn handle_bom_preview_set_grouping(&mut self, grouping: BomGrouping) {
@@ -324,7 +322,10 @@ impl Signex {
         if let Some(preview) = self.document_state.bom_preview.as_mut() {
             preview.column_drag_press_x = None;
             if let Some(src) = preview.column_drag.take() {
-                if src != dest && src < preview.options.columns.len() && dest < preview.options.columns.len() {
+                if src != dest
+                    && src < preview.options.columns.len()
+                    && dest < preview.options.columns.len()
+                {
                     let col = preview.options.columns.remove(src);
                     let insert_at = if src < dest { dest } else { dest };
                     let insert_at = insert_at.min(preview.options.columns.len());
@@ -369,8 +370,7 @@ impl Signex {
         let (filter_label, filter_exts) = format_filter;
         let default_name_owned = default_name.to_string();
         let filter_label_owned = filter_label.to_string();
-        let filter_exts_owned: Vec<String> =
-            filter_exts.iter().map(|s| s.to_string()).collect();
+        let filter_exts_owned: Vec<String> = filter_exts.iter().map(|s| s.to_string()).collect();
 
         // Stash the live options + dismiss the preview state. The
         // detached preview window also needs to close so the OS
@@ -378,8 +378,7 @@ impl Signex {
         // `handle_print_preview_export`.
         self.document_state.pending_bom_options = Some(options);
         self.document_state.bom_preview = None;
-        let close_window =
-            self.close_detached_modal(crate::app::states::ModalId::BomPreview);
+        let close_window = self.close_detached_modal(crate::app::state::ModalId::BomPreview);
 
         let dialog = Task::perform(
             async move {
@@ -407,9 +406,9 @@ impl Signex {
         self.document_state.bom_preview = None;
         self.ui_state
             .modal_offsets
-            .remove(&crate::app::states::ModalId::BomPreview);
+            .remove(&crate::app::state::ModalId::BomPreview);
         self.ui_state.modal_dragging = None;
-        self.close_detached_modal(crate::app::states::ModalId::BomPreview)
+        self.close_detached_modal(crate::app::state::ModalId::BomPreview)
     }
 
     /// Build (or rebuild) the BomTable from the current document
@@ -550,8 +549,8 @@ impl Signex {
                 .first()
                 .map(|s| s.schematic.paper_size.as_str())
                 .unwrap_or("A4");
-            let page_size = PageSize::from_paper_name(paper_str);
-            let orientation = PageSize::default_orientation_for_paper_name(paper_str);
+            let page_size = PageSize::from_standard_str(paper_str);
+            let orientation = PageSize::default_orientation_for_standard(paper_str);
             let palette = signex_output::SchematicPalette::from(
                 &signex_types::theme::canvas_colors(self.ui_state.theme_id),
             );
@@ -566,7 +565,7 @@ impl Signex {
         // Open-modal default quality is Medium — same value seeded
         // into `PreviewState.quality` below, so the very first
         // rasterisation matches what the picker shows.
-        let initial_quality = crate::app::states::PdfQuality::Medium300;
+        let initial_quality = crate::app::state::PdfQuality::Medium300;
         let pages = PreviewRasterizer.rasterize(
             &ctx,
             &PreviewOptions {
@@ -620,14 +619,14 @@ impl Signex {
                     .collect()
             })
             .unwrap_or_default();
-        self.document_state.preview = Some(crate::app::states::PreviewState {
+        self.document_state.preview = Some(crate::app::state::PreviewState {
             pages,
             page_handles,
             selected: 0,
             pdf_options: pdf_opts,
             specific_page_input: "1".to_string(),
             zoom: 1.0,
-            active_tab: crate::app::states::PdfPreviewTab::Preview,
+            active_tab: crate::app::state::PdfPreviewTab::Preview,
             pan: (0.0, 0.0),
             panning: None,
             selected_files,
@@ -637,7 +636,7 @@ impl Signex {
         // Altium parity: open Print Preview / Export PDF as its own OS
         // window so the user can drag it off the app's client area —
         // matches the Annotate / ERC modals.
-        self.handle_detach_modal(crate::app::states::ModalId::PrintPreview)
+        self.handle_detach_modal(crate::app::state::ModalId::PrintPreview)
     }
 
     pub(crate) fn handle_print_preview_select_page(&mut self, idx: usize) {
@@ -785,10 +784,10 @@ impl Signex {
         // — matches Annotate / ERC close behaviour.
         self.ui_state
             .modal_offsets
-            .remove(&crate::app::states::ModalId::PrintPreview);
+            .remove(&crate::app::state::ModalId::PrintPreview);
         self.ui_state.modal_dragging = None;
         // Close the detached OS window if the modal was popped out.
-        self.close_detached_modal(crate::app::states::ModalId::PrintPreview)
+        self.close_detached_modal(crate::app::state::ModalId::PrintPreview)
     }
 
     /// Public alias so the dispatcher can poke a re-rasterise after
@@ -881,15 +880,15 @@ impl Signex {
     pub(crate) fn handle_print_preview_zoom(&mut self, delta_y: f32) {
         if let Some(preview) = self.document_state.preview.as_mut() {
             let factor = if delta_y > 0.0 {
-                crate::app::states::PreviewState::ZOOM_STEP
+                crate::app::state::PreviewState::ZOOM_STEP
             } else if delta_y < 0.0 {
-                1.0 / crate::app::states::PreviewState::ZOOM_STEP
+                1.0 / crate::app::state::PreviewState::ZOOM_STEP
             } else {
                 return;
             };
             preview.zoom = (preview.zoom * factor).clamp(
-                crate::app::states::PreviewState::ZOOM_MIN,
-                crate::app::states::PreviewState::ZOOM_MAX,
+                crate::app::state::PreviewState::ZOOM_MIN,
+                crate::app::state::PreviewState::ZOOM_MAX,
             );
             if preview.zoom <= 1.0 {
                 preview.pan = (0.0, 0.0);
@@ -897,7 +896,7 @@ impl Signex {
         }
     }
 
-    pub(crate) fn handle_print_preview_set_tab(&mut self, tab: crate::app::states::PdfPreviewTab) {
+    pub(crate) fn handle_print_preview_set_tab(&mut self, tab: crate::app::state::PdfPreviewTab) {
         if let Some(preview) = self.document_state.preview.as_mut() {
             preview.active_tab = tab;
         }
@@ -978,7 +977,7 @@ impl Signex {
 /// Snapshot every open engine as a `SheetSnapshot`, active engine first.
 /// Returns `None` if there is no active engine.
 fn build_export_context(
-    document_state: &crate::app::states::DocumentState,
+    document_state: &crate::app::state::DocumentState,
 ) -> Option<ExportContext> {
     let active_path = document_state.active_path.as_ref()?;
     let active_engine = document_state.engines.get(active_path)?;
@@ -987,72 +986,71 @@ fn build_export_context(
     // than just the open tabs. Sheets currently opened as tabs use the
     // live engine snapshot (so unsaved edits show in the preview);
     // unopened sheets are read straight from disk via the parser. If
-    // the active document isn't tied to a project (loose .snxsch),
+    // the active document isn't tied to a project (loose .standard_sch),
     // we fall back to the engines map so a single-sheet preview still
     // works.
-    let sheets: Vec<SheetSnapshot> =
-        if let Some(project) = document_state.active_loaded_project() {
-            let project_dir = std::path::Path::new(&project.data.dir);
-            let mut snapshots: Vec<SheetSnapshot> = Vec::new();
-            let total = project.data.sheets.len().max(1);
-            for (i, entry) in project.data.sheets.iter().enumerate() {
-                let abs_path: PathBuf = project_dir.join(&entry.filename);
-                let schematic = match document_state.engines.get(&abs_path) {
-                    Some(engine) => engine.document().clone(),
-                    None => {
-                        let parse_result = std::fs::read_to_string(&abs_path)
-                            .map_err(anyhow::Error::from)
-                            .and_then(|text| {
-                                signex_types::format::SnxSchematic::parse(&text)
-                                    .map(|snx| snx.sheet)
-                                    .map_err(anyhow::Error::from)
-                            });
-                        match parse_result {
-                            Ok(s) => s,
-                            Err(e) => {
-                                log::warn!(
-                                    "Print preview: skipping sheet {} ({}): {e}",
-                                    entry.name,
-                                    abs_path.display()
-                                );
-                                continue;
-                            }
+    let sheets: Vec<SheetSnapshot> = if let Some(project) = document_state.active_loaded_project() {
+        let project_dir = std::path::Path::new(&project.data.dir);
+        let mut snapshots: Vec<SheetSnapshot> = Vec::new();
+        let total = project.data.sheets.len().max(1);
+        for (i, entry) in project.data.sheets.iter().enumerate() {
+            let abs_path: PathBuf = project_dir.join(&entry.filename);
+            let schematic = match document_state.engines.get(&abs_path) {
+                Some(engine) => engine.document().clone(),
+                None => {
+                    let parse_result = std::fs::read_to_string(&abs_path)
+                        .map_err(anyhow::Error::from)
+                        .and_then(|text| {
+                            signex_types::format::SnxSchematic::parse(&text)
+                                .map(|snx| snx.sheet)
+                                .map_err(anyhow::Error::from)
+                        });
+                    match parse_result {
+                        Ok(s) => s,
+                        Err(e) => {
+                            log::warn!(
+                                "Print preview: skipping sheet {} ({}): {e}",
+                                entry.name,
+                                abs_path.display()
+                            );
+                            continue;
                         }
                     }
-                };
-                snapshots.push(SheetSnapshot {
-                    path: abs_path,
-                    schematic,
-                    sheet_name: entry.name.clone(),
+                }
+            };
+            snapshots.push(SheetSnapshot {
+                path: abs_path,
+                schematic,
+                sheet_name: entry.name.clone(),
+                sheet_number: i + 1,
+                sheet_count: total,
+            });
+        }
+        snapshots
+    } else {
+        let mut paths: Vec<PathBuf> = document_state.engines.keys().cloned().collect();
+        paths.sort_by_key(|p| p != active_path);
+        let sheet_count = paths.len();
+        paths
+            .into_iter()
+            .enumerate()
+            .filter_map(|(i, path)| {
+                let engine = document_state.engines.get(&path)?;
+                let sheet_name = path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("Sheet")
+                    .to_string();
+                Some(SheetSnapshot {
+                    path: path.clone(),
+                    schematic: engine.document().clone(),
+                    sheet_name,
                     sheet_number: i + 1,
-                    sheet_count: total,
-                });
-            }
-            snapshots
-        } else {
-            let mut paths: Vec<PathBuf> = document_state.engines.keys().cloned().collect();
-            paths.sort_by_key(|p| p != active_path);
-            let sheet_count = paths.len();
-            paths
-                .into_iter()
-                .enumerate()
-                .filter_map(|(i, path)| {
-                    let engine = document_state.engines.get(&path)?;
-                    let sheet_name = path
-                        .file_stem()
-                        .and_then(|s| s.to_str())
-                        .unwrap_or("Sheet")
-                        .to_string();
-                    Some(SheetSnapshot {
-                        path: path.clone(),
-                        schematic: engine.document().clone(),
-                        sheet_name,
-                        sheet_number: i + 1,
-                        sheet_count,
-                    })
+                    sheet_count,
                 })
-                .collect()
-        };
+            })
+            .collect()
+    };
 
     let tb = &active_engine.document().title_block;
     let comment = |n: usize| tb.get(&format!("comment{n}")).cloned().unwrap_or_default();
@@ -1062,10 +1060,7 @@ fn build_export_context(
         .and_then(|p| p.data.active_variant.clone())
         .unwrap_or_else(|| "Base".to_string());
     if !active_variant.eq_ignore_ascii_case("Base") {
-        custom_fields.insert(
-            "active_variant".to_string(),
-            active_variant,
-        );
+        custom_fields.insert("active_variant".to_string(), active_variant);
     }
     let metadata = ProjectMetadata {
         title: tb.get("title").cloned().unwrap_or_default(),

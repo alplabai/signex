@@ -161,6 +161,7 @@ impl Signex {
                 hidden: false,
             }),
             fields_autoplaced: true,
+            fields_user_placed: false,
             dnp: false,
             in_bom: true,
             on_board: true,
@@ -170,6 +171,15 @@ impl Signex {
             custom_properties: Vec::new(),
             pin_uuids: std::collections::HashMap::new(),
             instances: Vec::new(),
+            // Legacy lib_id-driven place flow has no `.snxlib` identity —
+            // Stage 16 of `v0.9-snxlib-as-file-plan.md` only tags
+            // placements that go through the Library picker
+            // (`handle_place_library_component`). Anything placed via
+            // `selected_component` (Standard-style lib_id) skips drift
+            // tracking by design.
+            library_id: None,
+            row_id: None,
+            library_version: String::new(),
         };
         self.apply_engine_command(signex_engine::Command::PlaceSymbol { symbol }, false, false);
 
@@ -197,19 +207,10 @@ impl Signex {
         // session starts fresh instead of inheriting the previous one.
         self.document_state.panel_ctx.pre_placement = None;
         self.interaction_state.editing_text = None;
-        {
-            let canvas = self.interaction_state.active_canvas_mut();
-            if canvas.editing_text_uuid.is_some() {
-                canvas.editing_text_uuid = None;
-                canvas.editing_text_value = None;
-                canvas.clear_content_cache();
-                canvas.clear_overlay_cache();
-            }
-        }
         // Escape / right-click also cancels the net-colour pen, the
         // z-order reference picker, and any in-flight lasso —
         // Altium-parity "one terminator kills every armed mode".
-        self.ui_state.net_color.pending_color = None;
+        self.ui_state.pending_net_color = None;
         self.interaction_state.active_canvas_mut().pending_net_color = None;
         self.ui_state.reorder_picker = None;
         self.interaction_state

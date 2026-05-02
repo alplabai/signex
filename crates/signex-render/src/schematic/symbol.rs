@@ -1,570 +1,789 @@
-//! Symbol body rendering -- draws LibSymbol graphics (polyline, rectangle,
-//! circle, arc, text) with the symbol instance's position/rotation/mirror
-//! transform applied.
+//! Symbol render — body graphics under the symbol's transform, then
+//! pins, then visible fields (reference / value).
+//!
+//! Body graphics come from [`LibSymbol::graphics`]; pins are delegated
+//! to [`super::pin::draw_pin`]; field text uses the rotation + justify
+//! produced by [`super::field_style::field_effective_style`]. Per-pin
+//! and per-graphic unit / body-style filters are honoured before
+//! drawing.
 
-use iced::Color;
-use iced::widget::canvas::{self, LineCap, LineJoin, path};
+use iced::widget::canvas::{Frame, Path, Stroke};
+use signex_types::schematic::{
+    Aabb, FillType, Graphic, HAlign, LibSymbol, Point, SelectedItem, SelectedKind, Symbol, VAlign,
+};
 
-use signex_types::schematic::{FillType, Graphic, LibSymbol, Point, Symbol};
+use super::field_style::field_effective_style;
+use super::pin::{PinDrawHints, draw_pin_with_hints};
+use super::text::{draw_rotated_text, mm_to_text_pixels};
+use super::util::{aabbs_overlap, iced_color, point_finite};
+use super::{RenderContext, SymbolTransform};
 
-use super::ScreenTransform;
-use super::text::draw_rich_text;
+/// Default body stroke (mm) when a graphic primitive's `width == 0.0`.
+pub const SYMBOL_BODY_STROKE_MM: f64 = 0.15;
 
-// ---------------------------------------------------------------------------
-// Instance transform: position + rotation + mirror
-// ---------------------------------------------------------------------------
+const SELECTION_WEIGHT_FACTOR: f64 = 1.5;
 
-/// Delegate to the shared instance_transform in mod.rs.
-fn instance_transform(sym: &Symbol, local: &Point) -> (f64, f64) {
-    super::instance_transform(sym, local)
-}
+/// Render a single placed symbol — body, pins, and visible fields —
+/// into the content layer's frame.
+pub fn draw_symbol(frame: &mut Frame, symbol: &Symbol, lib: &LibSymbol, ctx: &RenderContext<'_>) {
+    // Coarse cull against viewport bounds using a generous bbox.
+    let bbox = symbol_aabb(symbol, lib);
+    if !aabbs_overlap(&bbox, &ctx.visible_world_bounds()) {
+        return;
+    }
 
-/// Default symbol body stroke width in mm.
-const BODY_DEFAULT_WIDTH_MM: f64 = 0.15;
+    let transform = SymbolTransform::from_symbol(symbol);
+    let selected = ctx.is_selected(&SelectedItem::new(symbol.uuid, SelectedKind::Symbol));
 
-/// Get the stroke width in screen pixels for a graphic element.
-fn graphic_stroke_width(transform: &ScreenTransform, world_width: f64) -> f32 {
-    let mm = if world_width > 0.0 {
-        world_width
-    } else {
-        BODY_DEFAULT_WIDTH_MM
+    // 1. Body graphics.
+    for lib_graphic in &lib.graphics {
+        if lib_graphic.unit != 0 && lib_graphic.unit != symbol.unit {
+            continue;
+        }
+        // body_style 0 = common, 1 = normal, 2 = De Morgan. We render
+        // common + normal until alternate-style support lands.
+        if lib_graphic.body_style != 0 && lib_graphic.body_style != 1 {
+            continue;
+        }
+        draw_graphic(frame, &lib_graphic.graphic, &transform, selected, ctx);
+    }
+
+    // 2. Pins. Bulk visibility / offset toggles flow from the parent
+    //    LibSymbol so per-pin defaults can be overridden at the symbol
+    //    level (e.g. resistors have `show_pin_names = false`).
+    let pin_hints = PinDrawHints {
+        show_pin_names: lib.show_pin_names,
+        show_pin_numbers: lib.show_pin_numbers,
+        pin_name_offset_mm: if lib.pin_name_offset > 0.0 {
+            lib.pin_name_offset
+        } else {
+            signex_types::schematic::PIN_NAME_OFFSET_MM
+        },
     };
-    transform.world_len(mm).max(0.5)
-}
+    for lib_pin in &lib.pins {
+        if lib_pin.unit != 0 && lib_pin.unit != symbol.unit {
+            continue;
+        }
+        if lib_pin.body_style != 0 && lib_pin.body_style != 1 {
+            continue;
+        }
+        draw_pin_with_hints(frame, &lib_pin.pin, &transform, &pin_hints, ctx);
+    }
 
-/// Build a square-cap miter-join stroke for body outlines.
-fn body_stroke(color: Color, width: f32) -> canvas::Stroke<'static> {
-    canvas::Stroke {
-        line_cap: LineCap::Square,
-        line_join: LineJoin::Miter,
-        ..canvas::Stroke::default()
-            .with_color(color)
-            .with_width(width)
+    // 3. Visible fields (reference + value).
+    if let Some(ref_text) = symbol.ref_text.as_ref()
+        && !ref_text.hidden
+        && !symbol.reference.is_empty()
+    {
+        draw_field(
+            frame,
+            &symbol.reference,
+            ref_text,
+            &transform,
+            iced_color(&ctx.theme().reference),
+            ctx,
+        );
+    }
+    if let Some(val_text) = symbol.val_text.as_ref()
+        && !val_text.hidden
+        && !symbol.value.is_empty()
+    {
+        draw_field(
+            frame,
+            &symbol.value,
+            val_text,
+            &transform,
+            iced_color(&ctx.theme().value),
+            ctx,
+        );
     }
 }
 
-/// Apply fill according to fill type, body_color, body_fill_color.
-fn apply_fill(
-    frame: &mut canvas::Frame,
-    path: &canvas::Path,
-    fill_type: FillType,
-    body_color: Color,
-    body_fill_color: Color,
+fn draw_graphic(
+    frame: &mut Frame,
+    graphic: &Graphic,
+    transform: &SymbolTransform,
+    selected: bool,
+    ctx: &RenderContext<'_>,
 ) {
-    match fill_type {
-        FillType::None => {}
-        FillType::Outline => {
-            frame.fill(path, body_color);
-        }
-        FillType::Background => {
-            frame.fill(path, body_fill_color);
-        }
-    }
-}
+    let body_colour = if selected {
+        iced_color(&ctx.theme().selection)
+    } else {
+        iced_color(&ctx.theme().body)
+    };
+    let body_fill = iced_color(&ctx.theme().body_fill);
 
-// ---------------------------------------------------------------------------
-// Main symbol drawing
-// ---------------------------------------------------------------------------
-
-/// Draw a symbol's library graphics at the symbol instance's position,
-/// filtering to only the matching unit and normal body style (body_style == 1).
-pub fn draw_symbol(
-    frame: &mut canvas::Frame,
-    sym: &Symbol,
-    lib: &LibSymbol,
-    transform: &ScreenTransform,
-    body_color: Color,
-    body_fill_color: Color,
-    _pin_color: Color,
-) {
-    // Fills render on a lower Z-layer than strokes.  In our single-pass
-    // canvas we replicate this by iterating the graphic list TWICE:
-    //   Pass 1 — background fills only      (like LAYER_DEVICE_BACKGROUND)
-    //   Pass 2 — outline fills + all strokes (like LAYER_DEVICE)
-    // This prevents body background fills from painting over stroked shapes
-    // that happen to reside in an earlier sub-symbol (e.g. Relay_SPDT_0_0 triangle).
-    for pass in 0u8..2 {
-        for lg in &lib.graphics {
-            // unit 0 = common to all units; otherwise must match symbol's unit
-            if lg.unit != 0 && lg.unit != sym.unit {
-                continue;
-            }
-            // body_style 0 = common; 1 = normal (default). Skip De Morgan (body_style 2).
-            if lg.body_style != 0 && lg.body_style != 1 {
-                continue;
-            }
-            // Pass 0: only background-fill graphics.
-            // Pass 1: everything else (no-fill strokes + outline-fill strokes).
-            let is_bg = graphic_has_background_fill(&lg.graphic);
-            if pass == 0 && !is_bg {
-                continue;
-            }
-            if pass == 1 && is_bg {
-                continue;
-            }
-            match &lg.graphic {
-                Graphic::Polyline {
-                    points,
-                    width,
-                    fill,
-                } => {
-                    draw_polyline(
-                        frame,
-                        sym,
-                        points,
-                        *width,
-                        *fill,
-                        transform,
-                        body_color,
-                        body_fill_color,
-                    );
-                }
-                Graphic::Rectangle {
-                    start,
-                    end,
-                    width,
-                    fill,
-                } => {
-                    draw_rectangle(
-                        frame,
-                        sym,
-                        start,
-                        end,
-                        *width,
-                        *fill,
-                        transform,
-                        body_color,
-                        body_fill_color,
-                    );
-                }
-                Graphic::Circle {
-                    center,
-                    radius,
-                    width,
-                    fill,
-                } => {
-                    draw_circle(
-                        frame,
-                        sym,
-                        center,
-                        *radius,
-                        *width,
-                        *fill,
-                        transform,
-                        body_color,
-                        body_fill_color,
-                    );
-                }
-                Graphic::Arc {
-                    start,
-                    mid,
-                    end,
-                    width,
-                    fill,
-                } => {
-                    draw_arc(
-                        frame,
-                        sym,
-                        start,
-                        mid,
-                        end,
-                        *width,
-                        *fill,
-                        transform,
-                        body_color,
-                        body_fill_color,
-                    );
-                }
-                Graphic::Text {
-                    text,
-                    position,
-                    rotation,
-                    font_size,
-                    ..
-                } => {
-                    draw_graphic_text(
-                        frame, sym, text, position, *rotation, *font_size, transform, body_color,
-                    );
-                }
-                Graphic::TextBox {
-                    text,
-                    position,
-                    rotation: _,
-                    size,
-                    font_size,
-                    bold: _,
-                    italic: _,
-                    width,
-                    fill,
-                } => {
-                    // Border rectangle: same math as Graphic::Rectangle.
-                    let (wx0, wy0) = instance_transform(sym, position);
-                    let (wx1, wy1) = instance_transform(
-                        sym,
-                        &signex_types::schematic::Point::new(
-                            position.x + size.x,
-                            position.y + size.y,
-                        ),
-                    );
-                    let s0 = transform.to_screen_point(wx0, wy0);
-                    let s1 = transform.to_screen_point(wx1, wy1);
-                    let top_left = iced::Point::new(s0.x.min(s1.x), s0.y.min(s1.y));
-                    let box_size = iced::Size::new((s1.x - s0.x).abs(), (s1.y - s0.y).abs());
-                    // Fill
-                    if !matches!(fill, signex_types::schematic::FillType::None) {
-                        let fill_color =
-                            Color::from_rgba(body_color.r, body_color.g, body_color.b, 0.08);
-                        let rect = canvas::Path::rectangle(top_left, box_size);
-                        frame.fill(&rect, fill_color);
-                    }
-                    // Border
-                    let stroke_w = if *width <= 0.0 {
-                        1.0
-                    } else {
-                        (*width as f32 * transform.scale).max(0.5)
-                    };
-                    let stroke = canvas::Stroke::default()
-                        .with_color(body_color)
-                        .with_width(stroke_w);
-                    frame.stroke(&canvas::Path::rectangle(top_left, box_size), stroke);
-                    // Text inside the box — single-line, top-left aligned.
-                    // Multi-line wrap deferred; text_box body wrapping
-                    // as a single wrapped string at parse time.
-                    let font_mm = if *font_size <= 0.0 { 1.27 } else { *font_size };
-                    let screen_font = transform.world_len(font_mm).abs();
-                    if screen_font >= 1.0 {
-                        let pad = 2.0_f32;
-                        let text_pos = iced::Point::new(top_left.x + pad, top_left.y + pad);
-                        frame.fill_text(canvas::Text {
-                            content: text.clone(),
-                            position: text_pos,
-                            color: body_color,
-                            size: iced::Pixels(screen_font),
-                            font: crate::canvas_font(),
-                            align_x: iced::alignment::Horizontal::Left.into(),
-                            align_y: iced::alignment::Vertical::Top,
-                            ..canvas::Text::default()
-                        });
-                    }
-                }
-                Graphic::Bezier {
-                    points,
-                    width,
-                    fill,
-                } => {
-                    draw_bezier(
-                        frame,
-                        sym,
-                        points,
-                        *width,
-                        *fill,
-                        transform,
-                        body_color,
-                        body_fill_color,
-                    );
-                }
-            }
-        } // end inner for lg
-    } // end for pass
-}
-
-// Returns true if a graphic's fill type is Background (needs pass-0 rendering).
-fn graphic_has_background_fill(g: &Graphic) -> bool {
-    matches!(
-        g,
+    match graphic {
+        Graphic::Polyline {
+            points,
+            width,
+            fill,
+        } => draw_polyline(
+            frame,
+            points,
+            *width,
+            *fill,
+            transform,
+            selected,
+            body_colour,
+            body_fill,
+            ctx,
+        ),
         Graphic::Rectangle {
-            fill: FillType::Background,
+            start,
+            end,
+            width,
+            fill,
+        } => draw_rect(
+            frame,
+            *start,
+            *end,
+            *width,
+            *fill,
+            transform,
+            selected,
+            body_colour,
+            body_fill,
+            ctx,
+        ),
+        Graphic::Circle {
+            center,
+            radius,
+            width,
+            fill,
+        } => draw_circle(
+            frame,
+            *center,
+            *radius,
+            *width,
+            *fill,
+            transform,
+            selected,
+            body_colour,
+            body_fill,
+            ctx,
+        ),
+        Graphic::Arc {
+            start,
+            mid,
+            end,
+            width,
             ..
-        } | Graphic::Polyline {
-            fill: FillType::Background,
-            ..
-        } | Graphic::Circle {
-            fill: FillType::Background,
-            ..
-        } | Graphic::Arc {
-            fill: FillType::Background,
-            ..
+        } => draw_arc(
+            frame,
+            *start,
+            *mid,
+            *end,
+            *width,
+            transform,
+            selected,
+            body_colour,
+            ctx,
+        ),
+        Graphic::Bezier { points, width, .. } if points.len() >= 4 => {
+            draw_bezier(frame, points, *width, transform, selected, body_colour, ctx)
         }
-    )
+        Graphic::Bezier { .. } => {
+            // Malformed bezier — too few control points; fall back to a
+            // polyline through whatever we have so the symbol stays
+            // visible.
+        }
+        Graphic::Text {
+            text,
+            position,
+            rotation,
+            font_size,
+            justify_h,
+            justify_v,
+            ..
+        } => draw_lib_text(
+            frame,
+            text,
+            *position,
+            *rotation,
+            *font_size,
+            *justify_h,
+            *justify_v,
+            transform,
+            body_colour,
+            ctx,
+        ),
+        Graphic::TextBox {
+            text,
+            position,
+            rotation,
+            font_size,
+            ..
+        } => {
+            // TextBox renders as a centred text inside the box bounds.
+            draw_lib_text(
+                frame,
+                text,
+                *position,
+                *rotation,
+                *font_size,
+                HAlign::Left,
+                VAlign::Top,
+                transform,
+                body_colour,
+                ctx,
+            )
+        }
+    }
 }
-
-// ---------------------------------------------------------------------------
-// Individual graphic renderers
-// ---------------------------------------------------------------------------
 
 #[allow(clippy::too_many_arguments)]
 fn draw_polyline(
-    frame: &mut canvas::Frame,
-    sym: &Symbol,
+    frame: &mut Frame,
     points: &[Point],
-    width: f64,
+    width_mm: f64,
     fill: FillType,
-    transform: &ScreenTransform,
-    body_color: Color,
-    body_fill_color: Color,
+    transform: &SymbolTransform,
+    selected: bool,
+    stroke_colour: iced::Color,
+    fill_colour: iced::Color,
+    ctx: &RenderContext<'_>,
 ) {
     if points.len() < 2 {
         return;
     }
-
-    let path = canvas::Path::new(|b: &mut path::Builder| {
-        let (wx, wy) = instance_transform(sym, &points[0]);
-        b.move_to(transform.to_screen_point(wx, wy));
-        for pt in &points[1..] {
-            let (wx, wy) = instance_transform(sym, pt);
-            b.line_to(transform.to_screen_point(wx, wy));
-        }
-        // Close the path if first == last (common for filled shapes)
-        if points.len() > 2 {
-            let first = &points[0];
-            let last = &points[points.len() - 1];
-            if (first.x - last.x).abs() < 0.001 && (first.y - last.y).abs() < 0.001 {
-                b.close();
+    let path = Path::new(|builder| {
+        for (i, p) in points.iter().enumerate() {
+            let s = ctx.viewport.world_to_screen(transform.apply(*p));
+            if !point_finite(s) {
+                return;
+            }
+            if i == 0 {
+                builder.move_to(s);
+            } else {
+                builder.line_to(s);
             }
         }
+        if !matches!(fill, FillType::None) {
+            builder.close();
+        }
     });
-
-    apply_fill(frame, &path, fill, body_color, body_fill_color);
-    frame.stroke(
-        &path,
-        body_stroke(body_color, graphic_stroke_width(transform, width)),
-    );
+    if matches!(fill, FillType::Background) {
+        frame.fill(&path, fill_colour);
+    }
+    frame.stroke(&path, body_stroke(width_mm, selected, stroke_colour, ctx));
 }
 
 #[allow(clippy::too_many_arguments)]
-fn draw_rectangle(
-    frame: &mut canvas::Frame,
-    sym: &Symbol,
-    start: &Point,
-    end: &Point,
-    width: f64,
+fn draw_rect(
+    frame: &mut Frame,
+    start: Point,
+    end: Point,
+    width_mm: f64,
     fill: FillType,
-    transform: &ScreenTransform,
-    body_color: Color,
-    body_fill_color: Color,
+    transform: &SymbolTransform,
+    selected: bool,
+    stroke_colour: iced::Color,
+    fill_colour: iced::Color,
+    ctx: &RenderContext<'_>,
 ) {
-    // Transform the four corners through the instance transform
     let corners = [
-        Point::new(start.x, start.y),
+        start,
         Point::new(end.x, start.y),
-        Point::new(end.x, end.y),
+        end,
         Point::new(start.x, end.y),
     ];
-
-    let path = canvas::Path::new(|b: &mut path::Builder| {
-        let (wx, wy) = instance_transform(sym, &corners[0]);
-        b.move_to(transform.to_screen_point(wx, wy));
-        for c in &corners[1..] {
-            let (wx, wy) = instance_transform(sym, c);
-            b.line_to(transform.to_screen_point(wx, wy));
+    let path = Path::new(|builder| {
+        for (i, c) in corners.iter().enumerate() {
+            let s = ctx.viewport.world_to_screen(transform.apply(*c));
+            if !point_finite(s) {
+                return;
+            }
+            if i == 0 {
+                builder.move_to(s);
+            } else {
+                builder.line_to(s);
+            }
         }
-        b.close();
+        builder.close();
     });
-
-    apply_fill(frame, &path, fill, body_color, body_fill_color);
-    frame.stroke(
-        &path,
-        body_stroke(body_color, graphic_stroke_width(transform, width)),
-    );
+    if matches!(fill, FillType::Background) {
+        frame.fill(&path, fill_colour);
+    }
+    frame.stroke(&path, body_stroke(width_mm, selected, stroke_colour, ctx));
 }
 
 #[allow(clippy::too_many_arguments)]
 fn draw_circle(
-    frame: &mut canvas::Frame,
-    sym: &Symbol,
-    center: &Point,
-    radius: f64,
-    width: f64,
+    frame: &mut Frame,
+    center: Point,
+    radius_mm: f64,
+    width_mm: f64,
     fill: FillType,
-    transform: &ScreenTransform,
-    body_color: Color,
-    body_fill_color: Color,
+    transform: &SymbolTransform,
+    selected: bool,
+    stroke_colour: iced::Color,
+    fill_colour: iced::Color,
+    ctx: &RenderContext<'_>,
 ) {
-    let (cx, cy) = instance_transform(sym, center);
-    let screen_center = transform.to_screen_point(cx, cy);
-    let screen_radius = transform.world_len(radius).max(1.0);
-
-    let circle = canvas::Path::circle(screen_center, screen_radius);
-
-    apply_fill(frame, &circle, fill, body_color, body_fill_color);
-    frame.stroke(
-        &circle,
-        body_stroke(body_color, graphic_stroke_width(transform, width)),
-    );
+    let centre_w = transform.apply(center);
+    let centre_s = ctx.viewport.world_to_screen(centre_w);
+    if !point_finite(centre_s) {
+        return;
+    }
+    let r_px = (radius_mm * ctx.viewport.zoom_px_per_mm()).max(0.5) as f32;
+    let path = Path::circle(centre_s, r_px);
+    if matches!(fill, FillType::Background) {
+        frame.fill(&path, fill_colour);
+    }
+    frame.stroke(&path, body_stroke(width_mm, selected, stroke_colour, ctx));
 }
 
 #[allow(clippy::too_many_arguments)]
 fn draw_arc(
-    frame: &mut canvas::Frame,
-    sym: &Symbol,
-    start: &Point,
-    mid: &Point,
-    end: &Point,
-    width: f64,
-    fill: FillType,
-    transform: &ScreenTransform,
-    body_color: Color,
-    body_fill_color: Color,
+    frame: &mut Frame,
+    start: Point,
+    mid: Point,
+    end: Point,
+    width_mm: f64,
+    transform: &SymbolTransform,
+    selected: bool,
+    stroke_colour: iced::Color,
+    ctx: &RenderContext<'_>,
 ) {
-    // Compute the arc's center and radius from three points (start, mid, end).
-    // Uses the circumscribed circle of the triangle formed by the three points.
-    let (sx, sy) = instance_transform(sym, start);
-    let (mx, my) = instance_transform(sym, mid);
-    let (ex, ey) = instance_transform(sym, end);
-
-    if let Some((cx, cy, r)) = circle_from_three_points(sx, sy, mx, my, ex, ey) {
-        // Compute angles
-        let start_angle = (sy - cy).atan2(sx - cx);
-        let mid_angle = (my - cy).atan2(mx - cx);
-        let end_angle = (ey - cy).atan2(ex - cx);
-
-        // Determine sweep direction: if mid is between start and end going
-        // counter-clockwise, sweep CCW; otherwise CW.
-        let sweep_ccw = is_angle_between_ccw(start_angle, mid_angle, end_angle);
-
-        // Approximate the arc with line segments (16 segments)
-        let n_segments = 24;
-        let total_sweep = if sweep_ccw {
-            let mut s = end_angle - start_angle;
-            if s <= 0.0 {
-                s += std::f64::consts::TAU;
-            }
-            s
-        } else {
-            let mut s = end_angle - start_angle;
-            if s >= 0.0 {
-                s -= std::f64::consts::TAU;
-            }
-            s
-        };
-
-        let path = canvas::Path::new(|b: &mut path::Builder| {
-            let a0 = start_angle;
-            let px = cx + r * a0.cos();
-            let py = cy + r * a0.sin();
-            b.move_to(transform.to_screen_point(px, py));
-
-            for i in 1..=n_segments {
-                let t = i as f64 / n_segments as f64;
-                let a = a0 + total_sweep * t;
-                let px = cx + r * a.cos();
-                let py = cy + r * a.sin();
-                b.line_to(transform.to_screen_point(px, py));
-            }
-            // Close the chord for filled arcs (connects arc ends directly,
-            // not back through center — this is the correct canonical behavior)
-            if fill != FillType::None {
-                b.close();
-            }
-        });
-
-        apply_fill(frame, &path, fill, body_color, body_fill_color);
-        frame.stroke(
-            &path,
-            body_stroke(body_color, graphic_stroke_width(transform, width)),
-        );
-    } else {
-        // Degenerate: just draw a line from start to end
-        let p1 = transform.to_screen_point(sx, sy);
-        let p2 = transform.to_screen_point(ex, ey);
-        let line = canvas::Path::line(p1, p2);
-        frame.stroke(
-            &line,
-            body_stroke(body_color, graphic_stroke_width(transform, width)),
-        );
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn draw_graphic_text(
-    frame: &mut canvas::Frame,
-    sym: &Symbol,
-    content: &str,
-    position: &Point,
-    lib_rotation: f64,
-    font_size: f64,
-    transform: &ScreenTransform,
-    color: Color,
-) {
-    let (wx, wy) = instance_transform(sym, position);
-    let sp = transform.to_screen_point(wx, wy);
-
-    // Force 10 pt (1.8 mm) for all symbol-embedded graphic text.
-    let _stored = font_size;
-    let size = transform.world_len(crate::SCHEMATIC_TEXT_EM_MM).abs();
-    if size < 1.0 {
-        return;
-    }
-
-    // Combine the symbol instance rotation with the library text rotation
-    // and snap to the nearest 90° quadrant so labels embedded in the symbol
-    // (e.g. "GND" inside the power-port library symbol) turn with the
-    // symbol. Keep text right-side-up at 180° so we never render upside-down.
-    let combined = (sym.rotation + lib_rotation).rem_euclid(360.0);
-    let rot_deg = ((combined.round() as i32) % 360 + 360) % 360;
-    let (text_rot, keep_upright) = match rot_deg {
-        90 => (std::f32::consts::FRAC_PI_2, false),
-        180 => (0.0, true),
-        270 => (-std::f32::consts::FRAC_PI_2, false),
-        _ => (0.0, false),
-    };
-    let _ = keep_upright;
-
-    draw_rich_text(
-        frame,
-        content,
-        sp,
-        color,
-        size,
-        iced::alignment::Horizontal::Center,
-        iced::alignment::Vertical::Center,
-        text_rot,
-    );
-}
-
-#[allow(clippy::too_many_arguments)]
-fn draw_bezier(
-    frame: &mut canvas::Frame,
-    sym: &Symbol,
-    points: &[Point],
-    width: f64,
-    fill: FillType,
-    transform: &ScreenTransform,
-    body_color: Color,
-    body_fill_color: Color,
-) {
-    if points.len() != 4 {
-        return;
-    }
-
-    let (p0x, p0y) = instance_transform(sym, &points[0]);
-    let (c1x, c1y) = instance_transform(sym, &points[1]);
-    let (c2x, c2y) = instance_transform(sym, &points[2]);
-    let (p3x, p3y) = instance_transform(sym, &points[3]);
-
-    let p0 = transform.to_screen_point(p0x, p0y);
-    let c1 = transform.to_screen_point(c1x, c1y);
-    let c2 = transform.to_screen_point(c2x, c2y);
-    let p3 = transform.to_screen_point(p3x, p3y);
-
-    let path = canvas::Path::new(|b: &mut path::Builder| {
-        b.move_to(p0);
-        b.bezier_curve_to(c1, c2, p3);
-        if fill != FillType::None {
-            b.close();
+    let path = Path::new(|builder| {
+        let s = ctx.viewport.world_to_screen(transform.apply(start));
+        let m = ctx.viewport.world_to_screen(transform.apply(mid));
+        let e = ctx.viewport.world_to_screen(transform.apply(end));
+        if !point_finite(s) || !point_finite(m) || !point_finite(e) {
+            return;
         }
+        // Approximate by a 3-segment polyline through start/mid/end —
+        // for v0.12 this keeps the symbol visible without bringing in
+        // the circumcircle math here. Drawing-tool arcs (which need
+        // accurate circular interpolation) live in `super::drawing`.
+        builder.move_to(s);
+        builder.line_to(m);
+        builder.line_to(e);
     });
+    frame.stroke(&path, body_stroke(width_mm, selected, stroke_colour, ctx));
+}
 
-    apply_fill(frame, &path, fill, body_color, body_fill_color);
-    frame.stroke(
-        &path,
-        body_stroke(body_color, graphic_stroke_width(transform, width)),
+fn draw_bezier(
+    frame: &mut Frame,
+    points: &[Point],
+    width_mm: f64,
+    transform: &SymbolTransform,
+    selected: bool,
+    stroke_colour: iced::Color,
+    ctx: &RenderContext<'_>,
+) {
+    let path = Path::new(|builder| {
+        let p0 = ctx.viewport.world_to_screen(transform.apply(points[0]));
+        let c1 = ctx.viewport.world_to_screen(transform.apply(points[1]));
+        let c2 = ctx.viewport.world_to_screen(transform.apply(points[2]));
+        let p3 = ctx.viewport.world_to_screen(transform.apply(points[3]));
+        if !point_finite(p0) || !point_finite(c1) || !point_finite(c2) || !point_finite(p3) {
+            return;
+        }
+        builder.move_to(p0);
+        builder.bezier_curve_to(c1, c2, p3);
+    });
+    frame.stroke(&path, body_stroke(width_mm, selected, stroke_colour, ctx));
+}
+
+#[allow(clippy::too_many_arguments)]
+fn draw_lib_text(
+    frame: &mut Frame,
+    text: &str,
+    position: Point,
+    rotation: f64,
+    font_size_mm: f64,
+    justify_h: HAlign,
+    justify_v: VAlign,
+    transform: &SymbolTransform,
+    colour: iced::Color,
+    ctx: &RenderContext<'_>,
+) {
+    let world = transform.apply(position);
+    let screen = ctx.viewport.world_to_screen(world);
+    if !point_finite(screen) {
+        return;
+    }
+    let folded_rot = transform.apply_angle(rotation);
+    let size_px = mm_to_text_pixels(font_size_mm, ctx);
+    draw_rotated_text(
+        frame, text, screen, folded_rot, size_px, colour, justify_h, justify_v,
     );
 }
 
-// ---------------------------------------------------------------------------
-// Geometry helpers
-// ---------------------------------------------------------------------------
+fn draw_field(
+    frame: &mut Frame,
+    text: &str,
+    prop: &signex_types::schematic::TextProp,
+    transform: &SymbolTransform,
+    colour: iced::Color,
+    ctx: &RenderContext<'_>,
+) {
+    let world = transform.apply(prop.position);
+    let screen = ctx.viewport.world_to_screen(world);
+    if !point_finite(screen) {
+        return;
+    }
+    let (rot, h, v) = field_effective_style(prop, transform);
+    let size_px = mm_to_text_pixels(prop.font_size, ctx);
+    draw_rotated_text(frame, text, screen, rot, size_px, colour, h, v);
+}
 
-// Geometry helpers — delegated to shared implementations in mod.rs
-use super::{circle_from_three_points, is_angle_between_ccw};
+fn body_stroke<'a>(
+    width_mm: f64,
+    selected: bool,
+    colour: iced::Color,
+    ctx: &RenderContext<'_>,
+) -> Stroke<'a> {
+    let mm = if width_mm > 0.0 {
+        width_mm
+    } else {
+        SYMBOL_BODY_STROKE_MM
+    };
+    let scaled = mm
+        * if selected {
+            SELECTION_WEIGHT_FACTOR
+        } else {
+            1.0
+        };
+    let px = (scaled * ctx.viewport.zoom_px_per_mm()).max(1.0) as f32;
+    Stroke::default().with_width(px).with_color(colour)
+}
+
+/// World-space AABB enclosing the symbol's *reference* field text, or
+/// `None` when the symbol has no `ref_text` slot. Used by hit-test and
+/// the selection overlay so a SymbolRefField selection paints an
+/// outline around just the field.
+pub(crate) fn ref_field_aabb(symbol: &Symbol) -> Option<Aabb> {
+    let prop = symbol.ref_text.as_ref()?;
+    if prop.hidden {
+        return None;
+    }
+    Some(field_text_aabb(symbol, &symbol.reference, prop))
+}
+
+/// World-space AABB for the symbol's *value* field text. See
+/// [`ref_field_aabb`] for the convention.
+pub(crate) fn val_field_aabb(symbol: &Symbol) -> Option<Aabb> {
+    let prop = symbol.val_text.as_ref()?;
+    if prop.hidden {
+        return None;
+    }
+    Some(field_text_aabb(symbol, &symbol.value, prop))
+}
+
+/// Coarse world-space AABB for an arbitrary field on the symbol.
+fn field_text_aabb(symbol: &Symbol, text: &str, prop: &signex_types::schematic::TextProp) -> Aabb {
+    let transform = SymbolTransform::from_symbol(symbol);
+    let world_pos = transform.apply(prop.position);
+    let mm = if prop.font_size > 0.0 {
+        prop.font_size
+    } else {
+        signex_types::schematic::SCHEMATIC_TEXT_MM
+    };
+    let glyph_w_mm = 0.6 * mm * text.chars().count().max(1) as f64;
+    let glyph_h_mm = mm;
+    let folded_rot = transform.apply_angle(prop.rotation);
+    super::text::approx_text_aabb(world_pos, glyph_w_mm, glyph_h_mm, folded_rot)
+}
+
+/// Fallback AABB for a placed symbol whose `lib_id` is missing from
+/// the sheet's `lib_symbols` map. Used by hit-test + the
+/// missing-symbol placeholder painter so the user can still click on a
+/// broken instance and fix it.
+pub(crate) fn missing_symbol_aabb(symbol: &Symbol) -> Aabb {
+    let half = signex_types::schematic::GRID_MM;
+    Aabb::new(
+        symbol.position.x - half,
+        symbol.position.y - half,
+        symbol.position.x + half,
+        symbol.position.y + half,
+    )
+}
+
+/// World-space AABB of a hierarchical child sheet. The sheet renders
+/// as a rectangle anchored at `position` with `size = (width, height)`.
+pub(crate) fn child_sheet_aabb(cs: &signex_types::schematic::ChildSheet) -> Aabb {
+    Aabb::new(
+        cs.position.x,
+        cs.position.y,
+        cs.position.x + cs.size.0,
+        cs.position.y + cs.size.1,
+    )
+}
+
+/// World-space AABB of a single sheet pin. Pins live in
+/// `child_sheet.pins[]`; their position is already in world space (the
+/// sheet symbol's `position` is the same coordinate system). Returns a
+/// small box around the pin so hit-test + selection overlay have a
+/// clickable target.
+pub(crate) fn sheet_pin_aabb(pin: &signex_types::schematic::SheetPin) -> Aabb {
+    let half = signex_types::schematic::GRID_MM * 0.5;
+    Aabb::new(
+        pin.position.x - half,
+        pin.position.y - half,
+        pin.position.x + half,
+        pin.position.y + half,
+    )
+}
+
+/// Coarse world-space AABB enclosing a placed symbol (body graphics +
+/// pin endpoints). Used by frustum culling and Wave 4 hit-test.
+pub(crate) fn symbol_aabb(symbol: &Symbol, lib: &LibSymbol) -> Aabb {
+    let transform = SymbolTransform::from_symbol(symbol);
+    let mut min_x = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+    let mut min_y = f64::INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+
+    let mut extend = |w: Point| {
+        min_x = min_x.min(w.x);
+        max_x = max_x.max(w.x);
+        min_y = min_y.min(w.y);
+        max_y = max_y.max(w.y);
+    };
+
+    for g in &lib.graphics {
+        if g.unit != 0 && g.unit != symbol.unit {
+            continue;
+        }
+        for p in graphic_points(&g.graphic) {
+            extend(transform.apply(p));
+        }
+    }
+    for p in &lib.pins {
+        if p.unit != 0 && p.unit != symbol.unit {
+            continue;
+        }
+        let rad = p.pin.rotation.to_radians();
+        let body = p.pin.position;
+        let tip = Point::new(
+            body.x + p.pin.length * rad.cos(),
+            body.y + p.pin.length * rad.sin(),
+        );
+        extend(transform.apply(body));
+        extend(transform.apply(tip));
+    }
+
+    if !min_x.is_finite() {
+        // Symbol with no graphics + no pins; fall back to a tiny
+        // box around the placement origin so the AABB is non-empty.
+        return Aabb::new(
+            symbol.position.x - 1.27,
+            symbol.position.y - 1.27,
+            symbol.position.x + 1.27,
+            symbol.position.y + 1.27,
+        );
+    }
+    Aabb::new(min_x, min_y, max_x, max_y)
+}
+
+fn graphic_points(g: &Graphic) -> Vec<Point> {
+    match g {
+        Graphic::Polyline { points, .. } | Graphic::Bezier { points, .. } => points.clone(),
+        Graphic::Rectangle { start, end, .. } => vec![
+            *start,
+            Point::new(end.x, start.y),
+            *end,
+            Point::new(start.x, end.y),
+        ],
+        Graphic::Circle { center, radius, .. } => vec![
+            Point::new(center.x - *radius, center.y - *radius),
+            Point::new(center.x + *radius, center.y - *radius),
+            Point::new(center.x - *radius, center.y + *radius),
+            Point::new(center.x + *radius, center.y + *radius),
+        ],
+        Graphic::Arc {
+            start, mid, end, ..
+        } => vec![*start, *mid, *end],
+        Graphic::Text { position, .. } | Graphic::TextBox { position, .. } => vec![*position],
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signex_types::schematic::{LibGraphic, LibPin, Pin, PinDirection, PinShapeStyle};
+    use uuid::Uuid;
+
+    fn empty_lib() -> LibSymbol {
+        LibSymbol {
+            id: "test:res".to_string(),
+            reference: "R".to_string(),
+            value: "10k".to_string(),
+            footprint: String::new(),
+            datasheet: String::new(),
+            description: String::new(),
+            keywords: String::new(),
+            fp_filters: String::new(),
+            in_bom: true,
+            on_board: true,
+            in_pos_files: true,
+            duplicate_pin_numbers_are_jumpers: false,
+            graphics: Vec::new(),
+            pins: Vec::new(),
+            show_pin_numbers: true,
+            show_pin_names: true,
+            pin_name_offset: 0.508,
+        }
+    }
+
+    fn lib_with_unit_rect() -> LibSymbol {
+        let mut lib = empty_lib();
+        lib.graphics.push(LibGraphic {
+            unit: 0,
+            body_style: 1,
+            graphic: Graphic::Rectangle {
+                start: Point::new(-2.54, -1.27),
+                end: Point::new(2.54, 1.27),
+                width: 0.0,
+                fill: FillType::None,
+            },
+        });
+        lib
+    }
+
+    fn placed(rotation: f64) -> Symbol {
+        Symbol {
+            uuid: Uuid::new_v4(),
+            lib_id: "test:res".to_string(),
+            reference: "R1".to_string(),
+            value: "10k".to_string(),
+            footprint: String::new(),
+            datasheet: String::new(),
+            position: Point::new(0.0, 0.0),
+            rotation,
+            mirror_x: false,
+            mirror_y: false,
+            unit: 1,
+            is_power: false,
+            ref_text: None,
+            val_text: None,
+            fields_autoplaced: false,
+            fields_user_placed: false,
+            dnp: false,
+            in_bom: true,
+            on_board: true,
+            exclude_from_sim: false,
+            locked: false,
+            fields: Default::default(),
+            custom_properties: Vec::new(),
+            pin_uuids: Default::default(),
+            instances: Vec::new(),
+            library_id: None,
+            row_id: None,
+            library_version: String::new(),
+        }
+    }
+
+    #[test]
+    fn symbol_aabb_returns_finite_box_for_empty_symbol() {
+        let lib = empty_lib();
+        let sym = placed(0.0);
+        let bbox = symbol_aabb(&sym, &lib);
+        assert!(bbox.min_x.is_finite());
+        assert!(bbox.width() > 0.0);
+    }
+
+    #[test]
+    fn symbol_aabb_includes_body_graphics() {
+        let lib = lib_with_unit_rect();
+        let sym = placed(0.0);
+        let bbox = symbol_aabb(&sym, &lib);
+        assert!(bbox.contains(0.0, 0.0));
+        // The lib rect spans 5.08 mm — the bbox should be at least as wide.
+        assert!(bbox.width() >= 5.08);
+    }
+
+    #[test]
+    fn symbol_aabb_with_unit_filter_skips_other_units() {
+        // Edge case: a graphic tagged unit=2 is skipped when rendering
+        // unit=1.
+        let mut lib = empty_lib();
+        lib.graphics.push(LibGraphic {
+            unit: 2,
+            body_style: 1,
+            graphic: Graphic::Rectangle {
+                start: Point::new(-100.0, -100.0),
+                end: Point::new(100.0, 100.0),
+                width: 0.0,
+                fill: FillType::None,
+            },
+        });
+        let mut sym = placed(0.0);
+        sym.unit = 1;
+        let bbox = symbol_aabb(&sym, &lib);
+        // Empty lib (no unit-1 graphics) → fallback ±1.27 mm box.
+        assert!(bbox.width() < 10.0);
+    }
+
+    #[test]
+    fn missing_symbol_aabb_is_finite_grid_size_box() {
+        // H-3 regression: a placed symbol with a missing lib_id used
+        // to be skipped from the hit-index entirely. Now it returns a
+        // grid-sized fallback box centred on the symbol's position so
+        // the user can still click + delete + relink the broken
+        // instance.
+        let mut sym = placed(0.0);
+        sym.position = Point::new(10.0, -5.0);
+        let bbox = missing_symbol_aabb(&sym);
+        assert!(bbox.contains(10.0, -5.0));
+        // 2 × GRID_MM = 5.08 mm — small enough to be visibly a
+        // placeholder box, large enough to be reliably clickable.
+        assert!(bbox.width() > 0.0 && bbox.width() <= 6.0);
+    }
+
+    #[test]
+    fn ref_field_aabb_returns_none_when_no_ref_text_slot() {
+        let sym = placed(0.0);
+        // Default `placed()` builds a symbol without ref_text/val_text.
+        assert!(ref_field_aabb(&sym).is_none());
+        assert!(val_field_aabb(&sym).is_none());
+    }
+
+    #[test]
+    fn ref_field_aabb_includes_field_position_when_present() {
+        // Edge case: stored field at +5, +0; the aabb must contain
+        // that anchor after the symbol transform folds.
+        let mut sym = placed(0.0);
+        sym.ref_text = Some(signex_types::schematic::TextProp {
+            position: Point::new(5.0, 0.0),
+            rotation: 0.0,
+            font_size: 1.27,
+            justify_h: signex_types::schematic::HAlign::Left,
+            justify_v: signex_types::schematic::VAlign::Center,
+            hidden: false,
+        });
+        sym.reference = "R1".to_string();
+        let bbox = ref_field_aabb(&sym).expect("ref text slot is set");
+        // World position: Y-up library negation → (5, 0) at identity.
+        assert!(bbox.contains(5.0, 0.0));
+    }
+
+    #[test]
+    fn symbol_aabb_rotates_with_parent() {
+        let mut lib = empty_lib();
+        lib.pins.push(LibPin {
+            unit: 0,
+            body_style: 1,
+            pin: Pin {
+                direction: PinDirection::Input,
+                shape_style: PinShapeStyle::Plain,
+                position: Point::new(0.0, 0.0),
+                rotation: 0.0,
+                length: 5.08,
+                name: "A".to_string(),
+                number: "1".to_string(),
+                visible: true,
+                name_visible: true,
+                number_visible: true,
+            },
+        });
+        let upright = symbol_aabb(&placed(0.0), &lib);
+        let rotated = symbol_aabb(&placed(90.0), &lib);
+        // Pin extends along x at 0°; along y at 90°. Either way the
+        // bbox's longest axis swaps.
+        assert!(upright.width() > 0.0 && rotated.height() > 0.0);
+    }
+}

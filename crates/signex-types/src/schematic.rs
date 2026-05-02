@@ -413,6 +413,13 @@ pub struct Symbol {
     pub val_text: Option<TextProp>,
     #[serde(default)]
     pub fields_autoplaced: bool,
+    /// `true` when the user has manually placed at least one field on
+    /// this symbol; the autoplacer will skip the symbol so user
+    /// positioning is never silently overwritten on a subsequent
+    /// rotate / mirror. Set when a field is dragged or has its
+    /// rotation manually edited.
+    #[serde(default)]
+    pub fields_user_placed: bool,
     #[serde(default)]
     pub dnp: bool,
     #[serde(default = "default_true")]
@@ -431,6 +438,34 @@ pub struct Symbol {
     pub pin_uuids: HashMap<String, Uuid>,
     #[serde(default)]
     pub instances: Vec<SymbolInstance>,
+
+    // ─────────────────────────────────────────────────────────────────────
+    // v0.9 §3.5 — schematic-side library pinning
+    //
+    // When a Symbol is placed from a `*.snxlib/` row (Library panel /
+    // picker), the dispatcher tags it with the row's identity + version
+    // so re-opening the schematic can detect drift against the library's
+    // current row version.  All three fields are `#[serde(default)]` so
+    // legacy `.snxsch` files (and any sheet imported from a foreign
+    // format that has no notion of a Signex library) load cleanly with
+    // `library_id = None`, `row_id = None`, `version = ""`.
+    // ─────────────────────────────────────────────────────────────────────
+    /// Source library for this placed Symbol.  `None` for sheets imported
+    /// from a foreign format, hand-built primitives, or any Symbol that
+    /// wasn't placed via a `.snxlib` row.
+    #[serde(default)]
+    pub library_id: Option<Uuid>,
+    /// Row identity inside the source library — points at the
+    /// `ComponentRow.row_id` so renaming the row's `internal_pn` doesn't
+    /// break placement.  `None` whenever `library_id` is `None`.
+    #[serde(default)]
+    pub row_id: Option<Uuid>,
+    /// Pinned row version at place-time (semver-style, e.g. `"1.0.2"`).
+    /// Empty for un-pinned placements.  The Library Updates dialog
+    /// (`v0.9-snxlib-as-file-plan.md` §3.5) compares this to the row's
+    /// current `ComponentRow.version` on schematic open.
+    #[serde(default)]
+    pub library_version: String,
 }
 
 fn default_unit() -> u32 {
@@ -567,10 +602,10 @@ pub struct ChildSheet {
 // Schematic drawing primitives
 // ---------------------------------------------------------------------------
 
-/// Optional RGBA override parsed from historical `(stroke ... (color r g b a))`.
-/// `None` means "use the theme's default drawing colour" — the renderer
-/// falls back to CanvasColors.outline. Stored per-drawing so users can
-/// recolour individual shapes without disturbing the sheet theme.
+/// Optional RGBA override for an individual `SchDrawing`. `None` means
+/// "use the theme's default drawing colour" — the renderer falls back to
+/// `CanvasColors.outline`. Stored per-drawing so users can recolour
+/// individual shapes without disturbing the sheet theme.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct StrokeColor {
     pub r: u8,

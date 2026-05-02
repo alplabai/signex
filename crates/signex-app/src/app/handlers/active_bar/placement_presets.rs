@@ -167,7 +167,7 @@ impl Signex {
             // Net-color palette — arms pending_net_color so the next
             // canvas click on a wire floods its whole net with the
             // selected colour. Colours stay in app state only; nothing
-            // is written back to the .snxsch so legacy formats round-trip
+            // is written back to the .standard_sch so Standard round-trips
             // unchanged.
             ActiveBarAction::NetColorBlue
             | ActiveBarAction::NetColorLightGreen
@@ -186,7 +186,7 @@ impl Signex {
                     ActiveBarAction::NetColorDarkGreen => (0x16, 0xA3, 0x4A),
                     _ => (0xFF, 0xFF, 0xFF),
                 };
-                self.ui_state.net_color.pending_color = Some(signex_types::theme::Color {
+                self.ui_state.pending_net_color = Some(signex_types::theme::Color {
                     r: c.0,
                     g: c.1,
                     b: c.2,
@@ -195,7 +195,7 @@ impl Signex {
                 // Sync to canvas so mouse_interaction can show a pen
                 // cursor while armed.
                 self.interaction_state.active_canvas_mut().pending_net_color =
-                    self.ui_state.net_color.pending_color;
+                    self.ui_state.pending_net_color;
                 crate::diagnostics::log_info("Net-color armed — click a wire to flood its net");
             }
             ActiveBarAction::NetColorCustom => {
@@ -204,45 +204,43 @@ impl Signex {
                 // the picker after a custom pick doesn't reset it.
                 let seed = self
                     .ui_state
-                    .net_color
-                    .pending_color
+                    .pending_net_color
                     .filter(|c| c.a != 0)
                     .map(|c| iced::Color::from_rgb8(c.r, c.g, c.b))
                     .unwrap_or(iced::Color::from_rgb(0.40, 0.40, 0.93));
-                self.ui_state.net_color.custom.draft = seed;
-                self.ui_state.net_color.custom.show = true;
+                self.ui_state.net_color_custom.draft = seed;
+                self.ui_state.net_color_custom.show = true;
             }
             ActiveBarAction::ClearNetColor => {
                 // Arm "clear one" — next click removes the override on
                 // the wires of the clicked net.
-                self.ui_state.net_color.pending_color = None;
+                self.ui_state.pending_net_color = None;
                 self.interaction_state.active_canvas_mut().pending_net_color = None;
                 // A distinct armed state: use a sentinel color (alpha 0)
                 // to mean "clear mode". Simpler than a second enum — we
                 // still read pending_net_color at click time.
-                self.ui_state.net_color.pending_color = Some(signex_types::theme::Color {
+                self.ui_state.pending_net_color = Some(signex_types::theme::Color {
                     r: 0,
                     g: 0,
                     b: 0,
                     a: 0,
                 });
                 self.interaction_state.active_canvas_mut().pending_net_color =
-                    self.ui_state.net_color.pending_color;
+                    self.ui_state.pending_net_color;
                 crate::diagnostics::log_info("Click a wire to clear its net-color override");
             }
             ActiveBarAction::ClearAllNetColors => {
-                if !self.ui_state.net_color.wire_color_overrides.is_empty() {
+                if !self.ui_state.wire_color_overrides.is_empty() {
                     self.ui_state
-                        .net_color
-                        .undo
-                        .push(self.ui_state.net_color.wire_color_overrides.clone());
+                        .net_color_undo
+                        .push(self.ui_state.wire_color_overrides.clone());
                 }
-                self.ui_state.net_color.wire_color_overrides.clear();
+                self.ui_state.wire_color_overrides.clear();
                 self.interaction_state
                     .active_canvas_mut()
                     .wire_color_overrides
                     .clear();
-                self.ui_state.net_color.pending_color = None;
+                self.ui_state.pending_net_color = None;
                 self.interaction_state.active_canvas_mut().pending_net_color = None;
                 self.interaction_state
                     .active_canvas_mut()
@@ -282,6 +280,7 @@ impl Signex {
                 ref_text: None,
                 val_text: None,
                 fields_autoplaced: false,
+                fields_user_placed: false,
                 dnp: false,
                 in_bom: true,
                 on_board: true,
@@ -291,6 +290,9 @@ impl Signex {
                 custom_properties: Vec::new(),
                 pin_uuids: std::collections::HashMap::new(),
                 instances: Vec::new(),
+                library_id: None,
+                row_id: None,
+                library_version: String::new(),
             });
     }
 }

@@ -1,7 +1,9 @@
 //! Netlist export.
 //!
-//! The native `.net` S-expression emitter that previously lived
-//! here lives in a separate companion repository now.
+//! The Standard-format `.net` S-expression emitter that previously lived
+//! here was split out as part of the issue #62 Apache-clean cutover.
+//! It moves to the optional `signex-standard-import` GPL-3.0 companion
+//! repository alongside the rest of the Standard I/O codepaths.
 //!
 //! Future Signex-native netlist formats (XML, Spice, etc.) will land
 //! here as separate `Exporter` impls. The exported types
@@ -27,7 +29,9 @@ pub struct NetlistOutput {
 
 #[derive(Debug, Error)]
 pub enum NetlistError {
-    #[error("netlist export is not yet available in Signex Community; the native emitter ships in a separate companion tool")]
+    #[error(
+        "netlist export is not yet available in Signex Community; the Standard-format emitter has moved to the signex-standard-import companion repo (issue #62)"
+    )]
     NotImplemented,
 }
 

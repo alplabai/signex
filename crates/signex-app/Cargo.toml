@@ -24,10 +24,37 @@ signex-widgets = { workspace = true }
 signex-erc = { workspace = true }
 signex-erc-dsl = { workspace = true }
 signex-output = { workspace = true }
+signex-library = { workspace = true, features = [
+    "local-git",
+    "database",
+    "distributors-community",
+    "ai-stub",
+    "search-tantivy",
+] }
+tracing = { workspace = true }
+chrono = { workspace = true }
 rfd = { workspace = true }
+sha2 = { workspace = true }
 fontdb = "0.23"
 log = "0.4"
 image = { version = "0.25", default-features = false, features = ["png"] }
+# UI-WS7 — Distributor APIs flows
+# `webbrowser` opens the DigiKey OAuth2 authorization URL in the user's
+# default browser; `tiny_http` runs the one-shot localhost callback
+# server that catches the OAuth redirect; `dirs` finds the OS config
+# directory for `distributors.toml` persistence; `toml` (de)serialises
+# the order-of-preference list. `tokio` is already a transitive dep
+# (iced) but we use the multi-thread runtime explicitly for the OAuth
+# exchange + Mouser test flow on a worker thread.
+webbrowser = "1"
+tiny_http = "0.12"
+dirs = "5"
+toml = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
+wiremock = "0.6"
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1"
@@ -38,4 +65,15 @@ winres = "0.1"
 # main window (which loses them when `decorations: false` strips the
 # WS_THICKFRAME DWM relies on). 0.61 aligns with what winit already pulls
 # so there's no extra copy in the dep graph.
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Dwm"] }
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Dwm",
+    # ReleaseCapture + SendMessageW + WM_SYSCOMMAND constants for the
+    # SC_MOVE / SC_SIZE drag fallback in `src/chrome.rs`. winit's own
+    # `drag_window` / `drag_resize_window` defer the `PostMessageW`
+    # via a thread executor and the message loses its connection to
+    # the user's button-down on borderless windows; sending
+    # WM_SYSCOMMAND ourselves bypasses that timing window.
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Input_KeyboardAndMouse",
+] }

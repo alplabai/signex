@@ -12,7 +12,7 @@ impl Signex {
     /// on screen.
     pub(crate) fn handle_run_erc(&mut self) -> Task<Message> {
         let dsl_eval_fns = self.load_project_dsl_eval_fns();
-        let overrides = self.ui_state.erc.severity_override.clone();
+        let overrides = self.ui_state.erc_severity_override.clone();
         let apply_overrides =
             |mut violations: Vec<signex_erc::Violation>| -> Vec<signex_erc::Violation> {
                 for v in &mut violations {
@@ -39,7 +39,7 @@ impl Signex {
         // First pass: collect every sheet's snapshot keyed by BOTH its
         // absolute path AND its bare filename. BadHierSheetPin looks up
         // children by the filename stored on the parent's sheet symbol,
-        // which is often just the basename (e.g. "power.snxsch").
+        // which is often just the basename (e.g. "power.standard_sch").
         let mut snapshots_by_path: std::collections::HashMap<
             std::path::PathBuf,
             signex_render::schematic::SchematicRenderSnapshot,
@@ -95,9 +95,7 @@ impl Signex {
                 continue;
             }
             if let Some(engine) = self.document_state.engines.get(&tab.path) {
-                let snapshot = signex_render::schematic::SchematicRenderSnapshot::from_sheet(
-                    engine.document(),
-                );
+                let snapshot = engine.document().clone();
                 push_snap(
                     tab.path.clone(),
                     snapshot,
@@ -124,8 +122,7 @@ impl Signex {
                 else {
                     continue;
                 };
-                let snapshot =
-                    signex_render::schematic::SchematicRenderSnapshot::from_sheet(&parsed);
+                let snapshot = parsed.clone();
                 push_snap(path, snapshot, &mut snapshots_by_path, &mut children);
             }
         }
@@ -158,11 +155,10 @@ impl Signex {
             .tabs
             .get(self.document_state.active_tab)
             .map(|t| t.path.clone());
-        self.ui_state.erc.violations_by_path = by_path;
-        self.ui_state.erc.focus_global_index = self
+        self.ui_state.erc_violations_by_path = by_path;
+        self.ui_state.erc_focus_global_index = self
             .ui_state
-            .erc
-            .violations_by_path
+            .erc_violations_by_path
             .values()
             .any(|v| !v.is_empty())
             .then_some(0);
@@ -220,7 +216,7 @@ impl Signex {
         active_path: Option<&std::path::PathBuf>,
     ) {
         let violations = active_path
-            .and_then(|p| self.ui_state.erc.violations_by_path.get(p))
+            .and_then(|p| self.ui_state.erc_violations_by_path.get(p))
             .cloned()
             .unwrap_or_default();
         self.interaction_state.active_canvas_mut().erc_markers = violations
@@ -239,14 +235,13 @@ impl Signex {
         self.interaction_state
             .active_canvas_mut()
             .clear_overlay_cache();
-        self.ui_state.erc.violations = violations;
+        self.ui_state.erc_violations = violations;
     }
 
     pub(crate) fn build_erc_diagnostic_entries(&self) -> Vec<crate::panels::ErcDiagnosticEntry> {
         let mut paths: Vec<_> = self
             .ui_state
-            .erc
-            .violations_by_path
+            .erc_violations_by_path
             .keys()
             .cloned()
             .collect();
@@ -258,7 +253,7 @@ impl Signex {
                 .file_name()
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_else(|| path.display().to_string());
-            if let Some(list) = self.ui_state.erc.violations_by_path.get(&path) {
+            if let Some(list) = self.ui_state.erc_violations_by_path.get(&path) {
                 for v in list {
                     out.push(crate::panels::ErcDiagnosticEntry {
                         global_index: out.len(),
@@ -272,6 +267,7 @@ impl Signex {
                             _ => crate::panels::ErcSeverityLite::Info,
                         },
                         rule_label: v.rule.label(),
+                        rule_kind: v.rule,
                         message: v.message.clone(),
                         world_x: v.location.x,
                         world_y: v.location.y,
@@ -287,19 +283,65 @@ impl Signex {
     pub(crate) fn handle_focus_erc_diagnostic_offset(&mut self, delta: isize) -> Task<Message> {
         let entries = self.build_erc_diagnostic_entries();
         if entries.is_empty() {
-            self.ui_state.erc.focus_global_index = None;
+            self.ui_state.erc_focus_global_index = None;
             return Task::none();
         }
-        let current = self.ui_state.erc.focus_global_index.unwrap_or(0) as isize;
+        let current = self.ui_state.erc_focus_global_index.unwrap_or(0) as isize;
         let len = entries.len() as isize;
         let next = (current + delta).rem_euclid(len) as usize;
         self.handle_focus_erc_diagnostic_index(next)
     }
 
+    /// Quick Fix dispatch from the Messages-panel chip.
+    /// `UnusedPin` places a `NoConnect` at the violation's world
+    /// coords and re-runs ERC so the row disappears immediately;
+    /// every other rule falls back to the row-click "zoom + select"
+    /// path, which is exactly the affordance the user wants 90% of
+    /// the time even without a mutating fix.
+    pub(crate) fn handle_erc_quick_fix(&mut self, index: usize) -> Task<Message> {
+        let entries = self.build_erc_diagnostic_entries();
+        if entries.is_empty() {
+            return Task::none();
+        }
+        let clamped = index.min(entries.len() - 1);
+        let target = entries[clamped].clone();
+
+        // Open + activate the violation's sheet first, regardless of
+        // rule kind — the engine command path operates on the active
+        // engine, and even the non-mutating rules want the canvas to
+        // scroll to the offending point.
+        self.ensure_sheet_open_and_active(&target.sheet_path);
+
+        match target.rule_kind {
+            signex_erc::RuleKind::UnusedPin => {
+                let nc = signex_types::schematic::NoConnect {
+                    uuid: uuid::Uuid::new_v4(),
+                    position: signex_types::schematic::Point::new(target.world_x, target.world_y),
+                };
+                self.apply_engine_command(
+                    signex_engine::Command::PlaceNoConnect { no_connect: nc },
+                    false,
+                    false,
+                );
+                // Re-run ERC so the cleared violation drops out of
+                // the panel without forcing the user to press F8.
+                let _ = self.handle_run_erc();
+                // Focus the cleared point so the new NoConnect marker
+                // is visible — a small but reassuring "the fix landed
+                // here" cue.
+                self.handle_focus_at(target.world_x, target.world_y, None)
+            }
+            _ => {
+                self.ui_state.erc_focus_global_index = Some(clamped);
+                self.handle_focus_at(target.world_x, target.world_y, target.select)
+            }
+        }
+    }
+
     pub(crate) fn handle_focus_erc_diagnostic_index(&mut self, index: usize) -> Task<Message> {
         let entries = self.build_erc_diagnostic_entries();
         if entries.is_empty() {
-            self.ui_state.erc.focus_global_index = None;
+            self.ui_state.erc_focus_global_index = None;
             return Task::none();
         }
         let clamped = index.min(entries.len() - 1);
@@ -308,7 +350,7 @@ impl Signex {
         // Ensure the target sheet is open and active before focusing its point.
         self.ensure_sheet_open_and_active(&target.sheet_path);
 
-        self.ui_state.erc.focus_global_index = Some(clamped);
+        self.ui_state.erc_focus_global_index = Some(clamped);
         self.handle_focus_at(target.world_x, target.world_y, target.select)
     }
 
@@ -444,7 +486,7 @@ impl Signex {
         }
 
         // Pass B: apply to cached (non-active) tabs via the shared counter.
-        let locked = self.ui_state.annotate.locked.clone();
+        let locked = self.ui_state.annotate_locked.clone();
         let mut any_cached_changed = false;
         let active_idx = self.document_state.active_tab;
         let paths: Vec<(usize, PathBuf)> = self
@@ -517,8 +559,7 @@ impl Signex {
                 ));
                 continue;
             };
-            let Ok(sheet) =
-                signex_types::format::SnxSchematic::parse(&text).map(|snx| snx.sheet)
+            let Ok(sheet) = signex_types::format::SnxSchematic::parse(&text).map(|snx| snx.sheet)
             else {
                 crate::diagnostics::log_info(format!(
                     "Annotate: failed to parse unopened sheet {}",
@@ -567,7 +608,7 @@ impl Signex {
             self.refresh_panel_ctx();
         }
 
-        self.ui_state.annotate.reset_confirm = false;
+        self.ui_state.annotate_reset_confirm = false;
         crate::diagnostics::log_info(format!(
             "Annotated symbols across {} sheet(s) ({:?})",
             tab_count.max(1),
@@ -577,18 +618,18 @@ impl Signex {
     }
 
     pub(crate) fn handle_open_annotate_dialog(&mut self) -> Task<Message> {
-        self.ui_state.annotate.dialog_open = true;
+        self.ui_state.annotate_dialog_open = true;
         self.interaction_state.context_menu = None;
         // Altium parity: these big modals live in their own OS window
         // from the moment they open — no in-window overlay, no drag-off
         // dance. `handle_detach_modal` is idempotent, so re-opening
         // while a window already exists just no-ops.
-        self.handle_detach_modal(super::super::states::ModalId::AnnotateDialog)
+        self.handle_detach_modal(super::super::state::ModalId::AnnotateDialog)
     }
 
     pub(crate) fn handle_close_annotate_dialog(&mut self) -> Task<Message> {
-        self.ui_state.annotate.dialog_open = false;
-        self.close_detached_modal(super::super::states::ModalId::AnnotateDialog)
+        self.ui_state.annotate_dialog_open = false;
+        self.close_detached_modal(super::super::state::ModalId::AnnotateDialog)
     }
 
     /// Altium's "Reset Duplicate Designators" — find references that
@@ -817,21 +858,21 @@ impl Signex {
 
     pub(crate) fn handle_annotate_order_changed(
         &mut self,
-        order: super::super::states::AnnotateOrder,
+        order: super::super::state::AnnotateOrder,
     ) -> Task<Message> {
-        self.ui_state.annotate.order = order;
+        self.ui_state.annotate_order = order;
         Task::none()
     }
 
     pub(crate) fn handle_open_erc_dialog(&mut self) -> Task<Message> {
-        self.ui_state.erc.dialog_open = true;
+        self.ui_state.erc_dialog_open = true;
         self.interaction_state.context_menu = None;
-        self.handle_detach_modal(super::super::states::ModalId::ErcDialog)
+        self.handle_detach_modal(super::super::state::ModalId::ErcDialog)
     }
 
     pub(crate) fn handle_close_erc_dialog(&mut self) -> Task<Message> {
-        self.ui_state.erc.dialog_open = false;
-        self.close_detached_modal(super::super::states::ModalId::ErcDialog)
+        self.ui_state.erc_dialog_open = false;
+        self.close_detached_modal(super::super::state::ModalId::ErcDialog)
     }
 
     pub(crate) fn handle_erc_severity_changed(
@@ -841,29 +882,29 @@ impl Signex {
     ) -> Task<Message> {
         if severity == rule.default_severity() {
             // Match default → remove override so the map stays minimal.
-            self.ui_state.erc.severity_override.remove(&rule);
+            self.ui_state.erc_severity_override.remove(&rule);
         } else {
-            self.ui_state.erc.severity_override.insert(rule, severity);
+            self.ui_state.erc_severity_override.insert(rule, severity);
         }
         // Persist so the override survives restart. Silent on I/O errors —
         // this is a preference, not critical state.
-        crate::fonts::write_erc_severity_overrides(&self.ui_state.erc.severity_override);
+        crate::fonts::write_erc_severity_overrides(&self.ui_state.erc_severity_override);
         Task::none()
     }
 
     pub(crate) fn handle_open_annotate_reset_confirm(&mut self) -> Task<Message> {
-        self.ui_state.annotate.reset_confirm = true;
-        self.handle_detach_modal(super::super::states::ModalId::AnnotateResetConfirm)
+        self.ui_state.annotate_reset_confirm = true;
+        self.handle_detach_modal(super::super::state::ModalId::AnnotateResetConfirm)
     }
 
     pub(crate) fn handle_close_annotate_reset_confirm(&mut self) -> Task<Message> {
-        self.ui_state.annotate.reset_confirm = false;
-        self.close_detached_modal(super::super::states::ModalId::AnnotateResetConfirm)
+        self.ui_state.annotate_reset_confirm = false;
+        self.close_detached_modal(super::super::state::ModalId::AnnotateResetConfirm)
     }
 
     pub(crate) fn handle_modal_drag_start(
         &mut self,
-        modal: super::super::states::ModalId,
+        modal: super::super::state::ModalId,
         x: f32,
         y: f32,
     ) -> Task<Message> {
@@ -886,10 +927,31 @@ impl Signex {
             return Task::none();
         };
         let path = tab.path.clone();
+        // Component Preview tabs undock to a window with
+        // `WindowKind::ComponentEditor` so the editor view dispatch
+        // picks it up. Schematic / PCB tabs use
+        // `WindowKind::UndockedTab` as before.
+        let component_editor = tab.kind.as_component_editor().cloned();
+
         // Don't re-undock a tab that already has a window.
-        if self.ui_state.windows.values().any(
-            |k| matches!(k, super::super::states::WindowKind::UndockedTab { path: p, .. } if p == &path),
-        ) {
+        let already_undocked = match component_editor.as_ref() {
+            Some(ce) => self.ui_state.windows.values().any(|k| {
+                matches!(
+                    k,
+                    super::super::state::WindowKind::ComponentEditor {
+                        library_path,
+                        table,
+                        row_id,
+                    } if library_path == &ce.library_path
+                        && table == &ce.table
+                        && row_id == &ce.row_id
+                )
+            }),
+            None => self.ui_state.windows.values().any(
+                |k| matches!(k, super::super::state::WindowKind::UndockedTab { path: p, .. } if p == &path),
+            ),
+        };
+        if already_undocked {
             return Task::none();
         }
         let title = tab.title.clone();
@@ -913,9 +975,24 @@ impl Signex {
         });
         // Stash immediately so the first frame in the new window has a
         // target; `UndockedTabOpened` refreshes the title afterwards.
+        if let Some(ce) = component_editor {
+            self.ui_state.windows.insert(
+                id,
+                super::super::state::WindowKind::ComponentEditor {
+                    library_path: ce.library_path.clone(),
+                    table: ce.table.clone(),
+                    row_id: ce.row_id,
+                },
+            );
+            // Component Editor windows don't need the
+            // `UndockedTabOpened` follow-up (no per-window canvas to
+            // wire); the editor view picks the entry up directly off
+            // `library.editors` via the address it already has.
+            return open_task.discard();
+        }
         self.ui_state.windows.insert(
             id,
-            super::super::states::WindowKind::UndockedTab {
+            super::super::state::WindowKind::UndockedTab {
                 path: path.clone(),
                 title,
             },
@@ -946,7 +1023,7 @@ impl Signex {
         });
         self.ui_state
             .windows
-            .insert(id, super::super::states::WindowKind::DetachedPanel(kind));
+            .insert(id, super::super::state::WindowKind::DetachedPanel(kind));
         open_task.map(move |settled_id| Message::DetachedPanelOpened {
             kind,
             id: settled_id,
@@ -960,9 +1037,9 @@ impl Signex {
     /// open rendering an orphaned modal body.
     pub(crate) fn close_detached_modal(
         &mut self,
-        modal: super::super::states::ModalId,
+        modal: super::super::state::ModalId,
     ) -> Task<Message> {
-        use super::super::states::WindowKind;
+        use super::super::state::WindowKind;
         let maybe_id = self.ui_state.windows.iter().find_map(|(id, kind)| {
             if matches!(kind, WindowKind::DetachedModal(m) if *m == modal) {
                 Some(*id)
@@ -984,13 +1061,13 @@ impl Signex {
     /// the OS) since we don't know where to anchor absent monitor query.
     pub(crate) fn handle_detach_modal(
         &mut self,
-        modal: super::super::states::ModalId,
+        modal: super::super::state::ModalId,
     ) -> Task<Message> {
-        use super::super::states::ModalId;
+        use super::super::state::ModalId;
         // Don't open a second window for the same modal — treat detach
         // on an already-detached modal as a no-op.
         if self.ui_state.windows.values().any(
-            |kind| matches!(kind, super::super::states::WindowKind::DetachedModal(m) if *m == modal),
+            |kind| matches!(kind, super::super::state::WindowKind::DetachedModal(m) if *m == modal),
         ) {
             return Task::none();
         }
@@ -1008,6 +1085,8 @@ impl Signex {
             ModalId::RemoveDialog => iced::Size::new(560.0, 260.0),
             ModalId::PrintPreview => iced::Size::new(1100.0, 780.0),
             ModalId::BomPreview => iced::Size::new(1180.0, 760.0),
+            ModalId::ProjectOptions => iced::Size::new(520.0, 360.0),
+            ModalId::EnableVersionControl => iced::Size::new(560.0, 480.0),
         };
 
         let (id, open_task) = iced::window::open(iced::window::Settings {
@@ -1023,7 +1102,7 @@ impl Signex {
         // the entry the detached window would render empty.
         self.ui_state
             .windows
-            .insert(id, super::super::states::WindowKind::DetachedModal(modal));
+            .insert(id, super::super::state::WindowKind::DetachedModal(modal));
         // When the OS finishes opening the window, forward the id so the
         // update can double-check and clear any leftover drag state.
         open_task.map(move |settled_id| Message::DetachedModalOpened {
@@ -1033,12 +1112,12 @@ impl Signex {
     }
 
     pub(crate) fn handle_open_move_selection_dialog(&mut self) -> Task<Message> {
-        self.ui_state.move_selection = super::super::states::MoveSelectionState {
+        self.ui_state.move_selection = super::super::state::MoveSelectionState {
             open: true,
             dx: "0".to_string(),
             dy: "0".to_string(),
         };
-        self.handle_detach_modal(super::super::states::ModalId::MoveSelection)
+        self.handle_detach_modal(super::super::state::ModalId::MoveSelection)
     }
 
     pub(crate) fn handle_close_move_selection_dialog(&mut self) -> Task<Message> {
@@ -1114,9 +1193,9 @@ impl Signex {
     /// title bar.
     pub(crate) fn handle_start_detached_window_drag(
         &mut self,
-        modal: super::super::states::ModalId,
+        modal: super::super::state::ModalId,
     ) -> Task<Message> {
-        use super::super::states::WindowKind;
+        use super::super::state::WindowKind;
         let id = self.ui_state.windows.iter().find_map(|(id, kind)| {
             if matches!(kind, WindowKind::DetachedModal(m) if *m == modal) {
                 Some(*id)
@@ -1125,7 +1204,7 @@ impl Signex {
             }
         });
         match id {
-            Some(id) => iced::window::drag(id),
+            Some(id) => crate::chrome::start_window_drag(id),
             None => Task::none(),
         }
     }

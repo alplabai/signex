@@ -103,7 +103,7 @@ pub struct PdfOptions {
     /// Live toggles (renderer honours the value):
     ///   `include_no_erc_markers`, `include_notes`.
     ///
-    /// Dormant toggles — the legacy schema has no equivalent concept,
+    /// Dormant toggles — Standard's schema has no equivalent concept,
     /// so these are stored for Altium-import parity but produce no
     /// observable difference today: `include_parameter_sets` (Altium
     /// parameter-set objects), `include_probes` (Altium probe
@@ -136,8 +136,9 @@ pub struct PdfOptions {
     /// Schematic-element colour palette. The unified Print Preview
     /// passes the active theme's `CanvasColors` here so PDF wires /
     /// symbols / labels match the on-screen schematic. Default is
-    /// the classic eeschema palette so existing direct-export
-    /// callers keep their historical look.
+    /// the legacy `SchematicPalette::classic()` (cream paper / dark-
+    /// blue wires) so existing direct-export callers keep their
+    /// historical look.
     pub palette: SchematicPalette,
 }
 
@@ -658,7 +659,7 @@ struct PdfTextRun {
 }
 
 fn pdf_markup_runs(input: &str) -> Vec<PdfTextRun> {
-    let expanded = normalize_text(input);
+    let expanded = normalize_standard_text(input);
     let segments = parse_signex_markup(&expanded);
     if segments.is_empty() {
         return vec![PdfTextRun {
@@ -716,11 +717,11 @@ fn pdf_markup_runs(input: &str) -> Vec<PdfTextRun> {
         .collect()
 }
 
-fn normalize_text(input: &str) -> String {
+fn normalize_standard_text(input: &str) -> String {
     let ctx = ExpressionEvalContext::default();
-    // Legacy char-escape expansion (`{slash}` → `/`, etc.) was removed
+    // Standard-specific char-escape expansion (`{slash}` → `/`, etc.) was removed
     // in Phase 2.3 of the Apache-clean remediation. Inputs no longer carry
-    // those tokens because the main repo no longer parses legacy files.
+    // those tokens because the main repo no longer parses Standard files.
     evaluate_expressions(input, &ctx)
 }
 
@@ -770,7 +771,7 @@ mod tests {
         ExportContext {
             sheets: (0..sheet_count)
                 .map(|i| SheetSnapshot {
-                    path: PathBuf::from(format!("sheet_{i}.snxsch")),
+                    path: PathBuf::from(format!("sheet_{i}.standard_sch")),
                     schematic: empty_sheet(),
                     sheet_name: format!("Sheet{i}"),
                     sheet_number: i + 1,
@@ -892,6 +893,7 @@ mod tests {
             ref_text: None,
             val_text: None,
             fields_autoplaced: false,
+            fields_user_placed: false,
             dnp: false,
             in_bom: true,
             on_board: true,
@@ -903,6 +905,9 @@ mod tests {
             instances: vec![],
             footprint: String::new(),
             datasheet: String::new(),
+            library_id: None,
+            row_id: None,
+            library_version: String::new(),
         });
 
         // Add one label.
@@ -1134,6 +1139,7 @@ mod tests {
             ref_text: None,
             val_text: None,
             fields_autoplaced: false,
+            fields_user_placed: false,
             dnp: false,
             in_bom: true,
             on_board: true,
@@ -1145,6 +1151,9 @@ mod tests {
             instances: vec![],
             footprint: String::new(),
             datasheet: String::new(),
+            library_id: None,
+            row_id: None,
+            library_version: String::new(),
         });
         let mut ctx = sample_ctx(1);
         ctx.sheets[0].schematic = sheet;

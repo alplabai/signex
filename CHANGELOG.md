@@ -6,6 +6,126 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
+> The v0.12 milestone is queued — a clean-room reimplementation of
+> `crates/signex-render/src/schematic/` and the field-autoplace
+> heuristic in `crates/signex-engine/src/transform.rs`, executed
+> against Signex-only specifications (`docs/RENDERING_RULES.md`,
+> Altium parity goals, IEEE-Std-91). The plan lives at
+> `docs/internal/CLEANROOM_REWRITE_PLAN.md`.
+
+## [0.11.0] — 2026-05-01
+
+The **v0.11 Library & Polish** milestone. Restores the full library subsystem implementation that was developed on the v0.9 branch (2026-04-26 → 2026-04-29) and parked when the Apache-clean cutover took priority. The original 169-commit chain is preserved on the `v0.9-snxlib-paused-2026-04-29` and `v0.10-library-cherry-pick-2026-04-29` tags; this release squashes the `crates/` tree of that chain onto the post-cutover dev as a single restoration unit, with all Apache-clean invariants enforced.
+
+The library subsystem follows the **DBLib model** specified in the v0.9 plan series (`docs/internal/docs/v0.9-library-plan.md` → `v0.9-library-refactor-plan.md` → `v0.9-refactor-2-plan.md`): components live as **rows in TSV tables** (`tables/<category>.tsv`) rather than per-component files; symbols, footprints, and sim models stay as standalone editable primitive files (`.snxsym`, `.snxfpt`, `.snxsim`) addressed by UUID; component rows reference primitives by `(library_id, uuid)` tuples. The same column schema serialises to TSV (LocalGit) or JSONB rows (Database) — one wire format, two backends.
+
+### Added — `signex-library` crate (data model + adapters + diff + search)
+
+- **Component model** — `ComponentRow` carries `row_id` (stable Uuid v7), `internal_pn`, `class`, `datasheet`, `state` (lifecycle), `symbol_ref` / `footprint_ref` / `sim_ref` (`PrimitiveRef { library_id, uuid }`), `pin_map_overrides`, `primary_mpn` + `alternates`, `supply` (distributor listings), `parameters` (template-validated `ParamMap`), and PLM-reserved inert fields for forward compatibility with Signex 365.
+- **Lifecycle states** — `Draft / InReview / Released / Deprecated / Obsolete` per the LIBRARY_PLAN §4 contract; placement gating + `state` field changes recorded in git history (LocalGit) or `updated_at` (Database).
+- **`LibraryAdapter` trait** — object-safe trait covering table CRUD (`list_tables`, `read_table`, `iter_rows`), row CRUD (`read_row`, `read_row_by_pn`, `insert_row`, `update_row`, `delete_row`), and primitive CRUD (`get_symbol`, `save_symbol`, `list_symbols`, etc.).
+- **`LocalGitAdapter`** — `*.snxlib/` directory format with `library.toml`, `tables/<category>.tsv`, `symbols/<uuid>.snxsym`, `footprints/<uuid>.snxfpt`, `sims/<uuid>.snxsim`, `step/<sha256>.step`. Every write commits via libgit2 with a supplied message; reads stream from the on-disk TSV.
+- **`DatabaseAdapter`** — generic `component_rows (library_id, table_name, row_id, payload jsonb)` schema; same column shape as the LocalGit TSV, JSONB payload preserves struct fidelity. Sync detection via `content_hash`.
+- **`DistributorAdapter` trait** with **DigiKey** (OAuth2 + PKCE), **Mouser** (API key), **LCSC** (anonymous), **JLCPCB** (anonymous) implementations. Per-provider 24h cache; OS-keyring storage for user-supplied keys (macOS Keychain, Windows Credential Manager, libsecret on Linux). Settings → Library → Distributor APIs UI for connecting providers + ordering preference.
+- **AI-stub from datasheet** — heuristic table extraction (PDF → text → pin-name guess) gated behind `pdf-extract`. Handed back as a `SymbolPinPreview` the user reviews before committing.
+- **Where-Used reverse index** — `WhereUsedIndex::primitive_to_rows` rebuilt from `iter_rows()`; click-to-jump from the Component Preview tab.
+- **Tantivy search index** — full-text index over `internal_pn / mpn / manufacturer / description / parameters`; rebuilt on commit.
+- **Diff API** — `RowDiff` with per-column-group flags drives lifecycle auto-bump heuristic.
+- **Manifest schema** — `library.toml` carries `[[tables]]` config (category → table name + class allowlist), `[users]` (per-email role table), `[workflow]` (review_required, reviewers_required, auto_lifecycle_promote).
+
+### Added — `signex-library-server` crate (axum HTTP+WS skeleton)
+
+- **REST API** — `GET /tables`, `GET /tables/:name`, `POST /tables/:name/rows`, `GET /tables/:name/rows/:row_id`, `PUT /tables/:name/rows/:row_id`, `DELETE /tables/:name/rows/:row_id`. Bearer-token gated.
+- **Lock service** — advisory locks per (table, row_id, field-set) with idle TTL + WS notification on release.
+- **Migrations** — sqlx-managed schema; `0001_initial.sql` through `0005_tabular_components.sql` covering both Postgres and SQLite via the same column DDL.
+- **Lifecycle transitions** with optional review workflow (per-library setting): `state = Draft` → `InReview` → `Released` (with reviewer approval), or direct `Draft` → `Released` when `review_required = false`.
+
+### Added — `signex-app` library UI
+
+- **SCH Library editor** — opens a `.snxsym` as a main-window tab (`TabKind::SymbolEditor(PathBuf)`). Multi-symbol container, per-pin Properties panel (name / number / direction / shape / position / length), drawing tools (Rectangle / Line / Circle), per-graphic Properties surface, drag-to-resize, multi-part component support via `SymbolPin.part_number`, `signex_widgets::active_bar` migration. Save uses the v0.9.1 borrow-based pattern.
+- **Footprint editor** — `.snxfpt` opens as `TabKind::FootprintEditor(PathBuf)`. Pad placement canvas, Body3D pane with STEP attach + 3D preview, layer toolbar, courtyard/silk/fab/paste-mask layers.
+- **Library Browser tab** — table on the left with clickable column headers (numeric-aware sort), Rev column showing the bound primitive's `version + released` indicator, side preview pane on the right rendering the bound symbol + footprint via `signex-render`. Substring filter across name / value / footprint / description.
+- **Component Preview tab** — 5 read-only tabs (Preview / Parameters / Supply / Datasheet / Simulation) per the v0.9-refactor-2 plan §11. Right-click the symbol render → "Open Symbol Editor" opens the standalone primitive tab.
+- **Library left-dock panel** — flat list of mounted libraries with single-click `[Open]` button. Filter input narrows the visible library list. Inline category-tree-with-row-grid is intentionally not in this panel — the canonical surface is the Library Browser tab (real libraries have thousands of components).
+- **Components panel** — Project / Installed / Global mount sources; renders the active Library Browser tab's row set as a placement palette.
+- **New Component modal** — picks library + table + class, mints sentinel UUIDs for symbol/footprint, writes the new row + primitive files atomically. Inline cell editing in the Library Browser grid; Edit Component Details modal on row double-click.
+- **Pick Symbol / Pick Footprint picker** — modal scoped to currently-mounted libraries; binds an existing primitive into a row's `symbol_ref` / `footprint_ref`. Never auto-mints empty primitive files; sentinel-`nil` UUIDs flow through until the user picks.
+- **Filesystem auto-mount on picker miss** — when the picker can't find a binding in mounted libraries, scans the active project tree for `.snxsym` / `.snxfpt` files and offers them as auto-mount candidates. Selecting one mounts its parent library transparently before binding.
+- **Library Updates dialog** — detects primitive version drift across mounted libraries, applies updates row-by-row.
+- **Cascade engine** — primitive saves bump bound rows so the Library Browser's Rev column refreshes without an explicit re-scan.
+- **History pane scaffold** — `LibraryAdapter::history` API for surfacing per-row commit / migration history.
+- **Recovery dialogs** — "missing snxlib", "git directory missing", "binding broken" prompts that route the user back to a working state.
+- **Save-As flow** for new symbols / footprints / libraries.
+- **Distributor-API settings UI** — Settings → Library → Distributor APIs renders the connect / test / order-preference grid.
+
+### Added — workspace plumbing
+
+- New deps in `Cargo.toml`: `chrono`, `sha2`, `git2` (vendored libgit2), `keyring`, `tantivy`, `oauth2`, `reqwest`, `axum`, `tokio`, `sqlx`, `pdf-extract`, `tower-http`, `tracing`, `tracing-subscriber`. All Apache-2.0 / MIT permissive — `cargo-deny` clean.
+- `CDLA-Permissive-2.0` added to the `deny.toml` allowlist for `webpki-roots` (transitive via `reqwest` + `sqlx`).
+- `.gitattributes` adds binary patterns for `.pdf`, `.step`, `.wrl`, `.png`.
+
+### Added — UX polish (v0.11 over-Altium wins)
+
+- **Command palette** (UX_IMPROVEMENTS_OVER_ALTIUM §4.1) — `Ctrl+Shift+P` focuses the chrome-strip search bar and opens a fuzzy-match dropdown over every menu action, every panel-open command, every placed designator, and every project file. Sublime-text-style scoring (word-boundary + contiguous + literal-substring bonuses, length penalty); arrow keys navigate, Enter executes, Esc / click-outside dismisses. Caps the result list at 10 with a "More results — refine query" footer. Replaces the old static placeholder. Export PDF stays reachable via File ▸ Export ▸ PDF…
+- **Hover tooltip on placed symbols** (UX_IMPROVEMENTS_OVER_ALTIUM §3.4) — dwelling the cursor on a placed schematic symbol for 250 ms now opens a small floating card showing designator + value + footprint + library id. Card tracks the cursor with a 16 px bottom-right offset (auto-flips at the right/bottom edges); vanishes when the cursor leaves the symbol. Click-through is preserved — the tooltip never blocks the next click. Symbol-only by design; wires/labels carry no library metadata worth surfacing.
+- **Persistent search across reopens** (UX_IMPROVEMENTS_OVER_ALTIUM §1.1) — the Components-panel filter and the Library Browser tab's search query are now written through to the prefs file on every keystroke and rehydrated on the next launch. Browser queries are scoped per `.snxlib` path so two open libraries don't share state. The primitive picker stays session-only by design (pickers exist to find _new_ primitives — preserved query feels stale).
+- **ERC violations grow a Quick Fix chip** (UX_IMPROVEMENTS_OVER_ALTIUM §4.4) — every ERC diagnostic row in the Messages panel now carries a small chip next to the message. `Unused pin` violations get an `Add No-Connect` chip that places a `NoConnect` marker at the offending pin and re-runs ERC so the row disappears immediately; every other rule's chip is a `Show on Canvas` alias for the row click that gives the user a one-click target even when the row's text is long. Click on the row body still does the default zoom-and-select.
+
+### Added — Version control + history (2026-05-01)
+
+- **Per-item tracking-scope picker on Enable Version Control** — the modal opened from the project root context menu now shows a checkbox list of each `.snxsch` / `.snxpcb` / `.snxlib` in the project. Unchecked rows are written to a generated `.gitignore` at confirm time so users can scope the initial commit without manual editing. Library API (`signex_library::enable_project_version_control`) takes the gitignore body as `Option<&str>` and writes both the gitignore and `.gitattributes` atomically alongside `git init`, with rollback on failure — disk state never lands half-applied.
+- **Library-level Enable Version Control** — right-click an existing plain-files `.snxlib` node → `Enable Version Control...` opens the same modal scoped to the library directory. Surfaces `library.toml`, `components.tsv`, and any `classes/` / `symbols/` / `footprints/` / `sims/` / `models/` subdirectories that exist on disk as separately tickable rows. `TrackItem` shape refactored to `{ absolute, relative, label, is_directory, tracked }` so library-scope items plug into the same picker without enum bloat. Confirm branches on `VersionControlScope { Project, Library }` so the post-init refresh updates the right tree node.
+- **Per-file Git history right-dock panel** — new `PanelKind::History` follows the active tab and renders the file's last 50 commits via `signex_widgets::history_pane`. Wires on a new `signex_library::project_file_history(project_dir, rel_path)` helper that walks any `git2::Repository` (not just library-rooted ones). Async-loaded with a generation counter to drop stale results on tab switch. States: not-in-git / no-commits / dirty-only / normal. Working-tree pseudo-card on top when the active path is in `dirty_paths`.
+- **Per-class filter in Library Browser sidebar** — clicking a class row in the master-detail layout's left sidebar filters the right-side component grid to rows whose `class` field matches. Clicking the active class clears the filter; `LibraryBrowserState.class_filter: Option<String>` applied alongside `lifecycle_filter`. Active class row renders with the same accent-tint background as the table sidebar's selected row for visual feedback.
+
+### Documentation (2026-05-01)
+
+- **Hardware Requirements** section in `README.md` (addresses #63) — Vulkan 1.1 / DirectX 12 / Metal floor (~2014+ GPU). Older GPUs that fall back to legacy OpenGL may render incorrectly.
+- **`docs/RENDERING_RULES.md`** (new public doc) — Apache-2.0 prose describing label rendering, field rotation/justify rules, and IEEE-Std-91 pin shape decorators. Sourced from `crates/signex-types/` (Signex's own `.snxsch` format), Altium parity goals, and public industry standards. Source comments in `signex-render` reference this spec instead of citing third-party EDA tooling.
+- **`docs/audit/comments-scrub-2026-05-01.md`** (new audit doc) — records the 2026-05-01 source comment scrub that removed residual KiCad C++ class name references from `signex-render` and `signex-engine` and `signex-output/pdf` even after the v0.10.0 "Standard" rename. Eight comment lines across seven files reworded to neutral descriptions; algorithms unchanged.
+- **`docs/internal/CLEANROOM_REWRITE_PLAN.md`** (private submodule) — plan for the v0.12 cleanroom milestone: deletion scope, working rules for the fresh agent session, six rewrite phases, CI guard extensions.
+
+### Changed — license-guard CI
+
+- `no-kicad-cpp-class-names` job (new) forbids `SCH_PAINTER`, `SCH_FIELD::`, `SCH_LABEL`, `SCH_PIN`, `SCH_SYMBOL`, `LIB_SYMBOL::`, `LIB_PIN::`, `sch_painter.cpp` / `sch_symbol.cpp` / `sch_label.cpp` / `sch_pin.cpp` / `lib_symbol.cpp`, and `eeschema/` anywhere in `crates/`.
+- `no-derivation-attribution-markers` job (new) forbids `DeepWiki`, `KiCad mirror source`, `extracted from KiCad`, `based on KiCad source` anywhere in the repo (excluding the audit trail and `docs/LICENSING.md`).
+- Total License Guard jobs: 6 → 8.
+
+### Changed — minor
+
+- `LibraryCreateOptionsState` and the Enable Version Control modal hoist the `intro` paragraph `format!` out of the view-body function — built once at modal-open time and stored on the state, no per-frame allocation.
+
+### Changed
+
+- **`PinElectricalType` → `PinDirection`** in the new `signex-library` crate to satisfy the License Guard's `no-removed-kicad-api` strict job. Variant set unchanged. Note: this is a different enum from `signex_types::schematic::PinDirection` (which has Signex-original variants); the two coexist as path-qualified `signex_library::PinDirection` vs `signex_types::schematic::PinDirection`. Consolidating them is a follow-up refactor.
+- `crates/signex-types/src/library.rs` — the v0.10.0 thin `Library` / `LibraryComponent` types are removed. Library Browser tab content now reads through the `signex-library` adapter trait.
+- `assets/samples/library/resistors-standard.snxlib` — removed; the obsolete v0.10.0 sample no longer fits the DBLib data model.
+
+### Documentation
+
+- Three internal-docs plans landed in `docs/internal/docs/` via the private subrepo: `v0.9-library-plan.md` (foundation), `v0.9-library-refactor-plan.md` (primitive split / DBLib shape), `v0.9-refactor-2-plan.md` (table-row + UI layout spec). The older `LIBRARY_PLAN.md` design-intent doc is retired in favour of the concrete implementation plans.
+- `docs/audit/history-rewrite-2026-04-29.md` — records the rationale, scope, and audit trail of the 2026-04-29 KiCad-name scrub history rewrite. Cosmetic, not a license remediation; full pre-rewrite chain preserved in the maintainer's backup repo.
+- `docs/internal/docs/issue-62-execution-plan.md` and `issue-62-licensing-remediation.md` — strategy docs behind the v0.9.0 Apache-clean cutover, pulled into the canonical internal docs home.
+
+### Provenance
+
+Every commit on the original 169-commit chain is preserved both locally and on origin under:
+
+- `refs/tags/v0.9-snxlib-paused-2026-04-29` (b9eac1f3) — library WIP as paused for the Apache-clean cutover.
+- `refs/tags/v0.10-library-cherry-pick-2026-04-29` (012264fb) — fully reconciled post-cutover state, parent of this restore.
+- `refs/tags/v0.11-pre-library-restore-2026-04-29` (e8b8e8f5) — branch tip before the squash, preserves the Phase A polish (filter + preview pane scaffolding) that was superseded by the orphan's richer Library Browser.
+
+The squash here is a tree-only restoration; full per-commit authorship and history is reachable via those tags.
+
+### Constraints — Apache-clean invariants (carry forward from v0.9.0)
+
+- Zero `kicad`/`KiCad`/`KICAD` substrings under `crates/` (License Guard's `no-kicad-shaped-symbols` strict job: PASS).
+- No `kicad-parser` / `kicad-writer` Cargo deps or imports.
+- No removed-API surface re-introduced (`PinElectricalType`, numeric `LayerId` constants, `parse_markup`, `kicad_auto_net_name_from_pins`, `find_kicad_symbols_dir`, …).
+- `cargo-deny check licenses` green — every transitive dep is permissive.
+- Every PR description carries the self-declaration block (Source basis / LLM-assisted / KiCad source consulted).
+
+
 ## [0.10.0] — 2026-04-29
 
 First slice of the **v0.10 Library & Polish** milestone — the Library Browser tab scaffold. Double-clicking a `.snxlib` file in the project tree now opens a dedicated tab that lists the components contained in the library package; the surface is intentionally read-only this release. v0.10.1 adds the side-by-side symbol preview pane on row click; v0.10.2 adds the filter / search bar above the table.

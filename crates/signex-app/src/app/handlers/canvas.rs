@@ -7,7 +7,7 @@ use super::super::helpers::constrain_segments;
 use super::super::*;
 
 /// Default stroke width applied when the user hasn't edited the
-/// pre_placement Width value yet. "default line width"
+/// pre_placement Width value yet. Standard's "default line width"
 /// is ~0.15 mm in schematics; showing 0 in the properties panel
 /// used to confuse users because the line was still visible
 /// (renderer substitutes its own default for 0).
@@ -17,7 +17,7 @@ const DEFAULT_SHAPE_STROKE_MM: f64 = 0.15;
 /// pre_placement slot (TAB-configured) so shape tools pick up the
 /// user's Width/Fill edits when committing the next click.
 fn pre_placement_shape(
-    doc: &super::super::states::DocumentState,
+    doc: &super::super::state::DocumentState,
 ) -> (f64, signex_types::schematic::FillType) {
     doc.panel_ctx
         .pre_placement
@@ -162,7 +162,7 @@ impl Signex {
         // Skip if this tab is already undocked (owned by another window).
         let tab = self.document_state.tabs.get(idx)?;
         if self.ui_state.windows.values().any(
-            |k| matches!(k, super::super::states::WindowKind::UndockedTab { path, .. } if path == &tab.path),
+            |k| matches!(k, super::super::state::WindowKind::UndockedTab { path, .. } if path == &tab.path),
         ) {
             return None;
         }
@@ -208,14 +208,14 @@ impl Signex {
         &self,
         cursor_x: f32,
         cursor_y: f32,
-    ) -> Option<super::super::states::ModalId> {
+    ) -> Option<super::super::state::ModalId> {
         let (modal, _, _) = self.ui_state.modal_dragging?;
         // Skip if it's already detached — another path owns it now.
         if self
             .ui_state
             .windows
             .values()
-            .any(|k| matches!(k, super::super::states::WindowKind::DetachedModal(m) if *m == modal))
+            .any(|k| matches!(k, super::super::state::WindowKind::DetachedModal(m) if *m == modal))
         {
             return None;
         }
@@ -308,6 +308,38 @@ impl Signex {
                 self.ui_state.cursor_x = x as f64;
                 self.ui_state.cursor_y = y as f64;
                 self.ui_state.zoom = zoom_pct;
+                // Hover detection: fast hit-test against the active
+                // schematic snapshot so the tooltip overlay (in
+                // `view::collect_overlays`) can show after a 250 ms
+                // dwell on a placed symbol. Snapshot lookups are cheap
+                // (Vec scan keyed by world bounds), so doing this on
+                // every cursor tick is fine. Other hit kinds (wires,
+                // labels) intentionally fall through — only Symbol
+                // hovers carry library metadata worth surfacing.
+                let hover_uuid: Option<uuid::Uuid> = self
+                    .interaction_state
+                    .active_canvas()
+                    .active_snapshot()
+                    .and_then(|snap| {
+                        signex_render::schematic::hit_test::hit_test(snap, x as f64, y as f64)
+                    })
+                    .and_then(|hit| {
+                        matches!(hit.kind, signex_types::schematic::SelectedKind::Symbol)
+                            .then_some(hit.uuid)
+                    });
+                if hover_uuid != self.interaction_state.hover_symbol_uuid {
+                    self.interaction_state.hover_symbol_uuid = hover_uuid;
+                    self.interaction_state.hover_started_at =
+                        hover_uuid.map(|_| std::time::Instant::now());
+                }
+                // Track screen position for the tooltip's translate
+                // offset on every move, even if the symbol is the
+                // same (the card follows the cursor).
+                self.interaction_state.hover_screen_pos = if hover_uuid.is_some() {
+                    Some(self.interaction_state.last_mouse_pos)
+                } else {
+                    None
+                };
                 // Lasso auto-sample: while a lasso is anchored (>= 1
                 // vertex already committed), sample a new vertex each
                 // time the cursor moves more than SAMPLE_MIN from the
@@ -403,9 +435,9 @@ impl Signex {
                 // Active Bar and is now clicking a wire. Union-find the
                 // whole connected net and apply the colour (or clear it
                 // if alpha == 0). Colours stay in app state so the
-                // .snxsch round-trips unchanged — There is no
+                // .standard_sch round-trips unchanged — Standard has no
                 // notion of per-wire override colours.
-                if let Some(pending) = self.ui_state.net_color.pending_color {
+                if let Some(pending) = self.ui_state.pending_net_color {
                     // Snap the click point to the grid before hit
                     // testing so the click lands where the pen ghost
                     // previewed. Without this the cursor's raw world
@@ -555,12 +587,12 @@ impl Signex {
                         let mut diff = false;
                         for uuid in &net_wire_uuids {
                             if pending.a == 0 {
-                                if self.ui_state.net_color.wire_color_overrides.contains_key(uuid) {
+                                if self.ui_state.wire_color_overrides.contains_key(uuid) {
                                     diff = true;
                                     break;
                                 }
                             } else {
-                                match self.ui_state.net_color.wire_color_overrides.get(uuid) {
+                                match self.ui_state.wire_color_overrides.get(uuid) {
                                     Some(c) if *c == pending => {}
                                     _ => {
                                         diff = true;
@@ -571,19 +603,18 @@ impl Signex {
                         }
                         if diff {
                             self.ui_state
-                                .net_color
-                                .undo
-                                .push(self.ui_state.net_color.wire_color_overrides.clone());
+                                .net_color_undo
+                                .push(self.ui_state.wire_color_overrides.clone());
                             for uuid in net_wire_uuids {
                                 if pending.a == 0 {
-                                    self.ui_state.net_color.wire_color_overrides.remove(&uuid);
+                                    self.ui_state.wire_color_overrides.remove(&uuid);
                                 } else {
-                                    self.ui_state.net_color.wire_color_overrides.insert(uuid, pending);
+                                    self.ui_state.wire_color_overrides.insert(uuid, pending);
                                 }
                             }
                             self.interaction_state
                                 .active_canvas_mut()
-                                .wire_color_overrides = self.ui_state.net_color.wire_color_overrides.clone();
+                                .wire_color_overrides = self.ui_state.wire_color_overrides.clone();
                             self.interaction_state
                                 .active_canvas_mut()
                                 .clear_content_cache();
@@ -609,10 +640,10 @@ impl Signex {
                         );
                         if let Some(reference) = hit {
                             let direction = match picker {
-                                super::super::states::ReorderPicker::Above => {
+                                super::super::state::ReorderPicker::Above => {
                                     signex_engine::ReorderDirection::JustAbove(reference.uuid)
                                 }
-                                super::super::states::ReorderPicker::Below => {
+                                super::super::state::ReorderPicker::Below => {
                                     signex_engine::ReorderDirection::JustBelow(reference.uuid)
                                 }
                             };
@@ -648,13 +679,9 @@ impl Signex {
                 // and returns to normal selection — same convention as most
                 // IDEs (Escape cancels, click elsewhere confirms).
                 if let Some(state) = self.interaction_state.editing_text.take() {
-                    let canvas = self.interaction_state.active_canvas_mut();
-                    canvas.editing_text_uuid = None;
-                    canvas.editing_text_value = None;
-                    canvas.clear_content_cache();
-                    canvas.clear_overlay_cache();
                     if state.text != state.original_text {
-                        let stored = signex_render::schematic::text::escape_for_storage(&state.text);
+                        let stored =
+                            signex_render::schematic::text::escape_for_standard(&state.text);
                         let cmd = match state.kind {
                             signex_types::schematic::SelectedKind::Label => {
                                 Some(signex_engine::Command::UpdateText {
@@ -777,6 +804,7 @@ impl Signex {
                                     hidden: false,
                                 }),
                                 fields_autoplaced: true,
+                                fields_user_placed: false,
                                 dnp: false,
                                 in_bom: false,
                                 on_board: true,
@@ -786,6 +814,9 @@ impl Signex {
                                 custom_properties: Vec::new(),
                                 pin_uuids: std::collections::HashMap::new(),
                                 instances: Vec::new(),
+                                library_id: None,
+                                row_id: None,
+                                library_version: String::new(),
                             };
                             self.apply_engine_command(
                                 signex_engine::Command::PlaceSymbol { symbol: sym },
@@ -1080,7 +1111,7 @@ impl Signex {
                 // stored `position`) lands on a grid dot after the move, not
                 // just the drag delta. Snapping only the delta preserves an
                 // off-grid origin; users expect the endpoint to be on-grid
-                // matching Altium do.
+                // like Standard/Altium do.
                 let (dx, dy) = if self.ui_state.snap_enabled {
                     let gs = self.ui_state.grid_size_mm as f64;
                     let primary = self
@@ -1338,15 +1369,11 @@ impl Signex {
                                 .iter()
                                 .find(|l| l.uuid == hit.uuid)
                                 .map(|l| {
-                                    let aabb = signex_render::schematic::label::label_text_aabb(l);
                                     (
                                         l.text.clone(),
                                         SelectedKind::Label,
                                         l.position.x,
                                         l.position.y,
-                                        aabb.min_x,
-                                        aabb.min_y,
-                                        aabb.max_y - aabb.min_y,
                                     )
                                 }),
                             SelectedKind::TextNote => snapshot
@@ -1354,42 +1381,27 @@ impl Signex {
                                 .iter()
                                 .find(|t| t.uuid == hit.uuid)
                                 .map(|t| {
-                                    let aabb = signex_render::schematic::text::text_note_aabb(t);
                                     (
                                         t.text.clone(),
                                         SelectedKind::TextNote,
                                         t.position.x,
                                         t.position.y,
-                                        aabb.min_x,
-                                        aabb.min_y,
-                                        aabb.max_y - aabb.min_y,
                                     )
                                 }),
                             _ => None,
                         };
-                        if let Some((raw_text, kind, wx, wy, mx, my, h)) = edit_info {
+                        if let Some((raw_text, kind, wx, wy)) = edit_info {
                             // Show the user the visible form (e.g. "/OE"), not
-                            // the escape-form storage form ("{slash}OE").
+                            // the Standard-escaped storage form ("{slash}OE").
                             let display_text = expand_char_escapes(&raw_text);
                             self.interaction_state.editing_text = Some(TextEditState {
                                 uuid: hit.uuid,
                                 kind,
                                 original_text: display_text.clone(),
-                                text: display_text.clone(),
+                                text: display_text,
                                 world_x: wx,
                                 world_y: wy,
-                                world_min_x: mx,
-                                world_min_y: my,
-                                world_height: h,
                             });
-                            // Hide the underlying glyphs so the inline
-                            // editor isn't rendered on top of the
-                            // static canvas text.
-                            let canvas = self.interaction_state.active_canvas_mut();
-                            canvas.editing_text_uuid = Some(hit.uuid);
-                            canvas.editing_text_value = Some(display_text);
-                            canvas.clear_content_cache();
-                            canvas.clear_overlay_cache();
                         }
                     }
                 }
@@ -1469,6 +1481,7 @@ impl Signex {
             Unit::Inch => Unit::Micrometer,
             Unit::Micrometer => Unit::Mm,
         };
+        crate::fonts::write_unit_pref(self.ui_state.unit);
     }
 
     fn resolve_child_sheet_path(&self, child_filename: &str) -> Option<std::path::PathBuf> {

@@ -9,10 +9,11 @@
 //! user is looking at on the canvas.
 //!
 //! Pre-existing tests + the empty `PdfOptions::default()` keep using
-//! the historical eeschema-style palette (`SchematicPalette::classic()`).
-//! The unified Print Preview hands the active theme's palette in
-//! when it kicks off an export, so users see Altium-style cream /
-//! Catppuccin Mocha / etc. honoured on paper too.
+//! the legacy `SchematicPalette::classic()` (cream paper / dark-blue
+//! wires / mustard symbols) so historical /Page byte snapshots stay
+//! stable. The unified Print Preview hands the active theme's
+//! palette in when it kicks off an export, so users see Altium-style
+//! cream / Catppuccin Mocha / etc. honoured on paper too.
 
 use signex_types::theme::CanvasColors;
 
@@ -50,8 +51,8 @@ pub struct SchematicPalette {
 }
 
 impl SchematicPalette {
-    /// Historical eeschema-style palette — cream paper, dark-blue
-    /// wires, mustard symbol bodies. Preserved for tests and as the
+    /// Legacy default palette — cream paper, dark-blue wires, mustard
+    /// symbol bodies. Preserved for tests and as the
     /// default-for-tests `PdfOptions::default()` palette so the
     /// existing /Page bytes don't shift under tests.
     pub const fn classic() -> Self {
@@ -130,11 +131,7 @@ impl From<CanvasColors> for SchematicPalette {
 /// `signex_types::theme::Color` is u8 RGBA — strip alpha and divide
 /// by 255 so the renderer can feed PDF / tiny-skia f32 colour ops.
 fn rgb(c: signex_types::theme::Color) -> (f32, f32, f32) {
-    (
-        c.r as f32 / 255.0,
-        c.g as f32 / 255.0,
-        c.b as f32 / 255.0,
-    )
+    (c.r as f32 / 255.0, c.g as f32 / 255.0, c.b as f32 / 255.0)
 }
 
 #[cfg(test)]

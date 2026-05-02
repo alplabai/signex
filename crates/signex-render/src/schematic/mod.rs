@@ -1,1082 +1,928 @@
-//! Schematic element rendering -- wires, symbols, labels, pins, etc.
+//! Signex schematic renderer — public API + per-primitive sub-modules.
 //!
-//! Each submodule handles rendering one schematic element type using
-//! the Iced Canvas `Frame` API. All functions are pure: they take data,
-//! a `ScreenTransform`, and colors, then draw onto the frame.
+//! This module is the result of the v0.12 cleanroom rewrite. It is built
+//! against [`signex_types::schematic`] domain types and the rendering
+//! rules in `docs/RENDERING_RULES.md`; no third-party EDA source code,
+//! file-format spec, or contaminated agent skill was consulted during its
+//! design or implementation.
+//!
+//! # Architecture overview
+//!
+//! The renderer follows a layered, snapshot-driven design:
+//!
+//! 1. The caller (typically `signex-app::canvas`) builds a
+//!    [`SchematicSnapshot`] each frame — a borrow-only bundle of the
+//!    sheet, theme, selection, and render options. Snapshots are cheap.
+//! 2. The caller passes a [`Viewport`] (world ↔ screen transform) and a
+//!    mutable [`RenderLayers`] cache.
+//! 3. [`render`] walks the snapshot and fills the cache layers' iced
+//!    [`Frame`]s in three passes (background → content → overlay).
+//! 4. Selection / hover / preview overlays go in the *overlay* layer
+//!    only, so an ordinary click never invalidates the (more expensive)
+//!    content layer.
+//! 5. Hit testing builds a [`HitIndex`] from the snapshot — a spatial
+//!    hash that gives O(k) lookup where k is the bucket population near
+//!    the cursor.
+//!
+//! Per-primitive draw functions live in sibling modules (`wire`, `bus`,
+//! `bus_entry`, `junction`, `no_connect`, `text`, `drawing`, `pin`,
+//! `label`, `symbol`). Each primitive only depends on
+//! [`RenderContext`], its own domain type, and the spec.
+//!
+//! # Spec citations
+//!
+//! - `docs/RENDERING_RULES.md::sch-labels` — label flag geometry.
+//! - `docs/RENDERING_RULES.md::field-rotation-and-justify` — field
+//!   rotation folding and justify-flip on parent transform.
+//! - `docs/RENDERING_RULES.md::pin-shape-decorators` — IEEE-Std-91
+//!   decorator catalog used by [`pin`].
+//! - `docs/UX_REFERENCE_ALTIUM.md` — Altium parity baseline.
 
+use signex_types::schematic::{Aabb, Point, SchematicSheet, SelectedItem, Symbol};
+use signex_types::theme::CanvasColors;
+
+/// **Deprecated v0.12 extension trait** that exposes the v0.11
+/// per-field accessors as inherent methods on `SchematicSheet`. Old
+/// callers (e.g. `signex-app`'s field-drag preview) reach for
+/// `sheet.symbol_position(uuid)` etc. — import this trait at the
+/// call site to keep them compiling.
+#[allow(deprecated)]
+pub trait SchematicSheetExt {
+    /// World-space position of the placed symbol identified by
+    /// `uuid`. `None` when no such symbol exists.
+    fn symbol_position(&self, uuid: uuid::Uuid) -> Option<(f64, f64)>;
+
+    /// World-space position of the *reference* field on the placed
+    /// symbol identified by `uuid`, or `None` when the symbol has no
+    /// stored reference text or doesn't exist.
+    fn symbol_reference_position(&self, uuid: uuid::Uuid) -> Option<(f64, f64)>;
+
+    /// World-space position of the *value* field on the placed
+    /// symbol identified by `uuid`.
+    fn symbol_value_position(&self, uuid: uuid::Uuid) -> Option<(f64, f64)>;
+}
+
+#[allow(deprecated)]
+impl SchematicSheetExt for SchematicSheet {
+    fn symbol_position(&self, uuid: uuid::Uuid) -> Option<(f64, f64)> {
+        self.symbols
+            .iter()
+            .find(|s| s.uuid == uuid)
+            .map(|s| (s.position.x, s.position.y))
+    }
+    fn symbol_reference_position(&self, uuid: uuid::Uuid) -> Option<(f64, f64)> {
+        self.symbols
+            .iter()
+            .find(|s| s.uuid == uuid)
+            .and_then(|s| s.ref_text.as_ref())
+            .map(|t| (t.position.x, t.position.y))
+    }
+    fn symbol_value_position(&self, uuid: uuid::Uuid) -> Option<(f64, f64)> {
+        self.symbols
+            .iter()
+            .find(|s| s.uuid == uuid)
+            .and_then(|s| s.val_text.as_ref())
+            .map(|t| (t.position.x, t.position.y))
+    }
+}
+
+pub mod bus;
+pub mod bus_entry;
 pub mod drawing;
+pub mod field_style;
 pub mod hit_test;
 pub mod junction;
 pub mod label;
+pub mod no_connect;
 pub mod pin;
 pub mod selection;
 pub mod symbol;
 pub mod text;
+pub mod viewport;
 pub mod wire;
 
-use iced::Rectangle;
-use iced::widget::canvas;
+mod util;
 
-use std::collections::HashMap;
-use std::sync::Arc;
-use uuid::Uuid;
-
-use signex_types::schematic::{
-    Aabb, Bus, BusEntry, ChildSheet, Junction, Label, LabelType, LibSymbol, NoConnect, SchDrawing,
-    SchematicSheet, Symbol, TextNote, Wire,
-};
-use signex_types::theme::CanvasColors;
-
-use crate::PowerPortStyle;
-use crate::colors::to_iced;
+pub use hit_test::HitIndex;
+pub use viewport::Viewport;
 
 // ---------------------------------------------------------------------------
-// ScreenTransform -- decouples rendering from the app-layer Camera
+// v0.11 → v0.12 compatibility aliases.
+//
+// The cleanroom rewrite redesigned the public API (Stage 1 Q2 = b).
+// These aliases let the v0.11 surface keep compiling against
+// `signex-app` while the consumer-side rename lands in a follow-up
+// PR. The aliases are deprecated; remove them in v0.13 once
+// `signex-app` no longer imports the old names.
 // ---------------------------------------------------------------------------
 
-/// Converts world coordinates (mm) to screen pixels.
+/// **Deprecated v0.12 alias.** v0.11's `SchematicRenderSnapshot` was
+/// equivalent to an owned [`signex_types::SchematicSheet`]; the alias
+/// keeps the v0.11 type identifier compiling. Construct a wrapper
+/// directly via `sheet.clone()` instead of the legacy
+/// `SchematicRenderSnapshot::from_sheet(...)` helper.
+#[deprecated(
+    since = "0.12.0",
+    note = "use SchematicSnapshot (borrow-based) or SchematicSheet (owned)"
+)]
+pub type SchematicRenderSnapshot = SchematicSheet;
+
+/// **Deprecated v0.12 wrapper** for the v0.11 `SchematicRenderCache`.
 ///
-/// The app layer constructs this from its `Camera` before calling render
-/// functions, so `signex-render` never depends on `signex-app`.
-#[derive(Debug, Clone, Copy)]
-pub struct ScreenTransform {
-    /// Screen-pixel offset of the world origin.
-    pub offset_x: f32,
-    pub offset_y: f32,
-    /// Pixels per mm -- higher values mean more zoom.
-    pub scale: f32,
+/// Stores the iced canvas caches (background / content / overlay) and
+/// — for v0.11 compat — a bundled sheet so callers that ask for
+/// `cache.snapshot()` can retrieve the last sheet the cache rebuilt
+/// against. New code should pass a fresh [`SchematicSnapshot`] into
+/// [`render`] per frame.
+#[derive(Default)]
+#[deprecated(since = "0.12.0", note = "use RenderLayers")]
+pub struct SchematicRenderCache {
+    layers: RenderLayers,
+    sheet: Option<SchematicSheet>,
+    preview: Option<SchematicSheet>,
 }
 
-/// Render-facing snapshot of the visible schematic.
-///
-/// This trims persistence and document metadata away from the canvas seam while
-/// keeping the fields that rendering, hit-testing, and selection overlays need.
-#[derive(Debug, Clone)]
-pub struct SchematicRenderSnapshot {
-    pub paper_size: String,
-    pub root_sheet_page: String,
-    pub symbols: Vec<Symbol>,
-    pub wires: Vec<Wire>,
-    pub junctions: Vec<Junction>,
-    pub labels: Vec<Label>,
-    pub child_sheets: Vec<ChildSheet>,
-    pub no_connects: Vec<NoConnect>,
-    pub text_notes: Vec<TextNote>,
-    pub buses: Vec<Bus>,
-    pub bus_entries: Vec<BusEntry>,
-    pub drawings: Vec<SchDrawing>,
-    pub lib_symbols: HashMap<String, LibSymbol>,
-    content_bounds: Option<Aabb>,
-}
-
-impl SchematicRenderSnapshot {
+#[allow(deprecated)]
+impl SchematicRenderCache {
+    /// Build a cache from a sheet — stores a clone of the sheet so
+    /// `cache.snapshot()` can be queried later.
     pub fn from_sheet(sheet: &SchematicSheet) -> Self {
         Self {
-            paper_size: sheet.paper_size.clone(),
-            root_sheet_page: sheet.root_sheet_page.clone(),
-            symbols: sheet.symbols.clone(),
-            wires: sheet.wires.clone(),
-            junctions: sheet.junctions.clone(),
-            labels: sheet.labels.clone(),
-            child_sheets: sheet.child_sheets.clone(),
-            no_connects: sheet.no_connects.clone(),
-            text_notes: sheet.text_notes.clone(),
-            buses: sheet.buses.clone(),
-            bus_entries: sheet.bus_entries.clone(),
-            drawings: sheet.drawings.clone(),
-            lib_symbols: sheet.lib_symbols.clone(),
-            content_bounds: sheet.content_bounds(),
+            layers: RenderLayers::default(),
+            sheet: Some(sheet.clone()),
+            preview: None,
         }
     }
 
-    pub fn content_bounds(&self) -> Option<Aabb> {
-        self.content_bounds
+    /// Update the cached sheet and clear the iced caches according to
+    /// `invalidation`.
+    pub fn update_from_sheet(&mut self, sheet: &SchematicSheet, invalidation: RenderInvalidation) {
+        self.sheet = Some(sheet.clone());
+        invalidation.clear_into(&self.layers);
+    }
+
+    /// The most recently snapshotted sheet — panics when the cache
+    /// was constructed via `Default` and never received a sheet.
+    /// Maintains v0.11's call shape (some callers rely on a `&Sheet`
+    /// rather than `Option<&Sheet>`).
+    pub fn snapshot(&self) -> &SchematicSheet {
+        self.sheet
+            .as_ref()
+            .expect("RenderCache::snapshot called before from_sheet/update_from_sheet")
+    }
+
+    /// Optional ghost-preview snapshot for tools that paint a hover
+    /// preview (placement, drag). v0.12: always `None`; consumers
+    /// should paint previews directly on the overlay frame.
+    pub fn prepared_preview(&self) -> Option<&SchematicSheet> {
+        self.preview.as_ref()
+    }
+
+    /// Direct access to the layered iced canvas caches.
+    pub fn layers(&self) -> &RenderLayers {
+        &self.layers
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct RenderInvalidation(u16);
+#[allow(deprecated)]
+impl std::fmt::Debug for SchematicRenderCache {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SchematicRenderCache")
+            .finish_non_exhaustive()
+    }
+}
+
+/// **Deprecated v0.12 alias.** Use [`Viewport`].
+#[deprecated(since = "0.12.0", note = "use Viewport")]
+pub type ScreenTransform = Viewport;
+
+/// **Deprecated v0.12 helper.** Apply a placed symbol's transform to
+/// a library-space point. New code should use
+/// `SymbolTransform::from_symbol(sym).apply(point)`.
+#[deprecated(
+    since = "0.12.0",
+    note = "use SymbolTransform::from_symbol(sym).apply(point)"
+)]
+pub fn instance_transform(symbol: &Symbol, local_point: &Point) -> (f64, f64) {
+    let world = SymbolTransform::from_symbol(symbol).apply(*local_point);
+    (world.x, world.y)
+}
+
+// ---------------------------------------------------------------------------
+// Errors
+// ---------------------------------------------------------------------------
+
+/// Errors the schematic renderer surfaces at module boundaries.
+///
+/// Library code returns `Result<_, RenderError>` (or
+/// `Result<_, Vec<RenderError>>` for the partial-render case) so
+/// `signex-app` can surface a Signal-AI diagnostic, log to the
+/// messages panel, or quietly skip the offending element. The
+/// renderer always paints what it can and reports issues alongside
+/// — partial render is preferred over a blank canvas.
+///
+/// `#[non_exhaustive]` because new variants are expected (e.g. when the
+/// PCB renderer reintroduces itself or when symbol-pinning detects
+/// drift). Callers must `match` with a `_` fallthrough.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum RenderError {
+    /// A `Symbol::lib_id` does not appear in
+    /// `SchematicSheet::lib_symbols`. The renderer paints a small
+    /// placeholder marker at `symbol.position` so the user can still
+    /// click + delete + relink the broken instance, and reports the
+    /// missing lib_id back to the caller.
+    #[error("missing library symbol for lib_id `{0}`")]
+    MissingLibSymbol(String),
+
+    /// A transform produced a NaN/Inf coordinate. Returned instead of
+    /// rendering NaN-corrupt geometry that iced silently turns into
+    /// hour-glass paths.
+    #[error("malformed transform: {0}")]
+    MalformedTransform(&'static str),
+}
+
+// ---------------------------------------------------------------------------
+// Render-cache invalidation
+// ---------------------------------------------------------------------------
+
+/// Tracks which of the three cache layers must be rebuilt on the next
+/// render pass. Carrying this as a struct of bools (instead of a single
+/// `dirty: bool`) lets a tool that only changed selection invalidate
+/// the [`RenderLayers::overlay`] cache without forcing the heavier
+/// [`RenderLayers::content`] cache to retessellate.
+///
+/// Use [`Self::all`] when something fundamental (theme change, sheet
+/// swap) requires every layer to redraw.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[must_use]
+pub struct RenderInvalidation {
+    /// Static layer — page outline, paper background, optional title
+    /// block. Invalidated by theme change, paper-size change, or the
+    /// first render of a sheet.
+    pub background: bool,
+    /// Document content — wires, symbols, labels, drawings.
+    /// Invalidated by document edits.
+    pub content: bool,
+    /// Transient overlay — selection rectangles, ghosts, hover hints,
+    /// ERC marker pins. Invalidated by every selection / hover change.
+    pub overlay: bool,
+}
 
 impl RenderInvalidation {
-    pub const NONE: Self = Self(0);
-    pub const SYMBOLS: Self = Self(1 << 0);
-    pub const WIRES: Self = Self(1 << 1);
-    pub const LABELS: Self = Self(1 << 2);
-    pub const TEXT_NOTES: Self = Self(1 << 3);
-    pub const BUSES: Self = Self(1 << 4);
-    pub const BUS_ENTRIES: Self = Self(1 << 5);
-    pub const JUNCTIONS: Self = Self(1 << 6);
-    pub const NO_CONNECTS: Self = Self(1 << 7);
-    pub const CHILD_SHEETS: Self = Self(1 << 8);
-    pub const DRAWINGS: Self = Self(1 << 9);
-    pub const LIB_SYMBOLS: Self = Self(1 << 10);
-    pub const PAPER: Self = Self(1 << 11);
-    pub const FULL: Self = Self(u16::MAX);
-
-    pub fn contains(self, other: Self) -> bool {
-        (self.0 & other.0) == other.0
+    /// All three layers dirty. v0.11 also exposed this as `FULL`.
+    #[inline]
+    pub const fn all() -> Self {
+        Self {
+            background: true,
+            content: true,
+            overlay: true,
+        }
     }
 
-    pub fn intersects(self, other: Self) -> bool {
-        (self.0 & other.0) != 0
+    /// **Deprecated v0.12 alias** for [`Self::all`].
+    pub const FULL: Self = Self {
+        background: true,
+        content: true,
+        overlay: true,
+    };
+
+    /// **Deprecated v0.12 alias** for the default (all-clean) state.
+    pub const NONE: Self = Self {
+        background: false,
+        content: false,
+        overlay: false,
+    };
+
+    // v0.11 per-primitive invalidation flags. The new API is 3-layer
+    // (background/content/overlay) instead, so all per-primitive flags
+    // alias to "content layer dirty" — the safest, smallest superset
+    // that preserves correctness without splitting layers further.
+
+    /// **Deprecated v0.12 alias.** v0.11's PAPER flag invalidated only
+    /// the paper / title-block. The new 3-layer cache puts those in
+    /// the *background* layer, so v0.12 maps PAPER → BACKGROUND_ONLY
+    /// (no over-invalidation of content + overlay).
+    pub const PAPER: Self = Self::BACKGROUND_ONLY;
+    /// **Deprecated v0.12 alias.** v0.11 per-primitive flag.
+    pub const WIRES: Self = Self::CONTENT_ONLY;
+    /// **Deprecated v0.12 alias.** v0.11 per-primitive flag.
+    pub const SYMBOLS: Self = Self::CONTENT_ONLY;
+    /// **Deprecated v0.12 alias.** v0.11 per-primitive flag.
+    pub const LIB_SYMBOLS: Self = Self::CONTENT_ONLY;
+    /// **Deprecated v0.12 alias.** v0.11 per-primitive flag.
+    pub const LABELS: Self = Self::CONTENT_ONLY;
+    /// **Deprecated v0.12 alias.** v0.11 per-primitive flag.
+    pub const JUNCTIONS: Self = Self::CONTENT_ONLY;
+    /// **Deprecated v0.12 alias.** v0.11 per-primitive flag.
+    pub const NO_CONNECTS: Self = Self::CONTENT_ONLY;
+    /// **Deprecated v0.12 alias.** v0.11 per-primitive flag.
+    pub const TEXT_NOTES: Self = Self::CONTENT_ONLY;
+    /// **Deprecated v0.12 alias.** v0.11 per-primitive flag.
+    pub const DRAWINGS: Self = Self::CONTENT_ONLY;
+    /// **Deprecated v0.12 alias.** v0.11 per-primitive flag.
+    pub const CHILD_SHEETS: Self = Self::CONTENT_ONLY;
+    /// **Deprecated v0.12 alias.** v0.11 per-primitive flag.
+    pub const BUS_ENTRIES: Self = Self::CONTENT_ONLY;
+    /// **Deprecated v0.12 alias.** v0.11 per-primitive flag.
+    pub const BUSES: Self = Self::CONTENT_ONLY;
+
+    /// Helper used by the per-primitive aliases above.
+    pub const CONTENT_ONLY: Self = Self {
+        background: false,
+        content: true,
+        overlay: false,
+    };
+
+    /// Background-only invalidation (paper / title-block / page outline).
+    /// Used by [`Self::PAPER`].
+    pub const BACKGROUND_ONLY: Self = Self {
+        background: true,
+        content: false,
+        overlay: false,
+    };
+
+    /// Only the overlay layer is dirty — the typical hot path when the
+    /// user changes selection, hovers, or moves a placement preview.
+    #[inline]
+    pub const fn overlay_only() -> Self {
+        Self {
+            background: false,
+            content: false,
+            overlay: true,
+        }
     }
 
-    pub fn affects_content_bounds(self) -> bool {
-        self.intersects(
-            Self::SYMBOLS
-                | Self::WIRES
-                | Self::LABELS
-                | Self::TEXT_NOTES
-                | Self::BUSES
-                | Self::BUS_ENTRIES
-                | Self::JUNCTIONS
-                | Self::NO_CONNECTS
-                | Self::CHILD_SHEETS
-                | Self::DRAWINGS
-                | Self::FULL,
-        )
+    /// True when at least one layer needs work.
+    #[inline]
+    pub const fn any(&self) -> bool {
+        self.background || self.content || self.overlay
+    }
+
+    /// Apply the dirty flags to a [`RenderLayers`] by clearing the
+    /// caches that need to redraw.
+    #[inline]
+    pub fn clear_into(&self, layers: &RenderLayers) {
+        if self.background {
+            layers.background.clear();
+        }
+        if self.content {
+            layers.content.clear();
+        }
+        if self.overlay {
+            layers.overlay.clear();
+        }
     }
 }
 
 impl std::ops::BitOr for RenderInvalidation {
     type Output = Self;
-
-    fn bitor(self, rhs: Self) -> Self::Output {
-        Self(self.0 | rhs.0)
+    #[inline]
+    fn bitor(self, rhs: Self) -> Self {
+        Self {
+            background: self.background | rhs.background,
+            content: self.content | rhs.content,
+            overlay: self.overlay | rhs.overlay,
+        }
     }
 }
 
 impl std::ops::BitOrAssign for RenderInvalidation {
+    #[inline]
     fn bitor_assign(&mut self, rhs: Self) {
-        self.0 |= rhs.0;
+        self.background |= rhs.background;
+        self.content |= rhs.content;
+        self.overlay |= rhs.overlay;
     }
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct PreparedPreviewGeometry {
-    symbol_positions: HashMap<Uuid, (f32, f32)>,
-    wire_midpoints: HashMap<Uuid, (f32, f32)>,
-    label_positions: HashMap<Uuid, (f32, f32)>,
-    symbol_reference_positions: HashMap<Uuid, (f32, f32)>,
-    symbol_value_positions: HashMap<Uuid, (f32, f32)>,
-}
-
-impl PreparedPreviewGeometry {
-    fn from_snapshot(snapshot: &SchematicRenderSnapshot) -> Self {
-        let mut prepared = Self::default();
-        prepared.refresh(snapshot, RenderInvalidation::FULL);
-        prepared
-    }
-
-    fn refresh(&mut self, snapshot: &SchematicRenderSnapshot, invalidation: RenderInvalidation) {
-        if invalidation.contains(RenderInvalidation::FULL)
-            || invalidation
-                .intersects(RenderInvalidation::SYMBOLS | RenderInvalidation::LIB_SYMBOLS)
-        {
-            self.symbol_positions = snapshot
-                .symbols
-                .iter()
-                .map(|symbol| {
-                    (
-                        symbol.uuid,
-                        (symbol.position.x as f32, symbol.position.y as f32),
-                    )
-                })
-                .collect();
-            self.symbol_reference_positions = snapshot
-                .symbols
-                .iter()
-                .filter_map(|symbol| {
-                    symbol.ref_text.as_ref().map(|prop| {
-                        (
-                            symbol.uuid,
-                            (prop.position.x as f32, prop.position.y as f32),
-                        )
-                    })
-                })
-                .collect();
-            self.symbol_value_positions = snapshot
-                .symbols
-                .iter()
-                .filter_map(|symbol| {
-                    symbol.val_text.as_ref().map(|prop| {
-                        (
-                            symbol.uuid,
-                            (prop.position.x as f32, prop.position.y as f32),
-                        )
-                    })
-                })
-                .collect();
-        }
-
-        if invalidation.contains(RenderInvalidation::FULL)
-            || invalidation.contains(RenderInvalidation::WIRES)
-        {
-            self.wire_midpoints = snapshot
-                .wires
-                .iter()
-                .map(|wire| {
-                    (
-                        wire.uuid,
-                        (
-                            ((wire.start.x + wire.end.x) / 2.0) as f32,
-                            ((wire.start.y + wire.end.y) / 2.0) as f32,
-                        ),
-                    )
-                })
-                .collect();
-        }
-
-        if invalidation.contains(RenderInvalidation::FULL)
-            || invalidation.contains(RenderInvalidation::LABELS)
-        {
-            self.label_positions = snapshot
-                .labels
-                .iter()
-                .map(|label| {
-                    (
-                        label.uuid,
-                        (label.position.x as f32, label.position.y as f32),
-                    )
-                })
-                .collect();
-        }
-    }
-
-    pub fn symbol_position(&self, uuid: Uuid) -> Option<(f32, f32)> {
-        self.symbol_positions.get(&uuid).copied()
-    }
-
-    pub fn wire_midpoint(&self, uuid: Uuid) -> Option<(f32, f32)> {
-        self.wire_midpoints.get(&uuid).copied()
-    }
-
-    pub fn label_position(&self, uuid: Uuid) -> Option<(f32, f32)> {
-        self.label_positions.get(&uuid).copied()
-    }
-
-    pub fn symbol_reference_position(&self, uuid: Uuid) -> Option<(f32, f32)> {
-        self.symbol_reference_positions.get(&uuid).copied()
-    }
-
-    pub fn symbol_value_position(&self, uuid: Uuid) -> Option<(f32, f32)> {
-        self.symbol_value_positions.get(&uuid).copied()
-    }
-}
-
-/// Shared render-cache seam for the visible schematic.
+/// Three-layer render cache — keep one per active schematic tab.
 ///
-/// The cache owns an `Arc` to the immutable render snapshot so canvas drawing,
-/// hit-testing, and selection overlays can share one prepared view-model.
-#[derive(Debug, Clone)]
-pub struct SchematicRenderCache {
-    snapshot: Arc<SchematicRenderSnapshot>,
-    prepared_preview: PreparedPreviewGeometry,
+/// The caches are iced [`canvas::Cache`](iced::widget::canvas::Cache)
+/// instances; clearing one schedules its `draw` closure to re-run on the
+/// next iced redraw cycle. See [`RenderInvalidation::clear_into`] for
+/// the typical update pattern.
+#[derive(Default)]
+pub struct RenderLayers {
+    pub background: iced::widget::canvas::Cache,
+    pub content: iced::widget::canvas::Cache,
+    pub overlay: iced::widget::canvas::Cache,
 }
 
-impl SchematicRenderCache {
-    pub fn from_sheet(sheet: &SchematicSheet) -> Self {
-        let snapshot = SchematicRenderSnapshot::from_sheet(sheet);
+impl std::fmt::Debug for RenderLayers {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RenderLayers").finish_non_exhaustive()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Render options
+// ---------------------------------------------------------------------------
+
+/// Render-time toggles that don't belong to the document. Construct a
+/// fresh `RenderOptions` per frame from `signex-app::state`; defaults
+/// match Altium parity baseline.
+///
+/// `Eq` is intentionally NOT derived because of the `f32` field; use
+/// `PartialEq` for testing equality across an epsilon if needed.
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[must_use]
+pub struct RenderOptions {
+    /// Power-port glyph style.
+    pub power_port_style: crate::PowerPortStyle,
+    /// Hier / global label flag style.
+    pub label_style: crate::LabelStyle,
+    /// Multi-sheet hierarchical sheet rendering style.
+    pub multisheet_style: crate::MultisheetStyle,
+    /// Visible grid style.
+    pub grid_style: crate::GridStyle,
+    /// `true` while the user has F5-toggled the per-net colour overlay.
+    pub net_color_overlay: bool,
+    /// AutoFocus dim level for unrelated objects when a selection is
+    /// active. `1.0` means full opacity (effect off); `0.4` is the
+    /// Altium parity default.
+    pub autofocus_dim: f32,
+}
+
+impl Default for RenderOptions {
+    #[inline]
+    fn default() -> Self {
         Self {
-            prepared_preview: PreparedPreviewGeometry::from_snapshot(&snapshot),
-            snapshot: Arc::new(snapshot),
+            power_port_style: crate::PowerPortStyle::Altium,
+            label_style: crate::LabelStyle::Standard,
+            multisheet_style: crate::MultisheetStyle::Standard,
+            grid_style: crate::GridStyle::Dots,
+            net_color_overlay: false,
+            autofocus_dim: 1.0,
         }
-    }
-
-    pub fn update_from_sheet(&mut self, sheet: &SchematicSheet, invalidation: RenderInvalidation) {
-        if invalidation.contains(RenderInvalidation::FULL) {
-            *self = Self::from_sheet(sheet);
-            return;
-        }
-
-        let snapshot = Arc::make_mut(&mut self.snapshot);
-
-        if invalidation.contains(RenderInvalidation::SYMBOLS) {
-            snapshot.symbols = sheet.symbols.clone();
-        }
-        if invalidation.contains(RenderInvalidation::WIRES) {
-            snapshot.wires = sheet.wires.clone();
-        }
-        if invalidation.contains(RenderInvalidation::LABELS) {
-            snapshot.labels = sheet.labels.clone();
-        }
-        if invalidation.contains(RenderInvalidation::TEXT_NOTES) {
-            snapshot.text_notes = sheet.text_notes.clone();
-        }
-        if invalidation.contains(RenderInvalidation::BUSES) {
-            snapshot.buses = sheet.buses.clone();
-        }
-        if invalidation.contains(RenderInvalidation::BUS_ENTRIES) {
-            snapshot.bus_entries = sheet.bus_entries.clone();
-        }
-        if invalidation.contains(RenderInvalidation::JUNCTIONS) {
-            snapshot.junctions = sheet.junctions.clone();
-        }
-        if invalidation.contains(RenderInvalidation::NO_CONNECTS) {
-            snapshot.no_connects = sheet.no_connects.clone();
-        }
-        if invalidation.contains(RenderInvalidation::CHILD_SHEETS) {
-            snapshot.child_sheets = sheet.child_sheets.clone();
-        }
-        if invalidation.contains(RenderInvalidation::DRAWINGS) {
-            snapshot.drawings = sheet.drawings.clone();
-        }
-        if invalidation.contains(RenderInvalidation::LIB_SYMBOLS) {
-            snapshot.lib_symbols = sheet.lib_symbols.clone();
-        }
-        if invalidation.contains(RenderInvalidation::PAPER) {
-            snapshot.paper_size = sheet.paper_size.clone();
-        }
-        if invalidation.affects_content_bounds() {
-            snapshot.content_bounds = sheet.content_bounds();
-        }
-
-        self.prepared_preview.refresh(snapshot, invalidation);
-    }
-
-    pub fn snapshot(&self) -> &SchematicRenderSnapshot {
-        self.snapshot.as_ref()
-    }
-
-    pub fn prepared_preview(&self) -> &PreparedPreviewGeometry {
-        &self.prepared_preview
     }
 }
 
-impl ScreenTransform {
-    /// Convert a world-space point (mm) to screen pixels.
+// ---------------------------------------------------------------------------
+// Snapshot
+// ---------------------------------------------------------------------------
+
+/// Frozen-frame input to a render pass. Borrows the underlying sheet
+/// and selection slice — does not allocate.
+///
+/// The snapshot is rebuilt every iced redraw, so its constructor is
+/// expected to be cheap. Helpers like [`Self::lib_symbol`] are O(1)
+/// `HashMap` lookups.
+#[derive(Debug, Clone, Copy)]
+pub struct SchematicSnapshot<'a> {
+    pub sheet: &'a SchematicSheet,
+    pub theme: &'a CanvasColors,
+    pub selection: &'a [SelectedItem],
+    pub options: RenderOptions,
+}
+
+impl<'a> SchematicSnapshot<'a> {
+    /// Build a snapshot for the given sheet + theme. Selection defaults
+    /// to empty; chain [`Self::with_selection`] to fill it.
     #[inline]
-    pub fn world_to_screen(&self, x: f64, y: f64) -> (f32, f32) {
-        (
-            x as f32 * self.scale + self.offset_x,
-            y as f32 * self.scale + self.offset_y,
-        )
-    }
-
-    /// Convert a world-space distance (mm) to screen pixels.
-    #[inline]
-    pub fn world_len(&self, mm: f64) -> f32 {
-        mm as f32 * self.scale
-    }
-
-    /// Return the iced `Point` for a world coordinate.
-    #[inline]
-    pub fn to_screen_point(&self, x: f64, y: f64) -> iced::Point {
-        let (sx, sy) = self.world_to_screen(x, y);
-        iced::Point::new(sx, sy)
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Shared geometry helpers (used by symbol, drawing, hit_test)
-// ---------------------------------------------------------------------------
-
-/// Compute the circumscribed circle center and radius from three points.
-/// Returns `None` if the points are collinear.
-pub(super) fn circle_from_three_points(
-    x1: f64,
-    y1: f64,
-    x2: f64,
-    y2: f64,
-    x3: f64,
-    y3: f64,
-) -> Option<(f64, f64, f64)> {
-    let d = 2.0 * (x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2));
-    if d.abs() < 1e-10 {
-        return None;
-    }
-    let ux = ((x1 * x1 + y1 * y1) * (y2 - y3)
-        + (x2 * x2 + y2 * y2) * (y3 - y1)
-        + (x3 * x3 + y3 * y3) * (y1 - y2))
-        / d;
-    let uy = ((x1 * x1 + y1 * y1) * (x3 - x2)
-        + (x2 * x2 + y2 * y2) * (x1 - x3)
-        + (x3 * x3 + y3 * y3) * (x2 - x1))
-        / d;
-    let r = ((x1 - ux).powi(2) + (y1 - uy).powi(2)).sqrt();
-    Some((ux, uy, r))
-}
-
-/// Check if `mid_angle` lies between `start_angle` and `end_angle` when
-/// going counter-clockwise from start to end.
-pub(super) fn is_angle_between_ccw(start: f64, mid: f64, end: f64) -> bool {
-    let tau = std::f64::consts::TAU;
-    let normalize = |a: f64| ((a % tau) + tau) % tau;
-    let s = normalize(start);
-    let m = normalize(mid);
-    let e = normalize(end);
-    if s <= e {
-        s <= m && m <= e
-    } else {
-        m >= s || m <= e
-    }
-}
-
-/// Return symbol field display position.
-///
-/// In our data model, field positions are stored as absolute schematic
-/// coordinates from `.snxsch` and should be rendered directly.
-pub(super) fn field_display_pos(
-    prop_pos: &signex_types::schematic::Point,
-    _sym: &signex_types::schematic::Symbol,
-) -> (f64, f64) {
-    (prop_pos.x, prop_pos.y)
-}
-
-/// Compute effective field draw properties under symbol transform.
-///
-/// Returns `(draw_rotation_deg, effective_h_align, effective_v_align)`.
-///
-/// Mirrors two pieces of canonical behaviour:
-/// 1. `SCH_FIELD::GetDrawRotation()` — for symbols at 0°/180° (`y1 == 0`)
-///    the stored field angle is used directly; for 90°/270° the angle is
-///    toggled between 0° and 90° so vertically-rotated symbols still
-///    render horizontal text when the field's stored angle is 90°.
-///    180°→0° and 270°→90° are folded for readability.
-/// 2. `SCH_FIELD::GetEffectiveJustify()` — We mirror the field's
-///    justify whenever the symbol's transform flips an axis. Concretely,
-///    a 180°-rotated symbol turns left→right and top→bottom; the mirror
-///    flags add an extra flip on the corresponding axis. Without this,
-///    a `justify left` field stored to the *left* of a 180°-rotated body
-///    anchors on its left edge and visibly grows back through the body.
-pub(super) fn field_effective_style(
-    prop: &signex_types::schematic::TextProp,
-    sym: &signex_types::schematic::Symbol,
-) -> (
-    f64,
-    signex_types::schematic::HAlign,
-    signex_types::schematic::VAlign,
-) {
-    use signex_types::schematic::{HAlign, VAlign};
-
-    let sym_rot = sym.rotation.rem_euclid(360.0).round() as i32;
-    let y1_nonzero = matches!(sym_rot, 90 | 270);
-    let stored = prop.rotation.rem_euclid(360.0);
-    let draw = if y1_nonzero {
-        if stored.round() as i32 == 0 { 90.0 } else { 0.0 }
-    } else {
-        stored
-    };
-    let draw_rot = match draw.round() as i32 {
-        0 | 180 => 0.0,
-        90 | 270 => 90.0,
-        _ => draw,
-    };
-
-    // Effective justify: count flips on each axis from the symbol's
-    // transform; an odd count flips the corresponding alignment.
-    // - rotation 180°: flips both H and V.
-    // - mirror_y (mirror about X-axis in canonical convention): flips H.
-    // - mirror_x (mirror about Y-axis): flips V.
-    let h_flips = (sym_rot == 180) as u8 + sym.mirror_y as u8;
-    let v_flips = (sym_rot == 180) as u8 + sym.mirror_x as u8;
-
-    let flip_h = |h: HAlign| match h {
-        HAlign::Left => HAlign::Right,
-        HAlign::Right => HAlign::Left,
-        HAlign::Center => HAlign::Center,
-    };
-    let flip_v = |v: VAlign| match v {
-        VAlign::Top => VAlign::Bottom,
-        VAlign::Bottom => VAlign::Top,
-        VAlign::Center => VAlign::Center,
-    };
-
-    let mut h = prop.justify_h;
-    if h_flips % 2 == 1 {
-        h = flip_h(h);
-    }
-    let mut v = prop.justify_v;
-    if v_flips % 2 == 1 {
-        v = flip_v(v);
-    }
-
-    (draw_rot, h, v)
-}
-
-/// Find the circle passing through three non-collinear points.
-/// Returns `(cx, cy, radius)` in world space. Returns `None` when
-/// the three points are collinear (determinant ≈ 0), in which case
-/// callers should fall back to chord-segment rendering.
-pub fn circumcircle(a: (f64, f64), b: (f64, f64), c: (f64, f64)) -> Option<(f64, f64, f64)> {
-    let (ax, ay) = a;
-    let (bx, by) = b;
-    let (cx, cy) = c;
-    let d = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
-    if d.abs() < 1e-9 {
-        return None;
-    }
-    let ux = ((ax * ax + ay * ay) * (by - cy)
-        + (bx * bx + by * by) * (cy - ay)
-        + (cx * cx + cy * cy) * (ay - by))
-        / d;
-    let uy = ((ax * ax + ay * ay) * (cx - bx)
-        + (bx * bx + by * by) * (ax - cx)
-        + (cx * cx + cy * cy) * (bx - ax))
-        / d;
-    let r = ((ax - ux) * (ax - ux) + (ay - uy) * (ay - uy)).sqrt();
-    Some((ux, uy, r))
-}
-
-/// Given start / mid / end angles (radians) around a circle center,
-/// return the `(from, to)` sweep that passes through `mid`.  The
-/// returned `to` may be outside `[-π, π]` so `from → to` covers the
-/// right arc direction for linear interpolation. Handles the case
-/// where the arc wraps across the ±π branch cut.
-pub fn arc_sweep(start: f64, mid: f64, end: f64) -> (f64, f64) {
-    use std::f64::consts::TAU;
-    // Normalise to [0, 2π).
-    let norm = |a: f64| -> f64 {
-        let mut t = a % TAU;
-        if t < 0.0 {
-            t += TAU;
+    pub fn new(sheet: &'a SchematicSheet, theme: &'a CanvasColors) -> Self {
+        Self {
+            sheet,
+            theme,
+            selection: &[],
+            options: RenderOptions::default(),
         }
-        t
-    };
-    let s = norm(start);
-    let m = norm(mid);
-    let e = norm(end);
-    // CCW distance from `a` to `b` in [0, 2π).
-    let ccw = |a: f64, b: f64| -> f64 {
-        let d = b - a;
-        if d < 0.0 { d + TAU } else { d }
-    };
-    // Walk CCW from s: does we hit m before e?
-    let s_to_m = ccw(s, m);
-    let s_to_e = ccw(s, e);
-    if s_to_m <= s_to_e {
-        // CCW sweep start → end via mid.
-        (start, start + s_to_e)
-    } else {
-        // CW sweep: negative direction to reach end via mid.
-        let cw_dist = TAU - s_to_e;
-        (start, start - cw_dist)
+    }
+
+    #[inline]
+    pub fn with_selection(mut self, sel: &'a [SelectedItem]) -> Self {
+        self.selection = sel;
+        self
+    }
+
+    #[inline]
+    pub fn with_options(mut self, options: RenderOptions) -> Self {
+        self.options = options;
+        self
+    }
+
+    /// O(1) lookup of the library symbol referenced by a placed
+    /// `Symbol::lib_id`. Returns `None` when the lib_id is missing
+    /// from the sheet's `lib_symbols` map (the renderer maps that to
+    /// [`RenderError::MissingLibSymbol`]).
+    #[inline]
+    pub fn lib_symbol(&self, lib_id: &str) -> Option<&'a signex_types::schematic::LibSymbol> {
+        self.sheet.lib_symbols.get(lib_id)
     }
 }
 
-/// Transform a local library-space point through a symbol instance's
-/// position, rotation, and mirror state, returning a world-space point.
-pub fn instance_transform(
-    sym: &signex_types::schematic::Symbol,
-    local: &signex_types::schematic::Point,
-) -> (f64, f64) {
-    // Step 1: Flip Y — Library-source coords are Y-up, schematic is Y-down.
-    let x = local.x;
-    let y = -local.y;
-    // Step 2: Rotate by NEGATIVE angle.
-    let rad = -sym.rotation.to_radians();
-    let cos = rad.cos();
-    let sin = rad.sin();
-    let rx = x * cos - y * sin;
-    let ry = x * sin + y * cos;
-    // Step 3: Mirror applied AFTER rotation (historical convention).
-    let rx = if sym.mirror_y { -rx } else { rx };
-    let ry = if sym.mirror_x { -ry } else { ry };
-    // Step 4: Translate to world position.
-    (rx + sym.position.x, ry + sym.position.y)
+// ---------------------------------------------------------------------------
+// Symbol transform
+// ---------------------------------------------------------------------------
+
+/// World-space placement of a parent symbol — used by [`pin::draw_pin`]
+/// and [`field_style`] when they need to fold a child's library-space
+/// rotation/mirror with the parent's transform.
+///
+/// The transform is `Y-up library` → `Y-down schematic`: a library-space
+/// pin at `(0, +pin_length)` lands at world position
+/// `(0, -pin_length)` relative to the parent body when the parent has
+/// no rotation or mirror.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SymbolTransform {
+    pub origin: Point,
+    pub rotation_deg: f64,
+    pub mirror_x: bool,
+    pub mirror_y: bool,
+}
+
+impl SymbolTransform {
+    /// Build from a placed `Symbol`.
+    #[inline]
+    pub fn from_symbol(symbol: &Symbol) -> Self {
+        Self {
+            origin: symbol.position,
+            rotation_deg: symbol.rotation,
+            mirror_x: symbol.mirror_x,
+            mirror_y: symbol.mirror_y,
+        }
+    }
+
+    /// Apply transform to a library-space point. The library convention
+    /// is Y-up; the schematic is Y-down, so we negate `y` first.
+    #[must_use]
+    pub fn apply(&self, local: Point) -> Point {
+        let x = local.x;
+        let y = -local.y;
+        let rad = -self.rotation_deg.to_radians();
+        let cos = rad.cos();
+        let sin = rad.sin();
+        let mut rx = x * cos - y * sin;
+        let mut ry = x * sin + y * cos;
+        if self.mirror_y {
+            rx = -rx;
+        }
+        if self.mirror_x {
+            ry = -ry;
+        }
+        Point::new(rx + self.origin.x, ry + self.origin.y)
+    }
+
+    /// Compose a child rotation (degrees, clockwise positive in
+    /// schematic-screen space) with the parent's rotation + mirror so
+    /// the rendered angle ends up correct.
+    #[must_use]
+    pub fn apply_angle(&self, child_deg: f64) -> f64 {
+        let mut r = self.rotation_deg + child_deg;
+        if self.mirror_x {
+            r = -r + 180.0;
+        }
+        if self.mirror_y {
+            r = -r;
+        }
+        r.rem_euclid(360.0)
+    }
 }
 
 // ---------------------------------------------------------------------------
-// Main render entry point
+// Render context
 // ---------------------------------------------------------------------------
 
-/// Draw all elements of a schematic sheet onto the canvas frame.
+/// Per-frame, per-primitive context. Bundles the snapshot, viewport,
+/// canvas size (for frustum culling), and a few render-time helpers so
+/// primitive functions don't need six-argument signatures.
+#[derive(Debug, Clone, Copy)]
+pub struct RenderContext<'a> {
+    pub snapshot: &'a SchematicSnapshot<'a>,
+    pub viewport: &'a Viewport,
+    pub canvas_size: iced::Size,
+}
+
+impl<'a> RenderContext<'a> {
+    /// Build a context for a frame. `canvas_size` comes from the iced
+    /// canvas widget's bounds. Defaults to `(0, 0)` when called from
+    /// non-canvas contexts (e.g. a unit test); primitives gracefully
+    /// skip culling in that case.
+    #[inline]
+    pub fn new(snapshot: &'a SchematicSnapshot<'a>, viewport: &'a Viewport) -> Self {
+        Self {
+            snapshot,
+            viewport,
+            canvas_size: iced::Size::ZERO,
+        }
+    }
+
+    /// Build a context with an explicit canvas size.
+    #[inline]
+    pub fn with_size(
+        snapshot: &'a SchematicSnapshot<'a>,
+        viewport: &'a Viewport,
+        canvas_size: iced::Size,
+    ) -> Self {
+        Self {
+            snapshot,
+            viewport,
+            canvas_size,
+        }
+    }
+
+    /// Convenience: theme palette for the active sheet.
+    #[inline]
+    pub fn theme(&self) -> &'a CanvasColors {
+        self.snapshot.theme
+    }
+
+    /// Convenience: options for the active sheet.
+    #[inline]
+    pub fn options(&self) -> RenderOptions {
+        self.snapshot.options
+    }
+
+    /// `true` if `item` is in the snapshot's selection set.
+    pub fn is_selected(&self, item: &SelectedItem) -> bool {
+        self.snapshot.selection.contains(item)
+    }
+
+    /// World-space rectangle currently visible — what every primitive
+    /// frustum-culls against. When `canvas_size` is zero (test
+    /// fixtures) we return an "everything visible" `Aabb` so primitives
+    /// don't accidentally skip rendering.
+    pub fn visible_world_bounds(&self) -> signex_types::schematic::Aabb {
+        if self.canvas_size.width <= 0.0 || self.canvas_size.height <= 0.0 {
+            return signex_types::schematic::Aabb::new(
+                f64::NEG_INFINITY,
+                f64::NEG_INFINITY,
+                f64::INFINITY,
+                f64::INFINITY,
+            );
+        }
+        self.viewport.visible_world_bounds(self.canvas_size)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Selection mode
+// ---------------------------------------------------------------------------
+
+/// Which selection rule applies to a hit-test query.
 ///
-/// Elements are rendered in z-order so that higher-layer items paint
-/// on top of lower ones.
+/// - `Single` — single click; topmost item at the cursor wins.
+/// - `Inside` — left-to-right drag (Altium "Inside" / AutoCAD
+///   "enclosing"); only items fully inside the query box are returned.
+/// - `Touching` — right-to-left drag (Altium "Touching" / AutoCAD
+///   "crossing"); items overlapping the query box are returned.
+///
+/// The two box modes match the Altium / AutoCAD convention documented
+/// in `docs/UX_REFERENCE_ALTIUM.md::3.1`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum SelectionMode {
+    Single,
+    /// Left-to-right drag — fully-enclosing selection.
+    #[default]
+    Inside,
+    /// Right-to-left drag — overlap-touching selection.
+    Touching,
+}
+
+// ---------------------------------------------------------------------------
+// Public render entry
+// ---------------------------------------------------------------------------
+
+/// **Deprecated v0.12 alias** for [`render`] using the v0.11 7-argument
+/// signature. The `_canvas_bounds`, `_focus_ref`, and
+/// `_color_overrides` arguments are accepted for source compatibility
+/// and currently ignored — the new render path bakes theme into the
+/// snapshot. Consumers should migrate to [`render`] over time.
+#[allow(deprecated)]
+#[deprecated(
+    since = "0.12.0",
+    note = "use schematic::render with a SchematicSnapshot"
+)]
 pub fn render_schematic(
-    frame: &mut canvas::Frame,
-    sheet: &SchematicRenderSnapshot,
-    transform: &ScreenTransform,
-    colors: &CanvasColors,
-    _bounds: Rectangle,
-    focus: Option<&std::collections::HashSet<uuid::Uuid>>,
-    wire_color_overrides: Option<
-        &std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
-    >,
-    // UUID of a text element currently being inline-edited; the
-    // renderer skips drawing the matching label / text note glyphs
-    // so the editor overlay isn't double-rendered on top.
-    hide_text_uuid: Option<uuid::Uuid>,
+    frame: &mut iced::widget::canvas::Frame,
+    sheet: &SchematicSheet,
+    viewport: &Viewport,
+    theme: &CanvasColors,
+    _canvas_bounds: iced::Rectangle,
+    _focus_ref: Option<&std::collections::HashSet<uuid::Uuid>>,
+    _color_overrides: Option<&std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>>,
 ) {
-    let body_color = to_iced(&colors.body);
-    let body_fill_color = to_iced(&colors.body_fill);
-    let wire_color = to_iced(&colors.wire);
-    let junction_color = to_iced(&colors.junction);
-    let pin_color = to_iced(&colors.pin);
-    let reference_color = to_iced(&colors.reference);
-    let value_color = to_iced(&colors.value);
-    let no_connect_color = to_iced(&colors.no_connect);
-    let bus_color = to_iced(&colors.bus);
-    let power_color = to_iced(&colors.power);
-    let power_style = crate::power_port_style();
-
-    // AutoFocus: dim non-selected items so the focus set stands out.
-    // When `focus` is None, every item draws at full alpha (normal mode).
-    // When Some, items NOT in the set get their color alpha scaled to
-    // `AUTO_FOCUS_DIM` so the selection reads as the spotlight. 0.28 is
-    // low enough to visibly recede but high enough that the context is
-    // still readable.
-    const AUTO_FOCUS_DIM: f32 = 0.28;
-    let alpha_for = |uuid: &uuid::Uuid| -> f32 {
-        match focus {
-            Some(set) if !set.contains(uuid) => AUTO_FOCUS_DIM,
-            _ => 1.0,
-        }
-    };
-    let dim = |c: iced::Color, a: f32| -> iced::Color { iced::Color { a: c.a * a, ..c } };
-
-    // Z=1: Drawing primitives (lines, rects, circles, arcs, polylines)
-    for d in &sheet.drawings {
-        drawing::draw_sch_drawing(frame, d, transform, body_color);
-    }
-
-    // Z=2: Wires — per-wire colour overrides win over the theme wire
-    // colour (net-colour flood from the Active Bar palette).
-    // Connected same-colour segments are chained into polylines so that
-    // 45° and 90° corners render with smooth LineJoin::Round.
-    wire::draw_wires(frame, &sheet.wires, transform, |w| {
-        let base = wire_color_overrides
-            .and_then(|o| o.get(&w.uuid))
-            .map(to_iced)
-            .unwrap_or(wire_color);
-        dim(base, alpha_for(&w.uuid))
-    });
-
-    // Z=3: Buses
-    for b in &sheet.buses {
-        wire::draw_bus(frame, b, transform, dim(bus_color, alpha_for(&b.uuid)));
-    }
-
-    // Z=4: Bus entries
-    for be in &sheet.bus_entries {
-        wire::draw_bus_entry(frame, be, transform, dim(bus_color, alpha_for(&be.uuid)));
-    }
-
-    // Z=5: Junctions — honour per-uuid colour overrides so a junction
-    // on a net-coloured net renders in the same colour as the wires.
-    for j in &sheet.junctions {
-        let base = wire_color_overrides
-            .and_then(|o| o.get(&j.uuid))
-            .map(to_iced)
-            .unwrap_or(junction_color);
-        junction::draw_junction(frame, j, transform, dim(base, alpha_for(&j.uuid)));
-    }
-
-    // Z=6: No-connect markers
-    for nc in &sheet.no_connects {
-        junction::draw_no_connect(
-            frame,
-            nc,
-            transform,
-            dim(no_connect_color, alpha_for(&nc.uuid)),
-        );
-    }
-
-    // Z=7-9: Labels (net, global, hierarchical, power)
-    for lbl in &sheet.labels {
-        if hide_text_uuid == Some(lbl.uuid) {
-            continue;
-        }
-        let color = match lbl.label_type {
-            LabelType::Net => to_iced(&colors.net_label),
-            LabelType::Global => to_iced(&colors.global_label),
-            LabelType::Hierarchical => to_iced(&colors.hier_label),
-            LabelType::Power => to_iced(&colors.power),
-        };
-        label::draw_label(
-            frame,
-            lbl,
-            transform,
-            dim(color, alpha_for(&lbl.uuid)),
-            body_fill_color,
-        );
-    }
-
-    // Z=10-11: Symbol bodies + pins
-    let global_refdes = text::build_global_refdes_lookup(sheet);
-    let pin_net_lookup = text::build_symbol_pin_net_lookup(sheet);
-    let cell = {
-        let page = sheet.root_sheet_page.trim();
-        if page.is_empty() { None } else { Some(page) }
-    };
-
-    for sym in &sheet.symbols {
-        let a = alpha_for(&sym.uuid);
-        let body_c = dim(body_color, a);
-        let body_fill_c = dim(body_fill_color, a);
-        let pin_c = dim(pin_color, a);
-        let power_c = dim(power_color, a);
-        let reference_c = dim(reference_color, a);
-        let value_c = dim(value_color, a);
-        if sym.is_power && matches!(power_style, PowerPortStyle::Altium) {
-            draw_builtin_power(frame, sym, transform, power_c, power_c);
-            continue;
-        }
-
-        if let Some(lib_sym) = sheet.lib_symbols.get(&sym.lib_id) {
-            symbol::draw_symbol(frame, sym, lib_sym, transform, body_c, body_fill_c, pin_c);
-
-            // Pins
-            pin::draw_symbol_pins(
-                frame,
-                sym,
-                lib_sym,
-                transform,
-                pin_c,
-                cell,
-                Some(&global_refdes),
-                Some(&pin_net_lookup),
-            );
-
-            // Reference text — power symbols (#PWR refs) are always hidden
-            if let Some(ref ref_text) = sym.ref_text
-                && !ref_text.hidden
-                && !sym.is_power
-            {
-                let dpos = field_display_pos(&ref_text.position, sym);
-                text::draw_text_prop(
-                    frame,
-                    &sym.reference,
-                    ref_text,
-                    sym,
-                    dpos,
-                    transform,
-                    reference_c,
-                    cell,
-                    Some(&global_refdes),
-                    pin_net_lookup.get(&sym.uuid),
-                );
-            }
-
-            // Value text
-            if let Some(ref val_text) = sym.val_text
-                && !val_text.hidden
-            {
-                let dpos = field_display_pos(&val_text.position, sym);
-                text::draw_text_prop(
-                    frame,
-                    &sym.value,
-                    val_text,
-                    sym,
-                    dpos,
-                    transform,
-                    value_c,
-                    cell,
-                    Some(&global_refdes),
-                    pin_net_lookup.get(&sym.uuid),
-                );
-            }
-        } else if sym.is_power {
-            draw_builtin_power(frame, sym, transform, power_c, power_c);
-        }
-    }
-
-    // Z=11b: Child sheets (hierarchical sheets). Each sheet's outline and
-    // body fill are read from the .snxsch file when the source provides
-    // `(stroke (color ...))` / `(fill (color ...))`. When no override is
-    // present we fall back to a sensible default that depends on the active
-    // label style: Standard mode keeps the theme's component body palette so
-    // sheets blend with the rest of the schematic; Altium mode uses the
-    // signature green sheet-symbol palette from Altium Designer.
-    let altium_mode = matches!(crate::multisheet_style(), crate::MultisheetStyle::Altium);
-    let altium_outline = iced::Color::from_rgba(0.20, 0.45, 0.20, 1.0);
-    let altium_fill = iced::Color::from_rgba(0.78, 0.93, 0.78, 1.0);
-    let stroke_color_to_iced = |c: signex_types::schematic::StrokeColor| {
-        iced::Color::from_rgba(
-            c.r as f32 / 255.0,
-            c.g as f32 / 255.0,
-            c.b as f32 / 255.0,
-            c.a as f32 / 255.0,
-        )
-    };
-    for child in &sheet.child_sheets {
-        let a = alpha_for(&child.uuid);
-        let outline = match child.stroke_color {
-            Some(c) => stroke_color_to_iced(c),
-            None if altium_mode => altium_outline,
-            None => body_color,
-        };
-        let fill = match child.fill_color {
-            Some(c) => stroke_color_to_iced(c),
-            None if altium_mode => altium_fill,
-            None => body_fill_color,
-        };
-        drawing::draw_child_sheet(frame, child, transform, dim(outline, a), dim(fill, a));
-    }
-
-    // Z=12: Text notes
-    for tn in &sheet.text_notes {
-        if hide_text_uuid == Some(tn.uuid) {
-            continue;
-        }
-        text::draw_text_note(
-            frame,
-            tn,
-            transform,
-            dim(to_iced(&colors.body), alpha_for(&tn.uuid)),
-        );
-    }
+    let snapshot = SchematicSnapshot::new(sheet, theme);
+    let _ = render(frame, &snapshot, viewport);
 }
 
-// ---------------------------------------------------------------------------
-// Built-in Altium-style power symbol rendering
-// ---------------------------------------------------------------------------
-
-/// Draw a built-in power symbol when no lib_symbol definition exists.
-/// Renders Altium-style shapes: GND (3 horizontal lines), VCC (bar + arrow),
-/// Earth (diagonal hatch), Signal GND (triangle), generic (bar + label).
-/// Public preview wrapper — renders the built-in power glyph at a ghost
-/// color for placement previews (single color for both body and label).
+/// **Deprecated v0.12 shim** of the old `draw_power_port_preview`
+/// helper. v0.11 painted a translucent symbol ghost during placement;
+/// v0.12's tooling paints previews directly on the overlay frame, so
+/// this shim is a no-op pending a Wave-7 placement-tool refactor.
+#[deprecated(
+    since = "0.12.0",
+    note = "ghost previews paint directly on the overlay frame"
+)]
 pub fn draw_power_port_preview(
-    frame: &mut canvas::Frame,
-    sym: &signex_types::schematic::Symbol,
-    transform: &ScreenTransform,
-    color: iced::Color,
+    _frame: &mut iced::widget::canvas::Frame,
+    _symbol: &Symbol,
+    _viewport: &Viewport,
+    _color: iced::Color,
 ) {
-    draw_builtin_power(frame, sym, transform, color, color);
+    // Intentional no-op for v0.12 — see doc.
 }
 
-fn draw_builtin_power(
-    frame: &mut canvas::Frame,
-    sym: &signex_types::schematic::Symbol,
-    transform: &ScreenTransform,
-    color: iced::Color,
-    label_color: iced::Color,
-) {
-    use iced::widget::canvas::path;
+/// Render every primitive into a single iced canvas frame.
+///
+/// `signex-app::canvas` calls this from each of its three cache draw
+/// closures (with the cache layer determining whether background /
+/// content / overlay is being filled). This single-entry helper paints
+/// **everything** — useful for one-shot exports (e.g. the print-preview
+/// or PDF backend) where layered caching isn't needed.
+///
+/// On `Ok(())`, every primitive painted successfully. On
+/// `Err(Vec<RenderError>)`, the renderer **still painted what it
+/// could** — the frame is partial, never blank — and the returned list
+/// names the elements that were skipped or stubbed. Typical behaviour:
+/// a symbol whose `lib_id` is missing from the sheet renders as a small
+/// placeholder marker at its position, and one
+/// [`RenderError::MissingLibSymbol`] is appended to the result.
+///
+/// # Example
+///
+/// ```ignore
+/// let snapshot = SchematicSnapshot::new(&sheet, &theme);
+/// if let Err(errors) = schematic::render(frame, &snapshot, &viewport) {
+///     for e in errors { tracing::warn!("render: {e}"); }
+/// }
+/// ```
+pub fn render(
+    frame: &mut iced::widget::canvas::Frame,
+    snapshot: &SchematicSnapshot<'_>,
+    viewport: &Viewport,
+) -> Result<(), Vec<RenderError>> {
+    let ctx = RenderContext::new(snapshot, viewport);
+    let mut errors: Vec<RenderError> = Vec::new();
 
-    // Keep power symbol stroke consistent with normal wire width.
-    let sw = transform.world_len(0.15).max(1.0);
-    let stroke = canvas::Stroke::default().with_color(color).with_width(sw);
-
-    // GND-like symbols point downward from anchor, VCC-like upward.
-    let id = sym.lib_id.to_lowercase();
-    let is_gnd_like = id.contains("gnd");
-    let dir = if is_gnd_like { -1.0 } else { 1.0 };
-
-    // Pin line: vertical stub from anchor toward symbol body.
-    let pin_len = 1.27;
-    let (p0x, p0y) = instance_transform(sym, &signex_types::schematic::Point::new(0.0, 0.0));
-    let (p1x, p1y) = instance_transform(
-        sym,
-        &signex_types::schematic::Point::new(0.0, pin_len * dir),
-    );
-    let s0 = transform.to_screen_point(p0x, p0y);
-    let s1 = transform.to_screen_point(p1x, p1y);
-    frame.stroke(&canvas::Path::line(s0, s1), stroke);
-
-    // Identify power type from lib_id or value
-    let net = sym.value.to_uppercase();
-
-    if id.contains("gnd") && !id.contains("earth") && !id.contains("gndref") {
-        // GND: 3 horizontal lines of decreasing width (Altium uses 2.54 mm)
-        let bar_w = 2.54;
-        for (i, frac) in [1.0_f64, 0.65, 0.3].iter().enumerate() {
-            let dy = (pin_len + 0.4 * i as f64) * dir;
-            let hw = bar_w * 0.5 * frac;
-            let (lx, ly) = instance_transform(sym, &signex_types::schematic::Point::new(-hw, dy));
-            let (rx, ry) = instance_transform(sym, &signex_types::schematic::Point::new(hw, dy));
-            let sl = transform.to_screen_point(lx, ly);
-            let sr = transform.to_screen_point(rx, ry);
-            frame.stroke(&canvas::Path::line(sl, sr), stroke);
-        }
-    } else if id.contains("gndref") {
-        // Signal GND: downward triangle
-        let hw = 1.27;
-        let tri_h = 1.27;
-        let base_y = pin_len * dir;
-        let pts = [
-            signex_types::schematic::Point::new(-hw, base_y),
-            signex_types::schematic::Point::new(hw, base_y),
-            signex_types::schematic::Point::new(0.0, base_y + tri_h * dir),
-        ];
-        let screen_pts: Vec<iced::Point> = pts
-            .iter()
-            .map(|p| {
-                let (wx, wy) = instance_transform(sym, p);
-                transform.to_screen_point(wx, wy)
-            })
-            .collect();
-        let tri = canvas::Path::new(|b: &mut path::Builder| {
-            b.move_to(screen_pts[0]);
-            b.line_to(screen_pts[1]);
-            b.line_to(screen_pts[2]);
-            b.close();
-        });
-        frame.stroke(&tri, stroke);
-    } else if id.contains("earth") {
-        // Earth: horizontal bar + 3 diagonal hatch lines (Altium 2.54 mm)
-        let bar_w = 2.54;
-        let base_y = pin_len * dir;
-        let hw = bar_w * 0.5;
-        let (lx, ly) = instance_transform(sym, &signex_types::schematic::Point::new(-hw, base_y));
-        let (rx, ry) = instance_transform(sym, &signex_types::schematic::Point::new(hw, base_y));
-        frame.stroke(
-            &canvas::Path::line(
-                transform.to_screen_point(lx, ly),
-                transform.to_screen_point(rx, ry),
-            ),
-            stroke,
-        );
-        // Diagonal hatch lines below bar
-        for i in 0..3 {
-            let x_off = -hw + (i as f64 + 0.5) * (bar_w / 3.0);
-            let (hx1, hy1) =
-                instance_transform(sym, &signex_types::schematic::Point::new(x_off, base_y));
-            let (hx2, hy2) = instance_transform(
-                sym,
-                &signex_types::schematic::Point::new(x_off - 0.5, base_y + 0.8 * dir),
-            );
-            frame.stroke(
-                &canvas::Path::line(
-                    transform.to_screen_point(hx1, hy1),
-                    transform.to_screen_point(hx2, hy2),
-                ),
-                stroke,
-            );
-        }
-    } else if id.contains("arrow") {
-        // Arrow: upward-pointing triangle at top of pin (Altium 2.54 mm base).
-        let base_y = pin_len * dir;
-        let tip_y = base_y + 1.4 * dir;
-        let pts = [
-            signex_types::schematic::Point::new(-1.27, base_y),
-            signex_types::schematic::Point::new(1.27, base_y),
-            signex_types::schematic::Point::new(0.0, tip_y),
-        ];
-        let screen_pts: Vec<iced::Point> = pts
-            .iter()
-            .map(|p| {
-                let (wx, wy) = instance_transform(sym, p);
-                transform.to_screen_point(wx, wy)
-            })
-            .collect();
-        let tri = canvas::Path::new(|b: &mut path::Builder| {
-            b.move_to(screen_pts[0]);
-            b.line_to(screen_pts[2]);
-            b.line_to(screen_pts[1]);
-        });
-        frame.stroke(&tri, stroke);
-    } else if id.contains("wave") {
-        // Wave: sinusoidal cap
-        let base_y = pin_len * dir;
-        let steps = 24_i32;
-        let span = 2.6_f64;
-        let amp = 0.5_f64;
-        let mut pts: Vec<iced::Point> = Vec::with_capacity(steps as usize + 1);
-        for i in 0..=steps {
-            let t = i as f64 / steps as f64;
-            let x = -span / 2.0 + t * span;
-            let y = base_y + dir * amp * (t * std::f64::consts::PI * 2.0).sin();
-            let (wx, wy) = instance_transform(sym, &signex_types::schematic::Point::new(x, y));
-            pts.push(transform.to_screen_point(wx, wy));
-        }
-        let path = canvas::Path::new(|b: &mut path::Builder| {
-            b.move_to(pts[0]);
-            for p in &pts[1..] {
-                b.line_to(*p);
+    // Render order — bottom layer first. Hit-test reverses this so
+    // the topmost item wins under a click. See
+    // `hit_test::HitIndex::build` for the parallel order.
+    for d in &snapshot.sheet.drawings {
+        drawing::draw_drawing(frame, d, &ctx);
+    }
+    for b in &snapshot.sheet.buses {
+        bus::draw_bus(frame, b, &ctx);
+    }
+    for w in &snapshot.sheet.wires {
+        wire::draw_wire(frame, w, &ctx);
+    }
+    for e in &snapshot.sheet.bus_entries {
+        bus_entry::draw_bus_entry(frame, e, &ctx);
+    }
+    for s in &snapshot.sheet.symbols {
+        match snapshot.lib_symbol(&s.lib_id) {
+            Some(lib) => symbol::draw_symbol(frame, s, lib, &ctx),
+            None => {
+                // Paint a placeholder so the user can still see + click
+                // the broken instance and fix the lib_id.
+                draw_missing_symbol_placeholder(frame, s, &ctx);
+                errors.push(RenderError::MissingLibSymbol(s.lib_id.clone()));
             }
-        });
-        frame.stroke(&path, stroke);
-    } else if id.contains("circle") {
-        // Circle: small open circle at pin top
-        let base_y = pin_len * dir + 0.6 * dir;
-        let (cx, cy) = instance_transform(sym, &signex_types::schematic::Point::new(0.0, base_y));
-        let center = transform.to_screen_point(cx, cy);
-        let r = transform.world_len(0.6).max(2.0);
-        frame.stroke(&canvas::Path::circle(center, r), stroke);
-    } else if id.contains("bar") {
-        // Explicit "Bar" style — single horizontal bar (Altium convention).
-        let bar_w = 2.54;
-        let base_y = pin_len * dir;
-        let hw = bar_w * 0.5;
-        let (lx, ly) = instance_transform(sym, &signex_types::schematic::Point::new(-hw, base_y));
-        let (rx, ry) = instance_transform(sym, &signex_types::schematic::Point::new(hw, base_y));
-        frame.stroke(
-            &canvas::Path::line(
-                transform.to_screen_point(lx, ly),
-                transform.to_screen_point(rx, ry),
-            ),
-            stroke,
-        );
-    } else {
-        // VCC / generic power: horizontal bar at top of pin (Altium 2.54 mm)
-        let bar_w = 2.54;
-        let base_y = pin_len * dir;
-        let hw = bar_w * 0.5;
-        let (lx, ly) = instance_transform(sym, &signex_types::schematic::Point::new(-hw, base_y));
-        let (rx, ry) = instance_transform(sym, &signex_types::schematic::Point::new(hw, base_y));
-        frame.stroke(
-            &canvas::Path::line(
-                transform.to_screen_point(lx, ly),
-                transform.to_screen_point(rx, ry),
-            ),
-            stroke,
-        );
+        }
+    }
+    for j in &snapshot.sheet.junctions {
+        junction::draw_junction(frame, j, &ctx);
+    }
+    for nc in &snapshot.sheet.no_connects {
+        no_connect::draw_no_connect(frame, nc, &ctx);
+    }
+    for l in &snapshot.sheet.labels {
+        label::draw_label(frame, l, &ctx);
+    }
+    for n in &snapshot.sheet.text_notes {
+        text::draw_text_note(frame, n, &ctx);
     }
 
-    // Draw value label immediately below the *visible body* of the symbol.
-    // Each style has a different body extent beyond the pin stub, so the
-    // offset is computed per-shape rather than a single constant.
-    let body_extent = if id.contains("gnd") && !id.contains("earth") && !id.contains("gndref") {
-        // 3 decreasing GND bars span ~1.2 mm from top bar to bottom bar.
-        1.2
-    } else if id.contains("gndref") {
-        // Triangle height 1.27.
-        1.27
-    } else if id.contains("earth") {
-        // Bar + hatch ~0.8 mm.
-        0.9
-    } else if id.contains("arrow") {
-        // Triangle height 1.4.
-        1.4
-    } else if id.contains("circle") {
-        // Circle diameter ~1.2 mm.
-        1.2
+    selection::render_selection_overlay(frame, snapshot, viewport);
+
+    if errors.is_empty() {
+        Ok(())
     } else {
-        // VCC / Bar: single bar has effectively zero extent beyond the pin.
-        0.0
-    };
-    let label_y = (pin_len + body_extent + 0.25) * dir;
-    // 10 pt — the canvas-wide default — matching Altium.
-    let font_size_mm = crate::SCHEMATIC_TEXT_EM_MM;
-    let screen_font = transform.world_len(font_size_mm).abs();
-    if screen_font >= 1.0 {
-        let (tx, ty) = instance_transform(sym, &signex_types::schematic::Point::new(0.0, label_y));
-        let sp = transform.to_screen_point(tx, ty);
-        // Altium convention: the power-port label text is always drawn
-        // upright regardless of symbol rotation. Only the label's POSITION
-        // follows the rotation (via `instance_transform` above) so the text
-        // sits just past the symbol body on the side away from the pin.
-        let dx = tx - sym.position.x;
-        let dy = ty - sym.position.y;
-        let (align_x, align_y_v) = if dx.abs() > dy.abs() {
-            // Label is horizontally offset (rotation 90° / 270°).
-            let h = if dx > 0.0 {
-                iced::alignment::Horizontal::Left
-            } else {
-                iced::alignment::Horizontal::Right
-            };
-            (h, iced::alignment::Vertical::Center)
-        } else {
-            // Label is vertically offset (rotation 0° / 180°).
-            let v = if dy > 0.0 {
-                iced::alignment::Vertical::Top
-            } else {
-                iced::alignment::Vertical::Bottom
-            };
-            (iced::alignment::Horizontal::Center, v)
+        Err(errors)
+    }
+}
+
+/// Paint a small "broken-symbol" marker at `symbol.position`. Used when
+/// a placed symbol's `lib_id` is missing from the sheet's `lib_symbols`
+/// map so the user can still click + delete + relink the instance.
+fn draw_missing_symbol_placeholder(
+    frame: &mut iced::widget::canvas::Frame,
+    symbol: &Symbol,
+    ctx: &RenderContext<'_>,
+) {
+    use iced::widget::canvas::{Path, Stroke};
+    let centre = ctx.viewport.world_to_screen(symbol.position);
+    if !centre.x.is_finite() || !centre.y.is_finite() {
+        return;
+    }
+    // 2.54 mm half-size — same as the `Symbol::content_bounds` fallback
+    // box in `signex-types::SchematicSheet::content_bounds`.
+    let half_px = (2.54 * ctx.viewport.zoom_px_per_mm()).max(8.0) as f32;
+    let colour = util::iced_color(&ctx.theme().no_connect);
+    let stroke = Stroke::default().with_width(1.5).with_color(colour);
+    let path = Path::new(|builder| {
+        builder.move_to(iced::Point::new(centre.x - half_px, centre.y - half_px));
+        builder.line_to(iced::Point::new(centre.x + half_px, centre.y - half_px));
+        builder.line_to(iced::Point::new(centre.x + half_px, centre.y + half_px));
+        builder.line_to(iced::Point::new(centre.x - half_px, centre.y + half_px));
+        builder.close();
+        // Diagonal X across the box.
+        builder.move_to(iced::Point::new(centre.x - half_px, centre.y - half_px));
+        builder.line_to(iced::Point::new(centre.x + half_px, centre.y + half_px));
+        builder.move_to(iced::Point::new(centre.x + half_px, centre.y - half_px));
+        builder.line_to(iced::Point::new(centre.x - half_px, centre.y + half_px));
+    });
+    frame.stroke(&path, stroke);
+}
+
+// ---------------------------------------------------------------------------
+// Public hit-test entry
+// ---------------------------------------------------------------------------
+
+/// Single-click hit test. Returns the topmost item under `point_world`
+/// per the render-order Z-rule (latest-rendered = topmost; see
+/// [`hit_test`] for the exact order).
+///
+/// `tolerance_world` is in millimetres; typical UI value is the screen
+/// hit pad converted via the active [`Viewport`]'s
+/// [`world_per_pixel`](Viewport::world_per_pixel).
+pub fn hit_test_point(
+    index: &HitIndex,
+    snapshot: &SchematicSnapshot<'_>,
+    point_world: Point,
+    tolerance_world: f64,
+) -> Option<SelectedItem> {
+    hit_test::point(index, snapshot, point_world, tolerance_world)
+}
+
+/// Box hit test for left-/right-drag selection.
+pub fn hit_test_box(
+    index: &HitIndex,
+    snapshot: &SchematicSnapshot<'_>,
+    box_world: Aabb,
+    mode: SelectionMode,
+) -> Vec<SelectedItem> {
+    hit_test::box_query(index, snapshot, box_world, mode)
+}
+
+// ---------------------------------------------------------------------------
+// Tests — public-API smoke
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signex_types::schematic::Point;
+
+    /// The public-API skeleton compiles and the `Default` constructors
+    /// produce a non-panicking baseline. Wave 2 sub-agents extend this
+    /// with per-primitive smoke tests.
+    #[test]
+    fn render_options_default_compiles() {
+        let opts = RenderOptions::default();
+        assert!((opts.autofocus_dim - 1.0).abs() < f32::EPSILON);
+        assert!(!opts.net_color_overlay);
+    }
+
+    #[test]
+    fn render_invalidation_overlay_only_is_minimal() {
+        let inv = RenderInvalidation::overlay_only();
+        assert!(inv.any());
+        assert!(!inv.background);
+        assert!(!inv.content);
+        assert!(inv.overlay);
+    }
+
+    #[test]
+    fn symbol_transform_identity_passes_point_through() {
+        let xform = SymbolTransform {
+            origin: Point::new(0.0, 0.0),
+            rotation_deg: 0.0,
+            mirror_x: false,
+            mirror_y: false,
         };
-        frame.fill_text(canvas::Text {
-            content: net,
-            position: sp,
-            color: label_color,
-            size: iced::Pixels(screen_font),
-            font: crate::canvas_font(),
-            align_x: align_x.into(),
-            align_y: align_y_v,
-            ..canvas::Text::default()
-        });
+        // Library Y-up → schematic Y-down inverts y even at identity.
+        let p = xform.apply(Point::new(2.0, 3.0));
+        assert!((p.x - 2.0).abs() < 1e-9);
+        assert!((p.y - (-3.0)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn symbol_transform_quarter_turn_rotates_point() {
+        let xform = SymbolTransform {
+            origin: Point::new(0.0, 0.0),
+            rotation_deg: 90.0,
+            mirror_x: false,
+            mirror_y: false,
+        };
+        // Library (1, 0) — point at +x, no y. A symbol rotated 90° CCW
+        // *as the user sees it* moves the +x axis to the screen-up
+        // direction. Screen is Y-down, so screen-up is `y < 0`. The
+        // point therefore lands at `(0, -1)`.
+        let p = xform.apply(Point::new(1.0, 0.0));
+        assert!(p.x.abs() < 1e-9, "x = {}", p.x);
+        assert!((p.y - (-1.0)).abs() < 1e-9, "y = {}", p.y);
     }
 }

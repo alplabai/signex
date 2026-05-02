@@ -2,41 +2,28 @@
 //!
 //! Entry point for the Iced 0.14 + wgpu application.
 
+mod active_bar;
 mod app;
+mod canvas;
+mod chrome;
 mod diagnostics;
+mod dock;
 mod find_replace;
+mod first_run_tour;
+mod fonts;
+mod icons;
+mod keyboard_shortcuts_modal;
+mod library;
+mod menu_bar;
+mod panels;
+mod pcb_canvas;
 mod preferences;
 mod shortcuts;
-mod undo;
-
-#[path = "editor/canvas/mod.rs"]
-mod canvas;
-#[path = "editor/dock/mod.rs"]
-mod dock;
-#[path = "editor/panels/mod.rs"]
-mod panels;
-#[path = "editor/pcb_canvas.rs"]
-mod pcb_canvas;
-
-#[path = "theme/fonts.rs"]
-mod fonts;
-#[path = "theme/icons.rs"]
-mod icons;
-#[path = "theme/styles.rs"]
-mod styles;
-
-#[path = "ui/active_bar.rs"]
-mod active_bar;
-#[path = "ui/chrome.rs"]
-mod chrome;
-#[path = "ui/menu_bar.rs"]
-mod menu_bar;
-#[path = "ui/status_bar.rs"]
 mod status_bar;
-#[path = "ui/tab_bar.rs"]
+mod styles;
 mod tab_bar;
-#[path = "ui/toolbar.rs"]
 mod toolbar;
+mod undo;
 
 use app::Signex;
 

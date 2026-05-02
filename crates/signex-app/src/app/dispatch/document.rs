@@ -9,7 +9,15 @@ impl Signex {
                 self.handle_document_file_opened(path);
                 self.finish_update()
             }
+            Message::NewProjectFile(path) => {
+                self.handle_new_project_file(path);
+                self.finish_update()
+            }
             Message::DeleteSelected => {
+                // Delete falls through to the schematic engine; the
+                // Component Preview tab is read-only and Footprint
+                // editing happens in the standalone `.snxfpt` tab,
+                // which owns its own delete handling.
                 self.handle_selection_delete_requested();
                 self.finish_update()
             }
@@ -55,11 +63,11 @@ impl Signex {
                 iced::Task::batch([task, self.finish_update()])
             }
             Message::SaveFileAs(path) => {
-                let task = self.handle_active_document_save_as_requested(path);
-                iced::Task::batch([task, self.finish_update()])
+                self.handle_active_document_save_as_requested(path);
+                self.finish_update()
             }
-            Message::SaveFileFinished(path, result) => {
-                self.handle_active_document_save_finished(path, result);
+            Message::SavePrimitiveAs { from_path, to_path } => {
+                self.handle_save_primitive_as(&from_path, &to_path);
                 self.finish_update()
             }
             Message::SchematicLoaded(sheet) => {
@@ -361,27 +369,23 @@ impl Signex {
             Message::BomPreviewColumnResizeStart(idx) => {
                 let cursor_x = self.interaction_state.last_mouse_pos.0;
                 if let Some(p) = self.document_state.bom_preview.as_mut() {
-                    let start_width = p
-                        .column_widths
-                        .get(&idx)
-                        .copied()
-                        .unwrap_or_else(|| {
-                            // Fall back to the per-BomColumn default
-                            // table the view function uses.
-                            use signex_output::BomColumn;
-                            match p.options.columns.get(idx) {
-                                Some(BomColumn::Name) => 140.0,
-                                Some(BomColumn::Description) => 220.0,
-                                Some(BomColumn::Designator) | Some(BomColumn::Reference) => 220.0,
-                                Some(BomColumn::Value) => 110.0,
-                                Some(BomColumn::Footprint) => 140.0,
-                                Some(BomColumn::LibRef) => 160.0,
-                                Some(BomColumn::Qty) => 50.0,
-                                Some(BomColumn::Custom(_)) => 120.0,
-                                None => 120.0,
-                            }
-                        });
-                    p.column_resize = Some(crate::app::states::ColumnResizeState {
+                    let start_width = p.column_widths.get(&idx).copied().unwrap_or_else(|| {
+                        // Fall back to the per-BomColumn default
+                        // table the view function uses.
+                        use signex_output::BomColumn;
+                        match p.options.columns.get(idx) {
+                            Some(BomColumn::Name) => 140.0,
+                            Some(BomColumn::Description) => 220.0,
+                            Some(BomColumn::Designator) | Some(BomColumn::Reference) => 220.0,
+                            Some(BomColumn::Value) => 110.0,
+                            Some(BomColumn::Footprint) => 140.0,
+                            Some(BomColumn::LibRef) => 160.0,
+                            Some(BomColumn::Qty) => 50.0,
+                            Some(BomColumn::Custom(_)) => 120.0,
+                            None => 120.0,
+                        }
+                    });
+                    p.column_resize = Some(crate::app::state::ColumnResizeState {
                         idx,
                         start_x: cursor_x,
                         start_width,

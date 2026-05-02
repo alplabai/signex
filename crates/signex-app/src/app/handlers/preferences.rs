@@ -10,6 +10,7 @@ impl Signex {
         self.ui_state.preferences_draft_power_port_style = self.ui_state.power_port_style;
         self.ui_state.preferences_draft_label_style = self.ui_state.label_style;
         self.ui_state.preferences_draft_multisheet_style = self.ui_state.multisheet_style;
+        self.ui_state.preferences_draft_component_classes = self.ui_state.component_classes.clone();
         self.ui_state.preferences_dirty = false;
         self.ui_state.panel_list_open = false;
         self.interaction_state.context_menu = None;
@@ -51,6 +52,8 @@ impl Signex {
                 self.ui_state.preferences_draft_power_port_style = self.ui_state.power_port_style;
                 self.ui_state.preferences_draft_label_style = self.ui_state.label_style;
                 self.ui_state.preferences_draft_multisheet_style = self.ui_state.multisheet_style;
+                self.ui_state.preferences_draft_component_classes =
+                    self.ui_state.component_classes.clone();
                 self.ui_state.preferences_dirty = false;
                 self.ui_state.preferences_open = false;
                 let tokens = if self.ui_state.theme_id == ThemeId::Custom {
@@ -99,6 +102,37 @@ impl Signex {
                 crate::fonts::write_label_style_pref(self.ui_state.label_style);
                 crate::fonts::write_multisheet_style_pref(self.ui_state.multisheet_style);
                 crate::fonts::write_grid_style_pref(self.ui_state.grid_style);
+                crate::fonts::write_theme_pref(self.ui_state.theme_id);
+                // Component classes — keep entries with non-empty keys
+                // and labels, dedupe by key (last write wins) so the
+                // dropdown never shows blanks or duplicates.
+                let mut sanitised: Vec<crate::fonts::ComponentClassEntry> = Vec::new();
+                for entry in &self.ui_state.preferences_draft_component_classes {
+                    let key = entry.key.trim();
+                    let label = entry.label.trim();
+                    if key.is_empty() || label.is_empty() {
+                        continue;
+                    }
+                    if let Some(existing) = sanitised.iter_mut().find(|e| e.key == key) {
+                        existing.label = label.to_string();
+                    } else {
+                        sanitised.push(crate::fonts::ComponentClassEntry {
+                            key: key.to_string(),
+                            label: label.to_string(),
+                        });
+                    }
+                }
+                // Persist first (the prefs writer borrows by ref so
+                // it can run before any moves), then move `sanitised`
+                // into the live registry. The draft + panel-ctx
+                // mirrors clone from the field rather than from
+                // `sanitised` so we drop one redundant clone.
+                crate::fonts::write_component_classes_pref(&sanitised);
+                self.ui_state.component_classes = sanitised;
+                self.ui_state.preferences_draft_component_classes =
+                    self.ui_state.component_classes.clone();
+                self.document_state.panel_ctx.component_classes =
+                    self.ui_state.component_classes.clone();
                 self.ui_state.preferences_dirty = false;
             }
             PrefMsg::DraftTheme(id) => {
@@ -280,15 +314,68 @@ impl Signex {
             PrefMsg::DraftErcSeverity(rule, severity) => {
                 let default_sev = rule.default_severity();
                 if severity == default_sev {
-                    self.ui_state.erc.severity_override.remove(&rule);
+                    self.ui_state.erc_severity_override.remove(&rule);
                 } else {
-                    self.ui_state.erc.severity_override.insert(rule, severity);
+                    self.ui_state.erc_severity_override.insert(rule, severity);
                 }
-                crate::fonts::write_erc_severity_overrides(&self.ui_state.erc.severity_override);
+                crate::fonts::write_erc_severity_overrides(&self.ui_state.erc_severity_override);
             }
             PrefMsg::ResetErcSeverities => {
-                self.ui_state.erc.severity_override.clear();
-                crate::fonts::write_erc_severity_overrides(&self.ui_state.erc.severity_override);
+                self.ui_state.erc_severity_override.clear();
+                crate::fonts::write_erc_severity_overrides(&self.ui_state.erc_severity_override);
+            }
+            PrefMsg::LibrarySettings(settings_msg) => {
+                // Route the Distributor APIs panel's SettingsMsg back
+                // through the library dispatcher so the canonical
+                // state (`LibraryState.settings`) and any async tasks
+                // (OAuth flow, Mouser test) live in one place.
+                // Returning the dispatch task lets long-running flows
+                // like the OAuth handshake settle on the iced runtime.
+                return self.dispatch_library_message(
+                    crate::library::messages::LibraryMessage::Settings(settings_msg),
+                );
+            }
+            PrefMsg::ComponentClassEditKey { index, key } => {
+                if let Some(entry) = self
+                    .ui_state
+                    .preferences_draft_component_classes
+                    .get_mut(index)
+                {
+                    entry.key = key;
+                    self.ui_state.preferences_dirty = true;
+                }
+            }
+            PrefMsg::ComponentClassEditLabel { index, label } => {
+                if let Some(entry) = self
+                    .ui_state
+                    .preferences_draft_component_classes
+                    .get_mut(index)
+                {
+                    entry.label = label;
+                    self.ui_state.preferences_dirty = true;
+                }
+            }
+            PrefMsg::ComponentClassAdd => {
+                self.ui_state.preferences_draft_component_classes.push(
+                    crate::fonts::ComponentClassEntry {
+                        key: String::new(),
+                        label: String::new(),
+                    },
+                );
+                self.ui_state.preferences_dirty = true;
+            }
+            PrefMsg::ComponentClassRemove { index } => {
+                if index < self.ui_state.preferences_draft_component_classes.len() {
+                    self.ui_state
+                        .preferences_draft_component_classes
+                        .remove(index);
+                    self.ui_state.preferences_dirty = true;
+                }
+            }
+            PrefMsg::ComponentClassResetDefaults => {
+                self.ui_state.preferences_draft_component_classes =
+                    crate::fonts::default_component_classes();
+                self.ui_state.preferences_dirty = true;
             }
         }
 

@@ -118,6 +118,7 @@ impl Signex {
                     ref_text: None,
                     val_text: None,
                     fields_autoplaced: false,
+                    fields_user_placed: false,
                     dnp: false,
                     in_bom: true,
                     on_board: true,
@@ -127,6 +128,9 @@ impl Signex {
                     custom_properties: Vec::new(),
                     pin_uuids: std::collections::HashMap::new(),
                     instances: Vec::new(),
+                    library_id: None,
+                    row_id: None,
+                    library_version: String::new(),
                 };
                 self.apply_engine_command(
                     signex_engine::Command::PlaceSymbol { symbol },

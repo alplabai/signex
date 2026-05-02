@@ -1,0 +1,35 @@
+class = "opamp"
+description = "Operational amplifier"
+
+[[required_params]]
+name = "channels"
+kind = "number"
+
+[[required_params]]
+name = "supply_min"
+kind = "measurement"
+unit = "V"
+
+[[required_params]]
+name = "supply_max"
+kind = "measurement"
+unit = "V"
+
+[[optional_params]]
+name = "gbw"
+kind = "measurement"
+unit = "Hz"
+
+[[optional_params]]
+name = "slew_rate"
+kind = "measurement"
+unit = "V/us"
+
+[[optional_params]]
+name = "input_offset"
+kind = "measurement"
+unit = "V"
+
+[[optional_params]]
+name = "package"
+kind = "text"

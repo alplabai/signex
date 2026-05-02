@@ -2,7 +2,9 @@ use iced::Task;
 
 use super::*;
 
+mod command_palette;
 mod document;
+pub(crate) mod library;
 mod overlay;
 mod routed;
 mod text_edit;
@@ -35,6 +37,7 @@ impl Signex {
             | Message::CancelDrawing
             | Message::Tool(_) => self.dispatch_tool_message(message),
             Message::FileOpened(_)
+            | Message::NewProjectFile(_)
             | Message::DeleteSelected
             | Message::Undo
             | Message::Redo
@@ -48,7 +51,7 @@ impl Signex {
             | Message::Duplicate
             | Message::SaveFile
             | Message::SaveFileAs(_)
-            | Message::SaveFileFinished(_, _)
+            | Message::SavePrimitiveAs { .. }
             | Message::SchematicLoaded(_)
             | Message::ExportPdfOpenDialog
             | Message::ExportPdfFinished(_)
@@ -118,6 +121,8 @@ impl Signex {
             | Message::OpenReplace
             | Message::OpenPreferences
             | Message::ClosePreferences
+            | Message::CloseKeyboardShortcuts
+            | Message::DismissFirstRunTour
             | Message::PreferencesNav(_)
             | Message::PreferencesMsg(_)
             | Message::FindReplaceMsg(_)
@@ -136,6 +141,13 @@ impl Signex {
             | Message::CloseRenameDialog
             | Message::RemoveConfirm(_)
             | Message::CloseRemoveDialog
+            | Message::AddExistingFilePicked { .. }
+            | Message::AddNewSchematicPicked { .. }
+            | Message::CloseProjectOptions
+            | Message::EnableVersionControlToggleLfs
+            | Message::EnableVersionControlToggleItem(_)
+            | Message::EnableVersionControlConfirm
+            | Message::CloseEnableVersionControl
             | Message::OpenContextSubmenu(_)
             | Message::HoverContextSubmenu(_)
             | Message::LeaveContextSubmenu
@@ -208,19 +220,19 @@ impl Signex {
                 // next view frame. Phase 3 will add undocked-tab cleanup
                 // here too.
                 if let Some(kind) = self.ui_state.windows.remove(&id) {
-                    use super::states::{ModalId, WindowKind};
+                    use super::state::{ModalId, WindowKind};
                     match kind {
                         WindowKind::DetachedModal(modal) => match modal {
-                            ModalId::AnnotateDialog => self.ui_state.annotate.dialog_open = false,
+                            ModalId::AnnotateDialog => self.ui_state.annotate_dialog_open = false,
                             ModalId::AnnotateResetConfirm => {
-                                self.ui_state.annotate.reset_confirm = false
+                                self.ui_state.annotate_reset_confirm = false
                             }
-                            ModalId::ErcDialog => self.ui_state.erc.dialog_open = false,
+                            ModalId::ErcDialog => self.ui_state.erc_dialog_open = false,
                             ModalId::Preferences => self.ui_state.preferences_open = false,
                             ModalId::FindReplace => self.ui_state.find_replace.open = false,
                             ModalId::MoveSelection => self.ui_state.move_selection.open = false,
                             ModalId::NetColorPalette => {
-                                self.ui_state.net_color.palette_open = false
+                                self.ui_state.net_color_palette_open = false
                             }
                             ModalId::ParameterManager => {
                                 self.ui_state.parameter_manager_open = false
@@ -229,6 +241,12 @@ impl Signex {
                             ModalId::RemoveDialog => self.ui_state.remove_dialog = None,
                             ModalId::PrintPreview => self.document_state.preview = None,
                             ModalId::BomPreview => self.document_state.bom_preview = None,
+                            ModalId::ProjectOptions => {
+                                self.ui_state.project_options = None;
+                            }
+                            ModalId::EnableVersionControl => {
+                                self.ui_state.enable_version_control = None;
+                            }
                         },
                         // Closing an undocked-tab window is the reattach
                         // gesture — the tab itself stays in
@@ -246,6 +264,17 @@ impl Signex {
                                 .dock
                                 .add_panel(crate::dock::PanelPosition::Right, kind);
                         }
+                        // The Component Preview lives as a tab in the
+                        // main window; its state outlasts the
+                        // detached OS window. Closing the OS window
+                        // re-docks the editor to the main-window tab
+                        // bar — `library.editors` keeps the in-flight
+                        // edits keyed by `(library_path, table,
+                        // row_id)`, and the main-window tab
+                        // already exists, so there's nothing to do
+                        // here beyond letting the window-id mapping
+                        // drop above.
+                        WindowKind::ComponentEditor { .. } => {}
                     }
                 }
                 Task::none()
@@ -254,7 +283,7 @@ impl Signex {
             Message::DetachedModalOpened { modal, id } => {
                 self.ui_state
                     .windows
-                    .insert(id, super::states::WindowKind::DetachedModal(modal));
+                    .insert(id, super::state::WindowKind::DetachedModal(modal));
                 // Any lingering drag state belongs to the main window —
                 // once the modal is popped out, the OS handles window
                 // drags directly.
@@ -278,7 +307,7 @@ impl Signex {
                     .unwrap_or_default();
                 self.ui_state.windows.insert(
                     id,
-                    super::states::WindowKind::UndockedTab {
+                    super::state::WindowKind::UndockedTab {
                         path: path.clone(),
                         title,
                     },
@@ -328,29 +357,33 @@ impl Signex {
             Message::DetachedPanelOpened { kind, id } => {
                 self.ui_state
                     .windows
-                    .insert(id, super::states::WindowKind::DetachedPanel(kind));
+                    .insert(id, super::state::WindowKind::DetachedPanel(kind));
                 Task::none()
             }
             Message::StartDetachedWindowDrag(modal) => {
                 self.handle_start_detached_window_drag(modal)
             }
             Message::StartMainWindowDrag => match self.ui_state.main_window_id {
-                Some(id) => iced::window::drag(id),
+                Some(id) => crate::chrome::start_window_drag(id),
                 None => Task::none(),
             },
             Message::StartMainWindowResize(direction) => match self.ui_state.main_window_id {
-                Some(id) => iced::window::drag_resize(id, direction),
+                Some(id) => crate::chrome::start_window_resize(id, direction),
                 None => Task::none(),
             },
             Message::StartDetachedModalResize { modal, direction } => {
                 // Find the OS window id hosting this modal, then ask
-                // iced/winit to start a resize drag in the requested
+                // the OS to start a resize drag in the requested
                 // direction. Same pattern as the main window —
                 // detached modals have `decorations: false`, so
                 // there's no OS frame to grab; the 6 px overlay
-                // strips are how we expose resize.
+                // strips are how we expose resize. Routed through
+                // `crate::chrome::start_window_resize` so the Win32
+                // SC_SIZE fallback applies here too — winit's own
+                // path silently no-ops on borderless windows after
+                // the first attempt.
                 let id = self.ui_state.windows.iter().find_map(|(id, kind)| {
-                    if let super::states::WindowKind::DetachedModal(m) = kind {
+                    if let super::state::WindowKind::DetachedModal(m) = kind {
                         if *m == modal {
                             return Some(*id);
                         }
@@ -358,7 +391,7 @@ impl Signex {
                     None
                 });
                 match id {
-                    Some(id) => iced::window::drag_resize(id, direction),
+                    Some(id) => crate::chrome::start_window_resize(id, direction),
                     None => Task::none(),
                 }
             }
@@ -377,7 +410,7 @@ impl Signex {
             Message::OpenMoveSelectionDialog => self.handle_open_move_selection_dialog(),
             Message::CloseMoveSelectionDialog => {
                 let _ = self.handle_close_move_selection_dialog();
-                self.close_detached_modal(super::states::ModalId::MoveSelection)
+                self.close_detached_modal(super::state::ModalId::MoveSelection)
             }
             Message::MoveSelectionDxChanged(s) => {
                 self.ui_state.move_selection.dx = s;
@@ -389,18 +422,18 @@ impl Signex {
             }
             Message::MoveSelectionApply => self.handle_move_selection_apply(),
             Message::OpenNetColorPalette => {
-                self.ui_state.net_color.palette_open = true;
-                self.handle_detach_modal(super::states::ModalId::NetColorPalette)
+                self.ui_state.net_color_palette_open = true;
+                self.handle_detach_modal(super::state::ModalId::NetColorPalette)
             }
             Message::CloseNetColorPalette => {
-                self.ui_state.net_color.palette_open = false;
-                self.close_detached_modal(super::states::ModalId::NetColorPalette)
+                self.ui_state.net_color_palette_open = false;
+                self.close_detached_modal(super::state::ModalId::NetColorPalette)
             }
             Message::NetColorSet { net, color } => {
                 if let Some(c) = color {
-                    self.ui_state.net_color.colors_by_net.insert(net, c);
+                    self.ui_state.net_colors.insert(net, c);
                 } else {
-                    self.ui_state.net_color.colors_by_net.remove(&net);
+                    self.ui_state.net_colors.remove(&net);
                 }
                 self.interaction_state
                     .active_canvas_mut()
@@ -409,11 +442,11 @@ impl Signex {
             }
             Message::OpenParameterManager => {
                 self.ui_state.parameter_manager_open = true;
-                self.handle_detach_modal(super::states::ModalId::ParameterManager)
+                self.handle_detach_modal(super::state::ModalId::ParameterManager)
             }
             Message::CloseParameterManager => {
                 self.ui_state.parameter_manager_open = false;
-                self.close_detached_modal(super::states::ModalId::ParameterManager)
+                self.close_detached_modal(super::state::ModalId::ParameterManager)
             }
             Message::ParameterManagerEdit {
                 symbol_uuid,
@@ -421,31 +454,31 @@ impl Signex {
                 value,
             } => self.handle_parameter_manager_edit(symbol_uuid, key, value),
             Message::AnnotateToggleLock(uuid) => {
-                if self.ui_state.annotate.locked.contains(&uuid) {
-                    self.ui_state.annotate.locked.remove(&uuid);
+                if self.ui_state.annotate_locked.contains(&uuid) {
+                    self.ui_state.annotate_locked.remove(&uuid);
                 } else {
-                    self.ui_state.annotate.locked.insert(uuid);
+                    self.ui_state.annotate_locked.insert(uuid);
                 }
                 Task::none()
             }
             Message::NetColorCustomShow(show) => {
-                self.ui_state.net_color.custom.show = show;
+                self.ui_state.net_color_custom.show = show;
                 Task::none()
             }
             Message::NetColorCustomDraft(c) => {
-                self.ui_state.net_color.custom.draft = c;
+                self.ui_state.net_color_custom.draft = c;
                 Task::none()
             }
             Message::NetColorCustomSubmit(c) => {
-                self.ui_state.net_color.custom.show = false;
-                self.ui_state.net_color.custom.draft = c;
+                self.ui_state.net_color_custom.show = false;
+                self.ui_state.net_color_custom.draft = c;
                 let color = signex_types::theme::Color {
                     r: (c.r * 255.0).round() as u8,
                     g: (c.g * 255.0).round() as u8,
                     b: (c.b * 255.0).round() as u8,
                     a: 255,
                 };
-                self.ui_state.net_color.pending_color = Some(color);
+                self.ui_state.pending_net_color = Some(color);
                 self.interaction_state.active_canvas_mut().pending_net_color = Some(color);
                 Task::none()
             }
@@ -454,7 +487,7 @@ impl Signex {
                 // text_input doesn't reject intermediate values like
                 // the empty string while the user types.
                 let parsed = s.trim().parse::<u16>().unwrap_or(0).min(255) as u8;
-                let draft = &mut self.ui_state.net_color.custom.draft;
+                let draft = &mut self.ui_state.net_color_custom.draft;
                 let v = parsed as f32 / 255.0;
                 match chan {
                     super::contracts::Channel::R => draft.r = v,
@@ -536,6 +569,8 @@ impl Signex {
                 self.ui_state.selection_mode = match self.ui_state.selection_mode {
                     SelectionMode::Inside => SelectionMode::Touching,
                     SelectionMode::Touching => SelectionMode::Inside,
+                    SelectionMode::Single => SelectionMode::Inside,
+                    _ => SelectionMode::Inside,
                 };
                 crate::diagnostics::log_info(format!(
                     "Selection mode: {:?}",
@@ -606,7 +641,6 @@ impl Signex {
                     .unwrap_or(Severity::Off);
                 let current = self
                     .ui_state
-                    .erc
                     .pin_matrix_overrides
                     .get(&key)
                     .copied()
@@ -618,14 +652,44 @@ impl Signex {
                     Severity::Off => Severity::Error,
                 };
                 if next == baseline {
-                    self.ui_state.erc.pin_matrix_overrides.remove(&key);
+                    self.ui_state.pin_matrix_overrides.remove(&key);
                 } else {
-                    self.ui_state.erc.pin_matrix_overrides.insert(key, next);
+                    self.ui_state.pin_matrix_overrides.insert(key, next);
                 }
-                crate::fonts::write_pin_matrix_overrides(&self.ui_state.erc.pin_matrix_overrides);
+                crate::fonts::write_pin_matrix_overrides(&self.ui_state.pin_matrix_overrides);
                 Task::none()
             }
             Message::UpdateDrawingField(uuid, edit) => self.handle_update_drawing_field(uuid, edit),
+            Message::Library(msg) => self.dispatch_library_message(msg),
+            Message::CommandPaletteOpen
+            | Message::CommandPaletteClose
+            | Message::CommandPaletteQueryChanged(_)
+            | Message::CommandPaletteMoveSelection(_)
+            | Message::CommandPaletteSelect(_)
+            | Message::CommandPaletteExecuteSelected => {
+                self.dispatch_command_palette_message(message)
+            }
+            Message::HistoryLoaded {
+                generation,
+                path: _,
+                result,
+            } => {
+                // Drop stale results from a previous tab — the
+                // generation token compares cheaply and is the
+                // authoritative staleness check (the path field
+                // is informational only).
+                if generation != self.document_state.history.generation {
+                    return Task::none();
+                }
+                self.document_state.history.loading = false;
+                self.document_state.history.mode = crate::panels::history::HistoryRenderMode::Ready;
+                self.document_state.history.entries = match result {
+                    Ok(entries) => entries,
+                    Err(_) => Vec::new(),
+                };
+                self.document_state.panel_ctx.history = self.document_state.history.clone();
+                Task::none()
+            }
             Message::Noop => Task::none(),
         }
     }

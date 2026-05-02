@@ -244,7 +244,7 @@ pub(crate) fn build_bookmarks(
                     }
                 }
                 if opts.bookmark_pins {
-                    // Historical formats don't store per-pin physical positions
+                    // Standard doesn't store per-pin physical positions
                     // separately from the parent symbol — render a
                     // pin entry per symbol-pin pair using the symbol
                     // anchor as the destination. Coarse but matches
@@ -304,8 +304,8 @@ pub(crate) fn emit_bookmarks(
         if let Some(&last) = top_level.last() {
             outline.last(bookmark_id(last));
         }
-        // /Count = total visible items so the panel opens fully
-        // expanded — matches what Altium ship.
+        // /Count = total visible items so the bookmarks panel opens
+        // fully expanded by default, matching common EDA exporters.
         outline.count(bookmarks.len() as i32);
         outline.finish();
     }
@@ -465,6 +465,7 @@ mod tests {
             ref_text: None,
             val_text: None,
             fields_autoplaced: false,
+            fields_user_placed: false,
             dnp: false,
             in_bom: true,
             on_board: true,
@@ -476,6 +477,9 @@ mod tests {
             instances: vec![],
             footprint: String::new(),
             datasheet: String::new(),
+            library_id: None,
+            row_id: None,
+            library_version: String::new(),
         });
         sheet.labels.push(Label {
             uuid: uuid::Uuid::nil(),
@@ -490,7 +494,7 @@ mod tests {
         });
         ExportContext {
             sheets: vec![SheetSnapshot {
-                path: std::path::PathBuf::from("a.snxsch"),
+                path: std::path::PathBuf::from("a.standard_sch"),
                 schematic: sheet,
                 sheet_name: "Power".to_string(),
                 sheet_number: 1,
@@ -629,11 +633,7 @@ mod tests {
             ..default_opts()
         };
         let items = build_bookmarks(&ctx, &opts, &[0], 297.0, 210.0, 595.0);
-        assert!(
-            items[0].title.contains("[VarA]"),
-            "got {}",
-            items[0].title
-        );
+        assert!(items[0].title.contains("[VarA]"), "got {}", items[0].title);
     }
 
     #[test]
@@ -667,6 +667,7 @@ mod tests {
             ref_text: None,
             val_text: None,
             fields_autoplaced: false,
+            fields_user_placed: false,
             dnp: false,
             in_bom: true,
             on_board: true,
@@ -678,6 +679,9 @@ mod tests {
             instances: vec![],
             footprint: String::new(),
             datasheet: String::new(),
+            library_id: None,
+            row_id: None,
+            library_version: String::new(),
         };
         sym.pin_uuids.insert("1".to_string(), uuid::Uuid::nil());
         sym.pin_uuids.insert("2".to_string(), uuid::Uuid::nil());
@@ -685,7 +689,7 @@ mod tests {
 
         let ctx = ExportContext {
             sheets: vec![SheetSnapshot {
-                path: std::path::PathBuf::from("a.snxsch"),
+                path: std::path::PathBuf::from("a.standard_sch"),
                 schematic: sheet,
                 sheet_name: "Sheet1".to_string(),
                 sheet_number: 1,
@@ -738,6 +742,7 @@ mod tests {
                     ref_text: None,
                     val_text: None,
                     fields_autoplaced: false,
+                    fields_user_placed: false,
                     dnp: false,
                     in_bom: true,
                     on_board: true,
@@ -749,9 +754,12 @@ mod tests {
                     instances: vec![],
                     footprint: String::new(),
                     datasheet: String::new(),
+                    library_id: None,
+                    row_id: None,
+                    library_version: String::new(),
                 });
                 sheets.push(SheetSnapshot {
-                    path: std::path::PathBuf::from(format!("sheet_{i}.snxsch")),
+                    path: std::path::PathBuf::from(format!("sheet_{i}.standard_sch")),
                     schematic: sheet,
                     sheet_name: format!("Sheet{}", i + 1),
                     sheet_number: i + 1,
@@ -772,8 +780,7 @@ mod tests {
         assert_eq!(items.len(), 9);
 
         // Top-level items = the 3 Sheet bookmarks.
-        let top: Vec<&PendingBookmark> =
-            items.iter().filter(|b| b.parent_idx.is_none()).collect();
+        let top: Vec<&PendingBookmark> = items.iter().filter(|b| b.parent_idx.is_none()).collect();
         assert_eq!(top.len(), 3);
 
         // Each Sheet bookmark has exactly one child (its Components group).

@@ -17,12 +17,12 @@ impl Signex {
     }
 
     pub(crate) fn handle_undo_requested(&mut self) {
-        // Net-colour floods aren't persisted to the schematic document so
+        // Net-colour floods aren't persisted to the Standard document so
         // they don't enter the engine's history. Check the app-level
-        // Net-color undo stack first; only fall through to the engine
+        // net_color_undo stack first; only fall through to the engine
         // when no net-colour action is pending.
-        if let Some(prev) = self.ui_state.net_color.undo.pop() {
-            self.ui_state.net_color.wire_color_overrides = prev.clone();
+        if let Some(prev) = self.ui_state.net_color_undo.pop() {
+            self.ui_state.wire_color_overrides = prev.clone();
             self.interaction_state
                 .active_canvas_mut()
                 .wire_color_overrides = prev;
@@ -136,7 +136,7 @@ impl Signex {
 /// Returns `None` when the edit is incompatible with the drawing
 /// variant (e.g. `ArcRadius` on a Rect). Arc edits convert the
 /// Altium-style (center, radius, start/end angle) fields back to
-/// the stored (start, mid, end) triple.
+/// Standard's stored (start, mid, end) triple.
 fn apply_drawing_edit(
     current: signex_types::schematic::SchDrawing,
     edit: crate::app::contracts::DrawingFieldEdit,

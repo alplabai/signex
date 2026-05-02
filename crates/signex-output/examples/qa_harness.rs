@@ -27,8 +27,12 @@ fn main() {
             std::process::exit(2);
         }
     };
-    let out_dir =
-        PathBuf::from(args.next().unwrap_or_else(|| std::env::temp_dir().join("signex_qa").to_string_lossy().into_owned()));
+    let out_dir = PathBuf::from(args.next().unwrap_or_else(|| {
+        std::env::temp_dir()
+            .join("signex_qa")
+            .to_string_lossy()
+            .into_owned()
+    }));
     std::fs::create_dir_all(&out_dir).expect("create out dir");
 
     println!("== Signex v0.8 QA harness ==");
@@ -110,12 +114,7 @@ fn main() {
 
     println!();
     println!("== BOM (Grouped) ==");
-    qa_bom(
-        &ctx,
-        &out_dir,
-        BomGrouping::Grouped,
-        "grouped",
-    );
+    qa_bom(&ctx, &out_dir, BomGrouping::Grouped, "grouped");
     println!();
     println!("== BOM (Flat) ==");
     qa_bom(&ctx, &out_dir, BomGrouping::Flat, "flat");
@@ -153,11 +152,7 @@ fn qa_netlist(ctx: &ExportContext, out_dir: &Path) {
         Ok(Ok(out)) => {
             let path = out_dir.join("qa.net");
             std::fs::write(&path, &out.bytes).expect("write netlist");
-            println!(
-                "  Netlist: bytes={} → {}",
-                out.bytes.len(),
-                path.display()
-            );
+            println!("  Netlist: bytes={} → {}", out.bytes.len(), path.display());
         }
         Ok(Err(e)) => eprintln!("  Netlist: ERROR {e}"),
         Err(_) => eprintln!("  Netlist: PANIC"),
@@ -186,11 +181,7 @@ fn qa_bom(ctx: &ExportContext, out_dir: &Path, grouping: BomGrouping, label: &st
         },
     );
     let fitted: u32 = table.rows.iter().map(|r| r.fitted_qty).sum();
-    println!(
-        "  rollup: {} row(s), {} fitted",
-        table.rows.len(),
-        fitted
-    );
+    println!("  rollup: {} row(s), {} fitted", table.rows.len(), fitted);
 
     for (format, ext) in [
         (BomFormat::Csv, "csv"),
@@ -227,7 +218,7 @@ fn qa_bom(ctx: &ExportContext, out_dir: &Path, grouping: BomGrouping, label: &st
                     path.display()
                 );
                 // Print errors only (warnings are usually 1×missing MPN
-                // per component which is verbose and historical
+                // per component which is verbose and expected on Standard
                 // projects without MPN fields populated).
                 if format == BomFormat::Csv {
                     use signex_output::BomIssueSeverity;
@@ -251,9 +242,7 @@ fn qa_bom(ctx: &ExportContext, out_dir: &Path, grouping: BomGrouping, label: &st
                         println!("    . WARN {rule}: {count} component(s)");
                     }
                     if shown == 0 && out.validation_report.error_count() > 0 {
-                        println!(
-                            "    (errors counted but none surfaced — bug?)"
-                        );
+                        println!("    (errors counted but none surfaced — bug?)");
                     }
                 }
             }

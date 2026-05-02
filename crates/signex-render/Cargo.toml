@@ -9,3 +9,4 @@ license.workspace = true
 signex-types = { workspace = true }
 iced = { workspace = true }
 uuid = { workspace = true }
+thiserror = { workspace = true }

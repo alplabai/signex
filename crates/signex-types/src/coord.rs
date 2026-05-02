@@ -113,6 +113,11 @@ pub fn from_um(v: f64) -> Coord {
     (v * NM_PER_UM as f64).round() as Coord
 }
 
+/// Standard stores coordinates as f64 millimeters -- convert to nanometers.
+pub fn from_standard_mm(v: f64) -> Coord {
+    from_mm(v)
+}
+
 // ---------------------------------------------------------------------------
 // Conversion helpers -- from nanometers to user units
 // ---------------------------------------------------------------------------

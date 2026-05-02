@@ -21,11 +21,20 @@ impl Signex {
             Message::OpenReplace => self.handle_find_replace_open_requested(true),
             Message::OpenPreferences => self.handle_preferences_open_requested(),
             Message::ClosePreferences => self.handle_preferences_close_requested(),
+            Message::CloseKeyboardShortcuts => {
+                self.ui_state.keyboard_shortcuts_open = false;
+                Task::none()
+            }
+            Message::DismissFirstRunTour => {
+                self.ui_state.first_run_tour_open = false;
+                crate::fonts::write_first_run_tour_dismissed(true);
+                Task::none()
+            }
             Message::PreferencesNav(nav) => self.handle_preferences_navigation_requested(nav),
             Message::PreferencesMsg(msg) => self.handle_preferences_message(msg),
             Message::FindReplaceMsg(msg) => self.handle_find_replace_message(msg),
             Message::RunErc => {
-                let close_task = if self.ui_state.erc.dialog_open {
+                let close_task = if self.ui_state.erc_dialog_open {
                     self.handle_close_erc_dialog()
                 } else {
                     Task::none()
@@ -65,14 +74,14 @@ impl Signex {
                     || canvas.placement_paused
                     || self.interaction_state.pending_power.is_some()
                     || self.interaction_state.pending_port.is_some()
-                    || self.ui_state.net_color.pending_color.is_some()
+                    || self.ui_state.pending_net_color.is_some()
                     || self.ui_state.reorder_picker.is_some()
                     || self.ui_state.lasso_polygon.is_some();
                 if placement_active {
                     self.clear_transient_schematic_tool_state();
                     self.interaction_state.current_tool = Tool::Select;
                     // Drop any app-level armed mode too.
-                    self.ui_state.net_color.pending_color = None;
+                    self.ui_state.pending_net_color = None;
                     self.interaction_state.active_canvas_mut().pending_net_color = None;
                     self.ui_state.reorder_picker = None;
                     self.interaction_state
@@ -169,6 +178,40 @@ impl Signex {
             Message::RemoveConfirm(choice) => self.handle_remove_confirm(choice),
             Message::CloseRemoveDialog => {
                 self.ui_state.remove_dialog = None;
+                Task::none()
+            }
+            Message::AddExistingFilePicked { project_idx, paths } => {
+                self.handle_add_existing_file_picked(project_idx, paths);
+                Task::none()
+            }
+            Message::AddNewSchematicPicked { project_idx, path } => {
+                self.handle_add_new_schematic_picked(project_idx, path);
+                Task::none()
+            }
+            Message::CloseProjectOptions => {
+                self.ui_state.project_options = None;
+                Task::none()
+            }
+            Message::EnableVersionControlToggleLfs => {
+                if let Some(s) = self.ui_state.enable_version_control.as_mut() {
+                    s.use_lfs = !s.use_lfs;
+                }
+                Task::none()
+            }
+            Message::EnableVersionControlToggleItem(idx) => {
+                if let Some(s) = self.ui_state.enable_version_control.as_mut() {
+                    if let Some(item) = s.items.get_mut(idx) {
+                        item.tracked = !item.tracked;
+                    }
+                }
+                Task::none()
+            }
+            Message::EnableVersionControlConfirm => {
+                self.handle_enable_version_control_confirm();
+                Task::none()
+            }
+            Message::CloseEnableVersionControl => {
+                self.ui_state.enable_version_control = None;
                 Task::none()
             }
             Message::OpenContextSubmenu(kind) => {

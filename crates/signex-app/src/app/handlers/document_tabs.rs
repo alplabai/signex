@@ -99,18 +99,36 @@ impl Signex {
             return Task::none();
         }
         let closing_path = self.document_state.tabs[idx].path.clone();
+        // Capture the tab kind before removal so the editor-state
+        // cleanup below can run after the tab is dropped.
+        let closing_kind = self.document_state.tabs[idx].kind.clone();
 
         // If the tab has an undocked window open, close that window
         // too — otherwise it'd be an orphan showing "No document open"
         // indefinitely. The window's `SecondaryWindowClosed` cleans up
         // `canvases[id]` + `ui_state.windows[id]`.
-        use crate::app::states::WindowKind;
+        use crate::app::state::WindowKind;
         let orphan_window_ids: Vec<iced::window::Id> = self
             .ui_state
             .windows
             .iter()
-            .filter_map(|(id, kind)| match kind {
-                WindowKind::UndockedTab { path, .. } if path == &closing_path => Some(*id),
+            .filter_map(|(id, kind)| match (kind, &closing_kind) {
+                (WindowKind::UndockedTab { path, .. }, _) if path == &closing_path => Some(*id),
+                // Component Preview windows are addressed by the DBLib
+                // row tier `(library_path, table, row_id)`.
+                (
+                    WindowKind::ComponentEditor {
+                        library_path,
+                        table,
+                        row_id,
+                    },
+                    crate::app::TabKind::ComponentEditor(ce),
+                ) if library_path == &ce.library_path
+                    && table == &ce.table
+                    && row_id == &ce.row_id =>
+                {
+                    Some(*id)
+                }
                 _ => None,
             })
             .collect();
@@ -123,6 +141,35 @@ impl Signex {
         }
         if self.document_state.active_path.as_ref() == Some(&closing_path) {
             self.document_state.active_path = None;
+        }
+
+        // Drop the editor state when the tab is a Component Preview.
+        // The library subsystem has no dirty-park mechanism yet, so
+        // closing the tab discards the draft (matches the
+        // window-close behaviour).
+        if let crate::app::TabKind::ComponentEditor(ref ce) = closing_kind {
+            self.library
+                .editors
+                .remove(&crate::library::state::EditorAddress::new(
+                    ce.library_path.clone(),
+                    ce.table.clone(),
+                    ce.row_id,
+                ));
+        }
+        // Standalone primitive editor tabs — drop the per-tab editor
+        // state on close. Same shape as Component Preview cleanup
+        // (no dirty-park yet, so closing discards the in-flight draft).
+        if let crate::app::TabKind::SymbolEditor(ref p) = closing_kind {
+            self.document_state.symbol_editors.remove(p);
+        }
+        if let crate::app::TabKind::FootprintEditor(ref p) = closing_kind {
+            self.document_state.footprint_editors.remove(p);
+        }
+        // Library Browser tabs — drop the per-browser state on close.
+        // The library itself stays mounted; only the tab-scoped UI
+        // state (active table, search buffer, selection) goes away.
+        if let crate::app::TabKind::LibraryBrowser(ref p) = closing_kind {
+            self.library.library_browsers.remove(p);
         }
         self.document_state.tabs.remove(idx);
         if self.document_state.active_tab >= self.document_state.tabs.len()
@@ -190,5 +237,4 @@ impl Signex {
             A::Undock(idx) => Task::done(Message::UndockTab(idx)),
         }
     }
-
 }

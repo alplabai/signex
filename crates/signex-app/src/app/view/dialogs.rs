@@ -8,7 +8,7 @@
 use iced::widget::{Column, Row, Space, button, column, container, row, scrollable, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
-use crate::app::states::AnnotateOrder;
+use crate::app::state::AnnotateOrder;
 use crate::app::{Message, Signex};
 
 const BACKDROP: Color = Color::from_rgba(0.0, 0.0, 0.0, 0.55);
@@ -26,32 +26,31 @@ const BACKDROP: Color = Color::from_rgba(0.0, 0.0, 0.0, 0.55);
 /// rename modals; 28 keeps the header tight relative to the body.
 /// Close-X follows the same height so there's no empty strip below
 /// the button.
-pub(in crate::app::view) const MODAL_HEADER_HEIGHT: f32 = 28.0;
+pub(crate) const MODAL_HEADER_HEIGHT: f32 = 28.0;
 /// Asymmetric padding inside the modal header strip: zero on the right
 /// so the close-X sits flush against the rounded corner (its own
 /// top-right radius matches `MODAL_CORNER_RADIUS`); zero top/bottom so
 /// the X fills the strip's full height; left inset matched to the
 /// modal body padding (16 px) so the title left-aligns with the
 /// body's first text column.
-pub(in crate::app::view) const MODAL_HEADER_PADDING: iced::Padding = iced::Padding {
+pub(crate) const MODAL_HEADER_PADDING: iced::Padding = iced::Padding {
     top: 0.0,
     right: 0.0,
     bottom: 0.0,
     left: 16.0,
 };
 /// Title text size in the modal header.
-pub(in crate::app::view) const MODAL_HEADER_TITLE_SIZE: f32 = 13.0;
+pub(crate) const MODAL_HEADER_TITLE_SIZE: f32 = 13.0;
 /// Close-X hit-box width — same width the chrome close uses
 /// (`view::view_main_window_chrome::chrome_btn`).
-pub(in crate::app::view) const MODAL_CLOSE_X_HIT_W: f32 = 46.0;
+pub(crate) const MODAL_CLOSE_X_HIT_W: f32 = 46.0;
 /// Close-X hit-box height — also matches the chrome close (full
 /// menu-bar height) so the modal X is pixel-identical to the OS-window X.
-pub(in crate::app::view) const MODAL_CLOSE_X_HIT_H: f32 = MODAL_HEADER_HEIGHT;
+pub(crate) const MODAL_CLOSE_X_HIT_H: f32 = MODAL_HEADER_HEIGHT;
 /// SVG glyph size for the close-X. Same value the chrome close uses.
-pub(in crate::app::view) const MODAL_CLOSE_X_ICON: f32 = 14.0;
+pub(crate) const MODAL_CLOSE_X_ICON: f32 = 14.0;
 /// Hover background for the close-X (Windows-native destructive red).
-pub(in crate::app::view) const MODAL_CLOSE_X_HOVER: Color =
-    Color::from_rgba(0.78, 0.22, 0.22, 1.0);
+pub(crate) const MODAL_CLOSE_X_HOVER: Color = Color::from_rgba(0.78, 0.22, 0.22, 1.0);
 
 impl Signex {
     pub(super) fn view_annotate_dialog(&self) -> Element<'_, Message> {
@@ -61,7 +60,7 @@ impl Signex {
         let offset = self
             .ui_state
             .modal_offsets
-            .get(&super::super::states::ModalId::AnnotateDialog)
+            .get(&super::super::state::ModalId::AnnotateDialog)
             .copied()
             .unwrap_or((0.0, 0.0));
         wrap_modal(
@@ -101,9 +100,7 @@ impl Signex {
         let theme_id = self.ui_state.theme_id;
         let header_content: Element<'_, Message> = container(
             row![
-                text("Annotate")
-                    .size(MODAL_HEADER_TITLE_SIZE)
-                    .color(text_c),
+                text("Annotate").size(MODAL_HEADER_TITLE_SIZE).color(text_c),
                 Space::new().width(Length::Fill),
                 close_x_button(Message::CloseAnnotateDialog, theme_id, text_muted),
             ]
@@ -117,11 +114,11 @@ impl Signex {
         let header = if draggable {
             draggable_header(
                 header_content,
-                super::super::states::ModalId::AnnotateDialog,
+                super::super::state::ModalId::AnnotateDialog,
                 self.interaction_state.last_mouse_pos,
             )
         } else {
-            detached_header(header_content, super::super::states::ModalId::AnnotateDialog)
+            detached_header(header_content, super::super::state::ModalId::AnnotateDialog)
         };
 
         // ── Left column: Schematic Annotation Configuration ──
@@ -137,7 +134,7 @@ impl Signex {
                         order_radio(
                             "Up Then Across",
                             AnnotateOrder::UpThenAcross,
-                            self.ui_state.annotate.order,
+                            self.ui_state.annotate_order,
                             text_c,
                             border_c,
                         ),
@@ -145,7 +142,7 @@ impl Signex {
                         order_radio(
                             "Across Then Down",
                             AnnotateOrder::AcrossThenDown,
-                            self.ui_state.annotate.order,
+                            self.ui_state.annotate_order,
                             text_c,
                             border_c,
                         ),
@@ -156,7 +153,7 @@ impl Signex {
                         order_radio(
                             "Down Then Across",
                             AnnotateOrder::DownThenAcross,
-                            self.ui_state.annotate.order,
+                            self.ui_state.annotate_order,
                             text_c,
                             border_c,
                         ),
@@ -164,7 +161,7 @@ impl Signex {
                         order_radio(
                             "Across Then Up",
                             AnnotateOrder::AcrossThenUp,
-                            self.ui_state.annotate.order,
+                            self.ui_state.annotate_order,
                             text_c,
                             border_c,
                         ),
@@ -174,7 +171,7 @@ impl Signex {
                 .spacing(0)
                 .width(Length::FillPortion(3)),
                 Space::new().width(8),
-                order_preview(self.ui_state.annotate.order, text_c, text_muted, border_c),
+                order_preview(self.ui_state.annotate_order, text_c, text_muted, border_c),
             ]
             .align_y(iced::Alignment::Start)
             .spacing(0),
@@ -419,7 +416,7 @@ impl Signex {
         ]
         .padding([4, 8]);
 
-        let locked_set = &self.ui_state.annotate.locked;
+        let locked_set = &self.ui_state.annotate_locked;
         let mut rows_col: iced::widget::Column<'_, Message> =
             column![].spacing(0).width(Length::Fill);
         if proposed.is_empty() {
@@ -611,7 +608,7 @@ impl Signex {
         let offset = self
             .ui_state
             .modal_offsets
-            .get(&super::super::states::ModalId::AnnotateResetConfirm)
+            .get(&super::super::state::ModalId::AnnotateResetConfirm)
             .copied()
             .unwrap_or((0.0, 0.0));
         wrap_modal(dialog, offset, self.ui_state.window_size, (420.0, 180.0))
@@ -646,13 +643,13 @@ impl Signex {
         let header = if draggable {
             draggable_header(
                 header_content,
-                super::super::states::ModalId::AnnotateResetConfirm,
+                super::super::state::ModalId::AnnotateResetConfirm,
                 self.interaction_state.last_mouse_pos,
             )
         } else {
             detached_header(
                 header_content,
-                super::super::states::ModalId::AnnotateResetConfirm,
+                super::super::state::ModalId::AnnotateResetConfirm,
             )
         };
         let dialog = container(
@@ -695,7 +692,7 @@ impl Signex {
         let offset = self
             .ui_state
             .modal_offsets
-            .get(&super::super::states::ModalId::ErcDialog)
+            .get(&super::super::state::ModalId::ErcDialog)
             .copied()
             .unwrap_or((0.0, 0.0));
         wrap_modal(dialog, offset, self.ui_state.window_size, (1000.0, 600.0))
@@ -730,11 +727,11 @@ impl Signex {
         let header = if draggable {
             draggable_header(
                 header_content,
-                super::super::states::ModalId::ErcDialog,
+                super::super::state::ModalId::ErcDialog,
                 self.interaction_state.last_mouse_pos,
             )
         } else {
-            detached_header(header_content, super::super::states::ModalId::ErcDialog)
+            detached_header(header_content, super::super::state::ModalId::ErcDialog)
         };
 
         // Per-rule severity grid. 11 rules × 4 severities.
@@ -755,8 +752,7 @@ impl Signex {
         for rule in ALL_RULES {
             let current = self
                 .ui_state
-                .erc
-                .severity_override
+                .erc_severity_override
                 .get(rule)
                 .copied()
                 .unwrap_or_else(|| rule.default_severity());
@@ -810,7 +806,7 @@ impl Signex {
                 .size(10)
                 .color(text_muted),
             Space::new().height(8),
-            container(pin_matrix_view(tokens, &self.ui_state.erc.pin_matrix_overrides))
+            container(pin_matrix_view(tokens, &self.ui_state.pin_matrix_overrides))
                 .padding(8)
                 .width(Length::Fill)
                 .style(move |_: &Theme| container::Style {
@@ -858,7 +854,7 @@ impl Signex {
         let offset = self
             .ui_state
             .modal_offsets
-            .get(&super::super::states::ModalId::RenameDialog)
+            .get(&super::super::state::ModalId::RenameDialog)
             .copied()
             .unwrap_or((0.0, 0.0));
         wrap_modal(dialog, offset, self.ui_state.window_size, (420.0, 200.0))
@@ -878,11 +874,14 @@ impl Signex {
         let error_c = Color::from_rgb(0.90, 0.35, 0.30);
 
         let theme_id = self.ui_state.theme_id;
+        let title = if st.is_project_rename {
+            "Rename Project"
+        } else {
+            "Rename File"
+        };
         let header_content: Element<'_, Message> = container(
             row![
-                text("Rename File")
-                    .size(MODAL_HEADER_TITLE_SIZE)
-                    .color(text_c),
+                text(title).size(MODAL_HEADER_TITLE_SIZE).color(text_c),
                 Space::new().width(Length::Fill),
                 close_x_button(Message::CloseRenameDialog, theme_id, text_muted),
             ]
@@ -895,22 +894,37 @@ impl Signex {
         let _ = border_c;
         let header = draggable_header(
             header_content,
-            super::super::states::ModalId::RenameDialog,
+            super::super::state::ModalId::RenameDialog,
             self.interaction_state.last_mouse_pos,
         );
 
-        let current_name = st
-            .target_path
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("")
-            .to_string();
+        let current_label = if st.is_project_rename {
+            st.target_path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_string()
+        } else {
+            st.target_path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_string()
+        };
+        let placeholder = if st.is_project_rename {
+            "new-project-name"
+        } else {
+            "new-name.snxsch"
+        };
+        let prompt = if st.is_project_rename {
+            format!("Rename project \"{}\"", current_label)
+        } else {
+            format!("Rename \"{}\"", current_label)
+        };
 
         let mut body: iced::widget::Column<'_, Message> = column![
-            text(format!("Rename \"{}\"", current_name))
-                .size(11)
-                .color(text_muted),
-            text_input("new-name.snxsch", &st.buffer)
+            text(prompt).size(11).color(text_muted),
+            text_input(placeholder, &st.buffer)
                 .on_input(Message::RenameBufferChanged)
                 .on_submit(Message::RenameSubmit)
                 .size(12)
@@ -945,12 +959,242 @@ impl Signex {
         dialog.into()
     }
 
+    pub(super) fn view_project_options_dialog(&self) -> Element<'_, Message> {
+        let dialog = self.view_project_options_dialog_body();
+        let offset = self
+            .ui_state
+            .modal_offsets
+            .get(&super::super::state::ModalId::ProjectOptions)
+            .copied()
+            .unwrap_or((0.0, 0.0));
+        wrap_modal(dialog, offset, self.ui_state.window_size, (520.0, 360.0))
+    }
+
+    fn view_project_options_dialog_body(&self) -> Element<'_, Message> {
+        let Some(ref st) = self.ui_state.project_options else {
+            return container(Space::new()).into();
+        };
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let theme_id = self.ui_state.theme_id;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border_c = crate::styles::ti(tokens.border);
+
+        let header_content: Element<'_, Message> = container(
+            row![
+                text("Project Options")
+                    .size(MODAL_HEADER_TITLE_SIZE)
+                    .color(text_c),
+                Space::new().width(Length::Fill),
+                close_x_button(Message::CloseProjectOptions, theme_id, text_muted),
+            ]
+            .align_y(iced::Alignment::Center),
+        )
+        .padding(MODAL_HEADER_PADDING)
+        .height(MODAL_HEADER_HEIGHT)
+        .style(crate::styles::modal_header_strip(tokens))
+        .into();
+        let header = draggable_header(
+            header_content,
+            super::super::state::ModalId::ProjectOptions,
+            self.interaction_state.last_mouse_pos,
+        );
+
+        let row_field = |label: &str, value: String| -> Element<'_, Message> {
+            row![
+                container(text(label.to_string()).size(11).color(text_muted))
+                    .width(Length::Fixed(140.0)),
+                text(value).size(12).color(text_c),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center)
+            .into()
+        };
+
+        let body = column![
+            row_field("Name", st.name.clone()),
+            row_field("Directory", st.directory.clone()),
+            row_field(
+                "Schematic root",
+                st.schematic_root.clone().unwrap_or_else(|| "—".to_string())
+            ),
+            row_field(
+                "PCB",
+                st.pcb_file.clone().unwrap_or_else(|| "—".to_string())
+            ),
+            row_field("Libraries", st.library_count.to_string()),
+        ]
+        .spacing(10);
+
+        let dialog = container(
+            column![
+                header,
+                container(body).padding([14, 16]),
+                container(
+                    row![
+                        Space::new().width(Length::Fill),
+                        primary_button("Close", Some(Message::CloseProjectOptions), border_c),
+                    ]
+                    .align_y(iced::Alignment::Center),
+                )
+                .padding([10, 14]),
+            ]
+            .width(520),
+        )
+        .style(crate::styles::modal_card(tokens))
+        .clip(true);
+        dialog.into()
+    }
+
+    pub(super) fn view_enable_version_control_dialog(&self) -> Element<'_, Message> {
+        let dialog = self.view_enable_version_control_dialog_body();
+        let offset = self
+            .ui_state
+            .modal_offsets
+            .get(&super::super::state::ModalId::EnableVersionControl)
+            .copied()
+            .unwrap_or((0.0, 0.0));
+        wrap_modal(dialog, offset, self.ui_state.window_size, (520.0, 320.0))
+    }
+
+    fn view_enable_version_control_dialog_body(&self) -> Element<'_, Message> {
+        use iced::widget::checkbox;
+        let Some(ref st) = self.ui_state.enable_version_control else {
+            return container(Space::new()).into();
+        };
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let theme_id = self.ui_state.theme_id;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border_c = crate::styles::ti(tokens.border);
+
+        let header_content: Element<'_, Message> = container(
+            row![
+                text("Enable Version Control")
+                    .size(MODAL_HEADER_TITLE_SIZE)
+                    .color(text_c),
+                Space::new().width(Length::Fill),
+                close_x_button(Message::CloseEnableVersionControl, theme_id, text_muted),
+            ]
+            .align_y(iced::Alignment::Center),
+        )
+        .padding(MODAL_HEADER_PADDING)
+        .height(MODAL_HEADER_HEIGHT)
+        .style(crate::styles::modal_header_strip(tokens))
+        .into();
+        let header = draggable_header(
+            header_content,
+            super::super::state::ModalId::EnableVersionControl,
+            self.interaction_state.last_mouse_pos,
+        );
+
+        let scope = st.scope;
+        let intro = text(st.intro_text.as_str()).size(11).color(text_muted);
+        let summary_label = match scope {
+            crate::app::VersionControlScope::Project => "Project",
+            crate::app::VersionControlScope::Library => "Library",
+        };
+        let summary = text(format!("{summary_label}: {}", st.project_name))
+            .size(12)
+            .color(text_c);
+
+        // Per-row track toggles. Surfaced as a column (no scrollable
+        // — typical project / library layouts have <20 entries) so
+        // the modal sizing stays predictable.
+        let items_text_c = text_c;
+        let items_text_muted = text_muted;
+        let mut items_col = column![].spacing(4);
+        if !st.items.is_empty() {
+            items_col =
+                items_col.push(text("Track in repository").size(11).color(items_text_muted));
+            for (idx, item) in st.items.iter().enumerate() {
+                let cb: Element<'_, Message> = checkbox(item.tracked)
+                    .size(13)
+                    .on_toggle(move |_| Message::EnableVersionControlToggleItem(idx))
+                    .into();
+                let row_widget = row![
+                    cb,
+                    Space::new().width(8),
+                    text(item.relative.clone()).size(11).color(items_text_c),
+                    Space::new().width(Length::Fill),
+                    text(item.label.clone()).size(10).color(items_text_muted),
+                ]
+                .align_y(iced::Alignment::Center);
+                items_col = items_col.push(row_widget);
+            }
+        }
+
+        let lfs_check: Element<'_, Message> = checkbox(st.use_lfs)
+            .size(14)
+            .on_toggle(|_| Message::EnableVersionControlToggleLfs)
+            .into();
+        let lfs_row = row![
+            lfs_check,
+            Space::new().width(8),
+            column![
+                text("Track binary 3D models via Git LFS")
+                    .size(12)
+                    .color(text_c),
+                text("Routes `*.step / *.stp / *.wrl / *.iges` through Git LFS. Requires `git lfs` locally.")
+                    .size(10)
+                    .color(text_muted),
+            ]
+            .spacing(2),
+        ]
+        .align_y(iced::Alignment::Start);
+
+        let mut body_col = column![summary, intro].spacing(10);
+        if !st.items.is_empty() {
+            body_col = body_col.push(Space::new().height(2));
+            body_col = body_col.push(items_col);
+        }
+        body_col = body_col.push(Space::new().height(6));
+        body_col = body_col.push(lfs_row);
+        if let Some(err) = st.error.as_ref() {
+            body_col = body_col.push(
+                text(err.clone())
+                    .size(11)
+                    .color(iced::Color::from_rgb(0.85, 0.3, 0.3)),
+            );
+        }
+
+        let dialog = container(
+            column![
+                header,
+                container(body_col).padding([14, 16]),
+                container(
+                    row![
+                        Space::new().width(Length::Fill),
+                        secondary_button(
+                            "Cancel",
+                            Message::CloseEnableVersionControl,
+                            text_c,
+                            border_c,
+                        ),
+                        Space::new().width(8),
+                        primary_button(
+                            "Enable",
+                            Some(Message::EnableVersionControlConfirm),
+                            border_c,
+                        ),
+                    ]
+                    .align_y(iced::Alignment::Center),
+                )
+                .padding([10, 14]),
+            ]
+            .width(520),
+        )
+        .style(crate::styles::modal_card(tokens))
+        .clip(true);
+        dialog.into()
+    }
+
     pub(super) fn view_remove_dialog(&self) -> Element<'_, Message> {
         let dialog = self.view_remove_dialog_body();
         let offset = self
             .ui_state
             .modal_offsets
-            .get(&super::super::states::ModalId::RemoveDialog)
+            .get(&super::super::state::ModalId::RemoveDialog)
             .copied()
             .unwrap_or((0.0, 0.0));
         wrap_modal(dialog, offset, self.ui_state.window_size, (560.0, 260.0))
@@ -984,47 +1228,47 @@ impl Signex {
         let _ = border_c;
         let header = draggable_header(
             header_content,
-            super::super::states::ModalId::RemoveDialog,
+            super::super::state::ModalId::RemoveDialog,
             self.interaction_state.last_mouse_pos,
         );
 
-        let option_card = |title: &'static str,
-                           subtitle: &'static str,
-                           msg: Message|
-         -> Element<'_, Message> {
-            let title_owned = title.to_string();
-            let subtitle_owned = subtitle.to_string();
-            button(
-                column![
-                    text(format!("\u{2192} {}", title_owned)).size(12).color(text_c),
-                    text(subtitle_owned).size(10).color(text_muted),
-                ]
-                .spacing(4)
-                .padding([2, 0]),
-            )
-            .on_press(msg)
-            .padding([10, 14])
-            .width(Length::Fill)
-            .style(move |_: &Theme, status: button::Status| {
-                let bg = match status {
-                    button::Status::Hovered | button::Status::Pressed => {
-                        Color::from_rgba(1.0, 1.0, 1.0, 0.06)
+        let option_card =
+            |title: &'static str, subtitle: &'static str, msg: Message| -> Element<'_, Message> {
+                let title_owned = title.to_string();
+                let subtitle_owned = subtitle.to_string();
+                button(
+                    column![
+                        text(format!("\u{2192} {}", title_owned))
+                            .size(12)
+                            .color(text_c),
+                        text(subtitle_owned).size(10).color(text_muted),
+                    ]
+                    .spacing(4)
+                    .padding([2, 0]),
+                )
+                .on_press(msg)
+                .padding([10, 14])
+                .width(Length::Fill)
+                .style(move |_: &Theme, status: button::Status| {
+                    let bg = match status {
+                        button::Status::Hovered | button::Status::Pressed => {
+                            Color::from_rgba(1.0, 1.0, 1.0, 0.06)
+                        }
+                        _ => Color::from_rgba(1.0, 1.0, 1.0, 0.02),
+                    };
+                    button::Style {
+                        background: Some(Background::Color(bg)),
+                        border: Border {
+                            width: 1.0,
+                            radius: 4.0.into(),
+                            color: border_c,
+                        },
+                        text_color: text_c,
+                        ..button::Style::default()
                     }
-                    _ => Color::from_rgba(1.0, 1.0, 1.0, 0.02),
-                };
-                button::Style {
-                    background: Some(Background::Color(bg)),
-                    border: Border {
-                        width: 1.0,
-                        radius: 4.0.into(),
-                        color: border_c,
-                    },
-                    text_color: text_c,
-                    ..button::Style::default()
-                }
-            })
-            .into()
-        };
+                })
+                .into()
+            };
 
         let dialog = container(
             column![
@@ -1076,10 +1320,15 @@ impl Signex {
         let offset = self
             .ui_state
             .modal_offsets
-            .get(&super::super::states::ModalId::BomPreview)
+            .get(&super::super::state::ModalId::BomPreview)
             .copied()
             .unwrap_or((0.0, 0.0));
-        wrap_modal(dialog, offset, self.ui_state.window_size, (modal_w, modal_h))
+        wrap_modal(
+            dialog,
+            offset,
+            self.ui_state.window_size,
+            (modal_w, modal_h),
+        )
     }
 
     pub(super) fn view_bom_preview_body(&self) -> Element<'_, Message> {
@@ -1115,11 +1364,11 @@ impl Signex {
         let header = if draggable {
             draggable_header(
                 header_content,
-                super::super::states::ModalId::BomPreview,
+                super::super::state::ModalId::BomPreview,
                 self.interaction_state.last_mouse_pos,
             )
         } else {
-            detached_header(header_content, super::super::states::ModalId::BomPreview)
+            detached_header(header_content, super::super::state::ModalId::BomPreview)
         };
 
         // Pill style mirrors the main-app right-side Properties
@@ -1129,16 +1378,16 @@ impl Signex {
         // the pill reads as "selected" without being a hard solid
         // fill that fights the theme.
         let accent_c = crate::styles::ti(tokens.accent);
-        let row_pill = |label: String,
-                        on: bool,
-                        msg: Message|
-         -> Element<'_, Message> {
+        let row_pill = |label: String, on: bool, msg: Message| -> Element<'_, Message> {
             button(text(label).size(11).color(text_c))
                 .padding([4, 10])
                 .on_press(msg)
                 .style(move |_: &Theme, status: button::Status| {
                     let bg = match (on, status) {
-                        (true, _) => Color { a: 0.15, ..accent_c },
+                        (true, _) => Color {
+                            a: 0.15,
+                            ..accent_c
+                        },
                         (false, button::Status::Hovered | button::Status::Pressed) => {
                             Color::from_rgba(1.0, 1.0, 1.0, 0.10)
                         }
@@ -1259,8 +1508,7 @@ impl Signex {
         // custom-field column discovered in the rolled-up rows. The
         // pill state mirrors `preview.options.columns`; clicking
         // adds/removes from that Vec via `handle_bom_preview_toggle_column`.
-        let mut custom_keys: std::collections::BTreeSet<String> =
-            std::collections::BTreeSet::new();
+        let mut custom_keys: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
         for r in &preview.table.rows {
             for k in r.custom.keys() {
                 custom_keys.insert(k.clone());
@@ -1275,8 +1523,11 @@ impl Signex {
             (BomColumn::LibRef, "LibRef"),
             (BomColumn::Qty, "Qty"),
         ];
-        let mut column_row = row![text("Columns:").size(11).color(text_muted), Space::new().width(8)]
-            .align_y(iced::Alignment::Center);
+        let mut column_row = row![
+            text("Columns:").size(11).color(text_muted),
+            Space::new().width(8)
+        ]
+        .align_y(iced::Alignment::Center);
         for (col, label) in &column_options {
             let on = preview.options.columns.iter().any(|c| c == col);
             column_row = column_row.push(row_pill(
@@ -1354,8 +1605,8 @@ impl Signex {
         let n_data = preview.options.columns.len();
         let dividers_width = n_data.saturating_sub(1) as f32;
         let resize_slots_width = n_data.saturating_sub(1) as f32 * 4.0;
-        let table_width: f32 = 36.0 + 1.0 + data_columns_width
-            + dividers_width + resize_slots_width;
+        let table_width: f32 =
+            36.0 + 1.0 + data_columns_width + dividers_width + resize_slots_width;
         // Headers: clickable + draggable. Click cycles sort; press
         // arms a drag, release on another header drops the source
         // column at that index. Sort indicator (▲/▼) appears next to
@@ -1380,19 +1631,18 @@ impl Signex {
             .height(HEADER_ROW_H)
             .into();
 
-        let mut header_row: Row<'_, Message> =
-            Row::new().spacing(0).align_y(iced::Alignment::Center).push(num_header);
+        let mut header_row: Row<'_, Message> = Row::new()
+            .spacing(0)
+            .align_y(iced::Alignment::Center)
+            .push(num_header);
         // Vertical divider between row-number column and the data
         // columns so the gutter is visibly its own zone.
-        header_row = header_row.push(
-            container(Space::new())
-                .width(1)
-                .height(HEADER_ROW_H)
-                .style(move |_: &Theme| container::Style {
-                    background: Some(Background::Color(border_c)),
-                    ..container::Style::default()
-                }),
-        );
+        header_row = header_row.push(container(Space::new()).width(1).height(HEADER_ROW_H).style(
+            move |_: &Theme| container::Style {
+                background: Some(Background::Color(border_c)),
+                ..container::Style::default()
+            },
+        ));
         // Index of the last data column — the one that uses
         // Length::Fill so the table eats any leftover horizontal
         // space when the modal is wider than the sum of fixed
@@ -1406,11 +1656,7 @@ impl Signex {
         const COL_DRAG_THRESHOLD_PX: f32 = 6.0;
         let cursor_x = self.interaction_state.last_mouse_pos.0;
         let active_drag = match (preview.column_drag, preview.column_drag_press_x) {
-            (Some(idx), Some(ox))
-                if (cursor_x - ox).abs() > COL_DRAG_THRESHOLD_PX =>
-            {
-                Some(idx)
-            }
+            (Some(idx), Some(ox)) if (cursor_x - ox).abs() > COL_DRAG_THRESHOLD_PX => Some(idx),
             _ => None,
         };
         let _ = preview.column_hover;
@@ -1477,22 +1723,18 @@ impl Signex {
                 // transparent resize handle. No accent bg in
                 // either — they sit between columns and shouldn't
                 // bleed sort highlights into neighbouring cells.
-                header_row = header_row.push(
-                    container(Space::new())
-                        .width(1)
-                        .height(24)
-                        .style(move |_: &Theme| container::Style {
-                            background: Some(Background::Color(border_c)),
-                            ..container::Style::default()
-                        }),
-                );
-                let resize_handle: Element<'_, Message> = iced::widget::mouse_area(
-                    container(Space::new()).width(4).height(HEADER_ROW_H),
-                )
-                .on_press(Message::BomPreviewColumnResizeStart(idx))
-                .on_release(Message::BomPreviewColumnResizeEnd)
-                .interaction(iced::mouse::Interaction::ResizingHorizontally)
-                .into();
+                header_row = header_row.push(container(Space::new()).width(1).height(24).style(
+                    move |_: &Theme| container::Style {
+                        background: Some(Background::Color(border_c)),
+                        ..container::Style::default()
+                    },
+                ));
+                let resize_handle: Element<'_, Message> =
+                    iced::widget::mouse_area(container(Space::new()).width(4).height(HEADER_ROW_H))
+                        .on_press(Message::BomPreviewColumnResizeStart(idx))
+                        .on_release(Message::BomPreviewColumnResizeEnd)
+                        .interaction(iced::mouse::Interaction::ResizingHorizontally)
+                        .into();
                 header_row = header_row.push(resize_handle);
             }
         }
@@ -1573,10 +1815,7 @@ impl Signex {
             // groove lines without competing with the header
             // dividers above. Same ordering as the header so
             // columns line up pixel-for-pixel.
-            let subtle_divider_color = Color {
-                a: 0.3,
-                ..border_c
-            };
+            let subtle_divider_color = Color { a: 0.3, ..border_c };
             let body_divider = move || -> Element<'_, Message> {
                 container(Space::new())
                     .width(1)
@@ -1647,10 +1886,7 @@ impl Signex {
             .unwrap_or_else(|| "Base".to_string());
         let row_count = preview.table.rows.len();
         let total_count = preview.table.rows.len();
-        let status_label = format!(
-            "{} of {} lines visible",
-            row_count, total_count
-        );
+        let status_label = format!("{} of {} lines visible", row_count, total_count);
         let variant_label = format!("Current variant: {}", active_variant_label);
 
         // Variant dropdown for the top toolbar — placeholder in the
@@ -1675,7 +1911,9 @@ impl Signex {
             .height(24)
             .padding([0, 10])
             .style(move |_: &iced::Theme| iced::widget::container::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04))),
+                background: Some(iced::Background::Color(iced::Color::from_rgba(
+                    1.0, 1.0, 1.0, 0.04,
+                ))),
                 border: iced::Border {
                     width: 1.0,
                     radius: 3.0.into(),
@@ -1685,26 +1923,25 @@ impl Signex {
             })
             .into()
         };
-        let info_badge: Element<'_, Message> = container(
-            text("i").size(11).color(iced::Color::WHITE),
-        )
-        .width(20)
-        .height(20)
-        .align_x(iced::alignment::Horizontal::Center)
-        .align_y(iced::alignment::Vertical::Center)
-        .style(move |_: &iced::Theme| iced::widget::container::Style {
-            background: Some(iced::Background::Color(iced::Color {
-                a: 0.7,
-                ..crate::styles::ti(tokens.accent)
-            })),
-            border: iced::Border {
-                width: 0.0,
-                radius: 10.0.into(),
-                color: iced::Color::TRANSPARENT,
-            },
-            ..iced::widget::container::Style::default()
-        })
-        .into();
+        let info_badge: Element<'_, Message> =
+            container(text("i").size(11).color(iced::Color::WHITE))
+                .width(20)
+                .height(20)
+                .align_x(iced::alignment::Horizontal::Center)
+                .align_y(iced::alignment::Vertical::Center)
+                .style(move |_: &iced::Theme| iced::widget::container::Style {
+                    background: Some(iced::Background::Color(iced::Color {
+                        a: 0.7,
+                        ..crate::styles::ti(tokens.accent)
+                    })),
+                    border: iced::Border {
+                        width: 0.0,
+                        radius: 10.0.into(),
+                        color: iced::Color::TRANSPARENT,
+                    },
+                    ..iced::widget::container::Style::default()
+                })
+                .into();
         let toolbar_strip = container(
             row![
                 variant_dropdown,
@@ -1719,7 +1956,7 @@ impl Signex {
 
         // Properties sidebar — General / Columns tabs, collapsible
         // sections inside.
-        use crate::app::states::BomSidebarTab;
+        use crate::app::state::BomSidebarTab;
         let sidebar_tab = preview.sidebar_tab;
         let tab_pill = |label: &'static str, target: BomSidebarTab| -> Element<'_, Message> {
             let on = sidebar_tab == target;
@@ -1728,7 +1965,10 @@ impl Signex {
                 .on_press(Message::BomPreviewSetSidebarTab(target))
                 .style(move |_: &iced::Theme, status: button::Status| {
                     let bg = match (on, status) {
-                        (true, _) => iced::Color { a: 0.15, ..accent_c },
+                        (true, _) => iced::Color {
+                            a: 0.15,
+                            ..accent_c
+                        },
                         (false, button::Status::Hovered) => {
                             iced::Color::from_rgba(1.0, 1.0, 1.0, 0.06)
                         }
@@ -1764,11 +2004,7 @@ impl Signex {
             .padding([8, 12]),
             Space::new().height(8),
             section_header("Export Options", text_muted),
-            container(
-                column![format_row]
-                .spacing(0),
-            )
-            .padding([8, 12]),
+            container(column![format_row].spacing(0),).padding([8, 12]),
         ]
         .spacing(0)
         .into();
@@ -1783,10 +2019,7 @@ impl Signex {
         let mut col_list: Column<'_, Message> = Column::new().spacing(0);
         col_list = col_list.push(section_header("Columns", text_muted));
         let mut list_items: Column<'_, Message> = Column::new().spacing(0);
-        let render_col_row = |col: BomColumn,
-                              label: String,
-                              on: bool|
-         -> Element<'_, Message> {
+        let render_col_row = |col: BomColumn, label: String, on: bool| -> Element<'_, Message> {
             let pip_bg = if on {
                 Color::from_rgb(0.00, 0.47, 0.84)
             } else {
@@ -1929,12 +2162,10 @@ impl Signex {
         // (`crate::styles::chrome_separator`). The inner Space is
         // sized Fill on both axes so iced doesn't shrink the
         // container to zero height in some layout scenarios.
-        let title_separator = container(
-            Space::new().width(Length::Fill).height(Length::Fill),
-        )
-        .width(Length::Fill)
-        .height(1)
-        .style(crate::styles::chrome_separator(tokens));
+        let title_separator = container(Space::new().width(Length::Fill).height(Length::Fill))
+            .width(Length::Fill)
+            .height(1)
+            .style(crate::styles::chrome_separator(tokens));
 
         let dialog = container(
             column![header, title_separator, toolbar_strip, main_row, footer]
@@ -1990,7 +2221,7 @@ impl Signex {
         let _ = border_c;
         let header = draggable_header(
             header_content,
-            super::super::states::ModalId::RenameDialog,
+            super::super::state::ModalId::RenameDialog,
             self.interaction_state.last_mouse_pos,
         );
 
@@ -2225,7 +2456,7 @@ pub(in crate::app::view) fn wrap_modal<'a>(
 /// drag. Uses the last known mouse position as the drag anchor.
 pub(in crate::app::view) fn draggable_header<'a>(
     header_content: Element<'a, Message>,
-    modal: super::super::states::ModalId,
+    modal: super::super::state::ModalId,
     last_mouse: (f32, f32),
 ) -> Element<'a, Message> {
     iced::widget::mouse_area(header_content)
@@ -2242,7 +2473,7 @@ pub(in crate::app::view) fn draggable_header<'a>(
 /// bar for detached modals opened with `decorations: false`.
 pub(in crate::app::view) fn detached_header<'a>(
     header_content: Element<'a, Message>,
-    modal: super::super::states::ModalId,
+    modal: super::super::state::ModalId,
 ) -> Element<'a, Message> {
     iced::widget::mouse_area(header_content)
         .on_press(Message::StartDetachedWindowDrag(modal))
@@ -2291,8 +2522,7 @@ pub(in crate::app::view) fn close_x_button(
         // Top-right radius matches the modal card's outer corner so
         // the red hover background fills the rounded corner cleanly
         // — same trick the OS chrome close uses on Windows 11.
-        let radius = iced::border::Radius::default()
-            .top_right(crate::styles::MODAL_CORNER_RADIUS);
+        let radius = iced::border::Radius::default().top_right(crate::styles::MODAL_CORNER_RADIUS);
         button::Style {
             background: if hovered {
                 Some(Background::Color(MODAL_CLOSE_X_HOVER))
@@ -2538,7 +2768,7 @@ pub(super) struct AnnotatePreviewEntry {
     pub current: String,
     pub proposed: String,
     /// Symbol uuid — lets the row's lock checkbox toggle the global
-    /// `ui_state.annotate.locked` set without re-looking-up the symbol.
+    /// `ui_state.annotate_locked` set without re-looking-up the symbol.
     pub uuid: uuid::Uuid,
 }
 

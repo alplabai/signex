@@ -135,6 +135,116 @@ jobs:
           fi
           echo "No KiCad auto-net-name format string."
 
+  no-kicad-cpp-class-names:
+    name: No KiCad C++ class / file references in source comments
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Forbid SCH_PAINTER / SCH_FIELD / sch_painter.cpp / etc.
+        run: |
+          set -e
+          # KiCad's C++ implementation uses specific class names
+          # (SCH_PAINTER, SCH_FIELD, SCH_SYMBOL, LIB_SYMBOL, …) and
+          # filenames (sch_painter.cpp, sch_symbol.cpp, …). Comments
+          # in `crates/` referencing these are derivation-shaped
+          # attributions in our own words and were scrubbed during
+          # the 2026-05-01 comment cleanup. Going forward, source
+          # comments must describe behaviour in neutral language and
+          # reference docs/RENDERING_RULES.md for the spec.
+          #
+          # NOTE: The bitflag constant `LIB_SYMBOLS` (plural,
+          # without scope operator) is allowed — it's our own
+          # bitflag name. Only `LIB_SYMBOL::` and `LIB_PIN::`
+          # (singular + scope, the C++ form) are forbidden.
+          if git grep -nE '\bSCH_(PAINTER|FIELD|LABEL|PIN|SYMBOL|LINE|RECTANGLE|JUNCTION|BUS|WIRE|TEXT|SHEET|MARKER)\b|\bLIB_(SYMBOL|PIN|FIELD|TEXT)::|\b(sch_painter|sch_symbol\.cpp|sch_label\.cpp|sch_pin\.cpp|lib_symbol\.cpp)\b|\beeschema/' -- 'crates/**/*.rs' 'crates/**/*.toml'; then
+            echo ""
+            echo "::error::KiCad C++ class name or .cpp file reference detected in crates/."
+            echo "::error::Source comments must describe behaviour in neutral terms and"
+            echo "::error::reference docs/RENDERING_RULES.md for the rendering spec."
+            echo "::error::See docs/audit/comments-scrub-2026-05-01.md for context."
+            exit 1
+          fi
+          echo "No KiCad C++ class names or .cpp file references."
+
+  no-standard-as-comment-word-in-renderer:
+    name: No bare `Standard` as a comment word in renderer / engine
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Forbid `\bStandard\b` substring in signex-render / signex-engine
+        run: |
+          set -e
+          # The v0.10.0 "Standard" rename of KiCad-class names was a
+          # cosmetic substitution that left structural derivation in
+          # place. The v0.12 cleanroom rewrite removed those references
+          # and forbids reintroduction; future contributions must use
+          # neutral terms or reference `docs/RENDERING_RULES.md`
+          # directly. The `Standard` literal in render-style enum
+          # variant names (`PowerPortStyle::Standard`,
+          # `LabelStyle::Standard`, `MultisheetStyle::Standard`) is
+          # whitelisted because it serialises to disk and renaming
+          # would break user files.
+          MATCHES=$(git grep -nE '\bStandard\b' -- 'crates/signex-render/' 'crates/signex-engine/' || true)
+          if [ -n "$MATCHES" ]; then
+            # Whitelist: render-style enum variant declarations + their
+            # Display impls. Anything else is a comment-word euphemism
+            # and fails the rule.
+            FILTERED=$(echo "$MATCHES" | grep -vE '(PowerPortStyle::Standard|LabelStyle::Standard|MultisheetStyle::Standard|"Standard"|^[^:]+:[0-9]+:[[:space:]]+Standard,[[:space:]]*$|Standard => write)' || true)
+            if [ -n "$FILTERED" ]; then
+              echo "$FILTERED"
+              echo ""
+              echo "::error::Bare 'Standard' comment-word detected in signex-render / signex-engine."
+              echo "::error::Source comments must describe behaviour without the v0.10.0 Standard euphemism."
+              echo "::error::Reference docs/RENDERING_RULES.md, IEEE-Std-91, or Altium parity instead."
+              exit 1
+            fi
+          fi
+          echo "No bare 'Standard' comment-words in renderer / engine."
+
+  no-kicad-published-format-substrings:
+    name: No `.kicad_sch` / `.kicad_pcb` / `.kicad_sym` literals
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Forbid published KiCad file-format extension substrings
+        run: |
+          set -e
+          # The Apache-clean Signex repo doesn't read or write KiCad
+          # files; the GPL-3.0 companion does. Any literal containing
+          # `.kicad_sch` / `.kicad_pcb` / `.kicad_sym` (test fixture
+          # filenames, error messages, file dialogs) signals a probable
+          # GPL-companion code drift. Use `.snxsch` / `.snxpcb` / `.snxsym`
+          # in the Apache crates.
+          if git grep -nE '\.kicad_(sch|pcb|sym)\b' -- 'crates/**/*.rs' 'crates/**/*.toml'; then
+            echo ""
+            echo "::error::Published KiCad file-format extension substring detected in crates/."
+            echo "::error::This Apache crate doesn't interop with KiCad files. Use the Signex"
+            echo "::error::extensions (.snxsch / .snxpcb / .snxsym) for fixtures and messages."
+            exit 1
+          fi
+          echo "No KiCad published-format substrings."
+
+  no-derivation-attribution-markers:
+    name: No DeepWiki / KiCad-mirror-source markers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Forbid "DeepWiki" / "KiCad mirror source" / etc. anywhere in repo
+        run: |
+          set -e
+          # Specific markers that appeared in pre-v0.9.0 agent-context
+          # skill docs as derivation attribution. They have no
+          # legitimate use in Signex source / docs and any future
+          # appearance would signal a regression of the agent-context
+          # discipline documented in docs/LICENSING.md.
+          if git grep -niE 'DeepWiki|KiCad mirror source|extracted from KiCad|based on KiCad source' -- ':!docs/audit/' ':!.github/workflows/license-guard.yml' ':!docs/LICENSING.md' ':!CHANGELOG.md'; then
+            echo ""
+            echo "::error::Derivation-attribution marker (DeepWiki / KiCad-mirror-source / etc.) detected."
+            echo "::error::These have no legitimate use in source or docs outside the audit trail."
+            exit 1
+          fi
+          echo "No derivation-attribution markers."
+
   cargo-deny:
     name: cargo-deny license + transitive-dep audit
     runs-on: ubuntu-latest

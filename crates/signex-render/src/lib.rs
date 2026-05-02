@@ -7,6 +7,8 @@
 pub mod colors;
 pub mod pcb;
 pub mod schematic;
+// PCB rendering surface is a v0.12 stub — the full Signex-spec PCB
+// renderer lands post-v0.12. See `docs/internal/CLEANROOM_REWRITE_PLAN.md`.
 
 use std::sync::{OnceLock, RwLock};
 
@@ -17,7 +19,7 @@ pub const IOSEVKA: iced::Font = iced::Font::with_name("Iosevka");
 pub use signex_types::schematic::SCHEMATIC_PT_TO_MM;
 pub use signex_types::schematic::SCHEMATIC_TEXT_MM;
 
-/// Legacy stroke font stores "size" as cap-height; Iced TrueType uses em-square
+/// Stroke fonts store "size" as cap-height; Iced TrueType uses em-square
 /// (cap height ≈ 72 % of em). To render a stroke-font size at the same visual
 /// cap height, we draw it at em = size / 0.72. Use this value for BOTH the
 /// canvas font size AND any offset / hit-test math so they stay in sync —
@@ -25,9 +27,6 @@ pub use signex_types::schematic::SCHEMATIC_TEXT_MM;
 /// `screen_font`) silently breaks label/pin/text anchors.
 pub const SCHEMATIC_TEXT_EM_MM: f64 = SCHEMATIC_TEXT_MM / 0.72;
 
-/// Power-port glyph style preference. `Standard` matches the rounded
-/// shapes typical of open-source schematic editors; `Altium` matches
-/// the Altium Designer signature look.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PowerPortStyle {
     Standard,
@@ -35,8 +34,6 @@ pub enum PowerPortStyle {
     Altium,
 }
 
-/// Net-label glyph style preference. `Standard` / `Altium` split mirrors
-/// `PowerPortStyle`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LabelStyle {
     #[default]
@@ -44,13 +41,12 @@ pub enum LabelStyle {
     Altium,
 }
 
-/// How hierarchical child sheets render. `Standard` mode keeps each
-/// sheet's stroke/fill colour from the source file (with theme
-/// component-body fallback) so the sheet blends with the rest of the
-/// schematic. `Altium` mode draws sheets with Altium Designer's
-/// signature greenish palette when no per-sheet colour is set in the
-/// file. Per-sheet colours from the source file always win,
-/// regardless of the active style.
+/// How hierarchical child sheets render. Classic mode keeps each sheet's
+/// stroke/fill colour from the source file (with theme component-body
+/// fallback) so the sheet blends with the rest of the schematic. Altium
+/// mode draws sheets with Altium Designer's signature greenish palette
+/// when no per-sheet colour is set in the file. Per-sheet colours from
+/// the source file always win, regardless of the active style.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MultisheetStyle {
     #[default]
@@ -58,7 +54,8 @@ pub enum MultisheetStyle {
     Altium,
 }
 
-/// Visible schematic grid rendering style: dots, lines, or small crosses.
+/// Visible schematic grid rendering style — Dots, Lines, or
+/// Small crosses, selectable from the schematic display preferences.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum GridStyle {
     #[default]

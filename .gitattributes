@@ -1,0 +1,5 @@
+# Binary fixtures — never line-ending-convert.
+*.pdf binary
+*.step binary
+*.wrl binary
+*.png binary

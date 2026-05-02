@@ -1,845 +1,303 @@
-//! Text rendering -- TextNote and TextProp (reference / value fields).
+//! Free text-note rendering plus shared text-drawing helpers used by
+//! [`label`](super::label), [`field_style`](super::field_style),
+//! [`symbol`](super::symbol), and [`drawing`](super::drawing).
+//!
+//! Text size storage is in millimetres on the spec side; iced's canvas
+//! takes pixels, so the conversion uses [`crate::SCHEMATIC_TEXT_EM_MM`]
+//! (cap-height ≈ 72% of em). Rotation is applied via a save/translate/
+//! rotate frame stack so [`iced::widget::canvas::Text`] (which has no
+//! rotation field) still ends up oriented correctly.
 
-use iced::Color;
-use iced::widget::canvas;
-use std::collections::HashMap;
-use uuid::Uuid;
+use iced::Vector;
+use iced::advanced::text as advanced_text;
+use iced::alignment;
+use iced::widget::canvas::{Frame, Text};
+use signex_types::schematic::{HAlign, Point, SelectedItem, SelectedKind, TextNote, VAlign};
 
-use signex_types::markup::{
-    ExpressionEvalContext, RichSegment, auto_net_name, evaluate_expressions, parse_signex_markup,
-};
-use signex_types::schematic::{HAlign, Symbol, TextNote, TextProp, VAlign};
+use super::RenderContext;
+use super::util::{iced_color, point_finite};
 
-use super::{ScreenTransform, field_effective_style};
+/// Default schematic text size (mm) when a note's `font_size` is `0.0`.
+/// Matches `signex_types::schematic::SCHEMATIC_TEXT_MM`.
+pub const DEFAULT_TEXT_MM: f64 = signex_types::schematic::SCHEMATIC_TEXT_MM;
 
-pub fn display_text_content(input: &str) -> String {
-    fn overbar_text(text: &str) -> String {
-        let mut out = String::new();
-        for ch in text.chars() {
-            out.push(ch);
-            out.push('\u{0305}');
-        }
-        out
-    }
+// ---------------------------------------------------------------------------
+// v0.11 → v0.12 compatibility shims (pass-through identity).
+//
+// v0.11 had an `expand_char_escapes` helper that converted backslash-
+// style escape sequences (`~FOO~` → overbar markup) into iced-friendly
+// glyph runs, and a matching `escape_for_standard` that round-tripped
+// the user's typed text back to the storage form. The new renderer
+// will eventually take these on through a Signex-original markup spec
+// (post-v0.12); for now both are identity functions so consumer code
+// keeps compiling. Field text round-trips visually unchanged.
+// ---------------------------------------------------------------------------
 
-    // Reserved characters are escaped with path/markup significance as {name} tokens
-    // (e.g. `{slash}` for `/`). Expand before parsing markup so the literal
-    // characters appear in the rendered glyphs instead of the escape source.
-    // Also fold backslash-escapes (`\n` → newline, `\\` → backslash) that
-    // We use inside multi-line text notes.
-    let expanded = expand_backslash_escapes(&expand_char_escapes(input));
-
-    let segments = parse_signex_markup(&expanded);
-    if segments.is_empty() {
-        return expanded;
-    }
-
-    let mut out = String::new();
-    for segment in segments {
-        match segment {
-            // TODO(v0.x): visual decoration for bold/italic/strike
-            RichSegment::Normal(text)
-            | RichSegment::Bold(text)
-            | RichSegment::Italic(text)
-            | RichSegment::Strike(text)
-            | RichSegment::Subscript(text)
-            | RichSegment::Superscript(text) => out.push_str(&text),
-            RichSegment::Overbar(text) => out.push_str(&overbar_text(&text)),
-            // Links render as plain label text — URL is ignored on canvas.
-            RichSegment::Link { label, .. } => out.push_str(&label),
-        }
-    }
-    out
+/// **Deprecated v0.12 shim.** Pass-through; previously decoded
+/// backslash escapes for display.
+#[deprecated(
+    since = "0.12.0",
+    note = "v0.13 will replace this with a Signex markup spec; identity for now"
+)]
+pub fn expand_char_escapes(text: &str) -> String {
+    text.to_string()
 }
 
-#[derive(Clone)]
-struct RichRun {
-    text: String,
-    scale: f32,
-    baseline_offset: f32,
-    kind: RichRunKind,
+/// **Deprecated v0.12 shim.** Pass-through; previously encoded
+/// display text back to storage form.
+#[deprecated(
+    since = "0.12.0",
+    note = "v0.13 will replace this with a Signex markup spec; identity for now"
+)]
+pub fn escape_for_standard(text: &str) -> String {
+    text.to_string()
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum RichRunKind {
-    Normal,
-    Overbar,
-    Subscript,
-    Superscript,
-}
-
-// Keep horizontal advance in sync with label metric tuning (`label_text_aabb`).
-const GLYPH_ADVANCE_FACTOR: f32 = 0.55;
-
-fn run_pair_kerning(prev: RichRunKind, next: RichRunKind, size: f32) -> f32 {
-    match (prev, next) {
-        // We keep suffix indices visually tight to the preceding glyph.
-        (
-            RichRunKind::Normal | RichRunKind::Overbar,
-            RichRunKind::Subscript | RichRunKind::Superscript,
-        ) => -size * 0.16,
-        _ => 0.0,
-    }
-}
-
-fn rich_runs(input: &str) -> Vec<RichRun> {
-    let expanded = expand_backslash_escapes(&expand_char_escapes(input));
-    let segments = parse_signex_markup(&expanded);
-    if segments.is_empty() {
-        return vec![RichRun {
-            text: expanded,
-            scale: 1.0,
-            baseline_offset: 0.0,
-            kind: RichRunKind::Normal,
-        }];
-    }
-
-    segments
-        .into_iter()
-        .map(|segment| match segment {
-            RichSegment::Normal(text) => RichRun {
-                text,
-                scale: 1.0,
-                baseline_offset: 0.0,
-                kind: RichRunKind::Normal,
-            },
-            // TODO(v0.x): visual decoration for bold/italic/strike — fall back
-            // to Normal styling for now; visual decoration is a later phase.
-            RichSegment::Bold(text) | RichSegment::Italic(text) | RichSegment::Strike(text) => {
-                RichRun {
-                    text,
-                    scale: 1.0,
-                    baseline_offset: 0.0,
-                    kind: RichRunKind::Normal,
-                }
-            }
-            RichSegment::Overbar(text) => RichRun {
-                text,
-                scale: 1.0,
-                baseline_offset: 0.0,
-                kind: RichRunKind::Overbar,
-            },
-            RichSegment::Subscript(text) => RichRun {
-                text,
-                scale: 0.72,
-                baseline_offset: 0.0,
-                kind: RichRunKind::Subscript,
-            },
-            RichSegment::Superscript(text) => RichRun {
-                text,
-                scale: 0.72,
-                baseline_offset: -0.34,
-                kind: RichRunKind::Superscript,
-            },
-            // Links render as plain label text on the canvas — URL is ignored
-            // until link rendering ships in a later phase.
-            RichSegment::Link { label, .. } => RichRun {
-                text: label,
-                scale: 1.0,
-                baseline_offset: 0.0,
-                kind: RichRunKind::Normal,
-            },
-        })
-        .filter(|run| !run.text.is_empty())
-        .collect()
-}
-
-fn symbol_eval_variables(sym: &Symbol) -> HashMap<String, String> {
-    let mut vars = sym.fields.clone();
-    for prop in &sym.custom_properties {
-        if !prop.key.is_empty() {
-            vars.insert(prop.key.clone(), prop.value.clone());
-        }
-    }
-    vars.entry("refdes".to_string())
-        .or_insert_with(|| sym.reference.clone());
-    vars.entry("reference".to_string())
-        .or_insert_with(|| sym.reference.clone());
-    vars.entry("value".to_string())
-        .or_insert_with(|| sym.value.clone());
-    vars
-}
-
-pub fn evaluate_symbol_text(content: &str, sym: &Symbol, current_pin: Option<&str>) -> String {
-    evaluate_symbol_text_with_context(content, sym, current_pin, None, None, None)
-}
-
-pub fn evaluate_symbol_text_with_context(
-    content: &str,
-    sym: &Symbol,
-    current_pin: Option<&str>,
-    cell: Option<&str>,
-    global_refdes: Option<&HashMap<String, String>>,
-    pin_net_names: Option<&HashMap<String, String>>,
-) -> String {
-    let at_vars = symbol_eval_variables(sym);
-    let mut refdes_vars = HashMap::new();
-    if !sym.uuid.is_nil() && !sym.reference.is_empty() {
-        refdes_vars.insert(sym.uuid.to_string(), sym.reference.clone());
-    }
-
-    let ctx = ExpressionEvalContext {
-        current_refdes: (!sym.reference.is_empty()).then_some(sym.reference.as_str()),
-        current_value: (!sym.value.is_empty()).then_some(sym.value.as_str()),
-        current_pin,
-        cell,
-        at_variables: Some(&at_vars),
-        refdes_variables: global_refdes.or(Some(&refdes_vars)),
-        net_name_by_pin: pin_net_names,
-        ..ExpressionEvalContext::default()
-    };
-    evaluate_expressions(content, &ctx)
-}
-
-pub fn build_global_refdes_lookup(
-    snapshot: &super::SchematicRenderSnapshot,
-) -> HashMap<String, String> {
-    let mut out = HashMap::new();
-    for sym in &snapshot.symbols {
-        if sym.reference.is_empty() {
-            continue;
-        }
-        out.entry(sym.uuid.to_string())
-            .or_insert_with(|| sym.reference.clone());
-        out.entry(sym.reference.clone())
-            .or_insert_with(|| sym.reference.clone());
-
-        for instance in &sym.instances {
-            if instance.path.is_empty() {
-                continue;
-            }
-            out.entry(instance.path.clone())
-                .or_insert_with(|| sym.reference.clone());
-            let trimmed = instance.path.trim_matches('/');
-            if !trimmed.is_empty() {
-                out.entry(trimmed.to_string())
-                    .or_insert_with(|| sym.reference.clone());
-            }
-        }
-    }
-    out
-}
-
-pub fn build_symbol_pin_net_lookup(
-    snapshot: &super::SchematicRenderSnapshot,
-) -> HashMap<Uuid, HashMap<String, String>> {
-    type Node = (i64, i64);
-
-    fn q(p: signex_types::schematic::Point) -> Node {
-        ((p.x * 100.0).round() as i64, (p.y * 100.0).round() as i64)
-    }
-
-    fn find(parent: &mut HashMap<Node, Node>, x: Node) -> Node {
-        let p = *parent.entry(x).or_insert(x);
-        if p == x {
-            x
-        } else {
-            let r = find(parent, p);
-            parent.insert(x, r);
-            r
-        }
-    }
-
-    fn union(parent: &mut HashMap<Node, Node>, a: Node, b: Node) {
-        let ra = find(parent, a);
-        let rb = find(parent, b);
-        if ra != rb {
-            parent.insert(ra, rb);
-        }
-    }
-
-    fn point_on_segment(
-        p: signex_types::schematic::Point,
-        a: signex_types::schematic::Point,
-        b: signex_types::schematic::Point,
-        tol: f64,
-    ) -> bool {
-        let dx = b.x - a.x;
-        let dy = b.y - a.y;
-        let len_sq = dx * dx + dy * dy;
-        if len_sq < tol * tol {
-            return (p.x - a.x).abs() < tol && (p.y - a.y).abs() < tol;
-        }
-        let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len_sq;
-        if !(0.0..=1.0).contains(&t) {
-            return false;
-        }
-        let proj_x = a.x + t * dx;
-        let proj_y = a.y + t * dy;
-        (p.x - proj_x).abs() < tol && (p.y - proj_y).abs() < tol
-    }
-
-    fn transform_pin_position(
-        sym: &Symbol,
-        local_pos: &signex_types::schematic::Point,
-    ) -> signex_types::schematic::Point {
-        let x = local_pos.x;
-        let y = -local_pos.y;
-
-        let rad = -sym.rotation.to_radians();
-        let cos = rad.cos();
-        let sin = rad.sin();
-        let rx = x * cos - y * sin;
-        let ry = x * sin + y * cos;
-
-        let rx = if sym.mirror_y { -rx } else { rx };
-        let ry = if sym.mirror_x { -ry } else { ry };
-
-        signex_types::schematic::Point::new(rx + sym.position.x, ry + sym.position.y)
-    }
-
-    fn label_priority(kind: signex_types::schematic::LabelType) -> u8 {
-        match kind {
-            signex_types::schematic::LabelType::Global => 4,
-            signex_types::schematic::LabelType::Power => 3,
-            signex_types::schematic::LabelType::Hierarchical => 2,
-            signex_types::schematic::LabelType::Net => 1,
-        }
-    }
-
-    let mut parent: HashMap<Node, Node> = HashMap::new();
-    let tolerance = 0.01;
-
-    for wire in &snapshot.wires {
-        union(&mut parent, q(wire.start), q(wire.end));
-    }
-
-    for junction in &snapshot.junctions {
-        let j = q(junction.position);
-        parent.entry(j).or_insert(j);
-        for wire in &snapshot.wires {
-            if wire.start == junction.position
-                || wire.end == junction.position
-                || point_on_segment(junction.position, wire.start, wire.end, tolerance)
-            {
-                union(&mut parent, j, q(wire.start));
-                union(&mut parent, j, q(wire.end));
-            }
-        }
-    }
-
-    let mut label_root_by_name: HashMap<String, Node> = HashMap::new();
-    let mut root_name: HashMap<Node, (u8, String)> = HashMap::new();
-
-    for label in &snapshot.labels {
-        let mut n = q(label.position);
-        parent.entry(n).or_insert(n);
-        for wire in &snapshot.wires {
-            if point_on_segment(label.position, wire.start, wire.end, tolerance) {
-                union(&mut parent, q(wire.start), q(wire.end));
-                union(&mut parent, n, q(wire.start));
-                n = q(wire.start);
-                break;
-            }
-        }
-
-        let mut root = find(&mut parent, n);
-        if matches!(
-            label.label_type,
-            signex_types::schematic::LabelType::Global
-                | signex_types::schematic::LabelType::Hierarchical
-        ) && !label.text.is_empty()
-        {
-            if let Some(existing) = label_root_by_name.get(&label.text).copied() {
-                union(&mut parent, root, existing);
-                root = find(&mut parent, root);
-            }
-            label_root_by_name.insert(label.text.clone(), root);
-        }
-
-        if !label.text.is_empty() {
-            let priority = label_priority(label.label_type);
-            match root_name.get(&root) {
-                Some((p, _)) if *p >= priority => {}
-                _ => {
-                    root_name.insert(root, (priority, label.text.clone()));
-                }
-            }
-        }
-    }
-
-    let mut root_pins: HashMap<Node, Vec<(String, String)>> = HashMap::new();
-    let mut pin_entries: Vec<(Uuid, String, Node)> = Vec::new();
-
-    for sym in &snapshot.symbols {
-        let Some(lib) = snapshot.lib_symbols.get(&sym.lib_id) else {
-            continue;
-        };
-        for lp in &lib.pins {
-            if !(lp.unit == 0 || lp.unit == sym.unit) {
-                continue;
-            }
-            let world = transform_pin_position(sym, &lp.pin.position);
-            let root = find(&mut parent, q(world));
-            root_pins
-                .entry(root)
-                .or_default()
-                .push((sym.reference.clone(), lp.pin.number.clone()));
-            pin_entries.push((sym.uuid, lp.pin.number.clone(), root));
-        }
-    }
-
-    let mut resolved_root_name: HashMap<Node, String> = HashMap::new();
-    for root in root_pins.keys().copied() {
-        let named = root_name
-            .get(&root)
-            .map(|(_, n)| n.clone())
-            .unwrap_or_default();
-        if !named.is_empty() {
-            resolved_root_name.insert(root, named);
-            continue;
-        }
-        let auto = root_pins
-            .get(&root)
-            .and_then(|pins| auto_net_name("", pins))
-            .unwrap_or_default();
-        resolved_root_name.insert(root, auto);
-    }
-
-    let mut out: HashMap<Uuid, HashMap<String, String>> = HashMap::new();
-    for (sym_uuid, pin_number, root) in pin_entries {
-        let net_name = resolved_root_name.get(&root).cloned().unwrap_or_default();
-        if !net_name.is_empty() {
-            out.entry(sym_uuid)
-                .or_default()
-                .insert(pin_number, net_name);
-        }
-    }
-
-    out
-}
-
-pub fn draw_rich_text(
-    frame: &mut canvas::Frame,
-    input: &str,
-    anchor: iced::Point,
-    color: Color,
-    size: f32,
-    h_align: iced::alignment::Horizontal,
-    v_align: iced::alignment::Vertical,
-    rotation_rad: f32,
-) {
-    if input.is_empty() || size < 1.0 {
-        return;
-    }
-
-    let runs = rich_runs(input);
-    let total_w: f32 = runs
-        .iter()
-        .map(|run| run.text.chars().count() as f32 * size * run.scale * GLYPH_ADVANCE_FACTOR)
-        .sum();
-
-    let mut cursor_x = match h_align {
-        iced::alignment::Horizontal::Left => anchor.x,
-        iced::alignment::Horizontal::Center => anchor.x - total_w * 0.5,
-        iced::alignment::Horizontal::Right => anchor.x - total_w,
-    };
-
-    // Vertical alignment: defer to iced's canvas::Text align_y so the glyph's
-    // visual center / top / bottom lands exactly on `anchor.y`. This is what
-    // the renderer assumes — the anchor is the field's pivot — and it
-    // matters the most for rotated fields, where any pre-rotation Y offset
-    // turns into a visible horizontal shift after the rotate-around-anchor
-    // transform below.
-    let base_y = anchor.y;
-    let canvas_align_y = v_align;
-
-    let mut prev_kind: Option<RichRunKind> = None;
-    for run in runs {
-        if let Some(prev) = prev_kind {
-            cursor_x += run_pair_kerning(prev, run.kind, size);
-        }
-
-        let run_size = size * run.scale;
-        let run_y = base_y + size * run.baseline_offset;
-        let text = canvas::Text {
-            content: run.text.clone(),
-            position: iced::Point::new(cursor_x, run_y),
-            color,
-            size: iced::Pixels(run_size),
-            font: crate::canvas_font(),
-            align_x: iced::alignment::Horizontal::Left.into(),
-            align_y: canvas_align_y,
-            ..canvas::Text::default()
-        };
-
-        if rotation_rad.abs() > 0.001 {
-            use iced::widget::canvas::path::lyon_path::math as lyon_math;
-            let t = lyon_math::Transform::identity()
-                .then_translate(lyon_math::Vector::new(-anchor.x, -anchor.y))
-                .then_rotate(lyon_math::Angle::radians(rotation_rad))
-                .then_translate(lyon_math::Vector::new(anchor.x, anchor.y));
-            text.draw_with(|path, fill| {
-                let rotated = path.transform(&t);
-                frame.fill(&rotated, fill);
-            });
-        } else {
-            frame.fill_text(text);
-        }
-
-        cursor_x += run.text.chars().count() as f32 * run_size * GLYPH_ADVANCE_FACTOR;
-        prev_kind = Some(run.kind);
-    }
-}
-
-/// Plain display string + ordered list of `(start_char_idx, char_count)` pairs
-/// identifying overbar regions. Used by renderers that draw the overbar as a
-/// separate stroke (with a visible gap above the glyphs) instead of relying on
-/// the combining-overline U+0305 which sits flush to the cap-height.
-pub fn display_text_with_overbars(input: &str) -> (String, Vec<(usize, usize)>) {
-    let expanded = expand_char_escapes(input);
-    let segments = parse_signex_markup(&expanded);
-    if segments.is_empty() {
-        return (expanded, Vec::new());
-    }
-
-    let mut plain = String::new();
-    let mut overbars: Vec<(usize, usize)> = Vec::new();
-    let mut char_cursor: usize = 0;
-    for segment in segments {
-        match segment {
-            // TODO(v0.x): visual decoration for bold/italic/strike
-            RichSegment::Normal(text)
-            | RichSegment::Bold(text)
-            | RichSegment::Italic(text)
-            | RichSegment::Strike(text)
-            | RichSegment::Subscript(text)
-            | RichSegment::Superscript(text) => {
-                let n = text.chars().count();
-                plain.push_str(&text);
-                char_cursor += n;
-            }
-            RichSegment::Overbar(text) => {
-                let n = text.chars().count();
-                overbars.push((char_cursor, n));
-                plain.push_str(&text);
-                char_cursor += n;
-            }
-            // Links render as plain label text — URL is ignored on canvas.
-            RichSegment::Link { label, .. } => {
-                let n = label.chars().count();
-                plain.push_str(&label);
-                char_cursor += n;
-            }
-        }
-    }
-    (plain, overbars)
-}
-
-/// Count the number of glyphs that will actually render for `input` — char
-/// escapes resolved, markup braces stripped. Used for width estimation in
-/// label/port geometry so the body rectangle matches the visible text.
-pub fn visible_char_count(input: &str) -> usize {
-    let expanded = expand_char_escapes(input);
-    let segments = parse_signex_markup(&expanded);
-    if segments.is_empty() {
-        return expanded.chars().count();
-    }
-    segments
-        .iter()
-        .map(|s| match s {
-            // TODO(v0.x): visual decoration for bold/italic/strike
-            RichSegment::Normal(t)
-            | RichSegment::Bold(t)
-            | RichSegment::Italic(t)
-            | RichSegment::Strike(t)
-            | RichSegment::Subscript(t)
-            | RichSegment::Superscript(t)
-            | RichSegment::Overbar(t) => t.chars().count(),
-            RichSegment::Link { label, .. } => label.chars().count(),
-        })
-        .sum()
-}
-
-/// Approximate world-space AABB for a [`TextNote`] that matches what
-/// [`draw_text_note`] actually renders. Text notes are drawn at a
-/// fixed `SCHEMATIC_TEXT_EM_MM` glyph height regardless of the
-/// note's stored `font_size` (which can be wildly larger when
-/// imported from foreign formats), and their position anchor honours
-/// the note's `justify_h` / `justify_v` alignment. The selection
-/// outline and hit-test must use the same metrics or they end up
-/// many times larger than the visible glyphs. Multi-line notes
-/// (separated by `\n` after escape expansion) widen to the longest
-/// line and grow vertically per line.
-pub fn text_note_aabb(note: &TextNote) -> signex_types::schematic::Aabb {
-    // Use the same em size the renderer passes to iced. iced's
-    // `canvas::Text` reserves exactly `size` pixels of vertical space
-    // per line (the em-box), and aligns that box's top/centre/bottom
-    // to the anchor — so matching it here keeps the selection outline
-    // glued to the visible glyphs regardless of cap-vs-em ratios.
-    let em = crate::SCHEMATIC_TEXT_EM_MM;
-    // Per-glyph advance for the canvas font (Iosevka monospace).
-    // 0.5 em is a tighter, more accurate width for monospace.
-    const GLYPH_W_FACTOR: f64 = 0.5;
-    // Multi-line spacing in em.
-    const LINE_GAP: f64 = 1.0;
-
-    let expanded = expand_backslash_escapes(&expand_char_escapes(&note.text));
-    let lines: Vec<&str> = if expanded.is_empty() {
-        vec![""]
-    } else {
-        expanded.split('\n').collect()
-    };
-    let max_chars = lines
-        .iter()
-        .map(|line| visible_char_count(line))
-        .max()
-        .unwrap_or(0)
-        .max(1);
-    let tw = max_chars as f64 * em * GLYPH_W_FACTOR;
-    let total_h = em * (1.0 + LINE_GAP * (lines.len().saturating_sub(1)) as f64);
-
-    let (x0, x1) = match note.justify_h {
-        HAlign::Left => (note.position.x, note.position.x + tw),
-        HAlign::Center => (
-            note.position.x - tw * 0.5,
-            note.position.x + tw * 0.5,
-        ),
-        HAlign::Right => (note.position.x - tw, note.position.x),
-    };
-    let (y0, y1) = match note.justify_v {
-        VAlign::Top => (note.position.y, note.position.y + total_h),
-        VAlign::Center => (
-            note.position.y - total_h * 0.5,
-            note.position.y + total_h * 0.5,
-        ),
-        VAlign::Bottom => (note.position.y - total_h, note.position.y),
-    };
-    signex_types::schematic::Aabb::new(x0, y0, x1, y1)
-}
-
-/// Expand backslash escapes used inside text-note / multi-line fields:
-/// `\n` → newline, `\r` → CR (collapsed), `\t` → tab, `\\` → literal `\`.
-/// Unrecognised `\x` sequences are passed through unchanged.
-pub fn expand_backslash_escapes(input: &str) -> String {
-    if !input.contains('\\') {
-        return input.to_string();
-    }
-    let mut out = String::with_capacity(input.len());
-    let mut chars = input.chars().peekable();
-    while let Some(ch) = chars.next() {
-        if ch == '\\' {
-            match chars.peek() {
-                Some('n') => {
-                    chars.next();
-                    out.push('\n');
-                }
-                Some('r') => {
-                    chars.next();
-                    // Collapse `\r\n` (backslash-escape form: four chars
-                    // `\`, `r`, `\`, `n`) into a single newline so CRLF
-                    // doesn't produce blank double-spaced lines.
-                    let mut la = chars.clone();
-                    if la.next() == Some('\\') && la.next() == Some('n') {
-                        chars.next();
-                        chars.next();
-                    }
-                    out.push('\n');
-                }
-                Some('t') => {
-                    chars.next();
-                    out.push('\t');
-                }
-                Some('\\') => {
-                    chars.next();
-                    out.push('\\');
-                }
-                _ => out.push(ch),
-            }
-        } else {
-            out.push(ch);
-        }
-    }
-    out
-}
-
-/// Replace `{name}` escape tokens with their literal character.
-///
-/// We use these so the raw `/` (hierarchical path separator) and a few
-/// other reserved characters don't have to appear in label/pin text streams.
-pub fn expand_char_escapes(input: &str) -> String {
-    if !input.contains('{') {
-        return input.to_string();
-    }
-    let mut out = input.to_string();
-    for (tok, ch) in ESCAPE_TABLE {
-        if out.contains(tok) {
-            out = out.replace(tok, ch);
-        }
-    }
-    out
-}
-
-/// Inverse of `expand_char_escapes` — replace literal reserved characters
-/// with their `{name}` escape tokens so text round-trips through the writer
-/// unambiguously. The escape syntax (`{slash}`, `{backslash}`, …) was
-/// inherited from a historical handoff format; new files round-trip
-/// identically through the native `.snxsch` TOML+TSV writer.
-pub fn escape_for_storage(input: &str) -> String {
-    let mut out = String::with_capacity(input.len());
-    for ch in input.chars() {
-        match ch {
-            '/' => out.push_str("{slash}"),
-            '\\' => out.push_str("{backslash}"),
-            _ => out.push(ch),
-        }
-    }
-    out
-}
-
-const ESCAPE_TABLE: &[(&str, &str)] = &[
-    ("{slash}", "/"),
-    ("{backslash}", "\\"),
-    ("{tilde}", "~"),
-    ("{colon}", ":"),
-    ("{dollar}", "$"),
-    ("{space}", " "),
-];
-
-/// Draw a text note on the schematic.
-pub fn draw_text_note(
-    frame: &mut canvas::Frame,
+/// **Deprecated v0.12 placement-preview helper.** Paints a single
+/// text note in the caller's chosen colour without needing a snapshot
+/// context — used by signex-app's placement tools that render a
+/// translucent ghost of the about-to-be-placed object.
+#[deprecated(
+    since = "0.12.0",
+    note = "build a RenderContext and call draw_text_note"
+)]
+pub fn draw_text_note_preview(
+    frame: &mut Frame,
     note: &TextNote,
-    transform: &ScreenTransform,
-    color: Color,
+    viewport: &super::Viewport,
+    color: iced::Color,
 ) {
-    // Fixed 10 pt (1.8 mm) for all canvas text — matches Altium default.
-    let font_size_mm = crate::SCHEMATIC_TEXT_EM_MM;
-    let _stored = note.font_size;
-    let screen_font = transform.world_len(font_size_mm).abs();
-    if screen_font < 1.0 {
+    if note.text.is_empty() {
         return;
     }
-
-    let sp = transform.to_screen_point(note.position.x, note.position.y);
-
-    let h_align = match note.justify_h {
-        HAlign::Left => iced::alignment::Horizontal::Left,
-        HAlign::Center => iced::alignment::Horizontal::Center,
-        HAlign::Right => iced::alignment::Horizontal::Right,
+    let pos = viewport.world_to_screen(note.position);
+    if !point_finite(pos) {
+        return;
+    }
+    let mm = if note.font_size > 0.0 {
+        note.font_size
+    } else {
+        DEFAULT_TEXT_MM
     };
-
-    let v_align = match note.justify_v {
-        VAlign::Top => iced::alignment::Vertical::Top,
-        VAlign::Center => iced::alignment::Vertical::Center,
-        VAlign::Bottom => iced::alignment::Vertical::Bottom,
-    };
-
-    let rad = -(note.rotation.to_radians() as f32);
-
-    draw_rich_text(
+    let scale = crate::canvas_font_size_scale() as f64;
+    let em_mm = mm / 0.72;
+    let size_px = (em_mm * viewport.zoom_px_per_mm() * scale) as f32;
+    draw_rotated_text(
         frame,
         &note.text,
-        sp,
+        pos,
+        note.rotation,
+        size_px,
         color,
-        screen_font,
-        h_align,
-        v_align,
-        rad,
+        note.justify_h,
+        note.justify_v,
     );
 }
 
-/// Draw a property text (reference, value, or other field).
-///
-/// `display_pos`: resolved display position for the field text, computed by
-/// caller via [`field_display_pos`].
-///
-/// `mirror_x`: true when the parent symbol has `mirror x` (flips Y axis),
-/// which causes the renderer to flip the horizontal justification of the field text
-/// (SCH_FIELD::GetEffectiveJustify). Pass `sym.mirror_x`.
-///
-/// Rotation: legacy field angles are CCW-positive in their Y-down screen
-/// space. Iced `frame.rotate()` is CW-positive, so we negate the angle.
-pub fn draw_text_prop(
-    frame: &mut canvas::Frame,
-    content: &str,
-    prop: &TextProp,
-    sym: &Symbol,
-    display_pos: (f64, f64),
-    transform: &ScreenTransform,
-    color: Color,
-    cell: Option<&str>,
-    global_refdes: Option<&HashMap<String, String>>,
-    pin_net_names: Option<&HashMap<String, String>>,
-) {
-    if content.is_empty() {
+/// Render a single free text note. Hidden notes early-return.
+pub fn draw_text_note(frame: &mut Frame, note: &TextNote, ctx: &RenderContext<'_>) {
+    if note.text.is_empty() {
+        return;
+    }
+    let pos = ctx.viewport.world_to_screen(note.position);
+    if !point_finite(pos) {
         return;
     }
 
-    let evaluated =
-        evaluate_symbol_text_with_context(content, sym, None, cell, global_refdes, pin_net_names);
-    if evaluated.is_empty() {
-        return;
-    }
-
-    // All symbol ref/val text renders at 10 pt (1.8 mm).
-    let font_size_mm = crate::SCHEMATIC_TEXT_EM_MM;
-    let _stored = prop.font_size;
-    let screen_font = transform.world_len(font_size_mm).abs();
-    if screen_font < 1.0 {
-        return;
-    }
-
-    let sp = transform.to_screen_point(display_pos.0, display_pos.1);
-
-    let (draw_rotation, effective_h, effective_v) = field_effective_style(prop, sym);
-
-    let h_align = match effective_h {
-        HAlign::Left => iced::alignment::Horizontal::Left,
-        HAlign::Center => iced::alignment::Horizontal::Center,
-        HAlign::Right => iced::alignment::Horizontal::Right,
+    let selected = ctx.is_selected(&SelectedItem::new(note.uuid, SelectedKind::TextNote));
+    let colour = if selected {
+        iced_color(&ctx.theme().selection)
+    } else {
+        // Free text notes use the body / value-text colour token.
+        iced_color(&ctx.theme().value)
     };
 
-    let v_align = match effective_v {
-        VAlign::Top => iced::alignment::Vertical::Top,
-        VAlign::Center => iced::alignment::Vertical::Center,
-        VAlign::Bottom => iced::alignment::Vertical::Bottom,
-    };
+    let size_px = mm_to_text_pixels(note.font_size, ctx);
 
-    // Iced CW-positive, Y-down; legacy field angles are CCW.
-    let rad = -(draw_rotation.to_radians() as f32);
-
-    draw_rich_text(
+    draw_rotated_text(
         frame,
-        &evaluated,
-        sp,
-        color,
-        screen_font,
-        h_align,
-        v_align,
-        rad,
+        &note.text,
+        pos,
+        note.rotation,
+        size_px,
+        colour,
+        note.justify_h,
+        note.justify_v,
     );
+}
+
+/// Convert a stored field font size (mm) to iced canvas Text pixels.
+/// Uses `SCHEMATIC_TEXT_EM_MM` so the rendered cap-height stays
+/// consistent with stored mm values.
+#[inline]
+pub(crate) fn mm_to_text_pixels(stored_mm: f64, ctx: &RenderContext<'_>) -> f32 {
+    let mm = if stored_mm > 0.0 {
+        stored_mm
+    } else {
+        DEFAULT_TEXT_MM
+    };
+    let scale = crate::canvas_font_size_scale() as f64;
+    let em_mm = mm / 0.72;
+    (em_mm * ctx.viewport.zoom_px_per_mm() * scale) as f32
+}
+
+/// Draw a single line of text with rotation + alignment, anchored at
+/// `pos_screen`. Used by labels, fields, drawing-text, and symbol body
+/// text — everything that needs a rotated, justified glyph run.
+///
+/// The argument list is wide because canvas text mechanics genuinely
+/// need every field (content, position, rotation, size, colour, two
+/// alignments). Squeezing them into a struct here would turn into
+/// builder boilerplate at every call site without making the helper
+/// any clearer, so the lint is allowed locally.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn draw_rotated_text(
+    frame: &mut Frame,
+    text: &str,
+    pos_screen: iced::Point,
+    rotation_deg: f64,
+    size_px: f32,
+    color: iced::Color,
+    justify_h: HAlign,
+    justify_v: VAlign,
+) {
+    if text.is_empty() || size_px <= 0.0 {
+        return;
+    }
+
+    let align_x = match justify_h {
+        HAlign::Left => advanced_text::Alignment::Left,
+        HAlign::Center => advanced_text::Alignment::Center,
+        HAlign::Right => advanced_text::Alignment::Right,
+    };
+    let align_y = match justify_v {
+        VAlign::Top => alignment::Vertical::Top,
+        VAlign::Center => alignment::Vertical::Center,
+        VAlign::Bottom => alignment::Vertical::Bottom,
+    };
+
+    let canvas_text = Text {
+        content: text.to_string(),
+        position: iced::Point::ORIGIN,
+        color,
+        size: iced::Pixels(size_px),
+        font: crate::canvas_font(),
+        align_x,
+        align_y,
+        ..Text::default()
+    };
+
+    let radians = rotation_deg.to_radians() as f32;
+    if radians.abs() < f32::EPSILON {
+        let mut t = canvas_text;
+        t.position = pos_screen;
+        frame.fill_text(t);
+        return;
+    }
+
+    frame.with_save(|frame| {
+        frame.translate(Vector::new(pos_screen.x, pos_screen.y));
+        frame.rotate(iced::Radians(radians));
+        frame.fill_text(canvas_text);
+    });
+}
+
+/// Approximate axis-aligned bounding box for a free text note in
+/// world coordinates. Used by hit-test and selection-overlay; we
+/// approximate the glyph extent as `(text_len * 0.6 em, 1.0 em)` since
+/// canvas-side metrics aren't available before tessellation.
+///
+/// `#[allow(dead_code)]` for now because Wave 4 hit-test is the only
+/// caller and it lands in a follow-on commit.
+#[allow(dead_code)]
+#[inline]
+pub(crate) fn text_note_aabb(note: &TextNote) -> signex_types::schematic::Aabb {
+    let mm = if note.font_size > 0.0 {
+        note.font_size
+    } else {
+        DEFAULT_TEXT_MM
+    };
+    let glyph_w_mm = 0.6 * mm * note.text.chars().count().max(1) as f64;
+    let glyph_h_mm = mm;
+    approx_text_aabb(note.position, glyph_w_mm, glyph_h_mm, note.rotation)
+}
+
+/// Build a coarse text bounding box in world space for a glyph run of
+/// `(width_mm × height_mm)` anchored at `pos`. Rotation is folded by
+/// rotating the four corners of the unrotated rect.
+///
+/// `#[allow(dead_code)]` until Wave 4 hit-test wires it in.
+#[allow(dead_code)]
+pub(crate) fn approx_text_aabb(
+    pos: Point,
+    width_mm: f64,
+    height_mm: f64,
+    rotation_deg: f64,
+) -> signex_types::schematic::Aabb {
+    let rad = -rotation_deg.to_radians();
+    let cos = rad.cos();
+    let sin = rad.sin();
+    let corners = [
+        (0.0, 0.0),
+        (width_mm, 0.0),
+        (0.0, height_mm),
+        (width_mm, height_mm),
+    ];
+    let mut min_x = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+    let mut min_y = f64::INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+    for (lx, ly) in corners {
+        let wx = pos.x + lx * cos - ly * sin;
+        let wy = pos.y + lx * sin + ly * cos;
+        min_x = min_x.min(wx);
+        max_x = max_x.max(wx);
+        min_y = min_y.min(wy);
+        max_y = max_y.max(wy);
+    }
+    signex_types::schematic::Aabb::new(min_x, min_y, max_x, max_y)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{RichRunKind, run_pair_kerning};
+    use super::*;
+    use uuid::Uuid;
 
-    #[test]
-    fn kerning_tightens_normal_to_subscript_gap() {
-        let k = run_pair_kerning(RichRunKind::Normal, RichRunKind::Subscript, 10.0);
-        assert!(k < 0.0);
+    fn test_note(text: &str) -> TextNote {
+        TextNote {
+            uuid: Uuid::new_v4(),
+            text: text.to_string(),
+            position: Point::new(5.0, 5.0),
+            rotation: 0.0,
+            font_size: 0.0,
+            justify_h: HAlign::Left,
+            justify_v: VAlign::Bottom,
+        }
     }
 
     #[test]
-    fn kerning_does_not_affect_normal_to_normal() {
-        let k = run_pair_kerning(RichRunKind::Normal, RichRunKind::Normal, 10.0);
-        assert_eq!(k, 0.0);
+    fn empty_text_aabb_is_minimal_height_box() {
+        let note = test_note("");
+        let bbox = text_note_aabb(&note);
+        assert!(bbox.height() > 0.0);
     }
 
     #[test]
-    fn subscript_keeps_same_baseline_as_normal() {
-        // Signex subscript syntax: ~3~ (was cross-style _{3} pre-Phase-2.3).
-        let runs = super::rich_runs("DIVIDED-S~3~");
-        let s_run = runs
-            .iter()
-            .find(|run| run.kind == RichRunKind::Normal && run.text.ends_with('S'))
-            .expect("normal run with S should exist");
-        let sub_run = runs
-            .iter()
-            .find(|run| run.kind == RichRunKind::Subscript && run.text == "3")
-            .expect("subscript run should exist");
+    fn longer_text_widens_aabb() {
+        let short = text_note_aabb(&test_note("AB"));
+        let long = text_note_aabb(&test_note("ABCDEFGHIJ"));
+        assert!(long.width() > short.width());
+    }
 
-        assert_eq!(s_run.baseline_offset, sub_run.baseline_offset);
+    #[test]
+    fn rotated_text_aabb_grows_orthogonal_axis() {
+        // Edge case: a rotated text run's AABB grows in both directions
+        // because the rotated rect's corners lie outside the unrotated
+        // span.
+        let mut note = test_note("ABCDE");
+        let upright = text_note_aabb(&note);
+        note.rotation = 30.0;
+        let rotated = text_note_aabb(&note);
+        assert!(rotated.height() > upright.height());
     }
 }

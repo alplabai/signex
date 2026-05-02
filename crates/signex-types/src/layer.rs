@@ -3,9 +3,13 @@
 //! Variants are **semantic** — they describe a layer's purpose
 //! (top copper, bottom silkscreen, courtyard, etc.), not its bit
 //! position in any particular EDA tool's internal layer set.
-//! Concrete `u8` IDs for foreign-format I/O are produced by the
-//! companion import tool's translation layer and do not live in
-//! this codebase.
+//! The previous version of this module exposed `LayerId(u8)` plus
+//! pre-Standard-7 numeric constants (`F_CU = 0`, `B_CU = 31`, …) that
+//! mirrored Standard's `PCB_LAYER_ID` numbering; those have been
+//! removed as part of the issue #62 Apache-clean remediation.
+//! Concrete `u8` IDs for any future foreign-format I/O are produced
+//! by the `signex-standard-import` companion crate's translation layer
+//! and do not live in this Apache codebase.
 
 use serde::{Deserialize, Serialize};
 
@@ -131,20 +135,20 @@ impl SignexLayer {
 // ---------------------------------------------------------------------------
 
 pub const DEFAULT_LAYER_COLORS: &[(SignexLayer, [u8; 4])] = &[
-    (SignexLayer::TopCopper, [0xC8, 0x00, 0x00, 0xFF]),       // red
-    (SignexLayer::BottomCopper, [0x00, 0x00, 0xC8, 0xFF]),    // blue
-    (SignexLayer::TopSilk, [0xC8, 0xC8, 0x00, 0xFF]),         // yellow
-    (SignexLayer::BottomSilk, [0x80, 0x00, 0x80, 0xFF]),      // purple
-    (SignexLayer::TopSolderMask, [0xC8, 0x00, 0xC8, 0x80]),   // magenta semi
+    (SignexLayer::TopCopper, [0xC8, 0x00, 0x00, 0xFF]), // red
+    (SignexLayer::BottomCopper, [0x00, 0x00, 0xC8, 0xFF]), // blue
+    (SignexLayer::TopSilk, [0xC8, 0xC8, 0x00, 0xFF]),   // yellow
+    (SignexLayer::BottomSilk, [0x80, 0x00, 0x80, 0xFF]), // purple
+    (SignexLayer::TopSolderMask, [0xC8, 0x00, 0xC8, 0x80]), // magenta semi
     (SignexLayer::BottomSolderMask, [0x00, 0xC8, 0xC8, 0x80]), // cyan semi
-    (SignexLayer::TopPaste, [0x80, 0x80, 0x00, 0xC0]),        // dark yellow
-    (SignexLayer::BottomPaste, [0x00, 0x80, 0x80, 0xC0]),     // teal
-    (SignexLayer::TopAssembly, [0x80, 0x80, 0x80, 0xFF]),     // grey
-    (SignexLayer::BottomAssembly, [0x60, 0x60, 0x60, 0xFF]),  // dark grey
-    (SignexLayer::TopCourtyard, [0xC0, 0xC0, 0xC0, 0xFF]),    // light grey
+    (SignexLayer::TopPaste, [0x80, 0x80, 0x00, 0xC0]),  // dark yellow
+    (SignexLayer::BottomPaste, [0x00, 0x80, 0x80, 0xC0]), // teal
+    (SignexLayer::TopAssembly, [0x80, 0x80, 0x80, 0xFF]), // grey
+    (SignexLayer::BottomAssembly, [0x60, 0x60, 0x60, 0xFF]), // dark grey
+    (SignexLayer::TopCourtyard, [0xC0, 0xC0, 0xC0, 0xFF]), // light grey
     (SignexLayer::BottomCourtyard, [0xA0, 0xA0, 0xA0, 0xFF]), // mid grey
-    (SignexLayer::BoardOutline, [0xFF, 0xFF, 0x00, 0xFF]),    // bright yellow
-    (SignexLayer::KeepOut, [0xFF, 0x00, 0xFF, 0xFF]),         // bright magenta
+    (SignexLayer::BoardOutline, [0xFF, 0xFF, 0x00, 0xFF]), // bright yellow
+    (SignexLayer::KeepOut, [0xFF, 0x00, 0xFF, 0xFF]),   // bright magenta
 ];
 
 // ---------------------------------------------------------------------------

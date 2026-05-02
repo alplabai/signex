@@ -1,11 +1,11 @@
-//! Electrical Rules Check. Runs on a [`SchematicRenderSnapshot`] and returns
-//! a list of [`Violation`]s. Internally the snapshot is projected into an
+//! Electrical Rules Check. Runs on a [`SchematicSheet`] and returns a
+//! list of [`Violation`]s. Internally the sheet is projected into an
 //! [`ErcContext`] first, so rule logic never imports `signex-render`.
 //!
 //! # Architecture
 //!
 //! ```text
-//! SchematicRenderSnapshot
+//! SchematicSheet
 //!        ↓  (projection)
 //!    ErcContext
 //!        ↓  (engine::run_all)
@@ -13,10 +13,12 @@
 //!        ↓  (From<Diagnostic>)
 //!  Vec<Violation>   ← public API
 //! ```
+//!
+//! v0.12 migrated this crate off the v0.11 render-snapshot wrapper;
+//! ERC now reads from `signex_types::SchematicSheet` directly.
 
 use serde::{Deserialize, Serialize};
-use signex_render::schematic::SchematicRenderSnapshot;
-use signex_types::schematic::{Point, SelectedItem, SelectedKind};
+use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind};
 
 pub mod context;
 pub mod diagnostic;
@@ -120,7 +122,7 @@ pub struct Violation {
 
 /// Run every enabled rule against the snapshot. Returns a flat list of
 /// violations in rule order.
-pub fn run(snapshot: &SchematicRenderSnapshot) -> Vec<Violation> {
+pub fn run(snapshot: &SchematicSheet) -> Vec<Violation> {
     let ctx = ErcContext::from_snapshot(snapshot);
     engine::run_all(&ctx)
         .into_iter()
@@ -129,10 +131,7 @@ pub fn run(snapshot: &SchematicRenderSnapshot) -> Vec<Violation> {
 }
 
 /// Run built-in ERC rules plus caller-provided DSL evaluator functions.
-pub fn run_with_dsl(
-    snapshot: &SchematicRenderSnapshot,
-    dsl_rules: &[engine::EvalFn],
-) -> Vec<Violation> {
+pub fn run_with_dsl(snapshot: &SchematicSheet, dsl_rules: &[engine::EvalFn]) -> Vec<Violation> {
     let ctx = ErcContext::from_snapshot(snapshot);
     engine::run_all_with_dsl(&ctx, dsl_rules)
         .into_iter()
@@ -141,11 +140,11 @@ pub fn run_with_dsl(
 }
 
 /// Run ERC for a schematic in the context of a whole project. Cross-sheet
-/// rules consult `children` keyed by the child filename as it appears
+/// rules consult `children` keyed by the child's filename as it appears
 /// on the parent's sheet symbol. Pass an empty map for top-only runs.
 pub fn run_with_project(
-    snapshot: &SchematicRenderSnapshot,
-    children: &std::collections::HashMap<String, SchematicRenderSnapshot>,
+    snapshot: &SchematicSheet,
+    children: &std::collections::HashMap<String, SchematicSheet>,
 ) -> Vec<Violation> {
     let ctx = ErcContext::from_snapshot_with_children(snapshot, children);
     engine::run_all(&ctx)
@@ -156,8 +155,8 @@ pub fn run_with_project(
 
 /// Run project-scoped ERC with built-in rules plus caller-provided DSL rules.
 pub fn run_with_project_and_dsl(
-    snapshot: &SchematicRenderSnapshot,
-    children: &std::collections::HashMap<String, SchematicRenderSnapshot>,
+    snapshot: &SchematicSheet,
+    children: &std::collections::HashMap<String, SchematicSheet>,
     dsl_rules: &[engine::EvalFn],
 ) -> Vec<Violation> {
     let ctx = ErcContext::from_snapshot_with_children(snapshot, children);

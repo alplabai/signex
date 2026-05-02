@@ -1,0 +1,906 @@
+//! Integration tests for the local + git library adapter.
+//!
+//! Per `v0.9-refactor-2-plan.md` §7, this exercise covers both flows the
+//! adapter ships:
+//!
+//! * Primitive (`Symbol` / `Footprint` / `SimModel`) round-trip + commit.
+//! * Row CRUD over `tables/<category>.tsv` — insert/update/delete by id,
+//!   lookup by `internal_pn`, and `iter_rows` across every table.
+
+#![cfg(feature = "local-git")]
+
+use std::path::{Path, PathBuf};
+
+use signex_library::adapter::{LibraryAdapter, LibraryError};
+use signex_library::adapters::library_set::LibrarySet;
+use signex_library::adapters::local_git::{LibraryInitOptions, LocalGitAdapter};
+use signex_library::component::{ComponentRow, DatasheetRef, PlmReserved};
+use signex_library::identity::{ComponentClass, InternalPn, RowId};
+use signex_library::library_file::{FORMAT_TOKEN, LibrarySection, SnxlibManifest};
+use signex_library::lifecycle::LifecycleState;
+use signex_library::manifest::{LibraryMode, UsersConfig, WorkflowConfig, WorkflowMode};
+use signex_library::manufacturer::ManufacturerPart;
+use signex_library::param::ParamMap;
+use signex_library::primitive::{
+    Body3D, BodyShape, Footprint, LayerId, Pad, PadKind, PadShape, PinDirection, PinOrientation,
+    Polygon, PrimitiveKind, PrimitiveRef, SimKind, SimModel, Symbol, SymbolPin,
+};
+use uuid::Uuid;
+
+fn empty_snx_manifest(name: &str, review_required: bool) -> SnxlibManifest {
+    SnxlibManifest {
+        format: FORMAT_TOKEN.into(),
+        library_id: Uuid::now_v7(),
+        library: LibrarySection {
+            name: name.into(),
+            description: None,
+        },
+        mode: LibraryMode::default(),
+        workflow: WorkflowConfig {
+            review_required,
+            ..Default::default()
+        },
+        users: UsersConfig::default(),
+        classes: Vec::new(),
+    }
+}
+
+/// Per-library .snxlib path inside `dir`. The file lives one level
+/// down (`dir/<name>/<name>.snxlib`) so each test gets its own
+/// directory for the parent-keyed git repo.
+fn snxlib_path(dir: &Path, name: &str) -> PathBuf {
+    dir.join(name).join(format!("{name}.snxlib"))
+}
+
+fn init_adapter(
+    dir: &tempfile::TempDir,
+    name: &str,
+    review_required: bool,
+) -> (PathBuf, LocalGitAdapter) {
+    let file = snxlib_path(dir.path(), name);
+    let manifest = empty_snx_manifest(name, review_required);
+    let adapter = LocalGitAdapter::init(
+        &file,
+        manifest,
+        LibraryInitOptions {
+            enable_git: true,
+            use_lfs: false,
+        },
+    )
+    .expect("init succeeds");
+    (file, adapter)
+}
+
+/// Initialising at a non-existent path writes the `.snxlib` file + makes a
+/// git commit; reopening picks up the same manifest.
+#[test]
+fn init_open_round_trip_empty_library() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = snxlib_path(dir.path(), "Empty");
+    let manifest = empty_snx_manifest("Empty", false);
+    let library_id = manifest.library_id;
+    let adapter = LocalGitAdapter::init(
+        &file,
+        manifest,
+        LibraryInitOptions {
+            enable_git: true,
+            use_lfs: false,
+        },
+    )
+    .unwrap();
+    assert_eq!(adapter.manifest().library.name, "Empty");
+    assert!(file.exists(), "expected .snxlib file at {file:?}");
+    assert!(file.parent().unwrap().join(".git").is_dir());
+
+    drop(adapter);
+    let reopened = LocalGitAdapter::open(&file).unwrap();
+    assert_eq!(reopened.manifest().library.library_id, library_id);
+}
+
+/// Re-init over an existing `.snxlib` must not silently nuke history.
+#[test]
+fn init_refuses_existing_library() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = snxlib_path(dir.path(), "X");
+    LocalGitAdapter::init(
+        &file,
+        empty_snx_manifest("X", false),
+        LibraryInitOptions {
+            enable_git: true,
+            use_lfs: false,
+        },
+    )
+    .unwrap();
+    let err = LocalGitAdapter::init(
+        &file,
+        empty_snx_manifest("X", false),
+        LibraryInitOptions {
+            enable_git: true,
+            use_lfs: false,
+        },
+    )
+    .unwrap_err();
+    assert!(matches!(err, LibraryError::Conflict(_)));
+}
+
+// ── Primitive CRUD ───────────────────────────────────────────────────────
+
+fn fixture_symbol(name: &str) -> Symbol {
+    let mut s = Symbol::empty(name);
+    s.pins.clear();
+    let mut p = SymbolPin::new("1", "OUT");
+    p.electrical = PinDirection::Output;
+    s.pins.push(p);
+    s
+}
+
+fn fixture_footprint(name: &str) -> Footprint {
+    let now = chrono::Utc::now();
+    Footprint {
+        uuid: Uuid::now_v7(),
+        name: name.into(),
+        anchor: [0.0, 0.0],
+        pads: vec![Pad {
+            number: "1".into(),
+            kind: PadKind::Smd,
+            shape: PadShape::Rect,
+            size: [1.0, 1.4],
+            position: [0.0, 0.0],
+            rotation: 0.0,
+            layers: vec![LayerId::new("F.Cu"), LayerId::new("F.Mask")],
+            drill: None,
+            solder_mask_margin: None,
+            paste_margin: None,
+        }],
+        courtyard: Polygon::default(),
+        silk_f: Vec::new(),
+        silk_b: Vec::new(),
+        fab_f: Vec::new(),
+        fab_b: Vec::new(),
+        body_3d: Body3D {
+            shape: BodyShape::Extrude,
+            height_mm: 1.6,
+            offset_z_mm: 0.0,
+            top_color: [0.1, 0.1, 0.1, 1.0],
+            side_color: [0.2, 0.2, 0.2, 1.0],
+            outline: None,
+        },
+        step_attachment: None,
+        pcb_params: ParamMap::new(),
+        version: "0.0.1".into(),
+        released: false,
+        created: now,
+        updated: now,
+    }
+}
+
+fn fixture_sim(name: &str) -> SimModel {
+    SimModel {
+        uuid: Uuid::now_v7(),
+        name: name.into(),
+        kind: SimKind::Spice3,
+        body: ".SUBCKT TEST IN OUT\n.ENDS".into(),
+        default_node_map: Default::default(),
+        version: "0.0.1".into(),
+        released: false,
+        created: chrono::Utc::now(),
+        updated: chrono::Utc::now(),
+    }
+}
+
+/// `library_id()` reflects the manifest's stable UUID so the resolver can key
+/// `LibrarySet` mounts off the adapter directly.
+#[test]
+fn library_id_returns_manifest_id() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = snxlib_path(dir.path(), "Id");
+    let manifest = empty_snx_manifest("Id", false);
+    let expected = manifest.library_id;
+    let adapter = LocalGitAdapter::init(
+        &file,
+        manifest,
+        LibraryInitOptions {
+            enable_git: true,
+            use_lfs: false,
+        },
+    )
+    .unwrap();
+    assert_eq!(adapter.library_id(), expected);
+}
+
+/// Save a Symbol → reopen → get_symbol → bytes are identical.
+/// Multi-symbol containers (v0.9 phase 2): the adapter writes the
+/// symbol into a `SymbolFile` JSON named after the symbol's
+/// slugified name (`opamp-dual-8.snxsym`), not `<uuid>.snxsym`.
+#[test]
+fn save_then_get_symbol_round_trip() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "Sym", false);
+    let sym = fixture_symbol("OPAMP-DUAL-8");
+    let uuid = sym.uuid;
+    adapter
+        .save_symbol(sym.clone(), "add OPAMP-DUAL-8")
+        .unwrap();
+
+    let on_disk = file
+        .parent()
+        .unwrap()
+        .join("symbols")
+        .join("opamp-dual-8.snxsym");
+    assert!(on_disk.exists(), "expected {on_disk:?} after save_symbol");
+
+    drop(adapter);
+    let reopened = LocalGitAdapter::open(&file).unwrap();
+    let got = reopened.get_symbol(uuid).unwrap();
+    assert_eq!(got, sym);
+}
+
+#[test]
+fn get_symbol_missing_uuid_is_not_found() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_file, adapter) = init_adapter(&dir, "Miss", false);
+    let err = adapter.get_symbol(Uuid::now_v7()).unwrap_err();
+    assert!(matches!(err, LibraryError::NotFound(_)));
+}
+
+#[test]
+fn save_then_get_footprint_round_trip() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "Fpt", false);
+    let fp = fixture_footprint("SOIC-8");
+    let uuid = fp.uuid;
+    adapter.save_footprint(fp.clone(), "add SOIC-8").unwrap();
+
+    let on_disk = file
+        .parent()
+        .unwrap()
+        .join("footprints")
+        .join(format!("{uuid}.snxfpt"));
+    assert!(on_disk.exists());
+
+    drop(adapter);
+    let reopened = LocalGitAdapter::open(&file).unwrap();
+    let got = reopened.get_footprint(uuid).unwrap();
+    assert_eq!(got, fp);
+}
+
+#[test]
+fn save_then_get_sim_round_trip() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "Sim", false);
+    let sm = fixture_sim("LM358");
+    let uuid = sm.uuid;
+    adapter.save_sim(sm.clone(), "add LM358").unwrap();
+
+    let on_disk = file
+        .parent()
+        .unwrap()
+        .join("sims")
+        .join(format!("{uuid}.snxsim"));
+    assert!(on_disk.exists());
+
+    drop(adapter);
+    let reopened = LocalGitAdapter::open(&file).unwrap();
+    let got = reopened.get_sim(uuid).unwrap();
+    assert_eq!(got, sm);
+}
+
+/// Each `save_*` produces its own commit (so history mirrors edits).
+#[test]
+fn primitive_saves_each_create_a_commit() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "Hist", false);
+    adapter.save_symbol(fixture_symbol("A"), "add A").unwrap();
+    adapter.save_symbol(fixture_symbol("B"), "add B").unwrap();
+    adapter
+        .save_footprint(fixture_footprint("F1"), "add F1")
+        .unwrap();
+    adapter.save_sim(fixture_sim("S1"), "add S1").unwrap();
+
+    let repo = git2::Repository::open(file.parent().unwrap()).unwrap();
+    let mut walk = repo.revwalk().unwrap();
+    walk.push_head().unwrap();
+    let count = walk.count();
+    // 1 (init) + 4 (saves) = 5 commits.
+    assert_eq!(count, 5, "expected 5 commits, got {count}");
+}
+
+/// Stage 17: `history(primitive_path)` returns one [`HistoryEntry`]
+/// per commit that touched the file, newest-first, capped at 50.
+///
+/// Two saves of the same symbol uuid land in the same `.snxsym`
+/// container (`save_symbol_in_container` upserts in place), so the
+/// per-file history must surface both saves' commit messages and
+/// none of the unrelated ones (init commit, footprint commit).
+#[test]
+fn history_returns_per_primitive_commits() {
+    let dir = tempfile::tempdir().unwrap();
+    let (file, adapter) = init_adapter(&dir, "Hist", false);
+    let mut sym = fixture_symbol("OPAMP-DUAL-8");
+    let uuid = sym.uuid;
+    adapter
+        .save_symbol(sym.clone(), "add OPAMP-DUAL-8")
+        .unwrap();
+    sym.pins.first_mut().unwrap().name = "VOUT".into();
+    adapter
+        .save_symbol(sym.clone(), "rename pin 1 → VOUT")
+        .unwrap();
+
+    // An unrelated footprint save — proves history filters by path.
+    adapter
+        .save_footprint(fixture_footprint("SOIC-8"), "add SOIC-8")
+        .unwrap();
+
+    let symbol_path = file
+        .parent()
+        .unwrap()
+        .join("symbols")
+        .join("opamp-dual-8.snxsym");
+    assert!(symbol_path.exists());
+
+    let entries = adapter.history(&symbol_path).unwrap();
+    assert!(
+        entries.len() >= 2,
+        "expected ≥ 2 history entries, got {}: {:?}",
+        entries.len(),
+        entries.iter().map(|e| &e.subject).collect::<Vec<_>>()
+    );
+    // Newest-first.
+    assert_eq!(entries[0].subject, "rename pin 1 → VOUT");
+    assert_eq!(entries[1].subject, "add OPAMP-DUAL-8");
+    // Author is filled in.
+    assert!(!entries[0].author_name.is_empty());
+    // 40-char hex SHA.
+    assert_eq!(entries[0].sha.len(), 40);
+    // Footprint commit must NOT show up in the symbol's history.
+    assert!(
+        !entries.iter().any(|e| e.subject == "add SOIC-8"),
+        "footprint commit leaked into symbol history"
+    );
+
+    // Relative paths (from library root) must produce the same list
+    // as absolute ones — the trait surface accepts either form.
+    let rel = std::path::PathBuf::from("symbols").join("opamp-dual-8.snxsym");
+    let entries_rel = adapter.history(&rel).unwrap();
+    assert_eq!(entries_rel.len(), entries.len());
+    let _ = uuid; // uuid retained for clarity; not asserted on.
+}
+
+/// `list_symbols` / `list_footprints` / `list_sims` walk the per-kind dir,
+/// return one summary per file, alphabetically sorted by name.
+#[test]
+fn list_primitives_returns_alphabetic_summaries() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_file, adapter) = init_adapter(&dir, "List", false);
+    adapter.save_symbol(fixture_symbol("Zeta"), "z").unwrap();
+    adapter.save_symbol(fixture_symbol("Alpha"), "a").unwrap();
+    adapter.save_symbol(fixture_symbol("Mu"), "m").unwrap();
+
+    let summaries = adapter.list_symbols().unwrap();
+    let names: Vec<&str> = summaries.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(names, vec!["Alpha", "Mu", "Zeta"]);
+    for s in &summaries {
+        assert_eq!(s.kind, PrimitiveKind::Symbol);
+    }
+
+    // Empty footprint dir → empty list.
+    assert!(adapter.list_footprints().unwrap().is_empty());
+
+    adapter
+        .save_footprint(fixture_footprint("SOIC-8"), "add")
+        .unwrap();
+    let fps = adapter.list_footprints().unwrap();
+    assert_eq!(fps.len(), 1);
+    assert_eq!(fps[0].kind, PrimitiveKind::Footprint);
+    assert_eq!(fps[0].name, "SOIC-8");
+}
+
+/// LibrarySet integration test — mount two LocalGit libraries and resolve a
+/// `PrimitiveRef` whose `library_id` points at one specific lib. Verifies the
+/// cross-library resolver picks the correct adapter and surfaces unresolved
+/// refs cleanly.
+#[test]
+fn library_set_resolves_across_two_local_libs() {
+    let dir = tempfile::tempdir().unwrap();
+    let file_a = snxlib_path(dir.path(), "A");
+    let file_b = snxlib_path(dir.path(), "B");
+    let manifest_a = empty_snx_manifest("A", false);
+    let manifest_b = empty_snx_manifest("B", false);
+    let lib_a = manifest_a.library_id;
+    let lib_b = manifest_b.library_id;
+    assert_ne!(lib_a, lib_b);
+
+    let adapter_a = LocalGitAdapter::init(
+        &file_a,
+        manifest_a,
+        LibraryInitOptions {
+            enable_git: true,
+            use_lfs: false,
+        },
+    )
+    .unwrap();
+    let adapter_b = LocalGitAdapter::init(
+        &file_b,
+        manifest_b,
+        LibraryInitOptions {
+            enable_git: true,
+            use_lfs: false,
+        },
+    )
+    .unwrap();
+
+    // Each library gets its own symbol with the SAME local UUID — so a
+    // resolver that ignores library_id would pick the wrong one. The test
+    // forces `library_id` to be load-bearing.
+    let shared_uuid = Uuid::now_v7();
+    let mut sym_a = fixture_symbol("OPAMP-IN-A");
+    sym_a.uuid = shared_uuid;
+    let mut sym_b = fixture_symbol("OPAMP-IN-B");
+    sym_b.uuid = shared_uuid;
+    adapter_a.save_symbol(sym_a.clone(), "in A").unwrap();
+    adapter_b.save_symbol(sym_b.clone(), "in B").unwrap();
+
+    // Footprint only lives in B — a ref into A would be unresolved.
+    let fp_b = fixture_footprint("SOIC-8");
+    let fp_b_uuid = fp_b.uuid;
+    adapter_b
+        .save_footprint(fp_b.clone(), "soic-8 in B")
+        .unwrap();
+
+    let mut set = LibrarySet::new();
+    set.mount(Box::new(adapter_a)).unwrap();
+    set.mount(Box::new(adapter_b)).unwrap();
+    assert_eq!(set.len(), 2);
+
+    // Cross-library resolution: refs disambiguated by library_id.
+    let from_a = set
+        .resolve_symbol(&PrimitiveRef::new(lib_a, shared_uuid))
+        .expect("symbol from lib A resolves");
+    assert_eq!(from_a.name, "OPAMP-IN-A");
+    let from_b = set
+        .resolve_symbol(&PrimitiveRef::new(lib_b, shared_uuid))
+        .expect("symbol from lib B resolves");
+    assert_eq!(from_b.name, "OPAMP-IN-B");
+
+    // Footprint only resolves through lib B's id; lib A returns None.
+    assert!(
+        set.resolve_footprint(&PrimitiveRef::new(lib_b, fp_b_uuid))
+            .is_some()
+    );
+    assert!(
+        set.resolve_footprint(&PrimitiveRef::new(lib_a, fp_b_uuid))
+            .is_none()
+    );
+
+    // unresolved_refs filters down to misses across both libs.
+    let bogus_lib = PrimitiveRef::new(Uuid::now_v7(), Uuid::now_v7());
+    let bogus_uuid = PrimitiveRef::new(lib_a, Uuid::now_v7());
+    let resolves = PrimitiveRef::new(lib_a, shared_uuid);
+    let unresolved = set.unresolved_refs([&bogus_lib, &bogus_uuid, &resolves]);
+    assert_eq!(unresolved.len(), 2);
+    assert!(unresolved.contains(&bogus_lib));
+    assert!(unresolved.contains(&bogus_uuid));
+    assert!(!unresolved.contains(&resolves));
+}
+
+// ── Row CRUD ──────────────────────────────────────────────────────────────
+
+/// Build a fixture row with a given internal PN and class. The `lib_id`
+/// argument is the library this row's primitives live in — the adapter's
+/// own `library_id` for an in-library row, or some other lib for a row
+/// pointing at an external primitive.
+fn fixture_row(internal_pn: &str, class: &str, lib_id: Uuid) -> ComponentRow {
+    let now = chrono::Utc::now();
+    ComponentRow {
+        row_id: Uuid::now_v7(),
+        internal_pn: InternalPn::new(internal_pn),
+        class: ComponentClass::new(class),
+        datasheet: DatasheetRef::default(),
+        state: LifecycleState::Draft,
+        symbol_ref: PrimitiveRef::new(lib_id, Uuid::now_v7()),
+        footprint_ref: None,
+        sim_ref: None,
+        pin_map_overrides: Vec::new(),
+        primary_mpn: ManufacturerPart::draft("Acme", internal_pn),
+        alternates: Vec::new(),
+        supply: Vec::new(),
+        parameters: ParamMap::new(),
+        plm: PlmReserved::default(),
+        version: "0.0.1".into(),
+        released: false,
+        symbol_version: String::new(),
+        footprint_version: String::new(),
+        sim_version: String::new(),
+        created: now,
+        updated: now,
+        content_hash: [0u8; 32],
+    }
+}
+
+/// `insert_row` → `read_row` round-trip; `update_row` mutates in place;
+/// `delete_row` removes the row and `read_row` then returns `NotFound`.
+#[test]
+fn local_git_round_trip_row() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = snxlib_path(dir.path(), "RowRT");
+    let manifest = empty_snx_manifest("RowRT", false);
+    let lib_id = manifest.library_id;
+    let adapter = LocalGitAdapter::init(
+        &file,
+        manifest,
+        LibraryInitOptions {
+            enable_git: true,
+            use_lfs: false,
+        },
+    )
+    .unwrap();
+
+    let row = fixture_row("R10K", "resistor", lib_id);
+    let row_id = RowId::from_uuid(row.row_id);
+
+    adapter
+        .insert_row("resistors", row.clone(), "first")
+        .unwrap();
+    // Tables now live inside the .snxlib file; the embedded
+    // [tables.resistors] block carries the row.
+    let snxlib_text = std::fs::read_to_string(&file).unwrap();
+    assert!(
+        snxlib_text.contains("[tables.resistors]"),
+        "expected [tables.resistors] in {file:?}"
+    );
+
+    let got = adapter.read_row("resistors", row_id).unwrap();
+    assert_eq!(got, row);
+
+    // Mutate a non-key field; update_row must keep the same row_id.
+    let mut modified = row.clone();
+    modified.internal_pn = InternalPn::new("R10K_RENAMED");
+    adapter
+        .update_row("resistors", modified.clone(), "rename")
+        .unwrap();
+    let after_update = adapter.read_row("resistors", row_id).unwrap();
+    assert_eq!(after_update, modified);
+    assert_eq!(after_update.internal_pn.as_str(), "R10K_RENAMED");
+
+    // Delete + read returns NotFound.
+    adapter.delete_row("resistors", row_id, "drop").unwrap();
+    let err = adapter.read_row("resistors", row_id).unwrap_err();
+    assert!(matches!(err, LibraryError::NotFound(_)));
+}
+
+/// `iter_rows` walks every `[tables.<name>]` inside the `.snxlib` and
+/// pairs each row with its table name.
+#[test]
+fn local_git_iter_rows_across_tables() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = snxlib_path(dir.path(), "IterRows");
+    let manifest = empty_snx_manifest("IterRows", false);
+    let lib_id = manifest.library_id;
+    let adapter = LocalGitAdapter::init(
+        &file,
+        manifest,
+        LibraryInitOptions {
+            enable_git: true,
+            use_lfs: false,
+        },
+    )
+    .unwrap();
+
+    let r1 = fixture_row("R10K", "resistor", lib_id);
+    let r2 = fixture_row("R47K", "resistor", lib_id);
+    let c1 = fixture_row("C100N", "capacitor", lib_id);
+
+    adapter.insert_row("resistors", r1.clone(), "r1").unwrap();
+    adapter.insert_row("resistors", r2.clone(), "r2").unwrap();
+    adapter.insert_row("capacitors", c1.clone(), "c1").unwrap();
+
+    let mut got = adapter.iter_rows().unwrap();
+    assert_eq!(got.len(), 3);
+
+    // Sort by (table, internal_pn) so the order is stable in the assertion.
+    got.sort_by(|a, b| {
+        a.0.cmp(&b.0)
+            .then_with(|| a.1.internal_pn.cmp(&b.1.internal_pn))
+    });
+    assert_eq!(got[0].0, "capacitors");
+    assert_eq!(got[0].1.internal_pn.as_str(), "C100N");
+    assert_eq!(got[1].0, "resistors");
+    assert_eq!(got[1].1.internal_pn.as_str(), "R10K");
+    assert_eq!(got[2].0, "resistors");
+    assert_eq!(got[2].1.internal_pn.as_str(), "R47K");
+
+    // `list_tables` returns sorted file stems.
+    let tables = adapter.list_tables().unwrap();
+    assert_eq!(
+        tables,
+        vec!["capacitors".to_string(), "resistors".to_string()]
+    );
+}
+
+/// `read_row_by_pn` finds the first matching row across every table.
+#[test]
+fn local_git_read_row_by_pn() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = snxlib_path(dir.path(), "ByPN");
+    let manifest = empty_snx_manifest("ByPN", false);
+    let lib_id = manifest.library_id;
+    let adapter = LocalGitAdapter::init(
+        &file,
+        manifest,
+        LibraryInitOptions {
+            enable_git: true,
+            use_lfs: false,
+        },
+    )
+    .unwrap();
+
+    let target = fixture_row("R10K", "resistor", lib_id);
+    let other = fixture_row("R47K", "resistor", lib_id);
+    adapter
+        .insert_row("resistors", target.clone(), "target")
+        .unwrap();
+    adapter.insert_row("resistors", other, "other").unwrap();
+
+    let pn: InternalPn = "R10K".parse().unwrap();
+    let (table, row) = adapter.read_row_by_pn(&pn).unwrap();
+    assert_eq!(table, "resistors");
+    assert_eq!(row, target);
+
+    // Missing PN returns NotFound, not a panic.
+    let missing: InternalPn = "Q_NOT_THERE".parse().unwrap();
+    let err = adapter.read_row_by_pn(&missing).unwrap_err();
+    assert!(matches!(err, LibraryError::NotFound(_)));
+}
+
+/// The `msg` argument on `insert_row` lands on the resulting libgit2 commit,
+/// so the user-supplied audit trail is preserved.
+#[test]
+fn local_git_commits_with_message() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = snxlib_path(dir.path(), "Commits");
+    let manifest = empty_snx_manifest("Commits", false);
+    let lib_id = manifest.library_id;
+    let adapter = LocalGitAdapter::init(
+        &file,
+        manifest,
+        LibraryInitOptions {
+            enable_git: true,
+            use_lfs: false,
+        },
+    )
+    .unwrap();
+
+    let row = fixture_row("R10K", "resistor", lib_id);
+    adapter.insert_row("resistors", row, "msg-XYZ").unwrap();
+
+    let repo = git2::Repository::open(file.parent().unwrap()).unwrap();
+    let head = repo.head().unwrap().peel_to_commit().unwrap();
+    assert_eq!(head.summary(), Some("msg-XYZ"));
+}
+
+// ── Cascade engine (Stage 15) ────────────────────────────────────────────
+
+/// Build an `.snxlib` manifest in the given workflow mode. Cascade
+/// behaviour gates on this — Personal silently bumps every bound row,
+/// Team leaves released rows stale.
+fn snx_manifest_with_mode(name: &str, mode: WorkflowMode) -> SnxlibManifest {
+    SnxlibManifest {
+        format: FORMAT_TOKEN.into(),
+        library_id: Uuid::now_v7(),
+        library: LibrarySection {
+            name: name.into(),
+            description: None,
+        },
+        mode: LibraryMode::default(),
+        workflow: WorkflowConfig {
+            mode,
+            ..Default::default()
+        },
+        users: UsersConfig::default(),
+        classes: Vec::new(),
+    }
+}
+
+/// Personal-mode cascade silently bumps a row binding to the saved
+/// symbol — both the row's pinned `symbol_version` and its own
+/// `version` patch advance.
+#[test]
+fn cascade_personal_mode_auto_bumps_bound_row() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = snxlib_path(dir.path(), "CascadeP");
+    let manifest = snx_manifest_with_mode("CascadeP", WorkflowMode::Personal);
+    let lib_id = manifest.library_id;
+    let adapter = LocalGitAdapter::init(
+        &file,
+        manifest,
+        LibraryInitOptions {
+            enable_git: true,
+            use_lfs: false,
+        },
+    )
+    .unwrap();
+
+    // Save symbol v0.0.1 — no rows yet, cascade is a no-op here.
+    let mut sym = fixture_symbol("OPAMP-V1");
+    sym.version = "0.0.1".into();
+    let sym_uuid = sym.uuid;
+    adapter.save_symbol(sym.clone(), "init opamp").unwrap();
+
+    // Insert a row whose symbol_ref points at our saved symbol's uuid;
+    // pin its `symbol_version` to the v0.0.1 we just saved.
+    let mut row = fixture_row("U-OPAMP-001", "opamp", lib_id);
+    row.symbol_ref = PrimitiveRef::new(lib_id, sym_uuid);
+    row.symbol_version = "0.0.1".into();
+    row.version = "0.0.1".into();
+    row.released = false;
+    let row_id = RowId::from_uuid(row.row_id);
+    adapter
+        .insert_row("opamps", row.clone(), "bind row")
+        .unwrap();
+
+    // Save symbol v0.0.2 — cascade should silently advance the row.
+    let mut sym2 = sym.clone();
+    sym2.version = "0.0.2".into();
+    adapter.save_symbol(sym2, "edit opamp").unwrap();
+
+    // Row's pinned symbol_version moved to the new symbol version,
+    // and the row's own version patch-bumped (0.0.1 → 0.0.2).
+    let after = adapter.read_row("opamps", row_id).unwrap();
+    assert_eq!(after.symbol_version, "0.0.2");
+    assert_eq!(after.version, "0.0.2");
+    assert_eq!(after.row_id, row.row_id, "row identity preserved");
+}
+
+/// Team-mode + released row — cascade leaves the pinned
+/// `symbol_version` alone so the schematic doesn't auto-pull a
+/// breaking change. The Library Browser's stale-binding indicator
+/// catches the drift visually.
+#[test]
+fn cascade_team_mode_leaves_released_row_stale() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = snxlib_path(dir.path(), "CascadeT");
+    let manifest = snx_manifest_with_mode("CascadeT", WorkflowMode::Team);
+    let lib_id = manifest.library_id;
+    let adapter = LocalGitAdapter::init(
+        &file,
+        manifest,
+        LibraryInitOptions {
+            enable_git: true,
+            use_lfs: false,
+        },
+    )
+    .unwrap();
+
+    let mut sym = fixture_symbol("OPAMP-V1");
+    sym.version = "1.0.0".into();
+    let sym_uuid = sym.uuid;
+    adapter.save_symbol(sym.clone(), "init opamp").unwrap();
+
+    // Released row binding at v1.0.0.
+    let mut row = fixture_row("U-OPAMP-RELEASED", "opamp", lib_id);
+    row.symbol_ref = PrimitiveRef::new(lib_id, sym_uuid);
+    row.symbol_version = "1.0.0".into();
+    row.version = "1.0.0".into();
+    row.released = true;
+    let row_id = RowId::from_uuid(row.row_id);
+    adapter
+        .insert_row("opamps", row.clone(), "bind released row")
+        .unwrap();
+
+    // Save symbol v1.0.1 — Team mode + released row → stale.
+    let mut sym2 = sym.clone();
+    sym2.version = "1.0.1".into();
+    adapter.save_symbol(sym2, "edit opamp").unwrap();
+
+    let after = adapter.read_row("opamps", row_id).unwrap();
+    assert_eq!(
+        after.symbol_version, "1.0.0",
+        "released row keeps old symbol_version pin"
+    );
+    assert_eq!(after.version, "1.0.0", "released row's version stays put");
+    assert!(after.released, "released flag preserved");
+
+    // Confirm the cascade engine itself bucketed it as stale rather
+    // than silently dropping it — call it directly so we can inspect
+    // the report shape (the adapter wrapper discards its return).
+    let report = signex_library::cascade::cascade_after_symbol_save(
+        &adapter,
+        sym_uuid,
+        "1.0.2",
+        WorkflowMode::Team,
+    )
+    .unwrap();
+    assert!(report.auto_bumped.is_empty());
+    assert_eq!(report.stale, vec![row_id]);
+}
+
+/// Team-mode + unreleased row — auto-cascade fires (the released
+/// flag is the gate, not the workflow mode alone). Mirrors Altium's
+/// "edit-in-place is fine while the row is still in draft".
+#[test]
+fn cascade_team_mode_unreleased_row_auto_bumps() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = snxlib_path(dir.path(), "CascadeTU");
+    let manifest = snx_manifest_with_mode("CascadeTU", WorkflowMode::Team);
+    let lib_id = manifest.library_id;
+    let adapter = LocalGitAdapter::init(
+        &file,
+        manifest,
+        LibraryInitOptions {
+            enable_git: true,
+            use_lfs: false,
+        },
+    )
+    .unwrap();
+
+    let mut sym = fixture_symbol("OPAMP-V1");
+    sym.version = "1.0.0".into();
+    let sym_uuid = sym.uuid;
+    adapter.save_symbol(sym.clone(), "init opamp").unwrap();
+
+    let mut row = fixture_row("U-OPAMP-DRAFT", "opamp", lib_id);
+    row.symbol_ref = PrimitiveRef::new(lib_id, sym_uuid);
+    row.symbol_version = "1.0.0".into();
+    row.version = "0.0.5".into();
+    row.released = false;
+    let row_id = RowId::from_uuid(row.row_id);
+    adapter
+        .insert_row("opamps", row.clone(), "bind draft row")
+        .unwrap();
+
+    let mut sym2 = sym.clone();
+    sym2.version = "1.0.1".into();
+    adapter.save_symbol(sym2, "edit opamp").unwrap();
+
+    let after = adapter.read_row("opamps", row_id).unwrap();
+    assert_eq!(after.symbol_version, "1.0.1");
+    assert_eq!(after.version, "0.0.6", "row.version patch-bumps");
+    assert!(!after.released);
+}
+
+/// Footprint cascade mirrors symbol cascade — same predicate
+/// (Personal mode OR `!row.released`), same auto-bump rules. Test
+/// confirms the trait dispatches against `footprint_ref` rather
+/// than `symbol_ref`.
+#[test]
+fn cascade_footprint_personal_mode_auto_bumps_bound_row() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = snxlib_path(dir.path(), "CascadeF");
+    let manifest = snx_manifest_with_mode("CascadeF", WorkflowMode::Personal);
+    let lib_id = manifest.library_id;
+    let adapter = LocalGitAdapter::init(
+        &file,
+        manifest,
+        LibraryInitOptions {
+            enable_git: true,
+            use_lfs: false,
+        },
+    )
+    .unwrap();
+
+    let mut fp = fixture_footprint("SOIC-8");
+    fp.version = "0.0.1".into();
+    let fp_uuid = fp.uuid;
+    adapter.save_footprint(fp.clone(), "init fp").unwrap();
+
+    let mut row = fixture_row("U-SOIC-001", "opamp", lib_id);
+    row.footprint_ref = Some(PrimitiveRef::new(lib_id, fp_uuid));
+    row.footprint_version = "0.0.1".into();
+    row.version = "0.0.1".into();
+    row.released = false;
+    let row_id = RowId::from_uuid(row.row_id);
+    adapter
+        .insert_row("opamps", row.clone(), "bind row")
+        .unwrap();
+
+    let mut fp2 = fp.clone();
+    fp2.version = "0.0.2".into();
+    adapter.save_footprint(fp2, "edit fp").unwrap();
+
+    let after = adapter.read_row("opamps", row_id).unwrap();
+    assert_eq!(after.footprint_version, "0.0.2");
+    assert_eq!(after.version, "0.0.2");
+    // Symbol pin must NOT have moved — cascade stays scoped to the
+    // primitive kind that was saved.
+    assert_eq!(after.symbol_version, row.symbol_version);
+}

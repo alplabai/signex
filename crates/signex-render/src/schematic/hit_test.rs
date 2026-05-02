@@ -1,687 +1,197 @@
-//! Hit-testing for schematic elements -- determines what the user clicked.
+//! Hit-test internals — spatial-hash builder + per-primitive distance
+//! / containment helpers used by the public
+//! [`super::hit_test_point`] / [`super::hit_test_box`] entries.
 //!
-//! All functions operate in world coordinates (mm). The app layer converts
-//! the screen click position to world coords before calling these.
+//! The spatial hash buckets every primitive's world-space AABB into
+//! a grid keyed by `(i32, i32)` cells of [`CELL_SIZE_MM`]. A point
+//! query touches only the buckets that overlap the cursor + tolerance
+//! pad — O(k) where k is the bucket population near the cursor. A box
+//! query inflates the touched-bucket set to every cell the query box
+//! overlaps and applies the [`super::SelectionMode`] rule on each
+//! candidate.
+//!
+//! Z-order: primitives are appended in render order, and queries
+//! traverse them in reverse so the topmost item wins. Render order
+//! comes from [`super::render`] and is documented in [`build_index`].
 
-use signex_types::schematic::*;
+use std::collections::{HashMap, HashSet};
 
-use super::{SchematicRenderSnapshot, field_display_pos, field_effective_style};
+use signex_types::schematic::{
+    Aabb, Point, SchDrawing, SelectedItem, SelectedKind, point_to_segment_dist,
+};
 
-/// Threshold distance in mm for considering a click "on" a thin element.
-const HIT_TOLERANCE: f64 = 1.5;
+// Re-export at the v0.11 path so consumers that imported
+// `signex_render::schematic::hit_test::SelectionMode` continue to compile.
+pub use super::SelectionMode;
 
-/// Find the topmost element at the given world position.
-/// Elements are tested in reverse z-order (top first) so the first hit wins.
-pub fn hit_test(sheet: &SchematicRenderSnapshot, wx: f64, wy: f64) -> Option<SelectedItem> {
-    // Labels (topmost in z-order)
-    for lbl in &sheet.labels {
-        if hit_label(lbl, wx, wy) {
-            return Some(SelectedItem::new(lbl.uuid, SelectedKind::Label));
-        }
-    }
+use super::SchematicSnapshot;
 
-    // Junctions
-    for j in &sheet.junctions {
-        if hit_junction(j, wx, wy) {
-            return Some(SelectedItem::new(j.uuid, SelectedKind::Junction));
-        }
-    }
+/// Spatial-hash cell size in millimetres. Sized to comfortably enclose
+/// the typical schematic primitive (≈ 1 cell per pin or junction);
+/// large primitives (symbols, multi-segment polylines) span several
+/// cells and are inserted into each overlapping cell.
+pub const CELL_SIZE_MM: f64 = 5.08;
 
-    // No-connects
-    for nc in &sheet.no_connects {
-        if hit_no_connect(nc, wx, wy) {
-            return Some(SelectedItem::new(nc.uuid, SelectedKind::NoConnect));
-        }
-    }
-
-    // Text notes
-    for tn in &sheet.text_notes {
-        if hit_text_note(tn, wx, wy) {
-            return Some(SelectedItem::new(tn.uuid, SelectedKind::TextNote));
-        }
-    }
-
-    // Child sheets
-    for cs in &sheet.child_sheets {
-        if let Some(pin) = cs.pins.iter().find(|pin| hit_child_sheet_pin(pin, wx, wy)) {
-            return Some(SelectedItem::new(pin.uuid, SelectedKind::SheetPin));
-        }
-        if hit_child_sheet(cs, wx, wy) {
-            return Some(SelectedItem::new(cs.uuid, SelectedKind::ChildSheet));
-        }
-    }
-
-    // Symbol field texts (tested before symbol body so clicking a label
-    // selects the field, not the whole symbol). Power ports are an exception:
-    // their val_text is rendered as part of the port by the built-in power
-    // renderer, so clicking anywhere on the glyph should select the whole
-    // port — not a phantom val_text hit region tracking the stored text
-    // position (often offset below the visible body).
-    for sym in &sheet.symbols {
-        if sym.is_power {
-            continue;
-        }
-        if let Some(ref ref_text) = sym.ref_text
-            && !ref_text.hidden
-            && hit_text_prop(&sym.reference, ref_text, sym, wx, wy)
-        {
-            return Some(SelectedItem::new(sym.uuid, SelectedKind::SymbolRefField));
-        }
-        if let Some(ref val_text) = sym.val_text
-            && !val_text.hidden
-            && hit_text_prop(&sym.value, val_text, sym, wx, wy)
-        {
-            return Some(SelectedItem::new(sym.uuid, SelectedKind::SymbolValField));
-        }
-    }
-
-    // Symbols
-    for sym in &sheet.symbols {
-        if let Some(lib_sym) = sheet.lib_symbols.get(&sym.lib_id)
-            && hit_symbol(sym, lib_sym, wx, wy)
-        {
-            return Some(SelectedItem::new(sym.uuid, SelectedKind::Symbol));
-        }
-        // Power ports always rely on the built-in renderer for their glyph,
-        // even when a matching lib_sym exists in the sheet's `lib_symbols`.
-        // So the hit region has to come from the built-in geometry — without
-        // this second pass, a power port whose Style was swapped (lib_id now
-        // points at a non-existent library symbol) would be unselectable.
-        if sym.is_power && hit_power_symbol(sym, wx, wy) {
-            return Some(SelectedItem::new(sym.uuid, SelectedKind::Symbol));
-        }
-    }
-
-    // Wires
-    for w in &sheet.wires {
-        if hit_wire(w, wx, wy) {
-            return Some(SelectedItem::new(w.uuid, SelectedKind::Wire));
-        }
-    }
-
-    // Buses
-    for b in &sheet.buses {
-        if hit_bus(b, wx, wy) {
-            return Some(SelectedItem::new(b.uuid, SelectedKind::Bus));
-        }
-    }
-
-    // Bus entries
-    for be in &sheet.bus_entries {
-        if hit_bus_entry(be, wx, wy) {
-            return Some(SelectedItem::new(be.uuid, SelectedKind::BusEntry));
-        }
-    }
-
-    // Graphic drawings — line / rect / circle / arc / polyline.
-    // Shapes placed by the Active Bar shape tools live here.
-    for d in &sheet.drawings {
-        if let Some(uuid) = hit_drawing(d, wx, wy) {
-            return Some(SelectedItem::new(uuid, SelectedKind::Drawing));
-        }
-    }
-
-    None
+#[derive(Debug, Clone)]
+struct HitEntry {
+    item: SelectedItem,
+    bbox: Aabb,
+    z: usize,
 }
 
-/// True iff `probe` (radians) falls within the arc going from
-/// `start_angle` through `mid_angle` to `end_angle` (also radians).
-/// Handles both CW / CCW sweeps and the wrap across ±π.
-fn angle_in_arc_sweep(probe: f64, start: f64, mid: f64, end: f64) -> bool {
-    use std::f64::consts::TAU;
-    let norm = |a: f64| -> f64 {
-        let mut t = a % TAU;
-        if t < 0.0 {
-            t += TAU;
-        }
-        t
-    };
-    let ccw_dist = |a: f64, b: f64| -> f64 {
-        let d = b - a;
-        if d < 0.0 { d + TAU } else { d }
-    };
-    let s = norm(start);
-    let m = norm(mid);
-    let e = norm(end);
-    let p = norm(probe);
-    // Walk CCW from s: does it reach m before e?
-    let s_to_m = ccw_dist(s, m);
-    let s_to_e = ccw_dist(s, e);
-    let s_to_p = ccw_dist(s, p);
-    if s_to_m <= s_to_e {
-        // CCW sweep; probe is inside iff it's hit before reaching end CCW.
-        s_to_p <= s_to_e
-    } else {
-        // CW sweep; equivalent to probe reaching start after going CCW from end.
-        let e_to_p = ccw_dist(e, p);
-        let e_to_s = ccw_dist(e, s);
-        e_to_p <= e_to_s
-    }
+/// Spatial-hash hit index. See module doc.
+#[derive(Debug, Default, Clone)]
+pub struct HitIndex {
+    buckets: HashMap<(i32, i32), Vec<usize>>,
+    entries: Vec<HitEntry>,
 }
 
-/// Distance from point `(px, py)` to the infinite line through `(ax, ay)` → `(bx, by)`,
-/// clamped to the segment. Returns `None` for a degenerate zero-length segment.
-fn dist_point_segment(px: f64, py: f64, ax: f64, ay: f64, bx: f64, by: f64) -> Option<f64> {
-    let dx = bx - ax;
-    let dy = by - ay;
-    let len_sq = dx * dx + dy * dy;
-    if len_sq < 1e-9 {
-        return None;
-    }
-    let t = (((px - ax) * dx) + ((py - ay) * dy)) / len_sq;
-    let t = t.clamp(0.0, 1.0);
-    let cx = ax + t * dx;
-    let cy = ay + t * dy;
-    let ex = px - cx;
-    let ey = py - cy;
-    Some((ex * ex + ey * ey).sqrt())
-}
+impl HitIndex {
+    /// Build the index from a snapshot. Render order:
+    /// `drawings → buses → wires → bus_entries → child_sheets →
+    /// symbols → junctions → no_connects → labels → text_notes`.
+    /// Hit-test queries traverse this list in reverse so labels and
+    /// text notes win over wires and drawings underneath.
+    pub fn build(snapshot: &SchematicSnapshot<'_>) -> Self {
+        let mut index = HitIndex::default();
+        let sheet = snapshot.sheet;
 
-fn hit_drawing(
-    drawing: &signex_types::schematic::SchDrawing,
-    wx: f64,
-    wy: f64,
-) -> Option<uuid::Uuid> {
-    use signex_types::schematic::SchDrawing;
-    let tol = HIT_TOLERANCE;
-    match drawing {
-        SchDrawing::Line {
-            uuid, start, end, ..
-        } => {
-            if dist_point_segment(wx, wy, start.x, start.y, end.x, end.y)
-                .map(|d| d <= tol)
-                .unwrap_or(false)
-            {
-                Some(*uuid)
-            } else {
-                None
-            }
+        for d in &sheet.drawings {
+            index.insert(
+                drawing_uuid(d),
+                SelectedKind::Drawing,
+                super::drawing::drawing_aabb(d),
+            );
         }
-        SchDrawing::Rect {
-            uuid,
-            start,
-            end,
-            fill,
-            ..
-        } => {
-            let x0 = start.x.min(end.x);
-            let x1 = start.x.max(end.x);
-            let y0 = start.y.min(end.y);
-            let y1 = start.y.max(end.y);
-            let filled = !matches!(fill, signex_types::schematic::FillType::None);
-            if filled && wx >= x0 && wx <= x1 && wy >= y0 && wy <= y1 {
-                return Some(*uuid);
-            }
-            // Outline test — click on any of 4 edges within tolerance.
-            let edges = [
-                (x0, y0, x1, y0),
-                (x1, y0, x1, y1),
-                (x1, y1, x0, y1),
-                (x0, y1, x0, y0),
-            ];
-            for (ax, ay, bx, by) in edges {
-                if dist_point_segment(wx, wy, ax, ay, bx, by)
-                    .map(|d| d <= tol)
-                    .unwrap_or(false)
-                {
-                    return Some(*uuid);
-                }
-            }
-            None
+        for b in &sheet.buses {
+            index.insert(b.uuid, SelectedKind::Bus, super::bus::bus_aabb(b));
         }
-        SchDrawing::Circle {
-            uuid,
-            center,
-            radius,
-            fill,
-            ..
-        } => {
-            let dx = wx - center.x;
-            let dy = wy - center.y;
-            let dist = (dx * dx + dy * dy).sqrt();
-            let filled = !matches!(fill, signex_types::schematic::FillType::None);
-            if filled && dist <= *radius + tol {
-                return Some(*uuid);
-            }
-            if (dist - *radius).abs() <= tol {
-                Some(*uuid)
-            } else {
-                None
-            }
+        for w in &sheet.wires {
+            index.insert(w.uuid, SelectedKind::Wire, super::wire::wire_aabb(w));
         }
-        SchDrawing::Arc {
-            uuid,
-            start,
-            mid,
-            end,
-            ..
-        } => {
-            // Real-arc hit test: the click must be on the circle of
-            // the arc (distance to center ≈ radius) AND within the
-            // angular sweep. Chord approximation captured empty
-            // canvas near the arc's bulge, so users couldn't
-            // deselect by clicking near it.
-            let Some((cx, cy, r)) =
-                crate::schematic::circumcircle((start.x, start.y), (mid.x, mid.y), (end.x, end.y))
-            else {
-                // Degenerate / collinear — fall back to the chord check.
-                for (a, b) in [(start, mid), (mid, end)] {
-                    if dist_point_segment(wx, wy, a.x, a.y, b.x, b.y)
-                        .map(|d| d <= tol)
-                        .unwrap_or(false)
-                    {
-                        return Some(*uuid);
-                    }
-                }
-                return None;
+        for e in &sheet.bus_entries {
+            index.insert(
+                e.uuid,
+                SelectedKind::BusEntry,
+                super::bus_entry::bus_entry_aabb(e),
+            );
+        }
+        for s in &sheet.symbols {
+            // Always index a symbol — even when its lib_id is missing,
+            // the user must be able to click + delete + relink it.
+            // Missing-lib instances get a small fallback box.
+            let bbox = match snapshot.lib_symbol(&s.lib_id) {
+                Some(lib) => super::symbol::symbol_aabb(s, lib),
+                None => super::symbol::missing_symbol_aabb(s),
             };
-            let dx = wx - cx;
-            let dy = wy - cy;
-            let d = (dx * dx + dy * dy).sqrt();
-            if (d - r).abs() > tol {
-                return None;
+            index.insert(s.uuid, SelectedKind::Symbol, bbox);
+
+            // Per-field index entries so SymbolRefField / SymbolValField
+            // selections (e.g. field-drag) can hit-test independently
+            // from the symbol body.
+            if let Some(field_box) = super::symbol::ref_field_aabb(s) {
+                index.insert(s.uuid, SelectedKind::SymbolRefField, field_box);
             }
-            // Angular sweep check: click angle must fall within the
-            // arc's span, where the span is determined by walking
-            // from start → end via mid (same direction used by the
-            // renderer).
-            let click_angle = dy.atan2(dx);
-            let sa = (start.y - cy).atan2(start.x - cx);
-            let ma = (mid.y - cy).atan2(mid.x - cx);
-            let ea = (end.y - cy).atan2(end.x - cx);
-            if angle_in_arc_sweep(click_angle, sa, ma, ea) {
-                Some(*uuid)
-            } else {
-                None
+            if let Some(field_box) = super::symbol::val_field_aabb(s) {
+                index.insert(s.uuid, SelectedKind::SymbolValField, field_box);
             }
         }
-        SchDrawing::Polyline {
-            uuid, points, fill, ..
-        } => {
-            if points.len() < 2 {
-                return None;
+        // Hierarchical child sheets and their pins.
+        for cs in &sheet.child_sheets {
+            index.insert(
+                cs.uuid,
+                SelectedKind::ChildSheet,
+                super::symbol::child_sheet_aabb(cs),
+            );
+            for pin in &cs.pins {
+                index.insert(
+                    pin.uuid,
+                    SelectedKind::SheetPin,
+                    super::symbol::sheet_pin_aabb(pin),
+                );
             }
-            let filled = !matches!(fill, signex_types::schematic::FillType::None);
-            if filled {
-                let poly: Vec<(f64, f64)> = points.iter().map(|p| (p.x, p.y)).collect();
-                if point_in_polygon(wx, wy, &poly) {
-                    return Some(*uuid);
-                }
-            }
-            for pair in points.windows(2) {
-                if dist_point_segment(wx, wy, pair[0].x, pair[0].y, pair[1].x, pair[1].y)
-                    .map(|d| d <= tol)
-                    .unwrap_or(false)
-                {
-                    return Some(*uuid);
-                }
-            }
-            None
         }
-    }
-}
-
-/// Altium-style rubber-band selection mode. Governs how
-/// `hit_test_rect` classifies hits relative to the drag rectangle.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum SelectionMode {
-    /// Only items fully contained within the rectangle are selected
-    /// (Altium's "Window" / default left-to-right drag).
-    #[default]
-    Inside,
-    /// Any item that the rectangle touches is selected — point items
-    /// at least partially inside the box and segments (wires/buses)
-    /// that cross the box boundary. Matches Altium's "Crossing" /
-    /// right-to-left drag semantics.
-    Touching,
-}
-
-/// Find all elements within a rectangular region (rubber-band
-/// selection). Uses `SelectionMode::Inside` for backwards compatibility.
-pub fn hit_test_rect(sheet: &SchematicRenderSnapshot, rect: &Aabb) -> Vec<SelectedItem> {
-    hit_test_rect_mode(sheet, rect, SelectionMode::Inside)
-}
-
-/// Ray-cast point-in-polygon test. `poly` is a closed polygon in CCW
-/// or CW order (direction doesn't matter). Uses the even-odd rule.
-fn point_in_polygon(px: f64, py: f64, poly: &[(f64, f64)]) -> bool {
-    if poly.len() < 3 {
-        return false;
-    }
-    let mut inside = false;
-    let n = poly.len();
-    let mut j = n - 1;
-    for i in 0..n {
-        let (xi, yi) = poly[i];
-        let (xj, yj) = poly[j];
-        // Even-odd ray cast. The `(yi > py) != (yj > py)` guard
-        // guarantees `py` lies strictly between yi and yj, so
-        // `yj - yi != 0` — no epsilon needed.
-        if ((yi > py) != (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi) {
-            inside = !inside;
+        for j in &sheet.junctions {
+            index.insert(
+                j.uuid,
+                SelectedKind::Junction,
+                super::junction::junction_aabb(j),
+            );
         }
-        j = i;
+        for nc in &sheet.no_connects {
+            index.insert(
+                nc.uuid,
+                SelectedKind::NoConnect,
+                super::no_connect::no_connect_aabb(nc),
+            );
+        }
+        for l in &sheet.labels {
+            index.insert(l.uuid, SelectedKind::Label, super::label::label_aabb(l));
+        }
+        for n in &sheet.text_notes {
+            index.insert(
+                n.uuid,
+                SelectedKind::TextNote,
+                super::text::text_note_aabb(n),
+            );
+        }
+        index
     }
-    inside
-}
 
-/// Segment-segment intersection test (ignoring endpoint-touch since
-/// lasso polygons don't usually touch wire endpoints exactly — if
-/// they do, the containment test covers it).
-fn segments_intersect(p1: (f64, f64), p2: (f64, f64), p3: (f64, f64), p4: (f64, f64)) -> bool {
-    let d = (p4.0 - p3.0) * (p1.1 - p3.1) - (p4.1 - p3.1) * (p1.0 - p3.0);
-    let e = (p2.0 - p1.0) * (p1.1 - p3.1) - (p2.1 - p1.1) * (p1.0 - p3.0);
-    let f = (p4.0 - p3.0) * (p2.1 - p1.1) - (p4.1 - p3.1) * (p2.0 - p1.0);
-    if f.abs() < 1e-12 {
-        return false;
-    }
-    let t = d / f;
-    let u = e / f;
-    (0.0..=1.0).contains(&t) && (0.0..=1.0).contains(&u)
-}
-
-/// Altium-style lasso selection. `polygon` is the closed polygon in
-/// world space (the lasso's vertex list, implicitly closed — the last
-/// edge is `polygon[n-1] → polygon[0]`). Items with a point inside the
-/// polygon select; wire/bus segments select if either endpoint is
-/// inside OR any polygon edge crosses the segment.
-pub fn hit_test_polygon(
-    sheet: &SchematicRenderSnapshot,
-    polygon: &[(f64, f64)],
-) -> Vec<SelectedItem> {
-    if polygon.len() < 3 {
-        return Vec::new();
-    }
-    let edges: Vec<((f64, f64), (f64, f64))> = (0..polygon.len())
-        .map(|i| (polygon[i], polygon[(i + 1) % polygon.len()]))
-        .collect();
-    let segment_crosses_polygon = |a: (f64, f64), b: (f64, f64)| -> bool {
-        edges
+    /// World-space bounding box of an indexed `SelectedItem`. `None`
+    /// when the item isn't in the index.
+    pub fn aabb_of(&self, item: &SelectedItem) -> Option<Aabb> {
+        self.entries
             .iter()
-            .any(|(e1, e2)| segments_intersect(a, b, *e1, *e2))
-    };
-    let mut result = Vec::new();
-    for sym in &sheet.symbols {
-        if point_in_polygon(sym.position.x, sym.position.y, polygon) {
-            result.push(SelectedItem::new(sym.uuid, SelectedKind::Symbol));
+            .find(|e| e.item == *item)
+            .map(|e| e.bbox)
+    }
+
+    fn insert(&mut self, uuid: uuid::Uuid, kind: SelectedKind, bbox: Aabb) {
+        let z = self.entries.len();
+        self.entries.push(HitEntry {
+            item: SelectedItem::new(uuid, kind),
+            bbox,
+            z,
+        });
+        for (cx, cy) in cells_for_aabb(&bbox) {
+            self.buckets.entry((cx, cy)).or_default().push(z);
         }
     }
-    for w in &sheet.wires {
-        let a = (w.start.x, w.start.y);
-        let b = (w.end.x, w.end.y);
-        if point_in_polygon(a.0, a.1, polygon)
-            || point_in_polygon(b.0, b.1, polygon)
-            || segment_crosses_polygon(a, b)
-        {
-            result.push(SelectedItem::new(w.uuid, SelectedKind::Wire));
-        }
-    }
-    for bus in &sheet.buses {
-        let a = (bus.start.x, bus.start.y);
-        let b = (bus.end.x, bus.end.y);
-        if point_in_polygon(a.0, a.1, polygon)
-            || point_in_polygon(b.0, b.1, polygon)
-            || segment_crosses_polygon(a, b)
-        {
-            result.push(SelectedItem::new(bus.uuid, SelectedKind::Bus));
-        }
-    }
-    for j in &sheet.junctions {
-        if point_in_polygon(j.position.x, j.position.y, polygon) {
-            result.push(SelectedItem::new(j.uuid, SelectedKind::Junction));
-        }
-    }
-    for nc in &sheet.no_connects {
-        if point_in_polygon(nc.position.x, nc.position.y, polygon) {
-            result.push(SelectedItem::new(nc.uuid, SelectedKind::NoConnect));
-        }
-    }
-    for lbl in &sheet.labels {
-        if point_in_polygon(lbl.position.x, lbl.position.y, polygon) {
-            result.push(SelectedItem::new(lbl.uuid, SelectedKind::Label));
-        }
-    }
-    for tn in &sheet.text_notes {
-        if point_in_polygon(tn.position.x, tn.position.y, polygon) {
-            result.push(SelectedItem::new(tn.uuid, SelectedKind::TextNote));
-        }
-    }
-    // Child sheets have real extent — a lasso that clips through
-    // a sheet symbol should pick it up even when the center is
-    // outside. Test every corner + every edge against the lasso.
-    for cs in &sheet.child_sheets {
-        for pin in &cs.pins {
-            if point_in_polygon(pin.position.x, pin.position.y, polygon) {
-                result.push(SelectedItem::new(pin.uuid, SelectedKind::SheetPin));
+
+    fn entries_in_aabb(&self, bbox: &Aabb) -> Vec<&HitEntry> {
+        // HashSet dedup keeps the spatial-hash benefit on dense queries
+        // — a Vec.contains scan would be O(k²) once large primitives
+        // span many cells, undoing the bucketing.
+        let mut seen: HashSet<usize> = HashSet::new();
+        for cell in cells_for_aabb(bbox) {
+            if let Some(ids) = self.buckets.get(&cell) {
+                for id in ids {
+                    seen.insert(*id);
+                }
             }
         }
-        let x0 = cs.position.x;
-        let y0 = cs.position.y;
-        let x1 = x0 + cs.size.0;
-        let y1 = y0 + cs.size.1;
-        let corners = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)];
-        let any_corner_in = corners
-            .iter()
-            .any(|&(x, y)| point_in_polygon(x, y, polygon));
-        let any_edge_crosses = corners
-            .iter()
-            .zip(corners.iter().cycle().skip(1))
-            .any(|(&a, &b)| segment_crosses_polygon(a, b));
-        if any_corner_in || any_edge_crosses {
-            result.push(SelectedItem::new(cs.uuid, SelectedKind::ChildSheet));
-        }
+        seen.iter().filter_map(|i| self.entries.get(*i)).collect()
     }
-    // Symbol ref/val fields — lasso independently picks detached
-    // fields dragged away from their body so rename workflows
-    // aren't stranded when the field has moved.
-    for sym in &sheet.symbols {
-        if let Some(ref tp) = sym.ref_text
-            && !tp.hidden
-            && point_in_polygon(tp.position.x, tp.position.y, polygon)
-        {
-            result.push(SelectedItem::new(sym.uuid, SelectedKind::SymbolRefField));
-        }
-        if let Some(ref tp) = sym.val_text
-            && !tp.hidden
-            && point_in_polygon(tp.position.x, tp.position.y, polygon)
-        {
-            result.push(SelectedItem::new(sym.uuid, SelectedKind::SymbolValField));
-        }
-    }
-    // Graphic drawings — lasso picks any drawing whose endpoints /
-    // bounds overlap the polygon or whose edges cross it.
-    for d in &sheet.drawings {
-        use signex_types::schematic::SchDrawing;
-        let (hit, uuid) = match d {
-            SchDrawing::Line {
-                uuid, start, end, ..
-            } => {
-                let inside = point_in_polygon(start.x, start.y, polygon)
-                    || point_in_polygon(end.x, end.y, polygon);
-                let crosses = segment_crosses_polygon((start.x, start.y), (end.x, end.y));
-                (inside || crosses, *uuid)
-            }
-            SchDrawing::Rect {
-                uuid, start, end, ..
-            } => {
-                let x0 = start.x.min(end.x);
-                let x1 = start.x.max(end.x);
-                let y0 = start.y.min(end.y);
-                let y1 = start.y.max(end.y);
-                let corners = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)];
-                let any_corner_in = corners
-                    .iter()
-                    .any(|&(x, y)| point_in_polygon(x, y, polygon));
-                let any_edge_crosses = corners
-                    .iter()
-                    .zip(corners.iter().cycle().skip(1))
-                    .any(|(&a, &b)| segment_crosses_polygon(a, b));
-                (any_corner_in || any_edge_crosses, *uuid)
-            }
-            SchDrawing::Circle { uuid, center, .. } => {
-                (point_in_polygon(center.x, center.y, polygon), *uuid)
-            }
-            SchDrawing::Arc {
-                uuid,
-                start,
-                mid,
-                end,
-                ..
-            } => {
-                let inside = point_in_polygon(start.x, start.y, polygon)
-                    || point_in_polygon(mid.x, mid.y, polygon)
-                    || point_in_polygon(end.x, end.y, polygon);
-                (inside, *uuid)
-            }
-            SchDrawing::Polyline { uuid, points, .. } => {
-                let any_inside = points.iter().any(|p| point_in_polygon(p.x, p.y, polygon));
-                let any_crosses = points.windows(2).any(|pair| {
-                    segment_crosses_polygon((pair[0].x, pair[0].y), (pair[1].x, pair[1].y))
-                });
-                (any_inside || any_crosses, *uuid)
-            }
-        };
-        if hit {
-            result.push(SelectedItem::new(uuid, SelectedKind::Drawing));
-        }
-    }
-    result
 }
 
-/// Returns true if a segment from `(x1,y1)` to `(x2,y2)` overlaps
-/// the rectangle at all — either endpoint inside, or the segment
-/// crossing any of the four edges.
-fn seg_overlaps_rect(rect: &Aabb, x1: f64, y1: f64, x2: f64, y2: f64) -> bool {
-    if rect.contains(x1, y1) || rect.contains(x2, y2) {
-        return true;
-    }
-    // Liang-Barsky line-clipping: solve the parametric line against
-    // each rect edge; segment crosses when the accepted t-range is
-    // non-empty within [0,1].
-    let dx = x2 - x1;
-    let dy = y2 - y1;
-    let p = [-dx, dx, -dy, dy];
-    let q = [
-        x1 - rect.min_x,
-        rect.max_x - x1,
-        y1 - rect.min_y,
-        rect.max_y - y1,
-    ];
-    let mut u1 = 0.0_f64;
-    let mut u2 = 1.0_f64;
-    for i in 0..4 {
-        if p[i] == 0.0 {
-            if q[i] < 0.0 {
-                return false;
-            }
-        } else {
-            let t = q[i] / p[i];
-            if p[i] < 0.0 {
-                if t > u2 {
-                    return false;
-                }
-                if t > u1 {
-                    u1 = t;
-                }
-            } else {
-                if t < u1 {
-                    return false;
-                }
-                if t < u2 {
-                    u2 = t;
-                }
-            }
+fn cells_for_aabb(bbox: &Aabb) -> Vec<(i32, i32)> {
+    let cell = |v: f64| (v / CELL_SIZE_MM).floor() as i32;
+    let x0 = cell(bbox.min_x);
+    let x1 = cell(bbox.max_x);
+    let y0 = cell(bbox.min_y);
+    let y1 = cell(bbox.max_y);
+    let mut cells = Vec::new();
+    for y in y0..=y1 {
+        for x in x0..=x1 {
+            cells.push((x, y));
         }
     }
-    u1 <= u2
+    cells
 }
 
-/// Mode-aware rubber-band selection.
-pub fn hit_test_rect_mode(
-    sheet: &SchematicRenderSnapshot,
-    rect: &Aabb,
-    mode: SelectionMode,
-) -> Vec<SelectedItem> {
-    let pt_match = |inside: bool| -> bool {
-        // Both modes treat point items the same — inside the box.
-        // `Touching` differs from `Inside` only for segments, where
-        // crossing the boundary counts.
-        let _ = mode;
-        inside
-    };
-    let seg_match = |a_in: bool, b_in: bool, crosses: bool| -> bool {
-        match mode {
-            SelectionMode::Inside => a_in && b_in,
-            SelectionMode::Touching => a_in || b_in || crosses,
-        }
-    };
-    let mut result = Vec::new();
-    for sym in &sheet.symbols {
-        if pt_match(rect.contains(sym.position.x, sym.position.y)) {
-            result.push(SelectedItem::new(sym.uuid, SelectedKind::Symbol));
-        }
-    }
-    for w in &sheet.wires {
-        let a = rect.contains(w.start.x, w.start.y);
-        let b = rect.contains(w.end.x, w.end.y);
-        let crosses = matches!(mode, SelectionMode::Touching)
-            && seg_overlaps_rect(rect, w.start.x, w.start.y, w.end.x, w.end.y);
-        if seg_match(a, b, crosses) {
-            result.push(SelectedItem::new(w.uuid, SelectedKind::Wire));
-        }
-    }
-    for bus in &sheet.buses {
-        let a = rect.contains(bus.start.x, bus.start.y);
-        let b = rect.contains(bus.end.x, bus.end.y);
-        let crosses = matches!(mode, SelectionMode::Touching)
-            && seg_overlaps_rect(rect, bus.start.x, bus.start.y, bus.end.x, bus.end.y);
-        if seg_match(a, b, crosses) {
-            result.push(SelectedItem::new(bus.uuid, SelectedKind::Bus));
-        }
-    }
-    for j in &sheet.junctions {
-        if pt_match(rect.contains(j.position.x, j.position.y)) {
-            result.push(SelectedItem::new(j.uuid, SelectedKind::Junction));
-        }
-    }
-    for nc in &sheet.no_connects {
-        if pt_match(rect.contains(nc.position.x, nc.position.y)) {
-            result.push(SelectedItem::new(nc.uuid, SelectedKind::NoConnect));
-        }
-    }
-    for lbl in &sheet.labels {
-        if pt_match(rect.contains(lbl.position.x, lbl.position.y)) {
-            result.push(SelectedItem::new(lbl.uuid, SelectedKind::Label));
-        }
-    }
-    for tn in &sheet.text_notes {
-        if pt_match(rect.contains(tn.position.x, tn.position.y)) {
-            result.push(SelectedItem::new(tn.uuid, SelectedKind::TextNote));
-        }
-    }
-    for cs in &sheet.child_sheets {
-        for pin in &cs.pins {
-            if pt_match(rect.contains(pin.position.x, pin.position.y)) {
-                result.push(SelectedItem::new(pin.uuid, SelectedKind::SheetPin));
-            }
-        }
-        let cx = cs.position.x + cs.size.0 / 2.0;
-        let cy = cs.position.y + cs.size.1 / 2.0;
-        if pt_match(rect.contains(cx, cy)) {
-            result.push(SelectedItem::new(cs.uuid, SelectedKind::ChildSheet));
-        }
-    }
-    for d in &sheet.drawings {
-        if drawing_in_rect(d, rect, mode) {
-            let uuid = drawing_uuid(d);
-            result.push(SelectedItem::new(uuid, SelectedKind::Drawing));
-        }
-    }
-    result
-}
-
-fn drawing_uuid(d: &signex_types::schematic::SchDrawing) -> uuid::Uuid {
-    use signex_types::schematic::SchDrawing;
+#[inline]
+fn drawing_uuid(d: &SchDrawing) -> uuid::Uuid {
     match d {
         SchDrawing::Line { uuid, .. }
         | SchDrawing::Rect { uuid, .. }
@@ -691,364 +201,362 @@ fn drawing_uuid(d: &signex_types::schematic::SchDrawing) -> uuid::Uuid {
     }
 }
 
-fn drawing_in_rect(
-    d: &signex_types::schematic::SchDrawing,
+// ---------------------------------------------------------------------------
+// v0.11 → v0.12 compatibility shims.
+//
+// v0.11 callers reach this module directly with a SchematicSheet
+// (which now `pub type` aliases to SchematicRenderSnapshot). To keep
+// those call sites compiling, the v0.11 entry points are provided as
+// thin shims that build a fresh `HitIndex` per call. New code should
+// construct the index once and call `point` / `box_query` repeatedly.
+// ---------------------------------------------------------------------------
+
+/// **Deprecated v0.12 shim.** Builds a `HitIndex` per call and runs a
+/// point query. New code should keep an index alive across frames.
+#[deprecated(
+    since = "0.12.0",
+    note = "build a HitIndex once and call hit_test_point"
+)]
+pub fn hit_test(
+    sheet: &signex_types::schematic::SchematicSheet,
+    world_x: f64,
+    world_y: f64,
+) -> Option<SelectedItem> {
+    let theme = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+    let snap = SchematicSnapshot::new(sheet, &theme);
+    let index = HitIndex::build(&snap);
+    point(&index, &snap, Point::new(world_x, world_y), 0.5)
+}
+
+/// **Deprecated v0.12 shim.** Polygon hit-test approximated as an AABB
+/// crossing query. Accepts any iterable of `(x, y)` pairs to match
+/// the v0.11 call shape (signex-app builds polygons as `Vec<(f64, f64)>`).
+#[deprecated(since = "0.12.0", note = "build a HitIndex once and call hit_test_box")]
+pub fn hit_test_polygon(
+    sheet: &signex_types::schematic::SchematicSheet,
+    poly: &[(f64, f64)],
+) -> Vec<SelectedItem> {
+    if poly.is_empty() {
+        return Vec::new();
+    }
+    let mut min_x = f64::INFINITY;
+    let mut min_y = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+    for (px, py) in poly {
+        min_x = min_x.min(*px);
+        min_y = min_y.min(*py);
+        max_x = max_x.max(*px);
+        max_y = max_y.max(*py);
+    }
+    let theme = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+    let snap = SchematicSnapshot::new(sheet, &theme);
+    let index = HitIndex::build(&snap);
+    box_query(
+        &index,
+        &snap,
+        Aabb::new(min_x, min_y, max_x, max_y),
+        SelectionMode::Touching,
+    )
+}
+
+/// **Deprecated v0.12 shim.** Rect-mode hit test — takes an Aabb and
+/// `SelectionMode` directly, matching the v0.11 call shape.
+#[deprecated(since = "0.12.0", note = "build a HitIndex once and call hit_test_box")]
+pub fn hit_test_rect_mode(
+    sheet: &signex_types::schematic::SchematicSheet,
     rect: &Aabb,
     mode: SelectionMode,
+) -> Vec<SelectedItem> {
+    let theme = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+    let snap = SchematicSnapshot::new(sheet, &theme);
+    let index = HitIndex::build(&snap);
+    box_query(&index, &snap, *rect, mode)
+}
+
+/// Public hit-test entry — see [`super::hit_test_point`].
+pub fn point(
+    index: &HitIndex,
+    snapshot: &SchematicSnapshot<'_>,
+    point_world: Point,
+    tolerance_world: f64,
+) -> Option<SelectedItem> {
+    let pad = tolerance_world.max(0.0);
+    let query = Aabb::new(
+        point_world.x - pad,
+        point_world.y - pad,
+        point_world.x + pad,
+        point_world.y + pad,
+    );
+    let mut candidates = index.entries_in_aabb(&query);
+    // Topmost first.
+    candidates.sort_by(|a, b| b.z.cmp(&a.z));
+    candidates
+        .into_iter()
+        .find(|entry| primitive_hit_point(snapshot, entry.item, point_world, tolerance_world))
+        .map(|entry| entry.item)
+}
+
+/// Public box hit-test entry — see [`super::hit_test_box`].
+pub fn box_query(
+    index: &HitIndex,
+    snapshot: &SchematicSnapshot<'_>,
+    box_world: Aabb,
+    mode: SelectionMode,
+) -> Vec<SelectedItem> {
+    let mut hits: Vec<&HitEntry> = index.entries_in_aabb(&box_world);
+    hits.sort_by_key(|e| e.z);
+    hits.into_iter()
+        .filter(|entry| primitive_hit_box(snapshot, entry.item, &entry.bbox, &box_world, mode))
+        .map(|entry| entry.item)
+        .collect()
+}
+
+fn primitive_hit_point(
+    snapshot: &SchematicSnapshot<'_>,
+    item: SelectedItem,
+    p: Point,
+    tol: f64,
 ) -> bool {
-    use signex_types::schematic::SchDrawing;
-    let touching = matches!(mode, SelectionMode::Touching);
-    match d {
-        SchDrawing::Line { start, end, .. } => {
-            let a = rect.contains(start.x, start.y);
-            let b = rect.contains(end.x, end.y);
-            let crosses = touching && seg_overlaps_rect(rect, start.x, start.y, end.x, end.y);
-            match mode {
-                SelectionMode::Inside => a && b,
-                SelectionMode::Touching => a || b || crosses,
-            }
+    match item.kind {
+        SelectedKind::Wire => snapshot
+            .sheet
+            .wires
+            .iter()
+            .find(|w| w.uuid == item.uuid)
+            .map(|w| point_to_segment_dist(p.x, p.y, w.start.x, w.start.y, w.end.x, w.end.y) <= tol)
+            .unwrap_or(false),
+        SelectedKind::Bus => snapshot
+            .sheet
+            .buses
+            .iter()
+            .find(|b| b.uuid == item.uuid)
+            .map(|b| point_to_segment_dist(p.x, p.y, b.start.x, b.start.y, b.end.x, b.end.y) <= tol)
+            .unwrap_or(false),
+        SelectedKind::BusEntry => snapshot
+            .sheet
+            .bus_entries
+            .iter()
+            .find(|e| e.uuid == item.uuid)
+            .map(|e| {
+                let end = Point::new(e.position.x + e.size.0, e.position.y + e.size.1);
+                point_to_segment_dist(p.x, p.y, e.position.x, e.position.y, end.x, end.y) <= tol
+            })
+            .unwrap_or(false),
+        SelectedKind::Junction => snapshot
+            .sheet
+            .junctions
+            .iter()
+            .find(|j| j.uuid == item.uuid)
+            .map(|j| {
+                let r = super::junction::effective_diameter_mm(j) * 0.5 + tol;
+                ((j.position.x - p.x).powi(2) + (j.position.y - p.y).powi(2)).sqrt() <= r
+            })
+            .unwrap_or(false),
+        SelectedKind::NoConnect => snapshot
+            .sheet
+            .no_connects
+            .iter()
+            .find(|n| n.uuid == item.uuid)
+            .map(|n| {
+                let h = super::no_connect::NO_CONNECT_HALF_SIZE_MM + tol;
+                (p.x - n.position.x).abs() <= h && (p.y - n.position.y).abs() <= h
+            })
+            .unwrap_or(false),
+        SelectedKind::Symbol
+        | SelectedKind::ChildSheet
+        | SelectedKind::Label
+        | SelectedKind::TextNote
+        | SelectedKind::Drawing
+        | SelectedKind::SheetPin
+        | SelectedKind::SymbolRefField
+        | SelectedKind::SymbolValField => {
+            // For body-shaped primitives we use AABB containment as a
+            // first-pass hit. Future tuning can replace each arm with
+            // a tighter shape test (per-pixel overlap, body polygon).
+            let bbox = match item.kind {
+                SelectedKind::Symbol => snapshot
+                    .sheet
+                    .symbols
+                    .iter()
+                    .find(|s| s.uuid == item.uuid)
+                    .map(|s| match snapshot.lib_symbol(&s.lib_id) {
+                        Some(lib) => super::symbol::symbol_aabb(s, lib),
+                        None => super::symbol::missing_symbol_aabb(s),
+                    }),
+                SelectedKind::SymbolRefField => snapshot
+                    .sheet
+                    .symbols
+                    .iter()
+                    .find(|s| s.uuid == item.uuid)
+                    .and_then(super::symbol::ref_field_aabb),
+                SelectedKind::SymbolValField => snapshot
+                    .sheet
+                    .symbols
+                    .iter()
+                    .find(|s| s.uuid == item.uuid)
+                    .and_then(super::symbol::val_field_aabb),
+                SelectedKind::Label => snapshot
+                    .sheet
+                    .labels
+                    .iter()
+                    .find(|l| l.uuid == item.uuid)
+                    .map(super::label::label_aabb),
+                SelectedKind::TextNote => snapshot
+                    .sheet
+                    .text_notes
+                    .iter()
+                    .find(|n| n.uuid == item.uuid)
+                    .map(super::text::text_note_aabb),
+                SelectedKind::Drawing => snapshot
+                    .sheet
+                    .drawings
+                    .iter()
+                    .find(|d| drawing_uuid(d) == item.uuid)
+                    .map(super::drawing::drawing_aabb),
+                SelectedKind::ChildSheet => snapshot
+                    .sheet
+                    .child_sheets
+                    .iter()
+                    .find(|cs| cs.uuid == item.uuid)
+                    .map(super::symbol::child_sheet_aabb),
+                SelectedKind::SheetPin => snapshot
+                    .sheet
+                    .child_sheets
+                    .iter()
+                    .find_map(|cs| cs.pins.iter().find(|p| p.uuid == item.uuid))
+                    .map(super::symbol::sheet_pin_aabb),
+                _ => None,
+            };
+            bbox.map(|b| b.expand(tol).contains(p.x, p.y))
+                .unwrap_or(false)
         }
-        SchDrawing::Rect { start, end, .. } => {
-            let x0 = start.x.min(end.x);
-            let x1 = start.x.max(end.x);
-            let y0 = start.y.min(end.y);
-            let y1 = start.y.max(end.y);
-            match mode {
-                SelectionMode::Inside => rect.contains(x0, y0) && rect.contains(x1, y1),
-                SelectionMode::Touching => {
-                    // Overlap test between rect bboxes.
-                    !(rect.max_x < x0 || rect.min_x > x1 || rect.max_y < y0 || rect.min_y > y1)
-                }
-            }
+    }
+}
+
+fn primitive_hit_box(
+    _snapshot: &SchematicSnapshot<'_>,
+    _item: SelectedItem,
+    item_bbox: &Aabb,
+    box_world: &Aabb,
+    mode: SelectionMode,
+) -> bool {
+    match mode {
+        SelectionMode::Single => box_world.contains(
+            (item_bbox.min_x + item_bbox.max_x) * 0.5,
+            (item_bbox.min_y + item_bbox.max_y) * 0.5,
+        ),
+        SelectionMode::Inside => {
+            // Item fully inside the query box.
+            box_world.min_x <= item_bbox.min_x
+                && box_world.max_x >= item_bbox.max_x
+                && box_world.min_y <= item_bbox.min_y
+                && box_world.max_y >= item_bbox.max_y
         }
-        SchDrawing::Circle { center, radius, .. } => {
-            match mode {
-                SelectionMode::Inside => {
-                    rect.contains(center.x - *radius, center.y - *radius)
-                        && rect.contains(center.x + *radius, center.y + *radius)
-                }
-                SelectionMode::Touching => {
-                    // Circle bbox overlaps rect.
-                    let cx0 = center.x - *radius;
-                    let cx1 = center.x + *radius;
-                    let cy0 = center.y - *radius;
-                    let cy1 = center.y + *radius;
-                    !(rect.max_x < cx0 || rect.min_x > cx1 || rect.max_y < cy0 || rect.min_y > cy1)
-                }
-            }
-        }
-        SchDrawing::Arc {
-            start, mid, end, ..
-        } => {
-            let a = rect.contains(start.x, start.y);
-            let b = rect.contains(mid.x, mid.y);
-            let c = rect.contains(end.x, end.y);
-            match mode {
-                SelectionMode::Inside => a && b && c,
-                SelectionMode::Touching => {
-                    a || b
-                        || c
-                        || seg_overlaps_rect(rect, start.x, start.y, mid.x, mid.y)
-                        || seg_overlaps_rect(rect, mid.x, mid.y, end.x, end.y)
-                }
-            }
-        }
-        SchDrawing::Polyline { points, .. } => {
-            let all_inside = points.iter().all(|p| rect.contains(p.x, p.y));
-            match mode {
-                SelectionMode::Inside => all_inside,
-                SelectionMode::Touching => {
-                    if points.iter().any(|p| rect.contains(p.x, p.y)) {
-                        return true;
-                    }
-                    points.windows(2).any(|pair| {
-                        seg_overlaps_rect(rect, pair[0].x, pair[0].y, pair[1].x, pair[1].y)
-                    })
-                }
-            }
-        }
+        SelectionMode::Touching => super::util::aabbs_overlap(item_bbox, box_world),
     }
 }
 
-fn hit_wire(w: &Wire, wx: f64, wy: f64) -> bool {
-    point_to_segment_dist(wx, wy, w.start.x, w.start.y, w.end.x, w.end.y) < HIT_TOLERANCE
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signex_types::schematic::{SchematicSheet, Wire};
+    use uuid::Uuid;
 
-fn hit_bus(b: &Bus, wx: f64, wy: f64) -> bool {
-    point_to_segment_dist(wx, wy, b.start.x, b.start.y, b.end.x, b.end.y) < HIT_TOLERANCE * 1.5
-}
-
-fn hit_bus_entry(be: &BusEntry, wx: f64, wy: f64) -> bool {
-    let ex = be.position.x + be.size.0;
-    let ey = be.position.y + be.size.1;
-    point_to_segment_dist(wx, wy, be.position.x, be.position.y, ex, ey) < HIT_TOLERANCE
-}
-
-fn hit_junction(j: &Junction, wx: f64, wy: f64) -> bool {
-    let r = if j.diameter > 0.0 {
-        j.diameter / 2.0
-    } else {
-        0.5
-    };
-    let dx = wx - j.position.x;
-    let dy = wy - j.position.y;
-    (dx * dx + dy * dy).sqrt() < r + HIT_TOLERANCE
-}
-
-fn hit_no_connect(nc: &NoConnect, wx: f64, wy: f64) -> bool {
-    let dx = (wx - nc.position.x).abs();
-    let dy = (wy - nc.position.y).abs();
-    dx < HIT_TOLERANCE * 1.5 && dy < HIT_TOLERANCE * 1.5
-}
-
-fn hit_label(lbl: &Label, wx: f64, wy: f64) -> bool {
-    // Small hit tolerance so clicks near the glyph edges still register,
-    // without bloating the visible selection rectangle.
-    super::label::label_text_aabb(lbl)
-        .expand(0.3)
-        .contains(wx, wy)
-}
-
-fn hit_text_note(tn: &TextNote, wx: f64, wy: f64) -> bool {
-    super::text::text_note_aabb(tn).expand(0.5).contains(wx, wy)
-}
-
-fn hit_child_sheet(cs: &ChildSheet, wx: f64, wy: f64) -> bool {
-    Aabb::new(
-        cs.position.x,
-        cs.position.y,
-        cs.position.x + cs.size.0,
-        cs.position.y + cs.size.1,
-    )
-    .contains(wx, wy)
-}
-
-fn hit_child_sheet_pin(pin: &SheetPin, wx: f64, wy: f64) -> bool {
-    let dx = wx - pin.position.x;
-    let dy = wy - pin.position.y;
-    (dx * dx + dy * dy).sqrt() <= HIT_TOLERANCE
-}
-
-/// Hit-test a text property (reference or value field).
-/// Approximates the text bounding box from character count and font size.
-/// Uses `field_display_pos` so the hit region matches where the text is rendered.
-fn hit_text_prop(content: &str, prop: &TextProp, sym: &Symbol, wx: f64, wy: f64) -> bool {
-    let font_h = prop.font_size.max(1.27);
-    let char_count = content.chars().count() as f64;
-    // Iosevka is roughly 0.6× monospace: each char ≈ 0.6 × font_h wide.
-    let text_w = char_count * font_h * 0.6;
-    let half_h = font_h * 0.6;
-    let margin = 0.5;
-
-    // Use display position (TRANSFORM applied), not raw stored position.
-    let (disp_x, disp_y) = field_display_pos(&prop.position, sym);
-    let (draw_rotation, justify_h, _justify_v) = field_effective_style(prop, sym);
-
-    // Click relative to text anchor
-    let dx = wx - disp_x;
-    let dy = wy - disp_y;
-
-    // Undo the render rotation to map the click into unrotated text-local
-    // space. `draw_text_prop` rotates by `-draw_rotation.to_radians()` (Iced
-    // Y-down), so the inverse is the same sign: rotate the click-to-anchor
-    // vector by `-(-θ) = +θ` in lyon math = `-θ` in Iced-visual. Either way,
-    // `(ldx, ldy) = R(-θ) · (dx, dy)`.
-    let (ldx, ldy) = if draw_rotation.abs() > 0.1 {
-        let rad = -draw_rotation.to_radians();
-        let cos = rad.cos();
-        let sin = rad.sin();
-        (dx * cos + dy * sin, -dx * sin + dy * cos)
-    } else {
-        (dx, dy)
-    };
-
-    // Text-local bounding box (depends on justification)
-    let (x_lo, x_hi) = match justify_h {
-        HAlign::Left => (-margin, text_w + margin),
-        HAlign::Right => (-(text_w + margin), margin),
-        HAlign::Center => (-(text_w / 2.0 + margin), text_w / 2.0 + margin),
-    };
-
-    ldx >= x_lo && ldx <= x_hi && ldy >= -(half_h + margin) && ldy <= half_h + margin
-}
-
-/// Bounding-box hit test for built-in power ports (no lib_sym required).
-/// Matches the rough extents drawn by `draw_builtin_power` — pin stub + bar.
-fn hit_power_symbol(sym: &Symbol, wx: f64, wy: f64) -> bool {
-    // Direction mirrors draw_builtin_power's logic.
-    let id = sym.lib_id.to_lowercase();
-    let is_gnd_like = id.contains("gnd");
-    let dir: f64 = if is_gnd_like { -1.0 } else { 1.0 };
-    let pin_len = 1.27;
-    // Generous bounding region — a power port is a small glyph, and Altium
-    // picks it even with a coarse click; we match that feel.
-    let body_extent = 2.8;
-    let half_w = 2.2;
-    // In symbol-local coords: the body extends from 0 to (pin_len + body_extent) * dir
-    // on the Y axis (after Y-flip), and ±half_w on X.
-    let (lx, ly) = world_to_lib_space(sym, wx, wy);
-    let y_min = 0.0_f64.min((pin_len + body_extent) * dir);
-    let y_max = 0.0_f64.max((pin_len + body_extent) * dir);
-    Aabb::new(-half_w, y_min, half_w, y_max)
-        .expand(0.4)
-        .contains(lx, ly)
-}
-
-fn hit_symbol(sym: &Symbol, lib_sym: &LibSymbol, wx: f64, wy: f64) -> bool {
-    // Body-only AABB. Pins extend outward from the body; including them in
-    // the hit region lets clicks on wires (which share the pin endpoints)
-    // select the whole symbol. We test pins separately with line-distance so
-    // clicking *on* a pin still selects the symbol, but clicking on a wire
-    // beyond the pin tip falls through to wire hit-testing.
-    let mut min_x = f64::MAX;
-    let mut min_y = f64::MAX;
-    let mut max_x = f64::MIN;
-    let mut max_y = f64::MIN;
-    let mut has_body = false;
-
-    for lg in &lib_sym.graphics {
-        if lg.unit != 0 && lg.unit != sym.unit {
-            continue;
-        }
-        if lg.body_style != 0 && lg.body_style != 1 {
-            continue;
-        }
-        match &lg.graphic {
-            Graphic::Rectangle { start, end, .. } => {
-                ext(
-                    &mut min_x, &mut min_y, &mut max_x, &mut max_y, start.x, start.y,
-                );
-                ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, end.x, end.y);
-                has_body = true;
-            }
-            Graphic::Polyline { points, .. } => {
-                for p in points {
-                    ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, p.x, p.y);
-                    has_body = true;
-                }
-            }
-            Graphic::Circle { center, radius, .. } => {
-                ext(
-                    &mut min_x,
-                    &mut min_y,
-                    &mut max_x,
-                    &mut max_y,
-                    center.x - radius,
-                    center.y - radius,
-                );
-                ext(
-                    &mut min_x,
-                    &mut min_y,
-                    &mut max_x,
-                    &mut max_y,
-                    center.x + radius,
-                    center.y + radius,
-                );
-                has_body = true;
-            }
-            Graphic::Arc {
-                start, mid, end, ..
-            } => {
-                ext(
-                    &mut min_x, &mut min_y, &mut max_x, &mut max_y, start.x, start.y,
-                );
-                ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, mid.x, mid.y);
-                ext(&mut min_x, &mut min_y, &mut max_x, &mut max_y, end.x, end.y);
-                has_body = true;
-            }
-            _ => {}
+    fn snap_with_wires(wires: Vec<Wire>) -> SchematicSheet {
+        SchematicSheet {
+            uuid: Uuid::new_v4(),
+            version: 0,
+            generator: String::new(),
+            generator_version: String::new(),
+            paper_size: String::new(),
+            root_sheet_page: "1".to_string(),
+            symbols: Vec::new(),
+            wires,
+            junctions: Vec::new(),
+            labels: Vec::new(),
+            child_sheets: Vec::new(),
+            no_connects: Vec::new(),
+            text_notes: Vec::new(),
+            buses: Vec::new(),
+            bus_entries: Vec::new(),
+            drawings: Vec::new(),
+            no_erc_directives: Vec::new(),
+            title_block: Default::default(),
+            lib_symbols: Default::default(),
         }
     }
 
-    // No body graphics at all (rare): fall back to small AABB around anchor.
-    if !has_body {
-        let aabb = Aabb::new(
-            sym.position.x - 2.54,
-            sym.position.y - 2.54,
-            sym.position.x + 2.54,
-            sym.position.y + 2.54,
-        );
-        return aabb.contains(wx, wy);
-    }
-
-    // Click in lib-local space.
-    let (lx, ly) = world_to_lib_space(sym, wx, wy);
-
-    // Primary: click inside the body rectangle (minimal padding).
-    if Aabb::new(min_x, min_y, max_x, max_y)
-        .expand(0.25)
-        .contains(lx, ly)
-    {
-        return true;
-    }
-
-    // Secondary: click near a pin line (stub between pin body-side point and
-    // pin tip). This keeps pin selection working without swallowing wires
-    // that simply share the pin endpoint.
-    for lp in &lib_sym.pins {
-        if lp.unit != 0 && lp.unit != sym.unit {
-            continue;
-        }
-        let p = &lp.pin;
-        if !p.visible {
-            continue;
-        }
-        let angle_rad = p.rotation.to_radians();
-        let end_x = p.position.x + p.length * angle_rad.cos();
-        let end_y = p.position.y + p.length * angle_rad.sin();
-        if point_to_segment_dist(lx, ly, p.position.x, p.position.y, end_x, end_y) <= 0.6 {
-            return true;
+    fn make_wire(start: (f64, f64), end: (f64, f64)) -> Wire {
+        Wire {
+            uuid: Uuid::new_v4(),
+            start: Point::new(start.0, start.1),
+            end: Point::new(end.0, end.1),
+            stroke_width: 0.0,
         }
     }
 
-    false
-}
-
-fn point_to_segment_dist(px: f64, py: f64, ax: f64, ay: f64, bx: f64, by: f64) -> f64 {
-    let dx = bx - ax;
-    let dy = by - ay;
-    let len_sq = dx * dx + dy * dy;
-    if len_sq < 1e-9 {
-        return ((px - ax).powi(2) + (py - ay).powi(2)).sqrt();
-    }
-    let t = ((px - ax) * dx + (py - ay) * dy) / len_sq;
-    let t = t.clamp(0.0, 1.0);
-    let cx = ax + t * dx;
-    let cy = ay + t * dy;
-    ((px - cx).powi(2) + (py - cy).powi(2)).sqrt()
-}
-
-/// Transform a world point into symbol library-local coordinate space.
-/// Exact inverse of `instance_transform` in symbol.rs:
-///   forward:  Y-flip → rotate(-θ) → mirror → translate
-///   inverse:  un-translate → un-mirror → rotate(+θ) → un-Y-flip
-fn world_to_lib_space(sym: &Symbol, wx: f64, wy: f64) -> (f64, f64) {
-    // Step 1: Un-translate
-    let mut dx = wx - sym.position.x;
-    let mut dy = wy - sym.position.y;
-
-    // Step 2: Un-mirror (mirrors are self-inverse, applied in reverse order)
-    if sym.mirror_y {
-        dx = -dx;
-    }
-    if sym.mirror_x {
-        dy = -dy;
+    #[test]
+    fn point_query_finds_wire_under_cursor() {
+        let w = make_wire((0.0, 0.0), (10.0, 0.0));
+        let target = w.uuid;
+        let sheet = snap_with_wires(vec![w]);
+        let theme = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+        let snap = SchematicSnapshot::new(&sheet, &theme);
+        let index = HitIndex::build(&snap);
+        let hit = point(&index, &snap, Point::new(5.0, 0.05), 0.5);
+        assert_eq!(hit.map(|i| i.uuid), Some(target));
     }
 
-    // Step 3: Rotate by +θ (inverse of rotate by -θ)
-    let rad = sym.rotation.to_radians();
-    let cos_a = rad.cos();
-    let sin_a = rad.sin();
-    let rx = dx * cos_a - dy * sin_a;
-    let ry = dx * sin_a + dy * cos_a;
+    #[test]
+    fn point_query_misses_when_outside_tolerance() {
+        let w = make_wire((0.0, 0.0), (10.0, 0.0));
+        let sheet = snap_with_wires(vec![w]);
+        let theme = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+        let snap = SchematicSnapshot::new(&sheet, &theme);
+        let index = HitIndex::build(&snap);
+        let hit = point(&index, &snap, Point::new(5.0, 5.0), 0.1);
+        assert!(hit.is_none());
+    }
 
-    // Step 4: Un-Y-flip
-    (rx, -ry)
-}
+    #[test]
+    fn box_query_enclosing_excludes_partially_overlapping_items() {
+        let inside = make_wire((1.0, 1.0), (2.0, 2.0));
+        let crossing = make_wire((0.5, 0.5), (5.0, 0.5));
+        let inside_uuid = inside.uuid;
+        let sheet = snap_with_wires(vec![inside, crossing]);
+        let theme = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+        let snap = SchematicSnapshot::new(&sheet, &theme);
+        let index = HitIndex::build(&snap);
+        let q = Aabb::new(0.0, 0.0, 3.0, 3.0);
+        let hits_enclose = box_query(&index, &snap, q, SelectionMode::Inside);
+        let hits_cross = box_query(&index, &snap, q, SelectionMode::Touching);
+        assert_eq!(hits_enclose.len(), 1);
+        assert_eq!(hits_enclose[0].uuid, inside_uuid);
+        assert_eq!(hits_cross.len(), 2);
+    }
 
-fn ext(min_x: &mut f64, min_y: &mut f64, max_x: &mut f64, max_y: &mut f64, x: f64, y: f64) {
-    *min_x = min_x.min(x);
-    *min_y = min_y.min(y);
-    *max_x = max_x.max(x);
-    *max_y = max_y.max(y);
+    #[test]
+    fn cells_for_aabb_returns_at_least_one_cell() {
+        let cells = cells_for_aabb(&Aabb::new(0.0, 0.0, 0.0, 0.0));
+        assert!(!cells.is_empty());
+    }
+
+    #[test]
+    fn dedup_returns_each_entry_once_when_query_spans_many_cells() {
+        // M-1 regression: the previous Vec.contains dedup was O(k²)
+        // and would also produce duplicates when a single primitive
+        // overlapped many cells. With HashSet dedup, a tall vertical
+        // wire spanning many cells still yields exactly one entry.
+        let tall = make_wire((0.0, 0.0), (0.0, 100.0));
+        let target = tall.uuid;
+        let sheet = snap_with_wires(vec![tall]);
+        let theme = signex_types::theme::canvas_colors(signex_types::theme::ThemeId::Signex);
+        let snap = SchematicSnapshot::new(&sheet, &theme);
+        let index = HitIndex::build(&snap);
+        let q = Aabb::new(-1.0, -1.0, 1.0, 101.0);
+        let hits = box_query(&index, &snap, q, SelectionMode::Touching);
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].uuid, target);
+    }
 }

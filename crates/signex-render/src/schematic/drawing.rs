@@ -1,38 +1,39 @@
-//! Schematic drawing primitives -- Line, Rect, Circle, Arc, Polyline,
-//! and ChildSheet rendering.
+//! Drawing primitives — sheet-level decorations (lines, rectangles,
+//! circles, arcs, polylines, beziers).
+//!
+//! Each variant of [`signex_types::schematic::SchDrawing`] becomes a
+//! single iced canvas Path with a stroke (always) plus an optional
+//! fill driven by [`signex_types::schematic::FillType`]. A per-shape
+//! `stroke_color` overrides the theme's `body` colour when present.
+//! See `docs/RENDERING_RULES.md` (general — line/rect/arc/circle/
+//! polygon section).
 
-use iced::Color;
-use iced::widget::canvas::{self, path};
+use iced::widget::canvas::{Frame, Path, Stroke};
+use signex_types::schematic::{
+    Aabb, FillType, Point, SchDrawing, SelectedItem, SelectedKind, StrokeColor,
+};
 
-use signex_types::schematic::{ChildSheet, FillType, SchDrawing};
+use super::RenderContext;
+use super::util::{aabbs_overlap, iced_color, point_finite};
 
-use super::ScreenTransform;
-use super::text::draw_rich_text;
+/// Default stroke width when `width == 0.0`. World mm.
+pub const DEFAULT_STROKE_MM: f64 = 0.15;
 
-/// Resolve the per-drawing stroke colour: falls back to the theme
-/// `color` when the drawing has no `stroke_color` override.
-fn resolve_stroke_color(
-    theme: Color,
-    override_rgba: Option<signex_types::schematic::StrokeColor>,
-) -> Color {
-    match override_rgba {
-        Some(c) => Color::from_rgba(
-            c.r as f32 / 255.0,
-            c.g as f32 / 255.0,
-            c.b as f32 / 255.0,
-            c.a as f32 / 255.0,
-        ),
-        None => theme,
+const SELECTION_WEIGHT_FACTOR: f64 = 1.5;
+
+/// Render a single drawing primitive into the content layer's frame.
+///
+/// All variants are dispatched through one entry; per-variant helpers
+/// are private to keep the call surface small.
+pub fn draw_drawing(frame: &mut Frame, drawing: &SchDrawing, ctx: &RenderContext<'_>) {
+    let bbox = drawing_aabb(drawing);
+    if !aabbs_overlap(&bbox, &ctx.visible_world_bounds()) {
+        return;
     }
-}
 
-/// Draw a schematic drawing primitive.
-pub fn draw_sch_drawing(
-    frame: &mut canvas::Frame,
-    drawing: &SchDrawing,
-    transform: &ScreenTransform,
-    color: Color,
-) {
+    let uuid = drawing_uuid(drawing);
+    let selected = ctx.is_selected(&SelectedItem::new(uuid, SelectedKind::Drawing));
+
     match drawing {
         SchDrawing::Line {
             start,
@@ -40,16 +41,7 @@ pub fn draw_sch_drawing(
             width,
             stroke_color,
             ..
-        } => {
-            let p1 = transform.to_screen_point(start.x, start.y);
-            let p2 = transform.to_screen_point(end.x, end.y);
-            let line = canvas::Path::line(p1, p2);
-            let w = stroke_width(transform, *width);
-            let c = resolve_stroke_color(color, *stroke_color);
-            let stroke = canvas::Stroke::default().with_color(c).with_width(w);
-            frame.stroke(&line, stroke);
-        }
-
+        } => draw_line(frame, *start, *end, *width, stroke_color, selected, ctx),
         SchDrawing::Rect {
             start,
             end,
@@ -57,34 +49,16 @@ pub fn draw_sch_drawing(
             fill,
             stroke_color,
             ..
-        } => {
-            let p1 = transform.to_screen_point(start.x, start.y);
-            let p2 = transform.to_screen_point(end.x, end.y);
-
-            let min_x = p1.x.min(p2.x);
-            let min_y = p1.y.min(p2.y);
-            let w = (p1.x - p2.x).abs();
-            let h = (p1.y - p2.y).abs();
-
-            let rect =
-                canvas::Path::rectangle(iced::Point::new(min_x, min_y), iced::Size::new(w, h));
-
-            let stroke_c = resolve_stroke_color(color, *stroke_color);
-            if *fill != FillType::None {
-                let fill_color = Color {
-                    a: stroke_c.a * 0.15,
-                    ..stroke_c
-                };
-                frame.fill(&rect, fill_color);
-            }
-
-            let sw = stroke_width(transform, *width);
-            let stroke = canvas::Stroke::default()
-                .with_color(stroke_c)
-                .with_width(sw);
-            frame.stroke(&rect, stroke);
-        }
-
+        } => draw_rect(
+            frame,
+            *start,
+            *end,
+            *width,
+            *fill,
+            stroke_color,
+            selected,
+            ctx,
+        ),
         SchDrawing::Circle {
             center,
             radius,
@@ -92,392 +66,380 @@ pub fn draw_sch_drawing(
             fill,
             stroke_color,
             ..
-        } => {
-            let c = transform.to_screen_point(center.x, center.y);
-            let r = transform.world_len(*radius).max(1.0);
-            let circle = canvas::Path::circle(c, r);
-
-            let stroke_c = resolve_stroke_color(color, *stroke_color);
-            if *fill != FillType::None {
-                let fill_color = Color {
-                    a: stroke_c.a * 0.15,
-                    ..stroke_c
-                };
-                frame.fill(&circle, fill_color);
-            }
-
-            let sw = stroke_width(transform, *width);
-            let stroke = canvas::Stroke::default()
-                .with_color(stroke_c)
-                .with_width(sw);
-            frame.stroke(&circle, stroke);
-        }
-
+        } => draw_circle(
+            frame,
+            *center,
+            *radius,
+            *width,
+            *fill,
+            stroke_color,
+            selected,
+            ctx,
+        ),
         SchDrawing::Arc {
             start,
             mid,
             end,
             width,
-            fill,
             stroke_color,
             ..
-        } => {
-            // Approximate arc with line segments via the three-point method
-            let sx = start.x;
-            let sy = start.y;
-            let mx = mid.x;
-            let my = mid.y;
-            let ex = end.x;
-            let ey = end.y;
-
-            let stroke_c = resolve_stroke_color(color, *stroke_color);
-            if let Some((cx, cy, r)) = circle_from_three_points(sx, sy, mx, my, ex, ey) {
-                let start_angle = (sy - cy).atan2(sx - cx);
-                let mid_angle = (my - cy).atan2(mx - cx);
-                let end_angle = (ey - cy).atan2(ex - cx);
-
-                let sweep_ccw = is_angle_between_ccw(start_angle, mid_angle, end_angle);
-                let n = 24;
-                let total_sweep = if sweep_ccw {
-                    let mut s = end_angle - start_angle;
-                    if s <= 0.0 {
-                        s += std::f64::consts::TAU;
-                    }
-                    s
-                } else {
-                    let mut s = end_angle - start_angle;
-                    if s >= 0.0 {
-                        s -= std::f64::consts::TAU;
-                    }
-                    s
-                };
-
-                let path = canvas::Path::new(|b: &mut path::Builder| {
-                    let px = cx + r * start_angle.cos();
-                    let py = cy + r * start_angle.sin();
-                    b.move_to(transform.to_screen_point(px, py));
-                    for i in 1..=n {
-                        let t = i as f64 / n as f64;
-                        let a = start_angle + total_sweep * t;
-                        let px = cx + r * a.cos();
-                        let py = cy + r * a.sin();
-                        b.line_to(transform.to_screen_point(px, py));
-                    }
-                    if *fill != FillType::None {
-                        b.close();
-                    }
-                });
-
-                if *fill != FillType::None {
-                    let fill_color = Color {
-                        a: stroke_c.a * 0.15,
-                        ..stroke_c
-                    };
-                    frame.fill(&path, fill_color);
-                }
-
-                let sw = stroke_width(transform, *width);
-                let stroke = canvas::Stroke::default()
-                    .with_color(stroke_c)
-                    .with_width(sw);
-                frame.stroke(&path, stroke);
-            } else {
-                // Degenerate -- just draw a line
-                let p1 = transform.to_screen_point(sx, sy);
-                let p2 = transform.to_screen_point(ex, ey);
-                let line = canvas::Path::line(p1, p2);
-                let sw = stroke_width(transform, *width);
-                let stroke = canvas::Stroke::default()
-                    .with_color(stroke_c)
-                    .with_width(sw);
-                frame.stroke(&line, stroke);
-            }
-        }
-
+        } => draw_arc(
+            frame,
+            *start,
+            *mid,
+            *end,
+            *width,
+            stroke_color,
+            selected,
+            ctx,
+        ),
         SchDrawing::Polyline {
             points,
             width,
             fill,
             stroke_color,
             ..
-        } => {
-            if points.len() < 2 {
-                return;
-            }
-
-            let path = canvas::Path::new(|b: &mut path::Builder| {
-                let p0 = transform.to_screen_point(points[0].x, points[0].y);
-                b.move_to(p0);
-                for pt in &points[1..] {
-                    b.line_to(transform.to_screen_point(pt.x, pt.y));
-                }
-                if *fill != FillType::None && points.len() > 2 {
-                    b.close();
-                }
-            });
-
-            let stroke_c = resolve_stroke_color(color, *stroke_color);
-            if *fill != FillType::None {
-                let fill_color = Color {
-                    a: stroke_c.a * 0.15,
-                    ..stroke_c
-                };
-                frame.fill(&path, fill_color);
-            }
-
-            let sw = stroke_width(transform, *width);
-            let stroke = canvas::Stroke::default()
-                .with_color(stroke_c)
-                .with_width(sw);
-            frame.stroke(&path, stroke);
-        }
+        } => draw_polyline(frame, points, *width, *fill, stroke_color, selected, ctx),
     }
 }
 
-/// Draw a hierarchical child sheet as a labeled rectangle.
-pub fn draw_child_sheet(
-    frame: &mut canvas::Frame,
-    child: &ChildSheet,
-    transform: &ScreenTransform,
-    body_color: Color,
-    body_fill_color: Color,
+#[allow(clippy::too_many_arguments)]
+fn draw_line(
+    frame: &mut Frame,
+    start: Point,
+    end: Point,
+    width: f64,
+    stroke_color: &Option<StrokeColor>,
+    selected: bool,
+    ctx: &RenderContext<'_>,
 ) {
-    let tl = transform.to_screen_point(child.position.x, child.position.y);
-    let br = transform.to_screen_point(
-        child.position.x + child.size.0,
-        child.position.y + child.size.1,
-    );
-
-    let w = br.x - tl.x;
-    let h = br.y - tl.y;
-
-    if w <= 0.0 || h <= 0.0 {
+    let s = ctx.viewport.world_to_screen(start);
+    let e = ctx.viewport.world_to_screen(end);
+    if !point_finite(s) || !point_finite(e) {
         return;
     }
+    frame.stroke(
+        &Path::line(s, e),
+        build_stroke(width, stroke_color, selected, ctx),
+    );
+}
 
-    // Fill background
-    let rect = canvas::Path::rectangle(tl, iced::Size::new(w, h));
-    frame.fill(&rect, body_fill_color);
-
-    // Border
-    let sw = (transform.scale * 0.2).clamp(1.0, 3.0);
-    let stroke = canvas::Stroke::default()
-        .with_color(body_color)
-        .with_width(sw);
-    frame.stroke(&rect, stroke);
-
-    // Sheet name + filename are placed OUTSIDE the box so they don't
-    // overlap pins or fill colour:
-    //   - Altium style: stacked above the top-left corner.
-    //   - Standard style:  stacked below the bottom-left corner.
-    let font_size = transform.world_len(1.5).abs();
-    if font_size < 1.0 {
+#[allow(clippy::too_many_arguments)]
+fn draw_rect(
+    frame: &mut Frame,
+    start: Point,
+    end: Point,
+    width: f64,
+    fill: FillType,
+    stroke_color: &Option<StrokeColor>,
+    selected: bool,
+    ctx: &RenderContext<'_>,
+) {
+    let a = ctx.viewport.world_to_screen(start);
+    let b = ctx.viewport.world_to_screen(end);
+    if !point_finite(a) || !point_finite(b) {
         return;
     }
-    let small_font = (font_size * 0.75).abs();
-    let label_gap = 2.0_f32;
+    let path = Path::new(|builder| {
+        builder.move_to(a);
+        builder.line_to(iced::Point::new(b.x, a.y));
+        builder.line_to(b);
+        builder.line_to(iced::Point::new(a.x, b.y));
+        builder.close();
+    });
+    if let Some(color) = fill_colour(fill, stroke_color, ctx) {
+        frame.fill(&path, color);
+    }
+    frame.stroke(&path, build_stroke(width, stroke_color, selected, ctx));
+}
 
-    let style = crate::multisheet_style();
-    let (name_anchor, file_anchor, v_align) = match style {
-        crate::MultisheetStyle::Altium => {
-            // Above the box: filename closest to the border, name on top.
-            let file_y = tl.y - label_gap;
-            let name_y = file_y - small_font - label_gap;
-            (
-                iced::Point::new(tl.x, name_y),
-                iced::Point::new(tl.x, file_y),
-                iced::alignment::Vertical::Bottom,
-            )
-        }
-        crate::MultisheetStyle::Standard => {
-            // Below the box: name closest to the border, filename underneath.
-            let name_y = br.y + label_gap;
-            let file_y = name_y + font_size + label_gap;
-            (
-                iced::Point::new(tl.x, name_y),
-                iced::Point::new(tl.x, file_y),
-                iced::alignment::Vertical::Top,
-            )
-        }
-    };
-
-    draw_rich_text(
-        frame,
-        &child.name,
-        name_anchor,
-        body_color,
-        font_size,
-        iced::alignment::Horizontal::Left,
-        v_align,
-        0.0,
-    );
-
-    if small_font < 1.0 {
+#[allow(clippy::too_many_arguments)]
+fn draw_circle(
+    frame: &mut Frame,
+    center: Point,
+    radius: f64,
+    width: f64,
+    fill: FillType,
+    stroke_color: &Option<StrokeColor>,
+    selected: bool,
+    ctx: &RenderContext<'_>,
+) {
+    let c = ctx.viewport.world_to_screen(center);
+    if !point_finite(c) {
         return;
     }
-    draw_rich_text(
-        frame,
-        &child.filename,
-        file_anchor,
-        Color {
-            a: body_color.a * 0.7,
-            ..body_color
-        },
-        small_font,
-        iced::alignment::Horizontal::Left,
-        v_align,
-        0.0,
-    );
+    let r_px = (radius * ctx.viewport.zoom_px_per_mm()).max(0.5) as f32;
+    let path = Path::circle(c, r_px);
+    if let Some(color) = fill_colour(fill, stroke_color, ctx) {
+        frame.fill(&path, color);
+    }
+    frame.stroke(&path, build_stroke(width, stroke_color, selected, ctx));
+}
 
-    // Draw sheet pins — Altium hierarchical port style. The pin's position is
-    // the connection point on the sheet edge; the pentagon tip sits exactly
-    // there with the body extending INWARD into the sheet so external wires
-    // dock cleanly without any protruding stub.
-    //
-    // Sheet-pin `rotation` is the OUTWARD direction (the way the pin
-    // points away from the sheet body). Inward is therefore the opposite.
-    //   rotation 0°   → outward +X (pin on right edge)  → inward -X
-    //   rotation 180° → outward -X (pin on left  edge)  → inward +X
-    //   rotation 90°  → outward -Y, screen up (pin on top    edge) → inward +Y down
-    //   rotation 270° → outward +Y, screen down(pin on bottom edge) → inward -Y up
-    let pin_h_mm = 1.4_f64;
-    let arrow_len_mm = 0.7_f64;
-    let body_len_mm = 2.4_f64;
-    let text_pad_mm = 0.4_f64;
-    let total_in_mm = arrow_len_mm + body_len_mm;
-
-    for pin in &child.pins {
-        let rot = pin.rotation.rem_euclid(360.0).round() as i32;
-
-        // Inward unit vector (into the sheet) and label placement that puts
-        // the text inside the sheet, hugging the flat back of the pentagon.
-        // For top / bottom pins the label is rotated 90° so it reads
-        // vertically along the inward direction — otherwise long names
-        // overlap each other on closely-spaced pins (Altium convention).
-        let (
-            ix,
-            iy,
-            h_align,
-            v_align,
-            text_dx,
-            text_dy,
-            label_rotation_rad,
-        ): (
-            f64,
-            f64,
-            iced::alignment::Horizontal,
-            iced::alignment::Vertical,
-            f64,
-            f64,
-            f32,
-        ) = match rot {
-            0 => (
-                // pin on RIGHT edge, body extends LEFT into sheet
-                -1.0,
-                0.0,
-                iced::alignment::Horizontal::Right,
-                iced::alignment::Vertical::Center,
-                -(total_in_mm + text_pad_mm),
-                0.0,
-                0.0,
-            ),
-            90 => (
-                // pin on TOP edge, body extends DOWN into sheet — vertical
-                // label reads top-to-bottom (edge → into sheet).
-                0.0,
-                1.0,
-                iced::alignment::Horizontal::Left,
-                iced::alignment::Vertical::Center,
-                0.0,
-                total_in_mm + text_pad_mm,
-                std::f32::consts::FRAC_PI_2,
-            ),
-            270 => (
-                // pin on BOTTOM edge, body extends UP into sheet — vertical
-                // label reads bottom-to-top (edge → into sheet).
-                0.0,
-                -1.0,
-                iced::alignment::Horizontal::Left,
-                iced::alignment::Vertical::Center,
-                0.0,
-                -(total_in_mm + text_pad_mm),
-                -std::f32::consts::FRAC_PI_2,
-            ),
-            _ => (
-                // 180° and fallback: pin on LEFT edge, body extends RIGHT into sheet
-                1.0,
-                0.0,
-                iced::alignment::Horizontal::Left,
-                iced::alignment::Vertical::Center,
-                total_in_mm + text_pad_mm,
-                0.0,
-                0.0,
-            ),
-        };
-
-        // Perpendicular vector (rotate inward 90° CCW) for the body half-height.
-        let perpx = -iy;
-        let perpy = ix;
-        let half_h = pin_h_mm / 2.0;
-
-        let lx = pin.position.x;
-        let ly = pin.position.y;
-        let arr_x = lx + ix * arrow_len_mm;
-        let arr_y = ly + iy * arrow_len_mm;
-        let back_x = lx + ix * total_in_mm;
-        let back_y = ly + iy * total_in_mm;
-
-        // Pentagon: tip on edge → arrow shoulders → flat back inside.
-        let pts_world = [
-            (lx, ly),
-            (arr_x + perpx * half_h, arr_y + perpy * half_h),
-            (back_x + perpx * half_h, back_y + perpy * half_h),
-            (back_x - perpx * half_h, back_y - perpy * half_h),
-            (arr_x - perpx * half_h, arr_y - perpy * half_h),
-        ];
-
-        let path = canvas::Path::new(|b: &mut path::Builder| {
-            let p0 = transform.to_screen_point(pts_world[0].0, pts_world[0].1);
-            b.move_to(p0);
-            for &(x, y) in &pts_world[1..] {
-                b.line_to(transform.to_screen_point(x, y));
-            }
-            b.close();
+#[allow(clippy::too_many_arguments)]
+fn draw_arc(
+    frame: &mut Frame,
+    start: Point,
+    mid: Point,
+    end: Point,
+    width: f64,
+    stroke_color: &Option<StrokeColor>,
+    selected: bool,
+    ctx: &RenderContext<'_>,
+) {
+    let Some((cx_w, cy_w, r_w)) = circumcircle((start.x, start.y), (mid.x, mid.y), (end.x, end.y))
+    else {
+        // Degenerate (collinear) input — fall back to a polyline through
+        // the three points so nothing is silently dropped.
+        let path = Path::new(|builder| {
+            builder.move_to(ctx.viewport.world_to_screen(start));
+            builder.line_to(ctx.viewport.world_to_screen(mid));
+            builder.line_to(ctx.viewport.world_to_screen(end));
         });
+        frame.stroke(&path, build_stroke(width, stroke_color, selected, ctx));
+        return;
+    };
 
-        frame.fill(&path, body_fill_color);
-        let sw = (transform.scale * 0.16).clamp(1.0, 2.0);
-        frame.stroke(
-            &path,
-            canvas::Stroke::default().with_color(body_color).with_width(sw),
-        );
+    let centre_screen = ctx.viewport.world_to_screen(Point::new(cx_w, cy_w));
+    let r_px = (r_w * ctx.viewport.zoom_px_per_mm()).max(0.5) as f32;
+    let a0 = (start.y - cy_w).atan2(start.x - cx_w);
+    let am = (mid.y - cy_w).atan2(mid.x - cx_w);
+    let a1 = (end.y - cy_w).atan2(end.x - cx_w);
 
-        let text_anchor = transform.to_screen_point(lx + text_dx, ly + text_dy);
-        draw_rich_text(
-            frame,
-            &pin.name,
-            text_anchor,
-            body_color,
-            small_font,
-            h_align,
-            v_align,
-            label_rotation_rad,
-        );
+    // Direction (CCW / CW) chosen so the arc sweeps through `mid`.
+    let (start_angle, end_angle) = if arc_sweeps_through_mid(a0, am, a1) {
+        (a0, a1)
+    } else {
+        (a1, a0)
+    };
+
+    let path = Path::new(|builder| {
+        builder.arc(iced::widget::canvas::path::Arc {
+            center: centre_screen,
+            radius: r_px,
+            start_angle: iced::Radians(start_angle as f32),
+            end_angle: iced::Radians(end_angle as f32),
+        });
+    });
+    frame.stroke(&path, build_stroke(width, stroke_color, selected, ctx));
+}
+
+#[allow(clippy::too_many_arguments)]
+fn draw_polyline(
+    frame: &mut Frame,
+    points: &[Point],
+    width: f64,
+    fill: FillType,
+    stroke_color: &Option<StrokeColor>,
+    selected: bool,
+    ctx: &RenderContext<'_>,
+) {
+    if points.len() < 2 {
+        return;
+    }
+    let path = Path::new(|builder| {
+        let mut iter = points.iter();
+        if let Some(first) = iter.next() {
+            builder.move_to(ctx.viewport.world_to_screen(*first));
+        }
+        for p in iter {
+            builder.line_to(ctx.viewport.world_to_screen(*p));
+        }
+        // Close only when fill is requested AND first/last point differ.
+        if fill_colour(fill, stroke_color, ctx).is_some() {
+            builder.close();
+        }
+    });
+    if let Some(color) = fill_colour(fill, stroke_color, ctx) {
+        frame.fill(&path, color);
+    }
+    frame.stroke(&path, build_stroke(width, stroke_color, selected, ctx));
+}
+
+/// World-space AABB enclosing a drawing primitive, used by frustum
+/// culling and (in Wave 4) hit testing.
+pub(crate) fn drawing_aabb(drawing: &SchDrawing) -> Aabb {
+    match drawing {
+        SchDrawing::Line { start, end, .. } => Aabb::new(start.x, start.y, end.x, end.y),
+        SchDrawing::Rect { start, end, .. } => Aabb::new(start.x, start.y, end.x, end.y),
+        SchDrawing::Circle { center, radius, .. } => {
+            let r = radius.abs();
+            Aabb::new(center.x - r, center.y - r, center.x + r, center.y + r)
+        }
+        SchDrawing::Arc {
+            start, mid, end, ..
+        } => {
+            let xs = [start.x, mid.x, end.x];
+            let ys = [start.y, mid.y, end.y];
+            Aabb::new(
+                xs.iter().cloned().fold(f64::INFINITY, f64::min),
+                ys.iter().cloned().fold(f64::INFINITY, f64::min),
+                xs.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
+                ys.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
+            )
+        }
+        SchDrawing::Polyline { points, .. } => {
+            if points.is_empty() {
+                Aabb::new(0.0, 0.0, 0.0, 0.0)
+            } else {
+                let mut min_x = f64::INFINITY;
+                let mut max_x = f64::NEG_INFINITY;
+                let mut min_y = f64::INFINITY;
+                let mut max_y = f64::NEG_INFINITY;
+                for p in points {
+                    min_x = min_x.min(p.x);
+                    max_x = max_x.max(p.x);
+                    min_y = min_y.min(p.y);
+                    max_y = max_y.max(p.y);
+                }
+                Aabb::new(min_x, min_y, max_x, max_y)
+            }
+        }
     }
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-fn stroke_width(transform: &ScreenTransform, world_width: f64) -> f32 {
-    let w = if world_width > 0.0 {
-        transform.world_len(world_width)
-    } else {
-        transform.scale * 0.15
-    };
-    w.clamp(0.5, 4.0)
+#[inline]
+fn drawing_uuid(drawing: &SchDrawing) -> uuid::Uuid {
+    match drawing {
+        SchDrawing::Line { uuid, .. }
+        | SchDrawing::Rect { uuid, .. }
+        | SchDrawing::Circle { uuid, .. }
+        | SchDrawing::Arc { uuid, .. }
+        | SchDrawing::Polyline { uuid, .. } => *uuid,
+    }
 }
 
-// Geometry helpers — delegated to shared implementations in mod.rs
-use super::{circle_from_three_points, is_angle_between_ccw};
+fn build_stroke<'a>(
+    width: f64,
+    stroke_color: &Option<StrokeColor>,
+    selected: bool,
+    ctx: &RenderContext<'_>,
+) -> Stroke<'a> {
+    let mm = if width > 0.0 {
+        width
+    } else {
+        DEFAULT_STROKE_MM
+    };
+    let scaled = mm
+        * if selected {
+            SELECTION_WEIGHT_FACTOR
+        } else {
+            1.0
+        };
+    let px = (scaled * ctx.viewport.zoom_px_per_mm()).max(1.0) as f32;
+    let colour = if selected {
+        iced_color(&ctx.theme().selection)
+    } else if let Some(sc) = stroke_color {
+        iced_color(&signex_types::theme::Color::new(sc.r, sc.g, sc.b, sc.a))
+    } else {
+        iced_color(&ctx.theme().body)
+    };
+    Stroke::default().with_width(px).with_color(colour)
+}
+
+fn fill_colour(
+    fill: FillType,
+    stroke_color: &Option<StrokeColor>,
+    ctx: &RenderContext<'_>,
+) -> Option<iced::Color> {
+    match fill {
+        FillType::None => None,
+        FillType::Outline => stroke_color
+            .map(|sc| iced_color(&signex_types::theme::Color::new(sc.r, sc.g, sc.b, sc.a)))
+            .or_else(|| Some(iced_color(&ctx.theme().body))),
+        FillType::Background => Some(iced_color(&ctx.theme().body_fill)),
+    }
+}
+
+/// Circle through three non-collinear points. Returns (cx, cy, r).
+/// Mirrors the helper in `signex-engine::selection`; duplicated here
+/// to keep the renderer crate dependency-free of the engine.
+pub(crate) fn circumcircle(a: (f64, f64), b: (f64, f64), c: (f64, f64)) -> Option<(f64, f64, f64)> {
+    let (ax, ay) = a;
+    let (bx, by) = b;
+    let (cx, cy) = c;
+    let d = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
+    if d.abs() < 1e-12 {
+        return None;
+    }
+    let ux = ((ax * ax + ay * ay) * (by - cy)
+        + (bx * bx + by * by) * (cy - ay)
+        + (cx * cx + cy * cy) * (ay - by))
+        / d;
+    let uy = ((ax * ax + ay * ay) * (cx - bx)
+        + (bx * bx + by * by) * (ax - cx)
+        + (cx * cx + cy * cy) * (bx - ax))
+        / d;
+    let r = ((ax - ux).powi(2) + (ay - uy).powi(2)).sqrt();
+    Some((ux, uy, r))
+}
+
+/// Does a CCW arc from angle `a0` to angle `a1` pass through angle
+/// `am`? Used to choose CW vs CCW direction so the rendered arc
+/// includes the user-specified mid-point.
+fn arc_sweeps_through_mid(a0: f64, am: f64, a1: f64) -> bool {
+    let two_pi = 2.0 * std::f64::consts::PI;
+    let norm = |a: f64| (a - a0).rem_euclid(two_pi);
+    norm(am) < norm(a1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use uuid::Uuid;
+
+    fn rect(start: Point, end: Point) -> SchDrawing {
+        SchDrawing::Rect {
+            uuid: Uuid::new_v4(),
+            start,
+            end,
+            width: 0.0,
+            fill: FillType::None,
+            stroke_color: None,
+        }
+    }
+
+    #[test]
+    fn drawing_aabb_rect_normalises_endpoints() {
+        let r = rect(Point::new(5.0, 5.0), Point::new(-1.0, 1.0));
+        let bbox = drawing_aabb(&r);
+        assert!(bbox.min_x <= bbox.max_x);
+        assert!(bbox.min_y <= bbox.max_y);
+        assert!(bbox.contains(0.0, 3.0));
+    }
+
+    #[test]
+    fn circumcircle_three_collinear_points_returns_none() {
+        assert!(circumcircle((0.0, 0.0), (1.0, 0.0), (2.0, 0.0)).is_none());
+    }
+
+    #[test]
+    fn circumcircle_unit_triangle_is_finite_and_centred() {
+        let (cx, cy, r) = circumcircle((0.0, 0.0), (1.0, 0.0), (0.0, 1.0)).unwrap();
+        assert!(cx.is_finite() && cy.is_finite() && r.is_finite());
+        // Centre of right-isoceles triangle is at (0.5, 0.5).
+        assert!((cx - 0.5).abs() < 1e-9);
+        assert!((cy - 0.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn drawing_aabb_polyline_collinear_points_still_has_extent() {
+        // Edge case from the Wave 1 stub note: collinear polyline.
+        let pl = SchDrawing::Polyline {
+            uuid: Uuid::new_v4(),
+            points: vec![
+                Point::new(0.0, 0.0),
+                Point::new(1.0, 0.0),
+                Point::new(2.0, 0.0),
+            ],
+            width: 0.0,
+            fill: FillType::None,
+            stroke_color: None,
+        };
+        let bbox = drawing_aabb(&pl);
+        assert!(bbox.width() >= 2.0);
+        // Height collapses to 0 — the renderer still strokes it as a
+        // line; bbox accepts that.
+        assert!(bbox.height() == 0.0);
+    }
+}

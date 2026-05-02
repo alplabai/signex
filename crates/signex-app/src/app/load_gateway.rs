@@ -1,6 +1,5 @@
 use std::path::PathBuf;
 
-use signex_types::library::Library;
 use signex_types::pcb::PcbBoard;
 use signex_types::schematic::SchematicSheet;
 
@@ -25,21 +24,12 @@ impl Signex {
             .and_then(TabDocument::as_pcb)
     }
 
-    pub(crate) fn active_library(&self) -> Option<&Library> {
-        self.active_tab_cached_document()
-            .and_then(TabDocument::as_library)
-    }
-
     pub(crate) fn has_active_schematic(&self) -> bool {
         self.active_schematic().is_some()
     }
 
     pub(crate) fn has_active_pcb(&self) -> bool {
         self.active_pcb().is_some()
-    }
-
-    pub(crate) fn has_active_library(&self) -> bool {
-        self.active_library().is_some()
     }
 
     pub(crate) fn active_render_snapshot(
@@ -179,12 +169,21 @@ impl Signex {
         // HashMap storage: an open schematic tab always has its engine
         // resident in `document_state.engines`.
         if let Some(engine) = self.document_state.active_engine() {
-            if let Some(cache) = self.interaction_state.active_canvas_mut().render_cache.as_mut() {
+            if let Some(cache) = self
+                .interaction_state
+                .active_canvas_mut()
+                .render_cache
+                .as_mut()
+            {
                 cache.update_from_sheet(engine.document(), invalidation);
             } else {
-                self.interaction_state.active_canvas_mut().set_render_cache(Some(
-                    signex_render::schematic::SchematicRenderCache::from_sheet(engine.document()),
-                ));
+                self.interaction_state
+                    .active_canvas_mut()
+                    .set_render_cache(Some(
+                        signex_render::schematic::SchematicRenderCache::from_sheet(
+                            engine.document(),
+                        ),
+                    ));
             }
             return;
         }
@@ -208,20 +207,27 @@ impl Signex {
         sheet: SchematicSheet,
     ) {
         self.park_active_schematic_session();
-        let project_id = self
-            .document_state
-            .project_for_path(&path)
-            .map(|p| p.id);
+        let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
+        let scan_path = path.clone();
         self.document_state.tabs.push(TabInfo {
             title,
             path,
             cached_document: None,
             dirty: false,
             project_id,
+            kind: super::TabKind::Schematic,
         });
         self.document_state.active_tab = self.document_state.tabs.len() - 1;
 
         self.apply_loaded_schematic(Some(sheet), true, true, true, true);
+
+        // Stage 16 §3.5 — Library Updates Available scan.
+        // Walks placed Symbols whose `library_id` is set and
+        // surfaces drift against the source library row's current
+        // version. Personal-mode libraries auto-apply silently; Team
+        // mode opens the "Library Updates Available" modal on the
+        // next view tick.
+        self.scan_library_updates_for_open_schematic(scan_path);
     }
 
     /// Reattach a tab to a schematic engine that's already parked in
@@ -236,10 +242,7 @@ impl Signex {
     /// canvas reflects the parked sheet's current state.
     pub(crate) fn attach_parked_schematic_tab(&mut self, path: PathBuf, title: String) {
         self.park_active_schematic_session();
-        let project_id = self
-            .document_state
-            .project_for_path(&path)
-            .map(|p| p.id);
+        let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
         // The parked engine is, by definition, dirty — `close_tab_now`
         // only keeps engines for paths in `dirty_paths`. Mirror that
         // into the new tab so the chrome (red dot, etc.) stays
@@ -251,6 +254,7 @@ impl Signex {
             cached_document: None,
             dirty,
             project_id,
+            kind: super::TabKind::Schematic,
         });
         self.document_state.active_tab = self.document_state.tabs.len() - 1;
         // Point active_path at the parked entry. `apply_loaded_schematic`
@@ -263,40 +267,17 @@ impl Signex {
 
     pub(crate) fn open_pcb_tab(&mut self, path: PathBuf, title: String, board: PcbBoard) {
         self.park_active_schematic_session();
-        let project_id = self
-            .document_state
-            .project_for_path(&path)
-            .map(|p| p.id);
+        let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
         self.document_state.tabs.push(TabInfo {
             title,
             path,
             cached_document: Some(TabDocument::Pcb(board)),
             dirty: false,
             project_id,
+            kind: super::TabKind::Pcb,
         });
         self.document_state.active_tab = self.document_state.tabs.len() - 1;
         self.apply_loaded_pcb_document(true, true);
-    }
-
-    /// Open a `.snxlib` package in a Library Browser tab. v0.10.0
-    /// ships read-only — the table view re-reads `library.components`
-    /// each frame; nothing in the browser mutates the in-memory
-    /// payload yet (Component Editor lands in v0.10.7).
-    pub(crate) fn open_library_tab(&mut self, path: PathBuf, title: String, library: Library) {
-        self.park_active_schematic_session();
-        let project_id = self
-            .document_state
-            .project_for_path(&path)
-            .map(|p| p.id);
-        self.document_state.tabs.push(TabInfo {
-            title,
-            path,
-            cached_document: Some(TabDocument::Library(library)),
-            dirty: false,
-            project_id,
-        });
-        self.document_state.active_tab = self.document_state.tabs.len() - 1;
-        self.apply_loaded_library_document(true);
     }
 
     pub(crate) fn load_schematic_into_active_tab(&mut self, sheet: SchematicSheet) {
@@ -305,15 +286,6 @@ impl Signex {
 
     pub(crate) fn sync_visible_document_from_active_tab(&mut self) {
         self.interaction_state.editing_text = None;
-        {
-            let canvas = self.interaction_state.active_canvas_mut();
-            if canvas.editing_text_uuid.is_some() {
-                canvas.editing_text_uuid = None;
-                canvas.editing_text_value = None;
-                canvas.clear_content_cache();
-                canvas.clear_overlay_cache();
-            }
-        }
 
         // Schematic tabs store their engine in `document_state.engines`,
         // keyed by the tab's path. PCB tabs still hold their board in
@@ -324,14 +296,7 @@ impl Signex {
             .as_ref()
             .map(|p| self.document_state.engines.contains_key(p))
             .unwrap_or(false);
-        let is_pcb = matches!(
-            self.active_tab_cached_document(),
-            Some(TabDocument::Pcb(_))
-        );
-        let is_library = matches!(
-            self.active_tab_cached_document(),
-            Some(TabDocument::Library(_))
-        );
+        let is_pcb = matches!(self.active_tab_cached_document(), Some(TabDocument::Pcb(_)));
 
         if is_schematic {
             if self.activate_active_schematic_session() {
@@ -339,8 +304,6 @@ impl Signex {
             }
         } else if is_pcb {
             self.apply_loaded_pcb_document(false, false);
-        } else if is_library {
-            self.apply_loaded_library_document(false);
         } else {
             self.apply_loaded_empty_document(false);
         }
@@ -356,12 +319,21 @@ impl Signex {
         // `handlers/document_tabs.rs`, which explicitly prunes the
         // closing tab's entry. GitHub issue #51.
         self.document_state.active_path = None;
-        self.interaction_state.active_canvas_mut().set_render_cache(None);
+        self.interaction_state
+            .active_canvas_mut()
+            .set_render_cache(None);
         self.interaction_state.active_canvas_mut().selected.clear();
-        self.interaction_state.active_canvas_mut().wire_preview.clear();
+        self.interaction_state
+            .active_canvas_mut()
+            .wire_preview
+            .clear();
         self.interaction_state.active_canvas_mut().drawing_mode = false;
-        self.interaction_state.active_canvas_mut().clear_content_cache();
-        self.interaction_state.active_canvas_mut().clear_overlay_cache();
+        self.interaction_state
+            .active_canvas_mut()
+            .clear_content_cache();
+        self.interaction_state
+            .active_canvas_mut()
+            .clear_overlay_cache();
         self.interaction_state.current_tool = Tool::Select;
     }
 
@@ -382,24 +354,6 @@ impl Signex {
     }
 
     fn apply_loaded_empty_document(&mut self, refresh_panel_ctx: bool) {
-        self.clear_schematic_ui_state();
-        self.interaction_state.pcb_canvas.set_render_snapshot(None);
-        self.interaction_state.pcb_canvas.clear_bg_cache();
-        self.interaction_state.pcb_canvas.clear_content_cache();
-
-        if refresh_panel_ctx {
-            self.refresh_panel_ctx();
-        } else {
-            self.sync_panel_ctx_from_visible_document();
-        }
-    }
-
-    /// Library Browser tabs share the empty-canvas treatment for
-    /// schematic/PCB visuals — neither canvas applies. The browser
-    /// view in `view_center` reads the cached library directly. Kept
-    /// as a separate helper so v0.10.1+ (preview pane) can attach a
-    /// preview-canvas refresh here without reshaping the dispatcher.
-    fn apply_loaded_library_document(&mut self, refresh_panel_ctx: bool) {
         self.clear_schematic_ui_state();
         self.interaction_state.pcb_canvas.set_render_snapshot(None);
         self.interaction_state.pcb_canvas.clear_bg_cache();
@@ -434,7 +388,9 @@ impl Signex {
         if clear_bg_cache {
             self.interaction_state.active_canvas_mut().clear_bg_cache();
         }
-        self.interaction_state.active_canvas_mut().clear_content_cache();
+        self.interaction_state
+            .active_canvas_mut()
+            .clear_content_cache();
 
         let _ = commit_to_active_tab;
 

@@ -49,9 +49,10 @@ impl Engine {
 
     /// Open a `.snxsch` file from disk.
     ///
-    /// Foreign-format schematics are not readable directly; users with
-    /// legacy projects must convert their files via the import companion
-    /// tool before opening here.
+    /// Foreign-format files (any extension other than `.snxsch`) are not
+    /// readable here; an optional GPL-3.0 import companion handles
+    /// conversion to `.snxsch` and is shipped separately from this
+    /// Apache-2.0 crate.
     pub fn open(path: &Path) -> Result<Self, EngineError> {
         let text = std::fs::read_to_string(path)
             .map_err(|error| EngineError::OpenFailed(anyhow::Error::msg(error.to_string())))?;
@@ -75,60 +76,13 @@ impl Engine {
     }
 
     pub fn save_as(&mut self, path: &Path) -> Result<(), EngineError> {
-        // Synchronous fallback path. New callers should use
-        // [`Engine::serialize_for_save`] + [`Engine::write_to_file`]
-        // and run the write off the UI thread (signex-app drives this
-        // via `iced::Task::perform`). Kept for tests, scripted saves,
-        // and any caller that already lives off the UI thread.
-        let bytes = self.serialize_for_save()?;
-        Self::write_to_file_sync(path, &bytes)?;
+        let snx = signex_types::format::SnxSchematic::new(self.document.clone());
+        let content = snx
+            .write_string()
+            .map_err(|error| EngineError::SaveFailed(std::io::Error::other(error.to_string())))?;
+        std::fs::write(path, content).map_err(EngineError::SaveFailed)?;
         self.path = Some(path.to_path_buf());
         Ok(())
-    }
-
-    /// Pure, side-effect-free serialise. Returns the bytes that would
-    /// be written to disk for a `save()` call right now. No I/O, no
-    /// path mutation — safe to call repeatedly. Cheap because it
-    /// borrows `self.document` rather than cloning it; on a 500 K-track
-    /// PCB the saved-copy clone alone was ~50–100 ms.
-    ///
-    /// Pair with [`Engine::write_to_file`] to do the disk write off
-    /// the UI thread:
-    ///
-    /// ```ignore
-    /// let bytes = engine.serialize_for_save()?;
-    /// // hand `bytes` + path to a worker task
-    /// let path = path.to_path_buf();
-    /// tokio::task::spawn_blocking(move || {
-    ///     signex_engine::Engine::write_to_file(&path, &bytes)
-    /// });
-    /// ```
-    pub fn serialize_for_save(&self) -> Result<Vec<u8>, EngineError> {
-        let text = signex_types::format::SnxSchematic::write_string_borrowed(
-            signex_types::format::SNXSCH_FORMAT_V1,
-            &self.document,
-        )
-        .map_err(|error| EngineError::SaveFailed(std::io::Error::other(error.to_string())))?;
-        Ok(text.into_bytes())
-    }
-
-    /// Disk write half of the async-save pair. Stateless (associated
-    /// function, not a method) so it can run on a worker thread
-    /// without holding an `&Engine` reference. Pair with
-    /// [`Engine::serialize_for_save`].
-    pub fn write_to_file(path: &Path, bytes: &[u8]) -> Result<(), EngineError> {
-        Self::write_to_file_sync(path, bytes)
-    }
-
-    fn write_to_file_sync(path: &Path, bytes: &[u8]) -> Result<(), EngineError> {
-        std::fs::write(path, bytes).map_err(EngineError::SaveFailed)
-    }
-
-    /// Mark the engine's path after an async save completes. Use this
-    /// from the UI dispatcher when [`Engine::write_to_file`] returns
-    /// `Ok(())` so subsequent `save()` calls write to the same file.
-    pub fn record_saved_path(&mut self, path: PathBuf) {
-        self.path = Some(path);
     }
 
     pub fn execute(&mut self, cmd: Command) -> Result<CommandResult, EngineError> {
@@ -766,7 +720,7 @@ impl Engine {
             Command::AnnotateAll { mode } => {
                 use crate::command::AnnotateMode;
                 // Power ports (is_power == true, or reference starting with '#')
-                // are net anchors, not components. Their references
+                // are net anchors, not real components. Their references
                 // carry the net name, not a designator. Skip them in every
                 // phase so annotation only touches real parts.
                 let is_designator_target = |sym: &signex_types::schematic::Symbol| -> bool {
@@ -1012,9 +966,9 @@ impl Engine {
                                 }
                             }
                         }
-                        // Drawings, junctions, NC, bus entries aren't
-                        // z-ordered in schematic (no explicit
-                        // stacking). Left out intentionally.
+                        // Signex schematics have no explicit z-order for
+                        // drawings, junctions, no-connects, or bus entries —
+                        // render order is file order. Left out intentionally.
                         _ => {}
                     }
                 }
@@ -1256,75 +1210,6 @@ mod tests {
         assert_eq!(pin.position, Point::new(25.0, 33.0));
         assert_eq!(pin.rotation, 90.0);
         assert_eq!(pin.direction, "output");
-    }
-
-    #[test]
-    fn serialize_for_save_returns_parseable_bytes() {
-        // v0.9.1 async-save guard: bytes from the borrow-based
-        // serialise must round-trip through the parser back to an
-        // equivalent SchematicSheet. If this drifts, async-saved
-        // files won't open.
-        let mut document = test_sheet();
-        document.labels.push(Label {
-            uuid: uuid::Uuid::new_v4(),
-            text: "VBUS".to_string(),
-            position: Point::new(10.0, 20.0),
-            rotation: 0.0,
-            label_type: LabelType::Net,
-            shape: String::new(),
-            font_size: 1.27,
-            justify: signex_types::schematic::HAlign::Left,
-            justify_v: signex_types::schematic::VAlign::Bottom,
-        });
-        let engine = Engine::new(document.clone()).unwrap();
-
-        let bytes = engine.serialize_for_save().expect("serialise");
-        let text = std::str::from_utf8(&bytes).expect("utf8");
-        let parsed = signex_types::format::SnxSchematic::parse(text).expect("parse round-trip");
-
-        assert_eq!(parsed.format, signex_types::format::SNXSCH_FORMAT_V1);
-        assert_eq!(parsed.sheet.uuid, document.uuid);
-        assert_eq!(parsed.sheet.labels.len(), 1);
-        assert_eq!(parsed.sheet.labels[0].text, "VBUS");
-    }
-
-    #[test]
-    fn write_to_file_writes_serialised_bytes() {
-        // Async-save second half: write_to_file must persist exactly
-        // the bytes serialize_for_save produced. tempdir-style: use
-        // std::env::temp_dir + a uuid-suffixed path so parallel tests
-        // don't collide.
-        let mut document = test_sheet();
-        document.labels.push(Label {
-            uuid: uuid::Uuid::new_v4(),
-            text: "GND".to_string(),
-            position: Point::new(0.0, 0.0),
-            rotation: 0.0,
-            label_type: LabelType::Net,
-            shape: String::new(),
-            font_size: 1.27,
-            justify: signex_types::schematic::HAlign::Left,
-            justify_v: signex_types::schematic::VAlign::Bottom,
-        });
-        let engine = Engine::new(document).unwrap();
-        let bytes = engine.serialize_for_save().expect("serialise");
-
-        let mut path = std::env::temp_dir();
-        path.push(format!(
-            "signex-engine-write-to-file-{}.snxsch",
-            uuid::Uuid::new_v4()
-        ));
-
-        Engine::write_to_file(&path, &bytes).expect("write");
-        let on_disk = std::fs::read(&path).expect("read back");
-        assert_eq!(on_disk, bytes, "disk bytes drift from serialised bytes");
-
-        // Re-parse round-trip from disk.
-        let text = std::str::from_utf8(&on_disk).expect("utf8");
-        let parsed = signex_types::format::SnxSchematic::parse(text).expect("parse round-trip");
-        assert_eq!(parsed.sheet.labels.len(), 1);
-
-        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

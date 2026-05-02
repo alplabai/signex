@@ -1,10 +1,11 @@
 //! Parser-independent ERC context. Built by projecting a
-//! [`SchematicRenderSnapshot`] once; all rule functions read from here so
+//! [`SchematicSheet`] once; all rule functions read from here so
 //! they never import `signex-render` directly.
 
 use std::collections::HashMap;
 
-use signex_render::schematic::{SchematicRenderSnapshot, instance_transform};
+use signex_render::schematic::SymbolTransform;
+use signex_types::schematic::SchematicSheet;
 use signex_types::schematic::{LabelType, PinDirection, Point};
 use uuid::Uuid;
 
@@ -185,13 +186,13 @@ pub struct ErcContext {
 }
 
 impl ErcContext {
-    pub fn from_snapshot(snapshot: &SchematicRenderSnapshot) -> Self {
+    pub fn from_snapshot(snapshot: &SchematicSheet) -> Self {
         Self::project(snapshot, HashMap::new())
     }
 
     pub fn from_snapshot_with_children(
-        snapshot: &SchematicRenderSnapshot,
-        children: &HashMap<String, SchematicRenderSnapshot>,
+        snapshot: &SchematicSheet,
+        children: &HashMap<String, SchematicSheet>,
     ) -> Self {
         let child_ctxs = children
             .iter()
@@ -200,7 +201,7 @@ impl ErcContext {
         Self::project(snapshot, child_ctxs)
     }
 
-    fn project(snapshot: &SchematicRenderSnapshot, children: HashMap<String, ErcContext>) -> Self {
+    fn project(snapshot: &SchematicSheet, children: HashMap<String, ErcContext>) -> Self {
         // --- Step 1: geometry primitives (no symbols yet) -----------------
         let wires: Vec<ErcWire> = snapshot
             .wires
@@ -287,7 +288,8 @@ impl ErcContext {
                     .iter()
                     .filter(|lp| lp.unit == 0 || lp.unit == sym.unit)
                     .map(|lp| {
-                        let (wx, wy) = instance_transform(sym, &lp.pin.position);
+                        let _world = SymbolTransform::from_symbol(sym).apply(lp.pin.position);
+                        let (wx, wy) = (_world.x, _world.y);
                         let world_pos = Point::new(wx, wy);
                         let connected =
                             point_is_connected(&world_pos, &wires, &buses, &labels, &no_connects);

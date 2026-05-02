@@ -581,8 +581,9 @@ impl Engine {
 // Arc geometry helper
 // ---------------------------------------------------------------------------
 
-/// Circle through three non-collinear points — converts the historical
-/// (start, mid, end) arc storage into (center, radius, angles).
+/// Circle through three non-collinear points — converts the Signex
+/// (start, mid, end) arc storage into (center, radius, angles) for
+/// rendering and hit-testing.
 fn circumcircle(a: (f64, f64), b: (f64, f64), c: (f64, f64)) -> Option<(f64, f64, f64)> {
     let (ax, ay) = a;
     let (bx, by) = b;
