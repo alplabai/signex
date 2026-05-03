@@ -1409,40 +1409,95 @@ impl Signex {
         Task::none()
     }
 
-    /// Open the New Component modal pre-set to the browser's library
-    /// + active table. Wraps the existing `NewComponent` flow.
+    /// Inline "+ Component" — mint a draft row directly into the
+    /// browser's active table without opening any modal. The user
+    /// fills in `internal_pn`, `manufacturer`, `mpn` etc. via the
+    /// grid's inline cell editor; symbol / footprint binding lives in
+    /// the Properties panel for the selected row.
+    ///
+    /// Library is implicit (the browser tab's library), table is the
+    /// browser's `active_table` or — when none is selected — the
+    /// generic-class default resolved through
+    /// `manifest.table_for_class("generic")`. Closes F17 / F18 of the
+    /// 2026-05-03 library polish: the New Component modal's library
+    /// dropdown was meaningless inside a library tab, and the modal
+    /// itself was a step the user didn't want.
     fn handle_browser_add_component(
         &mut self,
         library_path: std::path::PathBuf,
         table: Option<String>,
     ) -> Task<Message> {
-        // Find the library index inside `open_libraries`. The modal's
-        // pick_list is index-based, not path-based, so we need the
-        // position lookup.
-        let library_idx = self
+        let library_idx = match self
             .library
             .open_libraries
             .iter()
-            .position(|lib| lib.root == library_path);
-        tracing::warn!(
-            target: "signex::library",
-            library = %library_path.display(),
-            ?table,
-            ?library_idx,
-            "browser: Add Component clicked — opening New Component modal"
-        );
-        self.library.new_component = Some(NewComponentState {
-            internal_pn: String::new(),
+            .position(|lib| lib.root == library_path)
+        {
+            Some(idx) => idx,
+            None => {
+                tracing::warn!(
+                    target: "signex::library",
+                    library = %library_path.display(),
+                    "browser: Add Component — library not mounted"
+                );
+                return Task::none();
+            }
+        };
+
+        let class = signex_library::ComponentClass::generic();
+        let resolved_table = match table {
+            Some(t) if !t.trim().is_empty() => t,
+            _ => match self
+                .library
+                .open_libraries
+                .get(library_idx)
+                .and_then(|lib| self.library.set.get(lib.library_id))
+                .map(|adapter| adapter.manifest().table_for_class(class.as_str()))
+            {
+                Some(t) => t,
+                None => {
+                    tracing::warn!(
+                        target: "signex::library",
+                        library = %library_path.display(),
+                        "browser: Add Component — no active table and no class default"
+                    );
+                    return Task::none();
+                }
+            },
+        };
+
+        match commands::create_component_row(
+            &mut self.library,
             library_idx,
-            table,
-            class: signex_library::ComponentClass::generic(),
-            category: String::new(),
-            symbol_ref: None,
-            footprint_ref: None,
-            error: None,
-            creating_table: None,
-            advanced_open: false,
-        });
+            &resolved_table,
+            "", // empty PN — user fills it in via inline cell editor
+            class,
+            None, // symbol_ref bound later via Properties panel
+            None, // footprint_ref bound later
+        ) {
+            Ok(row_id) => {
+                if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
+                    state.active_table = Some(resolved_table.clone());
+                    state.selected_row = Some(row_id);
+                }
+                tracing::info!(
+                    target: "signex::library",
+                    library = %library_path.display(),
+                    table = %resolved_table,
+                    row_id = %row_id,
+                    "browser: minted draft row inline"
+                );
+            }
+            Err(e) => {
+                tracing::warn!(
+                    target: "signex::library",
+                    library = %library_path.display(),
+                    table = %resolved_table,
+                    error = %e,
+                    "browser: inline row create failed"
+                );
+            }
+        }
         Task::none()
     }
 
