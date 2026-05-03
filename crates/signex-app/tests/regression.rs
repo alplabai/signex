@@ -12,8 +12,10 @@
 //! still need a human eye.
 
 use signex_app::app::{
-    LoadedProject, Message, RemoveChoice, RemoveDialogState, RenameDialogState, Signex,
+    LoadedProject, Message, ProjectTreeAction, RemoveChoice, RemoveDialogState, RenameDialogState,
+    Signex,
 };
+use signex_types::project::SheetEntry;
 
 use signex_types::project::ProjectData;
 
@@ -384,6 +386,153 @@ fn project_rename_migrates_dirty_paths_to_new_path() {
         app.document_state.dirty_paths.contains(&new_prj),
         "new path migrated into dirty_paths"
     );
+}
+
+// ─────────────────────────────────────────────────────────────────
+// §3.2 — Add New ▸ Schematic (post-Save-As-dialog dispatch)
+// ─────────────────────────────────────────────────────────────────
+
+#[test]
+fn add_new_schematic_writes_blank_snxsch_marks_project_dirty_no_tab_open() {
+    let (mut app, tmp, prj_path) = fixture_project_with_companions("Mike");
+    let new_sheet = tmp.path().join("FreshSheet.snxsch");
+    assert!(!new_sheet.exists());
+
+    let _ = app.update(Message::AddNewSchematicPicked {
+        project_idx: 0,
+        path: Some(new_sheet.clone()),
+    });
+
+    assert!(new_sheet.exists(), "new .snxsch must land on disk");
+    assert_eq!(
+        app.document_state.projects[0].data.sheets.len(),
+        1,
+        "new sheet appears in the project's sheets list"
+    );
+    assert!(
+        app.document_state.dirty_paths.contains(&prj_path),
+        "project marked dirty so user knows to Save"
+    );
+
+    // §3.2 important UX: NO tab opens automatically. The user clicks
+    // the tree entry to open it. Pre-fix the Add New flow would have
+    // opened a tab as a side effect.
+    assert!(
+        app.document_state.tabs.is_empty(),
+        "Add New ▸ Schematic must NOT auto-open a tab (§3.2)"
+    );
+}
+
+#[test]
+fn add_new_schematic_cancelled_picker_is_a_clean_noop() {
+    let (mut app, _tmp, prj_path) = fixture_project_with_companions("November");
+
+    let _ = app.update(Message::AddNewSchematicPicked {
+        project_idx: 0,
+        path: None, // user cancelled the Save-As dialog
+    });
+
+    assert!(
+        app.document_state.projects[0].data.sheets.is_empty(),
+        "cancellation makes no project mutations"
+    );
+    assert!(
+        !app.document_state.dirty_paths.contains(&prj_path),
+        "cancellation does not flip the dirty bit"
+    );
+    assert!(app.document_state.tabs.is_empty());
+}
+
+// ─────────────────────────────────────────────────────────────────
+// §3.5 — Project Options modal (open + close lifecycle)
+// ─────────────────────────────────────────────────────────────────
+
+#[test]
+fn project_options_modal_opens_with_metadata_then_closes() {
+    let (mut app, tmp, _prj) = fixture_project_with_companions("Oscar");
+    // Add some sheets and libraries so library_count is meaningful.
+    {
+        let proj = &mut app.document_state.projects[0];
+        proj.data.sheets.push(SheetEntry {
+            name: "Power".into(),
+            filename: "Power.snxsch".into(),
+            symbols_count: 3,
+            wires_count: 5,
+            labels_count: 2,
+        });
+    }
+
+    let _ = app.update(Message::ProjectTreeAction(
+        ProjectTreeAction::OpenProjectOptions(vec![0]),
+    ));
+
+    let state = app
+        .ui_state
+        .project_options
+        .as_ref()
+        .expect("modal opened");
+    assert_eq!(state.project_idx, 0);
+    assert_eq!(state.name, "Oscar");
+    assert_eq!(
+        state.directory,
+        tmp.path().to_string_lossy().to_string()
+    );
+    assert_eq!(state.schematic_root.as_deref(), Some("Oscar.snxsch"));
+    assert_eq!(state.pcb_file.as_deref(), Some("Oscar.snxpcb"));
+    assert_eq!(state.library_count, 0);
+
+    // Close-X / Esc both fire CloseProjectOptions.
+    let _ = app.update(Message::CloseProjectOptions);
+    assert!(
+        app.ui_state.project_options.is_none(),
+        "Project Options modal closed after CloseProjectOptions"
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Modal lifecycle (rename / remove): buffer edit + close-without-submit
+// ─────────────────────────────────────────────────────────────────
+
+#[test]
+fn rename_buffer_changed_updates_modal_buffer() {
+    let (mut app, _tmp, prj_path) = fixture_project_with_companions("Papa");
+    arm_project_rename(&mut app, &prj_path, "");
+
+    let _ = app.update(Message::RenameBufferChanged("PartialName".into()));
+    let dlg = app.ui_state.rename_dialog.as_ref().unwrap();
+    assert_eq!(dlg.buffer, "PartialName");
+
+    let _ = app.update(Message::RenameBufferChanged("LongerName".into()));
+    let dlg = app.ui_state.rename_dialog.as_ref().unwrap();
+    assert_eq!(dlg.buffer, "LongerName");
+}
+
+#[test]
+fn close_rename_dialog_dismisses_modal_without_filesystem_changes() {
+    let (mut app, _tmp, prj_path) = fixture_project_with_companions("Quebec");
+    arm_project_rename(&mut app, &prj_path, "WouldBeRenamed");
+
+    let _ = app.update(Message::CloseRenameDialog);
+
+    assert!(app.ui_state.rename_dialog.is_none(), "modal closed");
+    assert!(prj_path.exists(), "no rename happened — original still there");
+    assert!(
+        !prj_path.with_file_name("WouldBeRenamed.snxprj").exists(),
+        "no new file created"
+    );
+}
+
+#[test]
+fn close_remove_dialog_dismisses_modal_without_filesystem_changes() {
+    let (mut app, tmp, _prj) = fixture_project_with_companions("Romeo");
+    let target = tmp.path().join("Romeo.snxsch");
+    assert!(target.exists());
+
+    arm_remove_dialog(&mut app, &target);
+    let _ = app.update(Message::CloseRemoveDialog);
+
+    assert!(app.ui_state.remove_dialog.is_none(), "modal closed");
+    assert!(target.exists(), "no removal happened — file still there");
 }
 
 // ─────────────────────────────────────────────────────────────────
