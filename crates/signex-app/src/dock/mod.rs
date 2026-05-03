@@ -461,7 +461,18 @@ impl DockArea {
                 // corners flip to the bottom. Inverse of doc tabs.
                 accent_position: signex_widgets::tab_pill::AccentPosition::Top,
             };
-            let inner = container(text(label).size(11).color(text_c)).padding([4, 10]);
+            // F27 — pin the panel-tab label to a single line. Without
+            // `Wrapping::None` iced word-wraps "SCH Library" onto two
+            // lines whenever the dock area squeezes the tab — which
+            // happens any time the panel column is in its default
+            // ~240 px width with several panels in the strip.
+            let inner = container(
+                text(label)
+                    .size(11)
+                    .color(text_c)
+                    .wrapping(iced::widget::text::Wrapping::None),
+            )
+            .padding([4, 10]);
             let tab = mouse_area(signex_widgets::tab_pill::TabPill::new(inner, pill_style))
                 .on_enter(DockMessage::TabHoverEnter(position, i))
                 .on_exit(DockMessage::TabHoverExit(position, i))
