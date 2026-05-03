@@ -215,6 +215,7 @@ impl Signex {
                     components_split: 250.0,
                     project_tree: vec![],
                     project_tree_selected: None,
+                    library_row_detail: None,
                     selection_count: 0,
                     selected_uuid: None,
                     selected_kind: None,

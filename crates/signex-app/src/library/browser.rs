@@ -160,23 +160,15 @@ pub fn view<'a>(
     .width(Length::Fill)
     .height(Length::Fill);
 
-    let preview_pane = view_preview_pane(
-        library_path,
-        active_table,
-        library_state,
-        &visible,
-        browser.selected_row,
-        tokens,
-    );
-
-    let body = row![
-        left,
-        Space::new().width(8),
-        container(preview_pane)
-            .width(Length::Fixed(PREVIEW_PANE_WIDTH))
-            .height(Length::Fill),
-    ]
-    .height(Length::Fill);
+    // F15 (final pass) — the inline preview pane is gone. Row detail
+    // and Pick Symbol / Pick Footprint live in the right-edge
+    // Properties panel now (`view_library_row_properties`), so the
+    // Library Browser tab body keeps the full width for the grid.
+    // `library_state` and `view_preview_pane` retained but unused
+    // here; remove in a follow-up cleanup pass once the Properties-
+    // panel approach is locked.
+    let _ = library_state;
+    let body = row![left].height(Length::Fill);
 
     let right = column![
         header,

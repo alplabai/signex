@@ -2,7 +2,7 @@
 
 use iced::mouse;
 use iced::widget::canvas;
-use iced::widget::{Column, Row, Space, column, container, row, scrollable, svg, text};
+use iced::widget::{Column, Row, Space, button, column, container, row, scrollable, svg, text};
 use iced::{Background, Border, Color, Element, Length, Point, Rectangle, Renderer, Theme};
 use iced_aw::{NumberInput, Wrap};
 use signex_types::coord::Unit;
@@ -261,6 +261,36 @@ pub enum ErcSeverityLite {
     Info,
 }
 
+/// Detail for the row currently selected in the active Library
+/// Browser tab. Surfaces in the right-edge Properties panel so
+/// primitive binding (Pick Symbol / Pick Footprint) lives next to
+/// every other "what am I selected?" affordance the user looks for
+/// there. F15 (2026-05-03 library polish): "right pane can be opened
+/// on properties instead."
+///
+/// Populated by `refresh_panel_ctx` when the active tab is
+/// `TabKind::LibraryBrowser(path)` AND the matching browser state's
+/// `selected_row` is `Some(_)`. Cleared otherwise.
+#[derive(Debug, Clone)]
+pub struct LibraryRowDetail {
+    pub library_path: std::path::PathBuf,
+    pub table: String,
+    pub row_id: uuid::Uuid,
+    pub internal_pn: String,
+    /// Class string stored on the row — derived from the table name
+    /// at create time per F20 (Tables-only model). Surfaced as
+    /// read-only metadata only; users can't edit it directly.
+    pub class: String,
+    /// Pretty `LifecycleState` token ("Draft", "Released", …).
+    pub lifecycle_label: String,
+    /// "Symbol bound" / "Symbol unresolved (UUID not mounted)" /
+    /// "Symbol unbound". Same shape as the legacy preview pane's
+    /// `symbol_summary` first line.
+    pub symbol_summary: String,
+    /// Same shape for footprint — "Footprint bound", "unbound", …
+    pub footprint_summary: String,
+}
+
 pub struct PanelContext {
     /// Multi-project workspace — one entry per `LoadedProject`. Every
     /// project-aware panel reads from this Vec; the active project is
@@ -327,6 +357,14 @@ pub struct PanelContext {
     /// the row highlight independently of which document is active.
     /// Set on `TreeMsg::Select`, cleared when the tree resets.
     pub project_tree_selected: Option<Vec<usize>>,
+    /// F15 — detail for the row currently selected in the active
+    /// Library Browser tab. `Some` when (a) the active tab is a
+    /// `LibraryBrowser(path)` AND (b) `library_browsers[path]
+    /// .selected_row` is `Some`. `view_properties` reads this and
+    /// renders the row's metadata + Pick Symbol / Pick Footprint
+    /// buttons; outside of a Library Browser tab the field stays
+    /// `None` and the panel falls through to its existing branches.
+    pub library_row_detail: Option<LibraryRowDetail>,
     // Selection info for Properties panel
     /// How many items are currently selected.
     pub selection_count: usize,
@@ -860,6 +898,14 @@ pub enum PanelMsg {
     SelectComponent(String),
     DragComponentsSplit,
     ComponentFilter(String),
+    /// F15 — Properties panel: open the primitive picker (symbol /
+    /// footprint) for the row described by the active
+    /// `PanelContext.library_row_detail`. Routes to
+    /// `LibraryMessage::OpenPrimitivePicker` with a
+    /// `PrimitivePickerTarget::BrowserRow` so the pick applies +
+    /// persists through the existing adapter path.
+    LibraryRowPickSymbol,
+    LibraryRowPickFootprint,
     /// Toggle a collapsible section (by section key).
     ToggleSection(String),
     /// Edit a symbol's designator (committed on submit).
@@ -2116,12 +2162,122 @@ const PROPERTY_LABEL_PORTION: u16 = 2;
 const PROPERTY_CONTROL_PORTION: u16 = 5;
 const PROPERTY_ROW_PAD_X: u16 = 6;
 
+/// F15 — Library Browser row detail in the Properties panel. Shows
+/// the row's identifier line + Symbol / Footprint binding status with
+/// Pick buttons. Mirrors what the Library Browser's inline preview
+/// pane used to render; surfacing here means the user gets the row's
+/// detail in the canonical "selected thing" panel, freeing horizontal
+/// space inside the browser tab for the grid.
+fn view_library_row_properties<'a>(
+    d: &'a LibraryRowDetail,
+    muted: iced::Color,
+    primary: iced::Color,
+    border_c: iced::Color,
+    tokens: &'a ThemeTokens,
+) -> Element<'a, PanelMsg> {
+    let _ = tokens;
+    // Truncate the row UUID to its first 8 hex chars for a
+    // human-scannable identity line.
+    let row_id_short = {
+        let s = d.row_id.simple().to_string();
+        if s.len() >= 8 {
+            s[..8].to_string()
+        } else {
+            s
+        }
+    };
+    let pn_text = if d.internal_pn.is_empty() {
+        "(unnamed row)".to_string()
+    } else {
+        d.internal_pn.clone()
+    };
+
+    let pick_symbol_btn = button(
+        text("Pick Symbol…")
+            .size(11)
+            .color(primary),
+    )
+    .padding([4, 10])
+    .on_press(PanelMsg::LibraryRowPickSymbol)
+    .style(move |_: &Theme, _| iced::widget::button::Style {
+        background: Some(iced::Background::Color(iced::Color::from_rgba(
+            1.0, 1.0, 1.0, 0.04,
+        ))),
+        text_color: primary,
+        border: Border {
+            width: 1.0,
+            radius: 3.0.into(),
+            color: border_c,
+        },
+        ..iced::widget::button::Style::default()
+    });
+
+    let pick_footprint_btn = button(
+        text("Pick Footprint…")
+            .size(11)
+            .color(primary),
+    )
+    .padding([4, 10])
+    .on_press(PanelMsg::LibraryRowPickFootprint)
+    .style(move |_: &Theme, _| iced::widget::button::Style {
+        background: Some(iced::Background::Color(iced::Color::from_rgba(
+            1.0, 1.0, 1.0, 0.04,
+        ))),
+        text_color: primary,
+        border: Border {
+            width: 1.0,
+            radius: 3.0.into(),
+            color: border_c,
+        },
+        ..iced::widget::button::Style::default()
+    });
+
+    let body = column![
+        text("Library Row").size(11).color(muted),
+        Space::new().height(4),
+        text(pn_text).size(13).color(primary),
+        Space::new().height(2),
+        text(format!(
+            "table: {}  ·  class: {}  ·  {}  ·  row {}",
+            d.table, d.class, d.lifecycle_label, row_id_short,
+        ))
+        .size(10)
+        .color(muted),
+        Space::new().height(12),
+        text("Symbol").size(11).color(muted),
+        Space::new().height(4),
+        text(d.symbol_summary.clone()).size(11).color(primary),
+        Space::new().height(6),
+        pick_symbol_btn,
+        Space::new().height(14),
+        text("Footprint").size(11).color(muted),
+        Space::new().height(4),
+        text(d.footprint_summary.clone()).size(11).color(primary),
+        Space::new().height(6),
+        pick_footprint_btn,
+    ]
+    .spacing(0)
+    .padding(10);
+
+    container(body).width(Length::Fill).into()
+}
+
 fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let muted = theme_ext::text_secondary(&ctx.tokens);
     let primary = theme_ext::text_primary(&ctx.tokens);
     let border_c = theme_ext::border_color(&ctx.tokens);
     let input_bg = crate::styles::ti(ctx.tokens.selection);
     let input_bdr = crate::styles::ti(ctx.tokens.accent);
+
+    // Library Browser tab — Properties panel surfaces the selected
+    // row's metadata + Pick Symbol / Pick Footprint. F15 (2026-05-03
+    // library polish): "right pane can be opened on properties
+    // instead." Takes precedence over the schematic / pre-placement /
+    // symbol-editor branches so when a Library Browser tab is active
+    // the panel stays focused on it.
+    if let Some(detail) = ctx.library_row_detail.as_ref() {
+        return view_library_row_properties(detail, muted, primary, border_c, &ctx.tokens);
+    }
 
     // Symbol-editor tab takes precedence — when the user is editing a
     // `.snxsym` the right-dock Properties panel shows symbol/pin
