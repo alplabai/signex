@@ -1330,6 +1330,13 @@ impl Signex {
         &mut self,
         path: std::path::PathBuf,
     ) -> Task<Message> {
+        tracing::info!(
+            target: "signex::library",
+            path = %path.display(),
+            exists = path.exists(),
+            already_mounted = self.library.library_at(&path).is_some(),
+            "open_library_browser: enter"
+        );
         // 1. Mount the library if it isn't already. `open_library` is
         //    idempotent — re-mounting an already-open library is a
         //    no-op.

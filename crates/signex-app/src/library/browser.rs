@@ -168,8 +168,18 @@ pub fn view<'a>(
     // `library_state` and `view_preview_pane` retained but unused
     // here; remove in a follow-up cleanup pass once the Properties-
     // panel approach is locked.
+    //
+    // The Row needs explicit `Length::Fill` width — the
+    // `feedback_iced_layout.md` anti-pattern: a Fill child inside a
+    // Shrink Row collapses the Row to the child's intrinsic min,
+    // which for the Fill grid means the body silently renders empty
+    // (visible regression: "double-clicking the .snxlib opens
+    // nothing"). The original three-child Row hid this because two
+    // of the children were fixed-width.
     let _ = library_state;
-    let body = row![left].height(Length::Fill);
+    let body = row![left]
+        .width(Length::Fill)
+        .height(Length::Fill);
 
     let right = column![
         header,
