@@ -78,6 +78,7 @@ fn fixture_project_with_companions(stem: &str) -> (Signex, TempDir, PathBuf) {
         id,
         path: prj_path.clone(),
         data,
+        pending_libraries: std::collections::HashMap::new(),
     });
     app.document_state.active_project = Some(id);
 
@@ -701,6 +702,58 @@ fn f3_garbage_json_doesnt_corrupt_file() {
     assert_eq!(
         after, original,
         "garbage JSON file must be left untouched (no panic, no truncation)"
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────
+// F13 — New Library: register-pending only, materialise on save
+// ─────────────────────────────────────────────────────────────────
+
+#[test]
+fn f13_register_pending_library_does_not_touch_disk() {
+    let tmp = TempDir::new().unwrap();
+    let lib_path = tmp.path().join("MyLib.snxlib");
+
+    let (library_id, spec) = signex_app::library::commands::register_pending_library(
+        lib_path.clone(),
+        false, // enable_git
+        false, // use_lfs
+    )
+    .expect("register pending");
+
+    // F13 load-bearing assertion: nothing on disk yet.
+    assert!(!lib_path.exists(), "register must NOT touch disk");
+    assert_eq!(spec.lib_path, lib_path);
+    assert_eq!(spec.display_name, "MyLib");
+    assert!(!spec.enable_git);
+    assert!(!spec.use_lfs);
+    // A real Uuid v7 was minted (timestamp-prefixed).
+    assert_ne!(library_id, uuid::Uuid::nil());
+}
+
+#[test]
+fn f13_register_pending_rejects_existing_path() {
+    let tmp = TempDir::new().unwrap();
+    let lib_path = tmp.path().join("Existing.snxlib");
+    fs::create_dir_all(&lib_path).unwrap();
+
+    let result = signex_app::library::commands::register_pending_library(
+        lib_path.clone(),
+        false,
+        false,
+    );
+    assert!(result.is_err(), "must reject paths that already exist");
+}
+
+#[test]
+fn f13_register_pending_rejects_non_snxlib_extension() {
+    let tmp = TempDir::new().unwrap();
+    let bad_path = tmp.path().join("BadExt.snxsch");
+
+    let result = signex_app::library::commands::register_pending_library(bad_path, false, false);
+    assert!(
+        result.is_err(),
+        "must reject paths whose extension isn't .snxlib"
     );
 }
 

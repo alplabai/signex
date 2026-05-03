@@ -175,6 +175,7 @@ impl Signex {
                 id,
                 path: project_path.to_path_buf(),
                 data,
+                pending_libraries: std::collections::HashMap::new(),
             });
         self.document_state.active_project = Some(id);
         Ok(id)
@@ -297,6 +298,20 @@ impl Signex {
     /// Persist the active project's `.snxprj` JSON when its dirty bit
     /// is set in `dirty_paths`. No-op if no project is active or the
     /// project file isn't dirty.
+    ///
+    /// Pending libraries (registered via the New Library flow) are
+    /// materialised to disk **first** — `commands::materialize_pending_library`
+    /// runs `LocalGitAdapter::init` for each entry. Successful
+    /// materialisations push their `LibraryEntry` onto
+    /// `project.libraries` so the subsequent `.snxprj` write captures
+    /// them. Failures (e.g. target path now exists, permission glitch)
+    /// keep the entry pending so the user can fix the underlying
+    /// problem and retry on the next Save.
+    ///
+    /// Closes `feedback_no_disk_writes_without_user_save.md`'s "wait
+    /// for explicit user save" invariant: modal confirm registered the
+    /// pending entry; this Ctrl+S is the explicit save that actually
+    /// commits to disk.
     fn save_active_project_if_dirty(&mut self) {
         let Some(project_id) = self.document_state.active_project else {
             return;
@@ -313,6 +328,68 @@ impl Signex {
         if !self.document_state.dirty_paths.contains(&project_path) {
             return;
         }
+
+        // Drain the pending-library map first so the snxprj save below
+        // captures the freshly-materialised LibraryEntry rows.
+        let pending: Vec<(uuid::Uuid, crate::library::commands::PendingLibrarySpec)> = self
+            .document_state
+            .projects
+            .iter_mut()
+            .find(|p| p.id == project_id)
+            .map(|p| p.pending_libraries.drain().collect())
+            .unwrap_or_default();
+        for (library_id, spec) in pending {
+            // Re-borrow per iteration so the materialise call owns
+            // the project + library state mutably without aliasing.
+            let project_path_log;
+            let result = if let Some(loaded) = self
+                .document_state
+                .projects
+                .iter_mut()
+                .find(|p| p.id == project_id)
+            {
+                project_path_log = loaded.path.clone();
+                crate::library::commands::materialize_pending_library(
+                    &mut self.library,
+                    &mut loaded.data,
+                    library_id,
+                    &spec,
+                )
+            } else {
+                continue;
+            };
+            match result {
+                Ok(()) => {
+                    tracing::info!(
+                        target: "signex::library",
+                        project = %project_path_log.display(),
+                        library = %spec.lib_path.display(),
+                        library_id = %library_id,
+                        "materialised pending library"
+                    );
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        target: "signex::library",
+                        project = %project_path_log.display(),
+                        library = %spec.lib_path.display(),
+                        library_id = %library_id,
+                        error = %error,
+                        "materialise_pending_library failed; keeping entry pending for retry"
+                    );
+                    // Re-stash so the user can fix + retry next Save.
+                    if let Some(loaded) = self
+                        .document_state
+                        .projects
+                        .iter_mut()
+                        .find(|p| p.id == project_id)
+                    {
+                        loaded.pending_libraries.insert(library_id, spec);
+                    }
+                }
+            }
+        }
+
         let data = match self
             .document_state
             .projects

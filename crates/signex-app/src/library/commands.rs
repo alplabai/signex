@@ -36,6 +36,181 @@ pub fn open_library(state: &mut LibraryState, root: PathBuf) -> Result<(), Libra
 
 // ── Library lifecycle helpers ────────────────────────────────────────
 
+/// Captured shape of a New Library request that hasn't been written
+/// to disk yet. Lives on `LoadedProject.pending_libraries` between
+/// the user clicking "Create Library" on the Library Options modal
+/// and the next successful project save (which materialises the
+/// `.snxlib` via `materialize_pending_library`). Closes
+/// `feedback_no_disk_writes_without_user_save.md`'s "wait for
+/// explicit user save" invariant — modal confirm flips the project
+/// dirty bit but leaves disk untouched; only `Ctrl+S` actually
+/// writes anything.
+#[derive(Debug, Clone)]
+pub struct PendingLibrarySpec {
+    pub lib_path: PathBuf,
+    pub enable_git: bool,
+    pub use_lfs: bool,
+    /// Tree-display name. Derived from the `.snxlib` stem at register
+    /// time so the project tree can show the entry without having to
+    /// touch disk.
+    pub display_name: String,
+}
+
+/// Register a library creation request without touching disk.
+///
+/// Validates the target path the same way `create_library_at` does
+/// (extension must be `.snxlib`, stem non-empty + portable, target
+/// must not already exist), pre-mints a `library_id`, and stashes a
+/// [`PendingLibrarySpec`] under that id on the caller-provided
+/// pending map. The actual `.snxlib` directory + manifest +
+/// optional `git init` happen at project-save time via
+/// [`materialize_pending_library`].
+///
+/// Returns the pre-minted `library_id`. Caller is responsible for:
+///   1. Storing the `(library_id, PendingLibrarySpec)` on the
+///      project's `pending_libraries` map.
+///   2. Marking the project dirty so the user knows Save is pending.
+pub fn register_pending_library(
+    lib_path: PathBuf,
+    enable_git: bool,
+    use_lfs: bool,
+) -> Result<(Uuid, PendingLibrarySpec), LibraryError> {
+    let ext_ok = lib_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.eq_ignore_ascii_case("snxlib"))
+        .unwrap_or(false);
+    if !ext_ok {
+        return Err(LibraryError::Conflict(format!(
+            "library path must end with `.snxlib`: {}",
+            lib_path.display()
+        )));
+    }
+    let stem = lib_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_string())
+        .unwrap_or_default();
+    if stem.is_empty() {
+        return Err(LibraryError::Conflict(
+            "library name (filename stem) is empty".to_string(),
+        ));
+    }
+    if stem
+        .chars()
+        .any(|c| matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|'))
+    {
+        return Err(LibraryError::Conflict(format!(
+            "library name {stem:?} contains illegal path characters"
+        )));
+    }
+    if lib_path.exists() {
+        return Err(LibraryError::Conflict(format!(
+            "{} already exists",
+            lib_path.display()
+        )));
+    }
+
+    let library_id = Uuid::now_v7();
+    let spec = PendingLibrarySpec {
+        lib_path,
+        enable_git,
+        use_lfs,
+        display_name: stem,
+    };
+    Ok((library_id, spec))
+}
+
+/// Materialise a previously-registered pending library: do the
+/// `.snxlib/` directory + manifest + git scaffolding + project
+/// registration, using the pre-minted `library_id` so the on-disk
+/// manifest matches whatever the user already has staged in
+/// `LoadedProject.pending_libraries`.
+///
+/// This is the disk-write side of the deferred flow. Called from
+/// `save_active_project_if_dirty` once per pending entry; on
+/// success the caller drains the entry from the pending map. On
+/// failure the entry stays pending so the user can retry on next
+/// save (e.g. they free up the target path).
+///
+/// Atomic-with-rollback discipline matches the original
+/// `create_library_at` (single library fn, never split across app +
+/// lib layers — `feedback_no_disk_writes_without_user_save.md`).
+pub fn materialize_pending_library(
+    state: &mut LibraryState,
+    project: &mut ProjectData,
+    library_id: Uuid,
+    spec: &PendingLibrarySpec,
+) -> Result<(), LibraryError> {
+    if spec.lib_path.exists() {
+        return Err(LibraryError::Conflict(format!(
+            "{} already exists (pending materialise)",
+            spec.lib_path.display()
+        )));
+    }
+
+    let stem = spec.display_name.clone();
+    let seed_classes: Vec<signex_library::ClassEntry> = crate::fonts::read_component_classes_pref()
+        .into_iter()
+        .map(|e| signex_library::ClassEntry {
+            key: e.key,
+            label: e.label,
+        })
+        .collect();
+    let manifest = SnxlibManifest {
+        format: FORMAT_TOKEN.into(),
+        library_id,
+        library: LibrarySection {
+            name: stem,
+            description: None,
+        },
+        mode: Default::default(),
+        workflow: WorkflowConfig::default(),
+        users: UsersConfig::default(),
+        classes: seed_classes,
+    };
+    let _adapter = LocalGitAdapter::init(
+        &spec.lib_path,
+        manifest,
+        LibraryInitOptions {
+            enable_git: spec.enable_git,
+            use_lfs: spec.enable_git && spec.use_lfs,
+        },
+    )?;
+
+    let project_dir = PathBuf::from(&project.dir);
+    let (entry_path, entry_kind) = if !project_dir.as_os_str().is_empty()
+        && let Ok(rel) = spec.lib_path.strip_prefix(&project_dir)
+    {
+        (rel.to_path_buf(), LibraryEntryKind::ProjectLocal)
+    } else {
+        (spec.lib_path.clone(), LibraryEntryKind::Shared)
+    };
+    project.libraries.push(LibraryEntry {
+        path: entry_path,
+        kind: entry_kind,
+        library_id: Some(library_id),
+    });
+
+    if let Err(e) = state.open_library(spec.lib_path.clone()) {
+        tracing::warn!(
+            target: "signex::library",
+            path = %spec.lib_path.display(),
+            error = %e,
+            "freshly-materialised library failed initial open — entry registered, retry from tree"
+        );
+    } else if let Err(e) = state.refresh_components(&spec.lib_path) {
+        tracing::warn!(
+            target: "signex::library",
+            path = %spec.lib_path.display(),
+            error = %e,
+            "freshly-materialised library failed initial refresh"
+        );
+    }
+
+    Ok(())
+}
+
 /// Create a fresh `.snxlib/` library at `lib_path`. The directory's
 /// final filename stem (`<name>.snxlib`) becomes the library's
 /// display name in the manifest. The library is registered on

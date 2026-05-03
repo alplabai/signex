@@ -2230,10 +2230,15 @@ impl Signex {
 
     /// Resolution of the "Library Options" modal (Stage 11 of
     /// `v0.9-snxlib-as-file-plan.md`). Re-resolves the project (in
-    /// case it was unloaded between modal spawn + confirm), then runs
-    /// `commands::create_library_at` to do the disk init + manifest +
-    /// git scaffolding + project registration. `use_lfs` carries the
-    /// modal's checkbox state — when on, the adapter writes
+    /// case it was unloaded between modal spawn + confirm), then
+    /// **registers** a pending library — no disk writes here. The
+    /// actual `.snxlib/` directory + manifest + git scaffolding land
+    /// at project-save time via
+    /// `commands::materialize_pending_library`, called from
+    /// `save_active_project_if_dirty`. Closes
+    /// `feedback_no_disk_writes_without_user_save.md`'s "wait for
+    /// explicit user save" invariant. `use_lfs` carries the modal's
+    /// checkbox state — when on, the eventual adapter writes
     /// `.gitattributes` for `*.step` / `*.stp` / `*.wrl` / `*.iges`
     /// and stages it into the initial commit.
     fn handle_create_library_at_path(
@@ -2257,21 +2262,20 @@ impl Signex {
             return Task::none();
         };
 
-        match crate::library::commands::create_library_at(
-            &mut self.library,
-            &mut loaded.data,
+        match crate::library::commands::register_pending_library(
             lib_path.clone(),
             enable_git,
             use_lfs,
         ) {
-            Ok(library_id) => {
+            Ok((library_id, spec)) => {
+                loaded.pending_libraries.insert(library_id, spec);
                 tracing::info!(
                     target: "signex::library",
                     project = %loaded.path.display(),
                     library = %lib_path.display(),
                     library_id = %library_id,
                     use_lfs,
-                    "created library via save-as dialog"
+                    "registered pending library — disk write deferred to project save"
                 );
                 // Mark the project file dirty so the user is prompted
                 // to persist the new library entry in the `.snxprj`.
@@ -2285,7 +2289,7 @@ impl Signex {
                     library = %lib_path.display(),
                     use_lfs,
                     error = %e,
-                    "create_library_at failed"
+                    "register_pending_library failed (path validation)"
                 );
             }
         }

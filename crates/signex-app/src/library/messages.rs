@@ -72,9 +72,9 @@ pub enum LibraryMessage {
     /// `lib_path` is the user's chosen `.snxlib/` directory path.
     /// Opens the "Library Options" modal seeded with `(project_path,
     /// lib_path, use_lfs = false)` so the user can opt into Git LFS
-    /// for binary 3D models before the adapter writes anything to
-    /// disk. Confirming the modal calls
-    /// `crate::library::commands::create_library_at`.
+    /// for binary 3D models. Confirming the modal calls
+    /// `crate::library::commands::register_pending_library` —
+    /// nothing hits disk until the user saves the project (Ctrl+S).
     CreateLibraryAtPath {
         project_path: std::path::PathBuf,
         lib_path: std::path::PathBuf,
@@ -87,8 +87,13 @@ pub enum LibraryMessage {
     /// as plain files; flipping this on triggers `git init` at
     /// create time.
     LibraryCreateOptionsToggleGit,
-    /// "Library Options" modal — Create Library button. Runs
-    /// `commands::create_library_at` with the modal's `use_lfs` flag.
+    /// "Library Options" modal — Create Library button. Registers
+    /// a pending library via
+    /// `commands::register_pending_library` and stashes the spec on
+    /// `LoadedProject.pending_libraries`. The actual `.snxlib/`
+    /// directory + git scaffolding are deferred to project save
+    /// (`commands::materialize_pending_library`), per the
+    /// "wait for explicit user save" invariant.
     LibraryCreateOptionsConfirm,
     /// "Library Options" modal — Cancel button (or Esc). Drops the
     /// modal state without creating anything.

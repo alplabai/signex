@@ -194,7 +194,7 @@ impl Signex {
                 // back to the correct library; the library renders as
                 // a single leaf in the project tree, so we don't
                 // enumerate the library's primitive files here.
-                let libraries: Vec<crate::panels::LibraryNodeInfo> = p
+                let mut libraries: Vec<crate::panels::LibraryNodeInfo> = p
                     .data
                     .libraries
                     .iter()
@@ -217,6 +217,19 @@ impl Signex {
                         }
                     })
                     .collect();
+
+                // Pending (yet-to-be-materialised) libraries appear in
+                // the tree as un-mounted nodes with a "(pending)"
+                // suffix so the user can see what Save will create.
+                // Disk write happens at project-save time via
+                // `commands::materialize_pending_library`.
+                for spec in p.pending_libraries.values() {
+                    libraries.push(crate::panels::LibraryNodeInfo {
+                        display_name: format!("{} (pending)", spec.display_name),
+                        root: spec.lib_path.clone(),
+                        mounted: false,
+                    });
+                }
                 crate::panels::ProjectPanelInfo {
                     id: p.id,
                     name: p.data.name.clone(),
