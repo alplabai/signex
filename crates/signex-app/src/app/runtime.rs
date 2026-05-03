@@ -286,24 +286,44 @@ impl Signex {
                                 .unwrap_or_else(|| entry.path.display().to_string()),
                         };
                         let missing = !resolved.exists();
-                        // F29 — surface mounted-library children so
-                        // the project tree can show Symbols /
-                        // Footprints subbranches under each `.snxlib`
-                        // node. Unmounted libraries return empty
-                        // vectors, which `build_project_tree` treats
-                        // as "no children" → leaf node, no chevron.
-                        let (symbols, footprints) = match mounted_lib {
-                            Some(lib) => (
-                                lib.cached_symbols
-                                    .iter()
-                                    .map(|s| s.name.clone())
-                                    .collect(),
-                                lib.cached_footprints
-                                    .iter()
-                                    .map(|f| f.name.clone())
-                                    .collect(),
-                            ),
-                            None => (Vec::new(), Vec::new()),
+                        // F30 — list `.snxsym` / `.snxfpt` FILES, not
+                        // individual primitives. Each file can hold
+                        // hundreds-to-thousands of symbols (Altium
+                        // parity: one `.SchLib` ≡ one `.snxsym`), so
+                        // enumerating cached_symbols would explode the
+                        // tree. The user opens a `.snxsym` file to
+                        // browse the symbols inside it via the SCH
+                        // Library panel, not via the project tree.
+                        let (symbols, footprints) = if mounted_lib.is_some() {
+                            let read_dir_names = |sub: &str, ext: &str| -> Vec<String> {
+                                let dir = resolved.join(sub);
+                                let mut names: Vec<String> = std::fs::read_dir(&dir)
+                                    .ok()
+                                    .into_iter()
+                                    .flatten()
+                                    .filter_map(|entry| entry.ok())
+                                    .filter_map(|entry| {
+                                        let path = entry.path();
+                                        if path.extension().and_then(|e| e.to_str())
+                                            == Some(ext)
+                                        {
+                                            path.file_stem()
+                                                .and_then(|s| s.to_str())
+                                                .map(|s| s.to_string())
+                                        } else {
+                                            None
+                                        }
+                                    })
+                                    .collect();
+                                names.sort();
+                                names
+                            };
+                            (
+                                read_dir_names("symbols", "snxsym"),
+                                read_dir_names("footprints", "snxfpt"),
+                            )
+                        } else {
+                            (Vec::new(), Vec::new())
                         };
                         crate::panels::LibraryNodeInfo {
                             display_name,
