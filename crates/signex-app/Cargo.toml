@@ -5,6 +5,10 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[lib]
+name = "signex_app"
+path = "src/lib.rs"
+
 [[bin]]
 name = "signex"
 path = "src/main.rs"
