@@ -285,6 +285,12 @@ impl Signex {
         // click → Add Existing flips the dirty bit). Best-effort: a
         // failure here is logged but doesn't block the schematic save.
         self.save_active_project_if_dirty();
+        // Refresh the panel context so the project-tree red dirty dot
+        // (which reads `panel_ctx.projects[*].sheets[*].is_dirty`)
+        // sees the updated `dirty_paths` set after the save. Without
+        // this the tree row stays red even though the title (which
+        // reads `dirty_paths.len()` directly each frame) clears.
+        self.refresh_panel_ctx();
         Ok(iced::Task::none())
     }
 

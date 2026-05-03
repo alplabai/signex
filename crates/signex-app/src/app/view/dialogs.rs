@@ -2471,7 +2471,7 @@ pub(in crate::app::view) fn draggable_header<'a>(
 /// Borderless-window header — pressing anywhere on the header region
 /// asks iced to start an OS-level window drag. Replaces the OS title
 /// bar for detached modals opened with `decorations: false`.
-pub(in crate::app::view) fn detached_header<'a>(
+pub(crate) fn detached_header<'a>(
     header_content: Element<'a, Message>,
     modal: super::super::state::ModalId,
 ) -> Element<'a, Message> {
@@ -2486,7 +2486,7 @@ pub(in crate::app::view) fn detached_header<'a>(
 /// no border, fully transparent at rest, Windows-native red bg + white
 /// icon on hover. The `_border` argument is kept for API compatibility
 /// with existing call sites — it is intentionally ignored.
-pub(in crate::app::view) fn close_x_button(
+pub(crate) fn close_x_button(
     message: Message,
     theme_id: signex_types::theme::ThemeId,
     text_color: Color,

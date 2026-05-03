@@ -214,6 +214,7 @@ impl Signex {
                     selected_lib_symbol: None,
                     components_split: 250.0,
                     project_tree: vec![],
+                    project_tree_selected: None,
                     selection_count: 0,
                     selected_uuid: None,
                     selected_kind: None,
@@ -460,6 +461,9 @@ impl Signex {
                 self.ui_state.preferences_open,
                 self.ui_state.annotate_dialog_open,
                 self.ui_state.erc_dialog_open,
+                self.ui_state.rename_dialog.is_some(),
+                self.ui_state.remove_dialog.is_some(),
+                self.ui_state.enable_version_control.is_some(),
             ))
             .map(
                 |(
@@ -471,6 +475,9 @@ impl Signex {
                         prefs_open,
                         annotate_open,
                         erc_open,
+                        rename_open,
+                        remove_open,
+                        enable_vc_open,
                     ),
                     event,
                 )| match event {
@@ -494,7 +501,7 @@ impl Signex {
                                 }
                                 // Toggle: Ctrl+Shift+P while open closes.
                                 (keyboard::Key::Character(c), m)
-                                    if c == "P" && m.command() && m.shift() =>
+                                    if c.eq_ignore_ascii_case("p") && m.command() && m.shift() =>
                                 {
                                     Message::CommandPaletteClose
                                 }
@@ -530,8 +537,11 @@ impl Signex {
                             }
                             // Ctrl+Shift+P: open command palette (VS Code parity).
                             // Export PDF stays reachable via File ▸ Export ▸ PDF…
+                            // Accept both "p" and "P" — iced/winit delivers
+                            // either depending on platform when Ctrl+Shift
+                            // suppress the shift-uppercase transform.
                             (keyboard::Key::Character(c), m)
-                                if c == "P" && m.command() && m.shift() =>
+                                if c.eq_ignore_ascii_case("p") && m.command() && m.shift() =>
                             {
                                 Message::CommandPaletteOpen
                             }
@@ -577,6 +587,21 @@ impl Signex {
                             {
                                 Message::ClosePreferences
                             }
+                            (keyboard::Key::Named(keyboard::key::Named::Escape), _)
+                                if rename_open =>
+                            {
+                                Message::CloseRenameDialog
+                            }
+                            (keyboard::Key::Named(keyboard::key::Named::Escape), _)
+                                if remove_open =>
+                            {
+                                Message::CloseRemoveDialog
+                            }
+                            (keyboard::Key::Named(keyboard::key::Named::Escape), _)
+                                if enable_vc_open =>
+                            {
+                                Message::CloseEnableVersionControl
+                            }
                             (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
                                 Message::Tool(ToolMessage::SelectTool(Tool::Select))
                             }
@@ -584,7 +609,12 @@ impl Signex {
                                 Message::CanvasEvent(CanvasEvent::FitAll)
                             }
                             (keyboard::Key::Named(keyboard::key::Named::F1), _) => {
-                                Message::Menu(MenuMessage::OpenKeyboardShortcuts)
+                                // F1 toggles: open if closed, close if open.
+                                if kbd_shortcuts_open {
+                                    Message::CloseKeyboardShortcuts
+                                } else {
+                                    Message::Menu(MenuMessage::OpenKeyboardShortcuts)
+                                }
                             }
                             (keyboard::Key::Named(keyboard::key::Named::F8), _) => Message::RunErc,
                             (keyboard::Key::Named(keyboard::key::Named::F9), _) => {

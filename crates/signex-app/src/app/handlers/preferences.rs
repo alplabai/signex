@@ -14,13 +14,16 @@ impl Signex {
         self.ui_state.preferences_dirty = false;
         self.ui_state.panel_list_open = false;
         self.interaction_state.context_menu = None;
-        Task::none()
+        // Open Preferences as a separate OS window so the user can move
+        // it around / drag it onto a second monitor. Same pattern as
+        // Print Preview, BOM Preview, Annotate, ERC.
+        self.handle_detach_modal(super::super::state::ModalId::Preferences)
     }
 
     pub(crate) fn handle_preferences_close_requested(&mut self) -> Task<Message> {
         self.ui_state.preferences_open = false;
         self.ui_state.preferences_dirty = false;
-        Task::none()
+        self.close_detached_modal(super::super::state::ModalId::Preferences)
     }
 
     pub(crate) fn handle_preferences_navigation_requested(
@@ -44,6 +47,8 @@ impl Signex {
             PrefMsg::Close => {
                 if !self.ui_state.preferences_dirty {
                     self.ui_state.preferences_open = false;
+                    return self
+                        .close_detached_modal(super::super::state::ModalId::Preferences);
                 }
             }
             PrefMsg::DiscardAndClose => {
@@ -73,6 +78,7 @@ impl Signex {
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_content_cache();
+                return self.close_detached_modal(super::super::state::ModalId::Preferences);
             }
             PrefMsg::Save => {
                 self.ui_state.theme_id = self.ui_state.preferences_draft_theme;

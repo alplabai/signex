@@ -5,10 +5,12 @@
 //! - Provide the canonical canvas font constant (Iosevka).
 //! - Read / write the UI font preference from a simple JSON config file.
 //!
-//! Config file: `~/.config/signex/prefs.json`
+//! Config file: OS-canonical config dir (`%APPDATA%\signex\prefs.json`
+//! on Windows, `~/Library/Application Support/signex/prefs.json` on
+//! macOS, `$XDG_CONFIG_HOME/signex/prefs.json` on Linux).
 //! Format: `{"ui_font": "Roboto"}`
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
 use signex_render::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
@@ -146,8 +148,79 @@ pub fn system_font_families() -> &'static Vec<String> {
 // Preferences file
 // ──────────────────────────────────────────────────────────────────────────
 
+/// Canonical OS-native preferences-file location:
+/// - Windows: `%APPDATA%\signex\prefs.json`
+/// - macOS:   `~/Library/Application Support/signex/prefs.json`
+/// - Linux:   `$XDG_CONFIG_HOME/signex/prefs.json` (or `~/.config/...`)
+///
+/// Computed once per process (via `OnceLock`) so the legacy-prefs
+/// migration runs at most once.
 fn prefs_path() -> PathBuf {
-    // Respect XDG_CONFIG_HOME if set, otherwise use ~/.config
+    use std::sync::OnceLock;
+    static PATH: OnceLock<PathBuf> = OnceLock::new();
+    PATH.get_or_init(|| {
+        let canonical = dirs::config_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("signex")
+            .join("prefs.json");
+        migrate_legacy_prefs(&canonical);
+        canonical
+    })
+    .clone()
+}
+
+/// One-shot startup migrations applied to `prefs.json` before any
+/// reader sees the file. Idempotent — runs at most once per process
+/// because [`prefs_path`] caches via `OnceLock`.
+///
+/// **F1** (Windows prefs path bug): pre-v0.12 the path was hardcoded
+/// to `$XDG_CONFIG_HOME/signex/prefs.json` or
+/// `$HOME/.config/signex/prefs.json`. On Windows that landed in a
+/// `.config` subfolder of the user dir rather than the canonical
+/// `%APPDATA%\signex\`. If the legacy path has a file but the
+/// canonical path doesn't, copy it forward.
+///
+/// **F3** (stale `"label_style":"kicad"`): pre-v0.10 prefs files
+/// carried KiCad-shaped discriminants. The reader silently falls
+/// through to `LabelStyle::Standard`, but the literal string lingers
+/// until the user changes label style + saves. Rewrite once on
+/// startup so the stale token doesn't sit in user-space prefs.
+fn migrate_legacy_prefs(canonical: &Path) {
+    // F1: copy legacy path → canonical, but only if canonical is empty.
+    if !canonical.exists() {
+        let legacy = legacy_posix_prefs_path();
+        if legacy != canonical && legacy.exists() {
+            if let Some(parent) = canonical.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            let _ = std::fs::copy(&legacy, canonical);
+        }
+    }
+
+    // F3: rewrite stale "label_style":"kicad" → "standard".
+    let Ok(bytes) = std::fs::read(canonical) else {
+        return;
+    };
+    let Ok(mut json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        return;
+    };
+    let stale_label = json
+        .get("label_style")
+        .and_then(|v| v.as_str())
+        .map(|s| matches!(s, "kicad" | "Kicad" | "KiCad" | "KICAD"))
+        .unwrap_or(false);
+    if stale_label {
+        json["label_style"] = serde_json::Value::String("standard".to_string());
+        if let Ok(serialized) = serde_json::to_string_pretty(&json) {
+            let _ = std::fs::write(canonical, serialized);
+        }
+    }
+}
+
+/// Pre-v0.12 prefs path: POSIX-style under `$XDG_CONFIG_HOME` or
+/// `$HOME/.config`. Only used by [`migrate_legacy_prefs`] to find
+/// existing user files for one-shot migration.
+fn legacy_posix_prefs_path() -> PathBuf {
     let base = std::env::var("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|_| {
