@@ -412,15 +412,20 @@ impl Signex {
                 "",
                 Message::Menu(crate::menu_bar::MenuMessage::AddLibraryComponent),
             ));
+            // F31 (2026-05-03) — these create FILES, not individual
+            // primitives. A `.snxsym` file holds many symbols (Altium
+            // parity); user edits it via the SCH Library panel after
+            // opening. Labels reworded so the user doesn't expect a
+            // single-symbol creation flow here.
             items.push(self.ctx_menu_item_msg(
                 None,
-                "Add New ▸ Symbol",
+                "Add New ▸ Symbol Library",
                 "",
                 Message::Menu(crate::menu_bar::MenuMessage::AddLibrarySymbol),
             ));
             items.push(self.ctx_menu_item_msg(
                 None,
-                "Add New ▸ Footprint",
+                "Add New ▸ Footprint Library",
                 "",
                 Message::Menu(crate::menu_bar::MenuMessage::AddLibraryFootprint),
             ));

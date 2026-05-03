@@ -580,9 +580,15 @@ impl DockArea {
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .padding(0),
+            // F32 — `clip(true)` so tab labels can't bleed past the
+            // panel boundary into the adjacent canvas / dock region.
+            // Combined with F27's `Wrapping::None` on the inner text:
+            // labels stay one line and get hard-cut at the panel
+            // edge instead of either wrapping or spilling.
             container(tab_strip)
                 .width(Length::Fill)
                 .padding([0, 4])
+                .clip(true)
                 .style(styles::tab_bar_strip(&ctx.tokens)),
         ]
         .into()
