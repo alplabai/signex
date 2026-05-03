@@ -16,6 +16,23 @@ use super::*;
 const SUBMENU_ARROW: &str = "›";
 const SUBMENU_ARROW_SIZE: f32 = 18.0;
 
+/// Chrome strip search bar width in pixels.
+pub(crate) const CHROME_SEARCH_BAR_WIDTH: f32 = 440.0;
+/// Fixed gap between the chrome search bar's right edge and the
+/// chrome controls (min/max/close).
+pub(crate) const CHROME_SEARCH_BAR_RIGHT_GAP: f32 = 12.0;
+/// One chrome control button (min / max / close) width — see
+/// `chrome_btn` in `view_main_window_chrome`.
+pub(crate) const CHROME_CONTROL_BTN_W: f32 = 46.0;
+/// Total controls strip width — three buttons.
+pub(crate) const CHROME_CONTROLS_W: f32 = CHROME_CONTROL_BTN_W * 3.0;
+/// Minimum left padding between the menu bar's right edge and the
+/// chrome search bar's left edge.
+pub(crate) const CHROME_SEARCH_LEFT_GAP: f32 = 16.0;
+/// Minimum right padding between the chrome search bar's right edge
+/// and the window-controls strip.
+pub(crate) const CHROME_SEARCH_RIGHT_GAP: f32 = 16.0;
+
 impl Signex {
     #[allow(clippy::vec_init_then_push)]
     fn view_context_menu(&self) -> Element<'_, Message> {
@@ -351,11 +368,6 @@ impl Signex {
             });
             items.push(self.ctx_menu_sep());
             items.push(self.ctx_menu_item_disabled(None, "Variants...", Some("v1.1")));
-            items.push(self.ctx_menu_item_disabled(
-                None,
-                "History & Version Control",
-                Some(SUBMENU_ARROW),
-            ));
             items.push(self.ctx_menu_sep());
             items.push(self.ctx_menu_item_disabled(None, "Project Packager...", Some("v4.2")));
             items.push(self.ctx_menu_item_disabled(None, "Project Releaser...", Some("v5.2")));
@@ -532,11 +544,6 @@ impl Signex {
                 self.ctx_menu_item_disabled(None, "Print...", None)
             });
             items.push(self.ctx_menu_item_disabled(None, "Show Differences...", Some("v4.3")));
-            items.push(self.ctx_menu_item_disabled(
-                None,
-                "History & Version Control",
-                Some(SUBMENU_ARROW),
-            ));
         } else if is_container {
             // Source Documents / Libraries / Settings folders. These have
             // no Altium direct analogue (Altium groups these under the
@@ -3214,7 +3221,7 @@ impl Signex {
             bottom: 0.0,
             left: 10.0,
         })
-        .width(440)
+        .width(crate::app::view::CHROME_SEARCH_BAR_WIDTH)
         .height(28)
         .align_y(iced::alignment::Vertical::Center)
         .style(move |_: &iced::Theme| container::Style {
@@ -3241,12 +3248,14 @@ impl Signex {
             .into()
         };
 
-        // `width(Length::Fill)` on the row is load-bearing: without it, the
-        // drag zones' Fill-width collapses to 0 because their parent (this
-        // row) is Shrink, and the chrome loses all its draggable real
-        // estate the moment menus + search + controls consume their
-        // natural widths.
-        let inner = row![menu_padded, drag_zone(), search_bar, drag_zone(), controls,]
+        // Original chrome layout — search bar centered between menu
+        // and controls (slightly right of true window center because
+        // the menu section is wider than the window-controls strip,
+        // but visually fine and the layout draggability + redraw
+        // characteristics are correct). Two Fill drag zones flank
+        // the search bar so the entire strip outside the input and
+        // controls is draggable.
+        let inner = row![menu_padded, drag_zone(), search_bar, drag_zone(), controls]
             .width(Length::Fill)
             .align_y(Alignment::Center);
 
@@ -3255,6 +3264,59 @@ impl Signex {
             .height(btn_h)
             .style(crate::styles::toolbar_strip(tokens))
             .into()
+    }
+
+    fn view_preferences_body(&self) -> Element<'_, Message> {
+        use crate::app::view::dialogs::{MODAL_CLOSE_X_HIT_W, MODAL_HEADER_HEIGHT};
+        use iced::widget::{Space, Stack, column as col_widget, mouse_area, row};
+
+        let ui = &self.ui_state;
+        let dialog: Element<'_, Message> = crate::preferences::view_body(
+            ui.preferences_nav,
+            ui.preferences_draft_theme,
+            ui.theme_id,
+            &ui.preferences_draft_font,
+            ui.preferences_draft_power_port_style,
+            ui.preferences_draft_label_style,
+            ui.preferences_draft_multisheet_style,
+            ui.preferences_draft_grid_style,
+            ui.custom_theme.as_ref().map(|c| c.name.as_str()),
+            ui.preferences_dirty,
+            &ui.erc_severity_override,
+            &self.library.settings,
+            &self.document_state.panel_ctx.tokens,
+            &ui.preferences_draft_component_classes,
+            ui.theme_id,
+        )
+        .map(Message::PreferencesMsg);
+
+        // OS-level drag handle covering the header strip, minus the
+        // close-X hit zone on the right. Press anywhere on the title
+        // bar → SC_MOVE drag the borderless OS window. Without this,
+        // `decorations: false` strips the OS title bar so there's
+        // nothing else for the user to grab.
+        let modal = super::state::ModalId::Preferences;
+        let drag_layer: Element<'_, Message> = col_widget![
+            row![
+                mouse_area(
+                    Space::new()
+                        .width(Length::Fill)
+                        .height(Length::Fixed(MODAL_HEADER_HEIGHT))
+                )
+                .on_press(Message::StartDetachedWindowDrag(modal))
+                .interaction(iced::mouse::Interaction::Grab),
+                Space::new()
+                    .width(Length::Fixed(MODAL_CLOSE_X_HIT_W))
+                    .height(Length::Fixed(MODAL_HEADER_HEIGHT)),
+            ]
+            .width(Length::Fill),
+            Space::new().width(Length::Fill).height(Length::Fill),
+        ]
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into();
+
+        Stack::new().push(dialog).push(drag_layer).into()
     }
 
     fn view_detached_modal(&self, modal: super::state::ModalId) -> Element<'_, Message> {
@@ -3305,8 +3367,8 @@ impl Signex {
                 }
                 stack.into()
             }
-            ModalId::Preferences
-            | ModalId::FindReplace
+            ModalId::Preferences => self.view_preferences_body(),
+            ModalId::FindReplace
             | ModalId::RenameDialog
             | ModalId::RemoveDialog
             | ModalId::ProjectOptions
@@ -4238,7 +4300,10 @@ impl Signex {
             Space::new().height(0).into()
         };
 
-        let card_w = 520.0_f32;
+        // Card width matches the chrome search bar exactly so the
+        // dropdown reads as an extension of the input rather than a
+        // floating popup that happens to be nearby.
+        let card_w = CHROME_SEARCH_BAR_WIDTH;
         let card = container(column![body, footer])
             .width(card_w)
             .max_height(360.0)
@@ -4254,9 +4319,14 @@ impl Signex {
             });
 
         let (ww, _wh) = self.ui_state.window_size;
-        let x = ((ww - card_w) / 2.0).max(8.0);
-        // Drop just below the chrome strip with a small gap so the
-        // card visually detaches from the menu bar.
+        // Track the chrome search bar's actual layout position so the
+        // dropdown lines up with the input. The chrome row is
+        // `[menu, drag_fill, search, drag_fill, controls]`; the two
+        // Fill drag zones split the leftover evenly, so the search
+        // bar starts at `menu_w + leftover/2`.
+        let menu_w = crate::menu_bar::approx_menu_bar_width();
+        let leftover = (ww - menu_w - card_w - CHROME_CONTROLS_W).max(0.0);
+        let x = (menu_w + leftover / 2.0).max(8.0);
         let y = crate::menu_bar::MENU_BAR_HEIGHT + 4.0;
         super::view::translate::Translate::new(card, (x, y)).into()
     }
@@ -4891,7 +4961,18 @@ impl Signex {
             }
         }
 
-        if ui.preferences_open {
+        // Preferences renders inline only if it hasn't been detached
+        // into its own OS window. Open-flow auto-detaches via
+        // `handle_preferences_open_requested`, so this in-window path
+        // is the fallback when the detach failed (e.g. window manager
+        // refused to spawn a new window).
+        let prefs_detached = ui.windows.values().any(|kind| {
+            matches!(
+                kind,
+                super::state::WindowKind::DetachedModal(super::state::ModalId::Preferences)
+            )
+        });
+        if ui.preferences_open && !prefs_detached {
             let pref_view = crate::preferences::view(
                 ui.preferences_nav,
                 ui.preferences_draft_theme,
@@ -4922,6 +5003,7 @@ impl Signex {
         if ui.keyboard_shortcuts_open {
             layers.push(crate::keyboard_shortcuts_modal::view(
                 &document.panel_ctx.tokens,
+                ui.theme_id,
             ));
         }
 

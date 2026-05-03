@@ -47,6 +47,7 @@ impl Signex {
             MenuMessage::ExportPdf => Some(self.update(Message::ExportPdfOpenDialog)),
             MenuMessage::ExportNetlist => self.handle_export_netlist_requested(),
             MenuMessage::ExportBom => Some(self.handle_bom_preview_open()),
+            MenuMessage::Exit => Some(self.update(Message::CloseMainWindow)),
             MenuMessage::LibraryOpenLibrary => Some(self.update(Message::Library(
                 crate::library::LibraryMessage::OpenLibraryDialog,
             ))),

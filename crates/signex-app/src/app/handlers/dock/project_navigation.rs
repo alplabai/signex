@@ -39,6 +39,12 @@ impl Signex {
                     self.interaction_state.last_tree_click = None;
                     return true;
                 }
+                // Single-click highlight: every leaf click sets the
+                // tree's "selected" path so the row gets the active
+                // background tint immediately, even before the second
+                // click opens it. Persists across panel refreshes via
+                // `runtime.rs`.
+                self.document_state.panel_ctx.project_tree_selected = Some(path.clone());
                 // Double-click gate — first click memos the path; the
                 // second click on the *same* path within the window
                 // actually opens the file. Otherwise the memo just
@@ -1072,10 +1078,13 @@ impl Signex {
     }
 
     /// Project-root rename — `state.target_path` is the project's
-    /// `.snxprj`; the buffer is the new *stem*. We rename the trio
-    /// `<old>.snxprj` / `<old>.snxsch` / `<old>.snxpcb` together so
-    /// `parse_project`'s directory probe still resolves the schematic
-    /// + pcb after the rename.
+    /// `.snxprj`; the buffer is the new *stem*. We rename ONLY the
+    /// `.snxprj` file and update the project's in-memory `name`.
+    /// Companion schematic / pcb files keep their existing filenames —
+    /// they're independent entities, possibly shared across workflows
+    /// or referenced from version control with their original names.
+    /// The `.snxprj`'s `schematic_root` / `pcb_file` are filename
+    /// strings that continue to point at the unchanged sheet files.
     fn handle_project_rename_submit(
         &mut self,
         state: &crate::app::RenameDialogState,
@@ -1112,86 +1121,43 @@ impl Signex {
             self.set_rename_error("A project with that name already exists.");
             return iced::Task::none();
         }
-        // Companion schematic / pcb files — rename whichever exist.
-        let companions: [(&str, &str); 2] = [("snxsch", "snxsch"), ("snxpcb", "snxpcb")];
-        let mut renamed: Vec<(std::path::PathBuf, std::path::PathBuf)> = Vec::new();
-        // Rename the .snxprj first; if any subsequent rename fails we
-        // try to roll back so the user isn't left with a half-renamed
-        // project.
+
+        // Rename only the .snxprj. Schematic / PCB files keep their
+        // original filenames; the project's `schematic_root` /
+        // `pcb_file` references continue to point at them.
         if let Err(e) = std::fs::rename(&state.target_path, &new_prj) {
             self.set_rename_error(&format!("Rename failed: {e}"));
             return iced::Task::none();
         }
-        renamed.push((state.target_path.clone(), new_prj.clone()));
-        for (ext, _) in companions {
-            let old_companion = dir.join(format!("{old_stem}.{ext}"));
-            if !old_companion.exists() {
-                continue;
-            }
-            let new_companion = dir.join(format!("{new_stem}.{ext}"));
-            if new_companion.exists() {
-                // Roll back partial renames.
-                for (from, to) in renamed.iter().rev() {
-                    let _ = std::fs::rename(to, from);
-                }
-                self.set_rename_error(
-                    "A companion file with the new name already exists; aborting.",
-                );
-                return iced::Task::none();
-            }
-            if let Err(e) = std::fs::rename(&old_companion, &new_companion) {
-                for (from, to) in renamed.iter().rev() {
-                    let _ = std::fs::rename(to, from);
-                }
-                self.set_rename_error(&format!("Rename failed for .{ext}: {e}"));
-                return iced::Task::none();
-            }
-            renamed.push((old_companion, new_companion));
-        }
 
-        // Update in-memory project + open tabs / engines for every
-        // path that just moved.
+        // Update the in-memory project record + any tab / engine that
+        // referenced the .snxprj path itself.
         let owner_idx = state.tree_path.first().copied();
         if let Some(idx) = owner_idx
             && let Some(loaded) = self.document_state.projects.get_mut(idx)
         {
             loaded.path = new_prj.clone();
             loaded.data.name = new_stem.to_string();
-            // schematic_root / pcb_file are basename strings.
-            if loaded.data.schematic_root.as_deref() == Some(&format!("{old_stem}.snxsch")) {
-                loaded.data.schematic_root = Some(format!("{new_stem}.snxsch"));
-            }
-            if loaded.data.pcb_file.as_deref() == Some(&format!("{old_stem}.snxpcb")) {
-                loaded.data.pcb_file = Some(format!("{new_stem}.snxpcb"));
-            }
-            for entry in loaded.data.sheets.iter_mut() {
-                if entry.filename == format!("{old_stem}.snxsch") {
-                    entry.filename = format!("{new_stem}.snxsch");
-                }
-                if entry.name == old_stem {
-                    entry.name = new_stem.to_string();
+        }
+
+        let from = state.target_path.clone();
+        let to = new_prj.clone();
+        for tab in self.document_state.tabs.iter_mut() {
+            if tab.path == from {
+                tab.path = to.clone();
+                if let Some(stem) = to.file_stem().and_then(|s| s.to_str()) {
+                    tab.title = stem.to_string();
                 }
             }
         }
-
-        for (from, to) in &renamed {
-            for tab in self.document_state.tabs.iter_mut() {
-                if tab.path == *from {
-                    tab.path = to.clone();
-                    if let Some(stem) = to.file_stem().and_then(|s| s.to_str()) {
-                        tab.title = stem.to_string();
-                    }
-                }
-            }
-            if let Some(engine) = self.document_state.engines.remove(from) {
-                self.document_state.engines.insert(to.clone(), engine);
-            }
-            if self.document_state.active_path.as_ref() == Some(from) {
-                self.document_state.active_path = Some(to.clone());
-            }
-            if self.document_state.dirty_paths.remove(from) {
-                self.document_state.dirty_paths.insert(to.clone());
-            }
+        if let Some(engine) = self.document_state.engines.remove(&from) {
+            self.document_state.engines.insert(to.clone(), engine);
+        }
+        if self.document_state.active_path.as_ref() == Some(&from) {
+            self.document_state.active_path = Some(to.clone());
+        }
+        if self.document_state.dirty_paths.remove(&from) {
+            self.document_state.dirty_paths.insert(to.clone());
         }
 
         self.ui_state.rename_dialog = None;

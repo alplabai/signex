@@ -323,6 +323,10 @@ pub struct PanelContext {
     pub components_split: f32,
     /// Persistent project tree — toggle state survives across renders.
     pub project_tree: Vec<TreeNode>,
+    /// Path of the currently single-clicked tree row, used to drive
+    /// the row highlight independently of which document is active.
+    /// Set on `TreeMsg::Select`, cleared when the tree resets.
+    pub project_tree_selected: Option<Vec<usize>>,
     // Selection info for Properties panel
     /// How many items are currently selected.
     pub selection_count: usize,
@@ -1760,10 +1764,14 @@ fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         // first row doesn't sit flush against the panel's tab-strip
         // border (matches the breathing room Altium leaves below its
         // panel tabs).
-        container(
-            TreeView::new(&ctx.project_tree, &ctx.tokens)
-                .view()
-                .map(PanelMsg::Tree),
+        container({
+            let mut tree = TreeView::new(&ctx.project_tree, &ctx.tokens);
+            if let Some(sel) = ctx.project_tree_selected.as_deref() {
+                tree = tree.selected(sel);
+            }
+            tree.view().map(PanelMsg::Tree)
+        }
+        ,
         )
         .padding(iced::Padding {
             top: 6.0,
@@ -4086,6 +4094,37 @@ fn view_pre_placement<'a>(
         .into()
 }
 
+/// Wrap a property-row label `text` in a clipped fill-portion container.
+/// Plain `text(...).width(FillPortion(...)).wrapping(None)` lays out at
+/// the text's intrinsic width and bleeds past the allotted column when
+/// the panel is narrow — covering the value column or the panel edge.
+/// This helper enforces the FillPortion bound and clips visual overflow
+/// inside it. Used by every `form_*_row` and inline property row.
+fn property_label<'a, M: 'a>(label: impl Into<String>, color: Color) -> Element<'a, M> {
+    container(
+        text(label.into())
+            .size(11)
+            .color(color)
+            .wrapping(iced::widget::text::Wrapping::None),
+    )
+    .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
+    .clip(true)
+    .into()
+}
+
+/// Like `property_label`, but for size-10 labels (used by `form_edit_row_f64`).
+fn property_label_small<'a, M: 'a>(label: impl Into<String>, color: Color) -> Element<'a, M> {
+    container(
+        text(label.into())
+            .size(10)
+            .color(color)
+            .wrapping(iced::widget::text::Wrapping::None),
+    )
+    .width(Length::FillPortion(2))
+    .clip(true)
+    .into()
+}
+
 /// Numeric edit row used by the shape pre-placement form. Writes on
 /// submit — partial text mid-type doesn't panic via parse failure.
 fn form_edit_row_f64<'a>(
@@ -4098,10 +4137,7 @@ fn form_edit_row_f64<'a>(
     let buf = format!("{value:.3}");
     let on_submit_cb = on_submit.clone();
     row![
-        text(label)
-            .size(10)
-            .color(muted)
-            .width(Length::FillPortion(2)),
+        property_label_small(label, muted),
         text_input("", &buf)
             .size(11)
             .on_input(move |s| {
@@ -4765,16 +4801,16 @@ fn form_input_row<'a, M: 'a>(
 ) -> Element<'a, M> {
     container(
         row![
-            text(label.to_string())
-                .size(11)
-                .color(label_c)
-                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
-                .wrapping(iced::widget::text::Wrapping::None),
+            property_label(label.to_string(), label_c),
             container(
-                text(value.to_string())
-                    .size(11)
-                    .color(Color::WHITE)
-                    .wrapping(iced::widget::text::Wrapping::None),
+                container(
+                    text(value.to_string())
+                        .size(11)
+                        .color(Color::WHITE)
+                        .wrapping(iced::widget::text::Wrapping::None),
+                )
+                .width(Length::Fill)
+                .clip(true),
             )
             .padding([3, 6])
             .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
@@ -4809,11 +4845,7 @@ fn form_int_edit_row<'a>(
     let on_change_cl = on_change.clone();
     container(
         row![
-            text(label.to_string())
-                .size(11)
-                .color(label_c)
-                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
-                .wrapping(iced::widget::text::Wrapping::None),
+            property_label(label.to_string(), label_c),
             iced::widget::text_input("", &text_value)
                 .on_input(move |s| {
                     let parsed: u32 = s.trim().parse().unwrap_or(0);
@@ -4856,11 +4888,7 @@ fn form_mm_edit_row<'a>(
     let on_change_cl = on_change.clone();
     container(
         row![
-            text(label.to_string())
-                .size(11)
-                .color(label_c)
-                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
-                .wrapping(iced::widget::text::Wrapping::None),
+            property_label(label.to_string(), label_c),
             iced::widget::text_input("", &text_value)
                 .on_input(move |s| {
                     let parsed: f32 = s.trim().parse().unwrap_or(0.0);
@@ -4903,11 +4931,7 @@ where
 {
     container(
         row![
-            text(label.to_string())
-                .size(11)
-                .color(label_c)
-                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
-                .wrapping(iced::widget::text::Wrapping::None),
+            property_label(label.to_string(), label_c),
             iced::widget::pick_list(options, Some(selected), on_change)
                 .text_size(11)
                 .padding([2, 6])
@@ -4930,11 +4954,7 @@ fn form_label_row<'a>(
 ) -> Element<'a, PanelMsg> {
     container(
         row![
-            text(label.to_string())
-                .size(11)
-                .color(label_c)
-                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
-                .wrapping(iced::widget::text::Wrapping::None),
+            property_label(label.to_string(), label_c),
             container(control).width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
         ]
         .spacing(8.0)
@@ -4954,11 +4974,7 @@ fn form_check_row<'a>(
 ) -> Element<'a, PanelMsg> {
     container(
         row![
-            text(label.to_string())
-                .size(11)
-                .color(label_c)
-                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
-                .wrapping(iced::widget::text::Wrapping::None),
+            property_label(label.to_string(), label_c),
             row![
                 iced::widget::checkbox(checked)
                     .on_toggle(move |_| msg.clone())
@@ -4991,11 +5007,14 @@ fn form_grid_size_row(current_mm: f32, label_c: Color) -> Element<'static, Panel
         .map(|(_, lbl)| *lbl);
     container(
         row![
-            text("Visible Grid".to_string())
-                .size(11)
-                .color(label_c)
-                .width(LABEL_W)
-                .wrapping(iced::widget::text::Wrapping::None),
+            container(
+                text("Visible Grid".to_string())
+                    .size(11)
+                    .color(label_c)
+                    .wrapping(iced::widget::text::Wrapping::None),
+            )
+            .width(LABEL_W)
+            .clip(true),
             iced::widget::pick_list(GRID_SIZE_LABELS, selected, |lbl: &'static str| {
                 // Map label back to mm value
                 let mm = GRID_SIZES_MM
@@ -5291,11 +5310,7 @@ where
 {
     container(
         row![
-            text(label.to_string())
-                .size(11)
-                .color(label_c)
-                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
-                .wrapping(iced::widget::text::Wrapping::None),
+            property_label(label.to_string(), label_c),
             NumberInput::new(&value, bounds, on_change)
                 .step(step)
                 .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
@@ -5318,11 +5333,7 @@ fn form_edit_row<'a>(
 ) -> Element<'a, PanelMsg> {
     container(
         row![
-            text(label.to_string())
-                .size(11)
-                .color(label_c)
-                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
-                .wrapping(iced::widget::text::Wrapping::None),
+            property_label(label.to_string(), label_c),
             iced::widget::text_input("", value)
                 .on_input(on_input)
                 .size(11)
@@ -5412,11 +5423,7 @@ fn net_numeric_row<'a>(
 ) -> Element<'a, PanelMsg> {
     container(
         row![
-            text(label.to_string())
-                .size(11)
-                .color(label_c)
-                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
-                .wrapping(iced::widget::text::Wrapping::None),
+            property_label(label.to_string(), label_c),
             iced::widget::checkbox(false)
                 .on_toggle(|_| PanelMsg::Noop)
                 .size(12)

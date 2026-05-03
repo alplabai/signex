@@ -397,6 +397,11 @@ impl Signex {
             selected_lib_symbol,
             components_split,
             project_tree: vec![],
+            project_tree_selected: self
+                .document_state
+                .panel_ctx
+                .project_tree_selected
+                .clone(),
             selection_count,
             selected_uuid,
             selected_kind,

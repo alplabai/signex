@@ -101,6 +101,10 @@ pub enum MenuMessage {
     ExportPdf,
     ExportNetlist,
     ExportBom,
+    /// File ▸ Exit — closes the main window via the same path as the
+    /// chrome ✕ button (`Message::CloseMainWindow`). Wired through
+    /// `handle_menu_file_command`.
+    Exit,
     /// File ▸ Library ▸ Open Library… (v0.9 Phase 1).
     LibraryOpenLibrary,
     /// File ▸ Library ▸ Place Component… (v0.9 Phase 1).
@@ -247,6 +251,36 @@ const MENU_LABEL_SIZE: f32 = 12.0;
 const MENU_SHORTCUT_SIZE: f32 = 11.0;
 const MENU_CHEVRON_SIZE: f32 = 18.0;
 
+/// Root menu labels rendered by `view`. Listed here so chrome
+/// layout code can estimate the menu bar's natural width without
+/// re-laying out the actual widgets.
+const MENU_ROOT_LABELS: &[&str] = &[
+    "File", "Edit", "View", "Place", "Design", "Tools", "Window", "Help",
+];
+
+/// Approximate visible width of the menu bar in pixels. Includes the
+/// Signex wordmark on the left, plus the sum of root button widths
+/// (label glyphs at `MENU_LABEL_SIZE` + horizontal padding from
+/// `root_btn`) plus the chrome's left padding. Used by the chrome
+/// to clamp the centered search bar so it can't slide under the
+/// menu items on narrow windows.
+pub fn approx_menu_bar_width() -> f32 {
+    // `root_btn` uses `padding([7, 6])` → 12 px horizontal per button.
+    const PER_BTN_PADDING: f32 = 12.0;
+    // Approx pixels per character at MENU_LABEL_SIZE (12 pt sans-serif).
+    // Slight overestimate so we err on the side of "no overlap."
+    const PX_PER_CHAR: f32 = 7.5;
+    // Chrome strip's left padding from `view_main_window_chrome`.
+    const CHROME_LEFT_PAD: f32 = 8.0;
+    // Gap between wordmark and the first menu root button.
+    const WORDMARK_TO_MENU_GAP: f32 = 8.0;
+    let labels_total: f32 = MENU_ROOT_LABELS
+        .iter()
+        .map(|l| l.chars().count() as f32 * PX_PER_CHAR + PER_BTN_PADDING)
+        .sum();
+    CHROME_LEFT_PAD + WORDMARK_LOGICAL_W + WORDMARK_TO_MENU_GAP + labels_total
+}
+
 /// Extracted theme colors (all Copy+ʼstatic so closures remain ʼstatic).
 #[derive(Clone, Copy)]
 struct MenuColors {
@@ -386,7 +420,7 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
             // global key handler; only the menu row moves.
             export_menu,
             separator(mc),
-            leaf_stub("Exit", None, mc),
+            leaf("Exit", None, MenuMessage::Exit, mc),
         ]),
     );
 
