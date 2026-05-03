@@ -4,7 +4,7 @@
 //! (Numerical Recipes §2.3 worked examples). All "expected" values
 //! were verified by hand or by direct substitution.
 
-use signex_sketch::solver::linalg::{lu_decompose, lu_solve, solve, LinAlgError};
+use signex_sketch::solver::linalg::{lu_decompose, lu_solve, solve, LinAlgError, QrDecomposition};
 
 const TOL: f64 = 1e-10;
 
@@ -302,4 +302,67 @@ fn solve_1x1_zero_is_singular() {
     let b = vec![1.0];
     let err = solve(&a, &b).expect_err("1×1 zero is singular");
     assert!(matches!(err, LinAlgError::Singular));
+}
+
+// ─── 10. Householder QR rank tests ──────────────────────────────────
+//
+// These cover the QR-based rank computation used by the DOF analysis
+// in `solver::dof`. The rank of A equals the rank of R (since Q is
+// orthogonal) so we only need to count the meaningful diagonal of R.
+// `RANK_TOL` for these unit cases is generous — `1e-9` provides
+// comfortable separation between "active" and "numerically zero"
+// singular values for the textbook integer-coefficient matrices we
+// use here.
+
+const QR_TOL: f64 = 1e-9;
+
+#[test]
+fn qr_rank_full_3x3() {
+    // The 3×3 identity is the canonical full-rank matrix: every
+    // diagonal of R is exactly 1 (or its sign flipped by Householder),
+    // so rank = 3.
+    let a = vec![
+        vec![1.0, 0.0, 0.0],
+        vec![0.0, 1.0, 0.0],
+        vec![0.0, 0.0, 1.0],
+    ];
+
+    let qr = QrDecomposition::new(&a).expect("identity QR factors cleanly");
+    assert_eq!(qr.rank(QR_TOL), 3);
+}
+
+#[test]
+fn qr_rank_full_4x2() {
+    // 4×2 matrix with two orthogonal non-zero columns; the rest of
+    // the column tail is zero. Rank should be exactly 2 (≤ min(m,n)).
+    let a = vec![
+        vec![1.0, 0.0],
+        vec![0.0, 1.0],
+        vec![0.0, 0.0],
+        vec![0.0, 0.0],
+    ];
+
+    let qr = QrDecomposition::new(&a).expect("4×2 with two non-zero columns");
+    assert_eq!(qr.rank(QR_TOL), 2);
+}
+
+#[test]
+fn qr_rank_deficient() {
+    // Row 1 is exactly 2× row 0 ⇒ rank 1 (one independent column,
+    // one independent row). After Householder, R[1][1] should be
+    // numerically zero so the rank count stops at 1.
+    let a = vec![vec![1.0, 2.0], vec![2.0, 4.0]];
+
+    let qr = QrDecomposition::new(&a).expect("rank-1 input still factors");
+    assert_eq!(qr.rank(QR_TOL), 1);
+}
+
+#[test]
+fn qr_rank_zero_matrix() {
+    // The all-zero matrix has rank 0. No Householder reflection runs
+    // because every sub-vector has norm zero; R is also all zeros.
+    let a = vec![vec![0.0, 0.0, 0.0], vec![0.0, 0.0, 0.0], vec![0.0, 0.0, 0.0]];
+
+    let qr = QrDecomposition::new(&a).expect("zero matrix factors trivially");
+    assert_eq!(qr.rank(QR_TOL), 0);
 }
