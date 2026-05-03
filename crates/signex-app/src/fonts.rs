@@ -180,11 +180,13 @@ fn prefs_path() -> PathBuf {
 /// `%APPDATA%\signex\`. If the legacy path has a file but the
 /// canonical path doesn't, copy it forward.
 ///
-/// **F3** (stale `"label_style":"kicad"`): pre-v0.10 prefs files
-/// carried KiCad-shaped discriminants. The reader silently falls
-/// through to `LabelStyle::Standard`, but the literal string lingers
-/// until the user changes label style + saves. Rewrite once on
-/// startup so the stale token doesn't sit in user-space prefs.
+/// **F3** (stale label-style discriminants): pre-v0.10 prefs files
+/// carried label-style tokens that aren't in the current canonical
+/// set. The reader silently falls through to `LabelStyle::Standard`
+/// for unknown discriminants, but the literal stale string lingers
+/// in user-space `prefs.json` until the user changes label style +
+/// saves. Rewrite once on startup so unknown tokens normalise to
+/// the canonical default.
 fn migrate_legacy_prefs(canonical: &Path) {
     // F1: copy legacy path → canonical, but only if canonical is empty.
     if !canonical.exists() {
@@ -197,7 +199,10 @@ fn migrate_legacy_prefs(canonical: &Path) {
         }
     }
 
-    // F3: rewrite stale "label_style":"kicad" → "standard".
+    // F3: rewrite any non-canonical label_style discriminant → "standard".
+    // Canonical writers emit lowercase "standard" / "altium"; we accept any
+    // case match and rewrite anything else to the default.
+    const CANONICAL_LABEL_STYLES: &[&str] = &["standard", "altium"];
     let Ok(bytes) = std::fs::read(canonical) else {
         return;
     };
@@ -207,7 +212,11 @@ fn migrate_legacy_prefs(canonical: &Path) {
     let stale_label = json
         .get("label_style")
         .and_then(|v| v.as_str())
-        .map(|s| matches!(s, "kicad" | "Kicad" | "KiCad" | "KICAD"))
+        .map(|s| {
+            !CANONICAL_LABEL_STYLES
+                .iter()
+                .any(|c| s.eq_ignore_ascii_case(c))
+        })
         .unwrap_or(false);
     if stale_label {
         json["label_style"] = serde_json::Value::String("standard".to_string());
