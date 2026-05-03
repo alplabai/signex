@@ -1017,6 +1017,18 @@ enum ColumnKind {
     /// pure-number case; mixed `1.0.2` strings fall back to lexical
     /// which still works for short major.minor.patch strings).
     Rev,
+    /// Read-only column showing the row's bound symbol primitive.
+    /// Empty cell (`—`) when the row's `symbol_ref` is `Uuid::nil()`
+    /// (the sentinel for an unbound row). The actual binding edit
+    /// surface is the Properties panel's "Pick Symbol…" button — the
+    /// column gives an at-a-glance status across the whole table.
+    /// F16 of the 2026-05-03 library polish ("the relevant columns
+    /// must be there by default").
+    Symbol,
+    /// Read-only column showing the row's bound footprint primitive.
+    /// Empty cell (`—`) when `footprint_ref` is `None` or its UUID is
+    /// `Uuid::nil()`. Edited via Properties panel "Pick Footprint…".
+    Footprint,
     /// Stage 18 — read-only column reading from `parameters["tags"]`.
     /// Inline-editable through the leftmost cell-edit buffer pattern
     /// is deferred to a polish pass; for now the canonical edit point
@@ -1035,6 +1047,8 @@ impl ColumnKind {
             ColumnKind::Manufacturer => "manufacturer".to_string(),
             ColumnKind::Mpn => "mpn".to_string(),
             ColumnKind::Rev => "version".to_string(),
+            ColumnKind::Symbol => "symbol_ref".to_string(),
+            ColumnKind::Footprint => "footprint_ref".to_string(),
             ColumnKind::Tags => "parameters.tags".to_string(),
             ColumnKind::Parameter(key) => format!("parameters.{key}"),
         }
@@ -1051,6 +1065,22 @@ impl ColumnKind {
             ColumnKind::Manufacturer => r.primary_mpn.manufacturer.clone(),
             ColumnKind::Mpn => r.primary_mpn.mpn.clone(),
             ColumnKind::Rev => r.version.clone(),
+            ColumnKind::Symbol => {
+                if r.symbol_ref.uuid == uuid::Uuid::nil() {
+                    "—".to_string()
+                } else {
+                    // Surface the short uuid prefix so the user has an
+                    // at-a-glance signal without bloating the column
+                    // width. Full path/name is in the Properties panel.
+                    format!("• {:.8}", r.symbol_ref.uuid)
+                }
+            }
+            ColumnKind::Footprint => match &r.footprint_ref {
+                Some(fp) if fp.uuid != uuid::Uuid::nil() => {
+                    format!("• {:.8}", fp.uuid)
+                }
+                _ => "—".to_string(),
+            },
             ColumnKind::Tags => match r.parameters.get("tags") {
                 Some(v) => v.display(),
                 None => String::new(),
@@ -1109,6 +1139,21 @@ fn derive_columns(rows: &[ComponentRow]) -> Vec<GridColumn> {
         label: "Rev".to_string(),
         kind: ColumnKind::Rev,
         width: 80.0,
+    });
+
+    // F16 (2026-05-03 library polish) — Symbol + Footprint binding
+    // status is shown by default. `—` means unbound; short uuid
+    // prefix means bound. Full primitive path/name + the Pick…
+    // affordance live in the Properties panel for the selected row.
+    columns.push(GridColumn {
+        label: "Symbol".to_string(),
+        kind: ColumnKind::Symbol,
+        width: 120.0,
+    });
+    columns.push(GridColumn {
+        label: "Footprint".to_string(),
+        kind: ColumnKind::Footprint,
+        width: 120.0,
     });
 
     // Surface tags as a first-class column whenever the table has at

@@ -453,10 +453,13 @@ pub fn create_component_row(
     symbol_ref: Option<PrimitiveRef>,
     footprint_ref: Option<PrimitiveRef>,
 ) -> Result<RowId, LibraryError> {
+    // Inline-add flow (Library Browser "+ Component" button): the row
+    // is minted with an empty internal_pn so the user can fill it in
+    // via the table's inline cell editor. Lifecycle promotion to
+    // Released will require a non-empty PN at that point — the
+    // creation step itself stays liberal so the +Component button
+    // doesn't need a separate "type a PN first" gate.
     let internal_pn = internal_pn.trim();
-    if internal_pn.is_empty() {
-        return Err(LibraryError::Conflict("internal PN cannot be empty".into()));
-    }
     let table = table.trim();
     if table.is_empty() {
         return Err(LibraryError::Conflict(
