@@ -124,6 +124,35 @@ pub fn lu_decompose(a: &mut [Vec<f64>]) -> Result<Vec<usize>, LinAlgError> {
     Ok(perm)
 }
 
+/// Bundled LU factorisation: the packed `LU` matrix and the row-pivot
+/// trail produced by [`lu_decompose`]. API patterned after nalgebra's
+/// `LU` struct (Apache-2.0; we adopt the API shape, not the
+/// implementation): factor once, then call [`LuDecomposition::solve`]
+/// repeatedly with different right-hand sides.
+///
+/// LM uses this in the inner loop: factor `(JᵀJ + λI)` once per
+/// iteration and solve against `−Jᵀr` without recomputing the
+/// factorisation if the step is rejected and `λ` updates.
+pub struct LuDecomposition {
+    pub lu: Vec<Vec<f64>>,
+    pub perm: Vec<usize>,
+}
+
+impl LuDecomposition {
+    /// Factor a square matrix into its packed LU form. The input is
+    /// borrowed and cloned internally so callers can reuse `a`.
+    pub fn new(a: &[Vec<f64>]) -> Result<Self, LinAlgError> {
+        let mut lu: Vec<Vec<f64>> = a.iter().map(|row| row.clone()).collect();
+        let perm = lu_decompose(&mut lu)?;
+        Ok(Self { lu, perm })
+    }
+
+    /// Solve `A x = b` against the cached factorisation.
+    pub fn solve(&self, b: &[f64]) -> Result<Vec<f64>, LinAlgError> {
+        lu_solve(&self.lu, &self.perm, b)
+    }
+}
+
 /// Forward + back substitution given an LU-decomposed matrix and a
 /// pivot permutation produced by [`lu_decompose`].
 ///
