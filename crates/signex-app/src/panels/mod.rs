@@ -238,6 +238,16 @@ pub struct LibraryNodeInfo {
     /// without double-clicking through to a "Library not mounted"
     /// recovery message.
     pub missing: bool,
+    /// F29 — names of `.snxsym` files inside this library. Populated
+    /// from `OpenLibrary::cached_symbols` when the library is
+    /// mounted. Empty when the library is unmounted or has no
+    /// symbols yet. Used by `build_project_tree` to surface a
+    /// `Symbols` subbranch under the library node so the user can
+    /// navigate to a specific symbol file directly from the tree.
+    pub symbols: Vec<String>,
+    /// F29 — same as `symbols` but for `.snxfpt` footprints. Used to
+    /// build the `Footprints` subbranch under the library node.
+    pub footprints: Vec<String>,
 }
 
 /// Context passed to panels — owned data to avoid lifetime issues.
@@ -1495,21 +1505,41 @@ fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         return scrollable(col).width(Length::Fill).into();
     };
 
-    // ── File header ──
+    // ── Breadcrumb header — F28 (2026-05-03) ──
+    // Shows `<library_name>  >  <symbol_file>  (N symbols)` so the
+    // user always knows which `.snxlib` the active `.snxsym` belongs
+    // to. Walk `sym.path` ancestors looking for the first directory
+    // ending in `.snxlib`; fall back to just the filename when the
+    // file lives outside any library.
+    let symbol_file = sym
+        .path
+        .file_name()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "<untitled>".to_string());
+    let library_stem: Option<String> = sym
+        .path
+        .ancestors()
+        .find(|p| {
+            p.extension()
+                .and_then(|e| e.to_str())
+                .map(|e| e.eq_ignore_ascii_case("snxlib"))
+                .unwrap_or(false)
+        })
+        .and_then(|p| p.file_stem())
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_string());
+    let breadcrumb = match library_stem {
+        Some(lib) => format!(
+            "{}  ›  {}  ({} symbols)",
+            lib,
+            symbol_file,
+            sym.symbols_in_file.len(),
+        ),
+        None => format!("{}  ({} symbols)", symbol_file, sym.symbols_in_file.len()),
+    };
     col = col.push(
-        container(
-            text(format!(
-                "{} ({} symbols)",
-                sym.path
-                    .file_name()
-                    .map(|s| s.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| "<untitled>".to_string()),
-                sym.symbols_in_file.len(),
-            ))
-            .size(10)
-            .color(muted),
-        )
-        .padding([4, 8]),
+        container(text(breadcrumb).size(10).color(muted))
+            .padding([4, 8]),
     );
     col = col.push(thin_sep(border_c));
 
@@ -1779,6 +1809,12 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
     // advertised symbols the project hadn't actually mounted, which
     // caused real confusion (a project with nothing saved would show
     // "222 symbols loaded" sourced from globally-mounted libraries).
+    // F29 — when a library is mounted and exposes symbols /
+    // footprints, render a `Symbols` and `Footprints` subbranch
+    // underneath the `.snxlib` node so the user can navigate to a
+    // specific primitive directly from the tree. Unmounted /
+    // missing / empty libraries collapse to a plain leaf (matches
+    // the previous behaviour).
     let lib_children: Vec<TreeNode> = project
         .libraries
         .iter()
@@ -1788,7 +1824,40 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
             } else {
                 format!("{}.snxlib", lib.display_name)
             };
-            TreeNode::leaf(display, TreeIcon::SnxLibrary)
+            let mut children: Vec<TreeNode> = Vec::new();
+            if !lib.symbols.is_empty() {
+                let sym_children: Vec<TreeNode> = lib
+                    .symbols
+                    .iter()
+                    .map(|name| {
+                        TreeNode::leaf(format!("{name}.snxsym"), TreeIcon::SnxSymbol)
+                    })
+                    .collect();
+                children.push(TreeNode::branch(
+                    "Symbols".to_string(),
+                    TreeIcon::Folder,
+                    sym_children,
+                ));
+            }
+            if !lib.footprints.is_empty() {
+                let fp_children: Vec<TreeNode> = lib
+                    .footprints
+                    .iter()
+                    .map(|name| {
+                        TreeNode::leaf(format!("{name}.snxfpt"), TreeIcon::SnxFootprint)
+                    })
+                    .collect();
+                children.push(TreeNode::branch(
+                    "Footprints".to_string(),
+                    TreeIcon::Folder,
+                    fp_children,
+                ));
+            }
+            if children.is_empty() {
+                TreeNode::leaf(display, TreeIcon::SnxLibrary)
+            } else {
+                TreeNode::branch(display, TreeIcon::SnxLibrary, children)
+            }
         })
         .collect();
 
