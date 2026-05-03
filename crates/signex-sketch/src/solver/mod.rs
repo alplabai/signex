@@ -3,6 +3,7 @@ pub mod residual;
 pub mod residuals;
 pub mod jacobian;
 pub mod lm;
+pub mod linalg;
 pub mod dof;
 pub mod timeout;
 
