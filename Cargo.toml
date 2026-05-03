@@ -13,6 +13,7 @@ members = [
     "crates/chrome-catalog",
     "crates/signex-library",
     "crates/signex-library-server",
+    "crates/signex-sketch",
 ]
 
 [workspace.package]
@@ -85,6 +86,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Internal — library
 signex-library = { path = "crates/signex-library" }
+
+# Internal — sketcher (v0.13)
+signex-sketch = { path = "crates/signex-sketch" }
 
 [profile.release]
 lto = "thin"
