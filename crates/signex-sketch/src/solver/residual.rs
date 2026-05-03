@@ -42,6 +42,27 @@ pub fn resolve_dim(target: &DimTarget, params: &ResolvedParams) -> Result<f64, S
     }
 }
 
+/// Total residual vector for an entire sketch — concatenates the
+/// per-constraint residual vectors in `sketch.constraints` order.
+///
+/// `total_residual` is the function the Levenberg–Marquardt iteration
+/// (Phase 3) drives toward zero. The output length is the sum of
+/// `ConstraintKind::residual_count()` across all constraints. The
+/// state vector length is unrelated; the Jacobian is `(m × n)` where
+/// `m = total_residual.len()` and `n = state.len()`.
+pub fn total_residual(
+    sketch: &SketchData,
+    state: &[f64],
+    index: &EntityIndex,
+    params: &ResolvedParams,
+) -> Result<Vec<f64>, SketchError> {
+    let mut out = Vec::new();
+    for c in &sketch.constraints {
+        out.extend(residual(c, state, index, sketch, params)?);
+    }
+    Ok(out)
+}
+
 /// Top-level residual dispatcher. Returns the residual vector for the
 /// given constraint, of length `c.kind.residual_count()`.
 pub fn residual(

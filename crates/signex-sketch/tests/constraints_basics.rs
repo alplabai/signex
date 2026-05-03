@@ -6,7 +6,7 @@ use common::Sketch;
 
 use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
 use signex_sketch::id::ConstraintId;
-use signex_sketch::solver::residual::{residual, ResolvedParams};
+use signex_sketch::solver::residual::{residual, total_residual, ResolvedParams};
 use signex_sketch::solver::state::pack;
 
 fn empty_params() -> ResolvedParams {
@@ -188,6 +188,81 @@ fn fixed_residual_is_empty() {
     };
     let r = residual(&c, &packed.vector, &packed.index, &s.data, &empty_params()).unwrap();
     assert!(r.is_empty());
+}
+
+#[test]
+fn total_residual_concatenates_per_constraint() {
+    // 1 Coincident (2) + 1 DistancePtPt (1) + 1 Horizontal (1) = 4 scalars.
+    let mut s = Sketch::new();
+    let p1 = s.add_point(0.0, 0.0);
+    let p2 = s.add_point(3.0, 4.0);
+    let p3 = s.add_point(0.0, 1.0);
+    let p4 = s.add_point(5.0, 1.0);
+    let line = s.add_line(p3, p4);
+
+    s.data.constraints.push(Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::Coincident { p1, p2 },
+    });
+    s.data.constraints.push(Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::DistancePtPt {
+            p1,
+            p2,
+            target: DimTarget::Literal(5.0),
+        },
+    });
+    s.data.constraints.push(Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::Horizontal { line },
+    });
+
+    let packed = pack(&s.data);
+    let r = total_residual(&s.data, &packed.vector, &packed.index, &empty_params()).unwrap();
+    assert_eq!(r.len(), 4);
+
+    // First two scalars: Coincident — points apart by (3, 4) → r[0]=3, r[1]=4
+    assert!((r[0] - 3.0).abs() < 1e-12);
+    assert!((r[1] - 4.0).abs() < 1e-12);
+    // Third scalar: DistancePtPt(target=5) on a 3-4-5 triangle → 0
+    assert!(r[2].abs() < 1e-12);
+    // Fourth scalar: Horizontal on a y=1 horizontal line → 0
+    assert!(r[3].abs() < 1e-12);
+}
+
+#[test]
+fn total_residual_length_matches_constraint_kind_count_sum() {
+    // Quick check that residual_count() summed across constraints
+    // equals total_residual().len().
+    let mut s = Sketch::new();
+    let p1 = s.add_point(0.0, 0.0);
+    let p2 = s.add_point(1.0, 1.0);
+    let p3 = s.add_point(2.0, 0.0);
+    let p4 = s.add_point(3.0, 0.0);
+    let line = s.add_line(p3, p4);
+
+    s.data.constraints.push(Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::Coincident { p1, p2 }, // 2
+    });
+    s.data.constraints.push(Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::Horizontal { line }, // 1
+    });
+    s.data.constraints.push(Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::Vertical { line }, // 1
+    });
+    s.data.constraints.push(Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::Midpoint { point: p1, line }, // 2
+    });
+
+    let packed = pack(&s.data);
+    let r = total_residual(&s.data, &packed.vector, &packed.index, &empty_params()).unwrap();
+    let expected: usize = s.data.constraints.iter().map(|c| c.kind.residual_count()).sum();
+    assert_eq!(r.len(), expected);
+    assert_eq!(r.len(), 2 + 1 + 1 + 2);
 }
 
 #[test]
