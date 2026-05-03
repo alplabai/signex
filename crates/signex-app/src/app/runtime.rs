@@ -136,6 +136,60 @@ impl Signex {
         }
     }
 
+    /// F15 — When the active tab is a Library Browser AND a row is
+    /// selected in that tab's browser state, build the
+    /// [`crate::panels::LibraryRowDetail`] the Properties panel
+    /// renders. Returns `None` for any other active tab kind, or
+    /// when the browser tab has no row selected.
+    fn compute_library_row_detail(&self) -> Option<crate::panels::LibraryRowDetail> {
+        let active_tab = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)?;
+        let library_path = match &active_tab.kind {
+            crate::app::TabKind::LibraryBrowser(p) => p.clone(),
+            _ => return None,
+        };
+        let browser = self.library.library_browsers.get(&library_path)?;
+        let table = browser.active_table.clone()?;
+        let row_id = browser.selected_row?;
+        let lib = self.library.library_at(&library_path)?;
+        let row = lib
+            .tables
+            .get(&table)?
+            .iter()
+            .find(|r| signex_library::RowId::from_uuid(r.row_id) == row_id)?;
+
+        let symbol_summary = match self.library.set.resolve_symbol(&row.symbol_ref) {
+            Some(s) => format!(
+                "Symbol bound — {} pin{}",
+                s.pins.len(),
+                if s.pins.len() == 1 { "" } else { "s" }
+            ),
+            None if row.symbol_ref.uuid == uuid::Uuid::nil() => "Symbol unbound".to_string(),
+            None => "Symbol unresolved (UUID not in mounted libraries)".to_string(),
+        };
+        let footprint_summary = match &row.footprint_ref {
+            Some(fp) if fp.uuid == uuid::Uuid::nil() => "Footprint unbound".to_string(),
+            Some(fp) => match self.library.set.resolve_footprint(fp) {
+                Some(_) => "Footprint bound".to_string(),
+                None => "Footprint unresolved (UUID not in mounted libraries)".to_string(),
+            },
+            None => "Footprint unbound".to_string(),
+        };
+
+        Some(crate::panels::LibraryRowDetail {
+            library_path,
+            table,
+            row_id: row.row_id,
+            internal_pn: row.internal_pn.as_str().to_string(),
+            class: row.class.as_str().to_string(),
+            lifecycle_label: format!("{:?}", row.state),
+            symbol_summary,
+            footprint_summary,
+        })
+    }
+
     pub(crate) fn refresh_panel_ctx(&mut self) {
         // Build per-project panel info from every loaded project in the
         // workspace. The `project_name` / `project_file` / `pcb_file` /
@@ -415,6 +469,7 @@ impl Signex {
                 .panel_ctx
                 .project_tree_selected
                 .clone(),
+            library_row_detail: self.compute_library_row_detail(),
             selection_count,
             selected_uuid,
             selected_kind,
