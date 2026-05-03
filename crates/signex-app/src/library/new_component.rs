@@ -40,7 +40,14 @@ use crate::app::view::dialogs::{
 };
 
 const MODAL_W: f32 = 520.0;
-const MODAL_H: f32 = 420.0;
+// No fixed height: the modal sizes to content so the Advanced ▾
+// disclosure (which adds a Table-picker row) can grow vertically
+// instead of clipping the Cancel / Create Row footer behind the
+// modal-card's `clip(true)`. The header / form / footer column is
+// `Length::Shrink` for the same reason; rounded-corner clipping
+// continues to work because it's on the outer card, not the inner
+// column. Width stays fixed so the form's inputs keep a predictable
+// extent regardless of content.
 
 /// `pick_list` adapter for the library dropdown.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -501,15 +508,7 @@ pub fn view<'a>(
     .style(crate::styles::modal_footer_strip(tokens));
 
     container(
-        column![
-            header,
-            form,
-            error_row,
-            Space::new().height(Length::Fill),
-            footer
-        ]
-        .width(Length::Fixed(MODAL_W))
-        .height(Length::Fixed(MODAL_H)),
+        column![header, form, error_row, footer].width(Length::Fixed(MODAL_W)),
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)
