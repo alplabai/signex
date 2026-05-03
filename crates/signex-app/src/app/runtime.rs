@@ -286,11 +286,32 @@ impl Signex {
                                 .unwrap_or_else(|| entry.path.display().to_string()),
                         };
                         let missing = !resolved.exists();
+                        // F29 — surface mounted-library children so
+                        // the project tree can show Symbols /
+                        // Footprints subbranches under each `.snxlib`
+                        // node. Unmounted libraries return empty
+                        // vectors, which `build_project_tree` treats
+                        // as "no children" → leaf node, no chevron.
+                        let (symbols, footprints) = match mounted_lib {
+                            Some(lib) => (
+                                lib.cached_symbols
+                                    .iter()
+                                    .map(|s| s.name.clone())
+                                    .collect(),
+                                lib.cached_footprints
+                                    .iter()
+                                    .map(|f| f.name.clone())
+                                    .collect(),
+                            ),
+                            None => (Vec::new(), Vec::new()),
+                        };
                         crate::panels::LibraryNodeInfo {
                             display_name,
                             root: resolved,
                             mounted: mounted_lib.is_some(),
                             missing,
+                            symbols,
+                            footprints,
                         }
                     })
                     .collect();
@@ -309,6 +330,8 @@ impl Signex {
                         // disk (they materialise at save time) — not
                         // a missing-orphan situation.
                         missing: false,
+                        symbols: Vec::new(),
+                        footprints: Vec::new(),
                     });
                 }
                 crate::panels::ProjectPanelInfo {
