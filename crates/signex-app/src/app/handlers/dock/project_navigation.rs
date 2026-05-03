@@ -1259,13 +1259,58 @@ impl Signex {
         let project_idx = *tree_path
             .first()
             .with_context(|| format!("project tree path was empty for {}", filename))?;
-        let project_dir = self
+        let loaded = self
             .document_state
             .projects
             .get(project_idx)
-            .and_then(|p| p.path.parent())
-            .with_context(|| format!("resolve project directory for {}", filename))?;
-        let file_path = project_dir.join(&filename);
+            .with_context(|| format!("resolve project for {}", filename))?;
+        let project_dir = loaded
+            .path
+            .parent()
+            .with_context(|| format!("resolve project directory for {}", filename))?
+            .to_path_buf();
+
+        // F21 follow-up — `.snxlib` library entries can live outside
+        // the project directory (`LibraryEntryKind::Shared` when the
+        // user picked a destination outside `project_dir` in the
+        // New Library save-as dialog). The legacy `project_dir.join
+        // (filename)` reconstruction silently broke for those because
+        // the assembled path didn't exist on disk → the bail at the
+        // bottom fired and the double-click looked dead.
+        //
+        // For `.snxlib` we resolve through `project.data.libraries`
+        // by matching the entry's filename, then ask
+        // `ProjectData::resolve_library_path` which returns the
+        // canonical absolute path (project-local entries are joined
+        // against `project.dir`; shared / global entries are passed
+        // through). Other extensions still use the filename-relative
+        // path because schematics / pcbs / primitives have always
+        // lived inside the project directory.
+        let file_path: std::path::PathBuf = if filename.ends_with(".snxlib") {
+            let entry = loaded
+                .data
+                .libraries
+                .iter()
+                .find(|entry| {
+                    entry
+                        .path
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                        .map(|n| n == filename)
+                        .unwrap_or(false)
+                })
+                .with_context(|| {
+                    format!(
+                        "library {} not registered on project {}",
+                        filename,
+                        loaded.path.display()
+                    )
+                })?;
+            loaded.data.resolve_library_path(entry)
+        } else {
+            project_dir.join(&filename)
+        };
+
         if !file_path.exists() {
             anyhow::bail!("project tree file does not exist: {}", file_path.display());
         }
