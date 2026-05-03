@@ -144,7 +144,86 @@ blog posts (SolveSpace, FreeCAD Sketcher, planegcs, OpenCascade,
 etc.) were consulted by any agent or the orchestrator during
 Phase 2.
 
-### Phase 3 — Solver: Newton-LM + Jacobian + DOF
+### Phase 3 — Solver: Newton-LM + Jacobian + DOF — DONE 2026-05-03
+
+Commits on `feature/v0.13-sketch-mode`:
+
+| SHA | Subject | Tasks |
+|---|---|---|
+| `133ad62c` | feat(sketch): Phase 3 Stage A — numerical Jacobian + dense LU linear solver | 3.1 + 3.2 (parallel agents) |
+| `ca37be55` | feat(sketch): in-house math primitives + LU benchmark + residual refactor | math.rs + bench + Phase 2 refactor |
+| `a7c9fb38` | feat(sketch): Phase 3.3 — Levenberg–Marquardt iteration + LuDecomposition wrapper | 3.3 |
+| `88c2a713` | feat(sketch): Phase 3 Stage C — canonical sketch corpus + DOF analysis (Householder QR) | 3.4 + 3.5 (parallel agents) |
+| `f43a8be2` | feat(sketch): Phase 3.6 — Solver public API + AutoPauseState hysteresis | 3.6 |
+
+Architecture decisions:
+
+- **Stayed dependency-free.** Initial plan was to use `nalgebra`
+  (Apache-2.0/MIT pure-Rust LA library) for the LM step, but the
+  user reversed that choice mid-Phase-3 in favour of an in-house
+  math library so signex-sketch has zero external numeric crates.
+  The roll-our-own LU benchmark (`examples/bench_linalg.rs`) shows
+  ~80 µs at n=100 unknowns on a 2024-class laptop — comfortably
+  inside the 50 ms LM budget. nalgebra-style API ergonomics
+  (`LuDecomposition`/`QrDecomposition` structs with `new()` +
+  `solve()`/`rank()` methods) are adopted as inspiration only;
+  the implementations are first-principles textbook code.
+
+- **Math primitives factored into `solver/math.rs`.** 18 free
+  functions cover 2D vector ops (sub/add/scale/dot/cross/norm/
+  distance/wrap_to_pi) and dense vector+matrix ops (norm_sq/
+  norm_vec/axpy/matvec/matvec_t/matmul_ata/add_diag). The Phase 2
+  residual modules were refactored to compose from these primitives
+  instead of inlining 2D arithmetic — same behaviour, cleaner code,
+  single source of truth, easier to optimise via `#[inline]`.
+
+- **DOF analysis uses a conservative coarse rule** (rank(J) == n →
+  all free Points Full; otherwise all Under) plus residual-magnitude
+  over-detection. Documented as intentional in `solver/dof.rs`. A
+  future revision can swap to per-column rank-deficiency detection
+  for finer granularity; the canonical under/full/over test cases
+  pass under the coarse rule.
+
+References consulted for Phase 3 algorithms (cited in module-level
+doc comments):
+
+- **Hearn & Baker, *Computer Graphics with OpenGL*** — ch. 5 (2D
+  vector geometry primitives).
+- **Press et al., *Numerical Recipes in C* (3rd ed.)** —
+  - §2.1 (vector and matrix conventions),
+  - §2.3 (LU decomposition with partial pivoting),
+  - §2.10 (QR decomposition via Householder reflections),
+  - §5.7 (numerical derivatives — central difference + step-size
+    selection),
+  - §15.5 (Levenberg–Marquardt method).
+
+API inspiration only (Apache-2.0 license-compatible per user
+authorisation 2026-05-03):
+
+- **nalgebra** — `LuDecomposition` and `QrDecomposition` struct
+  shapes (factor once + reuse). No nalgebra source code was read;
+  the inspiration is the API ergonomics, not the implementation.
+
+No third-party constraint-solver source code, header, wiki, or
+blog post (SolveSpace, FreeCAD Sketcher, planegcs, OpenCascade,
+etc.) was consulted by any agent or the orchestrator during
+Phase 3.
+
+Result:
+- `cargo test -p signex-sketch` — 167 / 167 passing
+- `cargo build --workspace` clean
+- `examples/bench_linalg.rs` documents performance baseline:
+  ~80 µs full LU solve at n=100, ~540 µs at n=200 (roll-our-own,
+  no SIMD)
+- All 5 canonical sketches (anchored line + rectangle +
+  parallelogram + isosceles triangle + regular hexagon) solve
+  within 1e-6 in 4–6 LM iterations
+- DOF colouring works on the three canonical cases (under / full /
+  over)
+- AutoPauseState hysteresis tested (single overrun no-pause, 2
+  consecutive pauses, good observation resets, unpause clears)
+
+### Phase 4 — Expression parser + evaluator + units
 
 (pending — next session)
 
