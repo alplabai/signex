@@ -464,6 +464,7 @@ impl Signex {
                 self.ui_state.rename_dialog.is_some(),
                 self.ui_state.remove_dialog.is_some(),
                 self.ui_state.enable_version_control.is_some(),
+                self.library.create_options.is_some(),
             ))
             .map(
                 |(
@@ -478,6 +479,7 @@ impl Signex {
                         rename_open,
                         remove_open,
                         enable_vc_open,
+                        library_create_options_open,
                     ),
                     event,
                 )| match event {
@@ -601,6 +603,21 @@ impl Signex {
                                 if enable_vc_open =>
                             {
                                 Message::CloseEnableVersionControl
+                            }
+                            // F12 — Library Options modal Esc gap. Without
+                            // this, Esc fell through to `Tool::Select`
+                            // reset; users hit Create Library out of
+                            // frustration thinking that was the only way
+                            // out, which actually wrote the .snxlib to disk
+                            // (violating the "no disk writes without user
+                            // save" invariant when the user hadn't intended
+                            // to confirm).
+                            (keyboard::Key::Named(keyboard::key::Named::Escape), _)
+                                if library_create_options_open =>
+                            {
+                                Message::Library(
+                                    crate::library::messages::LibraryMessage::LibraryCreateOptionsCancel,
+                                )
                             }
                             (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
                                 Message::Tool(ToolMessage::SelectTool(Tool::Select))
