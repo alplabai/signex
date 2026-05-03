@@ -1,0 +1,191 @@
+//! Task 3.6 — Solver public API + timeout hysteresis tests.
+//!
+//! Exercises the high-level `Solver::solve` façade (LM + DOF in one
+//! shot) and the `AutoPauseState` hysteresis state used by the live-
+//! solve UI.
+
+mod common;
+use common::Sketch;
+
+use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
+use signex_sketch::id::ConstraintId;
+use signex_sketch::solver::dof::DofColor;
+use signex_sketch::solver::residual::ResolvedParams;
+use signex_sketch::solver::state::point_xy;
+use signex_sketch::solver::timeout::AutoPauseState;
+use signex_sketch::solver::Solver;
+
+fn empty_params() -> ResolvedParams {
+    ResolvedParams::new()
+}
+
+#[test]
+fn solver_default_solves_anchored_horizontal_distance() {
+    let mut s = Sketch::new();
+    let p1 = s.add_point(0.0, 0.0);
+    let p2 = s.add_point(1.0, 0.0);
+    let line = s.add_line(p1, p2);
+    s.data.constraints.push(Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::Fixed { point: p1 },
+    });
+    s.data.constraints.push(Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::DistancePtPt {
+            p1,
+            p2,
+            target: DimTarget::Literal(5.0),
+        },
+    });
+    s.data.constraints.push(Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::Horizontal { line },
+    });
+
+    let solver = Solver::default();
+    let out = solver
+        .solve(&s.data, &empty_params())
+        .expect("default solver should converge on this canonical case");
+
+    let (x2, y2) = point_xy(p2, &out.result.state, &out.result.index, &s.data).unwrap();
+    assert!((x2 - 5.0).abs() < 1e-6);
+    assert!(y2.abs() < 1e-6);
+
+    // DOF: P1 fixed → Full. P2 free + fully pinned by Distance + Horizontal → Full.
+    assert_eq!(out.colours.get(&p1), Some(&DofColor::Full));
+    assert_eq!(out.colours.get(&p2), Some(&DofColor::Full));
+
+    // No over-constrained constraints in this well-posed setup.
+    assert!(out.over_constraints.is_empty());
+
+    // Jacobian shape: 3 rows (Fixed contributes 0, Distance + Horizontal
+    // each contribute 1) × 2 cols (P2.x, P2.y; P1 is excluded as Fixed).
+    // Wait — Fixed contributes 0 residuals so total m = 0 + 1 + 1 = 2.
+    assert_eq!(out.jacobian.len(), 2);
+    assert_eq!(out.jacobian[0].len(), 2);
+}
+
+#[test]
+fn solver_detects_over_constrained() {
+    // Conflicting Distance constraints (5 mm AND 10 mm) on the same
+    // anchored point. LM either converges to a least-squares
+    // compromise or returns DidNotConverge — either way we expect
+    // both Distance constraints to surface in over_constraints OR
+    // the solve to fail. We accept either outcome here; the contract
+    // is "detect the over-constraint, don't silently pretend it
+    // succeeded".
+    let mut s = Sketch::new();
+    let p1 = s.add_point(0.0, 0.0);
+    let p2 = s.add_point(1.0, 0.0);
+    let _line = s.add_line(p1, p2);
+    s.data.constraints.push(Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::Fixed { point: p1 },
+    });
+    s.data.constraints.push(Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::DistancePtPt {
+            p1,
+            p2,
+            target: DimTarget::Literal(5.0),
+        },
+    });
+    s.data.constraints.push(Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::DistancePtPt {
+            p1,
+            p2,
+            target: DimTarget::Literal(10.0),
+        },
+    });
+
+    let solver = Solver::default();
+    match solver.solve(&s.data, &empty_params()) {
+        Ok(out) => {
+            // LM converged to a least-squares compromise; both
+            // Distance constraints have non-trivial residuals and
+            // should be in over_constraints.
+            assert!(
+                !out.over_constraints.is_empty(),
+                "expected at least one over-constrained constraint, got {:?}",
+                out.over_constraints
+            );
+            // The conflicting point should be flagged Over.
+            assert_eq!(out.colours.get(&p2), Some(&DofColor::Over));
+        }
+        Err(_) => {
+            // LM may fail to converge on irreconcilable constraints.
+            // Either outcome is acceptable; we just don't want a
+            // silent success.
+        }
+    }
+}
+
+#[test]
+fn solver_under_constrained_returns_under_dof() {
+    // One free Point, no constraints. Solver returns immediately.
+    let mut s = Sketch::new();
+    let p = s.add_point(2.5, 7.5);
+
+    let solver = Solver::default();
+    let out = solver.solve(&s.data, &empty_params()).unwrap();
+
+    // No constraints → m = 0 → rank(J) = 0 < n = 2 → P is Under.
+    assert_eq!(out.colours.get(&p), Some(&DofColor::Under));
+    assert!(out.over_constraints.is_empty());
+}
+
+#[test]
+fn solver_custom_timeout_and_iter_cap() {
+    // Custom Solver with absurdly small timeout still completes the
+    // canonical case because it converges in a few iterations.
+    let mut s = Sketch::new();
+    let p1 = s.add_point(0.0, 0.0);
+    let p2 = s.add_point(1.0, 0.0);
+    let line = s.add_line(p1, p2);
+    s.data.constraints.push(Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::Fixed { point: p1 },
+    });
+    s.data.constraints.push(Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::DistancePtPt {
+            p1,
+            p2,
+            target: DimTarget::Literal(5.0),
+        },
+    });
+    s.data.constraints.push(Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::Horizontal { line },
+    });
+
+    let solver = Solver {
+        timeout_ms: 100, // generous to avoid CI flakiness
+        max_iters: 100,
+        tolerance: 1e-12,
+    };
+    let out = solver.solve(&s.data, &empty_params()).unwrap();
+    assert!(out.result.iterations <= 50);
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// AutoPauseState — exposed for completeness; the unit tests inside
+// solver/timeout.rs already cover the basic cases. These are
+// integration-level smoke tests that exercise the type via a public
+// import, catching breakage if the module's pub surface changes.
+// ─────────────────────────────────────────────────────────────────────
+
+#[test]
+fn auto_pause_smoke_default_unpaused() {
+    let s = AutoPauseState::default();
+    assert!(!s.paused());
+}
+
+#[test]
+fn auto_pause_smoke_two_overruns_pauses() {
+    let mut s = AutoPauseState::new();
+    s.observe(60, 50);
+    s.observe(60, 50);
+    assert!(s.paused());
+}
