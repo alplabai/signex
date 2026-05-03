@@ -5134,10 +5134,18 @@ impl Signex {
             layers.push(backdrop.into());
         }
 
-        // Edit Component Details modal (Deliverable B). One per
-        // browser tab; iterate to find the one with a live `edit_modal`.
+        // F25 (2026-05-03) — Edit Component Details modal removed.
+        // Row click selects → Properties panel surfaces detail.
+        // Per-component custom parameters are gone; every value
+        // lives in a table column. Render branch retained behind
+        // `EDIT_MODAL_ENABLED` for one release; prune the supporting
+        // state + dispatchers in a follow-up cleanup pass.
+        const EDIT_MODAL_ENABLED: bool = false;
+        #[allow(clippy::overly_complex_bool_expr)]
         for (lib_path, browser_state) in &self.library.library_browsers {
-            if let Some(edit) = browser_state.edit_modal.as_ref() {
+            if EDIT_MODAL_ENABLED
+                && let Some(edit) = browser_state.edit_modal.as_ref()
+            {
                 // Class registry is per-library — read from the
                 // editing library's manifest. Falls back to the
                 // user's prefs default when the library has no

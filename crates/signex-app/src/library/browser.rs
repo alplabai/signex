@@ -237,7 +237,7 @@ fn view_table_sidebar<'a>(
         .width(Length::Fill);
 
     col = col.push(
-        container(text("Tables").size(11).color(muted)).padding(iced::Padding {
+        container(text("Classes").size(11).color(muted)).padding(iced::Padding {
             top: 0.0,
             right: 8.0,
             bottom: 4.0,
@@ -902,7 +902,7 @@ fn view_table_sidebar<'a>(
         None => {
             let library_for_begin = lib_pb.clone();
             container(
-                button(text("+ Table").size(BROWSER_TEXT_SIZE).color(text_c))
+                button(text("+ Class").size(BROWSER_TEXT_SIZE).color(text_c))
                     .padding([4, 10])
                     .width(Length::Fill)
                     .on_press(LibraryMessage::BrowserBeginAddTable {
@@ -1565,15 +1565,21 @@ fn view_grid<'a>(
             // Right-press fires the Stage 18 distributor refresh stub
             // — tonight's wiring just emits a tracing log; the real
             // adapter call lands when the row-binding loop is built.
+            // F25 (2026-05-03) — double-click no longer opens an Edit
+            // Component modal. Single-click selects the row and the
+            // Properties panel surfaces the row detail; per-component
+            // custom parameters are gone (every value lives in a
+            // table column). The modal renderer + state field stay
+            // dead-coded for one release in case a regression test
+            // shows the row-edit ergonomics still need a richer
+            // surface; the on_press wiring here is the only user-
+            // facing trigger and removing it removes the feature.
+            let _ = library_for_open;
+            let _ = table_for_open;
             let row_widget = mouse_area(row_container)
                 .on_press(LibraryMessage::BrowserSelectRow {
                     library_path: library_for_msg,
                     table: table_for_msg,
-                    row_id,
-                })
-                .on_double_click(LibraryMessage::BrowserOpenEditModal {
-                    library_path: library_for_open,
-                    table: table_for_open,
                     row_id,
                 })
                 .on_right_press(LibraryMessage::BrowserRefreshPricing {
