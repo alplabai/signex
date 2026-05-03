@@ -13,7 +13,9 @@
 //! See `docs/internal/SKETCH_MODE_v0.13_PLAN.md` for the
 //! release plan.
 
+pub mod array;
 pub mod attr;
+pub mod bake;
 pub mod constraint;
 pub mod entity;
 pub mod error;
@@ -24,7 +26,6 @@ pub mod plane;
 pub mod sketch;
 pub mod solver;
 pub mod unit;
-pub mod bake;
 
 pub use error::{SketchError, SolveError};
 pub use sketch::SketchData;

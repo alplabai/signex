@@ -1,3 +1,6 @@
+use signex_sketch::array::{
+    bga_row_letter, Array, ArrayId, ArrayKind, GridDepopulation, NumberingScheme,
+};
 use signex_sketch::attr::{
     BoardCutoutAttr, BoardLayer, ChamferedCorners, CustomPadShape, DrillSpec, KeepoutAttr,
     KeepoutKinds, MaskOpeningAttr, PadAttr, PadKind, PadShape, PadSide, PasteAperturePattern,
@@ -6,6 +9,7 @@ use signex_sketch::attr::{
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::{ConstraintId, SketchEntityId};
 use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
+use signex_sketch::SketchData;
 use uuid::Uuid;
 
 #[test]
@@ -453,4 +457,179 @@ fn v_score_hint_with_overrides_round_trip() {
     let s = toml::to_string(&a).unwrap();
     let back: VScoreHintAttr = toml::from_str(&s).unwrap();
     assert_eq!(a, back);
+}
+
+// ─── Array round-trips ───
+
+#[test]
+fn linear_array_round_trip() {
+    let a = Array {
+        id: ArrayId::new(),
+        kind: ArrayKind::Linear {
+            source: SketchEntityId::new(),
+            count_expr: "= pin_count / 4".into(),
+            dx_expr: "= pad_pitch".into(),
+            dy_expr: "0mm".into(),
+        },
+        numbering: NumberingScheme::LinearIncrement {
+            start_expr: "1".into(),
+            step_expr: "1".into(),
+        },
+    };
+    let s = toml::to_string(&a).unwrap();
+    let back: Array = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
+}
+
+#[test]
+fn grid_array_with_bga_numbering_round_trip() {
+    let a = Array {
+        id: ArrayId::new(),
+        kind: ArrayKind::Grid {
+            source: SketchEntityId::new(),
+            nx_expr: "16".into(),
+            ny_expr: "16".into(),
+            dx_expr: "= ball_pitch".into(),
+            dy_expr: "= ball_pitch".into(),
+            depopulation: None,
+        },
+        numbering: NumberingScheme::BgaRowCol {
+            skip_letters: true,
+            start_row: 'A',
+            start_col: 1,
+        },
+    };
+    let s = toml::to_string(&a).unwrap();
+    let back: Array = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
+}
+
+#[test]
+fn polar_array_round_trip() {
+    let a = Array {
+        id: ArrayId::new(),
+        kind: ArrayKind::Polar {
+            source: SketchEntityId::new(),
+            center: SketchEntityId::new(),
+            count_expr: "8".into(),
+            sweep_angle_expr: "360deg".into(),
+        },
+        numbering: NumberingScheme::LinearIncrement {
+            start_expr: "1".into(),
+            step_expr: "1".into(),
+        },
+    };
+    let s = toml::to_string(&a).unwrap();
+    let back: Array = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
+}
+
+#[test]
+fn grid_array_with_corner_depopulation_round_trip() {
+    let a = Array {
+        id: ArrayId::new(),
+        kind: ArrayKind::Grid {
+            source: SketchEntityId::new(),
+            nx_expr: "16".into(),
+            ny_expr: "16".into(),
+            dx_expr: "= ball_pitch".into(),
+            dy_expr: "= ball_pitch".into(),
+            depopulation: Some(GridDepopulation {
+                mask_expr: "!(i == 0 && j == 0) && !(i == nx-1 && j == 0) \
+                            && !(i == 0 && j == ny-1) && !(i == nx-1 && j == ny-1)"
+                    .into(),
+            }),
+        },
+        numbering: NumberingScheme::BgaRowCol {
+            skip_letters: true,
+            start_row: 'A',
+            start_col: 1,
+        },
+    };
+    let s = toml::to_string(&a).unwrap();
+    let back: Array = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
+}
+
+#[test]
+fn explicit_numbering_round_trip() {
+    let a = Array {
+        id: ArrayId::new(),
+        kind: ArrayKind::Linear {
+            source: SketchEntityId::new(),
+            count_expr: "5".into(),
+            dx_expr: "= pad_pitch".into(),
+            dy_expr: "0mm".into(),
+        },
+        numbering: NumberingScheme::Explicit {
+            names: vec![
+                "GND".into(),
+                "VBUS".into(),
+                "D-".into(),
+                "D+".into(),
+                "ID".into(),
+            ],
+        },
+    };
+    let s = toml::to_string(&a).unwrap();
+    let back: Array = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
+}
+
+#[test]
+fn bga_letters_basic() {
+    assert_eq!(bga_row_letter(0, true, 'A'), "A");
+    assert_eq!(bga_row_letter(1, true, 'A'), "B");
+    assert_eq!(bga_row_letter(7, true, 'A'), "H");
+    // Index 8 would be 'I' which is skipped → 'J'
+    assert_eq!(bga_row_letter(8, true, 'A'), "J");
+    // 20 letters in the skipped alphabet → index 20 = "AA"
+    assert_eq!(bga_row_letter(20, true, 'A'), "AA");
+}
+
+#[test]
+fn bga_letters_no_skip() {
+    assert_eq!(bga_row_letter(8, false, 'A'), "I");
+    assert_eq!(bga_row_letter(25, false, 'A'), "Z");
+    assert_eq!(bga_row_letter(26, false, 'A'), "AA");
+}
+
+// ─── SketchData round-trip ───
+
+#[test]
+fn empty_sketch_round_trip() {
+    let s = SketchData::default();
+    let toml_s = toml::to_string(&s).unwrap();
+    let back: SketchData = toml::from_str(&toml_s).unwrap();
+    assert_eq!(s, back);
+}
+
+#[test]
+fn populated_sketch_round_trip() {
+    let plane_id = PlaneId::new();
+    let p1 = SketchEntityId::new();
+    let p2 = SketchEntityId::new();
+    let mut data = SketchData::default();
+    data.planes.push(Plane {
+        id: plane_id,
+        kind: PlaneKind::BoardTop,
+    });
+    data.entities
+        .push(Entity::new(p1, plane_id, EntityKind::Point { x: 0.0, y: 0.0 }));
+    data.entities.push(Entity::new(
+        p2,
+        plane_id,
+        EntityKind::Point { x: 1.0, y: 0.0 },
+    ));
+    data.entities.push(Entity::new(
+        SketchEntityId::new(),
+        plane_id,
+        EntityKind::Line { start: p1, end: p2 },
+    ));
+    data.parameters
+        .0
+        .insert("pad_pitch".into(), "0.5mm".into());
+    let s = toml::to_string(&data).unwrap();
+    let back: SketchData = toml::from_str(&s).unwrap();
+    assert_eq!(data, back);
 }
