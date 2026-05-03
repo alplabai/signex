@@ -383,6 +383,11 @@ pub enum PrimitivePickerTarget {
     /// The user picks while editing a row in the Library Browser
     /// grid's Edit Component Details modal (Deliverable B).
     EditRowModal(EditorAddress),
+    /// The user picks for the row currently selected in the Library
+    /// Browser tab — apply directly through the adapter and refresh.
+    /// F15 (2026-05-03): row binding lives next to the row, not in a
+    /// separate Component Preview tab or modal.
+    BrowserRow(EditorAddress),
 }
 
 /// Top-level Library subsystem state. Stored on
