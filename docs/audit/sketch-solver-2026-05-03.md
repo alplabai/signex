@@ -102,7 +102,49 @@ References consulted in Phase 1: only
 definition). No third-party constraint-solver code, no foreign EDA
 source code, no foreign-format wiki/blog/file-format docs.
 
-### Phase 2 — Constraint residuals
+### Phase 2 — Constraint residuals — DONE 2026-05-03
+
+Commits on `feature/v0.13-sketch-mode`:
+
+| SHA | Subject | Tasks |
+|---|---|---|
+| `3ef32f61` | feat(sketch): Phase 2 foundation — Constraint enum + state-vector packing + canonical residuals | 2.1 + 2.2 + 2.3 |
+| `3cb04db3` | feat(sketch): Phase 2 — residuals for all 18 constraint kinds + total aggregator | 2.4 + 2.5 + 2.6 + 2.7 + 2.8 |
+
+Tasks 2.4–2.7 ran as four parallel agents writing independent
+per-family modules (`solver/residuals/{parallel_perp_angle,
+point_on, equal_tangent, symmetric_midpoint}.rs`). Each agent owned
+exactly two files (one impl, one test file) and never touched the
+shared dispatcher, the Constraint enum, or the state-vector module.
+All four reported back without conflicts; the orchestrator wrote the
+Task 2.8 aggregator and the Task 2.8 tests.
+
+Result:
+- `cargo test -p signex-sketch` — 107 / 107 passing
+- `cargo build --workspace` clean (existing 65 signex-app warnings
+  unchanged)
+- All 18 constraint kinds have residual implementations
+- Each constraint kind has at least one residual test (most have
+  several covering edge cases like degenerate lines, branch-cut
+  wrapping, sign convention, mixed Arc/Circle dispatch)
+
+References consulted for Phase 2 residual derivations (cited in
+module-level doc comments of each `solver/residuals/*.rs` file):
+
+- Hearn & Baker, *Computer Graphics with OpenGL* — ch. 5, 2D
+  vector geometry primitives (cross product as signed area / side-
+  of-line, dot product as projection, signed perpendicular distance
+  via cross-divided-by-length).
+- Press et al., *Numerical Recipes in C* (3rd ed.) — §10.6 (`atan2`
+  branch handling), §10 (linear algebra primitives — applies in
+  Phase 3 when the Jacobian + LM linear solve land).
+
+No third-party constraint-solver source code, headers, wikis, or
+blog posts (SolveSpace, FreeCAD Sketcher, planegcs, OpenCascade,
+etc.) were consulted by any agent or the orchestrator during
+Phase 2.
+
+### Phase 3 — Solver: Newton-LM + Jacobian + DOF
 
 (pending — next session)
 
