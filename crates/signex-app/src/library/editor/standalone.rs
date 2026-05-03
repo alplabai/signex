@@ -347,8 +347,12 @@ pub fn view_footprint<'a>(
     let toolbar = view_footprint_toolbar(editor, tokens);
     let canvas_area = view_footprint_canvas(editor, tokens, bg, grid);
     let footer = view_footprint_footer(editor, tokens);
+    // v0.13.1 — Sketch inspector strip. Returns an empty Space when
+    // the editor isn't in Sketch mode so the column layout is stable.
+    let inspector =
+        crate::library::editor::footprint::sketch_mode::inspector::view(editor, tokens);
 
-    column![toolbar, canvas_area, footer]
+    column![toolbar, inspector, canvas_area, footer]
         .spacing(0)
         .width(Length::Fill)
         .height(Length::Fill)
@@ -471,8 +475,63 @@ fn view_footprint_toolbar<'a>(
         ..iced::widget::button::Style::default()
     });
 
+    // v0.13.1 — Sketch mode toggle. Three pills (Normal / Sketch /
+    // 3D View) sit between the layer toggles and the auto-fit /
+    // save buttons. The active pill is highlighted via the same
+    // pattern the layer toggles use.
+    let mode_pill = |label: &'static str, target: crate::library::editor::footprint::state::EditorMode, active: bool| {
+        let path = editor.path.clone();
+        let label_color = if active { text_c } else { muted };
+        button(text(label).size(11).color(label_color))
+            .padding([3, 8])
+            .on_press(LibraryMessage::PrimitiveEditorEvent {
+                path,
+                msg: PrimitiveEditorMsg::FootprintSetMode(target),
+            })
+            .style(move |_: &Theme, _| iced::widget::button::Style {
+                background: if active {
+                    Some(iced::Background::Color(iced::Color::from_rgba(
+                        1.0, 1.0, 1.0, 0.08,
+                    )))
+                } else {
+                    Some(iced::Background::Color(iced::Color::from_rgba(
+                        1.0, 1.0, 1.0, 0.02,
+                    )))
+                },
+                border: Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: border,
+                },
+                ..iced::widget::button::Style::default()
+            })
+    };
+    let mode = editor.state.mode;
+    let mode_row = row![
+        text("Mode:").size(11).color(muted),
+        mode_pill(
+            "Normal",
+            crate::library::editor::footprint::state::EditorMode::Normal,
+            matches!(mode, crate::library::editor::footprint::state::EditorMode::Normal),
+        ),
+        mode_pill(
+            "Sketch",
+            crate::library::editor::footprint::state::EditorMode::Sketch,
+            matches!(mode, crate::library::editor::footprint::state::EditorMode::Sketch),
+        ),
+        mode_pill(
+            "3D View",
+            crate::library::editor::footprint::state::EditorMode::View3d,
+            matches!(mode, crate::library::editor::footprint::state::EditorMode::View3d),
+        ),
+    ]
+    .spacing(4)
+    .align_y(iced::Alignment::Center);
+
     row_widget = row_widget
         .push(Space::new().width(Length::Fill))
+        .push(mode_row)
+        .push(Space::new().width(8))
         .push(auto_fit_btn)
         .push(Space::new().width(8))
         .push(save_btn);

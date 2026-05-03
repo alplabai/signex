@@ -3906,6 +3906,10 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintDeleteSelected
         | PrimitiveEditorMsg::FootprintToggleLayer(_)
         | PrimitiveEditorMsg::FootprintToggleAutoFit
+        | PrimitiveEditorMsg::FootprintSetMode(_)
+        | PrimitiveEditorMsg::FootprintSketchPlacePoint { .. }
+        | PrimitiveEditorMsg::FootprintSketchEditParameter { .. }
+        | PrimitiveEditorMsg::FootprintSketchToggleAutoPause
         | PrimitiveEditorMsg::Save => {}
     }
 }
@@ -4061,6 +4065,86 @@ pub(crate) fn apply_footprint_primitive_edit(
         PrimitiveEditorMsg::FootprintToggleAutoFit => {
             editor.state.toggle_auto_fit();
             CanvasState::sync_pads_to_primitive(&editor.state, &mut editor.primitive);
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintSetMode(mode) => {
+            editor.state.mode = mode;
+            // Run the dispatcher so the sketch is initialised + solved
+            // on first switch into Sketch mode (or no-op otherwise).
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit;
+            use crate::library::editor::footprint::sketch_mode::SketchEdit;
+            let _ = apply_sketch_edit(
+                &mut editor.state,
+                &mut editor.primitive,
+                SketchEdit::SetMode(mode),
+            );
+            editor.canvas_cache.clear();
+            editor.dirty = true;
+        }
+        PrimitiveEditorMsg::FootprintSketchPlacePoint { x_mm, y_mm } => {
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit;
+            use crate::library::editor::footprint::sketch_mode::SketchEdit;
+            use signex_sketch::entity::{Entity, EntityKind};
+            use signex_sketch::id::SketchEntityId;
+            use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
+            // Ensure the sketch has at least one plane so the entity has
+            // somewhere to live.
+            let plane_id = match editor.primitive.sketch.as_ref() {
+                Some(s) if !s.planes.is_empty() => s.planes[0].id,
+                _ => {
+                    let pid = PlaneId::new();
+                    let sketch = editor
+                        .primitive
+                        .sketch
+                        .get_or_insert_with(signex_sketch::SketchData::default);
+                    sketch.planes.push(Plane {
+                        id: pid,
+                        kind: PlaneKind::BoardTop,
+                    });
+                    pid
+                }
+            };
+            let id = SketchEntityId::new();
+            let entity = Entity::new(
+                id,
+                plane_id,
+                EntityKind::Point {
+                    x: x_mm,
+                    y: y_mm,
+                },
+            );
+            let _ = apply_sketch_edit(
+                &mut editor.state,
+                &mut editor.primitive,
+                SketchEdit::AddEntity(entity),
+            );
+            editor.canvas_cache.clear();
+            editor.dirty = true;
+        }
+        PrimitiveEditorMsg::FootprintSketchEditParameter { name, expr } => {
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit;
+            use crate::library::editor::footprint::sketch_mode::SketchEdit;
+            let _ = apply_sketch_edit(
+                &mut editor.state,
+                &mut editor.primitive,
+                SketchEdit::EditParameter { name, expr },
+            );
+            editor.canvas_cache.clear();
+            editor.dirty = true;
+        }
+        PrimitiveEditorMsg::FootprintSketchToggleAutoPause => {
+            if editor.state.auto_pause.paused() {
+                editor.state.auto_pause.unpause();
+            }
+            // Flip via a deliberate ForceRebuild so a successful solve
+            // resets the consecutive-overrun counter.
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit;
+            use crate::library::editor::footprint::sketch_mode::SketchEdit;
+            let _ = apply_sketch_edit(
+                &mut editor.state,
+                &mut editor.primitive,
+                SketchEdit::ForceRebuild,
+            );
             editor.canvas_cache.clear();
         }
         // Symbol variants are no-ops on a Footprint editor.

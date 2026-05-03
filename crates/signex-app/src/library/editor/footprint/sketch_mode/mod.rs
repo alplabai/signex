@@ -9,6 +9,7 @@
 //! v0.13 ships the `messages` and `tools` modules; the inspector +
 //! overlay + DOF render layer land in Phase 6 follow-ups.
 
+pub mod inspector;
 pub mod messages;
 
 pub use messages::{ActiveTool, SketchEdit, SketchModeMsg, ToolEvent};

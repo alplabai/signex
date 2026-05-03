@@ -1057,6 +1057,22 @@ pub enum PrimitiveEditorMsg {
     /// Toolbar — toggle the auto-fit-courtyard flag.
     FootprintToggleAutoFit,
 
+    // ── v0.13.1 — Sketch mode (Phase 6) ────────────────────
+    /// Toolbar — switch the editor mode. `Normal` is the existing
+    /// pad-list authoring; `Sketch` opens the parametric sketcher;
+    /// `View3d` is the body 3D preview.
+    FootprintSetMode(crate::library::editor::footprint::state::EditorMode),
+    /// Sketch tool — place a Point at the given world-mm position.
+    /// Triggers a solve + bake via the dispatcher.
+    FootprintSketchPlacePoint { x_mm: f64, y_mm: f64 },
+    /// Sketch inspector — edit / insert a parameter source string.
+    /// Triggers a solve + bake.
+    FootprintSketchEditParameter { name: String, expr: String },
+    /// Sketch inspector — toggle the auto-pause hysteresis state
+    /// machine. Used by the inspector's "Live solve paused (resume)"
+    /// button.
+    FootprintSketchToggleAutoPause,
+
     // ── Save ───────────────────────────────────────────────
     /// Explicit "Save this primitive tab to disk" — fires from the
     /// editor's Save button. Ctrl+S also routes here for primitive
