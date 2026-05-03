@@ -39,6 +39,7 @@ use super::state::{LibraryBrowserState, LibraryState, LifecycleFilter, OpenLibra
 
 const BROWSER_TEXT_SIZE: f32 = 11.0;
 const BROWSER_HEADER_SIZE: f32 = 10.0;
+#[allow(dead_code)] // F15 (final): preview pane removed; constant retained for the moment in case the Properties panel needs the same width hint.
 const PREVIEW_PANE_WIDTH: f32 = 380.0;
 const MAX_PARAM_COLUMNS: usize = 4;
 /// Width reserved at the start of every grid row for the per-row
@@ -1676,8 +1677,15 @@ fn view_action_row<'a>(
     .into()
 }
 
-// ─── Preview pane ───────────────────────────────────────────────────
+// ─── Preview pane (DEAD: F15 final pass moved this to Properties) ──
+//
+// view_preview_pane / preview_panel / preview_panel_with_pick /
+// symbol_summary / footprint_summary / short_row_id are kept as
+// dead code so the prune is reviewable in one commit. The Properties
+// panel reads `PanelContext.library_row_detail` and renders the
+// equivalent. Pruning this block in the next cleanup pass.
 
+#[allow(dead_code)]
 fn view_preview_pane<'a>(
     library_path: &'a std::path::Path,
     table: &str,
@@ -1801,6 +1809,7 @@ fn view_preview_pane<'a>(
     body
 }
 
+#[allow(dead_code)]
 fn short_row_id(uuid: uuid::Uuid) -> String {
     let s = uuid.simple().to_string();
     if s.len() >= 8 {
@@ -1810,6 +1819,7 @@ fn short_row_id(uuid: uuid::Uuid) -> String {
     }
 }
 
+#[allow(dead_code)]
 fn preview_panel<'a>(
     label: &'a str,
     summary: String,
@@ -1844,6 +1854,7 @@ fn preview_panel<'a>(
 /// of the header row. F15 — primitive binding lives next to the row
 /// status so the user has the Pick button visible whenever they see
 /// "unbound" or "unresolved".
+#[allow(dead_code)]
 fn preview_panel_with_pick<'a>(
     label: &'a str,
     summary: String,
@@ -1898,6 +1909,7 @@ fn preview_panel_with_pick<'a>(
         .into()
 }
 
+#[allow(dead_code)]
 fn symbol_summary(sym: Option<&signex_library::Symbol>) -> String {
     match sym {
         None => {
@@ -1928,6 +1940,7 @@ fn symbol_summary(sym: Option<&signex_library::Symbol>) -> String {
     }
 }
 
+#[allow(dead_code)]
 fn footprint_summary(fp: Option<&signex_library::Footprint>) -> String {
     match fp {
         None => "No footprint bound.".to_string(),
