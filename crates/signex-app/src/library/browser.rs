@@ -160,7 +160,14 @@ pub fn view<'a>(
     .width(Length::Fill)
     .height(Length::Fill);
 
-    let preview_pane = view_preview_pane(library_state, &visible, browser.selected_row, tokens);
+    let preview_pane = view_preview_pane(
+        library_path,
+        active_table,
+        library_state,
+        &visible,
+        browser.selected_row,
+        tokens,
+    );
 
     let body = row![
         left,
@@ -1473,6 +1480,24 @@ fn view_grid<'a>(
                     continue;
                 }
 
+                // Symbol + Footprint cells are read-only status
+                // markers (`—` unbound, `• <uuid8>` bound). Binding
+                // edit happens in the Properties panel via Pick
+                // Symbol / Pick Footprint — typing into the cell
+                // would have no defined semantics.
+                if matches!(c.kind, ColumnKind::Symbol | ColumnKind::Footprint) {
+                    data_row = data_row.push(
+                        container(
+                            text(row_value)
+                                .size(BROWSER_TEXT_SIZE)
+                                .color(theme_ext::text_secondary(tokens)),
+                        )
+                        .padding([4, 6])
+                        .width(Length::Fixed(c.width)),
+                    );
+                    continue;
+                }
+
                 // Buffer wins over row when active.
                 let buf_key = (row_id, column_key.clone());
                 let cell_value = browser
@@ -1662,6 +1687,8 @@ fn view_action_row<'a>(
 // ─── Preview pane ───────────────────────────────────────────────────
 
 fn view_preview_pane<'a>(
+    library_path: &'a std::path::Path,
+    table: &str,
     library_state: &'a LibraryState,
     visible: &[&'a ComponentRow],
     selected: Option<RowId>,
@@ -1717,9 +1744,38 @@ fn view_preview_pane<'a>(
                 .as_ref()
                 .and_then(|fp| library_state.set.resolve_footprint(fp));
 
-            let symbol_panel = preview_panel("Symbol", symbol_summary(symbol.as_ref()), tokens);
-            let footprint_panel =
-                preview_panel("Footprint", footprint_summary(footprint.as_ref()), tokens);
+            // F15 — bind primitives directly from the inline preview.
+            // BrowserRow target applies + saves through the adapter
+            // without needing a Component Preview tab open.
+            let row_id = RowId::from_uuid(r.row_id);
+            let address = crate::library::state::EditorAddress::new(
+                library_path.to_path_buf(),
+                table.to_string(),
+                row_id,
+            );
+
+            let symbol_panel = preview_panel_with_pick(
+                "Symbol",
+                symbol_summary(symbol.as_ref()),
+                "Pick Symbol…",
+                LibraryMessage::OpenPrimitivePicker {
+                    kind: signex_library::PrimitiveKind::Symbol,
+                    target: crate::library::state::PrimitivePickerTarget::BrowserRow(
+                        address.clone(),
+                    ),
+                },
+                tokens,
+            );
+            let footprint_panel = preview_panel_with_pick(
+                "Footprint",
+                footprint_summary(footprint.as_ref()),
+                "Pick Footprint…",
+                LibraryMessage::OpenPrimitivePicker {
+                    kind: signex_library::PrimitiveKind::Footprint,
+                    target: crate::library::state::PrimitivePickerTarget::BrowserRow(address),
+                },
+                tokens,
+            );
 
             container(
                 scrollable(
@@ -1772,6 +1828,64 @@ fn preview_panel<'a>(
     let border = theme_ext::border_color(tokens);
 
     let header = text(label).size(11).color(muted);
+    let body = container(text(summary).size(11).color(text_c))
+        .padding(10)
+        .width(Length::Fill)
+        .style(move |_: &Theme| iced::widget::container::Style {
+            background: Some(iced::Background::Color(iced::Color::from_rgba(
+                1.0, 1.0, 1.0, 0.02,
+            ))),
+            border: Border {
+                width: 1.0,
+                radius: 3.0.into(),
+                color: border,
+            },
+            ..Default::default()
+        });
+    column![header, Space::new().height(4), body]
+        .spacing(0)
+        .padding([0, 10])
+        .into()
+}
+
+/// Same as [`preview_panel`] but adds a Pick… button on the right
+/// of the header row. F15 — primitive binding lives next to the row
+/// status so the user has the Pick button visible whenever they see
+/// "unbound" or "unresolved".
+fn preview_panel_with_pick<'a>(
+    label: &'a str,
+    summary: String,
+    pick_label: &'a str,
+    pick_msg: LibraryMessage,
+    tokens: &'a ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    let text_c = theme_ext::text_primary(tokens);
+    let muted = theme_ext::text_secondary(tokens);
+    let border = theme_ext::border_color(tokens);
+
+    let pick_btn = button(text(pick_label).size(10).color(text_c))
+        .padding([3, 8])
+        .on_press(pick_msg)
+        .style(move |_: &Theme, _| iced::widget::button::Style {
+            background: Some(iced::Background::Color(iced::Color::from_rgba(
+                1.0, 1.0, 1.0, 0.04,
+            ))),
+            text_color: text_c,
+            border: Border {
+                width: 1.0,
+                radius: 3.0.into(),
+                color: border,
+            },
+            ..iced::widget::button::Style::default()
+        });
+
+    let header = row![
+        text(label).size(11).color(muted),
+        Space::new().width(Length::Fill),
+        pick_btn,
+    ]
+    .align_y(iced::Alignment::Center);
+
     let body = container(text(summary).size(11).color(text_c))
         .padding(10)
         .width(Length::Fill)

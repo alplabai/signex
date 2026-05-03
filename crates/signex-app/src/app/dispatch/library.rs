@@ -2086,8 +2086,97 @@ impl Signex {
                     nc.error = None;
                 }
             }
+            PrimitivePickerTarget::BrowserRow(address) => {
+                self.apply_primitive_pick_to_browser_row(address, picker.kind, primitive_ref);
+            }
         }
         Task::none()
+    }
+
+    /// F15 — Library Browser row binding. Same shape as
+    /// `apply_primitive_pick_to_preview` but reads/writes the row
+    /// through the cache directly because there's no Component
+    /// Preview tab open (the user picked from the inline preview /
+    /// Properties area). Updates the row, re-hashes, persists via
+    /// `adapter.update_row`, refreshes the cache.
+    fn apply_primitive_pick_to_browser_row(
+        &mut self,
+        address: EditorAddress,
+        kind: PrimitiveKind,
+        primitive_ref: PrimitiveRef,
+    ) {
+        // 1. Read the row from the library cache.
+        let mut row = match self
+            .library
+            .library_at(&address.library_path)
+            .and_then(|lib| lib.tables.get(&address.table))
+            .and_then(|rows| rows.iter().find(|r| RowId::from_uuid(r.row_id) == address.row_id))
+            .cloned()
+        {
+            Some(r) => r,
+            None => {
+                tracing::warn!(
+                    target: "signex::library",
+                    library = %address.library_path.display(),
+                    table = %address.table,
+                    row_id = %address.row_id,
+                    "primitive pick: row not found in cache"
+                );
+                return;
+            }
+        };
+        // 2. Apply.
+        match kind {
+            PrimitiveKind::Symbol => row.symbol_ref = primitive_ref,
+            PrimitiveKind::Footprint => row.footprint_ref = Some(primitive_ref),
+            PrimitiveKind::Sim => row.sim_ref = Some(primitive_ref),
+            _ => return,
+        }
+        // 3. Re-hash.
+        match signex_library::hash_row_content(&row) {
+            Ok(h) => row.content_hash = h,
+            Err(e) => {
+                tracing::warn!(
+                    target: "signex::library",
+                    error = %e,
+                    "browser-row primitive pick: hash failed"
+                );
+                return;
+            }
+        }
+        // 4. Persist via adapter.
+        let library_id = self
+            .library
+            .library_at(&address.library_path)
+            .map(|lib| lib.library_id);
+        let commit_msg = match kind {
+            PrimitiveKind::Symbol => "bind symbol",
+            PrimitiveKind::Footprint => "bind footprint",
+            PrimitiveKind::Sim => "bind sim",
+            _ => "bind primitive",
+        };
+        let result = match library_id.and_then(|id| self.library.set.get(id)) {
+            Some(adapter) => adapter.update_row(&address.table, row, commit_msg),
+            None => Err(signex_library::LibraryError::NotFound(
+                address.library_path.display().to_string(),
+            )),
+        };
+        if let Err(e) = result {
+            tracing::warn!(
+                target: "signex::library",
+                error = %e,
+                "browser-row primitive pick: update_row failed"
+            );
+            return;
+        }
+        // 5. Refresh cache.
+        if let Err(e) = self.library.refresh_components(&address.library_path) {
+            tracing::warn!(
+                target: "signex::library",
+                error = %e,
+                "browser-row primitive pick: refresh_components failed"
+            );
+        }
     }
 
     /// Component Preview tab — apply a freshly-picked primitive ref to
