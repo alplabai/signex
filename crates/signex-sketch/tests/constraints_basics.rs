@@ -108,6 +108,54 @@ fn distance_pt_pt_expr_resolves_via_params() {
 }
 
 #[test]
+fn distance_pt_pt_expr_full_arithmetic() {
+    // Phase 4 Task 4.6 — DimTarget::Expr now supports full
+    // expression evaluation, not just bare-name lookups.
+    let mut s = Sketch::new();
+    let p1 = s.add_point(0.0, 0.0);
+    let p2 = s.add_point(3.0, 4.0);
+    let packed = pack(&s.data);
+
+    // Distance is 5 mm. Target = 2 + 3 = 5 mm via arithmetic on
+    // dimensionless literals (auto-coerced to length-mm at the
+    // ResolvedParams interpretation).
+    let c = Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::DistancePtPt {
+            p1,
+            p2,
+            target: DimTarget::Expr("= 2mm + 3mm".into()),
+        },
+    };
+    let r = residual(&c, &packed.vector, &packed.index, &s.data, &ResolvedParams::new()).unwrap();
+    assert!(r[0].abs() < 1e-12, "5 - (2+3) = 0, got {}", r[0]);
+}
+
+#[test]
+fn distance_pt_pt_expr_param_arithmetic() {
+    // pad_pitch * 5 where pad_pitch = 1 (treated as 1mm in length
+    // context) should evaluate to 5mm.
+    let mut s = Sketch::new();
+    let p1 = s.add_point(0.0, 0.0);
+    let p2 = s.add_point(3.0, 4.0);
+    let packed = pack(&s.data);
+
+    let c = Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::DistancePtPt {
+            p1,
+            p2,
+            target: DimTarget::Expr("= pad_pitch * 5".into()),
+        },
+    };
+    let mut params = ResolvedParams::new();
+    params.insert("pad_pitch".into(), 1.0);
+    let r = residual(&c, &packed.vector, &packed.index, &s.data, &params).unwrap();
+    // distance 5 - target 5 = 0
+    assert!(r[0].abs() < 1e-12, "expected 0, got {}", r[0]);
+}
+
+#[test]
 fn horizontal_residual_zero_when_horizontal() {
     let mut s = Sketch::new();
     let a = s.add_point(0.0, 1.0);

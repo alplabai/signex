@@ -10,34 +10,84 @@
 //! module so the residual implementations can grow without this file
 //! becoming a single shared bottleneck.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use crate::constraint::{Constraint, ConstraintKind, DimTarget};
 use crate::error::SketchError;
+use crate::expr::ast::ExprNode;
+use crate::expr::eval::{eval as eval_expr, EvalContext};
+use crate::expr::parse::parse as parse_expr;
 use crate::sketch::SketchData;
 use crate::solver::residuals::{equal_tangent, point_on, parallel_perp_angle, symmetric_midpoint};
 use crate::solver::state::{point_xy, EntityIndex, line_endpoints};
+use crate::unit::{Quantity, UnitFamily};
 
 /// Resolved-parameter table — `name → f64` in canonical units (mm
-/// for lengths, rad for angles). Phase 4 produces this table from the
-/// [`crate::expr`] AST evaluator. Phase 2 honours
-/// `DimTarget::Literal` only and looks up `DimTarget::Expr` strings as
-/// bare parameter names.
+/// for lengths, rad for angles, raw for counts). Produced by
+/// [`crate::parameter::resolve`] from the user-authored
+/// [`crate::parameter::ParameterTable`]. The Solver's pipeline
+/// resolves the table once before the LM iteration starts and reuses
+/// the resulting `ResolvedParams` across all per-residual calls.
+///
+/// This stays a flat `HashMap<String, f64>` rather than a typed
+/// quantity table so the residual layer keeps a tight, allocation-
+/// free hot path. The unit family of each value is implied by the
+/// constraint that consumes it (Distance → mm, Angle → rad).
 pub type ResolvedParams = HashMap<String, f64>;
 
-/// Resolve a [`DimTarget`] against the parameter table. Literal
-/// values pass through; expression strings are stripped of a leading
-/// `=` and then looked up by name in `params`. Phase 4 replaces the
-/// lookup with full expression evaluation.
+/// Resolve a [`DimTarget`] against the parameter table.
+///
+/// `Literal` values pass through unchanged. `Expr` strings are
+/// parsed and evaluated through the [`crate::expr`] machinery —
+/// supporting arithmetic, comparisons, ternaries, and `lookup(...)`
+/// calls. The optional Altium-style `=` prefix is stripped before
+/// parsing.
+///
+/// `ResolvedParams` values are injected into the eval context as
+/// `Literal(Quantity::length(v))`. This works cleanly for length-
+/// family expressions (Distance constraints) where each parameter
+/// is a length in mm. Angle-family parameters work the same way at
+/// the bare-name lookup level (`= apex_angle`); for parameter-driven
+/// arithmetic on angles, write the literal unit explicitly
+/// (e.g. `= apex_angle * 1rad / 1rad` reduces back to the raw
+/// canonical value, but the more idiomatic form is to keep the
+/// expression inline rather than chained through a Length-typed
+/// parameter table).
 pub fn resolve_dim(target: &DimTarget, params: &ResolvedParams) -> Result<f64, SketchError> {
     match target {
         DimTarget::Literal(v) => Ok(*v),
         DimTarget::Expr(s) => {
-            let key = s.trim().trim_start_matches('=').trim();
-            params
-                .get(key)
-                .copied()
-                .ok_or_else(|| SketchError::ParameterNotFound(s.clone()))
+            let body = s.trim().trim_start_matches('=').trim();
+            // Fast path: single bare identifier.
+            if !body.is_empty() && body.chars().all(|c| c.is_alphanumeric() || c == '_') && !body.chars().next().unwrap().is_ascii_digit() {
+                if let Some(v) = params.get(body) {
+                    return Ok(*v);
+                }
+                // Bare-name with no entry — fall through to full parse so
+                // the error path produces a structured ExprError.
+            }
+
+            let ast = parse_expr(body).map_err(SketchError::Expr)?;
+            let mut params_ast: BTreeMap<String, ExprNode> = BTreeMap::new();
+            for (name, value) in params {
+                // ResolvedParams values are canonical-unit f64 with the
+                // unit family implied by the constraint context. We
+                // inject as Length(mm) since Distance is the dominant
+                // expression-driven case; Angle-only constraints with
+                // parameter-driven targets typically reference the
+                // parameter directly via the bare-name fast path above.
+                params_ast.insert(name.clone(), ExprNode::Literal(Quantity::length(*value)));
+            }
+            let ctx = EvalContext {
+                params: params_ast,
+                array_index: None,
+            };
+            let q = eval_expr(&ast, &ctx).map_err(SketchError::Expr)?;
+            match q.unit.family() {
+                UnitFamily::Length => q.as_mm().map_err(SketchError::Unit),
+                UnitFamily::Angle => q.as_rad().map_err(SketchError::Unit),
+                UnitFamily::Count => Ok(q.value),
+            }
         }
     }
 }
