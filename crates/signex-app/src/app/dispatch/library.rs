@@ -1444,7 +1444,9 @@ impl Signex {
             }
         };
 
-        let class = signex_library::ComponentClass::generic();
+        // Resolve target table — explicit arg wins, else fall back to
+        // the generic class default.
+        let generic = signex_library::ComponentClass::generic();
         let resolved_table = match table {
             Some(t) if !t.trim().is_empty() => t,
             _ => match self
@@ -1452,7 +1454,7 @@ impl Signex {
                 .open_libraries
                 .get(library_idx)
                 .and_then(|lib| self.library.set.get(lib.library_id))
-                .map(|adapter| adapter.manifest().table_for_class(class.as_str()))
+                .map(|adapter| adapter.manifest().table_for_class(generic.as_str()))
             {
                 Some(t) => t,
                 None => {
@@ -1465,6 +1467,32 @@ impl Signex {
                 }
             },
         };
+
+        // F19 (2026-05-03 library polish, "we had a talk about basic
+        // parameters"): infer the row's class from the resolved table
+        // name so a row added to the "resistors" table comes in as a
+        // resistor (not a generic). Reverse-lookup is cheap: strip the
+        // trailing "s" and verify that the candidate class round-trips
+        // back to the same table via `manifest.table_for_class`.
+        // Falls back to `generic` if no match — this covers user-named
+        // tables like "passives" that don't follow the pluralisation
+        // convention.
+        let class = self
+            .library
+            .open_libraries
+            .get(library_idx)
+            .and_then(|lib| self.library.set.get(lib.library_id))
+            .and_then(|adapter| {
+                let manifest = adapter.manifest();
+                resolved_table.strip_suffix('s').and_then(|stem| {
+                    if manifest.table_for_class(stem) == resolved_table {
+                        Some(signex_library::ComponentClass::new(stem))
+                    } else {
+                        None
+                    }
+                })
+            })
+            .unwrap_or(generic);
 
         match commands::create_component_row(
             &mut self.library,

@@ -124,7 +124,7 @@ pub fn view<'a>(
         .filter(|r| needle.is_empty() || row_matches_filter(r, &needle))
         .collect();
 
-    let columns = derive_columns(rows);
+    let columns = derive_columns(rows, lib.library_id, &library_state.template_registry, active_table);
 
     // Stage 8: apply the user's sort selection to the visible rows
     // before grid rendering. The grid view is a pure projection of
@@ -487,10 +487,18 @@ fn view_table_sidebar<'a>(
         col = col.push(row_with_actions);
     }
 
-    // ─── Classes section ───────────────────────────────────────────
-    // Classes are the per-library taxonomy backing the New Component
-    // class dropdown. Listed below tables so the sidebar reads as
-    // "library inventory: tables (data) + classes (taxonomy)".
+    // ─── Classes section — F20 (2026-05-03) hidden ─────────────────
+    // The Tables-only model collapses Class into Table. Class is
+    // still stored on each `ComponentRow` (it backs the
+    // `TemplateRegistry` lookup that surfaces basic-param columns),
+    // but it's derived from the table name now and never edited
+    // directly. The full Classes sidebar (per-library taxonomy +
+    // rename/delete/add) lives behind a `false` gate so the supporting
+    // message handlers in `dispatch/library.rs` stay live as dead
+    // code — a follow-up cleanup pass can prune them once we're sure
+    // the Tables-only model sticks.
+    #[allow(clippy::overly_complex_bool_expr)]
+    if false {
     col = col.push(Space::new().height(12));
     col = col.push(
         container(text("Classes").size(11).color(muted)).padding(iced::Padding {
@@ -809,6 +817,7 @@ fn view_table_sidebar<'a>(
             );
         }
     }
+    } // end `if false` — Classes section gate (F20)
 
     // Inline `+ Table` form / button — same lifecycle as before, now
     // anchored at the bottom of the sidebar.
@@ -1107,13 +1116,30 @@ fn compare_cells(a: &str, b: &str) -> std::cmp::Ordering {
     a.to_lowercase().cmp(&b.to_lowercase())
 }
 
-/// Resolve the column list. Always: Internal PN / Manufacturer / MPN.
+/// Resolve the column list. Always: Internal PN / Manufacturer / MPN /
+/// Rev / Symbol / Footprint. Then template-derived columns from the
+/// `TemplateRegistry`: every `required_param` slot from the templates
+/// resolved for the table's classes (de-duplicated across classes).
 /// Then a Tags column (Stage 18) when *any* row carries a non-empty
 /// `parameters["tags"]`. Finally up to [`MAX_PARAM_COLUMNS`] of the
-/// most-common other parametric keys across `rows` — `tags` is excluded
-/// from that auto-derived set so the dedicated column doesn't render
+/// most-common other parametric keys across `rows` — `tags` and any
+/// already-shown template params are excluded so columns don't render
 /// twice.
-fn derive_columns(rows: &[ComponentRow]) -> Vec<GridColumn> {
+///
+/// Template resolution sources `class` from the rows when present;
+/// for an empty table it strips a trailing "s" off `table_name` and
+/// uses that as the implicit class (works for the default
+/// pluralisation `resistor` → `resistors` etc.). F19 / F20 of the
+/// 2026-05-03 library polish: the user wanted basic params per table
+/// to appear by default, AND they want Tables to be the only
+/// user-facing concept (Classes are now derived purely from the
+/// table name, never edited directly).
+fn derive_columns(
+    rows: &[ComponentRow],
+    library_id: uuid::Uuid,
+    registry: &signex_library::TemplateRegistry,
+    table_name: &str,
+) -> Vec<GridColumn> {
     let mut columns: Vec<GridColumn> = Vec::with_capacity(4 + MAX_PARAM_COLUMNS);
     columns.push(GridColumn {
         label: "Internal PN".to_string(),
@@ -1155,6 +1181,54 @@ fn derive_columns(rows: &[ComponentRow]) -> Vec<GridColumn> {
         kind: ColumnKind::Footprint,
         width: 120.0,
     });
+
+    // F19 — template-derived basic-parameter columns. Resolve unique
+    // classes from the rows; for empty tables, strip a trailing "s"
+    // off the table name to derive an implicit class (works for the
+    // default pluralisation, falls through harmlessly otherwise).
+    // Each template's `required_params` becomes a column with
+    // "<name> (<unit>)" label so users see the canonical units up
+    // front. Already-added param keys are skipped to dedupe across
+    // classes.
+    let mut classes: std::collections::BTreeSet<String> =
+        rows.iter().map(|r| r.class.as_str().to_string()).collect();
+    if classes.is_empty() {
+        if let Some(stem) = table_name.strip_suffix('s') {
+            classes.insert(stem.to_string());
+        }
+    }
+    for class in &classes {
+        if let Some(tmpl) = registry.resolve(library_id, class) {
+            for slot in &tmpl.required_params {
+                let already = columns.iter().any(|c| {
+                    matches!(&c.kind, ColumnKind::Parameter(k) if k == &slot.name)
+                });
+                if already {
+                    continue;
+                }
+                // Label is the slot name only — no `(unit)` suffix.
+                // Units vary per row (a "value" column holds 10kΩ in
+                // resistors, 4.7µF in capacitors), so the column
+                // header must be unit-agnostic; the cell renders the
+                // unit inline via `ParamValue::Measurement.display()`.
+                // Capitalises the first letter so "value" → "Value" /
+                // "tolerance" → "Tolerance" without bringing a
+                // heavy-weight casing crate in.
+                let label = {
+                    let mut chars = slot.name.chars();
+                    match chars.next() {
+                        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+                        None => String::new(),
+                    }
+                };
+                columns.push(GridColumn {
+                    label,
+                    kind: ColumnKind::Parameter(slot.name.clone()),
+                    width: 110.0,
+                });
+            }
+        }
+    }
 
     // Surface tags as a first-class column whenever the table has at
     // least one tagged row. Saves the user from having to scroll
