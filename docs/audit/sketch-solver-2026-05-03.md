@@ -33,6 +33,30 @@ this file verbatim plus a feature summary.
 
 ## Phase log
 
-### Phase 1 — Crate scaffolding + entity types
+### Phase 1 — Crate scaffolding + entity types — DONE 2026-05-03
 
-(in progress)
+Commits on `feature/v0.13-sketch-mode`:
+
+| SHA | Subject | Tasks |
+|---|---|---|
+| `cff60f60` | chore(sketch): open cleanroom audit doc for v0.13 solver work | Pre-flight |
+| `2bb3fb0c` | feat(sketch): scaffold signex-sketch crate + ID newtypes | 1.1 + 1.2 |
+| `e5f20ace` | feat(sketch): Plane / PlaneKind types | 1.3 |
+| `14b71eaf` | feat(sketch): Entity / EntityKind types | 1.4 |
+| `10f4aec8` | feat(sketch): bake-attribute schema (Pad/Silk/Courtyard/Pour/Keepout/Cutout/V-score) | 1.5 |
+| `636bcf3c` | feat(sketch): SketchData container + Array (Linear/Grid/Polar) + BGA numbering | 1.6 + 1.7 + cap |
+
+Result:
+- `cargo build -p signex-sketch` clean
+- `cargo test -p signex-sketch` — 39 / 39 passing
+- `cargo build --workspace` clean (existing signex-app warnings unchanged)
+- No third-party constraint-solver code or wikis consulted in this phase.
+  All schema decisions follow the plan verbatim; no algorithmic input
+  was needed yet (Phase 2 opens the math).
+
+References consulted: none beyond `docs/internal/SKETCH_MODE_v0.13_PLAN.md`.
+
+### Phase 2 — Constraint residuals
+
+(pending — next session)
+
