@@ -4,6 +4,7 @@ pub mod residuals;
 pub mod jacobian;
 pub mod lm;
 pub mod linalg;
+pub mod math;
 pub mod dof;
 pub mod timeout;
 

@@ -3,55 +3,39 @@
 //! Each helper returns a single scalar residual (`Vec<f64>` of length 1)
 //! that the Levenberg–Marquardt driver in Phase 3 will drive to zero.
 //!
-//! Geometry references:
-//!  - Hearn & Baker, *Computer Graphics*, ch. 5 (2D vector geometry).
-//!  - *Numerical Recipes*, §10.6 (atan2 branch handling).
-//!
-//! All formulas were derived from first-principles 2D vector algebra:
-//!  - Two lines are parallel iff their direction-vector cross is zero.
-//!  - Two lines are perpendicular iff their direction-vector dot is zero.
-//!  - The signed CCW angle from `d1` to `d2` is `atan2(cross, dot)`.
+//! All formulas are composed from primitives in
+//! [`crate::solver::math`]:
+//!  - `cross` — two lines are parallel iff their direction-vector
+//!    cross is zero.
+//!  - `dot` — two lines are perpendicular iff their direction-vector
+//!    dot is zero.
+//!  - `wrap_to_pi` — the signed CCW angle from `d1` to `d2` is
+//!    `atan2(cross, dot)`; the residual is wrapped into `(−π, π]`
+//!    so a sketch crossing the ±π branch cut sees a continuous
+//!    derivative.
 
 use crate::error::SketchError;
 use crate::id::SketchEntityId;
 use crate::sketch::SketchData;
+use crate::solver::math::{cross as cross_2d, dot as dot_2d, sub, wrap_to_pi, Vec2};
 use crate::solver::state::{line_endpoints, point_xy, EntityIndex};
 
-/// Resolve a line's direction vector `(dx, dy) = end − start` from the
-/// current state vector. Returns `EntityNotFound` if the line itself or
-/// either endpoint cannot be resolved.
+/// Resolve a line's direction vector `d = end − start` from the
+/// current state vector. Returns `EntityNotFound` if the line itself
+/// or either endpoint cannot be resolved.
 fn line_dir(
     line: SketchEntityId,
     state: &[f64],
     index: &EntityIndex,
     sketch: &SketchData,
-) -> Result<(f64, f64), SketchError> {
+) -> Result<Vec2, SketchError> {
     let (s, e) = line_endpoints(line, sketch).ok_or(SketchError::EntityNotFound(line))?;
-    let (sx, sy) = point_xy(s, state, index, sketch).ok_or(SketchError::EntityNotFound(s))?;
-    let (ex, ey) = point_xy(e, state, index, sketch).ok_or(SketchError::EntityNotFound(e))?;
-    Ok((ex - sx, ey - sy))
+    let p_s = point_xy(s, state, index, sketch).ok_or(SketchError::EntityNotFound(s))?;
+    let p_e = point_xy(e, state, index, sketch).ok_or(SketchError::EntityNotFound(e))?;
+    Ok(sub(p_e, p_s))
 }
 
-/// Wrap `θ` into the principal range `(−π, π]`.
-///
-/// Computed as `θ − 2π · round(θ / 2π)` then nudged so the value at
-/// `θ = +π` stays `+π` (i.e. half-open interval on the negative side).
-/// This keeps the Angle residual continuous across a sketch that
-/// crosses the ±π branch cut, so Levenberg–Marquardt sees a well-formed
-/// derivative instead of a 2π jump.
-fn wrap_to_pi(theta: f64) -> f64 {
-    use std::f64::consts::PI;
-    let two_pi = 2.0 * PI;
-    let mut t = theta - two_pi * (theta / two_pi).round();
-    if t <= -PI {
-        t += two_pi;
-    } else if t > PI {
-        t -= two_pi;
-    }
-    t
-}
-
-/// Parallel: `cross(d1, d2) = d1.x·d2.y − d1.y·d2.x = 0`.
+/// Parallel: `cross(d1, d2) = 0`.
 ///
 /// Zero whether the lines point the same way or are antiparallel; the
 /// solver doesn't need to distinguish, since both cases satisfy the
@@ -63,13 +47,12 @@ pub fn parallel(
     index: &EntityIndex,
     sketch: &SketchData,
 ) -> Result<Vec<f64>, SketchError> {
-    let (d1x, d1y) = line_dir(l1, state, index, sketch)?;
-    let (d2x, d2y) = line_dir(l2, state, index, sketch)?;
-    let cross = d1x * d2y - d1y * d2x;
-    Ok(vec![cross])
+    let d1 = line_dir(l1, state, index, sketch)?;
+    let d2 = line_dir(l2, state, index, sketch)?;
+    Ok(vec![cross_2d(d1, d2)])
 }
 
-/// Perpendicular: `dot(d1, d2) = d1.x·d2.x + d1.y·d2.y = 0`.
+/// Perpendicular: `dot(d1, d2) = 0`.
 pub fn perpendicular(
     l1: SketchEntityId,
     l2: SketchEntityId,
@@ -77,15 +60,14 @@ pub fn perpendicular(
     index: &EntityIndex,
     sketch: &SketchData,
 ) -> Result<Vec<f64>, SketchError> {
-    let (d1x, d1y) = line_dir(l1, state, index, sketch)?;
-    let (d2x, d2y) = line_dir(l2, state, index, sketch)?;
-    let dot = d1x * d2x + d1y * d2y;
-    Ok(vec![dot])
+    let d1 = line_dir(l1, state, index, sketch)?;
+    let d2 = line_dir(l2, state, index, sketch)?;
+    Ok(vec![dot_2d(d1, d2)])
 }
 
 /// Angle: signed CCW angle from `d1` to `d2` equals `target_rad`.
 ///
-/// Residual = `wrap(atan2(cross, dot) − target_rad)` mapped into
+/// Residual = `wrap_to_pi(atan2(cross, dot) − target_rad)` mapped into
 /// `(−π, π]` so the LM driver sees a continuous derivative across a
 /// sketch that crosses the ±π branch cut.
 pub fn angle(
@@ -96,10 +78,8 @@ pub fn angle(
     index: &EntityIndex,
     sketch: &SketchData,
 ) -> Result<Vec<f64>, SketchError> {
-    let (d1x, d1y) = line_dir(l1, state, index, sketch)?;
-    let (d2x, d2y) = line_dir(l2, state, index, sketch)?;
-    let cross = d1x * d2y - d1y * d2x;
-    let dot = d1x * d2x + d1y * d2y;
-    let measured = cross.atan2(dot);
+    let d1 = line_dir(l1, state, index, sketch)?;
+    let d2 = line_dir(l2, state, index, sketch)?;
+    let measured = cross_2d(d1, d2).atan2(dot_2d(d1, d2));
     Ok(vec![wrap_to_pi(measured - target_rad)])
 }
