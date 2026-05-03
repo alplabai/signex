@@ -387,6 +387,175 @@ fn project_rename_migrates_dirty_paths_to_new_path() {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// F1 / F3 — Prefs migration (Windows path bug + stale label_style)
+// ─────────────────────────────────────────────────────────────────
+
+#[test]
+fn f1_legacy_prefs_path_copied_forward_when_canonical_empty() {
+    let tmp = TempDir::new().unwrap();
+    let canonical = tmp.path().join("canonical").join("signex").join("prefs.json");
+    let legacy = tmp.path().join("legacy").join("signex").join("prefs.json");
+
+    fs::create_dir_all(legacy.parent().unwrap()).unwrap();
+    fs::write(
+        &legacy,
+        br#"{"ui_font":"Roboto","theme":"signex","label_style":"standard"}"#,
+    )
+    .unwrap();
+    assert!(!canonical.exists(), "canonical absent before migration");
+
+    signex_app::fonts::migrate_legacy_prefs(&canonical, &legacy);
+
+    assert!(canonical.exists(), "canonical now exists (F1 copy)");
+    let copied = fs::read_to_string(&canonical).unwrap();
+    assert!(
+        copied.contains("\"ui_font\""),
+        "canonical contains the legacy file's content"
+    );
+    assert!(
+        legacy.exists(),
+        "legacy preserved (forward-copy, not move) — backward compat"
+    );
+}
+
+#[test]
+fn f1_canonical_present_blocks_legacy_copy() {
+    let tmp = TempDir::new().unwrap();
+    let canonical = tmp.path().join("canonical").join("signex").join("prefs.json");
+    let legacy = tmp.path().join("legacy").join("signex").join("prefs.json");
+
+    fs::create_dir_all(canonical.parent().unwrap()).unwrap();
+    fs::create_dir_all(legacy.parent().unwrap()).unwrap();
+    fs::write(&canonical, br#"{"ui_font":"Iosevka"}"#).unwrap();
+    fs::write(&legacy, br#"{"ui_font":"LegacyValue"}"#).unwrap();
+
+    signex_app::fonts::migrate_legacy_prefs(&canonical, &legacy);
+
+    let content = fs::read_to_string(&canonical).unwrap();
+    assert!(
+        content.contains("Iosevka"),
+        "canonical content untouched when it already exists"
+    );
+    assert!(
+        !content.contains("LegacyValue"),
+        "legacy must NOT overwrite canonical when canonical exists"
+    );
+}
+
+#[test]
+fn f1_no_legacy_no_canonical_is_a_clean_noop() {
+    let tmp = TempDir::new().unwrap();
+    let canonical = tmp.path().join("canonical").join("signex").join("prefs.json");
+    let legacy = tmp.path().join("legacy").join("signex").join("prefs.json");
+
+    // Neither exists. Migration should not panic, not create anything.
+    signex_app::fonts::migrate_legacy_prefs(&canonical, &legacy);
+
+    assert!(!canonical.exists(), "no canonical created from nothing");
+    assert!(!legacy.exists(), "no legacy created from nothing");
+}
+
+#[test]
+fn f3_stale_label_style_rewritten_to_standard() {
+    let tmp = TempDir::new().unwrap();
+    let canonical = tmp.path().join("signex").join("prefs.json");
+    let legacy = canonical.clone(); // legacy unused — canonical exists already.
+
+    fs::create_dir_all(canonical.parent().unwrap()).unwrap();
+    // Pre-v0.10 stale token. Use a non-canonical placeholder so this
+    // test source itself stays License-Guard-clean (no historic-EDA-
+    // tool substring under crates/).
+    let stale = serde_json::json!({
+        "ui_font": "Roboto",
+        "label_style": "stale-legacy-token",
+    });
+    fs::write(&canonical, serde_json::to_string_pretty(&stale).unwrap()).unwrap();
+
+    signex_app::fonts::migrate_legacy_prefs(&canonical, &legacy);
+
+    let rewritten: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&canonical).unwrap()).unwrap();
+    assert_eq!(
+        rewritten["label_style"], "standard",
+        "F3: non-canonical label_style normalised to default"
+    );
+    assert_eq!(
+        rewritten["ui_font"], "Roboto",
+        "other prefs preserved during F3 normalisation"
+    );
+}
+
+#[test]
+fn f3_canonical_label_style_left_alone() {
+    let tmp = TempDir::new().unwrap();
+    let canonical = tmp.path().join("signex").join("prefs.json");
+    let legacy = canonical.clone();
+
+    fs::create_dir_all(canonical.parent().unwrap()).unwrap();
+    let canonical_pref = serde_json::json!({
+        "ui_font": "Iosevka",
+        "label_style": "altium",
+    });
+    let original = serde_json::to_string_pretty(&canonical_pref).unwrap();
+    fs::write(&canonical, &original).unwrap();
+
+    signex_app::fonts::migrate_legacy_prefs(&canonical, &legacy);
+
+    // Idempotent — file content unchanged.
+    let after = fs::read_to_string(&canonical).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&after).unwrap();
+    assert_eq!(parsed["label_style"], "altium");
+    assert_eq!(parsed["ui_font"], "Iosevka");
+}
+
+#[test]
+fn f3_label_style_case_variants_all_normalise() {
+    for stale_token in ["STANDARD", "Altium", "ALTIUM"] {
+        // These are case variants of CANONICAL tokens — they should
+        // round-trip unchanged (eq_ignore_ascii_case match).
+        let tmp = TempDir::new().unwrap();
+        let canonical = tmp.path().join("signex").join("prefs.json");
+        let legacy = canonical.clone();
+        fs::create_dir_all(canonical.parent().unwrap()).unwrap();
+        fs::write(
+            &canonical,
+            serde_json::to_string(&serde_json::json!({"label_style": stale_token})).unwrap(),
+        )
+        .unwrap();
+
+        signex_app::fonts::migrate_legacy_prefs(&canonical, &legacy);
+
+        let parsed: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&canonical).unwrap()).unwrap();
+        assert_eq!(
+            parsed["label_style"], stale_token,
+            "case-variant of canonical token left unchanged: {stale_token}"
+        );
+    }
+}
+
+#[test]
+fn f3_garbage_json_doesnt_corrupt_file() {
+    let tmp = TempDir::new().unwrap();
+    let canonical = tmp.path().join("signex").join("prefs.json");
+    let legacy = canonical.clone();
+    fs::create_dir_all(canonical.parent().unwrap()).unwrap();
+
+    let original = b"this is not valid json {{{";
+    fs::write(&canonical, original).unwrap();
+
+    signex_app::fonts::migrate_legacy_prefs(&canonical, &legacy);
+
+    // Migration is best-effort; broken JSON returns early and leaves
+    // the file alone (vs. e.g. emptying it).
+    let after = fs::read(&canonical).unwrap();
+    assert_eq!(
+        after, original,
+        "garbage JSON file must be left untouched (no panic, no truncation)"
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────
 // §8.2 — `.snxprj` round-trip (engine-level — adds to the
 // `signex-types::project` tests by exercising the multi-project
 // `LoadedProject` shape that signex-app actually uses)

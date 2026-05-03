@@ -163,7 +163,8 @@ fn prefs_path() -> PathBuf {
             .unwrap_or_else(|| PathBuf::from("."))
             .join("signex")
             .join("prefs.json");
-        migrate_legacy_prefs(&canonical);
+        let legacy = legacy_posix_prefs_path();
+        migrate_legacy_prefs(&canonical, &legacy);
         canonical
     })
     .clone()
@@ -187,15 +188,18 @@ fn prefs_path() -> PathBuf {
 /// in user-space `prefs.json` until the user changes label style +
 /// saves. Rewrite once on startup so unknown tokens normalise to
 /// the canonical default.
-fn migrate_legacy_prefs(canonical: &Path) {
+///
+/// `legacy` is the legacy (pre-v0.12) POSIX-shaped prefs path to
+/// pull from when canonical is missing. Production passes
+/// [`legacy_posix_prefs_path()`]; tests inject a tempdir-shaped path.
+pub fn migrate_legacy_prefs(canonical: &Path, legacy: &Path) {
     // F1: copy legacy path → canonical, but only if canonical is empty.
     if !canonical.exists() {
-        let legacy = legacy_posix_prefs_path();
         if legacy != canonical && legacy.exists() {
             if let Some(parent) = canonical.parent() {
                 let _ = std::fs::create_dir_all(parent);
             }
-            let _ = std::fs::copy(&legacy, canonical);
+            let _ = std::fs::copy(legacy, canonical);
         }
     }
 
