@@ -45,6 +45,9 @@ Commits on `feature/v0.13-sketch-mode`:
 | `14b71eaf` | feat(sketch): Entity / EntityKind types | 1.4 |
 | `10f4aec8` | feat(sketch): bake-attribute schema (Pad/Silk/Courtyard/Pour/Keepout/Cutout/V-score) | 1.5 |
 | `636bcf3c` | feat(sketch): SketchData container + Array (Linear/Grid/Polar) + BGA numbering | 1.6 + 1.7 + cap |
+| `addee00f` | docs(sketch): log Phase 1 completion in audit trail | — |
+| `f338294a` | fix(sketch): use signex_types::SignexLayer instead of KiCad-style BoardLayer | post-review fix |
+| `fe587fc2` | docs: scrub KiCad-style framing across roadmap, codebase guide, and UX docs | post-review fix |
 
 Result:
 - `cargo build -p signex-sketch` clean
@@ -54,7 +57,50 @@ Result:
   All schema decisions follow the plan verbatim; no algorithmic input
   was needed yet (Phase 2 opens the math).
 
-References consulted: none beyond `docs/internal/SKETCH_MODE_v0.13_PLAN.md`.
+### Post-Phase-1 review fixes (2026-05-03)
+
+The first pass of Phase 1 introduced a private `BoardLayer` enum in
+`crates/signex-sketch/src/attr.rs` with KiCad-style short names
+(`FCu`/`BCu`/`FMask`/...). The user flagged this as a violation of the
+canonical layer policy in `docs/internal/docs/PCB_LAYERS_PLAN.md` and
+the issue #62 cleanroom invariants. Two fix-up commits address it:
+
+1. `f338294a` — Code fix:
+   - Drop `BoardLayer` from `attr.rs`.
+   - Depend on `signex-types` from `signex-sketch`.
+   - Use `signex_types::layer::SignexLayer` directly everywhere
+     (`TopCopper` / `BottomCopper` / `TopSolderMask` / etc.).
+   - Update tests to use the canonical variants.
+   - 39 / 39 round-trip tests still pass.
+
+2. `fe587fc2` (main repo) + `199c7b8` (`docs/internal` submodule) —
+   Doc scrub:
+   - Both v0.13 sketch-mode plans (`SKETCH_MODE_PLAN.md`,
+     `SKETCH_MODE_v0.13_PLAN.md`) updated to use `SignexLayer` in all
+     code snippets, prose, and inline test examples.
+   - `docs/internal/docs/PCB_LAYERS_PLAN.md` reframed: §2 no longer
+     credits the foreign EDA tool's layer model as the design source;
+     §6 KiCad-import section reframed as handled by the GPL-3.0
+     companion repo `signex-kicad-import`.
+   - 11 other internal plan docs (PCB_ROUTER, PCB_3D_RENDER, OUTPUT,
+     SIMULATION_VIEW, DESIGN_NOTEBOOK, MIGRATION_PLAN, COLLABORATION_
+     PLAN, PLM_INTEGRATION, PRODUCT_AND_EDITIONS, altium-gap-analysis,
+     "Agentic Hardware Design Assistant") scrubbed for KiCad-style
+     layer names and pre-v0.9 "KiCad-native" framing.
+   - 4 main-repo docs (ROADMAP, REPOSITORY_AND_CODEBASE,
+     UX_REFERENCE_ALTIUM, UI_WORKFLOW) scrubbed similarly.
+   - MASTER_PLAN.md and ARCHITECTURE.md flagged for follow-up
+     strategic rewrite — their entire architectural premise (Layer 1
+     = "Raw KiCad Document"; "KiCad files are canonical") is from
+     before the v0.9 cutover and needs a coherent product-thesis
+     rewrite, not a surgical scrub.
+
+References consulted in Phase 1: only
+`docs/internal/SKETCH_MODE_v0.13_PLAN.md`,
+`docs/internal/docs/PCB_LAYERS_PLAN.md` (canonical layer enum),
+`crates/signex-types/src/layer.rs` (existing `SignexLayer`
+definition). No third-party constraint-solver code, no foreign EDA
+source code, no foreign-format wiki/blog/file-format docs.
 
 ### Phase 2 — Constraint residuals
 
