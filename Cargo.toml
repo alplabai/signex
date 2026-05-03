@@ -14,6 +14,7 @@ members = [
     "crates/signex-library",
     "crates/signex-library-server",
     "crates/signex-sketch",
+    "crates/signex-bake",
 ]
 
 [workspace.package]
@@ -89,6 +90,9 @@ signex-library = { path = "crates/signex-library" }
 
 # Internal — sketcher (v0.13)
 signex-sketch = { path = "crates/signex-sketch" }
+
+# Internal — bake pipeline (v0.13 Phase 7)
+signex-bake = { path = "crates/signex-bake" }
 
 [profile.release]
 lto = "thin"

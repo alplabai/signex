@@ -5097,6 +5097,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "signex-bake"
+version = "0.11.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "signex-library",
+ "signex-sketch",
+ "signex-types",
+ "thiserror 2.0.18",
+ "toml 0.8.23",
+ "uuid",
+]
+
+[[package]]
 name = "signex-bom"
 version = "0.11.0"
 dependencies = [
