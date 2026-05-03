@@ -963,6 +963,13 @@ impl Signex {
     /// index picks which project's directory to resolve against, so a
     /// leaf under project B isn't accidentally resolved against project
     /// A's parent directory.
+    ///
+    /// F22 follow-up: `.snxlib` library leaves can live outside the
+    /// project directory (`LibraryEntryKind::Shared`). Resolve those
+    /// through `ProjectData::resolve_library_path` instead of joining
+    /// the leaf label against the project dir; otherwise the assembled
+    /// path doesn't exist and downstream remove / open paths bail
+    /// silently.
     fn tree_path_to_file_path(&self, tree_path: &[usize]) -> Option<std::path::PathBuf> {
         let node = signex_widgets::tree_view::get_node(
             self.document_state.panel_ctx.project_tree.as_slice(),
@@ -970,6 +977,20 @@ impl Signex {
         )?;
         let project_idx = *tree_path.first()?;
         let project = self.document_state.projects.get(project_idx)?;
+        if node.label.ends_with(".snxlib") {
+            let entry = project
+                .data
+                .libraries
+                .iter()
+                .find(|e| {
+                    e.path
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                        .map(|n| n == node.label)
+                        .unwrap_or(false)
+                })?;
+            return Some(project.data.resolve_library_path(entry));
+        }
         let dir = project.path.parent()?;
         Some(dir.join(&node.label))
     }
@@ -1189,12 +1210,29 @@ impl Signex {
         }
 
         if matches!(choice, RemoveChoice::DeleteFile) {
-            if let Err(e) = std::fs::remove_file(&state.target_path) {
-                crate::diagnostics::log_error(
-                    "Failed to delete project file",
-                    &anyhow::anyhow!("{e}"),
-                );
+            // F23 — handle three cases:
+            //   1. Regular file (sheets, pcbs, primitives) → remove_file.
+            //   2. `.snxlib` directory package → remove_dir_all.
+            //   3. Orphan entry (file/dir missing on disk) → no-op,
+            //      Exclude semantic falls through naturally so the
+            //      LibraryEntry / SheetEntry is still pruned below.
+            let target = &state.target_path;
+            if target.exists() {
+                let result = if target.is_dir() {
+                    std::fs::remove_dir_all(target)
+                } else {
+                    std::fs::remove_file(target)
+                };
+                if let Err(e) = result {
+                    crate::diagnostics::log_error(
+                        "Failed to delete project file",
+                        &anyhow::anyhow!("{e}"),
+                    );
+                }
             }
+            // Orphan target: silently fall through. The user's intent
+            // ("get this row out of the project") is satisfied by the
+            // in-memory entry pruning below.
         }
 
         // Drop the sheet from the *owning* project's in-memory data so
@@ -1230,6 +1268,38 @@ impl Signex {
             }
             if loaded.data.pcb_file.as_deref() == Some(filename.as_str()) {
                 loaded.data.pcb_file = None;
+                mutated = true;
+            }
+            // F23 — also prune library entries. Library file_name on
+            // the entry is the `.snxlib` filename for both
+            // ProjectLocal (relative path stored on the entry) and
+            // Shared (absolute path stored), so the same file_name
+            // match works for both kinds.
+            let lib_before = loaded.data.libraries.len();
+            loaded.data.libraries.retain(|entry| {
+                entry
+                    .path
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .map(|n| n != filename)
+                    .unwrap_or(true)
+            });
+            if loaded.data.libraries.len() != lib_before {
+                mutated = true;
+            }
+            // Drop any pending registration too, in case the user
+            // saved-then-removed within a single session before
+            // materialise ran (rare but possible if materialise failed
+            // and the entry stayed pending).
+            let pending_before = loaded.pending_libraries.len();
+            loaded.pending_libraries.retain(|_, spec| {
+                spec.lib_path
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .map(|n| n != filename)
+                    .unwrap_or(true)
+            });
+            if loaded.pending_libraries.len() != pending_before {
                 mutated = true;
             }
         }
@@ -1311,7 +1381,16 @@ impl Signex {
             project_dir.join(&filename)
         };
 
+        // F23 — orphan `.snxlib` entries (registered on the project but
+        // missing on disk) still flow through to the Library Browser
+        // tab so the user sees a "Library not mounted" message and
+        // can pick Remove from Project to clean up. Other extensions
+        // still error early because they have no recovery surface.
         if !file_path.exists() {
+            if filename.ends_with(".snxlib") {
+                let _ = self.handle_open_library_browser(file_path);
+                return Ok(());
+            }
             anyhow::bail!("project tree file does not exist: {}", file_path.display());
         }
 

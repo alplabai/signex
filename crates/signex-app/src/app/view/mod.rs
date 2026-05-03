@@ -470,6 +470,19 @@ impl Signex {
                 "",
                 Message::ProjectTreeAction(A::Refresh),
             ));
+            // F23 — surface "Remove from Project" on library nodes.
+            // Reuses the same RemoveDialog flow as sheet leaves;
+            // `handle_remove_confirm` handles directory deletes
+            // (.snxlib is a dir), library-entry removal from
+            // `project.data.libraries`, and the orphan case where
+            // the file doesn't exist on disk.
+            items.push(self.ctx_menu_sep());
+            items.push(self.ctx_menu_item_msg(
+                None,
+                "Remove from Project...",
+                "",
+                Message::ProjectTreeAction(A::OpenRemoveDialog(path.clone())),
+            ));
         } else if is_openable_leaf {
             // Sheet / PCB / library leaf — Altium's per-document menu.
             // Rows match the Altium screenshot exactly: Open + Explore
