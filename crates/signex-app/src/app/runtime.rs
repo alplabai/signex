@@ -294,9 +294,30 @@ impl Signex {
                         // tree. The user opens a `.snxsym` file to
                         // browse the symbols inside it via the SCH
                         // Library panel, not via the project tree.
+                        //
+                        // F34 (2026-05-03) — Add New ▸ Symbol Library
+                        // now opens a Save-As dialog so the user names
+                        // the file at create time and the `.snxsym`
+                        // lands on disk immediately. No in-memory
+                        // merging needed; the next refresh after the
+                        // dialog confirm picks up the new file.
                         let (symbols, footprints) = if mounted_lib.is_some() {
+                            // `.snxlib` is a manifest *file* — symbols/
+                            // and footprints/ are SIBLINGS of it inside
+                            // the library's working dir (the `.snxlib`'s
+                            // parent). Joining `resolved` directly would
+                            // build `<project>/<lib>.snxlib/symbols`,
+                            // which is not a real path and silently
+                            // returns empty via the `.ok().flatten()`
+                            // chain — the regression from F34 where
+                            // freshly-created `.snxsym` files never
+                            // appeared in the project tree.
+                            let lib_root = resolved
+                                .parent()
+                                .map(std::path::Path::to_path_buf)
+                                .unwrap_or_else(|| resolved.clone());
                             let read_dir_names = |sub: &str, ext: &str| -> Vec<String> {
-                                let dir = resolved.join(sub);
+                                let dir = lib_root.join(sub);
                                 let mut names: Vec<String> = std::fs::read_dir(&dir)
                                     .ok()
                                     .into_iter()

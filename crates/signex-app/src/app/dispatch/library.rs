@@ -883,6 +883,12 @@ impl Signex {
                     Task::none()
                 }
             }
+            LibraryMessage::AddLibrarySymbolFilePicked(path) => {
+                self.handle_add_library_symbol_file_picked(path)
+            }
+            LibraryMessage::AddLibraryFootprintFilePicked(path) => {
+                self.handle_add_library_footprint_file_picked(path)
+            }
             LibraryMessage::ComponentPreviewOpened {
                 path,
                 table,
@@ -2963,6 +2969,174 @@ impl Signex {
                 tracing::warn!(target: "signex::library", error = %e, "update_row failed");
             }
         }
+    }
+
+    /// F34 — Save-As dialog confirmed for a new symbol library file
+    /// (`.snxsym`). The user picked the location + filename in the
+    /// rfd `save_file()` dialog — that click IS the explicit save
+    /// action, so we write the empty `SymbolFile` to disk
+    /// immediately, register the path on the containing project's
+    /// `data.libraries` list (so the tree shows it directly under
+    /// Libraries), then open it as a clean primitive editor tab
+    /// (dirty=false). Subsequent edits flow through the regular
+    /// `Ctrl+S → save_primitive_tab_at` path.
+    pub(crate) fn handle_add_library_symbol_file_picked(
+        &mut self,
+        path: std::path::PathBuf,
+    ) -> Task<Message> {
+        let stem = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("NewSymbol")
+            .to_string();
+        let symbol = signex_library::Symbol::empty(stem);
+        let file = signex_library::SymbolFile::from_symbol(symbol);
+        let bytes = match serde_json::to_vec_pretty(&file) {
+            Ok(b) => b,
+            Err(e) => {
+                tracing::warn!(
+                    target: "signex::library",
+                    path = %path.display(),
+                    error = %e,
+                    "AddLibrarySymbolFilePicked: serialize failed"
+                );
+                return Task::none();
+            }
+        };
+        if let Some(parent) = path.parent()
+            && let Err(e) = std::fs::create_dir_all(parent)
+        {
+            tracing::warn!(
+                target: "signex::library",
+                parent = %parent.display(),
+                error = %e,
+                "AddLibrarySymbolFilePicked: create symbols dir failed"
+            );
+            return Task::none();
+        }
+        if let Err(e) = std::fs::write(&path, &bytes) {
+            tracing::warn!(
+                target: "signex::library",
+                path = %path.display(),
+                error = %e,
+                "AddLibrarySymbolFilePicked: write .snxsym failed"
+            );
+            return Task::none();
+        }
+        self.register_standalone_library_on_project(&path);
+        self.handle_open_primitive(path)
+    }
+
+    /// F34 — Footprint counterpart to
+    /// [`handle_add_library_symbol_file_picked`]. Writes an empty
+    /// `Footprint` JSON, registers the file as a project library
+    /// entry, opens the file as a clean primitive editor tab.
+    pub(crate) fn handle_add_library_footprint_file_picked(
+        &mut self,
+        path: std::path::PathBuf,
+    ) -> Task<Message> {
+        let stem = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("NewFootprint")
+            .to_string();
+        let footprint = signex_library::Footprint::empty(stem);
+        let bytes = match serde_json::to_vec_pretty(&footprint) {
+            Ok(b) => b,
+            Err(e) => {
+                tracing::warn!(
+                    target: "signex::library",
+                    path = %path.display(),
+                    error = %e,
+                    "AddLibraryFootprintFilePicked: serialize failed"
+                );
+                return Task::none();
+            }
+        };
+        if let Some(parent) = path.parent()
+            && let Err(e) = std::fs::create_dir_all(parent)
+        {
+            tracing::warn!(
+                target: "signex::library",
+                parent = %parent.display(),
+                error = %e,
+                "AddLibraryFootprintFilePicked: create footprints dir failed"
+            );
+            return Task::none();
+        }
+        if let Err(e) = std::fs::write(&path, &bytes) {
+            tracing::warn!(
+                target: "signex::library",
+                path = %path.display(),
+                error = %e,
+                "AddLibraryFootprintFilePicked: write .snxfpt failed"
+            );
+            return Task::none();
+        }
+        self.register_standalone_library_on_project(&path);
+        self.handle_open_primitive(path)
+    }
+
+    /// Find the project containing `path` and push a `LibraryEntry`
+    /// for it onto `data.libraries` (project-local relative path when
+    /// `path` is inside the project dir, absolute otherwise). Marks
+    /// the project dirty + refreshes the panel context so the new
+    /// entry shows immediately. No-op when the path is already
+    /// registered, or when no loaded project owns the file's parent.
+    fn register_standalone_library_on_project(&mut self, path: &std::path::Path) {
+        use signex_types::project::{LibraryEntry, LibraryEntryKind};
+        // Resolve the target project index first so the mutable borrow
+        // of `projects` is short-lived (the active-project fallback
+        // chained on iter_mut tripped E0500).
+        let target_idx = self
+            .document_state
+            .projects
+            .iter()
+            .position(|p| {
+                let project_dir = std::path::PathBuf::from(&p.data.dir);
+                !project_dir.as_os_str().is_empty() && path.starts_with(&project_dir)
+            })
+            .or_else(|| {
+                self.document_state.active_project.and_then(|id| {
+                    self.document_state.projects.iter().position(|p| p.id == id)
+                })
+            });
+        let Some(idx) = target_idx else {
+            tracing::warn!(
+                target: "signex::library",
+                path = %path.display(),
+                "register_standalone_library: no project to attach to"
+            );
+            return;
+        };
+        let Some(loaded) = self.document_state.projects.get_mut(idx) else {
+            return;
+        };
+        let project_dir = std::path::PathBuf::from(&loaded.data.dir);
+        let (entry_path, entry_kind) = if !project_dir.as_os_str().is_empty()
+            && let Ok(rel) = path.strip_prefix(&project_dir)
+        {
+            (rel.to_path_buf(), LibraryEntryKind::ProjectLocal)
+        } else {
+            (path.to_path_buf(), LibraryEntryKind::Shared)
+        };
+        // Skip if the same path is already on the list.
+        if loaded
+            .data
+            .libraries
+            .iter()
+            .any(|e| loaded.data.resolve_library_path(e) == path)
+        {
+            return;
+        }
+        loaded.data.libraries.push(LibraryEntry {
+            path: entry_path,
+            kind: entry_kind,
+            library_id: None,
+        });
+        let project_path = loaded.path.clone();
+        self.document_state.dirty_paths.insert(project_path);
+        self.refresh_panel_ctx();
     }
 
     /// Open a `.snxsym` or `.snxfpt` as a main-window document tab.

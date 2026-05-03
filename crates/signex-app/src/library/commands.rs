@@ -402,6 +402,19 @@ pub fn auto_mount_project_libraries(state: &mut LibraryState, project: &ProjectD
     let mut mounted = 0usize;
     for entry in &project.libraries {
         let resolved = project.resolve_library_path(entry);
+        // Standalone `.snxsym` / `.snxfpt` files are tracked on
+        // `project.libraries` so the tree shows them, but they're not
+        // Component Libraries — skip the mount step. The picker /
+        // browser only opens `.snxlib` files; primitive files open as
+        // editor tabs via `handle_open_primitive`.
+        let is_snxlib = resolved
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.eq_ignore_ascii_case("snxlib"))
+            .unwrap_or(false);
+        if !is_snxlib {
+            continue;
+        }
         match state.open_library(resolved.clone()) {
             Ok(()) => {
                 if let Err(e) = state.refresh_components(&resolved) {
