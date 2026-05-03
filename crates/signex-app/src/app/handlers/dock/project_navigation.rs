@@ -977,7 +977,12 @@ impl Signex {
         )?;
         let project_idx = *tree_path.first()?;
         let project = self.document_state.projects.get(project_idx)?;
-        if node.label.ends_with(".snxlib") {
+        // F24 — `build_project_tree` appends "  (missing)" to leaf
+        // labels when the backing file is absent from disk. Strip
+        // that suffix here so filename-matching against
+        // `entry.path.file_name()` still works on orphan rows.
+        let raw_label = canonical_tree_label(&node.label);
+        if raw_label.ends_with(".snxlib") {
             let entry = project
                 .data
                 .libraries
@@ -986,13 +991,13 @@ impl Signex {
                     e.path
                         .file_name()
                         .and_then(|s| s.to_str())
-                        .map(|n| n == node.label)
+                        .map(|n| n == raw_label)
                         .unwrap_or(false)
                 })?;
             return Some(project.data.resolve_library_path(entry));
         }
         let dir = project.path.parent()?;
-        Some(dir.join(&node.label))
+        Some(dir.join(raw_label))
     }
 
     pub(crate) fn handle_rename_submit(&mut self) -> iced::Task<Message> {
@@ -1322,6 +1327,10 @@ impl Signex {
     }
 
     fn open_project_tree_document(&mut self, tree_path: &[usize], filename: String) -> Result<()> {
+        // F24 — strip the "  (missing)" suffix `build_project_tree`
+        // appends to orphan rows so filename-matching downstream
+        // still resolves the correct entry.
+        let filename = canonical_tree_label(&filename).to_string();
         // Multi-project: walk to the owning project via tree_path[0]
         // instead of the active project, so clicking a leaf inside
         // project B opens B's file even when A is the active project.
@@ -1463,6 +1472,14 @@ impl Signex {
 
         anyhow::bail!("unsupported project tree document: {filename}")
     }
+}
+
+/// F24 — strip the "  (missing)" suffix `build_project_tree` appends
+/// to leaves whose backing file is absent from disk, so downstream
+/// filename matching against `entry.path.file_name()` still works.
+/// Returns the original `&str` when no suffix is present (zero-copy).
+fn canonical_tree_label(label: &str) -> &str {
+    label.trim_end_matches("  (missing)")
 }
 
 /// Recursively set every node's `expanded` state — used by

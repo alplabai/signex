@@ -157,6 +157,13 @@ pub struct SheetInfo {
     /// viewing (`document_state.tabs[active_tab].path == sheet path`).
     /// Drives the highlighted row background — Altium parity.
     pub is_active: bool,
+    /// F24 (2026-05-03) — `true` when the file backing this entry
+    /// is registered on the project but no longer exists on disk
+    /// (orphan reference, e.g. user moved/deleted outside Signex).
+    /// Drives the `(missing)` suffix in `build_project_tree` so the
+    /// user sees the broken state at a glance instead of having to
+    /// double-click and read an error.
+    pub missing: bool,
 }
 
 /// Per-project bundle surfaced to the Projects panel. One entry per
@@ -175,11 +182,16 @@ pub struct ProjectPanelInfo {
     pub project_file_open: bool,
     pub project_file_dirty: bool,
     pub project_file_active: bool,
+    /// F24 — same `(missing)` indicator as on `SheetInfo` but for the
+    /// project's root schematic.
+    pub project_file_missing: bool,
     /// Companion PCB filename, when present.
     pub pcb_file: Option<String>,
     pub pcb_file_open: bool,
     pub pcb_file_dirty: bool,
     pub pcb_file_active: bool,
+    /// F24 — `(missing)` indicator for the companion PCB file.
+    pub pcb_file_missing: bool,
     pub sheets: Vec<SheetInfo>,
     /// Component libraries attached to this project. One entry per
     /// `Project::libraries[]`. Drives the `Libraries` branch under
@@ -220,6 +232,12 @@ pub struct LibraryNodeInfo {
     /// `LibraryState::open_libraries`. Drives the icon tint —
     /// unmounted entries render in the muted "missing" colour.
     pub mounted: bool,
+    /// F24 — `true` when the `.snxlib` file is registered on the
+    /// project but no longer exists on disk. Drives the `(missing)`
+    /// suffix in the tree so the user spots orphan references
+    /// without double-clicking through to a "Library not mounted"
+    /// recovery message.
+    pub missing: bool,
 }
 
 /// Context passed to panels — owned data to avoid lifetime issues.
@@ -1700,11 +1718,25 @@ pub fn build_project_tree(ctx: &PanelContext) -> Vec<TreeNode> {
 fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
     let mut source_docs: Vec<TreeNode> = Vec::new();
 
+    // F24 — surface a `(missing)` suffix on every leaf whose backing
+    // file is registered on the project but absent from disk. Catches
+    // orphan references (e.g. user moved/deleted a file outside Signex,
+    // or a previous library-create attempt left an entry behind without
+    // the file). User sees the broken state at a glance instead of
+    // having to double-click and read an error.
+    fn missing_label(filename: &str, is_missing: bool) -> String {
+        if is_missing {
+            format!("{filename}  (missing)")
+        } else {
+            filename.to_string()
+        }
+    }
+
     if !project.sheets.is_empty() {
         for sheet in &project.sheets {
             let icon = TreeIcon::for_path(&sheet.filename);
             source_docs.push(
-                TreeNode::leaf(sheet.filename.clone(), icon)
+                TreeNode::leaf(missing_label(&sheet.filename, sheet.missing), icon)
                     .with_open(sheet.is_open)
                     .with_dirty(sheet.is_dirty)
                     .with_active(sheet.is_active),
@@ -1713,7 +1745,7 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
     } else if let Some(file) = &project.project_file {
         let icon = TreeIcon::for_path(file);
         source_docs.push(
-            TreeNode::leaf(file.clone(), icon)
+            TreeNode::leaf(missing_label(file, project.project_file_missing), icon)
                 .with_open(project.project_file_open)
                 .with_dirty(project.project_file_dirty)
                 .with_active(project.project_file_active),
@@ -1723,7 +1755,7 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
     if let Some(pcb) = &project.pcb_file {
         let icon = TreeIcon::for_path(pcb);
         source_docs.push(
-            TreeNode::leaf(pcb.clone(), icon)
+            TreeNode::leaf(missing_label(pcb, project.pcb_file_missing), icon)
                 .with_open(project.pcb_file_open)
                 .with_dirty(project.pcb_file_dirty)
                 .with_active(project.pcb_file_active),
@@ -1751,7 +1783,11 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
         .libraries
         .iter()
         .map(|lib| {
-            let display = format!("{}.snxlib", lib.display_name);
+            let display = if lib.missing {
+                format!("{}.snxlib  (missing)", lib.display_name)
+            } else {
+                format!("{}.snxlib", lib.display_name)
+            };
             TreeNode::leaf(display, TreeIcon::SnxLibrary)
         })
         .collect();

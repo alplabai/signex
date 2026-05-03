@@ -242,6 +242,27 @@ impl Signex {
                     .as_deref()
                     .map(lookup)
                     .unwrap_or((false, false, false));
+
+                // F24 — file existence check. Used to mark orphan
+                // references (file registered on the project but
+                // missing on disk) so the tree shows them as
+                // `<name> (missing)` upfront.
+                let exists = |filename: &str| -> bool {
+                    let abs = project_dir.join(filename);
+                    abs.exists()
+                };
+                let project_file_missing = p
+                    .data
+                    .schematic_root
+                    .as_deref()
+                    .map(|f| !exists(f))
+                    .unwrap_or(false);
+                let pcb_file_missing = p
+                    .data
+                    .pcb_file
+                    .as_deref()
+                    .map(|f| !exists(f))
+                    .unwrap_or(false);
                 // Flatten `Project::libraries` into the panel struct
                 // alongside the sheet list. Each entry resolves to an
                 // absolute path so the right-click menu can dispatch
@@ -264,10 +285,12 @@ impl Signex {
                                 .map(str::to_string)
                                 .unwrap_or_else(|| entry.path.display().to_string()),
                         };
+                        let missing = !resolved.exists();
                         crate::panels::LibraryNodeInfo {
                             display_name,
                             root: resolved,
                             mounted: mounted_lib.is_some(),
+                            missing,
                         }
                     })
                     .collect();
@@ -282,6 +305,10 @@ impl Signex {
                         display_name: format!("{} (pending)", spec.display_name),
                         root: spec.lib_path.clone(),
                         mounted: false,
+                        // Pending entries are intentionally absent on
+                        // disk (they materialise at save time) — not
+                        // a missing-orphan situation.
+                        missing: false,
                     });
                 }
                 crate::panels::ProjectPanelInfo {
@@ -291,16 +318,19 @@ impl Signex {
                     project_file_open,
                     project_file_dirty,
                     project_file_active,
+                    project_file_missing,
                     pcb_file: p.data.pcb_file.clone(),
                     pcb_file_open,
                     pcb_file_dirty,
                     pcb_file_active,
+                    pcb_file_missing,
                     sheets: p
                         .data
                         .sheets
                         .iter()
                         .map(|sheet| {
                             let (is_open, is_dirty, is_active) = lookup(&sheet.filename);
+                            let missing = !exists(&sheet.filename);
                             crate::panels::SheetInfo {
                                 name: sheet.name.clone(),
                                 filename: sheet.filename.clone(),
@@ -310,6 +340,7 @@ impl Signex {
                                 is_open,
                                 is_dirty,
                                 is_active,
+                                missing,
                             }
                         })
                         .collect(),
