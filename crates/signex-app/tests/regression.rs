@@ -705,6 +705,173 @@ fn f3_garbage_json_doesnt_corrupt_file() {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// §4.4 — Preferences persistence sweep
+//
+// For each user-toggleable knob the checklist asks: "toggle, restart
+// the app, confirm the value is restored". We can't restart from a
+// single test process, but we can exercise the same write→read pair
+// through the same `prefs.json` JSON encoding the production code
+// uses. Tests inject a tempdir prefs file via the `_at(path)`
+// variants on each pref function so the user's real prefs.json is
+// never touched.
+// ─────────────────────────────────────────────────────────────────
+
+use signex_render::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
+use signex_types::coord::Unit;
+use signex_types::theme::ThemeId;
+
+fn temp_prefs_path() -> (TempDir, PathBuf) {
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join("signex").join("prefs.json");
+    (tmp, path)
+}
+
+#[test]
+fn prefs_theme_round_trip_through_json() {
+    let (_tmp, path) = temp_prefs_path();
+    // Default when missing.
+    assert_eq!(
+        signex_app::fonts::read_theme_pref_at(&path),
+        ThemeId::Signex
+    );
+
+    // Each builtin theme survives a write→read cycle.
+    for &theme in ThemeId::BUILTINS {
+        signex_app::fonts::write_theme_pref_at(&path, theme);
+        assert_eq!(
+            signex_app::fonts::read_theme_pref_at(&path),
+            theme,
+            "theme {theme:?} must round-trip"
+        );
+    }
+}
+
+#[test]
+fn prefs_unit_round_trip_through_json() {
+    let (_tmp, path) = temp_prefs_path();
+    // Default when missing.
+    assert_eq!(signex_app::fonts::read_unit_pref_at(&path), Unit::Mm);
+
+    for unit in [Unit::Mm, Unit::Mil, Unit::Inch] {
+        signex_app::fonts::write_unit_pref_at(&path, unit);
+        assert_eq!(
+            signex_app::fonts::read_unit_pref_at(&path),
+            unit,
+            "unit {unit:?} must round-trip"
+        );
+    }
+}
+
+#[test]
+fn prefs_grid_visible_round_trip_through_json() {
+    let (_tmp, path) = temp_prefs_path();
+    // Default when missing.
+    assert!(signex_app::fonts::read_grid_visible_pref_at(&path));
+
+    signex_app::fonts::write_grid_visible_pref_at(&path, false);
+    assert!(!signex_app::fonts::read_grid_visible_pref_at(&path));
+
+    signex_app::fonts::write_grid_visible_pref_at(&path, true);
+    assert!(signex_app::fonts::read_grid_visible_pref_at(&path));
+}
+
+#[test]
+fn prefs_snap_enabled_round_trip_through_json() {
+    let (_tmp, path) = temp_prefs_path();
+    // Default when missing.
+    assert!(signex_app::fonts::read_snap_enabled_pref_at(&path));
+
+    signex_app::fonts::write_snap_enabled_pref_at(&path, false);
+    assert!(!signex_app::fonts::read_snap_enabled_pref_at(&path));
+}
+
+#[test]
+fn prefs_grid_size_round_trip_through_json() {
+    let (_tmp, path) = temp_prefs_path();
+    // Default when missing — `None` so the caller can fall back to
+    // the engine's preferred default.
+    assert_eq!(signex_app::fonts::read_grid_size_mm_pref_at(&path), None);
+
+    signex_app::fonts::write_grid_size_mm_pref_at(&path, 1.27);
+    let v = signex_app::fonts::read_grid_size_mm_pref_at(&path).unwrap();
+    assert!((v - 1.27).abs() < 1e-5, "grid size round-trips, got {v}");
+
+    signex_app::fonts::write_grid_size_mm_pref_at(&path, 0.635);
+    let v = signex_app::fonts::read_grid_size_mm_pref_at(&path).unwrap();
+    assert!((v - 0.635).abs() < 1e-5);
+}
+
+#[test]
+fn prefs_writes_dont_clobber_neighboring_keys() {
+    let (_tmp, path) = temp_prefs_path();
+
+    // Seed multiple keys.
+    signex_app::fonts::write_theme_pref_at(&path, ThemeId::Signex);
+    signex_app::fonts::write_unit_pref_at(&path, Unit::Mil);
+    signex_app::fonts::write_grid_visible_pref_at(&path, false);
+
+    // Write a different key — neighbouring values must survive.
+    signex_app::fonts::write_snap_enabled_pref_at(&path, false);
+
+    assert_eq!(
+        signex_app::fonts::read_theme_pref_at(&path),
+        ThemeId::Signex
+    );
+    assert_eq!(signex_app::fonts::read_unit_pref_at(&path), Unit::Mil);
+    assert!(!signex_app::fonts::read_grid_visible_pref_at(&path));
+    assert!(!signex_app::fonts::read_snap_enabled_pref_at(&path));
+}
+
+#[test]
+fn prefs_garbage_json_falls_back_to_defaults() {
+    let (_tmp, path) = temp_prefs_path();
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(&path, b"{ broken json content").unwrap();
+
+    // Each read returns its default rather than panicking on parse error.
+    assert_eq!(
+        signex_app::fonts::read_theme_pref_at(&path),
+        ThemeId::Signex
+    );
+    assert_eq!(signex_app::fonts::read_unit_pref_at(&path), Unit::Mm);
+    assert!(signex_app::fonts::read_grid_visible_pref_at(&path));
+    assert!(signex_app::fonts::read_snap_enabled_pref_at(&path));
+    assert_eq!(signex_app::fonts::read_grid_size_mm_pref_at(&path), None);
+}
+
+#[test]
+fn prefs_cross_pref_independence() {
+    let (_tmp, path) = temp_prefs_path();
+
+    // Write each pref in a different "session" (sequential writes,
+    // each through update_prefs_json which does read-modify-write).
+    signex_app::fonts::write_theme_pref_at(&path, ThemeId::Signex);
+    signex_app::fonts::write_grid_size_mm_pref_at(&path, 2.54);
+    signex_app::fonts::write_unit_pref_at(&path, Unit::Mil);
+    signex_app::fonts::write_grid_visible_pref_at(&path, false);
+    signex_app::fonts::write_snap_enabled_pref_at(&path, false);
+
+    // Read everything back — none should have been clobbered.
+    assert_eq!(
+        signex_app::fonts::read_theme_pref_at(&path),
+        ThemeId::Signex
+    );
+    assert!(
+        (signex_app::fonts::read_grid_size_mm_pref_at(&path).unwrap() - 2.54).abs() < 1e-5
+    );
+    assert_eq!(signex_app::fonts::read_unit_pref_at(&path), Unit::Mil);
+    assert!(!signex_app::fonts::read_grid_visible_pref_at(&path));
+    assert!(!signex_app::fonts::read_snap_enabled_pref_at(&path));
+
+    // Pre-existing keys (label_style, ui_font, etc.) should remain
+    // unset — we never wrote them — but absent ≠ default-failure.
+    let raw: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+    assert!(raw.get("label_style").is_none(), "label_style not written by these tests");
+    assert!(raw.get("ui_font").is_none());
+}
+
+// ─────────────────────────────────────────────────────────────────
 // §8.2 — `.snxprj` round-trip (engine-level — adds to the
 // `signex-types::project` tests by exercising the multi-project
 // `LoadedProject` shape that signex-app actually uses)

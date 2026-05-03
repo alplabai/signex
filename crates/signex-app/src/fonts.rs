@@ -488,148 +488,168 @@ pub fn write_grid_style_pref(style: GridStyle) {
 // when the prefs file is absent or the key missing — the same as a
 // fresh install.
 
+// ──────────────────────────────────────────────────────────────────────
+// Generic prefs helpers (testability + dedup).
+// ──────────────────────────────────────────────────────────────────────
+
+/// Read `prefs.json` at `path` and parse to JSON value. Returns `None`
+/// when the file is absent OR malformed — same semantics every read
+/// pref needs ("treat as missing, use default").
+fn read_prefs_json(path: &Path) -> Option<serde_json::Value> {
+    let bytes = std::fs::read(path).ok()?;
+    serde_json::from_slice::<serde_json::Value>(&bytes).ok()
+}
+
+/// Update one key of `prefs.json` at `path` without clobbering other
+/// keys. Creates the parent dir if missing. I/O failures are silent
+/// (preferences are best-effort).
+fn update_prefs_json(path: &Path, mut mutator: impl FnMut(&mut serde_json::Value)) {
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let mut json: serde_json::Value = std::fs::read(path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or(serde_json::json!({}));
+    mutator(&mut json);
+    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
+        let _ = std::fs::write(path, serialized);
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Theme
+// ──────────────────────────────────────────────────────────────────────
+
 /// Read the last-applied theme. Defaults to `ThemeId::Signex`.
 pub fn read_theme_pref() -> ThemeId {
-    let path = prefs_path();
-    let Ok(bytes) = std::fs::read(&path) else {
-        return ThemeId::Signex;
-    };
-    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
-        return ThemeId::Signex;
-    };
-    json.get("theme")
-        .cloned()
+    read_theme_pref_at(&prefs_path())
+}
+
+/// Same as [`read_theme_pref`] but reads from `path` — exposed for
+/// integration tests that inject a tempdir prefs file.
+pub fn read_theme_pref_at(path: &Path) -> ThemeId {
+    read_prefs_json(path)
+        .and_then(|json| json.get("theme").cloned())
         .and_then(|v| serde_json::from_value(v).ok())
         .unwrap_or(ThemeId::Signex)
 }
 
 /// Persist theme without clobbering other preference keys.
 pub fn write_theme_pref(theme: ThemeId) {
-    let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let mut json: serde_json::Value = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(serde_json::json!({}));
-    if let Ok(value) = serde_json::to_value(theme) {
-        json["theme"] = value;
-    }
-    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
-    }
+    write_theme_pref_at(&prefs_path(), theme)
 }
+
+/// Same as [`write_theme_pref`] but writes to `path` — exposed for tests.
+pub fn write_theme_pref_at(path: &Path, theme: ThemeId) {
+    update_prefs_json(path, |json| {
+        if let Ok(value) = serde_json::to_value(theme) {
+            json["theme"] = value;
+        }
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Unit
+// ──────────────────────────────────────────────────────────────────────
 
 /// Read the last-active coordinate unit. Defaults to `Unit::Mm`.
 pub fn read_unit_pref() -> Unit {
-    let path = prefs_path();
-    let Ok(bytes) = std::fs::read(&path) else {
-        return Unit::Mm;
-    };
-    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
-        return Unit::Mm;
-    };
-    json.get("unit")
-        .cloned()
+    read_unit_pref_at(&prefs_path())
+}
+
+pub fn read_unit_pref_at(path: &Path) -> Unit {
+    read_prefs_json(path)
+        .and_then(|json| json.get("unit").cloned())
         .and_then(|v| serde_json::from_value(v).ok())
         .unwrap_or(Unit::Mm)
 }
 
 /// Persist coordinate unit without clobbering other preference keys.
 pub fn write_unit_pref(unit: Unit) {
-    let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let mut json: serde_json::Value = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(serde_json::json!({}));
-    if let Ok(value) = serde_json::to_value(unit) {
-        json["unit"] = value;
-    }
-    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
-    }
+    write_unit_pref_at(&prefs_path(), unit)
 }
+
+pub fn write_unit_pref_at(path: &Path, unit: Unit) {
+    update_prefs_json(path, |json| {
+        if let Ok(value) = serde_json::to_value(unit) {
+            json["unit"] = value;
+        }
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Grid visible
+// ──────────────────────────────────────────────────────────────────────
 
 /// Read the last grid-visible toggle. Defaults to `true`.
 pub fn read_grid_visible_pref() -> bool {
-    let path = prefs_path();
-    let Ok(bytes) = std::fs::read(&path) else {
-        return true;
-    };
-    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
-        return true;
-    };
-    json["grid_visible"].as_bool().unwrap_or(true)
+    read_grid_visible_pref_at(&prefs_path())
+}
+
+pub fn read_grid_visible_pref_at(path: &Path) -> bool {
+    read_prefs_json(path)
+        .and_then(|json| json["grid_visible"].as_bool())
+        .unwrap_or(true)
 }
 
 pub fn write_grid_visible_pref(visible: bool) {
-    let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let mut json: serde_json::Value = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(serde_json::json!({}));
-    json["grid_visible"] = serde_json::Value::Bool(visible);
-    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
-    }
+    write_grid_visible_pref_at(&prefs_path(), visible)
 }
+
+pub fn write_grid_visible_pref_at(path: &Path, visible: bool) {
+    update_prefs_json(path, |json| {
+        json["grid_visible"] = serde_json::Value::Bool(visible);
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Snap enabled
+// ──────────────────────────────────────────────────────────────────────
 
 /// Read the last snap-enabled toggle. Defaults to `true`.
 pub fn read_snap_enabled_pref() -> bool {
-    let path = prefs_path();
-    let Ok(bytes) = std::fs::read(&path) else {
-        return true;
-    };
-    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
-        return true;
-    };
-    json["snap_enabled"].as_bool().unwrap_or(true)
+    read_snap_enabled_pref_at(&prefs_path())
+}
+
+pub fn read_snap_enabled_pref_at(path: &Path) -> bool {
+    read_prefs_json(path)
+        .and_then(|json| json["snap_enabled"].as_bool())
+        .unwrap_or(true)
 }
 
 pub fn write_snap_enabled_pref(enabled: bool) {
-    let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let mut json: serde_json::Value = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(serde_json::json!({}));
-    json["snap_enabled"] = serde_json::Value::Bool(enabled);
-    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
-    }
+    write_snap_enabled_pref_at(&prefs_path(), enabled)
 }
+
+pub fn write_snap_enabled_pref_at(path: &Path, enabled: bool) {
+    update_prefs_json(path, |json| {
+        json["snap_enabled"] = serde_json::Value::Bool(enabled);
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Grid size (mm)
+// ──────────────────────────────────────────────────────────────────────
 
 /// Read the last grid size (mm). Returns `None` when missing so the
 /// caller can fall back to the engine's preferred default.
 pub fn read_grid_size_mm_pref() -> Option<f32> {
-    let path = prefs_path();
-    let bytes = std::fs::read(&path).ok()?;
-    let json: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
-    json["grid_size_mm"].as_f64().map(|v| v as f32)
+    read_grid_size_mm_pref_at(&prefs_path())
+}
+
+pub fn read_grid_size_mm_pref_at(path: &Path) -> Option<f32> {
+    read_prefs_json(path).and_then(|json| json["grid_size_mm"].as_f64().map(|v| v as f32))
 }
 
 pub fn write_grid_size_mm_pref(grid_size_mm: f32) {
-    let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let mut json: serde_json::Value = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(serde_json::json!({}));
-    json["grid_size_mm"] = serde_json::json!(grid_size_mm);
-    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
-    }
+    write_grid_size_mm_pref_at(&prefs_path(), grid_size_mm)
+}
+
+pub fn write_grid_size_mm_pref_at(path: &Path, grid_size_mm: f32) {
+    update_prefs_json(path, |json| {
+        json["grid_size_mm"] = serde_json::json!(grid_size_mm);
+    })
 }
 
 /// Read ERC severity overrides from preferences file. Returns an empty
