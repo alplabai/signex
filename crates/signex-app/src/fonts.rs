@@ -246,39 +246,26 @@ fn legacy_posix_prefs_path() -> PathBuf {
 /// Read only the `ui_font` key from the preferences file.
 /// Returns `DEFAULT_UI_FONT` if the file is absent, malformed, or the key missing.
 pub fn read_ui_font_pref() -> String {
-    let path = prefs_path();
-    let Ok(bytes) = std::fs::read(&path) else {
-        return DEFAULT_UI_FONT.to_string();
-    };
-    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
-        return DEFAULT_UI_FONT.to_string();
-    };
-    json["ui_font"]
-        .as_str()
-        .unwrap_or(DEFAULT_UI_FONT)
-        .to_string()
+    read_ui_font_pref_at(&prefs_path())
+}
+
+pub fn read_ui_font_pref_at(path: &Path) -> String {
+    read_prefs_json(path)
+        .and_then(|j| j["ui_font"].as_str().map(str::to_string))
+        .unwrap_or_else(|| DEFAULT_UI_FONT.to_string())
 }
 
 /// Persist the given `ui_font` choice to the preferences file.
 /// Creates parent directories if they do not exist.
 /// Silently ignores I/O errors (non-critical preference).
 pub fn write_ui_font_pref(font_name: &str) {
-    let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
+    write_ui_font_pref_at(&prefs_path(), font_name)
+}
 
-    // Read existing prefs so we don't clobber other keys.
-    let mut json: serde_json::Value = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(serde_json::json!({}));
-
-    json["ui_font"] = serde_json::Value::String(font_name.to_string());
-
-    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
-    }
+pub fn write_ui_font_pref_at(path: &Path, font_name: &str) {
+    update_prefs_json(path, |json| {
+        json["ui_font"] = serde_json::Value::String(font_name.to_string());
+    })
 }
 
 /// Read the user's component-class list from the prefs file. Falls
@@ -328,155 +315,135 @@ pub fn write_component_classes_pref(classes: &[ComponentClassEntry]) {
 /// Read `power_port_style` from preferences file.
 /// Defaults to `Altium` when missing or invalid.
 pub fn read_power_port_style_pref() -> PowerPortStyle {
-    let path = prefs_path();
-    let Ok(bytes) = std::fs::read(&path) else {
-        return PowerPortStyle::Altium;
-    };
-    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
-        return PowerPortStyle::Altium;
-    };
+    read_power_port_style_pref_at(&prefs_path())
+}
 
-    match json["power_port_style"].as_str().unwrap_or("altium") {
-        "standard" | "Standard" => PowerPortStyle::Standard,
-        _ => PowerPortStyle::Altium,
+pub fn read_power_port_style_pref_at(path: &Path) -> PowerPortStyle {
+    let raw = read_prefs_json(path)
+        .and_then(|j| j["power_port_style"].as_str().map(str::to_string))
+        .unwrap_or_default();
+    if raw.eq_ignore_ascii_case("standard") {
+        PowerPortStyle::Standard
+    } else {
+        PowerPortStyle::Altium
     }
 }
 
 /// Persist power port style without clobbering other preference keys.
 pub fn write_power_port_style_pref(style: PowerPortStyle) {
-    let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
+    write_power_port_style_pref_at(&prefs_path(), style)
+}
 
-    let mut json: serde_json::Value = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(serde_json::json!({}));
-
-    json["power_port_style"] = serde_json::Value::String(match style {
-        PowerPortStyle::Standard => "standard".to_string(),
-        PowerPortStyle::Altium => "altium".to_string(),
-    });
-
-    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
-    }
+pub fn write_power_port_style_pref_at(path: &Path, style: PowerPortStyle) {
+    let token = match style {
+        PowerPortStyle::Standard => "standard",
+        PowerPortStyle::Altium => "altium",
+    };
+    update_prefs_json(path, |json| {
+        json["power_port_style"] = serde_json::Value::String(token.to_string());
+    })
 }
 
 /// Read `label_style` from preferences file.
 /// Defaults to `Standard` when missing or invalid.
 pub fn read_label_style_pref() -> LabelStyle {
-    let path = prefs_path();
-    let Ok(bytes) = std::fs::read(&path) else {
-        return LabelStyle::Standard;
-    };
-    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
-        return LabelStyle::Standard;
-    };
+    read_label_style_pref_at(&prefs_path())
+}
 
-    match json["label_style"].as_str().unwrap_or("standard") {
-        "altium" | "Altium" => LabelStyle::Altium,
-        _ => LabelStyle::Standard,
+pub fn read_label_style_pref_at(path: &Path) -> LabelStyle {
+    let raw = read_prefs_json(path)
+        .and_then(|j| j["label_style"].as_str().map(str::to_string))
+        .unwrap_or_default();
+    if raw.eq_ignore_ascii_case("altium") {
+        LabelStyle::Altium
+    } else {
+        LabelStyle::Standard
     }
 }
 
 /// Persist label style without clobbering other preference keys.
 pub fn write_label_style_pref(style: LabelStyle) {
-    let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
+    write_label_style_pref_at(&prefs_path(), style)
+}
 
-    let mut json: serde_json::Value = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(serde_json::json!({}));
-
-    json["label_style"] = serde_json::Value::String(match style {
-        LabelStyle::Standard => "standard".to_string(),
-        LabelStyle::Altium => "altium".to_string(),
-    });
-
-    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
-    }
+pub fn write_label_style_pref_at(path: &Path, style: LabelStyle) {
+    let token = match style {
+        LabelStyle::Standard => "standard",
+        LabelStyle::Altium => "altium",
+    };
+    update_prefs_json(path, |json| {
+        json["label_style"] = serde_json::Value::String(token.to_string());
+    })
 }
 
 /// Read `multisheet_style` from preferences file.
 /// Defaults to `Standard` when missing or invalid.
 pub fn read_multisheet_style_pref() -> MultisheetStyle {
-    let path = prefs_path();
-    let Ok(bytes) = std::fs::read(&path) else {
-        return MultisheetStyle::Standard;
-    };
-    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
-        return MultisheetStyle::Standard;
-    };
+    read_multisheet_style_pref_at(&prefs_path())
+}
 
-    match json["multisheet_style"].as_str().unwrap_or("standard") {
-        "altium" | "Altium" => MultisheetStyle::Altium,
-        _ => MultisheetStyle::Standard,
+pub fn read_multisheet_style_pref_at(path: &Path) -> MultisheetStyle {
+    let raw = read_prefs_json(path)
+        .and_then(|j| j["multisheet_style"].as_str().map(str::to_string))
+        .unwrap_or_default();
+    if raw.eq_ignore_ascii_case("altium") {
+        MultisheetStyle::Altium
+    } else {
+        MultisheetStyle::Standard
     }
 }
 
 /// Persist multisheet style without clobbering other preference keys.
 pub fn write_multisheet_style_pref(style: MultisheetStyle) {
-    let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
+    write_multisheet_style_pref_at(&prefs_path(), style)
+}
 
-    let mut json: serde_json::Value = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(serde_json::json!({}));
-
-    json["multisheet_style"] = serde_json::Value::String(match style {
-        MultisheetStyle::Standard => "standard".to_string(),
-        MultisheetStyle::Altium => "altium".to_string(),
-    });
-
-    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
-    }
+pub fn write_multisheet_style_pref_at(path: &Path, style: MultisheetStyle) {
+    let token = match style {
+        MultisheetStyle::Standard => "standard",
+        MultisheetStyle::Altium => "altium",
+    };
+    update_prefs_json(path, |json| {
+        json["multisheet_style"] = serde_json::Value::String(token.to_string());
+    })
 }
 
 /// Read the schematic visible-grid `grid_style` preference. Defaults
 /// to `Dots` (matches the previous hard-coded behaviour).
 pub fn read_grid_style_pref() -> GridStyle {
-    let path = prefs_path();
-    let Ok(bytes) = std::fs::read(&path) else {
-        return GridStyle::Dots;
-    };
-    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
-        return GridStyle::Dots;
-    };
-    match json["grid_style"].as_str().unwrap_or("dots") {
-        "lines" | "Lines" => GridStyle::Lines,
-        "crosses" | "small_crosses" | "SmallCrosses" => GridStyle::SmallCrosses,
-        _ => GridStyle::Dots,
+    read_grid_style_pref_at(&prefs_path())
+}
+
+pub fn read_grid_style_pref_at(path: &Path) -> GridStyle {
+    let raw = read_prefs_json(path)
+        .and_then(|j| j["grid_style"].as_str().map(str::to_string))
+        .unwrap_or_default();
+    if raw.eq_ignore_ascii_case("lines") {
+        GridStyle::Lines
+    } else if raw.eq_ignore_ascii_case("crosses")
+        || raw.eq_ignore_ascii_case("small_crosses")
+        || raw.eq_ignore_ascii_case("smallcrosses")
+    {
+        GridStyle::SmallCrosses
+    } else {
+        GridStyle::Dots
     }
 }
 
 /// Persist grid style without clobbering other preference keys.
 pub fn write_grid_style_pref(style: GridStyle) {
-    let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let mut json: serde_json::Value = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(serde_json::json!({}));
-    json["grid_style"] = serde_json::Value::String(match style {
-        GridStyle::Dots => "dots".to_string(),
-        GridStyle::Lines => "lines".to_string(),
-        GridStyle::SmallCrosses => "crosses".to_string(),
-    });
-    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
-    }
+    write_grid_style_pref_at(&prefs_path(), style)
+}
+
+pub fn write_grid_style_pref_at(path: &Path, style: GridStyle) {
+    let token = match style {
+        GridStyle::Dots => "dots",
+        GridStyle::Lines => "lines",
+        GridStyle::SmallCrosses => "crosses",
+    };
+    update_prefs_json(path, |json| {
+        json["grid_style"] = serde_json::Value::String(token.to_string());
+    })
 }
 
 // ──────────────────────────────────────────────────────────────────────────

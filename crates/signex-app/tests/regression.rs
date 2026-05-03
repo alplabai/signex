@@ -840,6 +840,131 @@ fn prefs_garbage_json_falls_back_to_defaults() {
 }
 
 #[test]
+fn prefs_ui_font_round_trip_through_json() {
+    let (_tmp, path) = temp_prefs_path();
+    // Default when missing.
+    assert_eq!(signex_app::fonts::read_ui_font_pref_at(&path), "Roboto");
+
+    for font in ["Iosevka", "Helvetica Neue", "Inter", "Source Code Pro"] {
+        signex_app::fonts::write_ui_font_pref_at(&path, font);
+        assert_eq!(
+            signex_app::fonts::read_ui_font_pref_at(&path),
+            font,
+            "ui_font {font} must round-trip"
+        );
+    }
+}
+
+#[test]
+fn prefs_label_style_round_trip_through_json() {
+    let (_tmp, path) = temp_prefs_path();
+    // Default when missing.
+    assert_eq!(
+        signex_app::fonts::read_label_style_pref_at(&path),
+        LabelStyle::Standard
+    );
+
+    for &style in &[LabelStyle::Standard, LabelStyle::Altium] {
+        signex_app::fonts::write_label_style_pref_at(&path, style);
+        assert_eq!(
+            signex_app::fonts::read_label_style_pref_at(&path),
+            style,
+            "label_style {style:?} must round-trip"
+        );
+    }
+}
+
+#[test]
+fn prefs_power_port_style_round_trip_through_json() {
+    let (_tmp, path) = temp_prefs_path();
+    // Default when missing.
+    assert_eq!(
+        signex_app::fonts::read_power_port_style_pref_at(&path),
+        PowerPortStyle::Altium
+    );
+
+    for &style in &[PowerPortStyle::Standard, PowerPortStyle::Altium] {
+        signex_app::fonts::write_power_port_style_pref_at(&path, style);
+        assert_eq!(
+            signex_app::fonts::read_power_port_style_pref_at(&path),
+            style,
+            "power_port_style {style:?} must round-trip"
+        );
+    }
+}
+
+#[test]
+fn prefs_multisheet_style_round_trip_through_json() {
+    let (_tmp, path) = temp_prefs_path();
+    // Default when missing.
+    assert_eq!(
+        signex_app::fonts::read_multisheet_style_pref_at(&path),
+        MultisheetStyle::Standard
+    );
+
+    for &style in &[MultisheetStyle::Standard, MultisheetStyle::Altium] {
+        signex_app::fonts::write_multisheet_style_pref_at(&path, style);
+        assert_eq!(
+            signex_app::fonts::read_multisheet_style_pref_at(&path),
+            style
+        );
+    }
+}
+
+#[test]
+fn prefs_grid_style_round_trip_through_json() {
+    let (_tmp, path) = temp_prefs_path();
+    // Default when missing.
+    assert_eq!(
+        signex_app::fonts::read_grid_style_pref_at(&path),
+        GridStyle::Dots
+    );
+
+    for &style in &[GridStyle::Dots, GridStyle::Lines, GridStyle::SmallCrosses] {
+        signex_app::fonts::write_grid_style_pref_at(&path, style);
+        assert_eq!(
+            signex_app::fonts::read_grid_style_pref_at(&path),
+            style,
+            "grid_style {style:?} must round-trip"
+        );
+    }
+}
+
+#[test]
+fn prefs_enum_case_insensitive_decode() {
+    // The legacy match arms accepted both lowercase and TitleCase tokens
+    // (e.g. "altium" | "Altium"). The refactor uses
+    // `eq_ignore_ascii_case` to match either form. Verify a hand-written
+    // mixed-case prefs.json decodes to the correct variant.
+    let (_tmp, path) = temp_prefs_path();
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let raw = serde_json::json!({
+        "label_style": "Altium",         // TitleCase
+        "power_port_style": "STANDARD",   // UPPERCASE
+        "multisheet_style": "altium",     // lowercase
+        "grid_style": "Lines",            // TitleCase
+    });
+    fs::write(&path, serde_json::to_string_pretty(&raw).unwrap()).unwrap();
+
+    assert_eq!(
+        signex_app::fonts::read_label_style_pref_at(&path),
+        LabelStyle::Altium
+    );
+    assert_eq!(
+        signex_app::fonts::read_power_port_style_pref_at(&path),
+        PowerPortStyle::Standard
+    );
+    assert_eq!(
+        signex_app::fonts::read_multisheet_style_pref_at(&path),
+        MultisheetStyle::Altium
+    );
+    assert_eq!(
+        signex_app::fonts::read_grid_style_pref_at(&path),
+        GridStyle::Lines
+    );
+}
+
+#[test]
 fn prefs_cross_pref_independence() {
     let (_tmp, path) = temp_prefs_path();
 
