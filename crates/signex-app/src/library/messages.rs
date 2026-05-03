@@ -98,6 +98,17 @@ pub enum LibraryMessage {
     /// "Library Options" modal — Cancel button (or Esc). Drops the
     /// modal state without creating anything.
     LibraryCreateOptionsCancel,
+    /// F34 — Save-As dialog confirmed for a new symbol library file
+    /// (`.snxsym`). Writes an empty `SymbolFile` to the picked path,
+    /// refreshes the cached library file enumeration so the project
+    /// tree shows the new node, and opens the file as a primitive
+    /// editor tab.
+    AddLibrarySymbolFilePicked(PathBuf),
+    /// F34 — Save-As dialog confirmed for a new footprint library
+    /// file (`.snxfpt`). Writes an empty `Footprint` to the picked
+    /// path, refreshes the cached library file enumeration, and
+    /// opens the file as a primitive editor tab.
+    AddLibraryFootprintFilePicked(PathBuf),
     /// Dismiss the New Component modal without creating anything.
     CloseNewComponent,
     /// Live-edit of the New Component modal's "Internal PN" field.

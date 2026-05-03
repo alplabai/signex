@@ -191,6 +191,12 @@ impl Signex {
             ProjectTreeAction::AddNewSchematic(tree_path) => {
                 return self.add_new_schematic(tree_path);
             }
+            ProjectTreeAction::AddProjectSymbolLibrary(tree_path) => {
+                return self.add_project_symbol_library(tree_path);
+            }
+            ProjectTreeAction::AddProjectFootprintLibrary(tree_path) => {
+                return self.add_project_footprint_library(tree_path);
+            }
             ProjectTreeAction::OpenEnableVersionControl(tree_path) => {
                 self.open_enable_version_control_dialog(tree_path);
             }
@@ -716,6 +722,86 @@ impl Signex {
                     .map(|file| file.path().to_path_buf())
             },
             move |path| Message::AddNewSchematicPicked { project_idx, path },
+        )
+    }
+
+    /// `Add New ▸ Symbol Library` — Save-As dialog scoped to the
+    /// project dir. The picked path is forwarded to
+    /// [`LibraryMessage::AddLibrarySymbolFilePicked`] which writes an
+    /// empty `SymbolFile` and opens the file as a primitive editor tab.
+    pub(crate) fn add_project_symbol_library(
+        &mut self,
+        tree_path: Vec<usize>,
+    ) -> iced::Task<Message> {
+        let Some(&project_idx) = tree_path.first() else {
+            return iced::Task::none();
+        };
+        let project_dir = match self
+            .document_state
+            .projects
+            .get(project_idx)
+            .and_then(|p| p.path.parent().map(|d| d.to_path_buf()))
+        {
+            Some(d) => d,
+            None => return iced::Task::none(),
+        };
+        let default_name = unique_name_in(&project_dir, "SymbolLibrary", "snxsym");
+        iced::Task::perform(
+            async move {
+                rfd::AsyncFileDialog::new()
+                    .set_title("New Symbol Library")
+                    .set_directory(&project_dir)
+                    .set_file_name(&default_name)
+                    .add_filter("Signex Symbol Library", &["snxsym"])
+                    .save_file()
+                    .await
+                    .map(|file| file.path().to_path_buf())
+            },
+            move |picked| match picked {
+                Some(path) => Message::Library(
+                    crate::library::LibraryMessage::AddLibrarySymbolFilePicked(path),
+                ),
+                None => Message::Noop,
+            },
+        )
+    }
+
+    /// `Add New ▸ PCB Library` — counterpart to
+    /// [`add_project_symbol_library`] for `.snxfpt` files.
+    pub(crate) fn add_project_footprint_library(
+        &mut self,
+        tree_path: Vec<usize>,
+    ) -> iced::Task<Message> {
+        let Some(&project_idx) = tree_path.first() else {
+            return iced::Task::none();
+        };
+        let project_dir = match self
+            .document_state
+            .projects
+            .get(project_idx)
+            .and_then(|p| p.path.parent().map(|d| d.to_path_buf()))
+        {
+            Some(d) => d,
+            None => return iced::Task::none(),
+        };
+        let default_name = unique_name_in(&project_dir, "FootprintLibrary", "snxfpt");
+        iced::Task::perform(
+            async move {
+                rfd::AsyncFileDialog::new()
+                    .set_title("New PCB Library")
+                    .set_directory(&project_dir)
+                    .set_file_name(&default_name)
+                    .add_filter("Signex Footprint Library", &["snxfpt"])
+                    .save_file()
+                    .await
+                    .map(|file| file.path().to_path_buf())
+            },
+            move |picked| match picked {
+                Some(path) => Message::Library(
+                    crate::library::LibraryMessage::AddLibraryFootprintFilePicked(path),
+                ),
+                None => Message::Noop,
+            },
         )
     }
 

@@ -1815,49 +1815,31 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
     // specific primitive directly from the tree. Unmounted /
     // missing / empty libraries collapse to a plain leaf (matches
     // the previous behaviour).
+    // Libraries branch: every entry renders as a single leaf with the
+    // file's full filename (incl. extension). `.snxlib` (Component
+    // Libraries), `.snxsym` (Symbol Libraries), and `.snxfpt` (PCB
+    // Libraries) all live as siblings under this branch — Altium
+    // parity. No nested Symbols / Footprints subbranches: a `.snxlib`
+    // can hold thousands of primitives and surfacing them in the tree
+    // would explode the panel; opening the `.snxlib` shows the
+    // browser instead.
     let lib_children: Vec<TreeNode> = project
         .libraries
         .iter()
         .map(|lib| {
+            let filename = lib
+                .root
+                .file_name()
+                .and_then(|s| s.to_str())
+                .map(str::to_string)
+                .unwrap_or_else(|| format!("{}.snxlib", lib.display_name));
             let display = if lib.missing {
-                format!("{}.snxlib  (missing)", lib.display_name)
+                format!("{filename}  (missing)")
             } else {
-                format!("{}.snxlib", lib.display_name)
+                filename.clone()
             };
-            let mut children: Vec<TreeNode> = Vec::new();
-            if !lib.symbols.is_empty() {
-                let sym_children: Vec<TreeNode> = lib
-                    .symbols
-                    .iter()
-                    .map(|name| {
-                        TreeNode::leaf(format!("{name}.snxsym"), TreeIcon::SnxSymbol)
-                    })
-                    .collect();
-                children.push(TreeNode::branch(
-                    "Symbols".to_string(),
-                    TreeIcon::Folder,
-                    sym_children,
-                ));
-            }
-            if !lib.footprints.is_empty() {
-                let fp_children: Vec<TreeNode> = lib
-                    .footprints
-                    .iter()
-                    .map(|name| {
-                        TreeNode::leaf(format!("{name}.snxfpt"), TreeIcon::SnxFootprint)
-                    })
-                    .collect();
-                children.push(TreeNode::branch(
-                    "Footprints".to_string(),
-                    TreeIcon::Folder,
-                    fp_children,
-                ));
-            }
-            if children.is_empty() {
-                TreeNode::leaf(display, TreeIcon::SnxLibrary)
-            } else {
-                TreeNode::branch(display, TreeIcon::SnxLibrary, children)
-            }
+            let icon = TreeIcon::for_path(&filename);
+            TreeNode::leaf(display, icon)
         })
         .collect();
 

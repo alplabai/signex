@@ -639,34 +639,30 @@ impl Signex {
                 |kind| matches!(kind, WindowKind::UndockedTab { path, .. } if *path == tab.path),
             );
 
-        items.push(self.ctx_menu_item_msg(
-            None,
+        items.push(self.ctx_menu_item_msg_no_icon(
             &format!("Close {title}"),
             "",
             Message::TabContextAction(A::Close(ctx.tab_idx)),
         ));
         if total_tabs > 1 {
-            items.push(self.ctx_menu_item_msg(
-                None,
+            items.push(self.ctx_menu_item_msg_no_icon(
                 "Close All Other Documents",
                 "",
                 Message::TabContextAction(A::CloseAllOthers(ctx.tab_idx)),
             ));
         } else {
-            items.push(self.ctx_menu_item_disabled(None, "Close All Other Documents", None));
+            items.push(self.ctx_menu_item_disabled_no_icon("Close All Other Documents"));
         }
-        items.push(self.ctx_menu_item_msg(
-            None,
+        items.push(self.ctx_menu_item_msg_no_icon(
             "Close All Documents",
             "",
             Message::TabContextAction(A::CloseAll),
         ));
         items.push(self.ctx_menu_sep());
         items.push(if already_undocked {
-            self.ctx_menu_item_disabled(None, "Open In New Window", None)
+            self.ctx_menu_item_disabled_no_icon("Open In New Window")
         } else {
-            self.ctx_menu_item_msg(
-                None,
+            self.ctx_menu_item_msg_no_icon(
                 "Open In New Window",
                 "",
                 Message::TabContextAction(A::Undock(ctx.tab_idx)),
@@ -831,6 +827,71 @@ impl Signex {
                 }
             },
         )
+        .into()
+    }
+
+    /// Icon-less variant of [`ctx_menu_item_msg`] for context menus
+    /// where no item carries an icon (e.g. the tab right-click menu).
+    /// Drops the 26 px icon-slot column so labels start flush with the
+    /// menu's left padding.
+    fn ctx_menu_item_msg_no_icon<'a>(
+        &self,
+        label: &str,
+        shortcut: &str,
+        message: Message,
+    ) -> Element<'a, Message> {
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let hover_c = crate::styles::ti(tokens.hover);
+        iced::widget::button(
+            iced::widget::row![
+                iced::widget::text(label.to_string()).size(11).color(text_c),
+                iced::widget::Space::new().width(Length::Fill),
+                iced::widget::text(shortcut.to_string())
+                    .size(10)
+                    .color(crate::styles::ti(tokens.text_secondary)),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center)
+            .width(Length::Fill),
+        )
+        .width(Self::CONTEXT_MENU_WIDTH)
+        .padding([4, 12])
+        .on_press(message)
+        .style(
+            move |_: &iced::Theme, status: iced::widget::button::Status| {
+                let bg = match status {
+                    iced::widget::button::Status::Hovered => Some(iced::Background::Color(hover_c)),
+                    _ => None,
+                };
+                iced::widget::button::Style {
+                    background: bg,
+                    border: iced::Border::default(),
+                    text_color: text_c,
+                    ..iced::widget::button::Style::default()
+                }
+            },
+        )
+        .into()
+    }
+
+    /// Icon-less, disabled-row counterpart to
+    /// [`ctx_menu_item_msg_no_icon`].
+    fn ctx_menu_item_disabled_no_icon<'a>(&self, label: &str) -> Element<'a, Message> {
+        let text_secondary = crate::styles::ti(self.document_state.panel_ctx.tokens.text_secondary);
+        container(
+            iced::widget::row![
+                iced::widget::text(label.to_string())
+                    .size(11)
+                    .color(text_secondary),
+                iced::widget::Space::new().width(Length::Fill),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center)
+            .width(Length::Fill),
+        )
+        .padding([4, 12])
+        .width(Self::CONTEXT_MENU_WIDTH)
         .into()
     }
 
@@ -1148,7 +1209,7 @@ impl Signex {
                     "Schematic",
                     "",
                     Message::ProjectTreeAction(crate::app::ProjectTreeAction::AddNewSchematic(
-                        target_path,
+                        target_path.clone(),
                     )),
                 ));
                 // Component Library is the Altium-style replacement
@@ -1162,15 +1223,36 @@ impl Signex {
                     "",
                     Message::Menu(crate::menu_bar::MenuMessage::AddComponentLibrary),
                 ));
+                // Altium parity: Schematic Library (= our `.snxsym`) is
+                // a top-level project document, not nested inside a
+                // Component Library. Same for PCB Library (= our
+                // `.snxfpt`). Both open a Save-As dialog scoped to the
+                // project dir; the picked file is written empty and
+                // opened as a primitive editor tab.
+                items.push(self.ctx_menu_item_msg(
+                    Some(ic::icon_component(tid)),
+                    "Symbol Library",
+                    "",
+                    Message::ProjectTreeAction(
+                        crate::app::ProjectTreeAction::AddProjectSymbolLibrary(
+                            target_path.clone(),
+                        ),
+                    ),
+                ));
                 items.push(self.ctx_menu_item_disabled(
                     Some(ic::icon_dd_part_actions(tid)),
                     "PCB",
                     Some("v2.0"),
                 ));
-                items.push(self.ctx_menu_item_disabled(
+                items.push(self.ctx_menu_item_msg(
                     Some(ic::icon_component(tid)),
                     "PCB Library",
-                    Some("v2.0"),
+                    "",
+                    Message::ProjectTreeAction(
+                        crate::app::ProjectTreeAction::AddProjectFootprintLibrary(
+                            target_path.clone(),
+                        ),
+                    ),
                 ));
                 items.push(self.ctx_menu_sep());
                 items.push(self.ctx_menu_item_disabled(

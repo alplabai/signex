@@ -774,6 +774,15 @@ pub enum ProjectTreeAction {
     /// blank `.snxsch`, registers it as a SheetEntry, marks the
     /// project dirty, and refreshes the tree (no tab opens).
     AddNewSchematic(Vec<usize>),
+    /// project-root → Add New ▸ Symbol Library. Save-As dialog
+    /// scoped to the project dir, writes an empty `.snxsym`, opens
+    /// the file as a primitive editor tab. Altium parity: Schematic
+    /// Library is a top-level project document.
+    AddProjectSymbolLibrary(Vec<usize>),
+    /// project-root → Add New ▸ PCB Library. Save-As dialog
+    /// scoped to the project dir, writes an empty `.snxfpt`, opens
+    /// the file as a primitive editor tab.
+    AddProjectFootprintLibrary(Vec<usize>),
     /// v0.11 project-root: open the Enable Version Control confirm
     /// modal. Runs `git init` at the project dir, optionally seeds
     /// `.gitattributes` for binary-model LFS, and creates the
