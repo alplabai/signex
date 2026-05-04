@@ -1240,6 +1240,39 @@ fn build_footprint_editor_panel_ctx(
     let next_pad_size_y_mm = editor.state.next_pad_defaults.size_y_mm;
     let next_pad_side = editor.state.next_pad_defaults.side;
 
+    // v0.16.4 — role sub-form summaries. Populated only when the
+    // selected entity carries the matching `*Attr`; the Properties
+    // panel renders the sub-form conditionally below the Role pick_list.
+    let (selected_pour, selected_keepout, selected_cutout) = match selected_sketch_entity_id {
+        Some(id) => editor
+            .primitive
+            .sketch
+            .as_ref()
+            .and_then(|s| s.entities.iter().find(|e| e.id == id))
+            .map(|e| {
+                let pour = e.pour.as_ref().map(|p| crate::panels::PourSummary {
+                    net: p.net.clone(),
+                    fill_type: p.fill_type,
+                    priority: p.priority,
+                });
+                let keepout = e.keepout.as_ref().map(|k| crate::panels::KeepoutSummary {
+                    no_routing: k.kinds.no_routing,
+                    no_components: k.kinds.no_components,
+                    no_copper: k.kinds.no_copper,
+                    no_vias: k.kinds.no_vias,
+                    no_drilling: k.kinds.no_drilling,
+                    no_pours: k.kinds.no_pours,
+                });
+                let cutout = e.board_cutout.as_ref().map(|c| crate::panels::CutoutSummary {
+                    edge_radius_expr: c.edge_radius_expr.clone(),
+                    through: c.through,
+                });
+                (pour, keepout, cutout)
+            })
+            .unwrap_or((None, None, None)),
+        None => (None, None, None),
+    };
+
     Some(FootprintEditorPanelContext {
         path,
         footprint_name: editor.primitive.name.clone(),
@@ -1265,6 +1298,9 @@ fn build_footprint_editor_panel_ctx(
         next_pad_size_x_mm,
         next_pad_size_y_mm,
         next_pad_side,
+        selected_pour,
+        selected_keepout,
+        selected_cutout,
     })
 }
 

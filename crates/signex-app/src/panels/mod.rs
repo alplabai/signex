@@ -582,6 +582,56 @@ pub struct FootprintEditorPanelContext {
     pub next_pad_size_y_mm: f64,
     /// v0.16.3 — copper side for the next placed pad.
     pub next_pad_side: crate::library::editor::footprint::state::PadSide,
+    /// v0.16.4 — Pour-role sub-form values for the selected entity.
+    /// `None` when the entity isn't a pour. Carries the net string,
+    /// fill type, and a snapshot of thermal-relief defaults so the
+    /// panel can show + edit each field.
+    pub selected_pour: Option<PourSummary>,
+    /// v0.16.4 — Keepout-role sub-form values for the selected
+    /// entity. `None` when the entity isn't a keepout.
+    pub selected_keepout: Option<KeepoutSummary>,
+    /// v0.16.4 — BoardCutout-role sub-form values for the selected
+    /// entity. `None` when the entity isn't a board cutout.
+    pub selected_cutout: Option<CutoutSummary>,
+}
+
+/// v0.16.4 — Pour role properties surfaced on the Properties panel.
+#[derive(Debug, Clone)]
+pub struct PourSummary {
+    pub net: Option<String>,
+    pub fill_type: signex_sketch::attr::PourFillType,
+    pub priority: u32,
+}
+
+/// v0.16.4 — Keepout role properties surfaced on the Properties panel.
+#[derive(Debug, Clone)]
+pub struct KeepoutSummary {
+    pub no_routing: bool,
+    pub no_components: bool,
+    pub no_copper: bool,
+    pub no_vias: bool,
+    pub no_drilling: bool,
+    pub no_pours: bool,
+}
+
+/// v0.16.4 — BoardCutout role properties surfaced on the Properties panel.
+#[derive(Debug, Clone)]
+pub struct CutoutSummary {
+    pub edge_radius_expr: Option<String>,
+    pub through: bool,
+}
+
+/// v0.16.4 — discrete bit identifier for [`KeepoutSummary`] flags.
+/// PanelMsg-friendly so the Keepout sub-form's checklist can carry
+/// "which flag" without smuggling a closure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeepoutKindFlag {
+    NoRouting,
+    NoComponents,
+    NoCopper,
+    NoVias,
+    NoDrilling,
+    NoPours,
 }
 
 /// One row in the Footprint Library panel — a sibling `.snxfpt`
@@ -1095,6 +1145,37 @@ pub enum PanelMsg {
     FpEditorSetNextPadSizeX(String),
     FpEditorSetNextPadSizeY(String),
     FpEditorSetNextPadSide(crate::library::editor::footprint::state::PadSide),
+    /// v0.16.4 — Pour-role sub-form. The handler mutates the
+    /// selected entity's `pour` attr and runs solve+bake.
+    FpEditorSetPourNet {
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    },
+    FpEditorSetPourFillType {
+        id: signex_sketch::id::SketchEntityId,
+        value: signex_sketch::attr::PourFillType,
+    },
+    FpEditorSetPourPriority {
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    },
+    /// v0.16.4 — Keepout-role kinds checklist. The handler mutates
+    /// the matching `kinds.<flag>` and runs solve+bake.
+    FpEditorSetKeepoutKind {
+        id: signex_sketch::id::SketchEntityId,
+        kind: KeepoutKindFlag,
+        value: bool,
+    },
+    /// v0.16.4 — BoardCutout-role edge-radius expression input.
+    FpEditorSetCutoutEdgeRadius {
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    },
+    /// v0.16.4 — BoardCutout-role through-vs-partial-depth toggle.
+    FpEditorSetCutoutThrough {
+        id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
     /// v0.14.2 — open a sibling `.snxfpt` from the Footprint Library
     /// panel. The handler routes through the existing
     /// `handle_open_primitive` flow so the file gets a fresh tab + a
@@ -3779,6 +3860,12 @@ fn view_footprint_editor_properties<'a>(
                             .width(Length::Fill),
                     );
                 }
+
+                // v0.16.4 — role sub-forms. Render when the
+                // matching `*Attr` is set on the selected entity.
+                col = render_pour_subform(col, fp, id, muted, primary, border_c);
+                col = render_keepout_subform(col, fp, id, muted, primary, border_c);
+                col = render_cutout_subform(col, fp, id, muted, primary, border_c);
             }
         }
         _ => {
@@ -4148,6 +4235,292 @@ fn props_section_header<'a>(label: &str, primary: Color) -> Element<'a, PanelMsg
         .padding([6, 8])
         .width(Length::Fill)
         .into()
+}
+
+/// v0.16.4 — Pour role sub-form. Renders when the entity's `pour`
+/// attr is set; otherwise the column passes through unchanged.
+fn render_pour_subform<'a>(
+    mut col: Column<'a, PanelMsg>,
+    fp: &'a FootprintEditorPanelContext,
+    id: signex_sketch::id::SketchEntityId,
+    muted: Color,
+    primary: Color,
+    border_c: Color,
+) -> Column<'a, PanelMsg> {
+    let Some(pour) = fp.selected_pour.as_ref() else {
+        return col;
+    };
+    col = col.push(
+        container(text("Pour properties").size(10).color(primary))
+            .padding([4, 8])
+            .width(Length::Fill),
+    );
+
+    // Net (text input — empty = unassigned)
+    let net_buf = pour.net.clone().unwrap_or_default();
+    col = col.push(
+        container(
+            row![
+                text("Net").size(10).color(muted).width(Length::Fixed(80.0)),
+                text_input("(none)", &net_buf)
+                    .size(10)
+                    .padding(2)
+                    .style(move |_: &Theme, _| iced::widget::text_input::Style {
+                        background: iced::Background::Color(iced::Color::from_rgba(
+                            1.0, 1.0, 1.0, 0.04,
+                        )),
+                        border: iced::Border {
+                            width: 1.0,
+                            radius: 2.0.into(),
+                            color: border_c,
+                        },
+                        icon: iced::Color::TRANSPARENT,
+                        placeholder: muted,
+                        value: primary,
+                        selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
+                    })
+                    .on_input(move |v| PanelMsg::FpEditorSetPourNet { id, value: v }),
+            ]
+            .spacing(6)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([2, 8])
+        .width(Length::Fill),
+    );
+
+    // Fill type (Solid / Hatched / Outline)
+    let fill_picker = pick_list(
+        signex_sketch::attr::PourFillType::ALL,
+        Some(pour.fill_type),
+        move |v| PanelMsg::FpEditorSetPourFillType { id, value: v },
+    )
+    .text_size(10)
+    .padding([3, 8]);
+    col = col.push(
+        container(
+            row![
+                text("Fill")
+                    .size(10)
+                    .color(muted)
+                    .width(Length::Fixed(80.0)),
+                fill_picker,
+            ]
+            .spacing(6)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([2, 8])
+        .width(Length::Fill),
+    );
+
+    // Priority (u32 text input)
+    col = col.push(
+        container(
+            row![
+                text("Priority")
+                    .size(10)
+                    .color(muted)
+                    .width(Length::Fixed(80.0)),
+                text_input("0", &pour.priority.to_string())
+                    .size(10)
+                    .padding(2)
+                    .style(move |_: &Theme, _| iced::widget::text_input::Style {
+                        background: iced::Background::Color(iced::Color::from_rgba(
+                            1.0, 1.0, 1.0, 0.04,
+                        )),
+                        border: iced::Border {
+                            width: 1.0,
+                            radius: 2.0.into(),
+                            color: border_c,
+                        },
+                        icon: iced::Color::TRANSPARENT,
+                        placeholder: muted,
+                        value: primary,
+                        selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
+                    })
+                    .on_input(move |v| PanelMsg::FpEditorSetPourPriority { id, value: v }),
+            ]
+            .spacing(6)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([2, 8])
+        .width(Length::Fill),
+    );
+
+    col
+}
+
+/// v0.16.4 — Keepout role sub-form. Renders the 6 kind flags as a
+/// vertical checklist when the entity's `keepout` attr is set.
+fn render_keepout_subform<'a>(
+    mut col: Column<'a, PanelMsg>,
+    fp: &'a FootprintEditorPanelContext,
+    id: signex_sketch::id::SketchEntityId,
+    muted: Color,
+    primary: Color,
+    _border_c: Color,
+) -> Column<'a, PanelMsg> {
+    let Some(k) = fp.selected_keepout.as_ref() else {
+        return col;
+    };
+    col = col.push(
+        container(text("Keepout kinds").size(10).color(primary))
+            .padding([4, 8])
+            .width(Length::Fill),
+    );
+
+    let mk_check = move |label: &'static str,
+                        kind: KeepoutKindFlag,
+                        on: bool|
+          -> Element<'a, PanelMsg> {
+        let glyph = if on { "[x]" } else { "[ ]" };
+        button(text(format!("{glyph}  {label}")).size(10).color(primary))
+            .padding([2, 6])
+            .on_press(PanelMsg::FpEditorSetKeepoutKind {
+                id,
+                kind,
+                value: !on,
+            })
+            .style(move |_: &Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(iced::Color::from_rgba(
+                    1.0, 1.0, 1.0, 0.02,
+                ))),
+                border: iced::Border {
+                    width: 0.0,
+                    radius: 0.0.into(),
+                    color: Color::TRANSPARENT,
+                },
+                ..iced::widget::button::Style::default()
+            })
+            .into()
+    };
+
+    let _ = muted; // kept for future per-row dimming
+    col = col.push(
+        container(mk_check("No routing", KeepoutKindFlag::NoRouting, k.no_routing))
+            .padding([0, 8])
+            .width(Length::Fill),
+    );
+    col = col.push(
+        container(mk_check(
+            "No components",
+            KeepoutKindFlag::NoComponents,
+            k.no_components,
+        ))
+        .padding([0, 8])
+        .width(Length::Fill),
+    );
+    col = col.push(
+        container(mk_check("No copper", KeepoutKindFlag::NoCopper, k.no_copper))
+            .padding([0, 8])
+            .width(Length::Fill),
+    );
+    col = col.push(
+        container(mk_check("No vias", KeepoutKindFlag::NoVias, k.no_vias))
+            .padding([0, 8])
+            .width(Length::Fill),
+    );
+    col = col.push(
+        container(mk_check(
+            "No drilling",
+            KeepoutKindFlag::NoDrilling,
+            k.no_drilling,
+        ))
+        .padding([0, 8])
+        .width(Length::Fill),
+    );
+    col = col.push(
+        container(mk_check("No pours", KeepoutKindFlag::NoPours, k.no_pours))
+            .padding([0, 8])
+            .width(Length::Fill),
+    );
+
+    col
+}
+
+/// v0.16.4 — BoardCutout role sub-form. Edge-radius expression input
+/// + through-vs-partial-depth toggle.
+fn render_cutout_subform<'a>(
+    mut col: Column<'a, PanelMsg>,
+    fp: &'a FootprintEditorPanelContext,
+    id: signex_sketch::id::SketchEntityId,
+    muted: Color,
+    primary: Color,
+    border_c: Color,
+) -> Column<'a, PanelMsg> {
+    let Some(c) = fp.selected_cutout.as_ref() else {
+        return col;
+    };
+    col = col.push(
+        container(text("Cutout properties").size(10).color(primary))
+            .padding([4, 8])
+            .width(Length::Fill),
+    );
+
+    let radius_buf = c.edge_radius_expr.clone().unwrap_or_default();
+    col = col.push(
+        container(
+            row![
+                text("Edge radius")
+                    .size(10)
+                    .color(muted)
+                    .width(Length::Fixed(80.0)),
+                text_input("(sharp)", &radius_buf)
+                    .size(10)
+                    .padding(2)
+                    .style(move |_: &Theme, _| iced::widget::text_input::Style {
+                        background: iced::Background::Color(iced::Color::from_rgba(
+                            1.0, 1.0, 1.0, 0.04,
+                        )),
+                        border: iced::Border {
+                            width: 1.0,
+                            radius: 2.0.into(),
+                            color: border_c,
+                        },
+                        icon: iced::Color::TRANSPARENT,
+                        placeholder: muted,
+                        value: primary,
+                        selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
+                    })
+                    .on_input(move |v| PanelMsg::FpEditorSetCutoutEdgeRadius { id, value: v }),
+            ]
+            .spacing(6)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([2, 8])
+        .width(Length::Fill),
+    );
+
+    let through_label = if c.through {
+        "[x]  Through (full board depth)"
+    } else {
+        "[ ]  Through (full board depth)"
+    };
+    let through_value = !c.through;
+    col = col.push(
+        container(
+            button(text(through_label).size(10).color(primary))
+                .padding([2, 6])
+                .on_press(PanelMsg::FpEditorSetCutoutThrough {
+                    id,
+                    value: through_value,
+                })
+                .style(move |_: &Theme, _| iced::widget::button::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgba(
+                        1.0, 1.0, 1.0, 0.02,
+                    ))),
+                    border: iced::Border {
+                        width: 0.0,
+                        radius: 0.0.into(),
+                        color: Color::TRANSPARENT,
+                    },
+                    ..iced::widget::button::Style::default()
+                }),
+        )
+        .padding([0, 8])
+        .width(Length::Fill),
+    );
+
+    col
 }
 
 fn props_kv_row<'a>(

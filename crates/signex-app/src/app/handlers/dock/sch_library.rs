@@ -97,6 +97,30 @@ impl Signex {
                 self.fp_editor_set_next_pad_side(*side);
                 true
             }
+            crate::panels::PanelMsg::FpEditorSetPourNet { id, value } => {
+                self.fp_editor_set_pour_net(*id, value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetPourFillType { id, value } => {
+                self.fp_editor_set_pour_fill_type(*id, *value);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetPourPriority { id, value } => {
+                self.fp_editor_set_pour_priority(*id, value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetKeepoutKind { id, kind, value } => {
+                self.fp_editor_set_keepout_kind(*id, *kind, *value);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetCutoutEdgeRadius { id, value } => {
+                self.fp_editor_set_cutout_edge_radius(*id, value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetCutoutThrough { id, value } => {
+                self.fp_editor_set_cutout_through(*id, *value);
+                true
+            }
             crate::panels::PanelMsg::FpEditorEditParameter { name, expr } => {
                 // v0.16.2 — Properties-panel parameter row edit.
                 // Forwards to `FootprintSketchEditParameter` which
@@ -786,6 +810,185 @@ impl Signex {
     ) {
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.state.next_pad_defaults.side = side;
+        }
+        self.refresh_panel_ctx();
+    }
+
+    /// v0.16.4 — mutate the selected entity's pour `net` and re-bake.
+    pub(crate) fn fp_editor_set_pour_net(
+        &mut self,
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    ) {
+        let net = if value.trim().is_empty() {
+            None
+        } else {
+            Some(value)
+        };
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            if let Some(sketch) = editor.primitive.sketch.as_mut() {
+                if let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id) {
+                    if let Some(p) = e.pour.as_mut() {
+                        p.net = net;
+                    }
+                }
+            }
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
+            use crate::library::editor::footprint::sketch_mode::SketchEdit;
+            apply_sketch_edit_with_warnings(
+                &mut editor.state,
+                &mut editor.primitive,
+                SketchEdit::ForceRebuild,
+            );
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+        }
+        self.refresh_panel_ctx();
+    }
+
+    pub(crate) fn fp_editor_set_pour_fill_type(
+        &mut self,
+        id: signex_sketch::id::SketchEntityId,
+        value: signex_sketch::attr::PourFillType,
+    ) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            if let Some(sketch) = editor.primitive.sketch.as_mut() {
+                if let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id) {
+                    if let Some(p) = e.pour.as_mut() {
+                        p.fill_type = value;
+                    }
+                }
+            }
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
+            use crate::library::editor::footprint::sketch_mode::SketchEdit;
+            apply_sketch_edit_with_warnings(
+                &mut editor.state,
+                &mut editor.primitive,
+                SketchEdit::ForceRebuild,
+            );
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+        }
+        self.refresh_panel_ctx();
+    }
+
+    pub(crate) fn fp_editor_set_pour_priority(
+        &mut self,
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    ) {
+        let parsed = value.trim().parse::<u32>().ok();
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            if let Some(sketch) = editor.primitive.sketch.as_mut() {
+                if let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id) {
+                    if let Some(p) = e.pour.as_mut() {
+                        if let Some(n) = parsed {
+                            p.priority = n;
+                        }
+                    }
+                }
+            }
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
+            use crate::library::editor::footprint::sketch_mode::SketchEdit;
+            apply_sketch_edit_with_warnings(
+                &mut editor.state,
+                &mut editor.primitive,
+                SketchEdit::ForceRebuild,
+            );
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+        }
+        self.refresh_panel_ctx();
+    }
+
+    pub(crate) fn fp_editor_set_keepout_kind(
+        &mut self,
+        id: signex_sketch::id::SketchEntityId,
+        kind: crate::panels::KeepoutKindFlag,
+        value: bool,
+    ) {
+        use crate::panels::KeepoutKindFlag;
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            if let Some(sketch) = editor.primitive.sketch.as_mut() {
+                if let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id) {
+                    if let Some(k) = e.keepout.as_mut() {
+                        match kind {
+                            KeepoutKindFlag::NoRouting => k.kinds.no_routing = value,
+                            KeepoutKindFlag::NoComponents => k.kinds.no_components = value,
+                            KeepoutKindFlag::NoCopper => k.kinds.no_copper = value,
+                            KeepoutKindFlag::NoVias => k.kinds.no_vias = value,
+                            KeepoutKindFlag::NoDrilling => k.kinds.no_drilling = value,
+                            KeepoutKindFlag::NoPours => k.kinds.no_pours = value,
+                        }
+                    }
+                }
+            }
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
+            use crate::library::editor::footprint::sketch_mode::SketchEdit;
+            apply_sketch_edit_with_warnings(
+                &mut editor.state,
+                &mut editor.primitive,
+                SketchEdit::ForceRebuild,
+            );
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+        }
+        self.refresh_panel_ctx();
+    }
+
+    pub(crate) fn fp_editor_set_cutout_edge_radius(
+        &mut self,
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    ) {
+        let edge_radius = if value.trim().is_empty() {
+            None
+        } else {
+            Some(value)
+        };
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            if let Some(sketch) = editor.primitive.sketch.as_mut() {
+                if let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id) {
+                    if let Some(c) = e.board_cutout.as_mut() {
+                        c.edge_radius_expr = edge_radius;
+                    }
+                }
+            }
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
+            use crate::library::editor::footprint::sketch_mode::SketchEdit;
+            apply_sketch_edit_with_warnings(
+                &mut editor.state,
+                &mut editor.primitive,
+                SketchEdit::ForceRebuild,
+            );
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+        }
+        self.refresh_panel_ctx();
+    }
+
+    pub(crate) fn fp_editor_set_cutout_through(
+        &mut self,
+        id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    ) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            if let Some(sketch) = editor.primitive.sketch.as_mut() {
+                if let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id) {
+                    if let Some(c) = e.board_cutout.as_mut() {
+                        c.through = value;
+                    }
+                }
+            }
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
+            use crate::library::editor::footprint::sketch_mode::SketchEdit;
+            apply_sketch_edit_with_warnings(
+                &mut editor.state,
+                &mut editor.primitive,
+                SketchEdit::ForceRebuild,
+            );
+            editor.dirty = true;
+            editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
     }

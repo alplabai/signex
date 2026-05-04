@@ -210,6 +210,30 @@ pub enum PourFillType {
     Outline,
 }
 
+impl PourFillType {
+    /// Display order used by Properties-panel pick_lists. Mirrors the
+    /// declaration order on the enum.
+    pub const ALL: &'static [PourFillType] = &[
+        PourFillType::Solid,
+        PourFillType::Hatched,
+        PourFillType::Outline,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            PourFillType::Solid => "Solid",
+            PourFillType::Hatched => "Hatched",
+            PourFillType::Outline => "Outline",
+        }
+    }
+}
+
+impl std::fmt::Display for PourFillType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
+}
+
 /// Thermal relief — how the pour connects to same-net pads.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ThermalRelief {
