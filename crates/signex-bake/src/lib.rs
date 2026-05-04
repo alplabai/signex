@@ -12,6 +12,7 @@
 //! or numerical-library source consulted.
 
 pub mod array;
+pub mod body3d;
 pub mod courtyard;
 pub mod cutout;
 pub mod keepout;
@@ -23,6 +24,7 @@ pub mod silk;
 pub mod vscore;
 
 pub use array::bake_arrays;
+pub use body3d::bake_body3d;
 pub use courtyard::bake_courtyard;
 pub use cutout::bake_cutouts;
 pub use keepout::bake_keepouts;

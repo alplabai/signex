@@ -255,6 +255,16 @@ fn solve_and_bake(
                 if !v_scores.is_empty() {
                     footprint.v_scores = v_scores;
                 }
+
+                // v0.14.1 — 3D extrude profile from a BodyTop plane
+                // enriches the existing body_3d.outline + offset_z_mm.
+                signex_bake::bake_body3d(
+                    sketch,
+                    &out,
+                    &resolved,
+                    &mut footprint.body_3d,
+                    &mut state.solve_warnings,
+                )?;
             }
 
             state.last_solve = Some(out);
