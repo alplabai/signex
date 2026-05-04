@@ -183,7 +183,15 @@ pub(crate) fn bake_one_pad(
         }
         LibPadShape::Round
     } else {
-        bake_shape(&pad_attr.shape, &ctx, warnings, &pad_number)?
+        bake_shape(
+            &pad_attr.shape,
+            &ctx,
+            warnings,
+            &pad_number,
+            sketch,
+            solve,
+            position,
+        )?
     };
 
     // Warn on paste-aperture patterns we don't bake yet.
@@ -365,6 +373,9 @@ fn bake_shape(
     ctx: &EvalContext,
     warnings: &mut Vec<String>,
     pad_number: &str,
+    sketch: &SketchData,
+    solve: &FullSolveOutput,
+    pad_position: [f64; 2],
 ) -> Result<LibPadShape, SketchError> {
     Ok(match s {
         PadShape::Round => LibPadShape::Round,
@@ -395,12 +406,39 @@ fn bake_shape(
                 points: points.clone(),
             })
         }
-        PadShape::Custom(CustomPadShape::SketchProfile { source: _ }) => {
-            warnings.push(format!(
-                "pad {}: Custom::SketchProfile falls back to bbox Rect in v0.13 (v0.14 bakes the profile)",
-                pad_number
-            ));
-            LibPadShape::Rect
+        PadShape::Custom(CustomPadShape::SketchProfile { source }) => {
+            // v0.14.1: trace the closed profile from source[0] through
+            // the walker, translate vertices into pad-local mm
+            // (subtract the pad's footprint position), and emit
+            // LibPadShape::Custom. On any trace failure, fall back to
+            // bbox Rect with a warning so the bake doesn't poison the
+            // whole pad.
+            let seed = match source.first() {
+                Some(id) => *id,
+                None => {
+                    warnings.push(format!(
+                        "pad {}: Custom::SketchProfile.source is empty; falling back to Rect",
+                        pad_number
+                    ));
+                    return Ok(LibPadShape::Rect);
+                }
+            };
+            match crate::profile::trace_closed_profile(sketch, solve, seed) {
+                Ok(world_pts) => {
+                    let local_pts: Vec<[f64; 2]> = world_pts
+                        .into_iter()
+                        .map(|[x, y]| [x - pad_position[0], y - pad_position[1]])
+                        .collect();
+                    LibPadShape::Custom(LibPolygon { points: local_pts })
+                }
+                Err(e) => {
+                    warnings.push(format!(
+                        "pad {}: Custom::SketchProfile trace failed ({e:?}); falling back to Rect",
+                        pad_number
+                    ));
+                    LibPadShape::Rect
+                }
+            }
         }
     })
 }

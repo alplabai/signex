@@ -519,6 +519,107 @@ fn bake_linear_array_3_pads_along_x() {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Test 11 — Custom::SketchProfile native bake (v0.14.1).
+// ─────────────────────────────────────────────────────────────────────
+
+#[test]
+fn bake_custom_sketch_profile_native_v0141() {
+    use signex_sketch::attr::{CustomPadShape, PadShape};
+    use signex_sketch::entity::{Entity, EntityKind};
+    use signex_sketch::id::SketchEntityId;
+    use signex_sketch::plane::Plane;
+
+    let mut s = Sketch::new();
+    let plane = s.plane;
+    let pad_pt = s.add_point(5.0, 5.0);
+
+    // Build a 1×1 mm rectangle (4 lines + 4 corner Points) located at
+    // (5, 5) → (6, 6) in footprint mm.
+    let p1 = SketchEntityId::new();
+    let p2 = SketchEntityId::new();
+    let p3 = SketchEntityId::new();
+    let p4 = SketchEntityId::new();
+    s.data
+        .entities
+        .push(Entity::new(p1, plane, EntityKind::Point { x: 5.0, y: 5.0 }));
+    s.data
+        .entities
+        .push(Entity::new(p2, plane, EntityKind::Point { x: 6.0, y: 5.0 }));
+    s.data
+        .entities
+        .push(Entity::new(p3, plane, EntityKind::Point { x: 6.0, y: 6.0 }));
+    s.data
+        .entities
+        .push(Entity::new(p4, plane, EntityKind::Point { x: 5.0, y: 6.0 }));
+    let l1 = SketchEntityId::new();
+    let l2 = SketchEntityId::new();
+    let l3 = SketchEntityId::new();
+    let l4 = SketchEntityId::new();
+    s.data.entities.push(Entity::new(
+        l1,
+        plane,
+        EntityKind::Line { start: p1, end: p2 },
+    ));
+    s.data.entities.push(Entity::new(
+        l2,
+        plane,
+        EntityKind::Line { start: p2, end: p3 },
+    ));
+    s.data.entities.push(Entity::new(
+        l3,
+        plane,
+        EntityKind::Line { start: p3, end: p4 },
+    ));
+    s.data.entities.push(Entity::new(
+        l4,
+        plane,
+        EntityKind::Line { start: p4, end: p1 },
+    ));
+
+    // Pad sits at the rectangle's lower-left corner (5, 5). Profile
+    // baked relative to pad position: world (5,5)→(6,6) becomes
+    // local (0,0)→(1,1).
+    let mut pad = smd_rect_pad("1", "1.0mm", "1.0mm");
+    pad.shape = PadShape::Custom(CustomPadShape::SketchProfile {
+        source: vec![l1],
+    });
+    s.attach_pad(pad_pt, pad);
+    // Need to suppress the pad-point's own contribution as a corner —
+    // ensure pad_pt isn't picked up by the walker. Setting it as
+    // construction would also drop it from the topology, so leave it
+    // as a Point-kind entity (Points aren't edges so they don't enter
+    // the adjacency).
+    let _ = (l2, l3, l4);
+
+    let _ = Plane {
+        id: plane,
+        kind: signex_sketch::plane::PlaneKind::BoardTop,
+    };
+    let solve = solve(&s.data);
+    let mut out = Vec::new();
+    let mut warnings = Vec::new();
+    bake_pads(&s.data, &solve, &HashMap::new(), &mut out, &mut warnings).expect("bake ok");
+
+    assert_eq!(out.len(), 1);
+    match &out[0].shape {
+        LibPadShape::Custom(poly) => {
+            // 4 vertices, in pad-local mm.
+            assert_eq!(poly.points.len(), 4);
+            // All vertices in the unit square (relative to pad position).
+            for [x, y] in &poly.points {
+                assert!(*x >= -1e-6 && *x <= 1.0 + 1e-6, "x out of range: {x}");
+                assert!(*y >= -1e-6 && *y <= 1.0 + 1e-6, "y out of range: {y}");
+            }
+        }
+        other => panic!("expected Custom polygon, got {other:?}"),
+    }
+    assert!(
+        warnings.iter().all(|w| !w.contains("falls back")),
+        "v0.14.1 should not fall back; got {warnings:?}"
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Smoke: verify the LibPad structure round-trips through bake without
 // dropping any layer info — guards against accidental dedup bugs.
 // ─────────────────────────────────────────────────────────────────────
