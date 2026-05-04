@@ -47,6 +47,7 @@ pub fn view<'a>(
     let border = theme_ext::border_color(tokens);
 
     let tools = view_tool_palette(editor, text_c, muted, border);
+    let constraints = view_constraint_submenu(editor, text_c, muted, border);
     let dof = view_dof(editor, text_c, muted);
     let params = view_params(editor, text_c, muted, border);
     let warnings = view_warnings(editor, text_c, muted);
@@ -54,6 +55,7 @@ pub fn view<'a>(
     container(
         column![
             tools,
+            constraints,
             row![
                 container(dof).padding([6, 10]).width(Length::FillPortion(1)),
                 container(params)
@@ -148,6 +150,182 @@ fn view_tool_palette<'a>(
     .spacing(4)
     .align_y(iced::Alignment::Center)
     .into()
+}
+
+/// v0.13.3 — selection-aware constraint submenu. Renders a row of
+/// applicable-constraint pills based on the current
+/// `selected_sketch` + `selected_sketch_secondary` slots. Empty
+/// when no entity is selected. Includes the Dimension tool's inline
+/// numeric value-entry field for `DistancePtPt`.
+fn view_constraint_submenu<'a>(
+    editor: &'a FootprintEditorState,
+    text_c: Color,
+    muted: Color,
+    border: Color,
+) -> Element<'a, LibraryMessage> {
+    use crate::library::messages::SketchConstraintTag;
+    use signex_sketch::entity::EntityKind;
+
+    let primary = editor.state.selected_sketch;
+    let secondary = editor.state.selected_sketch_secondary;
+    let kind_of = |id: signex_sketch::id::SketchEntityId| -> Option<&'static str> {
+        editor
+            .primitive
+            .sketch
+            .as_ref()?
+            .entities
+            .iter()
+            .find(|e| e.id == id)
+            .map(|e| match e.kind {
+                EntityKind::Point { .. } => "Point",
+                EntityKind::Line { .. } => "Line",
+                EntityKind::Arc { .. } => "Arc",
+                EntityKind::Circle { .. } => "Circle",
+            })
+    };
+    let p_kind = primary.and_then(kind_of);
+    let s_kind = secondary.and_then(kind_of);
+
+    let mut tags: Vec<(&'static str, SketchConstraintTag)> = Vec::new();
+    let needs_dim_input;
+    match (p_kind, s_kind) {
+        (Some("Point"), None) => {
+            tags.push(("Fix", SketchConstraintTag::Fixed));
+            needs_dim_input = false;
+        }
+        (Some("Line"), None) => {
+            tags.push(("Horizontal", SketchConstraintTag::Horizontal));
+            tags.push(("Vertical", SketchConstraintTag::Vertical));
+            needs_dim_input = false;
+        }
+        (Some("Point"), Some("Point")) => {
+            tags.push(("Coincident", SketchConstraintTag::Coincident));
+            tags.push(("Distance", SketchConstraintTag::DistancePtPt));
+            needs_dim_input = true;
+        }
+        (Some("Line"), Some("Line")) => {
+            tags.push(("Parallel", SketchConstraintTag::Parallel));
+            tags.push(("Perpendicular", SketchConstraintTag::Perpendicular));
+            tags.push(("Equal length", SketchConstraintTag::EqualLength));
+            needs_dim_input = false;
+        }
+        (Some("Point"), Some("Line")) | (Some("Line"), Some("Point")) => {
+            tags.push(("On line", SketchConstraintTag::PointOnLine));
+            tags.push(("Midpoint", SketchConstraintTag::Midpoint));
+            needs_dim_input = false;
+        }
+        _ => {
+            needs_dim_input = false;
+        }
+    }
+
+    let header_label = match (p_kind, s_kind) {
+        (None, _) => "Selection: (none) — click a sketch entity in Sketch mode",
+        (Some(a), None) => match a {
+            "Point" => "Selection: 1 Point",
+            "Line" => "Selection: 1 Line",
+            "Arc" => "Selection: 1 Arc",
+            "Circle" => "Selection: 1 Circle",
+            _ => "Selection: 1 entity",
+        },
+        (Some(_), Some(_)) => "Selection: 2 entities",
+    };
+
+    let mut pill_row =
+        row![text(header_label).size(11).color(muted)].spacing(6).align_y(iced::Alignment::Center);
+
+    for (label, tag) in &tags {
+        let path = editor.path.clone();
+        let t = *tag;
+        let pill = button(text(*label).size(11).color(text_c))
+            .padding([3, 8])
+            .on_press(LibraryMessage::PrimitiveEditorEvent {
+                path,
+                msg: PrimitiveEditorMsg::FootprintSketchAddConstraintForSelection(t),
+            })
+            .style(move |_: &Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(iced::Color::from_rgba(
+                    1.0, 1.0, 1.0, 0.04,
+                ))),
+                border: Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: border,
+                },
+                ..iced::widget::button::Style::default()
+            });
+        pill_row = pill_row.push(pill);
+    }
+
+    if needs_dim_input {
+        let path = editor.path.clone();
+        pill_row = pill_row.push(Space::new().width(Length::Fixed(8.0)));
+        pill_row = pill_row.push(text("mm:").size(11).color(muted));
+        let input = text_input("0.0", &editor.state.dimension_input)
+            .size(11)
+            .padding(2)
+            .width(Length::Fixed(80.0))
+            .style(move |_: &Theme, _| iced::widget::text_input::Style {
+                background: iced::Background::Color(iced::Color::from_rgba(
+                    1.0, 1.0, 1.0, 0.04,
+                )),
+                border: Border {
+                    width: 1.0,
+                    radius: 2.0.into(),
+                    color: border,
+                },
+                icon: iced::Color::TRANSPARENT,
+                placeholder: muted,
+                value: text_c,
+                selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
+            })
+            .on_input(move |s| LibraryMessage::PrimitiveEditorEvent {
+                path: path.clone(),
+                msg: PrimitiveEditorMsg::FootprintSketchDimensionInput(s),
+            });
+        pill_row = pill_row.push(input);
+    }
+
+    if let Some(_) = primary {
+        let clear_path = editor.path.clone();
+        pill_row = pill_row.push(Space::new().width(Length::Fixed(8.0)));
+        let clear = button(text("Deselect").size(10).color(muted))
+            .padding([2, 6])
+            .on_press(LibraryMessage::PrimitiveEditorEvent {
+                path: clear_path,
+                msg: PrimitiveEditorMsg::FootprintSketchSelect {
+                    id: None,
+                    shift: false,
+                },
+            })
+            .style(move |_: &Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(iced::Color::from_rgba(
+                    1.0, 1.0, 1.0, 0.02,
+                ))),
+                border: Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: border,
+                },
+                ..iced::widget::button::Style::default()
+            });
+        pill_row = pill_row.push(clear);
+    }
+
+    container(pill_row)
+        .padding([4, 10])
+        .style(move |_: &Theme| iced::widget::container::Style {
+            background: Some(iced::Background::Color(iced::Color::from_rgba(
+                1.0, 1.0, 1.0, 0.01,
+            ))),
+            border: Border {
+                width: 0.0,
+                radius: 0.0.into(),
+                color: Color::TRANSPARENT,
+            },
+            ..iced::widget::container::Style::default()
+        })
+        .into()
 }
 
 fn view_dof<'a>(

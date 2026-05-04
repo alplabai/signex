@@ -165,6 +165,21 @@ pub struct FootprintEditorState {
     /// Circle). Stashes the first / second clicks until the gesture
     /// completes; cleared on commit or Esc.
     pub tool_pending: ToolPending,
+    /// v0.13.3 — currently-selected sketch entity. `None` means no
+    /// selection. Drives the inspector's selection-aware constraint
+    /// submenu; also drives the canvas drag-to-move gesture for
+    /// Point entities.
+    pub selected_sketch: Option<signex_sketch::id::SketchEntityId>,
+    /// v0.13.3 — secondary selected sketch entity. Used so the
+    /// inspector's constraint submenu can detect "two entities
+    /// selected" cases (Coincident, Distance, Parallel, etc.).
+    /// `Shift+Click` adds to the selection; clicking empty canvas
+    /// clears both.
+    pub selected_sketch_secondary: Option<signex_sketch::id::SketchEntityId>,
+    /// v0.13.3 — Dimension tool's pending value (text input). The
+    /// user picks a number, the inspector emits the AddConstraint
+    /// for the active selection.
+    pub dimension_input: String,
 }
 
 /// Sketch-mode drawing tool. Phase 6.3 (v0.13.1) shipped Place Point
@@ -233,6 +248,9 @@ impl FootprintEditorState {
             solve_warnings: Vec::new(),
             active_tool: SketchTool::default(),
             tool_pending: ToolPending::default(),
+            selected_sketch: None,
+            selected_sketch_secondary: None,
+            dimension_input: String::new(),
         };
         s.recompute_courtyard();
         s
@@ -256,6 +274,9 @@ impl FootprintEditorState {
             solve_warnings: Vec::new(),
             active_tool: SketchTool::default(),
             tool_pending: ToolPending::default(),
+            selected_sketch: None,
+            selected_sketch_secondary: None,
+            dimension_input: String::new(),
         };
         s.recompute_courtyard();
         s

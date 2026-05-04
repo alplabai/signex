@@ -255,22 +255,16 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 cstate,
                                 click_world,
                             );
+                            // v0.13.3 — also try to hit-test Lines /
+                            // Arcs / Circles (not just snap-to-Point)
+                            // for the Select tool.
+                            let select_id = snap_id
+                                .or_else(|| sketch_hit_other(self.sketch, cstate, click_world));
                             let msg = match self.state.active_tool {
-                                SketchTool::Select => {
-                                    // No drawing tool active — fall
-                                    // through to legacy click-add.
-                                    return Some(canvas::Action::publish(
-                                        LibraryMessage::EditorEvent {
-                                            library_path: self.address.library_path.clone(),
-                                            table: self.address.table.clone(),
-                                            row_id: self.address.row_id,
-                                            msg: EditorMsg::FootprintSketchPlacePoint {
-                                                x_mm: click_world.0,
-                                                y_mm: click_world.1,
-                                            },
-                                        },
-                                    ));
-                                }
+                                SketchTool::Select => EditorMsg::FootprintSketchSelect {
+                                    id: select_id,
+                                    shift: false,
+                                },
                                 SketchTool::Point => EditorMsg::FootprintSketchPlacePoint {
                                     x_mm: click_world.0,
                                     y_mm: click_world.1,
@@ -536,6 +530,42 @@ fn draw_constraint_icons(
             }
         })
     };
+    fn arc_refs_local(
+        sketch: &signex_sketch::SketchData,
+        id: signex_sketch::id::SketchEntityId,
+    ) -> Option<(
+        signex_sketch::id::SketchEntityId,
+        signex_sketch::id::SketchEntityId,
+        signex_sketch::id::SketchEntityId,
+        bool,
+    )> {
+        sketch
+            .entities
+            .iter()
+            .find(|e| e.id == id)
+            .and_then(|e| match e.kind {
+                signex_sketch::entity::EntityKind::Arc {
+                    center,
+                    start,
+                    end,
+                    sweep_ccw,
+                } => Some((center, start, end, sweep_ccw)),
+                _ => None,
+            })
+    }
+    fn circle_center_local(
+        sketch: &signex_sketch::SketchData,
+        id: signex_sketch::id::SketchEntityId,
+    ) -> Option<signex_sketch::id::SketchEntityId> {
+        sketch
+            .entities
+            .iter()
+            .find(|e| e.id == id)
+            .and_then(|e| match e.kind {
+                signex_sketch::entity::EntityKind::Circle { center, .. } => Some(center),
+                _ => None,
+            })
+    }
 
     for c in &sketch.constraints {
         let (glyph, points): (&str, Vec<SketchEntityId>) = match &c.kind {
@@ -585,10 +615,98 @@ fn draw_constraint_icons(
                 ("L", v)
             }
             ConstraintKind::DistancePtPt { p1, p2, .. } => ("D", vec![*p1, *p2]),
+            ConstraintKind::DistancePtLine { point, line, .. } => {
+                let mut v = vec![*point];
+                if let Some((s, e)) = line_endpoints_local(*line) {
+                    v.push(s);
+                    v.push(e);
+                }
+                ("d", v)
+            }
             ConstraintKind::Fixed { point } => ("\u{1F512}", vec![*point]),
-            // Other constraint kinds get no glyph in v0.13.2 — added
-            // selectively as glyph-design lands.
-            _ => ("", Vec::new()),
+            // v0.13.3 — remaining constraint glyphs.
+            ConstraintKind::PointOnArc { point, arc } => {
+                let mut v = vec![*point];
+                if let Some((c, s, e, _)) = arc_refs_local(sketch, *arc) {
+                    v.extend([c, s, e]);
+                }
+                ("\u{2192}", v) // → "PointOnArc"
+            }
+            ConstraintKind::Angle { l1, l2, .. } => {
+                let mut v = Vec::new();
+                if let Some((s, e)) = line_endpoints_local(*l1) {
+                    v.extend([s, e]);
+                }
+                if let Some((s, e)) = line_endpoints_local(*l2) {
+                    v.extend([s, e]);
+                }
+                ("A", v)
+            }
+            ConstraintKind::EqualLength { l1, l2 } => {
+                let mut v = Vec::new();
+                if let Some((s, e)) = line_endpoints_local(*l1) {
+                    v.extend([s, e]);
+                }
+                if let Some((s, e)) = line_endpoints_local(*l2) {
+                    v.extend([s, e]);
+                }
+                ("=L", v)
+            }
+            ConstraintKind::EqualRadius { e1, e2 } => {
+                let mut v = Vec::new();
+                if let Some((c, _, _, _)) = arc_refs_local(sketch, *e1) {
+                    v.push(c);
+                }
+                if let Some((c, _, _, _)) = arc_refs_local(sketch, *e2) {
+                    v.push(c);
+                }
+                if v.is_empty() {
+                    if let Some(c) = circle_center_local(sketch, *e1) {
+                        v.push(c);
+                    }
+                    if let Some(c) = circle_center_local(sketch, *e2) {
+                        v.push(c);
+                    }
+                }
+                ("=R", v)
+            }
+            ConstraintKind::TangentLineArc { line, arc } => {
+                let mut v = Vec::new();
+                if let Some((s, e)) = line_endpoints_local(*line) {
+                    v.extend([s, e]);
+                }
+                if let Some((c, _, _, _)) = arc_refs_local(sketch, *arc) {
+                    v.push(c);
+                }
+                ("T", v)
+            }
+            ConstraintKind::TangentArcArc { a1, a2, .. } => {
+                let mut v = Vec::new();
+                if let Some((c, _, _, _)) = arc_refs_local(sketch, *a1) {
+                    v.push(c);
+                }
+                if let Some((c, _, _, _)) = arc_refs_local(sketch, *a2) {
+                    v.push(c);
+                }
+                ("TT", v)
+            }
+            ConstraintKind::SymmetricAboutLine { p1, p2, line } => {
+                let mut v = vec![*p1, *p2];
+                if let Some((s, e)) = line_endpoints_local(*line) {
+                    v.extend([s, e]);
+                }
+                ("\u{29C7}", v) // ⧇ "Symmetric"
+            }
+            ConstraintKind::SymmetricAboutPoint { p1, p2, center } => {
+                ("\u{29C7}", vec![*p1, *p2, *center])
+            }
+            ConstraintKind::Midpoint { point, line } => {
+                let mut v = vec![*point];
+                if let Some((s, e)) = line_endpoints_local(*line) {
+                    v.extend([s, e]);
+                }
+                ("M", v)
+            }
         };
         if glyph.is_empty() || points.is_empty() {
             continue;
@@ -621,6 +739,100 @@ fn draw_constraint_icons(
             ..canvas::Text::default()
         });
     }
+}
+
+/// v0.13.3 — Hit-test Lines / Arcs / Circles (everything that isn't
+/// a Point — Points are caught by `sketch_snap`). Returns the
+/// nearest entity within `SKETCH_SNAP_RADIUS_PX`. Used by the
+/// Select tool so the user can grab line / arc / circle entities,
+/// not just Points.
+fn sketch_hit_other(
+    sketch: Option<&signex_sketch::SketchData>,
+    cstate: &FootprintCanvasState,
+    click_world: (f64, f64),
+) -> Option<signex_sketch::id::SketchEntityId> {
+    use signex_sketch::entity::EntityKind;
+    let sketch = sketch?;
+    let click_screen = cstate.world_to_screen(click_world);
+    let radius_sq = SKETCH_SNAP_RADIUS_PX * SKETCH_SNAP_RADIUS_PX;
+    let mut best: Option<(f32, signex_sketch::id::SketchEntityId)> = None;
+
+    let resolve_pt = |id: signex_sketch::id::SketchEntityId| -> Option<(f64, f64)> {
+        sketch
+            .entities
+            .iter()
+            .find(|e| e.id == id)
+            .and_then(|e| match e.kind {
+                EntityKind::Point { x, y } => Some((x, y)),
+                _ => None,
+            })
+    };
+
+    for entity in &sketch.entities {
+        let world_dist_sq = match entity.kind {
+            EntityKind::Line { start, end } => {
+                let s = resolve_pt(start);
+                let e = resolve_pt(end);
+                match (s, e) {
+                    (Some(s), Some(e)) => {
+                        let p0 = cstate.world_to_screen(s);
+                        let p1 = cstate.world_to_screen(e);
+                        screen_dist_to_segment_sq(click_screen, p0, p1)
+                    }
+                    _ => continue,
+                }
+            }
+            EntityKind::Circle { center, radius } => {
+                let c = match resolve_pt(center) {
+                    Some(c) => c,
+                    None => continue,
+                };
+                let centre = cstate.world_to_screen(c);
+                let dx = click_screen.x - centre.x;
+                let dy = click_screen.y - centre.y;
+                let dist = (dx * dx + dy * dy).sqrt();
+                let r_screen = (radius as f32) * cstate.scale;
+                let edge_dist = (dist - r_screen).abs();
+                edge_dist * edge_dist
+            }
+            EntityKind::Arc { center, .. } => {
+                let c = match resolve_pt(center) {
+                    Some(c) => c,
+                    None => continue,
+                };
+                let centre = cstate.world_to_screen(c);
+                let dx = click_screen.x - centre.x;
+                let dy = click_screen.y - centre.y;
+                dx * dx + dy * dy
+            }
+            EntityKind::Point { .. } => continue,
+        };
+        if world_dist_sq <= radius_sq {
+            match best {
+                Some((b, _)) if b <= world_dist_sq => {}
+                _ => best = Some((world_dist_sq, entity.id)),
+            }
+        }
+    }
+    best.map(|(_, id)| id)
+}
+
+fn screen_dist_to_segment_sq(p: Point, a: Point, b: Point) -> f32 {
+    let abx = b.x - a.x;
+    let aby = b.y - a.y;
+    let len_sq = abx * abx + aby * aby;
+    if len_sq < 1e-6 {
+        let dx = p.x - a.x;
+        let dy = p.y - a.y;
+        return dx * dx + dy * dy;
+    }
+    let t = ((p.x - a.x) * abx + (p.y - a.y) * aby) / len_sq;
+    let t = t.clamp(0.0, 1.0);
+    let qx = a.x + abx * t;
+    let qy = a.y + aby * t;
+    let dx = p.x - qx;
+    let dy = p.y - qy;
+    dx * dx + dy * dy
 }
 
 /// v0.13.2 — Snap radius in screen pixels. A click within this

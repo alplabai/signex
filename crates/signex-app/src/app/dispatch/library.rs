@@ -3913,6 +3913,10 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintSketchSetTool(_)
         | PrimitiveEditorMsg::FootprintSketchToolClick { .. }
         | PrimitiveEditorMsg::FootprintSketchToolEscape
+        | PrimitiveEditorMsg::FootprintSketchSelect { .. }
+        | PrimitiveEditorMsg::FootprintSketchMovePoint { .. }
+        | PrimitiveEditorMsg::FootprintSketchAddConstraintForSelection(_)
+        | PrimitiveEditorMsg::FootprintSketchDimensionInput(_)
         | PrimitiveEditorMsg::Save => {}
     }
 }
@@ -4160,6 +4164,175 @@ pub(crate) fn apply_footprint_primitive_edit(
             editor.state.tool_pending =
                 crate::library::editor::footprint::state::ToolPending::Idle;
             editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintSketchSelect { id, shift } => {
+            // None clears both selection slots. Some(id) without
+            // shift replaces primary; with shift adds to secondary
+            // (or replaces secondary with the new id).
+            match (id, shift) {
+                (None, _) => {
+                    editor.state.selected_sketch = None;
+                    editor.state.selected_sketch_secondary = None;
+                }
+                (Some(new_id), false) => {
+                    editor.state.selected_sketch = Some(new_id);
+                    editor.state.selected_sketch_secondary = None;
+                }
+                (Some(new_id), true) => {
+                    if editor.state.selected_sketch.is_none() {
+                        editor.state.selected_sketch = Some(new_id);
+                    } else if editor.state.selected_sketch != Some(new_id) {
+                        editor.state.selected_sketch_secondary = Some(new_id);
+                    }
+                }
+            }
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintSketchMovePoint { id, dx, dy } => {
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit;
+            use crate::library::editor::footprint::sketch_mode::SketchEdit;
+            let _ = apply_sketch_edit(
+                &mut editor.state,
+                &mut editor.primitive,
+                SketchEdit::MovePoint { id, dx, dy },
+            );
+            editor.canvas_cache.clear();
+            editor.dirty = true;
+        }
+        PrimitiveEditorMsg::FootprintSketchDimensionInput(s) => {
+            editor.state.dimension_input = s;
+        }
+        PrimitiveEditorMsg::FootprintSketchAddConstraintForSelection(tag) => {
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit;
+            use crate::library::editor::footprint::sketch_mode::SketchEdit;
+            use crate::library::messages::SketchConstraintTag;
+            use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
+            use signex_sketch::id::ConstraintId;
+
+            let primary = editor.state.selected_sketch;
+            let secondary = editor.state.selected_sketch_secondary;
+            let dim_target = editor
+                .state
+                .dimension_input
+                .trim()
+                .parse::<f64>()
+                .ok()
+                .map(DimTarget::Literal);
+
+            // Determine selected entity kinds (Point / Line / Arc / Circle)
+            // by inspecting the sketch.
+            let kind_of = |id: signex_sketch::id::SketchEntityId| -> Option<&'static str> {
+                use signex_sketch::entity::EntityKind;
+                editor
+                    .primitive
+                    .sketch
+                    .as_ref()?
+                    .entities
+                    .iter()
+                    .find(|e| e.id == id)
+                    .map(|e| match e.kind {
+                        EntityKind::Point { .. } => "Point",
+                        EntityKind::Line { .. } => "Line",
+                        EntityKind::Arc { .. } => "Arc",
+                        EntityKind::Circle { .. } => "Circle",
+                    })
+            };
+            let p_kind = primary.and_then(kind_of);
+            let s_kind = secondary.and_then(kind_of);
+
+            let new_kind: Option<ConstraintKind> = match (tag, p_kind, s_kind, primary, secondary) {
+                (SketchConstraintTag::Fixed, Some("Point"), _, Some(p), _) => {
+                    Some(ConstraintKind::Fixed { point: p })
+                }
+                (
+                    SketchConstraintTag::Coincident,
+                    Some("Point"),
+                    Some("Point"),
+                    Some(p1),
+                    Some(p2),
+                ) => Some(ConstraintKind::Coincident { p1, p2 }),
+                (
+                    SketchConstraintTag::DistancePtPt,
+                    Some("Point"),
+                    Some("Point"),
+                    Some(p1),
+                    Some(p2),
+                ) => dim_target.map(|t| ConstraintKind::DistancePtPt {
+                    p1,
+                    p2,
+                    target: t,
+                }),
+                (SketchConstraintTag::Horizontal, Some("Line"), _, Some(l), _) => {
+                    Some(ConstraintKind::Horizontal { line: l })
+                }
+                (SketchConstraintTag::Vertical, Some("Line"), _, Some(l), _) => {
+                    Some(ConstraintKind::Vertical { line: l })
+                }
+                (
+                    SketchConstraintTag::Parallel,
+                    Some("Line"),
+                    Some("Line"),
+                    Some(l1),
+                    Some(l2),
+                ) => Some(ConstraintKind::Parallel { l1, l2 }),
+                (
+                    SketchConstraintTag::Perpendicular,
+                    Some("Line"),
+                    Some("Line"),
+                    Some(l1),
+                    Some(l2),
+                ) => Some(ConstraintKind::Perpendicular { l1, l2 }),
+                (
+                    SketchConstraintTag::EqualLength,
+                    Some("Line"),
+                    Some("Line"),
+                    Some(l1),
+                    Some(l2),
+                ) => Some(ConstraintKind::EqualLength { l1, l2 }),
+                (
+                    SketchConstraintTag::PointOnLine,
+                    Some("Point"),
+                    Some("Line"),
+                    Some(p),
+                    Some(l),
+                ) => Some(ConstraintKind::PointOnLine { point: p, line: l }),
+                (
+                    SketchConstraintTag::PointOnLine,
+                    Some("Line"),
+                    Some("Point"),
+                    Some(l),
+                    Some(p),
+                ) => Some(ConstraintKind::PointOnLine { point: p, line: l }),
+                (
+                    SketchConstraintTag::Midpoint,
+                    Some("Point"),
+                    Some("Line"),
+                    Some(p),
+                    Some(l),
+                ) => Some(ConstraintKind::Midpoint { point: p, line: l }),
+                (
+                    SketchConstraintTag::Midpoint,
+                    Some("Line"),
+                    Some("Point"),
+                    Some(l),
+                    Some(p),
+                ) => Some(ConstraintKind::Midpoint { point: p, line: l }),
+                _ => None,
+            };
+
+            if let Some(kind) = new_kind {
+                let constraint = Constraint {
+                    id: ConstraintId::new(),
+                    kind,
+                };
+                let _ = apply_sketch_edit(
+                    &mut editor.state,
+                    &mut editor.primitive,
+                    SketchEdit::AddConstraint(constraint),
+                );
+                editor.dirty = true;
+                editor.canvas_cache.clear();
+            }
         }
         PrimitiveEditorMsg::FootprintSketchToolClick { x_mm, y_mm, snap_id } => {
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit;
@@ -4752,6 +4925,8 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::FootprintSketchPlacePoint { .. }
         | EditorMsg::FootprintSketchToolClick { .. }
         | EditorMsg::FootprintSketchToolEscape
+        | EditorMsg::FootprintSketchSelect { .. }
+        | EditorMsg::FootprintSketchMovePoint { .. }
         | EditorMsg::FootprintMovePad { .. }
         | EditorMsg::FootprintCursorAt { .. }
         | EditorMsg::FootprintSelectPad(_)

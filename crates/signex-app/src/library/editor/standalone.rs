@@ -622,6 +622,12 @@ fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEditorMsg {
             snap_id,
         },
         EditorMsg::FootprintSketchToolEscape => PrimitiveEditorMsg::FootprintSketchToolEscape,
+        EditorMsg::FootprintSketchSelect { id, shift } => {
+            PrimitiveEditorMsg::FootprintSketchSelect { id, shift }
+        }
+        EditorMsg::FootprintSketchMovePoint { id, dx, dy } => {
+            PrimitiveEditorMsg::FootprintSketchMovePoint { id, dx, dy }
+        }
         EditorMsg::FootprintMovePad { idx, x_mm, y_mm } => {
             PrimitiveEditorMsg::FootprintMovePad { idx, x_mm, y_mm }
         }

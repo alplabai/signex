@@ -721,6 +721,17 @@ pub enum EditorMsg {
     /// v0.13.2 — Escape during a multi-click gesture; clears
     /// `tool_pending` without emitting a SketchEdit.
     FootprintSketchToolEscape,
+    /// v0.13.3 — Sketch entity selection from canvas. `None` = clear.
+    FootprintSketchSelect {
+        id: Option<signex_sketch::id::SketchEntityId>,
+        shift: bool,
+    },
+    /// v0.13.3 — Drag-move a Point entity by `(dx, dy)` mm.
+    FootprintSketchMovePoint {
+        id: signex_sketch::id::SketchEntityId,
+        dx: f64,
+        dy: f64,
+    },
     /// Select / deselect a pad. `None` deselects everything.
     FootprintSelectPad(Option<usize>),
     /// Delete-key — remove the currently-selected pad.
@@ -906,6 +917,35 @@ pub enum SymbolToolMsg {
     PlaceCircle,
     PlaceArc,
     PlaceText,
+}
+
+/// v0.13.3 — selection-aware constraint kind tag. The dispatcher
+/// resolves these against the editor's primary + secondary
+/// selection slots into the matching `ConstraintKind` and emits the
+/// SketchEdit. Tags that don't apply to the current selection are
+/// no-ops in the dispatcher.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SketchConstraintTag {
+    /// 1 Point selected → fix it in place.
+    Fixed,
+    /// 2 Points selected → make them coincident.
+    Coincident,
+    /// 2 Points selected + dimension input → DistancePtPt(target_mm).
+    DistancePtPt,
+    /// 1 Line selected → horizontal.
+    Horizontal,
+    /// 1 Line selected → vertical.
+    Vertical,
+    /// 2 Lines selected → parallel.
+    Parallel,
+    /// 2 Lines selected → perpendicular.
+    Perpendicular,
+    /// 2 Lines selected → equal length.
+    EqualLength,
+    /// 1 Point + 1 Line selected → point on line.
+    PointOnLine,
+    /// 1 Point + 1 Line selected → midpoint.
+    Midpoint,
 }
 
 /// Selection target on the Symbol canvas — pure-data version of
@@ -1112,6 +1152,31 @@ pub enum PrimitiveEditorMsg {
     /// v0.13.2 — Escape during a multi-click gesture: discard
     /// `tool_pending` without emitting a SketchEdit.
     FootprintSketchToolEscape,
+
+    // ── v0.13.3 — selection / constraint submenu / dimension ──
+    /// v0.13.3 — Select a sketch entity. `None` clears the selection;
+    /// `Some(id, false)` replaces the primary selection;
+    /// `Some(id, true)` adds to the secondary selection slot.
+    FootprintSketchSelect {
+        id: Option<signex_sketch::id::SketchEntityId>,
+        shift: bool,
+    },
+    /// v0.13.3 — Drag-move a Point entity by `(dx, dy)` in mm. Fires
+    /// from the canvas while the user drags a selected Point in
+    /// Sketch mode. Emits `SketchEdit::MovePoint`.
+    FootprintSketchMovePoint {
+        id: signex_sketch::id::SketchEntityId,
+        dx: f64,
+        dy: f64,
+    },
+    /// v0.13.3 — Add a constraint based on the current selection.
+    /// The inspector's selection-aware submenu emits a `Tag` that
+    /// the dispatcher maps into the appropriate `ConstraintKind`
+    /// using `selected_sketch` + `selected_sketch_secondary`.
+    FootprintSketchAddConstraintForSelection(SketchConstraintTag),
+    /// v0.13.3 — Inline numeric input for the Dimension tool /
+    /// editable Distance value. Updates `state.dimension_input`.
+    FootprintSketchDimensionInput(String),
 
     // ── Save ───────────────────────────────────────────────
     /// Explicit "Save this primitive tab to disk" — fires from the
