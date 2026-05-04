@@ -543,6 +543,49 @@ work in flight:
 - Bake modules drop the v0.14.1 "deferred" warnings; tests
   rewritten to assert the baked field values.
 
+### v0.16 (2026-05-04) — drag Points + Rounded Rectangle + pad-as-rectangle
+
+Three deliverables on top of v0.15:
+
+1. **Drag-to-move sketch Points** — Sketch mode + Select tool now
+   hit-tests Point entities on left-press; a successful hit starts a
+   drag that publishes `FootprintSketchMovePoint { id, dx, dy }` per
+   CursorMoved tick (delta from `last_world` so each tick advances by
+   exactly the cursor delta). Press → select + start drag, Move →
+   per-tick move publish, Release → consume drag. Bidirectional pad
+   moves piggyback on the existing `bake_pads` re-run inside
+   `apply_sketch_edit_with_warnings`: when a Point with a `PadAttr`
+   moves, the next solve regenerates the pad at the new position.
+
+2. **Rounded Rectangle sketch tool** — new `SketchTool::RoundedRectangle`
+   variant + `ToolPending::RoundedRectangleFirst { first }`. Two-click
+   flow (corner + opposite corner) reads the corner radius from
+   `dimension_input` (default 0.5 mm, clamped to
+   `[0.05, min(half_w, half_h)]`). Commits 12 Points (4 arc centres +
+   8 arc-end / line-end), 4 axis-aligned Lines (shortened by `r`), and
+   4 Arcs (one per corner, sweep CCW). Live ghost preview in
+   `draw_sketch_tool_preview` traces all 4 lines + 4 arcs against the
+   cursor as the user moves before clicking the second corner. Active
+   bar gains a tooltip-labelled `▢` glyph between Rectangle and
+   Circle.
+
+3. **Pad-as-editable-rectangle in Sketch mode** —
+   `EditorPad.corner_entity_ids: Option<[SketchEntityId; 4]>` plus 4
+   construction-flagged corner Points + 4 construction-flagged
+   outline Lines per pad. `auto_mint_for_literal_pads` /
+   `mirror_add_pad_to_sketch` mint them; `mirror_move_pad_in_sketch`
+   reposition them on Pads-mode pad drags;
+   `mirror_delete_pad_from_sketch` drops the corners + their connecting
+   Lines together with the centre. Bake unaffected — `signex-bake`
+   already skips construction entities. Pad outlines now appear as
+   first-class primitives the user can pick / hover in Sketch mode;
+   resizing-by-dragging-a-corner is queued for v0.16.1.
+
+Test updates: `pad_to_sketch::tests` entity-count assertions adjusted
+(per-pad: 1 centre + 4 corners + 4 lines = 9; pre-v0.16 tests assumed
+1). All 9 module tests pass; full `cargo test -p signex-app` green
+(110 lib + 3 integration, all green).
+
 ### v0.15 deferred to v0.15.1+ / v0.16+
 
 - **Stock library** — bundle ~5-10 reference parametric `.snxfpt`

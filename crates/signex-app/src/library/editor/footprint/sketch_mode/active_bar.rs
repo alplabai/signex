@@ -141,6 +141,13 @@ pub fn items<'a>(
             ActiveBarIcon::Svg(icons::icon_shape_rect(theme_id)),
         ),
         mk_tool(
+            "Place Rounded Rectangle (corner + opposite corner; radius from dim input)",
+            SketchTool::RoundedRectangle,
+            // No bespoke icon yet — show a glyph that hints at the
+            // shape until the per-theme registry gains a rrect entry.
+            ActiveBarIcon::Glyph("\u{25A2}"), // ▢
+        ),
+        mk_tool(
             "Place Circle (centre + radius)",
             SketchTool::Circle,
             ActiveBarIcon::Svg(icons::icon_shape_circle(theme_id)),

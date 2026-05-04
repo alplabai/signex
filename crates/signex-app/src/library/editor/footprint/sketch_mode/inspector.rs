@@ -131,11 +131,15 @@ fn view_tool_palette<'a>(
             SketchTool::Point => "click to place".into(),
             SketchTool::Line => "click first endpoint".into(),
             SketchTool::Rectangle => "click first corner".into(),
+            SketchTool::RoundedRectangle => "click first corner (radius from input)".into(),
             SketchTool::Circle => "click centre".into(),
             SketchTool::Arc => "click centre".into(),
         },
         ToolPending::LineFirst { .. } => "click second endpoint (Esc to cancel)".into(),
         ToolPending::RectangleFirst { .. } => "click opposite corner (Esc to cancel)".into(),
+        ToolPending::RoundedRectangleFirst { .. } => {
+            "click opposite corner (Esc to cancel)".into()
+        }
         ToolPending::CircleCenter { .. } => "click radius point (Esc to cancel)".into(),
         ToolPending::ArcCenter { .. } => "click start (Esc to cancel)".into(),
         ToolPending::ArcStart { .. } => "click end (Esc to cancel)".into(),

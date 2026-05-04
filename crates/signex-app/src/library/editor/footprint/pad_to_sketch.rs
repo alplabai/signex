@@ -74,6 +74,12 @@ pub fn auto_mint_for_literal_pads(
         sketch.entities.push(entity);
         // v0.15 — link the editor pad to its backing sketch entity.
         pad.sketch_entity_id = Some(entity_id);
+        // v0.16 — also mint 4 outline-corner Points + 4 Lines as
+        // construction so the user sees the pad outline as
+        // primitives in Sketch mode. `bake_pads` ignores construction
+        // entities so this stays purely visual.
+        let corners = mint_pad_corner_outline(sketch, plane_id, pad);
+        pad.corner_entity_ids = Some(corners);
         minted += 1;
     }
     minted
@@ -105,6 +111,9 @@ pub fn mirror_add_pad_to_sketch(pad: &mut EditorPad, footprint: &mut Footprint) 
     entity.pad = Some(pad_attr_from_editor_pad(pad));
     sketch.entities.push(entity);
     pad.sketch_entity_id = Some(entity_id);
+    // v0.16 — outline-corner Points + Lines, construction-only.
+    let corners = mint_pad_corner_outline(sketch, plane_id, pad);
+    pad.corner_entity_ids = Some(corners);
 }
 
 /// v0.15 — when a pad moves in Pads mode (drag), update its backing
@@ -123,6 +132,25 @@ pub fn mirror_move_pad_in_sketch(pad: &EditorPad, footprint: &mut Footprint) {
             *y = pad.position_mm.1;
         }
     }
+    // v0.16 — also reposition the outline-corner Points so the
+    // construction outline tracks the pad bbox.
+    if let Some(corners) = pad.corner_entity_ids {
+        let bbox = pad.bbox_mm();
+        let positions: [(f64, f64); 4] = [
+            (bbox.2, bbox.1), // ne
+            (bbox.2, bbox.3), // se
+            (bbox.0, bbox.3), // sw
+            (bbox.0, bbox.1), // nw
+        ];
+        for (id, (px, py)) in corners.iter().zip(positions.iter()) {
+            if let Some(entity) = sketch.entities.iter_mut().find(|e| e.id == *id) {
+                if let EntityKind::Point { x, y } = &mut entity.kind {
+                    *x = *px;
+                    *y = *py;
+                }
+            }
+        }
+    }
 }
 
 /// v0.15 — when a pad is deleted in Pads mode, also drop its
@@ -135,7 +163,27 @@ pub fn mirror_delete_pad_from_sketch(pad: &EditorPad, footprint: &mut Footprint)
     let Some(sketch) = footprint.sketch.as_mut() else {
         return;
     };
-    sketch.entities.retain(|e| e.id != entity_id);
+    // v0.16 — collect the corner-outline entity IDs so we can drop
+    // the construction Points + the Lines connecting them. Lines
+    // reference the corner Points by ID; we drop any Line whose
+    // start or end is one of the dropped corner IDs.
+    let mut to_drop: Vec<SketchEntityId> = vec![entity_id];
+    if let Some(corners) = pad.corner_entity_ids {
+        to_drop.extend_from_slice(&corners);
+    }
+    let drop_set: std::collections::HashSet<SketchEntityId> =
+        to_drop.iter().copied().collect();
+    sketch.entities.retain(|e| {
+        if drop_set.contains(&e.id) {
+            return false;
+        }
+        if let EntityKind::Line { start, end } = e.kind {
+            if drop_set.contains(&start) || drop_set.contains(&end) {
+                return false;
+            }
+        }
+        true
+    });
     // Drop dangling constraint refs — coarse rule via Debug
     // stringification (mirrors the SketchEdit::DeleteEntity path in
     // sketch_dispatch.rs).
@@ -143,6 +191,55 @@ pub fn mirror_delete_pad_from_sketch(pad: &EditorPad, footprint: &mut Footprint)
     sketch
         .constraints
         .retain(|c| !format!("{:?}", c.kind).contains(&id_str));
+}
+
+/// v0.16 — mint 4 corner Points + 4 Lines outlining a pad's bbox.
+/// Returns the corner IDs in `[ne, se, sw, nw]` order so the caller
+/// can store them on `EditorPad.corner_entity_ids` and reposition
+/// them on later pad moves. Both the corner Points and the Lines
+/// connecting them are flagged `construction = true` so
+/// `signex_bake::bake_pads` skips them and they don't double up the
+/// rendered pad geometry.
+fn mint_pad_corner_outline(
+    sketch: &mut SketchData,
+    plane_id: PlaneId,
+    pad: &EditorPad,
+) -> [SketchEntityId; 4] {
+    let bbox = pad.bbox_mm();
+    let positions: [(f64, f64); 4] = [
+        (bbox.2, bbox.1), // ne
+        (bbox.2, bbox.3), // se
+        (bbox.0, bbox.3), // sw
+        (bbox.0, bbox.1), // nw
+    ];
+    let ids: [SketchEntityId; 4] = [
+        SketchEntityId::new(),
+        SketchEntityId::new(),
+        SketchEntityId::new(),
+        SketchEntityId::new(),
+    ];
+    for (id, (x, y)) in ids.iter().zip(positions.iter()) {
+        let mut e = Entity::new(*id, plane_id, EntityKind::Point { x: *x, y: *y });
+        e.construction = true;
+        sketch.entities.push(e);
+    }
+    // 4 Lines around the loop — N (ne→nw), W (nw→sw), S (sw→se),
+    // E (se→ne). Construction-only.
+    for (a, b) in [
+        (ids[0], ids[3]),
+        (ids[3], ids[2]),
+        (ids[2], ids[1]),
+        (ids[1], ids[0]),
+    ] {
+        let mut line = Entity::new(
+            SketchEntityId::new(),
+            plane_id,
+            EntityKind::Line { start: a, end: b },
+        );
+        line.construction = true;
+        sketch.entities.push(line);
+    }
+    ids
 }
 
 fn ensure_board_top_plane(footprint: &mut Footprint) -> PlaneId {
@@ -277,12 +374,23 @@ mod tests {
         let n = auto_mint_for_literal_pads(&mut pads, &mut fp);
         assert_eq!(n, 3);
         let sketch = fp.sketch.as_ref().unwrap();
-        // 1 plane + 3 entities (one Point each).
+        // 1 plane.
         assert_eq!(sketch.planes.len(), 1);
-        assert_eq!(sketch.entities.len(), 3);
-        for entity in &sketch.entities {
+        // v0.16 — per pad: 1 centre Point + 4 corner Points + 4
+        // outline Lines = 9 entities. 3 pads × 9 = 27.
+        assert_eq!(sketch.entities.len(), 27);
+        // The 3 PadAttr-carrying centres should still match v0.15
+        // expectations.
+        let attr_carriers: Vec<&Entity> = sketch
+            .entities
+            .iter()
+            .filter(|e| e.pad.is_some())
+            .collect();
+        assert_eq!(attr_carriers.len(), 3);
+        for entity in attr_carriers {
             assert!(matches!(entity.kind, EntityKind::Point { .. }));
-            let attr = entity.pad.as_ref().expect("Point should carry PadAttr");
+            assert!(!entity.construction);
+            let attr = entity.pad.as_ref().unwrap();
             assert!(!attr.number.is_empty());
             assert_eq!(attr.size_x_expr, "1mm");
             assert_eq!(attr.size_y_expr, "0.5mm");
@@ -290,6 +398,7 @@ mod tests {
         // v0.15: every pad should now carry the minted entity ID.
         for pad in &pads {
             assert!(pad.sketch_entity_id.is_some());
+            assert!(pad.corner_entity_ids.is_some());
         }
     }
 
@@ -341,9 +450,11 @@ mod tests {
         let mut pads = vec![editor_pad("1", 0.0, 0.0)];
         let n = auto_mint_for_literal_pads(&mut pads, &mut fp);
         assert_eq!(n, 1);
-        // Construction entity preserved + 1 minted pad point = 2 total.
-        assert_eq!(fp.sketch.as_ref().unwrap().entities.len(), 2);
+        // v0.16 — pre-existing construction entity (1) + minted
+        // centre (1) + 4 corner Points + 4 outline Lines = 10.
+        assert_eq!(fp.sketch.as_ref().unwrap().entities.len(), 10);
         assert!(pads[0].sketch_entity_id.is_some());
+        assert!(pads[0].corner_entity_ids.is_some());
     }
 
     #[test]
@@ -402,8 +513,11 @@ mod tests {
         let mut fp = Footprint::empty("test");
         let mut pad = editor_pad("X", 0.0, 0.0);
         mirror_add_pad_to_sketch(&mut pad, &mut fp);
-        assert_eq!(fp.sketch.as_ref().unwrap().entities.len(), 1);
+        // v0.16 — 1 centre + 4 corners + 4 lines = 9.
+        assert_eq!(fp.sketch.as_ref().unwrap().entities.len(), 9);
         mirror_delete_pad_from_sketch(&pad, &mut fp);
+        // Drop the centre + corners + outline lines that referenced
+        // the dropped corners → 0 left.
         assert_eq!(fp.sketch.as_ref().unwrap().entities.len(), 0);
     }
 

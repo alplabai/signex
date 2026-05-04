@@ -4557,6 +4557,145 @@ pub(crate) fn apply_footprint_primitive_edit(
                         };
                     }
                 },
+                SketchTool::RoundedRectangle => match editor.state.tool_pending {
+                    ToolPending::Idle => {
+                        editor.state.tool_pending = ToolPending::RoundedRectangleFirst {
+                            first: resolved_id,
+                        };
+                    }
+                    ToolPending::RoundedRectangleFirst { first } => {
+                        // v0.16 — commit the rounded rectangle. Read
+                        // first/opposite corner positions, derive the
+                        // axis-aligned bbox, clamp the corner radius,
+                        // and emit 4 arc-centre Points + 8 arc-end /
+                        // line-end Points + 4 Lines (axis-aligned,
+                        // shortened by the radius) + 4 Arcs (one per
+                        // corner, sweep CCW around the centre).
+                        let first_pos = editor
+                            .primitive
+                            .sketch
+                            .as_ref()
+                            .and_then(|s| s.entities.iter().find(|e| e.id == first))
+                            .and_then(|e| match e.kind {
+                                EntityKind::Point { x, y } => Some((x, y)),
+                                _ => None,
+                            });
+                        let opposite_pos = editor
+                            .primitive
+                            .sketch
+                            .as_ref()
+                            .and_then(|s| s.entities.iter().find(|e| e.id == resolved_id))
+                            .and_then(|e| match e.kind {
+                                EntityKind::Point { x, y } => Some((x, y)),
+                                _ => None,
+                            });
+                        if let (Some((fx, fy)), Some((ox, oy))) = (first_pos, opposite_pos) {
+                            let x0 = fx.min(ox);
+                            let y0 = fy.min(oy);
+                            let x1 = fx.max(ox);
+                            let y1 = fy.max(oy);
+                            let half_w = (x1 - x0) / 2.0;
+                            let half_h = (y1 - y0) / 2.0;
+                            // Read corner radius from dimension input;
+                            // default 0.5 mm, clamp to [0.05, half_min].
+                            let r_input = editor
+                                .state
+                                .dimension_input
+                                .trim()
+                                .parse::<f64>()
+                                .ok()
+                                .unwrap_or(0.5);
+                            let r_max = half_w.min(half_h).max(0.05);
+                            let r = r_input.clamp(0.05, r_max);
+
+                            let tl_c = SketchEntityId::new();
+                            let tr_c = SketchEntityId::new();
+                            let br_c = SketchEntityId::new();
+                            let bl_c = SketchEntityId::new();
+                            let tl_right = SketchEntityId::new();
+                            let tr_left = SketchEntityId::new();
+                            let tr_top = SketchEntityId::new();
+                            let br_top = SketchEntityId::new();
+                            let br_right = SketchEntityId::new();
+                            let bl_left = SketchEntityId::new();
+                            let bl_bot = SketchEntityId::new();
+                            let tl_bot = SketchEntityId::new();
+
+                            for (id, x, y) in [
+                                (tl_c, x0 + r, y0 + r),
+                                (tr_c, x1 - r, y0 + r),
+                                (br_c, x1 - r, y1 - r),
+                                (bl_c, x0 + r, y1 - r),
+                                (tl_right, x0 + r, y0),
+                                (tr_left, x1 - r, y0),
+                                (tr_top, x1, y0 + r),
+                                (br_top, x1, y1 - r),
+                                (br_right, x1 - r, y1),
+                                (bl_left, x0 + r, y1),
+                                (bl_bot, x0, y1 - r),
+                                (tl_bot, x0, y0 + r),
+                            ] {
+                                apply_sketch_edit_with_warnings(
+                                    &mut editor.state,
+                                    &mut editor.primitive,
+                                    SketchEdit::AddEntity(Entity::new(
+                                        id,
+                                        plane_id,
+                                        EntityKind::Point { x, y },
+                                    )),
+                                );
+                            }
+                            // Lines: top, right, bottom, left.
+                            for (s, e) in [
+                                (tl_right, tr_left),
+                                (tr_top, br_top),
+                                (br_right, bl_left),
+                                (bl_bot, tl_bot),
+                            ] {
+                                let line_id = SketchEntityId::new();
+                                apply_sketch_edit_with_warnings(
+                                    &mut editor.state,
+                                    &mut editor.primitive,
+                                    SketchEdit::AddEntity(Entity::new(
+                                        line_id,
+                                        plane_id,
+                                        EntityKind::Line { start: s, end: e },
+                                    )),
+                                );
+                            }
+                            // Arcs: TR, BR, BL, TL — sweep CCW around
+                            // each centre so each subtends 90°.
+                            for (center, start, end) in [
+                                (tr_c, tr_left, tr_top),
+                                (br_c, br_top, br_right),
+                                (bl_c, bl_left, bl_bot),
+                                (tl_c, tl_bot, tl_right),
+                            ] {
+                                let arc_id = SketchEntityId::new();
+                                apply_sketch_edit_with_warnings(
+                                    &mut editor.state,
+                                    &mut editor.primitive,
+                                    SketchEdit::AddEntity(Entity::new(
+                                        arc_id,
+                                        plane_id,
+                                        EntityKind::Arc {
+                                            center,
+                                            start,
+                                            end,
+                                            sweep_ccw: true,
+                                        },
+                                    )),
+                                );
+                            }
+                        }
+                        editor.state.tool_pending = ToolPending::Idle;
+                    }
+                    _ => {
+                        editor.state.tool_pending = ToolPending::RoundedRectangleFirst {
+                            first: resolved_id,
+                        };
+                    }
+                },
                 SketchTool::Rectangle => match editor.state.tool_pending {
                     ToolPending::Idle => {
                         editor.state.tool_pending = ToolPending::RectangleFirst {

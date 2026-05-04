@@ -42,6 +42,11 @@ pub struct EditorPad {
     /// earlier (the auto-mint on first Sketch entry will populate
     /// these IDs going forward).
     pub sketch_entity_id: Option<signex_sketch::id::SketchEntityId>,
+    /// v0.16 — outline-corner Points minted when the pad enters
+    /// Sketch mode so the user sees / can pick the four corners
+    /// directly. Order: `[ne, se, sw, nw]`. Construction-flagged so
+    /// they're visual-only and don't affect `bake_pads`.
+    pub corner_entity_ids: Option<[signex_sketch::id::SketchEntityId; 4]>,
 }
 
 impl EditorPad {
@@ -58,6 +63,7 @@ impl EditorPad {
                 LayerId::new("F.Paste"),
             ],
             sketch_entity_id: None,
+            corner_entity_ids: None,
         }
     }
 
@@ -91,6 +97,7 @@ impl EditorPad {
             shape: p.shape.clone(),
             layers: p.layers.clone(),
             sketch_entity_id: None,
+            corner_entity_ids: None,
         }
     }
 
@@ -212,7 +219,9 @@ pub enum PadsTool {
 
 /// Sketch-mode drawing tool. Phase 6.3 (v0.13.1) shipped Place Point
 /// only; v0.13.2 adds Line, Circle, Arc; v0.15 adds Rectangle (two-
-/// click corner-to-corner; emits 4 Lines + corner Points).
+/// click corner-to-corner; emits 4 Lines + corner Points). v0.16 adds
+/// RoundedRectangle (two-click corner-to-corner with corner radius
+/// from `dimension_input`; emits 4 Points + 4 Lines + 4 Arcs).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SketchTool {
     #[default]
@@ -220,6 +229,7 @@ pub enum SketchTool {
     Point,
     Line,
     Rectangle,
+    RoundedRectangle,
     Circle,
     Arc,
 }
@@ -241,6 +251,14 @@ pub enum ToolPending {
     /// v0.15. Click 2 commits the opposite corner; the dispatcher
     /// adds 4 Lines + 2 new corner Points (opposite + 2 mid-axis).
     RectangleFirst {
+        first: signex_sketch::id::SketchEntityId,
+    },
+    /// Rounded-Rectangle tool, first corner click landed. v0.16.
+    /// Click 2 commits the opposite corner; the dispatcher emits 4
+    /// corner-of-rect Points + 4 Lines (axis-aligned, shortened by
+    /// the corner radius) + 4 Arcs (one per corner). Radius reads
+    /// from `dimension_input` (defaults to 0.5 mm if blank).
+    RoundedRectangleFirst {
         first: signex_sketch::id::SketchEntityId,
     },
     /// Circle tool, centre click landed.

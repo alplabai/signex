@@ -57,10 +57,25 @@ pub struct FootprintCanvasState {
 
 #[derive(Debug, Clone, Copy)]
 struct DragState {
+    /// `usize::MAX` for "click on empty canvas" (used by tools that
+    /// need a release event to commit, like Place Pad in Pads mode
+    /// and the click-add-Point fallback in Sketch mode). Otherwise
+    /// the index into `state.pads`.
     pad_idx: usize,
-    /// World-mm offset between the drag origin and the pad centre.
-    /// Subtract from cursor position to get the pad's new centre.
+    /// v0.16 — `Some(id)` when the drag originated on a sketch
+    /// `Point` entity. Active in Sketch mode + Select tool;
+    /// per-tick CursorMoved publishes `FootprintSketchMovePoint`
+    /// with the world-mm delta.
+    sketch_point: Option<signex_sketch::id::SketchEntityId>,
+    /// World-mm offset between the drag origin and the pad/Point
+    /// centre. Subtract from cursor position to get the pad's new
+    /// centre OR (for sketch Point drags) compute the per-tick
+    /// delta `(world - grab_offset_mm) - last_pos`.
     grab_offset_mm: (f64, f64),
+    /// World-mm position from the previous CursorMoved tick — used
+    /// by sketch-Point drags to compute the per-tick delta the
+    /// dispatcher's `FootprintSketchMovePoint` handler expects.
+    last_world: (f64, f64),
     /// Screen-pixel position the press started at. Used to gate
     /// "did this drag actually move?".
     press_screen: Point,
@@ -259,14 +274,52 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     && let Some(cursor_pos) = cursor.position_in(bounds)
                 {
                     let world = cstate.screen_to_world(cursor_pos);
+                    // v0.16 — Sketch mode + Select tool: hit-test
+                    // sketch Point entities first so the user can
+                    // drag the auto-minted pad-backing Points (and,
+                    // in future, any free Point) directly. Lines /
+                    // Arcs / Circles fall through to the click-route
+                    // path on release.
+                    use crate::library::editor::footprint::state::{
+                        EditorMode as _EM, SketchTool as _ST,
+                    };
+                    if matches!(self.state.mode, _EM::Sketch)
+                        && self.state.active_tool == _ST::Select
+                        && let Some(point_id) = sketch_snap(self.sketch, cstate, world)
+                    {
+                        cstate.drag = Some(DragState {
+                            pad_idx: usize::MAX,
+                            sketch_point: Some(point_id),
+                            grab_offset_mm: (0.0, 0.0),
+                            last_world: world,
+                            press_screen: cursor_pos,
+                            moved: false,
+                        });
+                        // Publish a select so the inspector + DOF
+                        // overlay highlight this Point immediately.
+                        return Some(
+                            canvas::Action::publish(LibraryMessage::EditorEvent {
+                                library_path: self.address.library_path.clone(),
+                                table: self.address.table.clone(),
+                                row_id: self.address.row_id,
+                                msg: EditorMsg::FootprintSketchSelect {
+                                    id: Some(point_id),
+                                    shift: false,
+                                },
+                            })
+                            .and_capture(),
+                        );
+                    }
                     if let Some(pad_idx) = self.state.pad_at(world.0, world.1) {
                         let pad = &self.state.pads[pad_idx];
                         cstate.drag = Some(DragState {
                             pad_idx,
+                            sketch_point: None,
                             grab_offset_mm: (
                                 world.0 - pad.position_mm.0,
                                 world.1 - pad.position_mm.1,
                             ),
+                            last_world: world,
                             press_screen: cursor_pos,
                             moved: false,
                         });
@@ -286,7 +339,9 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     // because a drag may follow; commit on release.
                     cstate.drag = Some(DragState {
                         pad_idx: usize::MAX,
+                        sketch_point: None,
                         grab_offset_mm: (world.0, world.1),
+                        last_world: world,
                         press_screen: cursor_pos,
                         moved: false,
                     });
@@ -302,6 +357,16 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 if *button == mouse::Button::Left
                     && let Some(drag) = cstate.drag.take()
                 {
+                    // v0.16 — sketch-Point drag releases here. The
+                    // press handler already published the select and
+                    // CursorMoved has been streaming
+                    // FootprintSketchMovePoint per tick; release just
+                    // ends the drag, no commit needed. Clear the
+                    // cache so the final solved frame renders.
+                    if drag.sketch_point.is_some() {
+                        self.cache.clear();
+                        return None;
+                    }
                     if drag.pad_idx == usize::MAX {
                         if drag.moved {
                             // Cancelled click-add — drag in empty
@@ -341,6 +406,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 },
                                 SketchTool::Line
                                 | SketchTool::Rectangle
+                                | SketchTool::RoundedRectangle
                                 | SketchTool::Circle
                                 | SketchTool::Arc => {
                                     EditorMsg::FootprintSketchToolClick {
@@ -428,6 +494,32 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     let dy = (cursor_pos.y - drag.press_screen.y).abs();
                     if !drag.moved && dx.max(dy) >= DRAG_THRESHOLD_PX {
                         drag.moved = true;
+                    }
+                    // v0.16 — sketch Point drag (Sketch mode + Select
+                    // tool with a hit on a Point entity). Publish a
+                    // per-tick `FootprintSketchMovePoint` with the
+                    // delta since the previous tick, then advance
+                    // `last_world` so successive ticks accumulate
+                    // correctly. The dispatcher's handler also drags
+                    // the matching pad if `sketch_entity_id` is set,
+                    // keeping the bidirectional link in sync.
+                    if drag.moved
+                        && let Some(point_id) = drag.sketch_point
+                    {
+                        let dx_mm = world.0 - drag.last_world.0;
+                        let dy_mm = world.1 - drag.last_world.1;
+                        drag.last_world = world;
+                        self.cache.clear();
+                        return Some(canvas::Action::publish(LibraryMessage::EditorEvent {
+                            library_path: self.address.library_path.clone(),
+                            table: self.address.table.clone(),
+                            row_id: self.address.row_id,
+                            msg: EditorMsg::FootprintSketchMovePoint {
+                                id: point_id,
+                                dx: dx_mm,
+                                dy: dy_mm,
+                            },
+                        }));
                     }
                     if drag.moved && drag.pad_idx != usize::MAX {
                         let new_x = world.0 - drag.grab_offset_mm.0;
@@ -1309,6 +1401,80 @@ fn draw_sketch_tool_preview(
             dashed(frame, p1, p2);
             dashed(frame, p2, p3);
             dashed(frame, p3, p0);
+        }
+        ToolPending::RoundedRectangleFirst { first } => {
+            // v0.16 — preview the rounded rectangle. Compute the bbox
+            // from the first corner + cursor, derive a clamped
+            // corner radius from the dimension input (default 0.5
+            // mm), and stroke 4 dashed line segments + 4 dashed
+            // 90° arcs.
+            let Some(first_world) = resolve_point(first) else {
+                return;
+            };
+            let x0 = first_world.0.min(cursor.0);
+            let y0 = first_world.1.min(cursor.1);
+            let x1 = first_world.0.max(cursor.0);
+            let y1 = first_world.1.max(cursor.1);
+            let half_w = (x1 - x0) / 2.0;
+            let half_h = (y1 - y0) / 2.0;
+            let r_input = state
+                .dimension_input
+                .trim()
+                .parse::<f64>()
+                .ok()
+                .unwrap_or(0.5);
+            let r_max = half_w.min(half_h).max(0.05);
+            let r = r_input.clamp(0.05, r_max);
+            // Line endpoints in world coords.
+            let tl_right = (x0 + r, y0);
+            let tr_left = (x1 - r, y0);
+            let tr_top = (x1, y0 + r);
+            let br_top = (x1, y1 - r);
+            let br_right = (x1 - r, y1);
+            let bl_left = (x0 + r, y1);
+            let bl_bot = (x0, y1 - r);
+            let tl_bot = (x0, y0 + r);
+            // Lines.
+            for (a, b) in [
+                (tl_right, tr_left),
+                (tr_top, br_top),
+                (br_right, bl_left),
+                (bl_bot, tl_bot),
+            ] {
+                dashed(frame, cstate.world_to_screen(a), cstate.world_to_screen(b));
+            }
+            // Arc centres.
+            let centres = [
+                ((x1 - r, y0 + r), tr_left, tr_top),
+                ((x1 - r, y1 - r), br_top, br_right),
+                ((x0 + r, y1 - r), bl_left, bl_bot),
+                ((x0 + r, y0 + r), tl_bot, tl_right),
+            ];
+            for (c_world, s_world, e_world) in centres {
+                let a0 = (s_world.1 - c_world.1).atan2(s_world.0 - c_world.0);
+                let a1 = (e_world.1 - c_world.1).atan2(e_world.0 - c_world.0);
+                let mut delta = a1 - a0;
+                while delta < 0.0 {
+                    delta += std::f64::consts::TAU;
+                }
+                let segs = 12;
+                let mut prev = cstate.world_to_screen(s_world);
+                for i in 1..=segs {
+                    if i % 2 == 0 {
+                        let t = (i as f64) / (segs as f64);
+                        let a = a0 + delta * t;
+                        let p = (c_world.0 + r * a.cos(), c_world.1 + r * a.sin());
+                        let q = cstate.world_to_screen(p);
+                        frame.stroke(&Path::line(prev, q), stroke);
+                        prev = q;
+                    } else {
+                        let t = (i as f64) / (segs as f64);
+                        let a = a0 + delta * t;
+                        let p = (c_world.0 + r * a.cos(), c_world.1 + r * a.sin());
+                        prev = cstate.world_to_screen(p);
+                    }
+                }
+            }
         }
         ToolPending::CircleCenter { center } => {
             let Some(c_world) = resolve_point(center) else {
