@@ -543,6 +543,73 @@ work in flight:
 - Bake modules drop the v0.14.1 "deferred" warnings; tests
   rewritten to assert the baked field values.
 
+### v0.16.0.1 + v0.16.1 (2026-05-04) — snap, chained Line, construction, filled loops, ghost, TAB pause, always-live solver
+
+**v0.16.0.1 hotfix:**
+- Centre-Point drag in Sketch mode now also translates the pad's 4
+  outline-corner Points so the construction outline tracks the pad
+  during sketch-mode drags. Without this the corner outline was
+  stranded at the previous centre after a drag.
+- `FpEditorToggleAutoFitCourtyard` handler now refreshes the panel
+  context after dispatching the toggle so the pill's pressed-state
+  style updates immediately.
+- New `library/editor/footprint/snap.rs` module — Fusion-style cursor
+  snap with priority chain (Point hit > Horizontal/Vertical within
+  5° of axis > 15° angle increments > 0.1 mm grid). Wired into the
+  canvas's `ButtonPressed` + `CursorMoved` handlers; only fires in
+  Sketch mode (Pads-mode literal pads stay raw).
+
+**v0.16.1:**
+- **Chained Line tool** — Line tool's second click commits a segment
+  AND advances `ToolPending::LineFirst` with the just-clicked endpoint
+  as the new anchor instead of resetting to Idle. Esc / right-click
+  cancel back to Select.
+- **Construction-mode toggle** on the sketch active bar (┄ glyph) —
+  sticky pill. While ON, every newly-minted Line / Arc / Circle /
+  Rectangle / RoundedRectangle / Point gets `construction = true`.
+  Bake skips construction entities.
+- **Filled closed-loop rendering** — `draw_filled_closed_loops` walks
+  the line graph per-frame, finds simple cycles whose Lines aren't
+  all construction-flagged, fills the polygon at low opacity. Pad-
+  corner outlines (all-construction) are skipped.
+- **Pad-placement ghost** — Pads mode + `PadsTool::PlacePad` renders a
+  translucent 1×1 mm rectangle at the snapped cursor showing where
+  the next pad will land. Desaturates to grey + dashed-stroke when
+  `placement_paused`.
+- **TAB pause/resume** for ALL primitive placement (PadsTool::PlacePad
+  + every non-Select sketch tool). `placement_paused` flag gates
+  click-publish; `tool_pending` survives a pause/resume cycle.
+- **Always-live solver** — removed `solve_and_bake` early-return on
+  `auto_pause.paused()`. Footprint sketches stay small (tens-to-low-
+  hundreds of entities); the solver's per-frame cost is well below
+  the per-frame budget. Active-bar pause-toggle button retired.
+- **Footprint Library panel** for lone `.snxfpt` files (not inside a
+  `.snxlib`) now shows the open footprint as a single-row list rather
+  than the misleading "(0 footprints) — right-click the .snxlib"
+  empty state.
+
+Tests: 116 lib + 3 integration green; `auto_pause_skips_solve` →
+`solver_always_runs_even_when_auto_pause_observed` (assertion
+inverted).
+
+**Deferred from v0.16.1:**
+- **Role assignment UI** — inspector dropdown / button row to pick
+  Unassigned / Pad / Silk-Top / Silk-Bottom / Courtyard / Keepout /
+  Cutout / Mask Opening / Pour. Writes the appropriate `*HintAttr` to
+  the selected entity (Entity already carries the fields). Bake
+  auto-emits.
+- **Drag-corner-to-resize-pad** — corner Points on the pad outline
+  become resize handles. Cursor changes per-edge (↕ for top/bottom,
+  ↔ for left/right, ↗/↘ for corners).
+- **Unified active bar** (Altium parity) — split-button submenus for
+  Move / Filter / Selection / Align / Line-Arc / Track-Solid;
+  primitive parity between Sketch and Pads modes (Line/Arc/Rectangle/
+  Circle/Fill/Region available in both).
+- **Full pad-stack Properties** — Pad Stack tabs, per-layer copper,
+  hole + paste + solder mask, Testpoint, Pad Features. Empty-canvas
+  Properties parity (Selection Filter / Snap Options checklist /
+  Grid Manager / Guide Manager / Units).
+
 ### v0.16 (2026-05-04) — drag Points + Rounded Rectangle + pad-as-rectangle
 
 Three deliverables on top of v0.15:
