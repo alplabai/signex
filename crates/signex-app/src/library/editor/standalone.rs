@@ -343,8 +343,16 @@ pub fn view_footprint<'a>(
     theme_id: signex_types::theme::ThemeId,
 ) -> Element<'a, LibraryMessage> {
     use crate::library::editor::footprint::state::EditorMode;
-    let bg = crate::styles::ti(tokens.bg);
-    let grid = crate::styles::ti(tokens.text_secondary);
+    // v0.16.2.2 — footprint canvas uses Altium PCB-editor colours
+    // regardless of the active app theme. Background pure black,
+    // grid dark navy. Pads / silk / courtyard already render via
+    // `FpLayer::color()` which carries Altium-flavoured tints (red
+    // FCu / blue BCu / off-white silk / yellow Edge.Cuts), so this
+    // change rounds out the Altium look on the canvas chrome itself.
+    // Symbol (schematic) canvas stays theme-driven — Altium's
+    // schematic editor uses a different (cream-ish) palette.
+    let bg = iced::Color::BLACK;
+    let grid = iced::Color::from_rgba(0.32, 0.36, 0.55, 1.0);
 
     let canvas_area = view_footprint_canvas(editor, tokens, bg, grid);
     let footer = view_footprint_footer(editor, tokens);

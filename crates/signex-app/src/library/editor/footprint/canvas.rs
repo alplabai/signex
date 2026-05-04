@@ -664,25 +664,25 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 );
             }
 
-            // Origin crosshair — small + at world (0, 0).
+            // Origin crosshair — Altium-style yellow + at world (0, 0).
+            // v0.16.2.2 swapped from theme-derived white to a
+            // saturated Altium yellow so the origin pops against the
+            // black canvas background.
             let origin = cstate.world_to_screen((0.0, 0.0));
+            let origin_color = Color::from_rgba(1.0, 0.95, 0.30, 0.85);
             frame.stroke(
                 &Path::line(
-                    Point::new(origin.x - 6.0, origin.y),
-                    Point::new(origin.x + 6.0, origin.y),
+                    Point::new(origin.x - 8.0, origin.y),
+                    Point::new(origin.x + 8.0, origin.y),
                 ),
-                Stroke::default()
-                    .with_width(1.0)
-                    .with_color(Color::from_rgba(1.0, 1.0, 1.0, 0.30)),
+                Stroke::default().with_width(1.5).with_color(origin_color),
             );
             frame.stroke(
                 &Path::line(
-                    Point::new(origin.x, origin.y - 6.0),
-                    Point::new(origin.x, origin.y + 6.0),
+                    Point::new(origin.x, origin.y - 8.0),
+                    Point::new(origin.x, origin.y + 8.0),
                 ),
-                Stroke::default()
-                    .with_width(1.0)
-                    .with_color(Color::from_rgba(1.0, 1.0, 1.0, 0.30)),
+                Stroke::default().with_width(1.5).with_color(origin_color),
             );
 
             // Silk/fab graphics live on the Footprint primitive
