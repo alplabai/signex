@@ -12,9 +12,17 @@
 //! or numerical-library source consulted.
 
 pub mod array;
+pub mod courtyard;
+pub mod mask;
 pub mod pad;
+pub mod pour;
 pub mod profile;
+pub mod silk;
 
 pub use array::bake_arrays;
+pub use courtyard::bake_courtyard;
+pub use mask::{bake_mask_excludes, bake_mask_openings, bake_paste_apertures};
 pub use pad::bake_pads;
+pub use pour::bake_pours;
 pub use profile::{trace_closed_profile, TraceError, TraceResult};
+pub use silk::bake_silk;

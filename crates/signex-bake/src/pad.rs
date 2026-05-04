@@ -14,31 +14,39 @@
 //! Cleanroom: no third-party constraint-solver, footprint-generator,
 //! or numerical-library source consulted.
 //!
-//! # v0.13 scope
+//! # Scope
 //!
-//! - `PadKind::{Smd, Tht, NptHole, ConnectorPad}` bake natively.
-//! - `PadKind::Fiducial` bakes as `LibPadKind::Smd` with default
-//!   1 mm mask margin, no paste, no drill, Round shape.
-//! - `PadKind::Castellated` bakes as `LibPadKind::Tht` with a warning.
-//! - `PadShape::Chamfered` falls back to `LibPadShape::RoundRect`
-//!   with a warning.
-//! - `PadShape::Custom(SketchProfile)` falls back to
-//!   `LibPadShape::Rect` with a warning.
+//! v0.14 baseline (with v0.14 lib variant additions):
+//! - `PadKind::{Smd, Tht, NptHole, ConnectorPad, Castellated, Fiducial}`
+//!   all bake to native `LibPadKind` variants. v0.13 used to fall
+//!   back Castellated→Tht and Fiducial→Smd with warnings; v0.14 ships
+//!   the variants directly so those warnings are gone.
+//! - `PadShape::Chamfered { chamfer_ratio_expr, corners }` bakes to
+//!   `LibPadShape::Chamfered` natively (was RoundRect approximation
+//!   in v0.13).
+//! - `PadShape::Custom(SketchProfile)` still falls back to
+//!   `LibPadShape::Rect` with a warning (sketch-profile bake lands
+//!   in v0.14.1).
 //! - `PasteAperturePattern::{Grid, Custom}` warn + fall back to
 //!   `Single` (one aperture).
 //! - Closed-profile attrs other than `pad` (silk / courtyard /
 //!   mask_opening / mask_exclude / paste_aperture / pour / keepout /
-//!   board_cutout / v_score) emit a "deferred to v0.14+" warning.
+//!   board_cutout / v_score) are baked by their respective
+//!   `crate::silk` / `crate::courtyard` / `crate::mask` / `crate::pour`
+//!   modules. `bake_pads` no longer warns about them — the dispatcher
+//!   invokes those modules separately.
+//! - `keepout` / `board_cutout` / `v_score` bake lands in v0.14.1.
 //! - `construction = true` entities are skipped silently.
 
 use std::collections::{BTreeMap, HashMap};
 
 use signex_library::primitive::footprint::{
-    Drill as LibDrill, LayerId, Pad as LibPad, PadKind as LibPadKind, PadShape as LibPadShape,
-    Polygon as LibPolygon,
+    ChamferedCorners as LibChamferedCorners, Drill as LibDrill, LayerId, Pad as LibPad,
+    PadKind as LibPadKind, PadShape as LibPadShape, Polygon as LibPolygon,
 };
 use signex_sketch::attr::{
-    CustomPadShape, PadAttr, PadKind, PadShape, PadSide, PasteAperturePattern,
+    ChamferedCorners as SkChamferedCorners, CustomPadShape, PadAttr, PadKind, PadShape, PadSide,
+    PasteAperturePattern,
 };
 use signex_sketch::expr::ast::ExprNode;
 use signex_sketch::expr::eval::{eval, EvalContext};
@@ -83,66 +91,32 @@ pub fn bake_pads(
         out.push(pad);
     }
 
-    // Emit one warning per closed-profile attr the entity carries —
-    // these all bake in v0.14+. Construction entities are silently
-    // skipped (matching the first loop above): they exist as solver
-    // scaffolding only and never produce baked geometry, so warning
-    // about their bake-attrs would be misleading noise.
+    // v0.14: silk / courtyard / mask / paste / pour are baked by
+    // their dedicated modules (`crate::silk` / `crate::courtyard` /
+    // `crate::mask` / `crate::pour`). The dispatcher invokes them
+    // alongside `bake_pads`; no warning needed here.
+    //
+    // v0.14.1 will add bake for `keepout` / `board_cutout` / `v_score`.
+    // Until then, those three attrs trigger a warning.
     for entity in &sketch.entities {
         if entity.construction {
             continue;
         }
-        if entity.silk.is_some() {
-            warnings.push(format!(
-                "entity {}: SilkAttr ignored (v0.14 feature)",
-                entity.id
-            ));
-        }
-        if entity.courtyard.is_some() {
-            warnings.push(format!(
-                "entity {}: CourtyardAttr ignored (v0.14 feature)",
-                entity.id
-            ));
-        }
-        if entity.mask_opening.is_some() {
-            warnings.push(format!(
-                "entity {}: MaskOpeningAttr ignored (v0.14 feature)",
-                entity.id
-            ));
-        }
-        if entity.mask_exclude.is_some() {
-            warnings.push(format!(
-                "entity {}: MaskExcludeAttr ignored (v0.14 feature)",
-                entity.id
-            ));
-        }
-        if entity.paste_aperture.is_some() {
-            warnings.push(format!(
-                "entity {}: PasteApertureAttr ignored (v0.14 feature)",
-                entity.id
-            ));
-        }
-        if entity.pour.is_some() {
-            warnings.push(format!(
-                "entity {}: PourAttr ignored — Footprint::pours field lands in v0.14, fill generation in v0.15",
-                entity.id
-            ));
-        }
         if entity.keepout.is_some() {
             warnings.push(format!(
-                "entity {}: KeepoutAttr ignored — Footprint::keepouts field lands in v0.14, DRC enforcement in v0.15",
+                "entity {}: KeepoutAttr ignored — bake lands in v0.14.1; DRC enforcement in v0.15",
                 entity.id
             ));
         }
         if entity.board_cutout.is_some() {
             warnings.push(format!(
-                "entity {}: BoardCutoutAttr ignored — Footprint::cutouts field lands in v0.14, PCB outline subtraction in v0.14",
+                "entity {}: BoardCutoutAttr ignored — bake lands in v0.14.1; PCB outline subtraction at PCB-export",
                 entity.id
             ));
         }
         if entity.v_score.is_some() {
             warnings.push(format!(
-                "entity {}: VScoreHintAttr ignored — Footprint::v_scores field lands in v0.14; panelisation tool consumes them in v0.16+",
+                "entity {}: VScoreHintAttr ignored — bake lands in v0.14.1; panelisation consumer in v0.16+",
                 entity.id
             ));
         }
@@ -323,19 +297,15 @@ fn rotation_deg(
 // Helpers — kind / shape / layer mapping
 // ─────────────────────────────────────────────────────────────────────
 
-fn lib_kind(k: PadKind, warnings: &mut Vec<String>, pad_number: &str) -> LibPadKind {
+fn lib_kind(k: PadKind, _warnings: &mut Vec<String>, _pad_number: &str) -> LibPadKind {
     match k {
-        PadKind::Smd | PadKind::Fiducial => LibPadKind::Smd,
+        PadKind::Smd => LibPadKind::Smd,
         PadKind::Tht => LibPadKind::Tht,
         PadKind::NptHole => LibPadKind::NptHole,
         PadKind::ConnectorPad => LibPadKind::ConnectorPad,
-        PadKind::Castellated => {
-            warnings.push(format!(
-                "pad {}: Castellated baked as Tht in v0.13 — lib gains a Castellated variant in v0.14 (needed for fab gerber outline export to identify halved holes)",
-                pad_number
-            ));
-            LibPadKind::Tht
-        }
+        // v0.14: native Castellated + Fiducial variants.
+        PadKind::Castellated => LibPadKind::Castellated,
+        PadKind::Fiducial => LibPadKind::Fiducial,
     }
 }
 
@@ -343,6 +313,16 @@ fn lib_kind(k: PadKind, warnings: &mut Vec<String>, pad_number: &str) -> LibPadK
 /// display label as the string-typed wrapper's content.
 fn signex_layer_id(l: SignexLayer) -> LayerId {
     LayerId::new(l.altium_label())
+}
+
+/// Translate sketch ChamferedCorners into the lib mirror enum.
+fn map_corners(c: &SkChamferedCorners) -> LibChamferedCorners {
+    LibChamferedCorners {
+        top_left: c.top_left,
+        top_right: c.top_right,
+        bottom_left: c.bottom_left,
+        bottom_right: c.bottom_right,
+    }
 }
 
 /// Layer set for a Fiducial pad — copper + mask only, no paste.
@@ -426,16 +406,14 @@ fn bake_shape(
         }
         PadShape::Chamfered {
             chamfer_ratio_expr,
-            corners: _,
+            corners,
         } => {
+            // v0.14: native Chamfered bake — chamfer_ratio in [0, 0.5].
             let ast = parse(strip_eq_prefix(chamfer_ratio_expr)).map_err(SketchError::Expr)?;
             let q = eval(&ast, ctx).map_err(SketchError::Expr)?;
-            warnings.push(format!(
-                "pad {}: Chamfered shape approximated as RoundRect in v0.13 (v0.14 adds chamfer)",
-                pad_number
-            ));
-            LibPadShape::RoundRect {
-                radius_ratio: q.value.clamp(0.0, 0.5),
+            LibPadShape::Chamfered {
+                chamfer_ratio: q.value.clamp(0.0, 0.5),
+                corners: map_corners(corners),
             }
         }
         PadShape::Custom(CustomPadShape::StaticPoints { points }) => {

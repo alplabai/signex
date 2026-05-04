@@ -270,7 +270,7 @@ fn bake_fiducial_default_mask_margin() {
 
     assert_eq!(out.len(), 1);
     let pad = &out[0];
-    assert_eq!(pad.kind, LibPadKind::Smd, "Fiducial bakes as Smd in v0.13");
+    assert_eq!(pad.kind, LibPadKind::Fiducial, "v0.14: native Fiducial");
     assert_eq!(pad.shape, LibPadShape::Round);
     assert_eq!(pad.solder_mask_margin, Some(1.0));
     assert!(pad.paste_margin.is_none());
@@ -284,11 +284,11 @@ fn bake_fiducial_default_mask_margin() {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Test 6 — Castellated bakes as Tht with a warning.
+// Test 6 — Castellated bakes as a native LibPadKind::Castellated (v0.14).
 // ─────────────────────────────────────────────────────────────────────
 
 #[test]
-fn bake_castellated_warns_and_bakes_as_tht() {
+fn bake_castellated_native() {
     let mut s = Sketch::new();
     let p = s.add_point(0.0, 0.0);
     let mut pad = smd_rect_pad("E1", "1.5mm", "1.0mm");
@@ -311,28 +311,28 @@ fn bake_castellated_warns_and_bakes_as_tht() {
 
     assert_eq!(out.len(), 1);
     let pad = &out[0];
-    assert_eq!(pad.kind, LibPadKind::Tht);
+    assert_eq!(pad.kind, LibPadKind::Castellated, "v0.14: native Castellated");
     let drill = pad.drill.as_ref().expect("drill present");
     assert!(approx_eq(drill.diameter, 0.6, 1e-9));
-    // Layers match the THT pattern (no paste).
+    // Castellated reuses the THT layer pattern (no paste).
     assert!(has_layer(pad, "Top Layer"));
     assert!(has_layer(pad, "Bottom Layer"));
     assert!(has_layer(pad, "Top Solder"));
     assert!(has_layer(pad, "Bottom Solder"));
     assert!(!has_layer(pad, "Top Paste"));
-    // At least one warning mentions Castellated.
+    // No warning anymore — variant is native in v0.14.
     assert!(
-        warnings.iter().any(|w| w.contains("Castellated")),
-        "expected a Castellated warning, got {warnings:?}"
+        warnings.iter().all(|w| !w.contains("Castellated")),
+        "v0.14 should not warn on Castellated; got {warnings:?}"
     );
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Test 7 — Chamfered shape falls back to RoundRect with a warning.
+// Test 7 — Chamfered shape bakes natively as LibPadShape::Chamfered (v0.14).
 // ─────────────────────────────────────────────────────────────────────
 
 #[test]
-fn bake_chamfered_falls_back_to_round_rect() {
+fn bake_chamfered_native() {
     let mut s = Sketch::new();
     let p = s.add_point(0.0, 0.0);
     let mut pad = smd_rect_pad("1", "1.0mm", "0.5mm");
@@ -349,14 +349,16 @@ fn bake_chamfered_falls_back_to_round_rect() {
 
     assert_eq!(out.len(), 1);
     match out[0].shape {
-        LibPadShape::RoundRect { radius_ratio } => {
-            assert!(approx_eq(radius_ratio, 0.2, 1e-9));
+        LibPadShape::Chamfered { chamfer_ratio, corners } => {
+            assert!(approx_eq(chamfer_ratio, 0.2, 1e-9));
+            assert!(corners.top_left && corners.top_right && corners.bottom_left && corners.bottom_right);
         }
-        ref other => panic!("expected RoundRect, got {other:?}"),
+        ref other => panic!("expected Chamfered, got {other:?}"),
     }
+    // No warning anymore — variant is native in v0.14.
     assert!(
-        warnings.iter().any(|w| w.contains("Chamfered")),
-        "expected Chamfered warning"
+        warnings.iter().all(|w| !w.contains("Chamfered")),
+        "v0.14 should not warn on Chamfered; got {warnings:?}"
     );
 }
 
@@ -448,9 +450,9 @@ fn bake_construction_entity_with_silk_attr_emits_no_warning() {
 }
 
 #[test]
-fn bake_non_construction_entity_with_silk_attr_still_warns() {
-    // Sanity: with construction = false (default), the warning still
-    // fires — we didn't accidentally suppress all warnings.
+fn bake_non_construction_entity_with_silk_attr_no_longer_warns_in_v014() {
+    // v0.14: silk bake moved to crate::silk; pad.rs no longer warns
+    // about SilkAttr — the dispatcher invokes bake_silk separately.
     use signex_sketch::attr::SilkAttr;
     use signex_types::layer::SignexLayer;
 
@@ -469,10 +471,10 @@ fn bake_non_construction_entity_with_silk_attr_still_warns() {
     let mut warnings = Vec::new();
     bake_pads(&s.data, &solve, &HashMap::new(), &mut out, &mut warnings).expect("bake ok");
 
-    assert_eq!(out.len(), 1, "non-construction pad still bakes");
+    assert_eq!(out.len(), 1, "pad still bakes");
     assert!(
-        warnings.iter().any(|w| w.contains("SilkAttr")),
-        "non-construction silk-attr must still emit v0.14 warning; got {warnings:?}"
+        warnings.iter().all(|w| !w.contains("SilkAttr")),
+        "v0.14: pad.rs must not warn on SilkAttr (silk bake lives in crate::silk now); got {warnings:?}"
     );
 }
 

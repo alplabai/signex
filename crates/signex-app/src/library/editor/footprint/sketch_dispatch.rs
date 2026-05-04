@@ -133,6 +133,7 @@ fn solve_and_bake(
             // source of truth and a (possibly empty) bake result is
             // intentional.
             if !sketch.entities.is_empty() {
+                // Pads + array expansions.
                 let mut baked: Vec<signex_library::primitive::footprint::Pad> = Vec::new();
                 signex_bake::bake_pads(
                     sketch,
@@ -149,6 +150,80 @@ fn solve_and_bake(
                     &mut state.solve_warnings,
                 )?;
                 footprint.pads = baked;
+
+                // v0.14 closed-profile bakes — silk / courtyard / mask /
+                // paste-aperture / pour. Each replaces its corresponding
+                // Footprint field (or appends, in the case of the
+                // multi-record Vec fields) so the sketch is the source
+                // of truth for any geometry it produces.
+                let mut silk_f = Vec::new();
+                let mut silk_b = Vec::new();
+                signex_bake::bake_silk(
+                    sketch,
+                    &out,
+                    &mut silk_f,
+                    &mut silk_b,
+                    &mut state.solve_warnings,
+                )?;
+                if !silk_f.is_empty() {
+                    footprint.silk_f = silk_f;
+                }
+                if !silk_b.is_empty() {
+                    footprint.silk_b = silk_b;
+                }
+
+                let mut courtyard = signex_library::primitive::footprint::Polygon::default();
+                signex_bake::bake_courtyard(
+                    sketch,
+                    &out,
+                    &mut courtyard,
+                    &mut state.solve_warnings,
+                )?;
+                if !courtyard.points.is_empty() {
+                    footprint.courtyard = courtyard;
+                }
+
+                let mut mask_openings = Vec::new();
+                let mut mask_excludes = Vec::new();
+                let mut paste_apertures = Vec::new();
+                let mut pours = Vec::new();
+                signex_bake::bake_mask_openings(
+                    sketch,
+                    &out,
+                    &mut mask_openings,
+                    &mut state.solve_warnings,
+                )?;
+                signex_bake::bake_mask_excludes(
+                    sketch,
+                    &out,
+                    &mut mask_excludes,
+                    &mut state.solve_warnings,
+                )?;
+                signex_bake::bake_paste_apertures(
+                    sketch,
+                    &out,
+                    &mut paste_apertures,
+                    &mut state.solve_warnings,
+                )?;
+                signex_bake::bake_pours(
+                    sketch,
+                    &out,
+                    &resolved,
+                    &mut pours,
+                    &mut state.solve_warnings,
+                )?;
+                if !mask_openings.is_empty() {
+                    footprint.mask_openings = mask_openings;
+                }
+                if !mask_excludes.is_empty() {
+                    footprint.mask_excludes = mask_excludes;
+                }
+                if !paste_apertures.is_empty() {
+                    footprint.paste_apertures = paste_apertures;
+                }
+                if !pours.is_empty() {
+                    footprint.pours = pours;
+                }
             }
 
             state.last_solve = Some(out);
