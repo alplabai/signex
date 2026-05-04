@@ -281,22 +281,24 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     && let Some(cursor_pos) = cursor.position_in(bounds)
                 {
                     let raw_world = cstate.screen_to_world(cursor_pos);
-                    // v0.16.1 — apply snap (Point / H / V / Angle /
-                    // Grid) only in Sketch mode. Pads-mode clicks
-                    // stay raw (literal pads aren't grid-locked).
+                    // v0.18.8 — Snap Options (Point / H/V / Angle /
+                    // Grid) apply in BOTH Sketch and Pads modes. Each
+                    // priority is gated by `state.snap_options.<flag>`
+                    // inside `snap::snap_cursor`, so unchecking every
+                    // box restores the v0.16.1 raw-cursor Pads-mode
+                    // behaviour. Sketch-mode point-hit lookup still
+                    // requires an existing sketch; in Pads mode the
+                    // sketch is usually `None` and snap falls through
+                    // to the H/V + Grid priorities.
                     use crate::library::editor::footprint::state::{
                         EditorMode as _EM, SketchTool as _ST,
                     };
-                    let snap_in_effect = matches!(self.state.mode, _EM::Sketch);
-                    let world = if snap_in_effect {
+                    let world = {
                         let point_hit = sketch_snap(self.sketch, cstate, raw_world);
                         let result =
                             snap::snap_cursor(raw_world, self.sketch, self.state, point_hit);
                         cstate.last_snap = Some(result);
                         result.pos
-                    } else {
-                        cstate.last_snap = None;
-                        raw_world
                     };
                     if matches!(self.state.mode, _EM::Sketch)
                         && self.state.active_tool == _ST::Select
@@ -521,20 +523,15 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     );
                 }
                 let raw_world = cstate.screen_to_world(cursor_pos);
-                // v0.16.1 — Sketch-mode snap (Point / H / V / Angle /
-                // Grid). The canvas-local `last_snap` drives the
-                // badge in `draw_sketch_tool_preview`. Pads-mode is
-                // not snapped.
-                use crate::library::editor::footprint::state::EditorMode as _EM;
-                let world = if matches!(self.state.mode, _EM::Sketch) {
+                // v0.18.8 — Snap (Point / H/V / Angle / Grid) applies
+                // in both Sketch and Pads modes; per-priority gating
+                // lives in `snap::snap_cursor` via `state.snap_options`.
+                let world = {
                     let point_hit = sketch_snap(self.sketch, cstate, raw_world);
                     let result =
                         snap::snap_cursor(raw_world, self.sketch, self.state, point_hit);
                     cstate.last_snap = Some(result);
                     result.pos
-                } else {
-                    cstate.last_snap = None;
-                    raw_world
                 };
                 if let Some(drag) = cstate.drag.as_mut() {
                     let dx = (cursor_pos.x - drag.press_screen.x).abs();
