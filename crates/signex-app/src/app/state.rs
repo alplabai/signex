@@ -738,6 +738,12 @@ pub struct InteractionState {
     /// overlap in actions and the canvas menu depends on placement /
     /// selection state that does not exist in the panel context.
     pub project_tree_context_menu: Option<crate::app::ProjectTreeContextMenuState>,
+    /// v0.18.10 — Altium-style grid picker popup. Anchored at the
+    /// cursor when the user presses `G`. Lists the standard grid
+    /// ladder (1mil…2.5mm). Picking an item writes the active
+    /// footprint editor's `snap_options.grid_step_mm`; outside-click
+    /// or Esc dismisses.
+    pub grid_picker: Option<crate::app::GridPickerState>,
     /// Document-tab right-click menu state. Anchored at the right-click
     /// coordinates inside the tab strip; carries the index of the
     /// clicked tab so per-tab actions ("Close [filename]") resolve

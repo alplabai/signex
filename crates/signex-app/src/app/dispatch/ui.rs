@@ -60,6 +60,37 @@ impl Signex {
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.finish_update()
             }
+            Message::GridPickerOpen => {
+                // v0.18.10 — only mount the picker when the active
+                // tab is a Footprint editor; the schematic / PCB
+                // grid systems aren't wired through this picker yet.
+                let active_tab_kind = self
+                    .document_state
+                    .tabs
+                    .get(self.document_state.active_tab)
+                    .map(|t| t.kind.clone());
+                if let Some(crate::app::TabKind::FootprintEditor(_)) = active_tab_kind {
+                    let (x, y) = self.interaction_state.last_mouse_pos;
+                    self.interaction_state.grid_picker =
+                        Some(crate::app::GridPickerState { x, y });
+                }
+                self.finish_update()
+            }
+            Message::GridPickerClose => {
+                self.interaction_state.grid_picker = None;
+                self.finish_update()
+            }
+            Message::GridPickerSelect(step_mm) => {
+                self.interaction_state.grid_picker = None;
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    if step_mm > 0.0 && step_mm.is_finite() {
+                        editor.state.snap_options.grid_step_mm = step_mm;
+                        editor.canvas_cache.clear();
+                    }
+                }
+                self.refresh_panel_ctx();
+                self.finish_update()
+            }
             Message::StatusBar(StatusBarRequest::ToggleSnap) => {
                 self.ui_state.snap_enabled = !self.ui_state.snap_enabled;
                 self.interaction_state.active_canvas_mut().snap_enabled =

@@ -34,6 +34,93 @@ pub(crate) const CHROME_SEARCH_LEFT_GAP: f32 = 16.0;
 pub(crate) const CHROME_SEARCH_RIGHT_GAP: f32 = 16.0;
 
 impl Signex {
+    /// v0.18.10 — Altium-style grid picker popup body. Renders the
+    /// standard 1mil…2.5mm ladder; clicking a row sends
+    /// `Message::GridPickerSelect(step_mm)` and closes the popup.
+    fn view_grid_picker_menu(&self) -> Element<'_, Message> {
+        use iced::widget::{button, column, container, text};
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let primary = signex_widgets::theme_ext::text_primary(tokens);
+        let muted = signex_widgets::theme_ext::text_secondary(tokens);
+        let panel_bg = signex_widgets::theme_ext::to_color(&tokens.panel_bg);
+        let border_c = signex_widgets::theme_ext::border_color(tokens);
+        let active_step = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .and_then(|t| match &t.kind {
+                crate::app::TabKind::FootprintEditor(p) => {
+                    self.document_state.footprint_editors.get(p)
+                }
+                _ => None,
+            })
+            .map(|e| e.state.snap_options.grid_step_mm);
+
+        // Altium-standard ladder. Mil entries first (imperial designs
+        // anchor on 50mil), metric second.
+        const LADDER: &[(&str, f64)] = &[
+            ("1 Mil", 0.0254),
+            ("5 Mil", 0.127),
+            ("10 Mil", 0.254),
+            ("20 Mil", 0.508),
+            ("25 Mil", 0.635),
+            ("50 Mil", 1.27),
+            ("100 Mil", 2.54),
+            ("0.025 mm", 0.025),
+            ("0.100 mm", 0.100),
+            ("0.250 mm", 0.250),
+            ("0.500 mm", 0.500),
+            ("1.000 mm", 1.000),
+            ("2.500 mm", 2.500),
+        ];
+
+        let mut col = column![].spacing(0).width(iced::Length::Fixed(200.0));
+        for (label, step_mm) in LADDER {
+            let is_active = active_step
+                .map(|s| (s - step_mm).abs() < 1e-9)
+                .unwrap_or(false);
+            let lbl_color = if is_active { primary } else { muted };
+            let row_label = *label;
+            let row_step = *step_mm;
+            let btn = button(
+                container(text(row_label).size(11).color(lbl_color))
+                    .padding([4, 12])
+                    .width(iced::Length::Fill),
+            )
+            .padding(0)
+            .on_press(Message::GridPickerSelect(row_step))
+            .style(move |_: &iced::Theme, status| iced::widget::button::Style {
+                background: match status {
+                    iced::widget::button::Status::Hovered => Some(iced::Background::Color(
+                        iced::Color::from_rgba(1.0, 1.0, 1.0, 0.06),
+                    )),
+                    _ => Some(iced::Background::Color(iced::Color::TRANSPARENT)),
+                },
+                border: iced::Border {
+                    width: 0.0,
+                    radius: 0.0.into(),
+                    color: iced::Color::TRANSPARENT,
+                },
+                ..iced::widget::button::Style::default()
+            })
+            .width(iced::Length::Fill);
+            col = col.push(btn);
+        }
+
+        container(col)
+            .padding(4)
+            .style(move |_: &iced::Theme| iced::widget::container::Style {
+                background: Some(iced::Background::Color(panel_bg)),
+                border: iced::Border {
+                    width: 1.0,
+                    radius: 4.0.into(),
+                    color: border_c,
+                },
+                ..iced::widget::container::Style::default()
+            })
+            .into()
+    }
+
     #[allow(clippy::vec_init_then_push)]
     fn view_context_menu(&self) -> Element<'_, Message> {
         use crate::icons as ic;
@@ -4932,6 +5019,41 @@ impl Signex {
                     .into(),
                 );
             }
+        }
+
+        // v0.18.10 — Altium-style grid picker popup. Floats at the
+        // cursor when `G` is pressed in a footprint editor; rows are
+        // the standard 1mil…2.5mm ladder. Outside-click and Esc both
+        // dismiss via `Message::GridPickerClose`.
+        if let Some(ref picker) = interaction.grid_picker {
+            let menu = self.view_grid_picker_menu();
+            let menu_w: f32 = 200.0;
+            let est_menu_h: f32 = 13.0 * 22.0 + 8.0; // 13 rows + padding
+            let (win_w, win_h) = ui.window_size;
+            let edge_margin: f32 = 4.0;
+            let x = if picker.x + menu_w + edge_margin > win_w {
+                (win_w - menu_w - edge_margin).max(0.0)
+            } else {
+                picker.x
+            };
+            let y = if picker.y + est_menu_h + edge_margin > win_h {
+                (picker.y - est_menu_h).max(0.0)
+            } else {
+                picker.y
+            };
+            layers.push(Self::dismiss_layer(Message::GridPickerClose));
+            layers.push(
+                column![
+                    iced::widget::Space::new().height(y),
+                    row![
+                        iced::widget::Space::new().width(x),
+                        menu,
+                        iced::widget::Space::new().width(Length::Fill),
+                    ]
+                    .width(Length::Fill),
+                ]
+                .into(),
+            );
         }
 
         if ui.panel_list_open {

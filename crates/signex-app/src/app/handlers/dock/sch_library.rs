@@ -893,7 +893,7 @@ impl Signex {
     /// `.snxfpt` editor tabs. Drives the Properties-panel pad-defaults
     /// form so it can mutate `next_pad_defaults` without round-
     /// tripping through `LibraryMessage::PrimitiveEditorEvent`.
-    fn active_footprint_editor_mut(
+    pub(crate) fn active_footprint_editor_mut(
         &mut self,
     ) -> Option<&mut crate::app::FootprintEditorState> {
         let path = self

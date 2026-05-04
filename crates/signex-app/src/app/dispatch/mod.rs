@@ -27,6 +27,9 @@ impl Signex {
             | Message::WindowResized(_, _)
             | Message::DragEnd
             | Message::GridCycle
+            | Message::GridPickerOpen
+            | Message::GridPickerClose
+            | Message::GridPickerSelect(_)
             | Message::StatusBar(_) => self.dispatch_ui_message(message),
             Message::TextEditChanged(_) | Message::TextEditSubmit => {
                 self.dispatch_text_edit_message(message)

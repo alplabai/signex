@@ -289,6 +289,7 @@ impl Signex {
                 editing_text: None,
                 context_menu: None,
                 project_tree_context_menu: None,
+                grid_picker: None,
                 tab_context_menu: None,
                 context_submenu: None,
                 pending_submenu: None,
@@ -519,7 +520,12 @@ impl Signex {
                             (keyboard::Key::Character(c), m)
                                 if c == "g" && !m.command() && !m.shift() =>
                             {
-                                Message::GridCycle
+                                // v0.18.10 — Altium parity: G opens the
+                                // grid picker popup. Footprint editor
+                                // wires it to set the snap step;
+                                // schematic / PCB tabs ignore (the
+                                // dispatcher's context check no-ops).
+                                Message::GridPickerOpen
                             }
                             (keyboard::Key::Character(c), m) if c == "w" && !m.command() => {
                                 Message::Tool(ToolMessage::SelectTool(Tool::Wire))

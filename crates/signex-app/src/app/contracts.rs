@@ -53,6 +53,16 @@ pub enum Message {
     UnitCycled,
     GridToggle,
     GridCycle,
+    /// v0.18.10 — open the Altium-style grid picker popup at the
+    /// current `last_mouse_pos`. Footprint editor only (today);
+    /// other contexts fall through to no-op.
+    GridPickerOpen,
+    /// v0.18.10 — dismiss the grid picker without picking.
+    GridPickerClose,
+    /// v0.18.10 — user picked a grid step from the picker. The
+    /// payload is the step in mm; the dispatcher writes it to the
+    /// active footprint editor's `state.snap_options.grid_step_mm`.
+    GridPickerSelect(f64),
     DragStart(DragTarget),
     DragMove(f32, f32),
     DragEnd,
@@ -650,6 +660,14 @@ pub struct TextEditState {
 
 #[derive(Debug, Clone)]
 pub struct ContextMenuState {
+    pub x: f32,
+    pub y: f32,
+}
+
+/// v0.18.10 — Altium-style grid picker popup state. Anchors the
+/// floating menu at the cursor position when `G` is pressed.
+#[derive(Debug, Clone)]
+pub struct GridPickerState {
     pub x: f32,
     pub y: f32,
 }
