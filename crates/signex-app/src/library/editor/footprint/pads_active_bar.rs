@@ -342,7 +342,20 @@ pub fn items(
         ),
         stub("Place Fill", "\u{25A0}"),  // ■
         stub("Place String", "T"),
-        stub("Place Hole", "\u{25CE}"), // ◎
+        // v0.18.12 — Place Hole wired. Click empty canvas → drops
+        // a Pad with `kind = NptHole` at the cursor (1-click drop,
+        // no drag). Right-click / Esc cancels back to Select.
+        ActiveBarItem::Button(ActiveBarButton {
+            icon: ActiveBarIcon::Glyph("\u{25CE}"), // ◎
+            tooltip: "Place Hole — click empty canvas to drop NPT holes".into(),
+            enabled: true,
+            selected: pads_tool == PadsTool::PlaceHole,
+            on_press: Some(LibraryMessage::PrimitiveEditorEvent {
+                path: path.clone(),
+                msg: PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlaceHole),
+            }),
+            ..ActiveBarButton::default()
+        }),
         ActiveBarItem::Separator,
         delete,
     ]

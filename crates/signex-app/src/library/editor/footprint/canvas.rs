@@ -475,6 +475,22 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 },
                             }));
                         }
+                        // v0.18.12 — Place Hole drops a non-plated
+                        // through hole at the cursor. Same gating as
+                        // PlacePad (TAB-pause suppresses click-add).
+                        if self.state.pads_tool == PadsTool::PlaceHole
+                            && !self.state.placement_paused
+                        {
+                            return Some(canvas::Action::publish(LibraryMessage::EditorEvent {
+                                library_path: self.address.library_path.clone(),
+                                table: self.address.table.clone(),
+                                row_id: self.address.row_id,
+                                msg: EditorMsg::FootprintAddHole {
+                                    x_mm: drag.grab_offset_mm.0,
+                                    y_mm: drag.grab_offset_mm.1,
+                                },
+                            }));
+                        }
                         // Select tool: empty click does nothing
                         // (selection-clear is handled by the model
                         // via the existing FootprintSelectPad(None)

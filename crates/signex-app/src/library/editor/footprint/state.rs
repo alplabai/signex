@@ -53,6 +53,10 @@ pub struct EditorPad {
     /// bake honours the value so saved files carry the correct
     /// rotation regardless.
     pub rotation_deg: f64,
+    /// v0.18.12 — drill diameter (mm) for through-hole / NPT pads.
+    /// `None` for SMD pads. Round-trips via `Pad::drill`. Mints as
+    /// `Some(default_drill_mm)` for `Place Hole` clicks.
+    pub drill_diameter_mm: Option<f64>,
 }
 
 impl EditorPad {
@@ -71,6 +75,28 @@ impl EditorPad {
             sketch_entity_id: None,
             corner_entity_ids: None,
             rotation_deg: 0.0,
+            drill_diameter_mm: None,
+        }
+    }
+
+    /// v0.18.12 — non-plated through hole. No copper / mask / paste
+    /// layers; the drill is the visible footprint feature. Default
+    /// outer diameter equals the drill diameter so the hole renders
+    /// as a circle of that size in the editor.
+    pub fn new_npt_hole(number: String, position_mm: (f64, f64), drill_mm: f64) -> Self {
+        let d = drill_mm.max(0.05);
+        Self {
+            number,
+            position_mm,
+            size_mm: (d, d),
+            kind: PadKind::NptHole,
+            shape: PadShape::Round,
+            // No copper / mask / paste — bare drilled hole.
+            layers: Vec::new(),
+            sketch_entity_id: None,
+            corner_entity_ids: None,
+            rotation_deg: 0.0,
+            drill_diameter_mm: Some(d),
         }
     }
 
@@ -106,10 +132,15 @@ impl EditorPad {
             sketch_entity_id: None,
             corner_entity_ids: None,
             rotation_deg: p.rotation,
+            drill_diameter_mm: p.drill.as_ref().map(|d| d.diameter),
         }
     }
 
     fn to_pad(&self) -> Pad {
+        let drill = self.drill_diameter_mm.map(|d| signex_library::Drill {
+            diameter: d,
+            slot_length: None,
+        });
         Pad {
             number: self.number.clone(),
             kind: self.kind,
@@ -118,7 +149,7 @@ impl EditorPad {
             position: [self.position_mm.0, self.position_mm.1],
             rotation: self.rotation_deg,
             layers: self.layers.clone(),
-            drill: None,
+            drill,
             solder_mask_margin: None,
             paste_margin: None,
         }
@@ -338,6 +369,10 @@ pub enum PadsTool {
     Select,
     /// Click empty canvas → adds a new pad at the cursor.
     PlacePad,
+    /// v0.18.12 — non-plated through hole. 1-click drop. Mints a
+    /// `Pad` with `kind = NptHole`, no copper / mask / paste, drill
+    /// at `next_pad_defaults.size_x_mm` (default 1mm).
+    PlaceHole,
 }
 
 /// Sketch-mode drawing tool. Phase 6.3 (v0.13.1) shipped Place Point
@@ -532,6 +567,25 @@ impl FootprintEditorState {
         pad.size_mm = (defaults.size_x_mm.max(0.05), defaults.size_y_mm.max(0.05));
         pad.layers = layers;
         pad.rotation_deg = defaults.rotation_deg;
+        self.pads.push(pad);
+        let idx = self.pads.len() - 1;
+        self.selected_pad = Some(idx);
+        self.recompute_courtyard();
+        idx
+    }
+
+    /// v0.18.12 — click-add a non-plated through hole at the given
+    /// world position. Drill diameter inherits the
+    /// `next_pad_defaults.size_x_mm` setting so the user can dial it
+    /// in via the Properties panel before placing.
+    pub fn add_hole_at(&mut self, x_mm: f64, y_mm: f64) -> usize {
+        let defaults = self.next_pad_defaults.clone();
+        let number = defaults
+            .designator_override
+            .clone()
+            .unwrap_or_else(|| self.next_pad_number());
+        let drill_mm = defaults.size_x_mm.max(0.05);
+        let pad = EditorPad::new_npt_hole(number, (x_mm, y_mm), drill_mm);
         self.pads.push(pad);
         let idx = self.pads.len() - 1;
         self.selected_pad = Some(idx);

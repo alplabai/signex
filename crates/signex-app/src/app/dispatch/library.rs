@@ -3942,6 +3942,7 @@ pub(crate) fn apply_symbol_primitive_edit(
         PrimitiveEditorMsg::FootprintSelectActiveIdx(_)
         | PrimitiveEditorMsg::FootprintAddNewSibling
         | PrimitiveEditorMsg::FootprintAddPad { .. }
+        | PrimitiveEditorMsg::FootprintAddHole { .. }
         | PrimitiveEditorMsg::FootprintMovePad { .. }
         | PrimitiveEditorMsg::FootprintCursorAt { .. }
         | PrimitiveEditorMsg::FootprintSelectPad(_)
@@ -4145,6 +4146,21 @@ pub(crate) fn apply_footprint_primitive_edit(
             // halves originate from disjoint editor fields.
             editor.with_parts(|state, primitive| {
                 let idx = state.add_pad_at(x_mm, y_mm);
+                if let Some(pad) = state.pads.get_mut(idx) {
+                    if footprint_sketch_is_active(primitive) {
+                        pad_to_sketch::mirror_add_pad_to_sketch(pad, primitive);
+                    }
+                }
+                CanvasState::sync_pads_to_primitive(state, primitive);
+            });
+            editor.canvas_cache.clear();
+            editor.dirty = true;
+        }
+        // v0.18.12 — Place Hole tool. Drops a non-plated through
+        // hole at the cursor (no copper, drill from `next_pad_defaults`).
+        PrimitiveEditorMsg::FootprintAddHole { x_mm, y_mm } => {
+            editor.with_parts(|state, primitive| {
+                let idx = state.add_hole_at(x_mm, y_mm);
                 if let Some(pad) = state.pads.get_mut(idx) {
                     if footprint_sketch_is_active(primitive) {
                         pad_to_sketch::mirror_add_pad_to_sketch(pad, primitive);
@@ -4546,6 +4562,7 @@ pub(crate) fn apply_footprint_primitive_edit(
                         sketch_entity_id: Some(id),
                         corner_entity_ids: None,
                         rotation_deg: 0.0,
+                        drill_diameter_mm: None,
                     });
                 }
                 (false, Some(idx)) => {
@@ -5503,6 +5520,7 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::SymbolDismissAiPreview
         | EditorMsg::SaveSymbol(_, _)
         | EditorMsg::FootprintAddPad { .. }
+        | EditorMsg::FootprintAddHole { .. }
         | EditorMsg::FootprintSketchPlacePoint { .. }
         | EditorMsg::FootprintSketchToolClick { .. }
         | EditorMsg::FootprintSketchToolEscape

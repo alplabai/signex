@@ -688,6 +688,12 @@ pub enum EditorMsg {
         x_mm: f64,
         y_mm: f64,
     },
+    /// v0.18.12 — click-to-place a non-plated through hole. Fires
+    /// from the canvas program when `PadsTool::PlaceHole` is active.
+    FootprintAddHole {
+        x_mm: f64,
+        y_mm: f64,
+    },
     /// Drag the pad at `idx` to a new world position.
     FootprintMovePad {
         idx: usize,
@@ -1230,6 +1236,12 @@ pub enum PrimitiveEditorMsg {
     FootprintAddNewSibling,
     /// Click-to-place a pad at the given world position.
     FootprintAddPad { x_mm: f64, y_mm: f64 },
+    /// v0.18.12 — Click-to-place a non-plated through hole (NPT) at
+    /// the given world position. Mints a `Pad` with `kind = NptHole`,
+    /// no copper / mask / paste, drill diameter from
+    /// `next_pad_defaults.size_x_mm`. The active bar's "Place Hole"
+    /// tool fires this on empty-canvas click.
+    FootprintAddHole { x_mm: f64, y_mm: f64 },
     /// Drag the pad at `idx` to a new world position.
     FootprintMovePad { idx: usize, x_mm: f64, y_mm: f64 },
     /// Cursor moved over the canvas — drives the footer X/Y readout.
