@@ -4153,7 +4153,7 @@ fn view_footprint_editor_properties<'a>(
             );
             col = col.push(
                 container(mk_snap_check(
-                    "Snap to grid (0.1 mm)",
+                    "Snap to grid (1.0 mm)",
                     SnapOptionFlag::Grid,
                     opts.grid,
                 ))

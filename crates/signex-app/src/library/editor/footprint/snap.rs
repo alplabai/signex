@@ -25,7 +25,14 @@ use signex_sketch::SketchData;
 use super::state::{FootprintEditorState, ToolPending};
 
 /// Default grid step for free-canvas snap (mm).
-pub const GRID_STEP_MM: f64 = 0.1;
+///
+/// v0.18.7.2 — bumped from 0.1mm to 1.0mm so snap-to-grid is
+/// visibly effective in Pads mode. With 0.1mm the snap fired but
+/// rounded to a position the user couldn't tell apart from the raw
+/// click. 1.0mm matches the typical Altium PCB Library grid step
+/// (50mil ≈ 1.27mm — close enough for default; the v0.18.10 Snap
+/// Distance numeric input will let the user dial it in).
+pub const GRID_STEP_MM: f64 = 1.0;
 /// Threshold for horizontal / vertical inference (degrees).
 pub const AXIS_THRESHOLD_DEG: f64 = 5.0;
 /// Angle-snap increment in degrees (15° → 24 ticks per turn).
@@ -256,9 +263,11 @@ mod tests {
     #[test]
     fn no_anchor_grid_snaps() {
         let state = empty_state();
+        // v0.18.7.2 — GRID_STEP_MM is 1.0mm; raw cursor at
+        // (1.234, -2.567) rounds to (1.0, -3.0).
         let r = snap_cursor((1.234, -2.567), None, &state, None);
-        assert!((r.pos.0 - 1.2).abs() < 1e-9);
-        assert!((r.pos.1 - (-2.6)).abs() < 1e-9);
+        assert!((r.pos.0 - 1.0).abs() < 1e-9);
+        assert!((r.pos.1 - (-3.0)).abs() < 1e-9);
         assert!(matches!(r.kind, SnapKind::Grid));
     }
 
