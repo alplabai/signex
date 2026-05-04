@@ -238,9 +238,18 @@ jobs:
           # source signals a derivation-shaped contribution and must
           # be reviewed before merge.
           #
-          # Targets the substring (any case) so attribution comments,
-          # struct/fn names, and import paths all trip the gate.
-          if git grep -niE 'solvespace|freecad|planegcs|opencascade|sketcher' -- 'crates/signex-sketch/**/*.rs' 'crates/signex-sketch/**/*.toml' 'crates/signex-bake/**/*.rs' 'crates/signex-bake/**/*.toml'; then
+          # Word-boundary `\b...\b` so the English word "sketcher" does
+          # not collide with our own `SketchError` type (substring
+          # `Sketcher` inside `SketchError`). The word "sketcher" still
+          # legitimately describes our own product in three audit-allowed
+          # files (Cargo.toml description, lib.rs heading, bench example
+          # comment) — those are excluded via pathspec.
+          if git grep -niE '\b(solvespace|freecad|planegcs|opencascade|sketcher)\b' -- \
+               'crates/signex-sketch/**/*.rs' 'crates/signex-sketch/**/*.toml' \
+               'crates/signex-bake/**/*.rs' 'crates/signex-bake/**/*.toml' \
+               ':!crates/signex-sketch/Cargo.toml' \
+               ':!crates/signex-sketch/src/lib.rs' \
+               ':!crates/signex-sketch/examples/bench_linalg.rs'; then
             echo ""
             echo "::error::Third-party constraint-solver substring (SolveSpace / FreeCAD / planegcs / OpenCascade / Sketcher) detected under crates/signex-sketch or crates/signex-bake."
             echo "::error::Phase 1-7 of v0.13 ships a cleanroom implementation; references must come from textbooks (Hearn & Baker, Numerical Recipes) only."
@@ -259,7 +268,9 @@ jobs:
           set -e
           # Catches the form "// from <Solver>" or "// based on
           # <Solver>" that an agent might use to credit derivation.
-          if git grep -niE '(from|based on|adapted from|derived from|copied from|inspired by) [^.]*(solvespace|freecad|planegcs|opencascade|sketcher)' -- ':!docs/audit/' ':!.github/workflows/license-guard.yml'; then
+          # Word-boundary the solver names to avoid colliding with our
+          # own English use of "sketcher" in product descriptions.
+          if git grep -niE '(from|based on|adapted from|derived from|copied from|inspired by) [^.]*\b(solvespace|freecad|planegcs|opencascade|sketcher)\b' -- ':!docs/audit/' ':!.github/workflows/license-guard.yml'; then
             echo ""
             echo "::error::Attribution comment referencing a third-party constraint solver detected."
             echo "::error::All algorithm references must cite public textbooks (Hearn & Baker, Numerical Recipes) — see docs/audit/sketch-solver-2026-05-03.md."
