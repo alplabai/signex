@@ -91,36 +91,10 @@ pub fn bake_pads(
         out.push(pad);
     }
 
-    // v0.14: silk / courtyard / mask / paste / pour are baked by
-    // their dedicated modules (`crate::silk` / `crate::courtyard` /
-    // `crate::mask` / `crate::pour`). The dispatcher invokes them
-    // alongside `bake_pads`; no warning needed here.
-    //
-    // v0.14.1 will add bake for `keepout` / `board_cutout` / `v_score`.
-    // Until then, those three attrs trigger a warning.
-    for entity in &sketch.entities {
-        if entity.construction {
-            continue;
-        }
-        if entity.keepout.is_some() {
-            warnings.push(format!(
-                "entity {}: KeepoutAttr ignored — bake lands in v0.14.1; DRC enforcement in v0.15",
-                entity.id
-            ));
-        }
-        if entity.board_cutout.is_some() {
-            warnings.push(format!(
-                "entity {}: BoardCutoutAttr ignored — bake lands in v0.14.1; PCB outline subtraction at PCB-export",
-                entity.id
-            ));
-        }
-        if entity.v_score.is_some() {
-            warnings.push(format!(
-                "entity {}: VScoreHintAttr ignored — bake lands in v0.14.1; panelisation consumer in v0.16+",
-                entity.id
-            ));
-        }
-    }
+    // v0.14.1: every closed-profile attr now has its own bake module
+    // (silk / courtyard / mask / paste / pour / keepout / cutout /
+    // v_score). The dispatcher invokes all of them alongside
+    // `bake_pads`; no per-attr warning is needed in this loop anymore.
 
     Ok(())
 }

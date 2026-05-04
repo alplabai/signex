@@ -187,6 +187,9 @@ fn solve_and_bake(
                 let mut mask_excludes = Vec::new();
                 let mut paste_apertures = Vec::new();
                 let mut pours = Vec::new();
+                let mut keepouts = Vec::new();
+                let mut cutouts = Vec::new();
+                let mut v_scores = Vec::new();
                 signex_bake::bake_mask_openings(
                     sketch,
                     &out,
@@ -212,6 +215,25 @@ fn solve_and_bake(
                     &mut pours,
                     &mut state.solve_warnings,
                 )?;
+                signex_bake::bake_keepouts(
+                    sketch,
+                    &out,
+                    &mut keepouts,
+                    &mut state.solve_warnings,
+                )?;
+                signex_bake::bake_cutouts(
+                    sketch,
+                    &out,
+                    &mut cutouts,
+                    &mut state.solve_warnings,
+                )?;
+                signex_bake::bake_v_scores(
+                    sketch,
+                    &out,
+                    &resolved,
+                    &mut v_scores,
+                    &mut state.solve_warnings,
+                )?;
                 if !mask_openings.is_empty() {
                     footprint.mask_openings = mask_openings;
                 }
@@ -223,6 +245,15 @@ fn solve_and_bake(
                 }
                 if !pours.is_empty() {
                     footprint.pours = pours;
+                }
+                if !keepouts.is_empty() {
+                    footprint.keepouts = keepouts;
+                }
+                if !cutouts.is_empty() {
+                    footprint.cutouts = cutouts;
+                }
+                if !v_scores.is_empty() {
+                    footprint.v_scores = v_scores;
                 }
             }
 
