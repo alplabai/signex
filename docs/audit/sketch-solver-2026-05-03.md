@@ -341,3 +341,68 @@ No third-party constraint-solver source code, header, wiki, or blog
 post (SolveSpace, FreeCAD Sketcher, planegcs, OpenCascade, etc.)
 consulted at any phase.
 
+---
+
+## v0.13.4 — Code review fixes (2026-05-04)
+
+Branch `feature/v0.13.4-review-fixes` off `feature/v0.13.3-sketch-ui-final`.
+Six commits, one per review issue from the post-v0.13.3 `/code-review`
+pass:
+
+| SHA prefix | Subject | Fix |
+|---|---|---|
+| `8af68bf9` | fix(ci): word-boundary the v0.13 license-guard regex | CI BLOCKER — `\bsketcher\b` so `SketchError` doesn't false-positive; pathspec exclude legit wordmark uses |
+| `22331dfd` | fix(sketch): thread Solver::tolerance + max_iters through to solve_lm | Solver fields were ignored; constants TOL_SQ/MAX_ITERS removed |
+| `af5a87ee` | fix(sketch): div-by-zero in eval_div_mod returns Domain error | All 5 (family, family) Div/Mod branches now reject zero divisor |
+| `7b0835d8` | fix(app): preserve literal pads when sketch is empty | bake gated on !sketch.entities.is_empty() |
+| `2bb107f6` | fix(app): surface solver errors in inspector solve_warnings | New `apply_sketch_edit_with_warnings` helper; 10 dispatch sites |
+| `9b632f68` | fix(bake): skip construction entities in closed-profile warning loop | Mirrors the bake loop's existing construction skip |
+
+908 / 908 workspace tests pass post-fix; License Guard regex returns
+zero hits. References consulted: none new — all fixes were corrective
+on existing code.
+
+---
+
+## v0.14 — Sketch-mode bake extras (in flight from 2026-05-04)
+
+Branch `feature/v0.14-sketch-bake-extras` off
+`feature/v0.13.4-review-fixes`. Three commits so far:
+
+| SHA prefix | Subject | Tasks |
+|---|---|---|
+| `cce65ce9` | feat(library): v3 schema — pour / keepout / cutout / v_score / mask / paste_aperture fields + Castellated/Fiducial/Chamfered pad variants | Stage 1: schema bump + lib variants |
+| `c4b9c1e8` | feat(bake): closed-profile walker for v0.14 silk/courtyard/mask/pour bakes | Stage 2: walker (Lines only, Arc tessellation deferred to v0.14.1) |
+| `20befcb5` | feat(bake): silk + courtyard + mask + pour bakes; native lib variants | Stage 3: 4 new modules + dispatcher wiring + drop v0.13 lib-variant fallback warnings |
+
+Test count: signex-bake grew from 13 lib tests to 32; signex-library
+gained 10 v3 schema tests. 67 / 67 workspace test runs green.
+
+Cleanroom: walker is textbook DFS (Cormen *Introduction to
+Algorithms* §22.3 conventions); no third-party CAD-tooling source
+consulted.
+
+References consulted in v0.14 so far:
+- (no new external references — all module designs derive from the
+  existing v0.13 schema + textbook graph traversal)
+
+### v0.14 deferred to v0.14.1+
+
+The original v0.14 plan covered eight sub-tasks (A-H). Stages 1-3
+above closed A (silk), B (courtyard), C (mask × 3 attrs), D (pour),
+plus the lib-variant native bakes from G. Remaining for v0.14.1+:
+
+- E. Keepout / cutout / v-score bake — `pad.rs` warning loop now
+  flags these as "v0.14.1 feature".
+- F. 3D extrude — sketch profiles on `BodyTopPlane` enrich
+  `body_3d.outline` with the closed sketch profile.
+- G. Lib variants (partial) — `LibPadShape::Custom(SketchProfile)`
+  still falls back to bbox Rect with a warning.
+- H. Stock library — bundle ~50 common footprints as parametric
+  sketches.
+- Walker scope — Arc tessellation in profiles (currently any Arc
+  errors with `TraceError::ArcInProfile`).
+- UX deferred items from v0.13.3 (Shift+Click multi-select drag,
+  drag-to-move Point, Angle / DistancePtLine inspector, per-
+  constraint delete, dimension-edit-in-place, modal value entry
+  with units).
