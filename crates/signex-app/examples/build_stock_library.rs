@@ -22,7 +22,7 @@
 use std::error::Error;
 use std::path::Path;
 
-use signex_library::primitive::footprint::Footprint;
+use signex_library::primitive::footprint::{Footprint, FootprintFile};
 use signex_sketch::attr::{
     DrillSpec, PadAttr, PadKind, PadShape, PadSide, PasteAperturePattern,
 };
@@ -49,8 +49,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         let fp = builder();
         let path = dir.join(filename);
         let pad_count = count_sketch_pads(&fp);
-        let bytes = serde_json::to_vec_pretty(&fp)?;
-        std::fs::write(&path, bytes)?;
+        // v0.18.2 — emit TOML envelope (`snxfpt/1`). Adapter readers
+        // auto-detect TOML vs legacy JSON via
+        // `FootprintFile::from_bytes`.
+        let file = FootprintFile::from_footprint(fp.clone());
+        let text = file.to_toml_string()?;
+        std::fs::write(&path, text.as_bytes())?;
         let line = format!(
             "wrote {:<32} name={:<22} pads={}",
             path.display(),

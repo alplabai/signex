@@ -515,6 +515,149 @@ fn default_schema_v2() -> u32 {
 /// the file may use.
 pub const FOOTPRINT_SCHEMA_VERSION: u32 = 3;
 
+/// v0.18.2 — multi-footprint container for `.snxfpt` files.
+///
+/// Wire format: TOML envelope with one `[[footprints]]` array entry
+/// per Footprint. Mirrors the `SymbolFile` envelope from
+/// `primitive/symbol.rs` but ships TOML-first per the architectural
+/// spec (`docs/internal/docs/ARCHITECTURE.md` "TOML envelope + TSV
+/// bulk-block pattern matches `.snxlib`/`.snxsym`/`.snxfpt`").
+///
+/// Reader auto-detects JSON vs TOML so v0.16.5-and-earlier files
+/// continue to load unchanged. New files are written as TOML.
+///
+/// Pads are emitted inline within each footprint's `[[footprints]]`
+/// entry. The TSV bulk-block optimisation (separate
+/// `[footprints.0.pads]` table with `tsv = '''…'''`) is queued for
+/// v0.18.3 — pure TOML works as the v0.18.2 ship target and keeps
+/// the serde derive surface flat.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct FootprintFile {
+    /// Schema sentinel — current emitters write `"snxfpt/1"`.
+    /// Legacy JSON files don't carry this field; the loader detects
+    /// them via the JSON-vs-TOML format probe and wraps the bare
+    /// `Footprint` into a one-element container.
+    #[serde(default = "default_footprint_format")]
+    pub format: String,
+    /// File-level UUID — distinct from any contained footprint's uuid.
+    /// Used as the file-rename-stable handle.
+    pub file_uuid: Uuid,
+    /// Human-facing library name shown in the Footprint Library
+    /// panel header. Defaults to the file stem when empty.
+    #[serde(default)]
+    pub display_name: String,
+    /// All footprints in this file. Order is the Footprint Library
+    /// panel order.
+    pub footprints: Vec<Footprint>,
+    pub created: DateTime<Utc>,
+    pub updated: DateTime<Utc>,
+}
+
+fn default_footprint_format() -> String {
+    "snxfpt/1".to_string()
+}
+
+impl FootprintFile {
+    /// Build a new container holding a single footprint — what the
+    /// `Add New ▸ Footprint Library` flow seeds.
+    pub fn from_footprint(footprint: Footprint) -> Self {
+        let now = Utc::now();
+        Self {
+            format: default_footprint_format(),
+            file_uuid: Uuid::now_v7(),
+            display_name: footprint.name.clone(),
+            footprints: vec![footprint],
+            created: now,
+            updated: now,
+        }
+    }
+
+    /// Auto-detecting parse for `.snxfpt` bytes. Probes the first
+    /// non-whitespace byte: `{` → JSON (legacy v0.16.5 format), any
+    /// other character → TOML (v0.18.2+). Legacy JSON files are
+    /// wrapped into a one-element container.
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, FootprintFileError> {
+        let first_non_ws = bytes
+            .iter()
+            .find(|b| !b.is_ascii_whitespace())
+            .copied()
+            .ok_or(FootprintFileError::Empty)?;
+        if first_non_ws == b'{' {
+            // Legacy JSON path — accept either a bare Footprint OR a
+            // pre-existing FootprintFile JSON (defensive — earlier
+            // session experiments may have written a JSON envelope).
+            #[derive(Deserialize)]
+            #[serde(untagged)]
+            enum JsonForm {
+                Container(FootprintFile),
+                Legacy(Footprint),
+            }
+            match serde_json::from_slice::<JsonForm>(bytes)? {
+                JsonForm::Container(file) => Ok(file),
+                JsonForm::Legacy(fp) => {
+                    let now = Utc::now();
+                    Ok(Self {
+                        format: default_footprint_format(),
+                        file_uuid: fp.uuid,
+                        display_name: fp.name.clone(),
+                        created: fp.created,
+                        updated: now,
+                        footprints: vec![fp],
+                    })
+                }
+            }
+        } else {
+            let text = std::str::from_utf8(bytes)?;
+            Self::from_toml_str(text)
+        }
+    }
+
+    /// Parse the TOML wire format. The format-token check pins us to
+    /// `snxfpt/1`; mismatched files surface
+    /// [`FootprintFileError::UnsupportedFormat`].
+    pub fn from_toml_str(text: &str) -> Result<Self, FootprintFileError> {
+        let parsed: Self = toml::from_str(text)?;
+        if parsed.format != "snxfpt/1" {
+            return Err(FootprintFileError::UnsupportedFormat {
+                got: parsed.format,
+            });
+        }
+        Ok(parsed)
+    }
+
+    /// Serialise to canonical TOML. Output is deterministic — re-
+    /// parsing returns a value equal to `self`.
+    pub fn to_toml_string(&self) -> Result<String, FootprintFileError> {
+        toml::to_string_pretty(self).map_err(FootprintFileError::TomlSerialize)
+    }
+
+    /// Locate a footprint by UUID within this file.
+    pub fn get_footprint(&self, uuid: Uuid) -> Option<&Footprint> {
+        self.footprints.iter().find(|f| f.uuid == uuid)
+    }
+
+    pub fn get_footprint_mut(&mut self, uuid: Uuid) -> Option<&mut Footprint> {
+        self.footprints.iter_mut().find(|f| f.uuid == uuid)
+    }
+}
+
+/// Error variants raised by [`FootprintFile`] parsers + serialisers.
+#[derive(Debug, thiserror::Error)]
+pub enum FootprintFileError {
+    #[error("empty .snxfpt file")]
+    Empty,
+    #[error("invalid UTF-8 in TOML payload: {0}")]
+    Utf8(#[from] std::str::Utf8Error),
+    #[error("TOML deserialise failed: {0}")]
+    TomlDeserialize(#[from] toml::de::Error),
+    #[error("TOML serialise failed: {0}")]
+    TomlSerialize(toml::ser::Error),
+    #[error("JSON deserialise failed: {0}")]
+    JsonDeserialize(#[from] serde_json::Error),
+    #[error("unsupported .snxfpt format token {got:?}; this build supports \"snxfpt/1\"")]
+    UnsupportedFormat { got: String },
+}
+
 impl Footprint {
     /// Empty footprint with no pads — what the New Component flow seeds.
     pub fn empty(name: impl Into<String>) -> Self {
@@ -690,5 +833,101 @@ mod tests {
         let json = serde_json::to_string(&s).unwrap();
         let back: StepAttachment = serde_json::from_str(&json).unwrap();
         assert_eq!(s, back);
+    }
+
+    // ---- v0.18.2 — FootprintFile TOML envelope round-trip + JSON ----
+
+    #[test]
+    fn footprint_file_toml_round_trip_empty() {
+        let fp = Footprint::empty("SOIC-8");
+        let original = FootprintFile::from_footprint(fp.clone());
+        let toml_text = original.to_toml_string().expect("serialise");
+        let back = FootprintFile::from_toml_str(&toml_text).expect("parse");
+        assert_eq!(back.footprints.len(), 1);
+        assert_eq!(back.footprints[0].name, "SOIC-8");
+        assert_eq!(back.format, "snxfpt/1");
+        assert_eq!(back.file_uuid, original.file_uuid);
+    }
+
+    #[test]
+    fn footprint_file_toml_round_trip_with_pads() {
+        let mut fp = Footprint::empty("R0805");
+        fp.pads.push(fixture_pad("1"));
+        fp.pads.push(fixture_pad("2"));
+        let original = FootprintFile::from_footprint(fp);
+        let toml_text = original.to_toml_string().expect("serialise");
+        let back = FootprintFile::from_toml_str(&toml_text).expect("parse");
+        assert_eq!(back.footprints[0].pads.len(), 2);
+        assert_eq!(back.footprints[0].pads[0].number, "1");
+        assert_eq!(back.footprints[0].pads[1].number, "2");
+    }
+
+    #[test]
+    fn footprint_file_toml_round_trip_multi() {
+        let mut file = FootprintFile::from_footprint(Footprint::empty("SOIC-8"));
+        file.footprints.push(Footprint::empty("QFN-16"));
+        file.footprints.push(Footprint::empty("R0805"));
+        file.display_name = "Reference parts".into();
+        let toml_text = file.to_toml_string().expect("serialise");
+        let back = FootprintFile::from_toml_str(&toml_text).expect("parse");
+        assert_eq!(back.footprints.len(), 3);
+        let names: Vec<&str> = back.footprints.iter().map(|f| f.name.as_str()).collect();
+        assert_eq!(names, vec!["SOIC-8", "QFN-16", "R0805"]);
+    }
+
+    #[test]
+    fn footprint_file_from_bytes_auto_detects_legacy_json() {
+        // v0.16.5 stock library files contain a bare Footprint JSON.
+        // from_bytes should accept these and wrap them.
+        let legacy = Footprint::empty("Legacy-Pad");
+        let bytes = serde_json::to_vec_pretty(&legacy).unwrap();
+        let wrapped = FootprintFile::from_bytes(&bytes).expect("parse");
+        assert_eq!(wrapped.footprints.len(), 1);
+        assert_eq!(wrapped.footprints[0].name, "Legacy-Pad");
+        assert_eq!(wrapped.format, "snxfpt/1");
+        assert_eq!(wrapped.file_uuid, legacy.uuid);
+    }
+
+    #[test]
+    fn footprint_file_from_bytes_auto_detects_toml_envelope() {
+        let mut file = FootprintFile::from_footprint(Footprint::empty("TOML-Test"));
+        file.footprints.push(Footprint::empty("Second"));
+        let toml_bytes = file.to_toml_string().unwrap().into_bytes();
+        let back = FootprintFile::from_bytes(&toml_bytes).expect("parse");
+        assert_eq!(back.footprints.len(), 2);
+        assert_eq!(back.footprints[0].name, "TOML-Test");
+    }
+
+    #[test]
+    fn footprint_file_unsupported_format_token_is_rejected() {
+        // Any token other than "snxfpt/1" must surface
+        // FootprintFileError::UnsupportedFormat.
+        let bad = r#"
+format = "snxfpt/99"
+file_uuid = "00000000-0000-0000-0000-000000000000"
+display_name = ""
+created = "2026-05-04T00:00:00Z"
+updated = "2026-05-04T00:00:00Z"
+footprints = []
+"#;
+        match FootprintFile::from_toml_str(bad) {
+            Err(FootprintFileError::UnsupportedFormat { got }) => {
+                assert_eq!(got, "snxfpt/99");
+            }
+            other => panic!("expected UnsupportedFormat, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn footprint_file_get_by_uuid() {
+        let a = Footprint::empty("A");
+        let b = Footprint::empty("B");
+        let a_uuid = a.uuid;
+        let b_uuid = b.uuid;
+        let mut file = FootprintFile::from_footprint(a);
+        file.footprints.push(b);
+        assert_eq!(file.get_footprint(a_uuid).map(|f| f.name.as_str()), Some("A"));
+        assert_eq!(file.get_footprint(b_uuid).map(|f| f.name.as_str()), Some("B"));
+        assert!(file.get_footprint(Uuid::now_v7()).is_none());
     }
 }

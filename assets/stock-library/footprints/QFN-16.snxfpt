@@ -1,461 +1,461 @@
-{
-  "uuid": "019df3df-aaba-7273-b862-737e5e0394ad",
-  "name": "QFN-16",
-  "anchor": [
+format = "snxfpt/1"
+file_uuid = "019df421-9c72-76f2-9312-b4a0968c8851"
+display_name = "QFN-16"
+created = "2026-05-04T17:55:36.690584400Z"
+updated = "2026-05-04T17:55:36.690584400Z"
+
+[[footprints]]
+uuid = "019df421-9c72-76f2-9312-b49a479b79a3"
+name = "QFN-16"
+anchor = [
     0.0,
-    0.0
-  ],
-  "pads": [],
-  "courtyard": {
-    "points": []
-  },
-  "silk_f": [],
-  "silk_b": [],
-  "fab_f": [],
-  "fab_b": [],
-  "body_3d": {
-    "shape": "Extrude",
-    "height_mm": 1.0,
-    "offset_z_mm": 0.0,
-    "top_color": [
-      0.2,
-      0.2,
-      0.2,
-      1.0
-    ],
-    "side_color": [
-      0.3,
-      0.3,
-      0.3,
-      1.0
-    ],
-    "outline": null
-  },
-  "step_attachment": null,
-  "pcb_params": {},
-  "version": "0.0.1",
-  "released": false,
-  "created": "2026-05-04T16:43:34.970520400Z",
-  "updated": "2026-05-04T16:43:34.970520400Z",
-  "schema_version": 3,
-  "sketch": {
-    "planes": [
-      {
-        "id": "3248c701-c074-4d32-bf05-25884e0adb68",
-        "kind": "BoardTop"
-      }
-    ],
-    "entities": [
-      {
-        "id": "88b96d5b-7135-4eea-b1f6-9ced3932ebfd",
-        "plane": "3248c701-c074-4d32-bf05-25884e0adb68",
-        "construction": false,
-        "kind": "Point",
-        "x": 0.0,
-        "y": 0.0,
-        "pad": {
-          "number": "1",
-          "kind": "Smd",
-          "side": "Top",
-          "shape": {
-            "shape": "Rect"
-          },
-          "size_x_expr": "pad_long",
-          "size_y_expr": "pad_short",
-          "offset_x_expr": "-row_offset",
-          "offset_y_expr": "1.5 * pad_pitch",
-          "mask_margin_expr": "0.05mm",
-          "paste_margin_expr": "0mm",
-          "paste_apertures": {
-            "kind": "Single"
-          }
-        }
-      },
-      {
-        "id": "f35985a9-9c82-4ac9-bb41-bc2fb776de20",
-        "plane": "3248c701-c074-4d32-bf05-25884e0adb68",
-        "construction": false,
-        "kind": "Point",
-        "x": 0.0,
-        "y": 0.0,
-        "pad": {
-          "number": "2",
-          "kind": "Smd",
-          "side": "Top",
-          "shape": {
-            "shape": "Rect"
-          },
-          "size_x_expr": "pad_long",
-          "size_y_expr": "pad_short",
-          "offset_x_expr": "-row_offset",
-          "offset_y_expr": "0.5 * pad_pitch",
-          "mask_margin_expr": "0.05mm",
-          "paste_margin_expr": "0mm",
-          "paste_apertures": {
-            "kind": "Single"
-          }
-        }
-      },
-      {
-        "id": "70936980-883f-4ae5-bd20-e8fe0bbe8cda",
-        "plane": "3248c701-c074-4d32-bf05-25884e0adb68",
-        "construction": false,
-        "kind": "Point",
-        "x": 0.0,
-        "y": 0.0,
-        "pad": {
-          "number": "3",
-          "kind": "Smd",
-          "side": "Top",
-          "shape": {
-            "shape": "Rect"
-          },
-          "size_x_expr": "pad_long",
-          "size_y_expr": "pad_short",
-          "offset_x_expr": "-row_offset",
-          "offset_y_expr": "-0.5 * pad_pitch",
-          "mask_margin_expr": "0.05mm",
-          "paste_margin_expr": "0mm",
-          "paste_apertures": {
-            "kind": "Single"
-          }
-        }
-      },
-      {
-        "id": "ce16b45c-8082-433a-bae3-81367bb1602c",
-        "plane": "3248c701-c074-4d32-bf05-25884e0adb68",
-        "construction": false,
-        "kind": "Point",
-        "x": 0.0,
-        "y": 0.0,
-        "pad": {
-          "number": "4",
-          "kind": "Smd",
-          "side": "Top",
-          "shape": {
-            "shape": "Rect"
-          },
-          "size_x_expr": "pad_long",
-          "size_y_expr": "pad_short",
-          "offset_x_expr": "-row_offset",
-          "offset_y_expr": "-1.5 * pad_pitch",
-          "mask_margin_expr": "0.05mm",
-          "paste_margin_expr": "0mm",
-          "paste_apertures": {
-            "kind": "Single"
-          }
-        }
-      },
-      {
-        "id": "efed515e-8807-408e-a86f-67f6c5fc5928",
-        "plane": "3248c701-c074-4d32-bf05-25884e0adb68",
-        "construction": false,
-        "kind": "Point",
-        "x": 0.0,
-        "y": 0.0,
-        "pad": {
-          "number": "5",
-          "kind": "Smd",
-          "side": "Top",
-          "shape": {
-            "shape": "Rect"
-          },
-          "size_x_expr": "pad_short",
-          "size_y_expr": "pad_long",
-          "offset_x_expr": "-1.5 * pad_pitch",
-          "offset_y_expr": "-row_offset",
-          "mask_margin_expr": "0.05mm",
-          "paste_margin_expr": "0mm",
-          "paste_apertures": {
-            "kind": "Single"
-          }
-        }
-      },
-      {
-        "id": "989129b8-d8da-4292-ae13-62dc6ef8d331",
-        "plane": "3248c701-c074-4d32-bf05-25884e0adb68",
-        "construction": false,
-        "kind": "Point",
-        "x": 0.0,
-        "y": 0.0,
-        "pad": {
-          "number": "6",
-          "kind": "Smd",
-          "side": "Top",
-          "shape": {
-            "shape": "Rect"
-          },
-          "size_x_expr": "pad_short",
-          "size_y_expr": "pad_long",
-          "offset_x_expr": "-0.5 * pad_pitch",
-          "offset_y_expr": "-row_offset",
-          "mask_margin_expr": "0.05mm",
-          "paste_margin_expr": "0mm",
-          "paste_apertures": {
-            "kind": "Single"
-          }
-        }
-      },
-      {
-        "id": "a9953c2b-84de-4118-948d-7dc2d5d3a572",
-        "plane": "3248c701-c074-4d32-bf05-25884e0adb68",
-        "construction": false,
-        "kind": "Point",
-        "x": 0.0,
-        "y": 0.0,
-        "pad": {
-          "number": "7",
-          "kind": "Smd",
-          "side": "Top",
-          "shape": {
-            "shape": "Rect"
-          },
-          "size_x_expr": "pad_short",
-          "size_y_expr": "pad_long",
-          "offset_x_expr": "0.5 * pad_pitch",
-          "offset_y_expr": "-row_offset",
-          "mask_margin_expr": "0.05mm",
-          "paste_margin_expr": "0mm",
-          "paste_apertures": {
-            "kind": "Single"
-          }
-        }
-      },
-      {
-        "id": "10c11b18-e244-4ae7-abc8-f7f8df07624c",
-        "plane": "3248c701-c074-4d32-bf05-25884e0adb68",
-        "construction": false,
-        "kind": "Point",
-        "x": 0.0,
-        "y": 0.0,
-        "pad": {
-          "number": "8",
-          "kind": "Smd",
-          "side": "Top",
-          "shape": {
-            "shape": "Rect"
-          },
-          "size_x_expr": "pad_short",
-          "size_y_expr": "pad_long",
-          "offset_x_expr": "1.5 * pad_pitch",
-          "offset_y_expr": "-row_offset",
-          "mask_margin_expr": "0.05mm",
-          "paste_margin_expr": "0mm",
-          "paste_apertures": {
-            "kind": "Single"
-          }
-        }
-      },
-      {
-        "id": "49675aca-2633-4106-912f-8ecce41d4635",
-        "plane": "3248c701-c074-4d32-bf05-25884e0adb68",
-        "construction": false,
-        "kind": "Point",
-        "x": 0.0,
-        "y": 0.0,
-        "pad": {
-          "number": "9",
-          "kind": "Smd",
-          "side": "Top",
-          "shape": {
-            "shape": "Rect"
-          },
-          "size_x_expr": "pad_long",
-          "size_y_expr": "pad_short",
-          "offset_x_expr": "row_offset",
-          "offset_y_expr": "-1.5 * pad_pitch",
-          "mask_margin_expr": "0.05mm",
-          "paste_margin_expr": "0mm",
-          "paste_apertures": {
-            "kind": "Single"
-          }
-        }
-      },
-      {
-        "id": "4c248e69-f2ec-41f5-8525-a7edab420907",
-        "plane": "3248c701-c074-4d32-bf05-25884e0adb68",
-        "construction": false,
-        "kind": "Point",
-        "x": 0.0,
-        "y": 0.0,
-        "pad": {
-          "number": "10",
-          "kind": "Smd",
-          "side": "Top",
-          "shape": {
-            "shape": "Rect"
-          },
-          "size_x_expr": "pad_long",
-          "size_y_expr": "pad_short",
-          "offset_x_expr": "row_offset",
-          "offset_y_expr": "-0.5 * pad_pitch",
-          "mask_margin_expr": "0.05mm",
-          "paste_margin_expr": "0mm",
-          "paste_apertures": {
-            "kind": "Single"
-          }
-        }
-      },
-      {
-        "id": "d42b708c-58f2-45a8-8ec1-fba0bb090c89",
-        "plane": "3248c701-c074-4d32-bf05-25884e0adb68",
-        "construction": false,
-        "kind": "Point",
-        "x": 0.0,
-        "y": 0.0,
-        "pad": {
-          "number": "11",
-          "kind": "Smd",
-          "side": "Top",
-          "shape": {
-            "shape": "Rect"
-          },
-          "size_x_expr": "pad_long",
-          "size_y_expr": "pad_short",
-          "offset_x_expr": "row_offset",
-          "offset_y_expr": "0.5 * pad_pitch",
-          "mask_margin_expr": "0.05mm",
-          "paste_margin_expr": "0mm",
-          "paste_apertures": {
-            "kind": "Single"
-          }
-        }
-      },
-      {
-        "id": "55ecd9cc-564c-463d-af89-22ecdbeaf1cf",
-        "plane": "3248c701-c074-4d32-bf05-25884e0adb68",
-        "construction": false,
-        "kind": "Point",
-        "x": 0.0,
-        "y": 0.0,
-        "pad": {
-          "number": "12",
-          "kind": "Smd",
-          "side": "Top",
-          "shape": {
-            "shape": "Rect"
-          },
-          "size_x_expr": "pad_long",
-          "size_y_expr": "pad_short",
-          "offset_x_expr": "row_offset",
-          "offset_y_expr": "1.5 * pad_pitch",
-          "mask_margin_expr": "0.05mm",
-          "paste_margin_expr": "0mm",
-          "paste_apertures": {
-            "kind": "Single"
-          }
-        }
-      },
-      {
-        "id": "96660d3b-e5b5-4315-9282-7061fadad971",
-        "plane": "3248c701-c074-4d32-bf05-25884e0adb68",
-        "construction": false,
-        "kind": "Point",
-        "x": 0.0,
-        "y": 0.0,
-        "pad": {
-          "number": "13",
-          "kind": "Smd",
-          "side": "Top",
-          "shape": {
-            "shape": "Rect"
-          },
-          "size_x_expr": "pad_short",
-          "size_y_expr": "pad_long",
-          "offset_x_expr": "1.5 * pad_pitch",
-          "offset_y_expr": "row_offset",
-          "mask_margin_expr": "0.05mm",
-          "paste_margin_expr": "0mm",
-          "paste_apertures": {
-            "kind": "Single"
-          }
-        }
-      },
-      {
-        "id": "a357cea2-313d-4603-a1f7-a0d0a9539259",
-        "plane": "3248c701-c074-4d32-bf05-25884e0adb68",
-        "construction": false,
-        "kind": "Point",
-        "x": 0.0,
-        "y": 0.0,
-        "pad": {
-          "number": "14",
-          "kind": "Smd",
-          "side": "Top",
-          "shape": {
-            "shape": "Rect"
-          },
-          "size_x_expr": "pad_short",
-          "size_y_expr": "pad_long",
-          "offset_x_expr": "0.5 * pad_pitch",
-          "offset_y_expr": "row_offset",
-          "mask_margin_expr": "0.05mm",
-          "paste_margin_expr": "0mm",
-          "paste_apertures": {
-            "kind": "Single"
-          }
-        }
-      },
-      {
-        "id": "e56d86dc-15a4-4c17-b6ba-a4e2b2d48e8f",
-        "plane": "3248c701-c074-4d32-bf05-25884e0adb68",
-        "construction": false,
-        "kind": "Point",
-        "x": 0.0,
-        "y": 0.0,
-        "pad": {
-          "number": "15",
-          "kind": "Smd",
-          "side": "Top",
-          "shape": {
-            "shape": "Rect"
-          },
-          "size_x_expr": "pad_short",
-          "size_y_expr": "pad_long",
-          "offset_x_expr": "-0.5 * pad_pitch",
-          "offset_y_expr": "row_offset",
-          "mask_margin_expr": "0.05mm",
-          "paste_margin_expr": "0mm",
-          "paste_apertures": {
-            "kind": "Single"
-          }
-        }
-      },
-      {
-        "id": "ec42b4f6-2be8-490e-b98a-a234efadb283",
-        "plane": "3248c701-c074-4d32-bf05-25884e0adb68",
-        "construction": false,
-        "kind": "Point",
-        "x": 0.0,
-        "y": 0.0,
-        "pad": {
-          "number": "16",
-          "kind": "Smd",
-          "side": "Top",
-          "shape": {
-            "shape": "Rect"
-          },
-          "size_x_expr": "pad_short",
-          "size_y_expr": "pad_long",
-          "offset_x_expr": "-1.5 * pad_pitch",
-          "offset_y_expr": "row_offset",
-          "mask_margin_expr": "0.05mm",
-          "paste_margin_expr": "0mm",
-          "paste_apertures": {
-            "kind": "Single"
-          }
-        }
-      }
-    ],
-    "constraints": [],
-    "arrays": [],
-    "parameters": {
-      "body_h": "3.0mm",
-      "body_w": "3.0mm",
-      "pad_long": "0.6mm",
-      "pad_pitch": "0.5mm",
-      "pad_short": "0.3mm",
-      "row_offset": "1.6mm"
-    }
-  }
-}
+    0.0,
+]
+pads = []
+silk_f = []
+silk_b = []
+fab_f = []
+fab_b = []
+version = "0.0.1"
+released = false
+created = "2026-05-04T17:55:36.690535400Z"
+updated = "2026-05-04T17:55:36.690535400Z"
+schema_version = 3
+
+[footprints.courtyard]
+points = []
+
+[footprints.body_3d]
+shape = "Extrude"
+height_mm = 1.0
+offset_z_mm = 0.0
+top_color = [
+    0.20000000298023224,
+    0.20000000298023224,
+    0.20000000298023224,
+    1.0,
+]
+side_color = [
+    0.30000001192092896,
+    0.30000001192092896,
+    0.30000001192092896,
+    1.0,
+]
+
+[footprints.pcb_params]
+
+[footprints.sketch]
+constraints = []
+arrays = []
+
+[[footprints.sketch.planes]]
+id = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+kind = "BoardTop"
+
+[[footprints.sketch.entities]]
+id = "7ecff22a-c234-4218-93ad-8f6f0b59a287"
+plane = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+construction = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "1"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_long"
+size_y_expr = "pad_short"
+offset_x_expr = "-row_offset"
+offset_y_expr = "1.5 * pad_pitch"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[[footprints.sketch.entities]]
+id = "feced505-6378-4034-ba3c-006d0a39a2c9"
+plane = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+construction = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "2"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_long"
+size_y_expr = "pad_short"
+offset_x_expr = "-row_offset"
+offset_y_expr = "0.5 * pad_pitch"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[[footprints.sketch.entities]]
+id = "f3ac60e6-3040-4275-bce2-b3f0da0430bf"
+plane = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+construction = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "3"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_long"
+size_y_expr = "pad_short"
+offset_x_expr = "-row_offset"
+offset_y_expr = "-0.5 * pad_pitch"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[[footprints.sketch.entities]]
+id = "c06c7770-c91c-4437-bc3d-d3ec0cf48ebe"
+plane = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+construction = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "4"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_long"
+size_y_expr = "pad_short"
+offset_x_expr = "-row_offset"
+offset_y_expr = "-1.5 * pad_pitch"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[[footprints.sketch.entities]]
+id = "5c558b03-cf27-4f23-9623-0645a7bc6302"
+plane = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+construction = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "5"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_short"
+size_y_expr = "pad_long"
+offset_x_expr = "-1.5 * pad_pitch"
+offset_y_expr = "-row_offset"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[[footprints.sketch.entities]]
+id = "370290f6-518f-40c7-ba72-a5820e07e4ca"
+plane = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+construction = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "6"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_short"
+size_y_expr = "pad_long"
+offset_x_expr = "-0.5 * pad_pitch"
+offset_y_expr = "-row_offset"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[[footprints.sketch.entities]]
+id = "af946d6b-8eef-4cdc-8ff8-62357c1aac5f"
+plane = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+construction = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "7"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_short"
+size_y_expr = "pad_long"
+offset_x_expr = "0.5 * pad_pitch"
+offset_y_expr = "-row_offset"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[[footprints.sketch.entities]]
+id = "7efb4bfd-e894-4226-a75d-bd0bd99b9586"
+plane = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+construction = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "8"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_short"
+size_y_expr = "pad_long"
+offset_x_expr = "1.5 * pad_pitch"
+offset_y_expr = "-row_offset"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[[footprints.sketch.entities]]
+id = "285312b7-9e38-4fc2-ac40-fadf3491b658"
+plane = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+construction = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "9"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_long"
+size_y_expr = "pad_short"
+offset_x_expr = "row_offset"
+offset_y_expr = "-1.5 * pad_pitch"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[[footprints.sketch.entities]]
+id = "a8c1c26b-8932-4ed5-9c3b-c8012fb7721d"
+plane = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+construction = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "10"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_long"
+size_y_expr = "pad_short"
+offset_x_expr = "row_offset"
+offset_y_expr = "-0.5 * pad_pitch"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[[footprints.sketch.entities]]
+id = "4ee1afd1-ec43-41ca-a215-d3e1fcd0b915"
+plane = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+construction = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "11"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_long"
+size_y_expr = "pad_short"
+offset_x_expr = "row_offset"
+offset_y_expr = "0.5 * pad_pitch"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[[footprints.sketch.entities]]
+id = "def06a1c-511b-4e70-96c5-2998d3ddafda"
+plane = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+construction = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "12"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_long"
+size_y_expr = "pad_short"
+offset_x_expr = "row_offset"
+offset_y_expr = "1.5 * pad_pitch"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[[footprints.sketch.entities]]
+id = "8fde1b56-2137-458d-bd7c-9d911596c41c"
+plane = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+construction = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "13"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_short"
+size_y_expr = "pad_long"
+offset_x_expr = "1.5 * pad_pitch"
+offset_y_expr = "row_offset"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[[footprints.sketch.entities]]
+id = "4c897a39-653b-4424-9c9f-77845ab0a94c"
+plane = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+construction = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "14"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_short"
+size_y_expr = "pad_long"
+offset_x_expr = "0.5 * pad_pitch"
+offset_y_expr = "row_offset"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[[footprints.sketch.entities]]
+id = "97ec1315-5ff9-4f70-ae31-1b64b53a2733"
+plane = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+construction = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "15"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_short"
+size_y_expr = "pad_long"
+offset_x_expr = "-0.5 * pad_pitch"
+offset_y_expr = "row_offset"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[[footprints.sketch.entities]]
+id = "fdc1826b-e684-4fc5-a4c0-8de9b9af34ef"
+plane = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+construction = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "16"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_short"
+size_y_expr = "pad_long"
+offset_x_expr = "-1.5 * pad_pitch"
+offset_y_expr = "row_offset"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[footprints.sketch.parameters]
+body_h = "3.0mm"
+body_w = "3.0mm"
+pad_long = "0.6mm"
+pad_pitch = "0.5mm"
+pad_short = "0.3mm"
+row_offset = "1.6mm"

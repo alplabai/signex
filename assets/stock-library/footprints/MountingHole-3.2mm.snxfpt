@@ -1,83 +1,83 @@
-{
-  "uuid": "019df3df-aabb-7733-b726-4ec228fc4c9e",
-  "name": "MountingHole-3.2mm",
-  "anchor": [
+format = "snxfpt/1"
+file_uuid = "019df421-9c77-7381-8b6b-8509d915c240"
+display_name = "MountingHole-3.2mm"
+created = "2026-05-04T17:55:36.695427600Z"
+updated = "2026-05-04T17:55:36.695427600Z"
+
+[[footprints]]
+uuid = "019df421-9c77-7381-8b6b-84f5a695cb9e"
+name = "MountingHole-3.2mm"
+anchor = [
     0.0,
-    0.0
-  ],
-  "pads": [],
-  "courtyard": {
-    "points": []
-  },
-  "silk_f": [],
-  "silk_b": [],
-  "fab_f": [],
-  "fab_b": [],
-  "body_3d": {
-    "shape": "Extrude",
-    "height_mm": 1.0,
-    "offset_z_mm": 0.0,
-    "top_color": [
-      0.2,
-      0.2,
-      0.2,
-      1.0
-    ],
-    "side_color": [
-      0.3,
-      0.3,
-      0.3,
-      1.0
-    ],
-    "outline": null
-  },
-  "step_attachment": null,
-  "pcb_params": {},
-  "version": "0.0.1",
-  "released": false,
-  "created": "2026-05-04T16:43:34.971876Z",
-  "updated": "2026-05-04T16:43:34.971876Z",
-  "schema_version": 3,
-  "sketch": {
-    "planes": [
-      {
-        "id": "82974be4-6239-432e-b3a4-080dab789fa2",
-        "kind": "BoardTop"
-      }
-    ],
-    "entities": [
-      {
-        "id": "d88b9de9-aa2a-4514-a4a2-ba91df06b84a",
-        "plane": "82974be4-6239-432e-b3a4-080dab789fa2",
-        "construction": false,
-        "kind": "Point",
-        "x": 0.0,
-        "y": 0.0,
-        "pad": {
-          "number": "MH1",
-          "kind": "NptHole",
-          "side": "All",
-          "shape": {
-            "shape": "Round"
-          },
-          "size_x_expr": "clearance_dia",
-          "size_y_expr": "clearance_dia",
-          "drill": {
-            "diameter_expr": "drill_dia",
-            "plated": false
-          },
-          "mask_margin_expr": "0.05mm",
-          "paste_apertures": {
-            "kind": "Single"
-          }
-        }
-      }
-    ],
-    "constraints": [],
-    "arrays": [],
-    "parameters": {
-      "clearance_dia": "6.0mm",
-      "drill_dia": "3.2mm"
-    }
-  }
-}
+    0.0,
+]
+pads = []
+silk_f = []
+silk_b = []
+fab_f = []
+fab_b = []
+version = "0.0.1"
+released = false
+created = "2026-05-04T17:55:36.695410100Z"
+updated = "2026-05-04T17:55:36.695410100Z"
+schema_version = 3
+
+[footprints.courtyard]
+points = []
+
+[footprints.body_3d]
+shape = "Extrude"
+height_mm = 1.0
+offset_z_mm = 0.0
+top_color = [
+    0.20000000298023224,
+    0.20000000298023224,
+    0.20000000298023224,
+    1.0,
+]
+side_color = [
+    0.30000001192092896,
+    0.30000001192092896,
+    0.30000001192092896,
+    1.0,
+]
+
+[footprints.pcb_params]
+
+[footprints.sketch]
+constraints = []
+arrays = []
+
+[[footprints.sketch.planes]]
+id = "a24e0a0e-11f8-47a5-8be2-32e04ae24d27"
+kind = "BoardTop"
+
+[[footprints.sketch.entities]]
+id = "a053736b-032e-4203-b13a-b81176062689"
+plane = "a24e0a0e-11f8-47a5-8be2-32e04ae24d27"
+construction = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "MH1"
+kind = "NptHole"
+side = "All"
+size_x_expr = "clearance_dia"
+size_y_expr = "clearance_dia"
+mask_margin_expr = "0.05mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Round"
+
+[footprints.sketch.entities.pad.drill]
+diameter_expr = "drill_dia"
+plated = false
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[footprints.sketch.parameters]
+clearance_dia = "6.0mm"
+drill_dia = "3.2mm"

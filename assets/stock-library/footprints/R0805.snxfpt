@@ -1,108 +1,108 @@
-{
-  "uuid": "019df3df-aabb-7733-b726-4ebaf8207774",
-  "name": "R0805",
-  "anchor": [
+format = "snxfpt/1"
+file_uuid = "019df421-9c76-71e1-a842-e47c204b7db3"
+display_name = "R0805"
+created = "2026-05-04T17:55:36.694470Z"
+updated = "2026-05-04T17:55:36.694470Z"
+
+[[footprints]]
+uuid = "019df421-9c76-71e1-a842-e46b9e283db3"
+name = "R0805"
+anchor = [
     0.0,
-    0.0
-  ],
-  "pads": [],
-  "courtyard": {
-    "points": []
-  },
-  "silk_f": [],
-  "silk_b": [],
-  "fab_f": [],
-  "fab_b": [],
-  "body_3d": {
-    "shape": "Extrude",
-    "height_mm": 1.0,
-    "offset_z_mm": 0.0,
-    "top_color": [
-      0.2,
-      0.2,
-      0.2,
-      1.0
-    ],
-    "side_color": [
-      0.3,
-      0.3,
-      0.3,
-      1.0
-    ],
-    "outline": null
-  },
-  "step_attachment": null,
-  "pcb_params": {},
-  "version": "0.0.1",
-  "released": false,
-  "created": "2026-05-04T16:43:34.971200Z",
-  "updated": "2026-05-04T16:43:34.971200Z",
-  "schema_version": 3,
-  "sketch": {
-    "planes": [
-      {
-        "id": "1424a7ee-837e-437e-8992-ecfa5299aa40",
-        "kind": "BoardTop"
-      }
-    ],
-    "entities": [
-      {
-        "id": "bbf1d822-3abf-4251-a6be-b0d0af49dd3f",
-        "plane": "1424a7ee-837e-437e-8992-ecfa5299aa40",
-        "construction": false,
-        "kind": "Point",
-        "x": 0.0,
-        "y": 0.0,
-        "pad": {
-          "number": "1",
-          "kind": "Smd",
-          "side": "Top",
-          "shape": {
-            "shape": "Rect"
-          },
-          "size_x_expr": "pad_w",
-          "size_y_expr": "pad_h",
-          "offset_x_expr": "-0.5 * pad_spacing",
-          "mask_margin_expr": "0.05mm",
-          "paste_margin_expr": "0mm",
-          "paste_apertures": {
-            "kind": "Single"
-          }
-        }
-      },
-      {
-        "id": "2e10361e-6131-4df8-a406-211bdb0fad27",
-        "plane": "1424a7ee-837e-437e-8992-ecfa5299aa40",
-        "construction": false,
-        "kind": "Point",
-        "x": 0.0,
-        "y": 0.0,
-        "pad": {
-          "number": "2",
-          "kind": "Smd",
-          "side": "Top",
-          "shape": {
-            "shape": "Rect"
-          },
-          "size_x_expr": "pad_w",
-          "size_y_expr": "pad_h",
-          "offset_x_expr": "0.5 * pad_spacing",
-          "mask_margin_expr": "0.05mm",
-          "paste_margin_expr": "0mm",
-          "paste_apertures": {
-            "kind": "Single"
-          }
-        }
-      }
-    ],
-    "constraints": [],
-    "arrays": [],
-    "parameters": {
-      "body_h": "1.25mm",
-      "body_w": "2.0mm",
-      "pad_h": "1.25mm",
-      "pad_spacing": "2.0mm",
-      "pad_w": "1.0mm"
-    }
-  }
-}
+    0.0,
+]
+pads = []
+silk_f = []
+silk_b = []
+fab_f = []
+fab_b = []
+version = "0.0.1"
+released = false
+created = "2026-05-04T17:55:36.694450300Z"
+updated = "2026-05-04T17:55:36.694450300Z"
+schema_version = 3
+
+[footprints.courtyard]
+points = []
+
+[footprints.body_3d]
+shape = "Extrude"
+height_mm = 1.0
+offset_z_mm = 0.0
+top_color = [
+    0.20000000298023224,
+    0.20000000298023224,
+    0.20000000298023224,
+    1.0,
+]
+side_color = [
+    0.30000001192092896,
+    0.30000001192092896,
+    0.30000001192092896,
+    1.0,
+]
+
+[footprints.pcb_params]
+
+[footprints.sketch]
+constraints = []
+arrays = []
+
+[[footprints.sketch.planes]]
+id = "3edc9c76-e23e-4ff6-a52f-a1ebeeea15ec"
+kind = "BoardTop"
+
+[[footprints.sketch.entities]]
+id = "164caae1-4199-46ad-93f6-50cd3798f339"
+plane = "3edc9c76-e23e-4ff6-a52f-a1ebeeea15ec"
+construction = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "1"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_w"
+size_y_expr = "pad_h"
+offset_x_expr = "-0.5 * pad_spacing"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[[footprints.sketch.entities]]
+id = "8c367293-2be6-4bae-a13c-8702e17c7b2d"
+plane = "3edc9c76-e23e-4ff6-a52f-a1ebeeea15ec"
+construction = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "2"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_w"
+size_y_expr = "pad_h"
+offset_x_expr = "0.5 * pad_spacing"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[footprints.sketch.parameters]
+body_h = "1.25mm"
+body_w = "2.0mm"
+pad_h = "1.25mm"
+pad_spacing = "2.0mm"
+pad_w = "1.0mm"

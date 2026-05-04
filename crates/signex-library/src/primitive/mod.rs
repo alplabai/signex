@@ -20,8 +20,8 @@ pub mod sim;
 pub mod symbol;
 
 pub use footprint::{
-    Body3D, BodyShape, Drill, Footprint, FpGraphic, FpGraphicKind, LayerId, Pad, PadKind, PadShape,
-    Polygon, StepAttachment,
+    Body3D, BodyShape, Drill, Footprint, FootprintFile, FootprintFileError, FpGraphic,
+    FpGraphicKind, LayerId, Pad, PadKind, PadShape, Polygon, StepAttachment,
 };
 pub use ref_::PrimitiveRef;
 pub use sim::{SimKind, SimModel};

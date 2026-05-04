@@ -1,79 +1,79 @@
-{
-  "uuid": "019df3df-aabc-7301-bbd7-2b1abd846810",
-  "name": "Fiducial-1mm",
-  "anchor": [
+format = "snxfpt/1"
+file_uuid = "019df421-9c78-77d1-ad92-37f652013ed3"
+display_name = "Fiducial-1mm"
+created = "2026-05-04T17:55:36.696230800Z"
+updated = "2026-05-04T17:55:36.696230800Z"
+
+[[footprints]]
+uuid = "019df421-9c78-77d1-ad92-37ef49895786"
+name = "Fiducial-1mm"
+anchor = [
     0.0,
-    0.0
-  ],
-  "pads": [],
-  "courtyard": {
-    "points": []
-  },
-  "silk_f": [],
-  "silk_b": [],
-  "fab_f": [],
-  "fab_b": [],
-  "body_3d": {
-    "shape": "Extrude",
-    "height_mm": 1.0,
-    "offset_z_mm": 0.0,
-    "top_color": [
-      0.2,
-      0.2,
-      0.2,
-      1.0
-    ],
-    "side_color": [
-      0.3,
-      0.3,
-      0.3,
-      1.0
-    ],
-    "outline": null
-  },
-  "step_attachment": null,
-  "pcb_params": {},
-  "version": "0.0.1",
-  "released": false,
-  "created": "2026-05-04T16:43:34.972288300Z",
-  "updated": "2026-05-04T16:43:34.972288300Z",
-  "schema_version": 3,
-  "sketch": {
-    "planes": [
-      {
-        "id": "39794942-4973-4406-902c-385bd2ba2e79",
-        "kind": "BoardTop"
-      }
-    ],
-    "entities": [
-      {
-        "id": "8a94e1b1-f494-4eca-9f51-fd7cfa1f1f6b",
-        "plane": "39794942-4973-4406-902c-385bd2ba2e79",
-        "construction": false,
-        "kind": "Point",
-        "x": 0.0,
-        "y": 0.0,
-        "pad": {
-          "number": "FID1",
-          "kind": "Fiducial",
-          "side": "Top",
-          "shape": {
-            "shape": "Round"
-          },
-          "size_x_expr": "copper_dia",
-          "size_y_expr": "copper_dia",
-          "mask_margin_expr": "0.5mm",
-          "paste_apertures": {
-            "kind": "Single"
-          }
-        }
-      }
-    ],
-    "constraints": [],
-    "arrays": [],
-    "parameters": {
-      "copper_dia": "1.0mm",
-      "mask_dia": "2.0mm"
-    }
-  }
-}
+    0.0,
+]
+pads = []
+silk_f = []
+silk_b = []
+fab_f = []
+fab_b = []
+version = "0.0.1"
+released = false
+created = "2026-05-04T17:55:36.696215800Z"
+updated = "2026-05-04T17:55:36.696215800Z"
+schema_version = 3
+
+[footprints.courtyard]
+points = []
+
+[footprints.body_3d]
+shape = "Extrude"
+height_mm = 1.0
+offset_z_mm = 0.0
+top_color = [
+    0.20000000298023224,
+    0.20000000298023224,
+    0.20000000298023224,
+    1.0,
+]
+side_color = [
+    0.30000001192092896,
+    0.30000001192092896,
+    0.30000001192092896,
+    1.0,
+]
+
+[footprints.pcb_params]
+
+[footprints.sketch]
+constraints = []
+arrays = []
+
+[[footprints.sketch.planes]]
+id = "f08feaa8-39c2-4740-81a8-e4c1bdbe88ab"
+kind = "BoardTop"
+
+[[footprints.sketch.entities]]
+id = "f578f47d-9482-4ec0-ad29-c0e6b7880aa3"
+plane = "f08feaa8-39c2-4740-81a8-e4c1bdbe88ab"
+construction = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "FID1"
+kind = "Fiducial"
+side = "Top"
+size_x_expr = "copper_dia"
+size_y_expr = "copper_dia"
+mask_margin_expr = "0.5mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Round"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[footprints.sketch.parameters]
+copper_dia = "1.0mm"
+mask_dia = "2.0mm"

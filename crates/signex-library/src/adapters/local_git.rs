@@ -348,13 +348,43 @@ impl LocalGitAdapter {
             )));
         }
         let bytes = fs::read(&path)?;
+        // v0.18.2 — `.snxfpt` files now use TOML envelope by default
+        // but the on-disk JSON corpus stays readable. The
+        // `FootprintFile::from_bytes` auto-detect handles the dispatch
+        // for footprint primitives; other primitive kinds keep the
+        // legacy serde_json path until their own TOML migration lands.
+        if matches!(kind, PrimitiveKind::Footprint) {
+            // Build a TOML-or-JSON FootprintFile, then return its
+            // first contained Footprint. The deserialise-into-T path
+            // round-trips through the Footprint shape because callers
+            // (read_footprint) hand T = Footprint here.
+            let file = crate::primitive::FootprintFile::from_bytes(&bytes)
+                .map_err(|e| LibraryError::Backend(format!("read .snxfpt: {e}")))?;
+            let fp = file
+                .footprints
+                .into_iter()
+                .next()
+                .ok_or_else(|| LibraryError::Backend("empty FootprintFile".into()))?;
+            // T should be Footprint here; serde round-trip via JSON
+            // keeps the call signature generic without inventing a
+            // dispatch enum.
+            let buf = serde_json::to_vec(&fp)
+                .map_err(|e| LibraryError::Backend(format!("re-serialise footprint: {e}")))?;
+            let value: T = serde_json::from_slice(&buf)
+                .map_err(|e| LibraryError::Backend(format!("read primitive: {e}")))?;
+            return Ok(value);
+        }
         let value: T = serde_json::from_slice(&bytes)
             .map_err(|e| LibraryError::Backend(format!("read primitive: {e}")))?;
         Ok(value)
     }
 
-    /// Persist a primitive JSON file under `<root>/<subdir>/<uuid>.<ext>`,
+    /// Persist a primitive file under `<root>/<subdir>/<uuid>.<ext>`,
     /// stage + commit it via libgit2 with the supplied message.
+    ///
+    /// v0.18.2 — `.snxfpt` files emit as TOML envelope. Other
+    /// primitive kinds (`.snxsym`, `.snxsim`) keep emitting JSON
+    /// until their own migration ships.
     fn write_primitive<T: Serialize>(
         &self,
         kind: PrimitiveKind,
@@ -366,8 +396,21 @@ impl LocalGitAdapter {
         fs::create_dir_all(&dir)?;
         let rel_path = format!("{}/{uuid}.{}", primitive_subdir(kind), primitive_ext(kind));
         let abs_path = self.root_dir.join(&rel_path);
-        let bytes = serde_json::to_vec_pretty(value)
-            .map_err(|e| LibraryError::Backend(format!("write primitive: {e}")))?;
+        let bytes = if matches!(kind, PrimitiveKind::Footprint) {
+            // T is Footprint here — round-trip through JSON to obtain
+            // the typed value, wrap into FootprintFile, then emit TOML.
+            let buf = serde_json::to_vec(value)
+                .map_err(|e| LibraryError::Backend(format!("re-serialise footprint: {e}")))?;
+            let fp: crate::primitive::Footprint = serde_json::from_slice(&buf)
+                .map_err(|e| LibraryError::Backend(format!("write primitive: {e}")))?;
+            let file = crate::primitive::FootprintFile::from_footprint(fp);
+            file.to_toml_string()
+                .map_err(|e| LibraryError::Backend(format!("emit .snxfpt: {e}")))?
+                .into_bytes()
+        } else {
+            serde_json::to_vec_pretty(value)
+                .map_err(|e| LibraryError::Backend(format!("write primitive: {e}")))?
+        };
         fs::write(&abs_path, bytes)?;
 
         let fallback = format!("save {} {uuid}", primitive_kind_str(kind));
@@ -634,8 +677,26 @@ impl LocalGitAdapter {
                 continue;
             };
             let bytes = fs::read(path)?;
-            let value: T = serde_json::from_slice(&bytes)
-                .map_err(|e| LibraryError::Backend(format!("list primitive {name}: {e}")))?;
+            // v0.18.2 — `.snxfpt` files migrated to TOML envelope.
+            // Auto-detect via `FootprintFile::from_bytes`, then serde
+            // round-trip through JSON to recover the generic T = Footprint
+            // shape. Other primitive kinds keep the legacy JSON path.
+            let value: T = if matches!(kind, PrimitiveKind::Footprint) {
+                let file = crate::primitive::FootprintFile::from_bytes(&bytes)
+                    .map_err(|e| LibraryError::Backend(format!("list primitive {name}: {e}")))?;
+                let fp = file.footprints.into_iter().next().ok_or_else(|| {
+                    LibraryError::Backend(format!("empty .snxfpt {name}"))
+                })?;
+                let buf = serde_json::to_vec(&fp).map_err(|e| {
+                    LibraryError::Backend(format!("re-serialise .snxfpt {name}: {e}"))
+                })?;
+                serde_json::from_slice(&buf).map_err(|e| {
+                    LibraryError::Backend(format!("list primitive {name}: {e}"))
+                })?
+            } else {
+                serde_json::from_slice(&bytes)
+                    .map_err(|e| LibraryError::Backend(format!("list primitive {name}: {e}")))?
+            };
             out.push(PrimitiveSummary {
                 uuid,
                 name: name_of(&value).to_string(),
