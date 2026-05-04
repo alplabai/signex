@@ -42,9 +42,9 @@ pub fn bake_pours(
             Some(a) => a,
             None => continue,
         };
-        if !matches!(entity.kind, EntityKind::Line { .. }) {
+        if !matches!(entity.kind, EntityKind::Line { .. } | EntityKind::Arc { .. }) {
             warnings.push(format!(
-                "entity {}: PourAttr requires a Line seed in v0.14 (Arcs / Circles land in v0.14.1); skipping",
+                "entity {}: PourAttr requires a Line or Arc seed (Circles land in v0.14.2); skipping",
                 entity.id
             ));
             continue;
@@ -62,13 +62,6 @@ pub fn bake_pours(
             Err(TraceError::Branching) => {
                 warnings.push(format!(
                     "entity {}: PourAttr profile branches at a vertex; skipping",
-                    entity.id
-                ));
-                continue;
-            }
-            Err(TraceError::ArcInProfile) => {
-                warnings.push(format!(
-                    "entity {}: PourAttr profile contains an Arc — arc tessellation lands in v0.14.1",
                     entity.id
                 ));
                 continue;

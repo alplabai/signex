@@ -100,9 +100,9 @@ where
             Some(l) => l,
             None => continue,
         };
-        if !matches!(entity.kind, EntityKind::Line { .. }) {
+        if !matches!(entity.kind, EntityKind::Line { .. } | EntityKind::Arc { .. }) {
             warnings.push(format!(
-                "entity {}: {attr_name} requires a Line seed in v0.14 (Arcs / Circles land in v0.14.1); skipping",
+                "entity {}: {attr_name} requires a Line or Arc seed (Circles land in v0.14.2); skipping",
                 entity.id
             ));
             continue;
@@ -123,10 +123,6 @@ where
             )),
             Err(TraceError::Branching) => warnings.push(format!(
                 "entity {}: {attr_name} profile branches at a vertex; skipping",
-                entity.id
-            )),
-            Err(TraceError::ArcInProfile) => warnings.push(format!(
-                "entity {}: {attr_name} profile contains an Arc — arc tessellation lands in v0.14.1",
                 entity.id
             )),
             Err(other) => warnings.push(format!(

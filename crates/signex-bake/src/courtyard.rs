@@ -43,10 +43,11 @@ pub fn bake_courtyard(
         if entity.courtyard.is_none() {
             continue;
         }
-        // The walker only takes Line seeds in v0.14.
-        if !matches!(entity.kind, EntityKind::Line { .. }) {
+        // The walker takes Line + Arc seeds (Circles still skipped in
+        // v0.14.1 — Circle bake lands in v0.14.2).
+        if !matches!(entity.kind, EntityKind::Line { .. } | EntityKind::Arc { .. }) {
             warnings.push(format!(
-                "entity {}: CourtyardAttr requires a Line seed in v0.14 (Arcs / Circles land in v0.14.1); skipping",
+                "entity {}: CourtyardAttr requires a Line or Arc seed (Circles land in v0.14.2); skipping",
                 entity.id
             ));
             continue;
@@ -72,12 +73,8 @@ pub fn bake_courtyard(
                 "entity {}: CourtyardAttr profile branches at a vertex; skipping",
                 entity.id
             )),
-            Err(TraceError::ArcInProfile) => warnings.push(format!(
-                "entity {}: CourtyardAttr profile contains an Arc — arc tessellation lands in v0.14.1",
-                entity.id
-            )),
             Err(TraceError::CircleInProfile) => warnings.push(format!(
-                "entity {}: CourtyardAttr profile is a Circle — Circle bake lands in v0.14.1",
+                "entity {}: CourtyardAttr profile is a Circle — Circle bake lands in v0.14.2",
                 entity.id
             )),
             Err(other) => warnings.push(format!(
