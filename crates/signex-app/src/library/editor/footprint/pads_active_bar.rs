@@ -30,28 +30,27 @@ use crate::icons;
 use crate::library::editor::footprint::state::EditorMode;
 use crate::library::messages::{LibraryMessage, PrimitiveEditorMsg};
 
-/// v0.14.2 — segmented mode-switch control rendered as a Custom slot
-/// at the left edge of every footprint editor active bar (Pads +
-/// Sketch). Three connected segments (Pads / Sketch / 3D); the
-/// active segment paints with the accent background. Re-used by
-/// both `pads_active_bar::items` and
-/// `sketch_mode::active_bar::items` so the control reads identically
-/// in either mode, anchored to the same screen position.
-pub fn mode_segments_item(
-    editor: &FootprintEditorState,
-    tokens: &ThemeTokens,
-) -> ActiveBarItem<LibraryMessage> {
+/// v0.14.2 — standalone floating mode-switch widget rendered at the
+/// top-left of the canvas via `Stack` overlay (separate from the
+/// active bar's tools). Three connected segments in **Sketch /
+/// Pads / 3D** order; the active segment paints with the accent
+/// background.
+pub fn mode_switcher_overlay<'a>(
+    editor: &'a FootprintEditorState,
+    tokens: &'a ThemeTokens,
+) -> iced::Element<'a, LibraryMessage> {
     let mode = editor.state.mode;
     let path = editor.path.clone();
     let text_c = theme_ext::text_primary(tokens);
     let border = theme_ext::border_color(tokens);
     let accent = theme_ext::to_color(&tokens.accent);
+    let panel_bg = theme_ext::to_color(&tokens.panel_bg);
 
     let segment = move |label: &'static str,
                         target: EditorMode,
                         active: bool,
                         path: PathBuf|
-     -> Element<'static, LibraryMessage> {
+     -> iced::Element<'a, LibraryMessage> {
         let label_color = if active { iced::Color::WHITE } else { text_c };
         button(
             text(label)
@@ -59,7 +58,7 @@ pub fn mode_segments_item(
                 .color(label_color)
                 .align_x(iced::alignment::Horizontal::Center),
         )
-        .padding([3, 10])
+        .padding([5, 12])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
             path,
             msg: PrimitiveEditorMsg::FootprintSetMode(target),
@@ -82,17 +81,37 @@ pub fn mode_segments_item(
         .into()
     };
 
-    let inner: Element<'static, LibraryMessage> = row![
-        segment("Pads", EditorMode::Normal, matches!(mode, EditorMode::Normal), path.clone()),
+    // Sketch · Pads · 3D — per user spec.
+    let segments = row![
         segment("Sketch", EditorMode::Sketch, matches!(mode, EditorMode::Sketch), path.clone()),
+        segment("Pads", EditorMode::Normal, matches!(mode, EditorMode::Normal), path.clone()),
         segment("3D", EditorMode::View3d, matches!(mode, EditorMode::View3d), path.clone()),
     ]
     .spacing(2)
-    .align_y(iced::Alignment::Center)
-    .height(Length::Shrink)
-    .into();
+    .align_y(iced::Alignment::Center);
 
-    ActiveBarItem::Custom(inner)
+    // Wrap in a panel-backed container so the chrome reads as a
+    // floating chip over the canvas (matches the active bar's
+    // visual rhythm).
+    iced::widget::container(
+        iced::widget::container(segments)
+            .padding(4)
+            .style(move |_: &Theme| iced::widget::container::Style {
+                background: Some(iced::Background::Color(panel_bg)),
+                border: Border {
+                    width: 1.0,
+                    radius: 4.0.into(),
+                    color: border,
+                },
+                ..iced::widget::container::Style::default()
+            }),
+    )
+    .padding([6, 10])
+    .align_x(iced::alignment::Horizontal::Right)
+    .align_y(iced::alignment::Vertical::Top)
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .into()
 }
 
 /// Build the Pads-mode Active Bar items.
@@ -169,13 +188,8 @@ pub fn items(
     // v0.14.2: dedicated "Edit Sketch" button removed — mode
     // segments at the left of the bar drive mode switching.
 
+    let _ = tokens;
     vec![
-        // v0.14.2: mode segmented control on the LEFT of every
-        // footprint editor active bar (Pads + Sketch). Same widget
-        // anchored to the same screen position whichever mode is
-        // active.
-        mode_segments_item(editor, tokens),
-        ActiveBarItem::Separator,
         select,
         ActiveBarItem::Separator,
         // Altium-parity Place tools — most are stubs in v0.14.x.

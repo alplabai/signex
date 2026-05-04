@@ -359,6 +359,13 @@ pub fn view_footprint<'a>(
     // Active bar floats OVER the canvas via Stack so the canvas
     // drawing area extends edge-to-edge behind it instead of being
     // clipped under the bar's bottom. Mirrors Fusion 360 / Altium.
+    // v0.14.2 — mode switcher is its own floating widget at the
+    // canvas's top-LEFT, separate from the centered active bar.
+    let mode_switcher =
+        crate::library::editor::footprint::pads_active_bar::mode_switcher_overlay(
+            editor, tokens,
+        );
+
     let body: Element<'a, LibraryMessage> = match editor.state.mode {
         EditorMode::Sketch => {
             let active_bar = container(
@@ -371,7 +378,8 @@ pub fn view_footprint<'a>(
             .align_y(iced::alignment::Vertical::Top);
             let canvas_with_bar = iced::widget::Stack::new()
                 .push(canvas_area)
-                .push(active_bar);
+                .push(active_bar)
+                .push(mode_switcher);
             let inspector = crate::library::editor::footprint::sketch_mode::inspector::view(
                 editor, tokens,
             );
@@ -392,7 +400,8 @@ pub fn view_footprint<'a>(
             .align_y(iced::alignment::Vertical::Top);
             let canvas_with_bar = iced::widget::Stack::new()
                 .push(canvas_area)
-                .push(pads_bar);
+                .push(pads_bar)
+                .push(mode_switcher);
             column![canvas_with_bar, layers_strip, footer]
                 .spacing(0)
                 .width(Length::Fill)
@@ -400,7 +409,10 @@ pub fn view_footprint<'a>(
                 .into()
         }
         EditorMode::View3d => {
-            column![canvas_area, layers_strip, footer]
+            let canvas_with_bar = iced::widget::Stack::new()
+                .push(canvas_area)
+                .push(mode_switcher);
+            column![canvas_with_bar, layers_strip, footer]
                 .spacing(0)
                 .width(Length::Fill)
                 .height(Length::Fill)
