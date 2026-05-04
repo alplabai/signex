@@ -252,6 +252,253 @@ mod tests {
     }
 
     #[test]
+    fn set_role_pad_on_point_attaches_pad_attr_and_bakes() {
+        use super::super::sketch_dispatch::{apply_sketch_role, current_role_of};
+        use crate::library::messages::RoleTag;
+
+        let mut fp = empty_footprint();
+        let plane = PlaneId::new();
+        let pid = SketchEntityId::new();
+        let mut e = Entity::new(pid, plane, EntityKind::Point { x: 1.0, y: 2.0 });
+        e.pad = None; // brand-new Point, Unassigned role
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            entities: vec![e],
+            ..SketchData::default()
+        });
+        let mut state = FootprintEditorState::from_footprint(&fp);
+
+        apply_sketch_role(&mut state, &mut fp, pid, RoleTag::Pad).unwrap();
+
+        let entity = &fp.sketch.as_ref().unwrap().entities[0];
+        assert!(entity.pad.is_some(), "Pad attr must be attached");
+        assert_eq!(current_role_of(entity), RoleTag::Pad);
+        assert_eq!(fp.pads.len(), 1, "bake must emit the pad");
+        assert_eq!(fp.pads[0].position, [1.0, 2.0]);
+    }
+
+    #[test]
+    fn set_role_pad_on_line_is_silent_noop() {
+        use super::super::sketch_dispatch::{apply_sketch_role, current_role_of};
+        use crate::library::messages::RoleTag;
+
+        let mut fp = empty_footprint();
+        let plane = PlaneId::new();
+        let p1 = SketchEntityId::new();
+        let p2 = SketchEntityId::new();
+        let lid = SketchEntityId::new();
+        let pt1 = Entity::new(p1, plane, EntityKind::Point { x: 0.0, y: 0.0 });
+        let pt2 = Entity::new(p2, plane, EntityKind::Point { x: 1.0, y: 0.0 });
+        let line = Entity::new(
+            lid,
+            plane,
+            EntityKind::Line { start: p1, end: p2 },
+        );
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            entities: vec![pt1, pt2, line],
+            ..SketchData::default()
+        });
+        let mut state = FootprintEditorState::from_footprint(&fp);
+
+        apply_sketch_role(&mut state, &mut fp, lid, RoleTag::Pad).unwrap();
+
+        let line_entity = fp
+            .sketch
+            .as_ref()
+            .unwrap()
+            .entities
+            .iter()
+            .find(|e| e.id == lid)
+            .unwrap();
+        assert!(line_entity.pad.is_none(), "Pad attr must NOT attach to a Line");
+        assert_eq!(current_role_of(line_entity), RoleTag::Unassigned);
+    }
+
+    #[test]
+    fn set_role_silk_top_attaches_silk_attr_with_top_layer() {
+        use super::super::sketch_dispatch::{apply_sketch_role, current_role_of};
+        use crate::library::messages::RoleTag;
+        use signex_types::layer::SignexLayer;
+
+        let mut fp = empty_footprint();
+        let plane = PlaneId::new();
+        let p1 = SketchEntityId::new();
+        let p2 = SketchEntityId::new();
+        let lid = SketchEntityId::new();
+        let pt1 = Entity::new(p1, plane, EntityKind::Point { x: 0.0, y: 0.0 });
+        let pt2 = Entity::new(p2, plane, EntityKind::Point { x: 1.0, y: 0.0 });
+        let line = Entity::new(
+            lid,
+            plane,
+            EntityKind::Line { start: p1, end: p2 },
+        );
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            entities: vec![pt1, pt2, line],
+            ..SketchData::default()
+        });
+        let mut state = FootprintEditorState::from_footprint(&fp);
+
+        apply_sketch_role(&mut state, &mut fp, lid, RoleTag::SilkTop).unwrap();
+
+        let line_entity = fp
+            .sketch
+            .as_ref()
+            .unwrap()
+            .entities
+            .iter()
+            .find(|e| e.id == lid)
+            .unwrap();
+        assert_eq!(
+            line_entity.silk.as_ref().unwrap().layer,
+            SignexLayer::TopSilk
+        );
+        assert_eq!(current_role_of(line_entity), RoleTag::SilkTop);
+    }
+
+    #[test]
+    fn set_role_unassigned_clears_every_attr() {
+        use super::super::sketch_dispatch::{apply_sketch_role, current_role_of};
+        use crate::library::messages::RoleTag;
+
+        let mut fp = empty_footprint();
+        let plane = PlaneId::new();
+        let (e1, p1) = point_with_pad(plane, 0.0, 0.0, "1");
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            entities: vec![e1],
+            ..SketchData::default()
+        });
+        let mut state = FootprintEditorState::from_footprint(&fp);
+
+        // Confirm starting role is Pad.
+        let entity_before = &fp.sketch.as_ref().unwrap().entities[0];
+        assert_eq!(current_role_of(entity_before), RoleTag::Pad);
+
+        apply_sketch_role(&mut state, &mut fp, p1, RoleTag::Unassigned).unwrap();
+
+        let entity_after = &fp.sketch.as_ref().unwrap().entities[0];
+        assert!(entity_after.pad.is_none());
+        assert!(entity_after.silk.is_none());
+        assert!(entity_after.courtyard.is_none());
+        assert!(entity_after.mask_opening.is_none());
+        assert!(entity_after.mask_exclude.is_none());
+        assert!(entity_after.paste_aperture.is_none());
+        assert!(entity_after.pour.is_none());
+        assert!(entity_after.keepout.is_none());
+        assert!(entity_after.board_cutout.is_none());
+        assert!(entity_after.v_score.is_none());
+        assert_eq!(current_role_of(entity_after), RoleTag::Unassigned);
+    }
+
+    #[test]
+    fn set_role_replaces_existing_attr_atomically() {
+        // Pad → SilkTop must swap, not append. If the dispatcher
+        // forgot to clear before setting, both attrs would be set
+        // simultaneously and the bake would emit duplicate geometry.
+        use super::super::sketch_dispatch::{apply_sketch_role, current_role_of};
+        use crate::library::messages::RoleTag;
+
+        let mut fp = empty_footprint();
+        let plane = PlaneId::new();
+        let (e1, p1) = point_with_pad(plane, 0.0, 0.0, "1");
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            entities: vec![e1],
+            ..SketchData::default()
+        });
+        let mut state = FootprintEditorState::from_footprint(&fp);
+
+        apply_sketch_role(&mut state, &mut fp, p1, RoleTag::SilkTop).unwrap();
+
+        let entity = &fp.sketch.as_ref().unwrap().entities[0];
+        assert!(entity.pad.is_none(), "Pad must be cleared by SilkTop assign");
+        assert!(entity.silk.is_some());
+        assert_eq!(current_role_of(entity), RoleTag::SilkTop);
+        // Bake must NOT emit a stale pad after the role swap.
+        assert_eq!(fp.pads.len(), 0);
+    }
+
+    #[test]
+    fn set_role_courtyard_attaches_courtyard_attr() {
+        use super::super::sketch_dispatch::{apply_sketch_role, current_role_of};
+        use crate::library::messages::RoleTag;
+
+        let mut fp = empty_footprint();
+        let plane = PlaneId::new();
+        let pid = SketchEntityId::new();
+        let pt = Entity::new(pid, plane, EntityKind::Point { x: 0.0, y: 0.0 });
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            entities: vec![pt],
+            ..SketchData::default()
+        });
+        let mut state = FootprintEditorState::from_footprint(&fp);
+
+        apply_sketch_role(&mut state, &mut fp, pid, RoleTag::Courtyard).unwrap();
+
+        let entity = &fp.sketch.as_ref().unwrap().entities[0];
+        assert!(entity.courtyard.is_some());
+        assert_eq!(current_role_of(entity), RoleTag::Courtyard);
+    }
+
+    #[test]
+    fn set_role_pad_increments_designator_across_entities() {
+        // First Pad gets "1", second Pad gets "2", third gets "3".
+        use super::super::sketch_dispatch::apply_sketch_role;
+        use crate::library::messages::RoleTag;
+
+        let mut fp = empty_footprint();
+        let plane = PlaneId::new();
+        let p1 = SketchEntityId::new();
+        let p2 = SketchEntityId::new();
+        let p3 = SketchEntityId::new();
+        let pt1 = Entity::new(p1, plane, EntityKind::Point { x: 0.0, y: 0.0 });
+        let pt2 = Entity::new(p2, plane, EntityKind::Point { x: 1.0, y: 0.0 });
+        let pt3 = Entity::new(p3, plane, EntityKind::Point { x: 2.0, y: 0.0 });
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            entities: vec![pt1, pt2, pt3],
+            ..SketchData::default()
+        });
+        let mut state = FootprintEditorState::from_footprint(&fp);
+
+        apply_sketch_role(&mut state, &mut fp, p1, RoleTag::Pad).unwrap();
+        apply_sketch_role(&mut state, &mut fp, p2, RoleTag::Pad).unwrap();
+        apply_sketch_role(&mut state, &mut fp, p3, RoleTag::Pad).unwrap();
+
+        let sketch = fp.sketch.as_ref().unwrap();
+        let nums: Vec<&str> = sketch
+            .entities
+            .iter()
+            .filter_map(|e| e.pad.as_ref().map(|a| a.number.as_str()))
+            .collect();
+        assert_eq!(nums, vec!["1", "2", "3"]);
+    }
+
+    #[test]
     fn solver_always_runs_even_when_auto_pause_observed() {
         // v0.16.1 — the auto-pause early-return was removed. The
         // AutoPauseState struct still observes elapsed_ms for

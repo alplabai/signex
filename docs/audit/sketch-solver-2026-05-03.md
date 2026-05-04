@@ -688,3 +688,90 @@ Test updates: `pad_to_sketch::tests` entity-count assertions adjusted
   vertices.
 - **UX deferred items from v0.13.3** — unchanged.
 
+### v0.16.1.1 (2026-05-04) — drag-corner-to-resize-pad + paused ghost hidden
+
+Hotfix on top of v0.16.1:
+
+- **Drag-corner-to-resize-pad** — `FootprintSketchMovePoint` now
+  detects when the dragged Point is a member of any pad's
+  `corner_entity_ids`. When so it recomputes the pad's bbox from the
+  4 corner positions, rewrites `EditorPad.position_mm` +
+  `EditorPad.size_mm`, repositions the centre Point to the new bbox
+  centre, and updates `PadAttr.size_x_expr` / `size_y_expr` so the
+  next bake emits the pad at the new size. Resize is one-axis when
+  the dragged corner stays on its parallel edge; both-axis when the
+  user drags it diagonally.
+- **Ghost hidden while paused** — the previous "grey-but-still-
+  following-cursor" ghost during `PadsTool::PlacePad` +
+  `placement_paused` confused users (the cursor implied a target
+  even though clicks were gated). v0.16.1.1 hides the ghost entirely
+  while paused and renders a solid fill (alpha 1.0 + white stroke)
+  while live for better contrast.
+
+### v0.16.2 (2026-05-04) — role-assignment UI + role-tinted closed loops
+
+Top-priority deferred item from v0.16.1 lands as a Fusion-style
+inspector dropdown:
+
+- **`RoleTag` enum** in `library/messages.rs` — 15 variants:
+  Unassigned, Pad, SilkTop, SilkBottom, Courtyard, Keepout, Cutout,
+  MaskOpeningTop, MaskOpeningBottom, MaskExcludeTop,
+  MaskExcludeBottom, PourTop, PourBottom, PasteApertureTop,
+  PasteApertureBottom. Wraps in a `RoleTag::ALL` static slice +
+  `RoleTag::label()` for the inspector pick_list.
+- **`PrimitiveEditorMsg::FootprintSketchSetRole { id, role }`** +
+  matching `EditorMsg` variant + standalone-converter arm.
+- **`apply_sketch_role` / `apply_sketch_role_with_warnings` /
+  `set_entity_role` / `current_role_of`** in `sketch_dispatch.rs` —
+  clears every `*Attr` slot on the target entity, sets the matching
+  one with sensible defaults (Pad: 1×1mm SMD on TopCopper, designator
+  = max-existing+1; Silk: TopSilk/BottomSilk; Courtyard: CourtyardAttr;
+  Keepout: TopCopper + NO_ROUTING; Cutout: BoardCutoutAttr through=true;
+  Pour: thermal-relief defaults; Mask Opening / Exclude: matching
+  Top/Bottom solder mask; Paste: matching Top/Bottom paste). Pad role
+  on a non-Point is a silent no-op.
+- **Inspector "Role" section** (4th cell on the strip below the
+  canvas) — pick_list dropdown bound to the selected entity's role.
+  Visible "(select a sketch entity in Sketch mode)" placeholder when
+  nothing is selected. Inline hint when a non-Point is selected
+  ("Pad role applies to Points only").
+- **Closed-loop fill colour by role** — `draw_filled_closed_loops`
+  picks the loop's fill colour from the first role attr it finds in
+  the loop's lines or points. SilkTop → `FpLayer::FSilks`; Courtyard
+  / Keepout / Cutout → `FpLayer::EdgeCuts`; PourTop / Pad →
+  `FpLayer::FCu`; PourBottom → `FpLayer::BCu`; etc. Loops with no
+  role attr keep the v0.16.1 neutral grey fallback. Alpha bumped to
+  0.20 (vs 0.10 grey) so role assignments are clearly visible.
+- **Dispatcher arm** in `app/dispatch/library.rs` — calls
+  `apply_sketch_role_with_warnings`, then diffs `state.pads` against
+  the target entity's new pad attr (per-entity diff preserves
+  existing `sketch_entity_id` + `corner_entity_ids` on auto-minted
+  pads).
+- **7 new dispatcher tests** in `sketch_dispatch_tests.rs`:
+  - `set_role_pad_on_point_attaches_pad_attr_and_bakes`
+  - `set_role_pad_on_line_is_silent_noop`
+  - `set_role_silk_top_attaches_silk_attr_with_top_layer`
+  - `set_role_unassigned_clears_every_attr`
+  - `set_role_replaces_existing_attr_atomically` (Pad → Silk swap)
+  - `set_role_courtyard_attaches_courtyard_attr`
+  - `set_role_pad_increments_designator_across_entities`
+
+Test counts: signex-app lib 116 → 123; full workspace test sweep
+green (all 38 test-binary `test result: ok` lines, zero failures).
+No clippy regressions.
+
+**Why:** user testing of v0.16 made the role-assignment gap the #1
+missing UX item — users could draw a closed silkscreen square but
+the bake had no way to know it was silk vs courtyard vs cutout.
+Option A from the v0.16 brainstorm (per-entity dropdown, not
+per-loop) chosen so a single attr lives in one place and bake walks
+out from it; matches Fusion's "select edge → assign feature" flow.
+
+**Deferred to v0.16.3+:**
+- Per-pad layer dropdown (top-side default fixed for now).
+- Keepout sub-form (which kinds: routing/components/copper/vias/
+  drilling/pours).
+- Pour sub-form (net + fill type + thermal relief overrides).
+- BoardCutout edge-radius input.
+- V-score role tag (for Line entities — BomLayer mounts).
+

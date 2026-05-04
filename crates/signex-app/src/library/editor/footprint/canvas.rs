@@ -1397,15 +1397,75 @@ fn draw_sketch_overlay(
 /// outlines or user-authored guides — already rendered as dashed
 /// strokes elsewhere; double-filling would obscure the rendered
 /// pad). Arc-bounded loops are deferred to v0.16.2.
+///
+/// v0.16.2 — Looks up the role attr on every entity in the loop.
+/// The first hit picks the fill colour from the matching layer in
+/// [`super::layers::FpLayer`]. Loops with no role assignment fall
+/// back to neutral grey.
 fn draw_filled_closed_loops(
     frame: &mut canvas::Frame,
     cstate: &FootprintCanvasState,
     sketch: &signex_sketch::SketchData,
     state: &FootprintEditorState,
 ) {
-    use signex_sketch::entity::EntityKind;
+    use signex_sketch::entity::{Entity, EntityKind};
     use signex_sketch::id::SketchEntityId;
+    use signex_types::layer::SignexLayer;
     use std::collections::{HashMap, HashSet};
+
+    // v0.16.2 — pick a fill colour for a loop by inspecting each
+    // entity's role attr. Returns `None` when no entity in the loop
+    // carries a role; the caller falls back to neutral grey.
+    fn role_color(entity: &Entity) -> Option<FpLayer> {
+        if entity.pad.is_some() {
+            return Some(FpLayer::FCu);
+        }
+        if let Some(s) = entity.silk.as_ref() {
+            return Some(if matches!(s.layer, SignexLayer::TopSilk) {
+                FpLayer::FSilks
+            } else {
+                FpLayer::BSilks
+            });
+        }
+        if entity.courtyard.is_some() {
+            return Some(FpLayer::EdgeCuts);
+        }
+        if let Some(m) = entity.mask_opening.as_ref() {
+            return Some(if matches!(m.layer, SignexLayer::TopSolderMask) {
+                FpLayer::FFab
+            } else {
+                FpLayer::BFab
+            });
+        }
+        if let Some(m) = entity.mask_exclude.as_ref() {
+            return Some(if matches!(m.layer, SignexLayer::TopSolderMask) {
+                FpLayer::FFab
+            } else {
+                FpLayer::BFab
+            });
+        }
+        if let Some(p) = entity.paste_aperture.as_ref() {
+            return Some(if matches!(p.layer, SignexLayer::TopPaste) {
+                FpLayer::FFab
+            } else {
+                FpLayer::BFab
+            });
+        }
+        if let Some(p) = entity.pour.as_ref() {
+            return Some(if matches!(p.layer, SignexLayer::TopCopper) {
+                FpLayer::FCu
+            } else {
+                FpLayer::BCu
+            });
+        }
+        if entity.keepout.is_some() {
+            return Some(FpLayer::EdgeCuts);
+        }
+        if entity.board_cutout.is_some() {
+            return Some(FpLayer::EdgeCuts);
+        }
+        None
+    }
 
     fn point_pos(
         id: SketchEntityId,
@@ -1495,7 +1555,31 @@ fn draw_filled_closed_loops(
         if positions.len() < 3 {
             continue;
         }
-        // Render: faint grey fill (role-tinting comes with role UI).
+        // v0.16.2 — find the first role attr in the loop's lines or
+        // points; use its layer colour for the fill. Falls back to
+        // neutral grey when nothing in the loop carries a role.
+        let loop_role: Option<FpLayer> = lines
+            .iter()
+            .chain(points.iter())
+            .filter_map(|id| sketch.entities.iter().find(|e| e.id == *id))
+            .find_map(role_color);
+        let fill = match loop_role {
+            Some(layer) => {
+                let c = layer.color();
+                Color {
+                    r: c.r,
+                    g: c.g,
+                    b: c.b,
+                    a: 0.20, // brighter than neutral grey to make role visible
+                }
+            }
+            None => Color {
+                r: 0.50,
+                g: 0.55,
+                b: 0.60,
+                a: 0.10,
+            },
+        };
         let path = Path::new(|builder| {
             let p0 = cstate.world_to_screen(positions[0]);
             builder.move_to(p0);
@@ -1505,12 +1589,6 @@ fn draw_filled_closed_loops(
             }
             builder.close();
         });
-        let fill = Color {
-            r: 0.50,
-            g: 0.55,
-            b: 0.60,
-            a: 0.10,
-        };
         frame.fill(&path, fill);
     }
 }

@@ -18,7 +18,7 @@
 //! same patch as Task 6.3's tool palette.
 
 use iced::{
-    widget::{button, column, container, row, scrollable, text, text_input, Space},
+    widget::{button, column, container, pick_list, row, scrollable, text, text_input, Space},
     Border, Color, Element, Length, Theme,
 };
 use signex_types::theme::ThemeTokens;
@@ -49,16 +49,21 @@ pub fn view<'a>(
     // v0.14.2: tool palette + constraint authoring picker have moved
     // into the Fusion-360-style floating Active Bar over the canvas
     // (`crate::library::editor::footprint::sketch_mode::active_bar`).
-    // This strip below the canvas now only carries the read-only
-    // DOF / parameters / warnings sections.
+    // The strip below the canvas carries DOF / parameters / role /
+    // warnings — Role is a v0.16.2 addition for selection-aware bake
+    // attr assignment.
     let dof = view_dof(editor, text_c, muted);
     let params = view_params(editor, text_c, muted, border);
+    let role = view_role(editor, text_c, muted);
     let warnings = view_warnings(editor, text_c, muted);
 
     container(
         row![
             container(dof).padding([6, 10]).width(Length::FillPortion(1)),
             container(params)
+                .padding([6, 10])
+                .width(Length::FillPortion(2)),
+            container(role)
                 .padding([6, 10])
                 .width(Length::FillPortion(2)),
             container(warnings)
@@ -471,4 +476,89 @@ fn view_warnings<'a>(
         }
     }
     scrollable(col).height(Length::Fixed(80.0)).into()
+}
+
+/// v0.16.2 — Role-assignment dropdown. Visible only when a sketch
+/// entity is selected; pick_list value mirrors the entity's
+/// currently-attached `*Attr` slot (or `Unassigned`). Picking a new
+/// value emits [`PrimitiveEditorMsg::FootprintSketchSetRole`] which
+/// the dispatcher routes through `apply_sketch_role_with_warnings`
+/// (clears all attrs, sets the matching one with defaults, runs
+/// solve + bake).
+fn view_role<'a>(
+    editor: &'a FootprintEditorState,
+    text_c: Color,
+    muted: Color,
+) -> Element<'a, LibraryMessage> {
+    use crate::library::editor::footprint::sketch_dispatch::current_role_of;
+    use crate::library::messages::RoleTag;
+    use signex_sketch::entity::EntityKind;
+
+    let primary = editor.state.selected_sketch;
+    let selected_entity = primary.and_then(|id| {
+        editor
+            .primitive
+            .sketch
+            .as_ref()?
+            .entities
+            .iter()
+            .find(|e| e.id == id)
+    });
+
+    let mut col = column![text("Role").size(11).color(text_c)].spacing(4);
+
+    let entity = match selected_entity {
+        Some(e) => e,
+        None => {
+            col = col.push(
+                text("(select a sketch entity in Sketch mode)")
+                    .size(10)
+                    .color(muted),
+            );
+            return col.into();
+        }
+    };
+
+    let id = primary.unwrap();
+    let current = current_role_of(entity);
+    let path = editor.path.clone();
+
+    let kind_label = match entity.kind {
+        EntityKind::Point { .. } => "Point",
+        EntityKind::Line { .. } => "Line",
+        EntityKind::Arc { .. } => "Arc",
+        EntityKind::Circle { .. } => "Circle",
+    };
+    col = col.push(
+        text(format!("Selection: {kind_label}"))
+            .size(10)
+            .color(muted),
+    );
+
+    let dropdown = pick_list(RoleTag::ALL, Some(current), move |new_role| {
+        LibraryMessage::PrimitiveEditorEvent {
+            path: path.clone(),
+            msg: PrimitiveEditorMsg::FootprintSketchSetRole {
+                id,
+                role: new_role,
+            },
+        }
+    })
+    .text_size(11)
+    .padding([3, 8])
+    .width(Length::Fill);
+
+    col = col.push(dropdown);
+
+    // Inline hint: Pad role only valid on Points; flag the silent
+    // no-op path so the user knows why "Pad" doesn't take effect on
+    // a Line or Arc selection.
+    let is_point = matches!(entity.kind, EntityKind::Point { .. });
+    if !is_point {
+        col = col.push(
+            text("Pad role applies to Points only").size(9).color(muted),
+        );
+    }
+
+    col.into()
 }

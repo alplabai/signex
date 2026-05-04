@@ -3932,6 +3932,7 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintSketchMovePoint { .. }
         | PrimitiveEditorMsg::FootprintSketchAddConstraintForSelection(_)
         | PrimitiveEditorMsg::FootprintSketchDimensionInput(_)
+        | PrimitiveEditorMsg::FootprintSketchSetRole { .. }
         | PrimitiveEditorMsg::Save => {}
     }
 }
@@ -4421,6 +4422,84 @@ pub(crate) fn apply_footprint_primitive_edit(
         }
         PrimitiveEditorMsg::FootprintSketchDimensionInput(s) => {
             editor.state.dimension_input = s;
+        }
+        PrimitiveEditorMsg::FootprintSketchSetRole { id, role } => {
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_role_with_warnings;
+            use crate::library::editor::footprint::state::EditorPad;
+            use signex_library::primitive::footprint::{
+                LayerId, PadKind as LibPadKind, PadShape as LibPadShape,
+            };
+
+            apply_sketch_role_with_warnings(
+                &mut editor.state,
+                &mut editor.primitive,
+                id,
+                role,
+            );
+
+            // Diff `state.pads` against the entity's new role so the
+            // canvas's pad list mirrors role assignments. Per-entity
+            // diff (rather than full rebuild from `primitive.pads`)
+            // preserves `sketch_entity_id` + `corner_entity_ids` on
+            // previously auto-minted Pads-mode pads.
+            let entity_has_pad = editor
+                .primitive
+                .sketch
+                .as_ref()
+                .and_then(|s| s.entities.iter().find(|e| e.id == id))
+                .map(|e| e.pad.is_some())
+                .unwrap_or(false);
+            let existing_idx = editor
+                .state
+                .pads
+                .iter()
+                .position(|p| p.sketch_entity_id == Some(id));
+            match (entity_has_pad, existing_idx) {
+                (true, None) => {
+                    use signex_sketch::entity::EntityKind;
+                    let (x, y, number) = editor
+                        .primitive
+                        .sketch
+                        .as_ref()
+                        .and_then(|s| s.entities.iter().find(|e| e.id == id))
+                        .map(|e| {
+                            let (x, y) = match e.kind {
+                                EntityKind::Point { x, y } => (x, y),
+                                _ => (0.0, 0.0),
+                            };
+                            let num = e
+                                .pad
+                                .as_ref()
+                                .map(|a| a.number.clone())
+                                .unwrap_or_default();
+                            (x, y, num)
+                        })
+                        .unwrap_or((0.0, 0.0, String::new()));
+                    editor.state.pads.push(EditorPad {
+                        number,
+                        position_mm: (x, y),
+                        size_mm: (1.0, 1.0),
+                        kind: LibPadKind::Smd,
+                        shape: LibPadShape::Rect,
+                        layers: vec![LayerId::new("Top Layer")],
+                        sketch_entity_id: Some(id),
+                        corner_entity_ids: None,
+                    });
+                }
+                (false, Some(idx)) => {
+                    editor.state.pads.remove(idx);
+                    if editor.state.selected_pad == Some(idx) {
+                        editor.state.selected_pad = None;
+                    } else if let Some(sel) = editor.state.selected_pad {
+                        if sel > idx {
+                            editor.state.selected_pad = Some(sel - 1);
+                        }
+                    }
+                }
+                _ => {}
+            }
+            editor.canvas_cache.clear();
+            editor.dirty = true;
         }
         PrimitiveEditorMsg::FootprintSketchAddConstraintForSelection(tag) => {
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
@@ -5399,6 +5478,7 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::FootprintSketchSetTool(_)
         | EditorMsg::FootprintSketchToggleConstruction
         | EditorMsg::FootprintTogglePlacementPause
+        | EditorMsg::FootprintSketchSetRole { .. }
         | EditorMsg::SaveFootprint(_, _)
         | EditorMsg::SetBodyHeight(_)
         | EditorMsg::SetBodyOffsetZ(_)

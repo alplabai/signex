@@ -1017,6 +1017,9 @@ fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEditorMsg {
         EditorMsg::FootprintTogglePlacementPause => {
             PrimitiveEditorMsg::FootprintTogglePlacementPause
         }
+        EditorMsg::FootprintSketchSetRole { id, role } => {
+            PrimitiveEditorMsg::FootprintSketchSetRole { id, role }
+        }
         // Anything not emitted by the footprint canvas is dropped via
         // a benign "save of the wrong tab" — the path-keyed dispatcher
         // ignores mismatches.

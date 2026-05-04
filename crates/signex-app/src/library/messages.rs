@@ -757,6 +757,14 @@ pub enum EditorMsg {
     /// `state.placement_paused`; while `true` the canvas ignores
     /// empty-canvas clicks so the user can adjust defaults.
     FootprintTogglePlacementPause,
+    /// v0.16.2 — assign / clear a role attr (PadAttr / SilkAttr /
+    /// CourtyardAttr / etc.) on the entity at `id`. The dispatcher
+    /// clears every `*Attr` slot first, then writes the matching one
+    /// with sensible defaults. Pad on a non-Point is a silent no-op.
+    FootprintSketchSetRole {
+        id: signex_sketch::id::SketchEntityId,
+        role: RoleTag,
+    },
     /// Fire-and-forget save of the active footprint primitive. Boxed
     /// so the containing enum stays cheap to clone and propagate.
     SaveFootprint(uuid::Uuid, Box<signex_library::Footprint>),
@@ -964,6 +972,98 @@ pub enum SketchConstraintTag {
     Midpoint,
 }
 
+/// v0.16.2 — role tag attached to a sketch entity. The Sketch-mode
+/// inspector emits one of these via
+/// [`PrimitiveEditorMsg::FootprintSketchSetRole`]; the dispatcher
+/// clears every `*Attr` slot on the target entity and writes the
+/// matching one with sensible defaults. Bake auto-emits whatever
+/// geometry the role implies (pad / silk segment / courtyard
+/// polygon / mask opening / pour / paste aperture / keepout / board
+/// cutout). `Pad` is only valid on a Point — non-Point entities
+/// fall through as a silent no-op.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RoleTag {
+    /// Clear every `*Attr` slot on the entity.
+    Unassigned,
+    /// `PadAttr` — bakes as an SMD pad. Point-only.
+    Pad,
+    /// `SilkAttr { layer: TopSilk }` — top-side silkscreen line/arc.
+    SilkTop,
+    /// `SilkAttr { layer: BottomSilk }`.
+    SilkBottom,
+    /// `CourtyardAttr` — closed loop becomes the courtyard polygon.
+    Courtyard,
+    /// `KeepoutAttr` with `NO_ROUTING` defaults on TopCopper.
+    Keepout,
+    /// `BoardCutoutAttr { through: true }` — board cutout polygon.
+    Cutout,
+    /// `MaskOpeningAttr { layer: TopSolderMask }`.
+    MaskOpeningTop,
+    /// `MaskOpeningAttr { layer: BottomSolderMask }`.
+    MaskOpeningBottom,
+    /// `MaskExcludeAttr { layer: TopSolderMask }`.
+    MaskExcludeTop,
+    /// `MaskExcludeAttr { layer: BottomSolderMask }`.
+    MaskExcludeBottom,
+    /// `PourAttr { layer: TopCopper, .. }` with thermal-relief defaults.
+    PourTop,
+    /// `PourAttr { layer: BottomCopper, .. }`.
+    PourBottom,
+    /// `PasteApertureAttr { layer: TopPaste }`.
+    PasteApertureTop,
+    /// `PasteApertureAttr { layer: BottomPaste }`.
+    PasteApertureBottom,
+}
+
+impl RoleTag {
+    /// Display order for the inspector's pick_list. Mirrors the
+    /// docstring order on the enum.
+    pub const ALL: &'static [RoleTag] = &[
+        RoleTag::Unassigned,
+        RoleTag::Pad,
+        RoleTag::SilkTop,
+        RoleTag::SilkBottom,
+        RoleTag::Courtyard,
+        RoleTag::Keepout,
+        RoleTag::Cutout,
+        RoleTag::MaskOpeningTop,
+        RoleTag::MaskOpeningBottom,
+        RoleTag::MaskExcludeTop,
+        RoleTag::MaskExcludeBottom,
+        RoleTag::PourTop,
+        RoleTag::PourBottom,
+        RoleTag::PasteApertureTop,
+        RoleTag::PasteApertureBottom,
+    ];
+
+    /// Human-readable label rendered in the inspector dropdown.
+    pub fn label(self) -> &'static str {
+        match self {
+            RoleTag::Unassigned => "Unassigned",
+            RoleTag::Pad => "Pad",
+            RoleTag::SilkTop => "Silk · Top",
+            RoleTag::SilkBottom => "Silk · Bottom",
+            RoleTag::Courtyard => "Courtyard",
+            RoleTag::Keepout => "Keepout",
+            RoleTag::Cutout => "Board Cutout",
+            RoleTag::MaskOpeningTop => "Mask Opening · Top",
+            RoleTag::MaskOpeningBottom => "Mask Opening · Bottom",
+            RoleTag::MaskExcludeTop => "Mask Exclude · Top",
+            RoleTag::MaskExcludeBottom => "Mask Exclude · Bottom",
+            RoleTag::PourTop => "Pour · Top",
+            RoleTag::PourBottom => "Pour · Bottom",
+            RoleTag::PasteApertureTop => "Paste · Top",
+            RoleTag::PasteApertureBottom => "Paste · Bottom",
+        }
+    }
+}
+
+impl std::fmt::Display for RoleTag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
+}
+
 /// Selection target on the Symbol canvas — pure-data version of
 /// `editor::symbol::state::SymbolSelection`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1158,6 +1258,14 @@ pub enum PrimitiveEditorMsg {
     FootprintSketchToggleConstruction,
     /// v0.16.1 — TAB pause/resume during pad placement.
     FootprintTogglePlacementPause,
+    /// v0.16.2 — set the role attr on a sketch entity. Inspector
+    /// emits this when the user picks a value from the Role dropdown;
+    /// dispatcher routes through
+    /// `apply_sketch_role_with_warnings`.
+    FootprintSketchSetRole {
+        id: signex_sketch::id::SketchEntityId,
+        role: RoleTag,
+    },
     /// v0.15 — Pads-mode tool switch (Select / PlacePad). Right-
     /// click cancels back to Select via the same dispatch.
     FootprintSetPadsTool(crate::library::editor::footprint::state::PadsTool),
