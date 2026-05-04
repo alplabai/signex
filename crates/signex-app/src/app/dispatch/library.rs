@@ -4078,9 +4078,9 @@ pub(crate) fn apply_footprint_primitive_edit(
             editor.state.mode = mode;
             // Run the dispatcher so the sketch is initialised + solved
             // on first switch into Sketch mode (or no-op otherwise).
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit;
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            let _ = apply_sketch_edit(
+            apply_sketch_edit_with_warnings(
                 &mut editor.state,
                 &mut editor.primitive,
                 SketchEdit::SetMode(mode),
@@ -4089,7 +4089,7 @@ pub(crate) fn apply_footprint_primitive_edit(
             editor.dirty = true;
         }
         PrimitiveEditorMsg::FootprintSketchPlacePoint { x_mm, y_mm } => {
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit;
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
             use signex_sketch::entity::{Entity, EntityKind};
             use signex_sketch::id::SketchEntityId;
@@ -4120,7 +4120,7 @@ pub(crate) fn apply_footprint_primitive_edit(
                     y: y_mm,
                 },
             );
-            let _ = apply_sketch_edit(
+            apply_sketch_edit_with_warnings(
                 &mut editor.state,
                 &mut editor.primitive,
                 SketchEdit::AddEntity(entity),
@@ -4129,9 +4129,9 @@ pub(crate) fn apply_footprint_primitive_edit(
             editor.dirty = true;
         }
         PrimitiveEditorMsg::FootprintSketchEditParameter { name, expr } => {
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit;
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            let _ = apply_sketch_edit(
+            apply_sketch_edit_with_warnings(
                 &mut editor.state,
                 &mut editor.primitive,
                 SketchEdit::EditParameter { name, expr },
@@ -4145,9 +4145,9 @@ pub(crate) fn apply_footprint_primitive_edit(
             }
             // Flip via a deliberate ForceRebuild so a successful solve
             // resets the consecutive-overrun counter.
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit;
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            let _ = apply_sketch_edit(
+            apply_sketch_edit_with_warnings(
                 &mut editor.state,
                 &mut editor.primitive,
                 SketchEdit::ForceRebuild,
@@ -4189,9 +4189,9 @@ pub(crate) fn apply_footprint_primitive_edit(
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintSketchMovePoint { id, dx, dy } => {
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit;
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            let _ = apply_sketch_edit(
+            apply_sketch_edit_with_warnings(
                 &mut editor.state,
                 &mut editor.primitive,
                 SketchEdit::MovePoint { id, dx, dy },
@@ -4203,7 +4203,7 @@ pub(crate) fn apply_footprint_primitive_edit(
             editor.state.dimension_input = s;
         }
         PrimitiveEditorMsg::FootprintSketchAddConstraintForSelection(tag) => {
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit;
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
             use crate::library::messages::SketchConstraintTag;
             use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
@@ -4325,7 +4325,7 @@ pub(crate) fn apply_footprint_primitive_edit(
                     id: ConstraintId::new(),
                     kind,
                 };
-                let _ = apply_sketch_edit(
+                apply_sketch_edit_with_warnings(
                     &mut editor.state,
                     &mut editor.primitive,
                     SketchEdit::AddConstraint(constraint),
@@ -4335,7 +4335,7 @@ pub(crate) fn apply_footprint_primitive_edit(
             }
         }
         PrimitiveEditorMsg::FootprintSketchToolClick { x_mm, y_mm, snap_id } => {
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit;
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
             use crate::library::editor::footprint::state::{SketchTool, ToolPending};
             use signex_sketch::entity::{Entity, EntityKind};
@@ -4372,7 +4372,7 @@ pub(crate) fn apply_footprint_primitive_edit(
                         plane_id,
                         EntityKind::Point { x: x_mm, y: y_mm },
                     );
-                    let _ = apply_sketch_edit(
+                    apply_sketch_edit_with_warnings(
                         &mut editor.state,
                         &mut editor.primitive,
                         SketchEdit::AddEntity(entity),
@@ -4404,7 +4404,7 @@ pub(crate) fn apply_footprint_primitive_edit(
                                 end: resolved_id,
                             },
                         );
-                        let _ = apply_sketch_edit(
+                        apply_sketch_edit_with_warnings(
                             &mut editor.state,
                             &mut editor.primitive,
                             SketchEdit::AddEntity(line),
@@ -4455,7 +4455,7 @@ pub(crate) fn apply_footprint_primitive_edit(
                             plane_id,
                             EntityKind::Circle { center, radius: r },
                         );
-                        let _ = apply_sketch_edit(
+                        apply_sketch_edit_with_warnings(
                             &mut editor.state,
                             &mut editor.primitive,
                             SketchEdit::AddEntity(circle),
@@ -4492,7 +4492,7 @@ pub(crate) fn apply_footprint_primitive_edit(
                                 sweep_ccw: true,
                             },
                         );
-                        let _ = apply_sketch_edit(
+                        apply_sketch_edit_with_warnings(
                             &mut editor.state,
                             &mut editor.primitive,
                             SketchEdit::AddEntity(arc),

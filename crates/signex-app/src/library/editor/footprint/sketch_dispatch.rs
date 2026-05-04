@@ -38,6 +38,21 @@ pub fn apply_sketch_edit(
     solve_and_bake(state, footprint)
 }
 
+/// Same as [`apply_sketch_edit`] but captures any returned
+/// [`SketchError`] into `state.solve_warnings` instead of dropping it.
+/// Used at app-dispatch call sites where there is no caller to
+/// propagate the error to — the inspector strip surfaces the warning
+/// list to the user.
+pub fn apply_sketch_edit_with_warnings(
+    state: &mut FootprintEditorState,
+    footprint: &mut Footprint,
+    edit: SketchEdit,
+) {
+    if let Err(e) = apply_sketch_edit(state, footprint, edit) {
+        state.solve_warnings.push(format!("{e}"));
+    }
+}
+
 /// Mutates `footprint.sketch` per the edit. Idempotent on its inputs
 /// so the test harness can inspect intermediate state.
 fn apply_edit_inner(footprint: &mut Footprint, edit: SketchEdit) {

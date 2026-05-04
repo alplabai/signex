@@ -14,7 +14,7 @@ mod tests {
     use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
     use signex_sketch::SketchData;
 
-    use super::super::sketch_dispatch::apply_sketch_edit;
+    use super::super::sketch_dispatch::{apply_sketch_edit, apply_sketch_edit_with_warnings};
     use super::super::sketch_mode::SketchEdit;
     use super::super::state::FootprintEditorState;
 
@@ -210,6 +210,45 @@ mod tests {
             .entities
             .iter()
             .any(|e| matches!(e.kind, EntityKind::Line { start, end } if start == p1 && end == p2)));
+    }
+
+    #[test]
+    fn warning_wrapper_captures_parse_error_into_solve_warnings() {
+        // EditParameter with bad expression syntax — the resolver fails
+        // on parse, the dispatcher returns SketchError::Expr, and the
+        // _with_warnings wrapper must capture the message into
+        // state.solve_warnings instead of dropping it on the floor.
+        let mut fp = empty_footprint();
+        let plane = PlaneId::new();
+        let (e1, _p1) = point_with_pad(plane, 0.0, 0.0, "1");
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            entities: vec![e1],
+            ..SketchData::default()
+        });
+        let mut state = FootprintEditorState::from_footprint(&fp);
+
+        // Unbalanced parens — guaranteed parser failure.
+        apply_sketch_edit_with_warnings(
+            &mut state,
+            &mut fp,
+            SketchEdit::EditParameter {
+                name: "bad".into(),
+                expr: "(((".into(),
+            },
+        );
+
+        assert!(
+            !state.solve_warnings.is_empty(),
+            "wrapper should have captured a parse error into solve_warnings"
+        );
+        // Message contains either "parse" or "expression" depending on
+        // the ExprError::Display impl — accept any non-empty warning
+        // for forward compat with the error-message wording.
+        assert!(state.solve_warnings.iter().any(|w| !w.is_empty()));
     }
 
     #[test]
