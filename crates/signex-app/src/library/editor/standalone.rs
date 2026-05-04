@@ -948,7 +948,7 @@ fn view_footprint_canvas<'a>(
         bg_color: bg,
         grid_color: grid,
         cache: &editor.canvas_cache,
-        sketch: editor.primitive.sketch.as_ref(),
+        sketch: editor.primitive().sketch.as_ref(),
     };
     let canvas_widget: Element<'a, LibraryMessage> = iced::widget::canvas(prog)
         .width(Length::Fill)

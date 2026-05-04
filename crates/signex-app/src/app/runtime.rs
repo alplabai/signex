@@ -1065,8 +1065,8 @@ fn build_footprint_editor_panel_ctx(
         EditorMode::View3d => FootprintModeKind::View3d,
     };
 
-    let pad_count = editor.primitive.pads.len();
-    let (sketch_entity_count, sketch_constraint_count) = match editor.primitive.sketch.as_ref() {
+    let pad_count = editor.primitive().pads.len();
+    let (sketch_entity_count, sketch_constraint_count) = match editor.primitive().sketch.as_ref() {
         Some(s) => (s.entities.len(), s.constraints.len()),
         None => (0, 0),
     };
@@ -1174,7 +1174,7 @@ fn build_footprint_editor_panel_ctx(
             .file_stem()
             .and_then(|s| s.to_str())
             .map(|s| s.to_string())
-            .unwrap_or_else(|| editor.primitive.name.clone());
+            .unwrap_or_else(|| editor.primitive().name.clone());
         library_siblings.push(crate::panels::FootprintLibSibling {
             path: path.clone(),
             display_name,
@@ -1187,7 +1187,7 @@ fn build_footprint_editor_panel_ctx(
     // entity's role so the panel can host the Role pick_list +
     // Parameter inputs.
     let sketch_parameters: Vec<(String, String)> = editor
-        .primitive
+        .primitive()
         .sketch
         .as_ref()
         .map(|s| {
@@ -1205,7 +1205,7 @@ fn build_footprint_editor_panel_ctx(
             use crate::library::messages::RoleTag;
             use signex_sketch::entity::EntityKind;
             editor
-                .primitive
+                .primitive()
                 .sketch
                 .as_ref()
                 .and_then(|s| s.entities.iter().find(|e| e.id == id))
@@ -1246,7 +1246,7 @@ fn build_footprint_editor_panel_ctx(
     // panel renders the sub-form conditionally below the Role pick_list.
     let (selected_pour, selected_keepout, selected_cutout) = match selected_sketch_entity_id {
         Some(id) => editor
-            .primitive
+            .primitive()
             .sketch
             .as_ref()
             .and_then(|s| s.entities.iter().find(|e| e.id == id))
@@ -1276,8 +1276,8 @@ fn build_footprint_editor_panel_ctx(
 
     Some(FootprintEditorPanelContext {
         path,
-        footprint_name: editor.primitive.name.clone(),
-        version: editor.primitive.version.clone(),
+        footprint_name: editor.primitive().name.clone(),
+        version: editor.primitive().version.clone(),
         mode_kind,
         pad_count,
         sketch_entity_count,
@@ -1341,7 +1341,7 @@ fn build_sketch_entity_summary(
     id: signex_sketch::id::SketchEntityId,
 ) -> Option<crate::panels::FootprintSketchEntitySummary> {
     use signex_sketch::entity::EntityKind;
-    let sketch = editor.primitive.sketch.as_ref()?;
+    let sketch = editor.primitive().sketch.as_ref()?;
     let entity = sketch.entities.iter().find(|e| e.id == id)?;
     let (kind_label, position_mm) = match entity.kind {
         EntityKind::Point { x, y } => ("Point", Some([x, y])),

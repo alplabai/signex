@@ -840,10 +840,9 @@ impl Signex {
             if let Ok(parsed) = value.trim().parse::<f64>() {
                 if let Some(pad) = editor.state.pads.get_mut(idx) {
                     pad.rotation_deg = parsed;
-                    crate::library::editor::footprint::state::FootprintEditorState::sync_pads_to_primitive(
-                        &editor.state,
-                        &mut editor.primitive,
-                    );
+                    editor.with_parts(|state, primitive| {
+                        crate::library::editor::footprint::state::FootprintEditorState::sync_pads_to_primitive(state, primitive);
+                    });
                     editor.dirty = true;
                     editor.canvas_cache.clear();
                 }
@@ -864,7 +863,7 @@ impl Signex {
             Some(value)
         };
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive.sketch.as_mut() {
+            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
                 if let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id) {
                     if let Some(p) = e.pour.as_mut() {
                         p.net = net;
@@ -873,11 +872,9 @@ impl Signex {
             }
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            apply_sketch_edit_with_warnings(
-                &mut editor.state,
-                &mut editor.primitive,
-                SketchEdit::ForceRebuild,
-            );
+            editor.with_parts(|state, primitive| {
+                apply_sketch_edit_with_warnings(state, primitive,                 SketchEdit::ForceRebuild,);
+            });
             editor.dirty = true;
             editor.canvas_cache.clear();
         }
@@ -890,7 +887,7 @@ impl Signex {
         value: signex_sketch::attr::PourFillType,
     ) {
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive.sketch.as_mut() {
+            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
                 if let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id) {
                     if let Some(p) = e.pour.as_mut() {
                         p.fill_type = value;
@@ -899,11 +896,9 @@ impl Signex {
             }
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            apply_sketch_edit_with_warnings(
-                &mut editor.state,
-                &mut editor.primitive,
-                SketchEdit::ForceRebuild,
-            );
+            editor.with_parts(|state, primitive| {
+                apply_sketch_edit_with_warnings(state, primitive,                 SketchEdit::ForceRebuild,);
+            });
             editor.dirty = true;
             editor.canvas_cache.clear();
         }
@@ -917,7 +912,7 @@ impl Signex {
     ) {
         let parsed = value.trim().parse::<u32>().ok();
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive.sketch.as_mut() {
+            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
                 if let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id) {
                     if let Some(p) = e.pour.as_mut() {
                         if let Some(n) = parsed {
@@ -928,11 +923,9 @@ impl Signex {
             }
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            apply_sketch_edit_with_warnings(
-                &mut editor.state,
-                &mut editor.primitive,
-                SketchEdit::ForceRebuild,
-            );
+            editor.with_parts(|state, primitive| {
+                apply_sketch_edit_with_warnings(state, primitive,                 SketchEdit::ForceRebuild,);
+            });
             editor.dirty = true;
             editor.canvas_cache.clear();
         }
@@ -947,7 +940,7 @@ impl Signex {
     ) {
         use crate::panels::KeepoutKindFlag;
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive.sketch.as_mut() {
+            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
                 if let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id) {
                     if let Some(k) = e.keepout.as_mut() {
                         match kind {
@@ -963,11 +956,9 @@ impl Signex {
             }
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            apply_sketch_edit_with_warnings(
-                &mut editor.state,
-                &mut editor.primitive,
-                SketchEdit::ForceRebuild,
-            );
+            editor.with_parts(|state, primitive| {
+                apply_sketch_edit_with_warnings(state, primitive,                 SketchEdit::ForceRebuild,);
+            });
             editor.dirty = true;
             editor.canvas_cache.clear();
         }
@@ -985,7 +976,7 @@ impl Signex {
             Some(value)
         };
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive.sketch.as_mut() {
+            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
                 if let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id) {
                     if let Some(c) = e.board_cutout.as_mut() {
                         c.edge_radius_expr = edge_radius;
@@ -994,11 +985,9 @@ impl Signex {
             }
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            apply_sketch_edit_with_warnings(
-                &mut editor.state,
-                &mut editor.primitive,
-                SketchEdit::ForceRebuild,
-            );
+            editor.with_parts(|state, primitive| {
+                apply_sketch_edit_with_warnings(state, primitive,                 SketchEdit::ForceRebuild,);
+            });
             editor.dirty = true;
             editor.canvas_cache.clear();
         }
@@ -1031,7 +1020,7 @@ impl Signex {
         value: bool,
     ) {
         if let Some(editor) = self.active_footprint_editor_mut() {
-            if let Some(sketch) = editor.primitive.sketch.as_mut() {
+            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
                 if let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id) {
                     if let Some(c) = e.board_cutout.as_mut() {
                         c.through = value;
@@ -1040,11 +1029,9 @@ impl Signex {
             }
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            apply_sketch_edit_with_warnings(
-                &mut editor.state,
-                &mut editor.primitive,
-                SketchEdit::ForceRebuild,
-            );
+            editor.with_parts(|state, primitive| {
+                apply_sketch_edit_with_warnings(state, primitive,                 SketchEdit::ForceRebuild,);
+            });
             editor.dirty = true;
             editor.canvas_cache.clear();
         }

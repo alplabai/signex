@@ -187,7 +187,7 @@ fn view_constraint_submenu<'a>(
     let secondary = editor.state.selected_sketch_secondary;
     let kind_of = |id: signex_sketch::id::SketchEntityId| -> Option<&'static str> {
         editor
-            .primitive
+            .primitive()
             .sketch
             .as_ref()?
             .entities
@@ -398,7 +398,7 @@ fn view_params<'a>(
 ) -> Element<'a, LibraryMessage> {
     let mut col = column![text("Parameters").size(11).color(text_c)].spacing(2);
 
-    if let Some(sketch) = editor.primitive.sketch.as_ref() {
+    if let Some(sketch) = editor.primitive().sketch.as_ref() {
         if sketch.parameters.is_empty() {
             col = col.push(
                 text("(no parameters yet — add via Inspector v0.13.2)")
@@ -497,7 +497,7 @@ fn view_role<'a>(
     let primary = editor.state.selected_sketch;
     let selected_entity = primary.and_then(|id| {
         editor
-            .primitive
+            .primitive()
             .sketch
             .as_ref()?
             .entities

@@ -284,29 +284,110 @@ impl SymbolEditorState {
 /// [`crate::library::editor::footprint::canvas::FootprintCanvas`] +
 /// [`crate::library::editor::footprint::state::FootprintEditorState`]
 /// so the behaviour matches the in-Component Editor experience verbatim.
+///
+/// v0.18.6 — mirrors [`SymbolEditorState`]: the editor backs a multi-
+/// footprint container and dispatches every mutation through
+/// `file.footprints[active_idx]`. Saves preserve `file_uuid` and any
+/// future siblings instead of minting a fresh single-footprint
+/// envelope.
 #[derive(Debug)]
 pub struct FootprintEditorState {
     pub path: PathBuf,
-    pub primitive: Footprint,
+    /// Multi-footprint container backing this `.snxfpt` tab. The
+    /// editor works against `file.footprints[active_idx]`; access
+    /// via [`primitive`](Self::primitive) /
+    /// [`primitive_mut`](Self::primitive_mut).
+    pub file: signex_library::FootprintFile,
+    /// Which footprint within the file is currently being edited.
+    /// The Footprint Library left-dock panel will eventually drive
+    /// this index; for now it always lands on the first footprint.
+    pub active_idx: usize,
     pub state: crate::library::editor::footprint::state::FootprintEditorState,
     pub canvas_cache: iced::widget::canvas::Cache,
     pub dirty: bool,
 }
 
 impl FootprintEditorState {
-    /// Build a fresh standalone editor state from a primitive loaded
-    /// off disk. `path` is the `.snxfpt` file the user opened.
-    pub fn new(path: PathBuf, primitive: Footprint) -> Self {
+    /// Build a fresh standalone editor state from a `FootprintFile`
+    /// container loaded off disk. `path` is the `.snxfpt` file the
+    /// user opened. The editor opens on the first footprint in the
+    /// file. The caller is responsible for confirming the file is
+    /// non-empty before this call.
+    pub fn new(path: PathBuf, file: signex_library::FootprintFile) -> Self {
+        let active_idx = 0;
         let state = crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
-            &primitive,
+            &file.footprints[active_idx],
         );
         Self {
             path,
-            primitive,
+            file,
+            active_idx,
             state,
             canvas_cache: iced::widget::canvas::Cache::default(),
             dirty: false,
         }
+    }
+
+    /// Borrow the footprint currently being edited. Falls back to
+    /// the first footprint when `active_idx` is out of range
+    /// (defensive — should never happen in practice). Panics only
+    /// when the file has zero footprints, which the loader rejects.
+    pub fn primitive(&self) -> &Footprint {
+        let idx = self
+            .active_idx
+            .min(self.file.footprints.len().saturating_sub(1));
+        &self.file.footprints[idx]
+    }
+
+    /// Mutable borrow of the active footprint — used by canvas
+    /// mutations (add/move/delete pad etc.). Same out-of-range
+    /// fallback as [`primitive`](Self::primitive).
+    pub fn primitive_mut(&mut self) -> &mut Footprint {
+        let idx = self
+            .active_idx
+            .min(self.file.footprints.len().saturating_sub(1));
+        &mut self.file.footprints[idx]
+    }
+
+    /// Split-borrow accessor returning mutable references to
+    /// `state` and the active primitive simultaneously. The two
+    /// fields are disjoint (`state` lives next to `file`), but
+    /// `&mut self`-shaped methods can't express that — calling
+    /// `editor.primitive_mut()` after `&mut editor.state` trips the
+    /// borrow checker. Destructuring `Self` makes disjointness
+    /// explicit. Callers passing both halves into a helper like
+    /// `apply_sketch_edit_with_warnings` reach for this.
+    pub fn parts_mut(
+        &mut self,
+    ) -> (
+        &mut crate::library::editor::footprint::state::FootprintEditorState,
+        &mut Footprint,
+    ) {
+        let Self {
+            state,
+            file,
+            active_idx,
+            ..
+        } = self;
+        let idx = (*active_idx).min(file.footprints.len().saturating_sub(1));
+        (state, &mut file.footprints[idx])
+    }
+
+    /// Closure-shaped split-borrow. The closure runs with both halves
+    /// in scope; the borrows are scoped to its body. Equivalent to
+    /// [`parts_mut`](Self::parts_mut) but plays nicer when the call
+    /// site needs to touch other `editor` fields after the split-
+    /// borrowed work returns — the closure boundary forces NLL to
+    /// release the borrows promptly.
+    pub fn with_parts<R, F>(&mut self, f: F) -> R
+    where
+        F: FnOnce(
+            &mut crate::library::editor::footprint::state::FootprintEditorState,
+            &mut Footprint,
+        ) -> R,
+    {
+        let (state, primitive) = self.parts_mut();
+        f(state, primitive)
     }
 }
 

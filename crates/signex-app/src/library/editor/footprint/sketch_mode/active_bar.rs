@@ -239,7 +239,7 @@ fn constraint_enable_matrix(editor: &FootprintEditorState) -> [bool; 10] {
     let secondary = editor.state.selected_sketch_secondary;
     let kind_of = |id: signex_sketch::id::SketchEntityId| -> Option<&'static str> {
         editor
-            .primitive
+            .primitive()
             .sketch
             .as_ref()?
             .entities

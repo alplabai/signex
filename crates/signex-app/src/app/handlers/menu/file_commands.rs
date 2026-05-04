@@ -314,7 +314,11 @@ impl Signex {
             .unwrap_or_else(|| primitive.name.clone());
         let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
 
-        let mut state = crate::app::FootprintEditorState::new(path.clone(), primitive);
+        // v0.18.6 — wrap into a FootprintFile envelope so the editor
+        // can save through the same multi-footprint path as the
+        // disk-loaded flow.
+        let file = signex_library::FootprintFile::from_footprint(primitive);
+        let mut state = crate::app::FootprintEditorState::new(path.clone(), file);
         state.dirty = true;
         self.document_state
             .footprint_editors
