@@ -340,22 +340,153 @@ fn symbol_selection_to_msg(sel: sym_state::SymbolSelection) -> SymbolSelectionMs
 pub fn view_footprint<'a>(
     editor: &'a FootprintEditorState,
     tokens: &'a ThemeTokens,
+    theme_id: signex_types::theme::ThemeId,
 ) -> Element<'a, LibraryMessage> {
+    use crate::library::editor::footprint::state::EditorMode;
     let bg = crate::styles::ti(tokens.bg);
     let grid = crate::styles::ti(tokens.text_secondary);
 
-    let toolbar = view_footprint_toolbar(editor, tokens);
     let canvas_area = view_footprint_canvas(editor, tokens, bg, grid);
     let footer = view_footprint_footer(editor, tokens);
-    // v0.13.1 — Sketch inspector strip. Returns an empty Space when
-    // the editor isn't in Sketch mode so the column layout is stable.
-    let inspector =
-        crate::library::editor::footprint::sketch_mode::inspector::view(editor, tokens);
 
-    column![toolbar, inspector, canvas_area, footer]
-        .spacing(0)
-        .width(Length::Fill)
-        .height(Length::Fill)
+    // v0.14.2 — full mode-context switch between Normal (pads
+    // editing) and Sketch (parametric sketcher). Each mode owns its
+    // own toolbar + tool-row + inspector strip; widgets that belong
+    // to one mode never appear in the other.
+    let body: Element<'a, LibraryMessage> = match editor.state.mode {
+        EditorMode::Sketch => {
+            let toolbar = view_footprint_sketch_toolbar(editor, tokens);
+            let active_bar = container(
+                crate::library::editor::footprint::sketch_mode::active_bar::view(
+                    editor, theme_id, tokens,
+                ),
+            )
+            .padding([4, 8])
+            .center_x(Length::Fill);
+            let inspector = crate::library::editor::footprint::sketch_mode::inspector::view(
+                editor, tokens,
+            );
+            column![toolbar, active_bar, canvas_area, inspector, footer]
+                .spacing(0)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into()
+        }
+        EditorMode::Normal => {
+            let toolbar = view_footprint_toolbar(editor, tokens);
+            // v0.14.2 — Pads-mode active bar (Altium PCB Library
+            // parity). Same `signex_widgets::active_bar` widget the
+            // sketch mode uses, but with pad-placement +
+            // courtyard-fit + Edit-Sketch-entry buttons.
+            let pads_bar = container(
+                crate::library::editor::footprint::pads_active_bar::view(
+                    editor, theme_id, tokens,
+                ),
+            )
+            .padding([4, 8])
+            .center_x(Length::Fill);
+            column![toolbar, pads_bar, canvas_area, footer]
+                .spacing(0)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into()
+        }
+        EditorMode::View3d => {
+            let toolbar = view_footprint_toolbar(editor, tokens);
+            column![toolbar, canvas_area, footer]
+                .spacing(0)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into()
+        }
+    };
+
+    body
+}
+
+/// Minimal Sketch-mode top bar — replaces the layer-heavy
+/// `view_footprint_toolbar` so the workspace reads as "you are now
+/// editing the sketch, not the pads". Carries a "Sketch" title, an
+/// **Exit Sketch** button (returns to Normal mode), and Save.
+fn view_footprint_sketch_toolbar<'a>(
+    editor: &'a FootprintEditorState,
+    tokens: &'a ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    use crate::library::editor::footprint::state::EditorMode;
+    let text_c = theme_ext::text_primary(tokens);
+    let muted = theme_ext::text_secondary(tokens);
+    let border = theme_ext::border_color(tokens);
+    let accent = theme_ext::to_color(&tokens.accent);
+
+    let exit_path = editor.path.clone();
+    let exit_btn = button(
+        row![
+            text("\u{2715}").size(11).color(text_c),
+            Space::new().width(4),
+            text("Exit Sketch").size(11).color(text_c),
+        ]
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([4, 10])
+    .on_press(LibraryMessage::PrimitiveEditorEvent {
+        path: exit_path,
+        msg: PrimitiveEditorMsg::FootprintSetMode(EditorMode::Normal),
+    })
+    .style(move |_: &Theme, _| iced::widget::button::Style {
+        background: Some(iced::Background::Color(iced::Color::from_rgba(
+            accent.r, accent.g, accent.b, 0.18,
+        ))),
+        border: Border {
+            width: 1.0,
+            radius: 3.0.into(),
+            color: iced::Color {
+                a: 0.6,
+                ..accent
+            },
+        },
+        ..iced::widget::button::Style::default()
+    });
+
+    let save_path = editor.path.clone();
+    let save_btn = button(
+        text(if editor.dirty { "Save *" } else { "Save" })
+            .size(11)
+            .color(text_c),
+    )
+    .padding([4, 10])
+    .on_press(LibraryMessage::PrimitiveEditorEvent {
+        path: save_path,
+        msg: PrimitiveEditorMsg::Save,
+    })
+    .style(move |_: &Theme, _| iced::widget::button::Style {
+        background: Some(iced::Background::Color(iced::Color::from_rgba(
+            1.0, 1.0, 1.0, 0.04,
+        ))),
+        border: Border {
+            width: 1.0,
+            radius: 3.0.into(),
+            color: border,
+        },
+        ..iced::widget::button::Style::default()
+    });
+
+    let row_widget = row![
+        text("Sketch").size(13).color(text_c),
+        text("·").size(13).color(muted),
+        text("authoring parametric geometry")
+            .size(11)
+            .color(muted),
+        Space::new().width(Length::Fill),
+        save_btn,
+        Space::new().width(8),
+        exit_btn,
+    ]
+    .spacing(8)
+    .align_y(iced::Alignment::Center);
+
+    container(row_widget)
+        .padding([6, 10])
+        .style(crate::styles::tab_bar_strip(tokens))
         .into()
 }
 

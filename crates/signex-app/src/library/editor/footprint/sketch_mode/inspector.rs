@@ -46,28 +46,26 @@ pub fn view<'a>(
     let muted = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
 
-    let tools = view_tool_palette(editor, text_c, muted, border);
-    let constraints = view_constraint_submenu(editor, text_c, muted, border);
+    // v0.14.2: tool palette + constraint authoring picker have moved
+    // into the Fusion-360-style floating Active Bar over the canvas
+    // (`crate::library::editor::footprint::sketch_mode::active_bar`).
+    // This strip below the canvas now only carries the read-only
+    // DOF / parameters / warnings sections.
     let dof = view_dof(editor, text_c, muted);
     let params = view_params(editor, text_c, muted, border);
     let warnings = view_warnings(editor, text_c, muted);
 
     container(
-        column![
-            tools,
-            constraints,
-            row![
-                container(dof).padding([6, 10]).width(Length::FillPortion(1)),
-                container(params)
-                    .padding([6, 10])
-                    .width(Length::FillPortion(2)),
-                container(warnings)
-                    .padding([6, 10])
-                    .width(Length::FillPortion(2)),
-            ]
-            .spacing(8),
+        row![
+            container(dof).padding([6, 10]).width(Length::FillPortion(1)),
+            container(params)
+                .padding([6, 10])
+                .width(Length::FillPortion(2)),
+            container(warnings)
+                .padding([6, 10])
+                .width(Length::FillPortion(2)),
         ]
-        .spacing(4),
+        .spacing(8),
     )
     .padding([4, 8])
     .style(move |_: &Theme| iced::widget::container::Style {
@@ -84,6 +82,10 @@ pub fn view<'a>(
     .into()
 }
 
+// v0.14.2: replaced by `crate::library::editor::footprint::sketch_mode
+// ::active_bar` — kept the body below temporarily as a doc-only ref;
+// remove on next visual-pass commit.
+#[allow(dead_code)]
 fn view_tool_palette<'a>(
     editor: &'a FootprintEditorState,
     text_c: Color,
@@ -157,6 +159,10 @@ fn view_tool_palette<'a>(
 /// `selected_sketch` + `selected_sketch_secondary` slots. Empty
 /// when no entity is selected. Includes the Dimension tool's inline
 /// numeric value-entry field for `DistancePtPt`.
+///
+/// v0.14.2: superseded by the Active Bar in
+/// `crate::library::editor::footprint::sketch_mode::active_bar`.
+#[allow(dead_code)]
 fn view_constraint_submenu<'a>(
     editor: &'a FootprintEditorState,
     text_c: Color,

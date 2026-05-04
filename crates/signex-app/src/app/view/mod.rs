@@ -3555,6 +3555,22 @@ impl Signex {
         // makes sense in the current app state. `has_schematic` /
         // `has_selection` drive most entries; undo / redo consult
         // the engine's history so they grey out when empty.
+        // v0.14.2: surface the active tab's primitive-editor kind to
+        // the menu so File ▸ Save / Save As enable themselves for
+        // `.snxsym` and `.snxfpt` standalone editor tabs.
+        let active_tab_kind = document
+            .tabs
+            .get(document.active_tab)
+            .map(|t| &t.kind);
+        let has_symbol_editor = matches!(
+            active_tab_kind,
+            Some(crate::app::TabKind::SymbolEditor(_))
+        );
+        let has_footprint_editor = matches!(
+            active_tab_kind,
+            Some(crate::app::TabKind::FootprintEditor(_))
+        );
+
         let menu_ctx = crate::menu_bar::MenuContext {
             has_schematic: self.has_active_schematic(),
             has_pcb: self.has_active_pcb(),
@@ -3568,6 +3584,8 @@ impl Signex {
                 .engine_for_window(window_id, ui)
                 .map(|e| e.can_redo())
                 .unwrap_or(false),
+            has_symbol_editor,
+            has_footprint_editor,
             // Secondary windows (detached modal, undocked tab) borrow
             // the main window's scale. Good enough until per-window
             // scale tracking lands — it's only wrong if the user drags
@@ -4065,8 +4083,11 @@ impl Signex {
                 && let Some(editor) = self.document_state.footprint_editors.get(path)
             {
                 let tokens = &self.document_state.panel_ctx.tokens;
-                return crate::library::editor::standalone::view_footprint(editor, tokens)
-                    .map(Message::Library);
+                let theme_id = self.ui_state.theme_id;
+                return crate::library::editor::standalone::view_footprint(
+                    editor, tokens, theme_id,
+                )
+                .map(Message::Library);
             }
             // Library Browser tab — `.snxlib` opened as a main-window
             // tab. Per-tab state lives in
