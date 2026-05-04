@@ -46,21 +46,26 @@ pub fn view<'a>(
     let muted = theme_ext::text_secondary(tokens);
     let border = theme_ext::border_color(tokens);
 
+    let tools = view_tool_palette(editor, text_c, muted, border);
     let dof = view_dof(editor, text_c, muted);
     let params = view_params(editor, text_c, muted, border);
     let warnings = view_warnings(editor, text_c, muted);
 
     container(
-        row![
-            container(dof).padding([6, 10]).width(Length::FillPortion(1)),
-            container(params)
-                .padding([6, 10])
-                .width(Length::FillPortion(2)),
-            container(warnings)
-                .padding([6, 10])
-                .width(Length::FillPortion(2)),
+        column![
+            tools,
+            row![
+                container(dof).padding([6, 10]).width(Length::FillPortion(1)),
+                container(params)
+                    .padding([6, 10])
+                    .width(Length::FillPortion(2)),
+                container(warnings)
+                    .padding([6, 10])
+                    .width(Length::FillPortion(2)),
+            ]
+            .spacing(8),
         ]
-        .spacing(8),
+        .spacing(4),
     )
     .padding([4, 8])
     .style(move |_: &Theme| iced::widget::container::Style {
@@ -74,6 +79,74 @@ pub fn view<'a>(
         },
         ..iced::widget::container::Style::default()
     })
+    .into()
+}
+
+fn view_tool_palette<'a>(
+    editor: &'a FootprintEditorState,
+    text_c: Color,
+    muted: Color,
+    border: Color,
+) -> Element<'a, LibraryMessage> {
+    use crate::library::editor::footprint::state::SketchTool;
+    let active = editor.state.active_tool;
+    let mk_pill = |label: &'static str, target: SketchTool| -> Element<'a, LibraryMessage> {
+        let path = editor.path.clone();
+        let on = active == target;
+        let label_color = if on { text_c } else { muted };
+        button(text(label).size(11).color(label_color))
+            .padding([3, 8])
+            .on_press(LibraryMessage::PrimitiveEditorEvent {
+                path,
+                msg: PrimitiveEditorMsg::FootprintSketchSetTool(target),
+            })
+            .style(move |_: &Theme, _| iced::widget::button::Style {
+                background: if on {
+                    Some(iced::Background::Color(iced::Color::from_rgba(
+                        1.0, 1.0, 1.0, 0.10,
+                    )))
+                } else {
+                    Some(iced::Background::Color(iced::Color::from_rgba(
+                        1.0, 1.0, 1.0, 0.02,
+                    )))
+                },
+                border: Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: border,
+                },
+                ..iced::widget::button::Style::default()
+            })
+            .into()
+    };
+
+    use crate::library::editor::footprint::state::ToolPending;
+    let pending_label: String = match editor.state.tool_pending {
+        ToolPending::Idle => match active {
+            SketchTool::Select => String::new(),
+            SketchTool::Point => "click to place".into(),
+            SketchTool::Line => "click first endpoint".into(),
+            SketchTool::Circle => "click centre".into(),
+            SketchTool::Arc => "click centre".into(),
+        },
+        ToolPending::LineFirst { .. } => "click second endpoint (Esc to cancel)".into(),
+        ToolPending::CircleCenter { .. } => "click radius point (Esc to cancel)".into(),
+        ToolPending::ArcCenter { .. } => "click start (Esc to cancel)".into(),
+        ToolPending::ArcStart { .. } => "click end (Esc to cancel)".into(),
+    };
+
+    row![
+        text("Tool:").size(11).color(muted),
+        mk_pill("Select", SketchTool::Select),
+        mk_pill("Point", SketchTool::Point),
+        mk_pill("Line", SketchTool::Line),
+        mk_pill("Circle", SketchTool::Circle),
+        mk_pill("Arc", SketchTool::Arc),
+        Space::new().width(Length::Fixed(8.0)),
+        text(pending_label).size(10).color(muted),
+    ]
+    .spacing(4)
+    .align_y(iced::Alignment::Center)
     .into()
 }
 

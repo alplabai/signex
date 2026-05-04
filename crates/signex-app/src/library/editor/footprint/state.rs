@@ -156,6 +156,55 @@ pub struct FootprintEditorState {
     /// Last solve's audit / over-constraint warnings. Cleared per
     /// solve. Surfaced by the inspector panel in Phase 6.
     pub solve_warnings: Vec<String>,
+    /// v0.13.2 — currently-active sketch tool. The inspector tool
+    /// palette emits `FootprintSketchSetTool(...)`; the canvas
+    /// Program reads this to interpret pointer events. `Select`
+    /// is the default and means "no drawing tool active".
+    pub active_tool: SketchTool,
+    /// v0.13.2 — transient state for multi-click tools (Line / Arc /
+    /// Circle). Stashes the first / second clicks until the gesture
+    /// completes; cleared on commit or Esc.
+    pub tool_pending: ToolPending,
+}
+
+/// Sketch-mode drawing tool. Phase 6.3 (v0.13.1) shipped Place Point
+/// only; v0.13.2 adds Line, Circle, Arc.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SketchTool {
+    #[default]
+    Select,
+    Point,
+    Line,
+    Circle,
+    Arc,
+}
+
+/// Transient per-tool gesture state. The canvas Program reads + writes
+/// it through editor messages so the iced update loop can persist it
+/// across renders without coupling the canvas's internal `cstate`
+/// (which is local to the canvas program) to the editor's serialised
+/// state.
+#[derive(Debug, Clone, Default)]
+pub enum ToolPending {
+    #[default]
+    Idle,
+    /// Line tool, first click landed (anchor point exists in sketch).
+    LineFirst {
+        first: signex_sketch::id::SketchEntityId,
+    },
+    /// Circle tool, centre click landed.
+    CircleCenter {
+        center: signex_sketch::id::SketchEntityId,
+    },
+    /// Arc tool, centre click landed.
+    ArcCenter {
+        center: signex_sketch::id::SketchEntityId,
+    },
+    /// Arc tool, centre + start clicks landed; awaiting end click.
+    ArcStart {
+        center: signex_sketch::id::SketchEntityId,
+        start: signex_sketch::id::SketchEntityId,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -182,6 +231,8 @@ impl FootprintEditorState {
             last_solve: None,
             auto_pause: signex_sketch::solver::timeout::AutoPauseState::default(),
             solve_warnings: Vec::new(),
+            active_tool: SketchTool::default(),
+            tool_pending: ToolPending::default(),
         };
         s.recompute_courtyard();
         s
@@ -203,6 +254,8 @@ impl FootprintEditorState {
             last_solve: None,
             auto_pause: signex_sketch::solver::timeout::AutoPauseState::default(),
             solve_warnings: Vec::new(),
+            active_tool: SketchTool::default(),
+            tool_pending: ToolPending::default(),
         };
         s.recompute_courtyard();
         s

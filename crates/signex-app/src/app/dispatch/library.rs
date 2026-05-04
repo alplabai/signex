@@ -3910,6 +3910,9 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintSketchPlacePoint { .. }
         | PrimitiveEditorMsg::FootprintSketchEditParameter { .. }
         | PrimitiveEditorMsg::FootprintSketchToggleAutoPause
+        | PrimitiveEditorMsg::FootprintSketchSetTool(_)
+        | PrimitiveEditorMsg::FootprintSketchToolClick { .. }
+        | PrimitiveEditorMsg::FootprintSketchToolEscape
         | PrimitiveEditorMsg::Save => {}
     }
 }
@@ -4146,6 +4149,192 @@ pub(crate) fn apply_footprint_primitive_edit(
                 SketchEdit::ForceRebuild,
             );
             editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintSketchSetTool(tool) => {
+            editor.state.active_tool = tool;
+            editor.state.tool_pending =
+                crate::library::editor::footprint::state::ToolPending::Idle;
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintSketchToolEscape => {
+            editor.state.tool_pending =
+                crate::library::editor::footprint::state::ToolPending::Idle;
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintSketchToolClick { x_mm, y_mm, snap_id } => {
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit;
+            use crate::library::editor::footprint::sketch_mode::SketchEdit;
+            use crate::library::editor::footprint::state::{SketchTool, ToolPending};
+            use signex_sketch::entity::{Entity, EntityKind};
+            use signex_sketch::id::SketchEntityId;
+            use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
+
+            // Resolve the click into either an existing snap Point or a
+            // freshly-minted Point. For a snap, the dispatcher reuses the
+            // existing entity ID. Otherwise it appends a Point at the
+            // click position and uses that new ID for the active tool's
+            // gesture state.
+            let plane_id = match editor.primitive.sketch.as_ref() {
+                Some(s) if !s.planes.is_empty() => s.planes[0].id,
+                _ => {
+                    let pid = PlaneId::new();
+                    let sketch = editor
+                        .primitive
+                        .sketch
+                        .get_or_insert_with(signex_sketch::SketchData::default);
+                    sketch.planes.push(Plane {
+                        id: pid,
+                        kind: PlaneKind::BoardTop,
+                    });
+                    pid
+                }
+            };
+
+            let resolved_id: SketchEntityId = match snap_id {
+                Some(id) => id,
+                None => {
+                    let id = SketchEntityId::new();
+                    let entity = Entity::new(
+                        id,
+                        plane_id,
+                        EntityKind::Point { x: x_mm, y: y_mm },
+                    );
+                    let _ = apply_sketch_edit(
+                        &mut editor.state,
+                        &mut editor.primitive,
+                        SketchEdit::AddEntity(entity),
+                    );
+                    id
+                }
+            };
+
+            // Per-tool state machine — advance `tool_pending` and emit
+            // the gesture-completing AddEntity when ready.
+            match editor.state.active_tool {
+                SketchTool::Select | SketchTool::Point => {
+                    // Select: ignore (no add). Point: already added above.
+                    editor.state.tool_pending = ToolPending::Idle;
+                }
+                SketchTool::Line => match editor.state.tool_pending {
+                    ToolPending::Idle => {
+                        editor.state.tool_pending = ToolPending::LineFirst {
+                            first: resolved_id,
+                        };
+                    }
+                    ToolPending::LineFirst { first } => {
+                        let line_id = SketchEntityId::new();
+                        let line = Entity::new(
+                            line_id,
+                            plane_id,
+                            EntityKind::Line {
+                                start: first,
+                                end: resolved_id,
+                            },
+                        );
+                        let _ = apply_sketch_edit(
+                            &mut editor.state,
+                            &mut editor.primitive,
+                            SketchEdit::AddEntity(line),
+                        );
+                        editor.state.tool_pending = ToolPending::Idle;
+                    }
+                    _ => {
+                        editor.state.tool_pending = ToolPending::LineFirst {
+                            first: resolved_id,
+                        };
+                    }
+                },
+                SketchTool::Circle => match editor.state.tool_pending {
+                    ToolPending::Idle => {
+                        editor.state.tool_pending = ToolPending::CircleCenter {
+                            center: resolved_id,
+                        };
+                    }
+                    ToolPending::CircleCenter { center } => {
+                        // Compute radius from centre + edge points.
+                        let r = if let (Some(c_pt), Some(e_pt)) = (
+                            editor
+                                .primitive
+                                .sketch
+                                .as_ref()
+                                .and_then(|s| s.entities.iter().find(|e| e.id == center))
+                                .and_then(|e| match e.kind {
+                                    EntityKind::Point { x, y } => Some((x, y)),
+                                    _ => None,
+                                }),
+                            editor
+                                .primitive
+                                .sketch
+                                .as_ref()
+                                .and_then(|s| s.entities.iter().find(|e| e.id == resolved_id))
+                                .and_then(|e| match e.kind {
+                                    EntityKind::Point { x, y } => Some((x, y)),
+                                    _ => None,
+                                }),
+                        ) {
+                            ((e_pt.0 - c_pt.0).powi(2) + (e_pt.1 - c_pt.1).powi(2)).sqrt()
+                        } else {
+                            1.0
+                        };
+                        let circle_id = SketchEntityId::new();
+                        let circle = Entity::new(
+                            circle_id,
+                            plane_id,
+                            EntityKind::Circle { center, radius: r },
+                        );
+                        let _ = apply_sketch_edit(
+                            &mut editor.state,
+                            &mut editor.primitive,
+                            SketchEdit::AddEntity(circle),
+                        );
+                        editor.state.tool_pending = ToolPending::Idle;
+                    }
+                    _ => {
+                        editor.state.tool_pending = ToolPending::CircleCenter {
+                            center: resolved_id,
+                        };
+                    }
+                },
+                SketchTool::Arc => match editor.state.tool_pending {
+                    ToolPending::Idle => {
+                        editor.state.tool_pending = ToolPending::ArcCenter {
+                            center: resolved_id,
+                        };
+                    }
+                    ToolPending::ArcCenter { center } => {
+                        editor.state.tool_pending = ToolPending::ArcStart {
+                            center,
+                            start: resolved_id,
+                        };
+                    }
+                    ToolPending::ArcStart { center, start } => {
+                        let arc_id = SketchEntityId::new();
+                        let arc = Entity::new(
+                            arc_id,
+                            plane_id,
+                            EntityKind::Arc {
+                                center,
+                                start,
+                                end: resolved_id,
+                                sweep_ccw: true,
+                            },
+                        );
+                        let _ = apply_sketch_edit(
+                            &mut editor.state,
+                            &mut editor.primitive,
+                            SketchEdit::AddEntity(arc),
+                        );
+                        editor.state.tool_pending = ToolPending::Idle;
+                    }
+                    _ => {
+                        editor.state.tool_pending = ToolPending::ArcCenter {
+                            center: resolved_id,
+                        };
+                    }
+                },
+            }
+            editor.canvas_cache.clear();
+            editor.dirty = true;
         }
         // Symbol variants are no-ops on a Footprint editor.
         PrimitiveEditorMsg::SymbolSetTool(_)
@@ -4561,6 +4750,8 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::SaveSymbol(_, _)
         | EditorMsg::FootprintAddPad { .. }
         | EditorMsg::FootprintSketchPlacePoint { .. }
+        | EditorMsg::FootprintSketchToolClick { .. }
+        | EditorMsg::FootprintSketchToolEscape
         | EditorMsg::FootprintMovePad { .. }
         | EditorMsg::FootprintCursorAt { .. }
         | EditorMsg::FootprintSelectPad(_)

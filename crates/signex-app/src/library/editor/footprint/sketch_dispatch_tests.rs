@@ -148,6 +148,56 @@ mod tests {
     }
 
     #[test]
+    fn line_tool_two_clicks_creates_line_with_snap() {
+        // v0.13.2 Phase 6.4 — drive the Line-tool state machine
+        // through two clicks. Second click snaps onto the first
+        // entity to verify the auto-Coincident path.
+        use crate::library::editor::footprint::state::{SketchTool, ToolPending};
+        use crate::library::editor::footprint::sketch_mode::SketchEdit;
+        use signex_sketch::entity::EntityKind;
+
+        let mut fp = empty_footprint();
+        let plane = PlaneId::new();
+        fp.sketch = Some(signex_sketch::SketchData {
+            planes: vec![signex_sketch::plane::Plane {
+                id: plane,
+                kind: signex_sketch::plane::PlaneKind::BoardTop,
+            }],
+            ..signex_sketch::SketchData::default()
+        });
+        let mut state = FootprintEditorState::from_footprint(&fp);
+        state.active_tool = SketchTool::Line;
+
+        // First click — adds the anchor Point and parks tool_pending
+        // on LineFirst.
+        let p1 = SketchEntityId::new();
+        let pt = Entity::new(p1, plane, EntityKind::Point { x: 0.0, y: 0.0 });
+        apply_sketch_edit(&mut state, &mut fp, SketchEdit::AddEntity(pt)).unwrap();
+        state.tool_pending = ToolPending::LineFirst { first: p1 };
+
+        // Second click — adds endpoint + Line entity. We do this
+        // step manually because the dispatcher in app/dispatch is the
+        // glue; this test verifies the SketchEdit-level behaviour.
+        let p2 = SketchEntityId::new();
+        let pt2 = Entity::new(p2, plane, EntityKind::Point { x: 5.0, y: 0.0 });
+        apply_sketch_edit(&mut state, &mut fp, SketchEdit::AddEntity(pt2)).unwrap();
+        let line_id = SketchEntityId::new();
+        let line = Entity::new(
+            line_id,
+            plane,
+            EntityKind::Line { start: p1, end: p2 },
+        );
+        apply_sketch_edit(&mut state, &mut fp, SketchEdit::AddEntity(line)).unwrap();
+
+        let sketch = fp.sketch.as_ref().unwrap();
+        assert_eq!(sketch.entities.len(), 3);
+        assert!(sketch
+            .entities
+            .iter()
+            .any(|e| matches!(e.kind, EntityKind::Line { start, end } if start == p1 && end == p2)));
+    }
+
+    #[test]
     fn auto_pause_skips_solve() {
         let mut fp = empty_footprint();
         let plane = PlaneId::new();

@@ -243,15 +243,51 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         // empty-canvas click-add to the Place Point
                         // sketch-tool path. Normal mode keeps the
                         // existing FootprintAddPad behaviour.
+                        // v0.13.2 Phase 6.4 — also routes Line /
+                        // Circle / Arc multi-click gestures with
+                        // snap-to-existing-point detection. The
+                        // dispatcher advances tool_pending per click.
                         if matches!(self.state.mode, super::state::EditorMode::Sketch) {
+                            use super::state::SketchTool;
+                            let click_world = drag.grab_offset_mm;
+                            let snap_id = sketch_snap(
+                                self.sketch,
+                                cstate,
+                                click_world,
+                            );
+                            let msg = match self.state.active_tool {
+                                SketchTool::Select => {
+                                    // No drawing tool active — fall
+                                    // through to legacy click-add.
+                                    return Some(canvas::Action::publish(
+                                        LibraryMessage::EditorEvent {
+                                            library_path: self.address.library_path.clone(),
+                                            table: self.address.table.clone(),
+                                            row_id: self.address.row_id,
+                                            msg: EditorMsg::FootprintSketchPlacePoint {
+                                                x_mm: click_world.0,
+                                                y_mm: click_world.1,
+                                            },
+                                        },
+                                    ));
+                                }
+                                SketchTool::Point => EditorMsg::FootprintSketchPlacePoint {
+                                    x_mm: click_world.0,
+                                    y_mm: click_world.1,
+                                },
+                                SketchTool::Line | SketchTool::Circle | SketchTool::Arc => {
+                                    EditorMsg::FootprintSketchToolClick {
+                                        x_mm: click_world.0,
+                                        y_mm: click_world.1,
+                                        snap_id,
+                                    }
+                                }
+                            };
                             return Some(canvas::Action::publish(LibraryMessage::EditorEvent {
                                 library_path: self.address.library_path.clone(),
                                 table: self.address.table.clone(),
                                 row_id: self.address.row_id,
-                                msg: EditorMsg::FootprintSketchPlacePoint {
-                                    x_mm: drag.grab_offset_mm.0,
-                                    y_mm: drag.grab_offset_mm.1,
-                                },
+                                msg,
                             }));
                         }
                         // Click-add at the press position (world coords
@@ -454,6 +490,176 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
     }
 }
 
+/// v0.13.2 Phase 6.6 — render constraint glyphs above the sketch
+/// entities. Each constraint's centroid (geometric mean of the
+/// entities it touches) gets a small Unicode glyph; over-constrained
+/// constraints render in red.
+fn draw_constraint_icons(
+    frame: &mut canvas::Frame,
+    cstate: &FootprintCanvasState,
+    sketch: &signex_sketch::SketchData,
+    state: &FootprintEditorState,
+) {
+    use signex_sketch::constraint::ConstraintKind;
+    use signex_sketch::entity::EntityKind;
+    use signex_sketch::id::{ConstraintId, SketchEntityId};
+
+    let over_set: std::collections::HashSet<ConstraintId> = state
+        .last_solve
+        .as_ref()
+        .map(|s| s.over_constraints.iter().copied().collect())
+        .unwrap_or_default();
+
+    let point_world_local = |id: SketchEntityId| -> Option<(f64, f64)> {
+        if let Some(solve) = state.last_solve.as_ref() {
+            if let Some(p) = signex_sketch::solver::state::point_xy(
+                id,
+                &solve.result.state,
+                &solve.result.index,
+                sketch,
+            ) {
+                return Some(p);
+            }
+        }
+        sketch.entities.iter().find(|e| e.id == id).and_then(|e| {
+            match e.kind {
+                EntityKind::Point { x, y } => Some((x, y)),
+                _ => None,
+            }
+        })
+    };
+    let line_endpoints_local = |id: SketchEntityId| -> Option<(SketchEntityId, SketchEntityId)> {
+        sketch.entities.iter().find(|e| e.id == id).and_then(|e| {
+            match e.kind {
+                EntityKind::Line { start, end } => Some((start, end)),
+                _ => None,
+            }
+        })
+    };
+
+    for c in &sketch.constraints {
+        let (glyph, points): (&str, Vec<SketchEntityId>) = match &c.kind {
+            ConstraintKind::Coincident { p1, p2 } => ("=", vec![*p1, *p2]),
+            ConstraintKind::PointOnLine { point, line } => {
+                let mut v = vec![*point];
+                if let Some((s, e)) = line_endpoints_local(*line) {
+                    v.push(s);
+                    v.push(e);
+                }
+                ("|", v)
+            }
+            ConstraintKind::Horizontal { line } => {
+                let mut v = Vec::new();
+                if let Some((s, e)) = line_endpoints_local(*line) {
+                    v.push(s);
+                    v.push(e);
+                }
+                ("H", v)
+            }
+            ConstraintKind::Vertical { line } => {
+                let mut v = Vec::new();
+                if let Some((s, e)) = line_endpoints_local(*line) {
+                    v.push(s);
+                    v.push(e);
+                }
+                ("V", v)
+            }
+            ConstraintKind::Parallel { l1, l2 } => {
+                let mut v = Vec::new();
+                if let Some((s, e)) = line_endpoints_local(*l1) {
+                    v.extend([s, e]);
+                }
+                if let Some((s, e)) = line_endpoints_local(*l2) {
+                    v.extend([s, e]);
+                }
+                ("//", v)
+            }
+            ConstraintKind::Perpendicular { l1, l2 } => {
+                let mut v = Vec::new();
+                if let Some((s, e)) = line_endpoints_local(*l1) {
+                    v.extend([s, e]);
+                }
+                if let Some((s, e)) = line_endpoints_local(*l2) {
+                    v.extend([s, e]);
+                }
+                ("L", v)
+            }
+            ConstraintKind::DistancePtPt { p1, p2, .. } => ("D", vec![*p1, *p2]),
+            ConstraintKind::Fixed { point } => ("\u{1F512}", vec![*point]),
+            // Other constraint kinds get no glyph in v0.13.2 — added
+            // selectively as glyph-design lands.
+            _ => ("", Vec::new()),
+        };
+        if glyph.is_empty() || points.is_empty() {
+            continue;
+        }
+        let mut sum_x = 0.0_f64;
+        let mut sum_y = 0.0_f64;
+        let mut n = 0;
+        for id in &points {
+            if let Some((x, y)) = point_world_local(*id) {
+                sum_x += x;
+                sum_y += y;
+                n += 1;
+            }
+        }
+        if n == 0 {
+            continue;
+        }
+        let centroid = (sum_x / n as f64, sum_y / n as f64);
+        let p = cstate.world_to_screen(centroid);
+        let colour = if over_set.contains(&c.id) {
+            Color::from_rgba(1.0, 0.20, 0.20, 1.00)
+        } else {
+            Color::from_rgba(0.85, 0.85, 0.85, 0.85)
+        };
+        frame.fill_text(canvas::Text {
+            content: glyph.to_string(),
+            position: Point::new(p.x + 6.0, p.y - 6.0),
+            color: colour,
+            size: iced::Pixels(11.0),
+            ..canvas::Text::default()
+        });
+    }
+}
+
+/// v0.13.2 — Snap radius in screen pixels. A click within this
+/// distance of an existing sketch Point's screen position resolves
+/// to that Point (auto-Coincident).
+const SKETCH_SNAP_RADIUS_PX: f32 = 8.0;
+
+/// Find the sketch Point whose screen position is within
+/// `SKETCH_SNAP_RADIUS_PX` of the given world-mm click. Returns the
+/// nearest-snap Point's `SketchEntityId`, or `None` if no Point is
+/// in range. Used by the canvas to drive auto-Coincident behaviour
+/// in multi-click drawing tools.
+fn sketch_snap(
+    sketch: Option<&signex_sketch::SketchData>,
+    cstate: &FootprintCanvasState,
+    click_world: (f64, f64),
+) -> Option<signex_sketch::id::SketchEntityId> {
+    use signex_sketch::entity::EntityKind;
+    let sketch = sketch?;
+    let click_screen = cstate.world_to_screen(click_world);
+    let radius_sq = SKETCH_SNAP_RADIUS_PX * SKETCH_SNAP_RADIUS_PX;
+    let mut best: Option<(f32, signex_sketch::id::SketchEntityId)> = None;
+    for entity in &sketch.entities {
+        if let EntityKind::Point { x, y } = entity.kind {
+            let p = cstate.world_to_screen((x, y));
+            let dx = p.x - click_screen.x;
+            let dy = p.y - click_screen.y;
+            let dist_sq = dx * dx + dy * dy;
+            if dist_sq <= radius_sq {
+                match best {
+                    Some((b, _)) if b <= dist_sq => {}
+                    _ => best = Some((dist_sq, entity.id)),
+                }
+            }
+        }
+    }
+    best.map(|(_, id)| id)
+}
+
 /// Render the sketch entities (Phase 6.2). Points draw as small
 /// filled circles, Lines stroke between their endpoints (dashed if
 /// `construction == true`), Circles stroke the radius circle, Arcs
@@ -504,6 +710,12 @@ fn draw_sketch_overlay(
             Color::from_rgba(0.85, 0.85, 0.85, 1.00)
         }
     };
+
+    // v0.13.2 Phase 6.6 — Constraint icon overlay. Render BEFORE
+    // entities so glyphs sit underneath the geometry layer and don't
+    // hide pad-edge clicks. Tinted red for over-constrained
+    // constraints; muted otherwise.
+    draw_constraint_icons(frame, cstate, sketch, state);
 
     for entity in &sketch.entities {
         match entity.kind {
@@ -574,10 +786,16 @@ fn draw_sketch_overlay(
                 frame.stroke(&path, Stroke::default().with_width(1.5).with_color(col));
             }
             EntityKind::Arc {
-                center, start, end, ..
+                center,
+                start,
+                end,
+                sweep_ccw,
             } => {
                 // Approximate the arc by a 16-segment polyline between
-                // start and end on the circle through `center`.
+                // start and end on the circle through `center`. Sweep
+                // direction respects the entity's `sweep_ccw` flag —
+                // CCW arcs walk positive delta, CW arcs walk negative
+                // delta.
                 let c = match point_world(center, sketch, state) {
                     Some(w) => w,
                     None => continue,
@@ -594,8 +812,17 @@ fn draw_sketch_overlay(
                 let a0 = (s.1 - c.1).atan2(s.0 - c.0);
                 let a1 = (e.1 - c.1).atan2(e.0 - c.0);
                 let mut delta = a1 - a0;
-                while delta < 0.0 {
-                    delta += std::f64::consts::TAU;
+                let tau = std::f64::consts::TAU;
+                if sweep_ccw {
+                    while delta < 0.0 {
+                        delta += tau;
+                    }
+                } else {
+                    // Clockwise sweep — delta should be ≤ 0; wrap into
+                    // (−2π, 0].
+                    while delta > 0.0 {
+                        delta -= tau;
+                    }
                 }
                 let segs = 16;
                 let mut prev = cstate.world_to_screen(s);

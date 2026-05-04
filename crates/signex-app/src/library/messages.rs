@@ -708,6 +708,19 @@ pub enum EditorMsg {
         x_mm: f64,
         y_mm: f64,
     },
+    /// v0.13.2 Phase 6.4 — Sketch-mode multi-click tool gesture
+    /// (Line / Circle / Arc). Carries the snap-to-existing-point id
+    /// when the click landed within `SNAP_RADIUS_PX` of an existing
+    /// sketch Point. The dispatcher advances the active tool's
+    /// state machine and emits the gesture-completing AddEntity.
+    FootprintSketchToolClick {
+        x_mm: f64,
+        y_mm: f64,
+        snap_id: Option<signex_sketch::id::SketchEntityId>,
+    },
+    /// v0.13.2 — Escape during a multi-click gesture; clears
+    /// `tool_pending` without emitting a SketchEdit.
+    FootprintSketchToolEscape,
     /// Select / deselect a pad. `None` deselects everything.
     FootprintSelectPad(Option<usize>),
     /// Delete-key — remove the currently-selected pad.
@@ -1081,6 +1094,24 @@ pub enum PrimitiveEditorMsg {
     /// machine. Used by the inspector's "Live solve paused (resume)"
     /// button.
     FootprintSketchToggleAutoPause,
+    /// v0.13.2 — Tool palette: switch the active drawing tool.
+    /// Clears any in-flight multi-click gesture (`tool_pending`) so
+    /// switching tools mid-gesture doesn't leave dangling anchors.
+    FootprintSketchSetTool(crate::library::editor::footprint::state::SketchTool),
+    /// v0.13.2 — Canvas left-click in Sketch mode while a multi-click
+    /// drawing tool is active. The dispatcher advances the per-tool
+    /// state machine on `tool_pending` and emits the appropriate
+    /// `SketchEdit` (AddEntity Line / Circle / Arc) when the gesture
+    /// completes. `snap_id` carries the sketch Point under the cursor
+    /// (within `SNAP_RADIUS_PX`) for auto-Coincident snap.
+    FootprintSketchToolClick {
+        x_mm: f64,
+        y_mm: f64,
+        snap_id: Option<signex_sketch::id::SketchEntityId>,
+    },
+    /// v0.13.2 — Escape during a multi-click gesture: discard
+    /// `tool_pending` without emitting a SketchEdit.
+    FootprintSketchToolEscape,
 
     // ── Save ───────────────────────────────────────────────
     /// Explicit "Save this primitive tab to disk" — fires from the
