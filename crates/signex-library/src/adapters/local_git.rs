@@ -39,7 +39,7 @@ use crate::component::ComponentRow;
 use crate::identity::{InternalPn, RowId};
 use crate::library_file::{LibraryFile, LibraryRow, LibraryTable, SnxlibManifest};
 use crate::manifest::{LibraryMeta, Manifest};
-use crate::primitive::{Footprint, PrimitiveKind, SimModel, Symbol, SymbolFile};
+use crate::primitive::{Footprint, PrimitiveKind, SimFile, SimModel, Symbol, SymbolFile};
 use crate::tables::{TABLE_HEADER, record_to_row, row_to_record};
 
 const SYMBOLS_DIR: &str = "symbols";
@@ -348,16 +348,12 @@ impl LocalGitAdapter {
             )));
         }
         let bytes = fs::read(&path)?;
-        // v0.18.2 — `.snxfpt` files now use TOML envelope by default
-        // but the on-disk JSON corpus stays readable. The
-        // `FootprintFile::from_bytes` auto-detect handles the dispatch
-        // for footprint primitives; other primitive kinds keep the
-        // legacy serde_json path until their own TOML migration lands.
+        // v0.18.4 — `.snxfpt` and `.snxsym` ship as TOML+TSV
+        // envelopes. v0.18.5 — `.snxsim` ships as TOML envelope.
+        // For each primitive kind that's been migrated, build the
+        // file envelope, pull the first contained primitive, then
+        // serde-round-trip through JSON to recover the generic T.
         if matches!(kind, PrimitiveKind::Footprint) {
-            // Build a TOML-or-JSON FootprintFile, then return its
-            // first contained Footprint. The deserialise-into-T path
-            // round-trips through the Footprint shape because callers
-            // (read_footprint) hand T = Footprint here.
             let file = crate::primitive::FootprintFile::from_bytes(&bytes)
                 .map_err(|e| LibraryError::Backend(format!("read .snxfpt: {e}")))?;
             let fp = file
@@ -365,11 +361,22 @@ impl LocalGitAdapter {
                 .into_iter()
                 .next()
                 .ok_or_else(|| LibraryError::Backend("empty FootprintFile".into()))?;
-            // T should be Footprint here; serde round-trip via JSON
-            // keeps the call signature generic without inventing a
-            // dispatch enum.
             let buf = serde_json::to_vec(&fp)
                 .map_err(|e| LibraryError::Backend(format!("re-serialise footprint: {e}")))?;
+            let value: T = serde_json::from_slice(&buf)
+                .map_err(|e| LibraryError::Backend(format!("read primitive: {e}")))?;
+            return Ok(value);
+        }
+        if matches!(kind, PrimitiveKind::Sim) {
+            let file = SimFile::from_bytes(&bytes)
+                .map_err(|e| LibraryError::Backend(format!("read .snxsim: {e}")))?;
+            let model = file
+                .models
+                .into_iter()
+                .next()
+                .ok_or_else(|| LibraryError::Backend("empty SimFile".into()))?;
+            let buf = serde_json::to_vec(&model)
+                .map_err(|e| LibraryError::Backend(format!("re-serialise sim: {e}")))?;
             let value: T = serde_json::from_slice(&buf)
                 .map_err(|e| LibraryError::Backend(format!("read primitive: {e}")))?;
             return Ok(value);
@@ -382,9 +389,10 @@ impl LocalGitAdapter {
     /// Persist a primitive file under `<root>/<subdir>/<uuid>.<ext>`,
     /// stage + commit it via libgit2 with the supplied message.
     ///
-    /// v0.18.2 — `.snxfpt` files emit as TOML envelope. Other
-    /// primitive kinds (`.snxsym`, `.snxsim`) keep emitting JSON
-    /// until their own migration ships.
+    /// `.snxfpt` files emit as TOML+TSV envelope (v0.18.4); `.snxsim`
+    /// files emit as TOML envelope (v0.18.5). `.snxsym` is handled
+    /// outside this generic path via `save_symbol_in_container` so
+    /// multi-symbol containers are preserved.
     fn write_primitive<T: Serialize>(
         &self,
         kind: PrimitiveKind,
@@ -406,6 +414,19 @@ impl LocalGitAdapter {
             let file = crate::primitive::FootprintFile::from_footprint(fp);
             file.to_toml_string()
                 .map_err(|e| LibraryError::Backend(format!("emit .snxfpt: {e}")))?
+                .into_bytes()
+        } else if matches!(kind, PrimitiveKind::Sim) {
+            // T is SimModel here — same JSON round-trip recovery
+            // pattern, then wrap into SimFile and emit TOML so the
+            // SPICE / Verilog-A `body` field lands as a literal
+            // multi-line string.
+            let buf = serde_json::to_vec(value)
+                .map_err(|e| LibraryError::Backend(format!("re-serialise sim: {e}")))?;
+            let model: SimModel = serde_json::from_slice(&buf)
+                .map_err(|e| LibraryError::Backend(format!("write primitive: {e}")))?;
+            let file = SimFile::from_model(model);
+            file.to_toml_string()
+                .map_err(|e| LibraryError::Backend(format!("emit .snxsim: {e}")))?
                 .into_bytes()
         } else {
             serde_json::to_vec_pretty(value)
@@ -684,10 +705,10 @@ impl LocalGitAdapter {
                 continue;
             };
             let bytes = fs::read(path)?;
-            // v0.18.2 — `.snxfpt` files migrated to TOML envelope.
-            // Auto-detect via `FootprintFile::from_bytes`, then serde
-            // round-trip through JSON to recover the generic T = Footprint
-            // shape. Other primitive kinds keep the legacy JSON path.
+            // v0.18.4/v0.18.5 — `.snxfpt` and `.snxsim` migrated to
+            // TOML envelopes. Read the envelope, pull the first
+            // contained primitive, then JSON-round-trip into the
+            // generic T (= Footprint or = SimModel).
             let value: T = if matches!(kind, PrimitiveKind::Footprint) {
                 let file = crate::primitive::FootprintFile::from_bytes(&bytes)
                     .map_err(|e| LibraryError::Backend(format!("list primitive {name}: {e}")))?;
@@ -696,6 +717,18 @@ impl LocalGitAdapter {
                 })?;
                 let buf = serde_json::to_vec(&fp).map_err(|e| {
                     LibraryError::Backend(format!("re-serialise .snxfpt {name}: {e}"))
+                })?;
+                serde_json::from_slice(&buf).map_err(|e| {
+                    LibraryError::Backend(format!("list primitive {name}: {e}"))
+                })?
+            } else if matches!(kind, PrimitiveKind::Sim) {
+                let file = SimFile::from_bytes(&bytes)
+                    .map_err(|e| LibraryError::Backend(format!("list primitive {name}: {e}")))?;
+                let model = file.models.into_iter().next().ok_or_else(|| {
+                    LibraryError::Backend(format!("empty .snxsim {name}"))
+                })?;
+                let buf = serde_json::to_vec(&model).map_err(|e| {
+                    LibraryError::Backend(format!("re-serialise .snxsim {name}: {e}"))
                 })?;
                 serde_json::from_slice(&buf).map_err(|e| {
                     LibraryError::Backend(format!("list primitive {name}: {e}"))

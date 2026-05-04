@@ -24,7 +24,7 @@ pub use footprint::{
     FpGraphicKind, LayerId, Pad, PadKind, PadShape, Polygon, StepAttachment,
 };
 pub use ref_::PrimitiveRef;
-pub use sim::{SimKind, SimModel};
+pub use sim::{SimFile, SimFileError, SimKind, SimModel};
 pub use symbol::{
     ComponentType, PinDirection, PinOrientation, PinSymbolKind, Symbol, SymbolFile,
     SymbolFileError, SymbolGraphic, SymbolGraphicKind, SymbolPin,
