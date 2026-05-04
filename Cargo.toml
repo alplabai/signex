@@ -6,6 +6,8 @@ members = [
     "crates/signex-bom",
     "crates/signex-types",
     "crates/signex-render",
+    "crates/signex-gfx",
+    "crates/signex-renderer",
     "crates/signex-widgets",
     "crates/signex-erc",
     "crates/signex-erc-dsl",
@@ -60,6 +62,8 @@ signex-types = { path = "crates/signex-types" }
 signex-engine = { path = "crates/signex-engine" }
 signex-bom = { path = "crates/signex-bom" }
 signex-render = { path = "crates/signex-render" }
+signex-gfx = { path = "crates/signex-gfx" }
+signex-renderer = { path = "crates/signex-renderer" }
 signex-widgets = { path = "crates/signex-widgets" }
 signex-erc = { path = "crates/signex-erc" }
 signex-erc-dsl = { path = "crates/signex-erc-dsl" }
