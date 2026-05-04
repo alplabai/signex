@@ -15,6 +15,14 @@ impl Signex {
         panel_msg: &crate::panels::PanelMsg,
     ) -> bool {
         match panel_msg {
+            crate::panels::PanelMsg::FpLibraryOpenSibling(sibling_path) => {
+                // v0.14.2 — open the sibling .snxfpt as a new tab
+                // (or activate an existing tab if it's already open)
+                // via the existing primitive-open flow.
+                let _ = self.handle_open_primitive(sibling_path.clone());
+                self.refresh_panel_ctx();
+                true
+            }
             crate::panels::PanelMsg::FpEditorToggleAutoFitCourtyard => {
                 // v0.14.2 — resolve the active footprint editor's
                 // path and route through the existing

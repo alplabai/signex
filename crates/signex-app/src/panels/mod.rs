@@ -46,6 +46,12 @@ pub enum PanelKind {
     /// editor's `active_idx`. Visible whenever a Symbol editor tab
     /// is focused.
     SchLibrary,
+    /// v0.14.2 — Altium PCB Library panel parity. Lists every
+    /// `.snxfpt` sibling inside the containing `.snxlib`'s
+    /// `footprints/` directory; clicking opens that footprint as a
+    /// new tab (same `Open ▸ Footprint` flow). Visible whenever a
+    /// Footprint editor tab is focused.
+    FootprintLibrary,
     /// VSCode-style per-file Git history. Right-dock surface that
     /// follows the active tab and shows the file's last 50 commits
     /// via `signex_widgets::history_pane`.
@@ -76,6 +82,7 @@ pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::Todo,
     PanelKind::Wiki,
     PanelKind::SchLibrary,
+    PanelKind::FootprintLibrary,
     PanelKind::History,
 ];
 
@@ -128,6 +135,7 @@ impl PanelKind {
             PanelKind::OutputJobs => "Output Jobs",
             PanelKind::Library => "Library",
             PanelKind::SchLibrary => "SCH Library",
+            PanelKind::FootprintLibrary => "Footprint Library",
             PanelKind::History => "History",
         }
     }
@@ -527,6 +535,31 @@ pub struct FootprintEditorPanelContext {
     /// the Properties panel's Auto-fit Courtyard toggle (the
     /// equivalent active-bar button stays for quick access).
     pub auto_fit_courtyard: bool,
+    /// v0.14.2 — every `.snxfpt` sibling inside the containing
+    /// `.snxlib`'s `footprints/` directory. Drives the new Footprint
+    /// Library panel (mirror of SCH Library). Empty when the active
+    /// footprint lives outside any mounted library.
+    pub library_siblings: Vec<FootprintLibSibling>,
+    /// Display name of the containing `.snxlib` (file stem) — used
+    /// in the Footprint Library panel breadcrumb. `None` for
+    /// lone-file edits.
+    pub library_stem: Option<String>,
+}
+
+/// One row in the Footprint Library panel — a sibling `.snxfpt`
+/// living next to the active footprint inside the same `.snxlib`'s
+/// `footprints/` directory.
+#[derive(Debug, Clone)]
+pub struct FootprintLibSibling {
+    /// Absolute path to the `.snxfpt` on disk.
+    pub path: std::path::PathBuf,
+    /// File stem ("SOIC-8") — falls back to filename when the stem
+    /// can't be resolved.
+    pub display_name: String,
+    /// `true` when this sibling is the currently-open footprint
+    /// (the active tab). The panel renders this row with the
+    /// selection highlight.
+    pub is_active: bool,
 }
 
 /// Editor mode mirror — kept in this crate so the panel doesn't need
@@ -1002,6 +1035,11 @@ pub enum PanelMsg {
     /// footprint editor by tab and flips its `auto_fit_courtyard`
     /// flag via the existing `FootprintToggleAutoFit` path.
     FpEditorToggleAutoFitCourtyard,
+    /// v0.14.2 — open a sibling `.snxfpt` from the Footprint Library
+    /// panel. The handler routes through the existing
+    /// `handle_open_primitive` flow so the file gets a fresh tab + a
+    /// `FootprintEditorState` (or activates an existing tab).
+    FpLibraryOpenSibling(std::path::PathBuf),
     /// Clear the current ERC violations list and canvas markers.
     ClearErc,
     /// Focus a specific ERC diagnostic row from the global flattened list.
@@ -1371,6 +1409,7 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
             ctx,
         ),
         PanelKind::SchLibrary => view_sch_library(ctx),
+        PanelKind::FootprintLibrary => view_footprint_library(ctx),
         PanelKind::History => return history::view_history(ctx),
     };
 
@@ -1973,6 +2012,123 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
     TreeNode::branch(project.name.clone(), TreeIcon::Folder, children)
         .with_accent(project.is_active)
         .with_dirty(project.is_dirty)
+}
+
+/// v0.14.2 — Footprint Library panel. Lists every `.snxfpt` sibling
+/// inside the containing `.snxlib`'s `footprints/` directory. Each
+/// row shows the footprint's display name; clicking opens it in a
+/// new tab (or activates an existing tab). The currently-active
+/// footprint is highlighted with the selection accent.
+///
+/// Mirrors `view_sch_library`'s layout: title, breadcrumb, single-
+/// column list. Differs in two ways: footprints live as one-per-file
+/// (so the list reads from sibling `.snxfpt` files in the library
+/// rather than from a multi-symbol container's in-memory `Vec`), and
+/// the click action opens a new tab instead of switching an
+/// in-tab `active_idx`.
+fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
+    let muted = theme_ext::text_secondary(&ctx.tokens);
+    let primary = theme_ext::text_primary(&ctx.tokens);
+    let border_c = theme_ext::border_color(&ctx.tokens);
+
+    let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
+    col = col.push(
+        container(text("Footprint Library").size(11).color(primary))
+            .padding([6, 8])
+            .width(Length::Fill),
+    );
+    col = col.push(thin_sep(border_c));
+
+    let Some(fp) = ctx.footprint_editor.as_ref() else {
+        col = col.push(
+            container(
+                text(
+                    "Open a `.snxfpt` to see its sibling footprints in the containing \
+                     library here. Right-click a `.snxlib` in the project tree and pick \
+                     `Add New ▸ Footprint` to create one.",
+                )
+                .size(10)
+                .color(muted),
+            )
+            .padding([6, 8])
+            .width(Length::Fill),
+        );
+        return scrollable(col).width(Length::Fill).into();
+    };
+
+    let breadcrumb = match &fp.library_stem {
+        Some(lib) => format!(
+            "{}  ›  footprints/  ({} footprints)",
+            lib,
+            fp.library_siblings.len(),
+        ),
+        None => format!("(lone file)  ({} footprints)", fp.library_siblings.len()),
+    };
+    col = col.push(
+        container(text(breadcrumb).size(10).color(muted))
+            .padding([4, 8]),
+    );
+    col = col.push(thin_sep(border_c));
+
+    if fp.library_siblings.is_empty() {
+        col = col.push(
+            container(
+                text(
+                    "No `.snxfpt` files in this library. Right-click the `.snxlib` in the \
+                     project tree and pick `Add New ▸ Footprint` to create one.",
+                )
+                .size(10)
+                .color(muted),
+            )
+            .padding([6, 8])
+            .width(Length::Fill),
+        );
+        return scrollable(col).width(Length::Fill).into();
+    }
+
+    // Column header — single column ("Name") for v0.14.2; pad count
+    // / 3D body summary land in v0.15 once we cache them at scan
+    // time (avoids re-parsing every sibling .snxfpt per panel build).
+    col = col.push(
+        container(
+            text("Name")
+                .size(10)
+                .color(muted)
+                .width(Length::Fill),
+        )
+        .padding([4, 8])
+        .width(Length::Fill),
+    );
+    col = col.push(thin_sep(border_c));
+
+    for sibling in &fp.library_siblings {
+        let label_color = if sibling.is_active { primary } else { muted };
+        let bg_active = crate::styles::ti(ctx.tokens.selection);
+        let row_msg = PanelMsg::FpLibraryOpenSibling(sibling.path.clone());
+        let row_btn = iced::widget::button(
+            container(text(sibling.display_name.clone()).size(10).color(label_color))
+                .padding([3, 8])
+                .width(Length::Fill),
+        )
+        .on_press(row_msg)
+        .style(move |_: &Theme, _| iced::widget::button::Style {
+            background: if sibling.is_active {
+                Some(iced::Background::Color(bg_active))
+            } else {
+                Some(iced::Background::Color(iced::Color::TRANSPARENT))
+            },
+            border: iced::Border {
+                width: 0.0,
+                radius: 0.0.into(),
+                color: iced::Color::TRANSPARENT,
+            },
+            ..iced::widget::button::Style::default()
+        })
+        .width(Length::Fill);
+        col = col.push(row_btn);
+    }
+
+    scrollable(col).width(Length::Fill).into()
 }
 
 fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {

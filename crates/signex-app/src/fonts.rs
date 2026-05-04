@@ -863,6 +863,7 @@ fn panel_kind_key(k: crate::panels::PanelKind) -> &'static str {
         NetClasses => "net_classes",
         Library => "library",
         SchLibrary => "sch_library",
+        FootprintLibrary => "footprint_library",
         History => "history",
     }
 }
@@ -892,6 +893,7 @@ fn parse_panel_kind(s: &str) -> Option<crate::panels::PanelKind> {
         "net_classes" => NetClasses,
         "library" => Library,
         "sch_library" => SchLibrary,
+        "footprint_library" => FootprintLibrary,
         "history" => History,
         _ => return None,
     })
