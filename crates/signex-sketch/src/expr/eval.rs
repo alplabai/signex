@@ -193,7 +193,10 @@ fn eval_mul(lhs: Quantity, rhs: Quantity) -> Result<Quantity, ExprError> {
 
 /// Division and modulus — same family combinations on both sides.
 /// Length / Length collapses to Dimensionless; the others mirror
-/// [`eval_mul`].
+/// [`eval_mul`]. A zero divisor on any branch surfaces
+/// [`ExprError::Domain`] rather than producing inf / NaN — `1mm / 0`
+/// and `0 % 0` would otherwise flow into the LM solver as a poisoned
+/// state and silently break convergence.
 fn eval_div_mod(
     lhs: Quantity,
     rhs: Quantity,
@@ -206,26 +209,48 @@ fn eval_div_mod(
             // Convert both to mm so the ratio is well-defined.
             let l_mm = lhs.as_mm()?;
             let r_mm = rhs.as_mm()?;
+            check_nonzero(r_mm)?;
             Ok(Quantity::count(f(l_mm, r_mm)))
         }
-        (UnitFamily::Length, UnitFamily::Count) => Ok(Quantity {
-            value: f(lhs.value, rhs.value),
-            unit: lhs.unit,
-        }),
+        (UnitFamily::Length, UnitFamily::Count) => {
+            check_nonzero(rhs.value)?;
+            Ok(Quantity {
+                value: f(lhs.value, rhs.value),
+                unit: lhs.unit,
+            })
+        }
         (UnitFamily::Angle, UnitFamily::Angle) => {
             let l_rad = lhs.as_rad()?;
             let r_rad = rhs.as_rad()?;
+            check_nonzero(r_rad)?;
             Ok(Quantity::count(f(l_rad, r_rad)))
         }
-        (UnitFamily::Angle, UnitFamily::Count) => Ok(Quantity {
-            value: f(lhs.value, rhs.value),
-            unit: lhs.unit,
-        }),
-        (UnitFamily::Count, UnitFamily::Count) => Ok(Quantity::count(f(lhs.value, rhs.value))),
+        (UnitFamily::Angle, UnitFamily::Count) => {
+            check_nonzero(rhs.value)?;
+            Ok(Quantity {
+                value: f(lhs.value, rhs.value),
+                unit: lhs.unit,
+            })
+        }
+        (UnitFamily::Count, UnitFamily::Count) => {
+            check_nonzero(rhs.value)?;
+            Ok(Quantity::count(f(lhs.value, rhs.value)))
+        }
         _ => Err(ExprError::UnitMismatch {
             lhs: lhs.unit,
             rhs: rhs.unit,
         }),
+    }
+}
+
+/// Reject a zero divisor before we feed it to `/` or `%`. Pure-zero
+/// equality is intentional; sub-ULP non-zero values still divide
+/// cleanly under f64 (returning a large finite ratio rather than inf).
+fn check_nonzero(divisor: f64) -> Result<(), ExprError> {
+    if divisor == 0.0 {
+        Err(ExprError::Domain("division by zero".into()))
+    } else {
+        Ok(())
     }
 }
 
@@ -435,5 +460,78 @@ mod tests {
             eval(&e, &ctx()),
             Err(ExprError::UnitMismatch { .. })
         ));
+    }
+
+    #[test]
+    fn div_by_zero_length_returns_domain_error() {
+        // 1mm / 0mm — Length / Length branch.
+        let e = ExprNode::Binary(
+            BinOp::Div,
+            Box::new(ExprNode::literal_mm(1.0)),
+            Box::new(ExprNode::literal_mm(0.0)),
+        );
+        assert!(matches!(eval(&e, &ctx()), Err(ExprError::Domain(_))));
+    }
+
+    #[test]
+    fn div_by_zero_count_returns_domain_error() {
+        // 5 / 0 — Count / Count branch.
+        let e = ExprNode::Binary(
+            BinOp::Div,
+            Box::new(ExprNode::Literal(Quantity::count(5.0))),
+            Box::new(ExprNode::Literal(Quantity::count(0.0))),
+        );
+        assert!(matches!(eval(&e, &ctx()), Err(ExprError::Domain(_))));
+    }
+
+    #[test]
+    fn mod_by_zero_returns_domain_error() {
+        // 0 % 0 — the prompt-named edge case.
+        let e = ExprNode::Binary(
+            BinOp::Mod,
+            Box::new(ExprNode::Literal(Quantity::count(0.0))),
+            Box::new(ExprNode::Literal(Quantity::count(0.0))),
+        );
+        assert!(matches!(eval(&e, &ctx()), Err(ExprError::Domain(_))));
+    }
+
+    #[test]
+    fn mod_by_zero_length_returns_domain_error() {
+        // 5mm % 0mm — Length / Length branch via the Mod operator.
+        let e = ExprNode::Binary(
+            BinOp::Mod,
+            Box::new(ExprNode::literal_mm(5.0)),
+            Box::new(ExprNode::literal_mm(0.0)),
+        );
+        assert!(matches!(eval(&e, &ctx()), Err(ExprError::Domain(_))));
+    }
+
+    #[test]
+    fn div_by_zero_angle_returns_domain_error() {
+        // 90deg / 0deg — Angle / Angle branch.
+        let e = ExprNode::Binary(
+            BinOp::Div,
+            Box::new(ExprNode::Literal(Quantity {
+                value: 90.0,
+                unit: Unit::Deg,
+            })),
+            Box::new(ExprNode::Literal(Quantity {
+                value: 0.0,
+                unit: Unit::Deg,
+            })),
+        );
+        assert!(matches!(eval(&e, &ctx()), Err(ExprError::Domain(_))));
+    }
+
+    #[test]
+    fn nonzero_divisor_still_works() {
+        // Sanity: the check doesn't accidentally reject finite divisors.
+        let e = ExprNode::Binary(
+            BinOp::Div,
+            Box::new(ExprNode::literal_mm(10.0)),
+            Box::new(ExprNode::literal_mm(2.0)),
+        );
+        let q = eval(&e, &ctx()).unwrap();
+        assert_eq!(q, Quantity::count(5.0));
     }
 }
