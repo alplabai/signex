@@ -214,6 +214,14 @@ pub struct MenuContext {
     pub has_selection: bool,
     pub can_undo: bool,
     pub can_redo: bool,
+    /// v0.14.2: `true` when the active tab is a `.snxsym` standalone
+    /// editor. Used by File ▸ Save / Save As to enable themselves
+    /// for primitive editor tabs (the dispatch handler in
+    /// `save_active_document` already supports them; only the menu
+    /// gate was missing).
+    pub has_symbol_editor: bool,
+    /// v0.14.2: same for `.snxfpt` standalone editor tabs.
+    pub has_footprint_editor: bool,
     /// OS scale factor of the window hosting this menu bar. Drives the
     /// wordmark PNG tier picker (1× / 2× / 3×) so the lockup is rendered
     /// at 1:1 with device pixels. Defaults to 1.0 before the main
@@ -231,6 +239,8 @@ impl Default for MenuContext {
             has_selection: false,
             can_undo: false,
             can_redo: false,
+            has_symbol_editor: false,
+            has_footprint_editor: false,
             scale_factor: 1.0,
         }
     }
@@ -402,12 +412,22 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
             leaf("New Project", Some("Ctrl+N"), MenuMessage::NewProject, mc),
             leaf("Open...", Some("Ctrl+O"), MenuMessage::OpenProject, mc),
             separator(mc),
-            leaf_if("Save", Some("Ctrl+S"), MenuMessage::Save, ctx.has_schematic),
+            // v0.14.2: Save / Save As also enabled for any standalone
+            // primitive editor tab (`.snxsym` / `.snxfpt`). The
+            // dispatcher in `save_active_document` already handles
+            // those tab kinds; previously the menu greyed itself out
+            // because the gate only checked for an active schematic.
+            leaf_if(
+                "Save",
+                Some("Ctrl+S"),
+                MenuMessage::Save,
+                ctx.has_schematic || ctx.has_symbol_editor || ctx.has_footprint_editor,
+            ),
             leaf_if(
                 "Save As...",
                 Some("Ctrl+Shift+S"),
                 MenuMessage::SaveAs,
-                ctx.has_schematic,
+                ctx.has_schematic || ctx.has_symbol_editor || ctx.has_footprint_editor,
             ),
             separator(mc),
             library_menu,

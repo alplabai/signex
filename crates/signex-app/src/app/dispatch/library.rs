@@ -3468,6 +3468,10 @@ impl Signex {
             // Best-effort LibrarySet reload so Component Preview
             // tabs that already cached the primitive see the new bytes.
             self.reload_primitive_in_library_set(path);
+            // v0.14.2 — refresh panel ctx so the project-tree red
+            // dirty dot drops on the row (same F10 fix as the
+            // footprint branch below + the schematic save handler).
+            self.refresh_panel_ctx();
             return;
         }
 
@@ -3512,6 +3516,13 @@ impl Signex {
             self.commit_external_change_for(path, &format!("save footprint {fp_name}"));
             self.refresh_primitive_cache_for(path);
             self.reload_primitive_in_library_set(path);
+            // v0.14.2 — same F10 pattern as the schematic save: the
+            // project-tree red dirty dot reads cached
+            // `panel_ctx.projects[*].sheets[*].is_dirty`, which only
+            // refreshes inside `refresh_panel_ctx`. Without this
+            // call the dot lingers on the row even though
+            // `dirty_paths` no longer contains the path.
+            self.refresh_panel_ctx();
         }
     }
 
