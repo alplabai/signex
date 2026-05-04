@@ -1,0 +1,79 @@
+{
+  "uuid": "019df3df-aabc-7301-bbd7-2b1abd846810",
+  "name": "Fiducial-1mm",
+  "anchor": [
+    0.0,
+    0.0
+  ],
+  "pads": [],
+  "courtyard": {
+    "points": []
+  },
+  "silk_f": [],
+  "silk_b": [],
+  "fab_f": [],
+  "fab_b": [],
+  "body_3d": {
+    "shape": "Extrude",
+    "height_mm": 1.0,
+    "offset_z_mm": 0.0,
+    "top_color": [
+      0.2,
+      0.2,
+      0.2,
+      1.0
+    ],
+    "side_color": [
+      0.3,
+      0.3,
+      0.3,
+      1.0
+    ],
+    "outline": null
+  },
+  "step_attachment": null,
+  "pcb_params": {},
+  "version": "0.0.1",
+  "released": false,
+  "created": "2026-05-04T16:43:34.972288300Z",
+  "updated": "2026-05-04T16:43:34.972288300Z",
+  "schema_version": 3,
+  "sketch": {
+    "planes": [
+      {
+        "id": "39794942-4973-4406-902c-385bd2ba2e79",
+        "kind": "BoardTop"
+      }
+    ],
+    "entities": [
+      {
+        "id": "8a94e1b1-f494-4eca-9f51-fd7cfa1f1f6b",
+        "plane": "39794942-4973-4406-902c-385bd2ba2e79",
+        "construction": false,
+        "kind": "Point",
+        "x": 0.0,
+        "y": 0.0,
+        "pad": {
+          "number": "FID1",
+          "kind": "Fiducial",
+          "side": "Top",
+          "shape": {
+            "shape": "Round"
+          },
+          "size_x_expr": "copper_dia",
+          "size_y_expr": "copper_dia",
+          "mask_margin_expr": "0.5mm",
+          "paste_apertures": {
+            "kind": "Single"
+          }
+        }
+      }
+    ],
+    "constraints": [],
+    "arrays": [],
+    "parameters": {
+      "copper_dia": "1.0mm",
+      "mask_dia": "2.0mm"
+    }
+  }
+}

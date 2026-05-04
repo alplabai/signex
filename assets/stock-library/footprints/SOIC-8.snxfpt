@@ -1,0 +1,261 @@
+{
+  "uuid": "019df3df-aab9-7782-aa46-facc4f6783d4",
+  "name": "SOIC-8",
+  "anchor": [
+    0.0,
+    0.0
+  ],
+  "pads": [],
+  "courtyard": {
+    "points": []
+  },
+  "silk_f": [],
+  "silk_b": [],
+  "fab_f": [],
+  "fab_b": [],
+  "body_3d": {
+    "shape": "Extrude",
+    "height_mm": 1.0,
+    "offset_z_mm": 0.0,
+    "top_color": [
+      0.2,
+      0.2,
+      0.2,
+      1.0
+    ],
+    "side_color": [
+      0.3,
+      0.3,
+      0.3,
+      1.0
+    ],
+    "outline": null
+  },
+  "step_attachment": null,
+  "pcb_params": {},
+  "version": "0.0.1",
+  "released": false,
+  "created": "2026-05-04T16:43:34.969742200Z",
+  "updated": "2026-05-04T16:43:34.969742200Z",
+  "schema_version": 3,
+  "sketch": {
+    "planes": [
+      {
+        "id": "ed7e7756-0d1e-4ed9-9377-5412387c4401",
+        "kind": "BoardTop"
+      }
+    ],
+    "entities": [
+      {
+        "id": "93589e0d-aa58-4c05-a0b3-dbbcddd4f256",
+        "plane": "ed7e7756-0d1e-4ed9-9377-5412387c4401",
+        "construction": false,
+        "kind": "Point",
+        "x": 0.0,
+        "y": 0.0,
+        "pad": {
+          "number": "1",
+          "kind": "Smd",
+          "side": "Top",
+          "shape": {
+            "shape": "Rect"
+          },
+          "size_x_expr": "pad_w",
+          "size_y_expr": "pad_h",
+          "offset_x_expr": "-row_half",
+          "offset_y_expr": "1.5 * pad_pitch",
+          "mask_margin_expr": "0.05mm",
+          "paste_margin_expr": "0mm",
+          "paste_apertures": {
+            "kind": "Single"
+          }
+        }
+      },
+      {
+        "id": "4764b27e-9aab-4db6-a7f5-e501a611010b",
+        "plane": "ed7e7756-0d1e-4ed9-9377-5412387c4401",
+        "construction": false,
+        "kind": "Point",
+        "x": 0.0,
+        "y": 0.0,
+        "pad": {
+          "number": "2",
+          "kind": "Smd",
+          "side": "Top",
+          "shape": {
+            "shape": "Rect"
+          },
+          "size_x_expr": "pad_w",
+          "size_y_expr": "pad_h",
+          "offset_x_expr": "-row_half",
+          "offset_y_expr": "0.5 * pad_pitch",
+          "mask_margin_expr": "0.05mm",
+          "paste_margin_expr": "0mm",
+          "paste_apertures": {
+            "kind": "Single"
+          }
+        }
+      },
+      {
+        "id": "15e4034d-3733-4a4d-bedf-8139166ffc50",
+        "plane": "ed7e7756-0d1e-4ed9-9377-5412387c4401",
+        "construction": false,
+        "kind": "Point",
+        "x": 0.0,
+        "y": 0.0,
+        "pad": {
+          "number": "3",
+          "kind": "Smd",
+          "side": "Top",
+          "shape": {
+            "shape": "Rect"
+          },
+          "size_x_expr": "pad_w",
+          "size_y_expr": "pad_h",
+          "offset_x_expr": "-row_half",
+          "offset_y_expr": "-0.5 * pad_pitch",
+          "mask_margin_expr": "0.05mm",
+          "paste_margin_expr": "0mm",
+          "paste_apertures": {
+            "kind": "Single"
+          }
+        }
+      },
+      {
+        "id": "615cc443-735b-4a57-af55-10d919e49ecf",
+        "plane": "ed7e7756-0d1e-4ed9-9377-5412387c4401",
+        "construction": false,
+        "kind": "Point",
+        "x": 0.0,
+        "y": 0.0,
+        "pad": {
+          "number": "4",
+          "kind": "Smd",
+          "side": "Top",
+          "shape": {
+            "shape": "Rect"
+          },
+          "size_x_expr": "pad_w",
+          "size_y_expr": "pad_h",
+          "offset_x_expr": "-row_half",
+          "offset_y_expr": "-1.5 * pad_pitch",
+          "mask_margin_expr": "0.05mm",
+          "paste_margin_expr": "0mm",
+          "paste_apertures": {
+            "kind": "Single"
+          }
+        }
+      },
+      {
+        "id": "25b35e64-bef4-4b44-bc5a-93c178828e67",
+        "plane": "ed7e7756-0d1e-4ed9-9377-5412387c4401",
+        "construction": false,
+        "kind": "Point",
+        "x": 0.0,
+        "y": 0.0,
+        "pad": {
+          "number": "5",
+          "kind": "Smd",
+          "side": "Top",
+          "shape": {
+            "shape": "Rect"
+          },
+          "size_x_expr": "pad_w",
+          "size_y_expr": "pad_h",
+          "offset_x_expr": "row_half",
+          "offset_y_expr": "-1.5 * pad_pitch",
+          "mask_margin_expr": "0.05mm",
+          "paste_margin_expr": "0mm",
+          "paste_apertures": {
+            "kind": "Single"
+          }
+        }
+      },
+      {
+        "id": "cd307edf-77f8-446f-b8c7-81306518a7c0",
+        "plane": "ed7e7756-0d1e-4ed9-9377-5412387c4401",
+        "construction": false,
+        "kind": "Point",
+        "x": 0.0,
+        "y": 0.0,
+        "pad": {
+          "number": "6",
+          "kind": "Smd",
+          "side": "Top",
+          "shape": {
+            "shape": "Rect"
+          },
+          "size_x_expr": "pad_w",
+          "size_y_expr": "pad_h",
+          "offset_x_expr": "row_half",
+          "offset_y_expr": "-0.5 * pad_pitch",
+          "mask_margin_expr": "0.05mm",
+          "paste_margin_expr": "0mm",
+          "paste_apertures": {
+            "kind": "Single"
+          }
+        }
+      },
+      {
+        "id": "2d790021-dfad-45d0-b1c8-eef0198dc52b",
+        "plane": "ed7e7756-0d1e-4ed9-9377-5412387c4401",
+        "construction": false,
+        "kind": "Point",
+        "x": 0.0,
+        "y": 0.0,
+        "pad": {
+          "number": "7",
+          "kind": "Smd",
+          "side": "Top",
+          "shape": {
+            "shape": "Rect"
+          },
+          "size_x_expr": "pad_w",
+          "size_y_expr": "pad_h",
+          "offset_x_expr": "row_half",
+          "offset_y_expr": "0.5 * pad_pitch",
+          "mask_margin_expr": "0.05mm",
+          "paste_margin_expr": "0mm",
+          "paste_apertures": {
+            "kind": "Single"
+          }
+        }
+      },
+      {
+        "id": "3387b8d8-640f-466a-bbed-794a140a7d9e",
+        "plane": "ed7e7756-0d1e-4ed9-9377-5412387c4401",
+        "construction": false,
+        "kind": "Point",
+        "x": 0.0,
+        "y": 0.0,
+        "pad": {
+          "number": "8",
+          "kind": "Smd",
+          "side": "Top",
+          "shape": {
+            "shape": "Rect"
+          },
+          "size_x_expr": "pad_w",
+          "size_y_expr": "pad_h",
+          "offset_x_expr": "row_half",
+          "offset_y_expr": "1.5 * pad_pitch",
+          "mask_margin_expr": "0.05mm",
+          "paste_margin_expr": "0mm",
+          "paste_apertures": {
+            "kind": "Single"
+          }
+        }
+      }
+    ],
+    "constraints": [],
+    "arrays": [],
+    "parameters": {
+      "body_h": "4.9mm",
+      "body_w": "3.9mm",
+      "pad_h": "0.6mm",
+      "pad_pitch": "1.27mm",
+      "pad_w": "1.55mm",
+      "row_half": "2.7mm"
+    }
+  }
+}
