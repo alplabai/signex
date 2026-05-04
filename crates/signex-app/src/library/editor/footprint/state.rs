@@ -211,6 +211,12 @@ pub struct FootprintEditorState {
     /// useful for guides + symmetry without affecting the baked
     /// pad / silk / courtyard output.
     pub construction_mode: bool,
+    /// v0.16.1 — TAB pause-during-placement. When `true`, the canvas
+    /// ignores empty-canvas clicks during PadsTool::PlacePad so the
+    /// user can adjust pad-stack defaults before resuming. TAB
+    /// toggles. Mirrors the schematic's pre-placement / Resume
+    /// pattern; the in-flight `pads_tool` survives a pause/resume.
+    pub placement_paused: bool,
 }
 
 /// Pads-mode drawing tool — v0.15. The Pads-mode active bar's
@@ -315,6 +321,7 @@ impl FootprintEditorState {
             dimension_input: String::new(),
             pads_tool: PadsTool::default(),
             construction_mode: false,
+            placement_paused: false,
         };
         s.recompute_courtyard();
         s
@@ -343,6 +350,7 @@ impl FootprintEditorState {
             dimension_input: String::new(),
             pads_tool: PadsTool::default(),
             construction_mode: false,
+            placement_paused: false,
         };
         s.recompute_courtyard();
         s

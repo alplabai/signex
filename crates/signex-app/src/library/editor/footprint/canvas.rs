@@ -410,6 +410,18 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                             // for the Select tool.
                             let select_id = snap_id
                                 .or_else(|| sketch_hit_other(self.sketch, cstate, click_world));
+                            // v0.16.1 — TAB pause/resume also applies
+                            // to sketch placement tools. While paused,
+                            // suppress click-publish for non-Select
+                            // tools so the user can adjust defaults
+                            // without accidentally minting geometry.
+                            // Select-tool clicks still resolve so the
+                            // user can re-pick a different anchor.
+                            if self.state.placement_paused
+                                && self.state.active_tool != SketchTool::Select
+                            {
+                                return None;
+                            }
                             let msg = match self.state.active_tool {
                                 SketchTool::Select => EditorMsg::FootprintSketchSelect {
                                     id: select_id,
@@ -444,8 +456,13 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         // click, which removes the "I clicked
                         // somewhere by accident and now have a stray
                         // pad" footgun.
+                        // v0.16.1 — also gate on `placement_paused`
+                        // so TAB-pause suppresses click-add until the
+                        // user resumes (TAB again).
                         use crate::library::editor::footprint::state::PadsTool;
-                        if self.state.pads_tool == PadsTool::PlacePad {
+                        if self.state.pads_tool == PadsTool::PlacePad
+                            && !self.state.placement_paused
+                        {
                             return Some(canvas::Action::publish(LibraryMessage::EditorEvent {
                                 library_path: self.address.library_path.clone(),
                                 table: self.address.table.clone(),
@@ -704,6 +721,8 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
             // active, render a translucent 1×1 mm rectangle at the
             // cursor showing where the next pad will land. Mirrors
             // schematic placement-tool's pre-placement preview.
+            // While `placement_paused` (TAB), the ghost desaturates
+            // to grey + dashed-stroke to signal the click-gate is on.
             use crate::library::editor::footprint::state::{EditorMode, PadsTool};
             if matches!(self.state.mode, EditorMode::Normal)
                 && self.state.pads_tool == PadsTool::PlacePad
@@ -713,17 +732,36 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 let centre = cstate.world_to_screen((cx, cy));
                 let p0 = Point::new(centre.x - half, centre.y - half);
                 let size = iced::Size::new(half * 2.0, half * 2.0);
-                let ghost_fill = Color {
-                    r: 0.85,
-                    g: 0.20,
-                    b: 0.20,
-                    a: 0.35,
+                let paused = self.state.placement_paused;
+                let ghost_fill = if paused {
+                    Color {
+                        r: 0.55,
+                        g: 0.55,
+                        b: 0.55,
+                        a: 0.20,
+                    }
+                } else {
+                    Color {
+                        r: 0.85,
+                        g: 0.20,
+                        b: 0.20,
+                        a: 0.35,
+                    }
                 };
-                let ghost_stroke = Color {
-                    r: 0.85,
-                    g: 0.20,
-                    b: 0.20,
-                    a: 0.85,
+                let ghost_stroke = if paused {
+                    Color {
+                        r: 0.55,
+                        g: 0.55,
+                        b: 0.55,
+                        a: 0.85,
+                    }
+                } else {
+                    Color {
+                        r: 0.85,
+                        g: 0.20,
+                        b: 0.20,
+                        a: 0.85,
+                    }
                 };
                 let rect = Path::rectangle(p0, size);
                 frame.fill(&rect, ghost_fill);

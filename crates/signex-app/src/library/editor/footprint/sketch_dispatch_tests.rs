@@ -252,7 +252,11 @@ mod tests {
     }
 
     #[test]
-    fn auto_pause_skips_solve() {
+    fn solver_always_runs_even_when_auto_pause_observed() {
+        // v0.16.1 — the auto-pause early-return was removed. The
+        // AutoPauseState struct still observes elapsed_ms for
+        // telemetry but never blocks the solve / bake. This test
+        // asserts the new always-live behavior.
         let mut fp = empty_footprint();
         let plane = PlaneId::new();
         let (e1, _p1) = point_with_pad(plane, 0.0, 0.0, "1");
@@ -266,15 +270,17 @@ mod tests {
         });
         let mut state = FootprintEditorState::from_footprint(&fp);
 
-        // Force the auto-pause state machine into the paused state.
+        // Push the auto-pause state machine into "paused" — used to
+        // mean "skip the solve". As of v0.16.1 it's purely
+        // informational and shouldn't gate anything.
         state.auto_pause.observe(60, 50);
         state.auto_pause.observe(60, 50);
         assert!(state.auto_pause.paused());
 
-        let pads_before = fp.pads.clone();
         apply_sketch_edit(&mut state, &mut fp, SketchEdit::ForceRebuild).unwrap();
-        // Pads should not have been re-baked.
-        assert_eq!(fp.pads.len(), pads_before.len());
-        assert!(state.last_solve.is_none());
+        // Solver ran — last_solve populated, pads re-baked from the
+        // single PadAttr-carrying Point.
+        assert!(state.last_solve.is_some());
+        assert_eq!(fp.pads.len(), 1);
     }
 }

@@ -3925,6 +3925,7 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintSketchToggleAutoPause
         | PrimitiveEditorMsg::FootprintSketchSetTool(_)
         | PrimitiveEditorMsg::FootprintSketchToggleConstruction
+        | PrimitiveEditorMsg::FootprintTogglePlacementPause
         | PrimitiveEditorMsg::FootprintSketchToolClick { .. }
         | PrimitiveEditorMsg::FootprintSketchToolEscape
         | PrimitiveEditorMsg::FootprintSketchSelect { .. }
@@ -4238,6 +4239,10 @@ pub(crate) fn apply_footprint_primitive_edit(
         }
         PrimitiveEditorMsg::FootprintSketchToggleConstruction => {
             editor.state.construction_mode = !editor.state.construction_mode;
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintTogglePlacementPause => {
+            editor.state.placement_paused = !editor.state.placement_paused;
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintSetPadsTool(tool) => {
@@ -5306,6 +5311,7 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::FootprintSetPadsTool(_)
         | EditorMsg::FootprintSketchSetTool(_)
         | EditorMsg::FootprintSketchToggleConstruction
+        | EditorMsg::FootprintTogglePlacementPause
         | EditorMsg::SaveFootprint(_, _)
         | EditorMsg::SetBodyHeight(_)
         | EditorMsg::SetBodyOffsetZ(_)

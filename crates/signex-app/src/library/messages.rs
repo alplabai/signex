@@ -753,6 +753,10 @@ pub enum EditorMsg {
     /// sketch active bar; when on, every newly-minted entity gets
     /// `construction = true`.
     FootprintSketchToggleConstruction,
+    /// v0.16.1 — TAB pause/resume during pad placement. Toggles
+    /// `state.placement_paused`; while `true` the canvas ignores
+    /// empty-canvas clicks so the user can adjust defaults.
+    FootprintTogglePlacementPause,
     /// Fire-and-forget save of the active footprint primitive. Boxed
     /// so the containing enum stays cheap to clone and propagate.
     SaveFootprint(uuid::Uuid, Box<signex_library::Footprint>),
@@ -1152,6 +1156,8 @@ pub enum PrimitiveEditorMsg {
     FootprintSketchSetTool(crate::library::editor::footprint::state::SketchTool),
     /// v0.16.1 — toggle construction-mode (sticky).
     FootprintSketchToggleConstruction,
+    /// v0.16.1 — TAB pause/resume during pad placement.
+    FootprintTogglePlacementPause,
     /// v0.15 — Pads-mode tool switch (Select / PlacePad). Right-
     /// click cancels back to Select via the same dispatch.
     FootprintSetPadsTool(crate::library::editor::footprint::state::PadsTool),
