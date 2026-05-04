@@ -47,6 +47,12 @@ pub struct EditorPad {
     /// directly. Order: `[ne, se, sw, nw]`. Construction-flagged so
     /// they're visual-only and don't affect `bake_pads`.
     pub corner_entity_ids: Option<[signex_sketch::id::SketchEntityId; 4]>,
+    /// v0.16.6 — pad rotation in degrees. Round-trips via
+    /// `Pad::rotation`. Editor canvas renders unrotated pads in
+    /// v0.16.6 (rendering rotated pads is a v0.17 follow-up); the
+    /// bake honours the value so saved files carry the correct
+    /// rotation regardless.
+    pub rotation_deg: f64,
 }
 
 impl EditorPad {
@@ -64,6 +70,7 @@ impl EditorPad {
             ],
             sketch_entity_id: None,
             corner_entity_ids: None,
+            rotation_deg: 0.0,
         }
     }
 
@@ -98,6 +105,7 @@ impl EditorPad {
             layers: p.layers.clone(),
             sketch_entity_id: None,
             corner_entity_ids: None,
+            rotation_deg: p.rotation,
         }
     }
 
@@ -108,7 +116,7 @@ impl EditorPad {
             shape: self.shape.clone(),
             size: [self.size_mm.0, self.size_mm.1],
             position: [self.position_mm.0, self.position_mm.1],
-            rotation: 0.0,
+            rotation: self.rotation_deg,
             layers: self.layers.clone(),
             drill: None,
             solder_mask_margin: None,
@@ -230,12 +238,15 @@ pub struct FootprintEditorState {
 /// `designator_override = Some("U1A")` overrides the auto-incrementing
 /// numeric designator; `None` means "use next-pad-number". Size is
 /// always in mm. Side controls which copper layer the pad lands on.
+/// v0.16.6 — `rotation_deg` controls the orientation of the next
+/// pad in degrees (CCW positive).
 #[derive(Debug, Clone, PartialEq)]
 pub struct NextPadDefaults {
     pub designator_override: Option<String>,
     pub size_x_mm: f64,
     pub size_y_mm: f64,
     pub side: PadSide,
+    pub rotation_deg: f64,
 }
 
 /// Pad copper side mirror — kept here so the panel doesn't have to
@@ -272,6 +283,7 @@ impl Default for NextPadDefaults {
             size_x_mm: NEW_PAD_SIZE_MM,
             size_y_mm: NEW_PAD_SIZE_MM,
             side: PadSide::Top,
+            rotation_deg: 0.0,
         }
     }
 }
@@ -477,6 +489,7 @@ impl FootprintEditorState {
         let mut pad = EditorPad::new_default(number, (x_mm, y_mm));
         pad.size_mm = (defaults.size_x_mm.max(0.05), defaults.size_y_mm.max(0.05));
         pad.layers = layers;
+        pad.rotation_deg = defaults.rotation_deg;
         self.pads.push(pad);
         let idx = self.pads.len() - 1;
         self.selected_pad = Some(idx);

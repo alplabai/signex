@@ -1091,7 +1091,7 @@ fn build_footprint_editor_panel_ctx(
                 shape_label: footprint_pad_shape_label(pad),
                 size_mm: [pad.size_mm.0, pad.size_mm.1],
                 position_mm: [pad.position_mm.0, pad.position_mm.1],
-                rotation_deg: 0.0, // editor-side pad doesn't carry rotation yet
+                rotation_deg: pad.rotation_deg,
                 layer_count: pad.layers.len(),
                 has_drill: false, // drill lives on the baked Pad, not EditorPad
             })
@@ -1239,6 +1239,7 @@ fn build_footprint_editor_panel_ctx(
     let next_pad_size_x_mm = editor.state.next_pad_defaults.size_x_mm;
     let next_pad_size_y_mm = editor.state.next_pad_defaults.size_y_mm;
     let next_pad_side = editor.state.next_pad_defaults.side;
+    let next_pad_rotation_deg = editor.state.next_pad_defaults.rotation_deg;
 
     // v0.16.4 — role sub-form summaries. Populated only when the
     // selected entity carries the matching `*Attr`; the Properties
@@ -1298,6 +1299,7 @@ fn build_footprint_editor_panel_ctx(
         next_pad_size_x_mm,
         next_pad_size_y_mm,
         next_pad_side,
+        next_pad_rotation_deg,
         selected_pour,
         selected_keepout,
         selected_cutout,

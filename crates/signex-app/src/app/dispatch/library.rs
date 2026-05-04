@@ -4484,6 +4484,7 @@ pub(crate) fn apply_footprint_primitive_edit(
                         layers: vec![LayerId::new("Top Layer")],
                         sketch_entity_id: Some(id),
                         corner_entity_ids: None,
+                        rotation_deg: 0.0,
                     });
                 }
                 (false, Some(idx)) => {

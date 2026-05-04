@@ -97,6 +97,14 @@ impl Signex {
                 self.fp_editor_set_next_pad_side(*side);
                 true
             }
+            crate::panels::PanelMsg::FpEditorSetNextPadRotation(value) => {
+                self.fp_editor_set_next_pad_rotation(value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadRotation { idx, value } => {
+                self.fp_editor_set_selected_pad_rotation(*idx, value.clone());
+                true
+            }
             crate::panels::PanelMsg::FpEditorSetPourNet { id, value } => {
                 self.fp_editor_set_pour_net(*id, value.clone());
                 true
@@ -810,6 +818,32 @@ impl Signex {
     ) {
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.state.next_pad_defaults.side = side;
+        }
+        self.refresh_panel_ctx();
+    }
+
+    pub(crate) fn fp_editor_set_next_pad_rotation(&mut self, value: String) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            if let Ok(parsed) = value.trim().parse::<f64>() {
+                editor.state.next_pad_defaults.rotation_deg = parsed;
+            }
+        }
+        self.refresh_panel_ctx();
+    }
+
+    pub(crate) fn fp_editor_set_selected_pad_rotation(&mut self, idx: usize, value: String) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            if let Ok(parsed) = value.trim().parse::<f64>() {
+                if let Some(pad) = editor.state.pads.get_mut(idx) {
+                    pad.rotation_deg = parsed;
+                    crate::library::editor::footprint::state::FootprintEditorState::sync_pads_to_primitive(
+                        &editor.state,
+                        &mut editor.primitive,
+                    );
+                    editor.dirty = true;
+                    editor.canvas_cache.clear();
+                }
+            }
         }
         self.refresh_panel_ctx();
     }

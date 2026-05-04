@@ -582,6 +582,10 @@ pub struct FootprintEditorPanelContext {
     pub next_pad_size_y_mm: f64,
     /// v0.16.3 — copper side for the next placed pad.
     pub next_pad_side: crate::library::editor::footprint::state::PadSide,
+    /// v0.16.6 — rotation in degrees (CCW positive) for the next
+    /// placed pad. Persists through `EditorPad.rotation_deg` →
+    /// `Pad::rotation` so the saved file carries the value.
+    pub next_pad_rotation_deg: f64,
     /// v0.16.4 — Pour-role sub-form values for the selected entity.
     /// `None` when the entity isn't a pour. Carries the net string,
     /// fill type, and a snapshot of thermal-relief defaults so the
@@ -1145,6 +1149,16 @@ pub enum PanelMsg {
     FpEditorSetNextPadSizeX(String),
     FpEditorSetNextPadSizeY(String),
     FpEditorSetNextPadSide(crate::library::editor::footprint::state::PadSide),
+    /// v0.16.6 — Properties-panel rotation input for the next placed
+    /// pad. String-typed so the user can erase / type freely.
+    FpEditorSetNextPadRotation(String),
+    /// v0.16.6 — Properties-panel rotation input for the SELECTED
+    /// pad in Pads mode. Mutates `state.pads[idx].rotation_deg`
+    /// directly + dirty-marks the tab.
+    FpEditorSetSelectedPadRotation {
+        idx: usize,
+        value: String,
+    },
     /// v0.16.4 — Pour-role sub-form. The handler mutates the
     /// selected entity's `pour` attr and runs solve+bake.
     FpEditorSetPourNet {
@@ -3806,6 +3820,47 @@ fn view_footprint_editor_properties<'a>(
                 "Layers",
                 pad.layer_count.to_string(),
             );
+
+            // v0.16.6 — editable rotation row. text_input bound to the
+            // selected pad's rotation_deg; routes through
+            // FpEditorSetSelectedPadRotation handler which writes
+            // back to state.pads[idx].rotation_deg + dirty-marks.
+            let pad_idx = pad.idx;
+            col = col.push(
+                container(
+                    row![
+                        text("Rotation (°)")
+                            .size(10)
+                            .color(muted)
+                            .width(Length::Fixed(110.0)),
+                        text_input("0", &format!("{:.1}", pad.rotation_deg))
+                            .size(10)
+                            .padding(2)
+                            .style(move |_: &Theme, _| iced::widget::text_input::Style {
+                                background: iced::Background::Color(iced::Color::from_rgba(
+                                    1.0, 1.0, 1.0, 0.04,
+                                )),
+                                border: iced::Border {
+                                    width: 1.0,
+                                    radius: 2.0.into(),
+                                    color: border_c,
+                                },
+                                icon: iced::Color::TRANSPARENT,
+                                placeholder: muted,
+                                value: primary,
+                                selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
+                            })
+                            .on_input(move |v| PanelMsg::FpEditorSetSelectedPadRotation {
+                                idx: pad_idx,
+                                value: v,
+                            }),
+                    ]
+                    .spacing(6)
+                    .align_y(iced::Alignment::Center),
+                )
+                .padding([2, 8])
+                .width(Length::Fill),
+            );
         }
         (FootprintModeKind::Sketch, _, Some(ent)) => {
             col = col.push(props_section_header("Sketch entity", primary));
@@ -4174,6 +4229,42 @@ fn view_footprint_editor_properties<'a>(
                 row![
                     text("Side").size(10).color(muted).width(Length::Fixed(80.0)),
                     side_picker,
+                ]
+                .spacing(6)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([2, 8])
+            .width(Length::Fill),
+        );
+
+        // v0.16.6 — Rotation (degrees, CCW positive). Persists through
+        // EditorPad.rotation_deg → Pad::rotation; canvas renders
+        // unrotated (rotation rendering deferred to v0.17).
+        col = col.push(
+            container(
+                row![
+                    text("Rotation (°)")
+                        .size(10)
+                        .color(muted)
+                        .width(Length::Fixed(80.0)),
+                    text_input("0", &format!("{:.1}", fp.next_pad_rotation_deg))
+                        .size(10)
+                        .padding(2)
+                        .style(move |_: &Theme, _| iced::widget::text_input::Style {
+                            background: iced::Background::Color(iced::Color::from_rgba(
+                                1.0, 1.0, 1.0, 0.04,
+                            )),
+                            border: iced::Border {
+                                width: 1.0,
+                                radius: 2.0.into(),
+                                color: border_c,
+                            },
+                            icon: iced::Color::TRANSPARENT,
+                            placeholder: muted,
+                            value: primary,
+                            selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
+                        })
+                        .on_input(PanelMsg::FpEditorSetNextPadRotation),
                 ]
                 .spacing(6)
                 .align_y(iced::Alignment::Center),
