@@ -4103,106 +4103,109 @@ fn view_footprint_editor_properties<'a>(
                 );
             }
 
-            // v0.17.0 — Snap Options checklist (Altium-style, empty-
-            // canvas Properties). Each priority in `snap::snap_cursor`
-            // is gated by its flag; all-off mirrors Altium's "no snap".
-            col = col.push(props_section_header("Snap Options", primary));
-            let opts = fp.snap_options;
-            let mk_snap_check = move |label: &str,
-                                      flag: SnapOptionFlag,
-                                      on: bool|
-                  -> Element<'static, PanelMsg> {
-                let glyph = if on { "[x]" } else { "[ ]" };
-                button(text(format!("{glyph}  {label}")).size(10).color(primary))
-                    .padding([2, 6])
-                    .on_press(PanelMsg::FpEditorToggleSnapOption(flag))
-                    .style(move |_: &Theme, _| iced::widget::button::Style {
-                        background: Some(iced::Background::Color(iced::Color::from_rgba(
-                            1.0, 1.0, 1.0, 0.02,
-                        ))),
-                        border: iced::Border {
-                            width: 0.0,
-                            radius: 0.0.into(),
-                            color: Color::TRANSPARENT,
-                        },
-                        ..iced::widget::button::Style::default()
-                    })
-                    .into()
-            };
-            col = col.push(
-                container(mk_snap_check(
-                    "Snap to Point",
-                    SnapOptionFlag::PointHit,
-                    opts.point_hit,
-                ))
-                .padding([0, 8])
-                .width(Length::Fill),
-            );
-            col = col.push(
-                container(mk_snap_check(
-                    "Snap horizontal/vertical (5°)",
-                    SnapOptionFlag::HorizontalVertical,
-                    opts.horizontal_vertical,
-                ))
-                .padding([0, 8])
-                .width(Length::Fill),
-            );
-            col = col.push(
-                container(mk_snap_check(
-                    "Snap angle (15° steps)",
-                    SnapOptionFlag::Angle,
-                    opts.angle,
-                ))
-                .padding([0, 8])
-                .width(Length::Fill),
-            );
-            col = col.push(
-                container(mk_snap_check(
-                    &format!("Snap to grid ({:.3} mm)", opts.grid_step_mm),
-                    SnapOptionFlag::Grid,
-                    opts.grid,
-                ))
-                .padding([0, 8])
-                .width(Length::Fill),
-            );
-            // v0.18.9 — author-controlled grid step. Numeric input
-            // bound to `state.snap_options.grid_step_mm`. The G key
-            // in v0.18.10 will populate this from the standard
-            // 1mil…2.5mm ladder; for now it's free-text mm.
-            col = col.push(
-                container(
-                    row![
-                        text("Grid step (mm)")
-                            .size(10)
-                            .color(muted)
-                            .width(Length::Fixed(110.0)),
-                        text_input("1.0", &format!("{:.3}", opts.grid_step_mm))
-                            .size(10)
-                            .padding(2)
-                            .style(move |_: &Theme, _| iced::widget::text_input::Style {
-                                background: iced::Background::Color(iced::Color::from_rgba(
-                                    1.0, 1.0, 1.0, 0.04,
-                                )),
-                                border: iced::Border {
-                                    width: 1.0,
-                                    radius: 2.0.into(),
-                                    color: border_c,
-                                },
-                                icon: iced::Color::TRANSPARENT,
-                                placeholder: muted,
-                                value: primary,
-                                selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
-                            })
-                            .on_input(PanelMsg::FpEditorSetSnapGridStep),
-                    ]
-                    .spacing(6)
-                    .align_y(iced::Alignment::Center),
-                )
-                .padding([2, 8])
-                .width(Length::Fill),
-            );
         }
     }
+
+    // v0.18.11.2 — Snap Options promoted out of the no-selection
+    // branch so it stays reachable while a pad/entity is selected.
+    // Earlier (v0.17.0) the section was tucked inside the empty-
+    // canvas summary which made the controls disappear the moment
+    // the user clicked a pad.
+    col = col.push(props_section_header("Snap Options", primary));
+    let opts = fp.snap_options;
+    let mk_snap_check = move |label: &str,
+                              flag: SnapOptionFlag,
+                              on: bool|
+          -> Element<'static, PanelMsg> {
+        let glyph = if on { "[x]" } else { "[ ]" };
+        button(text(format!("{glyph}  {label}")).size(10).color(primary))
+            .padding([2, 6])
+            .on_press(PanelMsg::FpEditorToggleSnapOption(flag))
+            .style(move |_: &Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(iced::Color::from_rgba(
+                    1.0, 1.0, 1.0, 0.02,
+                ))),
+                border: iced::Border {
+                    width: 0.0,
+                    radius: 0.0.into(),
+                    color: Color::TRANSPARENT,
+                },
+                ..iced::widget::button::Style::default()
+            })
+            .into()
+    };
+    col = col.push(
+        container(mk_snap_check(
+            "Snap to Point",
+            SnapOptionFlag::PointHit,
+            opts.point_hit,
+        ))
+        .padding([0, 8])
+        .width(Length::Fill),
+    );
+    col = col.push(
+        container(mk_snap_check(
+            "Snap horizontal/vertical (5°)",
+            SnapOptionFlag::HorizontalVertical,
+            opts.horizontal_vertical,
+        ))
+        .padding([0, 8])
+        .width(Length::Fill),
+    );
+    col = col.push(
+        container(mk_snap_check(
+            "Snap angle (15° steps)",
+            SnapOptionFlag::Angle,
+            opts.angle,
+        ))
+        .padding([0, 8])
+        .width(Length::Fill),
+    );
+    col = col.push(
+        container(mk_snap_check(
+            &format!("Snap to grid ({:.3} mm)", opts.grid_step_mm),
+            SnapOptionFlag::Grid,
+            opts.grid,
+        ))
+        .padding([0, 8])
+        .width(Length::Fill),
+    );
+    // v0.18.9 — author-controlled grid step. Numeric input bound to
+    // `state.snap_options.grid_step_mm`. The G key (v0.18.10)
+    // populates this from the standard 1mil…2.5mm ladder; the
+    // Ctrl+G modal (v0.18.11) opens a richer editor.
+    col = col.push(
+        container(
+            row![
+                text("Grid step (mm)")
+                    .size(10)
+                    .color(muted)
+                    .width(Length::Fixed(110.0)),
+                text_input("1.0", &format!("{:.3}", opts.grid_step_mm))
+                    .size(10)
+                    .padding(2)
+                    .style(move |_: &Theme, _| iced::widget::text_input::Style {
+                        background: iced::Background::Color(iced::Color::from_rgba(
+                            1.0, 1.0, 1.0, 0.04,
+                        )),
+                        border: iced::Border {
+                            width: 1.0,
+                            radius: 2.0.into(),
+                            color: border_c,
+                        },
+                        icon: iced::Color::TRANSPARENT,
+                        placeholder: muted,
+                        value: primary,
+                        selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
+                    })
+                    .on_input(PanelMsg::FpEditorSetSnapGridStep),
+            ]
+            .spacing(6)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([2, 8])
+        .width(Length::Fill),
+    );
 
     // v0.16.2 — Sketch-mode-only sections (Parameters, DOF, Solve
     // warnings). Always visible when the editor is in Sketch mode so

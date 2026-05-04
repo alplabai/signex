@@ -69,7 +69,17 @@ impl Signex {
                     .tabs
                     .get(self.document_state.active_tab)
                     .map(|t| t.kind.clone());
-                if let Some(crate::app::TabKind::FootprintEditor(_)) = active_tab_kind {
+                let footprint_active = matches!(
+                    active_tab_kind,
+                    Some(crate::app::TabKind::FootprintEditor(_))
+                );
+                tracing::info!(
+                    target: "signex::ui",
+                    footprint_active = footprint_active,
+                    last_mouse_pos = ?self.interaction_state.last_mouse_pos,
+                    "GridPickerOpen received",
+                );
+                if footprint_active {
                     let (x, y) = self.interaction_state.last_mouse_pos;
                     self.interaction_state.grid_picker =
                         Some(crate::app::GridPickerState { x, y });
@@ -98,6 +108,11 @@ impl Signex {
                 let active_step = self
                     .active_footprint_editor()
                     .map(|e| e.state.snap_options.grid_step_mm);
+                tracing::info!(
+                    target: "signex::ui",
+                    active_step = ?active_step,
+                    "GridPropertiesOpen received",
+                );
                 if let Some(step) = active_step {
                     let s = format!("{step:.4}");
                     self.ui_state.grid_properties = Some(crate::app::GridPropertiesState {
