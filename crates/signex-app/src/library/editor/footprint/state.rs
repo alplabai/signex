@@ -285,7 +285,7 @@ impl std::fmt::Display for PadSide {
 /// flag gates one priority in `snap::snap_cursor`; defaults are all
 /// `true` so existing behaviour is preserved when no toggling has
 /// happened.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SnapOptions {
     /// Snap onto an existing sketch Point within `POINT_SNAP_RADIUS_PX`.
     pub point_hit: bool,
@@ -293,9 +293,15 @@ pub struct SnapOptions {
     pub horizontal_vertical: bool,
     /// Multi-of-`ANGLE_STEP_DEG` snap within `ANGLE_THRESHOLD_DEG`.
     pub angle: bool,
-    /// Round to the nearest `GRID_STEP_MM`. When `false` the cursor
+    /// Round to the nearest `grid_step_mm`. When `false` the cursor
     /// passes through raw — useful for free-hand authoring.
     pub grid: bool,
+    /// v0.18.9 — author-controlled grid step in mm. Replaces the
+    /// hardcoded `snap::GRID_STEP_MM`. The Properties panel exposes
+    /// this as a numeric input; the v0.18.10 `G`-key popup picks
+    /// from the Altium-standard ladder
+    /// (1/5/10/20/25/50/100 mil + 0.025/0.1/0.25/0.5/1.0/2.5 mm).
+    pub grid_step_mm: f64,
 }
 
 impl Default for SnapOptions {
@@ -305,6 +311,7 @@ impl Default for SnapOptions {
             horizontal_vertical: true,
             angle: true,
             grid: true,
+            grid_step_mm: 1.0,
         }
     }
 }

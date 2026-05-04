@@ -24,14 +24,10 @@ use signex_sketch::SketchData;
 
 use super::state::{FootprintEditorState, ToolPending};
 
-/// Default grid step for free-canvas snap (mm).
-///
-/// v0.18.7.2 — bumped from 0.1mm to 1.0mm so snap-to-grid is
-/// visibly effective in Pads mode. With 0.1mm the snap fired but
-/// rounded to a position the user couldn't tell apart from the raw
-/// click. 1.0mm matches the typical Altium PCB Library grid step
-/// (50mil ≈ 1.27mm — close enough for default; the v0.18.10 Snap
-/// Distance numeric input will let the user dial it in).
+/// Fallback grid step (mm) used only by the snap unit tests where
+/// constructing a full `SnapOptions` is cumbersome. Production code
+/// reads the configurable `state.snap_options.grid_step_mm` field
+/// (v0.18.9), not this constant.
 pub const GRID_STEP_MM: f64 = 1.0;
 /// Threshold for horizontal / vertical inference (degrees).
 pub const AXIS_THRESHOLD_DEG: f64 = 5.0;
@@ -218,10 +214,15 @@ pub fn snap_cursor(
 
     // Priority 4 — grid snap. When disabled, the raw cursor passes
     // through unchanged (mirrors Altium's "Smart Snap → Off" flow).
-    if opts.grid {
+    // v0.18.9 — uses `opts.grid_step_mm` (configurable) instead of
+    // a hardcoded constant. Defends against zero/negative steps by
+    // falling through to raw — a misconfigured step shouldn't crash
+    // the canvas or move pads to the origin.
+    if opts.grid && opts.grid_step_mm > 1e-9 {
+        let step = opts.grid_step_mm;
         let snapped = (
-            (raw.0 / GRID_STEP_MM).round() * GRID_STEP_MM,
-            (raw.1 / GRID_STEP_MM).round() * GRID_STEP_MM,
+            (raw.0 / step).round() * step,
+            (raw.1 / step).round() * step,
         );
         SnapResult {
             pos: snapped,

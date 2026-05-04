@@ -1230,6 +1230,11 @@ pub enum PanelMsg {
     /// v0.17.0 — empty-canvas Snap Options toggles. The handler
     /// flips the matching `SnapOptions` flag.
     FpEditorToggleSnapOption(SnapOptionFlag),
+    /// v0.18.9 — author-controlled snap grid step (mm). The handler
+    /// parses the string and writes
+    /// `state.snap_options.grid_step_mm`. Invalid / empty strings
+    /// no-op so the input doesn't fight intermediate keystrokes.
+    FpEditorSetSnapGridStep(String),
     /// v0.14.2 — open a sibling `.snxfpt` from the Footprint Library
     /// panel. The handler routes through the existing
     /// `handle_open_primitive` flow so the file gets a fresh tab + a
@@ -4103,7 +4108,7 @@ fn view_footprint_editor_properties<'a>(
             // is gated by its flag; all-off mirrors Altium's "no snap".
             col = col.push(props_section_header("Snap Options", primary));
             let opts = fp.snap_options;
-            let mk_snap_check = move |label: &'static str,
+            let mk_snap_check = move |label: &str,
                                       flag: SnapOptionFlag,
                                       on: bool|
                   -> Element<'static, PanelMsg> {
@@ -4153,11 +4158,47 @@ fn view_footprint_editor_properties<'a>(
             );
             col = col.push(
                 container(mk_snap_check(
-                    "Snap to grid (1.0 mm)",
+                    &format!("Snap to grid ({:.3} mm)", opts.grid_step_mm),
                     SnapOptionFlag::Grid,
                     opts.grid,
                 ))
                 .padding([0, 8])
+                .width(Length::Fill),
+            );
+            // v0.18.9 — author-controlled grid step. Numeric input
+            // bound to `state.snap_options.grid_step_mm`. The G key
+            // in v0.18.10 will populate this from the standard
+            // 1mil…2.5mm ladder; for now it's free-text mm.
+            col = col.push(
+                container(
+                    row![
+                        text("Grid step (mm)")
+                            .size(10)
+                            .color(muted)
+                            .width(Length::Fixed(110.0)),
+                        text_input("1.0", &format!("{:.3}", opts.grid_step_mm))
+                            .size(10)
+                            .padding(2)
+                            .style(move |_: &Theme, _| iced::widget::text_input::Style {
+                                background: iced::Background::Color(iced::Color::from_rgba(
+                                    1.0, 1.0, 1.0, 0.04,
+                                )),
+                                border: iced::Border {
+                                    width: 1.0,
+                                    radius: 2.0.into(),
+                                    color: border_c,
+                                },
+                                icon: iced::Color::TRANSPARENT,
+                                placeholder: muted,
+                                value: primary,
+                                selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
+                            })
+                            .on_input(PanelMsg::FpEditorSetSnapGridStep),
+                    ]
+                    .spacing(6)
+                    .align_y(iced::Alignment::Center),
+                )
+                .padding([2, 8])
                 .width(Length::Fill),
             );
         }

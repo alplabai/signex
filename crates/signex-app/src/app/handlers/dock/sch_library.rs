@@ -250,6 +250,10 @@ impl Signex {
                 self.fp_editor_toggle_snap_option(*flag);
                 true
             }
+            crate::panels::PanelMsg::FpEditorSetSnapGridStep(value) => {
+                self.fp_editor_set_snap_grid_step(value);
+                true
+            }
             crate::panels::PanelMsg::FpEditorEditParameter { name, expr } => {
                 // v0.16.2 — Properties-panel parameter row edit.
                 // Forwards to `FootprintSketchEditParameter` which
@@ -1126,6 +1130,27 @@ impl Signex {
                 SnapOptionFlag::Angle => opts.angle = !opts.angle,
                 SnapOptionFlag::Grid => opts.grid = !opts.grid,
             }
+            editor.canvas_cache.clear();
+        }
+        self.refresh_panel_ctx();
+    }
+
+    /// v0.18.9 — Properties-panel "Grid step" numeric input. Parses
+    /// the user's text; on a clean positive parse writes
+    /// `state.snap_options.grid_step_mm`. Invalid / empty / non-
+    /// positive strings no-op so partial keystrokes don't snap to
+    /// zero (which would crash the canvas's grid math).
+    pub(crate) fn fp_editor_set_snap_grid_step(&mut self, value: &str) {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            return;
+        }
+        let parsed: f64 = match trimmed.parse::<f64>() {
+            Ok(v) if v > 0.0 && v.is_finite() => v,
+            _ => return,
+        };
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.snap_options.grid_step_mm = parsed;
             editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
