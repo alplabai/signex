@@ -359,7 +359,8 @@ fn find_symbol_file_for_uuid(
             Ok(b) => b,
             Err(_) => continue,
         };
-        if let Ok(file) = signex_library::SymbolFile::from_json(&bytes)
+        // v0.18.4 — auto-detect TOML vs legacy JSON.
+        if let Ok(file) = signex_library::SymbolFile::from_bytes(&bytes)
             && file.symbols.iter().any(|s| s.uuid == uuid)
         {
             return Some(path);

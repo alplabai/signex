@@ -515,28 +515,20 @@ fn default_schema_v2() -> u32 {
 /// the file may use.
 pub const FOOTPRINT_SCHEMA_VERSION: u32 = 3;
 
-/// v0.18.2 — multi-footprint container for `.snxfpt` files.
+/// Multi-footprint container for `.snxfpt` files — Altium PCB
+/// Library parity. One file holds many footprints; each footprint
+/// still has its own UUID for `PrimitiveRef` resolution.
 ///
-/// Wire format: TOML envelope with one `[[footprints]]` array entry
-/// per Footprint. Mirrors the `SymbolFile` envelope from
-/// `primitive/symbol.rs` but ships TOML-first per the architectural
-/// spec (`docs/internal/docs/ARCHITECTURE.md` "TOML envelope + TSV
-/// bulk-block pattern matches `.snxlib`/`.snxsym`/`.snxfpt`").
-///
-/// Reader auto-detects JSON vs TOML so v0.16.5-and-earlier files
-/// continue to load unchanged. New files are written as TOML.
-///
-/// Pads are emitted inline within each footprint's `[[footprints]]`
-/// entry. The TSV bulk-block optimisation (separate
-/// `[footprints.0.pads]` table with `tsv = '''…'''`) is queued for
-/// v0.18.3 — pure TOML works as the v0.18.2 ship target and keeps
-/// the serde derive surface flat.
+/// Wire format (v0.18.4): TOML manifest header + one `[[footprints]]`
+/// array entry per Footprint. Each entry's bulk pad list is embedded
+/// as a TSV literal multi-line string (`pads_tsv = '''…'''`) — line-
+/// diffable in git, editable in any spreadsheet. Graphics
+/// (silk/fab/courtyard), 3D body, sketch, pours, keepouts, cutouts,
+/// v-scores, mask openings/excludes, and paste apertures stay as
+/// inline TOML since they're variant-shaped or sparse.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct FootprintFile {
     /// Schema sentinel — current emitters write `"snxfpt/1"`.
-    /// Legacy JSON files don't carry this field; the loader detects
-    /// them via the JSON-vs-TOML format probe and wraps the bare
-    /// `Footprint` into a one-element container.
     #[serde(default = "default_footprint_format")]
     pub format: String,
     /// File-level UUID — distinct from any contained footprint's uuid.
@@ -553,8 +545,99 @@ pub struct FootprintFile {
     pub updated: DateTime<Utc>,
 }
 
+const FOOTPRINT_FILE_FORMAT_TOKEN: &str = "snxfpt/1";
+
+/// Stable column layout for the per-footprint `pads_tsv` block.
+/// Adding or reordering columns is a wire-format break — bump
+/// [`FOOTPRINT_FILE_FORMAT_TOKEN`].
+const PAD_TSV_COLUMNS: &[&str] = &[
+    "number",
+    "kind",
+    "shape",
+    "size_x",
+    "size_y",
+    "pos_x",
+    "pos_y",
+    "rotation",
+    "layers",
+    "drill_diameter",
+    "drill_slot_length",
+    "solder_mask_margin",
+    "paste_margin",
+];
+
+/// Sentinel string substituted for each footprint's `pads_tsv` field
+/// before TOML serialise; replaced post-emit with the literal multi-
+/// line `'''…'''` block.
+const PADS_TSV_PLACEHOLDER_PREFIX: &str = "__SIGNEX_PADS_TSV_a1b2c3d4_";
+
 fn default_footprint_format() -> String {
-    "snxfpt/1".to_string()
+    FOOTPRINT_FILE_FORMAT_TOKEN.to_string()
+}
+
+/// On-disk wire shape. Mirrors [`FootprintFile`] but each
+/// [`Footprint`]'s `pads` Vec is replaced with a `pads_tsv: String`
+/// carrying the TSV-encoded payload.
+#[derive(Serialize, Deserialize)]
+struct FootprintFileWire {
+    format: String,
+    file_uuid: Uuid,
+    #[serde(default)]
+    display_name: String,
+    created: DateTime<Utc>,
+    updated: DateTime<Utc>,
+    #[serde(default)]
+    footprints: Vec<FootprintWire>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct FootprintWire {
+    uuid: Uuid,
+    name: String,
+    #[serde(default)]
+    anchor: [f64; 2],
+    /// TSV-encoded pad list — header row + one row per pad.
+    pads_tsv: String,
+    #[serde(default)]
+    courtyard: Polygon,
+    #[serde(default)]
+    silk_f: Vec<FpGraphic>,
+    #[serde(default)]
+    silk_b: Vec<FpGraphic>,
+    #[serde(default)]
+    fab_f: Vec<FpGraphic>,
+    #[serde(default)]
+    fab_b: Vec<FpGraphic>,
+    #[serde(default)]
+    body_3d: Body3D,
+    #[serde(default)]
+    step_attachment: Option<StepAttachment>,
+    #[serde(default)]
+    pcb_params: ParamMap,
+    #[serde(default = "default_footprint_version")]
+    version: String,
+    #[serde(default)]
+    released: bool,
+    created: DateTime<Utc>,
+    updated: DateTime<Utc>,
+    #[serde(default = "default_schema_v2")]
+    schema_version: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    sketch: Option<signex_sketch::SketchData>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pours: Vec<FpPour>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    keepouts: Vec<FpKeepout>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    cutouts: Vec<FpCutout>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    v_scores: Vec<FpVScore>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    mask_openings: Vec<FpMaskOpening>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    mask_excludes: Vec<FpMaskExclude>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    paste_apertures: Vec<FpPasteAperture>,
 }
 
 impl FootprintFile {
@@ -572,63 +655,116 @@ impl FootprintFile {
         }
     }
 
-    /// Auto-detecting parse for `.snxfpt` bytes. Probes the first
-    /// non-whitespace byte: `{` → JSON (legacy v0.16.5 format), any
-    /// other character → TOML (v0.18.2+). Legacy JSON files are
-    /// wrapped into a one-element container.
+    /// Decode bytes as UTF-8 and parse via [`FootprintFile::from_toml_str`].
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, FootprintFileError> {
-        let first_non_ws = bytes
-            .iter()
-            .find(|b| !b.is_ascii_whitespace())
-            .copied()
-            .ok_or(FootprintFileError::Empty)?;
-        if first_non_ws == b'{' {
-            // Legacy JSON path — accept either a bare Footprint OR a
-            // pre-existing FootprintFile JSON (defensive — earlier
-            // session experiments may have written a JSON envelope).
-            #[derive(Deserialize)]
-            #[serde(untagged)]
-            enum JsonForm {
-                Container(FootprintFile),
-                Legacy(Footprint),
-            }
-            match serde_json::from_slice::<JsonForm>(bytes)? {
-                JsonForm::Container(file) => Ok(file),
-                JsonForm::Legacy(fp) => {
-                    let now = Utc::now();
-                    Ok(Self {
-                        format: default_footprint_format(),
-                        file_uuid: fp.uuid,
-                        display_name: fp.name.clone(),
-                        created: fp.created,
-                        updated: now,
-                        footprints: vec![fp],
-                    })
-                }
-            }
-        } else {
-            let text = std::str::from_utf8(bytes)?;
-            Self::from_toml_str(text)
+        if bytes.iter().all(u8::is_ascii_whitespace) {
+            return Err(FootprintFileError::Empty);
         }
+        let text = std::str::from_utf8(bytes)?;
+        Self::from_toml_str(text)
     }
 
-    /// Parse the TOML wire format. The format-token check pins us to
-    /// `snxfpt/1`; mismatched files surface
+    /// Parse the TOML+TSV wire format. The format-token check pins us
+    /// to [`FOOTPRINT_FILE_FORMAT_TOKEN`]; mismatched files surface
     /// [`FootprintFileError::UnsupportedFormat`].
     pub fn from_toml_str(text: &str) -> Result<Self, FootprintFileError> {
-        let parsed: Self = toml::from_str(text)?;
-        if parsed.format != "snxfpt/1" {
-            return Err(FootprintFileError::UnsupportedFormat {
-                got: parsed.format,
+        let wire: FootprintFileWire = toml::from_str(text)?;
+        if wire.format != FOOTPRINT_FILE_FORMAT_TOKEN {
+            return Err(FootprintFileError::UnsupportedFormat { got: wire.format });
+        }
+        let mut footprints = Vec::with_capacity(wire.footprints.len());
+        for fw in wire.footprints {
+            let pads = pads_from_tsv(&fw.pads_tsv)?;
+            footprints.push(Footprint {
+                uuid: fw.uuid,
+                name: fw.name,
+                anchor: fw.anchor,
+                pads,
+                courtyard: fw.courtyard,
+                silk_f: fw.silk_f,
+                silk_b: fw.silk_b,
+                fab_f: fw.fab_f,
+                fab_b: fw.fab_b,
+                body_3d: fw.body_3d,
+                step_attachment: fw.step_attachment,
+                pcb_params: fw.pcb_params,
+                version: fw.version,
+                released: fw.released,
+                created: fw.created,
+                updated: fw.updated,
+                schema_version: fw.schema_version,
+                sketch: fw.sketch,
+                pours: fw.pours,
+                keepouts: fw.keepouts,
+                cutouts: fw.cutouts,
+                v_scores: fw.v_scores,
+                mask_openings: fw.mask_openings,
+                mask_excludes: fw.mask_excludes,
+                paste_apertures: fw.paste_apertures,
             });
         }
-        Ok(parsed)
+        Ok(FootprintFile {
+            format: wire.format,
+            file_uuid: wire.file_uuid,
+            display_name: wire.display_name,
+            created: wire.created,
+            updated: wire.updated,
+            footprints,
+        })
     }
 
-    /// Serialise to canonical TOML. Output is deterministic — re-
-    /// parsing returns a value equal to `self`.
+    /// Serialise to canonical TOML+TSV. Pad lists become
+    /// `pads_tsv = '''\n<header>\n<rows>\n'''` literal multi-line
+    /// strings so the bulk data is line-diffable in git output.
     pub fn to_toml_string(&self) -> Result<String, FootprintFileError> {
-        toml::to_string_pretty(self).map_err(FootprintFileError::TomlSerialize)
+        let mut tsv_payloads: Vec<String> = Vec::with_capacity(self.footprints.len());
+        let mut wire_footprints: Vec<FootprintWire> =
+            Vec::with_capacity(self.footprints.len());
+        for (idx, fp) in self.footprints.iter().enumerate() {
+            tsv_payloads.push(pads_to_tsv(&fp.pads)?);
+            wire_footprints.push(FootprintWire {
+                uuid: fp.uuid,
+                name: fp.name.clone(),
+                anchor: fp.anchor,
+                pads_tsv: format!("{PADS_TSV_PLACEHOLDER_PREFIX}{idx}__"),
+                courtyard: fp.courtyard.clone(),
+                silk_f: fp.silk_f.clone(),
+                silk_b: fp.silk_b.clone(),
+                fab_f: fp.fab_f.clone(),
+                fab_b: fp.fab_b.clone(),
+                body_3d: fp.body_3d.clone(),
+                step_attachment: fp.step_attachment.clone(),
+                pcb_params: fp.pcb_params.clone(),
+                version: fp.version.clone(),
+                released: fp.released,
+                created: fp.created,
+                updated: fp.updated,
+                schema_version: fp.schema_version,
+                sketch: fp.sketch.clone(),
+                pours: fp.pours.clone(),
+                keepouts: fp.keepouts.clone(),
+                cutouts: fp.cutouts.clone(),
+                v_scores: fp.v_scores.clone(),
+                mask_openings: fp.mask_openings.clone(),
+                mask_excludes: fp.mask_excludes.clone(),
+                paste_apertures: fp.paste_apertures.clone(),
+            });
+        }
+        let wire = FootprintFileWire {
+            format: self.format.clone(),
+            file_uuid: self.file_uuid,
+            display_name: self.display_name.clone(),
+            created: self.created,
+            updated: self.updated,
+            footprints: wire_footprints,
+        };
+        let mut out = toml::to_string_pretty(&wire).map_err(FootprintFileError::TomlSerialize)?;
+        for (idx, payload) in tsv_payloads.iter().enumerate() {
+            let needle = format!("\"{PADS_TSV_PLACEHOLDER_PREFIX}{idx}__\"");
+            let replacement = format!("'''\n{payload}'''");
+            out = out.replace(&needle, &replacement);
+        }
+        Ok(out)
     }
 
     /// Locate a footprint by UUID within this file.
@@ -639,6 +775,307 @@ impl FootprintFile {
     pub fn get_footprint_mut(&mut self, uuid: Uuid) -> Option<&mut Footprint> {
         self.footprints.iter_mut().find(|f| f.uuid == uuid)
     }
+}
+
+// ---- Pad TSV codec --------------------------------------------------
+
+fn pad_kind_token(k: PadKind) -> &'static str {
+    match k {
+        PadKind::Smd => "Smd",
+        PadKind::Tht => "Tht",
+        PadKind::NptHole => "NptHole",
+        PadKind::ConnectorPad => "ConnectorPad",
+        PadKind::Castellated => "Castellated",
+        PadKind::Fiducial => "Fiducial",
+    }
+}
+
+fn pad_kind_from_token(s: &str) -> Result<PadKind, FootprintFileError> {
+    Ok(match s {
+        "Smd" => PadKind::Smd,
+        "Tht" => PadKind::Tht,
+        "NptHole" => PadKind::NptHole,
+        "ConnectorPad" => PadKind::ConnectorPad,
+        "Castellated" => PadKind::Castellated,
+        "Fiducial" => PadKind::Fiducial,
+        other => {
+            return Err(FootprintFileError::UnknownEnumToken {
+                kind: "PadKind",
+                got: other.to_string(),
+            });
+        }
+    })
+}
+
+fn fmt_f64_fp(v: f64) -> String {
+    if v == 0.0 {
+        "0".to_string()
+    } else {
+        format!("{v}")
+    }
+}
+
+fn fmt_opt_f64_fp(v: Option<f64>) -> String {
+    v.map(fmt_f64_fp).unwrap_or_default()
+}
+
+fn pad_shape_to_token(shape: &PadShape) -> Result<String, FootprintFileError> {
+    Ok(match shape {
+        PadShape::Round => "round".to_string(),
+        PadShape::Rect => "rect".to_string(),
+        PadShape::Oval => "oval".to_string(),
+        PadShape::RoundRect { radius_ratio } => {
+            format!("round_rect:{}", fmt_f64_fp(*radius_ratio))
+        }
+        PadShape::Chamfered {
+            chamfer_ratio,
+            corners,
+        } => {
+            let bits = format!(
+                "{}{}{}{}",
+                bool_bit(corners.top_left),
+                bool_bit(corners.top_right),
+                bool_bit(corners.bottom_left),
+                bool_bit(corners.bottom_right),
+            );
+            format!("chamfered:{}:{}", fmt_f64_fp(*chamfer_ratio), bits)
+        }
+        PadShape::Custom(poly) => {
+            let mut parts: Vec<String> = Vec::with_capacity(poly.points.len());
+            for p in &poly.points {
+                parts.push(format!("{},{}", fmt_f64_fp(p[0]), fmt_f64_fp(p[1])));
+            }
+            format!("custom:{}", parts.join("|"))
+        }
+    })
+}
+
+fn bool_bit(b: bool) -> char {
+    if b { '1' } else { '0' }
+}
+
+fn pad_shape_from_token(s: &str) -> Result<PadShape, FootprintFileError> {
+    let invalid = || FootprintFileError::InvalidPadShape(s.to_string());
+    if s == "round" {
+        return Ok(PadShape::Round);
+    }
+    if s == "rect" {
+        return Ok(PadShape::Rect);
+    }
+    if s == "oval" {
+        return Ok(PadShape::Oval);
+    }
+    if let Some(rest) = s.strip_prefix("round_rect:") {
+        let radius_ratio: f64 = rest.parse().map_err(|_| invalid())?;
+        return Ok(PadShape::RoundRect { radius_ratio });
+    }
+    if let Some(rest) = s.strip_prefix("chamfered:") {
+        let mut parts = rest.splitn(2, ':');
+        let ratio_str = parts.next().ok_or_else(invalid)?;
+        let bits_str = parts.next().ok_or_else(invalid)?;
+        let chamfer_ratio: f64 = ratio_str.parse().map_err(|_| invalid())?;
+        let bits: Vec<char> = bits_str.chars().collect();
+        if bits.len() != 4 || bits.iter().any(|c| *c != '0' && *c != '1') {
+            return Err(invalid());
+        }
+        let corners = ChamferedCorners {
+            top_left: bits[0] == '1',
+            top_right: bits[1] == '1',
+            bottom_left: bits[2] == '1',
+            bottom_right: bits[3] == '1',
+        };
+        return Ok(PadShape::Chamfered {
+            chamfer_ratio,
+            corners,
+        });
+    }
+    if let Some(rest) = s.strip_prefix("custom:") {
+        let points: Vec<[f64; 2]> = if rest.is_empty() {
+            Vec::new()
+        } else {
+            let mut points = Vec::new();
+            for p in rest.split('|') {
+                let mut xy = p.split(',');
+                let x_str = xy.next().ok_or_else(invalid)?;
+                let y_str = xy.next().ok_or_else(invalid)?;
+                if xy.next().is_some() {
+                    return Err(invalid());
+                }
+                let x: f64 = x_str.parse().map_err(|_| invalid())?;
+                let y: f64 = y_str.parse().map_err(|_| invalid())?;
+                points.push([x, y]);
+            }
+            points
+        };
+        return Ok(PadShape::Custom(Polygon::new(points)));
+    }
+    Err(invalid())
+}
+
+fn layers_to_token(layers: &[LayerId]) -> Result<String, FootprintFileError> {
+    for layer in layers {
+        if layer.as_str().contains('|') {
+            return Err(FootprintFileError::InvalidTsvCell {
+                column: "layers",
+                value: layer.as_str().to_string(),
+            });
+        }
+    }
+    Ok(layers
+        .iter()
+        .map(|l| l.as_str())
+        .collect::<Vec<&str>>()
+        .join("|"))
+}
+
+fn layers_from_token(s: &str) -> Vec<LayerId> {
+    if s.is_empty() {
+        Vec::new()
+    } else {
+        s.split('|').map(LayerId::new).collect()
+    }
+}
+
+fn parse_f64_cell_fp(col: &'static str, s: &str) -> Result<f64, FootprintFileError> {
+    s.parse().map_err(|_| FootprintFileError::InvalidNumericCell {
+        column: col,
+        value: s.to_string(),
+    })
+}
+
+fn parse_opt_f64_cell_fp(col: &'static str, s: &str) -> Result<Option<f64>, FootprintFileError> {
+    if s.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(parse_f64_cell_fp(col, s)?))
+    }
+}
+
+fn pad_to_tsv_row(pad: &Pad) -> Result<String, FootprintFileError> {
+    let shape_cell = pad_shape_to_token(&pad.shape)?;
+    let layers_cell = layers_to_token(&pad.layers)?;
+    let drill_diameter_cell = pad
+        .drill
+        .as_ref()
+        .map(|d| fmt_f64_fp(d.diameter))
+        .unwrap_or_default();
+    let drill_slot_cell = pad
+        .drill
+        .as_ref()
+        .and_then(|d| d.slot_length)
+        .map(fmt_f64_fp)
+        .unwrap_or_default();
+    let cells: [String; 13] = [
+        pad.number.clone(),
+        pad_kind_token(pad.kind).to_string(),
+        shape_cell,
+        fmt_f64_fp(pad.size[0]),
+        fmt_f64_fp(pad.size[1]),
+        fmt_f64_fp(pad.position[0]),
+        fmt_f64_fp(pad.position[1]),
+        fmt_f64_fp(pad.rotation),
+        layers_cell,
+        drill_diameter_cell,
+        drill_slot_cell,
+        fmt_opt_f64_fp(pad.solder_mask_margin),
+        fmt_opt_f64_fp(pad.paste_margin),
+    ];
+    for (col, cell) in PAD_TSV_COLUMNS.iter().zip(cells.iter()) {
+        if cell.contains('\t') || cell.contains('\n') || cell.contains("'''") {
+            return Err(FootprintFileError::InvalidTsvCell {
+                column: col,
+                value: cell.clone(),
+            });
+        }
+    }
+    Ok(cells.join("\t"))
+}
+
+/// Encode a slice of pads as TSV — header row first, then one row
+/// per pad. Empty slice still emits the header row.
+pub(crate) fn pads_to_tsv(pads: &[Pad]) -> Result<String, FootprintFileError> {
+    let mut out = String::new();
+    out.push_str(&PAD_TSV_COLUMNS.join("\t"));
+    out.push('\n');
+    for pad in pads {
+        out.push_str(&pad_to_tsv_row(pad)?);
+        out.push('\n');
+    }
+    Ok(out)
+}
+
+/// Parse a `pads_tsv` payload back into `Vec<Pad>`. The first non-
+/// empty line is the header and must equal [`PAD_TSV_COLUMNS`]; each
+/// subsequent line is a pad row.
+pub(crate) fn pads_from_tsv(tsv: &str) -> Result<Vec<Pad>, FootprintFileError> {
+    let trimmed = tsv.trim_matches('\n');
+    if trimmed.is_empty() {
+        return Err(FootprintFileError::EmptyPadsTsv);
+    }
+    let mut lines = trimmed.split('\n');
+    let header = lines.next().ok_or(FootprintFileError::EmptyPadsTsv)?;
+    let header_cols: Vec<&str> = header.split('\t').collect();
+    if header_cols.len() != PAD_TSV_COLUMNS.len()
+        || header_cols
+            .iter()
+            .zip(PAD_TSV_COLUMNS.iter())
+            .any(|(g, e)| g != e)
+    {
+        return Err(FootprintFileError::PadsTsvSchemaMismatch {
+            got: header_cols.iter().map(|s| (*s).to_string()).collect(),
+        });
+    }
+    let mut pads = Vec::new();
+    for (row_idx, line) in lines.enumerate() {
+        let cells: Vec<&str> = line.split('\t').collect();
+        if cells.len() != PAD_TSV_COLUMNS.len() {
+            return Err(FootprintFileError::PadsTsvCellCountMismatch {
+                row_index: row_idx,
+                got: cells.len(),
+                expected: PAD_TSV_COLUMNS.len(),
+            });
+        }
+        pads.push(pad_from_tsv_row(&cells)?);
+    }
+    Ok(pads)
+}
+
+fn pad_from_tsv_row(cells: &[&str]) -> Result<Pad, FootprintFileError> {
+    let drill = if cells[9].is_empty() {
+        if !cells[10].is_empty() {
+            return Err(FootprintFileError::InvalidNumericCell {
+                column: "drill_slot_length",
+                value: format!(
+                    "drill_slot_length set ({:?}) without a drill_diameter",
+                    cells[10]
+                ),
+            });
+        }
+        None
+    } else {
+        Some(Drill {
+            diameter: parse_f64_cell_fp("drill_diameter", cells[9])?,
+            slot_length: parse_opt_f64_cell_fp("drill_slot_length", cells[10])?,
+        })
+    };
+    Ok(Pad {
+        number: cells[0].to_string(),
+        kind: pad_kind_from_token(cells[1])?,
+        shape: pad_shape_from_token(cells[2])?,
+        size: [
+            parse_f64_cell_fp("size_x", cells[3])?,
+            parse_f64_cell_fp("size_y", cells[4])?,
+        ],
+        position: [
+            parse_f64_cell_fp("pos_x", cells[5])?,
+            parse_f64_cell_fp("pos_y", cells[6])?,
+        ],
+        rotation: parse_f64_cell_fp("rotation", cells[7])?,
+        layers: layers_from_token(cells[8]),
+        drill,
+        solder_mask_margin: parse_opt_f64_cell_fp("solder_mask_margin", cells[11])?,
+        paste_margin: parse_opt_f64_cell_fp("paste_margin", cells[12])?,
+    })
 }
 
 /// Error variants raised by [`FootprintFile`] parsers + serialisers.
@@ -652,10 +1089,42 @@ pub enum FootprintFileError {
     TomlDeserialize(#[from] toml::de::Error),
     #[error("TOML serialise failed: {0}")]
     TomlSerialize(toml::ser::Error),
-    #[error("JSON deserialise failed: {0}")]
-    JsonDeserialize(#[from] serde_json::Error),
     #[error("unsupported .snxfpt format token {got:?}; this build supports \"snxfpt/1\"")]
     UnsupportedFormat { got: String },
+    #[error(
+        "TSV cell in column {column:?} contains a tab, newline, or triple-quote: \
+         {value:?}; cells must be free of \\t, \\n, and the literal \"'''\""
+    )]
+    InvalidTsvCell {
+        column: &'static str,
+        value: String,
+    },
+    #[error("pads_tsv block is empty (no header row)")]
+    EmptyPadsTsv,
+    #[error(
+        "pads_tsv header does not match the expected schema; got columns {got:?}"
+    )]
+    PadsTsvSchemaMismatch { got: Vec<String> },
+    #[error(
+        "pads_tsv row {row_index} has {got} cells; header declares {expected}"
+    )]
+    PadsTsvCellCountMismatch {
+        row_index: usize,
+        got: usize,
+        expected: usize,
+    },
+    #[error("unknown {kind} token {got:?} in pads_tsv cell")]
+    UnknownEnumToken {
+        kind: &'static str,
+        got: String,
+    },
+    #[error("invalid pad shape token {0:?}")]
+    InvalidPadShape(String),
+    #[error("invalid numeric cell in column {column:?}: {value:?}")]
+    InvalidNumericCell {
+        column: &'static str,
+        value: String,
+    },
 }
 
 impl Footprint {
@@ -876,26 +1345,194 @@ mod tests {
     }
 
     #[test]
-    fn footprint_file_from_bytes_auto_detects_legacy_json() {
-        // v0.16.5 stock library files contain a bare Footprint JSON.
-        // from_bytes should accept these and wrap them.
-        let legacy = Footprint::empty("Legacy-Pad");
-        let bytes = serde_json::to_vec_pretty(&legacy).unwrap();
-        let wrapped = FootprintFile::from_bytes(&bytes).expect("parse");
-        assert_eq!(wrapped.footprints.len(), 1);
-        assert_eq!(wrapped.footprints[0].name, "Legacy-Pad");
-        assert_eq!(wrapped.format, "snxfpt/1");
-        assert_eq!(wrapped.file_uuid, legacy.uuid);
-    }
-
-    #[test]
-    fn footprint_file_from_bytes_auto_detects_toml_envelope() {
+    fn footprint_file_from_bytes_decodes_toml_envelope() {
         let mut file = FootprintFile::from_footprint(Footprint::empty("TOML-Test"));
         file.footprints.push(Footprint::empty("Second"));
         let toml_bytes = file.to_toml_string().unwrap().into_bytes();
         let back = FootprintFile::from_bytes(&toml_bytes).expect("parse");
         assert_eq!(back.footprints.len(), 2);
         assert_eq!(back.footprints[0].name, "TOML-Test");
+    }
+
+    #[test]
+    fn footprint_file_from_bytes_rejects_empty_payload() {
+        match FootprintFile::from_bytes(b"   \n  \t\n") {
+            Err(FootprintFileError::Empty) => {}
+            other => panic!("expected Empty, got {other:?}"),
+        }
+    }
+
+    // ---- v0.18.4 — pad TSV codec ------------------------------------
+
+    #[test]
+    fn pad_kind_token_round_trip_all_variants() {
+        for k in [
+            PadKind::Smd,
+            PadKind::Tht,
+            PadKind::NptHole,
+            PadKind::ConnectorPad,
+            PadKind::Castellated,
+            PadKind::Fiducial,
+        ] {
+            let token = pad_kind_token(k);
+            let back = pad_kind_from_token(token).unwrap();
+            assert_eq!(k, back);
+        }
+    }
+
+    #[test]
+    fn pad_shape_token_round_trip_each_variant() {
+        let cases = [
+            PadShape::Round,
+            PadShape::Rect,
+            PadShape::Oval,
+            PadShape::RoundRect { radius_ratio: 0.25 },
+            PadShape::Chamfered {
+                chamfer_ratio: 0.4,
+                corners: ChamferedCorners {
+                    top_left: true,
+                    top_right: false,
+                    bottom_left: true,
+                    bottom_right: false,
+                },
+            },
+            PadShape::Custom(Polygon::new(vec![[0.0, 0.0], [1.5, 0.0], [0.75, 1.0]])),
+            PadShape::Custom(Polygon::new(Vec::new())),
+        ];
+        for s in cases {
+            let token = pad_shape_to_token(&s).unwrap();
+            let back = pad_shape_from_token(&token).unwrap();
+            assert_eq!(s, back, "round-trip failed via token {token:?}");
+        }
+    }
+
+    #[test]
+    fn pads_to_tsv_empty_emits_header_only() {
+        let tsv = pads_to_tsv(&[]).expect("serialise");
+        assert_eq!(tsv, format!("{}\n", PAD_TSV_COLUMNS.join("\t")));
+    }
+
+    #[test]
+    fn pads_to_tsv_rejects_tab_in_cell() {
+        let mut pad = fixture_pad("1");
+        pad.number = "1\t2".into();
+        match pads_to_tsv(std::slice::from_ref(&pad)) {
+            Err(FootprintFileError::InvalidTsvCell { column, .. }) => {
+                assert_eq!(column, "number");
+            }
+            other => panic!("expected InvalidTsvCell, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn pads_from_tsv_rejects_schema_mismatch() {
+        let bad = "foo\tbar\n1\t2\n";
+        match pads_from_tsv(bad) {
+            Err(FootprintFileError::PadsTsvSchemaMismatch { got }) => {
+                assert_eq!(got, vec!["foo", "bar"]);
+            }
+            other => panic!("expected PadsTsvSchemaMismatch, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn pads_from_tsv_rejects_drill_slot_without_diameter() {
+        // 13 cells: drill_diameter (col 9) empty, drill_slot_length
+        // (col 10) non-empty → invariant violation.
+        let header = PAD_TSV_COLUMNS.join("\t");
+        let row = "1\tSmd\trect\t1.5\t1.5\t0\t0\t0\tF.Cu\t\t2.0\t\t";
+        let body = format!("{header}\n{row}\n");
+        match pads_from_tsv(&body) {
+            Err(FootprintFileError::InvalidNumericCell { column, .. }) => {
+                assert_eq!(column, "drill_slot_length");
+            }
+            other => panic!("expected InvalidNumericCell, got {other:?}"),
+        }
+    }
+
+    /// All-fields round-trip — every Pad field gets a non-default
+    /// value (chamfered shape, non-trivial drill, multiple layers,
+    /// solder/paste margins) so the TSV cell encoders / decoders are
+    /// exercised end-to-end.
+    #[test]
+    fn footprint_file_round_trip_with_full_pad_payload() {
+        let pad = Pad {
+            number: "EP".into(),
+            kind: PadKind::Tht,
+            shape: PadShape::Chamfered {
+                chamfer_ratio: 0.3,
+                corners: ChamferedCorners {
+                    top_left: false,
+                    top_right: true,
+                    bottom_left: true,
+                    bottom_right: false,
+                },
+            },
+            size: [2.5, 1.6],
+            position: [-0.75, 1.25],
+            rotation: 45.0,
+            layers: vec![
+                LayerId::new("F.Cu"),
+                LayerId::new("F.Mask"),
+                LayerId::new("F.Paste"),
+            ],
+            drill: Some(Drill {
+                diameter: 0.8,
+                slot_length: Some(2.4),
+            }),
+            solder_mask_margin: Some(0.05),
+            paste_margin: Some(-0.025),
+        };
+        let mut fp = Footprint::empty("CUSTOM");
+        fp.pads = vec![pad.clone()];
+        let file = FootprintFile::from_footprint(fp);
+        let toml_text = file.to_toml_string().expect("serialise");
+        let back = FootprintFile::from_toml_str(&toml_text).expect("parse");
+        assert_eq!(back.footprints[0].pads.len(), 1);
+        assert_eq!(back.footprints[0].pads[0], pad);
+    }
+
+    #[test]
+    fn footprint_file_round_trip_with_custom_polygon_pad() {
+        let pad = Pad {
+            number: "1".into(),
+            kind: PadKind::Smd,
+            shape: PadShape::Custom(Polygon::new(vec![
+                [0.0, 0.0],
+                [1.0, 0.0],
+                [1.5, 0.5],
+                [1.0, 1.0],
+                [0.0, 1.0],
+            ])),
+            size: [1.5, 1.0],
+            position: [0.0, 0.0],
+            rotation: 0.0,
+            layers: vec![LayerId::new("F.Cu")],
+            drill: None,
+            solder_mask_margin: None,
+            paste_margin: None,
+        };
+        let mut fp = Footprint::empty("CUSTOM");
+        fp.pads = vec![pad.clone()];
+        let file = FootprintFile::from_footprint(fp);
+        let toml_text = file.to_toml_string().expect("serialise");
+        let back = FootprintFile::from_toml_str(&toml_text).expect("parse");
+        assert_eq!(back.footprints[0].pads[0], pad);
+    }
+
+    #[test]
+    fn footprint_file_to_toml_emits_pads_as_literal_multiline() {
+        let mut fp = Footprint::empty("Demo");
+        fp.pads.push(fixture_pad("1"));
+        let toml_text = FootprintFile::from_footprint(fp).to_toml_string().unwrap();
+        assert!(
+            toml_text.contains("pads_tsv = '''"),
+            "expected literal multi-line opener; got:\n{toml_text}"
+        );
+        assert!(
+            !toml_text.contains(PADS_TSV_PLACEHOLDER_PREFIX),
+            "placeholder should be fully replaced; got:\n{toml_text}"
+        );
     }
 
     #[test]

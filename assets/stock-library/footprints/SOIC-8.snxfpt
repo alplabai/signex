@@ -1,25 +1,27 @@
 format = "snxfpt/1"
-file_uuid = "019df421-9c70-7d20-8182-d2a4b071db57"
+file_uuid = "019df45d-af5f-7bb0-914a-26cc90477b10"
 display_name = "SOIC-8"
-created = "2026-05-04T17:55:36.688837100Z"
-updated = "2026-05-04T17:55:36.688837100Z"
+created = "2026-05-04T19:01:13.695326400Z"
+updated = "2026-05-04T19:01:13.695326400Z"
 
 [[footprints]]
-uuid = "019df421-9c70-7d20-8182-d29e573699e9"
+uuid = "019df45d-af5f-7bb0-914a-26b538180e51"
 name = "SOIC-8"
 anchor = [
     0.0,
     0.0,
 ]
-pads = []
+pads_tsv = '''
+number	kind	shape	size_x	size_y	pos_x	pos_y	rotation	layers	drill_diameter	drill_slot_length	solder_mask_margin	paste_margin
+'''
 silk_f = []
 silk_b = []
 fab_f = []
 fab_b = []
 version = "0.0.1"
 released = false
-created = "2026-05-04T17:55:36.688686900Z"
-updated = "2026-05-04T17:55:36.688686900Z"
+created = "2026-05-04T19:01:13.695092100Z"
+updated = "2026-05-04T19:01:13.695092100Z"
 schema_version = 3
 
 [footprints.courtyard]
@@ -49,12 +51,12 @@ constraints = []
 arrays = []
 
 [[footprints.sketch.planes]]
-id = "8c91d91c-10e1-46cb-8f81-88f17a7a5feb"
+id = "e09fba70-a152-4bdf-a5b9-63e910b7feb9"
 kind = "BoardTop"
 
 [[footprints.sketch.entities]]
-id = "edd161e4-8a14-4c73-bb1c-f8bdbc0d85e9"
-plane = "8c91d91c-10e1-46cb-8f81-88f17a7a5feb"
+id = "a8e5614e-fd34-4ed7-843f-4e14aa2ad385"
+plane = "e09fba70-a152-4bdf-a5b9-63e910b7feb9"
 construction = false
 kind = "Point"
 x = 0.0
@@ -78,8 +80,8 @@ shape = "Rect"
 kind = "Single"
 
 [[footprints.sketch.entities]]
-id = "bd80a8e5-0e22-4996-923d-43b8f325f5cf"
-plane = "8c91d91c-10e1-46cb-8f81-88f17a7a5feb"
+id = "361ff8ec-6f30-4611-a6ae-23539330f3f6"
+plane = "e09fba70-a152-4bdf-a5b9-63e910b7feb9"
 construction = false
 kind = "Point"
 x = 0.0
@@ -103,8 +105,8 @@ shape = "Rect"
 kind = "Single"
 
 [[footprints.sketch.entities]]
-id = "2e4cba0b-a4dc-48f5-9163-f5dfbc5f63d1"
-plane = "8c91d91c-10e1-46cb-8f81-88f17a7a5feb"
+id = "ab4568ce-13da-4245-9e41-f5bd0db95882"
+plane = "e09fba70-a152-4bdf-a5b9-63e910b7feb9"
 construction = false
 kind = "Point"
 x = 0.0
@@ -128,8 +130,8 @@ shape = "Rect"
 kind = "Single"
 
 [[footprints.sketch.entities]]
-id = "30f869d7-dd45-4d31-9b7f-740e45d2f280"
-plane = "8c91d91c-10e1-46cb-8f81-88f17a7a5feb"
+id = "53b621c3-5e5e-4776-935c-4b429da345ad"
+plane = "e09fba70-a152-4bdf-a5b9-63e910b7feb9"
 construction = false
 kind = "Point"
 x = 0.0
@@ -153,8 +155,8 @@ shape = "Rect"
 kind = "Single"
 
 [[footprints.sketch.entities]]
-id = "facdd217-f82d-40c0-b088-2b70f45e602c"
-plane = "8c91d91c-10e1-46cb-8f81-88f17a7a5feb"
+id = "ec21901f-1dec-4e86-9d8e-7f560512dde4"
+plane = "e09fba70-a152-4bdf-a5b9-63e910b7feb9"
 construction = false
 kind = "Point"
 x = 0.0
@@ -178,8 +180,8 @@ shape = "Rect"
 kind = "Single"
 
 [[footprints.sketch.entities]]
-id = "83fc7dcd-66b8-42b3-a32d-d4eb593a2041"
-plane = "8c91d91c-10e1-46cb-8f81-88f17a7a5feb"
+id = "f8cb1015-8afe-4520-b623-26a290925a83"
+plane = "e09fba70-a152-4bdf-a5b9-63e910b7feb9"
 construction = false
 kind = "Point"
 x = 0.0
@@ -203,8 +205,8 @@ shape = "Rect"
 kind = "Single"
 
 [[footprints.sketch.entities]]
-id = "b8dd7ebf-b593-4506-92e5-6534902d2875"
-plane = "8c91d91c-10e1-46cb-8f81-88f17a7a5feb"
+id = "cd2740e0-0b32-4aa6-a641-87f428137e6e"
+plane = "e09fba70-a152-4bdf-a5b9-63e910b7feb9"
 construction = false
 kind = "Point"
 x = 0.0
@@ -228,8 +230,8 @@ shape = "Rect"
 kind = "Single"
 
 [[footprints.sketch.entities]]
-id = "395e338e-c696-403a-a0cc-bba05b650ff2"
-plane = "8c91d91c-10e1-46cb-8f81-88f17a7a5feb"
+id = "2af18275-f777-40c2-90ac-e382bb4da9d2"
+plane = "e09fba70-a152-4bdf-a5b9-63e910b7feb9"
 construction = false
 kind = "Point"
 x = 0.0

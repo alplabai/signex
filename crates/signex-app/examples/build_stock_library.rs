@@ -49,9 +49,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         let fp = builder();
         let path = dir.join(filename);
         let pad_count = count_sketch_pads(&fp);
-        // v0.18.2 — emit TOML envelope (`snxfpt/1`). Adapter readers
-        // auto-detect TOML vs legacy JSON via
-        // `FootprintFile::from_bytes`.
+        // v0.18.4 — emit TOML+TSV envelope (`snxfpt/1`). Pads land
+        // in the per-footprint `pads_tsv = '''…'''` literal multi-
+        // line block; the legacy JSON path was dropped.
         let file = FootprintFile::from_footprint(fp.clone());
         let text = file.to_toml_string()?;
         std::fs::write(&path, text.as_bytes())?;

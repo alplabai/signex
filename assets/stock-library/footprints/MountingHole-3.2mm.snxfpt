@@ -1,25 +1,27 @@
 format = "snxfpt/1"
-file_uuid = "019df421-9c77-7381-8b6b-8509d915c240"
+file_uuid = "019df45d-af65-71a1-b568-29e703608649"
 display_name = "MountingHole-3.2mm"
-created = "2026-05-04T17:55:36.695427600Z"
-updated = "2026-05-04T17:55:36.695427600Z"
+created = "2026-05-04T19:01:13.701775100Z"
+updated = "2026-05-04T19:01:13.701775100Z"
 
 [[footprints]]
-uuid = "019df421-9c77-7381-8b6b-84f5a695cb9e"
+uuid = "019df45d-af65-71a1-b568-29d0a5242184"
 name = "MountingHole-3.2mm"
 anchor = [
     0.0,
     0.0,
 ]
-pads = []
+pads_tsv = '''
+number	kind	shape	size_x	size_y	pos_x	pos_y	rotation	layers	drill_diameter	drill_slot_length	solder_mask_margin	paste_margin
+'''
 silk_f = []
 silk_b = []
 fab_f = []
 fab_b = []
 version = "0.0.1"
 released = false
-created = "2026-05-04T17:55:36.695410100Z"
-updated = "2026-05-04T17:55:36.695410100Z"
+created = "2026-05-04T19:01:13.701732500Z"
+updated = "2026-05-04T19:01:13.701732500Z"
 schema_version = 3
 
 [footprints.courtyard]
@@ -49,12 +51,12 @@ constraints = []
 arrays = []
 
 [[footprints.sketch.planes]]
-id = "a24e0a0e-11f8-47a5-8be2-32e04ae24d27"
+id = "6287d9cd-d2d8-4190-bd2e-46de49a389ac"
 kind = "BoardTop"
 
 [[footprints.sketch.entities]]
-id = "a053736b-032e-4203-b13a-b81176062689"
-plane = "a24e0a0e-11f8-47a5-8be2-32e04ae24d27"
+id = "a2de0bf0-adc5-448c-adf8-3b190a702392"
+plane = "6287d9cd-d2d8-4190-bd2e-46de49a389ac"
 construction = false
 kind = "Point"
 x = 0.0

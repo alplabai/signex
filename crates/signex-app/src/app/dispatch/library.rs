@@ -2991,8 +2991,9 @@ impl Signex {
             .to_string();
         let symbol = signex_library::Symbol::empty(stem);
         let file = signex_library::SymbolFile::from_symbol(symbol);
-        let bytes = match serde_json::to_vec_pretty(&file) {
-            Ok(b) => b,
+        // v0.18.4 — emit TOML envelope (mirror of v0.18.2 .snxfpt).
+        let text = match file.to_toml_string() {
+            Ok(s) => s,
             Err(e) => {
                 tracing::warn!(
                     target: "signex::library",
@@ -3014,7 +3015,7 @@ impl Signex {
             );
             return Task::none();
         }
-        if let Err(e) = std::fs::write(&path, &bytes) {
+        if let Err(e) = std::fs::write(&path, text.as_bytes()) {
             tracing::warn!(
                 target: "signex::library",
                 path = %path.display(),
@@ -3029,8 +3030,9 @@ impl Signex {
 
     /// F34 — Footprint counterpart to
     /// [`handle_add_library_symbol_file_picked`]. Writes an empty
-    /// `Footprint` JSON, registers the file as a project library
-    /// entry, opens the file as a clean primitive editor tab.
+    /// `FootprintFile` (TOML+TSV envelope), registers the file as a
+    /// project library entry, opens the file as a clean primitive
+    /// editor tab.
     pub(crate) fn handle_add_library_footprint_file_picked(
         &mut self,
         path: std::path::PathBuf,
@@ -3041,8 +3043,10 @@ impl Signex {
             .unwrap_or("NewFootprint")
             .to_string();
         let footprint = signex_library::Footprint::empty(stem);
-        let bytes = match serde_json::to_vec_pretty(&footprint) {
-            Ok(b) => b,
+        // v0.18.4 — emit TOML+TSV envelope.
+        let file = signex_library::FootprintFile::from_footprint(footprint);
+        let text = match file.to_toml_string() {
+            Ok(s) => s,
             Err(e) => {
                 tracing::warn!(
                     target: "signex::library",
@@ -3064,7 +3068,7 @@ impl Signex {
             );
             return Task::none();
         }
-        if let Err(e) = std::fs::write(&path, &bytes) {
+        if let Err(e) = std::fs::write(&path, text.as_bytes()) {
             tracing::warn!(
                 target: "signex::library",
                 path = %path.display(),
@@ -3183,7 +3187,8 @@ impl Signex {
                         return Task::none();
                     }
                 };
-                let file = match signex_library::SymbolFile::from_json(&bytes) {
+                // v0.18.4 — auto-detect TOML vs legacy JSON.
+                let file = match signex_library::SymbolFile::from_bytes(&bytes) {
                     Ok(f) if !f.symbols.is_empty() => f,
                     Ok(_) => {
                         tracing::warn!(
@@ -3250,8 +3255,19 @@ impl Signex {
                         return Task::none();
                     }
                 };
-                let footprint: signex_library::Footprint = match serde_json::from_str(&bytes) {
-                    Ok(f) => f,
+                // v0.18.4 — parse TOML+TSV envelope and use the first
+                // footprint as the editor primitive. Multi-footprint
+                // containers are not yet exposed in the editor UI.
+                let file = match signex_library::FootprintFile::from_toml_str(&bytes) {
+                    Ok(f) if !f.footprints.is_empty() => f,
+                    Ok(_) => {
+                        tracing::warn!(
+                            target: "signex::library",
+                            path = %path.display(),
+                            "open primitive: .snxfpt contains zero footprints",
+                        );
+                        return Task::none();
+                    }
                     Err(e) => {
                         tracing::warn!(
                             target: "signex::library",
@@ -3262,6 +3278,7 @@ impl Signex {
                         return Task::none();
                     }
                 };
+                let footprint = file.footprints.into_iter().next().expect("non-empty");
 
                 let title = path
                     .file_stem()
@@ -3425,7 +3442,8 @@ impl Signex {
             let now = chrono::Utc::now();
             editor.primitive_mut().updated = now;
             editor.file.updated = now;
-            let json = match serde_json::to_string_pretty(&editor.file) {
+            // v0.18.4 — emit TOML envelope (mirror of v0.18.2 .snxfpt).
+            let toml_text = match editor.file.to_toml_string() {
                 Ok(s) => s,
                 Err(e) => {
                     tracing::warn!(
@@ -3437,7 +3455,7 @@ impl Signex {
                     return;
                 }
             };
-            if let Err(e) = atomic_write(path, json.as_bytes()) {
+            if let Err(e) = atomic_write(path, toml_text.as_bytes()) {
                 tracing::warn!(
                     target: "signex::library",
                     path = %path.display(),
@@ -3486,7 +3504,14 @@ impl Signex {
                 &mut editor.primitive,
             );
             editor.primitive.updated = chrono::Utc::now();
-            let json = match serde_json::to_string_pretty(&editor.primitive) {
+            // v0.18.4 — wrap the editor primitive into a fresh
+            // FootprintFile envelope and emit TOML+TSV. file_uuid is
+            // re-minted each save (FootprintEditorState carries only a
+            // bare Footprint, not a parent container — mirroring
+            // SymbolEditorState would preserve file_uuid + multi-
+            // footprint and is queued for a follow-up refactor).
+            let file = signex_library::FootprintFile::from_footprint(editor.primitive.clone());
+            let toml_text = match file.to_toml_string() {
                 Ok(s) => s,
                 Err(e) => {
                     tracing::warn!(
@@ -3498,7 +3523,7 @@ impl Signex {
                     return;
                 }
             };
-            if let Err(e) = atomic_write(path, json.as_bytes()) {
+            if let Err(e) = atomic_write(path, toml_text.as_bytes()) {
                 tracing::warn!(
                     target: "signex::library",
                     path = %path.display(),

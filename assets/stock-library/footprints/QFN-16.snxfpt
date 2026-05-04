@@ -1,25 +1,27 @@
 format = "snxfpt/1"
-file_uuid = "019df421-9c72-76f2-9312-b4a0968c8851"
+file_uuid = "019df45d-af61-7612-8d18-c80e4c879451"
 display_name = "QFN-16"
-created = "2026-05-04T17:55:36.690584400Z"
-updated = "2026-05-04T17:55:36.690584400Z"
+created = "2026-05-04T19:01:13.697452Z"
+updated = "2026-05-04T19:01:13.697452Z"
 
 [[footprints]]
-uuid = "019df421-9c72-76f2-9312-b49a479b79a3"
+uuid = "019df45d-af61-7612-8d18-c7f4c67e4b0e"
 name = "QFN-16"
 anchor = [
     0.0,
     0.0,
 ]
-pads = []
+pads_tsv = '''
+number	kind	shape	size_x	size_y	pos_x	pos_y	rotation	layers	drill_diameter	drill_slot_length	solder_mask_margin	paste_margin
+'''
 silk_f = []
 silk_b = []
 fab_f = []
 fab_b = []
 version = "0.0.1"
 released = false
-created = "2026-05-04T17:55:36.690535400Z"
-updated = "2026-05-04T17:55:36.690535400Z"
+created = "2026-05-04T19:01:13.697362200Z"
+updated = "2026-05-04T19:01:13.697362200Z"
 schema_version = 3
 
 [footprints.courtyard]
@@ -49,12 +51,12 @@ constraints = []
 arrays = []
 
 [[footprints.sketch.planes]]
-id = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+id = "820e5c14-38a5-480a-9098-08579b42ef2d"
 kind = "BoardTop"
 
 [[footprints.sketch.entities]]
-id = "7ecff22a-c234-4218-93ad-8f6f0b59a287"
-plane = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+id = "f83b5630-3d88-4bdd-b8f9-46f0a8565577"
+plane = "820e5c14-38a5-480a-9098-08579b42ef2d"
 construction = false
 kind = "Point"
 x = 0.0
@@ -78,8 +80,8 @@ shape = "Rect"
 kind = "Single"
 
 [[footprints.sketch.entities]]
-id = "feced505-6378-4034-ba3c-006d0a39a2c9"
-plane = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+id = "1707c465-dcd3-4895-9926-70267973ba1c"
+plane = "820e5c14-38a5-480a-9098-08579b42ef2d"
 construction = false
 kind = "Point"
 x = 0.0
@@ -103,8 +105,8 @@ shape = "Rect"
 kind = "Single"
 
 [[footprints.sketch.entities]]
-id = "f3ac60e6-3040-4275-bce2-b3f0da0430bf"
-plane = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+id = "56b4c552-855b-4b61-8975-6f44107d97e5"
+plane = "820e5c14-38a5-480a-9098-08579b42ef2d"
 construction = false
 kind = "Point"
 x = 0.0
@@ -128,8 +130,8 @@ shape = "Rect"
 kind = "Single"
 
 [[footprints.sketch.entities]]
-id = "c06c7770-c91c-4437-bc3d-d3ec0cf48ebe"
-plane = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+id = "7a701422-da8f-4f1a-9915-de54ca7ea5db"
+plane = "820e5c14-38a5-480a-9098-08579b42ef2d"
 construction = false
 kind = "Point"
 x = 0.0
@@ -153,8 +155,8 @@ shape = "Rect"
 kind = "Single"
 
 [[footprints.sketch.entities]]
-id = "5c558b03-cf27-4f23-9623-0645a7bc6302"
-plane = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+id = "40918ad0-1223-4928-8d7d-7460fed0173a"
+plane = "820e5c14-38a5-480a-9098-08579b42ef2d"
 construction = false
 kind = "Point"
 x = 0.0
@@ -178,8 +180,8 @@ shape = "Rect"
 kind = "Single"
 
 [[footprints.sketch.entities]]
-id = "370290f6-518f-40c7-ba72-a5820e07e4ca"
-plane = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+id = "61e00863-ed6f-406d-9e62-f0b752e0203a"
+plane = "820e5c14-38a5-480a-9098-08579b42ef2d"
 construction = false
 kind = "Point"
 x = 0.0
@@ -203,8 +205,8 @@ shape = "Rect"
 kind = "Single"
 
 [[footprints.sketch.entities]]
-id = "af946d6b-8eef-4cdc-8ff8-62357c1aac5f"
-plane = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+id = "53fb08b5-a61b-4bdb-a4d6-b567d5cf1909"
+plane = "820e5c14-38a5-480a-9098-08579b42ef2d"
 construction = false
 kind = "Point"
 x = 0.0
@@ -228,8 +230,8 @@ shape = "Rect"
 kind = "Single"
 
 [[footprints.sketch.entities]]
-id = "7efb4bfd-e894-4226-a75d-bd0bd99b9586"
-plane = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+id = "43661ebe-cad5-4976-aa03-80034b7cbe4c"
+plane = "820e5c14-38a5-480a-9098-08579b42ef2d"
 construction = false
 kind = "Point"
 x = 0.0
@@ -253,8 +255,8 @@ shape = "Rect"
 kind = "Single"
 
 [[footprints.sketch.entities]]
-id = "285312b7-9e38-4fc2-ac40-fadf3491b658"
-plane = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+id = "b842a0e5-c7b0-411a-bd83-d9ead411b85b"
+plane = "820e5c14-38a5-480a-9098-08579b42ef2d"
 construction = false
 kind = "Point"
 x = 0.0
@@ -278,8 +280,8 @@ shape = "Rect"
 kind = "Single"
 
 [[footprints.sketch.entities]]
-id = "a8c1c26b-8932-4ed5-9c3b-c8012fb7721d"
-plane = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+id = "d73e721d-e653-400c-baa5-4cb59d422bdc"
+plane = "820e5c14-38a5-480a-9098-08579b42ef2d"
 construction = false
 kind = "Point"
 x = 0.0
@@ -303,8 +305,8 @@ shape = "Rect"
 kind = "Single"
 
 [[footprints.sketch.entities]]
-id = "4ee1afd1-ec43-41ca-a215-d3e1fcd0b915"
-plane = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+id = "6b691a25-b7df-4e85-b9d0-202cba270eb0"
+plane = "820e5c14-38a5-480a-9098-08579b42ef2d"
 construction = false
 kind = "Point"
 x = 0.0
@@ -328,8 +330,8 @@ shape = "Rect"
 kind = "Single"
 
 [[footprints.sketch.entities]]
-id = "def06a1c-511b-4e70-96c5-2998d3ddafda"
-plane = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+id = "22ca65aa-011d-4db4-b215-19ec429ce816"
+plane = "820e5c14-38a5-480a-9098-08579b42ef2d"
 construction = false
 kind = "Point"
 x = 0.0
@@ -353,8 +355,8 @@ shape = "Rect"
 kind = "Single"
 
 [[footprints.sketch.entities]]
-id = "8fde1b56-2137-458d-bd7c-9d911596c41c"
-plane = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+id = "b2b8e853-45b5-4260-9acc-94f19e238c44"
+plane = "820e5c14-38a5-480a-9098-08579b42ef2d"
 construction = false
 kind = "Point"
 x = 0.0
@@ -378,8 +380,8 @@ shape = "Rect"
 kind = "Single"
 
 [[footprints.sketch.entities]]
-id = "4c897a39-653b-4424-9c9f-77845ab0a94c"
-plane = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+id = "97191339-fd95-4500-8021-72c38ac4c4f9"
+plane = "820e5c14-38a5-480a-9098-08579b42ef2d"
 construction = false
 kind = "Point"
 x = 0.0
@@ -403,8 +405,8 @@ shape = "Rect"
 kind = "Single"
 
 [[footprints.sketch.entities]]
-id = "97ec1315-5ff9-4f70-ae31-1b64b53a2733"
-plane = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+id = "434e5442-6831-4d41-9209-dac04c1069b1"
+plane = "820e5c14-38a5-480a-9098-08579b42ef2d"
 construction = false
 kind = "Point"
 x = 0.0
@@ -428,8 +430,8 @@ shape = "Rect"
 kind = "Single"
 
 [[footprints.sketch.entities]]
-id = "fdc1826b-e684-4fc5-a4c0-8de9b9af34ef"
-plane = "eb6a53dd-4bb2-4546-81e9-0dbc4310cab2"
+id = "eab4a114-124e-44cb-b1c8-a3bfde628ca1"
+plane = "820e5c14-38a5-480a-9098-08579b42ef2d"
 construction = false
 kind = "Point"
 x = 0.0

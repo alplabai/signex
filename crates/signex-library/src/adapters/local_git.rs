@@ -562,7 +562,10 @@ impl LocalGitAdapter {
                 continue;
             }
             let bytes = fs::read(path)?;
-            let file = SymbolFile::from_json(&bytes)
+            // v0.18.4 — auto-detect TOML vs legacy JSON via
+            // `SymbolFile::from_bytes`. Old `.snxsym` files (JSON)
+            // continue to load; new files emit TOML.
+            let file = SymbolFile::from_bytes(&bytes)
                 .map_err(|e| LibraryError::Backend(format!("read symbol file {name}: {e}")))?;
             out.push((path.to_path_buf(), file));
         }
@@ -580,17 +583,21 @@ impl LocalGitAdapter {
                     file.symbols.push(sym.clone());
                     file.updated = chrono::Utc::now();
                 }
-                let bytes = serde_json::to_vec_pretty(&file)
+                // v0.18.4 — emit TOML envelope.
+                let text = file
+                    .to_toml_string()
                     .map_err(|e| LibraryError::Backend(format!("write symbol container: {e}")))?;
-                fs::write(&path, bytes)?;
+                fs::write(&path, text.as_bytes())?;
                 path
             }
             None => {
                 let file = SymbolFile::from_symbol(sym.clone());
                 let path = self.fresh_symbol_file_path(&dir, &file)?;
-                let bytes = serde_json::to_vec_pretty(&file)
+                // v0.18.4 — emit TOML envelope.
+                let text = file
+                    .to_toml_string()
                     .map_err(|e| LibraryError::Backend(format!("write symbol container: {e}")))?;
-                fs::write(&path, bytes)?;
+                fs::write(&path, text.as_bytes())?;
                 path
             }
         };

@@ -1,25 +1,27 @@
 format = "snxfpt/1"
-file_uuid = "019df421-9c78-77d1-ad92-37f652013ed3"
+file_uuid = "019df45d-af66-75c0-b9cf-2bbf173b0066"
 display_name = "Fiducial-1mm"
-created = "2026-05-04T17:55:36.696230800Z"
-updated = "2026-05-04T17:55:36.696230800Z"
+created = "2026-05-04T19:01:13.702958300Z"
+updated = "2026-05-04T19:01:13.702958300Z"
 
 [[footprints]]
-uuid = "019df421-9c78-77d1-ad92-37ef49895786"
+uuid = "019df45d-af66-75c0-b9cf-2ba7e253d69c"
 name = "Fiducial-1mm"
 anchor = [
     0.0,
     0.0,
 ]
-pads = []
+pads_tsv = '''
+number	kind	shape	size_x	size_y	pos_x	pos_y	rotation	layers	drill_diameter	drill_slot_length	solder_mask_margin	paste_margin
+'''
 silk_f = []
 silk_b = []
 fab_f = []
 fab_b = []
 version = "0.0.1"
 released = false
-created = "2026-05-04T17:55:36.696215800Z"
-updated = "2026-05-04T17:55:36.696215800Z"
+created = "2026-05-04T19:01:13.702918600Z"
+updated = "2026-05-04T19:01:13.702918600Z"
 schema_version = 3
 
 [footprints.courtyard]
@@ -49,12 +51,12 @@ constraints = []
 arrays = []
 
 [[footprints.sketch.planes]]
-id = "f08feaa8-39c2-4740-81a8-e4c1bdbe88ab"
+id = "7c74fab9-10b4-4550-aad0-cec6d5b2c3e9"
 kind = "BoardTop"
 
 [[footprints.sketch.entities]]
-id = "f578f47d-9482-4ec0-ad29-c0e6b7880aa3"
-plane = "f08feaa8-39c2-4740-81a8-e4c1bdbe88ab"
+id = "4373d9fb-b5a8-49e6-adc7-5f6307803a36"
+plane = "7c74fab9-10b4-4550-aad0-cec6d5b2c3e9"
 construction = false
 kind = "Point"
 x = 0.0
