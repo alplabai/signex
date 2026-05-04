@@ -406,3 +406,92 @@ plus the lib-variant native bakes from G. Remaining for v0.14.1+:
   drag-to-move Point, Angle / DistancePtLine inspector, per-
   constraint delete, dimension-edit-in-place, modal value entry
   with units).
+
+---
+
+## v0.14.1 — Bake completion (2026-05-04)
+
+Branch `feature/v0.14.1-bake-completion` off
+`feature/v0.14-sketch-bake-extras`. Five commits closing every v0.14
+deferred item except the stock library:
+
+| SHA prefix | Subject | Stage |
+|---|---|---|
+| `24e36137` | feat(bake): walker now tessellates Arc segments | Walker upgrade |
+| `a6c137f3` | feat(bake): keepout + cutout + v_score bake modules | E |
+| `985bd81f` | feat(bake): 3D extrude profile from BodyTop plane | F |
+| `340a6f1a` | feat(bake): native LibPadShape::Custom(SketchProfile) bake | G (final) |
+
+Walker upgrade — `crates/signex-bake/src/profile.rs`:
+- Drop `TraceError::ArcInProfile` (no longer produced).
+- Adjacency now includes both Lines and Arcs; Arcs traverse with
+  `ARC_SAMPLES = 16` interior vertices via polar sampling around the
+  arc's centre.
+- Reverse-traversal flips effective sweep direction so tessellation
+  always sits on the correct side of the chord.
+- 3 new walker tests (D-shape CCW, D-shape CW, arc-seed walks back
+  through line).
+
+Keepout / cutout / v-score — three new modules in `signex-bake`:
+- `keepout.rs` — KeepoutAttr profiles → FpKeepout. KeepoutKinds
+  6-bit field maps to KeepoutForbid 5-variant enum (multiple bits →
+  All; single bit → matching variant).
+- `cutout.rs` — BoardCutoutAttr profiles → FpCutout. edge_radius and
+  through=false warned as v0.15 lib-field gaps.
+- `vscore.rs` — VScoreHintAttr-tagged Lines → FpVScore. Single-Line
+  records (no walker). Uses `NOMINAL_BOARD_THICKNESS_MM = 1.6` (IPC-
+  A-600 default) to convert depth_fraction → mm. Arc/Circle entities
+  with VScore skip with a warning.
+
+3D extrude — new `body3d.rs` module:
+- Find first `PlaneKind::BodyTop` plane.
+- Find first non-construction Line/Arc on that plane.
+- Trace closed profile, set `body_3d.outline = Some(Polygon)` and
+  `body_3d.offset_z_mm = eval(plane.offset_z_expr)`.
+- height_mm preserved (caller's responsibility).
+- 4 new lib tests (no plane / normal / bad expr / no edges).
+
+Native SketchProfile bake — `pad.rs`:
+- `bake_shape` signature gains `sketch`, `solve`, `pad_position`.
+- Custom::SketchProfile traces the closed profile, translates
+  vertices to pad-local mm (subtract pad position), emits
+  `LibPadShape::Custom(LibPolygon)`.
+- Empty source / trace failure → fallback Rect + warning.
+- 1 new integration test (`bake_custom_sketch_profile_native_v0141`).
+
+Dispatcher (`sketch_dispatch.rs`) now invokes 9 bake modules in
+sequence: pads + arrays + silk + courtyard + 3 mask + pour + keepout
++ cutout + v_scores + body3d.
+
+Test count: signex-bake lib tests grew from 21 to 36 (15 new); plus
+1 new integration test (14 total). Workspace: 67/67 test runs green.
+
+References consulted in v0.14.1 (cited in module-level doc comments):
+- Hearn & Baker §3.13 ("Drawing Circular Arcs") — arc tessellation
+  via polar sampling.
+- IPC-A-600 — nominal board thickness 1.6 mm for FR-4 (used as the
+  v-score depth scale factor).
+
+Cleanroom: no new third-party CAD/EDA source consulted. All bake
+algorithms derive from textbook references + the existing v0.13/v0.14
+foundation.
+
+### v0.14.1 deferred to v0.14.2+ / v0.15+
+
+- **Stock library (H)** — 5–10 reference parametric .snxfpt
+  footprints. The bake pipeline is complete; what's missing is the
+  hand-authored TOML with constraints + parameters. Highly
+  parallelizable (one agent per ~10 footprints).
+- **Lib field gaps in cutouts** — `FpCutout` doesn't carry edge
+  radius or partial-depth flag. Schema bump v3 → v4.
+- **Lib v-score richer fields** — `FpVScore` doesn't carry side
+  (Top/Bottom/Both) or min-web. Schema bump.
+- **Multi-plane Body3D stack-up** — currently only the first
+  BodyTop plane contributes. Multi-body packages (e.g. crystal can
+  + leads) need plane stack-up.
+- **Circle bake** — Circle entities (closed primitive without
+  start/end endpoints) with closed-profile attrs are skipped with a
+  "v0.14.2" warning. Bake should sample the circle into N=ARC_SAMPLES*2
+  vertices.
+- **UX deferred items from v0.13.3** — unchanged.
+
