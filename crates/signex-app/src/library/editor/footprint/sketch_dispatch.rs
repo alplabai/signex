@@ -109,23 +109,32 @@ fn solve_and_bake(
                 .auto_pause
                 .observe(out.result.elapsed_ms, state.sketch_solver.timeout_ms);
 
-            // Phase 7.3 — bake pads + arrays into the footprint.
-            let mut baked: Vec<signex_library::primitive::footprint::Pad> = Vec::new();
-            signex_bake::bake_pads(
-                sketch,
-                &out,
-                &resolved,
-                &mut baked,
-                &mut state.solve_warnings,
-            )?;
-            signex_bake::bake_arrays(
-                sketch,
-                &out,
-                &resolved,
-                &mut baked,
-                &mut state.solve_warnings,
-            )?;
-            footprint.pads = baked;
+            // Phase 7.3 — bake pads + arrays into the footprint, but
+            // skip the overwrite on an empty sketch: a fresh
+            // SetMode(Sketch) toggle on a footprint with literal pads
+            // would otherwise produce an empty Vec and clobber the
+            // user's existing pad authoring on first entry. Once the
+            // user adds sketch entities, the sketch becomes the
+            // source of truth and a (possibly empty) bake result is
+            // intentional.
+            if !sketch.entities.is_empty() {
+                let mut baked: Vec<signex_library::primitive::footprint::Pad> = Vec::new();
+                signex_bake::bake_pads(
+                    sketch,
+                    &out,
+                    &resolved,
+                    &mut baked,
+                    &mut state.solve_warnings,
+                )?;
+                signex_bake::bake_arrays(
+                    sketch,
+                    &out,
+                    &resolved,
+                    &mut baked,
+                    &mut state.solve_warnings,
+                )?;
+                footprint.pads = baked;
+            }
 
             state.last_solve = Some(out);
         }

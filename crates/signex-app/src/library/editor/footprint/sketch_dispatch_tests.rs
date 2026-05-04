@@ -122,19 +122,33 @@ mod tests {
     }
 
     #[test]
-    fn set_mode_initialises_sketch_field() {
-        // Footprint with no sketch initially: SetMode populates an
-        // empty SketchData, runs the solve (no entities → no
-        // residuals → instant return), and bakes pads from the
-        // empty sketch (so fp.pads becomes empty).
-        //
-        // This documents the v0.13 design: once sketch mode is
-        // opened, the sketch is the single source of truth for the
-        // footprint's pad list. UX layers (Phase 6) surface a
-        // confirmation prompt before the user permanently discards
-        // their literal pad authoring; that confirmation lives
-        // outside the dispatcher.
+    fn set_mode_initialises_sketch_field_and_preserves_literal_pads() {
+        // Footprint with literal (manually-authored) pads and no sketch
+        // initially. SetMode populates an empty SketchData and runs the
+        // solver; the bake step is gated on `!sketch.entities.is_empty()`
+        // so the existing literal pads survive the first Sketch-mode
+        // toggle. Once the user actually authors sketch entities, the
+        // sketch becomes the source of truth and the bake's output
+        // (possibly an empty Vec) overwrites the literal pads.
+        use signex_library::primitive::footprint::{
+            LayerId, Pad, PadKind as LibPadKind, PadShape as LibPadShape,
+        };
+
         let mut fp = empty_footprint();
+        // Pre-populate with one literal pad so we can verify it survives.
+        fp.pads.push(Pad {
+            number: "literal".into(),
+            kind: LibPadKind::Smd,
+            shape: LibPadShape::Rect,
+            size: [1.0, 0.5],
+            position: [0.0, 0.0],
+            rotation: 0.0,
+            layers: vec![LayerId::new("Top Layer")],
+            drill: None,
+            solder_mask_margin: None,
+            paste_margin: None,
+        });
+
         let mut state = FootprintEditorState::from_footprint(&fp);
         apply_sketch_edit(
             &mut state,
@@ -144,7 +158,8 @@ mod tests {
         .unwrap();
 
         assert!(fp.sketch.is_some());
-        assert_eq!(fp.pads.len(), 0); // bake of empty sketch produces zero pads
+        assert_eq!(fp.pads.len(), 1, "literal pad must survive empty Sketch toggle");
+        assert_eq!(fp.pads[0].number, "literal");
     }
 
     #[test]
