@@ -3917,6 +3917,7 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintDeleteSelected
         | PrimitiveEditorMsg::FootprintToggleLayer(_)
         | PrimitiveEditorMsg::FootprintToggleAutoFit
+        | PrimitiveEditorMsg::FootprintSetPadsTool(_)
         | PrimitiveEditorMsg::FootprintSetMode(_)
         | PrimitiveEditorMsg::FootprintSketchPlacePoint { .. }
         | PrimitiveEditorMsg::FootprintSketchEditParameter { .. }
@@ -4220,6 +4221,10 @@ pub(crate) fn apply_footprint_primitive_edit(
             editor.state.active_tool = tool;
             editor.state.tool_pending =
                 crate::library::editor::footprint::state::ToolPending::Idle;
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintSetPadsTool(tool) => {
+            editor.state.pads_tool = tool;
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintSketchToolEscape => {

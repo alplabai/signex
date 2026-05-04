@@ -141,14 +141,23 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<LibraryMessage>> {
-        // First-draw fit. Skip for empty footprints — we'd just zoom
-        // the origin pixel.
-        if !cstate.did_initial_fit
-            && bounds.width > 0.0
-            && bounds.height > 0.0
-            && let Some(bbox) = self.state.content_bbox_mm()
-        {
-            cstate.fit_to_bounds(bbox, bounds);
+        // First-draw camera placement.
+        // - With content: fit-to-bounds so every pad / sketch entity
+        //   is visible.
+        // - Without content (fresh `.snxfpt` from "Add New ▸
+        //   Footprint"): centre world origin in the viewport so the
+        //   user lands on (0, 0) rather than the screen's top-left.
+        //   Without this, the default offset (0, 0) renders world
+        //   (0, 0) at screen pixel (0, 0) — the user's drawing area
+        //   starts in the corner and they have to pan to find the
+        //   centre.
+        if !cstate.did_initial_fit && bounds.width > 0.0 && bounds.height > 0.0 {
+            if let Some(bbox) = self.state.content_bbox_mm() {
+                cstate.fit_to_bounds(bbox, bounds);
+            } else {
+                cstate.offset = Point::new(bounds.width / 2.0, bounds.height / 2.0);
+                // Keep DEFAULT_PX_PER_MM scale.
+            }
             cstate.did_initial_fit = true;
         }
 
@@ -301,17 +310,30 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 msg,
                             }));
                         }
-                        // Click-add at the press position (world coords
-                        // were stashed in grab_offset_mm).
-                        return Some(canvas::Action::publish(LibraryMessage::EditorEvent {
-                            library_path: self.address.library_path.clone(),
-                            table: self.address.table.clone(),
-                            row_id: self.address.row_id,
-                            msg: EditorMsg::FootprintAddPad {
-                                x_mm: drag.grab_offset_mm.0,
-                                y_mm: drag.grab_offset_mm.1,
-                            },
-                        }));
+                        // v0.15 — gate empty-click pad-add on
+                        // PadsTool::PlacePad. The default Select tool
+                        // no longer auto-adds a pad on every empty
+                        // click, which removes the "I clicked
+                        // somewhere by accident and now have a stray
+                        // pad" footgun.
+                        use crate::library::editor::footprint::state::PadsTool;
+                        if self.state.pads_tool == PadsTool::PlacePad {
+                            return Some(canvas::Action::publish(LibraryMessage::EditorEvent {
+                                library_path: self.address.library_path.clone(),
+                                table: self.address.table.clone(),
+                                row_id: self.address.row_id,
+                                msg: EditorMsg::FootprintAddPad {
+                                    x_mm: drag.grab_offset_mm.0,
+                                    y_mm: drag.grab_offset_mm.1,
+                                },
+                            }));
+                        }
+                        // Select tool: empty click does nothing
+                        // (selection-clear is handled by the model
+                        // via the existing FootprintSelectPad(None)
+                        // path on actual canvas-click events that
+                        // miss every pad).
+                        return None;
                     }
                     if drag.moved {
                         // Final move position is already published per

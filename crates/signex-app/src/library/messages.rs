@@ -1138,6 +1138,9 @@ pub enum PrimitiveEditorMsg {
     /// Clears any in-flight multi-click gesture (`tool_pending`) so
     /// switching tools mid-gesture doesn't leave dangling anchors.
     FootprintSketchSetTool(crate::library::editor::footprint::state::SketchTool),
+    /// v0.15 — Pads-mode tool switch (Select / PlacePad). Right-
+    /// click cancels back to Select via the same dispatch.
+    FootprintSetPadsTool(crate::library::editor::footprint::state::PadsTool),
     /// v0.13.2 — Canvas left-click in Sketch mode while a multi-click
     /// drawing tool is active. The dispatcher advances the per-tool
     /// state machine on `tool_pending` and emits the appropriate

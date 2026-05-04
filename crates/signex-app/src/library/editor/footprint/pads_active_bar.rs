@@ -27,7 +27,7 @@ use signex_widgets::theme_ext;
 
 use crate::app::FootprintEditorState;
 use crate::icons;
-use crate::library::editor::footprint::state::EditorMode;
+use crate::library::editor::footprint::state::{EditorMode, PadsTool};
 use crate::library::messages::{LibraryMessage, PrimitiveEditorMsg};
 
 /// v0.14.2 — standalone floating mode-switch widget rendered at the
@@ -145,14 +145,34 @@ pub fn items(
         })
     };
 
-    // Select cursor — no dedicated message in pads mode (no tool
-    // state machine yet); leaves selection behaviour unchanged.
+    // v0.15 — Pads-mode tool state machine. Select is the default;
+    // PlacePad makes empty-canvas clicks drop a pad at the cursor.
+    let pads_tool = editor.state.pads_tool;
+    let select_path = path.clone();
     let select = ActiveBarItem::Button(ActiveBarButton {
         icon: ActiveBarIcon::Svg(icons::icon_select(theme_id)),
         tooltip: "Select".into(),
         enabled: true,
-        selected: true, // the de-facto active tool in pads mode
-        on_press: None,
+        selected: pads_tool == PadsTool::Select,
+        on_press: Some(LibraryMessage::PrimitiveEditorEvent {
+            path: select_path,
+            msg: PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::Select),
+        }),
+        ..ActiveBarButton::default()
+    });
+
+    // Place Pad — wired in v0.15. Activate the tool, then click an
+    // empty area of the canvas to drop a pad there.
+    let place_pad_path = path.clone();
+    let place_pad = ActiveBarItem::Button(ActiveBarButton {
+        icon: ActiveBarIcon::Glyph("\u{25CF}"), // ●
+        tooltip: "Place Pad — click empty canvas to drop pads".into(),
+        enabled: true,
+        selected: pads_tool == PadsTool::PlacePad,
+        on_press: Some(LibraryMessage::PrimitiveEditorEvent {
+            path: place_pad_path,
+            msg: PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlacePad),
+        }),
         ..ActiveBarButton::default()
     });
 
@@ -192,11 +212,8 @@ pub fn items(
     vec![
         select,
         ActiveBarItem::Separator,
-        // Altium-parity Place tools — most are stubs in v0.14.x.
-        // Place Pad has no dedicated tool state yet (clicking empty
-        // canvas adds a pad), so it ships as a stub here too — wiring
-        // a tool-state machine + ghost preview lands in v0.15+.
-        stub("Place Pad", "\u{25CF}"), // ●
+        // v0.15 — Place Pad now has a real tool-state machine.
+        place_pad,
         stub_svg(
             "Place Track",
             ActiveBarIcon::Svg(icons::icon_shape_line(theme_id)),

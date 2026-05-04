@@ -190,6 +190,24 @@ pub struct FootprintEditorState {
     /// user picks a number, the inspector emits the AddConstraint
     /// for the active selection.
     pub dimension_input: String,
+    /// v0.15 — Pads-mode tool. Default `Select`; switching to
+    /// `PlacePad` makes empty-canvas clicks drop a new pad at the
+    /// cursor instead of clearing the selection. Right-click / Esc
+    /// returns to Select. Mirrors the sketch-mode `active_tool`
+    /// state machine.
+    pub pads_tool: PadsTool,
+}
+
+/// Pads-mode drawing tool — v0.15. The Pads-mode active bar's
+/// "Place Pad" button switches to `PlacePad`; right-click cancels
+/// back to `Select`. Selecting a pad uses the existing pad-click
+/// hit-test and works regardless of `pads_tool`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PadsTool {
+    #[default]
+    Select,
+    /// Click empty canvas → adds a new pad at the cursor.
+    PlacePad,
 }
 
 /// Sketch-mode drawing tool. Phase 6.3 (v0.13.1) shipped Place Point
@@ -261,6 +279,7 @@ impl FootprintEditorState {
             selected_sketch: None,
             selected_sketch_secondary: None,
             dimension_input: String::new(),
+            pads_tool: PadsTool::default(),
         };
         s.recompute_courtyard();
         s
@@ -287,6 +306,7 @@ impl FootprintEditorState {
             selected_sketch: None,
             selected_sketch_secondary: None,
             dimension_input: String::new(),
+            pads_tool: PadsTool::default(),
         };
         s.recompute_courtyard();
         s
