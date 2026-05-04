@@ -476,6 +476,89 @@ Cleanroom: no new third-party CAD/EDA source consulted. All bake
 algorithms derive from textbook references + the existing v0.13/v0.14
 foundation.
 
+---
+
+## v0.14.2 — UX iteration (2026-05-04)
+
+Branch `feature/v0.14.2-ux` off `feature/v0.14.1-bake-completion`.
+Twelve commits closing UX feedback while testing the v0.14.1 bake
+pipeline:
+
+| SHA prefix | Subject |
+|---|---|
+| `deeb7785` | perf(footprint): batch grid lines + live pan/zoom updates |
+| `a89c871f` | feat(footprint): mode-context-switch with Fusion-style + Altium-style active bars |
+| `a5cc11a3` | feat(panels): context-aware Footprint editor Properties panel |
+| `293c325a` | fix: enable Save / Save As for primitive editor tabs + drop stale dirty dot |
+| `830a8839` | fix(save): also save dirty .snxprj when Ctrl+S fires on a primitive tab |
+| `f870ef9c` | feat(footprint): live ghost previews + canvas-under-bar Stack + mode-in-bar |
+| `7787552e` | feat(panels): Auto-fit Courtyard toggle on Properties panel |
+| `443c0f91` | feat(footprint): remove Auto-fit Courtyard button from active bar |
+| `1c59aa71` | feat(footprint): separate floating mode switch (top-right, Sketch·Pads·3D) |
+| `394d56f2` | fix(sketch): live ghost preview + 1/2/3 mode shortcuts |
+| `d83cff56` | feat(panels): Footprint Library panel — Altium PCB Library parity |
+| `026ecd60` | feat(footprint): auto-mint sketch Points for literal pads on Sketch entry |
+
+Highlights:
+- Floating active bar over canvas with mode-specific items (Pads
+  vs Sketch); separate mode-switch chip at top-right.
+- Live ghost previews for Line / Circle / Arc tools.
+- 1 / 2 / 3 keyboard shortcuts for mode switching.
+- Footprint Library panel mirrors SCH Library — lists sibling
+  `.snxfpt` files in the containing `.snxlib`.
+- Auto-mint sketch Points for literal pads on first Sketch entry —
+  foundation for v0.15 bidirectional sync.
+
+---
+
+## v0.15 — Bidirectional sketch ↔ pads + schema gaps (2026-05-04)
+
+Branch `feature/v0.15` off `feature/v0.14.2-ux`. Two commits so far,
+work in flight:
+
+| SHA prefix | Subject |
+|---|---|
+| `8633d6c9` | feat(footprint): bidirectional Pads → Sketch live mirror |
+| `4c2de82a` | feat(library, bake): close v0.14.1 schema gaps — FpCutout edge_radius + through; FpVScore side + min_web |
+
+**Bidirectional Pads → Sketch live mirror (`8633d6c9`):**
+- New `EditorPad.sketch_entity_id: Option<SketchEntityId>` field
+  links each canvas pad to its backing sketch `Point` carrying
+  `PadAttr`.
+- `auto_mint_for_literal_pads` now writes the minted entity IDs
+  back into each EditorPad.
+- Three new mirror helpers: `mirror_add_pad_to_sketch`,
+  `mirror_move_pad_in_sketch`, `mirror_delete_pad_from_sketch`.
+  Wired into `FootprintAddPad` / `FootprintMovePad` /
+  `FootprintDeleteSelected` dispatchers (gated on "sketch is
+  active" so users who only ever work in Pads mode don't get a
+  silent sketch).
+
+**Schema gaps closure (`4c2de82a`):**
+- `FpCutout.edge_radius_mm: f64` + `through: bool` — sourced from
+  `BoardCutoutAttr.edge_radius_expr` / `through`.
+- `FpVScore.side: VScoreSide` (Both / Top / Bottom enum) +
+  `min_web_mm: f64` — sourced from `VScoreHintAttr.side` /
+  `min_web_expr`.
+- Bake modules drop the v0.14.1 "deferred" warnings; tests
+  rewritten to assert the baked field values.
+
+### v0.15 deferred to v0.15.1+ / v0.16+
+
+- **Stock library** — bundle ~5-10 reference parametric `.snxfpt`
+  fixtures (SOIC-8 / QFN-16 / QFP-32 / mounting hole / fiducial /
+  USB-C edge). Hand-authored TOML; highly parallelizable with one
+  agent per ~5 footprints.
+- **Multi-footprint per `.snxfpt`** — change file format from a
+  single `Footprint` to a `FootprintFile { footprints: Vec<...>,
+  active_idx: usize }` envelope (mirrors `.snxsym` pattern).
+  Required for the Footprint Library panel to read more than one
+  footprint per file.
+- **PCB outline editor** — Sketch-mode-like editor for the
+  top-level PCB board outline.
+- **Pour fill generation** + **DRC enforcement** for keepouts —
+  actual rendering / DRC consumers of the v0.14.1 bake fields.
+
 ### v0.14.1 deferred to v0.14.2+ / v0.15+
 
 - **Stock library (H)** — 5–10 reference parametric .snxfpt
