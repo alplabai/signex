@@ -272,6 +272,16 @@ impl Signex {
                     }
                     self.save_primitive_tab_at(&path);
                     crate::diagnostics::log_info(format!("[save] Wrote {}", path.display()));
+                    // v0.14.2: also save the active project's
+                    // `.snxprj` if it's dirty + refresh panel ctx so
+                    // the project-root red dot drops. Adding a
+                    // `.snxsym` / `.snxfpt` to `Project::libraries`
+                    // marks the `.snxprj` dirty separately from the
+                    // primitive itself; without these calls the
+                    // project-root row stays red after a primitive
+                    // save even though the primitive's row is clean.
+                    self.save_active_project_if_dirty();
+                    self.refresh_panel_ctx();
                     return Ok(iced::Task::none());
                 }
                 _ => {}
