@@ -339,7 +339,10 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                     x_mm: click_world.0,
                                     y_mm: click_world.1,
                                 },
-                                SketchTool::Line | SketchTool::Circle | SketchTool::Arc => {
+                                SketchTool::Line
+                                | SketchTool::Rectangle
+                                | SketchTool::Circle
+                                | SketchTool::Arc => {
                                     EditorMsg::FootprintSketchToolClick {
                                         x_mm: click_world.0,
                                         y_mm: click_world.1,
@@ -1273,10 +1276,15 @@ fn draw_sketch_tool_preview(
 
     let cursor_screen = cstate.world_to_screen(cursor);
 
-    // Crosshair pip at the cursor so the user sees where a click
-    // would commit (in addition to the OS cursor).
-    let pip = Path::circle(cursor_screen, 3.0);
-    frame.stroke(&pip, Stroke::default().with_width(1.0).with_color(ghost));
+    // v0.15 — only show the cursor pip when a multi-click tool is
+    // mid-gesture (Line / Circle / Arc with first endpoint placed).
+    // For Select / idle tools the OS cursor is enough; an
+    // always-visible ring read as a stale entity in v0.14.2.
+    let pip_visible = !matches!(state.tool_pending, ToolPending::Idle);
+    if pip_visible {
+        let pip = Path::circle(cursor_screen, 3.0);
+        frame.stroke(&pip, Stroke::default().with_width(1.0).with_color(ghost));
+    }
 
     match state.tool_pending {
         ToolPending::Idle => {}
@@ -1286,6 +1294,21 @@ fn draw_sketch_tool_preview(
             };
             let p0 = cstate.world_to_screen(first_world);
             dashed(frame, p0, cursor_screen);
+        }
+        ToolPending::RectangleFirst { first } => {
+            // v0.15 — preview the axis-aligned rectangle from the
+            // first corner to the cursor.
+            let Some(first_world) = resolve_point(first) else {
+                return;
+            };
+            let p0 = cstate.world_to_screen(first_world);
+            let p2 = cursor_screen;
+            let p1 = Point::new(p2.x, p0.y);
+            let p3 = Point::new(p0.x, p2.y);
+            dashed(frame, p0, p1);
+            dashed(frame, p1, p2);
+            dashed(frame, p2, p3);
+            dashed(frame, p3, p0);
         }
         ToolPending::CircleCenter { center } => {
             let Some(c_world) = resolve_point(center) else {

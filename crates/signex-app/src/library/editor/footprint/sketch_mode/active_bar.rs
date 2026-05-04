@@ -136,6 +136,11 @@ pub fn items<'a>(
             ActiveBarIcon::Svg(icons::icon_shape_line(theme_id)),
         ),
         mk_tool(
+            "Place Rectangle (corner + opposite corner)",
+            SketchTool::Rectangle,
+            ActiveBarIcon::Svg(icons::icon_shape_rect(theme_id)),
+        ),
+        mk_tool(
             "Place Circle (centre + radius)",
             SketchTool::Circle,
             ActiveBarIcon::Svg(icons::icon_shape_circle(theme_id)),

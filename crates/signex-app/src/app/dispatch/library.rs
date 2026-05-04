@@ -4139,6 +4139,16 @@ pub(crate) fn apply_footprint_primitive_edit(
                     &mut editor.primitive,
                 );
             }
+            // v0.15 — reset tool state on every mode change so a
+            // stale Place Pad / Place Point selection from a prior
+            // session in this tab doesn't carry over and cause
+            // accidental entity placement on the first click.
+            editor.state.pads_tool =
+                crate::library::editor::footprint::state::PadsTool::Select;
+            editor.state.active_tool =
+                crate::library::editor::footprint::state::SketchTool::Select;
+            editor.state.tool_pending =
+                crate::library::editor::footprint::state::ToolPending::Idle;
             editor.state.mode = mode;
             // Run the dispatcher so the sketch is initialised + solved
             // on first switch into Sketch mode (or no-op otherwise).
@@ -4544,6 +4554,91 @@ pub(crate) fn apply_footprint_primitive_edit(
                     _ => {
                         editor.state.tool_pending = ToolPending::CircleCenter {
                             center: resolved_id,
+                        };
+                    }
+                },
+                SketchTool::Rectangle => match editor.state.tool_pending {
+                    ToolPending::Idle => {
+                        editor.state.tool_pending = ToolPending::RectangleFirst {
+                            first: resolved_id,
+                        };
+                    }
+                    ToolPending::RectangleFirst { first } => {
+                        // v0.15 — commit the rectangle. Resolve the
+                        // first corner's world position from the
+                        // sketch, then mint 2 new Points (the two
+                        // mid-axis corners) and 4 Lines connecting
+                        // (first, midA, opposite, midB) into a
+                        // closed loop. resolved_id is the opposite
+                        // corner the user just clicked.
+                        let first_pos = editor
+                            .primitive
+                            .sketch
+                            .as_ref()
+                            .and_then(|s| s.entities.iter().find(|e| e.id == first))
+                            .and_then(|e| match e.kind {
+                                EntityKind::Point { x, y } => Some((x, y)),
+                                _ => None,
+                            });
+                        let opposite_pos = editor
+                            .primitive
+                            .sketch
+                            .as_ref()
+                            .and_then(|s| s.entities.iter().find(|e| e.id == resolved_id))
+                            .and_then(|e| match e.kind {
+                                EntityKind::Point { x, y } => Some((x, y)),
+                                _ => None,
+                            });
+                        if let (Some((x0, y0)), Some((x1, y1))) = (first_pos, opposite_pos) {
+                            // Mint the two mid-axis corners.
+                            let mid_a_id = SketchEntityId::new();
+                            let mid_b_id = SketchEntityId::new();
+                            let mid_a = Entity::new(
+                                mid_a_id,
+                                plane_id,
+                                EntityKind::Point { x: x1, y: y0 },
+                            );
+                            let mid_b = Entity::new(
+                                mid_b_id,
+                                plane_id,
+                                EntityKind::Point { x: x0, y: y1 },
+                            );
+                            apply_sketch_edit_with_warnings(
+                                &mut editor.state,
+                                &mut editor.primitive,
+                                SketchEdit::AddEntity(mid_a),
+                            );
+                            apply_sketch_edit_with_warnings(
+                                &mut editor.state,
+                                &mut editor.primitive,
+                                SketchEdit::AddEntity(mid_b),
+                            );
+                            // Now the 4 lines: first → mid_a →
+                            // opposite → mid_b → first.
+                            for (s, e) in [
+                                (first, mid_a_id),
+                                (mid_a_id, resolved_id),
+                                (resolved_id, mid_b_id),
+                                (mid_b_id, first),
+                            ] {
+                                let line_id = SketchEntityId::new();
+                                let line = Entity::new(
+                                    line_id,
+                                    plane_id,
+                                    EntityKind::Line { start: s, end: e },
+                                );
+                                apply_sketch_edit_with_warnings(
+                                    &mut editor.state,
+                                    &mut editor.primitive,
+                                    SketchEdit::AddEntity(line),
+                                );
+                            }
+                        }
+                        editor.state.tool_pending = ToolPending::Idle;
+                    }
+                    _ => {
+                        editor.state.tool_pending = ToolPending::RectangleFirst {
+                            first: resolved_id,
                         };
                     }
                 },

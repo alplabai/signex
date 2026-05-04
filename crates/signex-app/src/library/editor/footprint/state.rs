@@ -211,13 +211,15 @@ pub enum PadsTool {
 }
 
 /// Sketch-mode drawing tool. Phase 6.3 (v0.13.1) shipped Place Point
-/// only; v0.13.2 adds Line, Circle, Arc.
+/// only; v0.13.2 adds Line, Circle, Arc; v0.15 adds Rectangle (two-
+/// click corner-to-corner; emits 4 Lines + corner Points).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SketchTool {
     #[default]
     Select,
     Point,
     Line,
+    Rectangle,
     Circle,
     Arc,
 }
@@ -233,6 +235,12 @@ pub enum ToolPending {
     Idle,
     /// Line tool, first click landed (anchor point exists in sketch).
     LineFirst {
+        first: signex_sketch::id::SketchEntityId,
+    },
+    /// Rectangle tool, first corner click landed (anchor point in sketch).
+    /// v0.15. Click 2 commits the opposite corner; the dispatcher
+    /// adds 4 Lines + 2 new corner Points (opposite + 2 mid-axis).
+    RectangleFirst {
         first: signex_sketch::id::SketchEntityId,
     },
     /// Circle tool, centre click landed.
