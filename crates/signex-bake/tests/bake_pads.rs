@@ -411,6 +411,72 @@ fn bake_construction_entities_skipped() {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Test 9b — construction entities with closed-profile attrs do NOT
+// emit "v0.14 deferred" warnings. Construction entities are scaffold
+// and never produce baked geometry, so warning about their bake-attrs
+// would be misleading noise.
+// ─────────────────────────────────────────────────────────────────────
+
+#[test]
+fn bake_construction_entity_with_silk_attr_emits_no_warning() {
+    use signex_sketch::attr::SilkAttr;
+    use signex_types::layer::SignexLayer;
+
+    let mut s = Sketch::new();
+    let p = s.add_point(0.0, 0.0);
+    // Tag with a SilkAttr (would normally trigger a "v0.14 feature"
+    // warning) AND mark as construction. The construction flag should
+    // win — no warning should appear.
+    {
+        let e = s.data.entities.iter_mut().find(|e| e.id == p).unwrap();
+        e.silk = Some(SilkAttr {
+            layer: SignexLayer::TopSilk,
+        });
+    }
+    s.set_construction(p, true);
+
+    let solve = solve(&s.data);
+    let mut out = Vec::new();
+    let mut warnings = Vec::new();
+    bake_pads(&s.data, &solve, &HashMap::new(), &mut out, &mut warnings).expect("bake ok");
+
+    assert!(out.is_empty(), "construction entity must not bake to a pad");
+    assert!(
+        warnings.is_empty(),
+        "construction entity must not emit v0.14-deferred warnings; got {warnings:?}"
+    );
+}
+
+#[test]
+fn bake_non_construction_entity_with_silk_attr_still_warns() {
+    // Sanity: with construction = false (default), the warning still
+    // fires — we didn't accidentally suppress all warnings.
+    use signex_sketch::attr::SilkAttr;
+    use signex_types::layer::SignexLayer;
+
+    let mut s = Sketch::new();
+    let p = s.add_point(0.0, 0.0);
+    s.attach_pad(p, smd_rect_pad("1", "1.0mm", "1.0mm"));
+    {
+        let e = s.data.entities.iter_mut().find(|e| e.id == p).unwrap();
+        e.silk = Some(SilkAttr {
+            layer: SignexLayer::TopSilk,
+        });
+    }
+
+    let solve = solve(&s.data);
+    let mut out = Vec::new();
+    let mut warnings = Vec::new();
+    bake_pads(&s.data, &solve, &HashMap::new(), &mut out, &mut warnings).expect("bake ok");
+
+    assert_eq!(out.len(), 1, "non-construction pad still bakes");
+    assert!(
+        warnings.iter().any(|w| w.contains("SilkAttr")),
+        "non-construction silk-attr must still emit v0.14 warning; got {warnings:?}"
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Test 10 — LinearArray with count=3, dx=1mm, dy=0 → 3 pads on x axis.
 // ─────────────────────────────────────────────────────────────────────
 

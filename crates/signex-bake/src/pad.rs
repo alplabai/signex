@@ -84,8 +84,14 @@ pub fn bake_pads(
     }
 
     // Emit one warning per closed-profile attr the entity carries —
-    // these all bake in v0.14+.
+    // these all bake in v0.14+. Construction entities are silently
+    // skipped (matching the first loop above): they exist as solver
+    // scaffolding only and never produce baked geometry, so warning
+    // about their bake-attrs would be misleading noise.
     for entity in &sketch.entities {
+        if entity.construction {
+            continue;
+        }
         if entity.silk.is_some() {
             warnings.push(format!(
                 "entity {}: SilkAttr ignored (v0.14 feature)",
