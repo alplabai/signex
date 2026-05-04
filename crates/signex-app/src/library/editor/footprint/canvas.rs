@@ -177,7 +177,24 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 cstate.offset.y = cursor_pos.y - (cursor_pos.y - cstate.offset.y) * actual_factor;
                 cstate.scale = new_scale;
                 self.cache.clear();
-                return Some(canvas::Action::capture());
+                // v0.14.2: same as the panning fix — publish a
+                // lightweight cursor-position message + capture so
+                // iced renders the new zoom immediately. `capture()`
+                // alone froze the canvas at the pre-zoom scale until
+                // some unrelated frame fired.
+                let world = cstate.screen_to_world(cursor_pos);
+                return Some(
+                    canvas::Action::publish(LibraryMessage::EditorEvent {
+                        library_path: self.address.library_path.clone(),
+                        table: self.address.table.clone(),
+                        row_id: self.address.row_id,
+                        msg: EditorMsg::FootprintCursorAt {
+                            x_mm: world.0,
+                            y_mm: world.1,
+                        },
+                    })
+                    .and_capture(),
+                );
             }
             Event::Mouse(mouse::Event::ButtonPressed(button)) => {
                 if matches!(button, mouse::Button::Right | mouse::Button::Middle) {
@@ -314,7 +331,27 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     cstate.offset.y += cursor_pos.y - last.y;
                     cstate.last_pan_pos = Some(cursor_pos);
                     self.cache.clear();
-                    return Some(canvas::Action::capture());
+                    // v0.14.2: publish the cursor world position
+                    // alongside .and_capture(). `capture()` alone is
+                    // not enough to make iced schedule a redraw, so
+                    // panning was visually frozen until the next
+                    // unrelated frame fired. Mirroring the schematic
+                    // canvas's pattern: publish a lightweight
+                    // FootprintCursorAt + capture, and iced renders
+                    // the new offset immediately.
+                    let world = cstate.screen_to_world(cursor_pos);
+                    return Some(
+                        canvas::Action::publish(LibraryMessage::EditorEvent {
+                            library_path: self.address.library_path.clone(),
+                            table: self.address.table.clone(),
+                            row_id: self.address.row_id,
+                            msg: EditorMsg::FootprintCursorAt {
+                                x_mm: world.0,
+                                y_mm: world.1,
+                            },
+                        })
+                        .and_capture(),
+                    );
                 }
                 let world = cstate.screen_to_world(cursor_pos);
                 if let Some(drag) = cstate.drag.as_mut() {
@@ -1057,22 +1094,26 @@ fn draw_sketch_overlay(
 
 fn draw_grid(frame: &mut canvas::Frame, bounds: Rectangle, offset: Point, step: f32, color: Color) {
     let stroke = Stroke::default().with_width(0.5).with_color(color);
-    let mut x = offset.x.rem_euclid(step) - step;
-    while x <= bounds.width + step {
-        frame.stroke(
-            &Path::line(Point::new(x, 0.0), Point::new(x, bounds.height)),
-            stroke,
-        );
-        x += step;
-    }
-    let mut y = offset.y.rem_euclid(step) - step;
-    while y <= bounds.height + step {
-        frame.stroke(
-            &Path::line(Point::new(0.0, y), Point::new(bounds.width, y)),
-            stroke,
-        );
-        y += step;
-    }
+    // Compose every grid line into a single Path with interleaved
+    // move_to / line_to and stroke once. Was a per-line `frame.stroke`
+    // loop (~60 minor + 60 major calls per frame) which forced iced to
+    // tessellate each path independently — the dominant cost when
+    // panning an empty footprint canvas.
+    let path = Path::new(|builder| {
+        let mut x = offset.x.rem_euclid(step) - step;
+        while x <= bounds.width + step {
+            builder.move_to(Point::new(x, 0.0));
+            builder.line_to(Point::new(x, bounds.height));
+            x += step;
+        }
+        let mut y = offset.y.rem_euclid(step) - step;
+        while y <= bounds.height + step {
+            builder.move_to(Point::new(0.0, y));
+            builder.line_to(Point::new(bounds.width, y));
+            y += step;
+        }
+    });
+    frame.stroke(&path, stroke);
 }
 
 fn draw_pad(
