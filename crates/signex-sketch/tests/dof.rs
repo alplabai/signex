@@ -17,7 +17,11 @@ use signex_sketch::error::SolveError;
 use signex_sketch::id::ConstraintId;
 use signex_sketch::solver::dof::{entity_colours, over_constraint_ids, DofColor};
 use signex_sketch::solver::jacobian::numerical_jacobian;
-use signex_sketch::solver::lm::{solve_lm, SolveResult, MAX_ITERS};
+use signex_sketch::solver::lm::{solve_lm, SolveResult};
+
+/// Default Solver tolerance + iteration cap, used by these tests.
+const TOL: f64 = 1e-12;
+const MAX_ITERS: usize = 100;
 use signex_sketch::solver::residual::{total_residual, ResolvedParams};
 use signex_sketch::solver::state::pack;
 use signex_sketch::solver::math::norm_vec;
@@ -35,7 +39,7 @@ fn dof_under_constrained_marks_blue() {
     let mut s = Sketch::new();
     let p = s.add_point(1.0, 2.0);
 
-    let result = solve_lm(&s.data, &empty_params(), 5_000)
+    let result = solve_lm(&s.data, &empty_params(), 5_000, TOL, MAX_ITERS)
         .expect("LM accepts a constraint-free sketch");
 
     // Build a fresh Jacobian at the converged state. With no
@@ -81,7 +85,7 @@ fn dof_fully_constrained_marks_black() {
         kind: ConstraintKind::Horizontal { line },
     });
 
-    let result = solve_lm(&s.data, &empty_params(), 5_000)
+    let result = solve_lm(&s.data, &empty_params(), 5_000, TOL, MAX_ITERS)
         .expect("anchored line solves cleanly");
 
     let packed = pack(&s.data);
@@ -150,7 +154,7 @@ fn dof_over_constrained_marks_red() {
     // initial state, which already shows the conflict (d ≈ 1 mm,
     // residuals ≈ −4 and −9, both ≫ RANK_TOL).
     let packed = pack(&s.data);
-    let result: SolveResult = match solve_lm(&s.data, &empty_params(), 5_000) {
+    let result: SolveResult = match solve_lm(&s.data, &empty_params(), 5_000, TOL, MAX_ITERS) {
         Ok(r) => r,
         Err(SolveError::DidNotConverge { .. }) => {
             // Build a SolveResult from the initial state. The DOF

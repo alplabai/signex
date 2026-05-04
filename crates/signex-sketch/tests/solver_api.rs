@@ -8,6 +8,7 @@ mod common;
 use common::Sketch;
 
 use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
+use signex_sketch::error::SolveError;
 use signex_sketch::id::ConstraintId;
 use signex_sketch::solver::dof::DofColor;
 use signex_sketch::solver::residual::ResolvedParams;
@@ -167,6 +168,87 @@ fn solver_custom_timeout_and_iter_cap() {
     };
     let out = solver.solve(&s.data, &empty_params()).unwrap();
     assert!(out.result.iterations <= 50);
+}
+
+/// Drives `max_iters = 1` and verifies the solver caps at exactly that
+/// many iterations — guards against the regression where the field was
+/// silently ignored in favour of a module-level `MAX_ITERS` constant.
+#[test]
+fn solver_max_iters_field_is_honoured() {
+    let mut s = Sketch::new();
+    let p1 = s.add_point(0.0, 0.0);
+    let p2 = s.add_point(1.0, 0.0); // far from the 5 mm target
+    s.data.constraints.push(Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::Fixed { point: p1 },
+    });
+    s.data.constraints.push(Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::DistancePtPt {
+            p1,
+            p2,
+            target: DimTarget::Literal(5.0),
+        },
+    });
+
+    // 1 iteration is far too few for the 1→5 mm jump to satisfy
+    // `|r| < 1e-12`. We expect DidNotConverge with iters == 1.
+    let solver = Solver {
+        timeout_ms: 1_000,
+        max_iters: 1,
+        tolerance: 1e-12,
+    };
+    match solver.solve(&s.data, &empty_params()) {
+        Ok(out) => panic!(
+            "max_iters=1 should not converge on the 4-mm gap; got {} iters, |r|={}",
+            out.result.iterations, out.result.final_residual_norm
+        ),
+        Err(SolveError::DidNotConverge { iters }) => assert_eq!(iters, 1),
+        Err(other) => panic!("unexpected error: {other:?}"),
+    }
+}
+
+/// Drives `tolerance = 10.0` (an absurdly loose bound). The solver
+/// should declare convergence on the first iteration because `|r|² < 100`
+/// is trivially true for the canonical anchored-distance case.
+#[test]
+fn solver_tolerance_field_is_honoured() {
+    let mut s = Sketch::new();
+    let p1 = s.add_point(0.0, 0.0);
+    let p2 = s.add_point(1.0, 0.0);
+    s.data.constraints.push(Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::Fixed { point: p1 },
+    });
+    s.data.constraints.push(Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::DistancePtPt {
+            p1,
+            p2,
+            target: DimTarget::Literal(5.0),
+        },
+    });
+
+    // tolerance = 10 ⇒ tol² = 100 ⇒ initial residual (4 mm gap, residual
+    // norm² = 16) already inside tolerance ⇒ converge in 0 iterations.
+    let solver_loose = Solver {
+        timeout_ms: 1_000,
+        max_iters: 100,
+        tolerance: 10.0,
+    };
+    let out_loose = solver_loose.solve(&s.data, &empty_params()).unwrap();
+    assert_eq!(
+        out_loose.result.iterations, 0,
+        "loose tolerance should converge immediately"
+    );
+
+    // For comparison, the default-tolerance solve takes more than 0
+    // iterations on the same problem.
+    let out_tight = Solver::default().solve(&s.data, &empty_params()).unwrap();
+    assert!(
+        out_tight.result.iterations > 0,
+        "default tolerance should take at least one iteration"
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────

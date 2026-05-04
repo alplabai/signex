@@ -41,8 +41,11 @@ const COORD_TOL: f64 = 1e-6;
 /// because at the solution every residual should be sub-microscopic.
 const RESIDUAL_TOL: f64 = 1e-6;
 
-/// LM iteration cap — matches `signex_sketch::solver::lm::MAX_ITERS`.
+/// LM iteration cap used by these tests — matches the
+/// `Solver::default().max_iters` of 100.
 const ITER_CAP: usize = 100;
+/// Default convergence tolerance — matches `Solver::default().tolerance`.
+const TOL: f64 = 1e-12;
 
 #[test]
 fn rectangle_10_by_5() {
@@ -105,7 +108,8 @@ fn rectangle_10_by_5() {
     });
 
     let result =
-        solve_lm(&s.data, &ResolvedParams::new(), 5_000).expect("rectangle should converge");
+        solve_lm(&s.data, &ResolvedParams::new(), 5_000, TOL, ITER_CAP)
+            .expect("rectangle should converge");
 
     let (x1, y1) = point_xy(p1, &result.state, &result.index, &s.data).unwrap();
     let (x2, y2) = point_xy(p2, &result.state, &result.index, &s.data).unwrap();
@@ -224,7 +228,7 @@ fn parallelogram_base10_side5_60deg() {
         },
     });
 
-    let result = solve_lm(&s.data, &ResolvedParams::new(), 5_000)
+    let result = solve_lm(&s.data, &ResolvedParams::new(), 5_000, TOL, ITER_CAP)
         .expect("parallelogram should converge");
 
     let (x2, y2) = point_xy(p2, &result.state, &result.index, &s.data).unwrap();
@@ -334,7 +338,8 @@ fn isosceles_triangle_apex_60() {
     });
 
     let result =
-        solve_lm(&s.data, &ResolvedParams::new(), 5_000).expect("triangle should converge");
+        solve_lm(&s.data, &ResolvedParams::new(), 5_000, TOL, ITER_CAP)
+            .expect("triangle should converge");
 
     let (x2, y2) = point_xy(p2, &result.state, &result.index, &s.data).unwrap();
     let (x3, y3) = point_xy(p3, &result.state, &result.index, &s.data).unwrap();
@@ -455,7 +460,8 @@ fn regular_hexagon_circumradius_10() {
     });
 
     let result =
-        solve_lm(&s.data, &ResolvedParams::new(), 5_000).expect("hexagon should converge");
+        solve_lm(&s.data, &ResolvedParams::new(), 5_000, TOL, ITER_CAP)
+            .expect("hexagon should converge");
 
     for (i, &v) in vertices.iter().enumerate() {
         let (x, y) = point_xy(v, &result.state, &result.index, &s.data).unwrap();

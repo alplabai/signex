@@ -49,8 +49,8 @@ pub enum DofColor {
 /// Numerical-zero threshold for rank computation. Tuned so a singular
 /// value of `1e-9` in residual units is still considered "active".
 /// Matches the per-residual tolerance the LM iteration drives toward
-/// (`TOL_SQ = 1e-24` ⇒ per-row √TOL_SQ = 1e-12 in well-conditioned
-/// cases; `1e-9` provides a comfortable margin).
+/// (default `Solver::tolerance = 1e-12` ⇒ `tolerance² = 1e-24`; the
+/// `1e-9` rank threshold provides a comfortable margin above that).
 pub const RANK_TOL: f64 = 1e-9;
 
 /// Per-entity DoF colour. Returns one entry per Point entity that
@@ -139,10 +139,11 @@ pub fn entity_colours(
 }
 
 /// Constraints whose residual norm at the solved state exceeds
-/// `RANK_TOL`. By construction LM drives `|r|² < TOL_SQ = 1e-24`, so
-/// any per-constraint residual still above `RANK_TOL` after a
-/// successful solve indicates LM couldn't satisfy that constraint —
-/// it's redundant or conflicting and should be flagged red.
+/// `RANK_TOL`. By construction LM drives `|r|² < tolerance²`
+/// (default `1e-12² = 1e-24`), so any per-constraint residual still
+/// above `RANK_TOL` after a successful solve indicates LM couldn't
+/// satisfy that constraint — it's redundant or conflicting and should
+/// be flagged red.
 ///
 /// The Jacobian is accepted as a parameter for future per-row null-
 /// space analysis (full rank-deficiency detection); the conservative

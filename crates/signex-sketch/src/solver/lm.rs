@@ -28,7 +28,7 @@
 //! to recover entity coordinates.
 //!
 //! On failure [`SolveError`] is returned with one of:
-//! - `DidNotConverge` — `MAX_ITERS` exceeded without `|r|² < ε`.
+//! - `DidNotConverge` — `max_iters` exceeded without `|r| < tolerance`.
 //! - `Timeout` — wall-clock budget exceeded.
 //! - `OverConstrained` — singular normal-equation matrix at any λ
 //!   (LM theory says this should be impossible for finite λ, but
@@ -47,12 +47,10 @@ use crate::solver::residual::{total_residual, ResolvedParams};
 use crate::solver::state::{pack, EntityIndex};
 use crate::solver::jacobian::numerical_jacobian;
 
-/// Convergence tolerance — `|r|² < TOL_SQ` declares success.
-pub const TOL_SQ: f64 = 1e-24;
-/// Hard iteration cap — `MAX_ITERS` exceeded surfaces `DidNotConverge`.
-pub const MAX_ITERS: usize = 100;
 /// Initial Marquardt damping. Small enough that the first step is
-/// roughly Gauss–Newton on a well-conditioned problem.
+/// roughly Gauss–Newton on a well-conditioned problem. Not configurable
+/// via [`crate::solver::Solver`]; callers that need a different damping
+/// schedule must invoke `solve_lm` directly with custom parameters.
 pub const LAMBDA_INIT: f64 = 1e-3;
 
 /// Output of a single solve. The state vector layout matches
@@ -67,12 +65,21 @@ pub struct SolveResult {
     pub elapsed_ms: u64,
 }
 
-/// Levenberg–Marquardt solve. Times out after `timeout_ms`
-/// wall-clock milliseconds.
+/// Levenberg–Marquardt solve.
+///
+/// `timeout_ms` is the wall-clock budget. `tolerance` is the linear
+/// residual-norm threshold — `|r|² < tolerance²` declares convergence.
+/// `max_iters` caps the iteration count before [`SolveError::DidNotConverge`]
+/// is returned. The defaults baked into [`crate::solver::Solver`]
+/// (`tolerance = 1e-12`, `max_iters = 100`) are appropriate for the
+/// v0.13 sketch use case; callers can tighten them for unit tests or
+/// for high-precision regression cases.
 pub fn solve_lm(
     sketch: &SketchData,
     params: &ResolvedParams,
     timeout_ms: u64,
+    tolerance: f64,
+    max_iters: usize,
 ) -> Result<SolveResult, SolveError> {
     let started = Instant::now();
     let packed = pack(sketch);
@@ -89,6 +96,10 @@ pub fn solve_lm(
         });
     }
 
+    // Internally the LM step compares the squared residual norm
+    // (saves a `sqrt` per iteration). `tolerance²` is the cutoff so
+    // the public-API contract is a linear-norm threshold.
+    let tol_sq = tolerance * tolerance;
     let mut lambda = LAMBDA_INIT;
     let mut iterations = 0usize;
 
@@ -96,8 +107,8 @@ pub fn solve_lm(
         .map_err(|_| SolveError::OverConstrained(ConstraintId(uuid::Uuid::nil())))?;
     let mut residual_norm_sq = norm_sq(&r);
 
-    while iterations < MAX_ITERS {
-        if residual_norm_sq < TOL_SQ {
+    while iterations < max_iters {
+        if residual_norm_sq < tol_sq {
             break;
         }
 
@@ -169,7 +180,7 @@ pub fn solve_lm(
         iterations += 1;
     }
 
-    if residual_norm_sq >= TOL_SQ && iterations >= MAX_ITERS {
+    if residual_norm_sq >= tol_sq && iterations >= max_iters {
         return Err(SolveError::DidNotConverge { iters: iterations });
     }
 

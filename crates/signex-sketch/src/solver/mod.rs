@@ -67,7 +67,13 @@ impl Solver {
         sketch: &SketchData,
         params: &ResolvedParams,
     ) -> Result<FullSolveOutput, SolveError> {
-        let result = solve_lm(sketch, params, self.timeout_ms)?;
+        let result = solve_lm(
+            sketch,
+            params,
+            self.timeout_ms,
+            self.tolerance,
+            self.max_iters,
+        )?;
 
         // Compute the Jacobian once at the solved state and reuse
         // for DOF colour + over-constraint detection. A constraint-
