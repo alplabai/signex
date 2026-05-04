@@ -749,6 +749,10 @@ pub enum EditorMsg {
     /// Circle / Arc). Right-click on the canvas publishes this
     /// with `Select` to cancel the active tool / pending gesture.
     FootprintSketchSetTool(crate::library::editor::footprint::state::SketchTool),
+    /// v0.16.1 — toggle construction-mode. Sticky pill on the
+    /// sketch active bar; when on, every newly-minted entity gets
+    /// `construction = true`.
+    FootprintSketchToggleConstruction,
     /// Fire-and-forget save of the active footprint primitive. Boxed
     /// so the containing enum stays cheap to clone and propagate.
     SaveFootprint(uuid::Uuid, Box<signex_library::Footprint>),
@@ -1146,6 +1150,8 @@ pub enum PrimitiveEditorMsg {
     /// Clears any in-flight multi-click gesture (`tool_pending`) so
     /// switching tools mid-gesture doesn't leave dangling anchors.
     FootprintSketchSetTool(crate::library::editor::footprint::state::SketchTool),
+    /// v0.16.1 — toggle construction-mode (sticky).
+    FootprintSketchToggleConstruction,
     /// v0.15 — Pads-mode tool switch (Select / PlacePad). Right-
     /// click cancels back to Select via the same dispatch.
     FootprintSetPadsTool(crate::library::editor::footprint::state::PadsTool),

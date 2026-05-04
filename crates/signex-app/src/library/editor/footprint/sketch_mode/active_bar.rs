@@ -111,6 +111,28 @@ pub fn items<'a>(
         ..ActiveBarButton::default()
     });
 
+    // v0.16.1 — Construction-mode toggle. Sticky pill: while on, every
+    // newly-minted entity gets `construction = true` (rendered dashed-
+    // grey, skipped by bake). Useful for guides + symmetry without
+    // affecting the baked silk / pad / courtyard output.
+    let construction_on = editor.state.construction_mode;
+    let construction_path = path.clone();
+    let construction_button = ActiveBarItem::Button(ActiveBarButton {
+        icon: ActiveBarIcon::Glyph("\u{2504}"), // ┄ dashed line glyph
+        tooltip: if construction_on {
+            "Construction mode: ON (new geometry won't bake)".into()
+        } else {
+            "Construction mode: OFF".into()
+        },
+        enabled: true,
+        selected: construction_on,
+        on_press: Some(LibraryMessage::PrimitiveEditorEvent {
+            path: construction_path,
+            msg: PrimitiveEditorMsg::FootprintSketchToggleConstruction,
+        }),
+        ..ActiveBarButton::default()
+    });
+
     // Section 4 — Dimension input as a Custom slot. Sized to fit
     // ~6 digits + "mm" hint inside the bar's vertical rhythm.
     let dim_input = build_dimension_input(editor, tokens);
@@ -213,7 +235,8 @@ pub fn items<'a>(
         // Section 4: Dimension input
         ActiveBarItem::Custom(dim_input),
         ActiveBarItem::Separator,
-        // Section 5: Solve toggle
+        // Section 5: Construction toggle + Solve toggle
+        construction_button,
         solve_button,
     ]
 }

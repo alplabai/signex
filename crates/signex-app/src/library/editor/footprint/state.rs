@@ -203,6 +203,14 @@ pub struct FootprintEditorState {
     /// returns to Select. Mirrors the sketch-mode `active_tool`
     /// state machine.
     pub pads_tool: PadsTool,
+    /// v0.16.1 — sticky construction-mode toggle on the sketch
+    /// active bar. When `true`, every newly-minted Line / Arc /
+    /// Circle / Rectangle / RoundedRectangle / Point gets
+    /// `entity.construction = true`, which the bake skips and the
+    /// canvas renders as dashed grey. Construction geometry is
+    /// useful for guides + symmetry without affecting the baked
+    /// pad / silk / courtyard output.
+    pub construction_mode: bool,
 }
 
 /// Pads-mode drawing tool — v0.15. The Pads-mode active bar's
@@ -306,6 +314,7 @@ impl FootprintEditorState {
             selected_sketch_secondary: None,
             dimension_input: String::new(),
             pads_tool: PadsTool::default(),
+            construction_mode: false,
         };
         s.recompute_courtyard();
         s
@@ -333,6 +342,7 @@ impl FootprintEditorState {
             selected_sketch_secondary: None,
             dimension_input: String::new(),
             pads_tool: PadsTool::default(),
+            construction_mode: false,
         };
         s.recompute_courtyard();
         s

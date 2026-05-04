@@ -3924,6 +3924,7 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintSketchEditParameter { .. }
         | PrimitiveEditorMsg::FootprintSketchToggleAutoPause
         | PrimitiveEditorMsg::FootprintSketchSetTool(_)
+        | PrimitiveEditorMsg::FootprintSketchToggleConstruction
         | PrimitiveEditorMsg::FootprintSketchToolClick { .. }
         | PrimitiveEditorMsg::FootprintSketchToolEscape
         | PrimitiveEditorMsg::FootprintSketchSelect { .. }
@@ -4186,7 +4187,7 @@ pub(crate) fn apply_footprint_primitive_edit(
                 }
             };
             let id = SketchEntityId::new();
-            let entity = Entity::new(
+            let mut entity = Entity::new(
                 id,
                 plane_id,
                 EntityKind::Point {
@@ -4194,6 +4195,7 @@ pub(crate) fn apply_footprint_primitive_edit(
                     y: y_mm,
                 },
             );
+            entity.construction = editor.state.construction_mode;
             apply_sketch_edit_with_warnings(
                 &mut editor.state,
                 &mut editor.primitive,
@@ -4232,6 +4234,10 @@ pub(crate) fn apply_footprint_primitive_edit(
             editor.state.active_tool = tool;
             editor.state.tool_pending =
                 crate::library::editor::footprint::state::ToolPending::Idle;
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintSketchToggleConstruction => {
+            editor.state.construction_mode = !editor.state.construction_mode;
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintSetPadsTool(tool) => {
@@ -4464,6 +4470,18 @@ pub(crate) fn apply_footprint_primitive_edit(
             use signex_sketch::id::SketchEntityId;
             use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
 
+            // v0.16.1 — sticky construction flag captured once so each
+            // newly-minted entity can be flagged in one place. Pads
+            // (PadAttr-carrying centre Points minted via auto_mint /
+            // mirror_add) intentionally bypass this; the bake skips
+            // construction entities and a construction pad would
+            // disappear from the rendered output.
+            let construction_mode = editor.state.construction_mode;
+            let mut flag = |mut e: Entity| -> Entity {
+                e.construction = construction_mode;
+                e
+            };
+
             // Resolve the click into either an existing snap Point or a
             // freshly-minted Point. For a snap, the dispatcher reuses the
             // existing entity ID. Otherwise it appends a Point at the
@@ -4489,11 +4507,11 @@ pub(crate) fn apply_footprint_primitive_edit(
                 Some(id) => id,
                 None => {
                     let id = SketchEntityId::new();
-                    let entity = Entity::new(
+                    let entity = flag(Entity::new(
                         id,
                         plane_id,
                         EntityKind::Point { x: x_mm, y: y_mm },
-                    );
+                    ));
                     apply_sketch_edit_with_warnings(
                         &mut editor.state,
                         &mut editor.primitive,
@@ -4518,20 +4536,26 @@ pub(crate) fn apply_footprint_primitive_edit(
                     }
                     ToolPending::LineFirst { first } => {
                         let line_id = SketchEntityId::new();
-                        let line = Entity::new(
+                        let line = flag(Entity::new(
                             line_id,
                             plane_id,
                             EntityKind::Line {
                                 start: first,
                                 end: resolved_id,
                             },
-                        );
+                        ));
                         apply_sketch_edit_with_warnings(
                             &mut editor.state,
                             &mut editor.primitive,
                             SketchEdit::AddEntity(line),
                         );
-                        editor.state.tool_pending = ToolPending::Idle;
+                        // v0.16.1 — chain: keep the Line tool active
+                        // and use this click's endpoint as the next
+                        // segment's anchor. Esc / right-click cancel
+                        // back to Select. Matches Fusion 2D sketch.
+                        editor.state.tool_pending = ToolPending::LineFirst {
+                            first: resolved_id,
+                        };
                     }
                     _ => {
                         editor.state.tool_pending = ToolPending::LineFirst {
@@ -4572,11 +4596,11 @@ pub(crate) fn apply_footprint_primitive_edit(
                             1.0
                         };
                         let circle_id = SketchEntityId::new();
-                        let circle = Entity::new(
+                        let circle = flag(Entity::new(
                             circle_id,
                             plane_id,
                             EntityKind::Circle { center, radius: r },
-                        );
+                        ));
                         apply_sketch_edit_with_warnings(
                             &mut editor.state,
                             &mut editor.primitive,
@@ -4671,11 +4695,11 @@ pub(crate) fn apply_footprint_primitive_edit(
                                 apply_sketch_edit_with_warnings(
                                     &mut editor.state,
                                     &mut editor.primitive,
-                                    SketchEdit::AddEntity(Entity::new(
+                                    SketchEdit::AddEntity(flag(Entity::new(
                                         id,
                                         plane_id,
                                         EntityKind::Point { x, y },
-                                    )),
+                                    ))),
                                 );
                             }
                             // Lines: top, right, bottom, left.
@@ -4689,11 +4713,11 @@ pub(crate) fn apply_footprint_primitive_edit(
                                 apply_sketch_edit_with_warnings(
                                     &mut editor.state,
                                     &mut editor.primitive,
-                                    SketchEdit::AddEntity(Entity::new(
+                                    SketchEdit::AddEntity(flag(Entity::new(
                                         line_id,
                                         plane_id,
                                         EntityKind::Line { start: s, end: e },
-                                    )),
+                                    ))),
                                 );
                             }
                             // Arcs: TR, BR, BL, TL — sweep CCW around
@@ -4708,7 +4732,7 @@ pub(crate) fn apply_footprint_primitive_edit(
                                 apply_sketch_edit_with_warnings(
                                     &mut editor.state,
                                     &mut editor.primitive,
-                                    SketchEdit::AddEntity(Entity::new(
+                                    SketchEdit::AddEntity(flag(Entity::new(
                                         arc_id,
                                         plane_id,
                                         EntityKind::Arc {
@@ -4717,7 +4741,7 @@ pub(crate) fn apply_footprint_primitive_edit(
                                             end,
                                             sweep_ccw: true,
                                         },
-                                    )),
+                                    ))),
                                 );
                             }
                         }
@@ -4765,16 +4789,16 @@ pub(crate) fn apply_footprint_primitive_edit(
                             // Mint the two mid-axis corners.
                             let mid_a_id = SketchEntityId::new();
                             let mid_b_id = SketchEntityId::new();
-                            let mid_a = Entity::new(
+                            let mid_a = flag(Entity::new(
                                 mid_a_id,
                                 plane_id,
                                 EntityKind::Point { x: x1, y: y0 },
-                            );
-                            let mid_b = Entity::new(
+                            ));
+                            let mid_b = flag(Entity::new(
                                 mid_b_id,
                                 plane_id,
                                 EntityKind::Point { x: x0, y: y1 },
-                            );
+                            ));
                             apply_sketch_edit_with_warnings(
                                 &mut editor.state,
                                 &mut editor.primitive,
@@ -4794,11 +4818,11 @@ pub(crate) fn apply_footprint_primitive_edit(
                                 (mid_b_id, first),
                             ] {
                                 let line_id = SketchEntityId::new();
-                                let line = Entity::new(
+                                let line = flag(Entity::new(
                                     line_id,
                                     plane_id,
                                     EntityKind::Line { start: s, end: e },
-                                );
+                                ));
                                 apply_sketch_edit_with_warnings(
                                     &mut editor.state,
                                     &mut editor.primitive,
@@ -4828,7 +4852,7 @@ pub(crate) fn apply_footprint_primitive_edit(
                     }
                     ToolPending::ArcStart { center, start } => {
                         let arc_id = SketchEntityId::new();
-                        let arc = Entity::new(
+                        let arc = flag(Entity::new(
                             arc_id,
                             plane_id,
                             EntityKind::Arc {
@@ -4837,7 +4861,7 @@ pub(crate) fn apply_footprint_primitive_edit(
                                 end: resolved_id,
                                 sweep_ccw: true,
                             },
-                        );
+                        ));
                         apply_sketch_edit_with_warnings(
                             &mut editor.state,
                             &mut editor.primitive,
@@ -5281,6 +5305,7 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::FootprintToggleAutoFit
         | EditorMsg::FootprintSetPadsTool(_)
         | EditorMsg::FootprintSketchSetTool(_)
+        | EditorMsg::FootprintSketchToggleConstruction
         | EditorMsg::SaveFootprint(_, _)
         | EditorMsg::SetBodyHeight(_)
         | EditorMsg::SetBodyOffsetZ(_)

@@ -1119,12 +1119,13 @@ fn build_footprint_editor_panel_ctx(
     // empty siblings vec — the panel handles that gracefully.
     let mut library_siblings: Vec<crate::panels::FootprintLibSibling> = Vec::new();
     let mut library_stem: Option<String> = None;
-    if let Some(snxlib_path) = path.ancestors().find(|p| {
+    let snxlib_ancestor = path.ancestors().find(|p| {
         p.extension()
             .and_then(|e| e.to_str())
             .map(|e| e.eq_ignore_ascii_case("snxlib"))
             .unwrap_or(false)
-    }) {
+    });
+    if let Some(snxlib_path) = snxlib_ancestor {
         library_stem = snxlib_path
             .file_stem()
             .and_then(|s| s.to_str())
@@ -1164,6 +1165,21 @@ fn build_footprint_editor_panel_ctx(
                 }
             }
         }
+    } else {
+        // v0.16.0.1 — lone `.snxfpt` (not inside a `.snxlib`). Show
+        // the single open footprint as a one-row list rather than an
+        // empty panel with a misleading "right-click the .snxlib"
+        // hint.
+        let display_name = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| editor.primitive.name.clone());
+        library_siblings.push(crate::panels::FootprintLibSibling {
+            path: path.clone(),
+            display_name,
+            is_active: true,
+        });
     }
 
     Some(FootprintEditorPanelContext {
