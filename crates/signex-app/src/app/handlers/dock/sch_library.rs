@@ -129,6 +129,10 @@ impl Signex {
                 self.fp_editor_set_cutout_through(*id, *value);
                 true
             }
+            crate::panels::PanelMsg::FpEditorToggleSnapOption(flag) => {
+                self.fp_editor_toggle_snap_option(*flag);
+                true
+            }
             crate::panels::PanelMsg::FpEditorEditParameter { name, expr } => {
                 // v0.16.2 — Properties-panel parameter row edit.
                 // Forwards to `FootprintSketchEditParameter` which
@@ -996,6 +1000,26 @@ impl Signex {
                 SketchEdit::ForceRebuild,
             );
             editor.dirty = true;
+            editor.canvas_cache.clear();
+        }
+        self.refresh_panel_ctx();
+    }
+
+    pub(crate) fn fp_editor_toggle_snap_option(
+        &mut self,
+        flag: crate::panels::SnapOptionFlag,
+    ) {
+        use crate::panels::SnapOptionFlag;
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            let opts = &mut editor.state.snap_options;
+            match flag {
+                SnapOptionFlag::PointHit => opts.point_hit = !opts.point_hit,
+                SnapOptionFlag::HorizontalVertical => {
+                    opts.horizontal_vertical = !opts.horizontal_vertical
+                }
+                SnapOptionFlag::Angle => opts.angle = !opts.angle,
+                SnapOptionFlag::Grid => opts.grid = !opts.grid,
+            }
             editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();

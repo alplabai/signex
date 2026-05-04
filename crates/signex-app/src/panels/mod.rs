@@ -597,6 +597,10 @@ pub struct FootprintEditorPanelContext {
     /// v0.16.4 — BoardCutout-role sub-form values for the selected
     /// entity. `None` when the entity isn't a board cutout.
     pub selected_cutout: Option<CutoutSummary>,
+    /// v0.17.0 — empty-canvas Snap Options. Surfaced on the
+    /// Properties panel default branch (no selection) so the user
+    /// can toggle each priority chain step.
+    pub snap_options: crate::library::editor::footprint::state::SnapOptions,
 }
 
 /// v0.16.4 — Pour role properties surfaced on the Properties panel.
@@ -636,6 +640,17 @@ pub enum KeepoutKindFlag {
     NoVias,
     NoDrilling,
     NoPours,
+}
+
+/// v0.17.0 — discrete identifier for the four `SnapOptions` flags.
+/// Used by the Properties-panel snap checklist to carry "which
+/// flag" through `PanelMsg`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SnapOptionFlag {
+    PointHit,
+    HorizontalVertical,
+    Angle,
+    Grid,
 }
 
 /// One row in the Footprint Library panel — a sibling `.snxfpt`
@@ -1190,6 +1205,9 @@ pub enum PanelMsg {
         id: signex_sketch::id::SketchEntityId,
         value: bool,
     },
+    /// v0.17.0 — empty-canvas Snap Options toggles. The handler
+    /// flips the matching `SnapOptions` flag.
+    FpEditorToggleSnapOption(SnapOptionFlag),
     /// v0.14.2 — open a sibling `.snxfpt` from the Footprint Library
     /// panel. The handler routes through the existing
     /// `handle_open_primitive` flow so the file gets a fresh tab + a
@@ -3946,6 +3964,69 @@ fn view_footprint_editor_properties<'a>(
                     fp.sketch_constraint_count.to_string(),
                 );
             }
+
+            // v0.17.0 — Snap Options checklist (Altium-style, empty-
+            // canvas Properties). Each priority in `snap::snap_cursor`
+            // is gated by its flag; all-off mirrors Altium's "no snap".
+            col = col.push(props_section_header("Snap Options", primary));
+            let opts = fp.snap_options;
+            let mk_snap_check = move |label: &'static str,
+                                      flag: SnapOptionFlag,
+                                      on: bool|
+                  -> Element<'static, PanelMsg> {
+                let glyph = if on { "[x]" } else { "[ ]" };
+                button(text(format!("{glyph}  {label}")).size(10).color(primary))
+                    .padding([2, 6])
+                    .on_press(PanelMsg::FpEditorToggleSnapOption(flag))
+                    .style(move |_: &Theme, _| iced::widget::button::Style {
+                        background: Some(iced::Background::Color(iced::Color::from_rgba(
+                            1.0, 1.0, 1.0, 0.02,
+                        ))),
+                        border: iced::Border {
+                            width: 0.0,
+                            radius: 0.0.into(),
+                            color: Color::TRANSPARENT,
+                        },
+                        ..iced::widget::button::Style::default()
+                    })
+                    .into()
+            };
+            col = col.push(
+                container(mk_snap_check(
+                    "Snap to Point",
+                    SnapOptionFlag::PointHit,
+                    opts.point_hit,
+                ))
+                .padding([0, 8])
+                .width(Length::Fill),
+            );
+            col = col.push(
+                container(mk_snap_check(
+                    "Snap horizontal/vertical (5°)",
+                    SnapOptionFlag::HorizontalVertical,
+                    opts.horizontal_vertical,
+                ))
+                .padding([0, 8])
+                .width(Length::Fill),
+            );
+            col = col.push(
+                container(mk_snap_check(
+                    "Snap angle (15° steps)",
+                    SnapOptionFlag::Angle,
+                    opts.angle,
+                ))
+                .padding([0, 8])
+                .width(Length::Fill),
+            );
+            col = col.push(
+                container(mk_snap_check(
+                    "Snap to grid (0.1 mm)",
+                    SnapOptionFlag::Grid,
+                    opts.grid,
+                ))
+                .padding([0, 8])
+                .width(Length::Fill),
+            );
         }
     }
 

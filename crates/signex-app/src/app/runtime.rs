@@ -1303,6 +1303,7 @@ fn build_footprint_editor_panel_ctx(
         selected_pour,
         selected_keepout,
         selected_cutout,
+        snap_options: editor.state.snap_options,
     })
 }
 

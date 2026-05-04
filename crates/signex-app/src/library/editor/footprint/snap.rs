@@ -139,72 +139,89 @@ pub fn snap_cursor(
     state: &FootprintEditorState,
     point_hit: Option<SketchEntityId>,
 ) -> SnapResult {
+    // v0.17.0 — each priority is gated by `state.snap_options.<flag>`.
+    // Disabled priorities pass through to the next; if all four are
+    // disabled the cursor returns raw (matches Altium's "no snap"
+    // workflow).
+    let opts = state.snap_options;
+
     // Priority 1 — Point snap.
-    if let Some(id) = point_hit {
-        if let Some(pos) = point_pos(id, sketch, state) {
-            return SnapResult {
-                pos,
-                kind: SnapKind::Point(id),
-            };
+    if opts.point_hit {
+        if let Some(id) = point_hit {
+            if let Some(pos) = point_pos(id, sketch, state) {
+                return SnapResult {
+                    pos,
+                    kind: SnapKind::Point(id),
+                };
+            }
         }
     }
 
     // Priority 2 + 3 — anchor-relative angle snap (H/V/15°).
-    if let Some(anchor) = anchor_for_tool(state, sketch) {
-        let dx = raw.0 - anchor.0;
-        let dy = raw.1 - anchor.1;
-        let dist = (dx * dx + dy * dy).sqrt();
-        // Skip degenerate (cursor on the anchor) — fall through to
-        // grid so we don't divide by zero on the angle math.
-        if dist > 1e-6 {
-            let angle = dy.atan2(dx);
-            // Horizontal: angle near 0 or ±π → |sin(angle)| small.
-            // Vertical:   angle near ±π/2  → |cos(angle)| small.
-            let axis_thresh = AXIS_THRESHOLD_DEG.to_radians().sin();
-            if angle.sin().abs() < axis_thresh {
-                let dir = if angle.cos() >= 0.0 { 1.0 } else { -1.0 };
-                let pos = (anchor.0 + dir * dist, anchor.1);
-                return SnapResult {
-                    pos,
-                    kind: SnapKind::Horizontal,
-                };
-            }
-            if angle.cos().abs() < axis_thresh {
-                let dir = if angle.sin() >= 0.0 { 1.0 } else { -1.0 };
-                let pos = (anchor.0, anchor.1 + dir * dist);
-                return SnapResult {
-                    pos,
-                    kind: SnapKind::Vertical,
-                };
-            }
+    if (opts.horizontal_vertical || opts.angle) {
+        if let Some(anchor) = anchor_for_tool(state, sketch) {
+            let dx = raw.0 - anchor.0;
+            let dy = raw.1 - anchor.1;
+            let dist = (dx * dx + dy * dy).sqrt();
+            // Skip degenerate (cursor on the anchor) — fall through to
+            // grid so we don't divide by zero on the angle math.
+            if dist > 1e-6 {
+                let angle = dy.atan2(dx);
+                // Horizontal: angle near 0 or ±π → |sin(angle)| small.
+                // Vertical:   angle near ±π/2  → |cos(angle)| small.
+                let axis_thresh = AXIS_THRESHOLD_DEG.to_radians().sin();
+                if opts.horizontal_vertical && angle.sin().abs() < axis_thresh {
+                    let dir = if angle.cos() >= 0.0 { 1.0 } else { -1.0 };
+                    let pos = (anchor.0 + dir * dist, anchor.1);
+                    return SnapResult {
+                        pos,
+                        kind: SnapKind::Horizontal,
+                    };
+                }
+                if opts.horizontal_vertical && angle.cos().abs() < axis_thresh {
+                    let dir = if angle.sin() >= 0.0 { 1.0 } else { -1.0 };
+                    let pos = (anchor.0, anchor.1 + dir * dist);
+                    return SnapResult {
+                        pos,
+                        kind: SnapKind::Vertical,
+                    };
+                }
 
-            // Angle snap to ANGLE_STEP_DEG increments.
-            let step_rad = ANGLE_STEP_DEG.to_radians();
-            let snapped_angle = (angle / step_rad).round() * step_rad;
-            let angle_diff = ((angle - snapped_angle).abs()).min(
-                (std::f64::consts::TAU - (angle - snapped_angle).abs()).abs(),
-            );
-            if angle_diff < ANGLE_THRESHOLD_DEG.to_radians() {
-                let pos = (
-                    anchor.0 + dist * snapped_angle.cos(),
-                    anchor.1 + dist * snapped_angle.sin(),
-                );
-                return SnapResult {
-                    pos,
-                    kind: SnapKind::Angle(snapped_angle),
-                };
+                if opts.angle {
+                    // Angle snap to ANGLE_STEP_DEG increments.
+                    let step_rad = ANGLE_STEP_DEG.to_radians();
+                    let snapped_angle = (angle / step_rad).round() * step_rad;
+                    let angle_diff = ((angle - snapped_angle).abs()).min(
+                        (std::f64::consts::TAU - (angle - snapped_angle).abs()).abs(),
+                    );
+                    if angle_diff < ANGLE_THRESHOLD_DEG.to_radians() {
+                        let pos = (
+                            anchor.0 + dist * snapped_angle.cos(),
+                            anchor.1 + dist * snapped_angle.sin(),
+                        );
+                        return SnapResult {
+                            pos,
+                            kind: SnapKind::Angle(snapped_angle),
+                        };
+                    }
+                }
             }
         }
     }
 
-    // Priority 4 — grid snap.
-    let snapped = (
-        (raw.0 / GRID_STEP_MM).round() * GRID_STEP_MM,
-        (raw.1 / GRID_STEP_MM).round() * GRID_STEP_MM,
-    );
-    SnapResult {
-        pos: snapped,
-        kind: SnapKind::Grid,
+    // Priority 4 — grid snap. When disabled, the raw cursor passes
+    // through unchanged (mirrors Altium's "Smart Snap → Off" flow).
+    if opts.grid {
+        let snapped = (
+            (raw.0 / GRID_STEP_MM).round() * GRID_STEP_MM,
+            (raw.1 / GRID_STEP_MM).round() * GRID_STEP_MM,
+        );
+        SnapResult {
+            pos: snapped,
+            kind: SnapKind::Grid,
+        }
+    } else {
+        SnapResult::raw(raw)
     }
 }
 

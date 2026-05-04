@@ -232,6 +232,10 @@ pub struct FootprintEditorState {
     /// (TAB pause/resume gives them time to type). Without this
     /// the canvas always minted 1×1 mm "1"-numbered pads.
     pub next_pad_defaults: NextPadDefaults,
+    /// v0.17.0 — empty-canvas Snap Options. Each flag gates one of
+    /// the four priorities in `snap::snap_cursor`. UI-toggled via
+    /// the Properties panel default branch.
+    pub snap_options: SnapOptions,
 }
 
 /// v0.16.3 — author-controlled defaults for the next placed pad.
@@ -273,6 +277,35 @@ impl PadSide {
 impl std::fmt::Display for PadSide {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.label())
+    }
+}
+
+/// v0.17.0 — per-priority snap toggles surfaced on the empty-canvas
+/// Properties panel. Mirrors Altium's "Snap Options" checklist. Each
+/// flag gates one priority in `snap::snap_cursor`; defaults are all
+/// `true` so existing behaviour is preserved when no toggling has
+/// happened.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SnapOptions {
+    /// Snap onto an existing sketch Point within `POINT_SNAP_RADIUS_PX`.
+    pub point_hit: bool,
+    /// Horizontal / Vertical inference within `AXIS_THRESHOLD_DEG`.
+    pub horizontal_vertical: bool,
+    /// Multi-of-`ANGLE_STEP_DEG` snap within `ANGLE_THRESHOLD_DEG`.
+    pub angle: bool,
+    /// Round to the nearest `GRID_STEP_MM`. When `false` the cursor
+    /// passes through raw — useful for free-hand authoring.
+    pub grid: bool,
+}
+
+impl Default for SnapOptions {
+    fn default() -> Self {
+        Self {
+            point_hit: true,
+            horizontal_vertical: true,
+            angle: true,
+            grid: true,
+        }
     }
 }
 
@@ -392,6 +425,7 @@ impl FootprintEditorState {
             construction_mode: false,
             placement_paused: false,
             next_pad_defaults: NextPadDefaults::default(),
+            snap_options: SnapOptions::default(),
         };
         s.recompute_courtyard();
         s
@@ -422,6 +456,7 @@ impl FootprintEditorState {
             construction_mode: false,
             placement_paused: false,
             next_pad_defaults: NextPadDefaults::default(),
+            snap_options: SnapOptions::default(),
         };
         s.recompute_courtyard();
         s
