@@ -4086,6 +4086,23 @@ pub(crate) fn apply_footprint_primitive_edit(
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintSetMode(mode) => {
+            use crate::library::editor::footprint::state::EditorMode;
+            // v0.14.2 — bidirectional sketch ↔ pads foundation.
+            // When the user enters Sketch mode for the first time on
+            // a footprint that has literal pads but no sketch
+            // entities yet, mint a Point + PadAttr for every pad so
+            // they're visible / editable in Sketch mode. The bake
+            // immediately re-emits identical pads, so the round-trip
+            // is identity-preserving.
+            let entering_sketch = editor.state.mode != EditorMode::Sketch
+                && mode == EditorMode::Sketch;
+            if entering_sketch {
+                use crate::library::editor::footprint::pad_to_sketch;
+                let _ = pad_to_sketch::auto_mint_for_literal_pads(
+                    &editor.state.pads,
+                    &mut editor.primitive,
+                );
+            }
             editor.state.mode = mode;
             // Run the dispatcher so the sketch is initialised + solved
             // on first switch into Sketch mode (or no-op otherwise).

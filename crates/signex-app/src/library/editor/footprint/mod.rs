@@ -10,6 +10,7 @@
 pub mod body3d;
 pub mod canvas;
 pub mod layers;
+pub mod pad_to_sketch;
 pub mod pads_active_bar;
 pub mod preview3d;
 pub mod sketch_dispatch;
