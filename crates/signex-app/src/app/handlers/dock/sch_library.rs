@@ -42,6 +42,14 @@ impl Signex {
                                 msg: crate::library::messages::PrimitiveEditorMsg::FootprintToggleAutoFit,
                             },
                         ));
+                        // v0.16.x — rebuild the panel context so the
+                        // pill's pressed-state style reflects the new
+                        // `auto_fit_courtyard` bool. Without this the
+                        // button click looked like a no-op because
+                        // `PanelContext.footprint_editor.auto_fit_courtyard`
+                        // was stale until the next unrelated panel
+                        // refresh.
+                        self.refresh_panel_ctx();
                     }
                 }
                 true

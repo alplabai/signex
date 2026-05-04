@@ -17,6 +17,7 @@ pub mod sketch_dispatch;
 #[cfg(test)]
 mod sketch_dispatch_tests;
 pub mod sketch_mode;
+pub mod snap;
 pub mod state;
 pub mod step_attach;
 

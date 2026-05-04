@@ -4285,6 +4285,39 @@ pub(crate) fn apply_footprint_primitive_edit(
                 &mut editor.primitive,
                 SketchEdit::MovePoint { id, dx, dy },
             );
+            // v0.16.0.1 fix — when the dragged Point is a pad's
+            // centre, also translate that pad's outline-corner Points
+            // by the same delta so the construction outline tracks
+            // the pad. Without this the corner outline was stranded
+            // at the previous centre after a sketch-mode drag.
+            let centre_pad_idx = editor
+                .state
+                .pads
+                .iter()
+                .position(|p| p.sketch_entity_id == Some(id));
+            if let Some(pad_idx) = centre_pad_idx {
+                if let Some(corners) = editor.state.pads[pad_idx].corner_entity_ids {
+                    for corner_id in corners {
+                        apply_sketch_edit_with_warnings(
+                            &mut editor.state,
+                            &mut editor.primitive,
+                            SketchEdit::MovePoint {
+                                id: corner_id,
+                                dx,
+                                dy,
+                            },
+                        );
+                    }
+                }
+                // Keep `EditorPad.position_mm` in sync so a Pads-mode
+                // tab switch shows the pad at the new world position.
+                editor.state.pads[pad_idx].position_mm.0 += dx;
+                editor.state.pads[pad_idx].position_mm.1 += dy;
+                CanvasState::sync_pads_to_primitive(
+                    &editor.state,
+                    &mut editor.primitive,
+                );
+            }
             editor.canvas_cache.clear();
             editor.dirty = true;
         }

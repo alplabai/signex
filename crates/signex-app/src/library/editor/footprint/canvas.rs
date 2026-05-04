@@ -19,6 +19,7 @@ use crate::library::messages::{EditorMsg, LibraryMessage};
 use crate::library::state::EditorAddress;
 
 use super::layers::FpLayer;
+use super::snap::{self, SnapKind, SnapResult};
 use super::state::{EditorPad, FootprintEditorState};
 
 /// Drag threshold in screen pixels — below this we treat the press
@@ -53,6 +54,11 @@ pub struct FootprintCanvasState {
     /// last time we drew. Used so the press handler can tell whether
     /// the click was on the already-selected pad.
     last_known_selected: Option<usize>,
+    /// v0.16.1 — last snap outcome at the cursor. `Some` when in
+    /// Sketch mode and a snap fired; drives the snap-kind badge in
+    /// `draw_sketch_tool_preview`. Cleared each tick before the
+    /// next compute.
+    last_snap: Option<SnapResult>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -92,6 +98,7 @@ impl Default for FootprintCanvasState {
             last_pan_pos: None,
             drag: None,
             last_known_selected: None,
+            last_snap: None,
         }
     }
 }
@@ -273,19 +280,27 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 if *button == mouse::Button::Left
                     && let Some(cursor_pos) = cursor.position_in(bounds)
                 {
-                    let world = cstate.screen_to_world(cursor_pos);
-                    // v0.16 — Sketch mode + Select tool: hit-test
-                    // sketch Point entities first so the user can
-                    // drag the auto-minted pad-backing Points (and,
-                    // in future, any free Point) directly. Lines /
-                    // Arcs / Circles fall through to the click-route
-                    // path on release.
+                    let raw_world = cstate.screen_to_world(cursor_pos);
+                    // v0.16.1 — apply snap (Point / H / V / Angle /
+                    // Grid) only in Sketch mode. Pads-mode clicks
+                    // stay raw (literal pads aren't grid-locked).
                     use crate::library::editor::footprint::state::{
                         EditorMode as _EM, SketchTool as _ST,
                     };
+                    let snap_in_effect = matches!(self.state.mode, _EM::Sketch);
+                    let world = if snap_in_effect {
+                        let point_hit = sketch_snap(self.sketch, cstate, raw_world);
+                        let result =
+                            snap::snap_cursor(raw_world, self.sketch, self.state, point_hit);
+                        cstate.last_snap = Some(result);
+                        result.pos
+                    } else {
+                        cstate.last_snap = None;
+                        raw_world
+                    };
                     if matches!(self.state.mode, _EM::Sketch)
                         && self.state.active_tool == _ST::Select
-                        && let Some(point_id) = sketch_snap(self.sketch, cstate, world)
+                        && let Some(point_id) = sketch_snap(self.sketch, cstate, raw_world)
                     {
                         cstate.drag = Some(DragState {
                             pad_idx: usize::MAX,
@@ -488,7 +503,22 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         .and_capture(),
                     );
                 }
-                let world = cstate.screen_to_world(cursor_pos);
+                let raw_world = cstate.screen_to_world(cursor_pos);
+                // v0.16.1 — Sketch-mode snap (Point / H / V / Angle /
+                // Grid). The canvas-local `last_snap` drives the
+                // badge in `draw_sketch_tool_preview`. Pads-mode is
+                // not snapped.
+                use crate::library::editor::footprint::state::EditorMode as _EM;
+                let world = if matches!(self.state.mode, _EM::Sketch) {
+                    let point_hit = sketch_snap(self.sketch, cstate, raw_world);
+                    let result =
+                        snap::snap_cursor(raw_world, self.sketch, self.state, point_hit);
+                    cstate.last_snap = Some(result);
+                    result.pos
+                } else {
+                    cstate.last_snap = None;
+                    raw_world
+                };
                 if let Some(drag) = cstate.drag.as_mut() {
                     let dx = (cursor_pos.x - drag.press_screen.x).abs();
                     let dy = (cursor_pos.y - drag.press_screen.y).abs();
