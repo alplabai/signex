@@ -566,6 +566,22 @@ pub struct FootprintEditorPanelContext {
     /// Point. Drives the "Pad role applies to Points only" hint on
     /// the Role pick_list.
     pub selected_sketch_is_point: bool,
+    /// v0.16.3 — `true` when the Pads-mode tool is `PlacePad`. Drives
+    /// visibility of the "Pad placement defaults" form on the
+    /// Properties panel (designator override + size_x / size_y / side).
+    pub placement_active: bool,
+    /// v0.16.3 — `true` when TAB has paused click-publish during pad
+    /// placement. Adds a "PAUSED — TAB to resume" hint to the form.
+    pub placement_paused: bool,
+    /// v0.16.3 — designator override for the next placed pad. `None`
+    /// = use the auto-incrementing numeric designator.
+    pub next_pad_designator_override: Option<String>,
+    /// v0.16.3 — size_x of the next placed pad in mm.
+    pub next_pad_size_x_mm: f64,
+    /// v0.16.3 — size_y of the next placed pad in mm.
+    pub next_pad_size_y_mm: f64,
+    /// v0.16.3 — copper side for the next placed pad.
+    pub next_pad_side: crate::library::editor::footprint::state::PadSide,
 }
 
 /// One row in the Footprint Library panel — a sibling `.snxfpt`
@@ -1072,6 +1088,13 @@ pub enum PanelMsg {
         name: String,
         expr: String,
     },
+    /// v0.16.3 — Properties-panel "Pad placement defaults" form
+    /// updates. The handler mutates `editor.state.next_pad_defaults`
+    /// directly so the next `add_pad_at` picks up the new values.
+    FpEditorSetNextPadDesignator(String),
+    FpEditorSetNextPadSizeX(String),
+    FpEditorSetNextPadSizeY(String),
+    FpEditorSetNextPadSide(crate::library::editor::footprint::state::PadSide),
     /// v0.14.2 — open a sibling `.snxfpt` from the Footprint Library
     /// panel. The handler routes through the existing
     /// `handle_open_primitive` flow so the file gets a fresh tab + a
@@ -3914,6 +3937,163 @@ fn view_footprint_editor_properties<'a>(
                 );
             }
         }
+    }
+
+    // v0.16.3 — "Pad placement" defaults form. Visible whenever the
+    // user is in Pads mode + the PlacePad tool is active. TAB pause
+    // adds a "PAUSED — TAB to resume" hint but doesn't gate the form
+    // itself; the user can adjust before resuming.
+    if fp.placement_active {
+        col = col.push(props_section_header("Pad placement", primary));
+        if fp.placement_paused {
+            col = col.push(
+                container(
+                    text("PAUSED — TAB to resume placement")
+                        .size(10)
+                        .color(Color::from_rgba(1.0, 0.85, 0.30, 1.0)),
+                )
+                .padding([2, 8])
+                .width(Length::Fill),
+            );
+        } else {
+            col = col.push(
+                container(
+                    text("TAB to pause placement and edit defaults")
+                        .size(10)
+                        .color(muted),
+                )
+                .padding([2, 8])
+                .width(Length::Fill),
+            );
+        }
+
+        // Designator override — empty string = auto-increment.
+        let designator_buf = fp
+            .next_pad_designator_override
+            .clone()
+            .unwrap_or_default();
+        col = col.push(
+            container(
+                row![
+                    text("Designator")
+                        .size(10)
+                        .color(muted)
+                        .width(Length::Fixed(80.0)),
+                    text_input("(auto)", &designator_buf)
+                        .size(10)
+                        .padding(2)
+                        .style(move |_: &Theme, _| iced::widget::text_input::Style {
+                            background: iced::Background::Color(iced::Color::from_rgba(
+                                1.0, 1.0, 1.0, 0.04,
+                            )),
+                            border: iced::Border {
+                                width: 1.0,
+                                radius: 2.0.into(),
+                                color: border_c,
+                            },
+                            icon: iced::Color::TRANSPARENT,
+                            placeholder: muted,
+                            value: primary,
+                            selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
+                        })
+                        .on_input(PanelMsg::FpEditorSetNextPadDesignator),
+                ]
+                .spacing(6)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([2, 8])
+            .width(Length::Fill),
+        );
+
+        // Size X (mm)
+        col = col.push(
+            container(
+                row![
+                    text("Size X (mm)")
+                        .size(10)
+                        .color(muted)
+                        .width(Length::Fixed(80.0)),
+                    text_input("", &format!("{:.3}", fp.next_pad_size_x_mm))
+                        .size(10)
+                        .padding(2)
+                        .style(move |_: &Theme, _| iced::widget::text_input::Style {
+                            background: iced::Background::Color(iced::Color::from_rgba(
+                                1.0, 1.0, 1.0, 0.04,
+                            )),
+                            border: iced::Border {
+                                width: 1.0,
+                                radius: 2.0.into(),
+                                color: border_c,
+                            },
+                            icon: iced::Color::TRANSPARENT,
+                            placeholder: muted,
+                            value: primary,
+                            selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
+                        })
+                        .on_input(PanelMsg::FpEditorSetNextPadSizeX),
+                ]
+                .spacing(6)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([2, 8])
+            .width(Length::Fill),
+        );
+
+        // Size Y (mm)
+        col = col.push(
+            container(
+                row![
+                    text("Size Y (mm)")
+                        .size(10)
+                        .color(muted)
+                        .width(Length::Fixed(80.0)),
+                    text_input("", &format!("{:.3}", fp.next_pad_size_y_mm))
+                        .size(10)
+                        .padding(2)
+                        .style(move |_: &Theme, _| iced::widget::text_input::Style {
+                            background: iced::Background::Color(iced::Color::from_rgba(
+                                1.0, 1.0, 1.0, 0.04,
+                            )),
+                            border: iced::Border {
+                                width: 1.0,
+                                radius: 2.0.into(),
+                                color: border_c,
+                            },
+                            icon: iced::Color::TRANSPARENT,
+                            placeholder: muted,
+                            value: primary,
+                            selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
+                        })
+                        .on_input(PanelMsg::FpEditorSetNextPadSizeY),
+                ]
+                .spacing(6)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([2, 8])
+            .width(Length::Fill),
+        );
+
+        // Side (Top / Bottom / All-THT)
+        use crate::library::editor::footprint::state::PadSide;
+        let side_picker = pick_list(
+            PadSide::ALL_OPTIONS,
+            Some(fp.next_pad_side),
+            PanelMsg::FpEditorSetNextPadSide,
+        )
+        .text_size(10)
+        .padding([3, 8]);
+        col = col.push(
+            container(
+                row![
+                    text("Side").size(10).color(muted).width(Length::Fixed(80.0)),
+                    side_picker,
+                ]
+                .spacing(6)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([2, 8])
+            .width(Length::Fill),
+        );
     }
 
     // Settings + hint — always visible at the bottom of the panel

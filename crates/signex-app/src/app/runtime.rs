@@ -1223,6 +1223,23 @@ fn build_footprint_editor_panel_ctx(
         ),
     };
 
+    // v0.16.3 — pad-placement defaults exposed for the Properties
+    // panel form. Form is visible whenever Pads mode + PlacePad tool
+    // are active; TAB pause adds a pause hint but does not gate the
+    // form itself.
+    use crate::library::editor::footprint::state::PadsTool;
+    let placement_active = matches!(editor.state.pads_tool, PadsTool::PlacePad)
+        && mode_kind == FootprintModeKind::Pads;
+    let placement_paused = editor.state.placement_paused;
+    let next_pad_designator_override = editor
+        .state
+        .next_pad_defaults
+        .designator_override
+        .clone();
+    let next_pad_size_x_mm = editor.state.next_pad_defaults.size_x_mm;
+    let next_pad_size_y_mm = editor.state.next_pad_defaults.size_y_mm;
+    let next_pad_side = editor.state.next_pad_defaults.side;
+
     Some(FootprintEditorPanelContext {
         path,
         footprint_name: editor.primitive.name.clone(),
@@ -1242,6 +1259,12 @@ fn build_footprint_editor_panel_ctx(
         selected_sketch_entity_id,
         selected_sketch_role,
         selected_sketch_is_point,
+        placement_active,
+        placement_paused,
+        next_pad_designator_override,
+        next_pad_size_x_mm,
+        next_pad_size_y_mm,
+        next_pad_side,
     })
 }
 

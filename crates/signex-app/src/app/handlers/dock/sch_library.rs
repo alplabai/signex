@@ -81,6 +81,22 @@ impl Signex {
                 }
                 true
             }
+            crate::panels::PanelMsg::FpEditorSetNextPadDesignator(value) => {
+                self.fp_editor_set_next_pad_designator(value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadSizeX(value) => {
+                self.fp_editor_set_next_pad_size_x(value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadSizeY(value) => {
+                self.fp_editor_set_next_pad_size_y(value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadSide(side) => {
+                self.fp_editor_set_next_pad_side(*side);
+                true
+            }
             crate::panels::PanelMsg::FpEditorEditParameter { name, expr } => {
                 // v0.16.2 — Properties-panel parameter row edit.
                 // Forwards to `FootprintSketchEditParameter` which
@@ -714,6 +730,64 @@ impl Signex {
                 _ => None,
             })?;
         self.document_state.symbol_editors.get_mut(&path)
+    }
+
+    /// v0.16.3 — sibling of [`Self::active_symbol_editor_mut`] for
+    /// `.snxfpt` editor tabs. Drives the Properties-panel pad-defaults
+    /// form so it can mutate `next_pad_defaults` without round-
+    /// tripping through `LibraryMessage::PrimitiveEditorEvent`.
+    fn active_footprint_editor_mut(
+        &mut self,
+    ) -> Option<&mut crate::app::FootprintEditorState> {
+        let path = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .and_then(|t| match &t.kind {
+                crate::app::TabKind::FootprintEditor(p) => Some(p.clone()),
+                _ => None,
+            })?;
+        self.document_state.footprint_editors.get_mut(&path)
+    }
+
+    pub(crate) fn fp_editor_set_next_pad_designator(&mut self, value: String) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.designator_override =
+                if value.is_empty() { None } else { Some(value) };
+        }
+        self.refresh_panel_ctx();
+    }
+
+    pub(crate) fn fp_editor_set_next_pad_size_x(&mut self, value: String) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            if let Ok(parsed) = value.trim().parse::<f64>() {
+                if parsed > 0.0 {
+                    editor.state.next_pad_defaults.size_x_mm = parsed;
+                }
+            }
+        }
+        self.refresh_panel_ctx();
+    }
+
+    pub(crate) fn fp_editor_set_next_pad_size_y(&mut self, value: String) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            if let Ok(parsed) = value.trim().parse::<f64>() {
+                if parsed > 0.0 {
+                    editor.state.next_pad_defaults.size_y_mm = parsed;
+                }
+            }
+        }
+        self.refresh_panel_ctx();
+    }
+
+    pub(crate) fn fp_editor_set_next_pad_side(
+        &mut self,
+        side: crate::library::editor::footprint::state::PadSide,
+    ) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.side = side;
+        }
+        self.refresh_panel_ctx();
     }
 }
 

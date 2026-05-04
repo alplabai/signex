@@ -802,6 +802,67 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
         if cstate.drag.is_some() {
             return mouse::Interaction::Grab;
         }
+
+        // v0.16.3 — drag-corner cursor indicators in Sketch mode.
+        // Hover a pad-outline corner / edge to see the matching
+        // resize cursor (↘/↗ for corners, ↔ for vertical edges, ↕
+        // for horizontal edges). Drag actually works since v0.16.1.1
+        // — this is the visual hint Caner asked for.
+        use crate::library::editor::footprint::state::EditorMode;
+        if self.state.mode == EditorMode::Sketch {
+            if let Some(c) = cursor.position_in(bounds) {
+                const CORNER_TOL: f32 = 6.0;
+                const EDGE_TOL: f32 = 4.0;
+                for pad in &self.state.pads {
+                    if pad.corner_entity_ids.is_none() {
+                        continue;
+                    }
+                    let (cx, cy) = pad.position_mm;
+                    let (w, h) = pad.size_mm;
+                    let half_w = w * 0.5;
+                    let half_h = h * 0.5;
+                    let nw = cstate.world_to_screen((cx - half_w, cy - half_h));
+                    let ne = cstate.world_to_screen((cx + half_w, cy - half_h));
+                    let se = cstate.world_to_screen((cx + half_w, cy + half_h));
+                    let sw = cstate.world_to_screen((cx - half_w, cy + half_h));
+
+                    // Corners take priority over edges. Diagonal sign
+                    // (relative to the centre) picks the cursor:
+                    // (dx * dy > 0) => NW or SE => DiagonallyDown (↘)
+                    // (dx * dy < 0) => NE or SW => DiagonallyUp (↗)
+                    let corners = [(nw, true), (ne, false), (se, true), (sw, false)];
+                    for (corner_pt, is_down) in corners {
+                        let dx = (c.x - corner_pt.x).abs();
+                        let dy = (c.y - corner_pt.y).abs();
+                        if dx <= CORNER_TOL && dy <= CORNER_TOL {
+                            return if is_down {
+                                mouse::Interaction::ResizingDiagonallyDown
+                            } else {
+                                mouse::Interaction::ResizingDiagonallyUp
+                            };
+                        }
+                    }
+
+                    // Edges — point lies within the bbox AND within
+                    // EDGE_TOL of one of the four edge lines.
+                    let inside_x = c.x >= nw.x - EDGE_TOL && c.x <= se.x + EDGE_TOL;
+                    let inside_y = c.y >= nw.y - EDGE_TOL && c.y <= se.y + EDGE_TOL;
+                    if inside_x && inside_y {
+                        let near_top = (c.y - nw.y).abs() <= EDGE_TOL;
+                        let near_bottom = (c.y - se.y).abs() <= EDGE_TOL;
+                        let near_left = (c.x - nw.x).abs() <= EDGE_TOL;
+                        let near_right = (c.x - se.x).abs() <= EDGE_TOL;
+                        if near_top || near_bottom {
+                            return mouse::Interaction::ResizingVertically;
+                        }
+                        if near_left || near_right {
+                            return mouse::Interaction::ResizingHorizontally;
+                        }
+                    }
+                }
+            }
+        }
+
         if cursor.is_over(bounds) {
             mouse::Interaction::Crosshair
         } else {

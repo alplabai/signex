@@ -217,6 +217,63 @@ pub struct FootprintEditorState {
     /// toggles. Mirrors the schematic's pre-placement / Resume
     /// pattern; the in-flight `pads_tool` survives a pause/resume.
     pub placement_paused: bool,
+    /// v0.16.3 — defaults applied to the next pad created via
+    /// `PadsTool::PlacePad`. Surfaced as input fields in the right-
+    /// dock Properties panel under the "Pad placement" section so
+    /// the user can pick a custom designator + size BEFORE the click
+    /// (TAB pause/resume gives them time to type). Without this
+    /// the canvas always minted 1×1 mm "1"-numbered pads.
+    pub next_pad_defaults: NextPadDefaults,
+}
+
+/// v0.16.3 — author-controlled defaults for the next placed pad.
+/// `designator_override = Some("U1A")` overrides the auto-incrementing
+/// numeric designator; `None` means "use next-pad-number". Size is
+/// always in mm. Side controls which copper layer the pad lands on.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NextPadDefaults {
+    pub designator_override: Option<String>,
+    pub size_x_mm: f64,
+    pub size_y_mm: f64,
+    pub side: PadSide,
+}
+
+/// Pad copper side mirror — kept here so the panel doesn't have to
+/// import `signex_sketch::attr::PadSide`. v0.16.3.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PadSide {
+    #[default]
+    Top,
+    Bottom,
+    All,
+}
+
+impl PadSide {
+    pub const ALL_OPTIONS: &'static [PadSide] = &[PadSide::Top, PadSide::Bottom, PadSide::All];
+    pub fn label(self) -> &'static str {
+        match self {
+            PadSide::Top => "Top",
+            PadSide::Bottom => "Bottom",
+            PadSide::All => "All (THT)",
+        }
+    }
+}
+
+impl std::fmt::Display for PadSide {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
+}
+
+impl Default for NextPadDefaults {
+    fn default() -> Self {
+        Self {
+            designator_override: None,
+            size_x_mm: NEW_PAD_SIZE_MM,
+            size_y_mm: NEW_PAD_SIZE_MM,
+            side: PadSide::Top,
+        }
+    }
 }
 
 /// Pads-mode drawing tool — v0.15. The Pads-mode active bar's
@@ -322,6 +379,7 @@ impl FootprintEditorState {
             pads_tool: PadsTool::default(),
             construction_mode: false,
             placement_paused: false,
+            next_pad_defaults: NextPadDefaults::default(),
         };
         s.recompute_courtyard();
         s
@@ -351,6 +409,7 @@ impl FootprintEditorState {
             pads_tool: PadsTool::default(),
             construction_mode: false,
             placement_paused: false,
+            next_pad_defaults: NextPadDefaults::default(),
         };
         s.recompute_courtyard();
         s
@@ -387,10 +446,38 @@ impl FootprintEditorState {
         format!("{}", max_int + 1)
     }
 
-    /// Click-add a new default pad at the given world position.
+    /// Click-add a new pad at the given world position. v0.16.3 — the
+    /// new pad applies the user-controlled `next_pad_defaults` so the
+    /// canvas mints whatever designator + size + side the Properties
+    /// panel form has captured. Falls back to auto-incrementing
+    /// designator when `designator_override` is `None` (default).
     pub fn add_pad_at(&mut self, x_mm: f64, y_mm: f64) -> usize {
-        let number = self.next_pad_number();
-        self.pads.push(EditorPad::new_default(number, (x_mm, y_mm)));
+        let defaults = self.next_pad_defaults.clone();
+        let number = defaults
+            .designator_override
+            .clone()
+            .unwrap_or_else(|| self.next_pad_number());
+        let layers = match defaults.side {
+            PadSide::Top => vec![
+                LayerId::new("F.Cu"),
+                LayerId::new("F.Mask"),
+                LayerId::new("F.Paste"),
+            ],
+            PadSide::Bottom => vec![
+                LayerId::new("B.Cu"),
+                LayerId::new("B.Mask"),
+                LayerId::new("B.Paste"),
+            ],
+            PadSide::All => vec![
+                LayerId::new("*.Cu"),
+                LayerId::new("F.Mask"),
+                LayerId::new("B.Mask"),
+            ],
+        };
+        let mut pad = EditorPad::new_default(number, (x_mm, y_mm));
+        pad.size_mm = (defaults.size_x_mm.max(0.05), defaults.size_y_mm.max(0.05));
+        pad.layers = layers;
+        self.pads.push(pad);
         let idx = self.pads.len() - 1;
         self.selected_pad = Some(idx);
         self.recompute_courtyard();
