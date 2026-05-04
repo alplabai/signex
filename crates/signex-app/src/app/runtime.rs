@@ -596,6 +596,7 @@ impl Signex {
             custom_paper_h_mm,
             sheet_color,
             symbol_editor: build_symbol_editor_panel_ctx(self),
+            footprint_editor: build_footprint_editor_panel_ctx(self),
             history: self.document_state.history.clone(),
         };
         self.document_state.panel_ctx.project_tree =
@@ -1041,4 +1042,145 @@ fn graphic_kind_to_summary(
             size: *size,
         },
     }
+}
+
+/// v0.14.2 — project the active `.snxfpt` editor's data into a
+/// panel-side snapshot. Mirrors `build_symbol_editor_panel_ctx`.
+fn build_footprint_editor_panel_ctx(
+    app: &super::Signex,
+) -> Option<crate::panels::FootprintEditorPanelContext> {
+    use crate::library::editor::footprint::state::EditorMode;
+    use crate::panels::{
+        FootprintEditorPanelContext, FootprintModeKind, FootprintPadSummary,
+        FootprintSketchEntitySummary, FootprintSolveSummary,
+    };
+
+    let active = app.document_state.tabs.get(app.document_state.active_tab)?;
+    let path = active.kind.as_footprint_editor()?.clone();
+    let editor = app.document_state.footprint_editors.get(&path)?;
+
+    let mode_kind = match editor.state.mode {
+        EditorMode::Normal => FootprintModeKind::Pads,
+        EditorMode::Sketch => FootprintModeKind::Sketch,
+        EditorMode::View3d => FootprintModeKind::View3d,
+    };
+
+    let pad_count = editor.primitive.pads.len();
+    let (sketch_entity_count, sketch_constraint_count) = match editor.primitive.sketch.as_ref() {
+        Some(s) => (s.entities.len(), s.constraints.len()),
+        None => (0, 0),
+    };
+
+    let last_solve = editor.state.last_solve.as_ref().map(|out| FootprintSolveSummary {
+        iterations: out.result.iterations,
+        elapsed_ms: out.result.elapsed_ms,
+        final_residual_norm: out.result.final_residual_norm,
+        over_constraint_count: out.over_constraints.len(),
+        auto_paused: editor.state.auto_pause.paused(),
+    });
+
+    // Pad summary — populated only when in Pads mode AND a pad is
+    // selected. Avoids confusing the user with a stale pad selection
+    // surfacing while they're authoring sketch entities.
+    let selected_pad = if mode_kind == FootprintModeKind::Pads {
+        editor.state.selected_pad.and_then(|idx| {
+            editor.state.pads.get(idx).map(|pad| FootprintPadSummary {
+                idx,
+                number: pad.number.clone(),
+                kind_label: footprint_pad_kind_label(pad),
+                shape_label: footprint_pad_shape_label(pad),
+                size_mm: [pad.size_mm.0, pad.size_mm.1],
+                position_mm: [pad.position_mm.0, pad.position_mm.1],
+                rotation_deg: 0.0, // editor-side pad doesn't carry rotation yet
+                layer_count: pad.layers.len(),
+                has_drill: false, // drill lives on the baked Pad, not EditorPad
+            })
+        })
+    } else {
+        None
+    };
+
+    // Sketch entity summary — populated only when in Sketch mode AND
+    // an entity is selected.
+    let selected_sketch_entity = if mode_kind == FootprintModeKind::Sketch {
+        editor
+            .state
+            .selected_sketch
+            .and_then(|id| build_sketch_entity_summary(editor, id))
+    } else {
+        None
+    };
+
+    Some(FootprintEditorPanelContext {
+        path,
+        footprint_name: editor.primitive.name.clone(),
+        version: editor.primitive.version.clone(),
+        mode_kind,
+        pad_count,
+        sketch_entity_count,
+        sketch_constraint_count,
+        last_solve,
+        selected_pad,
+        selected_sketch_entity,
+    })
+}
+
+fn footprint_pad_kind_label(
+    pad: &crate::library::editor::footprint::state::EditorPad,
+) -> &'static str {
+    use signex_library::primitive::footprint::PadKind;
+    match pad.kind {
+        PadKind::Smd => "SMD",
+        PadKind::Tht => "Through-hole",
+        PadKind::NptHole => "NPT hole",
+        PadKind::ConnectorPad => "Connector",
+        PadKind::Castellated => "Castellated",
+        PadKind::Fiducial => "Fiducial",
+        _ => "Unknown",
+    }
+}
+
+fn footprint_pad_shape_label(
+    pad: &crate::library::editor::footprint::state::EditorPad,
+) -> &'static str {
+    use signex_library::primitive::footprint::PadShape;
+    match &pad.shape {
+        PadShape::Round => "Round",
+        PadShape::Rect => "Rect",
+        PadShape::Oval => "Oval",
+        PadShape::RoundRect { .. } => "RoundRect",
+        PadShape::Chamfered { .. } => "Chamfered",
+        PadShape::Custom(_) => "Custom",
+    }
+}
+
+fn build_sketch_entity_summary(
+    editor: &crate::app::FootprintEditorState,
+    id: signex_sketch::id::SketchEntityId,
+) -> Option<crate::panels::FootprintSketchEntitySummary> {
+    use signex_sketch::entity::EntityKind;
+    let sketch = editor.primitive.sketch.as_ref()?;
+    let entity = sketch.entities.iter().find(|e| e.id == id)?;
+    let (kind_label, position_mm) = match entity.kind {
+        EntityKind::Point { x, y } => ("Point", Some([x, y])),
+        EntityKind::Line { .. } => ("Line", None),
+        EntityKind::Arc { .. } => ("Arc", None),
+        EntityKind::Circle { .. } => ("Circle", None),
+    };
+    // Coarse: count constraints whose Debug-stringified payload
+    // mentions this entity ID. Mirrors the dispatcher's existing
+    // dangling-ref drop heuristic — good enough for v0.14.2 surface;
+    // structured constraint→entity touch-graph lands later.
+    let id_str = id.to_string();
+    let attached_constraint_count = sketch
+        .constraints
+        .iter()
+        .filter(|c| format!("{:?}", c.kind).contains(&id_str))
+        .count();
+    Some(crate::panels::FootprintSketchEntitySummary {
+        kind_label,
+        position_mm,
+        attached_constraint_count,
+        construction: entity.construction,
+    })
 }

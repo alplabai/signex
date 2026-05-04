@@ -478,11 +478,96 @@ pub struct PanelContext {
     /// without the in-tab editor having to embed its own properties pane.
     /// `None` for any other tab kind.
     pub symbol_editor: Option<SymbolEditorPanelContext>,
+    /// v0.14.2 — context for the right-dock Properties panel when the
+    /// active tab is a `.snxfpt` standalone footprint editor.
+    /// Surfaces editor mode (Pads / Sketch / 3D View) + the current
+    /// selection so the panel can switch its body between pad
+    /// properties, sketch entity properties, or footprint defaults.
+    /// `None` for any other tab kind.
+    pub footprint_editor: Option<FootprintEditorPanelContext>,
     /// Per-file Git history snapshot for the right-dock History
     /// panel. Mirrored from [`crate::app::DocumentState::history`]
     /// each refresh; the panel reads it directly without holding a
     /// borrow into the document state.
     pub history: history::HistoryPanelState,
+}
+
+/// Context handed to the Properties panel when a `.snxfpt` editor
+/// tab is active. Mirrors a small read-only slice of the live
+/// `FootprintEditorState` — the panel never mutates this, edits flow
+/// back through `LibraryMessage::PrimitiveEditorEvent` like every
+/// other primitive editor.
+#[derive(Debug, Clone)]
+pub struct FootprintEditorPanelContext {
+    /// Open `.snxfpt` path (the tab key).
+    pub path: std::path::PathBuf,
+    /// `Footprint::name` — surfaced as the panel header.
+    pub footprint_name: String,
+    /// `Footprint::version` — semver-style revision string.
+    pub version: String,
+    /// Current editor mode — drives the Properties panel body branch.
+    pub mode_kind: FootprintModeKind,
+    /// Number of baked pads on the footprint primitive.
+    pub pad_count: usize,
+    /// Number of sketch entities (Points + Lines + Arcs + Circles)
+    /// when a sketch is present.
+    pub sketch_entity_count: usize,
+    /// Number of sketch constraints when a sketch is present.
+    pub sketch_constraint_count: usize,
+    /// Number of free DoF the most recent solve reported, plus
+    /// elapsed_ms. `None` if no solve has run yet.
+    pub last_solve: Option<FootprintSolveSummary>,
+    /// Read-only summary of the selected pad — populated when in
+    /// Pads mode and a pad is selected.
+    pub selected_pad: Option<FootprintPadSummary>,
+    /// Read-only summary of the primary selected sketch entity —
+    /// populated when in Sketch mode and an entity is selected.
+    pub selected_sketch_entity: Option<FootprintSketchEntitySummary>,
+}
+
+/// Editor mode mirror — kept in this crate so the panel doesn't need
+/// to import `library::editor::footprint::state::EditorMode`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FootprintModeKind {
+    Pads,
+    Sketch,
+    View3d,
+}
+
+#[derive(Debug, Clone)]
+pub struct FootprintSolveSummary {
+    pub iterations: usize,
+    pub elapsed_ms: u64,
+    pub final_residual_norm: f64,
+    pub over_constraint_count: usize,
+    pub auto_paused: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct FootprintPadSummary {
+    pub idx: usize,
+    pub number: String,
+    pub kind_label: &'static str,
+    pub shape_label: &'static str,
+    pub size_mm: [f64; 2],
+    pub position_mm: [f64; 2],
+    pub rotation_deg: f64,
+    pub layer_count: usize,
+    pub has_drill: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct FootprintSketchEntitySummary {
+    /// Display label for the entity kind ("Point", "Line", "Arc",
+    /// "Circle"). Wrapper avoids importing the sketch enum.
+    pub kind_label: &'static str,
+    /// Coordinates in mm — for Points only; None for Lines/Arcs/Circles.
+    pub position_mm: Option<[f64; 2]>,
+    /// Number of attached constraints touching this entity.
+    pub attached_constraint_count: usize,
+    /// `true` if this is a construction entity (solver scaffolding
+    /// only, no baked geometry).
+    pub construction: bool,
 }
 
 /// Context handed to the right-dock Properties panel and the SCH-Library
@@ -2375,6 +2460,14 @@ fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         return view_symbol_editor_properties(sym, muted, primary, border_c);
     }
 
+    // v0.14.2 — Footprint-editor tab. Properties panel switches body
+    // based on (mode × selection): Pads-mode pad selected → pad
+    // properties; Sketch-mode entity selected → sketch entity
+    // properties; nothing selected → footprint summary + solve stats.
+    if let Some(fp) = ctx.footprint_editor.as_ref() {
+        return view_footprint_editor_properties(fp, muted, primary, border_c);
+    }
+
     if !ctx.has_schematic {
         // Don't mislead the user into thinking nothing is loaded when
         // they've just switched to a PCB tab — distinguish "no project
@@ -3332,6 +3425,218 @@ fn view_symbol_editor_properties<'a>(
     );
 
     scrollable(col).width(Length::Fill).into()
+}
+
+/// v0.14.2 — Properties panel body for the Footprint editor. Switches
+/// between three contexts:
+///
+/// 1. **Pads mode + pad selected** — pad number, kind, shape, size,
+///    position, layer count.
+/// 2. **Sketch mode + entity selected** — entity kind, position
+///    (Points only), construction flag, attached-constraint count.
+/// 3. **Default** (any mode, no selection) — footprint summary
+///    (name + version), counts (pads, sketch entities, constraints),
+///    and the most recent solve summary when a sketch exists.
+fn view_footprint_editor_properties<'a>(
+    fp: &'a FootprintEditorPanelContext,
+    muted: Color,
+    primary: Color,
+    border_c: Color,
+) -> Element<'a, PanelMsg> {
+    let mode_label = match fp.mode_kind {
+        FootprintModeKind::Pads => "Pads",
+        FootprintModeKind::Sketch => "Sketch",
+        FootprintModeKind::View3d => "3D View",
+    };
+
+    let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
+
+    col = col.push(
+        container(
+            row![
+                text(&fp.footprint_name).size(12).color(primary),
+                text("·").size(12).color(muted),
+                text(mode_label).size(11).color(muted),
+            ]
+            .spacing(6)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([6, 8])
+        .width(Length::Fill),
+    );
+    col = col.push(thin_sep(border_c));
+
+    // Branch on (mode × selection).
+    match (fp.mode_kind, fp.selected_pad.as_ref(), fp.selected_sketch_entity.as_ref()) {
+        (FootprintModeKind::Pads, Some(pad), _) => {
+            col = col.push(props_section_header("Pad", primary));
+            col = props_kv_row(col, muted, primary, "Number", pad.number.clone());
+            col = props_kv_row(col, muted, primary, "Kind", pad.kind_label.into());
+            col = props_kv_row(col, muted, primary, "Shape", pad.shape_label.into());
+            col = props_kv_row(
+                col,
+                muted,
+                primary,
+                "Size",
+                format!("{:.3} × {:.3} mm", pad.size_mm[0], pad.size_mm[1]),
+            );
+            col = props_kv_row(
+                col,
+                muted,
+                primary,
+                "Position",
+                format!("({:.3}, {:.3}) mm", pad.position_mm[0], pad.position_mm[1]),
+            );
+            col = props_kv_row(
+                col,
+                muted,
+                primary,
+                "Layers",
+                pad.layer_count.to_string(),
+            );
+        }
+        (FootprintModeKind::Sketch, _, Some(ent)) => {
+            col = col.push(props_section_header("Sketch entity", primary));
+            col = props_kv_row(col, muted, primary, "Kind", ent.kind_label.into());
+            if let Some([x, y]) = ent.position_mm {
+                col = props_kv_row(
+                    col,
+                    muted,
+                    primary,
+                    "Position",
+                    format!("({x:.3}, {y:.3}) mm"),
+                );
+            }
+            col = props_kv_row(
+                col,
+                muted,
+                primary,
+                "Construction",
+                if ent.construction { "yes".into() } else { "no".into() },
+            );
+            col = props_kv_row(
+                col,
+                muted,
+                primary,
+                "Attached constraints",
+                ent.attached_constraint_count.to_string(),
+            );
+        }
+        _ => {
+            // No selection — show the footprint summary.
+            col = col.push(props_section_header("Footprint", primary));
+            col = props_kv_row(col, muted, primary, "Name", fp.footprint_name.clone());
+            col = props_kv_row(col, muted, primary, "Version", fp.version.clone());
+            col = props_kv_row(col, muted, primary, "Mode", mode_label.into());
+            col = props_kv_row(col, muted, primary, "Pads", fp.pad_count.to_string());
+
+            if fp.sketch_entity_count > 0 || fp.sketch_constraint_count > 0 {
+                col = col.push(props_section_header("Sketch", primary));
+                col = props_kv_row(
+                    col,
+                    muted,
+                    primary,
+                    "Entities",
+                    fp.sketch_entity_count.to_string(),
+                );
+                col = props_kv_row(
+                    col,
+                    muted,
+                    primary,
+                    "Constraints",
+                    fp.sketch_constraint_count.to_string(),
+                );
+                if let Some(s) = fp.last_solve.as_ref() {
+                    col = col.push(props_section_header("Last solve", primary));
+                    col = props_kv_row(
+                        col,
+                        muted,
+                        primary,
+                        "Iterations",
+                        s.iterations.to_string(),
+                    );
+                    col = props_kv_row(
+                        col,
+                        muted,
+                        primary,
+                        "Elapsed",
+                        format!("{} ms", s.elapsed_ms),
+                    );
+                    col = props_kv_row(
+                        col,
+                        muted,
+                        primary,
+                        "Residual norm",
+                        format!("{:.3e}", s.final_residual_norm),
+                    );
+                    col = props_kv_row(
+                        col,
+                        muted,
+                        primary,
+                        "Over-constrained",
+                        s.over_constraint_count.to_string(),
+                    );
+                    col = props_kv_row(
+                        col,
+                        muted,
+                        primary,
+                        "Auto-pause",
+                        if s.auto_paused { "PAUSED".into() } else { "running".into() },
+                    );
+                }
+            }
+
+            col = col.push(props_section_header("Hint", primary));
+            let hint = match fp.mode_kind {
+                FootprintModeKind::Pads => "Click a pad to edit its properties.",
+                FootprintModeKind::Sketch => {
+                    "Click a sketch entity (Point / Line / Arc / Circle) to edit it."
+                }
+                FootprintModeKind::View3d => "3D View — use the 3D preview pane to inspect the body.",
+            };
+            col = col.push(
+                container(text(hint).size(10).color(muted))
+                    .padding([4, 8])
+                    .width(Length::Fill),
+            );
+        }
+    }
+
+    scrollable(col).width(Length::Fill).into()
+}
+
+fn props_section_header<'a>(label: &str, primary: Color) -> Element<'a, PanelMsg> {
+    container(text(label.to_string()).size(11).color(primary))
+        .padding([6, 8])
+        .width(Length::Fill)
+        .into()
+}
+
+fn props_kv_row<'a>(
+    mut col: Column<'a, PanelMsg>,
+    muted: Color,
+    primary: Color,
+    key: &str,
+    value: String,
+) -> Column<'a, PanelMsg> {
+    col = col.push(
+        container(
+            row![
+                text(key.to_string())
+                    .size(10)
+                    .color(muted)
+                    .width(Length::FillPortion(2)),
+                text(value)
+                    .size(10)
+                    .color(primary)
+                    .width(Length::FillPortion(3)),
+            ]
+            .spacing(4),
+        )
+        .padding([3, 8])
+        .width(Length::Fill),
+    );
+    col
 }
 
 /// Altium-style context-aware properties for a single selected element.

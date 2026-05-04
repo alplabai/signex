@@ -250,6 +250,7 @@ impl Signex {
                     custom_paper_h_mm: 210.0,
                     sheet_color: crate::panels::SheetColor::default(),
                     symbol_editor: None,
+                    footprint_editor: None,
                     history: crate::panels::history::HistoryPanelState::default(),
                 },
                 history: crate::panels::history::HistoryPanelState::default(),
