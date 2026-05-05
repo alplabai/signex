@@ -24,10 +24,10 @@
 
 - [x] `cargo test -p signex-renderer -- --nocapture` passes.
 - [x] Targeted app tests for PCB dirty adapter and PCB canvas interactions pass.
-- [ ] Snapshot/fixture parity checks confirm no regression in overlay/zone ordering.
+- [x] Snapshot/fixture parity checks confirm no regression in overlay/zone ordering.
 
 ## Exit gate
 
-- [ ] Task 05-07 completed from Sprint C issue.
+- [x] Task 05-07 completed from Sprint C issue.
 - [x] No `signex_render::pcb` symbol usage remains in `signex-app`.
-- [ ] Sprint C issue marked done with evidence logs.
+- [x] Sprint C issue marked done with evidence logs.
