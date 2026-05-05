@@ -4,6 +4,7 @@
 //! This module was written without reference to GPL-licensed software.
 //! Sources: IPC-2612-1, IEEE 315, IEC 60617, wgpu/WGSL public docs.
 
+use crate::theme::ResolvedTheme;
 use signex_gfx::scene::{DirtyFlags, Scene};
 use std::collections::HashMap;
 
@@ -20,7 +21,12 @@ use signex_types::violation::Severity;
 pub trait ViewRenderer {
     type Snapshot;
 
-    fn build_scene(snapshot: &Self::Snapshot, dirty: DirtyFlags, scene: &mut Scene);
+    fn build_scene(
+        snapshot: &Self::Snapshot,
+        theme: &ResolvedTheme,
+        dirty: DirtyFlags,
+        scene: &mut Scene,
+    );
 }
 
 #[derive(Clone, Debug)]
@@ -110,23 +116,6 @@ pub struct ErcMarkerInput {
 }
 
 #[derive(Clone, Debug)]
-pub struct ErcSlotPalette {
-    pub error: [f32; 4],
-    pub warning: [f32; 4],
-    pub info: [f32; 4],
-}
-
-impl Default for ErcSlotPalette {
-    fn default() -> Self {
-        Self {
-            error: [0.93, 0.29, 0.31, 1.0],
-            warning: [0.96, 0.62, 0.19, 1.0],
-            info: [0.29, 0.68, 0.96, 1.0],
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
 pub struct SchematicSnapshot {
     pub wires: Vec<WireInput>,
     pub junctions: Vec<JunctionInput>,
@@ -138,21 +127,19 @@ pub struct SchematicSnapshot {
     pub parameter_texts: Vec<TextInput>,
     pub overlays: OverlayInputs,
     pub erc_markers: Vec<ErcMarkerInput>,
-    pub erc_palette: ErcSlotPalette,
     pub wire_color_overrides: HashMap<u64, [f32; 4]>,
-    pub wire_theme_default: [f32; 4],
 }
 
-fn resolve_wire_color(wire: &WireInput, snapshot: &SchematicSnapshot) -> [f32; 4] {
+fn resolve_wire_color(wire: &WireInput, snapshot: &SchematicSnapshot, theme: &ResolvedTheme) -> [f32; 4] {
     snapshot
         .wire_color_overrides
         .get(&wire.id)
         .copied()
         .or(wire.explicit_color)
-        .unwrap_or(snapshot.wire_theme_default)
+        .unwrap_or(theme.color(ColorSlot::Wire))
 }
 
-fn emit_wires(snapshot: &SchematicSnapshot, scene: &mut Scene) {
+fn emit_wires(snapshot: &SchematicSnapshot, theme: &ResolvedTheme, scene: &mut Scene) {
     scene.lines.clear();
     scene.lines.reserve(snapshot.wires.len());
 
@@ -161,7 +148,7 @@ fn emit_wires(snapshot: &SchematicSnapshot, scene: &mut Scene) {
             p0: wire.p0,
             p1: wire.p1,
             width: wire.width_mm,
-            color: resolve_wire_color(wire, snapshot),
+            color: resolve_wire_color(wire, snapshot, theme),
             style: 0,
             _pad: 0,
         });
@@ -326,12 +313,14 @@ fn erc_style_ref(severity: Severity) -> StyleRef {
     StyleRef::new(slot)
 }
 
-fn erc_color_from_style(style: StyleRef, palette: &ErcSlotPalette) -> [f32; 4] {
-    let mut color = match style.slot {
-        slot if slot == ColorSlot::ErcError as u16 => palette.error,
-        slot if slot == ColorSlot::ErcWarning as u16 => palette.warning,
-        _ => palette.info,
+fn erc_color_from_style(style: StyleRef, theme: &ResolvedTheme) -> [f32; 4] {
+    let slot = match style.slot {
+        slot if slot == ColorSlot::ErcError as u16 => ColorSlot::ErcError,
+        slot if slot == ColorSlot::ErcWarning as u16 => ColorSlot::ErcWarning,
+        _ => ColorSlot::ErcInfo,
     };
+
+    let mut color = theme.color(slot);
 
     color[3] = (color[3] * style.alpha_mul.clamp(0.0, 1.0)).clamp(0.0, 1.0);
     color
@@ -379,7 +368,7 @@ fn erc_marker_line(marker: &ErcMarkerInput) -> ([f32; 2], [f32; 2]) {
     }
 }
 
-fn emit_erc_markers(snapshot: &SchematicSnapshot, scene: &mut Scene) {
+fn emit_erc_markers(snapshot: &SchematicSnapshot, theme: &ResolvedTheme, scene: &mut Scene) {
     scene.erc_marker_lines.clear();
     scene.erc_marker_circles.clear();
     scene.erc_marker_polygons.clear();
@@ -390,7 +379,7 @@ fn emit_erc_markers(snapshot: &SchematicSnapshot, scene: &mut Scene) {
 
     for marker in &snapshot.erc_markers {
         let style = erc_style_ref(marker.severity);
-        let stroke_color = erc_color_from_style(style, &snapshot.erc_palette);
+        let stroke_color = erc_color_from_style(style, theme);
         let fill_color = [
             stroke_color[0],
             stroke_color[1],
@@ -430,9 +419,14 @@ pub struct SchematicRenderer;
 impl ViewRenderer for SchematicRenderer {
     type Snapshot = SchematicSnapshot;
 
-    fn build_scene(snapshot: &Self::Snapshot, dirty: DirtyFlags, scene: &mut Scene) {
+    fn build_scene(
+        snapshot: &Self::Snapshot,
+        theme: &ResolvedTheme,
+        dirty: DirtyFlags,
+        scene: &mut Scene,
+    ) {
         if dirty.contains(DirtyFlags::LINES) {
-            emit_wires(snapshot, scene);
+            emit_wires(snapshot, theme, scene);
         }
 
         if dirty.contains(DirtyFlags::CIRCLES) {
@@ -453,7 +447,7 @@ impl ViewRenderer for SchematicRenderer {
 
         if dirty.contains(DirtyFlags::OVERLAY) {
             emit_overlays(snapshot, scene);
-            emit_erc_markers(snapshot, scene);
+            emit_erc_markers(snapshot, theme, scene);
         }
 
         scene.dirty |= dirty;
@@ -463,15 +457,18 @@ impl ViewRenderer for SchematicRenderer {
 #[cfg(test)]
 mod tests {
     use super::{
-        ArcInput, ErcMarkerInput, ErcSlotPalette, OverlayCircleInput, OverlayInputs,
-        OverlayLineInput, OverlayPolygonInput, PolygonInput, SchematicRenderer,
-        SchematicSnapshot, TextInput, ViewRenderer, WireInput,
+        ArcInput, ErcMarkerInput, OverlayCircleInput, OverlayInputs, OverlayLineInput,
+        OverlayPolygonInput, PolygonInput, SchematicRenderer, SchematicSnapshot, TextInput,
+        ViewRenderer, WireInput,
     };
     use signex_gfx::primitive::text::{TextHAlign, TextVAlign};
     use signex_gfx::scene::{DirtyFlags, Scene};
+    use signex_gfx::style::ColorSlot;
     use signex_types::schematic::{HAlign, VAlign};
     use signex_types::violation::Severity;
     use std::collections::HashMap;
+
+    use crate::theme::ResolvedTheme;
 
     fn make_wire(id: u64, explicit_color: Option<[f32; 4]>) -> WireInput {
         WireInput {
@@ -544,12 +541,17 @@ mod tests {
         }
     }
 
-    fn default_erc_palette() -> ErcSlotPalette {
-        ErcSlotPalette {
-            error: [0.95, 0.22, 0.26, 1.0],
-            warning: [0.95, 0.74, 0.24, 1.0],
-            info: [0.27, 0.70, 0.96, 1.0],
-        }
+    fn default_theme() -> ResolvedTheme {
+        ResolvedTheme::builtin_default()
+    }
+
+    fn build_scene_with_default_theme(
+        snapshot: &SchematicSnapshot,
+        dirty: DirtyFlags,
+        scene: &mut Scene,
+    ) {
+        let theme = default_theme();
+        SchematicRenderer::build_scene(snapshot, &theme, dirty, scene);
     }
 
     fn make_erc_marker(center: [f32; 2], radius_mm: f32, severity: Severity) -> ErcMarkerInput {
@@ -580,13 +582,12 @@ mod tests {
             parameter_texts: Vec::new(),
             overlays: OverlayInputs::default(),
             erc_markers: Vec::new(),
-            erc_palette: default_erc_palette(),
             wire_color_overrides: overrides,
-            wire_theme_default: [0.2, 0.2, 0.9, 1.0],
         };
 
+        let theme = default_theme().with_slot(ColorSlot::Wire, [0.2, 0.2, 0.9, 1.0]);
         let mut scene = Scene::default();
-        SchematicRenderer::build_scene(&snapshot, DirtyFlags::LINES, &mut scene);
+        SchematicRenderer::build_scene(&snapshot, &theme, DirtyFlags::LINES, &mut scene);
 
         assert_eq!(scene.lines.len(), 3);
         assert_eq!(scene.lines[0].color, [0.8, 0.1, 0.1, 1.0]);
@@ -616,13 +617,11 @@ mod tests {
                 snap_circles: vec![make_overlay_circle([2.0, 2.0], [0.2, 0.9, 0.9, 1.0])],
             },
             erc_markers: vec![make_erc_marker([2.8, 2.8], 0.25, Severity::Warning)],
-            erc_palette: default_erc_palette(),
             wire_color_overrides: HashMap::new(),
-            wire_theme_default: [0.1, 0.1, 0.1, 1.0],
         };
 
         let mut scene = Scene::default();
-        SchematicRenderer::build_scene(&snapshot, DirtyFlags::LINES, &mut scene);
+        build_scene_with_default_theme(&snapshot, DirtyFlags::LINES, &mut scene);
         assert_eq!(scene.lines.len(), 1);
         assert_eq!(scene.circles.len(), 0);
         assert_eq!(scene.arcs.len(), 0);
@@ -635,7 +634,7 @@ mod tests {
         assert_eq!(scene.erc_marker_circles.len(), 0);
         assert_eq!(scene.erc_marker_polygons.len(), 0);
 
-        SchematicRenderer::build_scene(&snapshot, DirtyFlags::CIRCLES, &mut scene);
+        build_scene_with_default_theme(&snapshot, DirtyFlags::CIRCLES, &mut scene);
         assert_eq!(scene.lines.len(), 1);
         assert_eq!(scene.circles.len(), 1);
         assert_eq!(scene.arcs.len(), 0);
@@ -648,7 +647,7 @@ mod tests {
         assert_eq!(scene.erc_marker_circles.len(), 0);
         assert_eq!(scene.erc_marker_polygons.len(), 0);
 
-        SchematicRenderer::build_scene(&snapshot, DirtyFlags::ARCS, &mut scene);
+        build_scene_with_default_theme(&snapshot, DirtyFlags::ARCS, &mut scene);
         assert_eq!(scene.lines.len(), 1);
         assert_eq!(scene.circles.len(), 1);
         assert_eq!(scene.arcs.len(), 1);
@@ -661,11 +660,11 @@ mod tests {
         assert_eq!(scene.erc_marker_circles.len(), 0);
         assert_eq!(scene.erc_marker_polygons.len(), 0);
 
-        SchematicRenderer::build_scene(&snapshot, DirtyFlags::POLYGONS, &mut scene);
+        build_scene_with_default_theme(&snapshot, DirtyFlags::POLYGONS, &mut scene);
         assert_eq!(scene.polygons.len(), 1);
         assert_eq!(scene.texts.len(), 0);
 
-        SchematicRenderer::build_scene(&snapshot, DirtyFlags::TEXT, &mut scene);
+        build_scene_with_default_theme(&snapshot, DirtyFlags::TEXT, &mut scene);
         assert_eq!(scene.polygons.len(), 1);
         assert_eq!(scene.texts.len(), 1);
         assert_eq!(scene.overlay_lines.len(), 0);
@@ -675,7 +674,7 @@ mod tests {
         assert_eq!(scene.erc_marker_circles.len(), 0);
         assert_eq!(scene.erc_marker_polygons.len(), 0);
 
-        SchematicRenderer::build_scene(&snapshot, DirtyFlags::OVERLAY, &mut scene);
+        build_scene_with_default_theme(&snapshot, DirtyFlags::OVERLAY, &mut scene);
         assert_eq!(scene.overlay_lines.len(), 2);
         assert_eq!(scene.overlay_circles.len(), 1);
         assert_eq!(scene.overlay_polygons.len(), 1);
@@ -709,13 +708,11 @@ mod tests {
             parameter_texts: Vec::new(),
             overlays: OverlayInputs::default(),
             erc_markers: Vec::new(),
-            erc_palette: default_erc_palette(),
             wire_color_overrides: HashMap::new(),
-            wire_theme_default: [0.1, 0.1, 0.1, 1.0],
         };
 
         let mut scene = Scene::default();
-        SchematicRenderer::build_scene(&snapshot, DirtyFlags::ARCS, &mut scene);
+        build_scene_with_default_theme(&snapshot, DirtyFlags::ARCS, &mut scene);
 
         assert_eq!(scene.lines.len(), 0);
         assert_eq!(scene.circles.len(), 0);
@@ -738,13 +735,11 @@ mod tests {
             parameter_texts: Vec::new(),
             overlays: OverlayInputs::default(),
             erc_markers: Vec::new(),
-            erc_palette: default_erc_palette(),
             wire_color_overrides: HashMap::new(),
-            wire_theme_default: [0.1, 0.1, 0.1, 1.0],
         };
 
         let mut scene = Scene::default();
-        SchematicRenderer::build_scene(&snapshot, DirtyFlags::POLYGONS | DirtyFlags::TEXT, &mut scene);
+        build_scene_with_default_theme(&snapshot, DirtyFlags::POLYGONS | DirtyFlags::TEXT, &mut scene);
 
         assert_eq!(scene.polygons.len(), 1);
         assert_eq!(scene.polygons[0].vertices.len(), 4);
@@ -772,13 +767,11 @@ mod tests {
             parameter_texts: vec![make_text("Tolerance=1%", 0.0)],
             overlays: OverlayInputs::default(),
             erc_markers: Vec::new(),
-            erc_palette: default_erc_palette(),
             wire_color_overrides: HashMap::new(),
-            wire_theme_default: [0.1, 0.1, 0.1, 1.0],
         };
 
         let mut scene = Scene::default();
-        SchematicRenderer::build_scene(&snapshot, DirtyFlags::TEXT, &mut scene);
+        build_scene_with_default_theme(&snapshot, DirtyFlags::TEXT, &mut scene);
 
         assert_eq!(scene.texts.len(), 5);
         assert_eq!(scene.texts[0].content, "NET_A");
@@ -810,13 +803,11 @@ mod tests {
             parameter_texts: Vec::new(),
             overlays: OverlayInputs::default(),
             erc_markers: Vec::new(),
-            erc_palette: default_erc_palette(),
             wire_color_overrides: HashMap::new(),
-            wire_theme_default: [0.1, 0.1, 0.1, 1.0],
         };
 
         let mut scene = Scene::default();
-        SchematicRenderer::build_scene(&snapshot, DirtyFlags::TEXT, &mut scene);
+        build_scene_with_default_theme(&snapshot, DirtyFlags::TEXT, &mut scene);
 
         assert_eq!(scene.texts.len(), 2);
         assert_eq!(scene.texts[0].h_align, TextHAlign::Center);
@@ -847,13 +838,11 @@ mod tests {
                 snap_circles: vec![make_overlay_circle([2.0, 2.0], [0.2, 1.0, 0.9, 1.0])],
             },
             erc_markers: Vec::new(),
-            erc_palette: default_erc_palette(),
             wire_color_overrides: HashMap::new(),
-            wire_theme_default: [0.1, 0.1, 0.1, 1.0],
         };
 
         let mut scene = Scene::default();
-        SchematicRenderer::build_scene(&snapshot, DirtyFlags::OVERLAY, &mut scene);
+        build_scene_with_default_theme(&snapshot, DirtyFlags::OVERLAY, &mut scene);
 
         assert_eq!(scene.overlay_lines.len(), 3);
         assert_eq!(scene.overlay_polygons.len(), 1);
@@ -870,11 +859,10 @@ mod tests {
 
     #[test]
     fn erc_marker_emitter_maps_severity_slots_to_palette_colors() {
-        let palette = ErcSlotPalette {
-            error: [0.91, 0.2, 0.2, 1.0],
-            warning: [0.96, 0.72, 0.2, 1.0],
-            info: [0.26, 0.67, 0.94, 1.0],
-        };
+        let theme = default_theme()
+            .with_slot(ColorSlot::ErcError, [0.91, 0.2, 0.2, 1.0])
+            .with_slot(ColorSlot::ErcWarning, [0.96, 0.72, 0.2, 1.0])
+            .with_slot(ColorSlot::ErcInfo, [0.26, 0.67, 0.94, 1.0]);
 
         let snapshot = SchematicSnapshot {
             wires: Vec::new(),
@@ -891,13 +879,11 @@ mod tests {
                 make_erc_marker([2.0, 1.0], 0.25, Severity::Warning),
                 make_erc_marker([3.0, 1.0], 0.25, Severity::Info),
             ],
-            erc_palette: palette,
             wire_color_overrides: HashMap::new(),
-            wire_theme_default: [0.1, 0.1, 0.1, 1.0],
         };
 
         let mut scene = Scene::default();
-        SchematicRenderer::build_scene(&snapshot, DirtyFlags::OVERLAY, &mut scene);
+        SchematicRenderer::build_scene(&snapshot, &theme, DirtyFlags::OVERLAY, &mut scene);
 
         assert_eq!(scene.erc_marker_lines.len(), 3);
         assert_eq!(scene.erc_marker_circles.len(), 3);
@@ -934,13 +920,11 @@ mod tests {
             parameter_texts: Vec::new(),
             overlays: OverlayInputs::default(),
             erc_markers: markers,
-            erc_palette: default_erc_palette(),
             wire_color_overrides: HashMap::new(),
-            wire_theme_default: [0.1, 0.1, 0.1, 1.0],
         };
 
         let mut scene = Scene::default();
-        SchematicRenderer::build_scene(&snapshot, DirtyFlags::OVERLAY, &mut scene);
+        build_scene_with_default_theme(&snapshot, DirtyFlags::OVERLAY, &mut scene);
 
         assert_eq!(scene.erc_marker_lines.len(), 6);
         assert_eq!(scene.erc_marker_circles.len(), 6);
@@ -952,5 +936,39 @@ mod tests {
             .iter()
             .all(|polygon| polygon.vertices.len() >= 3));
         assert!(scene.dirty.contains(DirtyFlags::OVERLAY));
+    }
+
+    #[test]
+    fn theme_resolved_flow_updates_wire_and_erc_colors() {
+        let theme = default_theme()
+            .with_slot(ColorSlot::Wire, [0.12, 0.34, 0.56, 1.0])
+            .with_slot(ColorSlot::ErcError, [0.91, 0.11, 0.21, 1.0]);
+
+        let snapshot = SchematicSnapshot {
+            wires: vec![make_wire(42, None)],
+            junctions: Vec::new(),
+            arcs: Vec::new(),
+            polygons: Vec::new(),
+            labels: Vec::new(),
+            pin_texts: Vec::new(),
+            reference_value_texts: Vec::new(),
+            parameter_texts: Vec::new(),
+            overlays: OverlayInputs::default(),
+            erc_markers: vec![make_erc_marker([1.0, 1.0], 0.25, Severity::Error)],
+            wire_color_overrides: HashMap::new(),
+        };
+
+        let mut scene = Scene::default();
+        SchematicRenderer::build_scene(
+            &snapshot,
+            &theme,
+            DirtyFlags::LINES | DirtyFlags::OVERLAY,
+            &mut scene,
+        );
+
+        assert_eq!(scene.lines.len(), 1);
+        assert_eq!(scene.lines[0].color, [0.12, 0.34, 0.56, 1.0]);
+        assert_eq!(scene.erc_marker_lines.len(), 1);
+        assert_eq!(scene.erc_marker_lines[0].color, [0.91, 0.11, 0.21, 1.0]);
     }
 }

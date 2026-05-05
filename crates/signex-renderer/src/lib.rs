@@ -6,3 +6,4 @@
 
 pub mod iced_bridge;
 pub mod schematic;
+pub mod theme;
