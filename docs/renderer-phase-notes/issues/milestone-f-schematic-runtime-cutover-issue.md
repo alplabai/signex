@@ -1,6 +1,6 @@
 # Issue: Milestone F - Schematic Runtime Cutover
 
-Status: not_started
+Status: in_progress
 
 ## Goal
 
@@ -21,8 +21,8 @@ hit-testing, and invalidation-driven updates.
 
 ## Task breakdown (ordered)
 
-- [ ] Task 01: Schematic runtime callsite inventory and cutover contract freeze.
-- [ ] Task 02: App compatibility bridge for snapshot/invalidation/style contracts.
+- [x] Task 01: Schematic runtime callsite inventory and cutover contract freeze.
+- [x] Task 02: App compatibility bridge for snapshot/invalidation/style contracts.
 - [ ] Task 03: Canvas render path cutover to `signex-renderer` scene pipeline.
 - [ ] Task 04: Hit-test and selection workflow migration.
 - [ ] Task 05: Overlay/preview/text helper migration (`escape`, expansion, ghost paths).
@@ -49,6 +49,11 @@ Suggested filenames:
 - logs/milestone-f-task-05-overlay-helper-migration.md
 - logs/milestone-f-task-06-legacy-runtime-removal.md
 - logs/milestone-f-task-07-regression-smoke.md
+
+Completed in this slice:
+
+- [x] [logs/milestone-f-task-01-callsite-inventory.md](../logs/milestone-f-task-01-callsite-inventory.md)
+- [x] [logs/milestone-f-task-02-compat-bridge.md](../logs/milestone-f-task-02-compat-bridge.md)
 
 ## Non-goals
 

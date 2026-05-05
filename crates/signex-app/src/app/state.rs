@@ -172,7 +172,7 @@ pub struct UiState {
     pub annotate_locked: std::collections::HashSet<uuid::Uuid>,
     /// Altium-style rubber-band selection mode. Drives how the box
     /// drag classifies hits (Inside / Outside / TouchingLine).
-    pub selection_mode: signex_render::schematic::hit_test::SelectionMode,
+    pub selection_mode: crate::schematic_runtime::hit_test::SelectionMode,
     /// Net-color override armed from the Active Bar palette. When Some,
     /// the cursor turns into a paint-bucket over the canvas and the
     /// next click on a wire floods that color across every connected

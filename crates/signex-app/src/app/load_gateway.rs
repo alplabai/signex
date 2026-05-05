@@ -34,7 +34,7 @@ impl Signex {
 
     pub(crate) fn active_render_snapshot(
         &self,
-    ) -> Option<&signex_render::schematic::SchematicRenderSnapshot> {
+    ) -> Option<&crate::schematic_runtime::SchematicRenderSnapshot> {
         self.interaction_state.active_canvas().active_snapshot()
     }
 
@@ -162,7 +162,7 @@ impl Signex {
 
     pub(crate) fn sync_canvas_from_visible_schematic(
         &mut self,
-        invalidation: signex_render::schematic::RenderInvalidation,
+        invalidation: crate::schematic_runtime::RenderInvalidation,
     ) {
         // Active engine drives the render cache — if it's gone the
         // cache is cleared. There is no parked-schematic fallback with
@@ -180,7 +180,7 @@ impl Signex {
                 self.interaction_state
                     .active_canvas_mut()
                     .set_render_cache(Some(
-                        signex_render::schematic::SchematicRenderCache::from_sheet(
+                        crate::schematic_runtime::SchematicRenderCache::from_sheet(
                             engine.document(),
                         ),
                     ));
@@ -383,7 +383,7 @@ impl Signex {
         if !self.document_state.has_active_engine() {
             return;
         }
-        self.sync_canvas_from_visible_schematic(signex_render::schematic::RenderInvalidation::FULL);
+        self.sync_canvas_from_visible_schematic(crate::schematic_runtime::RenderInvalidation::FULL);
 
         if fit_to_paper {
             self.interaction_state.active_canvas_mut().fit_to_paper();

@@ -322,7 +322,7 @@ impl Signex {
                 let mut per_window = crate::canvas::SchematicCanvas::new();
                 if let Some(engine) = self.document_state.engines.get(&path) {
                     per_window.set_render_cache(Some(
-                        signex_render::schematic::SchematicRenderCache::from_sheet(
+                        crate::schematic_runtime::SchematicRenderCache::from_sheet(
                             engine.document(),
                         ),
                     ));
@@ -550,7 +550,7 @@ impl Signex {
                     let poly: Vec<(f64, f64)> = pts.iter().map(|p| (p.x, p.y)).collect();
                     let filters = self.interaction_state.selection_filters.clone();
                     self.interaction_state.active_canvas_mut().selected =
-                        signex_render::schematic::hit_test::hit_test_polygon(snapshot, &poly)
+                        crate::schematic_runtime::hit_test::hit_test_polygon(snapshot, &poly)
                             .into_iter()
                             .filter(|h| {
                                 super::handlers::selection_workflow::passes_filter(
@@ -567,7 +567,7 @@ impl Signex {
                 Task::none()
             }
             Message::CycleSelectionMode => {
-                use signex_render::schematic::hit_test::SelectionMode;
+                use crate::schematic_runtime::hit_test::SelectionMode;
                 self.ui_state.selection_mode = match self.ui_state.selection_mode {
                     SelectionMode::Inside => SelectionMode::Touching,
                     SelectionMode::Touching => SelectionMode::Inside,

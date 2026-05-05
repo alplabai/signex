@@ -321,7 +321,7 @@ impl Signex {
                     .active_canvas()
                     .active_snapshot()
                     .and_then(|snap| {
-                        signex_render::schematic::hit_test::hit_test(snap, x as f64, y as f64)
+                        crate::schematic_runtime::hit_test::hit_test(snap, x as f64, y as f64)
                     })
                     .and_then(|hit| {
                         matches!(hit.kind, signex_types::schematic::SelectedKind::Symbol)
@@ -412,7 +412,7 @@ impl Signex {
                         if let Some(snapshot) = self.active_render_snapshot() {
                             let filters = self.interaction_state.selection_filters.clone();
                             self.interaction_state.active_canvas_mut().selected =
-                                signex_render::schematic::hit_test::hit_test_polygon(
+                                crate::schematic_runtime::hit_test::hit_test_polygon(
                                     snapshot, &poly,
                                 )
                                 .into_iter()
@@ -635,7 +635,7 @@ impl Signex {
                 // Altium's "click the object to reference" convention.
                 if let Some(picker) = self.ui_state.reorder_picker {
                     if let Some(snapshot) = self.active_render_snapshot() {
-                        let hit = signex_render::schematic::hit_test::hit_test(
+                        let hit = crate::schematic_runtime::hit_test::hit_test(
                             snapshot, world_x, world_y,
                         );
                         if let Some(reference) = hit {
@@ -681,7 +681,7 @@ impl Signex {
                 if let Some(state) = self.interaction_state.editing_text.take() {
                     if state.text != state.original_text {
                         let stored =
-                            signex_render::schematic::text::escape_for_standard(&state.text);
+                            crate::schematic_runtime::text::escape_for_standard(&state.text);
                         let cmd = match state.kind {
                             signex_types::schematic::SelectedKind::Label => {
                                 Some(signex_engine::Command::UpdateText {
@@ -1164,7 +1164,7 @@ impl Signex {
                 let child_filename_to_open = if self.interaction_state.current_tool == Tool::Select
                     && let Some(snapshot) = self.active_render_snapshot()
                     && let Some(hit) =
-                        signex_render::schematic::hit_test::hit_test(snapshot, world_x, world_y)
+                        crate::schematic_runtime::hit_test::hit_test(snapshot, world_x, world_y)
                     && hit.kind == signex_types::schematic::SelectedKind::ChildSheet
                 {
                     snapshot
@@ -1360,9 +1360,9 @@ impl Signex {
                 } else if let Some(snapshot) = self.active_render_snapshot() {
                     use signex_types::schematic::SelectedKind;
                     if let Some(hit) =
-                        signex_render::schematic::hit_test::hit_test(snapshot, world_x, world_y)
+                        crate::schematic_runtime::hit_test::hit_test(snapshot, world_x, world_y)
                     {
-                        use signex_render::schematic::text::expand_char_escapes;
+                        use crate::schematic_runtime::text::expand_char_escapes;
                         let edit_info = match hit.kind {
                             SelectedKind::Label => snapshot
                                 .labels
@@ -1439,7 +1439,7 @@ impl Signex {
             CanvasEvent::CtrlClicked { world_x, world_y } => {
                 if let Some(snapshot) = self.active_render_snapshot()
                     && let Some(hit) =
-                        signex_render::schematic::hit_test::hit_test(snapshot, world_x, world_y)
+                        crate::schematic_runtime::hit_test::hit_test(snapshot, world_x, world_y)
                     && crate::app::handlers::selection_workflow::passes_filter(
                         &hit,
                         snapshot,
@@ -1589,7 +1589,7 @@ impl Signex {
 /// Resolve a selected item's primary anchor — the world point that should
 /// snap to the grid (connection point for labels/wires/symbols, etc.).
 fn primary_anchor_world(
-    snap: &signex_render::schematic::SchematicRenderSnapshot,
+    snap: &crate::schematic_runtime::SchematicRenderSnapshot,
     item: &signex_types::schematic::SelectedItem,
 ) -> Option<(f64, f64)> {
     use signex_types::schematic::SelectedKind;

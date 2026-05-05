@@ -156,7 +156,7 @@ impl Signex {
                 reorder_picker: None,
                 pin_matrix_overrides: crate::fonts::read_pin_matrix_overrides(),
                 annotate_locked: std::collections::HashSet::new(),
-                selection_mode: signex_render::schematic::hit_test::SelectionMode::default(),
+                selection_mode: crate::schematic_runtime::hit_test::SelectionMode::default(),
                 pending_net_color: None,
                 wire_color_overrides: std::collections::HashMap::new(),
                 lasso_polygon: None,

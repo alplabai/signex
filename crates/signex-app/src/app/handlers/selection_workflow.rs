@@ -8,7 +8,7 @@ use crate::active_bar::SelectionFilter;
 /// entirely — that matches the Altium "unselect all categories" behaviour.
 pub(crate) fn passes_filter(
     item: &signex_types::schematic::SelectedItem,
-    snapshot: &signex_render::schematic::SchematicRenderSnapshot,
+    snapshot: &crate::schematic_runtime::SchematicRenderSnapshot,
     filters: &std::collections::HashSet<SelectionFilter>,
 ) -> bool {
     use signex_types::schematic::SelectedKind;
@@ -39,7 +39,7 @@ pub(crate) fn passes_filter(
 }
 
 fn all_selectable_items(
-    snapshot: &signex_render::schematic::SchematicRenderSnapshot,
+    snapshot: &crate::schematic_runtime::SchematicRenderSnapshot,
 ) -> Vec<signex_types::schematic::SelectedItem> {
     use signex_types::schematic::{SelectedItem, SelectedKind};
 
@@ -92,7 +92,7 @@ fn all_selectable_items(
 }
 
 fn valid_selection_items(
-    snapshot: &signex_render::schematic::SchematicRenderSnapshot,
+    snapshot: &crate::schematic_runtime::SchematicRenderSnapshot,
     items: &[signex_types::schematic::SelectedItem],
 ) -> Vec<signex_types::schematic::SelectedItem> {
     use signex_types::schematic::SelectedKind;
@@ -156,7 +156,7 @@ impl Signex {
             selection_request::SelectionRequest::HitAt { world_x, world_y } => {
                 if let Some(snapshot) = self.active_render_snapshot() {
                     let hit =
-                        signex_render::schematic::hit_test::hit_test(snapshot, world_x, world_y);
+                        crate::schematic_runtime::hit_test::hit_test(snapshot, world_x, world_y);
                     let filters = &self.interaction_state.selection_filters;
                     let hit = hit.filter(|h| passes_filter(h, snapshot, filters));
                     self.interaction_state.active_canvas_mut().selected = hit.into_iter().collect();
@@ -172,7 +172,7 @@ impl Signex {
                     let filters = self.interaction_state.selection_filters.clone();
                     let mode = self.ui_state.selection_mode;
                     self.interaction_state.active_canvas_mut().selected =
-                        signex_render::schematic::hit_test::hit_test_rect_mode(
+                        crate::schematic_runtime::hit_test::hit_test_rect_mode(
                             snapshot, &rect, mode,
                         )
                         .into_iter()
@@ -187,7 +187,7 @@ impl Signex {
             selection_request::SelectionRequest::SelectConnected { world_x, world_y } => {
                 if let Some(snapshot) = self.active_render_snapshot() {
                     let hit =
-                        signex_render::schematic::hit_test::hit_test(snapshot, world_x, world_y);
+                        crate::schematic_runtime::hit_test::hit_test(snapshot, world_x, world_y);
                     if let Some(item) = hit {
                         self.interaction_state.active_canvas_mut().selected =
                             expand_to_net(snapshot, &item);
@@ -223,7 +223,7 @@ impl Signex {
 /// O(N · passes) instead of the naive O(P²·N²). Critical for power nets
 /// with hundreds of wires.
 fn expand_to_net(
-    snapshot: &signex_render::schematic::SchematicRenderSnapshot,
+    snapshot: &crate::schematic_runtime::SchematicRenderSnapshot,
     seed: &signex_types::schematic::SelectedItem,
 ) -> Vec<signex_types::schematic::SelectedItem> {
     use signex_types::schematic::{Point, SelectedItem, SelectedKind};
