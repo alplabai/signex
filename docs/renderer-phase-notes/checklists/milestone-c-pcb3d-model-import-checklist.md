@@ -10,7 +10,7 @@
 
 - [x] Scope freeze and non-goals documented.
 - [x] Import pipeline crate boundary documented.
-- [ ] Runtime GLB ingestion contract documented.
+- [x] Runtime GLB ingestion contract documented.
 
 ## Import and cache policy
 
