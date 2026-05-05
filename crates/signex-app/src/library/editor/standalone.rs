@@ -380,24 +380,25 @@ pub fn view_footprint<'a>(
     // chip was just visual noise. Keep `mode_switcher` (Sketch /
     // Pads / 3D) at top-right since it has no panel equivalent.
 
+    // v0.18.14 — single unified active bar carries mode-keyed
+    // tools (left half) + the eight Selection Filter pills (right
+    // half) regardless of mode. Replaces the per-mode
+    // pads_active_bar::view / sketch_mode::active_bar::view
+    // mounting that lived here through v0.18.13.
+    let unified_bar = container(
+        crate::library::editor::footprint::unified_active_bar::view(
+            editor, theme_id, tokens,
+        ),
+    )
+    .padding([6, 10])
+    .center_x(Length::Fill)
+    .align_y(iced::alignment::Vertical::Top);
     let body: Element<'a, LibraryMessage> = match editor.state.mode {
         EditorMode::Sketch => {
-            let active_bar = container(
-                crate::library::editor::footprint::sketch_mode::active_bar::view(
-                    editor, theme_id, tokens,
-                ),
-            )
-            .padding([6, 10])
-            .center_x(Length::Fill)
-            .align_y(iced::alignment::Vertical::Top);
             let canvas_with_bar = iced::widget::Stack::new()
                 .push(canvas_area)
-                .push(active_bar)
+                .push(unified_bar)
                 .push(mode_switcher);
-            // v0.16.2 — sketch-mode inspector strip migrated into the
-            // right-dock Properties panel (DOF / Parameters / Role /
-            // Solve warnings). The bottom of the canvas now goes
-            // straight to the layers strip + footer.
             column![canvas_with_bar, layers_strip, footer]
                 .spacing(0)
                 .width(Length::Fill)
@@ -405,17 +406,9 @@ pub fn view_footprint<'a>(
                 .into()
         }
         EditorMode::Normal => {
-            let pads_bar = container(
-                crate::library::editor::footprint::pads_active_bar::view(
-                    editor, theme_id, tokens,
-                ),
-            )
-            .padding([6, 10])
-            .center_x(Length::Fill)
-            .align_y(iced::alignment::Vertical::Top);
             let canvas_with_bar = iced::widget::Stack::new()
                 .push(canvas_area)
-                .push(pads_bar)
+                .push(unified_bar)
                 .push(mode_switcher);
             column![canvas_with_bar, layers_strip, footer]
                 .spacing(0)

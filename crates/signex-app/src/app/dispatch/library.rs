@@ -3943,6 +3943,7 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintAddNewSibling
         | PrimitiveEditorMsg::FootprintAddPad { .. }
         | PrimitiveEditorMsg::FootprintAddHole { .. }
+        | PrimitiveEditorMsg::FootprintToggleSelectionFilter(_)
         | PrimitiveEditorMsg::FootprintMovePad { .. }
         | PrimitiveEditorMsg::FootprintCursorAt { .. }
         | PrimitiveEditorMsg::FootprintSelectPad(_)
@@ -4155,6 +4156,15 @@ pub(crate) fn apply_footprint_primitive_edit(
             });
             editor.canvas_cache.clear();
             editor.dirty = true;
+        }
+        // v0.18.14 — Selection Filter pill toggle from the unified
+        // active bar. The panel-side equivalent
+        // (`PanelMsg::FpEditorToggleSelectionFilter`) routes through
+        // a dedicated handler in `handlers/dock/sch_library`; this
+        // arm covers the active-bar dispatch path.
+        PrimitiveEditorMsg::FootprintToggleSelectionFilter(kind) => {
+            editor.state.selection_filter.toggle(kind);
+            editor.canvas_cache.clear();
         }
         // v0.18.12 — Place Hole tool. Drops a non-plated through
         // hole at the cursor (no copper, drill from `next_pad_defaults`).

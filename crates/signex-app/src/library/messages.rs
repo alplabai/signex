@@ -1242,6 +1242,14 @@ pub enum PrimitiveEditorMsg {
     /// `next_pad_defaults.size_x_mm`. The active bar's "Place Hole"
     /// tool fires this on empty-canvas click.
     FootprintAddHole { x_mm: f64, y_mm: f64 },
+    /// v0.18.14 — Selection Filter pill toggle from the unified
+    /// active bar. Mirrors the panel-side
+    /// `PanelMsg::FpEditorToggleSelectionFilter` but flows through
+    /// the per-tab editor dispatch so the active bar can mutate
+    /// `editor.state.selection_filter` directly.
+    FootprintToggleSelectionFilter(
+        crate::library::editor::footprint::state::SelectionFilterKind,
+    ),
     /// Drag the pad at `idx` to a new world position.
     FootprintMovePad { idx: usize, x_mm: f64, y_mm: f64 },
     /// Cursor moved over the canvas — drives the footer X/Y readout.
