@@ -1,0 +1,87 @@
+{
+  "uuid": "2aeb4a21-1f3f-42de-95ac-44fd23db60ce",
+  "version": 1,
+  "generator": "fixture",
+  "thickness": 1.6,
+  "outline": [],
+  "layers": [
+    { "id": 0, "name": "F.Cu", "layer_type": "signal" },
+    { "id": 31, "name": "B.Cu", "layer_type": "signal" }
+  ],
+  "setup": null,
+  "nets": [
+    { "number": 1, "name": "VCC" },
+    { "number": 2, "name": "GND" }
+  ],
+  "footprints": [
+    {
+      "uuid": "1907ce74-946f-4410-a211-4e9a41708c1d",
+      "reference": "U1",
+      "value": "MCU",
+      "footprint_id": "QFN-16",
+      "position": { "x": 15.0, "y": 12.0 },
+      "rotation": 0.0,
+      "layer": "F.Cu",
+      "locked": false,
+      "pads": [
+        {
+          "uuid": "98df6d0b-f893-4622-a067-3376a6a2f2d0",
+          "number": "1",
+          "pad_type": "smd",
+          "shape": "rect",
+          "position": { "x": -0.8, "y": 0.0 },
+          "size": { "x": 1.2, "y": 0.6 },
+          "drill": null,
+          "layers": ["F.Cu"],
+          "net": { "number": 1, "name": "VCC" },
+          "roundrect_ratio": 0.0
+        },
+        {
+          "uuid": "cb57d2e2-a4b0-40f2-83c4-50c81af4f26a",
+          "number": "2",
+          "pad_type": "smd",
+          "shape": "circle",
+          "position": { "x": 0.8, "y": 0.0 },
+          "size": { "x": 1.0, "y": 1.0 },
+          "drill": null,
+          "layers": ["F.Cu"],
+          "net": { "number": 2, "name": "GND" },
+          "roundrect_ratio": 0.0
+        }
+      ],
+      "graphics": [],
+      "properties": []
+    }
+  ],
+  "segments": [
+    {
+      "uuid": "7f3a96d4-929f-431a-97fe-368cd5a697db",
+      "start": { "x": 0.0, "y": 0.0 },
+      "end": { "x": 8.0, "y": 0.0 },
+      "width": 0.25,
+      "layer": "F.Cu",
+      "net": 1
+    },
+    {
+      "uuid": "02aaef0e-388a-41ce-bf0f-67b01a2b2525",
+      "start": { "x": 8.0, "y": 0.0 },
+      "end": { "x": 8.0, "y": 6.0 },
+      "width": 0.2,
+      "layer": "F.Cu",
+      "net": 2
+    }
+  ],
+  "vias": [
+    {
+      "uuid": "f64715af-ac4e-44c1-b20f-e4f94692672a",
+      "position": { "x": 8.0, "y": 3.0 },
+      "diameter": 0.8,
+      "drill": 0.4,
+      "layers": ["F.Cu", "B.Cu"],
+      "net": 2
+    }
+  ],
+  "zones": [],
+  "graphics": [],
+  "texts": []
+}

@@ -5,5 +5,6 @@
 //! Sources: IPC-2612-1, IEEE 315, IEC 60617, wgpu/WGSL public docs.
 
 pub mod iced_bridge;
+pub mod pcb;
 pub mod schematic;
 pub mod theme;
