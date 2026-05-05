@@ -95,6 +95,11 @@ impl Signex {
                 if let Some(editor) = self.active_footprint_editor_mut() {
                     if step_mm > 0.0 && step_mm.is_finite() {
                         editor.state.snap_options.grid_step_mm = step_mm;
+                        // v0.18.21 — mirror onto active grid row.
+                        let idx = editor.state.active_grid_idx;
+                        if let Some(row) = editor.state.grids.get_mut(idx) {
+                            row.step_mm = step_mm;
+                        }
                         editor.canvas_cache.clear();
                     }
                 }
@@ -253,6 +258,18 @@ impl Signex {
                     opts.fine_grid_display = d.fine_display;
                     opts.coarse_grid_display = d.coarse_display;
                     opts.coarse_multiplier = d.multiplier.max(1);
+                    // v0.18.21 — mirror onto the active grid row so
+                    // multi-grid CRUD stays consistent. The Manager
+                    // displays per-row values from `grids[idx]`, so a
+                    // commit through the legacy modal must update the
+                    // matching row too.
+                    let active_idx = editor.state.active_grid_idx;
+                    if let Some(row) = editor.state.grids.get_mut(active_idx) {
+                        row.step_mm = opts.grid_step_mm;
+                        row.fine_display = opts.fine_grid_display;
+                        row.coarse_display = opts.coarse_grid_display;
+                        row.coarse_multiplier = opts.coarse_multiplier;
+                    }
                     editor.canvas_cache.clear();
                 }
                 self.ui_state.grid_properties = None;

@@ -1328,6 +1328,8 @@ fn build_footprint_editor_panel_ctx(
         snap_subtab: editor.state.snap_subtab,
         snapping_mode: editor.state.snapping_mode,
         guides: editor.state.guides.clone(),
+        grids: editor.state.grids.clone(),
+        active_grid_idx: editor.state.active_grid_idx,
     })
 }
 

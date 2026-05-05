@@ -282,25 +282,81 @@ impl Signex {
                 true
             }
             crate::panels::PanelMsg::FpEditorGridManagerAdd => {
-                tracing::warn!(
-                    target: "signex::library",
-                    "Grid Manager: Add is stubbed; multi-grid CRUD lands with v0.18.14",
-                );
+                // v0.18.21 — append a fresh `GridDef` clone of the
+                // active row (so the new grid inherits the user's last
+                // step + display picks). The new row activates so the
+                // user can immediately retune via Ctrl+G.
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    let seed = editor
+                        .state
+                        .grids
+                        .get(editor.state.active_grid_idx)
+                        .cloned()
+                        .unwrap_or_default();
+                    let mut next = seed;
+                    next.name = format!("Grid {}", editor.state.grids.len() + 1);
+                    editor.state.grids.push(next);
+                    let new_idx = editor.state.grids.len() - 1;
+                    editor.state.active_grid_idx = new_idx;
+                    // Mirror onto SnapOptions so the canvas picks up
+                    // the new active row immediately.
+                    let row = &editor.state.grids[new_idx];
+                    editor.state.snap_options.grid_step_mm = row.step_mm;
+                    editor.state.snap_options.fine_grid_display = row.fine_display;
+                    editor.state.snap_options.coarse_grid_display = row.coarse_display;
+                    editor.state.snap_options.coarse_multiplier = row.coarse_multiplier;
+                    editor.canvas_cache.clear();
+                }
+                self.refresh_panel_ctx();
                 true
             }
             crate::panels::PanelMsg::FpEditorGridManagerProperties => {
                 // Reuses the Ctrl+G modal so the user can edit the
-                // existing single grid via the same dialog. The modal
-                // open handler reads the active footprint's
-                // `snap_options.grid_step_mm` and seeds the buffers.
+                // active grid via the same dialog. The modal open
+                // handler reads `snap_options.grid_step_mm` and seeds
+                // the buffers; the commit path mirrors back to
+                // `grids[active_grid_idx]` (see GridPropertiesCommit).
                 let _ = self.update(Message::GridPropertiesOpen);
                 true
             }
             crate::panels::PanelMsg::FpEditorGridManagerDelete => {
-                tracing::warn!(
-                    target: "signex::library",
-                    "Grid Manager: Delete is stubbed; the Global Snap Grid is the only grid today",
-                );
+                // v0.18.21 — remove the active row. Always keep at
+                // least one grid (UI gates the button when only one
+                // remains, so this branch should normally only fire
+                // when len > 1).
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    if editor.state.grids.len() > 1 {
+                        let idx = editor.state.active_grid_idx;
+                        editor.state.grids.remove(idx);
+                        if editor.state.active_grid_idx >= editor.state.grids.len() {
+                            editor.state.active_grid_idx = editor.state.grids.len() - 1;
+                        }
+                        // Mirror new active onto SnapOptions.
+                        let row = &editor.state.grids[editor.state.active_grid_idx];
+                        editor.state.snap_options.grid_step_mm = row.step_mm;
+                        editor.state.snap_options.fine_grid_display = row.fine_display;
+                        editor.state.snap_options.coarse_grid_display = row.coarse_display;
+                        editor.state.snap_options.coarse_multiplier = row.coarse_multiplier;
+                        editor.canvas_cache.clear();
+                    }
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorGridSetActive(idx) => {
+                let idx = *idx;
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    if idx < editor.state.grids.len() {
+                        editor.state.active_grid_idx = idx;
+                        let row = &editor.state.grids[idx];
+                        editor.state.snap_options.grid_step_mm = row.step_mm;
+                        editor.state.snap_options.fine_grid_display = row.fine_display;
+                        editor.state.snap_options.coarse_grid_display = row.coarse_display;
+                        editor.state.snap_options.coarse_multiplier = row.coarse_multiplier;
+                        editor.canvas_cache.clear();
+                    }
+                }
+                self.refresh_panel_ctx();
                 true
             }
             crate::panels::PanelMsg::FpEditorGuideManagerAdd => {
@@ -1299,6 +1355,12 @@ impl Signex {
         };
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.state.snap_options.grid_step_mm = parsed;
+            // v0.18.21 — mirror onto the active grid row so the
+            // Manager view + the canvas stay aligned.
+            let idx = editor.state.active_grid_idx;
+            if let Some(row) = editor.state.grids.get_mut(idx) {
+                row.step_mm = parsed;
+            }
             editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();

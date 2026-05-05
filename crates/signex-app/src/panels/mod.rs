@@ -618,6 +618,12 @@ pub struct FootprintEditorPanelContext {
     /// panel can iterate them without holding a borrow into the
     /// document state.
     pub guides: Vec<crate::library::editor::footprint::state::Guide>,
+    /// v0.18.21 — Altium grid table rows. Cloned out of
+    /// `editor.state.grids`; the active row is `active_grid_idx`.
+    pub grids: Vec<crate::library::editor::footprint::state::GridDef>,
+    /// v0.18.21 — index into `grids` of the active row (mirror of
+    /// `editor.state.active_grid_idx`).
+    pub active_grid_idx: usize,
 }
 
 /// v0.16.4 — Pour role properties surfaced on the Properties panel.
@@ -1268,6 +1274,10 @@ pub enum PanelMsg {
     /// v0.18.13 — `Delete` button on the Grid Manager row
     /// (placeholder until multi-grid CRUD lands).
     FpEditorGridManagerDelete,
+    /// v0.18.21 — Activate the row at the given index. Mirrors the
+    /// row's step / display style / multiplier onto `snap_options` so
+    /// the canvas + snap logic switch to the new grid.
+    FpEditorGridSetActive(usize),
     /// v0.18.13 — `Add` button on the Guide Manager table
     /// (placeholder until guide system lands).
     FpEditorGuideManagerAdd,
@@ -4875,9 +4885,10 @@ fn render_selection_filter<'a>(
     col
 }
 
-/// v0.18.13 — Grid Manager table. Single-row placeholder until
-/// the multi-grid CRUD ships in v0.18.14. The row binds to the
-/// active footprint editor's `snap_options.grid_step_mm`.
+/// v0.18.21 — Grid Manager table. One row per `GridDef`. The active
+/// row is highlighted; clicking another row activates it (mirrors its
+/// step / display style onto `snap_options`). The footer's Add /
+/// Properties / Delete operate on the active row.
 fn render_grid_manager<'a>(
     mut col: Column<'a, PanelMsg>,
     fp: &'a FootprintEditorPanelContext,
@@ -4889,10 +4900,10 @@ fn render_grid_manager<'a>(
     col = col.push(
         container(
             row![
-                text("Priority").size(10).color(muted).width(Length::Fixed(60.0)),
+                text("Active").size(10).color(muted).width(Length::Fixed(50.0)),
                 text("Name").size(10).color(muted).width(Length::Fill),
-                text("Step").size(10).color(muted).width(Length::Fixed(72.0)),
-                text("Enabled").size(10).color(muted),
+                text("Step").size(10).color(muted).width(Length::Fixed(80.0)),
+                text("×").size(10).color(muted).width(Length::Fixed(28.0)),
             ]
             .spacing(4)
             .align_y(iced::Alignment::Center),
@@ -4900,29 +4911,68 @@ fn render_grid_manager<'a>(
         .padding([2, 8])
         .width(Length::Fill),
     );
-    // Single live row.
-    col = col.push(
-        container(
-            row![
-                text("50").size(10).color(primary).width(Length::Fixed(60.0)),
-                text("Global Board Snap Grid")
-                    .size(10)
-                    .color(primary)
-                    .width(Length::Fill),
-                text(format!("{:.3} mm", fp.snap_options.grid_step_mm))
-                    .size(10)
-                    .color(primary)
-                    .width(Length::Fixed(72.0)),
-                text(if fp.snap_options.grid { "✓" } else { "—" })
-                    .size(10)
-                    .color(primary),
-            ]
-            .spacing(4)
-            .align_y(iced::Alignment::Center),
-        )
-        .padding([2, 8])
-        .width(Length::Fill),
-    );
+
+    let active_idx = fp.active_grid_idx;
+    if fp.grids.is_empty() {
+        col = col.push(
+            container(text("(no grids)").size(10).color(muted))
+                .padding([4, 8])
+                .width(Length::Fill),
+        );
+    } else {
+        for (idx, g) in fp.grids.iter().enumerate() {
+            let is_active = idx == active_idx;
+            let toggle_label = if is_active { "●" } else { "○" };
+            let row_bg = if is_active {
+                iced::Color::from_rgba(0.30, 0.55, 0.95, 0.16)
+            } else {
+                iced::Color::TRANSPARENT
+            };
+            col = col.push(
+                container(
+                    row![
+                        iced::widget::button(
+                            text(toggle_label).size(10).color(primary),
+                        )
+                        .padding([1, 4])
+                        .style(move |_: &Theme, _| iced::widget::button::Style {
+                            background: Some(iced::Background::Color(
+                                iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04),
+                            )),
+                            border: iced::Border {
+                                width: 1.0,
+                                radius: 3.0.into(),
+                                color: border_c,
+                            },
+                            ..iced::widget::button::Style::default()
+                        })
+                        .on_press(PanelMsg::FpEditorGridSetActive(idx))
+                        .width(Length::Fixed(40.0)),
+                        text(g.name.as_str())
+                            .size(10)
+                            .color(primary)
+                            .width(Length::Fill),
+                        text(format!("{:.3} mm", g.step_mm))
+                            .size(10)
+                            .color(primary)
+                            .width(Length::Fixed(80.0)),
+                        text(format!("×{}", g.coarse_multiplier))
+                            .size(10)
+                            .color(muted)
+                            .width(Length::Fixed(28.0)),
+                    ]
+                    .spacing(4)
+                    .align_y(iced::Alignment::Center),
+                )
+                .padding([2, 8])
+                .width(Length::Fill)
+                .style(move |_: &Theme| iced::widget::container::Style {
+                    background: Some(iced::Background::Color(row_bg)),
+                    ..Default::default()
+                }),
+            );
+        }
+    }
     // Action footer — Add / Properties / Delete.
     col = col.push(
         container(
@@ -4936,7 +4986,11 @@ fn render_grid_manager<'a>(
                 ),
                 grid_manager_btn(
                     "Delete",
-                    Some(PanelMsg::FpEditorGridManagerDelete),
+                    if fp.grids.len() > 1 {
+                        Some(PanelMsg::FpEditorGridManagerDelete)
+                    } else {
+                        None
+                    },
                     primary,
                     border_c,
                 ),

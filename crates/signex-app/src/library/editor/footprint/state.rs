@@ -287,6 +287,18 @@ pub struct FootprintEditorState {
     /// Per-editor; the snap-to-guides hook follows in a v0.18.20+
     /// patch (today they're visual-only).
     pub guides: Vec<Guide>,
+    /// v0.18.21 — Altium-style grid table (multiple named grids with
+    /// independent step / display style / multiplier). The currently
+    /// active row's step / display style / multiplier are mirrored to
+    /// `snap_options` so the canvas + snap logic keep their existing
+    /// single-grid code paths. Grids must contain at least one entry;
+    /// `default_seeded` constructs the implicit "Global Snap Grid"
+    /// row that mirrors `SnapOptions::default()`.
+    pub grids: Vec<GridDef>,
+    /// v0.18.21 — index into `grids` of the row whose step / display
+    /// style currently drives the canvas + snap. Always valid: clamps
+    /// to `grids.len() - 1` on delete.
+    pub active_grid_idx: usize,
     /// v0.18.13 — Altium Selection Filter pill row state. Per-
     /// editor so flipping pads off in one tab doesn't follow the
     /// user into another footprint.
@@ -403,6 +415,50 @@ pub enum GuideAxis {
     #[default]
     Vertical,
     Horizontal,
+}
+
+/// v0.18.21 — One row in the Cartesian Grid Manager. Each grid is a
+/// named (step / fine_display / coarse_display / multiplier) bundle.
+/// The currently-active row mirrors its values onto
+/// `SnapOptions::{grid_step_mm, fine_grid_display, coarse_grid_display,
+/// coarse_multiplier}` so the canvas + snap logic keep operating on a
+/// single source of truth. The Properties panel's Grid Manager
+/// section is the multi-row CRUD view; the legacy "Grid step (mm)"
+/// numeric input edits the active row in place.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GridDef {
+    pub name: String,
+    pub step_mm: f64,
+    pub fine_display: GridDisplay,
+    pub coarse_display: GridDisplay,
+    pub coarse_multiplier: u32,
+}
+
+impl Default for GridDef {
+    fn default() -> Self {
+        Self {
+            name: "Grid".into(),
+            step_mm: 1.0,
+            fine_display: GridDisplay::Lines,
+            coarse_display: GridDisplay::Lines,
+            coarse_multiplier: 5,
+        }
+    }
+}
+
+impl GridDef {
+    /// Seed the implicit "Global Snap Grid" row from a `SnapOptions`
+    /// snapshot. Used when the FootprintEditorState first materialises
+    /// to keep the legacy single-grid behaviour intact.
+    pub fn from_snap_options(opts: &SnapOptions) -> Self {
+        Self {
+            name: "Global Snap Grid".into(),
+            step_mm: opts.grid_step_mm,
+            fine_display: opts.fine_grid_display,
+            coarse_display: opts.coarse_grid_display,
+            coarse_multiplier: opts.coarse_multiplier,
+        }
+    }
 }
 
 impl Default for SnapOptions {
@@ -687,6 +743,8 @@ impl FootprintEditorState {
             place_polygon_vertices: Vec::new(),
             selected_silk_f: None,
             guides: Vec::new(),
+            grids: vec![GridDef::from_snap_options(&SnapOptions::default())],
+            active_grid_idx: 0,
             selection_filter: SelectionFilter::default(),
             snap_subtab: SnapSubTab::default(),
             snapping_mode: SnappingMode::default(),
@@ -726,6 +784,8 @@ impl FootprintEditorState {
             place_polygon_vertices: Vec::new(),
             selected_silk_f: None,
             guides: Vec::new(),
+            grids: vec![GridDef::from_snap_options(&SnapOptions::default())],
+            active_grid_idx: 0,
             selection_filter: SelectionFilter::default(),
             snap_subtab: SnapSubTab::default(),
             snapping_mode: SnappingMode::default(),
