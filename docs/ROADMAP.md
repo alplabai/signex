@@ -106,7 +106,7 @@ complete on their own schedules.
 | **WS-V**  | Validation (ERC/DRC)        | `signex-erc`, `signex-drc`                   |
 | **WS-O**  | Output                      | export modules (PDF, BOM, Gerber, etc.)      |
 | **WS-P**  | PCB Geometry + Router       | `pcb-geom`, `pcb-router`                     |
-| **WS-3D** | 3D Viewer                   | `signex-render-3d`, `step-loader`            |
+| **WS-3D** | 3D Viewer                   | `signex-model-import`, `signex-render-3d`    |
 | **WS-S**  | Simulation                  | `spice-bridge`, `openems-bridge`, etc.       |
 | **WS-AI** | Signal AI (Pro)             | `signex-signal`                              |
 | **WS-C**  | Collaboration (Pro)         | `signex-collab`, Supabase backend            |
@@ -531,11 +531,16 @@ that drives it.
 
 ### Phase 11 — PCB Output and v2.0 Polish (v1.5 → v2.0)
 
-**Active workstreams:** WS-O (primary), all others (polish).
+**Active workstreams:** WS-O (primary), WS-3D (activates here), all others (polish).
 
 **Duration:** 10–12 weeks.
 
-**Goal:** Manufacturing-ready output and v2.0 release polish.
+**Goal:** Manufacturing-ready output, interactive 3D viewer, and v2.0 release polish.
+
+WS-3D activation: `signex-model-import` converts STEP/VRML/GLTF source models to
+GLB cache artifacts; `signex-render-3d` consumes the GLB artifacts via the runtime
+contract established in Milestone C. See renderer-phase-notes Milestone D for the
+full import pipeline preparation package.
 
 **Deliverables:**
 
@@ -545,6 +550,7 @@ that drives it.
 - Pick-and-place CSV
 - IPC-2581 export
 - STEP 3D export (board body)
+- Interactive 3D viewer (PCB + component models; STEP/VRML/GLTF source support via `signex-model-import`)
 - Assembly drawings (SVG)
 - Performance pass on PCB editor
 - Stability pass
