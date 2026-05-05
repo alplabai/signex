@@ -1271,6 +1271,79 @@ impl Signex {
         // is disabled to make the "Y mirrors X" semantics visible
         // instead of accepting input that Apply would silently
         // discard. Toggle the chain icon to enable it.
+        // v0.18.19 — display style + multiplier rows.
+        use crate::library::editor::footprint::state::GridDisplay as Gd;
+        let mk_display_row = |label: &'static str,
+                              current: Gd,
+                              setter: fn(Gd) -> Message|
+              -> Element<'_, Message> {
+            let seg = move |label: &'static str, target: Gd, active: bool|
+                  -> Element<'_, Message> {
+                let bg = if active {
+                    iced::Color::from_rgba(0.40, 0.70, 1.00, 0.20)
+                } else {
+                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04)
+                };
+                iced::widget::button(text(label).size(10).color(text_c))
+                    .padding([3, 10])
+                    .on_press(setter(target))
+                    .style(move |_: &iced::Theme, _| iced::widget::button::Style {
+                        background: Some(iced::Background::Color(bg)),
+                        border: iced::Border {
+                            width: 1.0,
+                            radius: 3.0.into(),
+                            color: border_c,
+                        },
+                        ..iced::widget::button::Style::default()
+                    })
+                    .into()
+            };
+            row![
+                container(text(label).size(11).color(text_muted))
+                    .width(Length::Fixed(80.0)),
+                seg("Lines", Gd::Lines, current == Gd::Lines),
+                seg("Dots", Gd::Dots, current == Gd::Dots),
+                seg("Hidden", Gd::Hidden, current == Gd::Hidden),
+            ]
+            .spacing(4)
+            .align_y(iced::Alignment::Center)
+            .into()
+        };
+        let mk_mult_row = |current: u32| -> Element<'_, Message> {
+            let seg = move |label: &'static str, target: u32, active: bool|
+                  -> Element<'_, Message> {
+                let bg = if active {
+                    iced::Color::from_rgba(0.40, 0.70, 1.00, 0.20)
+                } else {
+                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04)
+                };
+                iced::widget::button(text(label).size(10).color(text_c))
+                    .padding([3, 10])
+                    .on_press(Message::GridPropertiesSetMultiplier(target))
+                    .style(move |_: &iced::Theme, _| iced::widget::button::Style {
+                        background: Some(iced::Background::Color(bg)),
+                        border: iced::Border {
+                            width: 1.0,
+                            radius: 3.0.into(),
+                            color: border_c,
+                        },
+                        ..iced::widget::button::Style::default()
+                    })
+                    .into()
+            };
+            row![
+                container(text("Multiplier").size(11).color(text_muted))
+                    .width(Length::Fixed(80.0)),
+                seg("1×", 1, current == 1),
+                seg("2×", 2, current == 2),
+                seg("5×", 5, current == 5),
+                seg("10×", 10, current == 10),
+            ]
+            .spacing(4)
+            .align_y(iced::Alignment::Center)
+            .into()
+        };
+
         let body = column![
             row![
                 container(text("Step X").size(11).color(text_muted))
@@ -1295,15 +1368,22 @@ impl Signex {
             ]
             .spacing(8)
             .align_y(iced::Alignment::Center),
+            mk_display_row("Fine", st.fine_display, Message::GridPropertiesSetFineDisplay),
+            mk_display_row(
+                "Coarse",
+                st.coarse_display,
+                Message::GridPropertiesSetCoarseDisplay,
+            ),
+            mk_mult_row(st.multiplier),
             text(
-                "Step Y currently mirrors Step X (single-axis snap_options.grid_step_mm). \
-                 The Y field is wired for forward compatibility — separate-axis storage lands \
-                 in a follow-up. Toggle the chain to edit Y independently."
+                "Step Y mirrors Step X (single-axis storage). Toggle the chain to edit Y independently. \
+                 Display: Lines / Dots / Hidden — Lines is the v0.18.16 behaviour; Dots and Hidden land here. \
+                 Multiplier sets the coarse-grid stride (5× / 10× are typical Altium defaults)."
             )
             .size(10)
             .color(text_muted),
         ]
-        .spacing(12);
+        .spacing(10);
 
         let dialog = container(
             column![

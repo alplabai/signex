@@ -36,6 +36,9 @@ impl Signex {
             | Message::GridPropertiesSetStepY(_)
             | Message::GridPropertiesToggleLink
             | Message::GridPropertiesApply
+            | Message::GridPropertiesSetFineDisplay(_)
+            | Message::GridPropertiesSetCoarseDisplay(_)
+            | Message::GridPropertiesSetMultiplier(_)
             | Message::OpenSelectionFilterCustom
             | Message::CloseSelectionFilterCustom
             | Message::ToggleSelectionFilterCustomKind(_)

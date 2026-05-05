@@ -758,28 +758,37 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
             // Background.
             frame.fill_rectangle(Point::ORIGIN, bounds.size(), self.bg_color);
 
-            // 1mm minor grid + 5mm major. Scale makes minor grid
-            // disappear when zoomed out.
-            let minor_step = 1.0_f32 * cstate.scale;
-            let major_step = 5.0_f32 * cstate.scale;
-            if minor_step >= 6.0 {
+            // v0.18.19 — fine + coarse grid display follows the
+            // Cartesian Grid Editor's per-style picker. Step is
+            // driven by `snap_options.grid_step_mm`; the coarse
+            // overlay sits at `multiplier × fine_step`.
+            use crate::library::editor::footprint::state::GridDisplay as Gd;
+            let fine_step = (self.state.snap_options.grid_step_mm as f32) * cstate.scale;
+            let multiplier = self.state.snap_options.coarse_multiplier.max(1) as f32;
+            let coarse_step = fine_step * multiplier;
+            let fine_style = self.state.snap_options.fine_grid_display;
+            let coarse_style = self.state.snap_options.coarse_grid_display;
+            // Fine pass — only when each cell is at least 6 px wide
+            // so we don't chew tessellation budget on dense grids
+            // at low zoom.
+            if matches!(fine_style, Gd::Lines | Gd::Dots) && fine_step >= 6.0 {
                 draw_grid(
                     frame,
                     bounds,
                     cstate.offset,
-                    minor_step,
+                    fine_step,
                     Color {
                         a: 0.10,
                         ..self.grid_color
                     },
                 );
             }
-            if major_step >= 8.0 {
+            if matches!(coarse_style, Gd::Lines | Gd::Dots) && coarse_step >= 8.0 {
                 draw_grid(
                     frame,
                     bounds,
                     cstate.offset,
-                    major_step,
+                    coarse_step,
                     Color {
                         a: 0.30,
                         ..self.grid_color

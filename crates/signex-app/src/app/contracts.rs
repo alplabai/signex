@@ -81,8 +81,19 @@ pub enum Message {
     GridPropertiesToggleLink,
     /// v0.18.11 — Grid Properties modal: Apply button. Validates +
     /// writes the active footprint editor's `snap_options.grid_step_mm`
-    /// (and Y if/when separate axes ship).
+    /// (and Y if/when separate axes ship). v0.18.19: also commits
+    /// fine/coarse display + multiplier.
     GridPropertiesApply,
+    /// v0.18.19 — Grid Properties modal: Fine grid display style.
+    GridPropertiesSetFineDisplay(
+        crate::library::editor::footprint::state::GridDisplay,
+    ),
+    /// v0.18.19 — Grid Properties modal: Coarse grid display style.
+    GridPropertiesSetCoarseDisplay(
+        crate::library::editor::footprint::state::GridDisplay,
+    ),
+    /// v0.18.19 — Grid Properties modal: Multiplier (5x / 10x / 2x / 1x).
+    GridPropertiesSetMultiplier(u32),
     /// v0.18.14.1 — Custom Selection Filter modal launcher. Opens
     /// the 8-row checkbox table over the active footprint editor.
     OpenSelectionFilterCustom,
@@ -710,11 +721,16 @@ pub struct GridPickerState {
 /// v0.18.11 — Cartesian Grid Editor modal state. Carries the
 /// in-flight Step X / Step Y string buffers + the X/Y link toggle.
 /// Writes happen on `GridPropertiesApply`; close discards.
+///
+/// v0.18.19 added Fine / Coarse display + Multiplier draft fields.
 #[derive(Debug, Clone)]
 pub struct GridPropertiesState {
     pub step_x_mm: String,
     pub step_y_mm: String,
     pub link_xy: bool,
+    pub fine_display: crate::library::editor::footprint::state::GridDisplay,
+    pub coarse_display: crate::library::editor::footprint::state::GridDisplay,
+    pub multiplier: u32,
 }
 
 /// v0.18.14.1 — Custom Selection Filter modal draft state. Mirrors

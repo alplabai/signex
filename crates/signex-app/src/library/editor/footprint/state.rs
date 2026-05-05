@@ -361,6 +361,25 @@ pub struct SnapOptions {
     /// from the Altium-standard ladder
     /// (1/5/10/20/25/50/100 mil + 0.025/0.1/0.25/0.5/1.0/2.5 mm).
     pub grid_step_mm: f64,
+    /// v0.18.19 — fine grid display style.
+    pub fine_grid_display: GridDisplay,
+    /// v0.18.19 — coarse grid display style. The coarse grid is
+    /// drawn on top of the fine one at `grid_step_mm * coarse_multiplier`
+    /// spacing.
+    pub coarse_grid_display: GridDisplay,
+    /// v0.18.19 — coarse-grid multiplier (typically 5 or 10).
+    /// Renders an overlay grid at this multiple of the snap step.
+    pub coarse_multiplier: u32,
+}
+
+/// v0.18.19 — Altium grid display style for the Cartesian Grid
+/// Editor's Fine + Coarse pickers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum GridDisplay {
+    #[default]
+    Lines,
+    Dots,
+    Hidden,
 }
 
 impl Default for SnapOptions {
@@ -371,6 +390,9 @@ impl Default for SnapOptions {
             angle: true,
             grid: true,
             grid_step_mm: 1.0,
+            fine_grid_display: GridDisplay::Lines,
+            coarse_grid_display: GridDisplay::Lines,
+            coarse_multiplier: 5,
         }
     }
 }

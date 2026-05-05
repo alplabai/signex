@@ -105,21 +105,43 @@ impl Signex {
                 // Pre-populate from the active footprint editor's
                 // current step. No-op for non-footprint tabs (the
                 // modal would have nothing to drive).
-                let active_step = self
+                let editor_snap = self
                     .active_footprint_editor()
-                    .map(|e| e.state.snap_options.grid_step_mm);
+                    .map(|e| e.state.snap_options);
                 tracing::info!(
                     target: "signex::ui",
-                    active_step = ?active_step,
+                    has_snap = editor_snap.is_some(),
                     "GridPropertiesOpen received",
                 );
-                if let Some(step) = active_step {
+                if let Some(opts) = editor_snap {
+                    let step = opts.grid_step_mm;
                     let s = format!("{step:.4}");
                     self.ui_state.grid_properties = Some(crate::app::GridPropertiesState {
                         step_x_mm: s.clone(),
                         step_y_mm: s,
                         link_xy: true,
+                        fine_display: opts.fine_grid_display,
+                        coarse_display: opts.coarse_grid_display,
+                        multiplier: opts.coarse_multiplier,
                     });
+                }
+                self.finish_update()
+            }
+            Message::GridPropertiesSetFineDisplay(d) => {
+                if let Some(state) = self.ui_state.grid_properties.as_mut() {
+                    state.fine_display = d;
+                }
+                self.finish_update()
+            }
+            Message::GridPropertiesSetCoarseDisplay(d) => {
+                if let Some(state) = self.ui_state.grid_properties.as_mut() {
+                    state.coarse_display = d;
+                }
+                self.finish_update()
+            }
+            Message::GridPropertiesSetMultiplier(m) => {
+                if let Some(state) = self.ui_state.grid_properties.as_mut() {
+                    state.multiplier = m.max(1);
                 }
                 self.finish_update()
             }
@@ -216,18 +238,22 @@ impl Signex {
                 // Validate the X step (Y is taken from X for now —
                 // single-axis steps in `SnapOptions`; the Y field
                 // exists in the dialog for forward compatibility).
-                let parsed_x = self
-                    .ui_state
-                    .grid_properties
+                let draft = self.ui_state.grid_properties.clone();
+                let parsed_x = draft
                     .as_ref()
                     .and_then(|s| s.step_x_mm.trim().parse::<f64>().ok());
-                if let Some(step) = parsed_x {
-                    if step > 0.0 && step.is_finite() {
-                        if let Some(editor) = self.active_footprint_editor_mut() {
-                            editor.state.snap_options.grid_step_mm = step;
-                            editor.canvas_cache.clear();
+                if let (Some(d), Some(editor)) = (draft, self.active_footprint_editor_mut())
+                {
+                    let opts = &mut editor.state.snap_options;
+                    if let Some(step) = parsed_x {
+                        if step > 0.0 && step.is_finite() {
+                            opts.grid_step_mm = step;
                         }
                     }
+                    opts.fine_grid_display = d.fine_display;
+                    opts.coarse_grid_display = d.coarse_display;
+                    opts.coarse_multiplier = d.multiplier.max(1);
+                    editor.canvas_cache.clear();
                 }
                 self.ui_state.grid_properties = None;
                 self.refresh_panel_ctx();
