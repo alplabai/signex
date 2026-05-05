@@ -1292,6 +1292,28 @@ fn build_footprint_editor_panel_ctx(
         .collect();
     let internal_selected_idx = editor.panel_selected_idx;
 
+    // v0.18.24 — selected silk-front graphic summary. Only populated
+    // when `selected_silk_f` points at a valid index; the Properties
+    // panel reads `text_content` to decide whether to render the
+    // Text edit input.
+    let selected_silk_summary = editor.state.selected_silk_f.and_then(|idx| {
+        let g = editor.primitive().silk_f.get(idx)?;
+        use signex_library::primitive::footprint::FpGraphicKind;
+        let (kind_label, text_content) = match &g.kind {
+            FpGraphicKind::Line { .. } => ("Line", None),
+            FpGraphicKind::Rectangle { .. } => ("Rectangle", None),
+            FpGraphicKind::Circle { .. } => ("Circle", None),
+            FpGraphicKind::Arc { .. } => ("Arc", None),
+            FpGraphicKind::Polygon { .. } => ("Polygon", None),
+            FpGraphicKind::Text { content, .. } => ("Text", Some(content.clone())),
+        };
+        Some(crate::panels::FootprintSelectedSilkSummary {
+            idx,
+            kind_label,
+            text_content,
+        })
+    });
+
     Some(FootprintEditorPanelContext {
         path,
         footprint_name: editor.primitive().name.clone(),
@@ -1330,6 +1352,7 @@ fn build_footprint_editor_panel_ctx(
         guides: editor.state.guides.clone(),
         grids: editor.state.grids.clone(),
         active_grid_idx: editor.state.active_grid_idx,
+        selected_silk_summary,
     })
 }
 

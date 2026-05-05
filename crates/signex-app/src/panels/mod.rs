@@ -624,6 +624,10 @@ pub struct FootprintEditorPanelContext {
     /// v0.18.21 — index into `grids` of the active row (mirror of
     /// `editor.state.active_grid_idx`).
     pub active_grid_idx: usize,
+    /// v0.18.24 — selected silk-front graphic summary. `None` when
+    /// no silk graphic is selected; the Properties panel only renders
+    /// the silk-selection branch when this is `Some`.
+    pub selected_silk_summary: Option<FootprintSelectedSilkSummary>,
 }
 
 /// v0.16.4 — Pour role properties surfaced on the Properties panel.
@@ -735,6 +739,19 @@ pub struct FootprintPadSummary {
     pub rotation_deg: f64,
     pub layer_count: usize,
     pub has_drill: bool,
+}
+
+/// v0.18.24 — Read-only summary of the currently-selected silk-front
+/// graphic (`FpGraphic` in `silk_f`). Drives the Properties panel's
+/// silk-selection branch: kind label + Text content input + Delete.
+#[derive(Debug, Clone)]
+pub struct FootprintSelectedSilkSummary {
+    pub idx: usize,
+    pub kind_label: &'static str,
+    /// Content of a `FpGraphicKind::Text { content, .. }`. `None` for
+    /// non-Text kinds; the Properties panel only surfaces the Text
+    /// edit input when this is `Some`.
+    pub text_content: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -1278,6 +1295,15 @@ pub enum PanelMsg {
     /// row's step / display style / multiplier onto `snap_options` so
     /// the canvas + snap logic switch to the new grid.
     FpEditorGridSetActive(usize),
+    /// v0.18.24 — Edit the `content` field of a selected silk-front
+    /// `FpGraphicKind::Text { content, .. }` entry. The dispatcher
+    /// finds `editor.state.selected_silk_f` and mutates the matching
+    /// `silk_f[idx]` if it's a Text. No-op for non-Text selections.
+    FpEditorSetSilkText(String),
+    /// v0.18.24 — Delete the selected silk-front graphic. Mirrors the
+    /// existing `FootprintDeleteSilkF` PrimitiveEditorMsg surface but
+    /// is emitted from the Properties panel's silk-selection branch.
+    FpEditorDeleteSelectedSilk,
     /// v0.18.13 — `Add` button on the Guide Manager table
     /// (placeholder until guide system lands).
     FpEditorGuideManagerAdd,
@@ -4144,39 +4170,117 @@ fn view_footprint_editor_properties<'a>(
             }
         }
         _ => {
-            // v0.18.13 — Altium "Library Options" no-selection
-            // layout (Selection Filter at the top, full 5-section
-            // body assembled after the match). The Footprint
-            // summary remains as auxiliary kv-rows.
-            col = col.push(props_section_header("Selection Filter", primary));
-            col = render_selection_filter(col, fp, primary, muted, border_c);
-            col = col.push(props_section_header("Footprint", primary));
-            col = props_kv_row(col, muted, primary, "Name", fp.footprint_name.clone());
-            col = props_kv_row(col, muted, primary, "Version", fp.version.clone());
-            col = props_kv_row(col, muted, primary, "Mode", mode_label.into());
-            col = props_kv_row(col, muted, primary, "Pads", fp.pad_count.to_string());
-            if fp.sketch_entity_count > 0 || fp.sketch_constraint_count > 0 {
+            // v0.18.24 — silk-front graphic selection branch.
+            // Renders BEFORE the empty-canvas Library Options when a
+            // silk graphic is selected so the user can edit Text
+            // content + delete the entry without leaving the
+            // Properties panel.
+            if let Some(silk) = fp.selected_silk_summary.as_ref() {
+                col = col.push(props_section_header("Silk graphic", primary));
                 col = props_kv_row(
                     col,
                     muted,
                     primary,
-                    "Sketch entities",
-                    fp.sketch_entity_count.to_string(),
+                    "Kind",
+                    silk.kind_label.into(),
                 );
                 col = props_kv_row(
                     col,
                     muted,
                     primary,
-                    "Constraints",
-                    fp.sketch_constraint_count.to_string(),
+                    "Index",
+                    silk.idx.to_string(),
                 );
+                if let Some(content) = silk.text_content.as_ref() {
+                    col = col.push(
+                        container(
+                            row![
+                                text("Content")
+                                    .size(10)
+                                    .color(muted)
+                                    .width(Length::Fixed(70.0)),
+                                iced::widget::text_input("TEXT", content)
+                                    .size(10)
+                                    .padding([2, 4])
+                                    .style(move |_: &Theme, _| iced::widget::text_input::Style {
+                                        background: iced::Background::Color(
+                                            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04),
+                                        ),
+                                        border: iced::Border {
+                                            width: 1.0,
+                                            radius: 2.0.into(),
+                                            color: border_c,
+                                        },
+                                        icon: iced::Color::TRANSPARENT,
+                                        placeholder: muted,
+                                        value: primary,
+                                        selection: iced::Color::from_rgba(
+                                            0.4, 0.6, 1.0, 0.4,
+                                        ),
+                                    })
+                                    .on_input(PanelMsg::FpEditorSetSilkText)
+                                    .width(Length::Fill),
+                            ]
+                            .spacing(6)
+                            .align_y(iced::Alignment::Center),
+                        )
+                        .padding([2, 8])
+                        .width(Length::Fill),
+                    );
+                }
+                col = col.push(
+                    container(
+                        row![grid_manager_btn(
+                            "Delete",
+                            Some(PanelMsg::FpEditorDeleteSelectedSilk),
+                            primary,
+                            border_c,
+                        )]
+                        .spacing(4)
+                        .align_y(iced::Alignment::Center),
+                    )
+                    .padding([4, 8])
+                    .width(Length::Fill),
+                );
+            } else {
+                // v0.18.13 — Altium "Library Options" no-selection
+                // layout (Selection Filter at the top, full 5-section
+                // body assembled after the match). The Footprint
+                // summary remains as auxiliary kv-rows.
+                col = col.push(props_section_header("Selection Filter", primary));
+                col = render_selection_filter(col, fp, primary, muted, border_c);
+                col = col.push(props_section_header("Footprint", primary));
+                col = props_kv_row(col, muted, primary, "Name", fp.footprint_name.clone());
+                col = props_kv_row(col, muted, primary, "Version", fp.version.clone());
+                col = props_kv_row(col, muted, primary, "Mode", mode_label.into());
+                col = props_kv_row(col, muted, primary, "Pads", fp.pad_count.to_string());
+                if fp.sketch_entity_count > 0 || fp.sketch_constraint_count > 0 {
+                    col = props_kv_row(
+                        col,
+                        muted,
+                        primary,
+                        "Sketch entities",
+                        fp.sketch_entity_count.to_string(),
+                    );
+                    col = props_kv_row(
+                        col,
+                        muted,
+                        primary,
+                        "Constraints",
+                        fp.sketch_constraint_count.to_string(),
+                    );
+                }
             }
         }
     }
     // Track no-selection state so the v0.18.13 Library Options
     // sections (Grid Manager / Guide Manager / Other) only render
     // in the empty-canvas Properties body.
-    let no_selection = fp.selected_pad.is_none() && fp.selected_sketch_entity.is_none();
+    // v0.18.24 — silk graphic selection counts as a selection too:
+    // hide Manager sections so the silk panel branch isn't shadowed.
+    let no_selection = fp.selected_pad.is_none()
+        && fp.selected_sketch_entity.is_none()
+        && fp.selected_silk_summary.is_none();
 
     // v0.18.11.2 — Snap Options promoted out of the no-selection
     // branch so it stays reachable while a pad/entity is selected.

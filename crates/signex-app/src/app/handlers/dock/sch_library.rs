@@ -441,6 +441,47 @@ impl Signex {
                 // so the input keeps capturing keystrokes.
                 true
             }
+            crate::panels::PanelMsg::FpEditorSetSilkText(value) => {
+                // v0.18.24 — edit the selected silk-front graphic's
+                // Text content. No-op when the selection isn't a
+                // Text or no silk graphic is selected.
+                let value = value.clone();
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    if let Some(idx) = editor.state.selected_silk_f {
+                        editor.with_parts(|_state, primitive| {
+                            use signex_library::primitive::footprint::FpGraphicKind;
+                            if let Some(g) = primitive.silk_f.get_mut(idx) {
+                                if let FpGraphicKind::Text { content, .. } =
+                                    &mut g.kind
+                                {
+                                    *content = value;
+                                }
+                            }
+                        });
+                        editor.dirty = true;
+                        editor.canvas_cache.clear();
+                    }
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorDeleteSelectedSilk => {
+                // v0.18.24 — delete the currently-selected silk-front
+                // graphic and clear the selection.
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    if let Some(idx) = editor.state.selected_silk_f.take() {
+                        editor.with_parts(|_state, primitive| {
+                            if idx < primitive.silk_f.len() {
+                                primitive.silk_f.remove(idx);
+                            }
+                        });
+                        editor.dirty = true;
+                        editor.canvas_cache.clear();
+                    }
+                }
+                self.refresh_panel_ctx();
+                true
+            }
             crate::panels::PanelMsg::FpEditorEditParameter { name, expr } => {
                 // v0.16.2 — Properties-panel parameter row edit.
                 // Forwards to `FootprintSketchEditParameter` which
