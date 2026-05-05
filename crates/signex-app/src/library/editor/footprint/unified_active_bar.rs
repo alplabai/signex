@@ -52,14 +52,36 @@ pub fn view<'a>(
 
     // Bar centred at the top of the canvas. Match the schematic
     // active-bar mount pattern (column![Space, container(bar)]) so
-    // both editors render at the same vertical offset and the bar
-    // doesn't acquire phantom padding from a wrapper container.
+    // both editors render at the same vertical offset.
+    //
+    // Width MUST be Length::Fill so the inner container's
+    // align_x(Center) has a full-width parent to centre against.
+    // Without this, the Column collapses to Shrink and the bar
+    // hugs whatever width its content reports.
+    //
+    // y-offset matches the schematic's `Space::new().height(y_offset
+    // + 4.0)` calculation: the 4-px gap is identical so the two
+    // bars sit at the same screen y. (Schematic uses 28 px for the
+    // tab strip + 1 px chrome separator while the actual tab bar
+    // is 26 px, but that 5 px discrepancy is internal to the
+    // schematic's y_offset math; from the canvas-top reference, both
+    // bars float +4 px above the canvas content.)
     let bar_layer = iced::widget::column![
-        iced::widget::Space::new().height(Length::Fixed(4.0)),
+        // 5 px gap matches the schematic's effective bar-top offset.
+        // The schematic active bar uses
+        // `Space::new().height(MENU_BAR_HEIGHT + 28 + 4)` from the
+        // window top, but the actual canvas content begins at
+        // MENU_BAR_HEIGHT + 1 (chrome separator) + 26 (tab strip)
+        // = MENU_BAR_HEIGHT + 27 — so the schematic's bar lands at
+        // canvas_top + 5 (28 - 27 + 4). Mirroring 5 px here ensures
+        // the two bars sit at the same screen y when the user
+        // switches tabs.
+        iced::widget::Space::new().height(Length::Fixed(5.0)),
         container(bar)
             .width(Length::Fill)
             .align_x(iced::alignment::Horizontal::Center),
-    ];
+    ]
+    .width(Length::Fill);
 
     // 3) Dropdown overlay (when open) — backstop layer captures
     // click-outside; the panel itself hosts the items.
