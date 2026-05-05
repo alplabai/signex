@@ -11,6 +11,7 @@
 - [x] Scope freeze and non-goals documented.
 - [x] Import pipeline crate boundary documented.
 - [x] Runtime GLB ingestion contract documented.
+- [x] Hybrid 3D rendering pass model documented.
 
 ## Import and cache policy
 
