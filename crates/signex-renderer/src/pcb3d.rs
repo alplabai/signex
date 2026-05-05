@@ -5,6 +5,9 @@
 //! Sources: glTF 2.0 GLB container specification, serde_json public docs.
 
 use crate::theme::ResolvedTheme;
+use signex_3d_model_importer::{
+    import_model as import_to_glb, ImportWarning as ModelImportWarning, ModelImportRequest,
+};
 use signex_gfx::primitive::polygon::GpuPolygon;
 use signex_gfx::scene::Scene;
 use signex_gfx::style::ColorSlot;
@@ -169,6 +172,171 @@ impl fmt::Display for RuntimeGlbIngestError {
 }
 
 impl std::error::Error for RuntimeGlbIngestError {}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum RuntimeModelSource {
+    FilePath(PathBuf),
+    GlbBytes(Vec<u8>),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct RuntimeModelBridgeRequest {
+    pub model_id: String,
+    pub source: RuntimeModelSource,
+    pub cache_dir: PathBuf,
+    pub converter_version: &'static str,
+    pub transform: ModelTransform,
+    pub material_policy: RuntimeMaterialPolicy,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RuntimeModelBridgeWarning {
+    TextureMissing { uri: String },
+    EmptyPrimitive {
+        mesh_index: usize,
+        primitive_index: usize,
+    },
+    UnsupportedGeometry { entity_type: String },
+    UnsupportedGltfExtension { name: String },
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct RuntimeModelBridgeResult {
+    pub model: RuntimeGlbModel,
+    pub resolved_glb_path: Option<PathBuf>,
+    pub conversion_performed: bool,
+    pub cache_hit: bool,
+    pub warnings: Vec<RuntimeModelBridgeWarning>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RuntimeModelBridgeError {
+    ImportFailed {
+        model_id: String,
+        path: PathBuf,
+        reason: String,
+    },
+    IngestFailed(RuntimeGlbIngestError),
+}
+
+impl fmt::Display for RuntimeModelBridgeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ImportFailed {
+                model_id,
+                path,
+                reason,
+            } => write!(
+                f,
+                "model {model_id} failed import bridge for {:?}: {reason}",
+                path
+            ),
+            Self::IngestFailed(err) => write!(f, "runtime GLB ingest failed: {err}"),
+        }
+    }
+}
+
+impl std::error::Error for RuntimeModelBridgeError {}
+
+pub fn ingest_runtime_model_with_bridge(
+    request: RuntimeModelBridgeRequest,
+) -> Result<RuntimeModelBridgeResult, RuntimeModelBridgeError> {
+    match request.source {
+        RuntimeModelSource::GlbBytes(bytes) => {
+            let model = ingest_runtime_glb(RuntimeGlbIngestRequest {
+                model_id: request.model_id,
+                glb_source: GlbSource::Bytes(bytes),
+                transform: request.transform,
+                material_policy: request.material_policy,
+            })
+            .map_err(RuntimeModelBridgeError::IngestFailed)?;
+
+            Ok(RuntimeModelBridgeResult {
+                model,
+                resolved_glb_path: None,
+                conversion_performed: false,
+                cache_hit: false,
+                warnings: Vec::new(),
+            })
+        }
+        RuntimeModelSource::FilePath(path) => {
+            if is_glb_path(&path) {
+                let model = ingest_runtime_glb(RuntimeGlbIngestRequest {
+                    model_id: request.model_id,
+                    glb_source: GlbSource::FilePath(path.clone()),
+                    transform: request.transform,
+                    material_policy: request.material_policy,
+                })
+                .map_err(RuntimeModelBridgeError::IngestFailed)?;
+
+                return Ok(RuntimeModelBridgeResult {
+                    model,
+                    resolved_glb_path: Some(path),
+                    conversion_performed: false,
+                    cache_hit: false,
+                    warnings: Vec::new(),
+                });
+            }
+
+            let import_result = import_to_glb(ModelImportRequest {
+                model_id: request.model_id.clone(),
+                source_path: path.clone(),
+                cache_dir: request.cache_dir,
+                converter_version: request.converter_version,
+            })
+            .map_err(|err| RuntimeModelBridgeError::ImportFailed {
+                model_id: request.model_id.clone(),
+                path: path.clone(),
+                reason: err.to_string(),
+            })?;
+
+            let warnings = import_result
+                .warnings
+                .into_iter()
+                .map(map_import_warning)
+                .collect();
+
+            let resolved_glb_path = import_result.glb_path.clone();
+
+            let model = ingest_runtime_glb(RuntimeGlbIngestRequest {
+                model_id: request.model_id,
+                glb_source: GlbSource::FilePath(resolved_glb_path.clone()),
+                transform: request.transform,
+                material_policy: request.material_policy,
+            })
+            .map_err(RuntimeModelBridgeError::IngestFailed)?;
+
+            Ok(RuntimeModelBridgeResult {
+                model,
+                resolved_glb_path: Some(resolved_glb_path),
+                conversion_performed: true,
+                cache_hit: import_result.cache_hit,
+                warnings,
+            })
+        }
+    }
+}
+
+fn map_import_warning(warning: ModelImportWarning) -> RuntimeModelBridgeWarning {
+    match warning {
+        ModelImportWarning::TextureMissing { uri } => {
+            RuntimeModelBridgeWarning::TextureMissing { uri }
+        }
+        ModelImportWarning::EmptyPrimitive {
+            mesh_index,
+            primitive_index,
+        } => RuntimeModelBridgeWarning::EmptyPrimitive {
+            mesh_index,
+            primitive_index,
+        },
+        ModelImportWarning::UnsupportedGeometry { entity_type } => {
+            RuntimeModelBridgeWarning::UnsupportedGeometry { entity_type }
+        }
+        ModelImportWarning::UnsupportedGltfExtension { name } => {
+            RuntimeModelBridgeWarning::UnsupportedGltfExtension { name }
+        }
+    }
+}
 
 pub fn ingest_runtime_glb(
     request: RuntimeGlbIngestRequest,

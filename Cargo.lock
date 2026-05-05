@@ -5439,8 +5439,10 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "signex-3d-model-importer",
  "signex-gfx",
  "signex-types",
+ "tempfile",
 ]
 
 [[package]]

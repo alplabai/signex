@@ -8,8 +8,10 @@ repository.workspace = true
 [dependencies]
 signex-gfx = { workspace = true }
 signex-types = { workspace = true }
+signex-3d-model-importer = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
 regex = { workspace = true }
+tempfile = "3"
