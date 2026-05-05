@@ -21,9 +21,9 @@
 
 ## Validation planning
 
-- [ ] Fixture classes for model complexity tiers documented.
-- [ ] Regression and benchmark command set documented.
-- [ ] Pass/fail thresholds documented.
+- [x] Fixture classes for model complexity tiers documented.
+- [x] Regression and benchmark command set documented.
+- [x] Pass/fail thresholds documented.
 
 ## Handoff readiness
 
