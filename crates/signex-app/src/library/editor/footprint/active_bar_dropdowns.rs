@@ -19,7 +19,7 @@ use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 
 use crate::icons as ic;
 use crate::library::editor::footprint::state::{
-    FpActiveBarMenu, PadsTool, SelectionFilterKind, SnapSubTab, SnappingMode,
+    FpActiveBarMenu, PadsTool, SelectionFilterKind, SketchTool, SnapSubTab, SnappingMode,
 };
 use crate::library::messages::{LibraryMessage, PrimitiveEditorMsg};
 use crate::panels::SnapOptionFlag;
@@ -55,14 +55,17 @@ fn stub_with_icon(
 /// Build the entries for the dropdown matching `menu`. `tid` resolves
 /// the per-theme accent tint on each SVG icon (icons are reused from
 /// the schematic active bar's icon set for visual consistency).
+/// `custom_presets` are the named multi-preset shortcuts shown on
+/// row 1 of the Filter dropdown (parity with the schematic).
 pub fn entries(
     menu: FpActiveBarMenu,
     state: &FootprintEditorState,
     path: PathBuf,
     tid: ThemeId,
+    custom_presets: &[crate::active_bar::CustomFilterPreset],
 ) -> Vec<DropdownEntry<LibraryMessage>> {
     match menu {
-        FpActiveBarMenu::Filter => filter_entries(state, path),
+        FpActiveBarMenu::Filter => filter_entries(state, path, custom_presets),
         FpActiveBarMenu::Snap => snap_entries(state, path),
         FpActiveBarMenu::Place => place_entries(path, tid),
         FpActiveBarMenu::Select => select_entries(path, tid),
@@ -76,38 +79,168 @@ pub fn entries(
 fn filter_entries(
     state: &FootprintEditorState,
     path: PathBuf,
+    custom_presets: &[crate::active_bar::CustomFilterPreset],
 ) -> Vec<DropdownEntry<LibraryMessage>> {
+    use iced::widget::{button, column, container, row, text};
+    use iced::{Background, Border, Color, Length, Theme};
     use SelectionFilterKind as K;
+
     let f = state.selection_filter;
-    let mk = |label: &'static str, kind: K| -> DropdownItem<LibraryMessage> {
-        DropdownItem::new(
-            label,
-            fp(
-                path.clone(),
-                PrimitiveEditorMsg::FootprintToggleSelectionFilter(kind),
-            ),
+    let active_bg = Color::from_rgba8(0x2E, 0x33, 0x45, 1.0);
+    let inactive_bg = Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0);
+    let text_on = Color::WHITE;
+    let text_off = Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0);
+    // Border colour matches the schematic Filter dropdown chips —
+    // theme accent gives the chips an "input-like" feel.
+    let chip_border = Color::from_rgba8(0xE7, 0x8B, 0x2A, 1.0);
+
+    // Chip factory: enabled chips get accent-bordered active fill,
+    // disabled chips get the muted inactive fill. Click toggles.
+    let path_for_chip = path.clone();
+    let chip = move |label: &'static str, kind: K| -> iced::Element<'static, LibraryMessage> {
+        let enabled = f.get(kind);
+        let path_c = path_for_chip.clone();
+        button(
+            text(label.to_string())
+                .size(11)
+                .color(if enabled { text_on } else { text_off }),
         )
-        .checked(f.get(kind))
+        .padding([4, 10])
+        .on_press(LibraryMessage::PrimitiveEditorEvent {
+            path: path_c,
+            msg: PrimitiveEditorMsg::FootprintToggleSelectionFilter(kind),
+        })
+        .style(move |_: &Theme, status: button::Status| {
+            let bg = match status {
+                button::Status::Hovered => Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.06)),
+                _ => Background::Color(if enabled { active_bg } else { inactive_bg }),
+            };
+            button::Style {
+                background: Some(bg),
+                border: Border {
+                    width: 1.0,
+                    radius: 2.0.into(),
+                    color: chip_border,
+                },
+                text_color: if enabled { text_on } else { text_off },
+                ..button::Style::default()
+            }
+        })
+        .into()
     };
-    vec![
-        DropdownEntry::Header("Selection Filter".into()),
-        DropdownEntry::Item(mk("3D Bodies", K::Bodies3d)),
-        DropdownEntry::Item(mk("Keepouts", K::Keepouts)),
-        DropdownEntry::Item(mk("Tracks", K::Tracks)),
-        DropdownEntry::Item(mk("Arcs", K::Arcs)),
-        DropdownEntry::Item(mk("Pads", K::Pads)),
-        DropdownEntry::Item(mk("Vias", K::Vias)),
-        DropdownEntry::Item(mk("Regions", K::Regions)),
-        DropdownEntry::Item(mk("Fills", K::Fills)),
-        DropdownEntry::Item(mk("Texts", K::Texts)),
-        DropdownEntry::Item(mk("Other", K::Other)),
+
+    // "All - On / All - Off" toggle: clicking flips every kind.
+    // Exact parity with the schematic's All toggle. Renders inline
+    // via a stub message until a footprint-side ToggleAllFilters
+    // dispatcher lands; for now the chip falls through to
+    // `FootprintActiveBarStub("All filters")`.
+    let path_all = path.clone();
+    let all_on = K::ALTIUM_PILLS.iter().all(|k| f.get(*k));
+    let all_label = if all_on { "All - On" } else { "All - Off" };
+    let all_btn = button(text(all_label).size(11).color(if all_on { text_on } else { text_off }))
+        .padding([4, 12])
+        .on_press(LibraryMessage::PrimitiveEditorEvent {
+            path: path_all,
+            msg: PrimitiveEditorMsg::FootprintActiveBarStub("All filters"),
+        })
+        .style(move |_: &Theme, status: button::Status| {
+            let bg = match status {
+                button::Status::Hovered => Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.06)),
+                _ => Background::Color(if all_on { active_bg } else { inactive_bg }),
+            };
+            button::Style {
+                background: Some(bg),
+                border: Border {
+                    width: 1.0,
+                    radius: 2.0.into(),
+                    color: chip_border,
+                },
+                text_color: if all_on { text_on } else { text_off },
+                ..button::Style::default()
+            }
+        });
+
+    // Top row: All toggle + custom preset shortcuts. Each preset
+    // button is a stub today (clicking applies that preset's filter
+    // set) — a footprint-side ApplyCustomFilter dispatcher follows.
+    let mut top_row = iced::widget::Row::new()
+        .spacing(4)
+        .align_y(iced::Alignment::Center)
+        .push(all_btn);
+    for (idx, preset) in custom_presets.iter().enumerate() {
+        let label = if preset.name.trim().is_empty() {
+            format!("Filter {}", idx + 1)
+        } else {
+            preset.name.clone()
+        };
+        let path_preset = path.clone();
+        let preset_btn = button(text(label).size(11).color(text_on))
+            .padding([4, 10])
+            .on_press(LibraryMessage::PrimitiveEditorEvent {
+                path: path_preset,
+                msg: PrimitiveEditorMsg::FootprintActiveBarStub("Apply Custom Filter preset"),
+            })
+            .style(move |_: &Theme, status: button::Status| {
+                let bg = match status {
+                    button::Status::Hovered => Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.06)),
+                    _ => Background::Color(inactive_bg),
+                };
+                button::Style {
+                    background: Some(bg),
+                    border: Border {
+                        width: 1.0,
+                        radius: 2.0.into(),
+                        color: chip_border,
+                    },
+                    text_color: text_on,
+                    ..button::Style::default()
+                }
+            });
+        top_row = top_row.push(preset_btn);
+    }
+
+    // 3-row layout matching the schematic Filter dropdown:
+    //   row 1: All toggle + custom-preset shortcut chips
+    //   row 2: 5 chips (3D Bodies / Keepouts / Tracks / Arcs / Pads)
+    //   row 3: 5 chips (Vias / Regions / Fills / Texts / Other)
+    let layout = column![
+        container(top_row).padding([4, 8]),
+        container(
+            column![
+                row![
+                    chip("3D Bodies", K::Bodies3d),
+                    chip("Keepouts", K::Keepouts),
+                    chip("Tracks", K::Tracks),
+                    chip("Arcs", K::Arcs),
+                    chip("Pads", K::Pads),
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center),
+                row![
+                    chip("Vias", K::Vias),
+                    chip("Regions", K::Regions),
+                    chip("Fills", K::Fills),
+                    chip("Texts", K::Texts),
+                    chip("Other", K::Other),
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center),
+            ]
+            .spacing(4),
+        )
+        .padding([4, 8]),
     ]
+    .spacing(0)
+    .width(Length::Shrink);
+
+    vec![DropdownEntry::Custom(layout.into())]
 }
 
 fn snap_entries(
     state: &FootprintEditorState,
     path: PathBuf,
 ) -> Vec<DropdownEntry<LibraryMessage>> {
+    let _ = SnapSubTab::Grids; // silence unused-import lint when nothing references it
     let opts = state.snap_options;
     let mk_mode = |label: &'static str, mode: SnappingMode| -> DropdownItem<LibraryMessage> {
         DropdownItem::new(
@@ -118,16 +251,6 @@ fn snap_entries(
             ),
         )
         .checked(state.snapping_mode == mode)
-    };
-    let mk_sub = |label: &'static str, sub: SnapSubTab| -> DropdownItem<LibraryMessage> {
-        DropdownItem::new(
-            label,
-            fp(
-                path.clone(),
-                PrimitiveEditorMsg::FootprintActiveBarSetSnapSubTab(sub),
-            ),
-        )
-        .checked(state.snap_subtab == sub)
     };
     let mk_snap =
         |label: &'static str, flag: SnapOptionFlag, on: bool| -> DropdownItem<LibraryMessage> {
@@ -141,15 +264,27 @@ fn snap_entries(
             .checked(on)
         };
     vec![
-        DropdownEntry::Header("Snapping".into()),
+        DropdownEntry::Header("Snap layers".into()),
         DropdownEntry::Item(mk_mode("All Layers", SnappingMode::AllLayers)),
         DropdownEntry::Item(mk_mode("Current Layer", SnappingMode::CurrentLayer)),
         DropdownEntry::Item(mk_mode("Off", SnappingMode::Off)),
         DropdownEntry::Separator,
-        DropdownEntry::Header("Sub-tab".into()),
-        DropdownEntry::Item(mk_sub("Grids", SnapSubTab::Grids)),
-        DropdownEntry::Item(mk_sub("Guides", SnapSubTab::Guides)),
-        DropdownEntry::Item(mk_sub("Axes", SnapSubTab::Axes)),
+        DropdownEntry::Header("Snap targets".into()),
+        DropdownEntry::Item(mk_snap(
+            "Grids",
+            SnapOptionFlag::SnapToGrids,
+            opts.snap_to_grids,
+        )),
+        DropdownEntry::Item(mk_snap(
+            "Guides",
+            SnapOptionFlag::SnapToGuides,
+            opts.snap_to_guides,
+        )),
+        DropdownEntry::Item(mk_snap(
+            "Axes",
+            SnapOptionFlag::SnapToAxes,
+            opts.snap_to_axes,
+        )),
         DropdownEntry::Separator,
         DropdownEntry::Header("Objects for snapping".into()),
         DropdownEntry::Item(mk_snap(
@@ -228,16 +363,23 @@ fn place_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessag
             path.clone(),
             ic::icon_dd_move_xy(tid),
         )),
-        DropdownEntry::Item(stub_with_icon(
-            "Rotate Selection",
-            path.clone(),
-            ic::icon_dd_rotate(tid),
-        )),
-        DropdownEntry::Item(stub_with_icon(
-            "Flip Selection",
-            path,
-            ic::icon_dd_flip_x(tid),
-        )),
+        DropdownEntry::Item(
+            DropdownItem::new(
+                "Rotate Selection",
+                fp(
+                    path.clone(),
+                    PrimitiveEditorMsg::FootprintActiveBarRotateSelection,
+                ),
+            )
+            .icon(ic::icon_dd_rotate(tid)),
+        ),
+        DropdownEntry::Item(
+            DropdownItem::new(
+                "Flip Selection",
+                fp(path, PrimitiveEditorMsg::FootprintActiveBarFlipSelection),
+            )
+            .icon(ic::icon_dd_flip_x(tid)),
+        ),
     ]
 }
 
@@ -265,18 +407,25 @@ fn select_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessa
         DropdownEntry::Item(stub("Touching Line", path.clone())),
         DropdownEntry::Separator,
         DropdownEntry::Item(stub("All on Layer", path.clone())),
-        DropdownEntry::Item(stub_with_icon(
-            "All",
-            path.clone(),
-            ic::icon_dd_select_all(tid),
-        )),
+        DropdownEntry::Item(
+            DropdownItem::new(
+                "All",
+                fp(path.clone(), PrimitiveEditorMsg::FootprintActiveBarSelectAll),
+            )
+            .icon(ic::icon_dd_select_all(tid)),
+        ),
         DropdownEntry::Item(stub("Off Grid Pads", path.clone())),
         DropdownEntry::Separator,
-        DropdownEntry::Item(stub_with_icon(
-            "Toggle Selection",
-            path,
-            ic::icon_dd_select_toggle(tid),
-        )),
+        DropdownEntry::Item(
+            DropdownItem::new(
+                "Toggle Selection",
+                fp(
+                    path,
+                    PrimitiveEditorMsg::FootprintActiveBarClearSelection,
+                ),
+            )
+            .icon(ic::icon_dd_select_toggle(tid)),
+        ),
     ]
 }
 
@@ -338,12 +487,23 @@ fn align_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessag
         DropdownEntry::Item(stub("Increase Vertical Spacing", path.clone())),
         DropdownEntry::Item(stub("Decrease Vertical Spacing", path.clone())),
         DropdownEntry::Separator,
-        DropdownEntry::Item(stub_with_icon(
-            "Align To Grid",
-            path.clone(),
-            ic::icon_dd_align_grid(tid),
+        DropdownEntry::Item(
+            DropdownItem::new(
+                "Align To Grid",
+                fp(
+                    path.clone(),
+                    PrimitiveEditorMsg::FootprintActiveBarAlignSelectionToGrid,
+                ),
+            )
+            .icon(ic::icon_dd_align_grid(tid)),
+        ),
+        DropdownEntry::Item(DropdownItem::new(
+            "Move All Components Origin To Grid",
+            fp(
+                path,
+                PrimitiveEditorMsg::FootprintActiveBarMoveOriginToGrid,
+            ),
         )),
-        DropdownEntry::Item(stub("Move All Components Origin To Grid", path)),
     ]
 }
 
@@ -385,31 +545,33 @@ fn text_entries(
 
 fn shapes_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessage>> {
     // Per user simplification: pure graphics live in Sketch mode
-    // only. From Pads mode, Shapes opens the menu but every item is
-    // a stub that hints "switch to Sketch mode for graphics".
+    // only. Picking an item here switches the editor to Sketch mode
+    // and arms the matching SketchTool — single-click parity with
+    // Altium's Place ▸ Line / Arc / Rectangle flow.
+    let arm = |tool: SketchTool| -> LibraryMessage {
+        fp(
+            path.clone(),
+            PrimitiveEditorMsg::FootprintActiveBarSetSketchTool(tool),
+        )
+    };
     vec![
-        DropdownEntry::Header("(Sketch mode only — switch via the mode bar)".into()),
-        DropdownEntry::Item(stub_with_icon("Line", path.clone(), ic::icon_dd_line(tid))),
-        DropdownEntry::Item(stub_with_icon(
-            "Arc (Center)",
-            path.clone(),
-            ic::icon_dd_arc(tid),
-        )),
-        DropdownEntry::Item(stub_with_icon(
-            "Arc (Edge)",
-            path.clone(),
-            ic::icon_dd_arc(tid),
-        )),
-        DropdownEntry::Item(stub_with_icon(
-            "Arc (Any Angle)",
-            path.clone(),
-            ic::icon_dd_arc(tid),
-        )),
-        DropdownEntry::Item(stub_with_icon(
-            "Full Circle",
-            path.clone(),
-            ic::icon_dd_circle(tid),
-        )),
+        DropdownEntry::Header("Sketch mode tools".into()),
+        DropdownEntry::Item(
+            DropdownItem::new("Line", arm(SketchTool::Line)).icon(ic::icon_dd_line(tid)),
+        ),
+        DropdownEntry::Item(
+            DropdownItem::new("Arc (Center)", arm(SketchTool::Arc)).icon(ic::icon_dd_arc(tid)),
+        ),
+        DropdownEntry::Item(
+            DropdownItem::new("Arc (Edge)", arm(SketchTool::Arc)).icon(ic::icon_dd_arc(tid)),
+        ),
+        DropdownEntry::Item(
+            DropdownItem::new("Arc (Any Angle)", arm(SketchTool::Arc)).icon(ic::icon_dd_arc(tid)),
+        ),
+        DropdownEntry::Item(
+            DropdownItem::new("Full Circle", arm(SketchTool::Circle))
+                .icon(ic::icon_dd_circle(tid)),
+        ),
         DropdownEntry::Separator,
         DropdownEntry::Item(stub_with_icon(
             "Fill",
@@ -421,10 +583,9 @@ fn shapes_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessa
             path.clone(),
             ic::icon_dd_polygon(tid),
         )),
-        DropdownEntry::Item(stub_with_icon(
-            "Rectangle",
-            path,
-            ic::icon_dd_rect(tid),
-        )),
+        DropdownEntry::Item(
+            DropdownItem::new("Rectangle", arm(SketchTool::Rectangle))
+                .icon(ic::icon_dd_rect(tid)),
+        ),
     ]
 }

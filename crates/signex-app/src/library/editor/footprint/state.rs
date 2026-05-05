@@ -498,6 +498,14 @@ pub struct SnapOptions {
     /// v0.13 — Altium "Axis Snap Range" (mm). Lateral tolerance for
     /// horizontal/vertical axis snapping.
     pub axis_snap_range_mm: f64,
+    /// v0.13 — Altium-style independent target toggles: each gates
+    /// one CATEGORY of snap target (grids / guides / axes). Match
+    /// Altium's PCB Library editor where these can be combined freely
+    /// (you can have grid-snap AND axis-snap on simultaneously).
+    /// Replaces the v0.18.13 `snap_subtab` mutex enum.
+    pub snap_to_grids: bool,
+    pub snap_to_guides: bool,
+    pub snap_to_axes: bool,
 }
 
 /// v0.18.19 — Altium grid display style for the Cartesian Grid
@@ -600,6 +608,9 @@ impl Default for SnapOptions {
             snap_3d_body_points: false,
             snap_distance_mm: 0.203,
             axis_snap_range_mm: 5.08,
+            snap_to_grids: true,
+            snap_to_guides: false,
+            snap_to_axes: false,
         }
     }
 }
@@ -811,6 +822,10 @@ pub enum PadsTool {
     /// `FpGraphic::Polygon` with `filled: true` so the renderer
     /// fills the shape instead of stroking the outline.
     PlaceRegion,
+    /// v0.13 — through-hole via. 1-click drop, mints a Pad with
+    /// `kind = ThroughHole` + paired drill. Hole functionality is
+    /// covered by `PlacePad` with the via geometry.
+    PlaceVia,
 }
 
 /// v0.18.15.3 — Place Arc 3-click gesture state machine.

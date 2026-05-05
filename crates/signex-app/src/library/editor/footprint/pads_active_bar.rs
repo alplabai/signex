@@ -336,70 +336,29 @@ pub fn items(
     // segments at the left of the bar drive mode switching.
 
     let _ = tokens;
+    // v0.13 — Pads-mode active bar simplified. Pure graphics
+    // (Line / Arc / Polygon / Region) live in Sketch mode only;
+    // PlaceHole is folded into PlacePad (the user picks `kind` via
+    // the Properties panel). Place Via is the new through-hole tool.
     vec![
         select,
         ActiveBarItem::Separator,
-        // v0.15 — Place Pad now has a real tool-state machine.
         place_pad,
-        // v0.18.15.1 — Place Track wired (silk-layer 2-click line).
-        // First click stashes start; second click commits + chains.
-        // Right-click / Esc cancels back to Select.
+        // Place Via — through-hole via. 1-click drop. Wired as a stub
+        // until the via primitive ships; the tool state survives so
+        // Esc + the Properties panel remain coherent.
         ActiveBarItem::Button(ActiveBarButton {
-            icon: ActiveBarIcon::Svg(icons::icon_shape_line(theme_id)),
-            tooltip: "Place Track — click two endpoints to drop silk-layer lines".into(),
+            icon: ActiveBarIcon::Glyph("\u{25CE}"), // ◎ — annular ring glyph
+            tooltip: "Place Via — click empty canvas to drop a through-hole via".into(),
             enabled: true,
-            selected: pads_tool == PadsTool::PlaceTrack,
+            selected: pads_tool == PadsTool::PlaceVia,
             on_press: Some(LibraryMessage::PrimitiveEditorEvent {
                 path: path.clone(),
-                msg: PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlaceTrack),
+                msg: PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlaceVia),
             }),
             ..ActiveBarButton::default()
         }),
-        // v0.18.15.3 — Place Arc wired (silk-layer 3-click arc).
-        // Centre / start / sweep clicks; right-click / Esc cancels.
-        ActiveBarItem::Button(ActiveBarButton {
-            icon: ActiveBarIcon::Svg(icons::icon_shape_arc(theme_id)),
-            tooltip: "Place Arc — click centre, then radius, then sweep end to drop a silk arc"
-                .into(),
-            enabled: true,
-            selected: pads_tool == PadsTool::PlaceArc,
-            on_press: Some(LibraryMessage::PrimitiveEditorEvent {
-                path: path.clone(),
-                msg: PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlaceArc),
-            }),
-            ..ActiveBarButton::default()
-        }),
-        // v0.18.15.4 — Place Polygon wired (silk-layer multi-click
-        // closed-loop, stroked outline).
-        ActiveBarItem::Button(ActiveBarButton {
-            icon: ActiveBarIcon::Svg(icons::icon_shape_polygon(theme_id)),
-            tooltip: "Place Polygon — click vertices, switch tool to commit (≥ 3 vertices)".into(),
-            enabled: true,
-            selected: pads_tool == PadsTool::PlacePolygon,
-            on_press: Some(LibraryMessage::PrimitiveEditorEvent {
-                path: path.clone(),
-                msg: PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlacePolygon),
-            }),
-            ..ActiveBarButton::default()
-        }),
-        // v0.18.17 — Place Region wired (silk-layer multi-click
-        // closed-loop, FILLED). Same gesture as Polygon; the
-        // dispatcher reads `pads_tool` to set `filled: true` on
-        // the committed FpGraphic.
-        ActiveBarItem::Button(ActiveBarButton {
-            icon: ActiveBarIcon::Glyph("\u{25A0}"), // ■
-            tooltip: "Place Region — filled closed loop (Place Polygon for outline only)".into(),
-            enabled: true,
-            selected: pads_tool == PadsTool::PlaceRegion,
-            on_press: Some(LibraryMessage::PrimitiveEditorEvent {
-                path: path.clone(),
-                msg: PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlaceRegion),
-            }),
-            ..ActiveBarButton::default()
-        }),
-        // v0.18.15 — Place String wired (silk-layer text). 1-click
-        // drop appends a Text FpGraphic to `silk_f` with content
-        // "TEXT" + 1mm size. Right-click / Esc cancels back to Select.
+        // Place String — silk-layer 1-click text drop.
         ActiveBarItem::Button(ActiveBarButton {
             icon: ActiveBarIcon::Glyph("T"),
             tooltip: "Place String — click empty canvas to drop silk-layer text".into(),
@@ -408,20 +367,6 @@ pub fn items(
             on_press: Some(LibraryMessage::PrimitiveEditorEvent {
                 path: path.clone(),
                 msg: PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlaceString),
-            }),
-            ..ActiveBarButton::default()
-        }),
-        // v0.18.12 — Place Hole wired. Click empty canvas → drops
-        // a Pad with `kind = NptHole` at the cursor (1-click drop,
-        // no drag). Right-click / Esc cancels back to Select.
-        ActiveBarItem::Button(ActiveBarButton {
-            icon: ActiveBarIcon::Glyph("\u{25CE}"), // ◎
-            tooltip: "Place Hole — click empty canvas to drop NPT holes".into(),
-            enabled: true,
-            selected: pads_tool == PadsTool::PlaceHole,
-            on_press: Some(LibraryMessage::PrimitiveEditorEvent {
-                path: path.clone(),
-                msg: PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlaceHole),
             }),
             ..ActiveBarButton::default()
         }),

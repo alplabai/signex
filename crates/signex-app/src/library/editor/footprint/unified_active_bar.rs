@@ -28,6 +28,7 @@ pub fn view<'a>(
     editor: &'a FootprintEditorState,
     theme_id: signex_types::theme::ThemeId,
     tokens: &'a ThemeTokens,
+    custom_filter_presets: &[crate::active_bar::CustomFilterPreset],
 ) -> Element<'a, LibraryMessage> {
     let mut items: Vec<ActiveBarItem<LibraryMessage>> = Vec::new();
 
@@ -63,8 +64,23 @@ pub fn view<'a>(
             &editor.state,
             editor.path.clone(),
             theme_id,
+            custom_filter_presets,
         );
-        let panel = signex_widgets::active_bar_dropdown::view(entries, tokens);
+        // Per-menu width hint: list-style menus get a fixed width
+        // (~longest label + icon column + padding) so hover paints a
+        // full row; chip-grid menus (Filter) auto-size from the wrap
+        // layout.
+        let width_hint = match menu {
+            FpActiveBarMenu::Filter => None, // chip wrap
+            FpActiveBarMenu::Snap => Some(260.0),
+            FpActiveBarMenu::Place => Some(240.0),
+            FpActiveBarMenu::Select => Some(220.0),
+            FpActiveBarMenu::Align => Some(320.0),
+            FpActiveBarMenu::Body3d => Some(200.0),
+            FpActiveBarMenu::Text => Some(180.0),
+            FpActiveBarMenu::Shapes => Some(220.0),
+        };
+        let panel = signex_widgets::active_bar_dropdown::view(entries, tokens, width_hint);
         let panel_anchor = container(panel)
             .padding([46, 10])
             .center_x(Length::Fill)
@@ -118,6 +134,9 @@ fn dropdown_trigger_items(
                 path: path.clone(),
                 msg: PrimitiveEditorMsg::FootprintToggleActiveBarMenu(menu),
             }),
+            // Chevron indicator at the bottom-right of the button —
+            // matches the schematic active bar's `dropdown_indicator`.
+            dropdown_indicator: Some(ActiveBarIcon::Svg(ic::icon_chevron_45(tid))),
             ..ActiveBarButton::default()
         })
     };

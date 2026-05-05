@@ -714,6 +714,11 @@ pub enum SnapOptionFlag {
     Regions,
     FootprintOrigins,
     Body3dPoints,
+    /// Independent target-category toggles (Altium PCB Library
+    /// editor): each can be on simultaneously.
+    SnapToGrids,
+    SnapToGuides,
+    SnapToAxes,
 }
 
 /// One row in the Footprint Library panel — a sibling `.snxfpt`

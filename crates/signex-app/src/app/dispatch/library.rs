@@ -3988,6 +3988,13 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintActiveBarToggleSnap(_)
         | PrimitiveEditorMsg::FootprintActiveBarSetSnappingMode(_)
         | PrimitiveEditorMsg::FootprintActiveBarSetSnapSubTab(_)
+        | PrimitiveEditorMsg::FootprintActiveBarRotateSelection
+        | PrimitiveEditorMsg::FootprintActiveBarFlipSelection
+        | PrimitiveEditorMsg::FootprintActiveBarAlignSelectionToGrid
+        | PrimitiveEditorMsg::FootprintActiveBarMoveOriginToGrid
+        | PrimitiveEditorMsg::FootprintActiveBarSelectAll
+        | PrimitiveEditorMsg::FootprintActiveBarClearSelection
+        | PrimitiveEditorMsg::FootprintActiveBarSetSketchTool(_)
         | PrimitiveEditorMsg::FootprintSetMode(_)
         | PrimitiveEditorMsg::FootprintSketchPlacePoint { .. }
         | PrimitiveEditorMsg::FootprintSketchEditParameter { .. }
@@ -4651,6 +4658,9 @@ pub(crate) fn apply_footprint_primitive_edit(
                 SnapOptionFlag::Body3dPoints => {
                     opts.snap_3d_body_points = !opts.snap_3d_body_points
                 }
+                SnapOptionFlag::SnapToGrids => opts.snap_to_grids = !opts.snap_to_grids,
+                SnapOptionFlag::SnapToGuides => opts.snap_to_guides = !opts.snap_to_guides,
+                SnapOptionFlag::SnapToAxes => opts.snap_to_axes = !opts.snap_to_axes,
             }
             editor.canvas_cache.clear();
         }
@@ -4660,6 +4670,120 @@ pub(crate) fn apply_footprint_primitive_edit(
         }
         PrimitiveEditorMsg::FootprintActiveBarSetSnapSubTab(sub) => {
             editor.state.snap_subtab = sub;
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintActiveBarRotateSelection => {
+            editor.with_parts(|state, primitive| {
+                if let Some(idx) = state.selected_pad
+                    && let Some(pad) = state.pads.get_mut(idx)
+                {
+                    pad.rotation_deg = (pad.rotation_deg + 90.0).rem_euclid(360.0);
+                    CanvasState::sync_pads_to_primitive(state, primitive);
+                }
+            });
+            editor.state.active_bar_menu = None;
+            editor.canvas_cache.clear();
+            editor.dirty = true;
+        }
+        PrimitiveEditorMsg::FootprintActiveBarFlipSelection => {
+            editor.with_parts(|state, primitive| {
+                if let Some(idx) = state.selected_pad
+                    && let Some(pad) = state.pads.get_mut(idx)
+                {
+                    let new_layers: Vec<signex_library::LayerId> = pad
+                        .layers
+                        .iter()
+                        .map(|l| {
+                            let s = l.as_str();
+                            let flipped = if let Some(rest) = s.strip_prefix("F.") {
+                                format!("B.{rest}")
+                            } else if let Some(rest) = s.strip_prefix("B.") {
+                                format!("F.{rest}")
+                            } else {
+                                s.to_string()
+                            };
+                            signex_library::LayerId::new(flipped)
+                        })
+                        .collect();
+                    pad.layers = new_layers;
+                    CanvasState::sync_pads_to_primitive(state, primitive);
+                }
+            });
+            editor.state.active_bar_menu = None;
+            editor.canvas_cache.clear();
+            editor.dirty = true;
+        }
+        PrimitiveEditorMsg::FootprintActiveBarAlignSelectionToGrid => {
+            editor.with_parts(|state, primitive| {
+                let step = state.snap_options.grid_step_mm.max(0.001);
+                if let Some(idx) = state.selected_pad
+                    && let Some(pad) = state.pads.get_mut(idx)
+                {
+                    let (x, y) = pad.position_mm;
+                    pad.position_mm = ((x / step).round() * step, (y / step).round() * step);
+                    CanvasState::sync_pads_to_primitive(state, primitive);
+                }
+            });
+            editor.state.active_bar_menu = None;
+            editor.canvas_cache.clear();
+            editor.dirty = true;
+        }
+        PrimitiveEditorMsg::FootprintActiveBarMoveOriginToGrid => {
+            editor.with_parts(|state, primitive| {
+                let step = state.snap_options.grid_step_mm.max(0.001);
+                for pad in state.pads.iter_mut() {
+                    let (x, y) = pad.position_mm;
+                    pad.position_mm = ((x / step).round() * step, (y / step).round() * step);
+                }
+                CanvasState::sync_pads_to_primitive(state, primitive);
+            });
+            editor.state.active_bar_menu = None;
+            editor.canvas_cache.clear();
+            editor.dirty = true;
+        }
+        PrimitiveEditorMsg::FootprintActiveBarSelectAll => {
+            // Single-pad-selection limitation: pick the first pad in
+            // Pads mode; pick the first sketch entity in Sketch mode.
+            // Multi-select is a follow-up state refactor.
+            use crate::library::editor::footprint::state::EditorMode;
+            match editor.state.mode {
+                EditorMode::Sketch => {
+                    if editor.state.selected_sketch.is_none() {
+                        editor.state.selected_sketch = editor
+                            .primitive()
+                            .sketch
+                            .as_ref()
+                            .and_then(|sk| sk.entities.first().map(|e| e.id));
+                    }
+                }
+                EditorMode::Normal => {
+                    if !editor.state.pads.is_empty() && editor.state.selected_pad.is_none() {
+                        editor.state.selected_pad = Some(0);
+                    }
+                }
+                EditorMode::View3d => {}
+            }
+            editor.canvas_cache.clear();
+            editor.state.active_bar_menu = None;
+        }
+        PrimitiveEditorMsg::FootprintActiveBarClearSelection => {
+            editor.state.selected_pad = None;
+            editor.state.selected_sketch = None;
+            editor.state.selected_sketch_secondary = None;
+            editor.state.selected_silk_f = None;
+            editor.canvas_cache.clear();
+            editor.state.active_bar_menu = None;
+        }
+        PrimitiveEditorMsg::FootprintActiveBarSetSketchTool(tool) => {
+            // Switch to Sketch mode if not already there, then arm the
+            // selected sketch tool. Cancels any in-flight gesture.
+            use crate::library::editor::footprint::state::{EditorMode, ToolPending};
+            if editor.state.mode != EditorMode::Sketch {
+                editor.state.mode = EditorMode::Sketch;
+            }
+            editor.state.active_tool = tool;
+            editor.state.tool_pending = ToolPending::Idle;
+            editor.state.active_bar_menu = None;
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintSketchToolEscape => {

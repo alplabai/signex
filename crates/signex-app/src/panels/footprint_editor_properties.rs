@@ -285,7 +285,20 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 if !fp_is_collapsed("fp_selection_filter", collapsed_sections) {
                     col = render_fp_selection_filter(col, fp, accent_c, tag_hover);
                 }
-                let _ = (custom_filter_presets, active_custom_filter_tab);
+                // v0.13 — Custom Selection Filters (named-preset
+                // editor) lands BELOW the flat pill grid. Reuses the
+                // schematic Properties panel's tabbed multi-preset
+                // widget so the chrome is identical.
+                col = col.push(super::view_custom_selection_filters_section(
+                    custom_filter_presets,
+                    active_custom_filter_tab,
+                    collapsed_sections,
+                    muted,
+                    primary,
+                    border_c,
+                    accent_c,
+                    tag_hover,
+                ));
                 col = col.push(props_section_header("Footprint", "fp_footprint", collapsed_sections, primary, border_c));
                 if !fp_is_collapsed("fp_footprint", collapsed_sections) {
                     col = props_kv_row(col, muted, input_bg, input_bdr, "Name", fp.footprint_name.clone());
@@ -332,49 +345,62 @@ pub(super) fn view_footprint_editor_properties<'a>(
     let snap_open = !fp_is_collapsed("fp_snap_options", collapsed_sections);
     let opts = fp.snap_options;
     if snap_open {
-        // v0.18.14.2 — Altium Snap Options sub-tab row (Grids / Guides /
-        // Axes). Grids body renders the snap-to-grid checkbox stack;
-        // Guides drives the Guide Manager (v0.18.20); Axes is the
-        // remaining unbuilt surface (per-axis snap on SnapOptions).
-        col = render_snap_subtab_row(col, fp, primary, muted, border_c);
-        if fp.snap_subtab != crate::library::editor::footprint::state::SnapSubTab::Grids {
-            let hint = match fp.snap_subtab {
-                crate::library::editor::footprint::state::SnapSubTab::Guides => {
-                    "Guide Manager below — add horizontal / vertical guides; toggle individual lines via the row checkbox."
+        // v0.13 — Snap target categories as INDEPENDENT toggle pills
+        // (Altium PCB Library editor parity): each can be on
+        // simultaneously. Replaces the previous mutex sub-tab.
+        col = col.push(
+            container(text("Snap targets").size(10).color(muted))
+                .padding([4, 8])
+                .width(Length::Fill),
+        );
+        let snap_pill = |label: &'static str, flag: SnapOptionFlag, on: bool| -> Element<'static, PanelMsg> {
+            iced::widget::button(
+                text(label)
+                    .size(10)
+                    .color(if on { primary } else { muted })
+                    .align_x(iced::alignment::Horizontal::Center),
+            )
+            .padding([3, 12])
+            .on_press(PanelMsg::FpEditorToggleSnapOption(flag))
+            .style(move |_: &Theme, status: iced::widget::button::Status| {
+                let bg = match status {
+                    iced::widget::button::Status::Hovered => Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.06))),
+                    _ => Some(Background::Color(if on {
+                        Color::from_rgba8(0x2E, 0x33, 0x45, 1.0)
+                    } else {
+                        Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0)
+                    })),
+                };
+                iced::widget::button::Style {
+                    background: bg,
+                    border: Border {
+                        width: 1.0,
+                        radius: 2.0.into(),
+                        color: input_bdr,
+                    },
+                    ..iced::widget::button::Style::default()
                 }
-                crate::library::editor::footprint::state::SnapSubTab::Axes => {
-                    "Per-axis snap (Snap Grid X / Y) is unbuilt — uses the Grids step uniformly for now."
-                }
-                _ => "",
-            };
-            col = col.push(
-                container(text(hint).size(10).color(muted))
-                    .padding([4, 8])
-                    .width(Length::Fill),
-            );
-            // Sketch-mode-only sections + Library Options sections still
-            // render below for the user's other Properties needs even
-            // when the Grids sub-tab isn't selected.
-            if no_selection {
-                col = col.push(props_section_header("Grid Manager", "fp_grid_manager", collapsed_sections, primary, border_c));
-                if !fp_is_collapsed("fp_grid_manager", collapsed_sections) {
-                    col = render_grid_manager(col, fp, primary, muted, border_c);
-                }
-                col = col.push(props_section_header("Guide Manager", "fp_guide_manager", collapsed_sections, primary, border_c));
-                if !fp_is_collapsed("fp_guide_manager", collapsed_sections) {
-                    col = render_guide_manager(col, fp, primary, muted, border_c);
-                }
-                col = col.push(props_section_header("Other", "fp_other", collapsed_sections, primary, border_c));
-                if !fp_is_collapsed("fp_other", collapsed_sections) {
-                    col = render_other_section(col, fp, primary, muted, border_c, input_bg, input_bdr, unit, seg_hover);
-                }
-            }
-            return scrollable(col).width(Length::Fill).into();
-        }
-        // v0.18.14.3 — Altium "Snapping" 3-segment toggle (All Layers /
-        // Current Layer / Off). `Off` short-circuits all priorities in
-        // `snap::snap_cursor`; `CurrentLayer` is a placeholder for the
-        // v0.18.15 layer-aware enforcement.
+            })
+            .into()
+        };
+        col = col.push(
+            container(
+                row![
+                    snap_pill("Grids", SnapOptionFlag::SnapToGrids, opts.snap_to_grids),
+                    snap_pill("Guides", SnapOptionFlag::SnapToGuides, opts.snap_to_guides),
+                    snap_pill("Axes", SnapOptionFlag::SnapToAxes, opts.snap_to_axes),
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([2, 8])
+            .width(Length::Fill),
+        );
+
+        // v0.18.14.3 — "Snapping" mode (All Layers / Current Layer /
+        // Off). Mutually exclusive — selecting one deselects the
+        // others — but rendered as a 3-segment toggle row so it reads
+        // visually like the Altium scope picker.
         col = render_snapping_mode_row(col, fp, primary, muted, border_c);
 
         // v0.13 — Altium-style "Objects for snapping" table. 12-row
@@ -473,10 +499,9 @@ pub(super) fn view_footprint_editor_properties<'a>(
         if !fp_is_collapsed("fp_grid_manager", collapsed_sections) {
             col = render_grid_manager(col, fp, primary, muted, border_c);
         }
-        col = col.push(props_section_header("Guide Manager", "fp_guide_manager", collapsed_sections, primary, border_c));
-        if !fp_is_collapsed("fp_guide_manager", collapsed_sections) {
-            col = render_guide_manager(col, fp, primary, muted, border_c);
-        }
+        // Guide Manager removed in v0.13 — sketch-mode owns guides /
+        // construction geometry; the standalone Guide Manager was
+        // redundant.
         col = col.push(props_section_header("Other", "fp_other", collapsed_sections, primary, border_c));
         if !fp_is_collapsed("fp_other", collapsed_sections) {
             col = render_other_section(col, fp, primary, muted, border_c, input_bg, input_bdr, unit, seg_hover);
@@ -886,56 +911,55 @@ fn render_snapping_mode_row<'a>(
     fp: &'a FootprintEditorPanelContext,
     primary: Color,
     muted: Color,
-    border_c: Color,
+    _border_c: Color,
 ) -> Column<'a, PanelMsg> {
     use crate::library::editor::footprint::state::SnappingMode as M;
     let current = fp.snapping_mode;
-    let mk_segment =
-        move |label: &'static str, target: M, active: bool| -> Element<'static, PanelMsg> {
-            let bg = if active {
-                iced::Color::from_rgba(0.40, 0.70, 1.00, 0.20)
-            } else {
-                iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04)
+    // v0.13 — Match the Grids/Guides/Axes pill chrome above. Mutex
+    // semantics (clicking one selects only that mode), but the same
+    // border / fill / padding so the row reads visually identical.
+    let chip_border = Color::from_rgba8(0xE7, 0x8B, 0x2A, 1.0);
+    let active_bg = Color::from_rgba8(0x2E, 0x33, 0x45, 1.0);
+    let inactive_bg = Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0);
+    let mk_pill = move |label: &'static str, target: M, active: bool| -> Element<'static, PanelMsg> {
+        iced::widget::button(
+            text(label)
+                .size(10)
+                .color(if active { primary } else { muted })
+                .align_x(iced::alignment::Horizontal::Center),
+        )
+        .padding([3, 12])
+        .on_press(PanelMsg::FpEditorSetSnappingMode(target))
+        .style(move |_: &Theme, status: iced::widget::button::Status| {
+            let bg = match status {
+                iced::widget::button::Status::Hovered => Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.06))),
+                _ => Some(Background::Color(if active { active_bg } else { inactive_bg })),
             };
-            let txt = if active { primary } else { muted };
-            iced::widget::button(
-                container(
-                    text(label)
-                        .size(10)
-                        .color(txt)
-                        .align_x(iced::alignment::Horizontal::Center),
-                )
-                .padding([3, 8])
-                .width(Length::FillPortion(1))
-                .center_x(Length::Fill),
-            )
-            .padding(0)
-            .width(Length::FillPortion(1))
-            .on_press(PanelMsg::FpEditorSetSnappingMode(target))
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(bg)),
-                border: iced::Border {
+            iced::widget::button::Style {
+                background: bg,
+                border: Border {
                     width: 1.0,
-                    radius: 3.0.into(),
-                    color: border_c,
+                    radius: 2.0.into(),
+                    color: chip_border,
                 },
                 ..iced::widget::button::Style::default()
-            })
-            .into()
-        };
+            }
+        })
+        .into()
+    };
     col = col.push(
-        container(text("Snapping").size(10).color(muted))
+        container(text("Snap layers").size(10).color(muted))
             .padding([4, 8])
             .width(Length::Fill),
     );
     col = col.push(
         container(
             row![
-                mk_segment("All Layers", M::AllLayers, current == M::AllLayers),
-                mk_segment("Current Layer", M::CurrentLayer, current == M::CurrentLayer),
-                mk_segment("Off", M::Off, current == M::Off),
+                mk_pill("All Layers", M::AllLayers, current == M::AllLayers),
+                mk_pill("Current Layer", M::CurrentLayer, current == M::CurrentLayer),
+                mk_pill("Off", M::Off, current == M::Off),
             ]
-            .spacing(2)
+            .spacing(4)
             .align_y(iced::Alignment::Center),
         )
         .padding([2, 8])

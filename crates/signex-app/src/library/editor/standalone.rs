@@ -341,6 +341,7 @@ pub fn view_footprint<'a>(
     editor: &'a FootprintEditorState,
     tokens: &'a ThemeTokens,
     theme_id: signex_types::theme::ThemeId,
+    custom_filter_presets: &'a [crate::active_bar::CustomFilterPreset],
 ) -> Element<'a, LibraryMessage> {
     use crate::library::editor::footprint::state::EditorMode;
     // v0.16.2.2 — footprint canvas uses Altium PCB-editor colours
@@ -384,7 +385,10 @@ pub fn view_footprint<'a>(
     // pads_active_bar::view / sketch_mode::active_bar::view
     // mounting that lived here through v0.18.13.
     let unified_bar = container(crate::library::editor::footprint::unified_active_bar::view(
-        editor, theme_id, tokens,
+        editor,
+        theme_id,
+        tokens,
+        custom_filter_presets,
     ))
     .padding([6, 10])
     .center_x(Length::Fill)

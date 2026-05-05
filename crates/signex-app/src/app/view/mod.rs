@@ -4169,8 +4169,12 @@ impl Signex {
             {
                 let tokens = &self.document_state.panel_ctx.tokens;
                 let theme_id = self.ui_state.theme_id;
+                let custom_presets = &self.interaction_state.custom_filter_presets;
                 return crate::library::editor::standalone::view_footprint(
-                    editor, tokens, theme_id,
+                    editor,
+                    tokens,
+                    theme_id,
+                    custom_presets,
                 )
                 .map(Message::Library);
             }

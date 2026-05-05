@@ -32,6 +32,11 @@ where
     /// checkmark indicator (rendered to the right of the label),
     /// optional shortcut hint, and optional disabled flag.
     Item(DropdownItem<M>),
+    /// Arbitrary user-supplied widget — escape hatch for menus that
+    /// can't be expressed as a vertical list of `Item` rows (e.g. the
+    /// Selection Filter chip-wrap grid). Padding/border are still
+    /// applied by the panel container.
+    Custom(Element<'static, M>),
 }
 
 pub struct DropdownItem<M>
@@ -94,10 +99,17 @@ impl<M: 'static + Clone> DropdownItem<M> {
     }
 }
 
-/// Render the dropdown panel as an `Element<M>`. Caller wraps this
-/// in a Translate / Stack overlay layer at the chevron's anchor and
-/// pairs it with a transparent backstop for click-outside-to-dismiss.
-pub fn view<'a, M>(entries: Vec<DropdownEntry<M>>, tokens: &'a ThemeTokens) -> Element<'a, M>
+/// Render the dropdown panel as an `Element<M>`. `width_hint`
+/// specifies a fixed panel width in px (e.g. 220) when the menu is
+/// list-style; `None` lets the panel auto-size (used for the Filter
+/// chip-grid that drives its own width). Caller wraps the result in a
+/// Translate / Stack overlay layer at the chevron's anchor and pairs
+/// it with a transparent backstop for click-outside-to-dismiss.
+pub fn view<'a, M>(
+    entries: Vec<DropdownEntry<M>>,
+    tokens: &'a ThemeTokens,
+    width_hint: Option<f32>,
+) -> Element<'a, M>
 where
     M: 'static + Clone,
 {
@@ -129,6 +141,9 @@ where
                         }),
                 );
             }
+            DropdownEntry::Custom(element) => {
+                col = col.push(element);
+            }
             DropdownEntry::Item(item) => {
                 let DropdownItem {
                     label,
@@ -139,6 +154,11 @@ where
                     on_press,
                 } = item;
                 let row_text_c = if disabled { muted } else { primary };
+                // Match the schematic dropdown's vocabulary: 20×20
+                // icons (group-default & dropdown items render the
+                // same size so the eye doesn't jump as the pointer
+                // crosses from bar to menu) + 13 pt label + [5, 12]
+                // row padding.
                 let mut row_w = row![]
                     .spacing(8)
                     .align_y(iced::Alignment::Center)
@@ -146,37 +166,34 @@ where
                 // Leading icon column — fixed-width for alignment.
                 if let Some(handle) = icon {
                     row_w = row_w.push(
-                        container(
-                            svg(handle).width(14).height(14).style(
-                                move |_: &Theme, _| iced::widget::svg::Style {
-                                    color: Some(row_text_c),
-                                },
-                            ),
-                        )
-                        .width(Length::Fixed(16.0)),
+                        svg(handle).width(20).height(20).style(
+                            move |_: &Theme, _| iced::widget::svg::Style {
+                                color: Some(row_text_c),
+                            },
+                        ),
                     );
                 } else {
-                    row_w = row_w.push(Space::new().width(Length::Fixed(16.0)));
+                    row_w = row_w.push(Space::new().width(Length::Fixed(20.0)));
                 }
                 // Label.
-                row_w = row_w.push(text(label).size(11).color(row_text_c));
+                row_w = row_w.push(text(label).size(13).color(row_text_c));
                 // Right-aligned cluster: shortcut + check.
                 let mut right = row![]
                     .spacing(8)
                     .align_y(iced::Alignment::Center)
                     .width(Length::Shrink);
                 if let Some(s) = shortcut {
-                    right = right.push(text(s).size(10).color(muted));
+                    right = right.push(text(s).size(11).color(muted));
                 }
                 if checked {
-                    right = right.push(text("\u{2713}").size(11).color(accent));
+                    right = right.push(text("\u{2713}").size(13).color(accent));
                 }
                 row_w = row_w.push(Space::new().width(Length::Fixed(20.0))).push(right);
 
                 // Wrap in a button that triggers on_press when armed.
                 let mut btn = button(
                     container(row_w)
-                        .padding([4, 14])
+                        .padding([5, 12])
                         .width(Length::Fill),
                 )
                 .padding(0)
@@ -200,8 +217,13 @@ where
         }
     }
 
-    container(col)
-        .padding(4)
+    let mut panel = container(col).padding(4);
+    if let Some(w) = width_hint {
+        panel = panel.width(Length::Fixed(w));
+    } else {
+        panel = panel.width(Length::Shrink);
+    }
+    panel
         .style(move |_: &Theme| iced::widget::container::Style {
             background: Some(Background::Color(panel_bg)),
             border: Border {

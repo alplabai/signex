@@ -1401,6 +1401,9 @@ impl Signex {
                     opts.snap_footprint_origins = !opts.snap_footprint_origins
                 }
                 SnapOptionFlag::Body3dPoints => opts.snap_3d_body_points = !opts.snap_3d_body_points,
+                SnapOptionFlag::SnapToGrids => opts.snap_to_grids = !opts.snap_to_grids,
+                SnapOptionFlag::SnapToGuides => opts.snap_to_guides = !opts.snap_to_guides,
+                SnapOptionFlag::SnapToAxes => opts.snap_to_axes = !opts.snap_to_axes,
             }
             editor.canvas_cache.clear();
         }

@@ -1390,6 +1390,29 @@ pub enum PrimitiveEditorMsg {
     FootprintActiveBarSetSnapSubTab(
         crate::library::editor::footprint::state::SnapSubTab,
     ),
+    /// Active-bar Place → Rotate Selection. 90° CCW rotation on the
+    /// currently-selected pad's `rotation_deg`.
+    FootprintActiveBarRotateSelection,
+    /// Active-bar Place → Flip Selection. Swap Top ↔ Bottom layer
+    /// (and the paste/mask siblings) on the currently-selected pad.
+    FootprintActiveBarFlipSelection,
+    /// Active-bar Align → Align Selection To Grid. Snap the currently-
+    /// selected pad's centre to the nearest active-grid step.
+    FootprintActiveBarAlignSelectionToGrid,
+    /// Active-bar Align → Move All Components Origin To Grid. Snap
+    /// every pad's centre to the nearest active-grid step.
+    FootprintActiveBarMoveOriginToGrid,
+    /// Active-bar Selection → Select All. Pads mode picks the first
+    /// pad; Sketch mode picks the first sketch entity.
+    FootprintActiveBarSelectAll,
+    /// Active-bar Selection → Toggle Selection. Clears the selection
+    /// slot if anything is selected.
+    FootprintActiveBarClearSelection,
+    /// Active-bar Shapes → arm a sketch tool. Switches the editor to
+    /// Sketch mode if it isn't already and sets `state.active_tool`.
+    FootprintActiveBarSetSketchTool(
+        crate::library::editor::footprint::state::SketchTool,
+    ),
     /// v0.13.2 — Canvas left-click in Sketch mode while a multi-click
     /// drawing tool is active. The dispatcher advances the per-tool
     /// state machine on `tool_pending` and emits the appropriate
