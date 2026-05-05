@@ -1364,6 +1364,17 @@ pub enum PrimitiveEditorMsg {
     /// `tool_pending`. Mode-agnostic, so the same Esc dispatch
     /// works whichever mode the user is in.
     FootprintToolEscape,
+    // ── v0.13 — Active bar dropdowns ──────────────────────
+    /// Toggle the active-bar dropdown menu. Click the chevron once to
+    /// open; click again (or click-outside / pick item) to close.
+    FootprintToggleActiveBarMenu(crate::library::editor::footprint::state::FpActiveBarMenu),
+    /// Close any open active-bar dropdown (item picked / click-outside).
+    FootprintCloseActiveBarMenu,
+    /// Stub for "coming soon" Place / Move / Drag / Selection / 3D
+    /// Body / Text / Shapes dropdown items. Carries the label so the
+    /// dispatcher can log a single warn() per click without minting
+    /// a separate variant per item.
+    FootprintActiveBarStub(&'static str),
     /// v0.13.2 — Canvas left-click in Sketch mode while a multi-click
     /// drawing tool is active. The dispatcher advances the per-tool
     /// state machine on `tool_pending` and emits the appropriate

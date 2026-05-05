@@ -3982,6 +3982,9 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintToggleAutoFit
         | PrimitiveEditorMsg::FootprintSetPadsTool(_)
         | PrimitiveEditorMsg::FootprintToolEscape
+        | PrimitiveEditorMsg::FootprintToggleActiveBarMenu(_)
+        | PrimitiveEditorMsg::FootprintCloseActiveBarMenu
+        | PrimitiveEditorMsg::FootprintActiveBarStub(_)
         | PrimitiveEditorMsg::FootprintSetMode(_)
         | PrimitiveEditorMsg::FootprintSketchPlacePoint { .. }
         | PrimitiveEditorMsg::FootprintSketchEditParameter { .. }
@@ -4598,7 +4601,24 @@ pub(crate) fn apply_footprint_primitive_edit(
             // (no commit; matches Altium's Esc-cancels-tool
             // semantic).
             editor.state.place_polygon_vertices.clear();
+            // v0.13 — Esc also dismisses any open active-bar dropdown.
+            editor.state.active_bar_menu = None;
             editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintToggleActiveBarMenu(menu) => {
+            editor.state.active_bar_menu = match editor.state.active_bar_menu {
+                Some(m) if m == menu => None,
+                _ => Some(menu),
+            };
+        }
+        PrimitiveEditorMsg::FootprintCloseActiveBarMenu => {
+            editor.state.active_bar_menu = None;
+        }
+        PrimitiveEditorMsg::FootprintActiveBarStub(label) => {
+            crate::diagnostics::log_info(format!(
+                "Active bar: {label} — coming soon (footprint Altium parity)"
+            ));
+            editor.state.active_bar_menu = None;
         }
         PrimitiveEditorMsg::FootprintSketchToolEscape => {
             editor.state.tool_pending = crate::library::editor::footprint::state::ToolPending::Idle;
