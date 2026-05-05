@@ -267,6 +267,18 @@ pub struct FootprintEditorState {
     /// the four priorities in `snap::snap_cursor`. UI-toggled via
     /// the Properties panel default branch.
     pub snap_options: SnapOptions,
+    /// v0.18.13 — Altium Selection Filter pill row state. Per-
+    /// editor so flipping pads off in one tab doesn't follow the
+    /// user into another footprint.
+    pub selection_filter: SelectionFilter,
+    /// v0.18.13 — active sub-tab in the Snap Options section
+    /// (Grids / Guides / Axes).
+    pub snap_subtab: SnapSubTab,
+    /// v0.18.13 — Snapping 3-state (All Layers / Current Layer /
+    /// Off). Stored for forward compatibility; the actual layer-
+    /// aware enforcement lands with the PCB layer system. `Off`
+    /// short-circuits all snap priorities to raw cursor today.
+    pub snapping_mode: SnappingMode,
 }
 
 /// v0.16.3 — author-controlled defaults for the next placed pad.
@@ -357,6 +369,101 @@ impl Default for NextPadDefaults {
             rotation_deg: 0.0,
         }
     }
+}
+
+/// v0.18.13 — Altium-style Selection Filter. Each flag gates whether
+/// the corresponding kind is selectable in the canvas. `Pads` is the
+/// only one functionally wired today; the others are stored for
+/// forward compatibility so the pill row reflects user intent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SelectionFilter {
+    pub pads: bool,
+    pub tracks: bool,
+    pub arcs: bool,
+    pub pours: bool,
+    pub bodies_3d: bool,
+    pub keepouts: bool,
+    pub cutouts: bool,
+    pub texts: bool,
+}
+
+impl Default for SelectionFilter {
+    fn default() -> Self {
+        Self {
+            pads: true,
+            tracks: true,
+            arcs: true,
+            pours: true,
+            bodies_3d: true,
+            keepouts: true,
+            cutouts: true,
+            texts: true,
+        }
+    }
+}
+
+/// Selection-filter pill identifier — drives the panel pill row +
+/// the dispatcher's mutation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectionFilterKind {
+    Pads,
+    Tracks,
+    Arcs,
+    Pours,
+    Bodies3d,
+    Keepouts,
+    Cutouts,
+    Texts,
+}
+
+impl SelectionFilter {
+    pub fn get(&self, kind: SelectionFilterKind) -> bool {
+        match kind {
+            SelectionFilterKind::Pads => self.pads,
+            SelectionFilterKind::Tracks => self.tracks,
+            SelectionFilterKind::Arcs => self.arcs,
+            SelectionFilterKind::Pours => self.pours,
+            SelectionFilterKind::Bodies3d => self.bodies_3d,
+            SelectionFilterKind::Keepouts => self.keepouts,
+            SelectionFilterKind::Cutouts => self.cutouts,
+            SelectionFilterKind::Texts => self.texts,
+        }
+    }
+
+    pub fn toggle(&mut self, kind: SelectionFilterKind) {
+        match kind {
+            SelectionFilterKind::Pads => self.pads = !self.pads,
+            SelectionFilterKind::Tracks => self.tracks = !self.tracks,
+            SelectionFilterKind::Arcs => self.arcs = !self.arcs,
+            SelectionFilterKind::Pours => self.pours = !self.pours,
+            SelectionFilterKind::Bodies3d => self.bodies_3d = !self.bodies_3d,
+            SelectionFilterKind::Keepouts => self.keepouts = !self.keepouts,
+            SelectionFilterKind::Cutouts => self.cutouts = !self.cutouts,
+            SelectionFilterKind::Texts => self.texts = !self.texts,
+        }
+    }
+}
+
+/// v0.18.13 — Altium Snap Options sub-tabs (Grids / Guides / Axes).
+/// `Grids` is active by default; the other two are visual placeholders
+/// for the v0.18.14 Guide Manager / Axes Manager content.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SnapSubTab {
+    #[default]
+    Grids,
+    Guides,
+    Axes,
+}
+
+/// v0.18.13 — Altium Snapping mode (3-state segment). Visual today;
+/// the actual layer-aware filtering will land alongside the PCB
+/// layer system. Defaults to `AllLayers` (current behaviour).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SnappingMode {
+    #[default]
+    AllLayers,
+    CurrentLayer,
+    Off,
 }
 
 /// Pads-mode drawing tool — v0.15. The Pads-mode active bar's
@@ -468,6 +575,9 @@ impl FootprintEditorState {
             placement_paused: false,
             next_pad_defaults: NextPadDefaults::default(),
             snap_options: SnapOptions::default(),
+            selection_filter: SelectionFilter::default(),
+            snap_subtab: SnapSubTab::default(),
+            snapping_mode: SnappingMode::default(),
         };
         s.recompute_courtyard();
         s
@@ -499,6 +609,9 @@ impl FootprintEditorState {
             placement_paused: false,
             next_pad_defaults: NextPadDefaults::default(),
             snap_options: SnapOptions::default(),
+            selection_filter: SelectionFilter::default(),
+            snap_subtab: SnapSubTab::default(),
+            snapping_mode: SnappingMode::default(),
         };
         s.recompute_courtyard();
         s

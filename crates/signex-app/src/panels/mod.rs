@@ -609,6 +609,10 @@ pub struct FootprintEditorPanelContext {
     /// Properties panel default branch (no selection) so the user
     /// can toggle each priority chain step.
     pub snap_options: crate::library::editor::footprint::state::SnapOptions,
+    /// v0.18.13 — Altium 5-section Properties layout state.
+    pub selection_filter: crate::library::editor::footprint::state::SelectionFilter,
+    pub snap_subtab: crate::library::editor::footprint::state::SnapSubTab,
+    pub snapping_mode: crate::library::editor::footprint::state::SnappingMode,
 }
 
 /// v0.16.4 — Pour role properties surfaced on the Properties panel.
@@ -1235,6 +1239,33 @@ pub enum PanelMsg {
     /// `state.snap_options.grid_step_mm`. Invalid / empty strings
     /// no-op so the input doesn't fight intermediate keystrokes.
     FpEditorSetSnapGridStep(String),
+    /// v0.18.13 — Altium Selection Filter pill toggle. The pills
+    /// live on the v0.18.14 unified active bar; the Properties
+    /// panel surfaces the toggle through this same message.
+    FpEditorToggleSelectionFilter(
+        crate::library::editor::footprint::state::SelectionFilterKind,
+    ),
+    /// v0.18.13 — open the Custom Selection Filter modal. Stubbed
+    /// until v0.18.14 ships the modal body alongside the active
+    /// bar pills.
+    FpEditorOpenSelectionFilterCustom,
+    /// v0.18.13 — Snap Options sub-tab switch (Grids / Guides / Axes).
+    FpEditorSetSnapSubTab(crate::library::editor::footprint::state::SnapSubTab),
+    /// v0.18.13 — Snapping mode 3-state toggle.
+    FpEditorSetSnappingMode(crate::library::editor::footprint::state::SnappingMode),
+    /// v0.18.13 — `Add` button on the Grid Manager table (placeholder
+    /// for the multi-grid CRUD that lands with the v0.18.14 grid
+    /// system). Dispatch logs a warn for now.
+    FpEditorGridManagerAdd,
+    /// v0.18.13 — `Properties` button on the Grid Manager row;
+    /// reuses the Ctrl+G Cartesian Grid Editor modal.
+    FpEditorGridManagerProperties,
+    /// v0.18.13 — `Delete` button on the Grid Manager row
+    /// (placeholder until multi-grid CRUD lands).
+    FpEditorGridManagerDelete,
+    /// v0.18.13 — `Add` button on the Guide Manager table
+    /// (placeholder until guide system lands).
+    FpEditorGuideManagerAdd,
     /// v0.14.2 — open a sibling `.snxfpt` from the Footprint Library
     /// panel. The handler routes through the existing
     /// `handle_open_primitive` flow so the file gets a fresh tab + a
@@ -4080,7 +4111,12 @@ fn view_footprint_editor_properties<'a>(
             }
         }
         _ => {
-            // No selection — show the footprint summary.
+            // v0.18.13 — Altium "Library Options" no-selection
+            // layout (Selection Filter at the top, full 5-section
+            // body assembled after the match). The Footprint
+            // summary remains as auxiliary kv-rows.
+            col = col.push(props_section_header("Selection Filter", primary));
+            col = render_selection_filter(col, fp, primary, muted, border_c);
             col = col.push(props_section_header("Footprint", primary));
             col = props_kv_row(col, muted, primary, "Name", fp.footprint_name.clone());
             col = props_kv_row(col, muted, primary, "Version", fp.version.clone());
@@ -4102,9 +4138,12 @@ fn view_footprint_editor_properties<'a>(
                     fp.sketch_constraint_count.to_string(),
                 );
             }
-
         }
     }
+    // Track no-selection state so the v0.18.13 Library Options
+    // sections (Grid Manager / Guide Manager / Other) only render
+    // in the empty-canvas Properties body.
+    let no_selection = fp.selected_pad.is_none() && fp.selected_sketch_entity.is_none();
 
     // v0.18.11.2 — Snap Options promoted out of the no-selection
     // branch so it stays reachable while a pad/entity is selected.
@@ -4206,6 +4245,18 @@ fn view_footprint_editor_properties<'a>(
         .padding([2, 8])
         .width(Length::Fill),
     );
+
+    // v0.18.13 — Library Options layout (Grid Manager / Guide
+    // Manager / Other) below Snap Options, only on the no-selection
+    // body to mirror Altium's per-state Properties surface.
+    if no_selection {
+        col = col.push(props_section_header("Grid Manager", primary));
+        col = render_grid_manager(col, fp, primary, muted, border_c);
+        col = col.push(props_section_header("Guide Manager", primary));
+        col = render_guide_manager(col, primary, muted, border_c);
+        col = col.push(props_section_header("Other", primary));
+        col = render_other_section(col, fp, primary, muted, border_c);
+    }
 
     // v0.16.2 — Sketch-mode-only sections (Parameters, DOF, Solve
     // warnings). Always visible when the editor is in Sketch mode so
@@ -4584,6 +4635,229 @@ fn props_section_header<'a>(label: &str, primary: Color) -> Element<'a, PanelMsg
         .padding([6, 8])
         .width(Length::Fill)
         .into()
+}
+
+/// v0.18.13 — Selection Filter section in Properties. Per the
+/// schematic-Properties convention (kind pills live in the active
+/// bar, the Properties panel surfaces a single "Custom..." button),
+/// this renders just the count of currently-allowed kinds + the
+/// custom-filter launcher. The v0.18.14 unified active bar carries
+/// the per-kind toggle pills.
+fn render_selection_filter<'a>(
+    mut col: Column<'a, PanelMsg>,
+    fp: &'a FootprintEditorPanelContext,
+    primary: Color,
+    muted: Color,
+    border_c: Color,
+) -> Column<'a, PanelMsg> {
+    let f = fp.selection_filter;
+    let allowed: u8 = [
+        f.pads, f.tracks, f.arcs, f.pours, f.bodies_3d, f.keepouts, f.cutouts, f.texts,
+    ]
+    .iter()
+    .filter(|b| **b)
+    .count() as u8;
+    let summary = format!("{allowed}/8 kinds selectable");
+    col = col.push(
+        container(
+            row![
+                text(summary).size(10).color(muted).width(Length::Fill),
+                iced::widget::button(text("Custom…").size(10).color(primary))
+                    .padding([3, 10])
+                    .style(move |_: &Theme, _| iced::widget::button::Style {
+                        background: Some(iced::Background::Color(iced::Color::from_rgba(
+                            1.0, 1.0, 1.0, 0.04,
+                        ))),
+                        border: iced::Border {
+                            width: 1.0,
+                            radius: 3.0.into(),
+                            color: border_c,
+                        },
+                        ..iced::widget::button::Style::default()
+                    })
+                    // Custom modal is queued for v0.18.14 alongside
+                    // the unified active bar; the dispatcher logs a
+                    // warn until it lands.
+                    .on_press(PanelMsg::FpEditorOpenSelectionFilterCustom),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([2, 8])
+        .width(Length::Fill),
+    );
+    col
+}
+
+/// v0.18.13 — Grid Manager table. Single-row placeholder until
+/// the multi-grid CRUD ships in v0.18.14. The row binds to the
+/// active footprint editor's `snap_options.grid_step_mm`.
+fn render_grid_manager<'a>(
+    mut col: Column<'a, PanelMsg>,
+    fp: &'a FootprintEditorPanelContext,
+    primary: Color,
+    muted: Color,
+    border_c: Color,
+) -> Column<'a, PanelMsg> {
+    // Header row.
+    col = col.push(
+        container(
+            row![
+                text("Priority").size(10).color(muted).width(Length::Fixed(60.0)),
+                text("Name").size(10).color(muted).width(Length::Fill),
+                text("Step").size(10).color(muted).width(Length::Fixed(72.0)),
+                text("Enabled").size(10).color(muted),
+            ]
+            .spacing(4)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([2, 8])
+        .width(Length::Fill),
+    );
+    // Single live row.
+    col = col.push(
+        container(
+            row![
+                text("50").size(10).color(primary).width(Length::Fixed(60.0)),
+                text("Global Board Snap Grid")
+                    .size(10)
+                    .color(primary)
+                    .width(Length::Fill),
+                text(format!("{:.3} mm", fp.snap_options.grid_step_mm))
+                    .size(10)
+                    .color(primary)
+                    .width(Length::Fixed(72.0)),
+                text(if fp.snap_options.grid { "✓" } else { "—" })
+                    .size(10)
+                    .color(primary),
+            ]
+            .spacing(4)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([2, 8])
+        .width(Length::Fill),
+    );
+    // Action footer — Add / Properties / Delete.
+    col = col.push(
+        container(
+            row![
+                grid_manager_btn("Add", Some(PanelMsg::FpEditorGridManagerAdd), primary, border_c),
+                grid_manager_btn(
+                    "Properties",
+                    Some(PanelMsg::FpEditorGridManagerProperties),
+                    primary,
+                    border_c,
+                ),
+                grid_manager_btn(
+                    "Delete",
+                    Some(PanelMsg::FpEditorGridManagerDelete),
+                    primary,
+                    border_c,
+                ),
+            ]
+            .spacing(4)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([4, 8])
+        .width(Length::Fill),
+    );
+    col
+}
+
+/// v0.18.13 — Guide Manager placeholder table. Empty until the
+/// guide system lands.
+fn render_guide_manager<'a>(
+    mut col: Column<'a, PanelMsg>,
+    primary: Color,
+    muted: Color,
+    border_c: Color,
+) -> Column<'a, PanelMsg> {
+    col = col.push(
+        container(
+            row![
+                text("Enabled").size(10).color(muted).width(Length::Fixed(60.0)),
+                text("Name").size(10).color(muted).width(Length::Fill),
+                text("X").size(10).color(muted).width(Length::Fixed(60.0)),
+                text("Y").size(10).color(muted).width(Length::Fixed(60.0)),
+            ]
+            .spacing(4)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([2, 8])
+        .width(Length::Fill),
+    );
+    col = col.push(
+        container(text("(no guides)").size(10).color(muted))
+            .padding([4, 8])
+            .width(Length::Fill),
+    );
+    col = col.push(
+        container(
+            row![grid_manager_btn(
+                "Add",
+                Some(PanelMsg::FpEditorGuideManagerAdd),
+                primary,
+                border_c,
+            )]
+            .spacing(4)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([4, 8])
+        .width(Length::Fill),
+    );
+    col
+}
+
+/// v0.18.13 — Other section. Today carries only a Units toggle;
+/// future home for additional document-level options.
+fn render_other_section<'a>(
+    mut col: Column<'a, PanelMsg>,
+    _fp: &'a FootprintEditorPanelContext,
+    primary: Color,
+    muted: Color,
+    _border_c: Color,
+) -> Column<'a, PanelMsg> {
+    col = col.push(
+        container(
+            row![
+                text("Units").size(10).color(muted).width(Length::Fixed(80.0)),
+                text("mm").size(10).color(primary),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([2, 8])
+        .width(Length::Fill),
+    );
+    col
+}
+
+/// Shared button factory for the Grid / Guide Manager footers.
+fn grid_manager_btn<'a>(
+    label: &'static str,
+    on_press: Option<PanelMsg>,
+    primary: Color,
+    border_c: Color,
+) -> Element<'a, PanelMsg> {
+    let enabled = on_press.is_some();
+    let mut btn = iced::widget::button(text(label).size(10).color(primary))
+        .padding([3, 10])
+        .style(move |_: &Theme, _| iced::widget::button::Style {
+            background: Some(iced::Background::Color(iced::Color::from_rgba(
+                1.0, 1.0, 1.0, 0.04,
+            ))),
+            border: iced::Border {
+                width: 1.0,
+                radius: 3.0.into(),
+                color: border_c,
+            },
+            ..iced::widget::button::Style::default()
+        });
+    if let Some(msg) = on_press {
+        btn = btn.on_press(msg);
+    }
+    let _ = enabled;
+    btn.into()
 }
 
 /// v0.16.4 — Pour role sub-form. Renders when the entity's `pour`

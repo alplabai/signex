@@ -254,6 +254,65 @@ impl Signex {
                 self.fp_editor_set_snap_grid_step(value);
                 true
             }
+            crate::panels::PanelMsg::FpEditorToggleSelectionFilter(kind) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.state.selection_filter.toggle(*kind);
+                    editor.canvas_cache.clear();
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorOpenSelectionFilterCustom => {
+                tracing::warn!(
+                    target: "signex::library",
+                    "Custom Selection Filter modal stubbed; lands with v0.18.14 unified active bar",
+                );
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSnapSubTab(tab) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.state.snap_subtab = *tab;
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSnappingMode(mode) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.state.snapping_mode = *mode;
+                    editor.canvas_cache.clear();
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorGridManagerAdd => {
+                tracing::warn!(
+                    target: "signex::library",
+                    "Grid Manager: Add is stubbed; multi-grid CRUD lands with v0.18.14",
+                );
+                true
+            }
+            crate::panels::PanelMsg::FpEditorGridManagerProperties => {
+                // Reuses the Ctrl+G modal so the user can edit the
+                // existing single grid via the same dialog. The modal
+                // open handler reads the active footprint's
+                // `snap_options.grid_step_mm` and seeds the buffers.
+                let _ = self.update(Message::GridPropertiesOpen);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorGridManagerDelete => {
+                tracing::warn!(
+                    target: "signex::library",
+                    "Grid Manager: Delete is stubbed; the Global Snap Grid is the only grid today",
+                );
+                true
+            }
+            crate::panels::PanelMsg::FpEditorGuideManagerAdd => {
+                tracing::warn!(
+                    target: "signex::library",
+                    "Guide Manager: Add is stubbed; guide system lands with v0.18.14",
+                );
+                true
+            }
             crate::panels::PanelMsg::FpEditorEditParameter { name, expr } => {
                 // v0.16.2 — Properties-panel parameter row edit.
                 // Forwards to `FootprintSketchEditParameter` which
