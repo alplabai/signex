@@ -73,7 +73,8 @@ pub(super) fn view_footprint_editor_properties<'a>(
         fp.selected_sketch_entity.as_ref(),
     ) {
         (FootprintModeKind::Pads, Some(pad), _) => {
-            col = col.push(props_section_header("Pad", primary, border_c));
+            col = col.push(props_section_header("Pad", "fp_pad", collapsed_sections, primary, border_c));
+            if !fp_is_collapsed("fp_pad", collapsed_sections) {
             col = props_kv_row(col, muted, input_bg, input_bdr, "Number", pad.number.clone());
             col = props_kv_row(col, muted, input_bg, input_bdr, "Kind", pad.kind_label.into());
             col = props_kv_row(col, muted, input_bg, input_bdr, "Shape", pad.shape_label.into());
@@ -135,9 +136,11 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 .padding([2, 8])
                 .width(Length::Fill),
             );
+            } // end if !fp_pad collapsed
         }
         (FootprintModeKind::Sketch, _, Some(ent)) => {
-            col = col.push(props_section_header("Sketch entity", primary, border_c));
+            col = col.push(props_section_header("Sketch entity", "fp_sketch_entity", collapsed_sections, primary, border_c));
+            if !fp_is_collapsed("fp_sketch_entity", collapsed_sections) {
             col = props_kv_row(col, muted, input_bg, input_bdr, "Kind", ent.kind_label.into());
             if let Some([x, y]) = ent.position_mm {
                 col = props_kv_row(
@@ -169,34 +172,37 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 "Attached constraints",
                 ent.attached_constraint_count.to_string(),
             );
+            } // end if !fp_sketch_entity collapsed
 
             // v0.16.2 — Role pick_list. Visible when an entity is
             // selected; pick_list value mirrors the entity's
             // currently-attached `*Attr` slot (or `Unassigned`).
-            col = col.push(props_section_header("Role", primary, border_c));
-            if let Some(id) = fp.selected_sketch_entity_id {
-                use crate::library::messages::RoleTag;
-                let current = fp.selected_sketch_role;
-                let dropdown = pick_list(RoleTag::ALL, Some(current), move |new_role| {
-                    PanelMsg::FpEditorSetRole { id, role: new_role }
-                })
-                .text_size(11)
-                .padding([3, 8])
-                .width(Length::Fill);
-                col = col.push(container(dropdown).padding([4, 8]).width(Length::Fill));
-                if !fp.selected_sketch_is_point {
-                    col = col.push(
-                        container(text("Pad role applies to Points only").size(9).color(muted))
-                            .padding([0, 8])
-                            .width(Length::Fill),
-                    );
-                }
+            col = col.push(props_section_header("Role", "fp_role", collapsed_sections, primary, border_c));
+            if !fp_is_collapsed("fp_role", collapsed_sections) {
+                if let Some(id) = fp.selected_sketch_entity_id {
+                    use crate::library::messages::RoleTag;
+                    let current = fp.selected_sketch_role;
+                    let dropdown = pick_list(RoleTag::ALL, Some(current), move |new_role| {
+                        PanelMsg::FpEditorSetRole { id, role: new_role }
+                    })
+                    .text_size(11)
+                    .padding([3, 8])
+                    .width(Length::Fill);
+                    col = col.push(container(dropdown).padding([4, 8]).width(Length::Fill));
+                    if !fp.selected_sketch_is_point {
+                        col = col.push(
+                            container(text("Pad role applies to Points only").size(9).color(muted))
+                                .padding([0, 8])
+                                .width(Length::Fill),
+                        );
+                    }
 
-                // v0.16.4 — role sub-forms. Render when the
-                // matching `*Attr` is set on the selected entity.
-                col = render_pour_subform(col, fp, id, muted, primary, border_c);
-                col = render_keepout_subform(col, fp, id, muted, primary, border_c);
-                col = render_cutout_subform(col, fp, id, muted, primary, border_c);
+                    // v0.16.4 — role sub-forms. Render when the
+                    // matching `*Attr` is set on the selected entity.
+                    col = render_pour_subform(col, fp, id, muted, primary, border_c);
+                    col = render_keepout_subform(col, fp, id, muted, primary, border_c);
+                    col = render_cutout_subform(col, fp, id, muted, primary, border_c);
+                }
             }
         }
         _ => {
@@ -206,7 +212,8 @@ pub(super) fn view_footprint_editor_properties<'a>(
             // content + delete the entry without leaving the
             // Properties panel.
             if let Some(silk) = fp.selected_silk_summary.as_ref() {
-                col = col.push(props_section_header("Silk graphic", primary, border_c));
+                col = col.push(props_section_header("Silk graphic", "fp_silk_graphic", collapsed_sections, primary, border_c));
+                if !fp_is_collapsed("fp_silk_graphic", collapsed_sections) {
                 col = props_kv_row(col, muted, input_bg, input_bdr, "Kind", silk.kind_label.into());
                 col = props_kv_row(col, muted, input_bg, input_bdr, "Index", silk.idx.to_string());
                 if let Some(content) = silk.text_content.as_ref() {
@@ -258,6 +265,7 @@ pub(super) fn view_footprint_editor_properties<'a>(
                     .padding([4, 8])
                     .width(Length::Fill),
                 );
+                } // end if !fp_silk_graphic collapsed
             } else {
                 // v0.18.13 — Altium "Library Options" no-selection
                 // layout (Selection Filter at the top, full 5-section
@@ -276,28 +284,30 @@ pub(super) fn view_footprint_editor_properties<'a>(
                     accent_c,
                     tag_hover,
                 ));
-                col = col.push(props_section_header("Footprint", primary, border_c));
-                col = props_kv_row(col, muted, input_bg, input_bdr, "Name", fp.footprint_name.clone());
-                col = props_kv_row(col, muted, input_bg, input_bdr, "Version", fp.version.clone());
-                col = props_kv_row(col, muted, input_bg, input_bdr, "Mode", mode_label.into());
-                col = props_kv_row(col, muted, input_bg, input_bdr, "Pads", fp.pad_count.to_string());
-                if fp.sketch_entity_count > 0 || fp.sketch_constraint_count > 0 {
-                    col = props_kv_row(
-                        col,
-                        muted,
-                        input_bg,
-                        input_bdr,
-                        "Sketch entities",
-                        fp.sketch_entity_count.to_string(),
-                    );
-                    col = props_kv_row(
-                        col,
-                        muted,
-                        input_bg,
-                        input_bdr,
-                        "Constraints",
-                        fp.sketch_constraint_count.to_string(),
-                    );
+                col = col.push(props_section_header("Footprint", "fp_footprint", collapsed_sections, primary, border_c));
+                if !fp_is_collapsed("fp_footprint", collapsed_sections) {
+                    col = props_kv_row(col, muted, input_bg, input_bdr, "Name", fp.footprint_name.clone());
+                    col = props_kv_row(col, muted, input_bg, input_bdr, "Version", fp.version.clone());
+                    col = props_kv_row(col, muted, input_bg, input_bdr, "Mode", mode_label.into());
+                    col = props_kv_row(col, muted, input_bg, input_bdr, "Pads", fp.pad_count.to_string());
+                    if fp.sketch_entity_count > 0 || fp.sketch_constraint_count > 0 {
+                        col = props_kv_row(
+                            col,
+                            muted,
+                            input_bg,
+                            input_bdr,
+                            "Sketch entities",
+                            fp.sketch_entity_count.to_string(),
+                        );
+                        col = props_kv_row(
+                            col,
+                            muted,
+                            input_bg,
+                            input_bdr,
+                            "Constraints",
+                            fp.sketch_constraint_count.to_string(),
+                        );
+                    }
                 }
             }
         }
@@ -316,46 +326,54 @@ pub(super) fn view_footprint_editor_properties<'a>(
     // Earlier (v0.17.0) the section was tucked inside the empty-
     // canvas summary which made the controls disappear the moment
     // the user clicked a pad.
-    col = col.push(props_section_header("Snap Options", primary, border_c));
-    // v0.18.14.2 — Altium Snap Options sub-tab row (Grids / Guides /
-    // Axes). Grids body renders the snap-to-grid checkbox stack;
-    // Guides drives the Guide Manager (v0.18.20); Axes is the
-    // remaining unbuilt surface (per-axis snap on SnapOptions).
-    col = render_snap_subtab_row(col, fp, primary, muted, border_c);
-    if fp.snap_subtab != crate::library::editor::footprint::state::SnapSubTab::Grids {
-        let hint = match fp.snap_subtab {
-            crate::library::editor::footprint::state::SnapSubTab::Guides => {
-                "Guide Manager below — add horizontal / vertical guides; toggle individual lines via the row checkbox."
-            }
-            crate::library::editor::footprint::state::SnapSubTab::Axes => {
-                "Per-axis snap (Snap Grid X / Y) is unbuilt — uses the Grids step uniformly for now."
-            }
-            _ => "",
-        };
-        col = col.push(
-            container(text(hint).size(10).color(muted))
-                .padding([4, 8])
-                .width(Length::Fill),
-        );
-        // Sketch-mode-only sections + Library Options sections still
-        // render below for the user's other Properties needs even
-        // when the Grids sub-tab isn't selected.
-        if no_selection {
-            col = col.push(props_section_header("Grid Manager", primary, border_c));
-            col = render_grid_manager(col, fp, primary, muted, border_c);
-            col = col.push(props_section_header("Guide Manager", primary, border_c));
-            col = render_guide_manager(col, fp, primary, muted, border_c);
-            col = col.push(props_section_header("Other", primary, border_c));
-            col = render_other_section(col, fp, primary, muted, border_c);
-        }
-        return scrollable(col).width(Length::Fill).into();
-    }
-    // v0.18.14.3 — Altium "Snapping" 3-segment toggle (All Layers /
-    // Current Layer / Off). `Off` short-circuits all priorities in
-    // `snap::snap_cursor`; `CurrentLayer` is a placeholder for the
-    // v0.18.15 layer-aware enforcement.
-    col = render_snapping_mode_row(col, fp, primary, muted, border_c);
+    col = col.push(props_section_header("Snap Options", "fp_snap_options", collapsed_sections, primary, border_c));
+    let snap_open = !fp_is_collapsed("fp_snap_options", collapsed_sections);
     let opts = fp.snap_options;
+    if snap_open {
+        // v0.18.14.2 — Altium Snap Options sub-tab row (Grids / Guides /
+        // Axes). Grids body renders the snap-to-grid checkbox stack;
+        // Guides drives the Guide Manager (v0.18.20); Axes is the
+        // remaining unbuilt surface (per-axis snap on SnapOptions).
+        col = render_snap_subtab_row(col, fp, primary, muted, border_c);
+        if fp.snap_subtab != crate::library::editor::footprint::state::SnapSubTab::Grids {
+            let hint = match fp.snap_subtab {
+                crate::library::editor::footprint::state::SnapSubTab::Guides => {
+                    "Guide Manager below — add horizontal / vertical guides; toggle individual lines via the row checkbox."
+                }
+                crate::library::editor::footprint::state::SnapSubTab::Axes => {
+                    "Per-axis snap (Snap Grid X / Y) is unbuilt — uses the Grids step uniformly for now."
+                }
+                _ => "",
+            };
+            col = col.push(
+                container(text(hint).size(10).color(muted))
+                    .padding([4, 8])
+                    .width(Length::Fill),
+            );
+            // Sketch-mode-only sections + Library Options sections still
+            // render below for the user's other Properties needs even
+            // when the Grids sub-tab isn't selected.
+            if no_selection {
+                col = col.push(props_section_header("Grid Manager", "fp_grid_manager", collapsed_sections, primary, border_c));
+                if !fp_is_collapsed("fp_grid_manager", collapsed_sections) {
+                    col = render_grid_manager(col, fp, primary, muted, border_c);
+                }
+                col = col.push(props_section_header("Guide Manager", "fp_guide_manager", collapsed_sections, primary, border_c));
+                if !fp_is_collapsed("fp_guide_manager", collapsed_sections) {
+                    col = render_guide_manager(col, fp, primary, muted, border_c);
+                }
+                col = col.push(props_section_header("Other", "fp_other", collapsed_sections, primary, border_c));
+                if !fp_is_collapsed("fp_other", collapsed_sections) {
+                    col = render_other_section(col, fp, primary, muted, border_c);
+                }
+            }
+            return scrollable(col).width(Length::Fill).into();
+        }
+        // v0.18.14.3 — Altium "Snapping" 3-segment toggle (All Layers /
+        // Current Layer / Off). `Off` short-circuits all priorities in
+        // `snap::snap_cursor`; `CurrentLayer` is a placeholder for the
+        // v0.18.15 layer-aware enforcement.
+        col = render_snapping_mode_row(col, fp, primary, muted, border_c);
     // v0.18.25 — snap toggles use the schematic's `form_check_row`
     // (real iced checkbox + On/Off label) so the chrome matches the
     // schematic Properties panel byte-for-byte.
@@ -383,53 +401,60 @@ pub(super) fn view_footprint_editor_properties<'a>(
         PanelMsg::FpEditorToggleSnapOption(SnapOptionFlag::Grid),
         muted,
     ));
-    // v0.18.9 — author-controlled grid step. Numeric input bound to
-    // `state.snap_options.grid_step_mm`. The G key (v0.18.10)
-    // populates this from the standard 1mil…2.5mm ladder; the
-    // Ctrl+G modal (v0.18.11) opens a richer editor.
-    col = col.push(
-        container(
-            row![
-                text("Grid step (mm)")
-                    .size(10)
-                    .color(muted)
-                    .width(Length::Fixed(110.0)),
-                text_input("1.0", &format!("{:.3}", opts.grid_step_mm))
-                    .size(10)
-                    .padding(2)
-                    .style(move |_: &Theme, _| iced::widget::text_input::Style {
-                        background: iced::Background::Color(iced::Color::from_rgba(
-                            1.0, 1.0, 1.0, 0.04,
-                        )),
-                        border: iced::Border {
-                            width: 1.0,
-                            radius: 2.0.into(),
-                            color: border_c,
-                        },
-                        icon: iced::Color::TRANSPARENT,
-                        placeholder: muted,
-                        value: primary,
-                        selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
-                    })
-                    .on_input(PanelMsg::FpEditorSetSnapGridStep),
-            ]
-            .spacing(6)
-            .align_y(iced::Alignment::Center),
-        )
-        .padding([2, 8])
-        .width(Length::Fill),
-    );
+        // v0.18.9 — author-controlled grid step. Numeric input bound to
+        // `state.snap_options.grid_step_mm`. The G key (v0.18.10)
+        // populates this from the standard 1mil…2.5mm ladder; the
+        // Ctrl+G modal (v0.18.11) opens a richer editor.
+        col = col.push(
+            container(
+                row![
+                    text("Grid step (mm)")
+                        .size(10)
+                        .color(muted)
+                        .width(Length::Fixed(110.0)),
+                    text_input("1.0", &format!("{:.3}", opts.grid_step_mm))
+                        .size(10)
+                        .padding(2)
+                        .style(move |_: &Theme, _| iced::widget::text_input::Style {
+                            background: iced::Background::Color(iced::Color::from_rgba(
+                                1.0, 1.0, 1.0, 0.04,
+                            )),
+                            border: iced::Border {
+                                width: 1.0,
+                                radius: 2.0.into(),
+                                color: border_c,
+                            },
+                            icon: iced::Color::TRANSPARENT,
+                            placeholder: muted,
+                            value: primary,
+                            selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
+                        })
+                        .on_input(PanelMsg::FpEditorSetSnapGridStep),
+                ]
+                .spacing(6)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([2, 8])
+            .width(Length::Fill),
+        );
+    } // end if snap_open
 
     // v0.18.13 — Library Options layout (Grid Manager / Guide
     // Manager / Other) below Snap Options, only on the no-selection
     // body to mirror Altium's per-state Properties surface.
     if no_selection {
-        col = col.push(props_section_header("Grid Manager", primary, border_c));
-        col = render_grid_manager(col, fp, primary, muted, border_c);
-        col = col.push(props_section_header("Guide Manager", primary, border_c));
-        col = render_guide_manager(col, fp, primary, muted, border_c);
-        col = col.push(props_section_header("Other", primary, border_c));
-        col = render_other_section(col, fp, primary, muted, border_c);
+        col = col.push(props_section_header("Grid Manager", "fp_grid_manager", collapsed_sections, primary, border_c));
+        if !fp_is_collapsed("fp_grid_manager", collapsed_sections) {
+            col = render_grid_manager(col, fp, primary, muted, border_c);
+        }
+        col = col.push(props_section_header("Guide Manager", "fp_guide_manager", collapsed_sections, primary, border_c));
+        if !fp_is_collapsed("fp_guide_manager", collapsed_sections) {
+            col = render_guide_manager(col, fp, primary, muted, border_c);
+        }
+        col = col.push(props_section_header("Other", "fp_other", collapsed_sections, primary, border_c));
+        if !fp_is_collapsed("fp_other", collapsed_sections) {
+            col = render_other_section(col, fp, primary, muted, border_c);
+        }
     }
 
     // v0.16.2 — Sketch-mode-only sections (Parameters, DOF, Solve
@@ -439,7 +464,8 @@ pub(super) fn view_footprint_editor_properties<'a>(
     // inspector strip that shipped in v0.13.1.
     if fp.mode_kind == FootprintModeKind::Sketch {
         // Parameters
-        col = col.push(props_section_header("Parameters", primary, border_c));
+        col = col.push(props_section_header("Parameters", "fp_parameters", collapsed_sections, primary, border_c));
+        if !fp_is_collapsed("fp_parameters", collapsed_sections) {
         if fp.sketch_parameters.is_empty() {
             col = col.push(
                 container(text("(none — add via expression)").size(10).color(muted))
@@ -481,9 +507,11 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 col = col.push(container(row).padding([2, 8]).width(Length::Fill));
             }
         }
+        } // end if !fp_parameters collapsed
 
         // DOF / Last solve
-        col = col.push(props_section_header("DOF / Last solve", primary, border_c));
+        col = col.push(props_section_header("DOF / Last solve", "fp_dof", collapsed_sections, primary, border_c));
+        if !fp_is_collapsed("fp_dof", collapsed_sections) {
         col = props_kv_row(
             col,
             muted,
@@ -533,9 +561,11 @@ pub(super) fn view_footprint_editor_properties<'a>(
                     .width(Length::Fill),
             );
         }
+        } // end if !fp_dof collapsed
 
         // Solve warnings
-        col = col.push(props_section_header("Solve warnings", primary, border_c));
+        col = col.push(props_section_header("Solve warnings", "fp_solve_warnings", collapsed_sections, primary, border_c));
+        if !fp_is_collapsed("fp_solve_warnings", collapsed_sections) {
         if fp.solve_warnings.is_empty() {
             col = col.push(
                 container(text("(none)").size(10).color(muted))
@@ -562,6 +592,7 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 );
             }
         }
+        } // end if !fp_solve_warnings collapsed
     }
 
     // v0.16.3 — "Pad placement" defaults form. Visible whenever the
@@ -569,7 +600,8 @@ pub(super) fn view_footprint_editor_properties<'a>(
     // adds a "PAUSED — TAB to resume" hint but doesn't gate the form
     // itself; the user can adjust before resuming.
     if fp.placement_active {
-        col = col.push(props_section_header("Pad placement", primary, border_c));
+        col = col.push(props_section_header("Pad placement", "fp_pad_placement", collapsed_sections, primary, border_c));
+        if !fp_is_collapsed("fp_pad_placement", collapsed_sections) {
         if fp.placement_paused {
             col = col.push(
                 container(
@@ -755,49 +787,67 @@ pub(super) fn view_footprint_editor_properties<'a>(
             .padding([2, 8])
             .width(Length::Fill),
         );
+        } // end if !fp_pad_placement collapsed
     }
 
     // Settings + hint — always visible at the bottom of the panel
     // regardless of mode / selection so common toggles stay reachable.
-    col = col.push(props_section_header("Settings", primary, border_c));
-    let auto_fit_label = if fp.auto_fit_courtyard {
-        "Auto-fit Courtyard \u{2713}"
-    } else {
-        "Auto-fit Courtyard"
-    };
-    let auto_fit_btn = iced::widget::button(text(auto_fit_label).size(10).color(primary))
-        .padding([4, 10])
-        .on_press(PanelMsg::FpEditorToggleAutoFitCourtyard)
-        .style(iced::widget::button::secondary);
-    col = col.push(container(auto_fit_btn).padding([4, 8]).width(Length::Fill));
+    col = col.push(props_section_header("Settings", "fp_settings", collapsed_sections, primary, border_c));
+    if !fp_is_collapsed("fp_settings", collapsed_sections) {
+        let auto_fit_label = if fp.auto_fit_courtyard {
+            "Auto-fit Courtyard \u{2713}"
+        } else {
+            "Auto-fit Courtyard"
+        };
+        let auto_fit_btn = iced::widget::button(text(auto_fit_label).size(10).color(primary))
+            .padding([4, 10])
+            .on_press(PanelMsg::FpEditorToggleAutoFitCourtyard)
+            .style(iced::widget::button::primary);
+        col = col.push(container(auto_fit_btn).padding([4, 8]).width(Length::Fill));
+    }
 
-    col = col.push(props_section_header("Hint", primary, border_c));
-    let hint = match fp.mode_kind {
-        FootprintModeKind::Pads => "Click a pad to edit its properties.",
-        FootprintModeKind::Sketch => {
-            "Click a sketch entity (Point / Line / Arc / Circle) to edit it."
-        }
-        FootprintModeKind::View3d => "3D View — use the 3D preview pane to inspect the body.",
-    };
-    col = col.push(
-        container(text(hint).size(10).color(muted))
-            .padding([4, 8])
-            .width(Length::Fill),
-    );
+    col = col.push(props_section_header("Hint", "fp_hint", collapsed_sections, primary, border_c));
+    if !fp_is_collapsed("fp_hint", collapsed_sections) {
+        let hint = match fp.mode_kind {
+            FootprintModeKind::Pads => "Click a pad to edit its properties.",
+            FootprintModeKind::Sketch => {
+                "Click a sketch entity (Point / Line / Arc / Circle) to edit it."
+            }
+            FootprintModeKind::View3d => {
+                "3D View — use the 3D preview pane to inspect the body."
+            }
+        };
+        col = col.push(
+            container(text(hint).size(10).color(muted))
+                .padding([4, 8])
+                .width(Length::Fill),
+        );
+    }
 
     scrollable(col).width(Length::Fill).into()
 }
 
-/// Section header — delegates to the schematic Properties panel's
-/// `section_hdr` so the footprint editor uses the exact same widget
-/// (chevron prefix + bold title + 1px rule). Wrapper exists only to
-/// add the chevron without polluting every call site.
+/// Section header — collapsible. Delegates to
+/// `super::collapsible_section_header` so every footprint Properties
+/// section gets the same clickable chevron header used by the
+/// schematic's Custom Selection Filters / General sections. Each
+/// call site supplies a unique `key` so collapsed state survives in
+/// `PanelContext.collapsed_sections`. Callers guard their body push
+/// with `if !is_section_collapsed(key, collapsed)`.
 fn props_section_header<'a>(
     label: &str,
+    key: &'static str,
+    collapsed: &super::CollapsedSections,
     primary: Color,
     border_c: Color,
 ) -> iced::widget::Column<'a, PanelMsg> {
-    super::section_hdr(&format!("\u{25BC} {label}"), primary, border_c)
+    super::collapsible_section_header(key, label, collapsed, primary, border_c)
+}
+
+/// Returns true if the section with `key` is collapsed in
+/// `PanelContext.collapsed_sections`.
+fn fp_is_collapsed(key: &str, collapsed: &super::CollapsedSections) -> bool {
+    super::is_section_collapsed(key, collapsed)
 }
 
 /// v0.18.14.3 — Altium "Snapping" 3-segment toggle. `All Layers` is
@@ -1171,8 +1221,9 @@ fn render_other_section<'a>(
 }
 
 /// Shared button factory for the Grid / Guide Manager footers.
-/// Uses iced's built-in `button::secondary` so the chrome matches the
-/// schematic Properties panel's action buttons (Reset to Default, etc.).
+/// Uses iced's built-in `button::primary` (accent-filled) so the
+/// chrome matches the "+ Add Filter" call-to-action button in the
+/// Custom Selection Filters section above.
 fn grid_manager_btn<'a>(
     label: &'static str,
     on_press: Option<PanelMsg>,
@@ -1181,7 +1232,7 @@ fn grid_manager_btn<'a>(
 ) -> Element<'a, PanelMsg> {
     let mut btn = iced::widget::button(text(label).size(10).color(primary))
         .padding([4, 10])
-        .style(iced::widget::button::secondary);
+        .style(iced::widget::button::primary);
     if let Some(msg) = on_press {
         btn = btn.on_press(msg);
     }

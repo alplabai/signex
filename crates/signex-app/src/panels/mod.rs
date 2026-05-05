@@ -1779,14 +1779,16 @@ pub(super) fn shape_icon_handle(
     }
 }
 
-/// Collapsible section: clickable header with SVG chevron, hides content when collapsed.
-pub(super) fn collapsible_section<'a>(
+/// Just the header part of a collapsible section — clickable button
+/// with SVG chevron + 1px rule. Returns whether the section is
+/// collapsed via `is_collapsed_section(...)` so callers can guard
+/// their body push without using a closure.
+pub(super) fn collapsible_section_header<'a>(
     key: &str,
     title: &str,
     collapsed: &CollapsedSections,
     header_color: Color,
     border_c: Color,
-    content: impl FnOnce() -> Column<'a, PanelMsg>,
 ) -> Column<'a, PanelMsg> {
     let is_collapsed = collapsed.contains(key);
     let chevron_handle = if is_collapsed {
@@ -1798,7 +1800,6 @@ pub(super) fn collapsible_section<'a>(
 
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
 
-    // Clickable header with SVG chevron
     col = col.push(
         iced::widget::button(
             container(
@@ -1809,12 +1810,12 @@ pub(super) fn collapsible_section<'a>(
                         .style(move |_: &Theme, _| iced::widget::svg::Style {
                             color: Some(header_color),
                         }),
-                    text(title.to_string()).size(10).color(header_color),
+                    text(title.to_string()).size(12).color(header_color),
                 ]
-                .spacing(4)
+                .spacing(6)
                 .align_y(iced::Alignment::Center),
             )
-            .padding([4, 8])
+            .padding([6, 8])
             .width(Length::Fill),
         )
         .padding(0)
@@ -1833,12 +1834,27 @@ pub(super) fn collapsible_section<'a>(
         }),
     );
     col = col.push(thin_sep(border_c));
+    col
+}
 
-    // Content (only when expanded)
+pub(super) fn is_section_collapsed(key: &str, collapsed: &CollapsedSections) -> bool {
+    collapsed.contains(key)
+}
+
+/// Collapsible section: clickable header with SVG chevron, hides content when collapsed.
+pub(super) fn collapsible_section<'a>(
+    key: &str,
+    title: &str,
+    collapsed: &CollapsedSections,
+    header_color: Color,
+    border_c: Color,
+    content: impl FnOnce() -> Column<'a, PanelMsg>,
+) -> Column<'a, PanelMsg> {
+    let is_collapsed = collapsed.contains(key);
+    let mut col = collapsible_section_header(key, title, collapsed, header_color, border_c);
     if !is_collapsed {
         col = col.push(content());
     }
-
     col
 }
 
