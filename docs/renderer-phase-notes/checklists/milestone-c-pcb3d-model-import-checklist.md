@@ -27,12 +27,12 @@
 
 ## Handoff readiness
 
-- [ ] Milestone C first implementation slice documented.
-- [ ] Definition of Ready documented.
-- [ ] Definition of Done documented.
+- [x] Milestone C first implementation slice documented.
+- [x] Definition of Ready documented.
+- [x] Definition of Done documented.
 
 ## Exit gate
 
-- [ ] All seven Milestone C planning tasks completed.
-- [ ] Clean-room evidence notes completed for all tasks.
-- [ ] Milestone C preparation package marked done.
+- [x] All seven Milestone C planning tasks completed.
+- [x] Clean-room evidence notes completed for all tasks.
+- [x] Milestone C preparation package marked done.
