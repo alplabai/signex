@@ -2207,10 +2207,16 @@ fn draw_pad(
 }
 
 /// v0.18.18 — bounding-box hit test for silk-front graphics.
-/// Returns the index of the first graphic whose AABB contains
-/// `(x, y)` (in mm), with a small tolerance to make thin lines
+/// Returns the index of the first graphic whose hit-test contains
+/// `(x, y)` (in mm), with a small tolerance to make thin shapes
 /// reachable. Iterates in reverse so the topmost (most recently
 /// placed) graphic wins on overlap.
+///
+/// v0.18.25 — Line/Arc/Circle/Rectangle/Polygon use shape-tight
+/// hit-tests rather than AABB. Filled variants still match the
+/// interior; outlined variants only match within `tolerance_mm` of
+/// the stroke. Text continues to use AABB (the bake step doesn't
+/// expose per-glyph geometry yet).
 pub(super) fn silk_f_hit_at(
     silk_f: &[signex_library::primitive::footprint::FpGraphic],
     x: f64,
@@ -2220,77 +2226,164 @@ pub(super) fn silk_f_hit_at(
     use signex_library::primitive::footprint::FpGraphicKind;
     let t = tolerance_mm.max(0.05);
     for (idx, g) in silk_f.iter().enumerate().rev() {
-        let bbox: Option<(f64, f64, f64, f64)> = match &g.kind {
-            FpGraphicKind::Line { from, to } => Some((
-                from[0].min(to[0]),
-                from[1].min(to[1]),
-                from[0].max(to[0]),
-                from[1].max(to[1]),
-            )),
-            FpGraphicKind::Rectangle { from, to } => Some((
-                from[0].min(to[0]),
-                from[1].min(to[1]),
-                from[0].max(to[0]),
-                from[1].max(to[1]),
-            )),
-            FpGraphicKind::Circle { center, radius } => Some((
-                center[0] - radius,
-                center[1] - radius,
-                center[0] + radius,
-                center[1] + radius,
-            )),
+        let hit = match &g.kind {
+            FpGraphicKind::Line { from, to } => {
+                point_to_segment_dist(x, y, from[0], from[1], to[0], to[1]) <= t
+            }
+            FpGraphicKind::Rectangle { from, to } => {
+                let min_x = from[0].min(to[0]);
+                let min_y = from[1].min(to[1]);
+                let max_x = from[0].max(to[0]);
+                let max_y = from[1].max(to[1]);
+                if g.filled {
+                    x >= min_x - t && x <= max_x + t && y >= min_y - t && y <= max_y + t
+                } else {
+                    let inside_x = x >= min_x - t && x <= max_x + t;
+                    let inside_y = y >= min_y - t && y <= max_y + t;
+                    let near_left = (x - min_x).abs() <= t;
+                    let near_right = (x - max_x).abs() <= t;
+                    let near_top = (y - min_y).abs() <= t;
+                    let near_bot = (y - max_y).abs() <= t;
+                    (inside_y && (near_left || near_right))
+                        || (inside_x && (near_top || near_bot))
+                }
+            }
+            FpGraphicKind::Circle { center, radius } => {
+                let dx = x - center[0];
+                let dy = y - center[1];
+                let dist = (dx * dx + dy * dy).sqrt();
+                if g.filled {
+                    dist <= *radius + t
+                } else {
+                    (dist - *radius).abs() <= t
+                }
+            }
             FpGraphicKind::Arc {
                 center,
                 radius,
-                ..
-            } => Some((
-                center[0] - radius,
-                center[1] - radius,
-                center[0] + radius,
-                center[1] + radius,
-            )),
+                start_deg,
+                end_deg,
+            } => {
+                let dx = x - center[0];
+                let dy = y - center[1];
+                let dist = (dx * dx + dy * dy).sqrt();
+                if (dist - *radius).abs() > t {
+                    false
+                } else {
+                    // Angular gating: cursor's angle relative to centre
+                    // must lie within [start, end] (CCW). Angles are
+                    // wrapped into [0, 360) before comparison so the
+                    // arc can cross the 0° seam.
+                    let mut angle_deg = dy.atan2(dx).to_degrees();
+                    if angle_deg < 0.0 {
+                        angle_deg += 360.0;
+                    }
+                    let mut a = start_deg.rem_euclid(360.0);
+                    let mut b = end_deg.rem_euclid(360.0);
+                    if (b - a).abs() < 1e-6 {
+                        true
+                    } else {
+                        if b < a {
+                            b += 360.0;
+                        }
+                        let mut p = angle_deg;
+                        if p < a {
+                            p += 360.0;
+                        }
+                        p >= a && p <= b
+                    }
+                }
+            }
             FpGraphicKind::Text {
                 position,
                 content,
                 size,
             } => {
+                // Text stays AABB — the bake step doesn't expose
+                // per-glyph metrics; the placeholder width estimate
+                // is stable enough for selection purposes.
                 let w = (content.chars().count() as f64) * size * 0.6;
                 let h = *size;
-                Some((position[0], position[1], position[0] + w, position[1] + h))
+                x >= position[0] - t
+                    && x <= position[0] + w + t
+                    && y >= position[1] - t
+                    && y <= position[1] + h + t
             }
             FpGraphicKind::Polygon { vertices } => {
-                if vertices.is_empty() {
-                    None
+                if vertices.len() < 2 {
+                    false
+                } else if g.filled {
+                    point_in_polygon(x, y, vertices)
                 } else {
-                    let mut min_x = f64::INFINITY;
-                    let mut min_y = f64::INFINITY;
-                    let mut max_x = f64::NEG_INFINITY;
-                    let mut max_y = f64::NEG_INFINITY;
-                    for v in vertices {
-                        if v[0] < min_x {
-                            min_x = v[0];
-                        }
-                        if v[1] < min_y {
-                            min_y = v[1];
-                        }
-                        if v[0] > max_x {
-                            max_x = v[0];
-                        }
-                        if v[1] > max_y {
-                            max_y = v[1];
-                        }
-                    }
-                    Some((min_x, min_y, max_x, max_y))
+                    polygon_outline_hit(x, y, vertices, t)
                 }
             }
         };
-        if let Some((min_x, min_y, max_x, max_y)) = bbox {
-            if x >= min_x - t && x <= max_x + t && y >= min_y - t && y <= max_y + t {
-                return Some(idx);
-            }
+        if hit {
+            return Some(idx);
         }
     }
     None
+}
+
+/// v0.18.25 — squared distance from a point to a line segment, square-rooted.
+/// Standard projection-onto-segment with clamped t ∈ [0, 1].
+fn point_to_segment_dist(px: f64, py: f64, ax: f64, ay: f64, bx: f64, by: f64) -> f64 {
+    let dx = bx - ax;
+    let dy = by - ay;
+    let len_sq = dx * dx + dy * dy;
+    if len_sq < 1e-12 {
+        return ((px - ax).powi(2) + (py - ay).powi(2)).sqrt();
+    }
+    let t = ((px - ax) * dx + (py - ay) * dy) / len_sq;
+    let t_clamped = t.clamp(0.0, 1.0);
+    let qx = ax + t_clamped * dx;
+    let qy = ay + t_clamped * dy;
+    ((px - qx).powi(2) + (py - qy).powi(2)).sqrt()
+}
+
+/// v0.18.25 — even-odd ray casting; assumes the polygon is closed
+/// implicitly (last vertex connects back to first).
+fn point_in_polygon(px: f64, py: f64, vertices: &[[f64; 2]]) -> bool {
+    if vertices.len() < 3 {
+        return false;
+    }
+    let mut inside = false;
+    let mut j = vertices.len() - 1;
+    for i in 0..vertices.len() {
+        let xi = vertices[i][0];
+        let yi = vertices[i][1];
+        let xj = vertices[j][0];
+        let yj = vertices[j][1];
+        let intersect = ((yi > py) != (yj > py))
+            && (px < (xj - xi) * (py - yi) / (yj - yi + f64::EPSILON) + xi);
+        if intersect {
+            inside = !inside;
+        }
+        j = i;
+    }
+    inside
+}
+
+/// v0.18.25 — `true` when the point lies within `tol` of any closed-
+/// polygon edge (including the implicit last-to-first segment).
+fn polygon_outline_hit(px: f64, py: f64, vertices: &[[f64; 2]], tol: f64) -> bool {
+    let n = vertices.len();
+    for i in 0..n {
+        let j = (i + 1) % n;
+        if point_to_segment_dist(
+            px,
+            py,
+            vertices[i][0],
+            vertices[i][1],
+            vertices[j][0],
+            vertices[j][1],
+        ) <= tol
+        {
+            return true;
+        }
+    }
+    false
 }
 
 /// v0.18.16 — render the silk-layer graphics list. Each
