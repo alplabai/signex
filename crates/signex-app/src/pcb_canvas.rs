@@ -2,6 +2,13 @@ use iced::event::Event;
 use iced::mouse;
 use iced::widget::canvas;
 use iced::{Color, Rectangle, Renderer, Theme};
+use signex_gfx::primitive::circle::Circle as GfxCircle;
+use signex_gfx::primitive::line::LineSegment;
+use signex_gfx::primitive::polygon::GpuPolygon;
+use signex_gfx::scene::{DirtyFlags, Scene};
+use signex_renderer::pcb::{PcbRenderer, PcbSnapshot};
+use signex_renderer::schematic::ViewRenderer;
+use signex_renderer::theme::ResolvedTheme;
 
 use crate::app::Message;
 use crate::canvas::{Camera, CanvasEvent};
@@ -24,6 +31,7 @@ pub struct PcbCanvas {
     pub theme_grid: Color,
     pub canvas_colors: signex_types::theme::CanvasColors,
     pub render_snapshot: Option<signex_render::pcb::PcbRenderSnapshot>,
+    pub renderer_snapshot: Option<PcbSnapshot>,
     pub visible_grid_mm: f64,
 }
 
@@ -40,6 +48,7 @@ impl PcbCanvas {
             theme_grid: signex_render::colors::to_iced(&colors.grid),
             canvas_colors: colors,
             render_snapshot: None,
+            renderer_snapshot: None,
             visible_grid_mm: 2.54,
         }
     }
@@ -53,6 +62,14 @@ impl PcbCanvas {
         render_snapshot: Option<signex_render::pcb::PcbRenderSnapshot>,
     ) {
         self.render_snapshot = render_snapshot;
+    }
+
+    pub fn active_renderer_snapshot(&self) -> Option<&PcbSnapshot> {
+        self.renderer_snapshot.as_ref()
+    }
+
+    pub fn set_renderer_snapshot(&mut self, renderer_snapshot: Option<PcbSnapshot>) {
+        self.renderer_snapshot = renderer_snapshot;
     }
 
     pub fn clear_bg_cache(&mut self) {
@@ -79,6 +96,149 @@ impl PcbCanvas {
         self.theme_grid = grid;
         self.bg_cache.clear();
     }
+}
+
+fn color_from_rgba(rgba: [f32; 4]) -> Color {
+    Color::from_rgba(rgba[0], rgba[1], rgba[2], rgba[3])
+}
+
+fn world_to_screen(camera: &Camera, bounds: Rectangle, point: [f32; 2]) -> iced::Point {
+    camera.world_to_screen(iced::Point::new(point[0], point[1]), bounds)
+}
+
+fn draw_dashed_line(
+    frame: &mut canvas::Frame,
+    p0: iced::Point,
+    p1: iced::Point,
+    width: f32,
+    color: Color,
+) {
+    let dx = p1.x - p0.x;
+    let dy = p1.y - p0.y;
+    let length = (dx * dx + dy * dy).sqrt();
+    if length <= 0.0001 {
+        return;
+    }
+
+    let dash = 8.0;
+    let gap = 5.0;
+    let ux = dx / length;
+    let uy = dy / length;
+    let mut dist = 0.0;
+
+    while dist < length {
+        let seg_end = (dist + dash).min(length);
+        let sp = iced::Point::new(p0.x + ux * dist, p0.y + uy * dist);
+        let ep = iced::Point::new(p0.x + ux * seg_end, p0.y + uy * seg_end);
+        let path = canvas::Path::line(sp, ep);
+        frame.stroke(
+            &path,
+            canvas::Stroke::default()
+                .with_width(width)
+                .with_color(color),
+        );
+        dist += dash + gap;
+    }
+}
+
+fn draw_lines(
+    frame: &mut canvas::Frame,
+    lines: &[LineSegment],
+    camera: &Camera,
+    bounds: Rectangle,
+) {
+    for line in lines {
+        let p0 = world_to_screen(camera, bounds, line.p0);
+        let p1 = world_to_screen(camera, bounds, line.p1);
+        let width = (line.width * camera.scale).max(0.5);
+        let color = color_from_rgba(line.color);
+
+        if (line.style & 1) == 1 {
+            draw_dashed_line(frame, p0, p1, width, color);
+        } else {
+            let path = canvas::Path::line(p0, p1);
+            frame.stroke(
+                &path,
+                canvas::Stroke::default()
+                    .with_width(width)
+                    .with_color(color),
+            );
+        }
+    }
+}
+
+fn draw_circles(
+    frame: &mut canvas::Frame,
+    circles: &[GfxCircle],
+    camera: &Camera,
+    bounds: Rectangle,
+) {
+    for circle in circles {
+        let center = world_to_screen(camera, bounds, circle.center);
+        let radius = (circle.radius * camera.scale).max(0.5);
+        let stroke_width = (circle.stroke_width * camera.scale).max(0.5);
+        let color = color_from_rgba(circle.color);
+        let path = canvas::Path::circle(center, radius);
+
+        if circle.stroke_width <= 0.0 {
+            frame.fill(&path, color);
+        } else {
+            frame.stroke(
+                &path,
+                canvas::Stroke::default()
+                    .with_width(stroke_width)
+                    .with_color(color),
+            );
+        }
+    }
+}
+
+fn draw_polygons(
+    frame: &mut canvas::Frame,
+    polygons: &[GpuPolygon],
+    camera: &Camera,
+    bounds: Rectangle,
+) {
+    for polygon in polygons {
+        if polygon.vertices.len() < 3 {
+            continue;
+        }
+
+        let points: Vec<iced::Point> = polygon
+            .vertices
+            .iter()
+            .map(|vertex| world_to_screen(camera, bounds, *vertex))
+            .collect();
+
+        let path = canvas::Path::new(|builder| {
+            builder.move_to(points[0]);
+            for point in &points[1..] {
+                builder.line_to(*point);
+            }
+            builder.close();
+        });
+
+        frame.fill(&path, color_from_rgba(polygon.fill_color));
+
+        if let Some(stroke_color) = polygon.stroke_color {
+            frame.stroke(
+                &path,
+                canvas::Stroke::default()
+                    .with_width((polygon.stroke_width * camera.scale).max(0.5))
+                    .with_color(color_from_rgba(stroke_color)),
+            );
+        }
+    }
+}
+
+fn draw_scene(frame: &mut canvas::Frame, scene: &Scene, camera: &Camera, bounds: Rectangle) {
+    draw_lines(frame, &scene.lines, camera, bounds);
+    draw_circles(frame, &scene.circles, camera, bounds);
+    draw_polygons(frame, &scene.polygons, camera, bounds);
+
+    draw_lines(frame, &scene.overlay_lines, camera, bounds);
+    draw_circles(frame, &scene.overlay_circles, camera, bounds);
+    draw_polygons(frame, &scene.overlay_polygons, camera, bounds);
 }
 
 impl canvas::Program<Message> for PcbCanvas {
@@ -212,11 +372,6 @@ impl canvas::Program<Message> for PcbCanvas {
             }
         });
 
-        let transform = signex_render::pcb::ScreenTransform {
-            offset_x: state.camera.offset.x,
-            offset_y: state.camera.offset.y,
-            scale: state.camera.scale,
-        };
         let (cached_offset_x, cached_offset_y, cached_scale) = self.content_cache_camera.get();
         let camera_matches_cache = (cached_offset_x - state.camera.offset.x).abs() < 0.01
             && (cached_offset_y - state.camera.offset.y).abs() < 0.01
@@ -230,7 +385,25 @@ impl canvas::Program<Message> for PcbCanvas {
                 state.camera.offset.y,
                 state.camera.scale,
             ));
-            if let Some(snapshot) = self.active_snapshot() {
+            if let Some(snapshot) = self.active_renderer_snapshot() {
+                let mut scene = Scene::default();
+                let theme = ResolvedTheme::from_canvas_colors(self.canvas_colors);
+                PcbRenderer::build_scene(
+                    snapshot,
+                    &theme,
+                    DirtyFlags::LINES
+                        | DirtyFlags::CIRCLES
+                        | DirtyFlags::POLYGONS
+                        | DirtyFlags::OVERLAY,
+                    &mut scene,
+                );
+                draw_scene(frame, &scene, &state.camera, bounds);
+            } else if let Some(snapshot) = self.active_snapshot() {
+                let transform = signex_render::pcb::ScreenTransform {
+                    offset_x: state.camera.offset.x,
+                    offset_y: state.camera.offset.y,
+                    scale: state.camera.scale,
+                };
                 signex_render::pcb::render_pcb(frame, snapshot, transform, &self.canvas_colors);
             }
         });

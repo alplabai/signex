@@ -194,10 +194,19 @@ impl Signex {
     }
 
     pub(crate) fn sync_pcb_canvas_from_visible_board(&mut self) {
-        self.interaction_state.pcb_canvas.set_render_snapshot(
-            self.active_pcb()
-                .map(signex_render::pcb::PcbRenderSnapshot::from_board),
-        );
+        let render_snapshot = self
+            .active_pcb()
+            .map(signex_render::pcb::PcbRenderSnapshot::from_board);
+        let renderer_snapshot = self
+            .active_pcb()
+            .map(signex_renderer::pcb::PcbSnapshot::from_board);
+
+        self.interaction_state
+            .pcb_canvas
+            .set_render_snapshot(render_snapshot);
+        self.interaction_state
+            .pcb_canvas
+            .set_renderer_snapshot(renderer_snapshot);
     }
 
     pub(crate) fn open_schematic_tab(
@@ -356,6 +365,7 @@ impl Signex {
     fn apply_loaded_empty_document(&mut self, refresh_panel_ctx: bool) {
         self.clear_schematic_ui_state();
         self.interaction_state.pcb_canvas.set_render_snapshot(None);
+        self.interaction_state.pcb_canvas.set_renderer_snapshot(None);
         self.interaction_state.pcb_canvas.clear_bg_cache();
         self.interaction_state.pcb_canvas.clear_content_cache();
 

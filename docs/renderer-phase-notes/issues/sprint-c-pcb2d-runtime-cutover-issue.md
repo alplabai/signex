@@ -19,7 +19,7 @@ Execute Sprint C as incremental vertical slices to complete PCB 2D runtime integ
 - [x] Task 02: Zones, rule areas, ratsnest, and DRC overlay slices.
 - [x] Task 03: Deterministic zone compositing order hardening and benchmark fixture guards.
 - [x] Task 04: App dirty-event adapter bridge (`Message`/`CanvasEvent` -> `PcbAppEvent`).
-- [ ] Task 05: PCB canvas runtime cutover to `signex-renderer` scene build/render flow.
+- [x] Task 05: PCB canvas runtime cutover to `signex-renderer` scene build/render flow.
 - [ ] Task 06: Remove direct `signex_render::pcb` usage from `signex-app` and validate behavior parity.
 - [ ] Task 07: Legacy cleanup gate for PCB path (`Cargo.toml` dependency, dead helpers, regression checks).
 
