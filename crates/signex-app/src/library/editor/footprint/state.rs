@@ -273,6 +273,8 @@ pub struct FootprintEditorState {
     /// re-stashes the second click here for chained tracks. Esc /
     /// right-click clears.
     pub track_first: Option<(f64, f64)>,
+    /// v0.18.15.3 — Place Arc 3-click gesture state.
+    pub place_arc_pending: PlaceArcPending,
     /// v0.18.13 — Altium Selection Filter pill row state. Per-
     /// editor so flipping pads off in one tab doesn't follow the
     /// user into another footprint.
@@ -498,6 +500,27 @@ pub enum PadsTool {
     /// user can stroke a polyline without re-clicking the tool.
     /// Esc / right-click clears `track_first`.
     PlaceTrack,
+    /// v0.18.15.3 — silk-layer arc. 3-click gesture — first click
+    /// stashes the centre, second the radius (= distance from
+    /// centre), third the sweep end angle. Esc / right-click
+    /// clears the in-flight gesture. State carried in
+    /// `place_arc_pending`.
+    PlaceArc,
+}
+
+/// v0.18.15.3 — Place Arc 3-click gesture state machine.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum PlaceArcPending {
+    #[default]
+    Idle,
+    /// First click — centre stashed.
+    Center { center: (f64, f64) },
+    /// Second click — start point stashed; the third click closes
+    /// the sweep.
+    Start {
+        center: (f64, f64),
+        start: (f64, f64),
+    },
 }
 
 /// Sketch-mode drawing tool. Phase 6.3 (v0.13.1) shipped Place Point
@@ -594,6 +617,7 @@ impl FootprintEditorState {
             next_pad_defaults: NextPadDefaults::default(),
             snap_options: SnapOptions::default(),
             track_first: None,
+            place_arc_pending: PlaceArcPending::default(),
             selection_filter: SelectionFilter::default(),
             snap_subtab: SnapSubTab::default(),
             snapping_mode: SnappingMode::default(),
@@ -629,6 +653,7 @@ impl FootprintEditorState {
             next_pad_defaults: NextPadDefaults::default(),
             snap_options: SnapOptions::default(),
             track_first: None,
+            place_arc_pending: PlaceArcPending::default(),
             selection_filter: SelectionFilter::default(),
             snap_subtab: SnapSubTab::default(),
             snapping_mode: SnappingMode::default(),

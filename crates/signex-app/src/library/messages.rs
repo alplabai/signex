@@ -710,6 +710,16 @@ pub enum EditorMsg {
     /// gesture. Clears `editor.state.track_first` so the next
     /// click starts a fresh segment.
     FootprintTrackCancel,
+    /// v0.18.15.3 — click during a Place Arc 3-click gesture. The
+    /// dispatcher uses `state.place_arc_pending` to decide whether
+    /// this click stashes the centre, the start, or commits the
+    /// arc.
+    FootprintArcClick {
+        x_mm: f64,
+        y_mm: f64,
+    },
+    /// v0.18.15.3 — Esc / right-click during Place Arc.
+    FootprintArcCancel,
     /// Drag the pad at `idx` to a new world position.
     FootprintMovePad {
         idx: usize,
@@ -1267,6 +1277,10 @@ pub enum PrimitiveEditorMsg {
     FootprintTrackClick { x_mm: f64, y_mm: f64 },
     /// v0.18.15.1 — Esc / right-click during Place Track.
     FootprintTrackCancel,
+    /// v0.18.15.3 — click during a Place Arc 3-click gesture.
+    FootprintArcClick { x_mm: f64, y_mm: f64 },
+    /// v0.18.15.3 — Esc / right-click during Place Arc.
+    FootprintArcCancel,
     /// v0.18.14 — Selection Filter pill toggle from the unified
     /// active bar. Mirrors the panel-side
     /// `PanelMsg::FpEditorToggleSelectionFilter` but flows through

@@ -340,10 +340,21 @@ pub fn items(
             }),
             ..ActiveBarButton::default()
         }),
-        stub_svg(
-            "Place Arc",
-            ActiveBarIcon::Svg(icons::icon_shape_arc(theme_id)),
-        ),
+        // v0.18.15.3 — Place Arc wired (silk-layer 3-click arc).
+        // Centre / start / sweep clicks; right-click / Esc cancels.
+        ActiveBarItem::Button(ActiveBarButton {
+            icon: ActiveBarIcon::Svg(icons::icon_shape_arc(theme_id)),
+            tooltip:
+                "Place Arc — click centre, then radius, then sweep end to drop a silk arc"
+                    .into(),
+            enabled: true,
+            selected: pads_tool == PadsTool::PlaceArc,
+            on_press: Some(LibraryMessage::PrimitiveEditorEvent {
+                path: path.clone(),
+                msg: PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlaceArc),
+            }),
+            ..ActiveBarButton::default()
+        }),
         stub_svg(
             "Place Region (Polygon)",
             ActiveBarIcon::Svg(icons::icon_shape_polygon(theme_id)),

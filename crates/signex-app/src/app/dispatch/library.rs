@@ -3946,6 +3946,8 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintAddText { .. }
         | PrimitiveEditorMsg::FootprintTrackClick { .. }
         | PrimitiveEditorMsg::FootprintTrackCancel
+        | PrimitiveEditorMsg::FootprintArcClick { .. }
+        | PrimitiveEditorMsg::FootprintArcCancel
         | PrimitiveEditorMsg::FootprintToggleSelectionFilter(_)
         | PrimitiveEditorMsg::FootprintMovePad { .. }
         | PrimitiveEditorMsg::FootprintCursorAt { .. }
@@ -4203,6 +4205,52 @@ pub(crate) fn apply_footprint_primitive_edit(
             editor.state.track_first = None;
             editor.canvas_cache.clear();
         }
+        // v0.18.15.3 — Place Arc 3-click gesture (centre / radius
+        // start / sweep end). Idle → Center → Start → commit. After
+        // commit the gesture resets to Idle (no chain — arcs
+        // typically aren't strung together).
+        PrimitiveEditorMsg::FootprintArcClick { x_mm, y_mm } => {
+            use crate::library::editor::footprint::state::PlaceArcPending;
+            let next = match editor.state.place_arc_pending {
+                PlaceArcPending::Idle => {
+                    PlaceArcPending::Center { center: (x_mm, y_mm) }
+                }
+                PlaceArcPending::Center { center } => PlaceArcPending::Start {
+                    center,
+                    start: (x_mm, y_mm),
+                },
+                PlaceArcPending::Start { center, start } => {
+                    let (cx, cy) = center;
+                    let (sx, sy) = start;
+                    let radius = ((sx - cx).powi(2) + (sy - cy).powi(2)).sqrt();
+                    if radius > 1e-6 {
+                        let start_deg = (sy - cy).atan2(sx - cx).to_degrees();
+                        let end_deg = (y_mm - cy).atan2(x_mm - cx).to_degrees();
+                        let primitive = editor.primitive_mut();
+                        primitive
+                            .silk_f
+                            .push(signex_library::primitive::footprint::FpGraphic {
+                                kind: signex_library::primitive::footprint::FpGraphicKind::Arc {
+                                    center: [cx, cy],
+                                    radius,
+                                    start_deg,
+                                    end_deg,
+                                },
+                                stroke_width: 0.15,
+                            });
+                        editor.dirty = true;
+                    }
+                    PlaceArcPending::Idle
+                }
+            };
+            editor.state.place_arc_pending = next;
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintArcCancel => {
+            editor.state.place_arc_pending =
+                crate::library::editor::footprint::state::PlaceArcPending::Idle;
+            editor.canvas_cache.clear();
+        }
         // v0.18.15 — Place String tool. Appends a silk-layer text
         // label `FpGraphic { kind: Text { position, content: "TEXT",
         // size: 1.0 }, stroke_width: 0.0 }` to the active footprint's
@@ -4412,6 +4460,14 @@ pub(crate) fn apply_footprint_primitive_edit(
             ) {
                 editor.state.track_first = None;
             }
+            // v0.18.15.3 — same cleanup for Place Arc.
+            if !matches!(
+                tool,
+                crate::library::editor::footprint::state::PadsTool::PlaceArc
+            ) {
+                editor.state.place_arc_pending =
+                    crate::library::editor::footprint::state::PlaceArcPending::Idle;
+            }
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintToolEscape => {
@@ -4426,6 +4482,9 @@ pub(crate) fn apply_footprint_primitive_edit(
             // v0.18.15.1 — Esc also bails out of an in-flight
             // Place Track 2-click gesture.
             editor.state.track_first = None;
+            // v0.18.15.3 — and Place Arc.
+            editor.state.place_arc_pending =
+                crate::library::editor::footprint::state::PlaceArcPending::Idle;
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintSketchToolEscape => {
@@ -5661,6 +5720,8 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::FootprintAddText { .. }
         | EditorMsg::FootprintTrackClick { .. }
         | EditorMsg::FootprintTrackCancel
+        | EditorMsg::FootprintArcClick { .. }
+        | EditorMsg::FootprintArcCancel
         | EditorMsg::FootprintSketchPlacePoint { .. }
         | EditorMsg::FootprintSketchToolClick { .. }
         | EditorMsg::FootprintSketchToolEscape

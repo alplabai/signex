@@ -524,6 +524,23 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 },
                             }));
                         }
+                        // v0.18.15.3 — Place Arc is a 3-click
+                        // gesture (centre / radius / sweep). The
+                        // dispatcher reads `state.place_arc_pending`
+                        // to decide which click stage this is.
+                        if self.state.pads_tool == PadsTool::PlaceArc
+                            && !self.state.placement_paused
+                        {
+                            return Some(canvas::Action::publish(LibraryMessage::EditorEvent {
+                                library_path: self.address.library_path.clone(),
+                                table: self.address.table.clone(),
+                                row_id: self.address.row_id,
+                                msg: EditorMsg::FootprintArcClick {
+                                    x_mm: drag.grab_offset_mm.0,
+                                    y_mm: drag.grab_offset_mm.1,
+                                },
+                            }));
+                        }
                         // Select tool: empty click does nothing
                         // (selection-clear is handled by the model
                         // via the existing FootprintSelectPad(None)
