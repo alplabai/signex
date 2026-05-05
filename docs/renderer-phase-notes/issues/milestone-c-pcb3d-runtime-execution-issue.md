@@ -16,7 +16,7 @@ Execute Milestone C implementation slices for PCB 3D runtime using the GLB-only 
 ## Task breakdown (ordered)
 
 - [x] Task 01: Runtime GLB ingest adapter and validation hooks.
-- [ ] Task 02: Mesh staging and opaque pass wiring.
+- [x] Task 02: Mesh staging and opaque pass wiring.
 - [ ] Task 03: Projection texture pass integration and alignment checks.
 - [ ] Task 04: Integration validation and benchmark smoke gates.
 
@@ -24,7 +24,7 @@ Execute Milestone C implementation slices for PCB 3D runtime using the GLB-only 
 
 - [x] Runtime rejects non-GLB path sources and reports cache misses deterministically.
 - [x] Runtime validates GLB container version, scene graph presence, and mesh-count sanity.
-- [ ] Runtime mesh staging path feeds opaque pass without source-format parsing.
+- [x] Runtime mesh staging path feeds opaque pass without source-format parsing.
 - [ ] Projection pass ordering and ownership boundaries are implementation-backed.
 - [ ] Integration and benchmark commands pass for baseline fixture tiers.
 
