@@ -15,10 +15,10 @@
 
 ## Cutover tasks
 
-- [ ] Replace `signex_render::pcb::PcbRenderSnapshot` usage in app PCB canvas state.
+- [x] Replace `signex_render::pcb::PcbRenderSnapshot` usage in app PCB canvas state.
 - [x] Replace legacy PCB draw call path with `signex-renderer` scene build path.
 - [x] Route runtime invalidation updates through new PCB dirty family mapping.
-- [ ] Remove remaining direct legacy PCB API calls in app PCB modules.
+- [x] Remove remaining direct legacy PCB API calls in app PCB modules.
 
 ## Validation
 
@@ -29,5 +29,5 @@
 ## Exit gate
 
 - [ ] Task 05-07 completed from Sprint C issue.
-- [ ] No `signex_render::pcb` symbol usage remains in `signex-app`.
+- [x] No `signex_render::pcb` symbol usage remains in `signex-app`.
 - [ ] Sprint C issue marked done with evidence logs.
