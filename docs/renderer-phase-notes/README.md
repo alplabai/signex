@@ -21,6 +21,12 @@ This folder is the canonical execution and evidence tracker for the clean-room s
 | 5 | Grid and Overlay System | done | [issues/phase-5-grid-overlay-issue.md](issues/phase-5-grid-overlay-issue.md) | [checklists/phase-5-grid-overlay-checklist.md](checklists/phase-5-grid-overlay-checklist.md) |
 | 6 | Integration and Hardening | done | [issues/phase-6-integration-hardening-issue.md](issues/phase-6-integration-hardening-issue.md) | [checklists/phase-6-integration-hardening-checklist.md](checklists/phase-6-integration-hardening-checklist.md) |
 
+## Deferred milestone planning index
+
+| Milestone | Theme | Status | Issue | Checklist |
+| --- | --- | --- | --- | --- |
+| B | PCB 2D preparation (Sprint B) | done | [issues/milestone-b-pcb2d-preparation-issue.md](issues/milestone-b-pcb2d-preparation-issue.md) | [checklists/milestone-b-pcb2d-preparation-checklist.md](checklists/milestone-b-pcb2d-preparation-checklist.md) |
+
 ## Numbering and naming rules
 
 Use these conventions to keep phase tracking deterministic and audit-friendly.
@@ -30,6 +36,7 @@ Use these conventions to keep phase tracking deterministic and audit-friendly.
 3. Implementation task logs use numbered task IDs: `logs/phase-N-task-01-*.md` to `logs/phase-N-task-04-*.md`.
 4. Supplemental validation notes that are not part of task 01-04 use: `logs/phase-N-smoke-*.md` with metadata `Task ID: SMOKE`.
 5. If a file does not match these patterns, rename or reclassify it before phase closure.
+6. Deferred milestone planning files use: `issues/milestone-b-*-issue.md`, `checklists/milestone-b-*-checklist.md`, and `logs/milestone-b-task-01-*.md` onward.
 
 ## Folder layout
 
