@@ -12,10 +12,11 @@
 
 use iced::widget::{Stack, container};
 use iced::{Element, Length};
-use signex_types::theme::ThemeTokens;
+use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 
 use crate::app::FootprintEditorState;
+use crate::icons as ic;
 use crate::library::editor::footprint::state::{EditorMode, FpActiveBarMenu};
 use crate::library::messages::{LibraryMessage, PrimitiveEditorMsg};
 
@@ -31,7 +32,7 @@ pub fn view<'a>(
     let mut items: Vec<ActiveBarItem<LibraryMessage>> = Vec::new();
 
     // 1) Eight active-bar dropdown trigger buttons at the FRONT.
-    items.extend(dropdown_trigger_items(editor));
+    items.extend(dropdown_trigger_items(editor, theme_id));
     items.push(ActiveBarItem::Separator);
 
     // 2) Mode-keyed tool buttons (pads / sketch / 3D-view).
@@ -61,6 +62,7 @@ pub fn view<'a>(
             menu,
             &editor.state,
             editor.path.clone(),
+            theme_id,
         );
         let panel = signex_widgets::active_bar_dropdown::view(entries, tokens);
         let panel_anchor = container(panel)
@@ -95,14 +97,20 @@ pub fn view<'a>(
 /// Select / Align / 3D Body / Text / Shapes). Each click toggles the
 /// matching `FpActiveBarMenu` on `state.active_bar_menu` via
 /// `FootprintToggleActiveBarMenu`.
+///
+/// Icons reuse the schematic active bar's existing SVG set (themed,
+/// accent-tinted) so the visual rhythm matches across editors. 3D
+/// Body uses `icon_dd_graphic` until a dedicated 3D icon lands in
+/// `assets/icons/`.
 fn dropdown_trigger_items(
     editor: &FootprintEditorState,
+    tid: ThemeId,
 ) -> Vec<ActiveBarItem<LibraryMessage>> {
     let path = editor.path.clone();
     let active = editor.state.active_bar_menu;
-    let trigger = |label: &str, glyph: &'static str, menu: FpActiveBarMenu| -> ActiveBarItem<LibraryMessage> {
+    let trigger = |label: &str, icon: ActiveBarIcon, menu: FpActiveBarMenu| -> ActiveBarItem<LibraryMessage> {
         ActiveBarItem::Button(ActiveBarButton {
-            icon: ActiveBarIcon::Glyph(glyph),
+            icon,
             tooltip: label.to_string(),
             enabled: true,
             selected: active == Some(menu),
@@ -114,13 +122,47 @@ fn dropdown_trigger_items(
         })
     };
     vec![
-        trigger("Selection Filter", "\u{1F50D}", FpActiveBarMenu::Filter),
-        trigger("Snap Options", "\u{2316}", FpActiveBarMenu::Snap),
-        trigger("Place / Move", "+", FpActiveBarMenu::Place),
-        trigger("Selection", "\u{2BD0}", FpActiveBarMenu::Select),
-        trigger("Align / Distribute", "\u{2261}", FpActiveBarMenu::Align),
-        trigger("3D Body", "\u{2B22}", FpActiveBarMenu::Body3d),
-        trigger("Text", "A", FpActiveBarMenu::Text),
-        trigger("Shapes", "\u{25EF}", FpActiveBarMenu::Shapes),
+        trigger(
+            "Selection Filter",
+            ActiveBarIcon::Svg(ic::icon_filter(tid)),
+            FpActiveBarMenu::Filter,
+        ),
+        trigger(
+            "Snap Options",
+            // No dedicated snap icon yet — borrow the align-grid glyph
+            // since it visually communicates "snap to grid".
+            ActiveBarIcon::Svg(ic::icon_dd_align_grid(tid)),
+            FpActiveBarMenu::Snap,
+        ),
+        trigger(
+            "Place / Move",
+            ActiveBarIcon::Svg(ic::icon_move(tid)),
+            FpActiveBarMenu::Place,
+        ),
+        trigger(
+            "Selection",
+            ActiveBarIcon::Svg(ic::icon_select(tid)),
+            FpActiveBarMenu::Select,
+        ),
+        trigger(
+            "Align / Distribute",
+            ActiveBarIcon::Svg(ic::icon_align(tid)),
+            FpActiveBarMenu::Align,
+        ),
+        trigger(
+            "3D Body",
+            ActiveBarIcon::Svg(ic::icon_dd_graphic(tid)),
+            FpActiveBarMenu::Body3d,
+        ),
+        trigger(
+            "Text",
+            ActiveBarIcon::Svg(ic::icon_text(tid)),
+            FpActiveBarMenu::Text,
+        ),
+        trigger(
+            "Shapes",
+            ActiveBarIcon::Svg(ic::icon_shapes(tid)),
+            FpActiveBarMenu::Shapes,
+        ),
     ]
 }

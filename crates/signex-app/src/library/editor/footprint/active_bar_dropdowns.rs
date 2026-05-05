@@ -14,8 +14,10 @@
 
 use std::path::PathBuf;
 
+use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 
+use crate::icons as ic;
 use crate::library::editor::footprint::state::{
     FpActiveBarMenu, PadsTool, SelectionFilterKind, SnapSubTab, SnappingMode,
 };
@@ -29,7 +31,7 @@ fn fp(path: PathBuf, msg: PrimitiveEditorMsg) -> LibraryMessage {
     LibraryMessage::PrimitiveEditorEvent { path, msg }
 }
 
-/// "Coming soon" stub item.
+/// "Coming soon" stub item — no icon.
 fn stub(label: &'static str, path: PathBuf) -> DropdownItem<LibraryMessage> {
     DropdownItem::new(
         label,
@@ -37,21 +39,37 @@ fn stub(label: &'static str, path: PathBuf) -> DropdownItem<LibraryMessage> {
     )
 }
 
-/// Build the entries for the dropdown matching `menu`.
+/// "Coming soon" stub item with an icon for visual recognition.
+fn stub_with_icon(
+    label: &'static str,
+    path: PathBuf,
+    icon: iced::widget::svg::Handle,
+) -> DropdownItem<LibraryMessage> {
+    DropdownItem::new(
+        label,
+        fp(path, PrimitiveEditorMsg::FootprintActiveBarStub(label)),
+    )
+    .icon(icon)
+}
+
+/// Build the entries for the dropdown matching `menu`. `tid` resolves
+/// the per-theme accent tint on each SVG icon (icons are reused from
+/// the schematic active bar's icon set for visual consistency).
 pub fn entries(
     menu: FpActiveBarMenu,
     state: &FootprintEditorState,
     path: PathBuf,
+    tid: ThemeId,
 ) -> Vec<DropdownEntry<LibraryMessage>> {
     match menu {
         FpActiveBarMenu::Filter => filter_entries(state, path),
         FpActiveBarMenu::Snap => snap_entries(state, path),
-        FpActiveBarMenu::Place => place_entries(path),
-        FpActiveBarMenu::Select => select_entries(path),
-        FpActiveBarMenu::Align => align_entries(path),
+        FpActiveBarMenu::Place => place_entries(path, tid),
+        FpActiveBarMenu::Select => select_entries(path, tid),
+        FpActiveBarMenu::Align => align_entries(path, tid),
         FpActiveBarMenu::Body3d => body3d_entries(state, path),
-        FpActiveBarMenu::Text => text_entries(state, path),
-        FpActiveBarMenu::Shapes => shapes_entries(path),
+        FpActiveBarMenu::Text => text_entries(state, path, tid),
+        FpActiveBarMenu::Shapes => shapes_entries(path, tid),
     }
 }
 
@@ -193,62 +211,138 @@ fn snap_entries(
     ]
 }
 
-fn place_entries(path: PathBuf) -> Vec<DropdownEntry<LibraryMessage>> {
+fn place_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessage>> {
     vec![
-        DropdownEntry::Item(stub("Move", path.clone())),
-        DropdownEntry::Item(stub("Drag", path.clone())),
+        DropdownEntry::Item(stub_with_icon("Move", path.clone(), ic::icon_dd_move(tid))),
+        DropdownEntry::Item(stub_with_icon("Drag", path.clone(), ic::icon_dd_drag(tid))),
         DropdownEntry::Item(stub("Break Track", path.clone())),
         DropdownEntry::Item(stub("Drag Track End", path.clone())),
         DropdownEntry::Separator,
-        DropdownEntry::Item(stub("Move Selection", path.clone())),
-        DropdownEntry::Item(stub("Move Selection by X, Y…", path.clone())),
-        DropdownEntry::Item(stub("Rotate Selection", path.clone())),
-        DropdownEntry::Item(stub("Flip Selection", path)),
+        DropdownEntry::Item(stub_with_icon(
+            "Move Selection",
+            path.clone(),
+            ic::icon_dd_move_sel(tid),
+        )),
+        DropdownEntry::Item(stub_with_icon(
+            "Move Selection by X, Y…",
+            path.clone(),
+            ic::icon_dd_move_xy(tid),
+        )),
+        DropdownEntry::Item(stub_with_icon(
+            "Rotate Selection",
+            path.clone(),
+            ic::icon_dd_rotate(tid),
+        )),
+        DropdownEntry::Item(stub_with_icon(
+            "Flip Selection",
+            path,
+            ic::icon_dd_flip_x(tid),
+        )),
     ]
 }
 
-fn select_entries(path: PathBuf) -> Vec<DropdownEntry<LibraryMessage>> {
+fn select_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessage>> {
     vec![
         DropdownEntry::Item(stub("Select overlapped", path.clone())),
         DropdownEntry::Item(stub("Select next", path.clone())),
-        DropdownEntry::Item(stub("Lasso Select", path.clone())),
+        DropdownEntry::Item(stub_with_icon(
+            "Lasso Select",
+            path.clone(),
+            ic::icon_dd_select_lasso(tid),
+        )),
         DropdownEntry::Separator,
-        DropdownEntry::Item(stub("Inside Area", path.clone())),
-        DropdownEntry::Item(stub("Outside Area", path.clone())),
+        DropdownEntry::Item(stub_with_icon(
+            "Inside Area",
+            path.clone(),
+            ic::icon_dd_select_inside(tid),
+        )),
+        DropdownEntry::Item(stub_with_icon(
+            "Outside Area",
+            path.clone(),
+            ic::icon_dd_select_outside(tid),
+        )),
         DropdownEntry::Item(stub("Touching Rectangle", path.clone())),
         DropdownEntry::Item(stub("Touching Line", path.clone())),
         DropdownEntry::Separator,
         DropdownEntry::Item(stub("All on Layer", path.clone())),
-        DropdownEntry::Item(stub("All", path.clone())),
+        DropdownEntry::Item(stub_with_icon(
+            "All",
+            path.clone(),
+            ic::icon_dd_select_all(tid),
+        )),
         DropdownEntry::Item(stub("Off Grid Pads", path.clone())),
         DropdownEntry::Separator,
-        DropdownEntry::Item(stub("Toggle Selection", path)),
+        DropdownEntry::Item(stub_with_icon(
+            "Toggle Selection",
+            path,
+            ic::icon_dd_select_toggle(tid),
+        )),
     ]
 }
 
-fn align_entries(path: PathBuf) -> Vec<DropdownEntry<LibraryMessage>> {
+fn align_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessage>> {
     vec![
-        DropdownEntry::Item(stub("Align…", path.clone())),
+        DropdownEntry::Item(stub_with_icon(
+            "Align…",
+            path.clone(),
+            ic::icon_dd_align_menu(tid),
+        )),
         DropdownEntry::Separator,
-        DropdownEntry::Item(stub("Align Left", path.clone())),
-        DropdownEntry::Item(stub("Align Right", path.clone())),
+        DropdownEntry::Item(stub_with_icon(
+            "Align Left",
+            path.clone(),
+            ic::icon_dd_align_left(tid),
+        )),
+        DropdownEntry::Item(stub_with_icon(
+            "Align Right",
+            path.clone(),
+            ic::icon_dd_align_right(tid),
+        )),
         DropdownEntry::Item(stub("Align Left (maintain spacing)", path.clone())),
         DropdownEntry::Item(stub("Align Right (maintain spacing)", path.clone())),
-        DropdownEntry::Item(stub("Align Horizontal Centers", path.clone())),
-        DropdownEntry::Item(stub("Distribute Horizontally", path.clone())),
+        DropdownEntry::Item(stub_with_icon(
+            "Align Horizontal Centers",
+            path.clone(),
+            ic::icon_dd_align_hcenter(tid),
+        )),
+        DropdownEntry::Item(stub_with_icon(
+            "Distribute Horizontally",
+            path.clone(),
+            ic::icon_dd_dist_horiz(tid),
+        )),
         DropdownEntry::Item(stub("Increase Horizontal Spacing", path.clone())),
         DropdownEntry::Item(stub("Decrease Horizontal Spacing", path.clone())),
         DropdownEntry::Separator,
-        DropdownEntry::Item(stub("Align Top", path.clone())),
-        DropdownEntry::Item(stub("Align Bottom", path.clone())),
+        DropdownEntry::Item(stub_with_icon(
+            "Align Top",
+            path.clone(),
+            ic::icon_dd_align_top(tid),
+        )),
+        DropdownEntry::Item(stub_with_icon(
+            "Align Bottom",
+            path.clone(),
+            ic::icon_dd_align_bottom(tid),
+        )),
         DropdownEntry::Item(stub("Align Top (maintain spacing)", path.clone())),
         DropdownEntry::Item(stub("Align Bottom (maintain spacing)", path.clone())),
-        DropdownEntry::Item(stub("Align Vertical Centers", path.clone())),
-        DropdownEntry::Item(stub("Distribute Vertically", path.clone())),
+        DropdownEntry::Item(stub_with_icon(
+            "Align Vertical Centers",
+            path.clone(),
+            ic::icon_dd_align_vcenter(tid),
+        )),
+        DropdownEntry::Item(stub_with_icon(
+            "Distribute Vertically",
+            path.clone(),
+            ic::icon_dd_dist_vert(tid),
+        )),
         DropdownEntry::Item(stub("Increase Vertical Spacing", path.clone())),
         DropdownEntry::Item(stub("Decrease Vertical Spacing", path.clone())),
         DropdownEntry::Separator,
-        DropdownEntry::Item(stub("Align To Grid", path.clone())),
+        DropdownEntry::Item(stub_with_icon(
+            "Align To Grid",
+            path.clone(),
+            ic::icon_dd_align_grid(tid),
+        )),
         DropdownEntry::Item(stub("Move All Components Origin To Grid", path)),
     ]
 }
@@ -266,6 +360,7 @@ fn body3d_entries(
 fn text_entries(
     state: &FootprintEditorState,
     path: PathBuf,
+    tid: ThemeId,
 ) -> Vec<DropdownEntry<LibraryMessage>> {
     let active = state.pads_tool;
     vec![
@@ -277,26 +372,59 @@ fn text_entries(
                     PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlaceString),
                 ),
             )
+            .icon(ic::icon_dd_text_string(tid))
             .checked(active == PadsTool::PlaceString),
         ),
-        DropdownEntry::Item(stub("Text Frame", path)),
+        DropdownEntry::Item(stub_with_icon(
+            "Text Frame",
+            path,
+            ic::icon_dd_text_frame(tid),
+        )),
     ]
 }
 
-fn shapes_entries(path: PathBuf) -> Vec<DropdownEntry<LibraryMessage>> {
+fn shapes_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessage>> {
     // Per user simplification: pure graphics live in Sketch mode
     // only. From Pads mode, Shapes opens the menu but every item is
     // a stub that hints "switch to Sketch mode for graphics".
     vec![
         DropdownEntry::Header("(Sketch mode only — switch via the mode bar)".into()),
-        DropdownEntry::Item(stub("Line", path.clone())),
-        DropdownEntry::Item(stub("Arc (Center)", path.clone())),
-        DropdownEntry::Item(stub("Arc (Edge)", path.clone())),
-        DropdownEntry::Item(stub("Arc (Any Angle)", path.clone())),
-        DropdownEntry::Item(stub("Full Circle", path.clone())),
+        DropdownEntry::Item(stub_with_icon("Line", path.clone(), ic::icon_dd_line(tid))),
+        DropdownEntry::Item(stub_with_icon(
+            "Arc (Center)",
+            path.clone(),
+            ic::icon_dd_arc(tid),
+        )),
+        DropdownEntry::Item(stub_with_icon(
+            "Arc (Edge)",
+            path.clone(),
+            ic::icon_dd_arc(tid),
+        )),
+        DropdownEntry::Item(stub_with_icon(
+            "Arc (Any Angle)",
+            path.clone(),
+            ic::icon_dd_arc(tid),
+        )),
+        DropdownEntry::Item(stub_with_icon(
+            "Full Circle",
+            path.clone(),
+            ic::icon_dd_circle(tid),
+        )),
         DropdownEntry::Separator,
-        DropdownEntry::Item(stub("Fill", path.clone())),
-        DropdownEntry::Item(stub("Solid Region", path.clone())),
-        DropdownEntry::Item(stub("Rectangle", path)),
+        DropdownEntry::Item(stub_with_icon(
+            "Fill",
+            path.clone(),
+            ic::icon_dd_polygon(tid),
+        )),
+        DropdownEntry::Item(stub_with_icon(
+            "Solid Region",
+            path.clone(),
+            ic::icon_dd_polygon(tid),
+        )),
+        DropdownEntry::Item(stub_with_icon(
+            "Rectangle",
+            path,
+            ic::icon_dd_rect(tid),
+        )),
     ]
 }
