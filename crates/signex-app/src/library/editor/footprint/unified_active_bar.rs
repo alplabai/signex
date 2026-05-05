@@ -136,10 +136,11 @@ pub fn view<'a>(
     bar_layer.into()
 }
 
-/// Build the 8 dropdown trigger buttons (Filter / Snap / Place /
-/// Select / Align / 3D Body / Text / Shapes). Each click toggles the
-/// matching `FpActiveBarMenu` on `state.active_bar_menu` via
-/// `FootprintToggleActiveBarMenu`.
+/// Build the 8 dropdown trigger buttons matching the schematic's
+/// pattern: left-click fires the default action (or toggles the
+/// menu when there's no obvious default — Filter / Snap), right-click
+/// opens the dropdown. Chevron indicator advertises the right-click
+/// secondary action.
 ///
 /// Icons reuse the schematic active bar's existing SVG set (themed,
 /// accent-tinted) so the visual rhythm matches across editors. 3D
@@ -151,64 +152,97 @@ fn dropdown_trigger_items(
 ) -> Vec<ActiveBarItem<LibraryMessage>> {
     let path = editor.path.clone();
     let active = editor.state.active_bar_menu;
-    let trigger = |label: &str, icon: ActiveBarIcon, menu: FpActiveBarMenu| -> ActiveBarItem<LibraryMessage> {
+
+    // Build a button with BOTH left-action and right-click dropdown.
+    // Mirrors the schematic active bar's `btn` helper. When `left` is
+    // None the left-click also toggles the menu — used for surfaces
+    // (Filter / Snap) that have no obvious "default action".
+    let dual = |label: &str,
+                icon: ActiveBarIcon,
+                menu: FpActiveBarMenu,
+                left: Option<PrimitiveEditorMsg>|
+         -> ActiveBarItem<LibraryMessage> {
+        let on_press = Some(LibraryMessage::PrimitiveEditorEvent {
+            path: path.clone(),
+            msg: left.unwrap_or(PrimitiveEditorMsg::FootprintToggleActiveBarMenu(menu)),
+        });
+        let on_right_press = Some(LibraryMessage::PrimitiveEditorEvent {
+            path: path.clone(),
+            msg: PrimitiveEditorMsg::FootprintToggleActiveBarMenu(menu),
+        });
         ActiveBarItem::Button(ActiveBarButton {
             icon,
             tooltip: label.to_string(),
             enabled: true,
             selected: active == Some(menu),
-            on_press: Some(LibraryMessage::PrimitiveEditorEvent {
-                path: path.clone(),
-                msg: PrimitiveEditorMsg::FootprintToggleActiveBarMenu(menu),
-            }),
-            // Chevron indicator at the bottom-right of the button —
-            // matches the schematic active bar's `dropdown_indicator`.
+            on_press,
+            on_right_press,
             dropdown_indicator: Some(ActiveBarIcon::Svg(ic::icon_chevron_45(tid))),
-            ..ActiveBarButton::default()
         })
     };
+
     vec![
-        trigger(
-            "Selection Filter",
+        // Filter / Snap — no clear default action; both left and right
+        // toggle the dropdown. Same as the schematic's Filter button.
+        dual(
+            "Selection Filter (left or right click for menu)",
             ActiveBarIcon::Svg(ic::icon_filter(tid)),
             FpActiveBarMenu::Filter,
+            None,
         ),
-        trigger(
-            "Snap Options",
-            // No dedicated snap icon yet — borrow the align-grid glyph
-            // since it visually communicates "snap to grid".
+        dual(
+            "Snap Options (left or right click for menu)",
             ActiveBarIcon::Svg(ic::icon_dd_align_grid(tid)),
             FpActiveBarMenu::Snap,
+            None,
         ),
-        trigger(
-            "Place / Move",
+        // Place / Move — left-click runs the last-used Place command
+        // (defaults to Move Selection); right-click opens the menu.
+        dual(
+            "Place / Move (right-click for menu)",
             ActiveBarIcon::Svg(ic::icon_move(tid)),
             FpActiveBarMenu::Place,
+            Some(PrimitiveEditorMsg::FootprintActiveBarStub("Move")),
         ),
-        trigger(
-            "Selection",
+        // Selection — left-click switches to Select tool; right-click
+        // opens the Selection-mode menu (Inside Area / Lasso / etc.).
+        dual(
+            "Select (right-click for selection-mode menu)",
             ActiveBarIcon::Svg(ic::icon_select(tid)),
             FpActiveBarMenu::Select,
+            Some(PrimitiveEditorMsg::FootprintSetPadsTool(
+                crate::library::editor::footprint::state::PadsTool::Select,
+            )),
         ),
-        trigger(
-            "Align / Distribute",
+        // Align — left-click runs Align To Grid; right-click opens the
+        // Align/Distribute menu.
+        dual(
+            "Align / Distribute (right-click for menu)",
             ActiveBarIcon::Svg(ic::icon_align(tid)),
             FpActiveBarMenu::Align,
+            Some(PrimitiveEditorMsg::FootprintActiveBarAlignSelectionToGrid),
         ),
-        trigger(
-            "3D Body",
+        // 3D Body / Text / Shapes — left-click opens the menu since
+        // there's no single "default" placement action.
+        dual(
+            "3D Body (left or right click for menu)",
             ActiveBarIcon::Svg(ic::icon_dd_graphic(tid)),
             FpActiveBarMenu::Body3d,
+            None,
         ),
-        trigger(
-            "Text",
+        dual(
+            "Text (left-click places String, right-click for menu)",
             ActiveBarIcon::Svg(ic::icon_text(tid)),
             FpActiveBarMenu::Text,
+            Some(PrimitiveEditorMsg::FootprintSetPadsTool(
+                crate::library::editor::footprint::state::PadsTool::PlaceString,
+            )),
         ),
-        trigger(
-            "Shapes",
+        dual(
+            "Shapes (right-click for sketch-mode shape menu)",
             ActiveBarIcon::Svg(ic::icon_shapes(tid)),
             FpActiveBarMenu::Shapes,
+            None,
         ),
     ]
 }
