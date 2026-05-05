@@ -3985,6 +3985,9 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintToggleActiveBarMenu(_)
         | PrimitiveEditorMsg::FootprintCloseActiveBarMenu
         | PrimitiveEditorMsg::FootprintActiveBarStub(_)
+        | PrimitiveEditorMsg::FootprintActiveBarToggleSnap(_)
+        | PrimitiveEditorMsg::FootprintActiveBarSetSnappingMode(_)
+        | PrimitiveEditorMsg::FootprintActiveBarSetSnapSubTab(_)
         | PrimitiveEditorMsg::FootprintSetMode(_)
         | PrimitiveEditorMsg::FootprintSketchPlacePoint { .. }
         | PrimitiveEditorMsg::FootprintSketchEditParameter { .. }
@@ -4619,6 +4622,45 @@ pub(crate) fn apply_footprint_primitive_edit(
                 "Active bar: {label} — coming soon (footprint Altium parity)"
             ));
             editor.state.active_bar_menu = None;
+        }
+        PrimitiveEditorMsg::FootprintActiveBarToggleSnap(flag) => {
+            use crate::panels::SnapOptionFlag;
+            let opts = &mut editor.state.snap_options;
+            match flag {
+                SnapOptionFlag::PointHit => opts.point_hit = !opts.point_hit,
+                SnapOptionFlag::HorizontalVertical => {
+                    opts.horizontal_vertical = !opts.horizontal_vertical
+                }
+                SnapOptionFlag::Angle => opts.angle = !opts.angle,
+                SnapOptionFlag::Grid => opts.grid = !opts.grid,
+                SnapOptionFlag::TrackVertices => {
+                    opts.snap_track_vertices = !opts.snap_track_vertices
+                }
+                SnapOptionFlag::TrackLines => opts.snap_track_lines = !opts.snap_track_lines,
+                SnapOptionFlag::ArcCenters => opts.snap_arc_centers = !opts.snap_arc_centers,
+                SnapOptionFlag::Intersections => opts.snap_intersections = !opts.snap_intersections,
+                SnapOptionFlag::PadCenters => opts.snap_pad_centers = !opts.snap_pad_centers,
+                SnapOptionFlag::PadVertices => opts.snap_pad_vertices = !opts.snap_pad_vertices,
+                SnapOptionFlag::PadEdges => opts.snap_pad_edges = !opts.snap_pad_edges,
+                SnapOptionFlag::ViaCenters => opts.snap_via_centers = !opts.snap_via_centers,
+                SnapOptionFlag::Texts => opts.snap_texts = !opts.snap_texts,
+                SnapOptionFlag::Regions => opts.snap_regions = !opts.snap_regions,
+                SnapOptionFlag::FootprintOrigins => {
+                    opts.snap_footprint_origins = !opts.snap_footprint_origins
+                }
+                SnapOptionFlag::Body3dPoints => {
+                    opts.snap_3d_body_points = !opts.snap_3d_body_points
+                }
+            }
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintActiveBarSetSnappingMode(mode) => {
+            editor.state.snapping_mode = mode;
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintActiveBarSetSnapSubTab(sub) => {
+            editor.state.snap_subtab = sub;
+            editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintSketchToolEscape => {
             editor.state.tool_pending = crate::library::editor::footprint::state::ToolPending::Idle;

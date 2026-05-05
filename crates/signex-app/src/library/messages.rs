@@ -1375,6 +1375,21 @@ pub enum PrimitiveEditorMsg {
     /// dispatcher can log a single warn() per click without minting
     /// a separate variant per item.
     FootprintActiveBarStub(&'static str),
+    /// Snap-options toggle from the active-bar Snap dropdown.
+    /// Equivalent to `PanelMsg::FpEditorToggleSnapOption` but flows
+    /// through the editor-event path so the dropdown overlay stays
+    /// in the LibraryMessage envelope.
+    FootprintActiveBarToggleSnap(crate::panels::SnapOptionFlag),
+    /// Snapping-mode pick from the active-bar Snap dropdown
+    /// (All Layers / Current Layer / Off).
+    FootprintActiveBarSetSnappingMode(
+        crate::library::editor::footprint::state::SnappingMode,
+    ),
+    /// Snap sub-tab pick from the active-bar Snap dropdown
+    /// (Grids / Guides / Axes).
+    FootprintActiveBarSetSnapSubTab(
+        crate::library::editor::footprint::state::SnapSubTab,
+    ),
     /// v0.13.2 — Canvas left-click in Sketch mode while a multi-click
     /// drawing tool is active. The dispatcher advances the per-tool
     /// state machine on `tool_pending` and emits the appropriate

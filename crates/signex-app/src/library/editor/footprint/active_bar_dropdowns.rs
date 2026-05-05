@@ -1,43 +1,36 @@
 //! v0.13 — Footprint editor active-bar dropdown menu definitions.
 //!
-//! Each `FpActiveBarMenu` variant maps to a function that returns
-//! the list of `DropdownEntry<LibraryMessage>` rows. The actual
-//! rendering happens in `signex_widgets::active_bar_dropdown::view`,
-//! and the overlay positioning is handled by `pads_active_bar`.
+//! Each `FpActiveBarMenu` variant maps to a function that returns the
+//! list of `DropdownEntry<LibraryMessage>` rows. Rendering happens in
+//! `signex_widgets::active_bar_dropdown::view`; overlay positioning is
+//! handled by the caller (`unified_active_bar`).
 //!
 //! Wiring philosophy: items that map to existing primitives (Selection
-//! Filter pills, Snap toggles, Place tools) emit the real message;
-//! items that need new primitives (Move/Drag/Selection-mode picks /
-//! Body3D / TextFrame) emit `FootprintActiveBarStub` so the action
-//! logs a "coming soon" warn and dismisses the menu cleanly.
+//! Filter pills, Snap toggles, snap-mode picks, Place tools) emit the
+//! real `PrimitiveEditorMsg`; items that need new primitives
+//! (Move/Drag/Selection-mode picks / Body3D / TextFrame) emit
+//! `FootprintActiveBarStub` so the action logs a "coming soon" warn
+//! and dismisses the menu cleanly.
 
 use std::path::PathBuf;
 
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 
-use crate::app::Message;
-use crate::dock::DockMessage;
 use crate::library::editor::footprint::state::{
     FpActiveBarMenu, PadsTool, SelectionFilterKind, SnapSubTab, SnappingMode,
 };
 use crate::library::messages::{LibraryMessage, PrimitiveEditorMsg};
-use crate::panels::{PanelMsg, SnapOptionFlag};
+use crate::panels::SnapOptionFlag;
 
 use super::state::FootprintEditorState;
 
 /// Convenience: route a `PrimitiveEditorMsg` to the editor at `path`.
-fn fp(path: PathBuf, msg: PrimitiveEditorMsg) -> Message {
-    Message::Library(LibraryMessage::PrimitiveEditorEvent { path, msg })
+fn fp(path: PathBuf, msg: PrimitiveEditorMsg) -> LibraryMessage {
+    LibraryMessage::PrimitiveEditorEvent { path, msg }
 }
 
-/// Convenience: route a `PanelMsg` (typically toggle-state messages
-/// shared with the right-dock Properties panel).
-fn panel(msg: PanelMsg) -> Message {
-    Message::Dock(DockMessage::Panel(msg))
-}
-
-/// Convenience: build a "coming soon" stub item.
-fn stub(label: &'static str, path: PathBuf) -> DropdownItem<Message> {
+/// "Coming soon" stub item.
+fn stub(label: &'static str, path: PathBuf) -> DropdownItem<LibraryMessage> {
     DropdownItem::new(
         label,
         fp(path, PrimitiveEditorMsg::FootprintActiveBarStub(label)),
@@ -45,15 +38,11 @@ fn stub(label: &'static str, path: PathBuf) -> DropdownItem<Message> {
 }
 
 /// Build the entries for the dropdown matching `menu`.
-///
-/// `state` carries the live FootprintEditorState so item check-state
-/// reflects the actual flags. `path` identifies which editor publishes
-/// the message (multi-window: each tab has its own state + path).
 pub fn entries(
     menu: FpActiveBarMenu,
     state: &FootprintEditorState,
     path: PathBuf,
-) -> Vec<DropdownEntry<Message>> {
+) -> Vec<DropdownEntry<LibraryMessage>> {
     match menu {
         FpActiveBarMenu::Filter => filter_entries(state, path),
         FpActiveBarMenu::Snap => snap_entries(state, path),
@@ -69,95 +58,80 @@ pub fn entries(
 fn filter_entries(
     state: &FootprintEditorState,
     path: PathBuf,
-) -> Vec<DropdownEntry<Message>> {
+) -> Vec<DropdownEntry<LibraryMessage>> {
     use SelectionFilterKind as K;
     let f = state.selection_filter;
-    let mk_filter_item = |label: &'static str, kind: K| -> DropdownItem<Message> {
-        // Filter toggles route through the panel-level message system
-        // so the existing FpEditorToggleSelectionFilter dispatcher
-        // handles them. The active-bar wraps it in a LibraryMessage
-        // via PanelEvent.
+    let mk = |label: &'static str, kind: K| -> DropdownItem<LibraryMessage> {
         DropdownItem::new(
             label,
-            panel(PanelMsg::FpEditorToggleSelectionFilter(kind)),
+            fp(
+                path.clone(),
+                PrimitiveEditorMsg::FootprintToggleSelectionFilter(kind),
+            ),
         )
         .checked(f.get(kind))
     };
-    let _ = path;
     vec![
         DropdownEntry::Header("Selection Filter".into()),
-        DropdownEntry::Item(mk_filter_item("3D Bodies", K::Bodies3d)),
-        DropdownEntry::Item(mk_filter_item("Keepouts", K::Keepouts)),
-        DropdownEntry::Item(mk_filter_item("Tracks", K::Tracks)),
-        DropdownEntry::Item(mk_filter_item("Arcs", K::Arcs)),
-        DropdownEntry::Item(mk_filter_item("Pads", K::Pads)),
-        DropdownEntry::Item(mk_filter_item("Vias", K::Vias)),
-        DropdownEntry::Item(mk_filter_item("Regions", K::Regions)),
-        DropdownEntry::Item(mk_filter_item("Fills", K::Fills)),
-        DropdownEntry::Item(mk_filter_item("Texts", K::Texts)),
-        DropdownEntry::Item(mk_filter_item("Other", K::Other)),
+        DropdownEntry::Item(mk("3D Bodies", K::Bodies3d)),
+        DropdownEntry::Item(mk("Keepouts", K::Keepouts)),
+        DropdownEntry::Item(mk("Tracks", K::Tracks)),
+        DropdownEntry::Item(mk("Arcs", K::Arcs)),
+        DropdownEntry::Item(mk("Pads", K::Pads)),
+        DropdownEntry::Item(mk("Vias", K::Vias)),
+        DropdownEntry::Item(mk("Regions", K::Regions)),
+        DropdownEntry::Item(mk("Fills", K::Fills)),
+        DropdownEntry::Item(mk("Texts", K::Texts)),
+        DropdownEntry::Item(mk("Other", K::Other)),
     ]
 }
 
 fn snap_entries(
     state: &FootprintEditorState,
     path: PathBuf,
-) -> Vec<DropdownEntry<Message>> {
+) -> Vec<DropdownEntry<LibraryMessage>> {
     let opts = state.snap_options;
-    let mk_snap = |label: &'static str, flag: SnapOptionFlag, on: bool| -> DropdownItem<Message> {
+    let mk_mode = |label: &'static str, mode: SnappingMode| -> DropdownItem<LibraryMessage> {
         DropdownItem::new(
             label,
-            panel(PanelMsg::FpEditorToggleSnapOption(flag)),
+            fp(
+                path.clone(),
+                PrimitiveEditorMsg::FootprintActiveBarSetSnappingMode(mode),
+            ),
         )
-        .checked(on)
+        .checked(state.snapping_mode == mode)
     };
-    let _ = path;
+    let mk_sub = |label: &'static str, sub: SnapSubTab| -> DropdownItem<LibraryMessage> {
+        DropdownItem::new(
+            label,
+            fp(
+                path.clone(),
+                PrimitiveEditorMsg::FootprintActiveBarSetSnapSubTab(sub),
+            ),
+        )
+        .checked(state.snap_subtab == sub)
+    };
+    let mk_snap =
+        |label: &'static str, flag: SnapOptionFlag, on: bool| -> DropdownItem<LibraryMessage> {
+            DropdownItem::new(
+                label,
+                fp(
+                    path.clone(),
+                    PrimitiveEditorMsg::FootprintActiveBarToggleSnap(flag),
+                ),
+            )
+            .checked(on)
+        };
     vec![
         DropdownEntry::Header("Snapping".into()),
-        DropdownEntry::Item(
-            DropdownItem::new(
-                "All Layers",
-                panel(PanelMsg::FpEditorSetSnappingMode(SnappingMode::AllLayers)),
-            )
-            .checked(state.snapping_mode == SnappingMode::AllLayers),
-        ),
-        DropdownEntry::Item(
-            DropdownItem::new(
-                "Current Layer",
-                panel(PanelMsg::FpEditorSetSnappingMode(SnappingMode::CurrentLayer)),
-            )
-            .checked(state.snapping_mode == SnappingMode::CurrentLayer),
-        ),
-        DropdownEntry::Item(
-            DropdownItem::new(
-                "Off",
-                panel(PanelMsg::FpEditorSetSnappingMode(SnappingMode::Off)),
-            )
-            .checked(state.snapping_mode == SnappingMode::Off),
-        ),
+        DropdownEntry::Item(mk_mode("All Layers", SnappingMode::AllLayers)),
+        DropdownEntry::Item(mk_mode("Current Layer", SnappingMode::CurrentLayer)),
+        DropdownEntry::Item(mk_mode("Off", SnappingMode::Off)),
         DropdownEntry::Separator,
         DropdownEntry::Header("Sub-tab".into()),
-        DropdownEntry::Item(
-            DropdownItem::new(
-                "Grids",
-                panel(PanelMsg::FpEditorSetSnapSubTab(SnapSubTab::Grids)),
-            )
-            .checked(state.snap_subtab == SnapSubTab::Grids),
-        ),
-        DropdownEntry::Item(
-            DropdownItem::new(
-                "Guides",
-                panel(PanelMsg::FpEditorSetSnapSubTab(SnapSubTab::Guides)),
-            )
-            .checked(state.snap_subtab == SnapSubTab::Guides),
-        ),
-        DropdownEntry::Item(
-            DropdownItem::new(
-                "Axes",
-                panel(PanelMsg::FpEditorSetSnapSubTab(SnapSubTab::Axes)),
-            )
-            .checked(state.snap_subtab == SnapSubTab::Axes),
-        ),
+        DropdownEntry::Item(mk_sub("Grids", SnapSubTab::Grids)),
+        DropdownEntry::Item(mk_sub("Guides", SnapSubTab::Guides)),
+        DropdownEntry::Item(mk_sub("Axes", SnapSubTab::Axes)),
         DropdownEntry::Separator,
         DropdownEntry::Header("Objects for snapping".into()),
         DropdownEntry::Item(mk_snap(
@@ -219,7 +193,7 @@ fn snap_entries(
     ]
 }
 
-fn place_entries(path: PathBuf) -> Vec<DropdownEntry<Message>> {
+fn place_entries(path: PathBuf) -> Vec<DropdownEntry<LibraryMessage>> {
     vec![
         DropdownEntry::Item(stub("Move", path.clone())),
         DropdownEntry::Item(stub("Drag", path.clone())),
@@ -233,7 +207,7 @@ fn place_entries(path: PathBuf) -> Vec<DropdownEntry<Message>> {
     ]
 }
 
-fn select_entries(path: PathBuf) -> Vec<DropdownEntry<Message>> {
+fn select_entries(path: PathBuf) -> Vec<DropdownEntry<LibraryMessage>> {
     vec![
         DropdownEntry::Item(stub("Select overlapped", path.clone())),
         DropdownEntry::Item(stub("Select next", path.clone())),
@@ -252,7 +226,7 @@ fn select_entries(path: PathBuf) -> Vec<DropdownEntry<Message>> {
     ]
 }
 
-fn align_entries(path: PathBuf) -> Vec<DropdownEntry<Message>> {
+fn align_entries(path: PathBuf) -> Vec<DropdownEntry<LibraryMessage>> {
     vec![
         DropdownEntry::Item(stub("Align…", path.clone())),
         DropdownEntry::Separator,
@@ -282,7 +256,7 @@ fn align_entries(path: PathBuf) -> Vec<DropdownEntry<Message>> {
 fn body3d_entries(
     _state: &FootprintEditorState,
     path: PathBuf,
-) -> Vec<DropdownEntry<Message>> {
+) -> Vec<DropdownEntry<LibraryMessage>> {
     vec![
         DropdownEntry::Item(stub("3D Body", path.clone())),
         DropdownEntry::Item(stub("Extruded 3D Body", path)),
@@ -292,7 +266,7 @@ fn body3d_entries(
 fn text_entries(
     state: &FootprintEditorState,
     path: PathBuf,
-) -> Vec<DropdownEntry<Message>> {
+) -> Vec<DropdownEntry<LibraryMessage>> {
     let active = state.pads_tool;
     vec![
         DropdownEntry::Item(
@@ -309,7 +283,7 @@ fn text_entries(
     ]
 }
 
-fn shapes_entries(path: PathBuf) -> Vec<DropdownEntry<Message>> {
+fn shapes_entries(path: PathBuf) -> Vec<DropdownEntry<LibraryMessage>> {
     // Per user simplification: pure graphics live in Sketch mode
     // only. From Pads mode, Shapes opens the menu but every item is
     // a stub that hints "switch to Sketch mode for graphics".
