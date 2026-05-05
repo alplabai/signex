@@ -275,20 +275,11 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 // a "Custom..." modal launcher for advanced presets.
                 // Pill styling matches the schematic Properties panel's
                 // `preset_chip` / `tag_btn` chrome.
-                col = col.push(props_section_header(
-                    "Selection Filter",
-                    "fp_selection_filter",
-                    collapsed_sections,
-                    primary,
-                    border_c,
-                ));
-                if !fp_is_collapsed("fp_selection_filter", collapsed_sections) {
-                    col = render_fp_selection_filter(col, fp, accent_c, tag_hover);
-                }
-                // v0.13 — Custom Selection Filters (named-preset
-                // editor) lands BELOW the flat pill grid. Reuses the
-                // schematic Properties panel's tabbed multi-preset
-                // widget so the chrome is identical.
+                // v0.13 — flat Selection Filter pill grid removed
+                // (redundant with Custom Selection Filters below + the
+                // active bar's Filter dropdown). The Custom presets
+                // section is the single Properties-panel surface.
+                let _ = (fp, accent_c, tag_hover); // keep imports satisfied
                 col = col.push(super::view_custom_selection_filters_section(
                     custom_filter_presets,
                     active_custom_filter_tab,

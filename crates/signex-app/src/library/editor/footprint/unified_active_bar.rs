@@ -50,11 +50,16 @@ pub fn view<'a>(
 
     let bar = signex_widgets::active_bar::view(items, tokens);
 
-    // Bar centred at the top of the canvas.
-    let bar_layer = container(bar)
-        .padding([6, 10])
-        .center_x(Length::Fill)
-        .align_y(iced::alignment::Vertical::Top);
+    // Bar centred at the top of the canvas. Match the schematic
+    // active-bar mount pattern (column![Space, container(bar)]) so
+    // both editors render at the same vertical offset and the bar
+    // doesn't acquire phantom padding from a wrapper container.
+    let bar_layer = iced::widget::column![
+        iced::widget::Space::new().height(Length::Fixed(4.0)),
+        container(bar)
+            .width(Length::Fill)
+            .align_x(iced::alignment::Horizontal::Center),
+    ];
 
     // 3) Dropdown overlay (when open) — backstop layer captures
     // click-outside; the panel itself hosts the items.

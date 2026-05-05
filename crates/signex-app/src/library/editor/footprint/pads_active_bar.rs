@@ -19,7 +19,7 @@
 
 use std::path::PathBuf;
 
-use iced::widget::{Space, button, row, text};
+use iced::widget::{Space, button, container, row, text};
 use iced::{Border, Color, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
@@ -53,12 +53,16 @@ pub fn mode_switcher_overlay<'a>(
           -> iced::Element<'a, LibraryMessage> {
         let label_color = if active { iced::Color::WHITE } else { text_c };
         button(
-            text(label)
-                .size(11)
-                .color(label_color)
-                .align_x(iced::alignment::Horizontal::Center),
+            container(
+                text(label)
+                    .size(11)
+                    .color(label_color)
+                    .align_x(iced::alignment::Horizontal::Center),
+            )
+            .height(Length::Fixed(22.0))
+            .center_y(Length::Fixed(22.0)),
         )
-        .padding([5, 12])
+        .padding([0, 12])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
             path,
             msg: PrimitiveEditorMsg::FootprintSetMode(target),
@@ -336,10 +340,12 @@ pub fn items(
     // segments at the left of the bar drive mode switching.
 
     let _ = tokens;
+    let _ = delete; // Delete key handles selection deletion — no bar button.
     // v0.13 — Pads-mode active bar simplified. Pure graphics
     // (Line / Arc / Polygon / Region) live in Sketch mode only;
     // PlaceHole is folded into PlacePad (the user picks `kind` via
     // the Properties panel). Place Via is the new through-hole tool.
+    // Delete button removed — Delete key handles it.
     vec![
         select,
         ActiveBarItem::Separator,
@@ -370,8 +376,6 @@ pub fn items(
             }),
             ..ActiveBarButton::default()
         }),
-        ActiveBarItem::Separator,
-        delete,
     ]
 }
 

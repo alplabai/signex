@@ -384,15 +384,16 @@ pub fn view_footprint<'a>(
     // half) regardless of mode. Replaces the per-mode
     // pads_active_bar::view / sketch_mode::active_bar::view
     // mounting that lived here through v0.18.13.
-    let unified_bar = container(crate::library::editor::footprint::unified_active_bar::view(
+    // Wrap directly without extra padding — `unified_active_bar::view`
+    // returns a Column with its own Space + centered bar, mirroring
+    // the schematic active bar's mount pattern. Adding padding here
+    // double-pads the bar and shifts it off centre.
+    let unified_bar = crate::library::editor::footprint::unified_active_bar::view(
         editor,
         theme_id,
         tokens,
         custom_filter_presets,
-    ))
-    .padding([6, 10])
-    .center_x(Length::Fill)
-    .align_y(iced::alignment::Vertical::Top);
+    );
     let body: Element<'a, LibraryMessage> = match editor.state.mode {
         EditorMode::Sketch => {
             let canvas_with_bar = iced::widget::Stack::new()
