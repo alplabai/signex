@@ -35,7 +35,7 @@ pub(super) use properties_parameters::{
     form_input_row, form_int_edit_row, form_label, form_label_row, form_mm_edit_row, form_pick_row,
     justification_grid, net_numeric_row, net_params_add_bar, net_params_header, net_params_tabs,
     param_table_row, preplacement_justification_grid, preset_chip, props_tab_btn, section_hdr,
-    seg_btn, tag_btn, thin_sep,
+    seg_btn, tag_btn, thin_sep, view_custom_selection_filters_section,
 };
 use properties_parameters::{view_properties_general, view_properties_parameters};
 use symbol_editor_properties::view_symbol_editor_properties;
@@ -3044,7 +3044,29 @@ fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     // properties; Sketch-mode entity selected → sketch entity
     // properties; nothing selected → footprint summary + solve stats.
     if let Some(fp) = ctx.footprint_editor.as_ref() {
-        return view_footprint_editor_properties(fp, muted, primary, border_c);
+        let accent_c = crate::styles::ti(ctx.tokens.accent);
+        let tag_hover = {
+            let c = crate::styles::ti(ctx.tokens.accent);
+            Color {
+                r: (c.r * 1.3).min(1.0),
+                g: (c.g * 1.3).min(1.0),
+                b: (c.b * 1.3).min(1.0),
+                ..c
+            }
+        };
+        return view_footprint_editor_properties(
+            fp,
+            muted,
+            primary,
+            border_c,
+            input_bg,
+            input_bdr,
+            ctx.custom_filter_presets.clone(),
+            ctx.active_custom_filter_tab,
+            &ctx.collapsed_sections,
+            accent_c,
+            tag_hover,
+        );
     }
 
     if !ctx.has_schematic {

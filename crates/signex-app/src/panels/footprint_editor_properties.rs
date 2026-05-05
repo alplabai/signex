@@ -6,11 +6,14 @@
 //! Guide / Other) plus the v0.16.4 role sub-forms (Pour / Keepout /
 //! Cutout) and the v0.16.3 Pad placement defaults form.
 
-use iced::widget::{Column, button, container, pick_list, row, scrollable, text, text_input};
-use iced::{Color, Element, Length, Theme};
+use iced::widget::{
+    Column, Space, button, column, container, pick_list, row, scrollable, text, text_input,
+};
+use iced::{Background, Border, Color, Element, Length, Theme};
 
 use super::{
-    FootprintEditorPanelContext, FootprintModeKind, KeepoutKindFlag, PanelMsg, SnapOptionFlag,
+    CollapsedSections, FootprintEditorPanelContext, FootprintModeKind, KeepoutKindFlag, PanelMsg,
+    SnapOptionFlag,
 };
 
 /// v0.14.2 — Properties panel body for the Footprint editor. Switches
@@ -28,6 +31,13 @@ pub(super) fn view_footprint_editor_properties<'a>(
     muted: Color,
     primary: Color,
     border_c: Color,
+    input_bg: Color,
+    input_bdr: Color,
+    custom_filter_presets: Vec<crate::active_bar::CustomFilterPreset>,
+    active_custom_filter_tab: usize,
+    collapsed_sections: &'a CollapsedSections,
+    accent_c: Color,
+    tag_hover: Color,
 ) -> Element<'a, PanelMsg> {
     let mode_label = match fp.mode_kind {
         FootprintModeKind::Pads => "Pads",
@@ -63,25 +73,27 @@ pub(super) fn view_footprint_editor_properties<'a>(
         fp.selected_sketch_entity.as_ref(),
     ) {
         (FootprintModeKind::Pads, Some(pad), _) => {
-            col = col.push(props_section_header("Pad", primary));
-            col = props_kv_row(col, muted, primary, "Number", pad.number.clone());
-            col = props_kv_row(col, muted, primary, "Kind", pad.kind_label.into());
-            col = props_kv_row(col, muted, primary, "Shape", pad.shape_label.into());
+            col = col.push(props_section_header("Pad", primary, border_c));
+            col = props_kv_row(col, muted, input_bg, input_bdr, "Number", pad.number.clone());
+            col = props_kv_row(col, muted, input_bg, input_bdr, "Kind", pad.kind_label.into());
+            col = props_kv_row(col, muted, input_bg, input_bdr, "Shape", pad.shape_label.into());
             col = props_kv_row(
                 col,
                 muted,
-                primary,
+                input_bg,
+                input_bdr,
                 "Size",
                 format!("{:.3} × {:.3} mm", pad.size_mm[0], pad.size_mm[1]),
             );
             col = props_kv_row(
                 col,
                 muted,
-                primary,
+                input_bg,
+                input_bdr,
                 "Position",
                 format!("({:.3}, {:.3}) mm", pad.position_mm[0], pad.position_mm[1]),
             );
-            col = props_kv_row(col, muted, primary, "Layers", pad.layer_count.to_string());
+            col = props_kv_row(col, muted, input_bg, input_bdr, "Layers", pad.layer_count.to_string());
 
             // v0.16.6 — editable rotation row. text_input bound to the
             // selected pad's rotation_deg; routes through
@@ -125,13 +137,14 @@ pub(super) fn view_footprint_editor_properties<'a>(
             );
         }
         (FootprintModeKind::Sketch, _, Some(ent)) => {
-            col = col.push(props_section_header("Sketch entity", primary));
-            col = props_kv_row(col, muted, primary, "Kind", ent.kind_label.into());
+            col = col.push(props_section_header("Sketch entity", primary, border_c));
+            col = props_kv_row(col, muted, input_bg, input_bdr, "Kind", ent.kind_label.into());
             if let Some([x, y]) = ent.position_mm {
                 col = props_kv_row(
                     col,
                     muted,
-                    primary,
+                    input_bg,
+                    input_bdr,
                     "Position",
                     format!("({x:.3}, {y:.3}) mm"),
                 );
@@ -139,7 +152,8 @@ pub(super) fn view_footprint_editor_properties<'a>(
             col = props_kv_row(
                 col,
                 muted,
-                primary,
+                input_bg,
+                input_bdr,
                 "Construction",
                 if ent.construction {
                     "yes".into()
@@ -150,7 +164,8 @@ pub(super) fn view_footprint_editor_properties<'a>(
             col = props_kv_row(
                 col,
                 muted,
-                primary,
+                input_bg,
+                input_bdr,
                 "Attached constraints",
                 ent.attached_constraint_count.to_string(),
             );
@@ -158,7 +173,7 @@ pub(super) fn view_footprint_editor_properties<'a>(
             // v0.16.2 — Role pick_list. Visible when an entity is
             // selected; pick_list value mirrors the entity's
             // currently-attached `*Attr` slot (or `Unassigned`).
-            col = col.push(props_section_header("Role", primary));
+            col = col.push(props_section_header("Role", primary, border_c));
             if let Some(id) = fp.selected_sketch_entity_id {
                 use crate::library::messages::RoleTag;
                 let current = fp.selected_sketch_role;
@@ -191,9 +206,9 @@ pub(super) fn view_footprint_editor_properties<'a>(
             // content + delete the entry without leaving the
             // Properties panel.
             if let Some(silk) = fp.selected_silk_summary.as_ref() {
-                col = col.push(props_section_header("Silk graphic", primary));
-                col = props_kv_row(col, muted, primary, "Kind", silk.kind_label.into());
-                col = props_kv_row(col, muted, primary, "Index", silk.idx.to_string());
+                col = col.push(props_section_header("Silk graphic", primary, border_c));
+                col = props_kv_row(col, muted, input_bg, input_bdr, "Kind", silk.kind_label.into());
+                col = props_kv_row(col, muted, input_bg, input_bdr, "Index", silk.idx.to_string());
                 if let Some(content) = silk.text_content.as_ref() {
                     col = col.push(
                         container(
@@ -247,26 +262,39 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 // v0.18.13 — Altium "Library Options" no-selection
                 // layout (Selection Filter at the top, full 5-section
                 // body assembled after the match). The Footprint
-                // summary remains as auxiliary kv-rows.
-                col = col.push(props_section_header("Selection Filter", primary));
-                col = render_selection_filter(col, fp, primary, muted, border_c);
-                col = col.push(props_section_header("Footprint", primary));
-                col = props_kv_row(col, muted, primary, "Name", fp.footprint_name.clone());
-                col = props_kv_row(col, muted, primary, "Version", fp.version.clone());
-                col = props_kv_row(col, muted, primary, "Mode", mode_label.into());
-                col = props_kv_row(col, muted, primary, "Pads", fp.pad_count.to_string());
+                // summary remains as auxiliary kv-rows. Selection Filter
+                // chrome reuses the schematic's
+                // `view_custom_selection_filters_section` so both
+                // editors render the EXACT same widget.
+                col = col.push(super::view_custom_selection_filters_section(
+                    custom_filter_presets,
+                    active_custom_filter_tab,
+                    collapsed_sections,
+                    muted,
+                    primary,
+                    border_c,
+                    accent_c,
+                    tag_hover,
+                ));
+                col = col.push(props_section_header("Footprint", primary, border_c));
+                col = props_kv_row(col, muted, input_bg, input_bdr, "Name", fp.footprint_name.clone());
+                col = props_kv_row(col, muted, input_bg, input_bdr, "Version", fp.version.clone());
+                col = props_kv_row(col, muted, input_bg, input_bdr, "Mode", mode_label.into());
+                col = props_kv_row(col, muted, input_bg, input_bdr, "Pads", fp.pad_count.to_string());
                 if fp.sketch_entity_count > 0 || fp.sketch_constraint_count > 0 {
                     col = props_kv_row(
                         col,
                         muted,
-                        primary,
+                        input_bg,
+                        input_bdr,
                         "Sketch entities",
                         fp.sketch_entity_count.to_string(),
                     );
                     col = props_kv_row(
                         col,
                         muted,
-                        primary,
+                        input_bg,
+                        input_bdr,
                         "Constraints",
                         fp.sketch_constraint_count.to_string(),
                     );
@@ -288,39 +316,36 @@ pub(super) fn view_footprint_editor_properties<'a>(
     // Earlier (v0.17.0) the section was tucked inside the empty-
     // canvas summary which made the controls disappear the moment
     // the user clicked a pad.
-    col = col.push(props_section_header("Snap Options", primary));
+    col = col.push(props_section_header("Snap Options", primary, border_c));
     // v0.18.14.2 — Altium Snap Options sub-tab row (Grids / Guides /
-    // Axes). The current snap content is the Grids body; Guides /
-    // Axes are placeholders for the v0.18.15 guide + per-axis snap
-    // systems.
+    // Axes). Grids body renders the snap-to-grid checkbox stack;
+    // Guides drives the Guide Manager (v0.18.20); Axes is the
+    // remaining unbuilt surface (per-axis snap on SnapOptions).
     col = render_snap_subtab_row(col, fp, primary, muted, border_c);
     if fp.snap_subtab != crate::library::editor::footprint::state::SnapSubTab::Grids {
+        let hint = match fp.snap_subtab {
+            crate::library::editor::footprint::state::SnapSubTab::Guides => {
+                "Guide Manager below — add horizontal / vertical guides; toggle individual lines via the row checkbox."
+            }
+            crate::library::editor::footprint::state::SnapSubTab::Axes => {
+                "Per-axis snap (Snap Grid X / Y) is unbuilt — uses the Grids step uniformly for now."
+            }
+            _ => "",
+        };
         col = col.push(
-            container(
-                text(match fp.snap_subtab {
-                    crate::library::editor::footprint::state::SnapSubTab::Guides => {
-                        "Guides land in v0.18.15 — Guide Manager below collects horizontal / vertical / arbitrary guide lines."
-                    }
-                    crate::library::editor::footprint::state::SnapSubTab::Axes => {
-                        "Per-axis snap (Snap Grid X / Y) lands in v0.18.15 alongside separate-axis storage on SnapOptions."
-                    }
-                    _ => "",
-                })
-                .size(10)
-                .color(muted),
-            )
-            .padding([4, 8])
-            .width(Length::Fill),
+            container(text(hint).size(10).color(muted))
+                .padding([4, 8])
+                .width(Length::Fill),
         );
         // Sketch-mode-only sections + Library Options sections still
         // render below for the user's other Properties needs even
         // when the Grids sub-tab isn't selected.
         if no_selection {
-            col = col.push(props_section_header("Grid Manager", primary));
+            col = col.push(props_section_header("Grid Manager", primary, border_c));
             col = render_grid_manager(col, fp, primary, muted, border_c);
-            col = col.push(props_section_header("Guide Manager", primary));
+            col = col.push(props_section_header("Guide Manager", primary, border_c));
             col = render_guide_manager(col, fp, primary, muted, border_c);
-            col = col.push(props_section_header("Other", primary));
+            col = col.push(props_section_header("Other", primary, border_c));
             col = render_other_section(col, fp, primary, muted, border_c);
         }
         return scrollable(col).width(Length::Fill).into();
@@ -331,61 +356,33 @@ pub(super) fn view_footprint_editor_properties<'a>(
     // v0.18.15 layer-aware enforcement.
     col = render_snapping_mode_row(col, fp, primary, muted, border_c);
     let opts = fp.snap_options;
-    let mk_snap_check =
-        move |label: &str, flag: SnapOptionFlag, on: bool| -> Element<'static, PanelMsg> {
-            let glyph = if on { "[x]" } else { "[ ]" };
-            button(text(format!("{glyph}  {label}")).size(10).color(primary))
-                .padding([2, 6])
-                .on_press(PanelMsg::FpEditorToggleSnapOption(flag))
-                .style(move |_: &Theme, _| iced::widget::button::Style {
-                    background: Some(iced::Background::Color(iced::Color::from_rgba(
-                        1.0, 1.0, 1.0, 0.02,
-                    ))),
-                    border: iced::Border {
-                        width: 0.0,
-                        radius: 0.0.into(),
-                        color: Color::TRANSPARENT,
-                    },
-                    ..iced::widget::button::Style::default()
-                })
-                .into()
-        };
-    col = col.push(
-        container(mk_snap_check(
-            "Snap to Point",
-            SnapOptionFlag::PointHit,
-            opts.point_hit,
-        ))
-        .padding([0, 8])
-        .width(Length::Fill),
-    );
-    col = col.push(
-        container(mk_snap_check(
-            "Snap horizontal/vertical (5°)",
-            SnapOptionFlag::HorizontalVertical,
-            opts.horizontal_vertical,
-        ))
-        .padding([0, 8])
-        .width(Length::Fill),
-    );
-    col = col.push(
-        container(mk_snap_check(
-            "Snap angle (15° steps)",
-            SnapOptionFlag::Angle,
-            opts.angle,
-        ))
-        .padding([0, 8])
-        .width(Length::Fill),
-    );
-    col = col.push(
-        container(mk_snap_check(
-            &format!("Snap to grid ({:.3} mm)", opts.grid_step_mm),
-            SnapOptionFlag::Grid,
-            opts.grid,
-        ))
-        .padding([0, 8])
-        .width(Length::Fill),
-    );
+    // v0.18.25 — snap toggles use the schematic's `form_check_row`
+    // (real iced checkbox + On/Off label) so the chrome matches the
+    // schematic Properties panel byte-for-byte.
+    col = col.push(super::form_check_row(
+        "Snap to Point",
+        opts.point_hit,
+        PanelMsg::FpEditorToggleSnapOption(SnapOptionFlag::PointHit),
+        muted,
+    ));
+    col = col.push(super::form_check_row(
+        "Snap horizontal/vertical (5°)",
+        opts.horizontal_vertical,
+        PanelMsg::FpEditorToggleSnapOption(SnapOptionFlag::HorizontalVertical),
+        muted,
+    ));
+    col = col.push(super::form_check_row(
+        "Snap angle (15° steps)",
+        opts.angle,
+        PanelMsg::FpEditorToggleSnapOption(SnapOptionFlag::Angle),
+        muted,
+    ));
+    col = col.push(super::form_check_row(
+        &format!("Snap to grid ({:.3} mm)", opts.grid_step_mm),
+        opts.grid,
+        PanelMsg::FpEditorToggleSnapOption(SnapOptionFlag::Grid),
+        muted,
+    ));
     // v0.18.9 — author-controlled grid step. Numeric input bound to
     // `state.snap_options.grid_step_mm`. The G key (v0.18.10)
     // populates this from the standard 1mil…2.5mm ladder; the
@@ -427,11 +424,11 @@ pub(super) fn view_footprint_editor_properties<'a>(
     // Manager / Other) below Snap Options, only on the no-selection
     // body to mirror Altium's per-state Properties surface.
     if no_selection {
-        col = col.push(props_section_header("Grid Manager", primary));
+        col = col.push(props_section_header("Grid Manager", primary, border_c));
         col = render_grid_manager(col, fp, primary, muted, border_c);
-        col = col.push(props_section_header("Guide Manager", primary));
+        col = col.push(props_section_header("Guide Manager", primary, border_c));
         col = render_guide_manager(col, fp, primary, muted, border_c);
-        col = col.push(props_section_header("Other", primary));
+        col = col.push(props_section_header("Other", primary, border_c));
         col = render_other_section(col, fp, primary, muted, border_c);
     }
 
@@ -442,7 +439,7 @@ pub(super) fn view_footprint_editor_properties<'a>(
     // inspector strip that shipped in v0.13.1.
     if fp.mode_kind == FootprintModeKind::Sketch {
         // Parameters
-        col = col.push(props_section_header("Parameters", primary));
+        col = col.push(props_section_header("Parameters", primary, border_c));
         if fp.sketch_parameters.is_empty() {
             col = col.push(
                 container(text("(none — add via expression)").size(10).color(muted))
@@ -486,41 +483,46 @@ pub(super) fn view_footprint_editor_properties<'a>(
         }
 
         // DOF / Last solve
-        col = col.push(props_section_header("DOF / Last solve", primary));
+        col = col.push(props_section_header("DOF / Last solve", primary, border_c));
         col = props_kv_row(
             col,
             muted,
-            primary,
+            input_bg,
+            input_bdr,
             "Sketch entities",
             fp.sketch_entity_count.to_string(),
         );
         col = props_kv_row(
             col,
             muted,
-            primary,
+            input_bg,
+            input_bdr,
             "Constraints",
             fp.sketch_constraint_count.to_string(),
         );
         if let Some(s) = fp.last_solve.as_ref() {
-            col = props_kv_row(col, muted, primary, "Iterations", s.iterations.to_string());
+            col = props_kv_row(col, muted, input_bg, input_bdr, "Iterations", s.iterations.to_string());
             col = props_kv_row(
                 col,
                 muted,
-                primary,
+                input_bg,
+                input_bdr,
                 "Elapsed",
                 format!("{} ms", s.elapsed_ms),
             );
             col = props_kv_row(
                 col,
                 muted,
-                primary,
+                input_bg,
+                input_bdr,
                 "Residual norm",
                 format!("{:.3e}", s.final_residual_norm),
             );
             col = props_kv_row(
                 col,
                 muted,
-                primary,
+                input_bg,
+                input_bdr,
                 "Over-constrained",
                 s.over_constraint_count.to_string(),
             );
@@ -533,7 +535,7 @@ pub(super) fn view_footprint_editor_properties<'a>(
         }
 
         // Solve warnings
-        col = col.push(props_section_header("Solve warnings", primary));
+        col = col.push(props_section_header("Solve warnings", primary, border_c));
         if fp.solve_warnings.is_empty() {
             col = col.push(
                 container(text("(none)").size(10).color(muted))
@@ -567,7 +569,7 @@ pub(super) fn view_footprint_editor_properties<'a>(
     // adds a "PAUSED — TAB to resume" hint but doesn't gate the form
     // itself; the user can adjust before resuming.
     if fp.placement_active {
-        col = col.push(props_section_header("Pad placement", primary));
+        col = col.push(props_section_header("Pad placement", primary, border_c));
         if fp.placement_paused {
             col = col.push(
                 container(
@@ -757,31 +759,19 @@ pub(super) fn view_footprint_editor_properties<'a>(
 
     // Settings + hint — always visible at the bottom of the panel
     // regardless of mode / selection so common toggles stay reachable.
-    col = col.push(props_section_header("Settings", primary));
+    col = col.push(props_section_header("Settings", primary, border_c));
     let auto_fit_label = if fp.auto_fit_courtyard {
         "Auto-fit Courtyard \u{2713}"
     } else {
         "Auto-fit Courtyard"
     };
     let auto_fit_btn = iced::widget::button(text(auto_fit_label).size(10).color(primary))
-        .padding([4, 8])
+        .padding([4, 10])
         .on_press(PanelMsg::FpEditorToggleAutoFitCourtyard)
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(if fp.auto_fit_courtyard {
-                iced::Color::from_rgba(0.40, 0.70, 1.00, 0.18)
-            } else {
-                iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04)
-            })),
-            border: iced::Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: border_c,
-            },
-            ..iced::widget::button::Style::default()
-        });
+        .style(iced::widget::button::secondary);
     col = col.push(container(auto_fit_btn).padding([4, 8]).width(Length::Fill));
 
-    col = col.push(props_section_header("Hint", primary));
+    col = col.push(props_section_header("Hint", primary, border_c));
     let hint = match fp.mode_kind {
         FootprintModeKind::Pads => "Click a pad to edit its properties.",
         FootprintModeKind::Sketch => {
@@ -798,11 +788,16 @@ pub(super) fn view_footprint_editor_properties<'a>(
     scrollable(col).width(Length::Fill).into()
 }
 
-fn props_section_header<'a>(label: &str, primary: Color) -> Element<'a, PanelMsg> {
-    container(text(label.to_string()).size(11).color(primary))
-        .padding([6, 8])
-        .width(Length::Fill)
-        .into()
+/// Section header — delegates to the schematic Properties panel's
+/// `section_hdr` so the footprint editor uses the exact same widget
+/// (chevron prefix + bold title + 1px rule). Wrapper exists only to
+/// add the chevron without polluting every call site.
+fn props_section_header<'a>(
+    label: &str,
+    primary: Color,
+    border_c: Color,
+) -> iced::widget::Column<'a, PanelMsg> {
+    super::section_hdr(&format!("\u{25BC} {label}"), primary, border_c)
 }
 
 /// v0.18.14.3 — Altium "Snapping" 3-segment toggle. `All Layers` is
@@ -924,65 +919,6 @@ fn render_snap_subtab_row<'a>(
     col
 }
 
-/// v0.18.13 — Selection Filter section in Properties. Per the
-/// schematic-Properties convention (kind pills live in the active
-/// bar, the Properties panel surfaces a single "Custom..." button),
-/// this renders just the count of currently-allowed kinds + the
-/// custom-filter launcher. The v0.18.14 unified active bar carries
-/// the per-kind toggle pills.
-fn render_selection_filter<'a>(
-    mut col: Column<'a, PanelMsg>,
-    fp: &'a FootprintEditorPanelContext,
-    primary: Color,
-    muted: Color,
-    border_c: Color,
-) -> Column<'a, PanelMsg> {
-    let f = fp.selection_filter;
-    let allowed: u8 = [
-        f.pads,
-        f.tracks,
-        f.arcs,
-        f.pours,
-        f.bodies_3d,
-        f.keepouts,
-        f.cutouts,
-        f.texts,
-    ]
-    .iter()
-    .filter(|b| **b)
-    .count() as u8;
-    let summary = format!("{allowed}/8 kinds selectable");
-    col = col.push(
-        container(
-            row![
-                text(summary).size(10).color(muted).width(Length::Fill),
-                iced::widget::button(text("Custom…").size(10).color(primary))
-                    .padding([3, 10])
-                    .style(move |_: &Theme, _| iced::widget::button::Style {
-                        background: Some(iced::Background::Color(iced::Color::from_rgba(
-                            1.0, 1.0, 1.0, 0.04,
-                        ))),
-                        border: iced::Border {
-                            width: 1.0,
-                            radius: 3.0.into(),
-                            color: border_c,
-                        },
-                        ..iced::widget::button::Style::default()
-                    })
-                    // Custom modal is queued for v0.18.14 alongside
-                    // the unified active bar; the dispatcher logs a
-                    // warn until it lands.
-                    .on_press(PanelMsg::FpEditorOpenSelectionFilterCustom),
-            ]
-            .spacing(8)
-            .align_y(iced::Alignment::Center),
-        )
-        .padding([2, 8])
-        .width(Length::Fill),
-    );
-    col
-}
-
 /// v0.18.21 — Grid Manager table. One row per `GridDef`. The active
 /// row is highlighted; clicking another row activates it (mirrors its
 /// step / display style onto `snap_options`). The footer's Add /
@@ -1035,19 +971,9 @@ fn render_grid_manager<'a>(
             col = col.push(
                 container(
                     row![
-                        iced::widget::button(text(toggle_label).size(10).color(primary),)
-                            .padding([1, 4])
-                            .style(move |_: &Theme, _| iced::widget::button::Style {
-                                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                                    1.0, 1.0, 1.0, 0.04
-                                ),)),
-                                border: iced::Border {
-                                    width: 1.0,
-                                    radius: 3.0.into(),
-                                    color: border_c,
-                                },
-                                ..iced::widget::button::Style::default()
-                            })
+                        iced::widget::button(text(toggle_label).size(10).color(primary))
+                            .padding([2, 6])
+                            .style(iced::widget::button::secondary)
                             .on_press(PanelMsg::FpEditorGridSetActive(idx))
                             .width(Length::Fixed(40.0)),
                         text(g.name.as_str())
@@ -1162,19 +1088,9 @@ fn render_guide_manager<'a>(
             col = col.push(
                 container(
                     row![
-                        iced::widget::button(text(toggle_label).size(10).color(primary),)
-                            .padding([1, 4])
-                            .style(move |_: &Theme, _| iced::widget::button::Style {
-                                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                                    1.0, 1.0, 1.0, 0.04
-                                ),)),
-                                border: iced::Border {
-                                    width: 1.0,
-                                    radius: 3.0.into(),
-                                    color: border_c,
-                                },
-                                ..iced::widget::button::Style::default()
-                            })
+                        iced::widget::button(text(toggle_label).size(10).color(primary))
+                            .padding([2, 6])
+                            .style(iced::widget::button::secondary)
                             .on_press(PanelMsg::FpEditorGuideToggle(idx))
                             .width(Length::Fixed(24.0)),
                         text(axis_label)
@@ -1255,30 +1171,20 @@ fn render_other_section<'a>(
 }
 
 /// Shared button factory for the Grid / Guide Manager footers.
+/// Uses iced's built-in `button::secondary` so the chrome matches the
+/// schematic Properties panel's action buttons (Reset to Default, etc.).
 fn grid_manager_btn<'a>(
     label: &'static str,
     on_press: Option<PanelMsg>,
     primary: Color,
-    border_c: Color,
+    _border_c: Color,
 ) -> Element<'a, PanelMsg> {
-    let enabled = on_press.is_some();
     let mut btn = iced::widget::button(text(label).size(10).color(primary))
-        .padding([3, 10])
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                1.0, 1.0, 1.0, 0.04,
-            ))),
-            border: iced::Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: border_c,
-            },
-            ..iced::widget::button::Style::default()
-        });
+        .padding([4, 10])
+        .style(iced::widget::button::secondary);
     if let Some(msg) = on_press {
         btn = btn.on_press(msg);
     }
-    let _ = enabled;
     btn.into()
 }
 
@@ -1413,77 +1319,69 @@ fn render_keepout_subform<'a>(
             .width(Length::Fill),
     );
 
-    let mk_check =
-        move |label: &'static str, kind: KeepoutKindFlag, on: bool| -> Element<'a, PanelMsg> {
-            let glyph = if on { "[x]" } else { "[ ]" };
-            button(text(format!("{glyph}  {label}")).size(10).color(primary))
-                .padding([2, 6])
-                .on_press(PanelMsg::FpEditorSetKeepoutKind {
-                    id,
-                    kind,
-                    value: !on,
-                })
-                .style(move |_: &Theme, _| iced::widget::button::Style {
-                    background: Some(iced::Background::Color(iced::Color::from_rgba(
-                        1.0, 1.0, 1.0, 0.02,
-                    ))),
-                    border: iced::Border {
-                        width: 0.0,
-                        radius: 0.0.into(),
-                        color: Color::TRANSPARENT,
-                    },
-                    ..iced::widget::button::Style::default()
-                })
-                .into()
-        };
-
-    let _ = muted; // kept for future per-row dimming
-    col = col.push(
-        container(mk_check(
-            "No routing",
-            KeepoutKindFlag::NoRouting,
-            k.no_routing,
-        ))
-        .padding([0, 8])
-        .width(Length::Fill),
-    );
-    col = col.push(
-        container(mk_check(
-            "No components",
-            KeepoutKindFlag::NoComponents,
-            k.no_components,
-        ))
-        .padding([0, 8])
-        .width(Length::Fill),
-    );
-    col = col.push(
-        container(mk_check(
-            "No copper",
-            KeepoutKindFlag::NoCopper,
-            k.no_copper,
-        ))
-        .padding([0, 8])
-        .width(Length::Fill),
-    );
-    col = col.push(
-        container(mk_check("No vias", KeepoutKindFlag::NoVias, k.no_vias))
-            .padding([0, 8])
-            .width(Length::Fill),
-    );
-    col = col.push(
-        container(mk_check(
-            "No drilling",
-            KeepoutKindFlag::NoDrilling,
-            k.no_drilling,
-        ))
-        .padding([0, 8])
-        .width(Length::Fill),
-    );
-    col = col.push(
-        container(mk_check("No pours", KeepoutKindFlag::NoPours, k.no_pours))
-            .padding([0, 8])
-            .width(Length::Fill),
-    );
+    // v0.18.25 — keepout kinds use the schematic's `form_check_row`
+    // (real iced checkbox + On/Off) so the chrome matches the
+    // schematic Properties panel byte-for-byte.
+    col = col.push(super::form_check_row(
+        "No routing",
+        k.no_routing,
+        PanelMsg::FpEditorSetKeepoutKind {
+            id,
+            kind: KeepoutKindFlag::NoRouting,
+            value: !k.no_routing,
+        },
+        muted,
+    ));
+    col = col.push(super::form_check_row(
+        "No components",
+        k.no_components,
+        PanelMsg::FpEditorSetKeepoutKind {
+            id,
+            kind: KeepoutKindFlag::NoComponents,
+            value: !k.no_components,
+        },
+        muted,
+    ));
+    col = col.push(super::form_check_row(
+        "No copper",
+        k.no_copper,
+        PanelMsg::FpEditorSetKeepoutKind {
+            id,
+            kind: KeepoutKindFlag::NoCopper,
+            value: !k.no_copper,
+        },
+        muted,
+    ));
+    col = col.push(super::form_check_row(
+        "No vias",
+        k.no_vias,
+        PanelMsg::FpEditorSetKeepoutKind {
+            id,
+            kind: KeepoutKindFlag::NoVias,
+            value: !k.no_vias,
+        },
+        muted,
+    ));
+    col = col.push(super::form_check_row(
+        "No drilling",
+        k.no_drilling,
+        PanelMsg::FpEditorSetKeepoutKind {
+            id,
+            kind: KeepoutKindFlag::NoDrilling,
+            value: !k.no_drilling,
+        },
+        muted,
+    ));
+    col = col.push(super::form_check_row(
+        "No pours",
+        k.no_pours,
+        PanelMsg::FpEditorSetKeepoutKind {
+            id,
+            kind: KeepoutKindFlag::NoPours,
+            value: !k.no_pours,
+        },
+        muted,
+    ));
 
     col
 }
@@ -1541,62 +1439,31 @@ fn render_cutout_subform<'a>(
         .width(Length::Fill),
     );
 
-    let through_label = if c.through {
-        "[x]  Through (full board depth)"
-    } else {
-        "[ ]  Through (full board depth)"
-    };
-    let through_value = !c.through;
-    col = col.push(
-        container(
-            button(text(through_label).size(10).color(primary))
-                .padding([2, 6])
-                .on_press(PanelMsg::FpEditorSetCutoutThrough {
-                    id,
-                    value: through_value,
-                })
-                .style(move |_: &Theme, _| iced::widget::button::Style {
-                    background: Some(iced::Background::Color(iced::Color::from_rgba(
-                        1.0, 1.0, 1.0, 0.02,
-                    ))),
-                    border: iced::Border {
-                        width: 0.0,
-                        radius: 0.0.into(),
-                        color: Color::TRANSPARENT,
-                    },
-                    ..iced::widget::button::Style::default()
-                }),
-        )
-        .padding([0, 8])
-        .width(Length::Fill),
-    );
+    col = col.push(super::form_check_row(
+        "Through (full board depth)",
+        c.through,
+        PanelMsg::FpEditorSetCutoutThrough {
+            id,
+            value: !c.through,
+        },
+        muted,
+    ));
 
     col
 }
 
+/// Read-only key-value row — delegates to the schematic Properties
+/// panel's `form_input_row` so the footprint editor uses identical
+/// chrome (orange-accent border, dark-blue selection-tinted background).
+/// Returns the updated Column to keep the chained-update call style
+/// the rest of this module uses.
 fn props_kv_row<'a>(
-    mut col: Column<'a, PanelMsg>,
-    muted: Color,
-    primary: Color,
+    col: Column<'a, PanelMsg>,
+    label_c: Color,
+    input_bg: Color,
+    input_bdr: Color,
     key: &str,
     value: String,
 ) -> Column<'a, PanelMsg> {
-    col = col.push(
-        container(
-            row![
-                text(key.to_string())
-                    .size(10)
-                    .color(muted)
-                    .width(Length::FillPortion(2)),
-                text(value)
-                    .size(10)
-                    .color(primary)
-                    .width(Length::FillPortion(3)),
-            ]
-            .spacing(4),
-        )
-        .padding([3, 8])
-        .width(Length::Fill),
-    );
-    col
+    col.push(super::form_input_row(key, &value, label_c, input_bg, input_bdr))
 }

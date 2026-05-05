@@ -18,53 +18,37 @@ use iced_aw::{NumberInput, Wrap};
 use std::sync::OnceLock;
 
 use super::{
-    LABEL_W, PAPER_SIZES, PROPERTY_CONTROL_PORTION, PROPERTY_LABEL_PORTION, PROPERTY_ROW_PAD_X,
-    PageFormatMode, PageOrigin, PanelContext, PanelMsg, SheetColor, collapsible_section,
-    paper_dimensions, property_label,
+    CollapsedSections, LABEL_W, PAPER_SIZES, PROPERTY_CONTROL_PORTION, PROPERTY_LABEL_PORTION,
+    PROPERTY_ROW_PAD_X, PageFormatMode, PageOrigin, PanelContext, PanelMsg, SheetColor,
+    collapsible_section, paper_dimensions, property_label,
 };
 use signex_types::coord::Unit;
 
-pub fn view_properties_general<'a>(
-    ctx: &'a PanelContext,
+/// Custom Selection Filters collapsible section — tabbed editor for up to
+/// `CUSTOM_FILTER_PRESET_LIMIT` named presets. Pulled out of
+/// `view_properties_general` so the schematic Properties panel and the
+/// Footprint editor's Properties panel render the EXACT same widget.
+pub fn view_custom_selection_filters_section<'a>(
+    presets: Vec<crate::active_bar::CustomFilterPreset>,
+    active_custom_filter_tab: usize,
+    collapsed_sections: &'a CollapsedSections,
     muted: Color,
     primary: Color,
     border_c: Color,
+    accent_c: Color,
+    tag_hover: Color,
 ) -> Column<'a, PanelMsg> {
-    // Derive button/input colors from tokens (Copy values captured in closures)
-    let input_bg = crate::styles::ti(ctx.tokens.selection); // deep blue tint
-    let input_bdr = crate::styles::ti(ctx.tokens.accent);
-    let tag_hover = {
-        let c = crate::styles::ti(ctx.tokens.accent);
-        Color {
-            r: (c.r * 1.3).min(1.0),
-            g: (c.g * 1.3).min(1.0),
-            b: (c.b * 1.3).min(1.0),
-            ..c
-        }
-    };
-    let seg_hover = crate::styles::ti(ctx.tokens.hover);
-
-    let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
-
-    // Custom Selection Filters (collapsible) — tabbed editor for up to
-    // CUSTOM_FILTER_PRESET_LIMIT named presets that also surface as
-    // shortcut buttons in the Active Bar's filter dropdown.
-    {
-        use crate::active_bar::{CUSTOM_FILTER_PRESET_LIMIT, SelectionFilter};
-        let presets = ctx.custom_filter_presets.clone();
-        let active_tab = ctx
-            .active_custom_filter_tab
-            .min(presets.len().saturating_sub(1));
-        let muted_c = muted;
-        let primary_c = primary;
-        // Border colour for tabs and member chips — matches the Active
-        // Bar Filter dropdown's chip border treatment so the section
-        // reads as one cohesive piece.
-        let accent_c = crate::styles::ti(ctx.tokens.accent);
-        col = col.push(collapsible_section(
+    use crate::active_bar::{CUSTOM_FILTER_PRESET_LIMIT, SelectionFilter};
+    let active_tab = active_custom_filter_tab.min(presets.len().saturating_sub(1));
+    let muted_c = muted;
+    let primary_c = primary;
+    Column::new()
+        .spacing(0)
+        .width(Length::Fill)
+        .push(collapsible_section(
             "prop_sel_filter",
             "Custom Selection Filters",
-            &ctx.collapsed_sections,
+            collapsed_sections,
             primary,
             border_c,
             move || {
@@ -88,9 +72,6 @@ pub fn view_properties_general<'a>(
                     );
                     return c;
                 }
-                // Tab strip: one tab per preset + a trailing "+" tab
-                // when room remains. Each tab is its own button — the
-                // active one gets the accent border, others a muted one.
                 let mut tabs = iced::widget::Row::new()
                     .spacing(2)
                     .align_y(iced::Alignment::Center);
@@ -116,7 +97,6 @@ pub fn view_properties_general<'a>(
                     );
                 }
                 c = c.push(container(tabs).padding([4, 8]));
-                // Active tab body — name input + chips + delete.
                 let preset = &presets[active_tab];
                 let included: std::collections::HashSet<SelectionFilter> =
                     preset.filters.iter().copied().collect();
@@ -149,8 +129,45 @@ pub fn view_properties_general<'a>(
                 );
                 c
             },
-        ));
-    }
+        ))
+}
+
+pub fn view_properties_general<'a>(
+    ctx: &'a PanelContext,
+    muted: Color,
+    primary: Color,
+    border_c: Color,
+) -> Column<'a, PanelMsg> {
+    // Derive button/input colors from tokens (Copy values captured in closures)
+    let input_bg = crate::styles::ti(ctx.tokens.selection); // deep blue tint
+    let input_bdr = crate::styles::ti(ctx.tokens.accent);
+    let tag_hover = {
+        let c = crate::styles::ti(ctx.tokens.accent);
+        Color {
+            r: (c.r * 1.3).min(1.0),
+            g: (c.g * 1.3).min(1.0),
+            b: (c.b * 1.3).min(1.0),
+            ..c
+        }
+    };
+    let seg_hover = crate::styles::ti(ctx.tokens.hover);
+
+    let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
+
+    // Custom Selection Filters — shared widget reused by the Footprint
+    // editor's Properties panel so both editors render the EXACT same
+    // chrome (tabs, chips, name input, accent border).
+    let accent_c = crate::styles::ti(ctx.tokens.accent);
+    col = col.push(view_custom_selection_filters_section(
+        ctx.custom_filter_presets.clone(),
+        ctx.active_custom_filter_tab,
+        &ctx.collapsed_sections,
+        muted,
+        primary,
+        border_c,
+        accent_c,
+        tag_hover,
+    ));
 
     // General (collapsible)
     {
