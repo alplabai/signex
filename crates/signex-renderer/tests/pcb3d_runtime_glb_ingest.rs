@@ -2,8 +2,10 @@
 
 use signex_gfx::scene::Scene;
 use signex_renderer::pcb3d::{
-    emit_opaque_pass_preview, ingest_runtime_glb, GlbSource, ModelTransform, OpaquePassLayout,
-    RuntimeGlbIngestError, RuntimeGlbIngestRequest, RuntimeMaterialPolicy,
+    check_projection_alignment, emit_opaque_pass_preview, emit_projection_pass,
+    ingest_runtime_glb, GlbSource, ModelTransform, OpaquePassLayout, ProjectionAlignmentError,
+    ProjectionBounds, ProjectionPassConfig, RuntimeGlbIngestError, RuntimeGlbIngestRequest,
+    RuntimeMaterialPolicy,
 };
 use signex_renderer::theme::ResolvedTheme;
 use std::fs;
@@ -249,4 +251,138 @@ fn pcb3d_runtime_glb_opaque_pass_preview_emits_one_polygon_per_staged_primitive(
         assert_eq!(scene.polygons[1].vertices.len(), 4);
         assert!(scene.polygons[1].vertices[0][0] > scene.polygons[0].vertices[0][0]);
         assert!(scene.polygons[0].stroke_color.is_some());
+}
+
+// ---------------------------------------------------------------------------
+// Task 03: Projection texture pass alignment checks
+// ---------------------------------------------------------------------------
+
+#[test]
+fn pcb3d_projection_alignment_rejects_zero_area_footprint() {
+    let config = ProjectionPassConfig {
+        footprint_bounds: ProjectionBounds {
+            min_mm: [0.0, 0.0],
+            max_mm: [0.0, 5.0],
+        },
+        ..ProjectionPassConfig::default()
+    };
+    let err = check_projection_alignment("R1", &config).unwrap_err();
+    assert_eq!(
+        err,
+        ProjectionAlignmentError::ZeroAreaFootprint {
+            model_id: "R1".to_string()
+        }
+    );
+}
+
+#[test]
+fn pcb3d_projection_alignment_rejects_uv_out_of_range() {
+    let config = ProjectionPassConfig {
+        uv_bounds: ProjectionBounds {
+            min_mm: [0.0, 0.0],
+            max_mm: [1.5, 1.0],
+        },
+        ..ProjectionPassConfig::default()
+    };
+    let err = check_projection_alignment("R2", &config).unwrap_err();
+    assert!(matches!(
+        err,
+        ProjectionAlignmentError::UvBoundsOutOfRange { axis: "x", which: "max", .. }
+    ));
+}
+
+#[test]
+fn pcb3d_projection_alignment_rejects_inverted_uv_bounds() {
+    let config = ProjectionPassConfig {
+        uv_bounds: ProjectionBounds {
+            min_mm: [0.8, 0.0],
+            max_mm: [0.2, 1.0],
+        },
+        ..ProjectionPassConfig::default()
+    };
+    let err = check_projection_alignment("R3", &config).unwrap_err();
+    assert!(matches!(
+        err,
+        ProjectionAlignmentError::UvBoundsInverted { axis: "x", .. }
+    ));
+}
+
+#[test]
+fn pcb3d_projection_alignment_accepts_valid_config() {
+    let result = check_projection_alignment("R4", &ProjectionPassConfig::default());
+    assert!(result.is_ok(), "valid default config must pass alignment check");
+}
+
+#[test]
+fn pcb3d_projection_pass_emits_to_overlay_polygons_not_base_polygons() {
+    let json = r#"{
+      "asset": { "version": "2.0" },
+      "scenes": [{ "nodes": [0] }],
+      "nodes": [{ "mesh": 0 }],
+      "meshes": [{ "primitives": [{ "attributes": {} }] }]
+    }"#;
+    let model = ingest_runtime_glb(request("U10", GlbSource::Bytes(make_glb_with_json(json))))
+        .expect("valid payload for projection pass ordering test");
+    let mut scene = Scene::default();
+    let theme = ResolvedTheme::builtin_default();
+
+    emit_opaque_pass_preview(&model, &theme, &mut scene, OpaquePassLayout::default());
+    let opaque_count = scene.polygons.len();
+
+    emit_projection_pass(&model, &theme, &mut scene, ProjectionPassConfig::default())
+        .expect("valid projection config");
+
+    assert_eq!(scene.polygons.len(), opaque_count, "base polygons must not change after projection pass");
+    assert!(!scene.overlay_polygons.is_empty(), "projection pass must populate overlay_polygons");
+}
+
+#[test]
+fn pcb3d_projection_pass_emits_one_overlay_per_staged_primitive() {
+    let json = r#"{
+      "asset": { "version": "2.0" },
+      "scenes": [{ "nodes": [0, 1] }],
+      "nodes": [{ "mesh": 0 }, { "mesh": 1 }],
+      "meshes": [
+        { "primitives": [{ "attributes": {} }, { "attributes": {} }] },
+        { "primitives": [{ "attributes": {} }] }
+      ]
+    }"#;
+    let model = ingest_runtime_glb(request("U11", GlbSource::Bytes(make_glb_with_json(json))))
+        .expect("valid multi-primitive payload");
+    let mut scene = Scene::default();
+    let theme = ResolvedTheme::builtin_default();
+
+    emit_projection_pass(&model, &theme, &mut scene, ProjectionPassConfig::default())
+        .expect("valid projection config");
+
+    assert_eq!(
+        scene.overlay_polygons.len(),
+        model.mesh_staging.opaque_primitives.len(),
+        "must emit exactly one overlay polygon per staged primitive"
+    );
+    assert!(scene.overlay_polygons[0].stroke_color.is_some());
+}
+
+#[test]
+fn pcb3d_projection_pass_returns_error_on_misaligned_config() {
+    let json = valid_minimal_json();
+    let model = ingest_runtime_glb(request("U12", GlbSource::Bytes(make_glb_with_json(json))))
+        .expect("valid payload");
+    let mut scene = Scene::default();
+    let theme = ResolvedTheme::builtin_default();
+
+    let bad_config = ProjectionPassConfig {
+        uv_bounds: ProjectionBounds {
+            min_mm: [0.0, 0.0],
+            max_mm: [0.0, 1.0],
+        },
+        ..ProjectionPassConfig::default()
+    };
+
+    let result = emit_projection_pass(&model, &theme, &mut scene, bad_config);
+    assert!(result.is_err(), "inverted UV must return alignment error");
+    assert!(
+        scene.overlay_polygons.is_empty(),
+        "overlay_polygons must not be modified when alignment check fails"
+    );
 }
