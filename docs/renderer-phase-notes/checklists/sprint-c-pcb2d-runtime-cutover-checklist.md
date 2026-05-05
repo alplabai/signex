@@ -13,17 +13,17 @@
 - [x] Zone compositing order hardened with benchmark fixture guard.
 - [x] App dirty hint adapter integrated into dispatch path.
 
-## Cutover tasks (pending)
+## Cutover tasks
 
 - [ ] Replace `signex_render::pcb::PcbRenderSnapshot` usage in app PCB canvas state.
-- [ ] Replace legacy PCB draw call path with `signex-renderer` scene build path.
-- [ ] Route runtime invalidation updates through new PCB dirty family mapping.
+- [x] Replace legacy PCB draw call path with `signex-renderer` scene build path.
+- [x] Route runtime invalidation updates through new PCB dirty family mapping.
 - [ ] Remove remaining direct legacy PCB API calls in app PCB modules.
 
 ## Validation
 
-- [ ] `cargo test -p signex-renderer -- --nocapture` passes.
-- [ ] Targeted app tests for PCB dirty adapter and PCB canvas interactions pass.
+- [x] `cargo test -p signex-renderer -- --nocapture` passes.
+- [x] Targeted app tests for PCB dirty adapter and PCB canvas interactions pass.
 - [ ] Snapshot/fixture parity checks confirm no regression in overlay/zone ordering.
 
 ## Exit gate
