@@ -4151,6 +4151,42 @@ fn view_footprint_editor_properties<'a>(
     // canvas summary which made the controls disappear the moment
     // the user clicked a pad.
     col = col.push(props_section_header("Snap Options", primary));
+    // v0.18.14.2 — Altium Snap Options sub-tab row (Grids / Guides /
+    // Axes). The current snap content is the Grids body; Guides /
+    // Axes are placeholders for the v0.18.15 guide + per-axis snap
+    // systems.
+    col = render_snap_subtab_row(col, fp, primary, muted, border_c);
+    if fp.snap_subtab != crate::library::editor::footprint::state::SnapSubTab::Grids {
+        col = col.push(
+            container(
+                text(match fp.snap_subtab {
+                    crate::library::editor::footprint::state::SnapSubTab::Guides => {
+                        "Guides land in v0.18.15 — Guide Manager below collects horizontal / vertical / arbitrary guide lines."
+                    }
+                    crate::library::editor::footprint::state::SnapSubTab::Axes => {
+                        "Per-axis snap (Snap Grid X / Y) lands in v0.18.15 alongside separate-axis storage on SnapOptions."
+                    }
+                    _ => "",
+                })
+                .size(10)
+                .color(muted),
+            )
+            .padding([4, 8])
+            .width(Length::Fill),
+        );
+        // Sketch-mode-only sections + Library Options sections still
+        // render below for the user's other Properties needs even
+        // when the Grids sub-tab isn't selected.
+        if no_selection {
+            col = col.push(props_section_header("Grid Manager", primary));
+            col = render_grid_manager(col, fp, primary, muted, border_c);
+            col = col.push(props_section_header("Guide Manager", primary));
+            col = render_guide_manager(col, primary, muted, border_c);
+            col = col.push(props_section_header("Other", primary));
+            col = render_other_section(col, fp, primary, muted, border_c);
+        }
+        return scrollable(col).width(Length::Fill).into();
+    }
     let opts = fp.snap_options;
     let mk_snap_check = move |label: &str,
                               flag: SnapOptionFlag,
@@ -4635,6 +4671,60 @@ fn props_section_header<'a>(label: &str, primary: Color) -> Element<'a, PanelMsg
         .padding([6, 8])
         .width(Length::Fill)
         .into()
+}
+
+/// v0.18.14.2 — Snap Options sub-tab strip (Grids / Guides / Axes).
+/// Mirrors the schematic Properties tab-row visual rhythm. The
+/// active sub-tab paints with the accent background; clicking a
+/// pill sets `state.snap_subtab` via `FpEditorSetSnapSubTab`.
+fn render_snap_subtab_row<'a>(
+    mut col: Column<'a, PanelMsg>,
+    fp: &'a FootprintEditorPanelContext,
+    primary: Color,
+    muted: Color,
+    border_c: Color,
+) -> Column<'a, PanelMsg> {
+    use crate::library::editor::footprint::state::SnapSubTab as T;
+    let current = fp.snap_subtab;
+    let mk_pill = move |label: &'static str, target: T, active: bool|
+          -> Element<'static, PanelMsg> {
+        let bg = if active {
+            iced::Color::from_rgba(0.40, 0.70, 1.00, 0.18)
+        } else {
+            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04)
+        };
+        let txt = if active { primary } else { muted };
+        iced::widget::button(
+            container(text(label).size(10).color(txt))
+                .padding([2, 8]),
+        )
+        .padding(0)
+        .on_press(PanelMsg::FpEditorSetSnapSubTab(target))
+        .style(move |_: &Theme, _| iced::widget::button::Style {
+            background: Some(iced::Background::Color(bg)),
+            border: iced::Border {
+                width: 1.0,
+                radius: 3.0.into(),
+                color: border_c,
+            },
+            ..iced::widget::button::Style::default()
+        })
+        .into()
+    };
+    col = col.push(
+        container(
+            row![
+                mk_pill("Grids", T::Grids, current == T::Grids),
+                mk_pill("Guides", T::Guides, current == T::Guides),
+                mk_pill("Axes", T::Axes, current == T::Axes),
+            ]
+            .spacing(4)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([2, 8])
+        .width(Length::Fill),
+    );
+    col
 }
 
 /// v0.18.13 — Selection Filter section in Properties. Per the
