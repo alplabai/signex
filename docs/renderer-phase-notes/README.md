@@ -29,6 +29,7 @@ This folder is the canonical execution and evidence tracker for the clean-room s
 | C (prep) | PCB 3D and model import preparation | done | [issues/milestone-c-pcb3d-model-import-issue.md](issues/milestone-c-pcb3d-model-import-issue.md) | [checklists/milestone-c-pcb3d-model-import-checklist.md](checklists/milestone-c-pcb3d-model-import-checklist.md) |
 | C (exec) | PCB 3D runtime execution | done | [issues/milestone-c-pcb3d-runtime-execution-issue.md](issues/milestone-c-pcb3d-runtime-execution-issue.md) | [checklists/milestone-c-pcb3d-runtime-execution-checklist.md](checklists/milestone-c-pcb3d-runtime-execution-checklist.md) |
 | D | `signex-model-import` pipeline preparation | not_started | [issues/milestone-d-model-import-issue.md](issues/milestone-d-model-import-issue.md) | [checklists/milestone-d-model-import-checklist.md](checklists/milestone-d-model-import-checklist.md) |
+| E | `signex-3d-model-importer` → `signex-renderer` runtime integration | not_started | [issues/milestone-e-renderer-importer-integration-issue.md](issues/milestone-e-renderer-importer-integration-issue.md) | [checklists/milestone-e-renderer-importer-integration-checklist.md](checklists/milestone-e-renderer-importer-integration-checklist.md) |
 
 ## Numbering and naming rules
 
