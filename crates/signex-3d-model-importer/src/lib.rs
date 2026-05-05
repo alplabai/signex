@@ -1,7 +1,9 @@
 pub mod cache;
 pub mod error;
+pub mod gltf;
 pub mod glb;
 pub mod normalize;
+pub mod step;
 pub mod vrml;
 
 use std::path::{Path, PathBuf};
@@ -100,7 +102,7 @@ pub fn import_model(request: ModelImportRequest) -> Result<ModelImportResult, Mo
     }
 
     // Cache miss: convert
-    let (glb_bytes, warnings, mesh_count) = match format {
+    let (glb_bytes, warnings, mesh_count, primitive_count) = match format {
         SourceFormat::Vrml => {
             let meshes = vrml::load(source_path)?;
             let mesh_count = meshes.len();
@@ -111,7 +113,33 @@ pub fn import_model(request: ModelImportRequest) -> Result<ModelImportResult, Mo
                 request.converter_version,
             );
             let glb = glb::writer::write_glb(&json, &bin)?;
-            (glb, vec![], mesh_count)
+            (glb, vec![], mesh_count, mesh_count)
+        }
+        SourceFormat::Step => {
+            let result = step::load(source_path)?;
+            let mesh_count = result.meshes.len();
+            let mut warnings = Vec::new();
+            for entity in result.unsupported_entities {
+                warnings.push(ImportWarning::UnsupportedGeometry { entity_type: entity });
+            }
+            let (json, bin) = normalize::meshes_to_gltf(
+                &result.meshes,
+                "step",
+                &source_path.to_string_lossy(),
+                request.converter_version,
+            );
+            let glb = glb::writer::write_glb(&json, &bin)?;
+            (glb, warnings, mesh_count, mesh_count)
+        }
+        SourceFormat::Gltf => {
+            let wrapped = gltf::load(source_path, request.converter_version)?;
+            let glb = glb::writer::write_glb(&wrapped.json_bytes, &wrapped.bin_bytes)?;
+            (
+                glb,
+                wrapped.warnings,
+                wrapped.mesh_count,
+                wrapped.primitive_count,
+            )
         }
         SourceFormat::Glb => {
             // GLB pass-through: copy as-is
@@ -119,12 +147,7 @@ pub fn import_model(request: ModelImportRequest) -> Result<ModelImportResult, Mo
                 path: source_path.clone(),
                 message: e.to_string(),
             })?;
-            (bytes, vec![], 0)
-        }
-        SourceFormat::Step | SourceFormat::Gltf => {
-            return Err(ModelImportError::UnsupportedFormat {
-                extension: format_extension(&format),
-            });
+            (bytes, vec![], 0, 0)
         }
     };
 
@@ -148,7 +171,7 @@ pub fn import_model(request: ModelImportRequest) -> Result<ModelImportResult, Mo
             source_mtime,
             converter_version: request.converter_version.to_owned(),
             mesh_count,
-            primitive_count: mesh_count, // 1 primitive per mesh in E1
+            primitive_count,
             byte_len,
         },
     })
@@ -170,11 +193,3 @@ fn detect_format(path: &Path) -> Result<SourceFormat, ModelImportError> {
     }
 }
 
-fn format_extension(format: &SourceFormat) -> String {
-    match format {
-        SourceFormat::Vrml => "wrl".to_owned(),
-        SourceFormat::Step => "step".to_owned(),
-        SourceFormat::Gltf => "gltf".to_owned(),
-        SourceFormat::Glb => "glb".to_owned(),
-    }
-}
