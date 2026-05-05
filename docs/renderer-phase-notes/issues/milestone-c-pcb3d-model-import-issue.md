@@ -21,7 +21,7 @@ Prepare Milestone C execution boundaries, architecture contracts, and validation
  - [x] Task 02: Import pipeline crate contract is documented.
 - [x] Task 03: Format conversion and cache-key policy are documented.
 - [x] Task 04: Runtime GLB ingestion interface and constraints are documented.
-- [ ] Task 05: Hybrid 3D rendering pass model is documented.
+- [x] Task 05: Hybrid 3D rendering pass model is documented.
 - [ ] Task 06: Milestone C validation and benchmark plan is documented.
 - [ ] Task 07: Milestone C implementation handoff package is documented.
 
@@ -30,7 +30,7 @@ Prepare Milestone C execution boundaries, architecture contracts, and validation
 - [ ] Milestone C scope, assumptions, and non-goals are explicit and testable.
 - [x] Runtime path clearly accepts GLB only, with no direct STEP/VRML parse in runtime.
 - [x] Import conversion and cache policy are deterministic and implementation-ready.
-- [ ] Hybrid rendering model defines clear pass ordering and data ownership boundaries.
+- [x] Hybrid rendering model defines clear pass ordering and data ownership boundaries.
 - [ ] Validation plan includes fixture classes, parity checks, and measurable thresholds.
 - [ ] Milestone C starts with a clear vertical slice and readiness checklist.
 
