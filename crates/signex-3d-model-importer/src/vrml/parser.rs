@@ -88,7 +88,7 @@ impl Transform {
     }
 
     fn compose_translation(parent: &Transform, translation: [f32; 3], scale: [f32; 3]) -> Transform {
-        // Build a simple TRS matrix (no rotation for Milestone D E1 — KiCad WRL
+        // Build a simple TRS matrix (no rotation for Milestone D E1 - WRL
         // root transforms are axis-aligned for most components).
         // T * S applied on top of parent.
         let mut m = parent.m;
