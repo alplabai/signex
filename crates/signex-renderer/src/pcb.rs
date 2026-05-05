@@ -212,10 +212,23 @@ fn sort_zone_stack(zones: &mut [ZonePolygonInput]) {
         a.layer_rank
             .cmp(&b.layer_rank)
             .then_with(|| a.layer_name.cmp(&b.layer_name))
-            .then_with(|| a.priority.cmp(&b.priority))
-            .then_with(|| a.net.cmp(&b.net))
+            .then_with(|| zone_layer_top_composite_key(a).cmp(&zone_layer_top_composite_key(b)))
             .then_with(|| a.source_order.cmp(&b.source_order))
     });
+}
+
+fn zone_layer_top_composite_key(zone: &ZonePolygonInput) -> (u32, u8, u32) {
+    // Ascending order is intentional: lower priority and net bucket are painted first,
+    // so higher-priority connected zones land on top in the same layer stack.
+    (zone.priority, zone_connected_bucket(zone.net), zone.net)
+}
+
+fn zone_connected_bucket(net: u32) -> u8 {
+    if net == 0 {
+        0
+    } else {
+        1
+    }
 }
 
 fn is_rule_area_zone(zone: &Zone) -> bool {
@@ -676,8 +689,9 @@ impl ViewRenderer for PcbRenderer {
 #[cfg(test)]
 mod tests {
     use super::{
-        dirty_flags_for_event, dirty_flags_for_events, dirty_flags_for_families, DrcMarkerInput,
-        PcbAppEvent, PcbRenderer, PcbSliceFamily, PcbSnapshot, RatsnestInput,
+        dirty_flags_for_event, dirty_flags_for_events, dirty_flags_for_families,
+        sort_zone_stack, DrcMarkerInput, PcbAppEvent, PcbRenderer, PcbSliceFamily,
+        PcbSnapshot, RatsnestInput, ZonePolygonInput,
     };
     use crate::schematic::ViewRenderer;
     use crate::theme::ResolvedTheme;
@@ -901,6 +915,44 @@ mod tests {
         assert_eq!(scene.overlay_polygons.len(), 2);
         assert_eq!(scene.overlay_circles.len(), 2);
         assert_eq!(scene.overlay_lines.len(), 3);
+    }
+
+    #[test]
+    fn pcb_zone_sort_prefers_priority_then_connected_net_for_layer_top() {
+        let mut zones = vec![
+            ZonePolygonInput {
+                vertices: vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]],
+                rule_area: false,
+                net: 3,
+                priority: 2,
+                layer_rank: 0,
+                layer_name: "f.cu".to_string(),
+                source_order: 2,
+            },
+            ZonePolygonInput {
+                vertices: vec![[2.0, 0.0], [3.0, 0.0], [3.0, 1.0]],
+                rule_area: false,
+                net: 0,
+                priority: 2,
+                layer_rank: 0,
+                layer_name: "f.cu".to_string(),
+                source_order: 1,
+            },
+            ZonePolygonInput {
+                vertices: vec![[4.0, 0.0], [5.0, 0.0], [5.0, 1.0]],
+                rule_area: false,
+                net: 5,
+                priority: 1,
+                layer_rank: 0,
+                layer_name: "f.cu".to_string(),
+                source_order: 0,
+            },
+        ];
+
+        sort_zone_stack(&mut zones);
+
+        let ordered: Vec<(u32, u32)> = zones.iter().map(|zone| (zone.priority, zone.net)).collect();
+        assert_eq!(ordered, vec![(1, 5), (2, 0), (2, 3)]);
     }
 
     #[test]
