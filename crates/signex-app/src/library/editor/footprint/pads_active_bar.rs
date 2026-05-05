@@ -355,10 +355,23 @@ pub fn items(
             }),
             ..ActiveBarButton::default()
         }),
-        stub_svg(
-            "Place Region (Polygon)",
-            ActiveBarIcon::Svg(icons::icon_shape_polygon(theme_id)),
-        ),
+        // v0.18.15.4 — Place Polygon wired (silk-layer multi-click
+        // closed-loop). Each click appends a vertex to the
+        // in-flight stash; switching tools / Esc commits when
+        // ≥ 3 vertices have been captured.
+        ActiveBarItem::Button(ActiveBarButton {
+            icon: ActiveBarIcon::Svg(icons::icon_shape_polygon(theme_id)),
+            tooltip:
+                "Place Polygon — click vertices, switch tool to commit (≥ 3 vertices)"
+                    .into(),
+            enabled: true,
+            selected: pads_tool == PadsTool::PlacePolygon,
+            on_press: Some(LibraryMessage::PrimitiveEditorEvent {
+                path: path.clone(),
+                msg: PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlacePolygon),
+            }),
+            ..ActiveBarButton::default()
+        }),
         stub("Place Fill", "\u{25A0}"),  // ■
         // v0.18.15 — Place String wired (silk-layer text). 1-click
         // drop appends a Text FpGraphic to `silk_f` with content

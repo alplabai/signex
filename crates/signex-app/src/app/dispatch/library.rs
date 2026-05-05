@@ -3948,6 +3948,9 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintTrackCancel
         | PrimitiveEditorMsg::FootprintArcClick { .. }
         | PrimitiveEditorMsg::FootprintArcCancel
+        | PrimitiveEditorMsg::FootprintPolygonClick { .. }
+        | PrimitiveEditorMsg::FootprintPolygonCommit
+        | PrimitiveEditorMsg::FootprintPolygonCancel
         | PrimitiveEditorMsg::FootprintToggleSelectionFilter(_)
         | PrimitiveEditorMsg::FootprintMovePad { .. }
         | PrimitiveEditorMsg::FootprintCursorAt { .. }
@@ -4251,6 +4254,41 @@ pub(crate) fn apply_footprint_primitive_edit(
                 crate::library::editor::footprint::state::PlaceArcPending::Idle;
             editor.canvas_cache.clear();
         }
+        // v0.18.15.4 — Place Polygon multi-click gesture. Each
+        // click appends a vertex; commit happens on tool switch /
+        // Esc via `FootprintPolygonCommit`.
+        PrimitiveEditorMsg::FootprintPolygonClick { x_mm, y_mm } => {
+            editor.state.place_polygon_vertices.push((x_mm, y_mm));
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintPolygonCommit => {
+            let mut verts = std::mem::take(&mut editor.state.place_polygon_vertices);
+            if verts.len() >= 3 {
+                let primitive = editor.primitive_mut();
+                let n = verts.len();
+                for i in 0..n {
+                    let (a_x, a_y) = verts[i];
+                    let (b_x, b_y) = verts[(i + 1) % n];
+                    primitive
+                        .silk_f
+                        .push(signex_library::primitive::footprint::FpGraphic {
+                            kind:
+                                signex_library::primitive::footprint::FpGraphicKind::Line {
+                                    from: [a_x, a_y],
+                                    to: [b_x, b_y],
+                                },
+                            stroke_width: 0.15,
+                        });
+                }
+                editor.dirty = true;
+            }
+            verts.clear();
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintPolygonCancel => {
+            editor.state.place_polygon_vertices.clear();
+            editor.canvas_cache.clear();
+        }
         // v0.18.15 — Place String tool. Appends a silk-layer text
         // label `FpGraphic { kind: Text { position, content: "TEXT",
         // size: 1.0 }, stroke_width: 0.0 }` to the active footprint's
@@ -4468,6 +4506,36 @@ pub(crate) fn apply_footprint_primitive_edit(
                 editor.state.place_arc_pending =
                     crate::library::editor::footprint::state::PlaceArcPending::Idle;
             }
+            // v0.18.15.4 — leaving Place Polygon commits the
+            // in-flight vertex stash if it has ≥ 3 vertices, then
+            // clears.
+            if !matches!(
+                tool,
+                crate::library::editor::footprint::state::PadsTool::PlacePolygon
+            ) && !editor.state.place_polygon_vertices.is_empty()
+            {
+                let mut verts = std::mem::take(&mut editor.state.place_polygon_vertices);
+                if verts.len() >= 3 {
+                    let primitive = editor.primitive_mut();
+                    let n = verts.len();
+                    for i in 0..n {
+                        let (a_x, a_y) = verts[i];
+                        let (b_x, b_y) = verts[(i + 1) % n];
+                        primitive
+                            .silk_f
+                            .push(signex_library::primitive::footprint::FpGraphic {
+                                kind:
+                                    signex_library::primitive::footprint::FpGraphicKind::Line {
+                                        from: [a_x, a_y],
+                                        to: [b_x, b_y],
+                                    },
+                                stroke_width: 0.15,
+                            });
+                    }
+                    editor.dirty = true;
+                }
+                verts.clear();
+            }
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintToolEscape => {
@@ -4485,6 +4553,10 @@ pub(crate) fn apply_footprint_primitive_edit(
             // v0.18.15.3 — and Place Arc.
             editor.state.place_arc_pending =
                 crate::library::editor::footprint::state::PlaceArcPending::Idle;
+            // v0.18.15.4 — Esc drops the in-flight Polygon stash
+            // (no commit; matches Altium's Esc-cancels-tool
+            // semantic).
+            editor.state.place_polygon_vertices.clear();
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintSketchToolEscape => {
@@ -5722,6 +5794,9 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::FootprintTrackCancel
         | EditorMsg::FootprintArcClick { .. }
         | EditorMsg::FootprintArcCancel
+        | EditorMsg::FootprintPolygonClick { .. }
+        | EditorMsg::FootprintPolygonCommit
+        | EditorMsg::FootprintPolygonCancel
         | EditorMsg::FootprintSketchPlacePoint { .. }
         | EditorMsg::FootprintSketchToolClick { .. }
         | EditorMsg::FootprintSketchToolEscape

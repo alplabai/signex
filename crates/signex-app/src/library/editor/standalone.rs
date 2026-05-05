@@ -1002,6 +1002,11 @@ fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEditorMsg {
             PrimitiveEditorMsg::FootprintArcClick { x_mm, y_mm }
         }
         EditorMsg::FootprintArcCancel => PrimitiveEditorMsg::FootprintArcCancel,
+        EditorMsg::FootprintPolygonClick { x_mm, y_mm } => {
+            PrimitiveEditorMsg::FootprintPolygonClick { x_mm, y_mm }
+        }
+        EditorMsg::FootprintPolygonCommit => PrimitiveEditorMsg::FootprintPolygonCommit,
+        EditorMsg::FootprintPolygonCancel => PrimitiveEditorMsg::FootprintPolygonCancel,
         EditorMsg::FootprintSketchPlacePoint { x_mm, y_mm } => {
             PrimitiveEditorMsg::FootprintSketchPlacePoint { x_mm, y_mm }
         }

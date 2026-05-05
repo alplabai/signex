@@ -720,6 +720,15 @@ pub enum EditorMsg {
     },
     /// v0.18.15.3 — Esc / right-click during Place Arc.
     FootprintArcCancel,
+    /// v0.18.15.4 — Place Polygon click (appends a vertex).
+    FootprintPolygonClick {
+        x_mm: f64,
+        y_mm: f64,
+    },
+    /// v0.18.15.4 — commit the in-flight polygon to silk_f.
+    FootprintPolygonCommit,
+    /// v0.18.15.4 — drop the in-flight polygon stash.
+    FootprintPolygonCancel,
     /// Drag the pad at `idx` to a new world position.
     FootprintMovePad {
         idx: usize,
@@ -1281,6 +1290,12 @@ pub enum PrimitiveEditorMsg {
     FootprintArcClick { x_mm: f64, y_mm: f64 },
     /// v0.18.15.3 — Esc / right-click during Place Arc.
     FootprintArcCancel,
+    /// v0.18.15.4 — Place Polygon click (appends a vertex).
+    FootprintPolygonClick { x_mm: f64, y_mm: f64 },
+    /// v0.18.15.4 — explicit polygon commit.
+    FootprintPolygonCommit,
+    /// v0.18.15.4 — Esc / right-click during Place Polygon.
+    FootprintPolygonCancel,
     /// v0.18.14 — Selection Filter pill toggle from the unified
     /// active bar. Mirrors the panel-side
     /// `PanelMsg::FpEditorToggleSelectionFilter` but flows through

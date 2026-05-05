@@ -275,6 +275,9 @@ pub struct FootprintEditorState {
     pub track_first: Option<(f64, f64)>,
     /// v0.18.15.3 — Place Arc 3-click gesture state.
     pub place_arc_pending: PlaceArcPending,
+    /// v0.18.15.4 — Place Polygon vertex stash. Each click appends.
+    /// Tool switch / Esc commits if ≥ 3 vertices, otherwise drops.
+    pub place_polygon_vertices: Vec<(f64, f64)>,
     /// v0.18.13 — Altium Selection Filter pill row state. Per-
     /// editor so flipping pads off in one tab doesn't follow the
     /// user into another footprint.
@@ -506,6 +509,14 @@ pub enum PadsTool {
     /// clears the in-flight gesture. State carried in
     /// `place_arc_pending`.
     PlaceArc,
+    /// v0.18.15.4 — silk-layer closed-loop polygon. Each click
+    /// appends a vertex to `place_polygon_vertices`. Switching
+    /// away from the tool (or Esc) commits the polygon as N
+    /// connecting `Line` `FpGraphic`s when ≥ 3 vertices have been
+    /// captured (otherwise the in-flight stash is dropped). No
+    /// preview today — the canvas-overlay shape preview lands with
+    /// the silk-layer hover system.
+    PlacePolygon,
 }
 
 /// v0.18.15.3 — Place Arc 3-click gesture state machine.
@@ -618,6 +629,7 @@ impl FootprintEditorState {
             snap_options: SnapOptions::default(),
             track_first: None,
             place_arc_pending: PlaceArcPending::default(),
+            place_polygon_vertices: Vec::new(),
             selection_filter: SelectionFilter::default(),
             snap_subtab: SnapSubTab::default(),
             snapping_mode: SnappingMode::default(),
@@ -654,6 +666,7 @@ impl FootprintEditorState {
             snap_options: SnapOptions::default(),
             track_first: None,
             place_arc_pending: PlaceArcPending::default(),
+            place_polygon_vertices: Vec::new(),
             selection_filter: SelectionFilter::default(),
             snap_subtab: SnapSubTab::default(),
             snapping_mode: SnappingMode::default(),
