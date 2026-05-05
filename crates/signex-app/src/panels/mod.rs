@@ -613,6 +613,11 @@ pub struct FootprintEditorPanelContext {
     pub selection_filter: crate::library::editor::footprint::state::SelectionFilter,
     pub snap_subtab: crate::library::editor::footprint::state::SnapSubTab,
     pub snapping_mode: crate::library::editor::footprint::state::SnappingMode,
+    /// v0.18.20 — Altium-style guide lines visible to the Guide
+    /// Manager UI table. Cloned out of `editor.state.guides` so the
+    /// panel can iterate them without holding a borrow into the
+    /// document state.
+    pub guides: Vec<crate::library::editor::footprint::state::Guide>,
 }
 
 /// v0.16.4 — Pour role properties surfaced on the Properties panel.
@@ -1266,6 +1271,24 @@ pub enum PanelMsg {
     /// v0.18.13 — `Add` button on the Guide Manager table
     /// (placeholder until guide system lands).
     FpEditorGuideManagerAdd,
+    /// v0.18.20 — `Add Vertical` button on the Guide Manager footer.
+    /// Appends a new vertical guide at world X = 0 mm.
+    FpEditorGuideAddVertical,
+    /// v0.18.20 — `Add Horizontal` button on the Guide Manager footer.
+    /// Appends a new horizontal guide at world Y = 0 mm.
+    FpEditorGuideAddHorizontal,
+    /// v0.18.20 — Per-row delete button on the Guide Manager. Removes
+    /// the guide at the given index.
+    FpEditorGuideDelete(usize),
+    /// v0.18.20 — Per-row enabled toggle on the Guide Manager. Flips
+    /// `guides[idx].enabled` so the user can hide individual guides
+    /// without deleting them.
+    FpEditorGuideToggle(usize),
+    /// v0.18.20 — Per-row position edit on the Guide Manager. The text
+    /// input emits the raw string; the dispatcher parses to f64 and
+    /// no-ops on invalid input so intermediate keystrokes don't fight
+    /// the user.
+    FpEditorGuideSetPosition(usize, String),
     /// v0.14.2 — open a sibling `.snxfpt` from the Footprint Library
     /// panel. The handler routes through the existing
     /// `handle_open_primitive` flow so the file gets a fresh tab + a
@@ -4181,7 +4204,7 @@ fn view_footprint_editor_properties<'a>(
             col = col.push(props_section_header("Grid Manager", primary));
             col = render_grid_manager(col, fp, primary, muted, border_c);
             col = col.push(props_section_header("Guide Manager", primary));
-            col = render_guide_manager(col, primary, muted, border_c);
+            col = render_guide_manager(col, fp, primary, muted, border_c);
             col = col.push(props_section_header("Other", primary));
             col = render_other_section(col, fp, primary, muted, border_c);
         }
@@ -4294,7 +4317,7 @@ fn view_footprint_editor_properties<'a>(
         col = col.push(props_section_header("Grid Manager", primary));
         col = render_grid_manager(col, fp, primary, muted, border_c);
         col = col.push(props_section_header("Guide Manager", primary));
-        col = render_guide_manager(col, primary, muted, border_c);
+        col = render_guide_manager(col, fp, primary, muted, border_c);
         col = col.push(props_section_header("Other", primary));
         col = render_other_section(col, fp, primary, muted, border_c);
     }
@@ -4927,21 +4950,29 @@ fn render_grid_manager<'a>(
     col
 }
 
-/// v0.18.13 — Guide Manager placeholder table. Empty until the
-/// guide system lands.
+/// v0.18.20 — Guide Manager. One row per guide carrying an enabled
+/// checkbox, axis label, position field, and a per-row delete button.
+/// Footer surfaces `Add Vertical` / `Add Horizontal` buttons that
+/// append a new entry at world (0, 0) on the chosen axis.
 fn render_guide_manager<'a>(
     mut col: Column<'a, PanelMsg>,
+    fp: &'a FootprintEditorPanelContext,
     primary: Color,
     muted: Color,
     border_c: Color,
 ) -> Column<'a, PanelMsg> {
+    use crate::library::editor::footprint::state::GuideAxis;
+
     col = col.push(
         container(
             row![
-                text("Enabled").size(10).color(muted).width(Length::Fixed(60.0)),
-                text("Name").size(10).color(muted).width(Length::Fill),
-                text("X").size(10).color(muted).width(Length::Fixed(60.0)),
-                text("Y").size(10).color(muted).width(Length::Fixed(60.0)),
+                text("On").size(10).color(muted).width(Length::Fixed(28.0)),
+                text("Axis").size(10).color(muted).width(Length::Fixed(60.0)),
+                text("Position (mm)")
+                    .size(10)
+                    .color(muted)
+                    .width(Length::Fill),
+                text("").size(10).color(muted).width(Length::Fixed(50.0)),
             ]
             .spacing(4)
             .align_y(iced::Alignment::Center),
@@ -4949,19 +4980,84 @@ fn render_guide_manager<'a>(
         .padding([2, 8])
         .width(Length::Fill),
     );
-    col = col.push(
-        container(text("(no guides)").size(10).color(muted))
-            .padding([4, 8])
-            .width(Length::Fill),
-    );
+
+    if fp.guides.is_empty() {
+        col = col.push(
+            container(text("(no guides)").size(10).color(muted))
+                .padding([4, 8])
+                .width(Length::Fill),
+        );
+    } else {
+        for (idx, g) in fp.guides.iter().enumerate() {
+            let axis_label = match g.axis {
+                GuideAxis::Vertical => "Vert",
+                GuideAxis::Horizontal => "Horiz",
+            };
+            let pos_str = format!("{:.3}", g.position_mm);
+            let toggle_label = if g.enabled { "X" } else { " " };
+            col = col.push(
+                container(
+                    row![
+                        iced::widget::button(
+                            text(toggle_label).size(10).color(primary),
+                        )
+                        .padding([1, 4])
+                        .style(move |_: &Theme, _| iced::widget::button::Style {
+                            background: Some(iced::Background::Color(
+                                iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04),
+                            )),
+                            border: iced::Border {
+                                width: 1.0,
+                                radius: 3.0.into(),
+                                color: border_c,
+                            },
+                            ..iced::widget::button::Style::default()
+                        })
+                        .on_press(PanelMsg::FpEditorGuideToggle(idx))
+                        .width(Length::Fixed(24.0)),
+                        text(axis_label)
+                            .size(10)
+                            .color(primary)
+                            .width(Length::Fixed(60.0)),
+                        iced::widget::text_input("0.000", &pos_str)
+                            .size(10)
+                            .padding([2, 4])
+                            .on_input(move |raw| {
+                                PanelMsg::FpEditorGuideSetPosition(idx, raw)
+                            })
+                            .width(Length::Fill),
+                        grid_manager_btn(
+                            "Del",
+                            Some(PanelMsg::FpEditorGuideDelete(idx)),
+                            primary,
+                            border_c,
+                        ),
+                    ]
+                    .spacing(4)
+                    .align_y(iced::Alignment::Center),
+                )
+                .padding([2, 8])
+                .width(Length::Fill),
+            );
+        }
+    }
+
     col = col.push(
         container(
-            row![grid_manager_btn(
-                "Add",
-                Some(PanelMsg::FpEditorGuideManagerAdd),
-                primary,
-                border_c,
-            )]
+            row![
+                grid_manager_btn(
+                    "Add Vertical",
+                    Some(PanelMsg::FpEditorGuideAddVertical),
+                    primary,
+                    border_c,
+                ),
+                grid_manager_btn(
+                    "Add Horizontal",
+                    Some(PanelMsg::FpEditorGuideAddHorizontal),
+                    primary,
+                    border_c,
+                ),
+            ]
             .spacing(4)
             .align_y(iced::Alignment::Center),
         )

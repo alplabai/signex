@@ -304,10 +304,85 @@ impl Signex {
                 true
             }
             crate::panels::PanelMsg::FpEditorGuideManagerAdd => {
-                tracing::warn!(
-                    target: "signex::library",
-                    "Guide Manager: Add is stubbed; guide system lands with v0.18.14",
-                );
+                // v0.18.20 — bare "Add" button defaults to a vertical
+                // guide at world X = 0; users can flip via the row's
+                // axis label and edit the position field afterwards.
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.state.guides.push(
+                        crate::library::editor::footprint::state::Guide {
+                            axis: crate::library::editor::footprint::state::GuideAxis::Vertical,
+                            position_mm: 0.0,
+                            enabled: true,
+                        },
+                    );
+                    editor.canvas_cache.clear();
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorGuideAddVertical => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.state.guides.push(
+                        crate::library::editor::footprint::state::Guide {
+                            axis: crate::library::editor::footprint::state::GuideAxis::Vertical,
+                            position_mm: 0.0,
+                            enabled: true,
+                        },
+                    );
+                    editor.canvas_cache.clear();
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorGuideAddHorizontal => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.state.guides.push(
+                        crate::library::editor::footprint::state::Guide {
+                            axis: crate::library::editor::footprint::state::GuideAxis::Horizontal,
+                            position_mm: 0.0,
+                            enabled: true,
+                        },
+                    );
+                    editor.canvas_cache.clear();
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorGuideDelete(idx) => {
+                let idx = *idx;
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    if idx < editor.state.guides.len() {
+                        editor.state.guides.remove(idx);
+                        editor.canvas_cache.clear();
+                    }
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorGuideToggle(idx) => {
+                let idx = *idx;
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    if let Some(g) = editor.state.guides.get_mut(idx) {
+                        g.enabled = !g.enabled;
+                        editor.canvas_cache.clear();
+                    }
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorGuideSetPosition(idx, raw) => {
+                let idx = *idx;
+                if let Ok(parsed) = raw.trim().parse::<f64>() {
+                    if let Some(editor) = self.active_footprint_editor_mut() {
+                        if let Some(g) = editor.state.guides.get_mut(idx) {
+                            g.position_mm = parsed;
+                            editor.canvas_cache.clear();
+                        }
+                    }
+                    self.refresh_panel_ctx();
+                }
+                // Invalid float (e.g. user typing "-") — silently drop
+                // so the input keeps capturing keystrokes.
                 true
             }
             crate::panels::PanelMsg::FpEditorEditParameter { name, expr } => {

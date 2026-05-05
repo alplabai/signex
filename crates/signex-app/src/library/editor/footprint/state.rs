@@ -283,6 +283,10 @@ pub struct FootprintEditorState {
     /// Independent of `selected_pad` — pad selection clears silk
     /// selection and vice versa.
     pub selected_silk_f: Option<usize>,
+    /// v0.18.20 — Altium-style guide lines (vertical / horizontal).
+    /// Per-editor; the snap-to-guides hook follows in a v0.18.20+
+    /// patch (today they're visual-only).
+    pub guides: Vec<Guide>,
     /// v0.18.13 — Altium Selection Filter pill row state. Per-
     /// editor so flipping pads off in one tab doesn't follow the
     /// user into another footprint.
@@ -380,6 +384,25 @@ pub enum GridDisplay {
     Lines,
     Dots,
     Hidden,
+}
+
+/// v0.18.20 — Altium-style guide line. One of `x` / `y` is set,
+/// representing a vertical (X = const) or horizontal (Y = const)
+/// guide. Stored on the per-editor `FootprintEditorState`; the
+/// snap-to-guides hook lands in a follow-up (today they're
+/// visual-only).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Guide {
+    pub axis: GuideAxis,
+    pub position_mm: f64,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum GuideAxis {
+    #[default]
+    Vertical,
+    Horizontal,
 }
 
 impl Default for SnapOptions {
@@ -663,6 +686,7 @@ impl FootprintEditorState {
             place_arc_pending: PlaceArcPending::default(),
             place_polygon_vertices: Vec::new(),
             selected_silk_f: None,
+            guides: Vec::new(),
             selection_filter: SelectionFilter::default(),
             snap_subtab: SnapSubTab::default(),
             snapping_mode: SnappingMode::default(),
@@ -701,6 +725,7 @@ impl FootprintEditorState {
             place_arc_pending: PlaceArcPending::default(),
             place_polygon_vertices: Vec::new(),
             selected_silk_f: None,
+            guides: Vec::new(),
             selection_filter: SelectionFilter::default(),
             snap_subtab: SnapSubTab::default(),
             snapping_mode: SnappingMode::default(),

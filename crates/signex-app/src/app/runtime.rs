@@ -1327,6 +1327,7 @@ fn build_footprint_editor_panel_ctx(
         selection_filter: editor.state.selection_filter,
         snap_subtab: editor.state.snap_subtab,
         snapping_mode: editor.state.snapping_mode,
+        guides: editor.state.guides.clone(),
     })
 }
 

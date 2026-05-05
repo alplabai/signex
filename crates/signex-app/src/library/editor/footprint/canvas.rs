@@ -796,6 +796,51 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 );
             }
 
+            // v0.18.20 — Altium-style guide lines. Each enabled guide
+            // is a full-bleed line at the user-set world coordinate on
+            // its axis. Cyan dashed look mirrors Altium's snap-guide
+            // UX (snap-to-guides hook lands separately).
+            {
+                use crate::library::editor::footprint::state::GuideAxis;
+                let guide_color = Color::from_rgba(0.30, 0.85, 0.95, 0.55);
+                let dash_segments: &[f32] = &[6.0, 4.0];
+                for g in self.state.guides.iter().filter(|g| g.enabled) {
+                    let stroke = Stroke {
+                        line_dash: canvas::LineDash {
+                            segments: dash_segments,
+                            offset: 0,
+                        },
+                        ..Stroke::default().with_width(1.0).with_color(guide_color)
+                    };
+                    match g.axis {
+                        GuideAxis::Vertical => {
+                            let p = cstate.world_to_screen((g.position_mm, 0.0));
+                            if p.x >= 0.0 && p.x <= bounds.width {
+                                frame.stroke(
+                                    &Path::line(
+                                        Point::new(p.x, 0.0),
+                                        Point::new(p.x, bounds.height),
+                                    ),
+                                    stroke,
+                                );
+                            }
+                        }
+                        GuideAxis::Horizontal => {
+                            let p = cstate.world_to_screen((0.0, g.position_mm));
+                            if p.y >= 0.0 && p.y <= bounds.height {
+                                frame.stroke(
+                                    &Path::line(
+                                        Point::new(0.0, p.y),
+                                        Point::new(bounds.width, p.y),
+                                    ),
+                                    stroke,
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+
             // Origin crosshair — Altium-style yellow + at world (0, 0).
             // v0.16.2.2 swapped from theme-derived white to a
             // saturated Altium yellow so the origin pops against the
