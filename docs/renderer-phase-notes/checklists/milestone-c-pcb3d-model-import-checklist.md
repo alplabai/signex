@@ -14,9 +14,9 @@
 
 ## Import and cache policy
 
-- [ ] Source format intake rules documented (`.step`, `.stp`, `.wrl`, `.gltf`, `.glb`).
-- [ ] Conversion output and cache key policy documented.
-- [ ] Cache invalidation and fallback behavior documented.
+- [x] Source format intake rules documented (`.step`, `.stp`, `.wrl`, `.gltf`, `.glb`).
+- [x] Conversion output and cache key policy documented.
+- [x] Cache invalidation and fallback behavior documented.
 
 ## Validation planning
 
