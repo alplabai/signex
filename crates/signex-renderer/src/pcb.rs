@@ -17,7 +17,8 @@ use signex_types::pcb::{
     PCB_TRACK_MIN_MM, PCB_VIA_MIN_DIAMETER_MM, PCB_VIA_MIN_DRILL_MM,
 };
 use signex_types::schematic::Point;
-use signex_types::violation::Severity;
+use signex_types::violation::{DrcViolationType, Severity};
+use std::collections::HashMap;
 
 const PAD_ELLIPSE_SEGMENTS: usize = 18;
 const MARKER_POLYGON_SEGMENTS: usize = 14;
@@ -52,6 +53,10 @@ pub struct ZonePolygonInput {
     pub vertices: Vec<[f32; 2]>,
     pub rule_area: bool,
     pub net: u32,
+    pub priority: u32,
+    pub layer_rank: u16,
+    pub layer_name: String,
+    pub source_order: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -66,6 +71,7 @@ pub struct DrcMarkerInput {
     pub center: [f32; 2],
     pub radius_mm: f32,
     pub severity: Severity,
+    pub violation_type: Option<DrcViolationType>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -83,6 +89,7 @@ impl PcbSnapshot {
     pub fn from_board(board: &PcbBoard) -> Self {
         let traces = board.segments.iter().map(trace_from_segment).collect();
         let vias = board.vias.iter().map(via_from_board_via).collect();
+        let layer_ranks = layer_rank_index(board);
 
         let mut pads = Vec::new();
         for footprint in &board.footprints {
@@ -94,8 +101,8 @@ impl PcbSnapshot {
         let mut zones = Vec::new();
         let mut rule_areas = Vec::new();
 
-        for zone in &board.zones {
-            if let Some(zone_polygon) = zone_from_board_zone(zone) {
+        for (source_order, zone) in board.zones.iter().enumerate() {
+            if let Some(zone_polygon) = zone_from_board_zone(zone, source_order, &layer_ranks) {
                 if zone_polygon.rule_area {
                     rule_areas.push(zone_polygon);
                 } else {
@@ -103,6 +110,9 @@ impl PcbSnapshot {
                 }
             }
         }
+
+        sort_zone_stack(&mut zones);
+        sort_zone_stack(&mut rule_areas);
 
         Self {
             traces,
@@ -163,18 +173,49 @@ fn pad_from_footprint(footprint: &Footprint, pad: &Pad) -> PadInput {
     }
 }
 
-fn zone_from_board_zone(zone: &Zone) -> Option<ZonePolygonInput> {
+fn zone_from_board_zone(
+    zone: &Zone,
+    source_order: usize,
+    layer_ranks: &HashMap<String, u16>,
+) -> Option<ZonePolygonInput> {
     if zone.outline.len() < 3 {
         return None;
     }
 
     let vertices = zone.outline.iter().map(|point| point_to_xy(*point)).collect();
+    let layer_name = zone.layer.to_ascii_lowercase();
+    let layer_rank = layer_ranks.get(&layer_name).copied().unwrap_or(u16::MAX);
 
     Some(ZonePolygonInput {
         vertices,
         rule_area: is_rule_area_zone(zone),
         net: zone.net,
+        priority: zone.priority,
+        layer_rank,
+        layer_name,
+        source_order,
     })
+}
+
+fn layer_rank_index(board: &PcbBoard) -> HashMap<String, u16> {
+    let mut index = HashMap::with_capacity(board.layers.len());
+
+    for layer in &board.layers {
+        index.insert(layer.name.to_ascii_lowercase(), u16::from(layer.id));
+    }
+
+    index
+}
+
+fn sort_zone_stack(zones: &mut [ZonePolygonInput]) {
+    zones.sort_by(|a, b| {
+        a.layer_rank
+            .cmp(&b.layer_rank)
+            .then_with(|| a.layer_name.cmp(&b.layer_name))
+            .then_with(|| a.priority.cmp(&b.priority))
+            .then_with(|| a.net.cmp(&b.net))
+            .then_with(|| a.source_order.cmp(&b.source_order))
+    });
 }
 
 fn is_rule_area_zone(zone: &Zone) -> bool {
@@ -352,40 +393,107 @@ fn drc_slot(severity: Severity) -> ColorSlot {
     }
 }
 
-fn drc_marker_vertices(severity: Severity, center: [f32; 2], radius_mm: f32) -> Vec<[f32; 2]> {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DrcMarkerKind {
+    Generic,
+    Clearance,
+    ShortCircuit,
+    Unrouted,
+    Dimensional,
+}
+
+fn drc_marker_kind(marker: &DrcMarkerInput) -> DrcMarkerKind {
+    match marker.violation_type {
+        Some(DrcViolationType::ShortCircuit) => DrcMarkerKind::ShortCircuit,
+        Some(DrcViolationType::UnroutedNet) => DrcMarkerKind::Unrouted,
+        Some(
+            DrcViolationType::MinTrackWidth
+            | DrcViolationType::MinViaDiameter
+            | DrcViolationType::MinViaDrill
+            | DrcViolationType::MinHoleToHole
+            | DrcViolationType::MinAnnularRing
+            | DrcViolationType::MinDrill,
+        ) => DrcMarkerKind::Dimensional,
+        Some(
+            DrcViolationType::Clearance
+            | DrcViolationType::BoardOutlineClearance
+            | DrcViolationType::SilkToMask
+            | DrcViolationType::SilkToSilk,
+        ) => DrcMarkerKind::Clearance,
+        Some(DrcViolationType::AcuteAngle | DrcViolationType::AcidTrap | DrcViolationType::CopperSliver)
+        | None => DrcMarkerKind::Generic,
+    }
+}
+
+fn drc_marker_vertices(marker: &DrcMarkerInput) -> Vec<[f32; 2]> {
+    let severity = marker.severity;
+    let center = marker.center;
+    let radius_mm = marker.radius_mm;
     let radius = radius_mm.max(0.05);
     let cx = center[0];
     let cy = center[1];
 
-    match severity {
-        Severity::Error => {
-            let tri_half_width = radius * 0.8660254;
+    match drc_marker_kind(marker) {
+        DrcMarkerKind::ShortCircuit => vec![
+            [cx, cy - radius],
+            [cx + radius, cy],
+            [cx, cy + radius],
+            [cx - radius, cy],
+        ],
+        DrcMarkerKind::Unrouted => ellipse_vertices(center, [radius, radius], MARKER_POLYGON_SEGMENTS),
+        DrcMarkerKind::Dimensional => vec![
+            [cx - radius, cy - radius],
+            [cx + radius, cy - radius],
+            [cx + radius, cy + radius],
+            [cx - radius, cy + radius],
+        ],
+        DrcMarkerKind::Clearance => {
+            let tri_half_width = radius * 0.92;
             vec![
                 [cx, cy - radius],
                 [cx + tri_half_width, cy + radius * 0.5],
                 [cx - tri_half_width, cy + radius * 0.5],
             ]
         }
-        Severity::Warning => vec![
-            [cx, cy - radius],
-            [cx + radius, cy],
-            [cx, cy + radius],
-            [cx - radius, cy],
-        ],
-        Severity::Info => ellipse_vertices(center, [radius, radius], MARKER_POLYGON_SEGMENTS),
+        DrcMarkerKind::Generic => match severity {
+            Severity::Error => {
+                let tri_half_width = radius * 0.8660254;
+                vec![
+                    [cx, cy - radius],
+                    [cx + tri_half_width, cy + radius * 0.5],
+                    [cx - tri_half_width, cy + radius * 0.5],
+                ]
+            }
+            Severity::Warning => vec![
+                [cx, cy - radius],
+                [cx + radius, cy],
+                [cx, cy + radius],
+                [cx - radius, cy],
+            ],
+            Severity::Info => ellipse_vertices(center, [radius, radius], MARKER_POLYGON_SEGMENTS),
+        },
     }
 }
 
-fn drc_marker_line(marker: &DrcMarkerInput) -> ([f32; 2], [f32; 2]) {
+fn drc_marker_lines(marker: &DrcMarkerInput) -> Vec<([f32; 2], [f32; 2])> {
     let radius = marker.radius_mm.max(0.05);
     let half = radius * 0.5;
     let cx = marker.center[0];
     let cy = marker.center[1];
 
-    match marker.severity {
-        Severity::Error => ([cx - half, cy - half], [cx + half, cy + half]),
-        Severity::Warning => ([cx - half, cy + half * 0.2], [cx + half, cy + half * 0.2]),
-        Severity::Info => ([cx - half, cy], [cx + half, cy]),
+    match drc_marker_kind(marker) {
+        DrcMarkerKind::ShortCircuit => vec![
+            ([cx - half, cy - half], [cx + half, cy + half]),
+            ([cx - half, cy + half], [cx + half, cy - half]),
+        ],
+        DrcMarkerKind::Clearance => vec![([cx, cy - half], [cx, cy + half])],
+        DrcMarkerKind::Unrouted => vec![([cx - half, cy], [cx + half, cy])],
+        DrcMarkerKind::Dimensional => vec![([cx - half, cy], [cx + half, cy])],
+        DrcMarkerKind::Generic => match marker.severity {
+            Severity::Error => vec![([cx - half, cy - half], [cx + half, cy + half])],
+            Severity::Warning => vec![([cx - half, cy + half * 0.2], [cx + half, cy + half * 0.2])],
+            Severity::Info => vec![([cx - half, cy], [cx + half, cy])],
+        },
     }
 }
 
@@ -422,7 +530,7 @@ fn emit_overlays(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene: &mut Scen
         let fill_color = with_alpha_mul(stroke_color, 0.28);
 
         scene.overlay_polygons.push(GpuPolygon {
-            vertices: drc_marker_vertices(marker.severity, marker.center, marker.radius_mm),
+            vertices: drc_marker_vertices(marker),
             fill_color,
             stroke_color: Some(stroke_color),
             stroke_width: (marker.radius_mm * 0.12).max(0.03),
@@ -435,15 +543,16 @@ fn emit_overlays(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene: &mut Scen
             color: stroke_color,
         });
 
-        let (p0, p1) = drc_marker_line(marker);
-        scene.overlay_lines.push(LineSegment {
-            p0,
-            p1,
-            width: (marker.radius_mm * 0.14).max(0.04),
-            color: stroke_color,
-            style: 0,
-            _pad: 0,
-        });
+        for (p0, p1) in drc_marker_lines(marker) {
+            scene.overlay_lines.push(LineSegment {
+                p0,
+                p1,
+                width: (marker.radius_mm * 0.14).max(0.04),
+                color: stroke_color,
+                style: 0,
+                _pad: 0,
+            });
+        }
     }
 }
 
@@ -574,7 +683,7 @@ mod tests {
     use crate::theme::ResolvedTheme;
     use signex_gfx::scene::{DirtyFlags, Scene};
     use signex_types::pcb::PcbBoard;
-    use signex_types::violation::Severity;
+    use signex_types::violation::{DrcViolationType, Severity};
 
     fn sample_board() -> PcbBoard {
         serde_json::from_str(
@@ -585,7 +694,10 @@ mod tests {
               "generator": "test",
               "thickness": 1.6,
               "outline": [],
-              "layers": [],
+                            "layers": [
+                                { "id": 0, "name": "F.Cu", "layer_type": "signal" },
+                                { "id": 31, "name": "B.Cu", "layer_type": "signal" }
+                            ],
               "setup": null,
               "nets": [
                 { "number": 1, "name": "VCC" },
@@ -651,7 +763,21 @@ mod tests {
                                         { "x": 4.0, "y": 2.0 },
                                         { "x": 0.0, "y": 2.0 }
                                     ],
-                                    "priority": 1,
+                                    "priority": 7,
+                                    "fill_type": "solid"
+                                },
+                                {
+                                    "uuid": "4cec6cfd-a5d8-450d-bf31-c8f2fd8f5b39",
+                                    "net": 2,
+                                    "net_name": "GND",
+                                    "layer": "F.Cu",
+                                    "outline": [
+                                        { "x": 0.5, "y": 0.5 },
+                                        { "x": 2.0, "y": 0.5 },
+                                        { "x": 2.0, "y": 1.5 },
+                                        { "x": 0.5, "y": 1.5 }
+                                    ],
+                                    "priority": 2,
                                     "fill_type": "solid"
                                 },
                                 {
@@ -685,7 +811,7 @@ mod tests {
         assert_eq!(snapshot.traces.len(), 1);
         assert_eq!(snapshot.vias.len(), 1);
         assert_eq!(snapshot.pads.len(), 1);
-                assert_eq!(snapshot.zones.len(), 1);
+                assert_eq!(snapshot.zones.len(), 2);
                 assert_eq!(snapshot.rule_areas.len(), 1);
 
         assert_eq!(snapshot.traces[0].width_mm, 0.25);
@@ -694,6 +820,9 @@ mod tests {
         assert_eq!(snapshot.pads[0].center[1], 22.0);
                 assert_eq!(snapshot.zones[0].vertices.len(), 4);
                 assert_eq!(snapshot.rule_areas[0].vertices.len(), 4);
+                assert_eq!(snapshot.zones[0].priority, 2);
+                assert_eq!(snapshot.zones[1].priority, 7);
+                assert!(snapshot.rule_areas[0].rule_area);
     }
 
     #[test]
@@ -716,7 +845,7 @@ mod tests {
         PcbRenderer::build_scene(&snapshot, &theme, DirtyFlags::POLYGONS, &mut scene);
         assert_eq!(scene.lines.len(), 1);
         assert_eq!(scene.circles.len(), 1);
-        assert_eq!(scene.polygons.len(), 3);
+        assert_eq!(scene.polygons.len(), 4);
         assert_eq!(scene.lines[0].style, 1);
     }
 
@@ -733,6 +862,7 @@ mod tests {
                 center: [2.0, 2.0],
                 radius_mm: 0.35,
                 severity: Severity::Error,
+                violation_type: None,
             }]);
 
         let theme = ResolvedTheme::builtin_default();
@@ -744,6 +874,33 @@ mod tests {
         assert_eq!(scene.overlay_circles.len(), 1);
         assert_eq!(scene.overlay_polygons.len(), 1);
         assert_eq!(scene.overlay_lines[0].style & 1, 1);
+    }
+
+    #[test]
+    fn pcb_drc_violation_type_expands_overlay_line_patterns() {
+        let board = sample_board();
+        let snapshot = PcbSnapshot::from_board(&board).with_drc_markers(vec![
+            DrcMarkerInput {
+                center: [2.0, 2.0],
+                radius_mm: 0.35,
+                severity: Severity::Error,
+                violation_type: Some(DrcViolationType::ShortCircuit),
+            },
+            DrcMarkerInput {
+                center: [3.5, 2.0],
+                radius_mm: 0.3,
+                severity: Severity::Warning,
+                violation_type: Some(DrcViolationType::MinTrackWidth),
+            },
+        ]);
+
+        let theme = ResolvedTheme::builtin_default();
+        let mut scene = Scene::default();
+        PcbRenderer::build_scene(&snapshot, &theme, DirtyFlags::OVERLAY, &mut scene);
+
+        assert_eq!(scene.overlay_polygons.len(), 2);
+        assert_eq!(scene.overlay_circles.len(), 2);
+        assert_eq!(scene.overlay_lines.len(), 3);
     }
 
     #[test]

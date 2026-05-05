@@ -82,11 +82,13 @@ fn pcb_vertical_slice_overlay_paths_emit_ratsnest_and_drc() {
                 center: [8.0, 3.0],
                 radius_mm: 0.35,
                 severity: Severity::Error,
+                violation_type: None,
             },
             DrcMarkerInput {
                 center: [6.0, 2.0],
                 radius_mm: 0.3,
                 severity: Severity::Warning,
+                violation_type: None,
             },
         ]);
 

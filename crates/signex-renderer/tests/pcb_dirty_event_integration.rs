@@ -27,6 +27,7 @@ fn pcb_event_flow_updates_only_expected_scene_families() {
             center: [7.0, 4.0],
             radius_mm: 0.3,
             severity: Severity::Error,
+            violation_type: None,
         }]);
 
     let theme = ResolvedTheme::builtin_default();
