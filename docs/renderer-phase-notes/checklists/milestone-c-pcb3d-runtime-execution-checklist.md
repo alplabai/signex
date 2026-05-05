@@ -15,8 +15,8 @@
 ## Remaining runtime slices
 
 - [x] Mesh staging and opaque pass wiring completed.
-- [ ] Projection texture pass integration completed.
-- [ ] Overlay ordering checks for 3D runtime completed.
+- [x] Projection texture pass integration completed.
+- [x] Overlay ordering checks for 3D runtime completed.
 
 ## Validation
 
