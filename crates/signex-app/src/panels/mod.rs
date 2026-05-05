@@ -701,6 +701,19 @@ pub enum SnapOptionFlag {
     HorizontalVertical,
     Angle,
     Grid,
+    // v0.13 — Altium "Objects for snapping" set.
+    TrackVertices,
+    TrackLines,
+    ArcCenters,
+    Intersections,
+    PadCenters,
+    PadVertices,
+    PadEdges,
+    ViaCenters,
+    Texts,
+    Regions,
+    FootprintOrigins,
+    Body3dPoints,
 }
 
 /// One row in the Footprint Library panel — a sibling `.snxfpt`
@@ -1290,6 +1303,10 @@ pub enum PanelMsg {
     /// `state.snap_options.grid_step_mm`. Invalid / empty strings
     /// no-op so the input doesn't fight intermediate keystrokes.
     FpEditorSetSnapGridStep(String),
+    /// v0.13 — Altium "Snap Distance" numeric input.
+    FpEditorSetSnapDistance(String),
+    /// v0.13 — Altium "Axis Snap Range" numeric input.
+    FpEditorSetAxisSnapRange(String),
     /// v0.18.13 — Altium Selection Filter pill toggle. The pills
     /// live on the v0.18.14 unified active bar; the Properties
     /// panel surfaces the toggle through this same message.
@@ -3070,6 +3087,7 @@ fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 ..c
             }
         };
+        let seg_hover = crate::styles::ti(ctx.tokens.hover);
         return view_footprint_editor_properties(
             fp,
             muted,
@@ -3082,6 +3100,8 @@ fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             &ctx.collapsed_sections,
             accent_c,
             tag_hover,
+            ctx.unit,
+            seg_hover,
         );
     }
 

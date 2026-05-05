@@ -741,6 +741,10 @@ pub struct SelectionFilterCustomState {
     pub keepouts: bool,
     pub cutouts: bool,
     pub texts: bool,
+    pub vias: bool,
+    pub regions: bool,
+    pub fills: bool,
+    pub other: bool,
 }
 
 /// State for the Projects-panel tree-view right-click menu. The menu's

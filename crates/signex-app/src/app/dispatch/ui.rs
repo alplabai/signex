@@ -193,6 +193,10 @@ impl Signex {
                             keepouts: f.keepouts,
                             cutouts: f.cutouts,
                             texts: f.texts,
+                            vias: f.vias,
+                            regions: f.regions,
+                            fills: f.fills,
+                            other: f.other,
                         });
                 }
                 self.finish_update()
@@ -213,6 +217,10 @@ impl Signex {
                         K::Keepouts => state.keepouts = !state.keepouts,
                         K::Cutouts => state.cutouts = !state.cutouts,
                         K::Texts => state.texts = !state.texts,
+                        K::Vias => state.vias = !state.vias,
+                        K::Regions => state.regions = !state.regions,
+                        K::Fills => state.fills = !state.fills,
+                        K::Other => state.other = !state.other,
                     }
                 }
                 self.finish_update()
@@ -230,6 +238,10 @@ impl Signex {
                             keepouts: d.keepouts,
                             cutouts: d.cutouts,
                             texts: d.texts,
+                            vias: d.vias,
+                            regions: d.regions,
+                            fills: d.fills,
+                            other: d.other,
                         };
                     editor.canvas_cache.clear();
                 }

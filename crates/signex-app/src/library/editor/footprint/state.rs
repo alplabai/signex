@@ -444,6 +444,27 @@ pub struct SnapOptions {
     /// v0.18.19 — coarse-grid multiplier (typically 5 or 10).
     /// Renders an overlay grid at this multiple of the snap step.
     pub coarse_multiplier: u32,
+    // v0.13 — Altium "Objects for snapping" set. Each flag gates a
+    // priority in the snap pipeline. Defaults follow Altium's "common
+    // ON" group (Track Vertices, Pad Centers, Via Centers).
+    pub snap_track_vertices: bool,
+    pub snap_track_lines: bool,
+    pub snap_arc_centers: bool,
+    pub snap_intersections: bool,
+    pub snap_pad_centers: bool,
+    pub snap_pad_vertices: bool,
+    pub snap_pad_edges: bool,
+    pub snap_via_centers: bool,
+    pub snap_texts: bool,
+    pub snap_regions: bool,
+    pub snap_footprint_origins: bool,
+    pub snap_3d_body_points: bool,
+    /// v0.13 — Altium "Snap Distance" (mm). Hit-test radius for the
+    /// per-kind snap targets above.
+    pub snap_distance_mm: f64,
+    /// v0.13 — Altium "Axis Snap Range" (mm). Lateral tolerance for
+    /// horizontal/vertical axis snapping.
+    pub axis_snap_range_mm: f64,
 }
 
 /// v0.18.19 — Altium grid display style for the Cartesian Grid
@@ -530,6 +551,22 @@ impl Default for SnapOptions {
             fine_grid_display: GridDisplay::Lines,
             coarse_grid_display: GridDisplay::Lines,
             coarse_multiplier: 5,
+            // Altium "common ON" defaults: Track Vertices, Track Lines,
+            // Arc Centers, Pad Centers, Via Centers, Footprint Origins.
+            snap_track_vertices: true,
+            snap_track_lines: false,
+            snap_arc_centers: true,
+            snap_intersections: false,
+            snap_pad_centers: true,
+            snap_pad_vertices: false,
+            snap_pad_edges: false,
+            snap_via_centers: true,
+            snap_texts: false,
+            snap_regions: false,
+            snap_footprint_origins: true,
+            snap_3d_body_points: false,
+            snap_distance_mm: 0.203,
+            axis_snap_range_mm: 5.08,
         }
     }
 }
@@ -560,6 +597,10 @@ pub struct SelectionFilter {
     pub keepouts: bool,
     pub cutouts: bool,
     pub texts: bool,
+    pub vias: bool,
+    pub regions: bool,
+    pub fills: bool,
+    pub other: bool,
 }
 
 impl Default for SelectionFilter {
@@ -573,22 +614,65 @@ impl Default for SelectionFilter {
             keepouts: true,
             cutouts: true,
             texts: true,
+            vias: true,
+            regions: true,
+            fills: true,
+            other: true,
         }
     }
 }
 
 /// Selection-filter pill identifier — drives the panel pill row +
-/// the dispatcher's mutation.
+/// the dispatcher's mutation. Order matches Altium's PCB Library
+/// editor: 3D Bodies, Keepouts, Tracks, Arcs, Pads, Vias, Regions,
+/// Fills, Texts, Other (+ our two internal: Pours, Cutouts).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SelectionFilterKind {
-    Pads,
-    Tracks,
-    Arcs,
-    Pours,
     Bodies3d,
     Keepouts,
-    Cutouts,
+    Tracks,
+    Arcs,
+    Pads,
+    Vias,
+    Regions,
+    Fills,
     Texts,
+    Other,
+    Pours,
+    Cutouts,
+}
+
+impl SelectionFilterKind {
+    /// Altium's 10 user-visible pill kinds in display order.
+    pub const ALTIUM_PILLS: &'static [SelectionFilterKind] = &[
+        Self::Bodies3d,
+        Self::Keepouts,
+        Self::Tracks,
+        Self::Arcs,
+        Self::Pads,
+        Self::Vias,
+        Self::Regions,
+        Self::Fills,
+        Self::Texts,
+        Self::Other,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Bodies3d => "3D Bodies",
+            Self::Keepouts => "Keepouts",
+            Self::Tracks => "Tracks",
+            Self::Arcs => "Arcs",
+            Self::Pads => "Pads",
+            Self::Vias => "Vias",
+            Self::Regions => "Regions",
+            Self::Fills => "Fills",
+            Self::Texts => "Texts",
+            Self::Other => "Other",
+            Self::Pours => "Pours",
+            Self::Cutouts => "Cutouts",
+        }
+    }
 }
 
 impl SelectionFilter {
@@ -602,6 +686,10 @@ impl SelectionFilter {
             SelectionFilterKind::Keepouts => self.keepouts,
             SelectionFilterKind::Cutouts => self.cutouts,
             SelectionFilterKind::Texts => self.texts,
+            SelectionFilterKind::Vias => self.vias,
+            SelectionFilterKind::Regions => self.regions,
+            SelectionFilterKind::Fills => self.fills,
+            SelectionFilterKind::Other => self.other,
         }
     }
 
@@ -615,6 +703,10 @@ impl SelectionFilter {
             SelectionFilterKind::Keepouts => self.keepouts = !self.keepouts,
             SelectionFilterKind::Cutouts => self.cutouts = !self.cutouts,
             SelectionFilterKind::Texts => self.texts = !self.texts,
+            SelectionFilterKind::Vias => self.vias = !self.vias,
+            SelectionFilterKind::Regions => self.regions = !self.regions,
+            SelectionFilterKind::Fills => self.fills = !self.fills,
+            SelectionFilterKind::Other => self.other = !self.other,
         }
     }
 }

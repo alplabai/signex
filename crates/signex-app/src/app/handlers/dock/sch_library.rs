@@ -243,6 +243,14 @@ impl Signex {
                 self.fp_editor_set_snap_grid_step(value);
                 true
             }
+            crate::panels::PanelMsg::FpEditorSetSnapDistance(value) => {
+                self.handle_fp_set_snap_distance(value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetAxisSnapRange(value) => {
+                self.handle_fp_set_axis_snap_range(value.clone());
+                true
+            }
             crate::panels::PanelMsg::FpEditorToggleSelectionFilter(kind) => {
                 if let Some(editor) = self.active_footprint_editor_mut() {
                     editor.state.selection_filter.toggle(*kind);
@@ -1375,8 +1383,48 @@ impl Signex {
                 }
                 SnapOptionFlag::Angle => opts.angle = !opts.angle,
                 SnapOptionFlag::Grid => opts.grid = !opts.grid,
+                SnapOptionFlag::TrackVertices => {
+                    opts.snap_track_vertices = !opts.snap_track_vertices
+                }
+                SnapOptionFlag::TrackLines => opts.snap_track_lines = !opts.snap_track_lines,
+                SnapOptionFlag::ArcCenters => opts.snap_arc_centers = !opts.snap_arc_centers,
+                SnapOptionFlag::Intersections => {
+                    opts.snap_intersections = !opts.snap_intersections
+                }
+                SnapOptionFlag::PadCenters => opts.snap_pad_centers = !opts.snap_pad_centers,
+                SnapOptionFlag::PadVertices => opts.snap_pad_vertices = !opts.snap_pad_vertices,
+                SnapOptionFlag::PadEdges => opts.snap_pad_edges = !opts.snap_pad_edges,
+                SnapOptionFlag::ViaCenters => opts.snap_via_centers = !opts.snap_via_centers,
+                SnapOptionFlag::Texts => opts.snap_texts = !opts.snap_texts,
+                SnapOptionFlag::Regions => opts.snap_regions = !opts.snap_regions,
+                SnapOptionFlag::FootprintOrigins => {
+                    opts.snap_footprint_origins = !opts.snap_footprint_origins
+                }
+                SnapOptionFlag::Body3dPoints => opts.snap_3d_body_points = !opts.snap_3d_body_points,
             }
             editor.canvas_cache.clear();
+        }
+        self.refresh_panel_ctx();
+    }
+
+    /// v0.13 — Altium "Snap Distance" setter.
+    pub(crate) fn handle_fp_set_snap_distance(&mut self, raw: String) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            if let Ok(v) = raw.trim().parse::<f64>() {
+                editor.state.snap_options.snap_distance_mm = v.clamp(0.001, 100.0);
+                editor.canvas_cache.clear();
+            }
+        }
+        self.refresh_panel_ctx();
+    }
+
+    /// v0.13 — Altium "Axis Snap Range" setter.
+    pub(crate) fn handle_fp_set_axis_snap_range(&mut self, raw: String) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            if let Ok(v) = raw.trim().parse::<f64>() {
+                editor.state.snap_options.axis_snap_range_mm = v.clamp(0.001, 100.0);
+                editor.canvas_cache.clear();
+            }
         }
         self.refresh_panel_ctx();
     }
