@@ -10,7 +10,7 @@
 
 - [x] Task 01: Callsite inventory and cutover contract freeze completed. Evidence: [logs/milestone-f-task-01-callsite-inventory.md](../logs/milestone-f-task-01-callsite-inventory.md)
 - [x] Task 02: Compatibility bridge module integrated into app runtime. Evidence: [logs/milestone-f-task-02-compat-bridge.md](../logs/milestone-f-task-02-compat-bridge.md)
-- [ ] Task 03: Canvas render path switched to `signex-renderer` scene flow.
+- [ ] Task 03: Canvas render path switched to `signex-renderer` scene flow. Evidence (in progress): [logs/milestone-f-task-03-canvas-cutover.md](../logs/milestone-f-task-03-canvas-cutover.md)
 - [ ] Task 04: Hit-test and selection workflow switched to new runtime bridge.
 - [ ] Task 05: Overlay and text helper paths switched.
 - [ ] Task 06: Legacy schematic runtime imports removed from app modules.

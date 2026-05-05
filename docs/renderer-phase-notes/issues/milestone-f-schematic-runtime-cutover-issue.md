@@ -55,6 +55,10 @@ Completed in this slice:
 - [x] [logs/milestone-f-task-01-callsite-inventory.md](../logs/milestone-f-task-01-callsite-inventory.md)
 - [x] [logs/milestone-f-task-02-compat-bridge.md](../logs/milestone-f-task-02-compat-bridge.md)
 
+In progress:
+
+- [ ] [logs/milestone-f-task-03-canvas-cutover.md](../logs/milestone-f-task-03-canvas-cutover.md)
+
 ## Non-goals
 
 - No PCB 2D runtime migration in this milestone.
