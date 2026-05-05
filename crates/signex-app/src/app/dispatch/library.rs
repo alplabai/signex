@@ -4403,6 +4403,15 @@ pub(crate) fn apply_footprint_primitive_edit(
         }
         PrimitiveEditorMsg::FootprintSetPadsTool(tool) => {
             editor.state.pads_tool = tool;
+            // v0.18.15.1 — leaving the PlaceTrack tool clears the
+            // in-flight gesture so re-entering doesn't start
+            // mid-segment from a stale anchor.
+            if !matches!(
+                tool,
+                crate::library::editor::footprint::state::PadsTool::PlaceTrack
+            ) {
+                editor.state.track_first = None;
+            }
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintToolEscape => {
@@ -4414,6 +4423,9 @@ pub(crate) fn apply_footprint_primitive_edit(
                 crate::library::editor::footprint::state::SketchTool::Select;
             editor.state.tool_pending =
                 crate::library::editor::footprint::state::ToolPending::Idle;
+            // v0.18.15.1 — Esc also bails out of an in-flight
+            // Place Track 2-click gesture.
+            editor.state.track_first = None;
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintSketchToolEscape => {
