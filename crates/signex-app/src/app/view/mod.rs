@@ -4196,15 +4196,15 @@ impl Signex {
         // Match the schematic's own font (Iosevka by default; whatever
         // the user picked under Preferences ▸ Canvas Font) so the
         // tooltip reads as "this is data from the canvas" rather than
-        // floating Roboto chrome. We reuse the same `IOSEVKA` Font
-        // constant signex-render uses for canvas text so the lookup
+        // floating Roboto chrome. We reuse the app's `IOSEVKA` font
+        // constant for canvas text so the lookup
         // hits the embedded TTF (not whatever the system fontconfig
         // falls back to for `Family::Name`).
         let canvas_font_name: &str = &self.document_state.panel_ctx.canvas_font_name;
         let canvas_font = if canvas_font_name == crate::fonts::DEFAULT_CANVAS_FONT
             || canvas_font_name.is_empty()
         {
-            signex_render::IOSEVKA
+            crate::render_config::IOSEVKA
         } else {
             crate::fonts::iced_font_for_family(canvas_font_name)
         };

@@ -8,7 +8,7 @@ use iced::widget::{
     Column, Space, button, column, container, row, scrollable, svg, text, text_input,
 };
 use iced::{Background, Border, Color, Element, Length, Theme};
-use signex_render::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
+use crate::render_config::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
 use signex_types::theme::ThemeId;
 
 use crate::app::view::dialogs::{

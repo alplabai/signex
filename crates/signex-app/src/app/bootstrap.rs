@@ -318,16 +318,16 @@ impl Signex {
         // section is populated from the get-go.
         app.library.global_libraries =
             crate::panels::components_panel::global_prefs::load_and_mount_all(&mut app.library);
-        signex_render::set_canvas_font_name(&app.ui_state.canvas_font_name);
-        signex_render::set_canvas_font_size(app.ui_state.canvas_font_size);
-        signex_render::set_canvas_font_style(
+        crate::render_config::set_canvas_font_name(&app.ui_state.canvas_font_name);
+        crate::render_config::set_canvas_font_size(app.ui_state.canvas_font_size);
+        crate::render_config::set_canvas_font_style(
             app.ui_state.canvas_font_bold,
             app.ui_state.canvas_font_italic,
         );
-        signex_render::set_power_port_style(app.ui_state.power_port_style);
-        signex_render::set_label_style(app.ui_state.label_style);
-        signex_render::set_multisheet_style(app.ui_state.multisheet_style);
-        signex_render::set_grid_style(app.ui_state.grid_style);
+        crate::render_config::set_power_port_style(app.ui_state.power_port_style);
+        crate::render_config::set_label_style(app.ui_state.label_style);
+        crate::render_config::set_multisheet_style(app.ui_state.multisheet_style);
+        crate::render_config::set_grid_style(app.ui_state.grid_style);
 
         // Multi-window (Phase 1): open the main OS window here. Phase 2
         // will open additional windows on demand when the user drags a
@@ -379,7 +379,7 @@ impl Signex {
         id: ThemeId,
         custom: Option<&signex_types::theme::CustomThemeFile>,
     ) -> Theme {
-        use signex_render::colors::to_iced;
+        use crate::render_config::to_iced;
         match id {
             ThemeId::Custom => {
                 if let Some(c) = custom {

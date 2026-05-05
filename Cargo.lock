@@ -5286,7 +5286,6 @@ dependencies = [
  "signex-gfx",
  "signex-library",
  "signex-output",
- "signex-render",
  "signex-renderer",
  "signex-types",
  "signex-widgets",
@@ -5324,7 +5323,6 @@ name = "signex-erc"
 version = "0.11.0"
 dependencies = [
  "serde",
- "signex-render",
  "signex-types",
  "uuid",
 ]
@@ -5419,16 +5417,6 @@ dependencies = [
  "thiserror 2.0.18",
  "tiny-skia",
  "ttf-parser",
- "uuid",
-]
-
-[[package]]
-name = "signex-render"
-version = "0.11.0"
-dependencies = [
- "iced",
- "signex-types",
- "thiserror 2.0.18",
  "uuid",
 ]
 

@@ -275,8 +275,8 @@ impl Signex {
             crate::panels::PanelMsg::SetCanvasFont(name) => {
                 self.ui_state.canvas_font_name = name.clone();
                 self.document_state.panel_ctx.canvas_font_name = name.clone();
-                signex_render::set_canvas_font_name(name);
-                signex_render::set_canvas_font_style(
+                crate::render_config::set_canvas_font_name(name);
+                crate::render_config::set_canvas_font_style(
                     self.ui_state.canvas_font_bold,
                     self.ui_state.canvas_font_italic,
                 );
@@ -290,7 +290,7 @@ impl Signex {
             crate::panels::PanelMsg::SetCanvasFontSize(size) => {
                 self.ui_state.canvas_font_size = *size;
                 self.document_state.panel_ctx.canvas_font_size = *size;
-                signex_render::set_canvas_font_size(*size);
+                crate::render_config::set_canvas_font_size(*size);
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_content_cache();
@@ -301,7 +301,7 @@ impl Signex {
             crate::panels::PanelMsg::SetCanvasFontBold(is_bold) => {
                 self.ui_state.canvas_font_bold = *is_bold;
                 self.document_state.panel_ctx.canvas_font_bold = *is_bold;
-                signex_render::set_canvas_font_style(
+                crate::render_config::set_canvas_font_style(
                     self.ui_state.canvas_font_bold,
                     self.ui_state.canvas_font_italic,
                 );
@@ -315,7 +315,7 @@ impl Signex {
             crate::panels::PanelMsg::SetCanvasFontItalic(is_italic) => {
                 self.ui_state.canvas_font_italic = *is_italic;
                 self.document_state.panel_ctx.canvas_font_italic = *is_italic;
-                signex_render::set_canvas_font_style(
+                crate::render_config::set_canvas_font_style(
                     self.ui_state.canvas_font_bold,
                     self.ui_state.canvas_font_italic,
                 );

@@ -1,6 +1,6 @@
 //! Electrical Rules Check. Runs on a [`SchematicSheet`] and returns a
 //! list of [`Violation`]s. Internally the sheet is projected into an
-//! [`ErcContext`] first, so rule logic never imports `signex-render`.
+//! [`ErcContext`] first, so rule logic stays independent from any legacy renderer crate.
 //!
 //! # Architecture
 //!

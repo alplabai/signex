@@ -769,7 +769,7 @@ fn f13_register_pending_rejects_non_snxlib_extension() {
 // never touched.
 // ─────────────────────────────────────────────────────────────────
 
-use signex_render::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
+use signex_app::render_config::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeId;
 

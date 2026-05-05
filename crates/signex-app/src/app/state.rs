@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use signex_render::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
+use crate::render_config::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
 use signex_types::coord::Unit;
 use signex_types::project::ProjectData;
 use signex_types::theme::ThemeId;
