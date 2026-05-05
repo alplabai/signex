@@ -514,70 +514,13 @@ impl<'a> SchematicSnapshot<'a> {
 // ---------------------------------------------------------------------------
 // Symbol transform
 // ---------------------------------------------------------------------------
+//
+// HI-19: `SymbolTransform` is now defined in `signex_types::schematic` so
+// `signex-engine` and `signex-render` share one implementation. Re-exported
+// here for backward compatibility with existing imports
+// (`use signex_render::schematic::SymbolTransform`).
 
-/// World-space placement of a parent symbol — used by [`pin::draw_pin`]
-/// and [`field_style`] when they need to fold a child's library-space
-/// rotation/mirror with the parent's transform.
-///
-/// The transform is `Y-up library` → `Y-down schematic`: a library-space
-/// pin at `(0, +pin_length)` lands at world position
-/// `(0, -pin_length)` relative to the parent body when the parent has
-/// no rotation or mirror.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct SymbolTransform {
-    pub origin: Point,
-    pub rotation_deg: f64,
-    pub mirror_x: bool,
-    pub mirror_y: bool,
-}
-
-impl SymbolTransform {
-    /// Build from a placed `Symbol`.
-    #[inline]
-    pub fn from_symbol(symbol: &Symbol) -> Self {
-        Self {
-            origin: symbol.position,
-            rotation_deg: symbol.rotation,
-            mirror_x: symbol.mirror_x,
-            mirror_y: symbol.mirror_y,
-        }
-    }
-
-    /// Apply transform to a library-space point. The library convention
-    /// is Y-up; the schematic is Y-down, so we negate `y` first.
-    #[must_use]
-    pub fn apply(&self, local: Point) -> Point {
-        let x = local.x;
-        let y = -local.y;
-        let rad = -self.rotation_deg.to_radians();
-        let cos = rad.cos();
-        let sin = rad.sin();
-        let mut rx = x * cos - y * sin;
-        let mut ry = x * sin + y * cos;
-        if self.mirror_y {
-            rx = -rx;
-        }
-        if self.mirror_x {
-            ry = -ry;
-        }
-        Point::new(rx + self.origin.x, ry + self.origin.y)
-    }
-
-    /// Compose a child rotation (degrees, clockwise positive in
-    /// schematic-screen space) with the parent's rotation + mirror so
-    /// the rendered angle ends up correct.
-    #[must_use]
-    pub fn apply_angle(&self, child_deg: f64) -> f64 {
-        let mut r = self.rotation_deg + child_deg;
-        if self.mirror_x {
-            r = -r + 180.0;
-        }
-        if self.mirror_y {
-            r = -r;
-        }
-        r.rem_euclid(360.0)
-    }
-}
+pub use signex_types::schematic::SymbolTransform;
 
 // ---------------------------------------------------------------------------
 // Render context

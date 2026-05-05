@@ -318,7 +318,9 @@ impl Signex {
         // can save through the same multi-footprint path as the
         // disk-loaded flow.
         let file = signex_library::FootprintFile::from_footprint(primitive);
-        let mut state = crate::app::FootprintEditorState::new(path.clone(), file);
+        // HI-23: same snap-state seeding as the open-from-disk path.
+        let mut state = crate::app::FootprintEditorState::new(path.clone(), file)
+            .with_global_snap_disabled(!self.ui_state.snap_enabled);
         state.dirty = true;
         self.document_state
             .footprint_editors

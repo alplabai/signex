@@ -22,13 +22,13 @@
 use crate::error::SketchError;
 use crate::id::SketchEntityId;
 use crate::sketch::SketchData;
-use crate::solver::math::{cross, distance, norm, sub, Vec2};
-use crate::solver::state::{arc_refs, line_endpoints, point_xy, EntityIndex};
+use crate::solver::math::{Vec2, cross, distance, norm, sub};
+use crate::solver::state::{EntityIndex, arc_refs, line_endpoints, point_xy};
 
 /// Tolerance below which a line's direction vector is treated as
 /// degenerate (zero-length). Anything smaller is a malformed line for
 /// which the perpendicular-distance formula has no defined direction.
-const DEGENERATE_LEN_EPS: f64 = 1e-12;
+pub(super) const DEGENERATE_LEN_EPS: f64 = 1e-12;
 
 /// Signed perpendicular distance from point `p` to the infinite line
 /// through `a, b`. `None` if `|b − a| < DEGENERATE_LEN_EPS` (line is

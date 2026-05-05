@@ -85,13 +85,9 @@ pub enum Message {
     /// fine/coarse display + multiplier.
     GridPropertiesApply,
     /// v0.18.19 — Grid Properties modal: Fine grid display style.
-    GridPropertiesSetFineDisplay(
-        crate::library::editor::footprint::state::GridDisplay,
-    ),
+    GridPropertiesSetFineDisplay(crate::library::editor::footprint::state::GridDisplay),
     /// v0.18.19 — Grid Properties modal: Coarse grid display style.
-    GridPropertiesSetCoarseDisplay(
-        crate::library::editor::footprint::state::GridDisplay,
-    ),
+    GridPropertiesSetCoarseDisplay(crate::library::editor::footprint::state::GridDisplay),
     /// v0.18.19 — Grid Properties modal: Multiplier (5x / 10x / 2x / 1x).
     GridPropertiesSetMultiplier(u32),
     /// v0.18.14.1 — Custom Selection Filter modal launcher. Opens
@@ -102,9 +98,7 @@ pub enum Message {
     CloseSelectionFilterCustom,
     /// v0.18.14.1 — Custom Selection Filter modal: per-row checkbox
     /// toggle.
-    ToggleSelectionFilterCustomKind(
-        crate::library::editor::footprint::state::SelectionFilterKind,
-    ),
+    ToggleSelectionFilterCustomKind(crate::library::editor::footprint::state::SelectionFilterKind),
     /// v0.18.14.1 — Custom Selection Filter modal: Apply button.
     /// Writes the draft into the active footprint editor's
     /// `state.selection_filter` then closes.

@@ -7,12 +7,12 @@
 mod tests {
     use chrono::Utc;
     use signex_library::primitive::footprint::Footprint;
+    use signex_sketch::SketchData;
     use signex_sketch::attr::{PadAttr, PadKind, PadShape, PadSide, PasteAperturePattern};
     use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
     use signex_sketch::entity::{Entity, EntityKind};
     use signex_sketch::id::{ConstraintId, SketchEntityId};
     use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
-    use signex_sketch::SketchData;
 
     use super::super::sketch_dispatch::{apply_sketch_edit, apply_sketch_edit_with_warnings};
     use super::super::sketch_mode::SketchEdit;
@@ -158,7 +158,11 @@ mod tests {
         .unwrap();
 
         assert!(fp.sketch.is_some());
-        assert_eq!(fp.pads.len(), 1, "literal pad must survive empty Sketch toggle");
+        assert_eq!(
+            fp.pads.len(),
+            1,
+            "literal pad must survive empty Sketch toggle"
+        );
         assert_eq!(fp.pads[0].number, "literal");
     }
 
@@ -167,8 +171,8 @@ mod tests {
         // v0.13.2 Phase 6.4 — drive the Line-tool state machine
         // through two clicks. Second click snaps onto the first
         // entity to verify the auto-Coincident path.
-        use crate::library::editor::footprint::state::{SketchTool, ToolPending};
         use crate::library::editor::footprint::sketch_mode::SketchEdit;
+        use crate::library::editor::footprint::state::{SketchTool, ToolPending};
         use signex_sketch::entity::EntityKind;
 
         let mut fp = empty_footprint();
@@ -197,19 +201,14 @@ mod tests {
         let pt2 = Entity::new(p2, plane, EntityKind::Point { x: 5.0, y: 0.0 });
         apply_sketch_edit(&mut state, &mut fp, SketchEdit::AddEntity(pt2)).unwrap();
         let line_id = SketchEntityId::new();
-        let line = Entity::new(
-            line_id,
-            plane,
-            EntityKind::Line { start: p1, end: p2 },
-        );
+        let line = Entity::new(line_id, plane, EntityKind::Line { start: p1, end: p2 });
         apply_sketch_edit(&mut state, &mut fp, SketchEdit::AddEntity(line)).unwrap();
 
         let sketch = fp.sketch.as_ref().unwrap();
         assert_eq!(sketch.entities.len(), 3);
-        assert!(sketch
-            .entities
-            .iter()
-            .any(|e| matches!(e.kind, EntityKind::Line { start, end } if start == p1 && end == p2)));
+        assert!(sketch.entities.iter().any(
+            |e| matches!(e.kind, EntityKind::Line { start, end } if start == p1 && end == p2)
+        ));
     }
 
     #[test]
@@ -292,11 +291,7 @@ mod tests {
         let lid = SketchEntityId::new();
         let pt1 = Entity::new(p1, plane, EntityKind::Point { x: 0.0, y: 0.0 });
         let pt2 = Entity::new(p2, plane, EntityKind::Point { x: 1.0, y: 0.0 });
-        let line = Entity::new(
-            lid,
-            plane,
-            EntityKind::Line { start: p1, end: p2 },
-        );
+        let line = Entity::new(lid, plane, EntityKind::Line { start: p1, end: p2 });
         fp.sketch = Some(SketchData {
             planes: vec![Plane {
                 id: plane,
@@ -317,7 +312,10 @@ mod tests {
             .iter()
             .find(|e| e.id == lid)
             .unwrap();
-        assert!(line_entity.pad.is_none(), "Pad attr must NOT attach to a Line");
+        assert!(
+            line_entity.pad.is_none(),
+            "Pad attr must NOT attach to a Line"
+        );
         assert_eq!(current_role_of(line_entity), RoleTag::Unassigned);
     }
 
@@ -334,11 +332,7 @@ mod tests {
         let lid = SketchEntityId::new();
         let pt1 = Entity::new(p1, plane, EntityKind::Point { x: 0.0, y: 0.0 });
         let pt2 = Entity::new(p2, plane, EntityKind::Point { x: 1.0, y: 0.0 });
-        let line = Entity::new(
-            lid,
-            plane,
-            EntityKind::Line { start: p1, end: p2 },
-        );
+        let line = Entity::new(lid, plane, EntityKind::Line { start: p1, end: p2 });
         fp.sketch = Some(SketchData {
             planes: vec![Plane {
                 id: plane,
@@ -428,7 +422,10 @@ mod tests {
         apply_sketch_role(&mut state, &mut fp, p1, RoleTag::SilkTop).unwrap();
 
         let entity = &fp.sketch.as_ref().unwrap().entities[0];
-        assert!(entity.pad.is_none(), "Pad must be cleared by SilkTop assign");
+        assert!(
+            entity.pad.is_none(),
+            "Pad must be cleared by SilkTop assign"
+        );
         assert!(entity.silk.is_some());
         assert_eq!(current_role_of(entity), RoleTag::SilkTop);
         // Bake must NOT emit a stale pad after the role swap.

@@ -6,7 +6,7 @@ use common::Sketch;
 
 use signex_sketch::constraint::{Constraint, ConstraintKind};
 use signex_sketch::id::ConstraintId;
-use signex_sketch::solver::residual::{residual, ResolvedParams};
+use signex_sketch::solver::residual::{ResolvedParams, residual};
 use signex_sketch::solver::state::pack;
 
 fn empty_params() -> ResolvedParams {
@@ -30,7 +30,14 @@ fn equal_length_residual_zero_on_equal_lines() {
         id: ConstraintId::new(),
         kind: ConstraintKind::EqualLength { l1, l2 },
     };
-    let r = residual(&cstr, &packed.vector, &packed.index, &s.data, &empty_params()).unwrap();
+    let r = residual(
+        &cstr,
+        &packed.vector,
+        &packed.index,
+        &s.data,
+        &empty_params(),
+    )
+    .unwrap();
     assert_eq!(r.len(), 1);
     assert!(r[0].abs() < 1e-12);
 }
@@ -50,7 +57,14 @@ fn equal_length_residual_nonzero_when_mismatched() {
         id: ConstraintId::new(),
         kind: ConstraintKind::EqualLength { l1, l2 },
     };
-    let r = residual(&cstr, &packed.vector, &packed.index, &s.data, &empty_params()).unwrap();
+    let r = residual(
+        &cstr,
+        &packed.vector,
+        &packed.index,
+        &s.data,
+        &empty_params(),
+    )
+    .unwrap();
     // residual = len2 − len1 = 8 − 5 = 3
     assert!((r[0] - 3.0).abs() < 1e-12);
 }
@@ -70,7 +84,14 @@ fn equal_radius_zero_on_two_equal_circles() {
         id: ConstraintId::new(),
         kind: ConstraintKind::EqualRadius { e1, e2 },
     };
-    let r = residual(&cstr, &packed.vector, &packed.index, &s.data, &empty_params()).unwrap();
+    let r = residual(
+        &cstr,
+        &packed.vector,
+        &packed.index,
+        &s.data,
+        &empty_params(),
+    )
+    .unwrap();
     assert_eq!(r.len(), 1);
     assert!(r[0].abs() < 1e-12);
 }
@@ -95,7 +116,14 @@ fn equal_radius_zero_on_two_equal_arcs() {
         id: ConstraintId::new(),
         kind: ConstraintKind::EqualRadius { e1, e2 },
     };
-    let r = residual(&cstr, &packed.vector, &packed.index, &s.data, &empty_params()).unwrap();
+    let r = residual(
+        &cstr,
+        &packed.vector,
+        &packed.index,
+        &s.data,
+        &empty_params(),
+    )
+    .unwrap();
     assert_eq!(r.len(), 1);
     assert!(r[0].abs() < 1e-12);
 }
@@ -120,7 +148,14 @@ fn equal_radius_zero_on_circle_and_arc_combo() {
             e2: arc,
         },
     };
-    let r = residual(&cstr, &packed.vector, &packed.index, &s.data, &empty_params()).unwrap();
+    let r = residual(
+        &cstr,
+        &packed.vector,
+        &packed.index,
+        &s.data,
+        &empty_params(),
+    )
+    .unwrap();
     assert_eq!(r.len(), 1);
     assert!(r[0].abs() < 1e-12);
 }
@@ -138,7 +173,14 @@ fn equal_radius_nonzero_on_mismatched_radii() {
         id: ConstraintId::new(),
         kind: ConstraintKind::EqualRadius { e1, e2 },
     };
-    let r = residual(&cstr, &packed.vector, &packed.index, &s.data, &empty_params()).unwrap();
+    let r = residual(
+        &cstr,
+        &packed.vector,
+        &packed.index,
+        &s.data,
+        &empty_params(),
+    )
+    .unwrap();
     // residual = r2 − r1 = 7 − 3 = 4
     assert!((r[0] - 4.0).abs() < 1e-12);
 }
@@ -163,7 +205,14 @@ fn tangent_line_arc_zero_on_horizontal_line_above_centre() {
         id: ConstraintId::new(),
         kind: ConstraintKind::TangentLineArc { line, arc },
     };
-    let r = residual(&cstr, &packed.vector, &packed.index, &s.data, &empty_params()).unwrap();
+    let r = residual(
+        &cstr,
+        &packed.vector,
+        &packed.index,
+        &s.data,
+        &empty_params(),
+    )
+    .unwrap();
     assert_eq!(r.len(), 1);
     assert!(r[0].abs() < 1e-12, "residual = {}", r[0]);
 }
@@ -186,7 +235,14 @@ fn tangent_line_arc_zero_on_horizontal_line_below_centre() {
         id: ConstraintId::new(),
         kind: ConstraintKind::TangentLineArc { line, arc },
     };
-    let r = residual(&cstr, &packed.vector, &packed.index, &s.data, &empty_params()).unwrap();
+    let r = residual(
+        &cstr,
+        &packed.vector,
+        &packed.index,
+        &s.data,
+        &empty_params(),
+    )
+    .unwrap();
     assert!(r[0].abs() < 1e-12, "residual = {}", r[0]);
 }
 
@@ -208,7 +264,14 @@ fn tangent_line_arc_nonzero_on_non_tangent_line() {
         id: ConstraintId::new(),
         kind: ConstraintKind::TangentLineArc { line, arc },
     };
-    let r = residual(&cstr, &packed.vector, &packed.index, &s.data, &empty_params()).unwrap();
+    let r = residual(
+        &cstr,
+        &packed.vector,
+        &packed.index,
+        &s.data,
+        &empty_params(),
+    )
+    .unwrap();
     // |perp_dist| − r = 8 − 5 = 3
     assert!((r[0] - 3.0).abs() < 1e-12, "residual = {}", r[0]);
 }
@@ -238,7 +301,14 @@ fn tangent_arc_arc_external_zero_when_distance_equals_sum() {
             internal: false,
         },
     };
-    let r = residual(&cstr, &packed.vector, &packed.index, &s.data, &empty_params()).unwrap();
+    let r = residual(
+        &cstr,
+        &packed.vector,
+        &packed.index,
+        &s.data,
+        &empty_params(),
+    )
+    .unwrap();
     assert_eq!(r.len(), 1);
     assert!(r[0].abs() < 1e-12, "residual = {}", r[0]);
 }
@@ -266,7 +336,14 @@ fn tangent_arc_arc_internal_zero_when_distance_equals_diff() {
             internal: true,
         },
     };
-    let r = residual(&cstr, &packed.vector, &packed.index, &s.data, &empty_params()).unwrap();
+    let r = residual(
+        &cstr,
+        &packed.vector,
+        &packed.index,
+        &s.data,
+        &empty_params(),
+    )
+    .unwrap();
     assert!(r[0].abs() < 1e-12, "residual = {}", r[0]);
 }
 
@@ -293,7 +370,14 @@ fn tangent_arc_arc_external_nonzero_on_mismatched_setup() {
             internal: false,
         },
     };
-    let r = residual(&cstr, &packed.vector, &packed.index, &s.data, &empty_params()).unwrap();
+    let r = residual(
+        &cstr,
+        &packed.vector,
+        &packed.index,
+        &s.data,
+        &empty_params(),
+    )
+    .unwrap();
     // residual = dist − (r1 + r2) = 10 − 5 = 5
     assert!((r[0] - 5.0).abs() < 1e-12, "residual = {}", r[0]);
 }
@@ -321,7 +405,14 @@ fn tangent_arc_arc_internal_nonzero_on_mismatched_setup() {
             internal: true,
         },
     };
-    let r = residual(&cstr, &packed.vector, &packed.index, &s.data, &empty_params()).unwrap();
+    let r = residual(
+        &cstr,
+        &packed.vector,
+        &packed.index,
+        &s.data,
+        &empty_params(),
+    )
+    .unwrap();
     // residual = dist − |r1 − r2| = 1 − 3 = −2
     assert!((r[0] - (-2.0)).abs() < 1e-12, "residual = {}", r[0]);
 }
@@ -358,11 +449,7 @@ fn residual_count_is_one_for_all_task_2_6_kinds() {
     ];
 
     for kind in cases {
-        assert_eq!(
-            kind.residual_count(),
-            1,
-            "residual_count != 1 for {kind:?}"
-        );
+        assert_eq!(kind.residual_count(), 1, "residual_count != 1 for {kind:?}");
         let c = Constraint {
             id: ConstraintId::new(),
             kind: kind.clone(),

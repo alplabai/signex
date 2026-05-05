@@ -98,4 +98,3 @@ jobs:
 
       - name: Check advisories
         run: cargo deny --all-features check advisories
-        continue-on-error: true

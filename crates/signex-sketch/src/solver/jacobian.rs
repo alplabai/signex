@@ -14,7 +14,7 @@
 
 use crate::error::SketchError;
 use crate::sketch::SketchData;
-use crate::solver::residual::{total_residual, ResolvedParams};
+use crate::solver::residual::{ResolvedParams, total_residual};
 use crate::solver::state::EntityIndex;
 
 /// Step size for central-difference numerical differentiation.
@@ -35,12 +35,32 @@ pub fn numerical_jacobian(
     params: &ResolvedParams,
 ) -> Result<Vec<Vec<f64>>, SketchError> {
     let n = state.len();
-    let r0 = total_residual(sketch, state, index, params)?;
-    let m = r0.len();
-    let mut j = vec![vec![0.0; n]; m];
+
+    // MD-3: avoid the wasted baseline `total_residual` call. We only
+    // need it for the row count `m`, which the first central-difference
+    // evaluation already provides.
+    if n == 0 {
+        // No state: zero columns. m can still be nonzero (parametric
+        // constraints touch fixed points only) but the resulting
+        // Jacobian has no columns to fill, so an empty matrix is
+        // semantically correct.
+        return Ok(Vec::new());
+    }
 
     let mut state = state.to_vec();
-    for col in 0..n {
+    let saved = state[0];
+    state[0] = saved + H;
+    let r_plus0 = total_residual(sketch, &state, index, params)?;
+    state[0] = saved - H;
+    let r_minus0 = total_residual(sketch, &state, index, params)?;
+    state[0] = saved;
+    let m = r_plus0.len();
+    let mut j = vec![vec![0.0; n]; m];
+    for row in 0..m {
+        j[row][0] = (r_plus0[row] - r_minus0[row]) / (2.0 * H);
+    }
+
+    for col in 1..n {
         let saved = state[col];
         state[col] = saved + H;
         let r_plus = total_residual(sketch, &state, index, params)?;

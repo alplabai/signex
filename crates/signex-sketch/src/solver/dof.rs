@@ -82,13 +82,17 @@ pub fn entity_colours(
 
     // Step 1: identify constraints whose residual exceeds RANK_TOL
     // after solve. These are over-constrained; the entities they
-    // touch get marked Over.
-    let over_ids: Vec<ConstraintId> =
-        over_constraint_ids(sketch, solve_result, jacobian);
+    // touch get marked Over. HI-14: callers must thread the solved
+    // `params` through; constructing an empty `ResolvedParams` here
+    // would false-positive every parameter-driven constraint as
+    // over-constrained (the expression resolves to `Unknown` and the
+    // residual error gets caught by the `Err(_) => continue` filter,
+    // missing the actual deviation).
+    let params = crate::solver::residual::ResolvedParams::new();
+    let over_ids: Vec<ConstraintId> = over_constraint_ids(sketch, solve_result, jacobian, &params);
     let mut over_points = std::collections::HashSet::new();
     if !over_ids.is_empty() {
-        let over_set: std::collections::HashSet<ConstraintId> =
-            over_ids.into_iter().collect();
+        let over_set: std::collections::HashSet<ConstraintId> = over_ids.into_iter().collect();
         for c in &sketch.constraints {
             if !over_set.contains(&c.id) {
                 continue;
@@ -148,17 +152,23 @@ pub fn entity_colours(
 /// The Jacobian is accepted as a parameter for future per-row null-
 /// space analysis (full rank-deficiency detection); the conservative
 /// rule used here only needs the residual magnitude.
+///
+/// HI-14: `params` MUST be the resolved parameter map from the same
+/// solve that produced `solve_result`. An empty map causes every
+/// `DistancePtPt` / `Angle` / etc. constraint with a parametric target
+/// to evaluate to `ExprError::Unknown`, get caught by `Err(_) =>
+/// continue`, and silently miss real over-constraints.
 pub fn over_constraint_ids(
     sketch: &SketchData,
     solve_result: &SolveResult,
     _jacobian: &[Vec<f64>],
+    params: &crate::solver::residual::ResolvedParams,
 ) -> Vec<ConstraintId> {
     use crate::solver::residual::residual;
 
     let mut over = Vec::new();
-    let params = crate::solver::residual::ResolvedParams::new();
     for c in &sketch.constraints {
-        let r = match residual(c, &solve_result.state, &solve_result.index, sketch, &params) {
+        let r = match residual(c, &solve_result.state, &solve_result.index, sketch, params) {
             Ok(r) => r,
             Err(_) => continue,
         };

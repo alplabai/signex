@@ -23,6 +23,11 @@ pub enum PaperSize {
 }
 
 impl PaperSize {
+    /// Returns `(width_mm, height_mm)` for **landscape** orientation
+    /// (long side first). LO-5: schematic ERC currently treats every
+    /// sheet as landscape; if the schema ever grows an explicit
+    /// orientation flag (e.g. `A4_L` vs `A4`), the consumer should
+    /// swap the tuple instead of expecting this method to do it.
     pub fn dimensions_mm(self) -> (f64, f64) {
         match self {
             PaperSize::A4 => (297.0, 210.0),
@@ -347,8 +352,10 @@ fn pt_same(a: &Point, b: &Point) -> bool {
     (a.x - b.x).abs() < EPS && (a.y - b.y).abs() < EPS
 }
 
+/// MD-6: see `rules::key` — same 1 µm bucket so context + rule
+/// projections agree on net membership.
 fn pt_key(p: &Point) -> (i64, i64) {
-    ((p.x * 100.0).round() as i64, (p.y * 100.0).round() as i64)
+    ((p.x * 1000.0).round() as i64, (p.y * 1000.0).round() as i64)
 }
 
 /// Returns `true` if any wire/bus endpoint, label, or no-connect sits at `pos`.
@@ -373,24 +380,8 @@ fn point_is_connected(
 // Net derivation (union-find over wire endpoints)
 // ---------------------------------------------------------------------------
 
-fn uf_find(parent: &mut HashMap<(i64, i64), (i64, i64)>, x: (i64, i64)) -> (i64, i64) {
-    let p = *parent.entry(x).or_insert(x);
-    if p == x {
-        x
-    } else {
-        let r = uf_find(parent, p);
-        parent.insert(x, r);
-        r
-    }
-}
-
-fn uf_union(parent: &mut HashMap<(i64, i64), (i64, i64)>, a: (i64, i64), b: (i64, i64)) {
-    let ra = uf_find(parent, a);
-    let rb = uf_find(parent, b);
-    if ra != rb {
-        parent.insert(ra, rb);
-    }
-}
+// Union-find lives in `crate::uf` (HI-17). Import the canonical helpers.
+use crate::uf::{find as uf_find, union as uf_union};
 
 fn derive_nets(
     wires: &[ErcWire],

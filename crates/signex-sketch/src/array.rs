@@ -93,9 +93,7 @@ pub enum NumberingScheme {
     },
 
     /// Explicit list — `names[i]` per index. For named-pin connectors.
-    Explicit {
-        names: Vec<String>,
-    },
+    Explicit { names: Vec<String> },
 }
 
 impl Default for NumberingScheme {

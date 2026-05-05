@@ -47,8 +47,7 @@ impl Signex {
             PrefMsg::Close => {
                 if !self.ui_state.preferences_dirty {
                     self.ui_state.preferences_open = false;
-                    return self
-                        .close_detached_modal(super::super::state::ModalId::Preferences);
+                    return self.close_detached_modal(super::super::state::ModalId::Preferences);
                 }
             }
             PrefMsg::DiscardAndClose => {

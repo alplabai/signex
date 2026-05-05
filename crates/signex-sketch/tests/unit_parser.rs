@@ -3,7 +3,7 @@
 //!
 //! Covers Task 4.1 of `docs/internal/SKETCH_MODE_v0.13_PLAN.md`.
 
-use signex_sketch::unit::{parse_quantity, Quantity, Unit, UnitError, UnitFamily};
+use signex_sketch::unit::{Quantity, Unit, UnitError, UnitFamily, parse_quantity};
 
 const EPS: f64 = 1e-10;
 

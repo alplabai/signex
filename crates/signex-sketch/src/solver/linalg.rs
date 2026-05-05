@@ -125,10 +125,10 @@ pub fn lu_decompose(a: &mut [Vec<f64>]) -> Result<Vec<usize>, LinAlgError> {
 }
 
 /// Bundled LU factorisation: the packed `LU` matrix and the row-pivot
-/// trail produced by [`lu_decompose`]. API patterned after nalgebra's
-/// `LU` struct (Apache-2.0; we adopt the API shape, not the
-/// implementation): factor once, then call [`LuDecomposition::solve`]
-/// repeatedly with different right-hand sides.
+/// trail produced by [`lu_decompose`]. Factor-once, solve-many API
+/// shape: factor `(JᵀJ + λI)` once, then call [`LuDecomposition::solve`]
+/// repeatedly against different right-hand sides without recomputing the
+/// factorisation.
 ///
 /// LM uses this in the inner loop: factor `(JᵀJ + λI)` once per
 /// iteration and solve against `−Jᵀr` without recomputing the

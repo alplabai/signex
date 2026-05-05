@@ -22,8 +22,8 @@ use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
 use signex_sketch::sketch::SketchData;
-use signex_sketch::solver::residual::ResolvedParams;
 use signex_sketch::solver::Solver;
+use signex_sketch::solver::residual::ResolvedParams;
 
 // ─────────────────────────────────────────────────────────────────────
 // Inline sketch builder — no shared `tests/common/` for this crate.
@@ -311,7 +311,11 @@ fn bake_castellated_native() {
 
     assert_eq!(out.len(), 1);
     let pad = &out[0];
-    assert_eq!(pad.kind, LibPadKind::Castellated, "v0.14: native Castellated");
+    assert_eq!(
+        pad.kind,
+        LibPadKind::Castellated,
+        "v0.14: native Castellated"
+    );
     let drill = pad.drill.as_ref().expect("drill present");
     assert!(approx_eq(drill.diameter, 0.6, 1e-9));
     // Castellated reuses the THT layer pattern (no paste).
@@ -349,9 +353,17 @@ fn bake_chamfered_native() {
 
     assert_eq!(out.len(), 1);
     match out[0].shape {
-        LibPadShape::Chamfered { chamfer_ratio, corners } => {
+        LibPadShape::Chamfered {
+            chamfer_ratio,
+            corners,
+        } => {
             assert!(approx_eq(chamfer_ratio, 0.2, 1e-9));
-            assert!(corners.top_left && corners.top_right && corners.bottom_left && corners.bottom_right);
+            assert!(
+                corners.top_left
+                    && corners.top_right
+                    && corners.bottom_left
+                    && corners.bottom_right
+            );
         }
         ref other => panic!("expected Chamfered, got {other:?}"),
     }
@@ -580,9 +592,7 @@ fn bake_custom_sketch_profile_native_v0141() {
     // baked relative to pad position: world (5,5)→(6,6) becomes
     // local (0,0)→(1,1).
     let mut pad = smd_rect_pad("1", "1.0mm", "1.0mm");
-    pad.shape = PadShape::Custom(CustomPadShape::SketchProfile {
-        source: vec![l1],
-    });
+    pad.shape = PadShape::Custom(CustomPadShape::SketchProfile { source: vec![l1] });
     s.attach_pad(pad_pt, pad);
     // Need to suppress the pad-point's own contribution as a corner —
     // ensure pad_pt isn't picked up by the walker. Setting it as

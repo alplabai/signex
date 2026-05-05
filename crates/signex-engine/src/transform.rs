@@ -227,10 +227,9 @@ impl Engine {
                 .iter_mut()
                 .find(|symbol| symbol.uuid == item.uuid)
                 .map(|symbol| {
-                    let (field_dx, field_dy) = inverse_field_display_delta(dx, dy);
                     if let Some(ref mut ref_text) = symbol.ref_text {
-                        ref_text.position.x += field_dx;
-                        ref_text.position.y += field_dy;
+                        ref_text.position.x += dx;
+                        ref_text.position.y += dy;
                         true
                     } else {
                         false
@@ -243,10 +242,9 @@ impl Engine {
                 .iter_mut()
                 .find(|symbol| symbol.uuid == item.uuid)
                 .map(|symbol| {
-                    let (field_dx, field_dy) = inverse_field_display_delta(dx, dy);
                     if let Some(ref mut val_text) = symbol.val_text {
-                        val_text.position.x += field_dx;
-                        val_text.position.y += field_dy;
+                        val_text.position.x += dx;
+                        val_text.position.y += dy;
                         true
                     } else {
                         false
@@ -419,11 +417,10 @@ impl Engine {
 /// already set. Used by callers that want to migrate stale layouts in
 /// bulk. User-placed fields are still respected.
 ///
-/// Currently has no in-tree callers — kept `pub` so signex-app can
-/// expose it via a future "Re-autoplace all fields" command without a
-/// follow-up signex-engine release.
+/// `pub(crate)` until a real caller lands; flip to `pub` when signex-app
+/// wires it into the "Re-autoplace all fields" command.
 #[allow(dead_code)]
-pub fn autoplace_all_marked_fields(document: &mut signex_types::schematic::SchematicSheet) {
+pub(crate) fn autoplace_all_marked_fields(document: &mut signex_types::schematic::SchematicSheet) {
     let lib_symbols = document.lib_symbols.clone();
     let snapshot = document.clone();
     for symbol in &mut document.symbols {
@@ -626,23 +623,16 @@ fn autoplace_fields(
 }
 
 /// Apply a symbol instance's position, rotation, and mirror to a
-/// library-space point, returning world-space coordinates. Library
-/// is Y-up; the schematic is Y-down, so we negate `y` first.
+/// library-space point, returning world-space coordinates.
+///
+/// HI-19: thin wrapper over the shared `SymbolTransform::apply` so the
+/// math lives in exactly one place (`signex-types::schematic`). Kept
+/// as a free function so existing call sites that pass `(lx, ly)`
+/// don't need to reshape into `Point`.
 fn transform_local_point(sym: &signex_types::schematic::Symbol, lx: f64, ly: f64) -> (f64, f64) {
-    let x = lx;
-    let y = -ly;
-    let rad = -sym.rotation.to_radians();
-    let cos = rad.cos();
-    let sin = rad.sin();
-    let mut rx = x * cos - y * sin;
-    let mut ry = x * sin + y * cos;
-    if sym.mirror_y {
-        rx = -rx;
-    }
-    if sym.mirror_x {
-        ry = -ry;
-    }
-    (rx + sym.position.x, ry + sym.position.y)
+    let p = signex_types::schematic::SymbolTransform::from_symbol(sym)
+        .apply(signex_types::schematic::Point::new(lx, ly));
+    (p.x, p.y)
 }
 
 fn graphic_extent_points(g: &signex_types::schematic::Graphic) -> Vec<(f64, f64)> {
@@ -701,10 +691,6 @@ fn anchor_obstacle_count(
 // ---------------------------------------------------------------------------
 // Geometry helpers
 // ---------------------------------------------------------------------------
-
-fn inverse_field_display_delta(dx: f64, dy: f64) -> (f64, f64) {
-    (dx, dy)
-}
 
 fn point_on_wire_interior(
     point: signex_types::schematic::Point,

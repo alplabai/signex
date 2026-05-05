@@ -177,9 +177,7 @@ pub fn parse_quantity(s: &str) -> Result<Quantity, UnitError> {
             if num.is_empty() {
                 return Err(UnitError::Parse(s.to_string()));
             }
-            let value: f64 = num
-                .parse()
-                .map_err(|_| UnitError::Parse(s.to_string()))?;
+            let value: f64 = num.parse().map_err(|_| UnitError::Parse(s.to_string()))?;
             return Ok(Quantity { value, unit });
         }
     }

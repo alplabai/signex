@@ -313,8 +313,18 @@ fn parse_f64(value: &str, block: &str, row: usize, field: &str) -> Result<f64, F
 }
 
 fn parse_uuid(value: &str, block: &str, row: usize, field: &str) -> Result<Uuid, FormatError> {
+    // MD-7: an empty UUID cell is corruption, not "orphan" — surface it
+    // so a pad row with a missing uuid cell can't silently merge with
+    // the synthetic orphan-pad footprint that `SnxPcb::parse` builds at
+    // line 1688 (that footprint constructs its own `Uuid::nil()`; this
+    // helper does not need to provide one).
     if value.is_empty() {
-        return Ok(Uuid::nil());
+        return Err(FormatError::TsvFieldParse {
+            block: block.to_string(),
+            row,
+            field: field.to_string(),
+            message: "empty uuid cell".to_string(),
+        });
     }
     Uuid::parse_str(value).map_err(|e| FormatError::TsvFieldParse {
         block: block.to_string(),
@@ -336,8 +346,24 @@ fn parse_uuid(value: &str, block: &str, row: usize, field: &str) -> Result<Uuid,
 const MM_PER_NM: f64 = 1.0e-6;
 const NM_PER_MM: f64 = 1.0e6;
 
+/// HI-12: convert mm → nm without overflow. The unchecked `as i64` cast
+/// would wrap to garbage for boards larger than ~9.2 m (and for any
+/// NaN / Inf input). Real PCBs are < 1 m, so we clamp to `i64::MIN/MAX`
+/// rather than panicking — that surfaces a non-finite value as the
+/// largest representable coordinate, which is visibly wrong instead of
+/// silently corrupt.
 fn mm_to_nm(mm: f64) -> i64 {
-    (mm * NM_PER_MM).round() as i64
+    let scaled = (mm * NM_PER_MM).round();
+    if scaled.is_nan() {
+        return 0;
+    }
+    if scaled >= i64::MAX as f64 {
+        return i64::MAX;
+    }
+    if scaled <= i64::MIN as f64 {
+        return i64::MIN;
+    }
+    scaled as i64
 }
 
 fn nm_to_mm(nm: i64) -> f64 {
@@ -799,15 +825,20 @@ impl SnxTable for PcbViaRow {
 
 /// Format an `f64` for TSV: trailing zeros stripped to keep diffs
 /// minimal. Whole numbers emit as `0` rather than `0.0`.
+///
+/// HI-13: the previous `< 1e15` guard was looser than the actual
+/// `i64::MAX as f64` boundary, and the `as i64` cast would wrap on
+/// the gap between them. Use the real cast bound and route non-finite
+/// inputs through `format!("{f}")` (which produces `"NaN"` / `"inf"`
+/// — visible at parse time rather than silently corrupted).
 fn format_f64(f: f64) -> String {
     if f == 0.0 {
         return "0".to_string();
     }
-    if f.fract() == 0.0 && f.abs() < 1e15 {
+    if f.is_finite() && f.fract() == 0.0 && f.abs() < (i64::MAX as f64) {
         return format!("{}", f as i64);
     }
-    let s = format!("{f}");
-    s
+    format!("{f}")
 }
 
 fn label_kind_str(t: LabelType) -> &'static str {
@@ -1357,6 +1388,13 @@ fn symbol_to_row(s: &Symbol) -> SchComponentRow {
 
 fn row_to_symbol(row: SchComponentRow, extras: SymbolExtras) -> Symbol {
     let mut fields = extras.fields.clone();
+    // LO-6: precedence is `extras.fields["MPN"] > row.mpn`. The TSV row
+    // column wins ONLY when no extras-side `MPN` is set, mirroring how
+    // `symbol_to_row` populates the column from `fields["MPN"]`. A
+    // hand-edited file that disagrees between the two sources keeps
+    // the extras value (round-tripping through symbol_to_row would
+    // overwrite the row anyway, so this avoids an asymmetric "the
+    // file we wrote isn't the file we read" case).
     if !row.mpn.is_empty() && !fields.contains_key("MPN") {
         fields.insert("MPN".to_string(), row.mpn.clone());
     }

@@ -19,9 +19,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 
 use crate::app::FootprintEditorState;
-use crate::library::editor::footprint::state::{
-    EditorMode, SelectionFilter, SelectionFilterKind,
-};
+use crate::library::editor::footprint::state::{EditorMode, SelectionFilter, SelectionFilterKind};
 use crate::library::messages::{LibraryMessage, PrimitiveEditorMsg};
 
 /// Build the unified bar items + render via
@@ -35,15 +33,11 @@ pub fn view<'a>(
     tokens: &'a ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let mut items: Vec<ActiveBarItem<LibraryMessage>> = match editor.state.mode {
-        EditorMode::Sketch => {
-            crate::library::editor::footprint::sketch_mode::active_bar::items(
-                editor, theme_id, tokens,
-            )
-        }
+        EditorMode::Sketch => crate::library::editor::footprint::sketch_mode::active_bar::items(
+            editor, theme_id, tokens,
+        ),
         EditorMode::Normal => {
-            crate::library::editor::footprint::pads_active_bar::items(
-                editor, theme_id, tokens,
-            )
+            crate::library::editor::footprint::pads_active_bar::items(editor, theme_id, tokens)
         }
         EditorMode::View3d => Vec::new(),
     };

@@ -7,10 +7,10 @@
 
 #![allow(dead_code)] // tests pull in only the helpers they use
 
+use signex_sketch::SketchData;
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
-use signex_sketch::SketchData;
 
 pub struct Sketch {
     pub data: SketchData,
@@ -26,7 +26,10 @@ impl Sketch {
         let mut data = SketchData::default();
         let plane_id = plane.id;
         data.planes.push(plane);
-        Self { data, plane: plane_id }
+        Self {
+            data,
+            plane: plane_id,
+        }
     }
 
     pub fn add_point(&mut self, x: f64, y: f64) -> SketchEntityId {
@@ -37,11 +40,7 @@ impl Sketch {
         id
     }
 
-    pub fn add_line(
-        &mut self,
-        start: SketchEntityId,
-        end: SketchEntityId,
-    ) -> SketchEntityId {
+    pub fn add_line(&mut self, start: SketchEntityId, end: SketchEntityId) -> SketchEntityId {
         let id = SketchEntityId::new();
         self.data
             .entities

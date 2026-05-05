@@ -15,16 +15,16 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 
 use signex_library::primitive::footprint::{FpCutout, Polygon};
+use signex_sketch::SketchError;
 use signex_sketch::entity::EntityKind;
 use signex_sketch::expr::ast::ExprNode;
-use signex_sketch::expr::eval::{eval, EvalContext};
+use signex_sketch::expr::eval::{EvalContext, eval};
 use signex_sketch::expr::parse::parse;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 use signex_sketch::unit::Quantity;
-use signex_sketch::SketchError;
 
-use crate::profile::{trace_closed_profile, TraceError};
+use crate::profile::{TraceError, trace_closed_profile};
 
 pub fn bake_cutouts(
     sketch: &SketchData,
@@ -42,7 +42,10 @@ pub fn bake_cutouts(
             Some(a) => a,
             None => continue,
         };
-        if !matches!(entity.kind, EntityKind::Line { .. } | EntityKind::Arc { .. }) {
+        if !matches!(
+            entity.kind,
+            EntityKind::Line { .. } | EntityKind::Arc { .. }
+        ) {
             warnings.push(format!(
                 "entity {}: BoardCutoutAttr requires a Line or Arc seed (Circles land in v0.14.2); skipping",
                 entity.id
@@ -120,8 +123,8 @@ mod tests {
     use signex_sketch::entity::Entity;
     use signex_sketch::id::SketchEntityId;
     use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
-    use signex_sketch::solver::residual::ResolvedParams;
     use signex_sketch::solver::Solver;
+    use signex_sketch::solver::residual::ResolvedParams;
 
     fn solve(sketch: &SketchData) -> FullSolveOutput {
         Solver::default()
@@ -187,7 +190,10 @@ mod tests {
         assert_eq!(out[0].boundary.points.len(), 4);
         assert_eq!(out[0].edge_radius_mm, 0.0);
         assert!(out[0].through);
-        assert!(warnings.is_empty(), "default cutout should bake without warnings, got {warnings:?}");
+        assert!(
+            warnings.is_empty(),
+            "default cutout should bake without warnings, got {warnings:?}"
+        );
     }
 
     #[test]
@@ -202,7 +208,10 @@ mod tests {
         bake_cutouts(&data, &solved, &HashMap::new(), &mut out, &mut warnings).unwrap();
         assert_eq!(out.len(), 1);
         assert!((out[0].edge_radius_mm - 1.0).abs() < 1e-9);
-        assert!(warnings.is_empty(), "v0.15 — edge_radius is now baked, no warning expected; got {warnings:?}");
+        assert!(
+            warnings.is_empty(),
+            "v0.15 — edge_radius is now baked, no warning expected; got {warnings:?}"
+        );
     }
 
     #[test]

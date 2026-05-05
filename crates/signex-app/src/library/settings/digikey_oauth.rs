@@ -190,7 +190,13 @@ pub fn run_blocking(
             };
         }
         match listener.accept() {
-            Ok((mut stream, _addr)) => {
+            Ok((mut stream, addr)) => {
+                // MD-14: only loopback should be hitting this listener.
+                // Reject any non-loopback peer (DNS-rebinding hardening).
+                if !addr.ip().is_loopback() {
+                    let _ = stream.shutdown(std::net::Shutdown::Both);
+                    continue;
+                }
                 let req_line = read_first_line(&mut stream);
                 let response_body = "<html><body><p>Signex: DigiKey connected. You can close this window.</p></body></html>";
                 let _ = std::io::Write::write_all(

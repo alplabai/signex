@@ -1265,7 +1265,11 @@ impl Signex {
             input.into()
         };
 
-        let link_label = if st.link_xy { "🔗 Linked" } else { "🔓 Unlinked" };
+        let link_label = if st.link_xy {
+            "🔗 Linked"
+        } else {
+            "🔓 Unlinked"
+        };
 
         // v0.18.12.1 — when linked (the default), the Step Y input
         // is disabled to make the "Y mirrors X" semantics visible
@@ -1273,67 +1277,63 @@ impl Signex {
         // discard. Toggle the chain icon to enable it.
         // v0.18.19 — display style + multiplier rows.
         use crate::library::editor::footprint::state::GridDisplay as Gd;
-        let mk_display_row = |label: &'static str,
-                              current: Gd,
-                              setter: fn(Gd) -> Message|
-              -> Element<'_, Message> {
-            let seg = move |label: &'static str, target: Gd, active: bool|
-                  -> Element<'_, Message> {
-                let bg = if active {
-                    iced::Color::from_rgba(0.40, 0.70, 1.00, 0.20)
-                } else {
-                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04)
-                };
-                iced::widget::button(text(label).size(10).color(text_c))
-                    .padding([3, 10])
-                    .on_press(setter(target))
-                    .style(move |_: &iced::Theme, _| iced::widget::button::Style {
-                        background: Some(iced::Background::Color(bg)),
-                        border: iced::Border {
-                            width: 1.0,
-                            radius: 3.0.into(),
-                            color: border_c,
-                        },
-                        ..iced::widget::button::Style::default()
-                    })
-                    .into()
+        let mk_display_row =
+            |label: &'static str, current: Gd, setter: fn(Gd) -> Message| -> Element<'_, Message> {
+                let seg =
+                    move |label: &'static str, target: Gd, active: bool| -> Element<'_, Message> {
+                        let bg = if active {
+                            iced::Color::from_rgba(0.40, 0.70, 1.00, 0.20)
+                        } else {
+                            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04)
+                        };
+                        iced::widget::button(text(label).size(10).color(text_c))
+                            .padding([3, 10])
+                            .on_press(setter(target))
+                            .style(move |_: &iced::Theme, _| iced::widget::button::Style {
+                                background: Some(iced::Background::Color(bg)),
+                                border: iced::Border {
+                                    width: 1.0,
+                                    radius: 3.0.into(),
+                                    color: border_c,
+                                },
+                                ..iced::widget::button::Style::default()
+                            })
+                            .into()
+                    };
+                row![
+                    container(text(label).size(11).color(text_muted)).width(Length::Fixed(80.0)),
+                    seg("Lines", Gd::Lines, current == Gd::Lines),
+                    seg("Dots", Gd::Dots, current == Gd::Dots),
+                    seg("Hidden", Gd::Hidden, current == Gd::Hidden),
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center)
+                .into()
             };
-            row![
-                container(text(label).size(11).color(text_muted))
-                    .width(Length::Fixed(80.0)),
-                seg("Lines", Gd::Lines, current == Gd::Lines),
-                seg("Dots", Gd::Dots, current == Gd::Dots),
-                seg("Hidden", Gd::Hidden, current == Gd::Hidden),
-            ]
-            .spacing(4)
-            .align_y(iced::Alignment::Center)
-            .into()
-        };
         let mk_mult_row = |current: u32| -> Element<'_, Message> {
-            let seg = move |label: &'static str, target: u32, active: bool|
-                  -> Element<'_, Message> {
-                let bg = if active {
-                    iced::Color::from_rgba(0.40, 0.70, 1.00, 0.20)
-                } else {
-                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04)
+            let seg =
+                move |label: &'static str, target: u32, active: bool| -> Element<'_, Message> {
+                    let bg = if active {
+                        iced::Color::from_rgba(0.40, 0.70, 1.00, 0.20)
+                    } else {
+                        iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04)
+                    };
+                    iced::widget::button(text(label).size(10).color(text_c))
+                        .padding([3, 10])
+                        .on_press(Message::GridPropertiesSetMultiplier(target))
+                        .style(move |_: &iced::Theme, _| iced::widget::button::Style {
+                            background: Some(iced::Background::Color(bg)),
+                            border: iced::Border {
+                                width: 1.0,
+                                radius: 3.0.into(),
+                                color: border_c,
+                            },
+                            ..iced::widget::button::Style::default()
+                        })
+                        .into()
                 };
-                iced::widget::button(text(label).size(10).color(text_c))
-                    .padding([3, 10])
-                    .on_press(Message::GridPropertiesSetMultiplier(target))
-                    .style(move |_: &iced::Theme, _| iced::widget::button::Style {
-                        background: Some(iced::Background::Color(bg)),
-                        border: iced::Border {
-                            width: 1.0,
-                            radius: 3.0.into(),
-                            color: border_c,
-                        },
-                        ..iced::widget::button::Style::default()
-                    })
-                    .into()
-            };
             row![
-                container(text("Multiplier").size(11).color(text_muted))
-                    .width(Length::Fixed(80.0)),
+                container(text("Multiplier").size(11).color(text_muted)).width(Length::Fixed(80.0)),
                 seg("1×", 1, current == 1),
                 seg("2×", 2, current == 2),
                 seg("5×", 5, current == 5),
@@ -1392,18 +1392,9 @@ impl Signex {
                 container(
                     row![
                         Space::new().width(Length::Fill),
-                        secondary_button(
-                            "Cancel",
-                            Message::GridPropertiesClose,
-                            text_c,
-                            border_c,
-                        ),
+                        secondary_button("Cancel", Message::GridPropertiesClose, text_c, border_c,),
                         Space::new().width(8),
-                        primary_button(
-                            "Apply",
-                            Some(Message::GridPropertiesApply),
-                            border_c,
-                        ),
+                        primary_button("Apply", Some(Message::GridPropertiesApply), border_c,),
                     ]
                     .align_y(iced::Alignment::Center),
                 )
@@ -1463,10 +1454,7 @@ impl Signex {
             self.interaction_state.last_mouse_pos,
         );
 
-        let mk_row = |label: &'static str,
-                      kind: K,
-                      on: bool|
-         -> Element<'_, Message> {
+        let mk_row = |label: &'static str, kind: K, on: bool| -> Element<'_, Message> {
             let glyph = if on { "[x]" } else { "[ ]" };
             iced::widget::button(
                 row![

@@ -261,7 +261,10 @@ mod tests {
         // Branch-cut crossing: a 2π jump collapses to 0.
         let a = PI - 0.01;
         let b = -PI + 0.01;
-        assert!(approx_eq(wrap_to_pi(b - a), -PI + 0.02 + 2.0 * PI - 0.0, 1e-3) || (wrap_to_pi(b - a)).abs() < 0.02 + EPS);
+        assert!(
+            approx_eq(wrap_to_pi(b - a), -PI + 0.02 + 2.0 * PI - 0.0, 1e-3)
+                || (wrap_to_pi(b - a)).abs() < 0.02 + EPS
+        );
     }
 
     // ─── Dense vector / matrix primitives ───

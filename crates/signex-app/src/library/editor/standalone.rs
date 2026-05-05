@@ -370,9 +370,7 @@ pub fn view_footprint<'a>(
     // v0.14.2 — mode switcher is its own floating widget at the
     // canvas's top-LEFT, separate from the centered active bar.
     let mode_switcher =
-        crate::library::editor::footprint::pads_active_bar::mode_switcher_overlay(
-            editor, tokens,
-        );
+        crate::library::editor::footprint::pads_active_bar::mode_switcher_overlay(editor, tokens);
     // v0.18.11.1 — canvas-overlay multi-footprint tab strip removed.
     // The Footprint Library left-dock panel (v0.18.8) renders the
     // same list (internal `file.footprints[i]`) with proper
@@ -385,11 +383,9 @@ pub fn view_footprint<'a>(
     // half) regardless of mode. Replaces the per-mode
     // pads_active_bar::view / sketch_mode::active_bar::view
     // mounting that lived here through v0.18.13.
-    let unified_bar = container(
-        crate::library::editor::footprint::unified_active_bar::view(
-            editor, theme_id, tokens,
-        ),
-    )
+    let unified_bar = container(crate::library::editor::footprint::unified_active_bar::view(
+        editor, theme_id, tokens,
+    ))
     .padding([6, 10])
     .center_x(Length::Fill)
     .align_y(iced::alignment::Vertical::Top);
@@ -453,51 +449,53 @@ fn view_footprint_top_strip<'a>(
     // Segmented control — three connected segments. Active segment
     // paints with the accent background; inactive segments stay
     // muted with a hover affordance.
-    let mode_segment = |label: &'static str,
-                        target: EditorMode,
-                        active: bool|
-     -> Element<'a, LibraryMessage> {
-        let path = editor.path.clone();
-        let label_color = if active { iced::Color::WHITE } else { text_c };
-        button(
-            text(label)
-                .size(11)
-                .color(label_color)
-                .align_x(iced::alignment::Horizontal::Center),
-        )
-        .padding([5, 14])
-        .on_press(LibraryMessage::PrimitiveEditorEvent {
-            path,
-            msg: PrimitiveEditorMsg::FootprintSetMode(target),
-        })
-        .style(move |_: &Theme, _| iced::widget::button::Style {
-            background: if active {
-                Some(iced::Background::Color(accent))
-            } else {
-                Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.04,
-                )))
-            },
-            border: Border {
-                width: 1.0,
-                radius: 3.0.into(),
-                color: if active {
-                    accent
+    let mode_segment =
+        |label: &'static str, target: EditorMode, active: bool| -> Element<'a, LibraryMessage> {
+            let path = editor.path.clone();
+            let label_color = if active { iced::Color::WHITE } else { text_c };
+            button(
+                text(label)
+                    .size(11)
+                    .color(label_color)
+                    .align_x(iced::alignment::Horizontal::Center),
+            )
+            .padding([5, 14])
+            .on_press(LibraryMessage::PrimitiveEditorEvent {
+                path,
+                msg: PrimitiveEditorMsg::FootprintSetMode(target),
+            })
+            .style(move |_: &Theme, _| iced::widget::button::Style {
+                background: if active {
+                    Some(iced::Background::Color(accent))
                 } else {
-                    border
+                    Some(iced::Background::Color(iced::Color::from_rgba(
+                        1.0, 1.0, 1.0, 0.04,
+                    )))
                 },
-            },
-            ..iced::widget::button::Style::default()
-        })
-        .into()
-    };
+                border: Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: if active { accent } else { border },
+                },
+                ..iced::widget::button::Style::default()
+            })
+            .into()
+        };
 
     let mode = editor.state.mode;
     let mode_segments = row![
         text("Mode").size(11).color(muted),
         Space::new().width(6),
-        mode_segment("Pads", EditorMode::Normal, matches!(mode, EditorMode::Normal)),
-        mode_segment("Sketch", EditorMode::Sketch, matches!(mode, EditorMode::Sketch)),
+        mode_segment(
+            "Pads",
+            EditorMode::Normal,
+            matches!(mode, EditorMode::Normal)
+        ),
+        mode_segment(
+            "Sketch",
+            EditorMode::Sketch,
+            matches!(mode, EditorMode::Sketch)
+        ),
         mode_segment("3D", EditorMode::View3d, matches!(mode, EditorMode::View3d)),
     ]
     .spacing(2)
@@ -643,11 +641,14 @@ fn view_footprint_layers_strip<'a>(
         row_widget = row_widget.push(pill);
     }
 
-    container(scrollable(row_widget).direction(
-        iced::widget::scrollable::Direction::Horizontal(
-            iced::widget::scrollable::Scrollbar::default().width(0).margin(0).scroller_width(0),
-        ),
-    ))
+    container(
+        scrollable(row_widget).direction(iced::widget::scrollable::Direction::Horizontal(
+            iced::widget::scrollable::Scrollbar::default()
+                .width(0)
+                .margin(0)
+                .scroller_width(0),
+        )),
+    )
     .padding([4, 10])
     .width(Length::Fill)
     .style(crate::styles::tab_bar_strip(tokens))
@@ -686,10 +687,7 @@ fn view_footprint_sketch_toolbar<'a>(
         border: Border {
             width: 1.0,
             radius: 3.0.into(),
-            color: iced::Color {
-                a: 0.6,
-                ..accent
-            },
+            color: iced::Color { a: 0.6, ..accent },
         },
         ..iced::widget::button::Style::default()
     });
@@ -720,9 +718,7 @@ fn view_footprint_sketch_toolbar<'a>(
     let row_widget = row![
         text("Sketch").size(13).color(text_c),
         text("·").size(13).color(muted),
-        text("authoring parametric geometry")
-            .size(11)
-            .color(muted),
+        text("authoring parametric geometry").size(11).color(muted),
         Space::new().width(Length::Fill),
         save_btn,
         Space::new().width(8),
@@ -858,7 +854,9 @@ fn view_footprint_toolbar<'a>(
     // 3D View) sit between the layer toggles and the auto-fit /
     // save buttons. The active pill is highlighted via the same
     // pattern the layer toggles use.
-    let mode_pill = |label: &'static str, target: crate::library::editor::footprint::state::EditorMode, active: bool| {
+    let mode_pill = |label: &'static str,
+                     target: crate::library::editor::footprint::state::EditorMode,
+                     active: bool| {
         let path = editor.path.clone();
         let label_color = if active { text_c } else { muted };
         button(text(label).size(11).color(label_color))
@@ -891,17 +889,26 @@ fn view_footprint_toolbar<'a>(
         mode_pill(
             "Normal",
             crate::library::editor::footprint::state::EditorMode::Normal,
-            matches!(mode, crate::library::editor::footprint::state::EditorMode::Normal),
+            matches!(
+                mode,
+                crate::library::editor::footprint::state::EditorMode::Normal
+            ),
         ),
         mode_pill(
             "Sketch",
             crate::library::editor::footprint::state::EditorMode::Sketch,
-            matches!(mode, crate::library::editor::footprint::state::EditorMode::Sketch),
+            matches!(
+                mode,
+                crate::library::editor::footprint::state::EditorMode::Sketch
+            ),
         ),
         mode_pill(
             "3D View",
             crate::library::editor::footprint::state::EditorMode::View3d,
-            matches!(mode, crate::library::editor::footprint::state::EditorMode::View3d),
+            matches!(
+                mode,
+                crate::library::editor::footprint::state::EditorMode::View3d
+            ),
         ),
     ]
     .spacing(4)

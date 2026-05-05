@@ -285,18 +285,19 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
     let trimmed = std::str::from_utf8(&bytes)
         .map(|s| s.trim_start())
         .unwrap_or("");
-    if trimmed.starts_with('{') {
-        if let Ok(mut data) = serde_json::from_slice::<ProjectData>(&bytes) {
-            data.dir = dir.to_string_lossy().to_string();
-            // Project name in the file is informational; the on-disk
-            // filename is authoritative so renaming the .snxprj outside
-            // the app doesn't desync the displayed name.
-            data.name = project_name;
-            return Ok(data);
-        }
-        // Falls through to directory probe if JSON parse fails; the
-        // user's project is still recoverable from disk layout.
+    if trimmed.starts_with('{')
+        && let Ok(mut data) = serde_json::from_slice::<ProjectData>(&bytes)
+    {
+        data.dir = dir.to_string_lossy().to_string();
+        // Project name in the file is informational; the on-disk
+        // filename is authoritative so renaming the .snxprj outside
+        // the app doesn't desync the displayed name.
+        data.name = project_name;
+        return Ok(data);
     }
+    // Falls through to directory probe if JSON parse fails or the file
+    // doesn't start with '{'; the user's project is still recoverable
+    // from disk layout.
 
     // Legacy/empty marker — directory-driven probe (the original
     // pre-JSON behaviour).

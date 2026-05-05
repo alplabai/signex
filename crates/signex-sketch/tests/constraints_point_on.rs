@@ -5,7 +5,7 @@ use common::Sketch;
 
 use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
 use signex_sketch::id::ConstraintId;
-use signex_sketch::solver::residual::{residual, ResolvedParams};
+use signex_sketch::solver::residual::{ResolvedParams, residual};
 use signex_sketch::solver::state::pack;
 
 const EPS: f64 = 1e-12;
@@ -88,7 +88,11 @@ fn point_on_line_residual_zero_at_endpoint() {
         kind: ConstraintKind::PointOnLine { point: a, line },
     };
     let r = residual(&c, &packed.vector, &packed.index, &s.data, &empty_params()).unwrap();
-    assert!(r[0].abs() < EPS, "endpoint residual should be 0, got {}", r[0]);
+    assert!(
+        r[0].abs() < EPS,
+        "endpoint residual should be 0, got {}",
+        r[0]
+    );
 }
 
 #[test]
@@ -233,10 +237,22 @@ fn distance_pt_line_target_zero_reduces_to_point_on_line() {
             target: DimTarget::Literal(0.0),
         },
     };
-    let r_pol =
-        residual(&c_pol, &packed.vector, &packed.index, &s.data, &empty_params()).unwrap();
-    let r_dpl =
-        residual(&c_dpl, &packed.vector, &packed.index, &s.data, &empty_params()).unwrap();
+    let r_pol = residual(
+        &c_pol,
+        &packed.vector,
+        &packed.index,
+        &s.data,
+        &empty_params(),
+    )
+    .unwrap();
+    let r_dpl = residual(
+        &c_dpl,
+        &packed.vector,
+        &packed.index,
+        &s.data,
+        &empty_params(),
+    )
+    .unwrap();
 
     assert_eq!(r_pol.len(), 1);
     assert_eq!(r_dpl.len(), 1);
@@ -287,7 +303,11 @@ fn point_on_arc_residual_zero_at_arc_start() {
         kind: ConstraintKind::PointOnArc { point: start, arc },
     };
     let r = residual(&c, &packed.vector, &packed.index, &s.data, &empty_params()).unwrap();
-    assert!(r[0].abs() < EPS, "start should be on its own circle, got {}", r[0]);
+    assert!(
+        r[0].abs() < EPS,
+        "start should be on its own circle, got {}",
+        r[0]
+    );
 }
 
 #[test]
@@ -339,7 +359,7 @@ fn point_on_arc_residual_uses_start_for_radius_not_end() {
     let mut s = Sketch::new();
     let center = s.add_point(0.0, 0.0);
     let start = s.add_point(5.0, 0.0); // start radius = 5
-    let end = s.add_point(0.0, 8.0);   // end radius = 8 (not used)
+    let end = s.add_point(0.0, 8.0); // end radius = 8 (not used)
     let arc = s.add_arc(center, start, end, true);
     let p = s.add_point(3.0, 4.0); // distance to centre = 5
     let packed = pack(&s.data);
@@ -349,7 +369,11 @@ fn point_on_arc_residual_uses_start_for_radius_not_end() {
         kind: ConstraintKind::PointOnArc { point: p, arc },
     };
     let r = residual(&c, &packed.vector, &packed.index, &s.data, &empty_params()).unwrap();
-    assert!(r[0].abs() < EPS, "P should be on the start-radius circle, got {}", r[0]);
+    assert!(
+        r[0].abs() < EPS,
+        "P should be on the start-radius circle, got {}",
+        r[0]
+    );
 }
 
 // ─── residual_count() sanity ────────────────────────────────────────

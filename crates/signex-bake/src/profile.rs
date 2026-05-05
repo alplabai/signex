@@ -29,8 +29,8 @@ use std::collections::{HashMap, HashSet};
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::sketch::SketchData;
-use signex_sketch::solver::state::point_xy;
 use signex_sketch::solver::FullSolveOutput;
+use signex_sketch::solver::state::point_xy;
 
 /// Trace failure modes — the bake site decides whether to warn or
 /// error per-attr.
@@ -108,14 +108,7 @@ pub fn trace_closed_profile(
     vertices.push([pos_a.0, pos_a.1]);
     // If the seed entity is an Arc, sample its interior between
     // start_a and start_b before pushing start_b.
-    push_arc_interior_if_arc(
-        &mut vertices,
-        sketch,
-        solve,
-        start_entity,
-        start_a,
-        start_b,
-    )?;
+    push_arc_interior_if_arc(&mut vertices, sketch, solve, start_entity, start_a, start_b)?;
     vertices.push([pos_b.0, pos_b.1]);
 
     let mut visited: HashSet<SketchEntityId> = HashSet::new();
@@ -221,7 +214,11 @@ fn push_arc_interior_if_arc(
         // Topology bug — `from`/`to` don't match the arc's endpoints.
         return Err(TraceError::MissingEndpoint(from));
     }
-    let effective_ccw = if walking_forward { sweep_ccw } else { !sweep_ccw };
+    let effective_ccw = if walking_forward {
+        sweep_ccw
+    } else {
+        !sweep_ccw
+    };
 
     // Compute the signed sweep magnitude in [0, 2π) given the direction.
     let raw_delta = to_angle - from_angle;
@@ -300,8 +297,8 @@ mod tests {
     use signex_sketch::id::SketchEntityId;
     use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
     use signex_sketch::sketch::SketchData;
-    use signex_sketch::solver::residual::ResolvedParams;
     use signex_sketch::solver::Solver;
+    use signex_sketch::solver::residual::ResolvedParams;
 
     /// Build a sketch with one rectangle (4 Points + 4 Lines), solve,
     /// trace from the first Line, expect a 4-vertex polygon.
@@ -355,7 +352,9 @@ mod tests {
     }
 
     fn solve(sketch: &SketchData) -> FullSolveOutput {
-        Solver::default().solve(sketch, &ResolvedParams::new()).unwrap()
+        Solver::default()
+            .solve(sketch, &ResolvedParams::new())
+            .unwrap()
     }
 
     #[test]
@@ -457,8 +456,14 @@ mod tests {
             let dx = sample[0] - 1.0;
             let dy = sample[1];
             let r = (dx * dx + dy * dy).sqrt();
-            assert!((r - 1.0).abs() < 1e-9, "arc vertex {sample:?} not on r=1 circle");
-            assert!(dy >= -1e-9, "arc vertex {sample:?} should be in upper half-plane");
+            assert!(
+                (r - 1.0).abs() < 1e-9,
+                "arc vertex {sample:?} not on r=1 circle"
+            );
+            assert!(
+                dy >= -1e-9,
+                "arc vertex {sample:?} should be in upper half-plane"
+            );
         }
     }
 
@@ -502,7 +507,10 @@ mod tests {
         let polygon = trace_closed_profile(&data, &solved, l1).expect("CW D-shape should close");
         for sample in &polygon[2..] {
             let dy = sample[1];
-            assert!(dy <= 1e-9, "CW arc vertex {sample:?} should be in lower half-plane");
+            assert!(
+                dy <= 1e-9,
+                "CW arc vertex {sample:?} should be in lower half-plane"
+            );
         }
     }
 
@@ -545,7 +553,10 @@ mod tests {
         let solved = solve(&data);
         let polygon = trace_closed_profile(&data, &solved, arc)
             .expect("D-shape seeded from arc should close");
-        assert!(polygon.len() > 4, "arc seed should yield tessellated polygon");
+        assert!(
+            polygon.len() > 4,
+            "arc seed should yield tessellated polygon"
+        );
     }
 
     #[test]
@@ -567,8 +578,11 @@ mod tests {
             .push(Entity::new(pc, plane, EntityKind::Point { x: 0.0, y: 0.0 }));
         data.entities
             .push(Entity::new(p1, plane, EntityKind::Point { x: 1.0, y: 0.0 }));
-        data.entities
-            .push(Entity::new(p2, plane, EntityKind::Point { x: -1.0, y: 0.0 }));
+        data.entities.push(Entity::new(
+            p2,
+            plane,
+            EntityKind::Point { x: -1.0, y: 0.0 },
+        ));
         data.entities
             .push(Entity::new(p3, plane, EntityKind::Point { x: 0.0, y: 1.0 }));
         let l1 = SketchEntityId::new();
@@ -613,9 +627,11 @@ mod tests {
         // create branching if not skipped.
         let pc = SketchEntityId::new();
         let plane = sketch.planes[0].id;
-        sketch
-            .entities
-            .push(Entity::new(pc, plane, EntityKind::Point { x: -1.0, y: -1.0 }));
+        sketch.entities.push(Entity::new(
+            pc,
+            plane,
+            EntityKind::Point { x: -1.0, y: -1.0 },
+        ));
         let mut construction_line = Entity::new(
             SketchEntityId::new(),
             plane,
@@ -627,8 +643,7 @@ mod tests {
         construction_line.construction = true;
         sketch.entities.push(construction_line);
         let solved = solve(&sketch);
-        let polygon =
-            trace_closed_profile(&sketch, &solved, l1).expect("rectangle still closes");
+        let polygon = trace_closed_profile(&sketch, &solved, l1).expect("rectangle still closes");
         assert_eq!(polygon.len(), 4);
     }
 }

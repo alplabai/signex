@@ -41,9 +41,7 @@ impl Signex {
             // a double-click hook later) promotes selection to active.
             crate::panels::PanelMsg::FpLibrarySelectInternal(idx) => {
                 if let Some(path) = self.active_footprint_editor_path() {
-                    if let Some(editor) =
-                        self.document_state.footprint_editors.get_mut(&path)
-                    {
+                    if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
                         let last = editor.file.footprints.len().saturating_sub(1);
                         editor.panel_selected_idx = Some((*idx).min(last));
                     }
@@ -62,9 +60,7 @@ impl Signex {
                             msg: crate::library::messages::PrimitiveEditorMsg::FootprintAddNewSibling,
                         },
                     ));
-                    if let Some(editor) =
-                        self.document_state.footprint_editors.get_mut(&path)
-                    {
+                    if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
                         // Mirror the panel selection onto the just-
                         // added sibling so Delete/Edit immediately
                         // operate on it.
@@ -80,17 +76,14 @@ impl Signex {
             // fail to load on next open).
             crate::panels::PanelMsg::FpLibraryDeleteInternal(idx) => {
                 if let Some(path) = self.active_footprint_editor_path() {
-                    if let Some(editor) =
-                        self.document_state.footprint_editors.get_mut(&path)
-                    {
+                    if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
                         let last = editor.file.footprints.len();
                         if last > 1 && *idx < last {
                             editor.file.footprints.remove(*idx);
                             // Clamp `active_idx` so the canvas keeps
                             // pointing at a valid sibling.
                             if editor.active_idx >= editor.file.footprints.len() {
-                                editor.active_idx =
-                                    editor.file.footprints.len().saturating_sub(1);
+                                editor.active_idx = editor.file.footprints.len().saturating_sub(1);
                             }
                             // Re-derive canvas-side state from the
                             // (possibly different) active primitive.
@@ -146,10 +139,8 @@ impl Signex {
                 // `FootprintToggleAutoFit` dispatch so the toggle
                 // shares its dirty / panel-refresh behaviour with
                 // the active-bar button.
-                if let Some(active_tab) = self
-                    .document_state
-                    .tabs
-                    .get(self.document_state.active_tab)
+                if let Some(active_tab) =
+                    self.document_state.tabs.get(self.document_state.active_tab)
                 {
                     if let Some(path) = active_tab.kind.as_footprint_editor() {
                         let path = path.clone();
@@ -177,10 +168,8 @@ impl Signex {
                 // the standard PrimitiveEditorEvent path so the role
                 // mutation goes through `apply_sketch_role_with_warnings`
                 // (clears all attrs, sets matching one, runs solve+bake).
-                if let Some(active_tab) = self
-                    .document_state
-                    .tabs
-                    .get(self.document_state.active_tab)
+                if let Some(active_tab) =
+                    self.document_state.tabs.get(self.document_state.active_tab)
                 {
                     if let Some(path) = active_tab.kind.as_footprint_editor() {
                         let path = path.clone();
@@ -373,13 +362,14 @@ impl Signex {
                 // guide at world X = 0; users can flip via the row's
                 // axis label and edit the position field afterwards.
                 if let Some(editor) = self.active_footprint_editor_mut() {
-                    editor.state.guides.push(
-                        crate::library::editor::footprint::state::Guide {
+                    editor
+                        .state
+                        .guides
+                        .push(crate::library::editor::footprint::state::Guide {
                             axis: crate::library::editor::footprint::state::GuideAxis::Vertical,
                             position_mm: 0.0,
                             enabled: true,
-                        },
-                    );
+                        });
                     editor.canvas_cache.clear();
                 }
                 self.refresh_panel_ctx();
@@ -387,13 +377,14 @@ impl Signex {
             }
             crate::panels::PanelMsg::FpEditorGuideAddVertical => {
                 if let Some(editor) = self.active_footprint_editor_mut() {
-                    editor.state.guides.push(
-                        crate::library::editor::footprint::state::Guide {
+                    editor
+                        .state
+                        .guides
+                        .push(crate::library::editor::footprint::state::Guide {
                             axis: crate::library::editor::footprint::state::GuideAxis::Vertical,
                             position_mm: 0.0,
                             enabled: true,
-                        },
-                    );
+                        });
                     editor.canvas_cache.clear();
                 }
                 self.refresh_panel_ctx();
@@ -401,13 +392,14 @@ impl Signex {
             }
             crate::panels::PanelMsg::FpEditorGuideAddHorizontal => {
                 if let Some(editor) = self.active_footprint_editor_mut() {
-                    editor.state.guides.push(
-                        crate::library::editor::footprint::state::Guide {
+                    editor
+                        .state
+                        .guides
+                        .push(crate::library::editor::footprint::state::Guide {
                             axis: crate::library::editor::footprint::state::GuideAxis::Horizontal,
                             position_mm: 0.0,
                             enabled: true,
-                        },
-                    );
+                        });
                     editor.canvas_cache.clear();
                 }
                 self.refresh_panel_ctx();
@@ -460,9 +452,7 @@ impl Signex {
                         editor.with_parts(|_state, primitive| {
                             use signex_library::primitive::footprint::FpGraphicKind;
                             if let Some(g) = primitive.silk_f.get_mut(idx) {
-                                if let FpGraphicKind::Text { content, .. } =
-                                    &mut g.kind
-                                {
+                                if let FpGraphicKind::Text { content, .. } = &mut g.kind {
                                     *content = value;
                                 }
                             }
@@ -478,10 +468,19 @@ impl Signex {
                 // v0.18.24 — delete the currently-selected silk-front
                 // graphic and clear the selection.
                 if let Some(editor) = self.active_footprint_editor_mut() {
-                    if let Some(idx) = editor.state.selected_silk_f.take() {
-                        editor.with_parts(|_state, primitive| {
+                    if let Some(idx) = editor.state.selected_silk_f {
+                        editor.with_parts(|state, primitive| {
                             if idx < primitive.silk_f.len() {
                                 primitive.silk_f.remove(idx);
+                                // HI-25: keep the selection cursor consistent
+                                // with the new vec length / shifted indices.
+                                state.selected_silk_f =
+                                    crate::library::editor::footprint::state::adjust_selection_after_remove(
+                                        state.selected_silk_f,
+                                        idx,
+                                    );
+                            } else {
+                                state.selected_silk_f = None;
                             }
                         });
                         editor.dirty = true;
@@ -495,10 +494,8 @@ impl Signex {
                 // v0.16.2 — Properties-panel parameter row edit.
                 // Forwards to `FootprintSketchEditParameter` which
                 // upserts the parameter and triggers a solve+bake.
-                if let Some(active_tab) = self
-                    .document_state
-                    .tabs
-                    .get(self.document_state.active_tab)
+                if let Some(active_tab) =
+                    self.document_state.tabs.get(self.document_state.active_tab)
                 {
                     if let Some(path) = active_tab.kind.as_footprint_editor() {
                         let path = path.clone();
@@ -1133,9 +1130,7 @@ impl Signex {
     /// Read-only sibling of [`active_footprint_editor_mut`].
     /// v0.18.11 — used by the Grid Properties modal open handler
     /// to seed the dialog buffers from the live snap step.
-    pub(crate) fn active_footprint_editor(
-        &self,
-    ) -> Option<&crate::app::FootprintEditorState> {
+    pub(crate) fn active_footprint_editor(&self) -> Option<&crate::app::FootprintEditorState> {
         let path = self
             .document_state
             .tabs
@@ -1248,7 +1243,7 @@ impl Signex {
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
             editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive,                 SketchEdit::ForceRebuild,);
+                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
             });
             editor.dirty = true;
             editor.canvas_cache.clear();
@@ -1272,7 +1267,7 @@ impl Signex {
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
             editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive,                 SketchEdit::ForceRebuild,);
+                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
             });
             editor.dirty = true;
             editor.canvas_cache.clear();
@@ -1299,7 +1294,7 @@ impl Signex {
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
             editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive,                 SketchEdit::ForceRebuild,);
+                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
             });
             editor.dirty = true;
             editor.canvas_cache.clear();
@@ -1332,7 +1327,7 @@ impl Signex {
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
             editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive,                 SketchEdit::ForceRebuild,);
+                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
             });
             editor.dirty = true;
             editor.canvas_cache.clear();
@@ -1361,7 +1356,7 @@ impl Signex {
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
             editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive,                 SketchEdit::ForceRebuild,);
+                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
             });
             editor.dirty = true;
             editor.canvas_cache.clear();
@@ -1369,10 +1364,7 @@ impl Signex {
         self.refresh_panel_ctx();
     }
 
-    pub(crate) fn fp_editor_toggle_snap_option(
-        &mut self,
-        flag: crate::panels::SnapOptionFlag,
-    ) {
+    pub(crate) fn fp_editor_toggle_snap_option(&mut self, flag: crate::panels::SnapOptionFlag) {
         use crate::panels::SnapOptionFlag;
         if let Some(editor) = self.active_footprint_editor_mut() {
             let opts = &mut editor.state.snap_options;
@@ -1432,7 +1424,7 @@ impl Signex {
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
             editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive,                 SketchEdit::ForceRebuild,);
+                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
             });
             editor.dirty = true;
             editor.canvas_cache.clear();

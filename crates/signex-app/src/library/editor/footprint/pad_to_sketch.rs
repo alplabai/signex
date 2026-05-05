@@ -14,7 +14,9 @@
 //! - Editing a pad's `PadAttr` from the Properties panel updates
 //!   the matching sketch entity.
 
-use signex_library::primitive::footprint::{Footprint, PadKind as LibPadKind, PadShape as LibPadShape};
+use signex_library::primitive::footprint::{
+    Footprint, PadKind as LibPadKind, PadShape as LibPadShape,
+};
 use signex_sketch::attr::{
     ChamferedCorners as SkChamferedCorners, CustomPadShape, PadAttr, PadKind as SkPadKind,
     PadShape as SkPadShape, PadSide, PasteAperturePattern,
@@ -38,10 +40,7 @@ use super::state::EditorPad;
 /// `signex_bake::bake_pads`, so the bake immediately after this call
 /// re-emits the original pads — no visual change for the user, but
 /// every pad now has a sketch backing they can edit.
-pub fn auto_mint_for_literal_pads(
-    pads: &mut [EditorPad],
-    footprint: &mut Footprint,
-) -> usize {
+pub fn auto_mint_for_literal_pads(pads: &mut [EditorPad], footprint: &mut Footprint) -> usize {
     if pads.is_empty() {
         return 0;
     }
@@ -55,9 +54,7 @@ pub fn auto_mint_for_literal_pads(
     }
 
     let plane_id = ensure_board_top_plane(footprint);
-    let sketch = footprint
-        .sketch
-        .get_or_insert_with(SketchData::default);
+    let sketch = footprint.sketch.get_or_insert_with(SketchData::default);
 
     let mut minted = 0usize;
     for pad in pads.iter_mut() {
@@ -96,9 +93,7 @@ pub fn mirror_add_pad_to_sketch(pad: &mut EditorPad, footprint: &mut Footprint) 
         return;
     }
     let plane_id = ensure_board_top_plane(footprint);
-    let sketch = footprint
-        .sketch
-        .get_or_insert_with(SketchData::default);
+    let sketch = footprint.sketch.get_or_insert_with(SketchData::default);
     let entity_id = SketchEntityId::new();
     let mut entity = Entity::new(
         entity_id,
@@ -171,8 +166,7 @@ pub fn mirror_delete_pad_from_sketch(pad: &EditorPad, footprint: &mut Footprint)
     if let Some(corners) = pad.corner_entity_ids {
         to_drop.extend_from_slice(&corners);
     }
-    let drop_set: std::collections::HashSet<SketchEntityId> =
-        to_drop.iter().copied().collect();
+    let drop_set: std::collections::HashSet<SketchEntityId> = to_drop.iter().copied().collect();
     sketch.entities.retain(|e| {
         if drop_set.contains(&e.id) {
             return false;
@@ -243,10 +237,12 @@ fn mint_pad_corner_outline(
 }
 
 fn ensure_board_top_plane(footprint: &mut Footprint) -> PlaneId {
-    let sketch = footprint
-        .sketch
-        .get_or_insert_with(SketchData::default);
-    if let Some(p) = sketch.planes.iter().find(|p| matches!(p.kind, PlaneKind::BoardTop)) {
+    let sketch = footprint.sketch.get_or_insert_with(SketchData::default);
+    if let Some(p) = sketch
+        .planes
+        .iter()
+        .find(|p| matches!(p.kind, PlaneKind::BoardTop))
+    {
         return p.id;
     }
     let p = Plane {
@@ -394,11 +390,8 @@ mod tests {
         assert_eq!(sketch.entities.len(), 27);
         // The 3 PadAttr-carrying centres should still match v0.15
         // expectations.
-        let attr_carriers: Vec<&Entity> = sketch
-            .entities
-            .iter()
-            .filter(|e| e.pad.is_some())
-            .collect();
+        let attr_carriers: Vec<&Entity> =
+            sketch.entities.iter().filter(|e| e.pad.is_some()).collect();
         assert_eq!(attr_carriers.len(), 3);
         for entity in attr_carriers {
             assert!(matches!(entity.kind, EntityKind::Point { .. }));
@@ -436,7 +429,10 @@ mod tests {
         let n = auto_mint_for_literal_pads(&mut pads, &mut fp);
         assert_eq!(n, 0, "auto-mint must skip when sketch is already populated");
         assert_eq!(fp.sketch.as_ref().unwrap().entities.len(), 1);
-        assert!(pads[0].sketch_entity_id.is_none(), "skip leaves the link unset");
+        assert!(
+            pads[0].sketch_entity_id.is_none(),
+            "skip leaves the link unset"
+        );
     }
 
     #[test]
@@ -478,7 +474,11 @@ mod tests {
         mirror_add_pad_to_sketch(&mut pad, &mut fp);
         let id = pad.sketch_entity_id.expect("mirror should mint id");
         let sketch = fp.sketch.as_ref().unwrap();
-        let entity = sketch.entities.iter().find(|e| e.id == id).expect("entity exists");
+        let entity = sketch
+            .entities
+            .iter()
+            .find(|e| e.id == id)
+            .expect("entity exists");
         match entity.kind {
             EntityKind::Point { x, y } => {
                 assert_eq!((x, y), (5.0, 5.0));

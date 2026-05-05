@@ -16,12 +16,12 @@
 //! - Construction entities are excluded from the trace by the walker.
 
 use signex_library::primitive::footprint::Polygon;
+use signex_sketch::SketchError;
 use signex_sketch::entity::EntityKind;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
-use signex_sketch::SketchError;
 
-use crate::profile::{trace_closed_profile, TraceError};
+use crate::profile::{TraceError, trace_closed_profile};
 
 /// Bake the first CourtyardAttr-tagged closed profile into
 /// `courtyard_out`. The first non-construction Line entity carrying
@@ -45,7 +45,10 @@ pub fn bake_courtyard(
         }
         // The walker takes Line + Arc seeds (Circles still skipped in
         // v0.14.1 — Circle bake lands in v0.14.2).
-        if !matches!(entity.kind, EntityKind::Line { .. } | EntityKind::Arc { .. }) {
+        if !matches!(
+            entity.kind,
+            EntityKind::Line { .. } | EntityKind::Arc { .. }
+        ) {
             warnings.push(format!(
                 "entity {}: CourtyardAttr requires a Line or Arc seed (Circles land in v0.14.2); skipping",
                 entity.id
@@ -93,8 +96,8 @@ mod tests {
     use signex_sketch::entity::Entity;
     use signex_sketch::id::SketchEntityId;
     use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
-    use signex_sketch::solver::residual::ResolvedParams;
     use signex_sketch::solver::Solver;
+    use signex_sketch::solver::residual::ResolvedParams;
 
     fn solve(sketch: &SketchData) -> FullSolveOutput {
         Solver::default()
@@ -156,7 +159,10 @@ mod tests {
         let mut warnings = Vec::new();
         bake_courtyard(&data, &solved, &mut courtyard, &mut warnings).unwrap();
         assert_eq!(courtyard.points.len(), 4);
-        assert!(warnings.is_empty(), "rectangle should bake without warnings, got {warnings:?}");
+        assert!(
+            warnings.is_empty(),
+            "rectangle should bake without warnings, got {warnings:?}"
+        );
     }
 
     #[test]
@@ -172,7 +178,11 @@ mod tests {
             .map(|e| e.id)
             .next()
             .unwrap();
-        let second = data.entities.iter_mut().find(|e| e.id == second_line_id).unwrap();
+        let second = data
+            .entities
+            .iter_mut()
+            .find(|e| e.id == second_line_id)
+            .unwrap();
         second.courtyard = Some(CourtyardAttr);
 
         let solved = solve(&data);
@@ -245,7 +255,10 @@ mod tests {
         let mut warnings = Vec::new();
         bake_courtyard(&data, &solved, &mut courtyard, &mut warnings).unwrap();
 
-        assert!(courtyard.points.is_empty(), "construction-tagged seed must not bake");
+        assert!(
+            courtyard.points.is_empty(),
+            "construction-tagged seed must not bake"
+        );
         assert!(warnings.is_empty(), "construction skip is silent");
     }
 }

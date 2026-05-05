@@ -1,2 +1,2 @@
-pub mod pad;
 pub mod array;
+pub mod pad;

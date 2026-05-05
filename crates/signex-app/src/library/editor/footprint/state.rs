@@ -335,8 +335,39 @@ pub struct NextPadDefaults {
     pub rotation_deg: f64,
 }
 
-/// Pad copper side mirror — kept here so the panel doesn't have to
-/// import `signex_sketch::attr::PadSide`. v0.16.3.
+/// HI-25 helper: when an item is removed at `removed_idx` from a Vec,
+/// fold the change into a `selected: Option<usize>` so it still points
+/// at the right element (or clears to `None` if the selection is what
+/// got deleted). Used by the pad / silk / drawing deletion paths so
+/// the "selection became dangling after delete" bug class can't recur.
+///
+/// - `None`                 → `None`
+/// - `Some(sel)` if `sel == removed_idx` → `None` (was selected; gone)
+/// - `Some(sel)` if `sel < removed_idx`  → `Some(sel)` (unaffected)
+/// - `Some(sel)` if `sel > removed_idx`  → `Some(sel - 1)` (shifted left)
+pub(crate) fn adjust_selection_after_remove(
+    selected: Option<usize>,
+    removed_idx: usize,
+) -> Option<usize> {
+    match selected {
+        Some(sel) if sel == removed_idx => None,
+        Some(sel) if sel > removed_idx => Some(sel - 1),
+        other => other,
+    }
+}
+
+/// Pad copper side mirror — UI-side label-bearing enum. The sketch
+/// crate has the same shape at `signex_sketch::attr::PadSide`; this
+/// type wraps it for the app's panel/dispatcher boundary so the panel
+/// doesn't pull in the sketch crate's constraint-residual surface.
+///
+/// HI-24: variants MUST stay in lockstep with `signex_sketch::attr::PadSide`.
+/// The `From`/`Into` impls below force a compile error if either side
+/// adds a variant without updating the other. Adding `Inner` for buried
+/// copper would require:
+///   1. add `Inner` here AND in `signex_sketch::attr::PadSide`
+///   2. extend the conversion match arms below
+///   3. extend `pad_to_sketch.rs` mirror logic
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PadSide {
     #[default]
@@ -359,6 +390,26 @@ impl PadSide {
 impl std::fmt::Display for PadSide {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.label())
+    }
+}
+
+impl From<signex_sketch::attr::PadSide> for PadSide {
+    fn from(value: signex_sketch::attr::PadSide) -> Self {
+        match value {
+            signex_sketch::attr::PadSide::Top => PadSide::Top,
+            signex_sketch::attr::PadSide::Bottom => PadSide::Bottom,
+            signex_sketch::attr::PadSide::All => PadSide::All,
+        }
+    }
+}
+
+impl From<PadSide> for signex_sketch::attr::PadSide {
+    fn from(value: PadSide) -> Self {
+        match value {
+            PadSide::Top => signex_sketch::attr::PadSide::Top,
+            PadSide::Bottom => signex_sketch::attr::PadSide::Bottom,
+            PadSide::All => signex_sketch::attr::PadSide::All,
+        }
     }
 }
 
@@ -906,11 +957,7 @@ impl FootprintEditorState {
             return;
         }
         self.pads.remove(idx);
-        self.selected_pad = match self.selected_pad {
-            Some(sel) if sel == idx => None,
-            Some(sel) if sel > idx => Some(sel - 1),
-            other => other,
-        };
+        self.selected_pad = adjust_selection_after_remove(self.selected_pad, idx);
         self.recompute_courtyard();
     }
 

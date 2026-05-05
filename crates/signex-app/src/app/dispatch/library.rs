@@ -2123,7 +2123,10 @@ impl Signex {
             .library
             .library_at(&address.library_path)
             .and_then(|lib| lib.tables.get(&address.table))
-            .and_then(|rows| rows.iter().find(|r| RowId::from_uuid(r.row_id) == address.row_id))
+            .and_then(|rows| {
+                rows.iter()
+                    .find(|r| RowId::from_uuid(r.row_id) == address.row_id)
+            })
             .cloned()
         {
             Some(r) => r,
@@ -2751,11 +2754,24 @@ impl Signex {
                     move |result| {
                         let result = match result {
                             Ok(()) => {
-                                let store = KeyringStore::for_provider("mouser", "default");
-                                if let Err(e) = store.set_secret(&key_for_writeback) {
-                                    Err(format!("API key valid, but keyring write failed: {e}"))
-                                } else {
-                                    Ok(())
+                                // MD-17: surface keyring backend
+                                // unavailability instead of panicking
+                                // — the dialog will tell the user to
+                                // install libsecret or run with the
+                                // env-var auth flow.
+                                match KeyringStore::for_provider("mouser", "default") {
+                                    Ok(store) => {
+                                        if let Err(e) = store.set_secret(&key_for_writeback) {
+                                            Err(format!(
+                                                "API key valid, but keyring write failed: {e}"
+                                            ))
+                                        } else {
+                                            Ok(())
+                                        }
+                                    }
+                                    Err(e) => Err(format!(
+                                        "API key valid, but OS keychain unavailable: {e}"
+                                    )),
                                 }
                             }
                             Err(e) => Err(e),
@@ -3101,9 +3117,9 @@ impl Signex {
                 !project_dir.as_os_str().is_empty() && path.starts_with(&project_dir)
             })
             .or_else(|| {
-                self.document_state.active_project.and_then(|id| {
-                    self.document_state.projects.iter().position(|p| p.id == id)
-                })
+                self.document_state
+                    .active_project
+                    .and_then(|id| self.document_state.projects.iter().position(|p| p.id == id))
             });
         let Some(idx) = target_idx else {
             tracing::warn!(
@@ -3290,7 +3306,11 @@ impl Signex {
                     .unwrap_or(display_name);
                 let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
 
-                let state = crate::app::FootprintEditorState::new(path.clone(), file);
+                // HI-23: seed snap-disabled from the user's persisted
+                // global toggle so opening a .snxfpt while snap is off
+                // doesn't reset the editor to snap-on.
+                let state = crate::app::FootprintEditorState::new(path.clone(), file)
+                    .with_global_snap_disabled(!self.ui_state.snap_enabled);
                 self.document_state
                     .footprint_editors
                     .insert(path.clone(), state);
@@ -3982,37 +4002,11 @@ pub(crate) fn apply_symbol_primitive_edit(
 
 /// Atomic write — write `bytes` to `<path>.tmp` then `rename` over
 /// `path`. A crash mid-write leaves either the original file intact
-/// or `<path>.tmp` orphaned; the destination file is never half-
-/// written. Used by the standalone primitive save path so the
-/// `.snxsym` / `.snxfpt` container can't be corrupted by an
-/// untimely crash.
+/// Re-export of the shared atomic-write helper (HI-6). Lives in
+/// `signex-types::atomic_io` so engine, library, and app share one
+/// implementation; the function used to be a private duplicate here.
 fn atomic_write(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
-    if let Some(parent) = path.parent()
-        && !parent.as_os_str().is_empty()
-    {
-        std::fs::create_dir_all(parent)?;
-    }
-    let mut tmp = path.to_path_buf();
-    let tmp_name = match tmp.file_name() {
-        Some(name) => {
-            let mut s = name.to_os_string();
-            s.push(".tmp");
-            s
-        }
-        None => return Err(std::io::Error::other("destination path has no file name")),
-    };
-    tmp.set_file_name(tmp_name);
-    std::fs::write(&tmp, bytes)?;
-    // `std::fs::rename` is atomic-replace on every platform we ship —
-    // POSIX `rename(2)` by spec, and Windows uses `MoveFileExW` with
-    // `MOVEFILE_REPLACE_EXISTING`. A crash mid-write therefore leaves
-    // either the original file intact OR the new bytes at the
-    // destination, never a half-written file. The earlier
-    // `remove_file → rename` two-step opened a window where a crash
-    // between the two calls would orphan the .tmp and leave NO file
-    // at the destination, breaking the invariant the caller expects.
-    std::fs::rename(&tmp, path)?;
-    Ok(())
+    signex_types::atomic_io::atomic_write(path, bytes)
 }
 
 /// World-space bbox covering the symbol's body + every pin + every
@@ -4190,11 +4184,10 @@ pub(crate) fn apply_footprint_primitive_edit(
                     primitive
                         .silk_f
                         .push(signex_library::primitive::footprint::FpGraphic {
-                            kind:
-                                signex_library::primitive::footprint::FpGraphicKind::Line {
-                                    from: [sx, sy],
-                                    to: [x_mm, y_mm],
-                                },
+                            kind: signex_library::primitive::footprint::FpGraphicKind::Line {
+                                from: [sx, sy],
+                                to: [x_mm, y_mm],
+                            },
                             stroke_width: 0.15,
                             filled: false,
                         });
@@ -4218,9 +4211,9 @@ pub(crate) fn apply_footprint_primitive_edit(
         PrimitiveEditorMsg::FootprintArcClick { x_mm, y_mm } => {
             use crate::library::editor::footprint::state::PlaceArcPending;
             let next = match editor.state.place_arc_pending {
-                PlaceArcPending::Idle => {
-                    PlaceArcPending::Center { center: (x_mm, y_mm) }
-                }
+                PlaceArcPending::Idle => PlaceArcPending::Center {
+                    center: (x_mm, y_mm),
+                },
                 PlaceArcPending::Center { center } => PlaceArcPending::Start {
                     center,
                     start: (x_mm, y_mm),
@@ -4276,16 +4269,14 @@ pub(crate) fn apply_footprint_primitive_edit(
                 crate::library::editor::footprint::state::PadsTool::PlaceRegion
             );
             if verts.len() >= 3 {
-                let vertices: Vec<[f64; 2]> =
-                    verts.iter().map(|(x, y)| [*x, *y]).collect();
+                let vertices: Vec<[f64; 2]> = verts.iter().map(|(x, y)| [*x, *y]).collect();
                 let primitive = editor.primitive_mut();
                 primitive
                     .silk_f
                     .push(signex_library::primitive::footprint::FpGraphic {
-                        kind:
-                            signex_library::primitive::footprint::FpGraphicKind::Polygon {
-                                vertices,
-                            },
+                        kind: signex_library::primitive::footprint::FpGraphicKind::Polygon {
+                            vertices,
+                        },
                         stroke_width: if filled { 0.0 } else { 0.15 },
                         filled,
                     });
@@ -4312,12 +4303,20 @@ pub(crate) fn apply_footprint_primitive_edit(
         // No-op when nothing is selected. Updates `editor.dirty`
         // and clears the selection state.
         PrimitiveEditorMsg::FootprintDeleteSilkF => {
-            if let Some(idx) = editor.state.selected_silk_f.take() {
+            if let Some(idx) = editor.state.selected_silk_f {
                 let primitive = editor.primitive_mut();
                 if idx < primitive.silk_f.len() {
                     primitive.silk_f.remove(idx);
                     editor.dirty = true;
                 }
+                // HI-25: shared selection-adjustment helper — keep
+                // `selected_silk_f` valid against the new vec length
+                // instead of clearing unconditionally.
+                editor.state.selected_silk_f =
+                    crate::library::editor::footprint::state::adjust_selection_after_remove(
+                        editor.state.selected_silk_f,
+                        idx,
+                    );
             }
             editor.canvas_cache.clear();
         }
@@ -4410,7 +4409,9 @@ pub(crate) fn apply_footprint_primitive_edit(
         }
         PrimitiveEditorMsg::FootprintToggleAutoFit => {
             editor.state.toggle_auto_fit();
-            editor.with_parts(|state, primitive| { CanvasState::sync_pads_to_primitive(state, primitive); });
+            editor.with_parts(|state, primitive| {
+                CanvasState::sync_pads_to_primitive(state, primitive);
+            });
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintSetMode(mode) => {
@@ -4422,8 +4423,8 @@ pub(crate) fn apply_footprint_primitive_edit(
             // they're visible / editable in Sketch mode. The bake
             // immediately re-emits identical pads, so the round-trip
             // is identity-preserving.
-            let entering_sketch = editor.state.mode != EditorMode::Sketch
-                && mode == EditorMode::Sketch;
+            let entering_sketch =
+                editor.state.mode != EditorMode::Sketch && mode == EditorMode::Sketch;
             if entering_sketch {
                 use crate::library::editor::footprint::pad_to_sketch;
                 let _ = editor.with_parts(|state, primitive| {
@@ -4434,19 +4435,16 @@ pub(crate) fn apply_footprint_primitive_edit(
             // stale Place Pad / Place Point selection from a prior
             // session in this tab doesn't carry over and cause
             // accidental entity placement on the first click.
-            editor.state.pads_tool =
-                crate::library::editor::footprint::state::PadsTool::Select;
-            editor.state.active_tool =
-                crate::library::editor::footprint::state::SketchTool::Select;
-            editor.state.tool_pending =
-                crate::library::editor::footprint::state::ToolPending::Idle;
+            editor.state.pads_tool = crate::library::editor::footprint::state::PadsTool::Select;
+            editor.state.active_tool = crate::library::editor::footprint::state::SketchTool::Select;
+            editor.state.tool_pending = crate::library::editor::footprint::state::ToolPending::Idle;
             editor.state.mode = mode;
             // Run the dispatcher so the sketch is initialised + solved
             // on first switch into Sketch mode (or no-op otherwise).
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
             editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive,                 SketchEdit::SetMode(mode),);
+                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::SetMode(mode));
             });
             editor.canvas_cache.clear();
             editor.dirty = true;
@@ -4475,17 +4473,10 @@ pub(crate) fn apply_footprint_primitive_edit(
                 }
             };
             let id = SketchEntityId::new();
-            let mut entity = Entity::new(
-                id,
-                plane_id,
-                EntityKind::Point {
-                    x: x_mm,
-                    y: y_mm,
-                },
-            );
+            let mut entity = Entity::new(id, plane_id, EntityKind::Point { x: x_mm, y: y_mm });
             entity.construction = editor.state.construction_mode;
             editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive,                 SketchEdit::AddEntity(entity),);
+                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::AddEntity(entity));
             });
             editor.canvas_cache.clear();
             editor.dirty = true;
@@ -4494,7 +4485,11 @@ pub(crate) fn apply_footprint_primitive_edit(
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
             editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive,                 SketchEdit::EditParameter { name, expr },);
+                apply_sketch_edit_with_warnings(
+                    state,
+                    primitive,
+                    SketchEdit::EditParameter { name, expr },
+                );
             });
             editor.canvas_cache.clear();
             editor.dirty = true;
@@ -4508,14 +4503,13 @@ pub(crate) fn apply_footprint_primitive_edit(
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
             editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive,                 SketchEdit::ForceRebuild,);
+                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
             });
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintSketchSetTool(tool) => {
             editor.state.active_tool = tool;
-            editor.state.tool_pending =
-                crate::library::editor::footprint::state::ToolPending::Idle;
+            editor.state.tool_pending = crate::library::editor::footprint::state::ToolPending::Idle;
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintSketchToggleConstruction => {
@@ -4572,16 +4566,14 @@ pub(crate) fn apply_footprint_primitive_edit(
                     // PlaceRegion if they wanted fill. Future:
                     // store filled-ness on the in-flight stash
                     // alongside vertices.
-                    let vertices: Vec<[f64; 2]> =
-                        verts.iter().map(|(x, y)| [*x, *y]).collect();
+                    let vertices: Vec<[f64; 2]> = verts.iter().map(|(x, y)| [*x, *y]).collect();
                     let primitive = editor.primitive_mut();
                     primitive
                         .silk_f
                         .push(signex_library::primitive::footprint::FpGraphic {
-                            kind:
-                                signex_library::primitive::footprint::FpGraphicKind::Polygon {
-                                    vertices,
-                                },
+                            kind: signex_library::primitive::footprint::FpGraphicKind::Polygon {
+                                vertices,
+                            },
                             stroke_width: 0.15,
                             filled: false,
                         });
@@ -4593,12 +4585,9 @@ pub(crate) fn apply_footprint_primitive_edit(
         PrimitiveEditorMsg::FootprintToolEscape => {
             // v0.15 — global Esc tool cancel. Resets both Pads and
             // Sketch tool state, mode-agnostic.
-            editor.state.pads_tool =
-                crate::library::editor::footprint::state::PadsTool::Select;
-            editor.state.active_tool =
-                crate::library::editor::footprint::state::SketchTool::Select;
-            editor.state.tool_pending =
-                crate::library::editor::footprint::state::ToolPending::Idle;
+            editor.state.pads_tool = crate::library::editor::footprint::state::PadsTool::Select;
+            editor.state.active_tool = crate::library::editor::footprint::state::SketchTool::Select;
+            editor.state.tool_pending = crate::library::editor::footprint::state::ToolPending::Idle;
             // v0.18.15.1 — Esc also bails out of an in-flight
             // Place Track 2-click gesture.
             editor.state.track_first = None;
@@ -4612,8 +4601,7 @@ pub(crate) fn apply_footprint_primitive_edit(
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintSketchToolEscape => {
-            editor.state.tool_pending =
-                crate::library::editor::footprint::state::ToolPending::Idle;
+            editor.state.tool_pending = crate::library::editor::footprint::state::ToolPending::Idle;
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintSketchSelect { id, shift } => {
@@ -4643,7 +4631,11 @@ pub(crate) fn apply_footprint_primitive_edit(
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
             editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive,                 SketchEdit::MovePoint { id, dx, dy },);
+                apply_sketch_edit_with_warnings(
+                    state,
+                    primitive,
+                    SketchEdit::MovePoint { id, dx, dy },
+                );
             });
             // v0.16.0.1 fix — when the dragged Point is a pad's
             // centre, also translate that pad's outline-corner Points
@@ -4659,11 +4651,15 @@ pub(crate) fn apply_footprint_primitive_edit(
                 if let Some(corners) = editor.state.pads[pad_idx].corner_entity_ids {
                     for corner_id in corners {
                         editor.with_parts(|state, primitive| {
-                            apply_sketch_edit_with_warnings(state, primitive,                             SketchEdit::MovePoint {
-                                id: corner_id,
-                                dx,
-                                dy,
-                            },);
+                            apply_sketch_edit_with_warnings(
+                                state,
+                                primitive,
+                                SketchEdit::MovePoint {
+                                    id: corner_id,
+                                    dx,
+                                    dy,
+                                },
+                            );
                         });
                     }
                 }
@@ -4691,7 +4687,13 @@ pub(crate) fn apply_footprint_primitive_edit(
             });
             if let Some(pad_idx) = corner_pad_idx {
                 use signex_sketch::entity::EntityKind;
-                let corners = editor.state.pads[pad_idx].corner_entity_ids.unwrap();
+                let Some(corners) = editor.state.pads[pad_idx].corner_entity_ids else {
+                    // `position()` above already required `is_some()`; this
+                    // arm is unreachable in practice but propagating via
+                    // early-let-else avoids the matching `.unwrap()` panic
+                    // if a future refactor decouples the two.
+                    return;
+                };
                 let mut min_x = f64::INFINITY;
                 let mut min_y = f64::INFINITY;
                 let mut max_x = f64::NEG_INFINITY;
@@ -4754,13 +4756,9 @@ pub(crate) fn apply_footprint_primitive_edit(
                             .primitive()
                             .sketch
                             .as_ref()
-                            .and_then(|s| {
-                                s.entities.iter().find(|e| e.id == *corner_id)
-                            })
+                            .and_then(|s| s.entities.iter().find(|e| e.id == *corner_id))
                             .and_then(|e| {
-                                if let signex_sketch::entity::EntityKind::Point { x, y } =
-                                    e.kind
-                                {
+                                if let signex_sketch::entity::EntityKind::Point { x, y } = e.kind {
                                     Some((x, y))
                                 } else {
                                     None
@@ -4792,18 +4790,20 @@ pub(crate) fn apply_footprint_primitive_edit(
                         let cdy = new_cy - old_centre.1;
                         if cdx.abs() > 1e-9 || cdy.abs() > 1e-9 {
                             editor.with_parts(|state, primitive| {
-                                apply_sketch_edit_with_warnings(state, primitive,                                 SketchEdit::MovePoint {
-                                    id: centre_id,
-                                    dx: cdx,
-                                    dy: cdy,
-                                },);
+                                apply_sketch_edit_with_warnings(
+                                    state,
+                                    primitive,
+                                    SketchEdit::MovePoint {
+                                        id: centre_id,
+                                        dx: cdx,
+                                        dy: cdy,
+                                    },
+                                );
                             });
                         }
                         if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
-                            if let Some(centre) = sketch
-                                .entities
-                                .iter_mut()
-                                .find(|e| e.id == centre_id)
+                            if let Some(centre) =
+                                sketch.entities.iter_mut().find(|e| e.id == centre_id)
                             {
                                 if let Some(attr) = centre.pad.as_mut() {
                                     attr.size_x_expr = format!("{:.4}mm", new_w);
@@ -4864,11 +4864,7 @@ pub(crate) fn apply_footprint_primitive_edit(
                                 EntityKind::Point { x, y } => (x, y),
                                 _ => (0.0, 0.0),
                             };
-                            let num = e
-                                .pad
-                                .as_ref()
-                                .map(|a| a.number.clone())
-                                .unwrap_or_default();
+                            let num = e.pad.as_ref().map(|a| a.number.clone()).unwrap_or_default();
                             (x, y, num)
                         })
                         .unwrap_or((0.0, 0.0, String::new()));
@@ -4955,24 +4951,16 @@ pub(crate) fn apply_footprint_primitive_edit(
                     Some("Point"),
                     Some(p1),
                     Some(p2),
-                ) => dim_target.map(|t| ConstraintKind::DistancePtPt {
-                    p1,
-                    p2,
-                    target: t,
-                }),
+                ) => dim_target.map(|t| ConstraintKind::DistancePtPt { p1, p2, target: t }),
                 (SketchConstraintTag::Horizontal, Some("Line"), _, Some(l), _) => {
                     Some(ConstraintKind::Horizontal { line: l })
                 }
                 (SketchConstraintTag::Vertical, Some("Line"), _, Some(l), _) => {
                     Some(ConstraintKind::Vertical { line: l })
                 }
-                (
-                    SketchConstraintTag::Parallel,
-                    Some("Line"),
-                    Some("Line"),
-                    Some(l1),
-                    Some(l2),
-                ) => Some(ConstraintKind::Parallel { l1, l2 }),
+                (SketchConstraintTag::Parallel, Some("Line"), Some("Line"), Some(l1), Some(l2)) => {
+                    Some(ConstraintKind::Parallel { l1, l2 })
+                }
                 (
                     SketchConstraintTag::Perpendicular,
                     Some("Line"),
@@ -5001,20 +4989,12 @@ pub(crate) fn apply_footprint_primitive_edit(
                     Some(l),
                     Some(p),
                 ) => Some(ConstraintKind::PointOnLine { point: p, line: l }),
-                (
-                    SketchConstraintTag::Midpoint,
-                    Some("Point"),
-                    Some("Line"),
-                    Some(p),
-                    Some(l),
-                ) => Some(ConstraintKind::Midpoint { point: p, line: l }),
-                (
-                    SketchConstraintTag::Midpoint,
-                    Some("Line"),
-                    Some("Point"),
-                    Some(l),
-                    Some(p),
-                ) => Some(ConstraintKind::Midpoint { point: p, line: l }),
+                (SketchConstraintTag::Midpoint, Some("Point"), Some("Line"), Some(p), Some(l)) => {
+                    Some(ConstraintKind::Midpoint { point: p, line: l })
+                }
+                (SketchConstraintTag::Midpoint, Some("Line"), Some("Point"), Some(l), Some(p)) => {
+                    Some(ConstraintKind::Midpoint { point: p, line: l })
+                }
                 _ => None,
             };
 
@@ -5024,13 +5004,21 @@ pub(crate) fn apply_footprint_primitive_edit(
                     kind,
                 };
                 editor.with_parts(|state, primitive| {
-                    apply_sketch_edit_with_warnings(state, primitive,                     SketchEdit::AddConstraint(constraint),);
+                    apply_sketch_edit_with_warnings(
+                        state,
+                        primitive,
+                        SketchEdit::AddConstraint(constraint),
+                    );
                 });
                 editor.dirty = true;
                 editor.canvas_cache.clear();
             }
         }
-        PrimitiveEditorMsg::FootprintSketchToolClick { x_mm, y_mm, snap_id } => {
+        PrimitiveEditorMsg::FootprintSketchToolClick {
+            x_mm,
+            y_mm,
+            snap_id,
+        } => {
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
             use crate::library::editor::footprint::state::{SketchTool, ToolPending};
@@ -5081,7 +5069,11 @@ pub(crate) fn apply_footprint_primitive_edit(
                         EntityKind::Point { x: x_mm, y: y_mm },
                     ));
                     editor.with_parts(|state, primitive| {
-                        apply_sketch_edit_with_warnings(state, primitive,                         SketchEdit::AddEntity(entity),);
+                        apply_sketch_edit_with_warnings(
+                            state,
+                            primitive,
+                            SketchEdit::AddEntity(entity),
+                        );
                     });
                     id
                 }
@@ -5096,9 +5088,7 @@ pub(crate) fn apply_footprint_primitive_edit(
                 }
                 SketchTool::Line => match editor.state.tool_pending {
                     ToolPending::Idle => {
-                        editor.state.tool_pending = ToolPending::LineFirst {
-                            first: resolved_id,
-                        };
+                        editor.state.tool_pending = ToolPending::LineFirst { first: resolved_id };
                     }
                     ToolPending::LineFirst { first } => {
                         let line_id = SketchEntityId::new();
@@ -5111,20 +5101,20 @@ pub(crate) fn apply_footprint_primitive_edit(
                             },
                         ));
                         editor.with_parts(|state, primitive| {
-                            apply_sketch_edit_with_warnings(state, primitive,                             SketchEdit::AddEntity(line),);
+                            apply_sketch_edit_with_warnings(
+                                state,
+                                primitive,
+                                SketchEdit::AddEntity(line),
+                            );
                         });
                         // v0.16.1 — chain: keep the Line tool active
                         // and use this click's endpoint as the next
                         // segment's anchor. Esc / right-click cancel
                         // back to Select. Matches Fusion 2D sketch.
-                        editor.state.tool_pending = ToolPending::LineFirst {
-                            first: resolved_id,
-                        };
+                        editor.state.tool_pending = ToolPending::LineFirst { first: resolved_id };
                     }
                     _ => {
-                        editor.state.tool_pending = ToolPending::LineFirst {
-                            first: resolved_id,
-                        };
+                        editor.state.tool_pending = ToolPending::LineFirst { first: resolved_id };
                     }
                 },
                 SketchTool::Circle => match editor.state.tool_pending {
@@ -5166,7 +5156,11 @@ pub(crate) fn apply_footprint_primitive_edit(
                             EntityKind::Circle { center, radius: r },
                         ));
                         editor.with_parts(|state, primitive| {
-                            apply_sketch_edit_with_warnings(state, primitive,                             SketchEdit::AddEntity(circle),);
+                            apply_sketch_edit_with_warnings(
+                                state,
+                                primitive,
+                                SketchEdit::AddEntity(circle),
+                            );
                         });
                         editor.state.tool_pending = ToolPending::Idle;
                     }
@@ -5178,9 +5172,8 @@ pub(crate) fn apply_footprint_primitive_edit(
                 },
                 SketchTool::RoundedRectangle => match editor.state.tool_pending {
                     ToolPending::Idle => {
-                        editor.state.tool_pending = ToolPending::RoundedRectangleFirst {
-                            first: resolved_id,
-                        };
+                        editor.state.tool_pending =
+                            ToolPending::RoundedRectangleFirst { first: resolved_id };
                     }
                     ToolPending::RoundedRectangleFirst { first } => {
                         // v0.16 — commit the rounded rectangle. Read
@@ -5255,11 +5248,15 @@ pub(crate) fn apply_footprint_primitive_edit(
                                 (tl_bot, x0, y0 + r),
                             ] {
                                 editor.with_parts(|state, primitive| {
-                                    apply_sketch_edit_with_warnings(state, primitive,                                     SketchEdit::AddEntity(flag(Entity::new(
-                                        id,
-                                        plane_id,
-                                        EntityKind::Point { x, y },
-                                    ))),);
+                                    apply_sketch_edit_with_warnings(
+                                        state,
+                                        primitive,
+                                        SketchEdit::AddEntity(flag(Entity::new(
+                                            id,
+                                            plane_id,
+                                            EntityKind::Point { x, y },
+                                        ))),
+                                    );
                                 });
                             }
                             // Lines: top, right, bottom, left.
@@ -5271,11 +5268,15 @@ pub(crate) fn apply_footprint_primitive_edit(
                             ] {
                                 let line_id = SketchEntityId::new();
                                 editor.with_parts(|state, primitive| {
-                                    apply_sketch_edit_with_warnings(state, primitive,                                     SketchEdit::AddEntity(flag(Entity::new(
-                                        line_id,
-                                        plane_id,
-                                        EntityKind::Line { start: s, end: e },
-                                    ))),);
+                                    apply_sketch_edit_with_warnings(
+                                        state,
+                                        primitive,
+                                        SketchEdit::AddEntity(flag(Entity::new(
+                                            line_id,
+                                            plane_id,
+                                            EntityKind::Line { start: s, end: e },
+                                        ))),
+                                    );
                                 });
                             }
                             // Arcs: TR, BR, BL, TL — sweep CCW around
@@ -5288,32 +5289,34 @@ pub(crate) fn apply_footprint_primitive_edit(
                             ] {
                                 let arc_id = SketchEntityId::new();
                                 editor.with_parts(|state, primitive| {
-                                    apply_sketch_edit_with_warnings(state, primitive,                                     SketchEdit::AddEntity(flag(Entity::new(
-                                        arc_id,
-                                        plane_id,
-                                        EntityKind::Arc {
-                                            center,
-                                            start,
-                                            end,
-                                            sweep_ccw: true,
-                                        },
-                                    ))),);
+                                    apply_sketch_edit_with_warnings(
+                                        state,
+                                        primitive,
+                                        SketchEdit::AddEntity(flag(Entity::new(
+                                            arc_id,
+                                            plane_id,
+                                            EntityKind::Arc {
+                                                center,
+                                                start,
+                                                end,
+                                                sweep_ccw: true,
+                                            },
+                                        ))),
+                                    );
                                 });
                             }
                         }
                         editor.state.tool_pending = ToolPending::Idle;
                     }
                     _ => {
-                        editor.state.tool_pending = ToolPending::RoundedRectangleFirst {
-                            first: resolved_id,
-                        };
+                        editor.state.tool_pending =
+                            ToolPending::RoundedRectangleFirst { first: resolved_id };
                     }
                 },
                 SketchTool::Rectangle => match editor.state.tool_pending {
                     ToolPending::Idle => {
-                        editor.state.tool_pending = ToolPending::RectangleFirst {
-                            first: resolved_id,
-                        };
+                        editor.state.tool_pending =
+                            ToolPending::RectangleFirst { first: resolved_id };
                     }
                     ToolPending::RectangleFirst { first } => {
                         // v0.15 — commit the rectangle. Resolve the
@@ -5356,10 +5359,18 @@ pub(crate) fn apply_footprint_primitive_edit(
                                 EntityKind::Point { x: x0, y: y1 },
                             ));
                             editor.with_parts(|state, primitive| {
-                                apply_sketch_edit_with_warnings(state, primitive,                                 SketchEdit::AddEntity(mid_a),);
+                                apply_sketch_edit_with_warnings(
+                                    state,
+                                    primitive,
+                                    SketchEdit::AddEntity(mid_a),
+                                );
                             });
                             editor.with_parts(|state, primitive| {
-                                apply_sketch_edit_with_warnings(state, primitive,                                 SketchEdit::AddEntity(mid_b),);
+                                apply_sketch_edit_with_warnings(
+                                    state,
+                                    primitive,
+                                    SketchEdit::AddEntity(mid_b),
+                                );
                             });
                             // Now the 4 lines: first → mid_a →
                             // opposite → mid_b → first.
@@ -5376,16 +5387,19 @@ pub(crate) fn apply_footprint_primitive_edit(
                                     EntityKind::Line { start: s, end: e },
                                 ));
                                 editor.with_parts(|state, primitive| {
-                                    apply_sketch_edit_with_warnings(state, primitive,                                     SketchEdit::AddEntity(line),);
+                                    apply_sketch_edit_with_warnings(
+                                        state,
+                                        primitive,
+                                        SketchEdit::AddEntity(line),
+                                    );
                                 });
                             }
                         }
                         editor.state.tool_pending = ToolPending::Idle;
                     }
                     _ => {
-                        editor.state.tool_pending = ToolPending::RectangleFirst {
-                            first: resolved_id,
-                        };
+                        editor.state.tool_pending =
+                            ToolPending::RectangleFirst { first: resolved_id };
                     }
                 },
                 SketchTool::Arc => match editor.state.tool_pending {
@@ -5413,7 +5427,11 @@ pub(crate) fn apply_footprint_primitive_edit(
                             },
                         ));
                         editor.with_parts(|state, primitive| {
-                            apply_sketch_edit_with_warnings(state, primitive,                             SketchEdit::AddEntity(arc),);
+                            apply_sketch_edit_with_warnings(
+                                state,
+                                primitive,
+                                SketchEdit::AddEntity(arc),
+                            );
                         });
                         editor.state.tool_pending = ToolPending::Idle;
                     }

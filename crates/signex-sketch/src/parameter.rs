@@ -19,10 +19,10 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::expr::ast::ExprNode;
-use crate::expr::eval::{eval, EvalContext};
-use crate::expr::parse::parse;
 use crate::expr::ExprError;
+use crate::expr::ast::ExprNode;
+use crate::expr::eval::{EvalContext, eval};
+use crate::expr::parse::parse;
 use crate::unit::{Quantity, UnitFamily};
 
 /// User-defined parameter table — `name → source-string`. Source
@@ -123,8 +123,7 @@ enum Color {
 /// order where every dependency precedes its dependants. Errors with
 /// [`ExprError::Cycle`] if a cycle is found.
 fn topo_sort(asts: &BTreeMap<String, ExprNode>) -> Result<Vec<String>, ExprError> {
-    let mut color: HashMap<&str, Color> =
-        asts.keys().map(|k| (k.as_str(), Color::White)).collect();
+    let mut color: HashMap<&str, Color> = asts.keys().map(|k| (k.as_str(), Color::White)).collect();
     let mut order: Vec<String> = Vec::with_capacity(asts.len());
 
     // We walk every parameter in BTreeMap order so the resolution is

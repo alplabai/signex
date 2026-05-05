@@ -18,7 +18,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.11.0"
+version = "0.18.25"
 edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/alplabai/signex"
@@ -81,7 +81,11 @@ axum = { version = "0.7", features = ["ws"] }
 tokio = { version = "1", features = ["full"] }
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "postgres", "sqlite", "macros", "chrono", "uuid", "migrate"] }
 pdf-extract = "0.7"
-tower-http = { version = "0.6", features = ["cors", "trace", "auth", "validate-request"] }
+tower-http = { version = "0.6", features = ["cors", "trace", "auth", "validate-request", "limit"] }
+# Per-IP rate limiting for the library server (HI-2). Closes the DoS surface
+# on `/locks` (unbounded acquire) + mutating routes. `governor` is the
+# underlying token-bucket impl.
+tower_governor = "0.4"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 

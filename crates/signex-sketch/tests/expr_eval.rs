@@ -10,9 +10,9 @@
 
 use std::collections::BTreeMap;
 
-use signex_sketch::expr::ast::{ArrayIndex, BinOp, ExprNode, UnaryOp};
-use signex_sketch::expr::eval::{eval, EvalContext};
 use signex_sketch::expr::ExprError;
+use signex_sketch::expr::ast::{ArrayIndex, BinOp, ExprNode, UnaryOp};
+use signex_sketch::expr::eval::{EvalContext, eval};
 use signex_sketch::unit::{Quantity, Unit};
 
 const EPS: f64 = 1e-10;

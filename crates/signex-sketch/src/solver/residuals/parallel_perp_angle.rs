@@ -17,8 +17,8 @@
 use crate::error::SketchError;
 use crate::id::SketchEntityId;
 use crate::sketch::SketchData;
-use crate::solver::math::{cross as cross_2d, dot as dot_2d, sub, wrap_to_pi, Vec2};
-use crate::solver::state::{line_endpoints, point_xy, EntityIndex};
+use crate::solver::math::{Vec2, cross as cross_2d, dot as dot_2d, sub, wrap_to_pi};
+use crate::solver::state::{EntityIndex, line_endpoints, point_xy};
 
 /// Resolve a line's direction vector `d = end − start` from the
 /// current state vector. Returns `EntityNotFound` if the line itself

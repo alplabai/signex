@@ -198,9 +198,7 @@ impl SimFile {
     pub fn to_toml_string(&self) -> Result<String, SimFileError> {
         for (idx, model) in self.models.iter().enumerate() {
             if model.body.contains("'''") {
-                return Err(SimFileError::InvalidBody {
-                    model_index: idx,
-                });
+                return Err(SimFileError::InvalidBody { model_index: idx });
             }
             // v0.18.12.1 — also reject the sentinel prefix in body
             // content. Without this, a SPICE source containing the
@@ -208,9 +206,7 @@ impl SimFile {
             // confuse the post-emit `str::replace` pass and corrupt
             // the output. Practically improbable but cheap to guard.
             if model.body.contains(BODY_PLACEHOLDER_PREFIX) {
-                return Err(SimFileError::InvalidBody {
-                    model_index: idx,
-                });
+                return Err(SimFileError::InvalidBody { model_index: idx });
             }
         }
         let mut wire_models: Vec<SimModelWire> = Vec::with_capacity(self.models.len());
@@ -360,7 +356,8 @@ mod tests {
             uuid: Uuid::now_v7(),
             name: "LM358".into(),
             kind: SimKind::Ngspice,
-            body: ".SUBCKT LM358 IN+ IN- OUT VCC GND\n* dual op-amp\nR1 IN+ N1 1k\n.ENDS LM358".into(),
+            body: ".SUBCKT LM358 IN+ IN- OUT VCC GND\n* dual op-amp\nR1 IN+ N1 1k\n.ENDS LM358"
+                .into(),
             default_node_map: node_map,
             version: "1.2.3".into(),
             released: true,

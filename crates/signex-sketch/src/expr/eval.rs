@@ -36,8 +36,8 @@
 
 use std::collections::BTreeMap;
 
-use crate::expr::ast::{ArrayIndex, BinOp, ExprNode, UnaryOp};
 use crate::expr::ExprError;
+use crate::expr::ast::{ArrayIndex, BinOp, ExprNode, UnaryOp};
 use crate::unit::{Quantity, Unit, UnitFamily};
 
 /// Tolerance for `Eq`/`Ne` comparisons and `Lookup` key matching, in

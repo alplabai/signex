@@ -120,6 +120,13 @@ impl AppState {
         &self.locks
     }
 
+    /// Hand out a clone of the `Arc<LockManager>` for background tasks
+    /// (the periodic `sweep_expired` sweeper spawned in `router_with_state`
+    /// holds one of these).
+    pub fn locks_arc(&self) -> Arc<LockManager> {
+        Arc::clone(&self.locks)
+    }
+
     /// Apply embedded migrations.
     pub async fn migrate(&self) -> sqlx::Result<()> {
         match &self.pool {
@@ -450,9 +457,12 @@ impl AppState {
 // ---------- Primitive query helpers ----------------------------------------
 
 /// Whitelist of primitive table names — guards against SQL injection through
-/// the `table` parameter that callers in this module supply.
+/// the `table` parameter that callers in this module supply. `assert!` (not
+/// `debug_assert!`) so the guard remains in release builds — every caller
+/// passes `&'static str` literals today, but a future refactor that injects
+/// non-literal data would land in a release-mode SQL injection without this.
 fn assert_primitive_table(table: &str) {
-    debug_assert!(
+    assert!(
         matches!(table, "symbols" | "footprints" | "sims"),
         "primitive table name `{table}` is not whitelisted",
     );
@@ -568,9 +578,14 @@ async fn list_primitive_summaries(
                     let lib: String = r.get("library_id");
                     let id: String = r.get("uuid");
                     let name: String = r.get("name");
+                    // HI-9: surface decode errors instead of mapping to
+                    // Uuid::nil() — corrupt rows would otherwise alias
+                    // and confuse caller-side aggregation.
+                    let library_id = Uuid::parse_str(&lib).map_err(uuid_decode_err)?;
+                    let uuid = Uuid::parse_str(&id).map_err(uuid_decode_err)?;
                     Ok(PrimitiveSummary {
-                        library_id: Uuid::parse_str(&lib).unwrap_or(Uuid::nil()),
-                        uuid: Uuid::parse_str(&id).unwrap_or(Uuid::nil()),
+                        library_id,
+                        uuid,
                         name,
                     })
                 })
@@ -595,9 +610,14 @@ async fn list_primitive_summaries(
                     let lib: String = r.get("library_id");
                     let id: String = r.get("uuid");
                     let name: String = r.get("name");
+                    // HI-9: surface decode errors instead of mapping to
+                    // Uuid::nil() — corrupt rows would otherwise alias
+                    // and confuse caller-side aggregation.
+                    let library_id = Uuid::parse_str(&lib).map_err(uuid_decode_err)?;
+                    let uuid = Uuid::parse_str(&id).map_err(uuid_decode_err)?;
                     Ok(PrimitiveSummary {
-                        library_id: Uuid::parse_str(&lib).unwrap_or(Uuid::nil()),
-                        uuid: Uuid::parse_str(&id).unwrap_or(Uuid::nil()),
+                        library_id,
+                        uuid,
                         name,
                     })
                 })
@@ -611,5 +631,13 @@ pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
 
 /// Wrap `serde_json::Error` into the `sqlx::Error::Decode(Box<dyn StdError>)` form.
 fn decode_err(e: serde_json::Error) -> sqlx::Error {
+    sqlx::Error::Decode(Box::new(e))
+}
+
+/// HI-9: surface UUID parse failures as `sqlx::Error::Decode` instead of
+/// silently mapping to `Uuid::nil()`. A corrupt row is a real problem the
+/// operator needs to see, not a row that aliases with every other corrupt
+/// row in the result set.
+fn uuid_decode_err(e: uuid::Error) -> sqlx::Error {
     sqlx::Error::Decode(Box::new(e))
 }

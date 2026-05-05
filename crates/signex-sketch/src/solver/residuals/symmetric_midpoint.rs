@@ -8,7 +8,7 @@ use crate::error::SketchError;
 use crate::id::SketchEntityId;
 use crate::sketch::SketchData;
 use crate::solver::math::{add, cross, dot, norm_sq_2, scale, sub};
-use crate::solver::state::{line_endpoints, point_xy, EntityIndex};
+use crate::solver::state::{EntityIndex, line_endpoints, point_xy};
 
 /// Residual for `p1` and `p2` being mirror images of each other
 /// across the infinite line through the line entity's endpoints
@@ -81,8 +81,7 @@ pub fn symmetric_about_point(
 ) -> Result<Vec<f64>, SketchError> {
     let p1v = point_xy(p1, state, index, sketch).ok_or(SketchError::EntityNotFound(p1))?;
     let p2v = point_xy(p2, state, index, sketch).ok_or(SketchError::EntityNotFound(p2))?;
-    let c =
-        point_xy(center, state, index, sketch).ok_or(SketchError::EntityNotFound(center))?;
+    let c = point_xy(center, state, index, sketch).ok_or(SketchError::EntityNotFound(center))?;
 
     let mid = scale(0.5, add(p1v, p2v));
     let r = sub(mid, c);

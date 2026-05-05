@@ -86,11 +86,7 @@ pub fn point_xy(
 
 /// Look up the radius of a [`EntityKind::Circle`] from the state
 /// vector. Returns `None` for non-circle entities.
-pub fn circle_radius(
-    id: SketchEntityId,
-    state: &[f64],
-    index: &EntityIndex,
-) -> Option<f64> {
+pub fn circle_radius(id: SketchEntityId, state: &[f64], index: &EntityIndex) -> Option<f64> {
     let ri = index.radii.get(&id)?;
     Some(state[*ri])
 }
@@ -115,19 +111,19 @@ pub fn arc_refs(
 ) -> Option<(SketchEntityId, SketchEntityId, SketchEntityId, bool)> {
     let arc = sketch.entities.iter().find(|e| e.id == id)?;
     match arc.kind {
-        EntityKind::Arc { center, start, end, sweep_ccw } => {
-            Some((center, start, end, sweep_ccw))
-        }
+        EntityKind::Arc {
+            center,
+            start,
+            end,
+            sweep_ccw,
+        } => Some((center, start, end, sweep_ccw)),
         _ => None,
     }
 }
 
 /// Resolve the centre Point ID for either an [`EntityKind::Arc`] or
 /// [`EntityKind::Circle`].
-pub fn center_of(
-    id: SketchEntityId,
-    sketch: &SketchData,
-) -> Option<SketchEntityId> {
+pub fn center_of(id: SketchEntityId, sketch: &SketchData) -> Option<SketchEntityId> {
     let entity = sketch.entities.iter().find(|e| e.id == id)?;
     match entity.kind {
         EntityKind::Arc { center, .. } => Some(center),
@@ -137,9 +133,6 @@ pub fn center_of(
 }
 
 /// Lookup helper used by tests that need an [`Entity`] by ID.
-pub fn find_entity<'a>(
-    id: SketchEntityId,
-    sketch: &'a SketchData,
-) -> Option<&'a Entity> {
+pub fn find_entity<'a>(id: SketchEntityId, sketch: &'a SketchData) -> Option<&'a Entity> {
     sketch.entities.iter().find(|e| e.id == id)
 }

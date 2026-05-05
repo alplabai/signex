@@ -161,10 +161,8 @@ impl Signex {
                 // canvas click. This sits BEFORE the schematic flow
                 // so it doesn't fight with `current_tool` (which
                 // tracks schematic tools, not footprint pads).
-                if let Some(active_tab) = self
-                    .document_state
-                    .tabs
-                    .get(self.document_state.active_tab)
+                if let Some(active_tab) =
+                    self.document_state.tabs.get(self.document_state.active_tab)
                 {
                     if let Some(path) = active_tab.kind.as_footprint_editor() {
                         let path = path.clone();

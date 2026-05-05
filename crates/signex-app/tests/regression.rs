@@ -151,7 +151,10 @@ fn f6_project_rename_does_not_touch_companion_snxsch_snxpcb() {
     let project = &app.document_state.projects[0];
     assert_eq!(project.path, new_prj);
     assert_eq!(project.data.name, "NewProj");
-    assert!(app.ui_state.rename_dialog.is_none(), "modal closed on success");
+    assert!(
+        app.ui_state.rename_dialog.is_none(),
+        "modal closed on success"
+    );
 }
 
 #[test]
@@ -165,7 +168,10 @@ fn f6_project_rename_refuses_to_overwrite_existing_target() {
     arm_project_rename(&mut app, &old_prj, "Beta");
     let _ = app.update(Message::RenameSubmit);
 
-    assert!(old_prj.exists(), "old .snxprj must NOT be removed on collision");
+    assert!(
+        old_prj.exists(),
+        "old .snxprj must NOT be removed on collision"
+    );
     assert!(
         collision.exists(),
         "pre-existing target file must remain untouched"
@@ -221,7 +227,10 @@ fn remove_with_delete_choice_unlinks_the_file() {
     arm_remove_dialog(&mut app, &target);
     let _ = app.update(Message::RemoveConfirm(RemoveChoice::DeleteFile));
 
-    assert!(!target.exists(), "DeleteFile must remove the file from disk");
+    assert!(
+        !target.exists(),
+        "DeleteFile must remove the file from disk"
+    );
 }
 
 #[test]
@@ -467,17 +476,10 @@ fn project_options_modal_opens_with_metadata_then_closes() {
         ProjectTreeAction::OpenProjectOptions(vec![0]),
     ));
 
-    let state = app
-        .ui_state
-        .project_options
-        .as_ref()
-        .expect("modal opened");
+    let state = app.ui_state.project_options.as_ref().expect("modal opened");
     assert_eq!(state.project_idx, 0);
     assert_eq!(state.name, "Oscar");
-    assert_eq!(
-        state.directory,
-        tmp.path().to_string_lossy().to_string()
-    );
+    assert_eq!(state.directory, tmp.path().to_string_lossy().to_string());
     assert_eq!(state.schematic_root.as_deref(), Some("Oscar.snxsch"));
     assert_eq!(state.pcb_file.as_deref(), Some("Oscar.snxpcb"));
     assert_eq!(state.library_count, 0);
@@ -516,7 +518,10 @@ fn close_rename_dialog_dismisses_modal_without_filesystem_changes() {
     let _ = app.update(Message::CloseRenameDialog);
 
     assert!(app.ui_state.rename_dialog.is_none(), "modal closed");
-    assert!(prj_path.exists(), "no rename happened — original still there");
+    assert!(
+        prj_path.exists(),
+        "no rename happened — original still there"
+    );
     assert!(
         !prj_path.with_file_name("WouldBeRenamed.snxprj").exists(),
         "no new file created"
@@ -543,7 +548,11 @@ fn close_remove_dialog_dismisses_modal_without_filesystem_changes() {
 #[test]
 fn f1_legacy_prefs_path_copied_forward_when_canonical_empty() {
     let tmp = TempDir::new().unwrap();
-    let canonical = tmp.path().join("canonical").join("signex").join("prefs.json");
+    let canonical = tmp
+        .path()
+        .join("canonical")
+        .join("signex")
+        .join("prefs.json");
     let legacy = tmp.path().join("legacy").join("signex").join("prefs.json");
 
     fs::create_dir_all(legacy.parent().unwrap()).unwrap();
@@ -571,7 +580,11 @@ fn f1_legacy_prefs_path_copied_forward_when_canonical_empty() {
 #[test]
 fn f1_canonical_present_blocks_legacy_copy() {
     let tmp = TempDir::new().unwrap();
-    let canonical = tmp.path().join("canonical").join("signex").join("prefs.json");
+    let canonical = tmp
+        .path()
+        .join("canonical")
+        .join("signex")
+        .join("prefs.json");
     let legacy = tmp.path().join("legacy").join("signex").join("prefs.json");
 
     fs::create_dir_all(canonical.parent().unwrap()).unwrap();
@@ -595,7 +608,11 @@ fn f1_canonical_present_blocks_legacy_copy() {
 #[test]
 fn f1_no_legacy_no_canonical_is_a_clean_noop() {
     let tmp = TempDir::new().unwrap();
-    let canonical = tmp.path().join("canonical").join("signex").join("prefs.json");
+    let canonical = tmp
+        .path()
+        .join("canonical")
+        .join("signex")
+        .join("prefs.json");
     let legacy = tmp.path().join("legacy").join("signex").join("prefs.json");
 
     // Neither exists. Migration should not panic, not create anything.
@@ -737,11 +754,8 @@ fn f13_register_pending_rejects_existing_path() {
     let lib_path = tmp.path().join("Existing.snxlib");
     fs::create_dir_all(&lib_path).unwrap();
 
-    let result = signex_app::library::commands::register_pending_library(
-        lib_path.clone(),
-        false,
-        false,
-    );
+    let result =
+        signex_app::library::commands::register_pending_library(lib_path.clone(), false, false);
     assert!(result.is_err(), "must reject paths that already exist");
 }
 
@@ -1034,18 +1048,18 @@ fn prefs_cross_pref_independence() {
         signex_app::fonts::read_theme_pref_at(&path),
         ThemeId::Signex
     );
-    assert!(
-        (signex_app::fonts::read_grid_size_mm_pref_at(&path).unwrap() - 2.54).abs() < 1e-5
-    );
+    assert!((signex_app::fonts::read_grid_size_mm_pref_at(&path).unwrap() - 2.54).abs() < 1e-5);
     assert_eq!(signex_app::fonts::read_unit_pref_at(&path), Unit::Mil);
     assert!(!signex_app::fonts::read_grid_visible_pref_at(&path));
     assert!(!signex_app::fonts::read_snap_enabled_pref_at(&path));
 
     // Pre-existing keys (label_style, ui_font, etc.) should remain
     // unset — we never wrote them — but absent ≠ default-failure.
-    let raw: serde_json::Value =
-        serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
-    assert!(raw.get("label_style").is_none(), "label_style not written by these tests");
+    let raw: serde_json::Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+    assert!(
+        raw.get("label_style").is_none(),
+        "label_style not written by these tests"
+    );
     assert!(raw.get("ui_font").is_none());
 }
 

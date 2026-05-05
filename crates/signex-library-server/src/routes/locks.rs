@@ -60,12 +60,32 @@ impl From<FieldSetWire> for FieldSet {
     }
 }
 
+/// Maximum length for the `x-signex-holder` header. Bounded so a client
+/// can't grow the lock-map keys (which are echoed in error responses) by
+/// supplying megabyte holder strings. (MD-15)
+const MAX_HOLDER_LEN: usize = 256;
+
 fn holder_from(headers: &HeaderMap) -> Result<String, ApiError> {
-    headers
+    let raw = headers
         .get("x-signex-holder")
         .and_then(|h| h.to_str().ok())
-        .map(|s| s.to_string())
-        .ok_or_else(|| ApiError::bad_request("missing x-signex-holder header"))
+        .ok_or_else(|| ApiError::bad_request("missing x-signex-holder header"))?;
+    if raw.is_empty() {
+        return Err(ApiError::bad_request("x-signex-holder is empty"));
+    }
+    if raw.len() > MAX_HOLDER_LEN {
+        return Err(ApiError::bad_request(format!(
+            "x-signex-holder exceeds {MAX_HOLDER_LEN}-byte limit"
+        )));
+    }
+    // Reject control characters — they would corrupt the echoed error
+    // body and tracing output.
+    if raw.chars().any(|c| c.is_control()) {
+        return Err(ApiError::bad_request(
+            "x-signex-holder contains control characters",
+        ));
+    }
+    Ok(raw.to_string())
 }
 
 async fn acquire_lock(
@@ -84,6 +104,7 @@ async fn acquire_lock(
         .map_err(|e| match e.kind {
             LockErrorKind::Held { holder } => ApiError::conflict(format!("lock held by {holder}")),
             LockErrorKind::UnknownHolder => ApiError::bad_request("unknown holder"),
+            LockErrorKind::Internal => ApiError::internal("lock manager internal error"),
         })?;
     Ok(StatusCode::CREATED)
 }
@@ -104,6 +125,7 @@ async fn release_lock(
         .map_err(|e| match e.kind {
             LockErrorKind::Held { holder } => ApiError::conflict(format!("lock held by {holder}")),
             LockErrorKind::UnknownHolder => ApiError::bad_request("not lock holder"),
+            LockErrorKind::Internal => ApiError::internal("lock manager internal error"),
         })?;
     Ok(StatusCode::NO_CONTENT)
 }

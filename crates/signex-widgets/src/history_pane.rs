@@ -148,7 +148,10 @@ where
 
 /// Trim a SHA to the seven-char shorthand `git log --oneline` uses.
 /// Anything shorter than 7 chars (e.g. a test stub) is returned
-/// untouched.
+/// untouched. LO-4 considered: returning `&str` here would force the
+/// iced `text()` widget to capture the entry's lifetime, which doesn't
+/// compose with the row-builder iterator's per-item ownership. The
+/// allocation is paid anyway when the widget materialises the string.
 fn short_sha(sha: &str) -> String {
     if sha.len() >= 7 {
         sha[..7].to_string()

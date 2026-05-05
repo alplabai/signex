@@ -1,11 +1,11 @@
 mod common;
 use common::Sketch;
 
+use signex_sketch::SketchData;
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
 use signex_sketch::solver::state::{circle_radius, pack, point_xy};
-use signex_sketch::SketchData;
 
 fn make_plane() -> Plane {
     Plane {
@@ -178,10 +178,7 @@ fn jacobian_coincident_matches_analytical() {
     assert_eq!(j.len(), 2, "Coincident produces 2 residual rows");
     assert_eq!(j[0].len(), 4);
 
-    let expected = [
-        [-1.0, 0.0, 1.0, 0.0],
-        [0.0, -1.0, 0.0, 1.0],
-    ];
+    let expected = [[-1.0, 0.0, 1.0, 0.0], [0.0, -1.0, 0.0, 1.0]];
     for row in 0..2 {
         for col in 0..4 {
             approx_eq(j[row][col], expected[row][col], 1e-5);

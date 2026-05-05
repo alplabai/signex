@@ -81,8 +81,7 @@ impl Signex {
                 );
                 if footprint_active {
                     let (x, y) = self.interaction_state.last_mouse_pos;
-                    self.interaction_state.grid_picker =
-                        Some(crate::app::GridPickerState { x, y });
+                    self.interaction_state.grid_picker = Some(crate::app::GridPickerState { x, y });
                 }
                 self.finish_update()
             }
@@ -110,9 +109,7 @@ impl Signex {
                 // Pre-populate from the active footprint editor's
                 // current step. No-op for non-footprint tabs (the
                 // modal would have nothing to drive).
-                let editor_snap = self
-                    .active_footprint_editor()
-                    .map(|e| e.state.snap_options);
+                let editor_snap = self.active_footprint_editor().map(|e| e.state.snap_options);
                 tracing::info!(
                     target: "signex::ui",
                     has_snap = editor_snap.is_some(),
@@ -247,8 +244,7 @@ impl Signex {
                 let parsed_x = draft
                     .as_ref()
                     .and_then(|s| s.step_x_mm.trim().parse::<f64>().ok());
-                if let (Some(d), Some(editor)) = (draft, self.active_footprint_editor_mut())
-                {
+                if let (Some(d), Some(editor)) = (draft, self.active_footprint_editor_mut()) {
                     let opts = &mut editor.state.snap_options;
                     if let Some(step) = parsed_x {
                         if step > 0.0 && step.is_finite() {

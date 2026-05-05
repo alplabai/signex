@@ -85,7 +85,9 @@ pub enum PadShape {
     Round,
     Rect,
     /// Rounded rectangle — `radius_ratio_expr` ∈ 0..0.5.
-    RoundRect { radius_ratio_expr: String },
+    RoundRect {
+        radius_ratio_expr: String,
+    },
     Oval,
     /// Rectangle with chamfered corners.
     Chamfered {

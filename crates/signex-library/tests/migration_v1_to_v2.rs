@@ -21,7 +21,10 @@ use signex_sketch::SketchData;
 fn v1_soic8_loads_with_no_sketch_and_schema_2() {
     let toml_src = include_str!("fixtures/v1_soic8.toml");
     let fp: Footprint = toml::from_str(toml_src).expect("v1 SOIC-8 must deserialise into v2");
-    assert_eq!(fp.schema_version, 2, "default schema_version applies to legacy fixtures");
+    assert_eq!(
+        fp.schema_version, 2,
+        "default schema_version applies to legacy fixtures"
+    );
     assert!(fp.sketch.is_none(), "v1 footprints have no sketch");
     assert_eq!(fp.pads.len(), 8, "SOIC-8 has 8 pads");
     assert_eq!(fp.name, "SOIC-8");
@@ -40,17 +43,15 @@ fn v1_qfp32_loads_clean() {
 #[test]
 fn v1_mounting_hole_loads_clean() {
     let toml_src = include_str!("fixtures/v1_mounting_hole.toml");
-    let fp: Footprint = toml::from_str(toml_src).expect("v1 mounting hole must deserialise into v2");
+    let fp: Footprint =
+        toml::from_str(toml_src).expect("v1 mounting hole must deserialise into v2");
     assert_eq!(fp.schema_version, 2);
     assert!(fp.sketch.is_none());
     assert_eq!(fp.pads.len(), 5, "1 NPT hole + 4 fiducials");
     // First pad is the NPT hole; verify the drill survived deserialisation.
     let mh = &fp.pads[0];
     assert_eq!(mh.number, "MH1");
-    let drill = mh
-        .drill
-        .as_ref()
-        .expect("NPT pad must carry a drill spec");
+    let drill = mh.drill.as_ref().expect("NPT pad must carry a drill spec");
     assert!((drill.diameter - 3.2).abs() < f64::EPSILON);
 }
 
@@ -64,7 +65,10 @@ fn v2_round_trip_with_sketch() {
     let back: Footprint =
         toml::from_str(&serialised).expect("serialised v2 footprint must round-trip");
 
-    assert!(back.sketch.is_some(), "sketch field must survive round-trip");
+    assert!(
+        back.sketch.is_some(),
+        "sketch field must survive round-trip"
+    );
     assert_eq!(back.schema_version, 2);
     assert_eq!(back, fp, "round-trip must preserve every field");
 }

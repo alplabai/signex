@@ -15,11 +15,11 @@ use std::collections::{BTreeMap, HashMap};
 use crate::constraint::{Constraint, ConstraintKind, DimTarget};
 use crate::error::SketchError;
 use crate::expr::ast::ExprNode;
-use crate::expr::eval::{eval as eval_expr, EvalContext};
+use crate::expr::eval::{EvalContext, eval as eval_expr};
 use crate::expr::parse::parse as parse_expr;
 use crate::sketch::SketchData;
-use crate::solver::residuals::{equal_tangent, point_on, parallel_perp_angle, symmetric_midpoint};
-use crate::solver::state::{point_xy, EntityIndex, line_endpoints};
+use crate::solver::residuals::{equal_tangent, parallel_perp_angle, point_on, symmetric_midpoint};
+use crate::solver::state::{EntityIndex, line_endpoints, point_xy};
 use crate::unit::{Quantity, UnitFamily};
 
 /// Resolved-parameter table — `name → f64` in canonical units (mm
@@ -59,7 +59,10 @@ pub fn resolve_dim(target: &DimTarget, params: &ResolvedParams) -> Result<f64, S
         DimTarget::Expr(s) => {
             let body = s.trim().trim_start_matches('=').trim();
             // Fast path: single bare identifier.
-            if !body.is_empty() && body.chars().all(|c| c.is_alphanumeric() || c == '_') && !body.chars().next().unwrap().is_ascii_digit() {
+            if !body.is_empty()
+                && body.chars().all(|c| c.is_alphanumeric() || c == '_')
+                && !body.chars().next().unwrap().is_ascii_digit()
+            {
                 if let Some(v) = params.get(body) {
                     return Ok(*v);
                 }
@@ -126,37 +129,35 @@ pub fn residual(
     match &c.kind {
         // ─── Task 2.3: Coincident, DistancePtPt, Horizontal, Vertical, Fixed ───
         Coincident { p1, p2 } => {
-            let (x1, y1) = point_xy(*p1, state, index, sketch)
-                .ok_or(SketchError::EntityNotFound(*p1))?;
-            let (x2, y2) = point_xy(*p2, state, index, sketch)
-                .ok_or(SketchError::EntityNotFound(*p2))?;
+            let (x1, y1) =
+                point_xy(*p1, state, index, sketch).ok_or(SketchError::EntityNotFound(*p1))?;
+            let (x2, y2) =
+                point_xy(*p2, state, index, sketch).ok_or(SketchError::EntityNotFound(*p2))?;
             Ok(vec![x2 - x1, y2 - y1])
         }
         DistancePtPt { p1, p2, target } => {
-            let (x1, y1) = point_xy(*p1, state, index, sketch)
-                .ok_or(SketchError::EntityNotFound(*p1))?;
-            let (x2, y2) = point_xy(*p2, state, index, sketch)
-                .ok_or(SketchError::EntityNotFound(*p2))?;
+            let (x1, y1) =
+                point_xy(*p1, state, index, sketch).ok_or(SketchError::EntityNotFound(*p1))?;
+            let (x2, y2) =
+                point_xy(*p2, state, index, sketch).ok_or(SketchError::EntityNotFound(*p2))?;
             let d = ((x2 - x1).powi(2) + (y2 - y1).powi(2)).sqrt();
             let t = resolve_dim(target, params)?;
             Ok(vec![d - t])
         }
         Horizontal { line } => {
-            let (s, e) = line_endpoints(*line, sketch)
-                .ok_or(SketchError::EntityNotFound(*line))?;
-            let (_, y1) = point_xy(s, state, index, sketch)
-                .ok_or(SketchError::EntityNotFound(s))?;
-            let (_, y2) = point_xy(e, state, index, sketch)
-                .ok_or(SketchError::EntityNotFound(e))?;
+            let (s, e) = line_endpoints(*line, sketch).ok_or(SketchError::EntityNotFound(*line))?;
+            let (_, y1) =
+                point_xy(s, state, index, sketch).ok_or(SketchError::EntityNotFound(s))?;
+            let (_, y2) =
+                point_xy(e, state, index, sketch).ok_or(SketchError::EntityNotFound(e))?;
             Ok(vec![y2 - y1])
         }
         Vertical { line } => {
-            let (s, e) = line_endpoints(*line, sketch)
-                .ok_or(SketchError::EntityNotFound(*line))?;
-            let (x1, _) = point_xy(s, state, index, sketch)
-                .ok_or(SketchError::EntityNotFound(s))?;
-            let (x2, _) = point_xy(e, state, index, sketch)
-                .ok_or(SketchError::EntityNotFound(e))?;
+            let (s, e) = line_endpoints(*line, sketch).ok_or(SketchError::EntityNotFound(*line))?;
+            let (x1, _) =
+                point_xy(s, state, index, sketch).ok_or(SketchError::EntityNotFound(s))?;
+            let (x2, _) =
+                point_xy(e, state, index, sketch).ok_or(SketchError::EntityNotFound(e))?;
             Ok(vec![x2 - x1])
         }
         Fixed { .. } => Ok(vec![]),
@@ -174,7 +175,11 @@ pub fn residual(
         // ─── Task 2.5: point_on ───
         PointOnLine { point, line } => point_on::point_on_line(*point, *line, state, index, sketch),
         PointOnArc { point, arc } => point_on::point_on_arc(*point, *arc, state, index, sketch),
-        DistancePtLine { point, line, target } => {
+        DistancePtLine {
+            point,
+            line,
+            target,
+        } => {
             let t = resolve_dim(target, params)?;
             point_on::distance_pt_line(*point, *line, t, state, index, sketch)
         }

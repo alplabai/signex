@@ -15,16 +15,16 @@ use common::Sketch;
 use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
 use signex_sketch::error::SolveError;
 use signex_sketch::id::ConstraintId;
-use signex_sketch::solver::dof::{entity_colours, over_constraint_ids, DofColor};
+use signex_sketch::solver::dof::{DofColor, entity_colours, over_constraint_ids};
 use signex_sketch::solver::jacobian::numerical_jacobian;
-use signex_sketch::solver::lm::{solve_lm, SolveResult};
+use signex_sketch::solver::lm::{SolveResult, solve_lm};
 
 /// Default Solver tolerance + iteration cap, used by these tests.
 const TOL: f64 = 1e-12;
 const MAX_ITERS: usize = 100;
-use signex_sketch::solver::residual::{total_residual, ResolvedParams};
-use signex_sketch::solver::state::pack;
 use signex_sketch::solver::math::norm_vec;
+use signex_sketch::solver::residual::{ResolvedParams, total_residual};
+use signex_sketch::solver::state::pack;
 
 fn empty_params() -> ResolvedParams {
     ResolvedParams::new()
@@ -181,7 +181,7 @@ fn dof_over_constrained_marks_red() {
     // — judge based on the solver behaviour: with two equal-weight
     // conflicting constraints LM settles at ≈ 7.5 mm, leaving each
     // ≈ 2.5 mm residual.)
-    let over_ids = over_constraint_ids(&s.data, &result, &j);
+    let over_ids = over_constraint_ids(&s.data, &result, &j, &empty_params());
     assert!(
         !over_ids.is_empty(),
         "at least one of the two conflicting Distance constraints should be flagged red"

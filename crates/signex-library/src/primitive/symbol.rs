@@ -567,7 +567,16 @@ impl SymbolFile {
         let mut tsv_payloads: Vec<String> = Vec::with_capacity(self.symbols.len());
         let mut wire_symbols: Vec<SymbolWire> = Vec::with_capacity(self.symbols.len());
         for (idx, sym) in self.symbols.iter().enumerate() {
-            tsv_payloads.push(pins_to_tsv(&sym.pins)?);
+            let payload = pins_to_tsv(&sym.pins)?;
+            // MD-27: refuse to emit a TSV payload that contains the
+            // post-emit-replace sentinel — `String::replace` is
+            // non-anchored, so a payload byte sequence matching the
+            // placeholder would get a SECOND replacement applied,
+            // corrupting the output. Mirrors the guard in `SimFile`.
+            if payload.contains(PINS_TSV_PLACEHOLDER_PREFIX) {
+                return Err(SymbolFileError::InvalidPinsTsv { symbol_index: idx });
+            }
+            tsv_payloads.push(payload);
             wire_symbols.push(SymbolWire {
                 uuid: sym.uuid,
                 name: sym.name.clone(),
@@ -636,10 +645,12 @@ fn pin_direction_from_token(s: &str) -> Result<PinDirection, SymbolFileError> {
         "NotConnected" => PinDirection::NotConnected,
         "Tristate" => PinDirection::Tristate,
         "Unspecified" => PinDirection::Unspecified,
-        other => return Err(SymbolFileError::UnknownEnumToken {
-            kind: "PinDirection",
-            got: other.to_string(),
-        }),
+        other => {
+            return Err(SymbolFileError::UnknownEnumToken {
+                kind: "PinDirection",
+                got: other.to_string(),
+            });
+        }
     })
 }
 
@@ -658,10 +669,12 @@ fn pin_orientation_from_token(s: &str) -> Result<PinOrientation, SymbolFileError
         "Down" => PinOrientation::Down,
         "Left" => PinOrientation::Left,
         "Right" => PinOrientation::Right,
-        other => return Err(SymbolFileError::UnknownEnumToken {
-            kind: "PinOrientation",
-            got: other.to_string(),
-        }),
+        other => {
+            return Err(SymbolFileError::UnknownEnumToken {
+                kind: "PinOrientation",
+                got: other.to_string(),
+            });
+        }
     })
 }
 
@@ -702,10 +715,12 @@ fn pin_symbol_kind_from_token(s: &str) -> Result<PinSymbolKind, SymbolFileError>
         "OpenCollector" => PinSymbolKind::OpenCollector,
         "OpenEmitter" => PinSymbolKind::OpenEmitter,
         "HiZ" => PinSymbolKind::HiZ,
-        other => return Err(SymbolFileError::UnknownEnumToken {
-            kind: "PinSymbolKind",
-            got: other.to_string(),
-        }),
+        other => {
+            return Err(SymbolFileError::UnknownEnumToken {
+                kind: "PinSymbolKind",
+                got: other.to_string(),
+            });
+        }
     })
 }
 
@@ -713,9 +728,18 @@ fn pin_symbol_kind_from_token(s: &str) -> Result<PinSymbolKind, SymbolFileError>
 /// the most common default is short; non-zero values use the
 /// shortest precision-preserving form via `Display`. Cells must be
 /// re-parseable by `f64::from_str`.
+///
+/// HI-10: non-finite values (NaN / ±Inf) silently become `"NaN"` /
+/// `"inf"` strings via `Display`, which fail to re-parse. Surface as
+/// an empty cell — round-trip lands on `parse_f64_cell`'s "invalid
+/// numeric" error rather than corrupting the file.
 fn fmt_f64(v: f64) -> String {
     if v == 0.0 {
         "0".to_string()
+    } else if !v.is_finite() {
+        // Don't write NaN / inf — caller's invariant is broken.
+        debug_assert!(v.is_finite(), "fmt_f64 called with non-finite {v}");
+        String::new()
     } else {
         format!("{v}")
     }
@@ -892,39 +916,30 @@ pub enum SymbolFileError {
         "TSV cell in column {column:?} contains a tab, newline, or triple-quote: \
          {value:?}; cells must be free of \\t, \\n, and the literal \"'''\""
     )]
-    InvalidTsvCell {
-        column: &'static str,
-        value: String,
-    },
+    InvalidTsvCell { column: &'static str, value: String },
     #[error("pins_tsv block is empty (no header row)")]
     EmptyPinsTsv,
-    #[error(
-        "pins_tsv header does not match the expected schema; got columns {got:?}"
-    )]
+    #[error("pins_tsv header does not match the expected schema; got columns {got:?}")]
     PinsTsvSchemaMismatch { got: Vec<String> },
-    #[error(
-        "pins_tsv row {row_index} has {got} cells; header declares {expected}"
-    )]
+    #[error("pins_tsv row {row_index} has {got} cells; header declares {expected}")]
     PinsTsvCellCountMismatch {
         row_index: usize,
         got: usize,
         expected: usize,
     },
     #[error("unknown {kind} token {got:?} in pins_tsv cell")]
-    UnknownEnumToken {
-        kind: &'static str,
-        got: String,
-    },
+    UnknownEnumToken { kind: &'static str, got: String },
     #[error("invalid numeric cell in column {column:?}: {value:?}")]
-    InvalidNumericCell {
-        column: &'static str,
-        value: String,
-    },
-    #[error("invalid boolean cell in column {column:?}: {value:?} (expected \"true\" or \"false\")")]
-    InvalidBoolCell {
-        column: &'static str,
-        value: String,
-    },
+    InvalidNumericCell { column: &'static str, value: String },
+    #[error(
+        "invalid boolean cell in column {column:?}: {value:?} (expected \"true\" or \"false\")"
+    )]
+    InvalidBoolCell { column: &'static str, value: String },
+    /// MD-27: pin TSV payload contains the placeholder sentinel that
+    /// `to_toml_string` uses for the post-emit `String::replace` pass.
+    /// Mirrors `SimFileError::InvalidBody` — output corruption guard.
+    #[error("symbol {symbol_index} pin TSV contains the placeholder sentinel")]
+    InvalidPinsTsv { symbol_index: usize },
 }
 
 #[cfg(test)]

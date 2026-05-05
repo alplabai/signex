@@ -24,8 +24,15 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LockErrorKind {
-    Held { holder: String },
+    Held {
+        holder: String,
+    },
     UnknownHolder,
+    /// HI-20: a previous LockManager call panicked while holding the
+    /// `Mutex`, poisoning it. We surface the failure as an explicit
+    /// 500-class error rather than letting the second `.unwrap()` panic
+    /// the axum task and cascade into every subsequent request.
+    Internal,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,6 +45,7 @@ impl std::fmt::Display for LockError {
         match &self.kind {
             LockErrorKind::Held { holder } => write!(f, "lock held by {holder}"),
             LockErrorKind::UnknownHolder => write!(f, "lock not held by caller"),
+            LockErrorKind::Internal => write!(f, "lock manager internal error"),
         }
     }
 }
@@ -80,12 +88,17 @@ impl LockManager {
 
     /// Override TTL — primarily for tests so they don't have to wait minutes.
     pub fn set_idle_ttl(&self, ttl: Duration) {
-        let mut inner = self.inner.lock().unwrap();
+        // HI-20: best-effort recovery. If the mutex is poisoned the inner
+        // state may be partially consistent, but for a TTL update that's
+        // acceptable; the alternative (panic) brings down the server.
+        let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         inner.idle_ttl = ttl;
     }
 
     pub fn try_lock(&self, uuid: Uuid, field_set: FieldSet, holder: &str) -> Result<(), LockError> {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.inner.lock().map_err(|_| LockError {
+            kind: LockErrorKind::Internal,
+        })?;
         let now = Instant::now();
         let now_wall = Utc::now();
         let key = (uuid, field_set);
@@ -113,7 +126,9 @@ impl LockManager {
     }
 
     pub fn renew(&self, uuid: Uuid, field_set: FieldSet, holder: &str) -> Result<(), LockError> {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.inner.lock().map_err(|_| LockError {
+            kind: LockErrorKind::Internal,
+        })?;
         let key = (uuid, field_set);
         let entry = inner.locks.get_mut(&key).ok_or(LockError {
             kind: LockErrorKind::UnknownHolder,
@@ -131,7 +146,9 @@ impl LockManager {
     }
 
     pub fn release(&self, uuid: Uuid, field_set: FieldSet, holder: &str) -> Result<(), LockError> {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.inner.lock().map_err(|_| LockError {
+            kind: LockErrorKind::Internal,
+        })?;
         let key = (uuid, field_set);
         let entry = inner.locks.get(&key).ok_or(LockError {
             kind: LockErrorKind::UnknownHolder,
@@ -148,7 +165,8 @@ impl LockManager {
     }
 
     pub fn snapshot(&self, uuid: Uuid, field_set: FieldSet) -> Option<LockSnapshot> {
-        let inner = self.inner.lock().unwrap();
+        // Read-only inspection; on poison we recover rather than crash.
+        let inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         let key = (uuid, field_set);
         let entry = inner.locks.get(&key)?;
         // Treat expired entries as absent.
@@ -164,7 +182,9 @@ impl LockManager {
 
     /// Drop expired entries. Background tasks may call this periodically.
     pub fn sweep_expired(&self) {
-        let mut inner = self.inner.lock().unwrap();
+        // The sweeper is best-effort; on poison we still want the next
+        // tick to clean up rather than the task panicking out.
+        let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         let now = Instant::now();
         let ttl = inner.idle_ttl;
         inner

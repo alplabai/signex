@@ -17,15 +17,15 @@
 use std::collections::BTreeMap;
 
 use signex_library::primitive::footprint::FpVScore;
+use signex_sketch::SketchError;
 use signex_sketch::entity::EntityKind;
 use signex_sketch::expr::ast::ExprNode;
-use signex_sketch::expr::eval::{eval, EvalContext};
+use signex_sketch::expr::eval::{EvalContext, eval};
 use signex_sketch::expr::parse::parse;
 use signex_sketch::sketch::SketchData;
-use signex_sketch::solver::state::point_xy;
 use signex_sketch::solver::FullSolveOutput;
+use signex_sketch::solver::state::point_xy;
 use signex_sketch::unit::Quantity;
-use signex_sketch::SketchError;
 use std::collections::HashMap;
 
 /// Nominal board thickness used to convert `depth_fraction` to mm.
@@ -114,7 +114,9 @@ pub fn bake_v_scores(
     Ok(())
 }
 
-fn map_side(s: signex_sketch::attr::VScoreSide) -> signex_library::primitive::footprint::VScoreSide {
+fn map_side(
+    s: signex_sketch::attr::VScoreSide,
+) -> signex_library::primitive::footprint::VScoreSide {
     use signex_library::primitive::footprint::VScoreSide as Lib;
     use signex_sketch::attr::VScoreSide as Sk;
     match s {
@@ -162,8 +164,8 @@ mod tests {
     use signex_sketch::entity::Entity;
     use signex_sketch::id::SketchEntityId;
     use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
-    use signex_sketch::solver::residual::ResolvedParams;
     use signex_sketch::solver::Solver;
+    use signex_sketch::solver::residual::ResolvedParams;
 
     fn solve(sketch: &SketchData) -> FullSolveOutput {
         Solver::default()
@@ -183,8 +185,11 @@ mod tests {
         let p2 = SketchEntityId::new();
         data.entities
             .push(Entity::new(p1, plane, EntityKind::Point { x: 0.0, y: 0.0 }));
-        data.entities
-            .push(Entity::new(p2, plane, EntityKind::Point { x: 50.0, y: 0.0 }));
+        data.entities.push(Entity::new(
+            p2,
+            plane,
+            EntityKind::Point { x: 50.0, y: 0.0 },
+        ));
         let mut line = Entity::new(
             SketchEntityId::new(),
             plane,
@@ -273,8 +278,14 @@ mod tests {
         let mut warnings = Vec::new();
         bake_v_scores(&data, &solved, &HashMap::new(), &mut out, &mut warnings).unwrap();
         assert_eq!(out.len(), 1);
-        assert!((out[0].min_web_mm - 0.4).abs() < 1e-9, "v0.15 — min_web_mm now propagates");
-        assert_eq!(out[0].side, signex_library::primitive::footprint::VScoreSide::Both);
+        assert!(
+            (out[0].min_web_mm - 0.4).abs() < 1e-9,
+            "v0.15 — min_web_mm now propagates"
+        );
+        assert_eq!(
+            out[0].side,
+            signex_library::primitive::footprint::VScoreSide::Both
+        );
         assert!(warnings.is_empty());
     }
 

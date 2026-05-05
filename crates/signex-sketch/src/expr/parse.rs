@@ -40,8 +40,8 @@
 //! - There are no comments inside expressions; the source is a
 //!   single line.
 
-use crate::expr::ast::{ArrayIndex, BinOp, ExprNode, UnaryOp};
 use crate::expr::ExprError;
+use crate::expr::ast::{ArrayIndex, BinOp, ExprNode, UnaryOp};
 use crate::unit::parse_quantity;
 
 // =========================================================================

@@ -26,11 +26,11 @@
 //! footprint-generator source consulted.
 
 use signex_library::primitive::footprint::{FpGraphic, FpGraphicKind};
+use signex_sketch::SketchError;
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::sketch::SketchData;
-use signex_sketch::solver::state::point_xy;
 use signex_sketch::solver::FullSolveOutput;
-use signex_sketch::SketchError;
+use signex_sketch::solver::state::point_xy;
 use signex_types::layer::SignexLayer;
 
 /// Bake every SilkAttr-tagged non-construction entity into an
@@ -170,8 +170,8 @@ mod tests {
     use signex_sketch::entity::Entity;
     use signex_sketch::id::SketchEntityId;
     use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
-    use signex_sketch::solver::residual::ResolvedParams;
     use signex_sketch::solver::Solver;
+    use signex_sketch::solver::residual::ResolvedParams;
 
     fn solve(sketch: &SketchData) -> FullSolveOutput {
         Solver::default()

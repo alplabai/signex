@@ -25,7 +25,7 @@
 
 use std::path::PathBuf;
 
-use iced::widget::{container, text, text_input, Space};
+use iced::widget::{Space, container, text, text_input};
 use iced::{Border, Color, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
@@ -47,23 +47,21 @@ pub fn items<'a>(
     let path = editor.path.clone();
     let active_tool = editor.state.active_tool;
 
-    let mk_tool = |label: &str,
-                   tool: SketchTool,
-                   icon: ActiveBarIcon|
-     -> ActiveBarItem<LibraryMessage> {
-        let p = path.clone();
-        ActiveBarItem::Button(ActiveBarButton {
-            icon,
-            tooltip: label.to_string(),
-            enabled: true,
-            selected: active_tool == tool,
-            on_press: Some(LibraryMessage::PrimitiveEditorEvent {
-                path: p,
-                msg: PrimitiveEditorMsg::FootprintSketchSetTool(tool),
-            }),
-            ..ActiveBarButton::default()
-        })
-    };
+    let mk_tool =
+        |label: &str, tool: SketchTool, icon: ActiveBarIcon| -> ActiveBarItem<LibraryMessage> {
+            let p = path.clone();
+            ActiveBarItem::Button(ActiveBarButton {
+                icon,
+                tooltip: label.to_string(),
+                enabled: true,
+                selected: active_tool == tool,
+                on_press: Some(LibraryMessage::PrimitiveEditorEvent {
+                    path: p,
+                    msg: PrimitiveEditorMsg::FootprintSketchSetTool(tool),
+                }),
+                ..ActiveBarButton::default()
+            })
+        };
 
     // Compute which constraint tags apply to the current selection.
     let enabled = constraint_enable_matrix(editor);

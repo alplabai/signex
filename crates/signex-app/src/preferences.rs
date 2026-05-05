@@ -15,8 +15,8 @@ use crate::app::view::dialogs::{
     MODAL_CLOSE_X_HIT_H, MODAL_CLOSE_X_HIT_W, MODAL_CLOSE_X_HOVER, MODAL_CLOSE_X_ICON,
     MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE,
 };
-use crate::styles::MODAL_CORNER_RADIUS;
 use crate::fonts;
+use crate::styles::MODAL_CORNER_RADIUS;
 
 // ─── Navigation Items ─────────────────────────────────────────
 
@@ -355,8 +355,7 @@ fn build_dialog<'a>(
             .into()
     };
 
-    let mut col_items: Vec<Element<'a, PrefMsg>> =
-        vec![header.into(), h_divider(), body.into()];
+    let mut col_items: Vec<Element<'a, PrefMsg>> = vec![header.into(), h_divider(), body.into()];
     if let Some(footer) = footer_opt {
         col_items.push(h_divider());
         col_items.push(footer);

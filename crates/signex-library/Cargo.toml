@@ -18,6 +18,9 @@ anyhow = { workspace = true }
 url = { version = "2", features = ["serde"] }
 csv = "1.3"
 
+# Atomic-write helper used by adapters (HI-6).
+signex-types = { workspace = true }
+
 # Optional 2D parametric sketch field on Footprint (v0.13+).
 signex-sketch = { workspace = true }
 

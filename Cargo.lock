@@ -731,7 +731,7 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
 name = "chrome-catalog"
-version = "0.11.0"
+version = "0.18.25"
 dependencies = [
  "iced",
  "signex-types",
@@ -1096,6 +1096,19 @@ name = "cursor-icon"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f27ae1dd37df86211c42e150270f82743308803d90a6f6e6651cd730d5e1732f"
+
+[[package]]
+name = "dashmap"
+version = "5.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "978747c1d849a7d2ee5e8adc0159961c48fb7e5db2f06af6723b80123bb53856"
+dependencies = [
+ "cfg-if",
+ "hashbrown 0.14.5",
+ "lock_api",
+ "once_cell",
+ "parking_lot_core",
+]
 
 [[package]]
 name = "data-encoding"
@@ -1601,6 +1614,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "forwarded-header-value"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8835f84f38484cc86f110a805655697908257fb9a7af005234060891557198e9"
+dependencies = [
+ "nonempty",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "fs4"
 version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1704,6 +1727,12 @@ name = "futures-task"
 version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "037711b3d59c33004d3856fbdc83b99d4ff37a24768fa1be9ce3538a1cde4393"
+
+[[package]]
+name = "futures-timer"
+version = "3.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f288b0a4f20f9a56b5d1da57e2227c661b7b16168e2f72365f57b63326e29b24"
 
 [[package]]
 name = "futures-util"
@@ -1854,6 +1883,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "governor"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68a7f542ee6b35af73b06abc0dad1c1bae89964e4e253bc4b587b91c9637867b"
+dependencies = [
+ "cfg-if",
+ "dashmap",
+ "futures",
+ "futures-timer",
+ "no-std-compat",
+ "nonzero_ext",
+ "parking_lot",
+ "portable-atomic",
+ "quanta",
+ "rand 0.8.6",
+ "smallvec",
+ "spinning_top",
+]
+
+[[package]]
 name = "gpu-alloc"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1957,6 +2006,12 @@ dependencies = [
  "read-fonts 0.35.0",
  "smallvec",
 ]
+
+[[package]]
+name = "hashbrown"
+version = "0.14.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
 
 [[package]]
 name = "hashbrown"
@@ -3295,6 +3350,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 
 [[package]]
+name = "no-std-compat"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b93853da6d84c2e3c7d730d6473e8817692dd89be387eb01b94d7f108ecb5b8c"
+
+[[package]]
 name = "nom"
 version = "7.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3312,6 +3373,18 @@ checksum = "df9761775871bdef83bee530e60050f7e54b1105350d6884eb0fb4f46c2f9405"
 dependencies = [
  "memchr",
 ]
+
+[[package]]
+name = "nonempty"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9e591e719385e6ebaeb5ce5d3887f7d5676fceca6411d1925ccc95745f3d6f7"
+
+[[package]]
+name = "nonzero_ext"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "38bf9645c8b145698bb0b18a4637dcacbc421ea49bef2317e4fd8065a387cf21"
 
 [[package]]
 name = "noop_proc_macro"
@@ -4248,6 +4321,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "quanta"
+version = "0.12.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3ab5a9d756f0d97bdc89019bd2e4ea098cf9cde50ee7564dde6b81ccc8f06c7"
+dependencies = [
+ "crossbeam-utils",
+ "libc",
+ "once_cell",
+ "raw-cpuid",
+ "wasi",
+ "web-sys",
+ "winapi",
+]
+
+[[package]]
 name = "quick-error"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4467,6 +4555,15 @@ dependencies = [
  "rav1e",
  "rayon",
  "rgb",
+]
+
+[[package]]
+name = "raw-cpuid"
+version = "11.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "498cd0dc59d73224351ee52a95fee0f1a617a2eae0e7d9d720cc622c73a54186"
+dependencies = [
+ "bitflags 2.11.1",
 ]
 
 [[package]]
@@ -5061,7 +5158,7 @@ dependencies = [
 
 [[package]]
 name = "signex-app"
-version = "0.11.0"
+version = "0.18.25"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5100,7 +5197,7 @@ dependencies = [
 
 [[package]]
 name = "signex-bake"
-version = "0.11.0"
+version = "0.18.25"
 dependencies = [
  "serde",
  "serde_json",
@@ -5114,14 +5211,14 @@ dependencies = [
 
 [[package]]
 name = "signex-bom"
-version = "0.11.0"
+version = "0.18.25"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "signex-engine"
-version = "0.11.0"
+version = "0.18.25"
 dependencies = [
  "anyhow",
  "signex-types",
@@ -5131,7 +5228,7 @@ dependencies = [
 
 [[package]]
 name = "signex-erc"
-version = "0.11.0"
+version = "0.18.25"
 dependencies = [
  "serde",
  "signex-render",
@@ -5141,7 +5238,7 @@ dependencies = [
 
 [[package]]
 name = "signex-erc-dsl"
-version = "0.11.0"
+version = "0.18.25"
 dependencies = [
  "chumsky",
  "regex",
@@ -5152,7 +5249,7 @@ dependencies = [
 
 [[package]]
 name = "signex-library"
-version = "0.11.0"
+version = "0.18.25"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5169,6 +5266,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "signex-sketch",
+ "signex-types",
  "tantivy",
  "tempfile",
  "thiserror 2.0.18",
@@ -5183,7 +5281,7 @@ dependencies = [
 
 [[package]]
 name = "signex-library-server"
-version = "0.11.0"
+version = "0.18.25"
 dependencies = [
  "anyhow",
  "axum",
@@ -5198,6 +5296,7 @@ dependencies = [
  "tokio",
  "tower",
  "tower-http",
+ "tower_governor",
  "tracing",
  "tracing-subscriber",
  "uuid",
@@ -5205,7 +5304,7 @@ dependencies = [
 
 [[package]]
 name = "signex-output"
-version = "0.11.0"
+version = "0.18.25"
 dependencies = [
  "pdf-writer",
  "rust_xlsxwriter",
@@ -5220,7 +5319,7 @@ dependencies = [
 
 [[package]]
 name = "signex-render"
-version = "0.11.0"
+version = "0.18.25"
 dependencies = [
  "iced",
  "signex-types",
@@ -5230,7 +5329,7 @@ dependencies = [
 
 [[package]]
 name = "signex-sketch"
-version = "0.11.0"
+version = "0.18.25"
 dependencies = [
  "approx",
  "serde",
@@ -5243,10 +5342,11 @@ dependencies = [
 
 [[package]]
 name = "signex-types"
-version = "0.11.0"
+version = "0.18.25"
 dependencies = [
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.18",
  "toml 0.8.23",
  "uuid",
@@ -5254,7 +5354,7 @@ dependencies = [
 
 [[package]]
 name = "signex-widgets"
-version = "0.11.0"
+version = "0.18.25"
 dependencies = [
  "chrono",
  "iced",
@@ -5478,6 +5578,15 @@ name = "spin"
 version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
+dependencies = [
+ "lock_api",
+]
+
+[[package]]
+name = "spinning_top"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d96d2d1d716fb500937168cc09353ffdc7a012be8475ac7308e1bdf0e3923300"
 dependencies = [
  "lock_api",
 ]
@@ -6332,6 +6441,7 @@ dependencies = [
  "futures-util",
  "http",
  "http-body",
+ "http-body-util",
  "iri-string",
  "mime",
  "pin-project-lite",
@@ -6352,6 +6462,22 @@ name = "tower-service"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8df9b6e13f2d32c91b9bd719c00d1958837bc7dec474d94952798cc8e69eeec3"
+
+[[package]]
+name = "tower_governor"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aea939ea6cfa7c4880f3e7422616624f97a567c16df67b53b11f0d03917a8e46"
+dependencies = [
+ "axum",
+ "forwarded-header-value",
+ "governor",
+ "http",
+ "pin-project",
+ "thiserror 1.0.69",
+ "tower",
+ "tracing",
+]
 
 [[package]]
 name = "tracing"

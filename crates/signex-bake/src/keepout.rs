@@ -21,13 +21,13 @@
 //!   untyped keepout zone forbids everything).
 
 use signex_library::primitive::footprint::{FpKeepout, KeepoutForbid, LayerId, Polygon};
+use signex_sketch::SketchError;
 use signex_sketch::attr::KeepoutKinds;
 use signex_sketch::entity::EntityKind;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
-use signex_sketch::SketchError;
 
-use crate::profile::{trace_closed_profile, TraceError};
+use crate::profile::{TraceError, trace_closed_profile};
 
 pub fn bake_keepouts(
     sketch: &SketchData,
@@ -43,7 +43,10 @@ pub fn bake_keepouts(
             Some(a) => a,
             None => continue,
         };
-        if !matches!(entity.kind, EntityKind::Line { .. } | EntityKind::Arc { .. }) {
+        if !matches!(
+            entity.kind,
+            EntityKind::Line { .. } | EntityKind::Arc { .. }
+        ) {
             warnings.push(format!(
                 "entity {}: KeepoutAttr requires a Line or Arc seed (Circles land in v0.14.2); skipping",
                 entity.id
@@ -109,8 +112,8 @@ mod tests {
     use signex_sketch::entity::Entity;
     use signex_sketch::id::SketchEntityId;
     use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
-    use signex_sketch::solver::residual::ResolvedParams;
     use signex_sketch::solver::Solver;
+    use signex_sketch::solver::residual::ResolvedParams;
     use signex_types::layer::SignexLayer;
 
     fn solve(sketch: &SketchData) -> FullSolveOutput {

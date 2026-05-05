@@ -325,9 +325,7 @@ impl Signex {
                                     .filter_map(|entry| entry.ok())
                                     .filter_map(|entry| {
                                         let path = entry.path();
-                                        if path.extension().and_then(|e| e.to_str())
-                                            == Some(ext)
-                                        {
+                                        if path.extension().and_then(|e| e.to_str()) == Some(ext) {
                                             path.file_stem()
                                                 .and_then(|s| s.to_str())
                                                 .map(|s| s.to_string())
@@ -559,11 +557,7 @@ impl Signex {
             selected_lib_symbol,
             components_split,
             project_tree: vec![],
-            project_tree_selected: self
-                .document_state
-                .panel_ctx
-                .project_tree_selected
-                .clone(),
+            project_tree_selected: self.document_state.panel_ctx.project_tree_selected.clone(),
             library_row_detail: self.compute_library_row_detail(),
             selection_count,
             selected_uuid,
@@ -1071,13 +1065,17 @@ fn build_footprint_editor_panel_ctx(
         None => (0, 0),
     };
 
-    let last_solve = editor.state.last_solve.as_ref().map(|out| FootprintSolveSummary {
-        iterations: out.result.iterations,
-        elapsed_ms: out.result.elapsed_ms,
-        final_residual_norm: out.result.final_residual_norm,
-        over_constraint_count: out.over_constraints.len(),
-        auto_paused: editor.state.auto_pause.paused(),
-    });
+    let last_solve = editor
+        .state
+        .last_solve
+        .as_ref()
+        .map(|out| FootprintSolveSummary {
+            iterations: out.result.iterations,
+            elapsed_ms: out.result.elapsed_ms,
+            final_residual_norm: out.result.final_residual_norm,
+            over_constraint_count: out.over_constraints.len(),
+            auto_paused: editor.state.auto_pause.paused(),
+        });
 
     // Pad summary — populated only when in Pads mode AND a pad is
     // selected. Avoids confusing the user with a stale pad selection
@@ -1130,9 +1128,7 @@ fn build_footprint_editor_panel_ctx(
             .file_stem()
             .and_then(|s| s.to_str())
             .map(|s| s.to_string());
-        let footprints_dir = snxlib_path
-            .parent()
-            .map(|d| d.join("footprints"));
+        let footprints_dir = snxlib_path.parent().map(|d| d.join("footprints"));
         if let Some(dir) = footprints_dir {
             if let Ok(entries) = std::fs::read_dir(&dir) {
                 let mut paths: Vec<std::path::PathBuf> = entries
@@ -1217,10 +1213,7 @@ fn build_footprint_editor_panel_ctx(
                 })
                 .unwrap_or((RoleTag::Unassigned, false))
         }
-        None => (
-            crate::library::messages::RoleTag::Unassigned,
-            false,
-        ),
+        None => (crate::library::messages::RoleTag::Unassigned, false),
     };
 
     // v0.16.3 — pad-placement defaults exposed for the Properties
@@ -1231,11 +1224,7 @@ fn build_footprint_editor_panel_ctx(
     let placement_active = matches!(editor.state.pads_tool, PadsTool::PlacePad)
         && mode_kind == FootprintModeKind::Pads;
     let placement_paused = editor.state.placement_paused;
-    let next_pad_designator_override = editor
-        .state
-        .next_pad_defaults
-        .designator_override
-        .clone();
+    let next_pad_designator_override = editor.state.next_pad_defaults.designator_override.clone();
     let next_pad_size_x_mm = editor.state.next_pad_defaults.size_x_mm;
     let next_pad_size_y_mm = editor.state.next_pad_defaults.size_y_mm;
     let next_pad_side = editor.state.next_pad_defaults.side;
@@ -1264,10 +1253,13 @@ fn build_footprint_editor_panel_ctx(
                     no_drilling: k.kinds.no_drilling,
                     no_pours: k.kinds.no_pours,
                 });
-                let cutout = e.board_cutout.as_ref().map(|c| crate::panels::CutoutSummary {
-                    edge_radius_expr: c.edge_radius_expr.clone(),
-                    through: c.through,
-                });
+                let cutout = e
+                    .board_cutout
+                    .as_ref()
+                    .map(|c| crate::panels::CutoutSummary {
+                        edge_radius_expr: c.edge_radius_expr.clone(),
+                        through: c.through,
+                    });
                 (pour, keepout, cutout)
             })
             .unwrap_or((None, None, None)),

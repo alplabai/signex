@@ -80,7 +80,11 @@ impl Engine {
         let content = snx
             .write_string()
             .map_err(|error| EngineError::SaveFailed(std::io::Error::other(error.to_string())))?;
-        std::fs::write(path, content).map_err(EngineError::SaveFailed)?;
+        // HI-6: atomic write — a crash mid-save no longer truncates the
+        // destination. The user's prior file stays intact until the
+        // rename succeeds.
+        signex_types::atomic_io::atomic_write(path, content.as_bytes())
+            .map_err(EngineError::SaveFailed)?;
         self.path = Some(path.to_path_buf());
         Ok(())
     }
@@ -667,8 +671,11 @@ impl Engine {
                 if !changed {
                     return Ok(CommandResult::unchanged());
                 }
+                // MD-11: drawing geometry changes are NOT text events;
+                // emit `DrawingMutated` so consumers don't take the
+                // text-reflow path on a `SchDrawing::Line` move.
                 let patch_pair = PatchPair {
-                    semantic: SemanticPatch::TextUpdated,
+                    semantic: SemanticPatch::DrawingMutated,
                     document: DocumentPatch::DRAWINGS,
                 };
                 self.record_history(before, patch_pair);
@@ -710,8 +717,11 @@ impl Engine {
                 if !changed {
                     return Ok(CommandResult::unchanged());
                 }
+                // MD-11: stroke width / colour / fill colour are pure
+                // style changes, not text edits. `StyleUpdated` lets
+                // consumers skip text-reflow work.
                 let patch_pair = PatchPair {
-                    semantic: SemanticPatch::TextUpdated,
+                    semantic: SemanticPatch::StyleUpdated,
                     document: DocumentPatch::CHILD_SHEETS,
                 };
                 self.record_history(before, patch_pair);

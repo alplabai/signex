@@ -44,19 +44,19 @@ use signex_library::primitive::footprint::{
     ChamferedCorners as LibChamferedCorners, Drill as LibDrill, LayerId, Pad as LibPad,
     PadKind as LibPadKind, PadShape as LibPadShape, Polygon as LibPolygon,
 };
+use signex_sketch::SketchError;
 use signex_sketch::attr::{
     ChamferedCorners as SkChamferedCorners, CustomPadShape, PadAttr, PadKind, PadShape, PadSide,
     PasteAperturePattern,
 };
 use signex_sketch::expr::ast::ExprNode;
-use signex_sketch::expr::eval::{eval, EvalContext};
+use signex_sketch::expr::eval::{EvalContext, eval};
 use signex_sketch::expr::parse::parse;
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::sketch::SketchData;
-use signex_sketch::solver::state::point_xy;
 use signex_sketch::solver::FullSolveOutput;
+use signex_sketch::solver::state::point_xy;
 use signex_sketch::unit::{Quantity, UnitFamily};
-use signex_sketch::SketchError;
 use signex_types::layer::SignexLayer;
 
 /// Bake every entity tagged with [`PadAttr`] into a [`LibPad`]. Adds
@@ -86,7 +86,16 @@ pub fn bake_pads(
         };
 
         let pad = bake_one_pad(
-            entity.id, pad_attr, &params_ast, None, 0.0, 0.0, None, sketch, solve, warnings,
+            entity.id,
+            pad_attr,
+            &params_ast,
+            None,
+            0.0,
+            0.0,
+            None,
+            sketch,
+            solve,
+            warnings,
         )?;
         out.push(pad);
     }
@@ -125,8 +134,13 @@ pub(crate) fn bake_one_pad(
     };
 
     // Look up the sketch point.
-    let (px, py) = point_xy(sketch_point_id, &solve.result.state, &solve.result.index, sketch)
-        .ok_or(SketchError::EntityNotFound(sketch_point_id))?;
+    let (px, py) = point_xy(
+        sketch_point_id,
+        &solve.result.state,
+        &solve.result.index,
+        sketch,
+    )
+    .ok_or(SketchError::EntityNotFound(sketch_point_id))?;
 
     // Position = sketch point + array offset + per-pad authored offset.
     let ox = opt_eval_mm(&pad_attr.offset_x_expr, &ctx)?.unwrap_or(0.0);
@@ -254,10 +268,7 @@ fn opt_eval_mm(expr: &Option<String>, ctx: &EvalContext) -> Result<Option<f64>, 
     }
 }
 
-fn rotation_deg(
-    expr: &Option<String>,
-    ctx: &EvalContext,
-) -> Result<f64, SketchError> {
+fn rotation_deg(expr: &Option<String>, ctx: &EvalContext) -> Result<f64, SketchError> {
     match expr.as_deref() {
         Some(e) => {
             let body = strip_eq_prefix(e);
@@ -384,7 +395,12 @@ fn bake_shape(
         PadShape::RoundRect { radius_ratio_expr } => {
             let ast = parse(strip_eq_prefix(radius_ratio_expr)).map_err(SketchError::Expr)?;
             let q = eval(&ast, ctx).map_err(SketchError::Expr)?;
-            let ratio = q.value.clamp(0.0, 0.5);
+            // MD-8: ratio is dimensionless by spec. Treating `q.value`
+            // raw silently honours `Quantity { value: 500, unit: Um }`
+            // as 500 (then clamps to 0.5), discarding the user's unit
+            // intent. `as_count()?` rejects expressions with physical
+            // units up front.
+            let ratio = q.as_count()?.clamp(0.0, 0.5);
             LibPadShape::RoundRect {
                 radius_ratio: ratio,
             }

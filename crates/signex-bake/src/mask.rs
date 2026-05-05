@@ -12,13 +12,13 @@
 use signex_library::primitive::footprint::{
     FpMaskExclude, FpMaskOpening, FpPasteAperture, LayerId, Polygon,
 };
+use signex_sketch::SketchError;
 use signex_sketch::entity::EntityKind;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
-use signex_sketch::SketchError;
 use signex_types::layer::SignexLayer;
 
-use crate::profile::{trace_closed_profile, TraceError};
+use crate::profile::{TraceError, trace_closed_profile};
 
 /// Bake every MaskOpeningAttr-tagged closed profile.
 pub fn bake_mask_openings(
@@ -51,7 +51,7 @@ pub fn bake_mask_excludes(
         out,
         warnings,
         |e| e.mask_exclude.as_ref().map(|a| a.layer),
-        |boundary, layer| FpMaskOpening { boundary, layer },
+        |boundary, layer| FpMaskExclude { boundary, layer },
         "MaskExcludeAttr",
     )
 }
@@ -100,7 +100,10 @@ where
             Some(l) => l,
             None => continue,
         };
-        if !matches!(entity.kind, EntityKind::Line { .. } | EntityKind::Arc { .. }) {
+        if !matches!(
+            entity.kind,
+            EntityKind::Line { .. } | EntityKind::Arc { .. }
+        ) {
             warnings.push(format!(
                 "entity {}: {attr_name} requires a Line or Arc seed (Circles land in v0.14.2); skipping",
                 entity.id
@@ -141,8 +144,8 @@ mod tests {
     use signex_sketch::entity::Entity;
     use signex_sketch::id::SketchEntityId;
     use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
-    use signex_sketch::solver::residual::ResolvedParams;
     use signex_sketch::solver::Solver;
+    use signex_sketch::solver::residual::ResolvedParams;
 
     fn solve(sketch: &SketchData) -> FullSolveOutput {
         Solver::default()

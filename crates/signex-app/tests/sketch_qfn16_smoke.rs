@@ -15,11 +15,11 @@ use signex_app::library::editor::footprint::sketch_dispatch::apply_sketch_edit;
 use signex_app::library::editor::footprint::sketch_mode::SketchEdit;
 use signex_app::library::editor::footprint::state::FootprintEditorState;
 use signex_library::primitive::footprint::Footprint;
+use signex_sketch::SketchData;
 use signex_sketch::attr::{PadAttr, PadKind, PadShape, PadSide, PasteAperturePattern};
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
-use signex_sketch::SketchData;
 
 const PITCH_05: f64 = 0.5;
 const PITCH_065: f64 = 0.65;
@@ -39,9 +39,7 @@ fn build_qfn_row(pad_pitch_expr: &str) -> (Footprint, Vec<SketchEntityId>) {
         }],
         ..SketchData::default()
     };
-    sketch
-        .parameters
-        .insert("pad_pitch", pad_pitch_expr);
+    sketch.parameters.insert("pad_pitch", pad_pitch_expr);
 
     // Each pad's centre is `(ROW_X, idx * pad_pitch)`. Underlying
     // sketch Point sits at the row anchor `(ROW_X, 0)`; the
@@ -90,8 +88,7 @@ fn qfn16_row_bakes_at_05mm_pitch() {
 
     // Expected y-positions at 0.5 mm pitch:
     //   pad 1 → +0.75, pad 2 → +0.25, pad 3 → -0.25, pad 4 → -0.75.
-    let mut by_number: std::collections::HashMap<&str, [f64; 2]> =
-        std::collections::HashMap::new();
+    let mut by_number: std::collections::HashMap<&str, [f64; 2]> = std::collections::HashMap::new();
     for pad in &fp.pads {
         by_number.insert(Box::leak(pad.number.clone().into_boxed_str()), pad.position);
     }
@@ -178,7 +175,9 @@ fn qfn16_solve_warnings_empty_on_clean_sketch() {
     let unrelated_warnings: Vec<&String> = state
         .solve_warnings
         .iter()
-        .filter(|w| !w.contains("ignored") && !w.contains("deferred") && !w.contains("approximated"))
+        .filter(|w| {
+            !w.contains("ignored") && !w.contains("deferred") && !w.contains("approximated")
+        })
         .collect();
     assert!(
         unrelated_warnings.is_empty(),

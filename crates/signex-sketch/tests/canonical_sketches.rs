@@ -107,9 +107,8 @@ fn rectangle_10_by_5() {
         },
     });
 
-    let result =
-        solve_lm(&s.data, &ResolvedParams::new(), 5_000, TOL, ITER_CAP)
-            .expect("rectangle should converge");
+    let result = solve_lm(&s.data, &ResolvedParams::new(), 5_000, TOL, ITER_CAP)
+        .expect("rectangle should converge");
 
     let (x1, y1) = point_xy(p1, &result.state, &result.index, &s.data).unwrap();
     let (x2, y2) = point_xy(p2, &result.state, &result.index, &s.data).unwrap();
@@ -337,9 +336,8 @@ fn isosceles_triangle_apex_60() {
         kind: ConstraintKind::Horizontal { line: l3 },
     });
 
-    let result =
-        solve_lm(&s.data, &ResolvedParams::new(), 5_000, TOL, ITER_CAP)
-            .expect("triangle should converge");
+    let result = solve_lm(&s.data, &ResolvedParams::new(), 5_000, TOL, ITER_CAP)
+        .expect("triangle should converge");
 
     let (x2, y2) = point_xy(p2, &result.state, &result.index, &s.data).unwrap();
     let (x3, y3) = point_xy(p3, &result.state, &result.index, &s.data).unwrap();
@@ -459,23 +457,16 @@ fn regular_hexagon_circumradius_10() {
         kind: ConstraintKind::Horizontal { line: spokes[0] },
     });
 
-    let result =
-        solve_lm(&s.data, &ResolvedParams::new(), 5_000, TOL, ITER_CAP)
-            .expect("hexagon should converge");
+    let result = solve_lm(&s.data, &ResolvedParams::new(), 5_000, TOL, ITER_CAP)
+        .expect("hexagon should converge");
 
     for (i, &v) in vertices.iter().enumerate() {
         let (x, y) = point_xy(v, &result.state, &result.index, &s.data).unwrap();
         let theta = (i as f64) * PI / 3.0;
         let ex = 10.0 * theta.cos();
         let ey = 10.0 * theta.sin();
-        assert!(
-            (x - ex).abs() < COORD_TOL,
-            "P_{i}.x = {x}, expected {ex}"
-        );
-        assert!(
-            (y - ey).abs() < COORD_TOL,
-            "P_{i}.y = {y}, expected {ey}"
-        );
+        assert!((x - ex).abs() < COORD_TOL, "P_{i}.x = {x}, expected {ex}");
+        assert!((y - ey).abs() < COORD_TOL, "P_{i}.y = {y}, expected {ey}");
     }
 
     assert!(

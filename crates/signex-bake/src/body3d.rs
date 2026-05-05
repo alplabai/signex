@@ -30,18 +30,18 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 
 use signex_library::primitive::footprint::{Body3D, Polygon};
+use signex_sketch::SketchError;
 use signex_sketch::entity::EntityKind;
 use signex_sketch::expr::ast::ExprNode;
-use signex_sketch::expr::eval::{eval, EvalContext};
+use signex_sketch::expr::eval::{EvalContext, eval};
 use signex_sketch::expr::parse::parse;
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::plane::{PlaneId, PlaneKind};
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 use signex_sketch::unit::Quantity;
-use signex_sketch::SketchError;
 
-use crate::profile::{trace_closed_profile, TraceError};
+use crate::profile::{TraceError, trace_closed_profile};
 
 pub fn bake_body3d(
     sketch: &SketchData,
@@ -83,7 +83,24 @@ pub fn bake_body3d(
             // the caller had set and warn.
             let ctx = build_ctx(params_canonical);
             match eval_mm(&offset_z_expr, &ctx) {
-                Ok(z_mm) => body_3d.offset_z_mm = z_mm as f32,
+                Ok(z_mm) => {
+                    // MD-9: guard against NaN / Inf / overflow before
+                    // narrowing to f32. A typo like `=1e40mm` would
+                    // otherwise produce ±Inf with no warning.
+                    if !z_mm.is_finite() {
+                        warnings.push(format!(
+                            "BodyTop plane offset_z_expr `{offset_z_expr}` evaluated to non-finite {z_mm}; keeping prior offset_z_mm = {}",
+                            body_3d.offset_z_mm
+                        ));
+                    } else if z_mm.abs() > f32::MAX as f64 {
+                        warnings.push(format!(
+                            "BodyTop plane offset_z_expr `{offset_z_expr}` evaluated to {z_mm} which exceeds f32 range; keeping prior offset_z_mm = {}",
+                            body_3d.offset_z_mm
+                        ));
+                    } else {
+                        body_3d.offset_z_mm = z_mm as f32;
+                    }
+                }
                 Err(e) => warnings.push(format!(
                     "BodyTop plane offset_z_expr `{offset_z_expr}` failed to evaluate ({e}); keeping prior offset_z_mm = {}",
                     body_3d.offset_z_mm
@@ -141,8 +158,8 @@ mod tests {
     use signex_sketch::entity::Entity;
     use signex_sketch::id::SketchEntityId;
     use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
-    use signex_sketch::solver::residual::ResolvedParams;
     use signex_sketch::solver::Solver;
+    use signex_sketch::solver::residual::ResolvedParams;
 
     fn solve(sketch: &SketchData) -> FullSolveOutput {
         Solver::default()
@@ -169,8 +186,11 @@ mod tests {
         let p2 = SketchEntityId::new();
         let p3 = SketchEntityId::new();
         let p4 = SketchEntityId::new();
-        data.entities
-            .push(Entity::new(p1, body, EntityKind::Point { x: -1.0, y: -1.0 }));
+        data.entities.push(Entity::new(
+            p1,
+            body,
+            EntityKind::Point { x: -1.0, y: -1.0 },
+        ));
         data.entities
             .push(Entity::new(p2, body, EntityKind::Point { x: 1.0, y: -1.0 }));
         data.entities

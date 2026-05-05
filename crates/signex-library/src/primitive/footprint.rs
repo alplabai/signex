@@ -731,8 +731,7 @@ impl FootprintFile {
     /// strings so the bulk data is line-diffable in git output.
     pub fn to_toml_string(&self) -> Result<String, FootprintFileError> {
         let mut tsv_payloads: Vec<String> = Vec::with_capacity(self.footprints.len());
-        let mut wire_footprints: Vec<FootprintWire> =
-            Vec::with_capacity(self.footprints.len());
+        let mut wire_footprints: Vec<FootprintWire> = Vec::with_capacity(self.footprints.len());
         for (idx, fp) in self.footprints.iter().enumerate() {
             tsv_payloads.push(pads_to_tsv(&fp.pads)?);
             wire_footprints.push(FootprintWire {
@@ -820,9 +819,13 @@ fn pad_kind_from_token(s: &str) -> Result<PadKind, FootprintFileError> {
     })
 }
 
+/// HI-10: see [`crate::primitive::symbol::fmt_f64`] — same NaN/inf guard.
 fn fmt_f64_fp(v: f64) -> String {
     if v == 0.0 {
         "0".to_string()
+    } else if !v.is_finite() {
+        debug_assert!(v.is_finite(), "fmt_f64_fp called with non-finite {v}");
+        String::new()
     } else {
         format!("{v}")
     }
@@ -950,10 +953,11 @@ fn layers_from_token(s: &str) -> Vec<LayerId> {
 }
 
 fn parse_f64_cell_fp(col: &'static str, s: &str) -> Result<f64, FootprintFileError> {
-    s.parse().map_err(|_| FootprintFileError::InvalidNumericCell {
-        column: col,
-        value: s.to_string(),
-    })
+    s.parse()
+        .map_err(|_| FootprintFileError::InvalidNumericCell {
+            column: col,
+            value: s.to_string(),
+        })
 }
 
 fn parse_opt_f64_cell_fp(col: &'static str, s: &str) -> Result<Option<f64>, FootprintFileError> {
@@ -1108,36 +1112,23 @@ pub enum FootprintFileError {
         "TSV cell in column {column:?} contains a tab, newline, or triple-quote: \
          {value:?}; cells must be free of \\t, \\n, and the literal \"'''\""
     )]
-    InvalidTsvCell {
-        column: &'static str,
-        value: String,
-    },
+    InvalidTsvCell { column: &'static str, value: String },
     #[error("pads_tsv block is empty (no header row)")]
     EmptyPadsTsv,
-    #[error(
-        "pads_tsv header does not match the expected schema; got columns {got:?}"
-    )]
+    #[error("pads_tsv header does not match the expected schema; got columns {got:?}")]
     PadsTsvSchemaMismatch { got: Vec<String> },
-    #[error(
-        "pads_tsv row {row_index} has {got} cells; header declares {expected}"
-    )]
+    #[error("pads_tsv row {row_index} has {got} cells; header declares {expected}")]
     PadsTsvCellCountMismatch {
         row_index: usize,
         got: usize,
         expected: usize,
     },
     #[error("unknown {kind} token {got:?} in pads_tsv cell")]
-    UnknownEnumToken {
-        kind: &'static str,
-        got: String,
-    },
+    UnknownEnumToken { kind: &'static str, got: String },
     #[error("invalid pad shape token {0:?}")]
     InvalidPadShape(String),
     #[error("invalid numeric cell in column {column:?}: {value:?}")]
-    InvalidNumericCell {
-        column: &'static str,
-        value: String,
-    },
+    InvalidNumericCell { column: &'static str, value: String },
 }
 
 impl Footprint {
@@ -1577,8 +1568,14 @@ footprints = []
         let b_uuid = b.uuid;
         let mut file = FootprintFile::from_footprint(a);
         file.footprints.push(b);
-        assert_eq!(file.get_footprint(a_uuid).map(|f| f.name.as_str()), Some("A"));
-        assert_eq!(file.get_footprint(b_uuid).map(|f| f.name.as_str()), Some("B"));
+        assert_eq!(
+            file.get_footprint(a_uuid).map(|f| f.name.as_str()),
+            Some("A")
+        );
+        assert_eq!(
+            file.get_footprint(b_uuid).map(|f| f.name.as_str()),
+            Some("B")
+        );
         assert!(file.get_footprint(Uuid::now_v7()).is_none());
     }
 }

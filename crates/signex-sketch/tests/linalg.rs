@@ -4,7 +4,7 @@
 //! (Numerical Recipes §2.3 worked examples). All "expected" values
 //! were verified by hand or by direct substitution.
 
-use signex_sketch::solver::linalg::{lu_decompose, lu_solve, solve, LinAlgError, QrDecomposition};
+use signex_sketch::solver::linalg::{LinAlgError, QrDecomposition, lu_decompose, lu_solve, solve};
 
 const TOL: f64 = 1e-10;
 
@@ -361,7 +361,11 @@ fn qr_rank_deficient() {
 fn qr_rank_zero_matrix() {
     // The all-zero matrix has rank 0. No Householder reflection runs
     // because every sub-vector has norm zero; R is also all zeros.
-    let a = vec![vec![0.0, 0.0, 0.0], vec![0.0, 0.0, 0.0], vec![0.0, 0.0, 0.0]];
+    let a = vec![
+        vec![0.0, 0.0, 0.0],
+        vec![0.0, 0.0, 0.0],
+        vec![0.0, 0.0, 0.0],
+    ];
 
     let qr = QrDecomposition::new(&a).expect("zero matrix factors trivially");
     assert_eq!(qr.rank(QR_TOL), 0);

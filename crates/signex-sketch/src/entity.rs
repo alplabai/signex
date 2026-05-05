@@ -66,10 +66,7 @@ pub enum EntityKind {
     },
 
     /// Circle — center is a Point, radius is a literal.
-    Circle {
-        center: SketchEntityId,
-        radius: f64,
-    },
+    Circle { center: SketchEntityId, radius: f64 },
 }
 
 fn default_sweep_ccw() -> bool {

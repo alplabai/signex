@@ -20,6 +20,24 @@ use signex_types::theme::ThemeId;
 /// Default UI font family name. Used when no preference file is found.
 pub const DEFAULT_UI_FONT: &str = "Roboto";
 
+/// MD-32: persist `bytes` to `path` atomically (tmp + rename via
+/// `signex_types::atomic_io`) and `tracing::debug!` on failure
+/// instead of the `let _ = std::fs::write(...)` pattern that swallows
+/// disk-full / permission errors silently. Used by every preferences
+/// write in this module so a single source of failures shows up in
+/// `RUST_LOG=signex_app::fonts=debug` instead of nowhere.
+fn write_pref_atomic(path: &Path, bytes: &[u8], context: &str) {
+    if let Err(e) = signex_types::atomic_io::atomic_write(path, bytes) {
+        tracing::debug!(
+            target = "signex::prefs",
+            path = %path.display(),
+            context = context,
+            error = %e,
+            "preference write failed (best-effort, will retry on next change)"
+        );
+    }
+}
+
 /// Default canvas (schematic / PCB) font family name.
 /// Iosevka is bundled in `assets/fonts/` and loaded at startup.
 pub const DEFAULT_CANVAS_FONT: &str = "Iosevka";
@@ -225,7 +243,11 @@ pub fn migrate_legacy_prefs(canonical: &Path, legacy: &Path) {
     if stale_label {
         json["label_style"] = serde_json::Value::String("standard".to_string());
         if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-            let _ = std::fs::write(canonical, serialized);
+            write_pref_atomic(
+                canonical,
+                serialized.as_bytes(),
+                "migrate_legacy_label_style",
+            );
         }
     }
 }
@@ -297,9 +319,6 @@ pub fn read_component_classes_pref() -> Vec<ComponentClassEntry> {
 /// — preferences are best-effort.
 pub fn write_component_classes_pref(classes: &[ComponentClassEntry]) {
     let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
     let mut json: serde_json::Value = std::fs::read(&path)
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
@@ -308,7 +327,7 @@ pub fn write_component_classes_pref(classes: &[ComponentClassEntry]) {
         json["component_classes"] = value;
     }
     if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
+        write_pref_atomic(&path, serialized.as_bytes(), "component_classes");
     }
 }
 
@@ -468,19 +487,17 @@ fn read_prefs_json(path: &Path) -> Option<serde_json::Value> {
 }
 
 /// Update one key of `prefs.json` at `path` without clobbering other
-/// keys. Creates the parent dir if missing. I/O failures are silent
-/// (preferences are best-effort).
+/// keys. Creates the parent dir if missing. I/O failures are
+/// best-effort but logged at `debug` (MD-32) — set
+/// `RUST_LOG=signex_app::fonts=debug` to see them.
 fn update_prefs_json(path: &Path, mut mutator: impl FnMut(&mut serde_json::Value)) {
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
     let mut json: serde_json::Value = std::fs::read(path)
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or(serde_json::json!({}));
     mutator(&mut json);
     if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(path, serialized);
+        write_pref_atomic(path, serialized.as_bytes(), "update_prefs_json");
     }
 }
 
@@ -655,10 +672,6 @@ pub fn write_erc_severity_overrides(
     overrides: &std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
 ) {
     let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-
     let mut json: serde_json::Value = std::fs::read(&path)
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
@@ -674,7 +687,7 @@ pub fn write_erc_severity_overrides(
     json["erc_severity"] = serde_json::Value::Object(obj);
 
     if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
+        write_pref_atomic(&path, serialized.as_bytes(), "erc_severity_overrides");
     }
 }
 
@@ -749,9 +762,6 @@ pub fn read_custom_filter_presets() -> Vec<crate::active_bar::CustomFilterPreset
 /// clobbering other preference keys.
 pub fn write_custom_filter_presets(presets: &[crate::active_bar::CustomFilterPreset]) {
     let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
     let mut json: serde_json::Value = std::fs::read(&path)
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
@@ -760,7 +770,7 @@ pub fn write_custom_filter_presets(presets: &[crate::active_bar::CustomFilterPre
         json["custom_filter_presets"] = array;
     }
     if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
+        write_pref_atomic(&path, serialized.as_bytes(), "fonts_pref");
     }
 }
 
@@ -768,9 +778,6 @@ pub fn write_custom_filter_presets(presets: &[crate::active_bar::CustomFilterPre
 /// so the next session reopens with the same layout.
 pub fn write_dock_layout(dock: &crate::dock::DockArea) {
     let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
     let mut json: serde_json::Value = std::fs::read(&path)
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
@@ -798,7 +805,7 @@ pub fn write_dock_layout(dock: &crate::dock::DockArea) {
     });
 
     if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
+        write_pref_atomic(&path, serialized.as_bytes(), "fonts_pref");
     }
 }
 
@@ -946,9 +953,6 @@ pub fn write_pin_matrix_overrides(
     overrides: &std::collections::HashMap<(u8, u8), signex_erc::Severity>,
 ) {
     let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
     let mut json: serde_json::Value = std::fs::read(&path)
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
@@ -962,7 +966,7 @@ pub fn write_pin_matrix_overrides(
     }
     json["pin_matrix"] = serde_json::Value::Object(obj);
     if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
+        write_pref_atomic(&path, serialized.as_bytes(), "fonts_pref");
     }
 }
 
@@ -988,16 +992,13 @@ pub fn read_first_run_tour_dismissed() -> bool {
 /// Persist the dismissal flag without clobbering other keys.
 pub fn write_first_run_tour_dismissed(dismissed: bool) {
     let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
     let mut json: serde_json::Value = std::fs::read(&path)
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or(serde_json::json!({}));
     json["first_run_tour_dismissed"] = serde_json::Value::Bool(dismissed);
     if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
+        write_pref_atomic(&path, serialized.as_bytes(), "fonts_pref");
     }
 }
 
@@ -1022,16 +1023,13 @@ pub fn read_component_filter() -> String {
 /// Persist the Components-panel filter without clobbering other keys.
 pub fn write_component_filter(query: &str) {
     let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
     let mut json: serde_json::Value = std::fs::read(&path)
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or(serde_json::json!({}));
     json["component_filter"] = serde_json::Value::String(query.to_string());
     if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
+        write_pref_atomic(&path, serialized.as_bytes(), "fonts_pref");
     }
 }
 
@@ -1070,9 +1068,6 @@ pub fn read_library_browser_searches() -> std::collections::HashMap<PathBuf, Str
 /// is out of scope for prefs).
 pub fn write_library_browser_search(library_path: &std::path::Path, query: &str) {
     let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
     let mut json: serde_json::Value = std::fs::read(&path)
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
@@ -1092,6 +1087,6 @@ pub fn write_library_browser_search(library_path: &std::path::Path, query: &str)
         }
     }
     if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
+        write_pref_atomic(&path, serialized.as_bytes(), "fonts_pref");
     }
 }

@@ -1,11 +1,11 @@
-pub mod state;
+pub mod dof;
+pub mod jacobian;
+pub mod linalg;
+pub mod lm;
+pub mod math;
 pub mod residual;
 pub mod residuals;
-pub mod jacobian;
-pub mod lm;
-pub mod linalg;
-pub mod math;
-pub mod dof;
+pub mod state;
 pub mod timeout;
 
 use std::collections::HashMap;
@@ -14,9 +14,9 @@ use crate::error::SolveError;
 use crate::id::{ConstraintId, SketchEntityId};
 use crate::sketch::SketchData;
 
-use self::dof::{entity_colours, over_constraint_ids, DofColor};
+use self::dof::{DofColor, entity_colours, over_constraint_ids};
 use self::jacobian::numerical_jacobian;
-use self::lm::{solve_lm, SolveResult};
+use self::lm::{SolveResult, solve_lm};
 use self::residual::ResolvedParams;
 
 /// Top-level solver façade. Configure timeouts / iteration cap /
@@ -80,10 +80,12 @@ impl Solver {
         // free sketch has no Jacobian rows (m=0); we still build it
         // so the API surface is consistent.
         let jacobian = numerical_jacobian(sketch, &result.state, &result.index, params)
-            .map_err(|_| SolveError::OverConstrained(ConstraintId(uuid::Uuid::nil())))?;
+            .map_err(|e| SolveError::Internal(format!("post-solve jacobian: {e}")))?;
 
         let colours = entity_colours(sketch, &result, &jacobian, &result.index);
-        let over_constraints = over_constraint_ids(sketch, &result, &jacobian);
+        // HI-14: thread the solved params through so parametric
+        // constraints don't false-flag as over-constrained.
+        let over_constraints = over_constraint_ids(sketch, &result, &jacobian, params);
 
         Ok(FullSolveOutput {
             result,

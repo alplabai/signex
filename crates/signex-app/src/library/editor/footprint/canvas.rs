@@ -377,16 +377,12 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 silk_f_hit_at(self.silk_f, world.0, world.1, tolerance)
                             {
                                 return Some(
-                                    canvas::Action::publish(
-                                        LibraryMessage::EditorEvent {
-                                            library_path: self.address.library_path.clone(),
-                                            table: self.address.table.clone(),
-                                            row_id: self.address.row_id,
-                                            msg: EditorMsg::FootprintSelectSilkF(Some(
-                                                silk_idx,
-                                            )),
-                                        },
-                                    )
+                                    canvas::Action::publish(LibraryMessage::EditorEvent {
+                                        library_path: self.address.library_path.clone(),
+                                        table: self.address.table.clone(),
+                                        row_id: self.address.row_id,
+                                        msg: EditorMsg::FootprintSelectSilkF(Some(silk_idx)),
+                                    })
                                     .and_capture(),
                                 );
                             }
@@ -442,11 +438,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         if matches!(self.state.mode, super::state::EditorMode::Sketch) {
                             use super::state::SketchTool;
                             let click_world = drag.grab_offset_mm;
-                            let snap_id = sketch_snap(
-                                self.sketch,
-                                cstate,
-                                click_world,
-                            );
+                            let snap_id = sketch_snap(self.sketch, cstate, click_world);
                             // v0.13.3 — also try to hit-test Lines /
                             // Arcs / Circles (not just snap-to-Point)
                             // for the Select tool.
@@ -477,13 +469,11 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 | SketchTool::Rectangle
                                 | SketchTool::RoundedRectangle
                                 | SketchTool::Circle
-                                | SketchTool::Arc => {
-                                    EditorMsg::FootprintSketchToolClick {
-                                        x_mm: click_world.0,
-                                        y_mm: click_world.1,
-                                        snap_id,
-                                    }
-                                }
+                                | SketchTool::Arc => EditorMsg::FootprintSketchToolClick {
+                                    x_mm: click_world.0,
+                                    y_mm: click_world.1,
+                                    snap_id,
+                                },
                             };
                             return Some(canvas::Action::publish(LibraryMessage::EditorEvent {
                                 library_path: self.address.library_path.clone(),
@@ -654,8 +644,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 // lives in `snap::snap_cursor` via `state.snap_options`.
                 let world = {
                     let point_hit = sketch_snap(self.sketch, cstate, raw_world);
-                    let result =
-                        snap::snap_cursor(raw_world, self.sketch, self.state, point_hit);
+                    let result = snap::snap_cursor(raw_world, self.sketch, self.state, point_hit);
                     cstate.last_snap = Some(result);
                     result.pos
                 };
@@ -718,9 +707,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 // v0.16.1: also clear in Pads mode + PlacePad so the
                 // pad-placement ghost rectangle re-renders at the
                 // moving cursor.
-                use crate::library::editor::footprint::state::{
-                    EditorMode, PadsTool, ToolPending,
-                };
+                use crate::library::editor::footprint::state::{EditorMode, PadsTool, ToolPending};
                 let in_sketch_with_anchor = matches!(self.state.mode, EditorMode::Sketch)
                     && !matches!(self.state.tool_pending, ToolPending::Idle);
                 let in_pads_place = matches!(self.state.mode, EditorMode::Normal)
@@ -1105,20 +1092,24 @@ fn draw_constraint_icons(
                 return Some(p);
             }
         }
-        sketch.entities.iter().find(|e| e.id == id).and_then(|e| {
-            match e.kind {
+        sketch
+            .entities
+            .iter()
+            .find(|e| e.id == id)
+            .and_then(|e| match e.kind {
                 EntityKind::Point { x, y } => Some((x, y)),
                 _ => None,
-            }
-        })
+            })
     };
     let line_endpoints_local = |id: SketchEntityId| -> Option<(SketchEntityId, SketchEntityId)> {
-        sketch.entities.iter().find(|e| e.id == id).and_then(|e| {
-            match e.kind {
+        sketch
+            .entities
+            .iter()
+            .find(|e| e.id == id)
+            .and_then(|e| match e.kind {
                 EntityKind::Line { start, end } => Some((start, end)),
                 _ => None,
-            }
-        })
+            })
     };
     fn arc_refs_local(
         sketch: &signex_sketch::SketchData,
@@ -1493,10 +1484,14 @@ fn draw_sketch_overlay(
                 return Some((x, y));
             }
         }
-        sketch.entities.iter().find(|e| e.id == id).and_then(|e| match e.kind {
-            EntityKind::Point { x, y } => Some((x, y)),
-            _ => None,
-        })
+        sketch
+            .entities
+            .iter()
+            .find(|e| e.id == id)
+            .and_then(|e| match e.kind {
+                EntityKind::Point { x, y } => Some((x, y)),
+                _ => None,
+            })
     }
 
     let dof_colour = |id: SketchEntityId| -> Color {
@@ -1543,14 +1538,12 @@ fn draw_sketch_overlay(
                 frame.fill(&path, col);
                 frame.stroke(
                     &path,
-                    Stroke::default()
-                        .with_width(1.0)
-                        .with_color(Color {
-                            a: 1.0,
-                            r: col.r * 0.6,
-                            g: col.g * 0.6,
-                            b: col.b * 0.6,
-                        }),
+                    Stroke::default().with_width(1.0).with_color(Color {
+                        a: 1.0,
+                        r: col.r * 0.6,
+                        g: col.g * 0.6,
+                        b: col.b * 0.6,
+                    }),
                 );
             }
             EntityKind::Line { start, end } => {
@@ -1746,12 +1739,14 @@ fn draw_filled_closed_loops(
                 return Some(p);
             }
         }
-        sketch.entities.iter().find(|e| e.id == id).and_then(|e| {
-            match e.kind {
+        sketch
+            .entities
+            .iter()
+            .find(|e| e.id == id)
+            .and_then(|e| match e.kind {
                 EntityKind::Point { x, y } => Some((x, y)),
                 _ => None,
-            }
-        })
+            })
     }
 
     // Build adjacency: Point ID -> Vec<(other_endpoint, line_id, construction)>.
@@ -1759,8 +1754,12 @@ fn draw_filled_closed_loops(
         HashMap::new();
     for e in &sketch.entities {
         if let EntityKind::Line { start, end } = e.kind {
-            adj.entry(start).or_default().push((end, e.id, e.construction));
-            adj.entry(end).or_default().push((start, e.id, e.construction));
+            adj.entry(start)
+                .or_default()
+                .push((end, e.id, e.construction));
+            adj.entry(end)
+                .or_default()
+                .push((start, e.id, e.construction));
         }
     }
 
@@ -2100,8 +2099,7 @@ fn draw_sketch_tool_preview(
                 return;
             };
             let c_screen = cstate.world_to_screen(c_world);
-            let r_world =
-                ((cursor.0 - c_world.0).powi(2) + (cursor.1 - c_world.1).powi(2)).sqrt();
+            let r_world = ((cursor.0 - c_world.0).powi(2) + (cursor.1 - c_world.1).powi(2)).sqrt();
             let r_screen = (r_world as f32) * cstate.scale;
             // Approximate dashed circle with 32-segment polyline.
             let segments = 32;
@@ -2110,8 +2108,14 @@ fn draw_sketch_tool_preview(
                 let t1 = (i + 1) as f32 / segments as f32;
                 let a0 = t0 * std::f32::consts::TAU;
                 let a1 = t1 * std::f32::consts::TAU;
-                let q0 = Point::new(c_screen.x + r_screen * a0.cos(), c_screen.y + r_screen * a0.sin());
-                let q1 = Point::new(c_screen.x + r_screen * a1.cos(), c_screen.y + r_screen * a1.sin());
+                let q0 = Point::new(
+                    c_screen.x + r_screen * a0.cos(),
+                    c_screen.y + r_screen * a0.sin(),
+                );
+                let q1 = Point::new(
+                    c_screen.x + r_screen * a1.cos(),
+                    c_screen.y + r_screen * a1.sin(),
+                );
                 frame.stroke(&Path::line(q0, q1), stroke);
             }
             // Radial guide from centre to cursor.
@@ -2152,8 +2156,14 @@ fn draw_sketch_tool_preview(
                 let t1 = (i + 1) as f32 / segments as f32;
                 let a0 = start_angle + delta * t0;
                 let a1 = start_angle + delta * t1;
-                let q0 = Point::new(c_screen.x + r_screen * a0.cos(), c_screen.y + r_screen * a0.sin());
-                let q1 = Point::new(c_screen.x + r_screen * a1.cos(), c_screen.y + r_screen * a1.sin());
+                let q0 = Point::new(
+                    c_screen.x + r_screen * a0.cos(),
+                    c_screen.y + r_screen * a0.sin(),
+                );
+                let q1 = Point::new(
+                    c_screen.x + r_screen * a1.cos(),
+                    c_screen.y + r_screen * a1.sin(),
+                );
                 frame.stroke(&Path::line(q0, q1), stroke);
             }
             // Radial guides for both endpoints + cursor.
@@ -2244,8 +2254,7 @@ pub(super) fn silk_f_hit_at(
                     let near_right = (x - max_x).abs() <= t;
                     let near_top = (y - min_y).abs() <= t;
                     let near_bot = (y - max_y).abs() <= t;
-                    (inside_y && (near_left || near_right))
-                        || (inside_x && (near_top || near_bot))
+                    (inside_y && (near_left || near_right)) || (inside_x && (near_top || near_bot))
                 }
             }
             FpGraphicKind::Circle { center, radius } => {
@@ -2383,8 +2392,7 @@ fn point_in_polygon(px: f64, py: f64, vertices: &[[f64; 2]]) -> bool {
             j = i;
             continue;
         }
-        let intersect =
-            ((yi > py) != (yj > py)) && (px < (xj - xi) * (py - yi) / denom + xi);
+        let intersect = ((yi > py) != (yj > py)) && (px < (xj - xi) * (py - yi) / denom + xi);
         if intersect {
             inside = !inside;
         }
@@ -2542,7 +2550,13 @@ fn draw_silk_graphics(
                     builder.line_to(first);
                 });
                 if g.filled {
-                    frame.fill(&path, Color { a: 0.55, ..base_colour });
+                    frame.fill(
+                        &path,
+                        Color {
+                            a: 0.55,
+                            ..base_colour
+                        },
+                    );
                 }
                 frame.stroke(
                     &path,
@@ -2570,7 +2584,11 @@ fn draw_pads_tool_preview(
     };
     let ghost_colour = Color::from_rgba(1.0, 1.0, 1.0, 0.55);
     let stroke_px = 1.2_f32;
-    let stroke = || Stroke::default().with_width(stroke_px).with_color(ghost_colour);
+    let stroke = || {
+        Stroke::default()
+            .with_width(stroke_px)
+            .with_color(ghost_colour)
+    };
 
     match state.pads_tool {
         PadsTool::PlaceTrack => {
@@ -2597,10 +2615,8 @@ fn draw_pads_tool_preview(
                 let c = cstate.world_to_screen((cx, cy));
                 let radius_world = ((sx - cx).powi(2) + (sy - cy).powi(2)).sqrt();
                 let r_px = (radius_world as f32) * cstate.scale;
-                let start_rad =
-                    ((sy - cy).atan2(sx - cx)) as f32;
-                let end_rad =
-                    ((cursor.1 - cy).atan2(cursor.0 - cx)) as f32;
+                let start_rad = ((sy - cy).atan2(sx - cx)) as f32;
+                let end_rad = ((cursor.1 - cy).atan2(cursor.0 - cx)) as f32;
                 let sweep = end_rad - start_rad;
                 let segments = 64;
                 let path = Path::new(|builder| {
@@ -2748,12 +2764,7 @@ mod hit_test_tests {
         // the divide `(yj - yi + EPSILON)` returned ±Inf/NaN for
         // horizontal edges; the fix continues past them. Filled
         // square hit-test must still work.
-        let square = vec![
-            [0.0, 0.0],
-            [10.0, 0.0],
-            [10.0, 10.0],
-            [0.0, 10.0],
-        ];
+        let square = vec![[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]];
         assert!(point_in_polygon(5.0, 5.0, &square));
         assert!(!point_in_polygon(-1.0, 5.0, &square));
         assert!(!point_in_polygon(5.0, -1.0, &square));
@@ -2762,12 +2773,7 @@ mod hit_test_tests {
 
     #[test]
     fn polygon_outline_hit_on_edge() {
-        let square = vec![
-            [0.0, 0.0],
-            [10.0, 0.0],
-            [10.0, 10.0],
-            [0.0, 10.0],
-        ];
+        let square = vec![[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]];
         // 0.05 mm outside the bottom edge — within 0.1 mm tol.
         assert!(polygon_outline_hit(5.0, -0.05, &square, 0.1));
         // 5 mm above bottom edge, deep inside — outline miss.
@@ -2790,7 +2796,7 @@ mod hit_test_tests {
             [0.0, 0.0],
             [10.0, 0.0],
             [10.0, 10.0],
-            [6.0, 5.0],   // mouth pinch in
+            [6.0, 5.0],          // mouth pinch in
             [10.0, 0.0 + 1e-12], // near-horizontal edge: re-uses bottom
             [0.0, 10.0],
         ];

@@ -19,8 +19,8 @@
 //! doesn't carry modifier state cleanly in 0.14, so a Shift-to-
 //! disable toggle is deferred.
 
-use signex_sketch::id::SketchEntityId;
 use signex_sketch::SketchData;
+use signex_sketch::id::SketchEntityId;
 
 use super::state::{FootprintEditorState, ToolPending};
 
@@ -196,9 +196,7 @@ pub fn snap_cursor(
                 GuideAxis::Vertical => {
                     if (raw.0 - g.position_mm).abs() <= GUIDE_SNAP_TOLERANCE_MM
                         && snapped_x
-                            .map(|sx| {
-                                (raw.0 - g.position_mm).abs() < (raw.0 - sx).abs()
-                            })
+                            .map(|sx| (raw.0 - g.position_mm).abs() < (raw.0 - sx).abs())
                             .unwrap_or(true)
                     {
                         snapped_x = Some(g.position_mm);
@@ -207,9 +205,7 @@ pub fn snap_cursor(
                 GuideAxis::Horizontal => {
                     if (raw.1 - g.position_mm).abs() <= GUIDE_SNAP_TOLERANCE_MM
                         && snapped_y
-                            .map(|sy| {
-                                (raw.1 - g.position_mm).abs() < (raw.1 - sy).abs()
-                            })
+                            .map(|sy| (raw.1 - g.position_mm).abs() < (raw.1 - sy).abs())
                             .unwrap_or(true)
                     {
                         snapped_y = Some(g.position_mm);
@@ -259,9 +255,8 @@ pub fn snap_cursor(
                     // Angle snap to ANGLE_STEP_DEG increments.
                     let step_rad = ANGLE_STEP_DEG.to_radians();
                     let snapped_angle = (angle / step_rad).round() * step_rad;
-                    let angle_diff = ((angle - snapped_angle).abs()).min(
-                        (std::f64::consts::TAU - (angle - snapped_angle).abs()).abs(),
-                    );
+                    let angle_diff = ((angle - snapped_angle).abs())
+                        .min((std::f64::consts::TAU - (angle - snapped_angle).abs()).abs());
                     if angle_diff < ANGLE_THRESHOLD_DEG.to_radians() {
                         let pos = (
                             anchor.0 + dist * snapped_angle.cos(),
@@ -285,10 +280,7 @@ pub fn snap_cursor(
     // the canvas or move pads to the origin.
     if opts.grid && opts.grid_step_mm > 1e-9 {
         let step = opts.grid_step_mm;
-        let snapped = (
-            (raw.0 / step).round() * step,
-            (raw.1 / step).round() * step,
-        );
+        let snapped = ((raw.0 / step).round() * step, (raw.1 / step).round() * step);
         SnapResult {
             pos: snapped,
             kind: SnapKind::Grid,
@@ -301,10 +293,10 @@ pub fn snap_cursor(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use signex_sketch::SketchData;
     use signex_sketch::entity::{Entity, EntityKind};
     use signex_sketch::id::SketchEntityId;
     use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
-    use signex_sketch::SketchData;
 
     fn empty_state() -> FootprintEditorState {
         FootprintEditorState::empty()

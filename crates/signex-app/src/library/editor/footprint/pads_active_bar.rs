@@ -19,7 +19,7 @@
 
 use std::path::PathBuf;
 
-use iced::widget::{button, row, text, Space};
+use iced::widget::{Space, button, row, text};
 use iced::{Border, Color, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
@@ -50,7 +50,7 @@ pub fn mode_switcher_overlay<'a>(
                         target: EditorMode,
                         active: bool,
                         path: PathBuf|
-     -> iced::Element<'a, LibraryMessage> {
+          -> iced::Element<'a, LibraryMessage> {
         let label_color = if active { iced::Color::WHITE } else { text_c };
         button(
             text(label)
@@ -83,9 +83,24 @@ pub fn mode_switcher_overlay<'a>(
 
     // Sketch · Pads · 3D — per user spec.
     let segments = row![
-        segment("Sketch", EditorMode::Sketch, matches!(mode, EditorMode::Sketch), path.clone()),
-        segment("Pads", EditorMode::Normal, matches!(mode, EditorMode::Normal), path.clone()),
-        segment("3D", EditorMode::View3d, matches!(mode, EditorMode::View3d), path.clone()),
+        segment(
+            "Sketch",
+            EditorMode::Sketch,
+            matches!(mode, EditorMode::Sketch),
+            path.clone()
+        ),
+        segment(
+            "Pads",
+            EditorMode::Normal,
+            matches!(mode, EditorMode::Normal),
+            path.clone()
+        ),
+        segment(
+            "3D",
+            EditorMode::View3d,
+            matches!(mode, EditorMode::View3d),
+            path.clone()
+        ),
     ]
     .spacing(2)
     .align_y(iced::Alignment::Center);
@@ -344,9 +359,8 @@ pub fn items(
         // Centre / start / sweep clicks; right-click / Esc cancels.
         ActiveBarItem::Button(ActiveBarButton {
             icon: ActiveBarIcon::Svg(icons::icon_shape_arc(theme_id)),
-            tooltip:
-                "Place Arc — click centre, then radius, then sweep end to drop a silk arc"
-                    .into(),
+            tooltip: "Place Arc — click centre, then radius, then sweep end to drop a silk arc"
+                .into(),
             enabled: true,
             selected: pads_tool == PadsTool::PlaceArc,
             on_press: Some(LibraryMessage::PrimitiveEditorEvent {
@@ -359,9 +373,7 @@ pub fn items(
         // closed-loop, stroked outline).
         ActiveBarItem::Button(ActiveBarButton {
             icon: ActiveBarIcon::Svg(icons::icon_shape_polygon(theme_id)),
-            tooltip:
-                "Place Polygon — click vertices, switch tool to commit (≥ 3 vertices)"
-                    .into(),
+            tooltip: "Place Polygon — click vertices, switch tool to commit (≥ 3 vertices)".into(),
             enabled: true,
             selected: pads_tool == PadsTool::PlacePolygon,
             on_press: Some(LibraryMessage::PrimitiveEditorEvent {
@@ -376,8 +388,7 @@ pub fn items(
         // the committed FpGraphic.
         ActiveBarItem::Button(ActiveBarButton {
             icon: ActiveBarIcon::Glyph("\u{25A0}"), // ■
-            tooltip: "Place Region — filled closed loop (Place Polygon for outline only)"
-                .into(),
+            tooltip: "Place Region — filled closed loop (Place Polygon for outline only)".into(),
             enabled: true,
             selected: pads_tool == PadsTool::PlaceRegion,
             on_press: Some(LibraryMessage::PrimitiveEditorEvent {

@@ -13,9 +13,9 @@
 //!   already match exhaustively in their own code.
 
 use signex_library::primitive::footprint::{
-    ChamferedCorners, FpCutout, FpKeepout, FpMaskOpening, FpPasteAperture, FpPour, FpVScore,
-    Footprint, KeepoutForbid, LayerId, NetRef, PadKind, PadShape, Polygon, PourFillType,
-    ThermalReliefStyle, FOOTPRINT_SCHEMA_VERSION,
+    ChamferedCorners, FOOTPRINT_SCHEMA_VERSION, Footprint, FpCutout, FpKeepout, FpMaskOpening,
+    FpPasteAperture, FpPour, FpVScore, KeepoutForbid, LayerId, NetRef, PadKind, PadShape, Polygon,
+    PourFillType, ThermalReliefStyle,
 };
 
 #[test]
@@ -121,7 +121,10 @@ fn v3_chamfered_pad_shape_round_trips() {
     let json = r#"{"kind":"chamfered","chamfer_ratio":0.25,"corners":{"top_left":true,"top_right":false,"bottom_left":false,"bottom_right":true}}"#;
     let shape: PadShape = serde_json::from_str(json).unwrap();
     match shape {
-        PadShape::Chamfered { chamfer_ratio, corners } => {
+        PadShape::Chamfered {
+            chamfer_ratio,
+            corners,
+        } => {
             assert!((chamfer_ratio - 0.25).abs() < 1e-12);
             assert!(corners.top_left);
             assert!(!corners.top_right);

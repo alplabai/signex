@@ -19,7 +19,7 @@
 use signex_library::primitive::footprint::Footprint;
 use signex_sketch::error::SolveError;
 use signex_sketch::id::SketchEntityId;
-use signex_sketch::{parameter, SketchData, SketchError};
+use signex_sketch::{SketchData, SketchError, parameter};
 
 use super::sketch_mode::SketchEdit;
 use super::state::FootprintEditorState;
@@ -101,8 +101,8 @@ pub fn apply_sketch_role_with_warnings(
 pub fn set_entity_role(footprint: &mut Footprint, id: SketchEntityId, role: RoleTag) {
     use signex_sketch::attr::{
         BoardCutoutAttr, CourtyardAttr, KeepoutAttr, KeepoutKinds, MaskExcludeAttr,
-        MaskOpeningAttr, PadAttr, PadKind, PadShape, PadSide, PasteAperturePattern,
-        PasteApertureAttr, PourAttr, SilkAttr, ThermalRelief,
+        MaskOpeningAttr, PadAttr, PadKind, PadShape, PadSide, PasteApertureAttr,
+        PasteAperturePattern, PourAttr, SilkAttr, ThermalRelief,
     };
     use signex_sketch::entity::EntityKind;
     use signex_types::layer::SignexLayer;
@@ -309,9 +309,7 @@ pub fn current_role_of(entity: &signex_sketch::entity::Entity) -> RoleTag {
 /// Mutates `footprint.sketch` per the edit. Idempotent on its inputs
 /// so the test harness can inspect intermediate state.
 fn apply_edit_inner(footprint: &mut Footprint, edit: SketchEdit) {
-    let sketch = footprint
-        .sketch
-        .get_or_insert_with(SketchData::default);
+    let sketch = footprint.sketch.get_or_insert_with(SketchData::default);
     match edit {
         SketchEdit::AddEntity(e) => sketch.entities.push(e),
         SketchEdit::DeleteEntity(id) => {
@@ -471,12 +469,7 @@ fn solve_and_bake(
                     &mut pours,
                     &mut state.solve_warnings,
                 )?;
-                signex_bake::bake_keepouts(
-                    sketch,
-                    &out,
-                    &mut keepouts,
-                    &mut state.solve_warnings,
-                )?;
+                signex_bake::bake_keepouts(sketch, &out, &mut keepouts, &mut state.solve_warnings)?;
                 signex_bake::bake_cutouts(
                     sketch,
                     &out,

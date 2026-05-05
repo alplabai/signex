@@ -6,7 +6,7 @@ use common::Sketch;
 
 use signex_sketch::constraint::{Constraint, ConstraintKind};
 use signex_sketch::id::ConstraintId;
-use signex_sketch::solver::residual::{residual, ResolvedParams};
+use signex_sketch::solver::residual::{ResolvedParams, residual};
 use signex_sketch::solver::state::pack;
 
 fn empty_params() -> ResolvedParams {
@@ -33,8 +33,16 @@ fn symmetric_about_line_zero_mirrored_across_x_axis() {
     };
     let r = residual(&c, &packed.vector, &packed.index, &s.data, &empty_params()).unwrap();
     assert_eq!(r.len(), 2);
-    assert!(r[0].abs() < 1e-12, "midpoint-on-line residual nonzero: {}", r[0]);
-    assert!(r[1].abs() < 1e-12, "perp-to-line residual nonzero: {}", r[1]);
+    assert!(
+        r[0].abs() < 1e-12,
+        "midpoint-on-line residual nonzero: {}",
+        r[0]
+    );
+    assert!(
+        r[1].abs() < 1e-12,
+        "perp-to-line residual nonzero: {}",
+        r[1]
+    );
 }
 
 #[test]
@@ -204,7 +212,10 @@ fn residual_count_matches_returned_vector_length() {
     let cases: Vec<ConstraintKind> = vec![
         ConstraintKind::SymmetricAboutLine { p1, p2, line },
         ConstraintKind::SymmetricAboutPoint { p1, p2, center },
-        ConstraintKind::Midpoint { point: on_mid, line },
+        ConstraintKind::Midpoint {
+            point: on_mid,
+            line,
+        },
     ];
 
     for kind in cases {

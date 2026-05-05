@@ -23,13 +23,11 @@ use std::error::Error;
 use std::path::Path;
 
 use signex_library::primitive::footprint::{Footprint, FootprintFile};
-use signex_sketch::attr::{
-    DrillSpec, PadAttr, PadKind, PadShape, PadSide, PasteAperturePattern,
-};
+use signex_sketch::SketchData;
+use signex_sketch::attr::{DrillSpec, PadAttr, PadKind, PadShape, PadSide, PasteAperturePattern};
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
-use signex_sketch::SketchData;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let dir = Path::new("assets/stock-library/footprints");
@@ -65,7 +63,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         summary.push(line);
     }
 
-    println!("\n{} footprint(s) written to {}", summary.len(), dir.display());
+    println!(
+        "\n{} footprint(s) written to {}",
+        summary.len(),
+        dir.display()
+    );
     Ok(())
 }
 

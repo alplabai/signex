@@ -335,6 +335,15 @@ impl FootprintEditorState {
         }
     }
 
+    /// HI-23: builder that seeds `global_snap_disabled` from
+    /// `ui_state.snap_enabled` so opening a `.snxfpt` while the user
+    /// has the global snap toggle off doesn't surprise them with snap
+    /// suddenly back on. Call sites pass `!ui_state.snap_enabled`.
+    pub fn with_global_snap_disabled(mut self, disabled: bool) -> Self {
+        self.state.global_snap_disabled = disabled;
+        self
+    }
+
     /// Borrow the footprint currently being edited. Falls back to
     /// the first footprint when `active_idx` is out of range
     /// (defensive — should never happen in practice). Panics only

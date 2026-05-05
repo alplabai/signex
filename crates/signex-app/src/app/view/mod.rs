@@ -1321,9 +1321,7 @@ impl Signex {
                     "Symbol Library",
                     "",
                     Message::ProjectTreeAction(
-                        crate::app::ProjectTreeAction::AddProjectSymbolLibrary(
-                            target_path.clone(),
-                        ),
+                        crate::app::ProjectTreeAction::AddProjectSymbolLibrary(target_path.clone()),
                     ),
                 ));
                 items.push(self.ctx_menu_item_disabled(
@@ -3647,14 +3645,9 @@ impl Signex {
         // v0.14.2: surface the active tab's primitive-editor kind to
         // the menu so File ▸ Save / Save As enable themselves for
         // `.snxsym` and `.snxfpt` standalone editor tabs.
-        let active_tab_kind = document
-            .tabs
-            .get(document.active_tab)
-            .map(|t| &t.kind);
-        let has_symbol_editor = matches!(
-            active_tab_kind,
-            Some(crate::app::TabKind::SymbolEditor(_))
-        );
+        let active_tab_kind = document.tabs.get(document.active_tab).map(|t| &t.kind);
+        let has_symbol_editor =
+            matches!(active_tab_kind, Some(crate::app::TabKind::SymbolEditor(_)));
         let has_footprint_editor = matches!(
             active_tab_kind,
             Some(crate::app::TabKind::FootprintEditor(_))
@@ -5384,9 +5377,7 @@ impl Signex {
         const EDIT_MODAL_ENABLED: bool = false;
         #[allow(clippy::overly_complex_bool_expr)]
         for (lib_path, browser_state) in &self.library.library_browsers {
-            if EDIT_MODAL_ENABLED
-                && let Some(edit) = browser_state.edit_modal.as_ref()
-            {
+            if EDIT_MODAL_ENABLED && let Some(edit) = browser_state.edit_modal.as_ref() {
                 // Class registry is per-library — read from the
                 // editing library's manifest. Falls back to the
                 // user's prefs default when the library has no

@@ -19,9 +19,9 @@ use crate::entity::EntityKind;
 use crate::error::SketchError;
 use crate::id::SketchEntityId;
 use crate::sketch::SketchData;
-use crate::solver::math::{cross, distance, norm, sub, Vec2};
+use crate::solver::math::{Vec2, cross, distance, norm, sub};
 use crate::solver::state::{
-    arc_refs, circle_radius, find_entity, line_endpoints, point_xy, EntityIndex,
+    EntityIndex, arc_refs, circle_radius, find_entity, line_endpoints, point_xy,
 };
 
 /// Resolve the length of a line from the current state vector.
@@ -54,8 +54,8 @@ fn entity_radius(
         EntityKind::Arc { .. } => {
             let (center, start, _end, _ccw) =
                 arc_refs(id, sketch).ok_or(SketchError::EntityNotFound(id))?;
-            let c =
-                point_xy(center, state, index, sketch).ok_or(SketchError::EntityNotFound(center))?;
+            let c = point_xy(center, state, index, sketch)
+                .ok_or(SketchError::EntityNotFound(center))?;
             let s =
                 point_xy(start, state, index, sketch).ok_or(SketchError::EntityNotFound(start))?;
             Ok(distance(s, c))
@@ -129,7 +129,9 @@ pub fn tangent_line_arc(
 
     let d = sub(p_e, p_s);
     let len = norm(d);
-    let signed = if len == 0.0 {
+    // Match the `point_on` family's eps; near-degenerate lines (sub-ULP
+    // norm after `f64::hypot`) would otherwise silently divide by ~0.
+    let signed = if len < super::point_on::DEGENERATE_LEN_EPS {
         0.0
     } else {
         cross(sub(c, p_s), d) / len

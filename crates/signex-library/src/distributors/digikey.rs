@@ -129,9 +129,15 @@ impl DigiKeyAuth {
             .set_token_uri(token_url)
             .set_redirect_uri(redirect_url);
 
+        // MD-17: surface keyring-unavailable errors at construction so
+        // callers can show a clear "OS keychain not available — install
+        // libsecret on Linux or run with --no-keyring" rather than
+        // letting the iced UI panic at a later moment.
+        let keyring = KeyringStore::for_provider("digikey", "refresh")
+            .map_err(|e| DigiKeyAuthError::Keyring(e.to_string()))?;
         Ok(Self {
             client,
-            keyring: KeyringStore::for_provider("digikey", "refresh"),
+            keyring,
             fallback_refresh: None,
         })
     }

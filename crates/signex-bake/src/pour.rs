@@ -12,18 +12,18 @@ use std::collections::BTreeMap;
 use signex_library::primitive::footprint::{
     FpPour, LayerId, NetRef, Polygon, PourFillType as LibPourFill, ThermalReliefStyle as LibThermal,
 };
+use signex_sketch::SketchError;
 use signex_sketch::attr::PourFillType as SkPourFill;
 use signex_sketch::entity::EntityKind;
 use signex_sketch::expr::ast::ExprNode;
-use signex_sketch::expr::eval::{eval, EvalContext};
+use signex_sketch::expr::eval::{EvalContext, eval};
 use signex_sketch::expr::parse::parse;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 use signex_sketch::unit::Quantity;
-use signex_sketch::SketchError;
 use std::collections::HashMap;
 
-use crate::profile::{trace_closed_profile, TraceError};
+use crate::profile::{TraceError, trace_closed_profile};
 
 /// Bake every PourAttr-tagged closed profile into `out`.
 pub fn bake_pours(
@@ -42,7 +42,10 @@ pub fn bake_pours(
             Some(a) => a,
             None => continue,
         };
-        if !matches!(entity.kind, EntityKind::Line { .. } | EntityKind::Arc { .. }) {
+        if !matches!(
+            entity.kind,
+            EntityKind::Line { .. } | EntityKind::Arc { .. }
+        ) {
             warnings.push(format!(
                 "entity {}: PourAttr requires a Line or Arc seed (Circles land in v0.14.2); skipping",
                 entity.id
@@ -158,8 +161,8 @@ mod tests {
     use signex_sketch::entity::Entity;
     use signex_sketch::id::SketchEntityId;
     use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
-    use signex_sketch::solver::residual::ResolvedParams;
     use signex_sketch::solver::Solver;
+    use signex_sketch::solver::residual::ResolvedParams;
     use signex_types::layer::SignexLayer;
 
     fn solve(sketch: &SketchData) -> FullSolveOutput {

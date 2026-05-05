@@ -10,11 +10,11 @@ use common::Sketch;
 use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
 use signex_sketch::error::SolveError;
 use signex_sketch::id::ConstraintId;
+use signex_sketch::solver::Solver;
 use signex_sketch::solver::dof::DofColor;
 use signex_sketch::solver::residual::ResolvedParams;
 use signex_sketch::solver::state::point_xy;
 use signex_sketch::solver::timeout::AutoPauseState;
-use signex_sketch::solver::Solver;
 
 fn empty_params() -> ResolvedParams {
     ResolvedParams::new()
@@ -203,7 +203,7 @@ fn solver_max_iters_field_is_honoured() {
             "max_iters=1 should not converge on the 4-mm gap; got {} iters, |r|={}",
             out.result.iterations, out.result.final_residual_norm
         ),
-        Err(SolveError::DidNotConverge { iters }) => assert_eq!(iters, 1),
+        Err(SolveError::DidNotConverge { iters, .. }) => assert_eq!(iters, 1),
         Err(other) => panic!("unexpected error: {other:?}"),
     }
 }

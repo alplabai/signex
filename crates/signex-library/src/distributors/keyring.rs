@@ -43,20 +43,21 @@ pub struct KeyringStore {
 impl KeyringStore {
     /// Create a store for `provider` with the given `username` slot.
     ///
-    /// # Panics
-    /// `keyring::Entry::new` only fails if the platform refuses any entry —
-    /// in that case `set_secret` / `get_secret` will surface the real error
-    /// later. We construct lazily and unwrap here so the API is infallible
-    /// at construction.
-    pub fn for_provider(provider: &str, username: &str) -> Self {
+    /// MD-17: returns `Result` because `keyring::Entry::new` can fail on
+    /// platforms without a daemon (Linux Docker without dbus / libsecret,
+    /// minimal Wayland setups, headless CI). The previous `expect()`
+    /// panicked the calling thread — typically the iced UI thread on
+    /// app startup — which is unrecoverable. Callers now propagate the
+    /// error to the user (e.g. "Distributor unavailable: install
+    /// libsecret-tools or run with `--no-keyring`").
+    pub fn for_provider(provider: &str, username: &str) -> Result<Self, KeyringError> {
         let service = format!("{SERVICE_PREFIX}{provider}");
-        let entry = Entry::new(&service, username)
-            .expect("keyring::Entry::new is infallible on supported platforms");
-        Self {
+        let entry = Entry::new(&service, username).map_err(KeyringError::from)?;
+        Ok(Self {
             service,
             username: username.to_string(),
             entry,
-        }
+        })
     }
 
     /// Service name as registered with the OS keychain.
@@ -100,7 +101,12 @@ mod tests {
 
     #[test]
     fn for_provider_builds_expected_service_name() {
-        let s = KeyringStore::for_provider("mouser", "default");
+        // CI environments without a keyring daemon return `Err` —
+        // skip rather than fail to keep the test useful on macOS /
+        // Windows where the daemon is always present.
+        let Ok(s) = KeyringStore::for_provider("mouser", "default") else {
+            return;
+        };
         assert_eq!(s.service_name(), "signex-distributor-mouser");
         assert_eq!(s.username(), "default");
     }

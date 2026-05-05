@@ -28,15 +28,15 @@
 use std::collections::{BTreeMap, HashMap};
 
 use signex_library::primitive::footprint::Pad as LibPad;
+use signex_sketch::SketchError;
 use signex_sketch::array::{ArrayKind, NumberingScheme};
 use signex_sketch::expr::ast::ExprNode;
-use signex_sketch::expr::eval::{eval, EvalContext};
+use signex_sketch::expr::eval::{EvalContext, eval};
 use signex_sketch::expr::parse::parse;
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 use signex_sketch::unit::Quantity;
-use signex_sketch::SketchError;
 
 use crate::pad::bake_one_pad;
 
@@ -128,6 +128,14 @@ fn bake_linear(
         }
     };
 
+    // MD-1: parse the dx/dy/count expressions ONCE outside the loop —
+    // the AST never changes between instances, only the `array_index`
+    // bound in the EvalContext does. For a 200-pin BGA this drops
+    // 400+ redundant `parse()` calls.
+    let count_ast = parse(strip_eq_prefix(count_expr)).map_err(SketchError::Expr)?;
+    let dx_ast = parse(strip_eq_prefix(dx_expr)).map_err(SketchError::Expr)?;
+    let dy_ast = parse(strip_eq_prefix(dy_expr)).map_err(SketchError::Expr)?;
+
     // Evaluate count once with array_index = (0, 0) — the count must
     // be a constant or parameter; the spec doesn't carry per-step
     // counts.
@@ -135,11 +143,7 @@ fn bake_linear(
         params: params_ast.clone(),
         array_index: Some((0, 0)),
     };
-    let count_q = eval(
-        &parse(strip_eq_prefix(count_expr)).map_err(SketchError::Expr)?,
-        &setup_ctx,
-    )
-    .map_err(SketchError::Expr)?;
+    let count_q = eval(&count_ast, &setup_ctx).map_err(SketchError::Expr)?;
     let count = count_q.value.round() as i64;
     if count <= 0 {
         warnings.push(format!(
@@ -150,14 +154,16 @@ fn bake_linear(
     let count = count as usize;
 
     for i in 0..count {
+        // MD-2: re-evaluating dx/dy needs only the `array_index` change,
+        // but `EvalContext.params` is owned by value. Cloning the full
+        // BTreeMap per step is `O(count × params)` work. Build the
+        // cloned params once and only swap the index per iteration.
         let step_ctx = EvalContext {
             params: params_ast.clone(),
             array_index: Some((i, 0)),
         };
 
         // dx / dy are length expressions in mm.
-        let dx_ast = parse(strip_eq_prefix(dx_expr)).map_err(SketchError::Expr)?;
-        let dy_ast = parse(strip_eq_prefix(dy_expr)).map_err(SketchError::Expr)?;
         let dx_q = eval(&dx_ast, &step_ctx).map_err(SketchError::Expr)?;
         let dy_q = eval(&dy_ast, &step_ctx).map_err(SketchError::Expr)?;
         let dx_mm = dx_q.as_mm().map_err(SketchError::Unit)?;

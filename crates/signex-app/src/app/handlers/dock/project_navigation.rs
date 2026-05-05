@@ -1069,20 +1069,35 @@ impl Signex {
         // `entry.path.file_name()` still works on orphan rows.
         let raw_label = canonical_tree_label(&node.label);
         if raw_label.ends_with(".snxlib") {
-            let entry = project
-                .data
-                .libraries
-                .iter()
-                .find(|e| {
-                    e.path
-                        .file_name()
-                        .and_then(|s| s.to_str())
-                        .map(|n| n == raw_label)
-                        .unwrap_or(false)
-                })?;
+            let entry = project.data.libraries.iter().find(|e| {
+                e.path
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .map(|n| n == raw_label)
+                    .unwrap_or(false)
+            })?;
             return Some(project.data.resolve_library_path(entry));
         }
         let dir = project.path.parent()?;
+        // HI-5: refuse to feed `dir.join(raw_label)` if `raw_label` is
+        // a path that escapes the project root. The label is a UI
+        // string (canonical_tree_label) but a user could craft an
+        // entry via "Add Existing" with `..` or a path separator;
+        // this then flows into `reveal_in_file_manager` which dispatches
+        // `xdg-open` on Linux (MIME-type-driven) and `explorer /select,`
+        // on Windows. Reject anything that isn't a single path
+        // component free of `..`.
+        let raw_path = std::path::Path::new(raw_label);
+        if raw_path.components().any(|c| {
+            matches!(
+                c,
+                std::path::Component::ParentDir
+                    | std::path::Component::RootDir
+                    | std::path::Component::Prefix(_)
+            )
+        }) {
+            return None;
+        }
         Some(dir.join(raw_label))
     }
 

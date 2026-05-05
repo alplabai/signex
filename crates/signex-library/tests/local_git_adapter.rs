@@ -221,9 +221,8 @@ fn library_id_returns_manifest_id() {
 /// Multi-symbol containers (v0.9 phase 2): the adapter writes the
 /// symbol into a `SymbolFile` TOML envelope named after the
 /// symbol's slugified name (`opamp-dual-8.snxsym`), not
-/// `<uuid>.snxsym`. (TOML envelope shipped in v0.18.4; pre-v0.18.4
-/// `.snxsym` files were JSON and still load via the auto-detect
-/// path in `SymbolFile::from_bytes`.)
+/// `<uuid>.snxsym`. TOML-only since v0.18.4 (alpha policy, no legacy
+/// JSON support).
 #[test]
 fn save_then_get_symbol_round_trip() {
     let dir = tempfile::tempdir().unwrap();

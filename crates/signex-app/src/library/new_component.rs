@@ -507,12 +507,10 @@ pub fn view<'a>(
     .padding([10, 14])
     .style(crate::styles::modal_footer_strip(tokens));
 
-    container(
-        column![header, form, error_row, footer].width(Length::Fixed(MODAL_W)),
-    )
-    .style(crate::styles::modal_card(tokens))
-    .clip(true)
-    .into()
+    container(column![header, form, error_row, footer].width(Length::Fixed(MODAL_W)))
+        .style(crate::styles::modal_card(tokens))
+        .clip(true)
+        .into()
 }
 
 /// Same SVG glyph + hover footprint the shared `close_x_button` uses

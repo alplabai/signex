@@ -31,6 +31,6 @@ pub use keepout::bake_keepouts;
 pub use mask::{bake_mask_excludes, bake_mask_openings, bake_paste_apertures};
 pub use pad::bake_pads;
 pub use pour::bake_pours;
-pub use profile::{trace_closed_profile, TraceError, TraceResult, ARC_SAMPLES};
+pub use profile::{ARC_SAMPLES, TraceError, TraceResult, trace_closed_profile};
 pub use silk::bake_silk;
 pub use vscore::bake_v_scores;

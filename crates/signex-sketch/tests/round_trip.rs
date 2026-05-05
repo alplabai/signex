@@ -1,16 +1,16 @@
+use signex_sketch::SketchData;
 use signex_sketch::array::{
-    bga_row_letter, Array, ArrayId, ArrayKind, GridDepopulation, NumberingScheme,
+    Array, ArrayId, ArrayKind, GridDepopulation, NumberingScheme, bga_row_letter,
 };
 use signex_sketch::attr::{
     BoardCutoutAttr, ChamferedCorners, CustomPadShape, DrillSpec, KeepoutAttr, KeepoutKinds,
-    MaskOpeningAttr, PadAttr, PadKind, PadShape, PadSide, PasteAperturePattern, PasteApertureAttr,
+    MaskOpeningAttr, PadAttr, PadKind, PadShape, PadSide, PasteApertureAttr, PasteAperturePattern,
     PourAttr, PourFillType, ThermalRelief, VScoreHintAttr, VScoreSide,
 };
-use signex_types::layer::SignexLayer;
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::{ConstraintId, SketchEntityId};
 use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
-use signex_sketch::SketchData;
+use signex_types::layer::SignexLayer;
 use uuid::Uuid;
 
 #[test]
@@ -172,13 +172,7 @@ fn pad_attr_chamfered_round_trip() {
 fn pad_attr_custom_static_round_trip() {
     let mut a = smd_rect_pad("1");
     a.shape = PadShape::Custom(CustomPadShape::StaticPoints {
-        points: vec![
-            [0.0, 0.0],
-            [1.0, 0.0],
-            [1.0, 0.5],
-            [0.5, 1.0],
-            [0.0, 0.5],
-        ],
+        points: vec![[0.0, 0.0], [1.0, 0.0], [1.0, 0.5], [0.5, 1.0], [0.0, 0.5]],
     });
     let s = toml::to_string(&a).unwrap();
     let back: PadAttr = toml::from_str(&s).unwrap();
@@ -615,8 +609,11 @@ fn populated_sketch_round_trip() {
         id: plane_id,
         kind: PlaneKind::BoardTop,
     });
-    data.entities
-        .push(Entity::new(p1, plane_id, EntityKind::Point { x: 0.0, y: 0.0 }));
+    data.entities.push(Entity::new(
+        p1,
+        plane_id,
+        EntityKind::Point { x: 0.0, y: 0.0 },
+    ));
     data.entities.push(Entity::new(
         p2,
         plane_id,
@@ -627,9 +624,7 @@ fn populated_sketch_round_trip() {
         plane_id,
         EntityKind::Line { start: p1, end: p2 },
     ));
-    data.parameters
-        .0
-        .insert("pad_pitch".into(), "0.5mm".into());
+    data.parameters.0.insert("pad_pitch".into(), "0.5mm".into());
     let s = toml::to_string(&data).unwrap();
     let back: SketchData = toml::from_str(&s).unwrap();
     assert_eq!(data, back);

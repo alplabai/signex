@@ -54,10 +54,7 @@ fn lm_solves_anchored_horizontal_distance() {
         (x2 - 5.0).abs() < 1e-6,
         "P2.x converged to {x2}, expected 5.0"
     );
-    assert!(
-        y2.abs() < 1e-6,
-        "P2.y converged to {y2}, expected 0.0"
-    );
+    assert!(y2.abs() < 1e-6, "P2.y converged to {y2}, expected 0.0");
     assert!(
         result.final_residual_norm < 1e-6,
         "final residual norm {} should be near zero",

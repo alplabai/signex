@@ -6,7 +6,7 @@ use common::Sketch;
 
 use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
 use signex_sketch::id::ConstraintId;
-use signex_sketch::solver::residual::{residual, total_residual, ResolvedParams};
+use signex_sketch::solver::residual::{ResolvedParams, residual, total_residual};
 use signex_sketch::solver::state::pack;
 
 fn empty_params() -> ResolvedParams {
@@ -127,7 +127,14 @@ fn distance_pt_pt_expr_full_arithmetic() {
             target: DimTarget::Expr("= 2mm + 3mm".into()),
         },
     };
-    let r = residual(&c, &packed.vector, &packed.index, &s.data, &ResolvedParams::new()).unwrap();
+    let r = residual(
+        &c,
+        &packed.vector,
+        &packed.index,
+        &s.data,
+        &ResolvedParams::new(),
+    )
+    .unwrap();
     assert!(r[0].abs() < 1e-12, "5 - (2+3) = 0, got {}", r[0]);
 }
 
@@ -308,7 +315,12 @@ fn total_residual_length_matches_constraint_kind_count_sum() {
 
     let packed = pack(&s.data);
     let r = total_residual(&s.data, &packed.vector, &packed.index, &empty_params()).unwrap();
-    let expected: usize = s.data.constraints.iter().map(|c| c.kind.residual_count()).sum();
+    let expected: usize = s
+        .data
+        .constraints
+        .iter()
+        .map(|c| c.kind.residual_count())
+        .sum();
     assert_eq!(r.len(), expected);
     assert_eq!(r.len(), 2 + 1 + 1 + 2);
 }
@@ -333,7 +345,9 @@ fn residual_count_matches_returned_vector_length() {
         },
         ConstraintKind::Horizontal { line },
         ConstraintKind::Vertical { line },
-        ConstraintKind::Fixed { point: SketchEntityId::new() },
+        ConstraintKind::Fixed {
+            point: SketchEntityId::new(),
+        },
     ];
 
     for kind in cases {

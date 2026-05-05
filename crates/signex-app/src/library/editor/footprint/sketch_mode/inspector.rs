@@ -18,8 +18,8 @@
 //! same patch as Task 6.3's tool palette.
 
 use iced::{
-    widget::{button, column, container, pick_list, row, scrollable, text, text_input, Space},
     Border, Color, Element, Length, Theme,
+    widget::{Space, button, column, container, pick_list, row, scrollable, text, text_input},
 };
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
@@ -59,7 +59,9 @@ pub fn view<'a>(
 
     container(
         row![
-            container(dof).padding([6, 10]).width(Length::FillPortion(1)),
+            container(dof)
+                .padding([6, 10])
+                .width(Length::FillPortion(1)),
             container(params)
                 .padding([6, 10])
                 .width(Length::FillPortion(2)),
@@ -142,9 +144,7 @@ fn view_tool_palette<'a>(
         },
         ToolPending::LineFirst { .. } => "click second endpoint (Esc to cancel)".into(),
         ToolPending::RectangleFirst { .. } => "click opposite corner (Esc to cancel)".into(),
-        ToolPending::RoundedRectangleFirst { .. } => {
-            "click opposite corner (Esc to cancel)".into()
-        }
+        ToolPending::RoundedRectangleFirst { .. } => "click opposite corner (Esc to cancel)".into(),
         ToolPending::CircleCenter { .. } => "click radius point (Esc to cancel)".into(),
         ToolPending::ArcCenter { .. } => "click start (Esc to cancel)".into(),
         ToolPending::ArcStart { .. } => "click end (Esc to cancel)".into(),
@@ -248,8 +248,9 @@ fn view_constraint_submenu<'a>(
         (Some(_), Some(_)) => "Selection: 2 entities",
     };
 
-    let mut pill_row =
-        row![text(header_label).size(11).color(muted)].spacing(6).align_y(iced::Alignment::Center);
+    let mut pill_row = row![text(header_label).size(11).color(muted)]
+        .spacing(6)
+        .align_y(iced::Alignment::Center);
 
     for (label, tag) in &tags {
         let path = editor.path.clone();
@@ -283,9 +284,7 @@ fn view_constraint_submenu<'a>(
             .padding(2)
             .width(Length::Fixed(80.0))
             .style(move |_: &Theme, _| iced::widget::text_input::Style {
-                background: iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.04,
-                )),
+                background: iced::Background::Color(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04)),
                 border: Border {
                     width: 1.0,
                     radius: 2.0.into(),
@@ -410,7 +409,10 @@ fn view_params<'a>(
                 let name_clone = name.clone();
                 let path = editor.path.clone();
                 let row = row![
-                    text(name).size(10).color(text_c).width(Length::Fixed(110.0)),
+                    text(name)
+                        .size(10)
+                        .color(text_c)
+                        .width(Length::Fixed(110.0)),
                     text_input("expression…", src)
                         .size(10)
                         .padding(2)
@@ -466,12 +468,9 @@ fn view_warnings<'a>(
         }
         if editor.state.solve_warnings.len() > 8 {
             col = col.push(
-                text(format!(
-                    "… +{} more",
-                    editor.state.solve_warnings.len() - 8
-                ))
-                .size(9)
-                .color(muted),
+                text(format!("… +{} more", editor.state.solve_warnings.len() - 8))
+                    .size(9)
+                    .color(muted),
             );
         }
     }
@@ -538,10 +537,7 @@ fn view_role<'a>(
     let dropdown = pick_list(RoleTag::ALL, Some(current), move |new_role| {
         LibraryMessage::PrimitiveEditorEvent {
             path: path.clone(),
-            msg: PrimitiveEditorMsg::FootprintSketchSetRole {
-                id,
-                role: new_role,
-            },
+            msg: PrimitiveEditorMsg::FootprintSketchSetRole { id, role: new_role },
         }
     })
     .text_size(11)
@@ -555,9 +551,7 @@ fn view_role<'a>(
     // a Line or Arc selection.
     let is_point = matches!(entity.kind, EntityKind::Point { .. });
     if !is_point {
-        col = col.push(
-            text("Pad role applies to Points only").size(9).color(muted),
-        );
+        col = col.push(text("Pad role applies to Points only").size(9).color(muted));
     }
 
     col.into()

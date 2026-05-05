@@ -212,6 +212,10 @@ pub fn draw_grid(
                                     frame.stroke(&h, minor_stroke);
                                     frame.stroke(&v, minor_stroke);
                                 }
+                                // SAFETY: `Lines` short-circuits at the `if matches!(style, …Lines)`
+                                // early return at the top of this function (≈ line 150); this match
+                                // arm is structurally unreachable. If a new `GridStyle` variant ever
+                                // lands, it must be handled at BOTH sites.
                                 signex_render::GridStyle::Lines => unreachable!(),
                             }
                         }

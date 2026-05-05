@@ -39,19 +39,25 @@
 use std::time::Instant;
 
 use crate::error::SolveError;
-use crate::id::ConstraintId;
 use crate::sketch::SketchData;
+use crate::solver::jacobian::numerical_jacobian;
 use crate::solver::linalg::{LinAlgError, LuDecomposition};
 use crate::solver::math::{add_diag, axpy, matmul_ata, matvec_t, norm_sq, norm_vec};
-use crate::solver::residual::{total_residual, ResolvedParams};
-use crate::solver::state::{pack, EntityIndex};
-use crate::solver::jacobian::numerical_jacobian;
+use crate::solver::residual::{ResolvedParams, total_residual};
+use crate::solver::state::{EntityIndex, pack};
 
 /// Initial Marquardt damping. Small enough that the first step is
 /// roughly Gauss–Newton on a well-conditioned problem. Not configurable
 /// via [`crate::solver::Solver`]; callers that need a different damping
 /// schedule must invoke `solve_lm` directly with custom parameters.
 pub const LAMBDA_INIT: f64 = 1e-3;
+
+/// CRIT-6: upper bound on Marquardt damping. After ~300 consecutive
+/// rejected steps `lambda` would otherwise grow to `1e297`; (JᵀJ + λI)
+/// then overflows to Inf, the LU pivot check passes, and `lu_solve`
+/// produces NaN that silently poisons the state vector. We bail out
+/// before that happens with `DidNotConverge`.
+pub const LAMBDA_MAX: f64 = 1e16;
 
 /// Output of a single solve. The state vector layout matches
 /// `pack(sketch).vector` — pair it with the [`EntityIndex`] returned
@@ -104,12 +110,21 @@ pub fn solve_lm(
     let mut iterations = 0usize;
 
     let mut r = total_residual(sketch, &state, &packed.index, params)
-        .map_err(|_| SolveError::OverConstrained(ConstraintId(uuid::Uuid::nil())))?;
+        .map_err(|e| SolveError::Internal(format!("initial residual: {e}")))?;
     let mut residual_norm_sq = norm_sq(&r);
 
     while iterations < max_iters {
         if residual_norm_sq < tol_sq {
             break;
+        }
+
+        // CRIT-6: divergence guard. Once `lambda` saturates we cannot
+        // make progress without overflowing `(JᵀJ + λI)`.
+        if lambda > LAMBDA_MAX {
+            return Err(SolveError::DidNotConverge {
+                iters: iterations,
+                final_residual_norm: norm_vec(&r),
+            });
         }
 
         let elapsed_ms = started.elapsed().as_millis() as u64;
@@ -121,7 +136,7 @@ pub fn solve_lm(
         }
 
         let j = numerical_jacobian(sketch, &state, &packed.index, params)
-            .map_err(|_| SolveError::OverConstrained(ConstraintId(uuid::Uuid::nil())))?;
+            .map_err(|e| SolveError::Internal(format!("jacobian: {e}")))?;
 
         // Edge case: no constraints (m=0). Nothing to drive; converged.
         if j.is_empty() {
@@ -131,27 +146,38 @@ pub fn solve_lm(
         // Form the damped normal equations: (JᵀJ + λI) Δx = −Jᵀr.
         let mut a = matmul_ata(&j);
         add_diag(&mut a, lambda);
-        let neg_jt_r: Vec<f64> = matvec_t(&j, &r).iter().map(|&v| -v).collect();
+        // MD-5: in-place negate avoids a fresh `Vec` allocation per
+        // iteration. `matvec_t` already builds the vector; flip signs
+        // there instead of `.iter().map(|&v| -v).collect()`.
+        let mut neg_jt_r = matvec_t(&j, &r);
+        for v in &mut neg_jt_r {
+            *v = -*v;
+        }
 
         let lu = match LuDecomposition::new(&a) {
             Ok(lu) => lu,
             Err(LinAlgError::Singular) => {
                 // λ already damps the diagonal; if even with damping
                 // we hit a zero pivot, the geometry is genuinely
-                // over-constrained.
-                return Err(SolveError::OverConstrained(ConstraintId(uuid::Uuid::nil())));
+                // over-constrained. We don't have a single constraint
+                // id to attribute this to, so callers should match on
+                // OverConstrained without relying on the inner id.
+                return Err(SolveError::OverConstrained(crate::id::ConstraintId(
+                    uuid::Uuid::nil(),
+                )));
             }
             Err(LinAlgError::DimensionMismatch) => {
-                // The math module enforces shapes by construction;
-                // hitting this means a code bug, not a user error.
-                return Err(SolveError::OverConstrained(ConstraintId(uuid::Uuid::nil())));
+                // LO-12: code bug, not a user error.
+                return Err(SolveError::Internal(
+                    "LU dimension mismatch — please report".into(),
+                ));
             }
         };
 
         let delta = match lu.solve(&neg_jt_r) {
             Ok(d) => d,
-            Err(_) => {
-                return Err(SolveError::OverConstrained(ConstraintId(uuid::Uuid::nil())));
+            Err(e) => {
+                return Err(SolveError::Internal(format!("LU back-substitution: {e:?}")));
             }
         };
 
@@ -169,6 +195,17 @@ pub fn solve_lm(
         };
         let trial_norm_sq = norm_sq(&trial_r);
 
+        // CRIT-6: NaN trap. If lambda saturates, the LU solve can yield
+        // NaN deltas; trial_norm_sq becomes NaN; `NaN < residual_norm_sq`
+        // is always false so we'd loop forever rejecting the step. Bail
+        // out with DidNotConverge before max_iters runs out.
+        if !trial_norm_sq.is_finite() {
+            return Err(SolveError::DidNotConverge {
+                iters: iterations,
+                final_residual_norm: norm_vec(&r),
+            });
+        }
+
         if trial_norm_sq < residual_norm_sq {
             state = trial;
             r = trial_r;
@@ -181,7 +218,18 @@ pub fn solve_lm(
     }
 
     if residual_norm_sq >= tol_sq && iterations >= max_iters {
-        return Err(SolveError::DidNotConverge { iters: iterations });
+        return Err(SolveError::DidNotConverge {
+            iters: iterations,
+            final_residual_norm: norm_vec(&r),
+        });
+    }
+
+    // CRIT-6: defence-in-depth — never return a NaN-poisoned result.
+    if !residual_norm_sq.is_finite() {
+        return Err(SolveError::DidNotConverge {
+            iters: iterations,
+            final_residual_norm: norm_vec(&r),
+        });
     }
 
     Ok(SolveResult {

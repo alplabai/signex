@@ -153,13 +153,27 @@ impl Default for PdfSurface {
 }
 
 /// Escape a string for use in PDF string literals (minimal escaping).
+///
+/// MD-28: PDF string literals are PDFDocEncoding / Latin-1; multi-byte
+/// UTF-8 sequences emitted raw would be misinterpreted by readers as
+/// pairs of Latin-1 characters. Callers must run `sanitize_pdf_text`
+/// first so the input is ASCII-only by the time it reaches us; this
+/// `debug_assert!` enforces that contract in dev builds.
 fn escape_pdf_string(s: &str) -> String {
+    debug_assert!(
+        s.is_ascii(),
+        "escape_pdf_string received non-ASCII input ({:?}); call sanitize_pdf_text first",
+        s
+    );
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {
         match c {
             '\\' => out.push_str("\\\\"),
             '(' => out.push_str("\\("),
             ')' => out.push_str("\\)"),
+            // Drop any non-ASCII byte in release rather than emitting
+            // bytes a PDF reader would mis-decode.
+            _ if !c.is_ascii() => out.push('?'),
             _ => out.push(c),
         }
     }

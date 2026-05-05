@@ -12,7 +12,6 @@ pub mod canvas;
 pub mod layers;
 pub mod pad_to_sketch;
 pub mod pads_active_bar;
-pub mod unified_active_bar;
 pub mod preview3d;
 pub mod sketch_dispatch;
 #[cfg(test)]
@@ -21,6 +20,7 @@ pub mod sketch_mode;
 pub mod snap;
 pub mod state;
 pub mod step_attach;
+pub mod unified_active_bar;
 
 #[cfg(test)]
 mod tests;
