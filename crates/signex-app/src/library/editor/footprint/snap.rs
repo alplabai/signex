@@ -62,9 +62,19 @@ pub enum SnapKind {
     /// Snapped to a non-cardinal angle (radians, 0..2π) relative to
     /// the active anchor.
     Angle(f64),
+    /// v0.18.23 — snapped onto an Altium-style guide line. When both
+    /// an X-guide and a Y-guide fire on the same cursor pass the
+    /// snap pins both axes.
+    Guide,
     /// Fell through to grid snap.
     Grid,
 }
+
+/// v0.18.23 — world-mm tolerance used by the guide-snap priority.
+/// The cursor snaps onto a guide whose axis is within this distance.
+/// Picked to feel sticky at typical 1 mm grid steps without competing
+/// against point-hit (which is px-radius scaled).
+pub const GUIDE_SNAP_TOLERANCE_MM: f64 = 0.5;
 
 impl SnapResult {
     pub fn raw(pos: (f64, f64)) -> Self {
@@ -165,6 +175,48 @@ pub fn snap_cursor(
                     kind: SnapKind::Point(id),
                 };
             }
+        }
+    }
+
+    // Priority 1.5 — Guide snap. Snaps the cursor onto enabled
+    // vertical / horizontal guides whose axis is within
+    // `GUIDE_SNAP_TOLERANCE_MM`. When both fire, snap both axes (a
+    // guide-intersection lock).
+    if !state.guides.is_empty() {
+        use super::state::GuideAxis;
+        let mut snapped_x: Option<f64> = None;
+        let mut snapped_y: Option<f64> = None;
+        for g in state.guides.iter().filter(|g| g.enabled) {
+            match g.axis {
+                GuideAxis::Vertical => {
+                    if (raw.0 - g.position_mm).abs() <= GUIDE_SNAP_TOLERANCE_MM
+                        && snapped_x
+                            .map(|sx| {
+                                (raw.0 - g.position_mm).abs() < (raw.0 - sx).abs()
+                            })
+                            .unwrap_or(true)
+                    {
+                        snapped_x = Some(g.position_mm);
+                    }
+                }
+                GuideAxis::Horizontal => {
+                    if (raw.1 - g.position_mm).abs() <= GUIDE_SNAP_TOLERANCE_MM
+                        && snapped_y
+                            .map(|sy| {
+                                (raw.1 - g.position_mm).abs() < (raw.1 - sy).abs()
+                            })
+                            .unwrap_or(true)
+                    {
+                        snapped_y = Some(g.position_mm);
+                    }
+                }
+            }
+        }
+        if snapped_x.is_some() || snapped_y.is_some() {
+            return SnapResult {
+                pos: (snapped_x.unwrap_or(raw.0), snapped_y.unwrap_or(raw.1)),
+                kind: SnapKind::Guide,
+            };
         }
     }
 
@@ -339,6 +391,66 @@ mod tests {
         let angle = 22.0_f64.to_radians();
         let raw = (10.0 * angle.cos(), 10.0 * angle.sin());
         let r = snap_cursor(raw, Some(&sketch), &state, None);
+        assert!(matches!(r.kind, SnapKind::Grid));
+    }
+
+    #[test]
+    fn vertical_guide_snaps_x_axis() {
+        let mut state = empty_state();
+        state.guides.push(super::super::state::Guide {
+            axis: super::super::state::GuideAxis::Vertical,
+            position_mm: 5.0,
+            enabled: true,
+        });
+        // Cursor 0.2 mm from the guide on X — within 0.5 mm tolerance.
+        let r = snap_cursor((4.8, 1.234), None, &state, None);
+        assert_eq!(r.kind, SnapKind::Guide);
+        assert!((r.pos.0 - 5.0).abs() < 1e-9);
+        assert!((r.pos.1 - 1.234).abs() < 1e-9);
+    }
+
+    #[test]
+    fn horizontal_guide_snaps_y_axis() {
+        let mut state = empty_state();
+        state.guides.push(super::super::state::Guide {
+            axis: super::super::state::GuideAxis::Horizontal,
+            position_mm: -3.0,
+            enabled: true,
+        });
+        let r = snap_cursor((7.7, -2.7), None, &state, None);
+        assert_eq!(r.kind, SnapKind::Guide);
+        assert!((r.pos.0 - 7.7).abs() < 1e-9);
+        assert!((r.pos.1 - (-3.0)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn guide_intersection_pins_both_axes() {
+        let mut state = empty_state();
+        state.guides.push(super::super::state::Guide {
+            axis: super::super::state::GuideAxis::Vertical,
+            position_mm: 2.0,
+            enabled: true,
+        });
+        state.guides.push(super::super::state::Guide {
+            axis: super::super::state::GuideAxis::Horizontal,
+            position_mm: 4.0,
+            enabled: true,
+        });
+        let r = snap_cursor((1.9, 4.2), None, &state, None);
+        assert_eq!(r.kind, SnapKind::Guide);
+        assert!((r.pos.0 - 2.0).abs() < 1e-9);
+        assert!((r.pos.1 - 4.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn disabled_guide_does_not_snap() {
+        let mut state = empty_state();
+        state.guides.push(super::super::state::Guide {
+            axis: super::super::state::GuideAxis::Vertical,
+            position_mm: 5.0,
+            enabled: false,
+        });
+        let r = snap_cursor((4.8, 1.234), None, &state, None);
         assert!(matches!(r.kind, SnapKind::Grid));
     }
 }

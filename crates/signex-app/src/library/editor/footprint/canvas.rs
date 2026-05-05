@@ -771,29 +771,35 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
             // Fine pass — only when each cell is at least 6 px wide
             // so we don't chew tessellation budget on dense grids
             // at low zoom.
-            if matches!(fine_style, Gd::Lines | Gd::Dots) && fine_step >= 6.0 {
-                draw_grid(
-                    frame,
-                    bounds,
-                    cstate.offset,
-                    fine_step,
-                    Color {
-                        a: 0.10,
-                        ..self.grid_color
-                    },
-                );
+            if fine_step >= 6.0 {
+                let fine_color = Color {
+                    a: 0.10,
+                    ..self.grid_color
+                };
+                match fine_style {
+                    Gd::Lines => {
+                        draw_grid(frame, bounds, cstate.offset, fine_step, fine_color);
+                    }
+                    Gd::Dots => {
+                        draw_grid_dots(frame, bounds, cstate.offset, fine_step, fine_color);
+                    }
+                    Gd::Hidden => {}
+                }
             }
-            if matches!(coarse_style, Gd::Lines | Gd::Dots) && coarse_step >= 8.0 {
-                draw_grid(
-                    frame,
-                    bounds,
-                    cstate.offset,
-                    coarse_step,
-                    Color {
-                        a: 0.30,
-                        ..self.grid_color
-                    },
-                );
+            if coarse_step >= 8.0 {
+                let coarse_color = Color {
+                    a: 0.30,
+                    ..self.grid_color
+                };
+                match coarse_style {
+                    Gd::Lines => {
+                        draw_grid(frame, bounds, cstate.offset, coarse_step, coarse_color);
+                    }
+                    Gd::Dots => {
+                        draw_grid_dots(frame, bounds, cstate.offset, coarse_step, coarse_color);
+                    }
+                    Gd::Hidden => {}
+                }
             }
 
             // v0.18.20 — Altium-style guide lines. Each enabled guide
@@ -1873,6 +1879,38 @@ fn draw_grid(frame: &mut canvas::Frame, bounds: Rectangle, offset: Point, step: 
         }
     });
     frame.stroke(&path, stroke);
+}
+
+/// v0.18.22 — dotted grid variant. One filled square per intersection
+/// rendered as a single `frame.fill` over a composed path so the cost
+/// matches `draw_grid`'s single-stroke design. The dot side is
+/// 1.4 px (looks like a 1×1 dot at typical DPI without disappearing
+/// at fractional pixels).
+fn draw_grid_dots(
+    frame: &mut canvas::Frame,
+    bounds: Rectangle,
+    offset: Point,
+    step: f32,
+    color: Color,
+) {
+    let dot_side: f32 = 1.4;
+    let half = dot_side * 0.5;
+    let path = Path::new(|builder| {
+        let mut x = offset.x.rem_euclid(step) - step;
+        while x <= bounds.width + step {
+            let mut y = offset.y.rem_euclid(step) - step;
+            while y <= bounds.height + step {
+                builder.move_to(Point::new(x - half, y - half));
+                builder.line_to(Point::new(x + half, y - half));
+                builder.line_to(Point::new(x + half, y + half));
+                builder.line_to(Point::new(x - half, y + half));
+                builder.close();
+                y += step;
+            }
+            x += step;
+        }
+    });
+    frame.fill(&path, color);
 }
 
 /// v0.14.2 — live ghost preview for the multi-click sketch drawing
