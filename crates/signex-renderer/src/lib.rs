@@ -6,5 +6,6 @@
 
 pub mod iced_bridge;
 pub mod pcb;
+pub mod pcb3d;
 pub mod schematic;
 pub mod theme;
