@@ -3951,6 +3951,8 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintPolygonClick { .. }
         | PrimitiveEditorMsg::FootprintPolygonCommit
         | PrimitiveEditorMsg::FootprintPolygonCancel
+        | PrimitiveEditorMsg::FootprintSelectSilkF(_)
+        | PrimitiveEditorMsg::FootprintDeleteSilkF
         | PrimitiveEditorMsg::FootprintToggleSelectionFilter(_)
         | PrimitiveEditorMsg::FootprintMovePad { .. }
         | PrimitiveEditorMsg::FootprintCursorAt { .. }
@@ -4295,6 +4297,30 @@ pub(crate) fn apply_footprint_primitive_edit(
             editor.state.place_polygon_vertices.clear();
             editor.canvas_cache.clear();
         }
+        // v0.18.18 — silk-front graphic selection. Clears
+        // selected_pad symmetrically so the Properties panel
+        // doesn't try to render two selection-specific bodies at
+        // once.
+        PrimitiveEditorMsg::FootprintSelectSilkF(sel) => {
+            editor.state.selected_silk_f = sel;
+            if sel.is_some() {
+                editor.state.selected_pad = None;
+            }
+            editor.canvas_cache.clear();
+        }
+        // v0.18.18 — delete the selected silk-front graphic.
+        // No-op when nothing is selected. Updates `editor.dirty`
+        // and clears the selection state.
+        PrimitiveEditorMsg::FootprintDeleteSilkF => {
+            if let Some(idx) = editor.state.selected_silk_f.take() {
+                let primitive = editor.primitive_mut();
+                if idx < primitive.silk_f.len() {
+                    primitive.silk_f.remove(idx);
+                    editor.dirty = true;
+                }
+            }
+            editor.canvas_cache.clear();
+        }
         // v0.18.15 — Place String tool. Appends a silk-layer text
         // label `FpGraphic { kind: Text { position, content: "TEXT",
         // size: 1.0 }, stroke_width: 0.0 }` to the active footprint's
@@ -4348,6 +4374,12 @@ pub(crate) fn apply_footprint_primitive_edit(
         }
         PrimitiveEditorMsg::FootprintSelectPad(sel) => {
             editor.state.selected_pad = sel;
+            // v0.18.18 — pad and silk selection are mutually
+            // exclusive in the Properties panel; clear the silk
+            // selection when a pad is picked.
+            if sel.is_some() {
+                editor.state.selected_silk_f = None;
+            }
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintDeleteSelected => {
@@ -5817,6 +5849,8 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::FootprintPolygonClick { .. }
         | EditorMsg::FootprintPolygonCommit
         | EditorMsg::FootprintPolygonCancel
+        | EditorMsg::FootprintSelectSilkF(_)
+        | EditorMsg::FootprintDeleteSilkF
         | EditorMsg::FootprintSketchPlacePoint { .. }
         | EditorMsg::FootprintSketchToolClick { .. }
         | EditorMsg::FootprintSketchToolEscape

@@ -1009,6 +1009,8 @@ fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEditorMsg {
         }
         EditorMsg::FootprintPolygonCommit => PrimitiveEditorMsg::FootprintPolygonCommit,
         EditorMsg::FootprintPolygonCancel => PrimitiveEditorMsg::FootprintPolygonCancel,
+        EditorMsg::FootprintSelectSilkF(sel) => PrimitiveEditorMsg::FootprintSelectSilkF(sel),
+        EditorMsg::FootprintDeleteSilkF => PrimitiveEditorMsg::FootprintDeleteSilkF,
         EditorMsg::FootprintSketchPlacePoint { x_mm, y_mm } => {
             PrimitiveEditorMsg::FootprintSketchPlacePoint { x_mm, y_mm }
         }

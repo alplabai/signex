@@ -360,6 +360,38 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                             .and_capture(),
                         );
                     }
+                    // v0.18.18 — Pads-mode Select tool also tries
+                    // a silk-front graphic hit before falling
+                    // through to the empty-area click-add path.
+                    // The dispatcher's `FootprintSelectSilkF` arm
+                    // clears `selected_pad` symmetrically.
+                    {
+                        use crate::library::editor::footprint::state::{
+                            EditorMode as Em2, PadsTool as Pt2,
+                        };
+                        if matches!(self.state.mode, Em2::Normal)
+                            && self.state.pads_tool == Pt2::Select
+                        {
+                            let tolerance = 4.0_f64 / (cstate.scale.max(1.0) as f64);
+                            if let Some(silk_idx) =
+                                silk_f_hit_at(self.silk_f, world.0, world.1, tolerance)
+                            {
+                                return Some(
+                                    canvas::Action::publish(
+                                        LibraryMessage::EditorEvent {
+                                            library_path: self.address.library_path.clone(),
+                                            table: self.address.table.clone(),
+                                            row_id: self.address.row_id,
+                                            msg: EditorMsg::FootprintSelectSilkF(Some(
+                                                silk_idx,
+                                            )),
+                                        },
+                                    )
+                                    .and_capture(),
+                                );
+                            }
+                        }
+                    }
                     // Empty area → pending click-add. We can't add yet
                     // because a drag may follow; commit on release.
                     cstate.drag = Some(DragState {
@@ -782,10 +814,16 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
             // `primitive.silk_f`; without this draw pass the user's
             // placements were invisible on the canvas.
             if self.state.layer_visibility.get(FpLayer::FSilks) {
-                draw_silk_graphics(frame, cstate, self.silk_f, FpLayer::FSilks);
+                draw_silk_graphics(
+                    frame,
+                    cstate,
+                    self.silk_f,
+                    FpLayer::FSilks,
+                    self.state.selected_silk_f,
+                );
             }
             if self.state.layer_visibility.get(FpLayer::BSilks) {
-                draw_silk_graphics(frame, cstate, self.silk_b, FpLayer::BSilks);
+                draw_silk_graphics(frame, cstate, self.silk_b, FpLayer::BSilks, None);
             }
 
             // Courtyard — drawn as a hollow rectangle on Edge.Cuts.
@@ -2076,6 +2114,93 @@ fn draw_pad(
     }
 }
 
+/// v0.18.18 — bounding-box hit test for silk-front graphics.
+/// Returns the index of the first graphic whose AABB contains
+/// `(x, y)` (in mm), with a small tolerance to make thin lines
+/// reachable. Iterates in reverse so the topmost (most recently
+/// placed) graphic wins on overlap.
+pub(super) fn silk_f_hit_at(
+    silk_f: &[signex_library::primitive::footprint::FpGraphic],
+    x: f64,
+    y: f64,
+    tolerance_mm: f64,
+) -> Option<usize> {
+    use signex_library::primitive::footprint::FpGraphicKind;
+    let t = tolerance_mm.max(0.05);
+    for (idx, g) in silk_f.iter().enumerate().rev() {
+        let bbox: Option<(f64, f64, f64, f64)> = match &g.kind {
+            FpGraphicKind::Line { from, to } => Some((
+                from[0].min(to[0]),
+                from[1].min(to[1]),
+                from[0].max(to[0]),
+                from[1].max(to[1]),
+            )),
+            FpGraphicKind::Rectangle { from, to } => Some((
+                from[0].min(to[0]),
+                from[1].min(to[1]),
+                from[0].max(to[0]),
+                from[1].max(to[1]),
+            )),
+            FpGraphicKind::Circle { center, radius } => Some((
+                center[0] - radius,
+                center[1] - radius,
+                center[0] + radius,
+                center[1] + radius,
+            )),
+            FpGraphicKind::Arc {
+                center,
+                radius,
+                ..
+            } => Some((
+                center[0] - radius,
+                center[1] - radius,
+                center[0] + radius,
+                center[1] + radius,
+            )),
+            FpGraphicKind::Text {
+                position,
+                content,
+                size,
+            } => {
+                let w = (content.chars().count() as f64) * size * 0.6;
+                let h = *size;
+                Some((position[0], position[1], position[0] + w, position[1] + h))
+            }
+            FpGraphicKind::Polygon { vertices } => {
+                if vertices.is_empty() {
+                    None
+                } else {
+                    let mut min_x = f64::INFINITY;
+                    let mut min_y = f64::INFINITY;
+                    let mut max_x = f64::NEG_INFINITY;
+                    let mut max_y = f64::NEG_INFINITY;
+                    for v in vertices {
+                        if v[0] < min_x {
+                            min_x = v[0];
+                        }
+                        if v[1] < min_y {
+                            min_y = v[1];
+                        }
+                        if v[0] > max_x {
+                            max_x = v[0];
+                        }
+                        if v[1] > max_y {
+                            max_y = v[1];
+                        }
+                    }
+                    Some((min_x, min_y, max_x, max_y))
+                }
+            }
+        };
+        if let Some((min_x, min_y, max_x, max_y)) = bbox {
+            if x >= min_x - t && x <= max_x + t && y >= min_y - t && y <= max_y + t {
+                return Some(idx);
+            }
+        }
+    }
+    None
+}
+
 /// v0.18.16 — render the silk-layer graphics list. Each
 /// `FpGraphic` becomes a single Path stroke / fill in the layer's
 /// colour. Used for both `silk_f` (FSilks) and `silk_b` (BSilks)
@@ -2085,16 +2210,23 @@ fn draw_silk_graphics(
     cstate: &FootprintCanvasState,
     graphics: &[signex_library::primitive::footprint::FpGraphic],
     layer: FpLayer,
+    selected_idx: Option<usize>,
 ) {
     use signex_library::primitive::footprint::FpGraphicKind;
-    let colour = layer.color();
+    let base_colour = layer.color();
+    let highlight = Color::from_rgb(1.0, 1.0, 1.0);
     let stroke_default_px: f32 = 1.0;
-    for g in graphics {
-        let stroke_px = if g.stroke_width > 0.0 {
+    for (idx, g) in graphics.iter().enumerate() {
+        let is_selected = selected_idx == Some(idx);
+        let colour = if is_selected { highlight } else { base_colour };
+        let mut stroke_px = if g.stroke_width > 0.0 {
             (g.stroke_width as f32 * cstate.scale).max(0.5)
         } else {
             stroke_default_px
         };
+        if is_selected {
+            stroke_px = (stroke_px + 1.0).max(2.0);
+        }
         match &g.kind {
             FpGraphicKind::Line { from, to } => {
                 let p0 = cstate.world_to_screen((from[0], from[1]));
@@ -2197,7 +2329,7 @@ fn draw_silk_graphics(
                     builder.line_to(first);
                 });
                 if g.filled {
-                    frame.fill(&path, Color { a: 0.55, ..colour });
+                    frame.fill(&path, Color { a: 0.55, ..base_colour });
                 }
                 frame.stroke(
                     &path,

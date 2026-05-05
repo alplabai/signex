@@ -729,6 +729,11 @@ pub enum EditorMsg {
     FootprintPolygonCommit,
     /// v0.18.15.4 — drop the in-flight polygon stash.
     FootprintPolygonCancel,
+    /// v0.18.18 — select a silk-front graphic (or clear with `None`).
+    FootprintSelectSilkF(Option<usize>),
+    /// v0.18.18 — delete the selected silk-front graphic. No-op
+    /// when `selected_silk_f` is `None`.
+    FootprintDeleteSilkF,
     /// Drag the pad at `idx` to a new world position.
     FootprintMovePad {
         idx: usize,
@@ -1296,6 +1301,10 @@ pub enum PrimitiveEditorMsg {
     FootprintPolygonCommit,
     /// v0.18.15.4 — Esc / right-click during Place Polygon.
     FootprintPolygonCancel,
+    /// v0.18.18 — silk-front graphic selection.
+    FootprintSelectSilkF(Option<usize>),
+    /// v0.18.18 — delete the selected silk-front graphic.
+    FootprintDeleteSilkF,
     /// v0.18.14 — Selection Filter pill toggle from the unified
     /// active bar. Mirrors the panel-side
     /// `PanelMsg::FpEditorToggleSelectionFilter` but flows through

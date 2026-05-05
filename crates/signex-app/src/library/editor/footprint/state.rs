@@ -278,6 +278,11 @@ pub struct FootprintEditorState {
     /// v0.18.15.4 — Place Polygon vertex stash. Each click appends.
     /// Tool switch / Esc commits if ≥ 3 vertices, otherwise drops.
     pub place_polygon_vertices: Vec<(f64, f64)>,
+    /// v0.18.18 — currently-selected silk-front graphic index (into
+    /// `primitive.silk_f`). `None` until the user clicks one.
+    /// Independent of `selected_pad` — pad selection clears silk
+    /// selection and vice versa.
+    pub selected_silk_f: Option<usize>,
     /// v0.18.13 — Altium Selection Filter pill row state. Per-
     /// editor so flipping pads off in one tab doesn't follow the
     /// user into another footprint.
@@ -635,6 +640,7 @@ impl FootprintEditorState {
             track_first: None,
             place_arc_pending: PlaceArcPending::default(),
             place_polygon_vertices: Vec::new(),
+            selected_silk_f: None,
             selection_filter: SelectionFilter::default(),
             snap_subtab: SnapSubTab::default(),
             snapping_mode: SnappingMode::default(),
@@ -672,6 +678,7 @@ impl FootprintEditorState {
             track_first: None,
             place_arc_pending: PlaceArcPending::default(),
             place_polygon_vertices: Vec::new(),
+            selected_silk_f: None,
             selection_filter: SelectionFilter::default(),
             snap_subtab: SnapSubTab::default(),
             snapping_mode: SnappingMode::default(),
