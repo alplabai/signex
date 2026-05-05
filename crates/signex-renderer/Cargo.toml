@@ -8,3 +8,8 @@ repository.workspace = true
 [dependencies]
 signex-gfx = { workspace = true }
 signex-types = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+regex = { workspace = true }
