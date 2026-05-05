@@ -21,6 +21,7 @@ mod handlers;
 mod helpers;
 mod load_gateway;
 mod mutation_gateway;
+mod pcb_dirty_adapter;
 mod runtime;
 mod selection_request;
 mod state;

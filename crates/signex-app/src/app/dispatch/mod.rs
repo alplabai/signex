@@ -13,6 +13,8 @@ mod ui;
 
 impl Signex {
     pub(crate) fn dispatch_update(&mut self, message: Message) -> Task<Message> {
+        self.apply_pcb_renderer_dirty_hint(&message);
+
         match message {
             Message::Menu(_) | Message::Tab { .. } | Message::Dock(_) | Message::Selection(_) => {
                 self.dispatch_routed_message(message)

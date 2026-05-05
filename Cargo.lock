@@ -5274,6 +5274,7 @@ dependencies = [
  "signex-library",
  "signex-output",
  "signex-render",
+ "signex-renderer",
  "signex-types",
  "signex-widgets",
  "tempfile",
