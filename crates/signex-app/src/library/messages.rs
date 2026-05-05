@@ -699,6 +699,17 @@ pub enum EditorMsg {
         x_mm: f64,
         y_mm: f64,
     },
+    /// v0.18.15.1 — click during a Place Track gesture. The
+    /// dispatcher decides whether this is the first or second
+    /// click based on `editor.state.track_first`.
+    FootprintTrackClick {
+        x_mm: f64,
+        y_mm: f64,
+    },
+    /// v0.18.15.1 — Esc / right-click during a Place Track
+    /// gesture. Clears `editor.state.track_first` so the next
+    /// click starts a fresh segment.
+    FootprintTrackCancel,
     /// Drag the pad at `idx` to a new world position.
     FootprintMovePad {
         idx: usize,
@@ -1252,6 +1263,10 @@ pub enum PrimitiveEditorMsg {
     /// with placeholder content "TEXT" + 1mm size. The user edits
     /// the content via the Properties panel later.
     FootprintAddText { x_mm: f64, y_mm: f64 },
+    /// v0.18.15.1 — click during a Place Track 2-click gesture.
+    FootprintTrackClick { x_mm: f64, y_mm: f64 },
+    /// v0.18.15.1 — Esc / right-click during Place Track.
+    FootprintTrackCancel,
     /// v0.18.14 — Selection Filter pill toggle from the unified
     /// active bar. Mirrors the panel-side
     /// `PanelMsg::FpEditorToggleSelectionFilter` but flows through

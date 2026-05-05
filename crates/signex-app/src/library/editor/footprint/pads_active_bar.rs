@@ -326,10 +326,20 @@ pub fn items(
         ActiveBarItem::Separator,
         // v0.15 — Place Pad now has a real tool-state machine.
         place_pad,
-        stub_svg(
-            "Place Track",
-            ActiveBarIcon::Svg(icons::icon_shape_line(theme_id)),
-        ),
+        // v0.18.15.1 — Place Track wired (silk-layer 2-click line).
+        // First click stashes start; second click commits + chains.
+        // Right-click / Esc cancels back to Select.
+        ActiveBarItem::Button(ActiveBarButton {
+            icon: ActiveBarIcon::Svg(icons::icon_shape_line(theme_id)),
+            tooltip: "Place Track — click two endpoints to drop silk-layer lines".into(),
+            enabled: true,
+            selected: pads_tool == PadsTool::PlaceTrack,
+            on_press: Some(LibraryMessage::PrimitiveEditorEvent {
+                path: path.clone(),
+                msg: PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlaceTrack),
+            }),
+            ..ActiveBarButton::default()
+        }),
         stub_svg(
             "Place Arc",
             ActiveBarIcon::Svg(icons::icon_shape_arc(theme_id)),

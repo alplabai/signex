@@ -994,6 +994,10 @@ fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEditorMsg {
         EditorMsg::FootprintAddText { x_mm, y_mm } => {
             PrimitiveEditorMsg::FootprintAddText { x_mm, y_mm }
         }
+        EditorMsg::FootprintTrackClick { x_mm, y_mm } => {
+            PrimitiveEditorMsg::FootprintTrackClick { x_mm, y_mm }
+        }
+        EditorMsg::FootprintTrackCancel => PrimitiveEditorMsg::FootprintTrackCancel,
         EditorMsg::FootprintSketchPlacePoint { x_mm, y_mm } => {
             PrimitiveEditorMsg::FootprintSketchPlacePoint { x_mm, y_mm }
         }

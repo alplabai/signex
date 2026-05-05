@@ -267,6 +267,12 @@ pub struct FootprintEditorState {
     /// the four priorities in `snap::snap_cursor`. UI-toggled via
     /// the Properties panel default branch.
     pub snap_options: SnapOptions,
+    /// v0.18.15.1 — first click of an in-flight Place Track
+    /// gesture. `Some((x, y))` after the first click; the second
+    /// click commits `(track_first, second_click)` to silk_f and
+    /// re-stashes the second click here for chained tracks. Esc /
+    /// right-click clears.
+    pub track_first: Option<(f64, f64)>,
     /// v0.18.13 — Altium Selection Filter pill row state. Per-
     /// editor so flipping pads off in one tab doesn't follow the
     /// user into another footprint.
@@ -485,6 +491,13 @@ pub enum PadsTool {
     /// 1.0 } }` to `footprint.silk_f`. The user can later edit the
     /// content via the Properties panel (queued).
     PlaceString,
+    /// v0.18.15.1 — silk-layer line. 2-click gesture — first click
+    /// stashes the start position in `track_first`, second click
+    /// emits `FootprintAddTrack { from, to }` and chains: the
+    /// second click also becomes the next gesture's start so the
+    /// user can stroke a polyline without re-clicking the tool.
+    /// Esc / right-click clears `track_first`.
+    PlaceTrack,
 }
 
 /// Sketch-mode drawing tool. Phase 6.3 (v0.13.1) shipped Place Point
@@ -580,6 +593,7 @@ impl FootprintEditorState {
             placement_paused: false,
             next_pad_defaults: NextPadDefaults::default(),
             snap_options: SnapOptions::default(),
+            track_first: None,
             selection_filter: SelectionFilter::default(),
             snap_subtab: SnapSubTab::default(),
             snapping_mode: SnappingMode::default(),
@@ -614,6 +628,7 @@ impl FootprintEditorState {
             placement_paused: false,
             next_pad_defaults: NextPadDefaults::default(),
             snap_options: SnapOptions::default(),
+            track_first: None,
             selection_filter: SelectionFilter::default(),
             snap_subtab: SnapSubTab::default(),
             snapping_mode: SnappingMode::default(),

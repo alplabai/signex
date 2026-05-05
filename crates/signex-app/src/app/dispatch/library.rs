@@ -3944,6 +3944,8 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintAddPad { .. }
         | PrimitiveEditorMsg::FootprintAddHole { .. }
         | PrimitiveEditorMsg::FootprintAddText { .. }
+        | PrimitiveEditorMsg::FootprintTrackClick { .. }
+        | PrimitiveEditorMsg::FootprintTrackCancel
         | PrimitiveEditorMsg::FootprintToggleSelectionFilter(_)
         | PrimitiveEditorMsg::FootprintMovePad { .. }
         | PrimitiveEditorMsg::FootprintCursorAt { .. }
@@ -4165,6 +4167,40 @@ pub(crate) fn apply_footprint_primitive_edit(
         // arm covers the active-bar dispatch path.
         PrimitiveEditorMsg::FootprintToggleSelectionFilter(kind) => {
             editor.state.selection_filter.toggle(kind);
+            editor.canvas_cache.clear();
+        }
+        // v0.18.15.1 — Place Track 2-click gesture. First click
+        // stashes the start in `state.track_first`; second click
+        // commits the line to silk_f and chains by re-stashing the
+        // second click as the next gesture's start.
+        PrimitiveEditorMsg::FootprintTrackClick { x_mm, y_mm } => {
+            match editor.state.track_first {
+                None => {
+                    editor.state.track_first = Some((x_mm, y_mm));
+                }
+                Some((sx, sy)) => {
+                    let primitive = editor.primitive_mut();
+                    primitive
+                        .silk_f
+                        .push(signex_library::primitive::footprint::FpGraphic {
+                            kind:
+                                signex_library::primitive::footprint::FpGraphicKind::Line {
+                                    from: [sx, sy],
+                                    to: [x_mm, y_mm],
+                                },
+                            stroke_width: 0.15,
+                        });
+                    // Chain — the second click becomes the next
+                    // segment's start, matching Altium's stroke-a-
+                    // polyline workflow.
+                    editor.state.track_first = Some((x_mm, y_mm));
+                    editor.dirty = true;
+                }
+            }
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintTrackCancel => {
+            editor.state.track_first = None;
             editor.canvas_cache.clear();
         }
         // v0.18.15 — Place String tool. Appends a silk-layer text
@@ -5611,6 +5647,8 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::FootprintAddPad { .. }
         | EditorMsg::FootprintAddHole { .. }
         | EditorMsg::FootprintAddText { .. }
+        | EditorMsg::FootprintTrackClick { .. }
+        | EditorMsg::FootprintTrackCancel
         | EditorMsg::FootprintSketchPlacePoint { .. }
         | EditorMsg::FootprintSketchToolClick { .. }
         | EditorMsg::FootprintSketchToolEscape
