@@ -18,7 +18,7 @@ Prepare Milestone C execution boundaries, architecture contracts, and validation
 ## Checklist
 
  - [x] Task 01: Scope freeze and dependency boundaries are documented.
-- [ ] Task 02: Import pipeline crate contract is documented.
+ - [x] Task 02: Import pipeline crate contract is documented.
 - [ ] Task 03: Format conversion and cache-key policy are documented.
 - [ ] Task 04: Runtime GLB ingestion interface and constraints are documented.
 - [ ] Task 05: Hybrid 3D rendering pass model is documented.
