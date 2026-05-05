@@ -1,31 +1,11 @@
-//! wgpu rendering primitives for Signex — schematic and PCB drawing.
+//! Local render configuration for signex-app.
 //!
-//! This crate provides the rendering logic that bridges `signex-types`
-//! domain objects to Iced Canvas draw calls. No Iced Application logic here —
-//! just pure rendering functions.
-
-pub mod colors;
-pub mod pcb;
-pub mod schematic;
-// PCB rendering surface is a v0.12 stub — the full Signex-spec PCB
-// renderer lands post-v0.12. See `docs/internal/CLEANROOM_REWRITE_PLAN.md`.
+//! This module replaces the old renderer runtime config surface so app-side
+//! preferences stay independent from removed legacy code.
 
 use std::sync::{OnceLock, RwLock};
 
-/// The schematic canvas font. Loaded as a binary asset in `main.rs` and
-/// available by name once the application starts.
 pub const IOSEVKA: iced::Font = iced::Font::with_name("Iosevka");
-
-pub use signex_types::schematic::SCHEMATIC_PT_TO_MM;
-pub use signex_types::schematic::SCHEMATIC_TEXT_MM;
-
-/// Stroke fonts store "size" as cap-height; Iced TrueType uses em-square
-/// (cap height ≈ 72 % of em). To render a stroke-font size at the same visual
-/// cap height, we draw it at em = size / 0.72. Use this value for BOTH the
-/// canvas font size AND any offset / hit-test math so they stay in sync —
-/// applying the scale only at render sites (as a separate multiplier on
-/// `screen_font`) silently breaks label/pin/text anchors.
-pub const SCHEMATIC_TEXT_EM_MM: f64 = SCHEMATIC_TEXT_MM / 0.72;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PowerPortStyle {
@@ -41,12 +21,6 @@ pub enum LabelStyle {
     Altium,
 }
 
-/// How hierarchical child sheets render. Classic mode keeps each sheet's
-/// stroke/fill colour from the source file (with theme component-body
-/// fallback) so the sheet blends with the rest of the schematic. Altium
-/// mode draws sheets with Altium Designer's signature greenish palette
-/// when no per-sheet colour is set in the file. Per-sheet colours from
-/// the source file always win, regardless of the active style.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MultisheetStyle {
     #[default]
@@ -54,8 +28,6 @@ pub enum MultisheetStyle {
     Altium,
 }
 
-/// Visible schematic grid rendering style — Dots, Lines, or
-/// Small crosses, selectable from the schematic display preferences.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum GridStyle {
     #[default]
@@ -67,6 +39,24 @@ pub enum GridStyle {
 impl GridStyle {
     pub const ALL: &'static [GridStyle] =
         &[GridStyle::Dots, GridStyle::Lines, GridStyle::SmallCrosses];
+}
+
+impl std::fmt::Display for PowerPortStyle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PowerPortStyle::Standard => write!(f, "Standard"),
+            PowerPortStyle::Altium => write!(f, "Altium"),
+        }
+    }
+}
+
+impl std::fmt::Display for LabelStyle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LabelStyle::Standard => write!(f, "Standard"),
+            LabelStyle::Altium => write!(f, "Altium"),
+        }
+    }
 }
 
 impl std::fmt::Display for MultisheetStyle {
@@ -84,24 +74,6 @@ impl std::fmt::Display for GridStyle {
             GridStyle::Dots => write!(f, "Dots"),
             GridStyle::Lines => write!(f, "Lines"),
             GridStyle::SmallCrosses => write!(f, "Small crosses"),
-        }
-    }
-}
-
-impl std::fmt::Display for LabelStyle {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            LabelStyle::Standard => write!(f, "Standard"),
-            LabelStyle::Altium => write!(f, "Altium"),
-        }
-    }
-}
-
-impl std::fmt::Display for PowerPortStyle {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            PowerPortStyle::Standard => write!(f, "Standard"),
-            PowerPortStyle::Altium => write!(f, "Altium"),
         }
     }
 }
@@ -240,4 +212,8 @@ pub fn canvas_font_size_scale() -> f32 {
         .read()
         .map(|c| c.size_scale)
         .unwrap_or(1.0)
+}
+
+pub fn to_iced(c: &signex_types::theme::Color) -> iced::Color {
+    iced::Color::from_rgba8(c.r, c.g, c.b, c.a as f32 / 255.0)
 }

@@ -138,7 +138,7 @@ pub fn draw_grid(
     // --- 3. Minor dots. Radius scales with screen step, slightly. ---
     let dot_radius = (minor_screen * 0.06).clamp(0.5, 1.6);
 
-    let style = signex_render::grid_style();
+    let style = crate::render_config::grid_style();
     // Small-cross arm length in screen pixels (Standard-style "+").
     let cross_arm = (minor_screen * 0.18).clamp(1.5, 4.0);
     let minor_stroke = canvas::Stroke::default()
@@ -147,7 +147,7 @@ pub fn draw_grid(
 
     // For Lines style we draw full minor grid lines instead of per-cell
     // glyphs and skip the per-point loop below entirely.
-    if matches!(style, signex_render::GridStyle::Lines) {
+    if matches!(style, crate::render_config::GridStyle::Lines) {
         let page_top = camera.world_to_screen(Point::new(0.0, 0.0), bounds).y;
         let page_bot = camera.world_to_screen(Point::new(0.0, page_h), bounds).y;
         let page_left = camera.world_to_screen(Point::new(0.0, 0.0), bounds).x;
@@ -196,11 +196,11 @@ pub fn draw_grid(
                             && screen.y <= bounds.height + dot_radius
                         {
                             match style {
-                                signex_render::GridStyle::Dots => {
+                                crate::render_config::GridStyle::Dots => {
                                     let dot = canvas::Path::circle(screen, dot_radius);
                                     frame.fill(&dot, dot_color);
                                 }
-                                signex_render::GridStyle::SmallCrosses => {
+                                crate::render_config::GridStyle::SmallCrosses => {
                                     let h = canvas::Path::line(
                                         Point::new(screen.x - cross_arm, screen.y),
                                         Point::new(screen.x + cross_arm, screen.y),
@@ -212,7 +212,7 @@ pub fn draw_grid(
                                     frame.stroke(&h, minor_stroke);
                                     frame.stroke(&v, minor_stroke);
                                 }
-                                signex_render::GridStyle::Lines => unreachable!(),
+                                crate::render_config::GridStyle::Lines => unreachable!(),
                             }
                         }
                     }

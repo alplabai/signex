@@ -742,13 +742,13 @@ impl Signex {
             signex_types::theme::canvas_colors(self.ui_state.theme_id)
         };
         self.interaction_state.active_canvas_mut().set_theme_colors(
-            signex_render::colors::to_iced(&colors.background),
-            signex_render::colors::to_iced(&colors.grid),
-            signex_render::colors::to_iced(&colors.paper),
+            crate::render_config::to_iced(&colors.background),
+            crate::render_config::to_iced(&colors.grid),
+            crate::render_config::to_iced(&colors.paper),
         );
         self.interaction_state.pcb_canvas.set_theme_colors(
-            signex_render::colors::to_iced(&colors.background),
-            signex_render::colors::to_iced(&colors.grid),
+            crate::render_config::to_iced(&colors.background),
+            crate::render_config::to_iced(&colors.grid),
         );
         self.interaction_state.active_canvas_mut().canvas_colors = colors;
         self.interaction_state.pcb_canvas.canvas_colors = colors;

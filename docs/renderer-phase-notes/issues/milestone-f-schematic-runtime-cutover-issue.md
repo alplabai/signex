@@ -26,16 +26,16 @@ hit-testing, and invalidation-driven updates.
 - [ ] Task 03: Canvas render path cutover to `signex-renderer` scene pipeline.
 - [ ] Task 04: Hit-test and selection workflow migration.
 - [ ] Task 05: Overlay/preview/text helper migration (`escape`, expansion, ghost paths).
-- [ ] Task 06: Remove remaining direct `signex_render::schematic` app runtime imports.
+- [x] Task 06: Remove remaining direct legacy runtime imports and remove old source crate.
 - [ ] Task 07: Regression parity validation and benchmark smoke gates.
 
 ## Acceptance criteria
 
-- [ ] Main schematic canvas no longer calls `signex_render::schematic::render_*` runtime API paths.
+- [x] Main schematic canvas no longer calls legacy schematic runtime API paths.
 - [ ] Selection, lasso, and polygon hit-tests match prior behavior on baseline fixtures.
 - [ ] Overlay families (preview/ghost/lasso/snap/ERC markers) are emitted with parity in expected layers.
 - [ ] App dispatch and invalidation flow maps correctly to renderer dirty-family updates.
-- [ ] `signex-app` has no direct `signex_render::schematic` runtime dependency at cutover exit gate.
+- [x] `signex-app` has no direct legacy schematic runtime dependency at cutover exit gate.
 - [ ] Cutover regression command set passes locally (`signex-app` + `signex-renderer` test suites).
 
 ## Required evidence notes
@@ -54,6 +54,7 @@ Completed in this slice:
 
 - [x] [logs/milestone-f-task-01-callsite-inventory.md](../logs/milestone-f-task-01-callsite-inventory.md)
 - [x] [logs/milestone-f-task-02-compat-bridge.md](../logs/milestone-f-task-02-compat-bridge.md)
+- [x] [logs/milestone-f-task-06-legacy-runtime-removal.md](../logs/milestone-f-task-06-legacy-runtime-removal.md)
 
 In progress:
 
@@ -64,4 +65,4 @@ In progress:
 - No PCB 2D runtime migration in this milestone.
 - No PCB 3D or model-import runtime changes in this milestone.
 - No redesign of UI workflows unrelated to renderer runtime ownership.
-- No crate-wide deletion of `signex-render` outside the schematic runtime path.
+- No PCB/runtime scope expansion beyond schematic migration boundaries.

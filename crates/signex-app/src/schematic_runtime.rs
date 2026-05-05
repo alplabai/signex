@@ -1,6 +1,6 @@
 //! Clean-room schematic runtime used by `signex-app` during Milestone F.
 //!
-//! This module intentionally avoids importing `signex_render::schematic`.
+//! This module intentionally keeps schematic runtime implementation local.
 //! It provides a local rendering, hit-test, and overlay surface that matches
 //! the app's runtime contract while the full `signex-renderer` cutover lands.
 

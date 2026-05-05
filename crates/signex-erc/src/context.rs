@@ -1,13 +1,48 @@
 //! Parser-independent ERC context. Built by projecting a
 //! [`SchematicSheet`] once; all rule functions read from here so
-//! they never import `signex-render` directly.
+//! they stay independent from any legacy renderer crate.
 
 use std::collections::HashMap;
 
-use signex_render::schematic::SymbolTransform;
 use signex_types::schematic::SchematicSheet;
 use signex_types::schematic::{LabelType, PinDirection, Point};
 use uuid::Uuid;
+
+#[derive(Debug, Clone, Copy)]
+struct SymbolTransform {
+    origin: Point,
+    rotation_deg: f64,
+    mirror_x: bool,
+    mirror_y: bool,
+}
+
+impl SymbolTransform {
+    fn from_symbol(symbol: &signex_types::schematic::Symbol) -> Self {
+        Self {
+            origin: symbol.position,
+            rotation_deg: symbol.rotation,
+            mirror_x: symbol.mirror_x,
+            mirror_y: symbol.mirror_y,
+        }
+    }
+
+    fn apply(&self, local: Point) -> Point {
+        let x = local.x;
+        let y = -local.y;
+        let rad = -self.rotation_deg.to_radians();
+        let cos = rad.cos();
+        let sin = rad.sin();
+        let mut rx = x * cos - y * sin;
+        let mut ry = x * sin + y * cos;
+        if self.mirror_y {
+            rx = -rx;
+        }
+        if self.mirror_x {
+            ry = -ry;
+        }
+        Point::new(rx + self.origin.x, ry + self.origin.y)
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Paper size

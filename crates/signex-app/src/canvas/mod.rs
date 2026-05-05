@@ -1391,7 +1391,7 @@ impl canvas::Program<Message> for SchematicCanvas {
                 // Wire-in-progress rubber-band preview
                 if self.drawing_mode && !self.wire_preview.is_empty() {
                     let wire_color = self.canvas_colors.wire;
-                    let wire_color_iced = signex_render::colors::to_iced(&wire_color);
+                    let wire_color_iced = crate::render_config::to_iced(&wire_color);
                     // Match the placed-wire stroke width (0.15 mm in world),
                     // scaled by camera. Previously fixed 1.5 px which looked
                     // thin at higher zooms.
@@ -1652,7 +1652,7 @@ impl canvas::Program<Message> for SchematicCanvas {
                         position: iced::Point::new(tag_x + 3.0, tag_y + 1.0),
                         color: Color::from_rgba(1.0, 1.0, 1.0, 0.95),
                         size: iced::Pixels(11.0),
-                        font: signex_render::IOSEVKA,
+                        font: crate::render_config::IOSEVKA,
                         ..canvas::Text::default()
                     });
                 }

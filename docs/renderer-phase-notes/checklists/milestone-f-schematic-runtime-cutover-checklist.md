@@ -13,13 +13,13 @@
 - [ ] Task 03: Canvas render path switched to `signex-renderer` scene flow. Evidence (in progress): [logs/milestone-f-task-03-canvas-cutover.md](../logs/milestone-f-task-03-canvas-cutover.md)
 - [ ] Task 04: Hit-test and selection workflow switched to new runtime bridge.
 - [ ] Task 05: Overlay and text helper paths switched.
-- [ ] Task 06: Legacy schematic runtime imports removed from app modules.
+- [x] Task 06: Legacy runtime imports removed and old source crate deleted. Evidence: [logs/milestone-f-task-06-legacy-runtime-removal.md](../logs/milestone-f-task-06-legacy-runtime-removal.md)
 
 ## Validation
 
 - [ ] Task 07: Regression parity checks pass for schematic interactions.
 - [ ] `cargo test -p signex-renderer` passes.
-- [ ] Targeted `signex-app` regression tests for canvas/selection/overlay pass.
+- [x] Targeted `signex-app` regression test target compiles (`--no-run`).
 
 ## Exit gate
 

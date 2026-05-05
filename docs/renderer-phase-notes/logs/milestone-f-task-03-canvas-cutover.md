@@ -49,8 +49,8 @@ Result:
 ## Notes
 
 - This slice removes the legacy schematic runtime dependency path from app code.
-- Remaining `signex_render::...` usages in app are non-schematic utilities
-  (font/style/color settings) and are tracked as follow-up cleanup in Milestone F.
+- Follow-up non-schematic utility cleanup (font/style/color settings) was
+  completed in Task 06.
 - Task 03 remains `in_progress` until the target `signex-renderer` scene-flow
   contract is fully adopted.
 
