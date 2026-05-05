@@ -6,6 +6,11 @@
 
 pub mod dirty;
 pub mod frame;
+pub mod upload;
 
 pub use dirty::DirtyFlags;
 pub use frame::Scene;
+pub use upload::{
+	apply_dirty_uploads, apply_dirty_uploads_with_culling, SceneUploadTarget, TextUploadParams,
+	UploadCounters, UploadCulling, ViewportAabbMm,
+};

@@ -1,27 +1,58 @@
 # Renderer Phase Notes
 
-This folder tracks clean-room implementation evidence and execution status for the schematic-first renderer rewrite.
+This folder is the canonical execution and evidence tracker for the clean-room schematic renderer rewrite.
+
+## Scope boundary (schematic only)
+
+- In scope: schematic renderer work for Phase 0 through Phase 6.
+- Deferred: PCB 2D runtime renderer work.
+- Deferred: PCB 3D runtime renderer work.
+- Deferral rule: PCB runtime work starts only after Phase 6 exit criteria are complete.
+
+## Phase index (0-6)
+
+| Phase | Theme | Status | Issue | Checklist |
+| --- | --- | --- | --- | --- |
+| 0 | Foundation | done | [issues/phase-0-foundation-issue.md](issues/phase-0-foundation-issue.md) | [checklists/phase-0-foundation-checklist.md](checklists/phase-0-foundation-checklist.md) |
+| 1 | Line and Circle Pipelines | done | [issues/phase-1-line-circle-issue.md](issues/phase-1-line-circle-issue.md) | [checklists/phase-1-line-circle-checklist.md](checklists/phase-1-line-circle-checklist.md) |
+| 2 | Arc Pipeline | done | [issues/phase-2-arc-pipeline-issue.md](issues/phase-2-arc-pipeline-issue.md) | [checklists/phase-2-arc-pipeline-checklist.md](checklists/phase-2-arc-pipeline-checklist.md) |
+| 3 | Polygon and Text Integration | done | [issues/phase-3-polygon-text-issue.md](issues/phase-3-polygon-text-issue.md) | [checklists/phase-3-polygon-text-checklist.md](checklists/phase-3-polygon-text-checklist.md) |
+| 4 | Text Pipeline Completion | done | [issues/phase-4-text-pipeline-issue.md](issues/phase-4-text-pipeline-issue.md) | [checklists/phase-4-text-pipeline-checklist.md](checklists/phase-4-text-pipeline-checklist.md) |
+| 5 | Grid and Overlay System | done | [issues/phase-5-grid-overlay-issue.md](issues/phase-5-grid-overlay-issue.md) | [checklists/phase-5-grid-overlay-checklist.md](checklists/phase-5-grid-overlay-checklist.md) |
+| 6 | Integration and Hardening | done | [issues/phase-6-integration-hardening-issue.md](issues/phase-6-integration-hardening-issue.md) | [checklists/phase-6-integration-hardening-checklist.md](checklists/phase-6-integration-hardening-checklist.md) |
+
+## Numbering and naming rules
+
+Use these conventions to keep phase tracking deterministic and audit-friendly.
+
+1. Each phase has exactly one issue file: `issues/phase-N-*-issue.md`.
+2. Each phase has exactly one checklist file: `checklists/phase-N-*-checklist.md`.
+3. Implementation task logs use numbered task IDs: `logs/phase-N-task-01-*.md` to `logs/phase-N-task-04-*.md`.
+4. Supplemental validation notes that are not part of task 01-04 use: `logs/phase-N-smoke-*.md` with metadata `Task ID: SMOKE`.
+5. If a file does not match these patterns, rename or reclassify it before phase closure.
 
 ## Folder layout
 
-- templates/phase-note-template.md: reusable note template for each implementation task
-- issues/phase-0-foundation-issue.md: Phase 0 execution issue in checklist format
-- checklists/phase-0-foundation-checklist.md: compact execution checklist
-- logs/: per-task notes created from the template
+- [templates/phase-note-template.md](templates/phase-note-template.md): reusable template for each phase task note
+- [templates/clean-room-module-header-template.md](templates/clean-room-module-header-template.md): clean-room header template
+- [templates/commit-derivation-checklist.md](templates/commit-derivation-checklist.md): commit-level derivation checklist
+- [issues](issues): phase execution issues
+- [checklists](checklists): compact phase execution checklists
+- [logs](logs): implementation and smoke evidence notes
 
 ## Required evidence format
 
-Each completed task must include the following fields:
+Each completed task note must include:
 
-- Source: standard section or public specification
-- Derivation: direct mapping, formula, or design decision
-- Rationale: why the approach/value was chosen
+- Source: public standard, document, or internal decision source
+- Derivation: mapping, formula, or implementation reasoning
+- Rationale: why this approach was selected
 - Clean-room check: confirmation that no GPL-licensed source was consulted
-- Verification: test name, screenshot id, benchmark id, or build output
+- Verification: tests, smoke output, benchmark, or build evidence
 
 ## Usage
 
-1. Create a new note under logs/ from templates/phase-note-template.md.
+1. Create a new note under [logs](logs) from [templates/phase-note-template.md](templates/phase-note-template.md).
 2. Fill all required evidence fields.
-3. Link the note from the corresponding issue/checklist item.
-4. Keep entries concise and audit-friendly.
+3. Link the note from the corresponding phase issue and checklist entries.
+4. Keep entries concise and reviewable.

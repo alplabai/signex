@@ -9,3 +9,4 @@ pub mod circle;
 pub mod arc;
 pub mod polygon;
 pub mod text;
+pub mod grid;
