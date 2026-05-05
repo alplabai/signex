@@ -26,6 +26,8 @@ This folder is the canonical execution and evidence tracker for the clean-room s
 | Milestone | Theme | Status | Issue | Checklist |
 | --- | --- | --- | --- | --- |
 | B | PCB 2D preparation (Sprint B) | done | [issues/milestone-b-pcb2d-preparation-issue.md](issues/milestone-b-pcb2d-preparation-issue.md) | [checklists/milestone-b-pcb2d-preparation-checklist.md](checklists/milestone-b-pcb2d-preparation-checklist.md) |
+| C (prep) | PCB 3D and model import preparation | done | [issues/milestone-c-pcb3d-model-import-issue.md](issues/milestone-c-pcb3d-model-import-issue.md) | [checklists/milestone-c-pcb3d-model-import-checklist.md](checklists/milestone-c-pcb3d-model-import-checklist.md) |
+| C (exec) | PCB 3D runtime execution | in_progress | [issues/milestone-c-pcb3d-runtime-execution-issue.md](issues/milestone-c-pcb3d-runtime-execution-issue.md) | [checklists/milestone-c-pcb3d-runtime-execution-checklist.md](checklists/milestone-c-pcb3d-runtime-execution-checklist.md) |
 
 ## Numbering and naming rules
 
