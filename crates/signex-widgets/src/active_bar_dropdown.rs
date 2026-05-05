@@ -2,13 +2,44 @@
 //! bar (schematic, footprint, future PCB) so chrome stays identical
 //! across surfaces while each editor supplies its own actions.
 //!
+//! ## Contract for new editors (PCB integration target)
+//!
+//! 1. Define a `*_active_bar_menu: Option<MenuKind>` field on the
+//!    editor's state to track which dropdown is open.
+//! 2. Add a `ToggleActiveBarMenu(MenuKind)` message variant + a
+//!    `CloseActiveBarMenu` message; the dispatcher toggles / clears
+//!    the field.
+//! 3. Build a `dropdowns.rs` module exposing
+//!    `entries(menu, state, path, theme_id, ...) ->
+//!    Vec<DropdownEntry<EditorMessage>>` with one match arm per menu.
+//! 4. In the editor's active-bar `view` function, render the open
+//!    dropdown via `signex_widgets::active_bar_dropdown::view(entries,
+//!    tokens, width_hint)` and stack it in a `Stack` overlay layer
+//!    above the bar with a transparent backstop layer for click-
+//!    outside-to-dismiss.
+//!
+//! ## What this widget renders
+//!
 //! Driven by a `Vec<DropdownEntry<M>>`; the widget knows how to draw
 //! section headers, separators, disabled rows, glyph + label rows,
-//! and an optional checkmark / right-aligned shortcut hint.
+//! and an optional checkmark / right-aligned shortcut hint. The
+//! `Custom(Element<M>)` escape hatch lets editors compose chip-grid
+//! layouts (the Selection Filter dropdown's pill grid) without
+//! re-implementing the panel chrome.
 //!
-//! NOT included here: the trigger button, the toggle state, the
-//! click-outside backstop layer. Those live in the editor's view code
-//! since they vary per editor (overlay anchoring, message types).
+//! ## Helpers
+//!
+//! - `chip_btn(label, on_press, enabled, accent) -> Element<M>` —
+//!   Altium-style toggle chip used inside `DropdownEntry::Custom` for
+//!   chip-grid layouts. Identical chrome across all editors.
+//!
+//! ## NOT included here
+//!
+//! - The trigger button (`signex_widgets::active_bar::ActiveBarButton`
+//!   handles that — left-click action + right-click dropdown +
+//!   chevron indicator).
+//! - The toggle state (each editor's state owns it).
+//! - The click-outside backstop layer (each editor's view stacks it).
 
 use iced::widget::svg;
 use iced::widget::{Column, Space, button, column, container, row, text};
@@ -234,4 +265,55 @@ where
             ..iced::widget::container::Style::default()
         })
         .into()
+}
+
+/// Altium-style toggle chip — used inside `DropdownEntry::Custom`
+/// to build chip-wrap layouts (Selection Filter pill grids in the
+/// schematic / footprint / future PCB editors).
+///
+/// `enabled = true` paints the chip with the accent border + active
+/// background; `false` shows the muted inactive treatment. Click
+/// fires `on_press`.
+///
+/// Caller composes a `Wrap` or `column![row![...], row![...]]`
+/// from these chips and feeds the result into
+/// `DropdownEntry::Custom(...)` so the same chrome lights up in
+/// every editor.
+pub fn chip_btn<M>(
+    label: impl Into<String>,
+    on_press: M,
+    enabled: bool,
+    accent: Color,
+) -> Element<'static, M>
+where
+    M: 'static + Clone,
+{
+    let active_bg = Color::from_rgba8(0x2E, 0x33, 0x45, 1.0);
+    let inactive_bg = Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0);
+    let text_on = Color::WHITE;
+    let text_off = Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0);
+    button(
+        text(label.into())
+            .size(11)
+            .color(if enabled { text_on } else { text_off }),
+    )
+    .padding([4, 10])
+    .on_press(on_press)
+    .style(move |_: &Theme, status: button::Status| {
+        let bg = match status {
+            button::Status::Hovered => Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.06)),
+            _ => Background::Color(if enabled { active_bg } else { inactive_bg }),
+        };
+        button::Style {
+            background: Some(bg),
+            border: Border {
+                width: 1.0,
+                radius: 2.0.into(),
+                color: accent,
+            },
+            text_color: if enabled { text_on } else { text_off },
+            ..button::Style::default()
+        }
+    })
+    .into()
 }

@@ -81,88 +81,43 @@ fn filter_entries(
     path: PathBuf,
     custom_presets: &[crate::active_bar::CustomFilterPreset],
 ) -> Vec<DropdownEntry<LibraryMessage>> {
-    use iced::widget::{button, column, container, row, text};
-    use iced::{Background, Border, Color, Length, Theme};
+    use iced::widget::{column, container, row};
+    use iced::{Color, Length};
+    use signex_widgets::active_bar_dropdown::chip_btn;
     use SelectionFilterKind as K;
 
     let f = state.selection_filter;
-    let active_bg = Color::from_rgba8(0x2E, 0x33, 0x45, 1.0);
-    let inactive_bg = Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0);
-    let text_on = Color::WHITE;
-    let text_off = Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0);
-    // Border colour matches the schematic Filter dropdown chips —
-    // theme accent gives the chips an "input-like" feel.
+    // Theme accent — matches the schematic Filter dropdown chips.
     let chip_border = Color::from_rgba8(0xE7, 0x8B, 0x2A, 1.0);
 
-    // Chip factory: enabled chips get accent-bordered active fill,
-    // disabled chips get the muted inactive fill. Click toggles.
-    let path_for_chip = path.clone();
-    let chip = move |label: &'static str, kind: K| -> iced::Element<'static, LibraryMessage> {
-        let enabled = f.get(kind);
-        let path_c = path_for_chip.clone();
-        button(
-            text(label.to_string())
-                .size(11)
-                .color(if enabled { text_on } else { text_off }),
+    // Chip factory delegates to the shared `chip_btn` helper so PCB +
+    // schematic + footprint render identical chip chrome.
+    let make_chip = |label: &'static str, kind: K| -> iced::Element<'static, LibraryMessage> {
+        chip_btn(
+            label,
+            LibraryMessage::PrimitiveEditorEvent {
+                path: path.clone(),
+                msg: PrimitiveEditorMsg::FootprintToggleSelectionFilter(kind),
+            },
+            f.get(kind),
+            chip_border,
         )
-        .padding([4, 10])
-        .on_press(LibraryMessage::PrimitiveEditorEvent {
-            path: path_c,
-            msg: PrimitiveEditorMsg::FootprintToggleSelectionFilter(kind),
-        })
-        .style(move |_: &Theme, status: button::Status| {
-            let bg = match status {
-                button::Status::Hovered => Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.06)),
-                _ => Background::Color(if enabled { active_bg } else { inactive_bg }),
-            };
-            button::Style {
-                background: Some(bg),
-                border: Border {
-                    width: 1.0,
-                    radius: 2.0.into(),
-                    color: chip_border,
-                },
-                text_color: if enabled { text_on } else { text_off },
-                ..button::Style::default()
-            }
-        })
-        .into()
     };
 
-    // "All - On / All - Off" toggle: clicking flips every kind.
-    // Exact parity with the schematic's All toggle. Renders inline
-    // via a stub message until a footprint-side ToggleAllFilters
-    // dispatcher lands; for now the chip falls through to
-    // `FootprintActiveBarStub("All filters")`.
-    let path_all = path.clone();
+    // All-On / All-Off toggle: click flips every kind. Stub message
+    // until a footprint-side ToggleAllFilters dispatcher lands.
     let all_on = K::ALTIUM_PILLS.iter().all(|k| f.get(*k));
-    let all_label = if all_on { "All - On" } else { "All - Off" };
-    let all_btn = button(text(all_label).size(11).color(if all_on { text_on } else { text_off }))
-        .padding([4, 12])
-        .on_press(LibraryMessage::PrimitiveEditorEvent {
-            path: path_all,
+    let all_btn = chip_btn(
+        if all_on { "All - On" } else { "All - Off" },
+        LibraryMessage::PrimitiveEditorEvent {
+            path: path.clone(),
             msg: PrimitiveEditorMsg::FootprintActiveBarStub("All filters"),
-        })
-        .style(move |_: &Theme, status: button::Status| {
-            let bg = match status {
-                button::Status::Hovered => Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.06)),
-                _ => Background::Color(if all_on { active_bg } else { inactive_bg }),
-            };
-            button::Style {
-                background: Some(bg),
-                border: Border {
-                    width: 1.0,
-                    radius: 2.0.into(),
-                    color: chip_border,
-                },
-                text_color: if all_on { text_on } else { text_off },
-                ..button::Style::default()
-            }
-        });
+        },
+        all_on,
+        chip_border,
+    );
 
-    // Top row: All toggle + custom preset shortcuts. Each preset
-    // button is a stub today (clicking applies that preset's filter
-    // set) — a footprint-side ApplyCustomFilter dispatcher follows.
+    // Top row: All toggle + custom-preset shortcut chips.
     let mut top_row = iced::widget::Row::new()
         .spacing(4)
         .align_y(iced::Alignment::Center)
@@ -173,34 +128,19 @@ fn filter_entries(
         } else {
             preset.name.clone()
         };
-        let path_preset = path.clone();
-        let preset_btn = button(text(label).size(11).color(text_on))
-            .padding([4, 10])
-            .on_press(LibraryMessage::PrimitiveEditorEvent {
-                path: path_preset,
+        top_row = top_row.push(chip_btn(
+            label,
+            LibraryMessage::PrimitiveEditorEvent {
+                path: path.clone(),
                 msg: PrimitiveEditorMsg::FootprintActiveBarStub("Apply Custom Filter preset"),
-            })
-            .style(move |_: &Theme, status: button::Status| {
-                let bg = match status {
-                    button::Status::Hovered => Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.06)),
-                    _ => Background::Color(inactive_bg),
-                };
-                button::Style {
-                    background: Some(bg),
-                    border: Border {
-                        width: 1.0,
-                        radius: 2.0.into(),
-                        color: chip_border,
-                    },
-                    text_color: text_on,
-                    ..button::Style::default()
-                }
-            });
-        top_row = top_row.push(preset_btn);
+            },
+            false,
+            chip_border,
+        ));
     }
 
     // 3-row layout matching the schematic Filter dropdown:
-    //   row 1: All toggle + custom-preset shortcut chips
+    //   row 1: All toggle + preset shortcut chips
     //   row 2: 5 chips (3D Bodies / Keepouts / Tracks / Arcs / Pads)
     //   row 3: 5 chips (Vias / Regions / Fills / Texts / Other)
     let layout = column![
@@ -208,20 +148,20 @@ fn filter_entries(
         container(
             column![
                 row![
-                    chip("3D Bodies", K::Bodies3d),
-                    chip("Keepouts", K::Keepouts),
-                    chip("Tracks", K::Tracks),
-                    chip("Arcs", K::Arcs),
-                    chip("Pads", K::Pads),
+                    make_chip("3D Bodies", K::Bodies3d),
+                    make_chip("Keepouts", K::Keepouts),
+                    make_chip("Tracks", K::Tracks),
+                    make_chip("Arcs", K::Arcs),
+                    make_chip("Pads", K::Pads),
                 ]
                 .spacing(4)
                 .align_y(iced::Alignment::Center),
                 row![
-                    chip("Vias", K::Vias),
-                    chip("Regions", K::Regions),
-                    chip("Fills", K::Fills),
-                    chip("Texts", K::Texts),
-                    chip("Other", K::Other),
+                    make_chip("Vias", K::Vias),
+                    make_chip("Regions", K::Regions),
+                    make_chip("Fills", K::Fills),
+                    make_chip("Texts", K::Texts),
+                    make_chip("Other", K::Other),
                 ]
                 .spacing(4)
                 .align_y(iced::Alignment::Center),
