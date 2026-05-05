@@ -20,6 +20,12 @@ pub struct Scene {
     pub arcs: Vec<Arc>,
     pub polygons: Vec<GpuPolygon>,
     pub texts: Vec<TextItem>,
+    pub overlay_lines: Vec<LineSegment>,
+    pub overlay_circles: Vec<Circle>,
+    pub overlay_polygons: Vec<GpuPolygon>,
+    pub erc_marker_lines: Vec<LineSegment>,
+    pub erc_marker_circles: Vec<Circle>,
+    pub erc_marker_polygons: Vec<GpuPolygon>,
     pub dirty: DirtyFlags,
 }
 
@@ -30,6 +36,12 @@ impl Scene {
         self.arcs.clear();
         self.polygons.clear();
         self.texts.clear();
+        self.overlay_lines.clear();
+        self.overlay_circles.clear();
+        self.overlay_polygons.clear();
+        self.erc_marker_lines.clear();
+        self.erc_marker_circles.clear();
+        self.erc_marker_polygons.clear();
         self.dirty = DirtyFlags::ALL;
     }
 
@@ -39,5 +51,11 @@ impl Scene {
             && self.arcs.is_empty()
             && self.polygons.is_empty()
             && self.texts.is_empty()
+            && self.overlay_lines.is_empty()
+            && self.overlay_circles.is_empty()
+            && self.overlay_polygons.is_empty()
+            && self.erc_marker_lines.is_empty()
+            && self.erc_marker_circles.is_empty()
+            && self.erc_marker_polygons.is_empty()
     }
 }
