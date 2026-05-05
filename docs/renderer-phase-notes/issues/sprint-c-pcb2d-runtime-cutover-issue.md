@@ -20,14 +20,14 @@ Execute Sprint C as incremental vertical slices to complete PCB 2D runtime integ
 - [x] Task 03: Deterministic zone compositing order hardening and benchmark fixture guards.
 - [x] Task 04: App dirty-event adapter bridge (`Message`/`CanvasEvent` -> `PcbAppEvent`).
 - [x] Task 05: PCB canvas runtime cutover to `signex-renderer` scene build/render flow.
-- [ ] Task 06: Remove direct `signex_render::pcb` usage from `signex-app` and validate behavior parity.
+- [x] Task 06: Remove direct `signex_render::pcb` usage from `signex-app` and validate behavior parity.
 - [ ] Task 07: Legacy cleanup gate for PCB path (`Cargo.toml` dependency, dead helpers, regression checks).
 
 ## Acceptance criteria
 
 - [x] Deterministic fixture + golden tests exist and are green for implemented PCB slices.
 - [x] Dirty trigger matrix is mapped and test-verified for PCB event families.
-- [ ] `signex-app` PCB runtime no longer depends on `signex_render::pcb` symbols.
+- [x] `signex-app` PCB runtime no longer depends on `signex_render::pcb` symbols.
 - [ ] PCB interaction parity (selection/camera/overlay visibility) remains stable after cutover.
 - [ ] Regression commands are documented and pass in CI-equivalent local run.
 

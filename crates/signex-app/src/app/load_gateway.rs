@@ -38,8 +38,8 @@ impl Signex {
         self.interaction_state.active_canvas().active_snapshot()
     }
 
-    pub(crate) fn active_pcb_snapshot(&self) -> Option<&signex_render::pcb::PcbRenderSnapshot> {
-        self.interaction_state.pcb_canvas.active_snapshot()
+    pub(crate) fn active_pcb_snapshot(&self) -> Option<&PcbBoard> {
+        self.active_pcb()
     }
 
     pub(crate) fn with_active_schematic_session_mut<R>(
@@ -194,16 +194,10 @@ impl Signex {
     }
 
     pub(crate) fn sync_pcb_canvas_from_visible_board(&mut self) {
-        let render_snapshot = self
-            .active_pcb()
-            .map(signex_render::pcb::PcbRenderSnapshot::from_board);
         let renderer_snapshot = self
             .active_pcb()
             .map(signex_renderer::pcb::PcbSnapshot::from_board);
 
-        self.interaction_state
-            .pcb_canvas
-            .set_render_snapshot(render_snapshot);
         self.interaction_state
             .pcb_canvas
             .set_renderer_snapshot(renderer_snapshot);
@@ -364,7 +358,6 @@ impl Signex {
 
     fn apply_loaded_empty_document(&mut self, refresh_panel_ctx: bool) {
         self.clear_schematic_ui_state();
-        self.interaction_state.pcb_canvas.set_render_snapshot(None);
         self.interaction_state.pcb_canvas.set_renderer_snapshot(None);
         self.interaction_state.pcb_canvas.clear_bg_cache();
         self.interaction_state.pcb_canvas.clear_content_cache();
