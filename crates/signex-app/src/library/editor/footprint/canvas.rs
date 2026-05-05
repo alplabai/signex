@@ -549,10 +549,14 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 },
                             }));
                         }
-                        // v0.18.15.4 — Place Polygon: each click
-                        // appends a vertex. Commit on tool switch
-                        // / Esc.
-                        if self.state.pads_tool == PadsTool::PlacePolygon
+                        // v0.18.15.4 / v0.18.17 — Place Polygon
+                        // and Place Region share the same gesture
+                        // (vertex click stash). The dispatcher
+                        // reads `pads_tool` at commit time to
+                        // decide `filled` on the resulting
+                        // `Polygon` FpGraphic.
+                        if (self.state.pads_tool == PadsTool::PlacePolygon
+                            || self.state.pads_tool == PadsTool::PlaceRegion)
                             && !self.state.placement_paused
                         {
                             return Some(canvas::Action::publish(LibraryMessage::EditorEvent {
@@ -2179,6 +2183,27 @@ fn draw_silk_graphics(
                     ..canvas::Text::default()
                 });
             }
+            FpGraphicKind::Polygon { vertices } => {
+                if vertices.len() < 2 {
+                    continue;
+                }
+                let path = Path::new(|builder| {
+                    let first = cstate.world_to_screen((vertices[0][0], vertices[0][1]));
+                    builder.move_to(first);
+                    for v in vertices.iter().skip(1) {
+                        builder.line_to(cstate.world_to_screen((v[0], v[1])));
+                    }
+                    // Close the loop visually.
+                    builder.line_to(first);
+                });
+                if g.filled {
+                    frame.fill(&path, Color { a: 0.55, ..colour });
+                }
+                frame.stroke(
+                    &path,
+                    Stroke::default().with_width(stroke_px).with_color(colour),
+                );
+            }
         }
     }
 }
@@ -2249,7 +2274,7 @@ fn draw_pads_tool_preview(
                 frame.fill(&Path::circle(c, 3.0), ghost_colour);
             }
         },
-        PadsTool::PlacePolygon => {
+        PadsTool::PlacePolygon | PadsTool::PlaceRegion => {
             let verts = &state.place_polygon_vertices;
             if verts.is_empty() {
                 return;

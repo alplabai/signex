@@ -356,9 +356,7 @@ pub fn items(
             ..ActiveBarButton::default()
         }),
         // v0.18.15.4 — Place Polygon wired (silk-layer multi-click
-        // closed-loop). Each click appends a vertex to the
-        // in-flight stash; switching tools / Esc commits when
-        // ≥ 3 vertices have been captured.
+        // closed-loop, stroked outline).
         ActiveBarItem::Button(ActiveBarButton {
             icon: ActiveBarIcon::Svg(icons::icon_shape_polygon(theme_id)),
             tooltip:
@@ -372,7 +370,22 @@ pub fn items(
             }),
             ..ActiveBarButton::default()
         }),
-        stub("Place Fill", "\u{25A0}"),  // ■
+        // v0.18.17 — Place Region wired (silk-layer multi-click
+        // closed-loop, FILLED). Same gesture as Polygon; the
+        // dispatcher reads `pads_tool` to set `filled: true` on
+        // the committed FpGraphic.
+        ActiveBarItem::Button(ActiveBarButton {
+            icon: ActiveBarIcon::Glyph("\u{25A0}"), // ■
+            tooltip: "Place Region — filled closed loop (Place Polygon for outline only)"
+                .into(),
+            enabled: true,
+            selected: pads_tool == PadsTool::PlaceRegion,
+            on_press: Some(LibraryMessage::PrimitiveEditorEvent {
+                path: path.clone(),
+                msg: PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlaceRegion),
+            }),
+            ..ActiveBarButton::default()
+        }),
         // v0.18.15 — Place String wired (silk-layer text). 1-click
         // drop appends a Text FpGraphic to `silk_f` with content
         // "TEXT" + 1mm size. Right-click / Esc cancels back to Select.

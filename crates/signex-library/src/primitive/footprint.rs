@@ -189,6 +189,12 @@ pub enum FpGraphicKind {
         content: String,
         size: f64,
     },
+    /// v0.18.17 — closed-loop polygon outlined or filled. The
+    /// vertex list is closed implicitly (`vertices[N-1]` connects
+    /// back to `vertices[0]` at render / bake time).
+    Polygon {
+        vertices: Vec<[f64; 2]>,
+    },
 }
 
 /// One footprint silkscreen / fab graphic.
@@ -198,6 +204,13 @@ pub struct FpGraphic {
     /// Stroke width in mm (0.0 = renderer default).
     #[serde(default)]
     pub stroke_width: f64,
+    /// v0.18.17 — fill flag. `true` = render as a solid colour fill
+    /// (Altium "Place Region" / "Place Fill"); `false` = outline
+    /// only (the v0.16.5 behaviour, which all pre-v0.18.17 files
+    /// still load as via `#[serde(default)]`). Only meaningful for
+    /// `Polygon` / `Rectangle` / `Circle` / `Arc` (closed shapes).
+    #[serde(default)]
+    pub filled: bool,
 }
 
 /// 3D body shape — drives the procedural render (no STEP required).
@@ -1194,6 +1207,7 @@ mod tests {
                     to: [1.0, 0.0],
                 },
                 stroke_width: 0.12,
+                filled: false,
             }],
             silk_b: Vec::new(),
             fab_f: Vec::new(),

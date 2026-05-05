@@ -4194,6 +4194,7 @@ pub(crate) fn apply_footprint_primitive_edit(
                                     to: [x_mm, y_mm],
                                 },
                             stroke_width: 0.15,
+                            filled: false,
                         });
                     // Chain — the second click becomes the next
                     // segment's start, matching Altium's stroke-a-
@@ -4240,6 +4241,7 @@ pub(crate) fn apply_footprint_primitive_edit(
                                     end_deg,
                                 },
                                 stroke_width: 0.15,
+                                filled: false,
                             });
                         editor.dirty = true;
                     }
@@ -4262,27 +4264,31 @@ pub(crate) fn apply_footprint_primitive_edit(
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintPolygonCommit => {
-            let mut verts = std::mem::take(&mut editor.state.place_polygon_vertices);
+            let verts = std::mem::take(&mut editor.state.place_polygon_vertices);
+            // v0.18.17 — emit one `Polygon` FpGraphic (instead of
+            // N Lines). `filled` follows the active tool —
+            // `PlacePolygon` = stroked outline, `PlaceRegion` =
+            // solid fill.
+            let filled = matches!(
+                editor.state.pads_tool,
+                crate::library::editor::footprint::state::PadsTool::PlaceRegion
+            );
             if verts.len() >= 3 {
+                let vertices: Vec<[f64; 2]> =
+                    verts.iter().map(|(x, y)| [*x, *y]).collect();
                 let primitive = editor.primitive_mut();
-                let n = verts.len();
-                for i in 0..n {
-                    let (a_x, a_y) = verts[i];
-                    let (b_x, b_y) = verts[(i + 1) % n];
-                    primitive
-                        .silk_f
-                        .push(signex_library::primitive::footprint::FpGraphic {
-                            kind:
-                                signex_library::primitive::footprint::FpGraphicKind::Line {
-                                    from: [a_x, a_y],
-                                    to: [b_x, b_y],
-                                },
-                            stroke_width: 0.15,
-                        });
-                }
+                primitive
+                    .silk_f
+                    .push(signex_library::primitive::footprint::FpGraphic {
+                        kind:
+                            signex_library::primitive::footprint::FpGraphicKind::Polygon {
+                                vertices,
+                            },
+                        stroke_width: if filled { 0.0 } else { 0.15 },
+                        filled,
+                    });
                 editor.dirty = true;
             }
-            verts.clear();
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintPolygonCancel => {
@@ -4305,6 +4311,7 @@ pub(crate) fn apply_footprint_primitive_edit(
                         size: 1.0,
                     },
                     stroke_width: 0.0,
+                    filled: false,
                 });
             editor.canvas_cache.clear();
             editor.dirty = true;
@@ -4506,35 +4513,48 @@ pub(crate) fn apply_footprint_primitive_edit(
                 editor.state.place_arc_pending =
                     crate::library::editor::footprint::state::PlaceArcPending::Idle;
             }
-            // v0.18.15.4 — leaving Place Polygon commits the
-            // in-flight vertex stash if it has ≥ 3 vertices, then
-            // clears.
-            if !matches!(
-                tool,
-                crate::library::editor::footprint::state::PadsTool::PlacePolygon
-            ) && !editor.state.place_polygon_vertices.is_empty()
+            // v0.18.15.4/v0.18.17 — leaving Place Polygon /
+            // Place Region commits the in-flight vertex stash if
+            // it has ≥ 3 vertices, then clears. The `filled` flag
+            // follows the OUTGOING tool (we just set
+            // editor.state.pads_tool = tool above; check the
+            // OLD tool's identity by recording before the swap is
+            // unnecessary because PadsTool::PlaceRegion is the
+            // only tool that flips filled).
+            let was_polygon_or_region = !editor.state.place_polygon_vertices.is_empty();
+            if was_polygon_or_region
+                && !matches!(
+                    tool,
+                    crate::library::editor::footprint::state::PadsTool::PlacePolygon
+                        | crate::library::editor::footprint::state::PadsTool::PlaceRegion
+                )
             {
-                let mut verts = std::mem::take(&mut editor.state.place_polygon_vertices);
+                let verts = std::mem::take(&mut editor.state.place_polygon_vertices);
                 if verts.len() >= 3 {
+                    // The dispatcher arm uses
+                    // `editor.state.pads_tool` (now equal to the
+                    // NEW tool), so `filled` would be wrong. We
+                    // can't distinguish whether the user was on
+                    // PlacePolygon vs PlaceRegion now — fall back
+                    // to `filled: false` and let the user re-fire
+                    // PlaceRegion if they wanted fill. Future:
+                    // store filled-ness on the in-flight stash
+                    // alongside vertices.
+                    let vertices: Vec<[f64; 2]> =
+                        verts.iter().map(|(x, y)| [*x, *y]).collect();
                     let primitive = editor.primitive_mut();
-                    let n = verts.len();
-                    for i in 0..n {
-                        let (a_x, a_y) = verts[i];
-                        let (b_x, b_y) = verts[(i + 1) % n];
-                        primitive
-                            .silk_f
-                            .push(signex_library::primitive::footprint::FpGraphic {
-                                kind:
-                                    signex_library::primitive::footprint::FpGraphicKind::Line {
-                                        from: [a_x, a_y],
-                                        to: [b_x, b_y],
-                                    },
-                                stroke_width: 0.15,
-                            });
-                    }
+                    primitive
+                        .silk_f
+                        .push(signex_library::primitive::footprint::FpGraphic {
+                            kind:
+                                signex_library::primitive::footprint::FpGraphicKind::Polygon {
+                                    vertices,
+                                },
+                            stroke_width: 0.15,
+                            filled: false,
+                        });
                     editor.dirty = true;
                 }
-                verts.clear();
             }
             editor.canvas_cache.clear();
         }

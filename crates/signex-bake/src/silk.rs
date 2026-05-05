@@ -97,6 +97,7 @@ fn entity_to_graphic(
             Ok(Some(FpGraphic {
                 kind: FpGraphicKind::Line { from, to },
                 stroke_width: DEFAULT_SILK_STROKE_MM,
+                filled: false,
             }))
         }
         EntityKind::Circle { center, radius } => {
@@ -104,6 +105,7 @@ fn entity_to_graphic(
             Ok(Some(FpGraphic {
                 kind: FpGraphicKind::Circle { center: c, radius },
                 stroke_width: DEFAULT_SILK_STROKE_MM,
+                filled: false,
             }))
         }
         EntityKind::Arc {
@@ -140,6 +142,7 @@ fn entity_to_graphic(
                     end_deg,
                 },
                 stroke_width: DEFAULT_SILK_STROKE_MM,
+                filled: false,
             }))
         }
     }

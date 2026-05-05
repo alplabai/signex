@@ -511,12 +511,17 @@ pub enum PadsTool {
     PlaceArc,
     /// v0.18.15.4 — silk-layer closed-loop polygon. Each click
     /// appends a vertex to `place_polygon_vertices`. Switching
-    /// away from the tool (or Esc) commits the polygon as N
-    /// connecting `Line` `FpGraphic`s when ≥ 3 vertices have been
-    /// captured (otherwise the in-flight stash is dropped). No
-    /// preview today — the canvas-overlay shape preview lands with
-    /// the silk-layer hover system.
+    /// away from the tool (or Esc) commits the polygon (one
+    /// `FpGraphic::Polygon` entry, `filled: false`) when ≥ 3
+    /// vertices have been captured. No preview today — the
+    /// canvas-overlay shape preview lands with the silk-layer
+    /// hover system.
     PlacePolygon,
+    /// v0.18.17 — silk-layer filled region (Altium "Place Region").
+    /// Same gesture as `PlacePolygon`; emits one
+    /// `FpGraphic::Polygon` with `filled: true` so the renderer
+    /// fills the shape instead of stroking the outline.
+    PlaceRegion,
 }
 
 /// v0.18.15.3 — Place Arc 3-click gesture state machine.
