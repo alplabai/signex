@@ -286,13 +286,22 @@ impl Signex {
                 // active row (so the new grid inherits the user's last
                 // step + display picks). The new row activates so the
                 // user can immediately retune via Ctrl+G.
+                //
+                // v0.18.25.1 — fall back to the live `snap_options`
+                // (not `GridDef::default()`) when `active_grid_idx`
+                // is out of range, so a misindex doesn't drop the
+                // user's current step/display pickers on the floor.
                 if let Some(editor) = self.active_footprint_editor_mut() {
                     let seed = editor
                         .state
                         .grids
                         .get(editor.state.active_grid_idx)
                         .cloned()
-                        .unwrap_or_default();
+                        .unwrap_or_else(|| {
+                            crate::library::editor::footprint::state::GridDef::from_snap_options(
+                                &editor.state.snap_options,
+                            )
+                        });
                     let mut next = seed;
                     next.name = format!("Grid {}", editor.state.grids.len() + 1);
                     editor.state.grids.push(next);

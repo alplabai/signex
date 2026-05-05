@@ -281,6 +281,15 @@ impl Signex {
                 self.interaction_state.active_canvas_mut().snap_enabled =
                     self.ui_state.snap_enabled;
                 crate::fonts::write_snap_enabled_pref(self.ui_state.snap_enabled);
+                // v0.18.25.1 — mirror the global toggle into every open
+                // footprint editor so the .snxfpt snap chain (guides /
+                // grid / point-hit / angle) short-circuits in lockstep
+                // with the schematic + PCB canvases.
+                let disabled = !self.ui_state.snap_enabled;
+                for editor in self.document_state.footprint_editors.values_mut() {
+                    editor.state.global_snap_disabled = disabled;
+                    editor.canvas_cache.clear();
+                }
                 self.finish_update()
             }
             Message::StatusBar(StatusBarRequest::TogglePanelList) => {

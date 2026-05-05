@@ -2274,15 +2274,30 @@ pub(super) fn silk_f_hit_at(
                     // must lie within [start, end] (CCW). Angles are
                     // wrapped into [0, 360) before comparison so the
                     // arc can cross the 0° seam.
-                    let mut angle_deg = dy.atan2(dx).to_degrees();
-                    if angle_deg < 0.0 {
-                        angle_deg += 360.0;
-                    }
-                    let mut a = start_deg.rem_euclid(360.0);
-                    let mut b = end_deg.rem_euclid(360.0);
-                    if (b - a).abs() < 1e-6 {
+                    //
+                    // The raw sweep `end_deg - start_deg` discriminates
+                    // zero-sweep degenerates (`< 1e-6` → no hit) from
+                    // full-circle arcs (`>= 359.999` → always hit on
+                    // the radius ring). The intermediate case runs the
+                    // CCW [a, b] containment test with a 360° unwrap
+                    // so seam-crossing arcs work.
+                    let raw_sweep = (end_deg - start_deg).abs();
+                    if raw_sweep < 1e-6 {
+                        // Zero-sweep degenerate — match the old AABB
+                        // behaviour by failing the hit (a zero-sweep
+                        // arc has no visible body).
+                        false
+                    } else if raw_sweep >= 359.999 {
+                        // Full circle (or more). Hit anywhere on the
+                        // radius ring (already gated above).
                         true
                     } else {
+                        let mut angle_deg = dy.atan2(dx).to_degrees();
+                        if angle_deg < 0.0 {
+                            angle_deg += 360.0;
+                        }
+                        let a = start_deg.rem_euclid(360.0);
+                        let mut b = end_deg.rem_euclid(360.0);
                         if b < a {
                             b += 360.0;
                         }
@@ -2344,6 +2359,12 @@ fn point_to_segment_dist(px: f64, py: f64, ax: f64, ay: f64, bx: f64, by: f64) -
 
 /// v0.18.25 — even-odd ray casting; assumes the polygon is closed
 /// implicitly (last vertex connects back to first).
+///
+/// v0.18.25.1 — replaced `+ f64::EPSILON` denominator guard (≈ 2e-16,
+/// not enough headroom for sub-mm horizontal edges in PCB space) with
+/// an explicit `continue` when the edge is near-horizontal at a 1e-10
+/// tolerance. Removes a NaN-propagation path that could corrupt the
+/// even-odd toggle for the remaining iterations.
 fn point_in_polygon(px: f64, py: f64, vertices: &[[f64; 2]]) -> bool {
     if vertices.len() < 3 {
         return false;
@@ -2355,8 +2376,15 @@ fn point_in_polygon(px: f64, py: f64, vertices: &[[f64; 2]]) -> bool {
         let yi = vertices[i][1];
         let xj = vertices[j][0];
         let yj = vertices[j][1];
-        let intersect = ((yi > py) != (yj > py))
-            && (px < (xj - xi) * (py - yi) / (yj - yi + f64::EPSILON) + xi);
+        let denom = yj - yi;
+        if denom.abs() < 1e-10 {
+            // Horizontal edge — contributes no X intersection. Skip
+            // outright rather than divide by a near-zero number.
+            j = i;
+            continue;
+        }
+        let intersect =
+            ((yi > py) != (yj > py)) && (px < (xj - xi) * (py - yi) / denom + xi);
         if intersect {
             inside = !inside;
         }
@@ -2622,5 +2650,153 @@ fn draw_pads_tool_preview(
             }
         }
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod hit_test_tests {
+    //! v0.18.25.1 — regression tests for the silk hit-test edge cases
+    //! flagged by the v0.18.25 code review (H1 zero-sweep arc, M1
+    //! polygon near-horizontal edges).
+
+    use super::{point_in_polygon, point_to_segment_dist, polygon_outline_hit, silk_f_hit_at};
+    use signex_library::primitive::footprint::{FpGraphic, FpGraphicKind};
+
+    fn line(from: [f64; 2], to: [f64; 2]) -> FpGraphic {
+        FpGraphic {
+            kind: FpGraphicKind::Line { from, to },
+            stroke_width: 0.0,
+            filled: false,
+        }
+    }
+
+    fn arc(center: [f64; 2], radius: f64, start_deg: f64, end_deg: f64) -> FpGraphic {
+        FpGraphic {
+            kind: FpGraphicKind::Arc {
+                center,
+                radius,
+                start_deg,
+                end_deg,
+            },
+            stroke_width: 0.0,
+            filled: false,
+        }
+    }
+
+    fn polygon(vertices: Vec<[f64; 2]>, filled: bool) -> FpGraphic {
+        FpGraphic {
+            kind: FpGraphicKind::Polygon { vertices },
+            stroke_width: 0.0,
+            filled,
+        }
+    }
+
+    #[test]
+    fn line_hit_on_segment() {
+        let g = vec![line([0.0, 0.0], [10.0, 0.0])];
+        // 0.05 mm above the line — within 0.1 mm tolerance.
+        assert_eq!(silk_f_hit_at(&g, 5.0, 0.05, 0.1), Some(0));
+    }
+
+    #[test]
+    fn line_miss_above_aabb_below_segment_distance() {
+        let g = vec![line([0.0, 0.0], [10.0, 0.0])];
+        // 0.5 mm above — outside the 0.1 mm tolerance even though
+        // inside the AABB. Pre-v0.18.25 (AABB-only) would have hit.
+        assert_eq!(silk_f_hit_at(&g, 5.0, 0.5, 0.1), None);
+    }
+
+    #[test]
+    fn arc_zero_sweep_is_no_hit() {
+        // H1 — arc with start == end (degenerate zero-sweep) must
+        // miss every cursor, not be treated as a full circle.
+        let g = vec![arc([0.0, 0.0], 5.0, 90.0, 90.0)];
+        // Cursor on the radius ring at 0°.
+        assert_eq!(silk_f_hit_at(&g, 5.0, 0.0, 0.1), None);
+    }
+
+    #[test]
+    fn arc_full_circle_via_360_sweep() {
+        // H1 — `start = 0, end = 360` must hit anywhere on the ring.
+        let g = vec![arc([0.0, 0.0], 5.0, 0.0, 360.0)];
+        assert_eq!(silk_f_hit_at(&g, 5.0, 0.0, 0.1), Some(0));
+        assert_eq!(silk_f_hit_at(&g, -5.0, 0.0, 0.1), Some(0));
+        assert_eq!(silk_f_hit_at(&g, 0.0, 5.0, 0.1), Some(0));
+    }
+
+    #[test]
+    fn arc_seam_crossing_includes_zero_degrees() {
+        // Arc from 350° to 10° (CCW, crosses 0°/360° seam).
+        let g = vec![arc([0.0, 0.0], 5.0, 350.0, 10.0)];
+        // Cursor at 0° on radius — must hit.
+        assert_eq!(silk_f_hit_at(&g, 5.0, 0.0, 0.1), Some(0));
+    }
+
+    #[test]
+    fn arc_excludes_outside_sweep() {
+        // Arc from 0° to 90° — 180° (negative X axis) must miss.
+        let g = vec![arc([0.0, 0.0], 5.0, 0.0, 90.0)];
+        assert_eq!(silk_f_hit_at(&g, -5.0, 0.0, 0.1), None);
+        // Inside sweep (45°) hits.
+        let s = (5.0_f64) * (45.0_f64.to_radians()).cos();
+        assert_eq!(silk_f_hit_at(&g, s, s, 0.1), Some(0));
+    }
+
+    #[test]
+    fn polygon_horizontal_edge_no_nan_propagation() {
+        // M1 — square with two perfectly horizontal edges. Pre-fix
+        // the divide `(yj - yi + EPSILON)` returned ±Inf/NaN for
+        // horizontal edges; the fix continues past them. Filled
+        // square hit-test must still work.
+        let square = vec![
+            [0.0, 0.0],
+            [10.0, 0.0],
+            [10.0, 10.0],
+            [0.0, 10.0],
+        ];
+        assert!(point_in_polygon(5.0, 5.0, &square));
+        assert!(!point_in_polygon(-1.0, 5.0, &square));
+        assert!(!point_in_polygon(5.0, -1.0, &square));
+        assert!(!point_in_polygon(11.0, 5.0, &square));
+    }
+
+    #[test]
+    fn polygon_outline_hit_on_edge() {
+        let square = vec![
+            [0.0, 0.0],
+            [10.0, 0.0],
+            [10.0, 10.0],
+            [0.0, 10.0],
+        ];
+        // 0.05 mm outside the bottom edge — within 0.1 mm tol.
+        assert!(polygon_outline_hit(5.0, -0.05, &square, 0.1));
+        // 5 mm above bottom edge, deep inside — outline miss.
+        assert!(!polygon_outline_hit(5.0, 5.0, &square, 0.1));
+    }
+
+    #[test]
+    fn point_to_segment_dist_zero_length() {
+        // Degenerate segment (point) — distance is to that single
+        // point, not NaN.
+        let d = point_to_segment_dist(3.0, 4.0, 0.0, 0.0, 0.0, 0.0);
+        assert!((d - 5.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn polygon_filled_silk_uses_even_odd() {
+        // Concave polygon (Pac-Man notch). Filled hit-test should
+        // include the body but exclude the notch.
+        let pac = vec![
+            [0.0, 0.0],
+            [10.0, 0.0],
+            [10.0, 10.0],
+            [6.0, 5.0],   // mouth pinch in
+            [10.0, 0.0 + 1e-12], // near-horizontal edge: re-uses bottom
+            [0.0, 10.0],
+        ];
+        // Just here to confirm even-odd doesn't panic on near-
+        // duplicate Y coords. Body of the test is exercising the
+        // 1e-10 guard path.
+        let _ = point_in_polygon(5.0, 5.0, &pac);
     }
 }

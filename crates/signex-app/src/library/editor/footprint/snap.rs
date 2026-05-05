@@ -156,8 +156,13 @@ pub fn snap_cursor(
     // priorities when set to `Off`. `CurrentLayer` is a placeholder
     // for the v0.18.15 layer-aware filter; today it behaves like
     // `AllLayers`.
+    //
+    // v0.18.25.1 — global status-bar Snap toggle (`ui_state.snap_enabled`)
+    // mirrors into `state.global_snap_disabled`. Treat the same as
+    // `SnappingMode::Off` so guides / grid / point-hit / angle all
+    // stop firing together when the user disables snap globally.
     use super::state::SnappingMode;
-    if state.snapping_mode == SnappingMode::Off {
+    if state.global_snap_disabled || state.snapping_mode == SnappingMode::Off {
         return SnapResult::raw(raw);
     }
     // v0.17.0 — each priority is gated by `state.snap_options.<flag>`.
@@ -452,5 +457,25 @@ mod tests {
         });
         let r = snap_cursor((4.8, 1.234), None, &state, None);
         assert!(matches!(r.kind, SnapKind::Grid));
+    }
+
+    #[test]
+    fn global_snap_disabled_short_circuits() {
+        // v0.18.25.1 — global status-bar Snap toggle short-circuits
+        // every priority including grid + guides + point-hit. The
+        // raw cursor passes through unchanged.
+        let (sketch, anchor_id) = sketch_with_anchor();
+        let mut state = empty_state();
+        state.global_snap_disabled = true;
+        state.guides.push(super::super::state::Guide {
+            axis: super::super::state::GuideAxis::Vertical,
+            position_mm: 5.0,
+            enabled: true,
+        });
+        // Cursor near a guide AND a point-hit AND on grid; with
+        // global-snap-off, none should fire.
+        let r = snap_cursor((4.8, 0.0), Some(&sketch), &state, Some(anchor_id));
+        assert!(matches!(r.kind, SnapKind::Raw));
+        assert_eq!(r.pos, (4.8, 0.0));
     }
 }

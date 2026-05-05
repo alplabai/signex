@@ -299,6 +299,13 @@ pub struct FootprintEditorState {
     /// style currently drives the canvas + snap. Always valid: clamps
     /// to `grids.len() - 1` on delete.
     pub active_grid_idx: usize,
+    /// v0.18.25.1 — mirror of the global `ui_state.snap_enabled`
+    /// status-bar toggle. The footprint snap chain is otherwise
+    /// driven by the per-editor `snapping_mode` 3-state; this field
+    /// gives the global "Snap off" toggle a hook into the same
+    /// short-circuit logic so guides + grid + point-hit all stop
+    /// firing together. Synced by the StatusBar::ToggleSnap handler.
+    pub global_snap_disabled: bool,
     /// v0.18.13 — Altium Selection Filter pill row state. Per-
     /// editor so flipping pads off in one tab doesn't follow the
     /// user into another footprint.
@@ -745,6 +752,7 @@ impl FootprintEditorState {
             guides: Vec::new(),
             grids: vec![GridDef::from_snap_options(&SnapOptions::default())],
             active_grid_idx: 0,
+            global_snap_disabled: false,
             selection_filter: SelectionFilter::default(),
             snap_subtab: SnapSubTab::default(),
             snapping_mode: SnappingMode::default(),
@@ -786,6 +794,7 @@ impl FootprintEditorState {
             guides: Vec::new(),
             grids: vec![GridDef::from_snap_options(&SnapOptions::default())],
             active_grid_idx: 0,
+            global_snap_disabled: false,
             selection_filter: SelectionFilter::default(),
             snap_subtab: SnapSubTab::default(),
             snapping_mode: SnappingMode::default(),
