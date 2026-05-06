@@ -3838,7 +3838,26 @@ impl Signex {
         // correct.
         let main: Element<'_, Message> = main.into();
 
-        let has_active_bar = self.has_active_schematic();
+        // v0.13 — `has_active_bar` is now true for ANY editor tab
+        // that mounts an active bar (schematic / footprint /
+        // symbol library) so the layers Stack mounts and the bar
+        // layer fires from `view_main_for` regardless of editor
+        // kind.
+        let active_tab_kind_any = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .map(|t| &t.kind);
+        let has_footprint_bar = matches!(
+            active_tab_kind_any,
+            Some(crate::app::TabKind::FootprintEditor(_))
+        );
+        let has_symbol_bar = matches!(
+            active_tab_kind_any,
+            Some(crate::app::TabKind::SymbolEditor(_))
+        );
+        let has_active_bar =
+            self.has_active_schematic() || has_footprint_bar || has_symbol_bar;
         let dragging_tab = ui.tab_dragging.is_some();
         let needs_overlay = has_active_bar
             || interaction.editing_text.is_some()
