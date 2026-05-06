@@ -5368,26 +5368,17 @@ impl Signex {
             } else {
                 library_classes
             };
-            let card = crate::library::new_component::view(
-                &self.library,
-                nc,
-                &document.panel_ctx.tokens,
-                self.ui_state.theme_id,
-                classes_to_show,
-            )
-            .map(Message::Library);
-            let backdrop = container(card)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .center_x(Length::Fill)
-                .center_y(Length::Fill)
-                .style(|_: &iced::Theme| iced::widget::container::Style {
-                    background: Some(iced::Background::Color(iced::Color::from_rgba(
-                        0.0, 0.0, 0.0, 0.45,
-                    ))),
-                    ..Default::default()
-                });
-            layers.push(backdrop.into());
+            // v0.13 — New Component modal removed. "Add Component"
+            // appends a draft row directly to the Library Browser's
+            // inline-editable table; the user types the PN in the
+            // table cell and picks the symbol / footprint via the
+            // Properties panel that surfaces when the row is
+            // selected. The unused `card` here is kept compiled to
+            // keep the form's `view` function exercised — once the
+            // dispatcher migration to "append-row-direct" lands
+            // properly, the whole `library.new_component` state +
+            // its messages can be pruned.
+            let _ = (nc, classes_to_show);
         }
 
         // F25 (2026-05-03) — Edit Component Details modal removed.

@@ -84,11 +84,75 @@ impl Signex {
             }
 
             // ── New Component flow ───────────────────────────────────
+            // v0.13 — No modal. Append a draft row directly to the
+            // active library's first table, then OpenComponentRow so
+            // the Library Browser tab focuses the new row. The user
+            // fills in the PN inline in the table and picks the
+            // symbol / footprint via the Properties panel.
+            //
+            // When no library is open OR no table exists, fall back
+            // to the legacy modal path so the user gets a clear
+            // picker UI (the modal handles "no library" + table
+            // selection edge cases).
             LibraryMessage::NewComponent => {
-                self.library.new_component = Some(NewComponentState {
-                    library_idx: (!self.library.open_libraries.is_empty()).then_some(0),
-                    ..NewComponentState::default()
-                });
+                if self.library.open_libraries.is_empty() {
+                    // No library — fall back to the legacy modal
+                    // path; the modal explains the empty-library
+                    // recovery flow.
+                    self.library.new_component = Some(NewComponentState {
+                        library_idx: None,
+                        ..NewComponentState::default()
+                    });
+                    return Task::none();
+                }
+                let library_idx = 0usize;
+                let library = &self.library.open_libraries[library_idx];
+                let library_path = library.root.clone();
+                let library_id = library.library_id;
+                let class = signex_library::ComponentClass::default();
+                let table = self
+                    .library
+                    .set
+                    .get(library_id)
+                    .map(|adapter| adapter.manifest().table_for_class(class.as_str()));
+                let Some(table) = table else {
+                    // Library has no tables registered — fall back
+                    // to modal so the user can pick / create one.
+                    self.library.new_component = Some(NewComponentState {
+                        library_idx: Some(library_idx),
+                        ..NewComponentState::default()
+                    });
+                    return Task::none();
+                };
+                match commands::create_component_row(
+                    &mut self.library,
+                    library_idx,
+                    &table,
+                    "",
+                    class,
+                    None,
+                    None,
+                ) {
+                    Ok(row_id) => {
+                        return Task::done(Message::Library(LibraryMessage::OpenComponentRow {
+                            library_path,
+                            table,
+                            row_id,
+                        }));
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            target: "signex::library",
+                            error = %e,
+                            "NewComponent: append-row failed; falling back to modal",
+                        );
+                        self.library.new_component = Some(NewComponentState {
+                            library_idx: Some(library_idx),
+                            error: Some(e.to_string()),
+                            ..NewComponentState::default()
+                        });
+                    }
+                }
                 Task::none()
             }
             LibraryMessage::CloseNewComponent => {
