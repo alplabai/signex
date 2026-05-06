@@ -3486,12 +3486,20 @@ impl Signex {
         // Symbol-only mutations.
         if let Some(editor) = self.document_state.symbol_editors.get_mut(&path) {
             apply_symbol_primitive_edit(editor, msg);
+            // v0.20 — primitive editor edits (designator/size/etc, and
+            // critically `placement_paused`) need the panel context
+            // rebuilt so the right-dock view reads the new value next
+            // frame. Without this the panel renders against stale
+            // `FootprintEditorPanelContext` and TAB-pause-driven UI
+            // changes (Pad form vs no Pad form) silently miss.
+            self.refresh_panel_ctx();
             return Task::none();
         }
 
         // Footprint-only mutations.
         if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
             apply_footprint_primitive_edit(editor, msg);
+            self.refresh_panel_ctx();
             return Task::none();
         }
 
@@ -4697,6 +4705,14 @@ pub(crate) fn apply_footprint_primitive_edit(
             editor.state.place_polygon_vertices.clear();
             // v0.13 — Esc also dismisses any open active-bar dropdown.
             editor.state.active_bar_menu = None;
+            // v0.20 — Esc clears the selected pad / silk graphic too,
+            // matching the schematic canvas + Altium PCB Library
+            // editor. Without this, Esc only reset the tool but the
+            // pad selection persisted, leaving the user staring at
+            // pad properties they no longer wanted to edit.
+            editor.state.selected_pad = None;
+            editor.state.selected_silk_f = None;
+            editor.state.placement_paused = false;
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintToggleActiveBarMenu(menu) => {
@@ -5158,6 +5174,20 @@ pub(crate) fn apply_footprint_primitive_edit(
                         corner_entity_ids: None,
                         rotation_deg: 0.0,
                         drill_diameter_mm: None,
+                        stack: crate::library::editor::footprint::state::PadStackUi::default(),
+                        feature_top: signex_sketch::attr::PadFeature::None,
+                        feature_bottom: signex_sketch::attr::PadFeature::None,
+                        testpoint: signex_sketch::attr::TestpointFlags::default(),
+                        template: String::new(),
+                        template_library: String::new(),
+                        electrical_type: signex_sketch::attr::ElectricalType::Load,
+                        net: String::new(),
+                        locked: false,
+                        hole_tolerance_plus_mm: None,
+                        hole_tolerance_minus_mm: None,
+                        hole_rotation_deg: None,
+                        copper_offset_x_mm: None,
+                        copper_offset_y_mm: None,
                     });
                 }
                 (false, Some(idx)) => {

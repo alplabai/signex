@@ -102,6 +102,7 @@ fn smd_rect_pad(number: &str, w: &str, h: &str) -> PadAttr {
         mask_margin_expr: None,
         paste_margin_expr: None,
         paste_apertures: PasteAperturePattern::Single,
+        ..PadAttr::default()
     }
 }
 

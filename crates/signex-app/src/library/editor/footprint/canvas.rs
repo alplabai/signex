@@ -591,11 +591,22 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 },
                             }));
                         }
-                        // Select tool: empty click does nothing
-                        // (selection-clear is handled by the model
-                        // via the existing FootprintSelectPad(None)
-                        // path on actual canvas-click events that
-                        // miss every pad).
+                        // v0.20 — Select tool: empty-area left-click
+                        // clears the current selection. Mirrors Altium
+                        // and the schematic canvas; the previous
+                        // behaviour silently no-op'd, leaving the user
+                        // unable to deselect a pad without picking
+                        // another. Only fires for the Select tool —
+                        // every other pads_tool handles the click
+                        // above (place / drop / etc.).
+                        if self.state.pads_tool == PadsTool::Select {
+                            return Some(canvas::Action::publish(LibraryMessage::EditorEvent {
+                                library_path: self.address.library_path.clone(),
+                                table: self.address.table.clone(),
+                                row_id: self.address.row_id,
+                                msg: EditorMsg::FootprintSelectPad(None),
+                            }));
+                        }
                         return None;
                     }
                     if drag.moved {
@@ -913,45 +924,120 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 && !self.state.placement_paused
                 && let Some((cx, cy)) = self.state.cursor_mm
             {
-                let half = 0.5_f32 * cstate.scale; // 1 mm pad
+                use signex_library::PadShape as PS;
+                // v0.20 — ghost reflects `next_pad_defaults`: actual
+                // size_x / size_y / shape from the Properties panel
+                // form, so the cursor preview shows what the click
+                // will mint. Round/Oval/RoundRect/Chamfered render
+                // their proper outline; everything else falls back
+                // to a rectangle.
+                let defaults = &self.state.next_pad_defaults;
+                let half_w = (defaults.size_x_mm.max(0.05) / 2.0) as f32 * cstate.scale;
+                let half_h = (defaults.size_y_mm.max(0.05) / 2.0) as f32 * cstate.scale;
                 let centre = cstate.world_to_screen((cx, cy));
-                let p0 = Point::new(centre.x - half, centre.y - half);
-                let size = iced::Size::new(half * 2.0, half * 2.0);
                 let paused = self.state.placement_paused;
                 let ghost_fill = if paused {
-                    Color {
-                        r: 0.55,
-                        g: 0.55,
-                        b: 0.55,
-                        a: 1.0,
-                    }
+                    Color { r: 0.55, g: 0.55, b: 0.55, a: 1.0 }
                 } else {
-                    Color {
-                        r: 0.85,
-                        g: 0.20,
-                        b: 0.20,
-                        a: 1.0,
-                    }
+                    Color { r: 0.85, g: 0.20, b: 0.20, a: 1.0 }
                 };
                 let ghost_stroke = if paused {
-                    Color {
-                        r: 0.40,
-                        g: 0.40,
-                        b: 0.40,
-                        a: 1.0,
-                    }
+                    Color { r: 0.40, g: 0.40, b: 0.40, a: 1.0 }
                 } else {
-                    Color {
-                        r: 1.0,
-                        g: 1.0,
-                        b: 1.0,
-                        a: 1.0,
+                    Color { r: 1.0, g: 1.0, b: 1.0, a: 1.0 }
+                };
+
+                let path = match &defaults.shape {
+                    PS::Round | PS::Oval => Path::new(|b| {
+                        let segments = 36;
+                        for i in 0..=segments {
+                            let t = i as f32 / segments as f32 * std::f32::consts::TAU;
+                            let x = centre.x + half_w * t.cos();
+                            let y = centre.y + half_h * t.sin();
+                            if i == 0 {
+                                b.move_to(Point::new(x, y));
+                            } else {
+                                b.line_to(Point::new(x, y));
+                            }
+                        }
+                        b.close();
+                    }),
+                    PS::RoundRect { radius_ratio } => {
+                        let r = (half_w.min(half_h) * (*radius_ratio as f32 * 2.0)).max(0.5);
+                        Path::new(|b| {
+                            b.move_to(Point::new(centre.x - half_w + r, centre.y - half_h));
+                            b.line_to(Point::new(centre.x + half_w - r, centre.y - half_h));
+                            b.arc_to(
+                                Point::new(centre.x + half_w, centre.y - half_h),
+                                Point::new(centre.x + half_w, centre.y - half_h + r),
+                                r,
+                            );
+                            b.line_to(Point::new(centre.x + half_w, centre.y + half_h - r));
+                            b.arc_to(
+                                Point::new(centre.x + half_w, centre.y + half_h),
+                                Point::new(centre.x + half_w - r, centre.y + half_h),
+                                r,
+                            );
+                            b.line_to(Point::new(centre.x - half_w + r, centre.y + half_h));
+                            b.arc_to(
+                                Point::new(centre.x - half_w, centre.y + half_h),
+                                Point::new(centre.x - half_w, centre.y + half_h - r),
+                                r,
+                            );
+                            b.line_to(Point::new(centre.x - half_w, centre.y - half_h + r));
+                            b.arc_to(
+                                Point::new(centre.x - half_w, centre.y - half_h),
+                                Point::new(centre.x - half_w + r, centre.y - half_h),
+                                r,
+                            );
+                            b.close();
+                        })
+                    }
+                    PS::Chamfered { chamfer_ratio, corners } => {
+                        let c = (half_w.min(half_h) * (*chamfer_ratio as f32 * 2.0)).max(0.5);
+                        Path::new(|b| {
+                            let tl = Point::new(centre.x - half_w, centre.y - half_h);
+                            let tr = Point::new(centre.x + half_w, centre.y - half_h);
+                            let br = Point::new(centre.x + half_w, centre.y + half_h);
+                            let bl = Point::new(centre.x - half_w, centre.y + half_h);
+                            b.move_to(Point::new(tl.x + c, tl.y));
+                            if corners.top_right {
+                                b.line_to(Point::new(tr.x - c, tr.y));
+                                b.line_to(Point::new(tr.x, tr.y + c));
+                            } else {
+                                b.line_to(tr);
+                            }
+                            if corners.bottom_right {
+                                b.line_to(Point::new(br.x, br.y - c));
+                                b.line_to(Point::new(br.x - c, br.y));
+                            } else {
+                                b.line_to(br);
+                            }
+                            if corners.bottom_left {
+                                b.line_to(Point::new(bl.x + c, bl.y));
+                                b.line_to(Point::new(bl.x, bl.y - c));
+                            } else {
+                                b.line_to(bl);
+                            }
+                            if corners.top_left {
+                                b.line_to(Point::new(tl.x, tl.y + c));
+                                b.line_to(Point::new(tl.x + c, tl.y));
+                            } else {
+                                b.line_to(tl);
+                                b.line_to(Point::new(tl.x + c, tl.y));
+                            }
+                            b.close();
+                        })
+                    }
+                    _ => {
+                        let p0 = Point::new(centre.x - half_w, centre.y - half_h);
+                        let size = iced::Size::new(half_w * 2.0, half_h * 2.0);
+                        Path::rectangle(p0, size)
                     }
                 };
-                let rect = Path::rectangle(p0, size);
-                frame.fill(&rect, ghost_fill);
+                frame.fill(&path, ghost_fill);
                 frame.stroke(
-                    &rect,
+                    &path,
                     Stroke::default().with_width(1.0).with_color(ghost_stroke),
                 );
             }
@@ -2180,21 +2266,148 @@ fn draw_pad(
     pad: &EditorPad,
     is_selected: bool,
 ) {
+    use signex_library::PadShape as PS;
     let layer = pad.primary_layer();
     let color = layer.color();
     let (x0, y0, x1, y1) = pad.bbox_mm();
     let p0 = cstate.world_to_screen((x0, y0));
     let p1 = cstate.world_to_screen((x1, y1));
     let size = iced::Size::new(p1.x - p0.x, p1.y - p0.y);
-    let rect = Path::rectangle(p0, size);
-    frame.fill(&rect, Color { a: 0.85, ..color });
+    let centre = cstate.world_to_screen(pad.position_mm);
+    let half_w = size.width / 2.0;
+    let half_h = size.height / 2.0;
+
+    // v0.20 — branch on pad.shape to render the actual copper
+    // outline. Previously every pad rendered as a rectangle, so the
+    // Properties-panel Shape pick_list change wasn't visible on the
+    // canvas. Round/Oval use a stretched circle; RoundRect uses
+    // rect with arc corners; Chamfered uses a 6/8-vertex polygon;
+    // Custom falls back to its provided polygon points.
+    let shape_path = match &pad.shape {
+        PS::Round | PS::Oval => Path::new(|b| {
+            // Approximate ellipse with quadratic bezier arcs.
+            // For a circle (size_x == size_y) this is exact.
+            let segments = 36;
+            for i in 0..=segments {
+                let t = i as f32 / segments as f32 * std::f32::consts::TAU;
+                let x = centre.x + half_w * t.cos();
+                let y = centre.y + half_h * t.sin();
+                if i == 0 {
+                    b.move_to(Point::new(x, y));
+                } else {
+                    b.line_to(Point::new(x, y));
+                }
+            }
+            b.close();
+        }),
+        PS::RoundRect { radius_ratio } => {
+            let r = (half_w.min(half_h) * (*radius_ratio as f32 * 2.0)).max(0.5);
+            Path::new(|b| {
+                // Rounded-rect via 4 line segments + 4 quarter arcs.
+                b.move_to(Point::new(centre.x - half_w + r, centre.y - half_h));
+                b.line_to(Point::new(centre.x + half_w - r, centre.y - half_h));
+                b.arc_to(
+                    Point::new(centre.x + half_w, centre.y - half_h),
+                    Point::new(centre.x + half_w, centre.y - half_h + r),
+                    r,
+                );
+                b.line_to(Point::new(centre.x + half_w, centre.y + half_h - r));
+                b.arc_to(
+                    Point::new(centre.x + half_w, centre.y + half_h),
+                    Point::new(centre.x + half_w - r, centre.y + half_h),
+                    r,
+                );
+                b.line_to(Point::new(centre.x - half_w + r, centre.y + half_h));
+                b.arc_to(
+                    Point::new(centre.x - half_w, centre.y + half_h),
+                    Point::new(centre.x - half_w, centre.y + half_h - r),
+                    r,
+                );
+                b.line_to(Point::new(centre.x - half_w, centre.y - half_h + r));
+                b.arc_to(
+                    Point::new(centre.x - half_w, centre.y - half_h),
+                    Point::new(centre.x - half_w + r, centre.y - half_h),
+                    r,
+                );
+                b.close();
+            })
+        }
+        PS::Chamfered { chamfer_ratio, corners } => {
+            let c = (half_w.min(half_h) * (*chamfer_ratio as f32 * 2.0)).max(0.5);
+            Path::new(|b| {
+                // Polygon: 4 corners with optional chamfers.
+                // Order: TL → TR → BR → BL.
+                let tl = Point::new(centre.x - half_w, centre.y - half_h);
+                let tr = Point::new(centre.x + half_w, centre.y - half_h);
+                let br = Point::new(centre.x + half_w, centre.y + half_h);
+                let bl = Point::new(centre.x - half_w, centre.y + half_h);
+
+                let chamfer_corner = |b: &mut canvas::path::Builder,
+                                      p: Point,
+                                      _flag: bool,
+                                      _enter: Point,
+                                      _exit: Point| {
+                    b.line_to(p);
+                };
+                let _ = chamfer_corner; // silence unused warning when no flag is set
+                // Start at TL+c-x.
+                b.move_to(Point::new(tl.x + c, tl.y));
+                if corners.top_right {
+                    b.line_to(Point::new(tr.x - c, tr.y));
+                    b.line_to(Point::new(tr.x, tr.y + c));
+                } else {
+                    b.line_to(tr);
+                }
+                if corners.bottom_right {
+                    b.line_to(Point::new(br.x, br.y - c));
+                    b.line_to(Point::new(br.x - c, br.y));
+                } else {
+                    b.line_to(br);
+                }
+                if corners.bottom_left {
+                    b.line_to(Point::new(bl.x + c, bl.y));
+                    b.line_to(Point::new(bl.x, bl.y - c));
+                } else {
+                    b.line_to(bl);
+                }
+                if corners.top_left {
+                    b.line_to(Point::new(tl.x, tl.y + c));
+                    b.line_to(Point::new(tl.x + c, tl.y));
+                } else {
+                    b.line_to(tl);
+                    b.line_to(Point::new(tl.x + c, tl.y));
+                }
+                b.close();
+            })
+        }
+        PS::Custom(poly) => Path::new(|b| {
+            if let Some((first, rest)) = poly.points.split_first() {
+                let p0 = cstate.world_to_screen((
+                    pad.position_mm.0 + first[0],
+                    pad.position_mm.1 + first[1],
+                ));
+                b.move_to(p0);
+                for pt in rest {
+                    let p = cstate.world_to_screen((
+                        pad.position_mm.0 + pt[0],
+                        pad.position_mm.1 + pt[1],
+                    ));
+                    b.line_to(p);
+                }
+                b.close();
+            }
+        }),
+        _ => Path::rectangle(p0, size),
+    };
+
+    frame.fill(&shape_path, Color { a: 0.85, ..color });
     let outline_color = if is_selected {
         Color::from_rgb(1.0, 1.0, 1.0)
     } else {
         Color { a: 1.0, ..color }
     };
     frame.stroke(
-        &rect,
+        &shape_path,
         Stroke::default()
             .with_width(if is_selected { 1.6 } else { 0.8 })
             .with_color(outline_color),

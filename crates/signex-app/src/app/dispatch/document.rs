@@ -14,11 +14,28 @@ impl Signex {
                 self.finish_update()
             }
             Message::DeleteSelected => {
-                // Delete falls through to the schematic engine; the
-                // Component Preview tab is read-only and Footprint
-                // editing happens in the standalone `.snxfpt` tab,
-                // which owns its own delete handling.
-                self.handle_selection_delete_requested();
+                // v0.20 — if the active tab is a footprint editor,
+                // route the Delete key to FootprintDeleteSelected so
+                // the selected pad / silk graphic is removed via the
+                // footprint dispatcher. Otherwise fall through to
+                // the schematic engine's delete (Component Preview
+                // is read-only, so it's a no-op there).
+                let footprint_path = self
+                    .document_state
+                    .tabs
+                    .get(self.document_state.active_tab)
+                    .and_then(|t| t.kind.as_footprint_editor())
+                    .cloned();
+                if let Some(path) = footprint_path {
+                    let _ = self.update(Message::Library(
+                        crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                            path,
+                            msg: crate::library::messages::PrimitiveEditorMsg::FootprintDeleteSelected,
+                        },
+                    ));
+                } else {
+                    self.handle_selection_delete_requested();
+                }
                 self.finish_update()
             }
             Message::Undo => {

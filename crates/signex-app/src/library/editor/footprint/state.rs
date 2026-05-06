@@ -11,6 +11,7 @@
 //! to write the new pad list back onto the primitive.
 
 use signex_library::{Footprint, LayerId, Pad, PadKind, PadShape};
+use signex_sketch::attr::{ElectricalType, PadFeature, TestpointFlags};
 
 use super::layers::{FpLayer, LayerVisibility};
 
@@ -57,6 +58,77 @@ pub struct EditorPad {
     /// `None` for SMD pads. Round-trips via `Pad::drill`. Mints as
     /// `Some(default_drill_mm)` for `Place Hole` clicks.
     pub drill_diameter_mm: Option<f64>,
+    /// v0.20 — Altium-parity pad-stack overrides. Per-side paste +
+    /// mask + tented + thermal-relief + corner radius. Each value
+    /// surfaces in the right-dock Properties panel "Pad Stack"
+    /// section and round-trips through `Pad`'s matching fields.
+    pub stack: PadStackUi,
+    /// v0.20 — top-side surface treatment (Solder Bumps / Glue Dots
+    /// / Adhesive Beads). `PadFeature::None` = bare copper.
+    pub feature_top: PadFeature,
+    /// v0.20 — bottom-side surface treatment.
+    pub feature_bottom: PadFeature,
+    /// v0.20 — test-point participation flags (top/bottom × assembly
+    /// /fab). All `false` = not a test point.
+    pub testpoint: TestpointFlags,
+    /// v0.20 — pad-template name. Empty = no template.
+    pub template: String,
+    /// v0.20 — pad-template library reference. Empty = local.
+    pub template_library: String,
+    /// v0.20 — Altium-parity electrical-type (Load/Source/Terminator).
+    pub electrical_type: ElectricalType,
+    /// v0.20 — net assignment. Empty = unassigned.
+    pub net: String,
+    /// v0.20 — locked flag. `true` resists drag/delete/move-by-arrow.
+    pub locked: bool,
+    /// v0.20 — Pad Hole tolerance ± (mm). Reporting only — drives
+    /// IPC-356 / drill-table export, not DRC.
+    pub hole_tolerance_plus_mm: Option<f64>,
+    pub hole_tolerance_minus_mm: Option<f64>,
+    /// v0.20 — Pad Hole rotation (Slot/Rectangular orientation).
+    pub hole_rotation_deg: Option<f64>,
+    /// v0.20 — Copper offset relative to hole centre.
+    pub copper_offset_x_mm: Option<f64>,
+    pub copper_offset_y_mm: Option<f64>,
+}
+
+/// v0.20 — UI-side mirror of `Pad`'s pad-stack override fields. All
+/// values in mm (already evaluated). `None` on a margin override
+/// means "use the rule-driven / global value"; `true` on a tented
+/// flag means "skip the mask opening on that side".
+///
+/// `Default` matches Altium's "out-of-the-box" pad: paste enabled on
+/// both sides, mask not tented, thermal relief on, no margin
+/// overrides, no explicit corner-radius percentage.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PadStackUi {
+    pub paste_margin_top: Option<f64>,
+    pub paste_margin_bottom: Option<f64>,
+    pub paste_enabled_top: bool,
+    pub paste_enabled_bottom: bool,
+    pub mask_margin_top: Option<f64>,
+    pub mask_margin_bottom: Option<f64>,
+    pub mask_tented_top: bool,
+    pub mask_tented_bottom: bool,
+    pub thermal_relief: bool,
+    pub corner_radius_pct: Option<f64>,
+}
+
+impl Default for PadStackUi {
+    fn default() -> Self {
+        Self {
+            paste_margin_top: None,
+            paste_margin_bottom: None,
+            paste_enabled_top: true,
+            paste_enabled_bottom: true,
+            mask_margin_top: None,
+            mask_margin_bottom: None,
+            mask_tented_top: false,
+            mask_tented_bottom: false,
+            thermal_relief: true,
+            corner_radius_pct: None,
+        }
+    }
 }
 
 impl EditorPad {
@@ -76,6 +148,20 @@ impl EditorPad {
             corner_entity_ids: None,
             rotation_deg: 0.0,
             drill_diameter_mm: None,
+            stack: PadStackUi::default(),
+            feature_top: PadFeature::None,
+            feature_bottom: PadFeature::None,
+            testpoint: TestpointFlags::default(),
+            template: String::new(),
+            template_library: String::new(),
+            electrical_type: ElectricalType::Load,
+            net: String::new(),
+            locked: false,
+            hole_tolerance_plus_mm: None,
+            hole_tolerance_minus_mm: None,
+            hole_rotation_deg: None,
+            copper_offset_x_mm: None,
+            copper_offset_y_mm: None,
         }
     }
 
@@ -97,6 +183,20 @@ impl EditorPad {
             corner_entity_ids: None,
             rotation_deg: 0.0,
             drill_diameter_mm: Some(d),
+            stack: PadStackUi::default(),
+            feature_top: PadFeature::None,
+            feature_bottom: PadFeature::None,
+            testpoint: TestpointFlags::default(),
+            template: String::new(),
+            template_library: String::new(),
+            electrical_type: ElectricalType::Load,
+            net: String::new(),
+            locked: false,
+            hole_tolerance_plus_mm: None,
+            hole_tolerance_minus_mm: None,
+            hole_rotation_deg: None,
+            copper_offset_x_mm: None,
+            copper_offset_y_mm: None,
         }
     }
 
@@ -133,6 +233,31 @@ impl EditorPad {
             corner_entity_ids: None,
             rotation_deg: p.rotation,
             drill_diameter_mm: p.drill.as_ref().map(|d| d.diameter),
+            stack: PadStackUi {
+                paste_margin_top: p.paste_margin_top,
+                paste_margin_bottom: p.paste_margin_bottom,
+                paste_enabled_top: p.paste_enabled_top,
+                paste_enabled_bottom: p.paste_enabled_bottom,
+                mask_margin_top: p.mask_margin_top,
+                mask_margin_bottom: p.mask_margin_bottom,
+                mask_tented_top: p.mask_tented_top,
+                mask_tented_bottom: p.mask_tented_bottom,
+                thermal_relief: p.thermal_relief,
+                corner_radius_pct: p.corner_radius_pct,
+            },
+            feature_top: p.feature_top,
+            feature_bottom: p.feature_bottom,
+            testpoint: p.testpoint,
+            template: p.template.clone(),
+            template_library: p.template_library.clone(),
+            electrical_type: p.electrical_type,
+            net: p.net.clone(),
+            locked: p.locked,
+            hole_tolerance_plus_mm: p.hole_tolerance_plus_mm,
+            hole_tolerance_minus_mm: p.hole_tolerance_minus_mm,
+            hole_rotation_deg: p.hole_rotation_deg,
+            copper_offset_x_mm: p.copper_offset_x_mm,
+            copper_offset_y_mm: p.copper_offset_y_mm,
         }
     }
 
@@ -152,6 +277,29 @@ impl EditorPad {
             drill,
             solder_mask_margin: None,
             paste_margin: None,
+            template: self.template.clone(),
+            template_library: self.template_library.clone(),
+            paste_margin_top: self.stack.paste_margin_top,
+            paste_margin_bottom: self.stack.paste_margin_bottom,
+            paste_enabled_top: self.stack.paste_enabled_top,
+            paste_enabled_bottom: self.stack.paste_enabled_bottom,
+            mask_margin_top: self.stack.mask_margin_top,
+            mask_margin_bottom: self.stack.mask_margin_bottom,
+            mask_tented_top: self.stack.mask_tented_top,
+            mask_tented_bottom: self.stack.mask_tented_bottom,
+            thermal_relief: self.stack.thermal_relief,
+            corner_radius_pct: self.stack.corner_radius_pct,
+            feature_top: self.feature_top,
+            feature_bottom: self.feature_bottom,
+            testpoint: self.testpoint,
+            electrical_type: self.electrical_type,
+            net: self.net.clone(),
+            locked: self.locked,
+            hole_tolerance_plus_mm: self.hole_tolerance_plus_mm,
+            hole_tolerance_minus_mm: self.hole_tolerance_minus_mm,
+            hole_rotation_deg: self.hole_rotation_deg,
+            copper_offset_x_mm: self.copper_offset_x_mm,
+            copper_offset_y_mm: self.copper_offset_y_mm,
         }
     }
 }
@@ -322,6 +470,43 @@ pub struct FootprintEditorState {
     /// Set by right-clicking (or clicking the chevron on) a tool button
     /// in the active bar; cleared on item-pick or click-outside.
     pub active_bar_menu: Option<FpActiveBarMenu>,
+    /// v0.20 — Pad Stack panel tab (Simple / Top-Middle-Bottom /
+    /// Full Stack). UI-only state; not persisted. Drives which Pad
+    /// Stack body the right-dock Properties panel renders. Mirrors
+    /// the Altium PCB Library tab strip on the same section.
+    pub pad_stack_tab: PadStackTab,
+}
+
+/// v0.20 — Pad Stack section's tab strip. Matches Altium's three
+/// tabs verbatim:
+/// - `Simple`: one row per stack family (COPPER / HOLE / PASTE /
+///   SOLDER). Default.
+/// - `TopMiddleBottom`: COPPER splits into Top / Middle / Bottom
+///   rows. Middle is a placeholder for inner-copper pad-stack
+///   overrides; surfaces in v0.21+ once the schema lands.
+/// - `FullStack`: enumerates the pad's `layers` list verbatim, one
+///   row per layer with the matching margin/expansion field.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PadStackTab {
+    #[default]
+    Simple,
+    TopMiddleBottom,
+    FullStack,
+}
+
+impl PadStackTab {
+    pub const ALL: &'static [PadStackTab] = &[
+        PadStackTab::Simple,
+        PadStackTab::TopMiddleBottom,
+        PadStackTab::FullStack,
+    ];
+    pub fn label(self) -> &'static str {
+        match self {
+            PadStackTab::Simple => "Simple",
+            PadStackTab::TopMiddleBottom => "Top-Middle-Bottom",
+            PadStackTab::FullStack => "Full Stack",
+        }
+    }
 }
 
 /// v0.13 — Altium-style footprint active bar dropdown menus. One per
@@ -359,6 +544,11 @@ pub enum FpActiveBarMenu {
 /// always in mm. Side controls which copper layer the pad lands on.
 /// v0.16.6 — `rotation_deg` controls the orientation of the next
 /// pad in degrees (CCW positive).
+/// v0.20 — also carries the Altium-parity Pad Stack (per-side mask /
+/// paste / tented / thermal / corner-radius), Pad Features (top /
+/// bottom surface treatment), Testpoint flags, and Template /
+/// Library reference fields. Mirrors `EditorPad` so the Properties
+/// panel renders the same form before-placement and after-selection.
 #[derive(Debug, Clone, PartialEq)]
 pub struct NextPadDefaults {
     pub designator_override: Option<String>,
@@ -366,6 +556,47 @@ pub struct NextPadDefaults {
     pub size_y_mm: f64,
     pub side: PadSide,
     pub rotation_deg: f64,
+    /// Per-side pad-stack overrides. Mirror of `EditorPad.stack`.
+    pub stack: PadStackUi,
+    /// Top-side surface feature.
+    pub feature_top: PadFeature,
+    /// Bottom-side surface feature.
+    pub feature_bottom: PadFeature,
+    /// Test-point participation flags.
+    pub testpoint: TestpointFlags,
+    /// Pad-template name. Empty = no template.
+    pub template: String,
+    /// Pad-template library reference. Empty = local.
+    pub template_library: String,
+    /// v0.20 — Drill diameter (mm) for the next placed pad. `None`
+    /// = SMD pad (no hole). `Some(d)` = THT/NPT pad with the given
+    /// diameter. Surfaced in the Pad Stack → HOLE → Hole size row.
+    pub drill_diameter_mm: Option<f64>,
+    /// v0.20 — Drill slot length (mm). `None` = round drill;
+    /// `Some(l)` = oval slot of length l along the slot's long axis.
+    /// Drives the HOLE → Shape pick_list (Round vs Slot) and the
+    /// "Slot length" input visibility.
+    pub drill_slot_length_mm: Option<f64>,
+    /// v0.20 — Copper shape for the next placed pad. Mirror of
+    /// `EditorPad.shape`. Drives the Pad Stack → COPPER → Shape
+    /// pick_list and the 3D preview.
+    pub shape: signex_library::PadShape,
+    /// v0.20 — Pad mounting kind (SMD / THT / NptHole / etc) for
+    /// the next placed pad. Mirror of `EditorPad.kind`. Persisted
+    /// to `Pad::kind` at bake time.
+    pub kind: signex_library::PadKind,
+    /// v0.20 — Altium-parity electrical-type (Load/Source/Terminator).
+    pub electrical_type: ElectricalType,
+    /// v0.20 — net assignment.
+    pub net: String,
+    /// v0.20 — locked flag.
+    pub locked: bool,
+    /// v0.20 — Pad Hole tolerance ±.
+    pub hole_tolerance_plus_mm: Option<f64>,
+    pub hole_tolerance_minus_mm: Option<f64>,
+    pub hole_rotation_deg: Option<f64>,
+    pub copper_offset_x_mm: Option<f64>,
+    pub copper_offset_y_mm: Option<f64>,
 }
 
 /// HI-25 helper: when an item is removed at `removed_idx` from a Vec,
@@ -623,6 +854,24 @@ impl Default for NextPadDefaults {
             size_y_mm: NEW_PAD_SIZE_MM,
             side: PadSide::Top,
             rotation_deg: 0.0,
+            stack: PadStackUi::default(),
+            feature_top: PadFeature::None,
+            feature_bottom: PadFeature::None,
+            testpoint: TestpointFlags::default(),
+            template: String::new(),
+            template_library: String::new(),
+            drill_diameter_mm: None,
+            drill_slot_length_mm: None,
+            shape: signex_library::PadShape::Rect,
+            kind: signex_library::PadKind::Smd,
+            electrical_type: ElectricalType::Load,
+            net: String::new(),
+            locked: false,
+            hole_tolerance_plus_mm: None,
+            hole_tolerance_minus_mm: None,
+            hole_rotation_deg: None,
+            copper_offset_x_mm: None,
+            copper_offset_y_mm: None,
         }
     }
 }
@@ -948,6 +1197,7 @@ impl FootprintEditorState {
             snap_subtab: SnapSubTab::default(),
             snapping_mode: SnappingMode::default(),
             active_bar_menu: None,
+            pad_stack_tab: PadStackTab::default(),
         };
         s.recompute_courtyard();
         s
@@ -991,6 +1241,7 @@ impl FootprintEditorState {
             snap_subtab: SnapSubTab::default(),
             snapping_mode: SnappingMode::default(),
             active_bar_menu: None,
+            pad_stack_tab: PadStackTab::default(),
         };
         s.recompute_courtyard();
         s
@@ -1057,8 +1308,32 @@ impl FootprintEditorState {
         };
         let mut pad = EditorPad::new_default(number, (x_mm, y_mm));
         pad.size_mm = (defaults.size_x_mm.max(0.05), defaults.size_y_mm.max(0.05));
+        pad.shape = defaults.shape.clone();
+        pad.kind = defaults.kind;
         pad.layers = layers;
         pad.rotation_deg = defaults.rotation_deg;
+        // v0.20 — apply Altium-parity Pad Stack / Pad Features /
+        // Testpoint / Template defaults so the placed pad inherits
+        // the user-edited values from the Properties panel.
+        pad.stack = defaults.stack.clone();
+        pad.feature_top = defaults.feature_top;
+        pad.feature_bottom = defaults.feature_bottom;
+        pad.testpoint = defaults.testpoint;
+        pad.template = defaults.template.clone();
+        pad.template_library = defaults.template_library.clone();
+        // For Multi-Layer pads, propagate drill diameter from the
+        // defaults. Single-layer pads stay SMD (no drill).
+        if matches!(defaults.side, PadSide::All) {
+            pad.drill_diameter_mm = defaults.drill_diameter_mm;
+        }
+        pad.electrical_type = defaults.electrical_type;
+        pad.net = defaults.net.clone();
+        pad.locked = defaults.locked;
+        pad.hole_tolerance_plus_mm = defaults.hole_tolerance_plus_mm;
+        pad.hole_tolerance_minus_mm = defaults.hole_tolerance_minus_mm;
+        pad.hole_rotation_deg = defaults.hole_rotation_deg;
+        pad.copper_offset_x_mm = defaults.copper_offset_x_mm;
+        pad.copper_offset_y_mm = defaults.copper_offset_y_mm;
         self.pads.push(pad);
         let idx = self.pads.len() - 1;
         self.selected_pad = Some(idx);
@@ -1077,7 +1352,15 @@ impl FootprintEditorState {
             .clone()
             .unwrap_or_else(|| self.next_pad_number());
         let drill_mm = defaults.size_x_mm.max(0.05);
-        let pad = EditorPad::new_npt_hole(number, (x_mm, y_mm), drill_mm);
+        let mut pad = EditorPad::new_npt_hole(number, (x_mm, y_mm), drill_mm);
+        // v0.20 — propagate the Pad Properties defaults onto the hole
+        // so testpoint / template / feature flags survive placement.
+        pad.stack = defaults.stack.clone();
+        pad.feature_top = defaults.feature_top;
+        pad.feature_bottom = defaults.feature_bottom;
+        pad.testpoint = defaults.testpoint;
+        pad.template = defaults.template.clone();
+        pad.template_library = defaults.template_library.clone();
         self.pads.push(pad);
         let idx = self.pads.len() - 1;
         self.selected_pad = Some(idx);
@@ -1197,6 +1480,7 @@ mod tests {
             drill: None,
             solder_mask_margin: None,
             paste_margin: None,
+            ..Pad::default()
         });
         let s = FootprintEditorState::from_footprint(&fp);
         assert_eq!(s.pads.len(), 1);

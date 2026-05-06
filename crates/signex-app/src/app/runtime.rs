@@ -1089,16 +1089,51 @@ fn build_footprint_editor_panel_ctx(
     // surfacing while they're authoring sketch entities.
     let selected_pad = if mode_kind == FootprintModeKind::Pads {
         editor.state.selected_pad.and_then(|idx| {
-            editor.state.pads.get(idx).map(|pad| FootprintPadSummary {
-                idx,
-                number: pad.number.clone(),
-                kind_label: footprint_pad_kind_label(pad),
-                shape_label: footprint_pad_shape_label(pad),
-                size_mm: [pad.size_mm.0, pad.size_mm.1],
-                position_mm: [pad.position_mm.0, pad.position_mm.1],
-                rotation_deg: pad.rotation_deg,
-                layer_count: pad.layers.len(),
-                has_drill: false, // drill lives on the baked Pad, not EditorPad
+            editor.state.pads.get(idx).map(|pad| {
+                use crate::library::editor::footprint::state::PadSide;
+                // Side derived from the first layer's prefix. THT/NPT
+                // pads carry both copper sides → All. Otherwise Top
+                // for F.* and Bottom for B.*.
+                let side = if pad
+                    .layers
+                    .iter()
+                    .any(|l| l.as_str().starts_with("*."))
+                {
+                    PadSide::All
+                } else if pad
+                    .layers
+                    .first()
+                    .map(|l| l.as_str().starts_with("B."))
+                    .unwrap_or(false)
+                {
+                    PadSide::Bottom
+                } else {
+                    PadSide::Top
+                };
+                FootprintPadSummary {
+                    idx,
+                    number: pad.number.clone(),
+                    kind_label: footprint_pad_kind_label(pad),
+                    shape_label: footprint_pad_shape_label(pad),
+                    size_mm: [pad.size_mm.0, pad.size_mm.1],
+                    position_mm: [pad.position_mm.0, pad.position_mm.1],
+                    rotation_deg: pad.rotation_deg,
+                    layer_count: pad.layers.len(),
+                    has_drill: pad.drill_diameter_mm.is_some(),
+                    side,
+                    shape: pad.shape.clone(),
+                    kind: pad.kind,
+                    drill_diameter_mm: pad.drill_diameter_mm,
+                    stack: pad.stack.clone(),
+                    feature_top: pad.feature_top,
+                    feature_bottom: pad.feature_bottom,
+                    testpoint: pad.testpoint,
+                    template: pad.template.clone(),
+                    template_library: pad.template_library.clone(),
+                    electrical_type: pad.electrical_type,
+                    net: pad.net.clone(),
+                    locked: pad.locked,
+                }
             })
         })
     } else {
@@ -1345,6 +1380,23 @@ fn build_footprint_editor_panel_ctx(
         next_pad_size_y_mm,
         next_pad_side,
         next_pad_rotation_deg,
+        next_pad_stack: editor.state.next_pad_defaults.stack.clone(),
+        next_pad_shape: editor.state.next_pad_defaults.shape.clone(),
+        next_pad_drill_diameter_mm: editor.state.next_pad_defaults.drill_diameter_mm,
+        next_pad_drill_slot_length_mm: editor.state.next_pad_defaults.drill_slot_length_mm,
+        next_pad_template: editor.state.next_pad_defaults.template.clone(),
+        next_pad_template_library: editor.state.next_pad_defaults.template_library.clone(),
+        next_pad_feature_top: editor.state.next_pad_defaults.feature_top,
+        next_pad_feature_bottom: editor.state.next_pad_defaults.feature_bottom,
+        next_pad_testpoint: editor.state.next_pad_defaults.testpoint,
+        pad_stack_tab: editor.state.pad_stack_tab,
+        next_pad_electrical_type: editor.state.next_pad_defaults.electrical_type,
+        next_pad_net: editor.state.next_pad_defaults.net.clone(),
+        next_pad_locked: editor.state.next_pad_defaults.locked,
+        footprint_description: editor.primitive().description.clone(),
+        footprint_default_designator: editor.primitive().default_designator.clone(),
+        footprint_component_type: editor.primitive().component_type,
+        footprint_height_mm: editor.primitive().height_mm,
         selected_pour,
         selected_keepout,
         selected_cutout,

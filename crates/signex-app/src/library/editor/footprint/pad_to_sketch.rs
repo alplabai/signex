@@ -282,6 +282,7 @@ fn pad_attr_from_editor_pad(pad: &EditorPad) -> PadAttr {
         mask_margin_expr: None,
         paste_margin_expr: None,
         paste_apertures: PasteAperturePattern::Single,
+        ..PadAttr::default()
     }
 }
 

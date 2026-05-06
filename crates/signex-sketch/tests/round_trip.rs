@@ -130,6 +130,7 @@ fn smd_rect_pad(num: &str) -> PadAttr {
         mask_margin_expr: None,
         paste_margin_expr: None,
         paste_apertures: PasteAperturePattern::Single,
+        ..PadAttr::default()
     }
 }
 
@@ -210,6 +211,7 @@ fn pad_attr_tht_with_drill_round_trip() {
         mask_margin_expr: None,
         paste_margin_expr: None,
         paste_apertures: PasteAperturePattern::Single,
+        ..PadAttr::default()
     };
     let s = toml::to_string(&a).unwrap();
     let back: PadAttr = toml::from_str(&s).unwrap();
@@ -236,6 +238,7 @@ fn pad_attr_npt_mounting_hole_round_trip() {
         mask_margin_expr: None,
         paste_margin_expr: None,
         paste_apertures: PasteAperturePattern::Single,
+        ..PadAttr::default()
     };
     let s = toml::to_string(&a).unwrap();
     let back: PadAttr = toml::from_str(&s).unwrap();
@@ -304,6 +307,7 @@ fn fiducial_pad_round_trip() {
         mask_margin_expr: Some("1.0mm".into()),
         paste_margin_expr: None,
         paste_apertures: PasteAperturePattern::Single,
+        ..PadAttr::default()
     };
     let s = toml::to_string(&a).unwrap();
     let back: PadAttr = toml::from_str(&s).unwrap();
@@ -424,6 +428,7 @@ fn castellated_pad_round_trip() {
         mask_margin_expr: None,
         paste_margin_expr: None,
         paste_apertures: PasteAperturePattern::Single,
+        ..PadAttr::default()
     };
     let s = toml::to_string(&a).unwrap();
     let back: PadAttr = toml::from_str(&s).unwrap();

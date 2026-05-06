@@ -164,6 +164,7 @@ pub fn set_entity_role(footprint: &mut Footprint, id: SketchEntityId, role: Role
                     mask_margin_expr: None,
                     paste_margin_expr: None,
                     paste_apertures: PasteAperturePattern::Single,
+                    ..PadAttr::default()
                 });
             }
             // Non-Point: silent no-op (Pad attr requires a single point

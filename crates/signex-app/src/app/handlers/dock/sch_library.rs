@@ -211,6 +211,281 @@ impl Signex {
                 self.fp_editor_set_selected_pad_rotation(*idx, value.clone());
                 true
             }
+            // v0.20 — Altium-parity Pad Properties / Pad Stack / Pad
+            // Features form for the next placed pad. Each handler
+            // mutates the matching slice of `editor.state.next_pad_defaults`
+            // (and its `stack` sub-struct) so the next placement
+            // click picks up the new value.
+            crate::panels::PanelMsg::FpEditorSetNextPadShape(shape) => {
+                self.fp_editor_set_next_pad_shape(shape.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadKind(kind) => {
+                self.fp_editor_set_next_pad_kind(*kind);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadDrillDiameter(v) => {
+                self.fp_editor_set_next_pad_drill_diameter(v.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadDrillSlotLength(v) => {
+                self.fp_editor_set_next_pad_drill_slot_length(v.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadCornerRadiusPct(v) => {
+                self.fp_editor_set_next_pad_corner_radius_pct(v.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadTemplate(v) => {
+                self.fp_editor_set_next_pad_template(v.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadTemplateLibrary(v) => {
+                self.fp_editor_set_next_pad_template_library(v.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadPasteMarginTop(v) => {
+                self.fp_editor_set_next_pad_paste_margin_top(v.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadPasteMarginBottom(v) => {
+                self.fp_editor_set_next_pad_paste_margin_bottom(v.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleNextPadPasteEnabledTop(on) => {
+                self.fp_editor_toggle_next_pad_paste_enabled_top(*on);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleNextPadPasteEnabledBottom(on) => {
+                self.fp_editor_toggle_next_pad_paste_enabled_bottom(*on);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadMaskMarginTop(v) => {
+                self.fp_editor_set_next_pad_mask_margin_top(v.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadMaskMarginBottom(v) => {
+                self.fp_editor_set_next_pad_mask_margin_bottom(v.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleNextPadMaskTentedTop(on) => {
+                self.fp_editor_toggle_next_pad_mask_tented_top(*on);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleNextPadMaskTentedBottom(on) => {
+                self.fp_editor_toggle_next_pad_mask_tented_bottom(*on);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleNextPadThermalRelief(on) => {
+                self.fp_editor_toggle_next_pad_thermal_relief(*on);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadFeatureTop(f) => {
+                self.fp_editor_set_next_pad_feature_top(*f);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadFeatureBottom(f) => {
+                self.fp_editor_set_next_pad_feature_bottom(*f);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleNextPadTestpointTopAssembly(on) => {
+                self.fp_editor_toggle_next_pad_testpoint_top_assembly(*on);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleNextPadTestpointTopFab(on) => {
+                self.fp_editor_toggle_next_pad_testpoint_top_fab(*on);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleNextPadTestpointBottomAssembly(on) => {
+                self.fp_editor_toggle_next_pad_testpoint_bottom_assembly(*on);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleNextPadTestpointBottomFab(on) => {
+                self.fp_editor_toggle_next_pad_testpoint_bottom_fab(*on);
+                true
+            }
+            // v0.20 — selected-pad editing routes. Each handler mutates
+            // `state.pads[idx]` and triggers a dirty + canvas-cache
+            // invalidate so the panel re-renders with the new value.
+            crate::panels::PanelMsg::FpEditorSetSelectedPadDesignator { idx, value } => {
+                self.fp_editor_set_selected_pad_designator(*idx, value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadSide { idx, side } => {
+                self.fp_editor_set_selected_pad_side(*idx, *side);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadShape { idx, shape } => {
+                self.fp_editor_set_selected_pad_shape(*idx, shape.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadKind { idx, kind } => {
+                self.fp_editor_set_selected_pad_kind(*idx, *kind);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadSizeX { idx, value } => {
+                self.fp_editor_set_selected_pad_size_x(*idx, value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadSizeY { idx, value } => {
+                self.fp_editor_set_selected_pad_size_y(*idx, value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadDrillDiameter { idx, value } => {
+                self.fp_editor_set_selected_pad_drill_diameter(*idx, value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadDrillSlotLength { idx, value } => {
+                self.fp_editor_set_selected_pad_drill_slot_length(*idx, value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadCornerRadiusPct { idx, value } => {
+                self.fp_editor_set_selected_pad_corner_radius_pct(*idx, value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadTemplate { idx, value } => {
+                self.fp_editor_set_selected_pad_template(*idx, value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadTemplateLibrary { idx, value } => {
+                self.fp_editor_set_selected_pad_template_library(*idx, value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadPasteMarginTop { idx, value } => {
+                self.fp_editor_set_selected_pad_paste_margin_top(*idx, value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadPasteMarginBottom { idx, value } => {
+                self.fp_editor_set_selected_pad_paste_margin_bottom(*idx, value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSelectedPadPasteEnabledTop { idx, value } => {
+                self.fp_editor_toggle_selected_pad_paste_enabled_top(*idx, *value);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSelectedPadPasteEnabledBottom { idx, value } => {
+                self.fp_editor_toggle_selected_pad_paste_enabled_bottom(*idx, *value);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadMaskMarginTop { idx, value } => {
+                self.fp_editor_set_selected_pad_mask_margin_top(*idx, value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadMaskMarginBottom { idx, value } => {
+                self.fp_editor_set_selected_pad_mask_margin_bottom(*idx, value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSelectedPadMaskTentedTop { idx, value } => {
+                self.fp_editor_toggle_selected_pad_mask_tented_top(*idx, *value);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSelectedPadMaskTentedBottom { idx, value } => {
+                self.fp_editor_toggle_selected_pad_mask_tented_bottom(*idx, *value);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSelectedPadThermalRelief { idx, value } => {
+                self.fp_editor_toggle_selected_pad_thermal_relief(*idx, *value);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadFeatureTop { idx, value } => {
+                self.fp_editor_set_selected_pad_feature_top(*idx, *value);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadFeatureBottom { idx, value } => {
+                self.fp_editor_set_selected_pad_feature_bottom(*idx, *value);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSelectedPadTestpointTopAssembly { idx, value } => {
+                self.fp_editor_toggle_selected_pad_testpoint_top_assembly(*idx, *value);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSelectedPadTestpointTopFab { idx, value } => {
+                self.fp_editor_toggle_selected_pad_testpoint_top_fab(*idx, *value);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSelectedPadTestpointBottomAssembly { idx, value } => {
+                self.fp_editor_toggle_selected_pad_testpoint_bottom_assembly(*idx, *value);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSelectedPadTestpointBottomFab { idx, value } => {
+                self.fp_editor_toggle_selected_pad_testpoint_bottom_fab(*idx, *value);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetPadStackTab(tab) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.state.pad_stack_tab = *tab;
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadElectricalType(v) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.state.next_pad_defaults.electrical_type = *v;
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadNet(v) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.state.next_pad_defaults.net = v.clone();
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleNextPadLocked(on) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.state.next_pad_defaults.locked = *on;
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadElectricalType { idx, value } => {
+                let v = *value;
+                self.with_selected_pad(*idx, |pad| pad.electrical_type = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadNet { idx, value } => {
+                let v = value.clone();
+                self.with_selected_pad(*idx, |pad| pad.net = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSelectedPadLocked { idx, value } => {
+                let v = *value;
+                self.with_selected_pad(*idx, |pad| pad.locked = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetFootprintDescription(v) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.primitive_mut().description = v.clone();
+                    editor.dirty = true;
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetFootprintDefaultDesignator(v) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.primitive_mut().default_designator = v.clone();
+                    editor.dirty = true;
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetFootprintComponentType(t) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.primitive_mut().component_type = *t;
+                    editor.dirty = true;
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetFootprintHeight(v) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.primitive_mut().height_mm = fp_parse_optional_mm(v);
+                    editor.dirty = true;
+                }
+                self.refresh_panel_ctx();
+                true
+            }
             crate::panels::PanelMsg::FpEditorSetPourNet { id, value } => {
                 self.fp_editor_set_pour_net(*id, value.clone());
                 true
@@ -1238,6 +1513,344 @@ impl Signex {
         self.refresh_panel_ctx();
     }
 
+    // v0.20 — Altium-parity Pad Properties / Pad Stack / Pad Features
+    // form handlers. Each method mutates a slice of
+    // `editor.state.next_pad_defaults` so the next `add_pad_at` mints
+    // a pad with the user-selected stack / feature / testpoint
+    // configuration. None of these are dirty-marking on their own —
+    // they're "pre-placement defaults" — but the panel `refresh` runs
+    // so the form re-reads the new value.
+    pub(crate) fn fp_editor_set_next_pad_shape(
+        &mut self,
+        shape: signex_library::PadShape,
+    ) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.shape = shape;
+            editor.canvas_cache.clear();
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_set_next_pad_kind(
+        &mut self,
+        kind: signex_library::PadKind,
+    ) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.kind = kind;
+            editor.canvas_cache.clear();
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_set_next_pad_drill_diameter(&mut self, value: String) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.drill_diameter_mm = fp_parse_optional_mm(&value);
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_set_next_pad_drill_slot_length(&mut self, value: String) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.drill_slot_length_mm =
+                fp_parse_optional_mm(&value);
+        }
+        self.refresh_panel_ctx();
+    }
+    /// v0.20 — Hole shape pick_list. Round / Slot. The picker is a
+    /// shortcut: Round clears slot_length; Slot defaults it to
+    /// 1.5× drill diameter (or 1mm if no drill yet).
+    pub(crate) fn fp_editor_set_next_pad_hole_shape_round(&mut self) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.drill_slot_length_mm = None;
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_set_next_pad_hole_shape_slot(&mut self) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            let default_slot = editor
+                .state
+                .next_pad_defaults
+                .drill_diameter_mm
+                .map(|d| d * 1.5)
+                .unwrap_or(1.0);
+            editor.state.next_pad_defaults.drill_slot_length_mm = Some(default_slot);
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_set_next_pad_corner_radius_pct(&mut self, value: String) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            let parsed = value.trim().parse::<f64>().ok();
+            editor.state.next_pad_defaults.stack.corner_radius_pct =
+                parsed.filter(|v| (0.0..=50.0).contains(v));
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_set_next_pad_template(&mut self, value: String) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.template = value;
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_set_next_pad_template_library(&mut self, value: String) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.template_library = value;
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_set_next_pad_paste_margin_top(&mut self, value: String) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.stack.paste_margin_top =
+                fp_parse_optional_mm(&value);
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_set_next_pad_paste_margin_bottom(&mut self, value: String) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.stack.paste_margin_bottom =
+                fp_parse_optional_mm(&value);
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_toggle_next_pad_paste_enabled_top(&mut self, on: bool) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.stack.paste_enabled_top = on;
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_toggle_next_pad_paste_enabled_bottom(&mut self, on: bool) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.stack.paste_enabled_bottom = on;
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_set_next_pad_mask_margin_top(&mut self, value: String) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.stack.mask_margin_top =
+                fp_parse_optional_mm(&value);
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_set_next_pad_mask_margin_bottom(&mut self, value: String) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.stack.mask_margin_bottom =
+                fp_parse_optional_mm(&value);
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_toggle_next_pad_mask_tented_top(&mut self, on: bool) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.stack.mask_tented_top = on;
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_toggle_next_pad_mask_tented_bottom(&mut self, on: bool) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.stack.mask_tented_bottom = on;
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_toggle_next_pad_thermal_relief(&mut self, on: bool) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.stack.thermal_relief = on;
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_set_next_pad_feature_top(
+        &mut self,
+        f: signex_sketch::attr::PadFeature,
+    ) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.feature_top = f;
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_set_next_pad_feature_bottom(
+        &mut self,
+        f: signex_sketch::attr::PadFeature,
+    ) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.feature_bottom = f;
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_toggle_next_pad_testpoint_top_assembly(&mut self, on: bool) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.testpoint.top_assembly = on;
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_toggle_next_pad_testpoint_top_fab(&mut self, on: bool) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.testpoint.top_fab = on;
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_toggle_next_pad_testpoint_bottom_assembly(&mut self, on: bool) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.testpoint.bottom_assembly = on;
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_toggle_next_pad_testpoint_bottom_fab(&mut self, on: bool) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.testpoint.bottom_fab = on;
+        }
+        self.refresh_panel_ctx();
+    }
+
+    // v0.20 — Selected-pad editing handlers. Each one mutates a slice
+    // of `state.pads[idx]` and dirty-marks the editor + clears the
+    // canvas cache so the new value renders. The `with_parts` block
+    // syncs the pad list back onto the underlying primitive so the
+    // saved file picks up the change.
+    fn with_selected_pad<F>(&mut self, idx: usize, f: F)
+    where
+        F: FnOnce(&mut crate::library::editor::footprint::state::EditorPad),
+    {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            if let Some(pad) = editor.state.pads.get_mut(idx) {
+                f(pad);
+                editor.with_parts(|state, primitive| {
+                    crate::library::editor::footprint::state::FootprintEditorState::sync_pads_to_primitive(state, primitive);
+                });
+                editor.dirty = true;
+                editor.canvas_cache.clear();
+            }
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_set_selected_pad_designator(&mut self, idx: usize, value: String) {
+        self.with_selected_pad(idx, |pad| pad.number = value);
+    }
+    pub(crate) fn fp_editor_set_selected_pad_side(
+        &mut self,
+        idx: usize,
+        side: crate::library::editor::footprint::state::PadSide,
+    ) {
+        use crate::library::editor::footprint::state::PadSide;
+        use signex_library::LayerId;
+        let layers = match side {
+            PadSide::Top => vec![
+                LayerId::new("F.Cu"),
+                LayerId::new("F.Mask"),
+                LayerId::new("F.Paste"),
+            ],
+            PadSide::Bottom => vec![
+                LayerId::new("B.Cu"),
+                LayerId::new("B.Mask"),
+                LayerId::new("B.Paste"),
+            ],
+            PadSide::All => vec![
+                LayerId::new("*.Cu"),
+                LayerId::new("F.Mask"),
+                LayerId::new("B.Mask"),
+            ],
+        };
+        self.with_selected_pad(idx, |pad| pad.layers = layers);
+    }
+    pub(crate) fn fp_editor_set_selected_pad_shape(
+        &mut self,
+        idx: usize,
+        shape: signex_library::PadShape,
+    ) {
+        self.with_selected_pad(idx, |pad| pad.shape = shape);
+    }
+    pub(crate) fn fp_editor_set_selected_pad_kind(
+        &mut self,
+        idx: usize,
+        kind: signex_library::PadKind,
+    ) {
+        self.with_selected_pad(idx, |pad| pad.kind = kind);
+    }
+    pub(crate) fn fp_editor_set_selected_pad_size_x(&mut self, idx: usize, value: String) {
+        if let Ok(parsed) = value.trim().parse::<f64>() {
+            if parsed > 0.0 {
+                self.with_selected_pad(idx, |pad| pad.size_mm.0 = parsed);
+            }
+        }
+    }
+    pub(crate) fn fp_editor_set_selected_pad_size_y(&mut self, idx: usize, value: String) {
+        if let Ok(parsed) = value.trim().parse::<f64>() {
+            if parsed > 0.0 {
+                self.with_selected_pad(idx, |pad| pad.size_mm.1 = parsed);
+            }
+        }
+    }
+    pub(crate) fn fp_editor_set_selected_pad_drill_diameter(&mut self, idx: usize, value: String) {
+        let parsed = fp_parse_optional_mm(&value);
+        self.with_selected_pad(idx, |pad| pad.drill_diameter_mm = parsed);
+    }
+    pub(crate) fn fp_editor_set_selected_pad_drill_slot_length(&mut self, idx: usize, _value: String) {
+        // v0.20 placeholder — slot length not yet on EditorPad. Wired
+        // when `EditorPad` gains a separate `drill_slot_length_mm`.
+        let _ = idx;
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_set_selected_pad_corner_radius_pct(&mut self, idx: usize, value: String) {
+        let parsed = value.trim().parse::<f64>().ok().filter(|v| (0.0..=50.0).contains(v));
+        self.with_selected_pad(idx, |pad| pad.stack.corner_radius_pct = parsed);
+    }
+    pub(crate) fn fp_editor_set_selected_pad_template(&mut self, idx: usize, value: String) {
+        self.with_selected_pad(idx, |pad| pad.template = value);
+    }
+    pub(crate) fn fp_editor_set_selected_pad_template_library(&mut self, idx: usize, value: String) {
+        self.with_selected_pad(idx, |pad| pad.template_library = value);
+    }
+    pub(crate) fn fp_editor_set_selected_pad_paste_margin_top(&mut self, idx: usize, value: String) {
+        let parsed = fp_parse_optional_mm(&value);
+        self.with_selected_pad(idx, |pad| pad.stack.paste_margin_top = parsed);
+    }
+    pub(crate) fn fp_editor_set_selected_pad_paste_margin_bottom(&mut self, idx: usize, value: String) {
+        let parsed = fp_parse_optional_mm(&value);
+        self.with_selected_pad(idx, |pad| pad.stack.paste_margin_bottom = parsed);
+    }
+    pub(crate) fn fp_editor_toggle_selected_pad_paste_enabled_top(&mut self, idx: usize, on: bool) {
+        self.with_selected_pad(idx, |pad| pad.stack.paste_enabled_top = on);
+    }
+    pub(crate) fn fp_editor_toggle_selected_pad_paste_enabled_bottom(&mut self, idx: usize, on: bool) {
+        self.with_selected_pad(idx, |pad| pad.stack.paste_enabled_bottom = on);
+    }
+    pub(crate) fn fp_editor_set_selected_pad_mask_margin_top(&mut self, idx: usize, value: String) {
+        let parsed = fp_parse_optional_mm(&value);
+        self.with_selected_pad(idx, |pad| pad.stack.mask_margin_top = parsed);
+    }
+    pub(crate) fn fp_editor_set_selected_pad_mask_margin_bottom(&mut self, idx: usize, value: String) {
+        let parsed = fp_parse_optional_mm(&value);
+        self.with_selected_pad(idx, |pad| pad.stack.mask_margin_bottom = parsed);
+    }
+    pub(crate) fn fp_editor_toggle_selected_pad_mask_tented_top(&mut self, idx: usize, on: bool) {
+        self.with_selected_pad(idx, |pad| pad.stack.mask_tented_top = on);
+    }
+    pub(crate) fn fp_editor_toggle_selected_pad_mask_tented_bottom(&mut self, idx: usize, on: bool) {
+        self.with_selected_pad(idx, |pad| pad.stack.mask_tented_bottom = on);
+    }
+    pub(crate) fn fp_editor_toggle_selected_pad_thermal_relief(&mut self, idx: usize, on: bool) {
+        self.with_selected_pad(idx, |pad| pad.stack.thermal_relief = on);
+    }
+    pub(crate) fn fp_editor_set_selected_pad_feature_top(
+        &mut self,
+        idx: usize,
+        value: signex_sketch::attr::PadFeature,
+    ) {
+        self.with_selected_pad(idx, |pad| pad.feature_top = value);
+    }
+    pub(crate) fn fp_editor_set_selected_pad_feature_bottom(
+        &mut self,
+        idx: usize,
+        value: signex_sketch::attr::PadFeature,
+    ) {
+        self.with_selected_pad(idx, |pad| pad.feature_bottom = value);
+    }
+    pub(crate) fn fp_editor_toggle_selected_pad_testpoint_top_assembly(&mut self, idx: usize, on: bool) {
+        self.with_selected_pad(idx, |pad| pad.testpoint.top_assembly = on);
+    }
+    pub(crate) fn fp_editor_toggle_selected_pad_testpoint_top_fab(&mut self, idx: usize, on: bool) {
+        self.with_selected_pad(idx, |pad| pad.testpoint.top_fab = on);
+    }
+    pub(crate) fn fp_editor_toggle_selected_pad_testpoint_bottom_assembly(&mut self, idx: usize, on: bool) {
+        self.with_selected_pad(idx, |pad| pad.testpoint.bottom_assembly = on);
+    }
+    pub(crate) fn fp_editor_toggle_selected_pad_testpoint_bottom_fab(&mut self, idx: usize, on: bool) {
+        self.with_selected_pad(idx, |pad| pad.testpoint.bottom_fab = on);
+    }
+
     /// v0.16.4 — mutate the selected entity's pour `net` and re-bake.
     pub(crate) fn fp_editor_set_pour_net(
         &mut self,
@@ -1499,6 +2112,18 @@ impl Signex {
 /// Click-to-cycle the symbol's local color override through a small
 /// preset palette and back to `None` (= inherit). 5 steps total:
 /// None → red → green → blue → yellow → back to None.
+/// v0.20 — parse a Properties-panel mm input as `Option<f64>`.
+/// Empty / whitespace = `None` (means "use rule"); non-numeric =
+/// `None` (the form re-displays the previous value, so the user
+/// can keep typing). Used by every per-side mask / paste row.
+fn fp_parse_optional_mm(value: &str) -> Option<f64> {
+    let s = value.trim();
+    if s.is_empty() {
+        return None;
+    }
+    s.parse::<f64>().ok()
+}
+
 fn cycle_local_color(current: Option<[u8; 4]>) -> Option<[u8; 4]> {
     const PALETTE: &[[u8; 4]] = &[
         [220, 60, 60, 255],  // red

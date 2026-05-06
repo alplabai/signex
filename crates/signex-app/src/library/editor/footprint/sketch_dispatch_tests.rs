@@ -39,6 +39,7 @@ mod tests {
             mask_margin_expr: None,
             paste_margin_expr: None,
             paste_apertures: PasteAperturePattern::Single,
+            ..PadAttr::default()
         });
         (e, id)
     }
@@ -147,6 +148,7 @@ mod tests {
             drill: None,
             solder_mask_margin: None,
             paste_margin: None,
+            ..Pad::default()
         });
 
         let mut state = FootprintEditorState::from_footprint(&fp);

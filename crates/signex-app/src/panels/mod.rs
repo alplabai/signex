@@ -624,6 +624,52 @@ pub struct FootprintEditorPanelContext {
     /// placed pad. Persists through `EditorPad.rotation_deg` →
     /// `Pad::rotation` so the saved file carries the value.
     pub next_pad_rotation_deg: f64,
+    /// v0.20 — Altium-parity pad-stack defaults for the next placed
+    /// pad. Mirrors `editor.state.next_pad_defaults.stack` for the
+    /// Properties panel "Pad Stack" section. UI mutates these via
+    /// `FpEditorSetNextPad*` messages; the dispatcher writes the
+    /// value back so `add_pad_at` picks it up on the next click.
+    pub next_pad_stack: crate::library::editor::footprint::state::PadStackUi,
+    /// v0.20 — pad shape for the next placed pad (read out of
+    /// `EditorPad::shape` after mint). Defaults to `Rect`.
+    pub next_pad_shape: signex_library::PadShape,
+    /// v0.20 — drill diameter for the next placed pad in mm. `None`
+    /// = SMD pad (no hole). Drives the HOLE → Hole size row.
+    pub next_pad_drill_diameter_mm: Option<f64>,
+    /// v0.20 — drill slot length for the next placed pad in mm.
+    /// `None` = round drill; `Some(l)` = oval slot of length l.
+    /// Drives the HOLE → Shape pick_list (Round vs Slot) and the
+    /// Slot length input visibility.
+    pub next_pad_drill_slot_length_mm: Option<f64>,
+    /// v0.20 — pad-template name for the next placed pad. Empty =
+    /// no template.
+    pub next_pad_template: String,
+    /// v0.20 — pad-template library reference for the next placed
+    /// pad. Empty = local.
+    pub next_pad_template_library: String,
+    /// v0.20 — top-side surface feature for the next placed pad.
+    pub next_pad_feature_top: signex_sketch::attr::PadFeature,
+    /// v0.20 — bottom-side surface feature for the next placed pad.
+    pub next_pad_feature_bottom: signex_sketch::attr::PadFeature,
+    /// v0.20 — test-point participation flags for the next placed
+    /// pad. All `false` = not a test point.
+    pub next_pad_testpoint: signex_sketch::attr::TestpointFlags,
+    /// v0.20 — currently-active Pad Stack tab (Simple / Top-Middle-
+    /// Bottom / Full Stack). Drives which body the Pad Stack section
+    /// renders. UI-only state; not persisted to disk.
+    pub pad_stack_tab: crate::library::editor::footprint::state::PadStackTab,
+    /// v0.21 — Altium-parity electrical-type for the next placed pad.
+    pub next_pad_electrical_type: signex_sketch::attr::ElectricalType,
+    /// v0.21 — net assignment for the next placed pad.
+    pub next_pad_net: String,
+    /// v0.21 — locked flag for the next placed pad.
+    pub next_pad_locked: bool,
+    /// v0.21 — Altium-parity component-level fields. Surface in the
+    /// empty-canvas Footprint summary form.
+    pub footprint_description: String,
+    pub footprint_default_designator: String,
+    pub footprint_component_type: signex_library::primitive::footprint::ComponentType,
+    pub footprint_height_mm: Option<f64>,
     /// v0.16.4 — Pour-role sub-form values for the selected entity.
     /// `None` when the entity isn't a pour. Carries the net string,
     /// fill type, and a snapshot of thermal-relief defaults so the
@@ -787,6 +833,26 @@ pub struct FootprintPadSummary {
     pub rotation_deg: f64,
     pub layer_count: usize,
     pub has_drill: bool,
+    /// v0.20 — full snapshot of editable pad state surfaced for the
+    /// selected-pad Properties panel. Mirrors the same fields the
+    /// next-pad form binds to so the selected-pad branch can render
+    /// the same Properties / Pad Stack / Pad Features sections.
+    pub side: crate::library::editor::footprint::state::PadSide,
+    pub shape: signex_library::PadShape,
+    pub kind: signex_library::PadKind,
+    pub drill_diameter_mm: Option<f64>,
+    pub stack: crate::library::editor::footprint::state::PadStackUi,
+    pub feature_top: signex_sketch::attr::PadFeature,
+    pub feature_bottom: signex_sketch::attr::PadFeature,
+    pub testpoint: signex_sketch::attr::TestpointFlags,
+    pub template: String,
+    pub template_library: String,
+    /// v0.21 — Altium-parity electrical-type.
+    pub electrical_type: signex_sketch::attr::ElectricalType,
+    /// v0.21 — net assignment.
+    pub net: String,
+    /// v0.21 — locked flag.
+    pub locked: bool,
 }
 
 /// v0.18.24 — Read-only summary of the currently-selected silk-front
@@ -1276,6 +1342,92 @@ pub enum PanelMsg {
         idx: usize,
         value: String,
     },
+    /// v0.20 — Altium-parity Pad Properties / Pad Stack / Pad Features
+    /// form for the next placed pad. Each variant maps to one row in
+    /// the right-dock Properties panel; the dispatcher writes the
+    /// parsed value into `editor.state.next_pad_defaults` (or the
+    /// matching sub-struct) so the next `add_pad_at` picks it up.
+    /// String-typed inputs preserve the per-field typing buffer
+    /// behaviour we use for size_x / size_y / rotation.
+    FpEditorSetNextPadShape(signex_library::PadShape),
+    FpEditorSetNextPadKind(signex_library::PadKind),
+    FpEditorSetNextPadDrillDiameter(String),
+    FpEditorSetNextPadDrillSlotLength(String),
+    FpEditorSetNextPadCornerRadiusPct(String),
+    FpEditorSetNextPadTemplate(String),
+    FpEditorSetNextPadTemplateLibrary(String),
+    FpEditorSetNextPadPasteMarginTop(String),
+    FpEditorSetNextPadPasteMarginBottom(String),
+    FpEditorToggleNextPadPasteEnabledTop(bool),
+    FpEditorToggleNextPadPasteEnabledBottom(bool),
+    FpEditorSetNextPadMaskMarginTop(String),
+    FpEditorSetNextPadMaskMarginBottom(String),
+    FpEditorToggleNextPadMaskTentedTop(bool),
+    FpEditorToggleNextPadMaskTentedBottom(bool),
+    FpEditorToggleNextPadThermalRelief(bool),
+    FpEditorSetNextPadFeatureTop(signex_sketch::attr::PadFeature),
+    FpEditorSetNextPadFeatureBottom(signex_sketch::attr::PadFeature),
+    FpEditorToggleNextPadTestpointTopAssembly(bool),
+    FpEditorToggleNextPadTestpointTopFab(bool),
+    FpEditorToggleNextPadTestpointBottomAssembly(bool),
+    FpEditorToggleNextPadTestpointBottomFab(bool),
+    /// v0.20 — Altium-parity Pad Properties / Pad Stack / Pad Features
+    /// editing for the SELECTED pad. Each handler mutates
+    /// `state.pads[idx]` (and dirty-marks the editor + syncs the
+    /// primitive). String-typed numeric inputs preserve the
+    /// per-field typing buffer behaviour.
+    FpEditorSetSelectedPadDesignator { idx: usize, value: String },
+    FpEditorSetSelectedPadSide { idx: usize, side: crate::library::editor::footprint::state::PadSide },
+    FpEditorSetSelectedPadShape { idx: usize, shape: signex_library::PadShape },
+    FpEditorSetSelectedPadKind { idx: usize, kind: signex_library::PadKind },
+    FpEditorSetSelectedPadSizeX { idx: usize, value: String },
+    FpEditorSetSelectedPadSizeY { idx: usize, value: String },
+    FpEditorSetSelectedPadDrillDiameter { idx: usize, value: String },
+    FpEditorSetSelectedPadDrillSlotLength { idx: usize, value: String },
+    FpEditorSetSelectedPadCornerRadiusPct { idx: usize, value: String },
+    FpEditorSetSelectedPadTemplate { idx: usize, value: String },
+    FpEditorSetSelectedPadTemplateLibrary { idx: usize, value: String },
+    FpEditorSetSelectedPadPasteMarginTop { idx: usize, value: String },
+    FpEditorSetSelectedPadPasteMarginBottom { idx: usize, value: String },
+    FpEditorToggleSelectedPadPasteEnabledTop { idx: usize, value: bool },
+    FpEditorToggleSelectedPadPasteEnabledBottom { idx: usize, value: bool },
+    FpEditorSetSelectedPadMaskMarginTop { idx: usize, value: String },
+    FpEditorSetSelectedPadMaskMarginBottom { idx: usize, value: String },
+    FpEditorToggleSelectedPadMaskTentedTop { idx: usize, value: bool },
+    FpEditorToggleSelectedPadMaskTentedBottom { idx: usize, value: bool },
+    FpEditorToggleSelectedPadThermalRelief { idx: usize, value: bool },
+    FpEditorSetSelectedPadFeatureTop { idx: usize, value: signex_sketch::attr::PadFeature },
+    FpEditorSetSelectedPadFeatureBottom { idx: usize, value: signex_sketch::attr::PadFeature },
+    FpEditorToggleSelectedPadTestpointTopAssembly { idx: usize, value: bool },
+    FpEditorToggleSelectedPadTestpointTopFab { idx: usize, value: bool },
+    FpEditorToggleSelectedPadTestpointBottomAssembly { idx: usize, value: bool },
+    FpEditorToggleSelectedPadTestpointBottomFab { idx: usize, value: bool },
+    /// v0.20 — switch the Pad Stack section's tab (Simple /
+    /// Top-Middle-Bottom / Full Stack). UI-only; mutates
+    /// `editor.state.pad_stack_tab`.
+    FpEditorSetPadStackTab(crate::library::editor::footprint::state::PadStackTab),
+    /// v0.21 — Altium-parity Net / Locked / Electrical Type fields
+    /// for both placement-defaults and selected-pad targets.
+    FpEditorSetNextPadElectricalType(signex_sketch::attr::ElectricalType),
+    FpEditorSetNextPadNet(String),
+    FpEditorToggleNextPadLocked(bool),
+    FpEditorSetSelectedPadElectricalType {
+        idx: usize,
+        value: signex_sketch::attr::ElectricalType,
+    },
+    FpEditorSetSelectedPadNet {
+        idx: usize,
+        value: String,
+    },
+    FpEditorToggleSelectedPadLocked {
+        idx: usize,
+        value: bool,
+    },
+    /// v0.21 — Footprint (component-level) edits.
+    FpEditorSetFootprintDescription(String),
+    FpEditorSetFootprintDefaultDesignator(String),
+    FpEditorSetFootprintComponentType(signex_library::primitive::footprint::ComponentType),
+    FpEditorSetFootprintHeight(String),
     /// v0.16.4 — Pour-role sub-form. The handler mutates the
     /// selected entity's `pour` attr and runs solve+bake.
     FpEditorSetPourNet {
