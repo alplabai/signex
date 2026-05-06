@@ -10,8 +10,7 @@
 //! → no tools). The right-side per-kind Selection Filter pill row is
 //! gone — the Filter dropdown supersedes it.
 
-use iced::widget::{Stack, container};
-use iced::{Element, Length};
+use iced::Element;
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 
@@ -21,9 +20,10 @@ use crate::library::editor::footprint::state::{EditorMode, FpActiveBarMenu};
 use crate::library::messages::{LibraryMessage, PrimitiveEditorMsg};
 
 /// Build the unified bar items and render the bar + open-dropdown
-/// overlay (when one is open). Both layers carry `LibraryMessage` so
-/// callers can mount them in a Stack alongside the canvas without a
-/// message-type bridge.
+/// overlay (when one is open) — single-call API via
+/// `signex_widgets::active_bar::view_with_overlay`. The widget
+/// handles the bar centring, dropdown panel anchoring, and the
+/// click-outside backstop layer.
 pub fn view<'a>(
     editor: &'a FootprintEditorState,
     theme_id: signex_types::theme::ThemeId,
@@ -48,57 +48,37 @@ pub fn view<'a>(
     };
     items.extend(mode_items);
 
-    let bar = signex_widgets::active_bar::view(items, tokens);
+    // Capture context for the closures used by the unified widget.
+    let path_for_entries = editor.path.clone();
+    let presets_for_entries = custom_filter_presets.to_vec();
+    let state_snapshot_path = editor.path.clone();
+    // Unsafe-free workaround: clone the snapshot needed by entries()
+    // closure. FootprintEditorState is large but we only read
+    // selection_filter / snap_options / pads_tool / snapping_mode /
+    // snap_subtab / active_bar_menu through it. Cloning the inner
+    // state struct keeps the closure 'static-friendly.
+    let state_clone = editor.state.clone();
+    let close_msg = LibraryMessage::PrimitiveEditorEvent {
+        path: editor.path.clone(),
+        msg: PrimitiveEditorMsg::FootprintCloseActiveBarMenu,
+    };
+    let _ = state_snapshot_path;
 
-    // Bar centred at the top of the canvas. Match the schematic
-    // active-bar mount pattern (column![Space, container(bar)]) so
-    // both editors render at the same vertical offset.
-    //
-    // Width MUST be Length::Fill so the inner container's
-    // align_x(Center) has a full-width parent to centre against.
-    // Without this, the Column collapses to Shrink and the bar
-    // hugs whatever width its content reports.
-    //
-    // y-offset matches the schematic's `Space::new().height(y_offset
-    // + 4.0)` calculation: the 4-px gap is identical so the two
-    // bars sit at the same screen y. (Schematic uses 28 px for the
-    // tab strip + 1 px chrome separator while the actual tab bar
-    // is 26 px, but that 5 px discrepancy is internal to the
-    // schematic's y_offset math; from the canvas-top reference, both
-    // bars float +4 px above the canvas content.)
-    let bar_layer = iced::widget::column![
-        // 5 px gap matches the schematic's effective bar-top offset.
-        // The schematic active bar uses
-        // `Space::new().height(MENU_BAR_HEIGHT + 28 + 4)` from the
-        // window top, but the actual canvas content begins at
-        // MENU_BAR_HEIGHT + 1 (chrome separator) + 26 (tab strip)
-        // = MENU_BAR_HEIGHT + 27 — so the schematic's bar lands at
-        // canvas_top + 5 (28 - 27 + 4). Mirroring 5 px here ensures
-        // the two bars sit at the same screen y when the user
-        // switches tabs.
-        iced::widget::Space::new().height(Length::Fixed(5.0)),
-        container(bar)
-            .width(Length::Fill)
-            .align_x(iced::alignment::Horizontal::Center),
-    ]
-    .width(Length::Fill);
-
-    // 3) Dropdown overlay (when open) — backstop layer captures
-    // click-outside; the panel itself hosts the items.
-    if let Some(menu) = editor.state.active_bar_menu {
-        let entries = crate::library::editor::footprint::active_bar_dropdowns::entries(
-            menu,
-            &editor.state,
-            editor.path.clone(),
-            theme_id,
-            custom_filter_presets,
-        );
-        // Per-menu width hint: list-style menus get a fixed width
-        // (~longest label + icon column + padding) so hover paints a
-        // full row; chip-grid menus (Filter) auto-size from the wrap
-        // layout.
-        let width_hint = match menu {
-            FpActiveBarMenu::Filter => None, // chip wrap
+    signex_widgets::active_bar::view_with_overlay::<LibraryMessage, FpActiveBarMenu>(
+        items,
+        editor.state.active_bar_menu,
+        close_msg,
+        move |menu| {
+            crate::library::editor::footprint::active_bar_dropdowns::entries(
+                menu,
+                &state_clone,
+                path_for_entries.clone(),
+                theme_id,
+                &presets_for_entries,
+            )
+        },
+        |menu| match menu {
+            FpActiveBarMenu::Filter => None,
             FpActiveBarMenu::Snap => Some(260.0),
             FpActiveBarMenu::Place => Some(240.0),
             FpActiveBarMenu::Select => Some(220.0),
@@ -106,34 +86,9 @@ pub fn view<'a>(
             FpActiveBarMenu::Body3d => Some(200.0),
             FpActiveBarMenu::Text => Some(180.0),
             FpActiveBarMenu::Shapes => Some(220.0),
-        };
-        let panel = signex_widgets::active_bar_dropdown::view(entries, tokens, width_hint);
-        let panel_anchor = container(panel)
-            .padding([46, 10])
-            .center_x(Length::Fill)
-            .align_y(iced::alignment::Vertical::Top);
-
-        // Backstop: full-area transparent button that closes the menu
-        // when clicked outside the panel. Mounted UNDER the panel so
-        // panel clicks don't fall through.
-        let backstop = iced::widget::mouse_area(
-            container(iced::widget::Space::new())
-                .width(Length::Fill)
-                .height(Length::Fill),
-        )
-        .on_press(LibraryMessage::PrimitiveEditorEvent {
-            path: editor.path.clone(),
-            msg: PrimitiveEditorMsg::FootprintCloseActiveBarMenu,
-        });
-
-        return Stack::new()
-            .push(backstop)
-            .push(bar_layer)
-            .push(panel_anchor)
-            .into();
-    }
-
-    bar_layer.into()
+        },
+        tokens,
+    )
 }
 
 /// Build the 8 dropdown trigger buttons matching the schematic's

@@ -48,14 +48,12 @@ pub fn view_symbol<'a>(
 ) -> Element<'a, LibraryMessage> {
     let tokens = &panel_ctx.tokens;
     let toolbar = view_symbol_toolbar(editor, panel_ctx);
-    let active_bar = container(crate::library::editor::symbol::active_bar::view(
-        &editor.path,
-        editor.tool,
-        theme_id,
-        tokens,
-    ))
-    .padding([4, 8])
-    .center_x(Length::Fill);
+    // v0.13 — unified bar + dropdown overlay come from one widget
+    // call now. No outer padding — the widget centres the bar
+    // itself and mounts the dropdown panel inside its own Stack.
+    let active_bar = crate::library::editor::symbol::active_bar::view(
+        editor, theme_id, tokens,
+    );
     let canvas_widget = view_symbol_canvas(editor, panel_ctx, display);
 
     let body = column![toolbar, active_bar, canvas_widget]

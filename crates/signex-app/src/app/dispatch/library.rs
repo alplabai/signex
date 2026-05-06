@@ -3690,6 +3690,25 @@ pub(crate) fn apply_symbol_primitive_edit(
                 SymbolToolMsg::PlaceText => SymbolTool::PlaceText,
             };
         }
+        PrimitiveEditorMsg::SymbolToggleActiveBarMenu(menu) => {
+            editor.active_bar_menu = match editor.active_bar_menu {
+                Some(m) if m == menu => None,
+                _ => Some(menu),
+            };
+        }
+        PrimitiveEditorMsg::SymbolCloseActiveBarMenu => {
+            editor.active_bar_menu = None;
+        }
+        PrimitiveEditorMsg::SymbolActiveBarStub(label) => {
+            crate::diagnostics::log_info(format!(
+                "Symbol active bar: {label} — coming soon (SchLib Altium parity)"
+            ));
+            editor.active_bar_menu = None;
+        }
+        PrimitiveEditorMsg::SymbolToggleSelectionFilter(kind) => {
+            editor.selection_filter.toggle(kind);
+            editor.canvas_cache.clear();
+        }
         PrimitiveEditorMsg::SymbolAddPin { x, y } => {
             let active_part = editor.active_part;
             let idx = crate::library::editor::symbol::state::add_pin(
@@ -5668,6 +5687,10 @@ pub(crate) fn apply_footprint_primitive_edit(
         | PrimitiveEditorMsg::SymbolToggleGrid
         | PrimitiveEditorMsg::SymbolCycleGridSize
         | PrimitiveEditorMsg::SymbolCycleUnit
+        | PrimitiveEditorMsg::SymbolToggleActiveBarMenu(_)
+        | PrimitiveEditorMsg::SymbolCloseActiveBarMenu
+        | PrimitiveEditorMsg::SymbolActiveBarStub(_)
+        | PrimitiveEditorMsg::SymbolToggleSelectionFilter(_)
         | PrimitiveEditorMsg::Save => {}
     }
 }

@@ -234,6 +234,15 @@ pub struct SymbolEditorState {
     /// outside the canvas. Per-tab — tracking the cursor is
     /// inherently a single-canvas concept.
     pub cursor_mm: Option<(f64, f64)>,
+    /// v0.13 — SchLib selection filter. Per-kind selectable flags
+    /// gate which entities the canvas hit-tester considers. Mirrors
+    /// the footprint editor's `selection_filter`.
+    pub selection_filter: crate::library::editor::symbol::state::SymbolSelectionFilter,
+    /// v0.13 — Open active-bar dropdown menu. `None` = no menu open.
+    pub active_bar_menu:
+        Option<crate::library::editor::symbol::state::SymActiveBarMenu>,
+    /// v0.13 — Pause flag for placement (TAB during Place Pin / etc.).
+    pub placement_paused: bool,
 }
 
 impl SymbolEditorState {
@@ -253,6 +262,9 @@ impl SymbolEditorState {
             dirty: false,
             camera: crate::canvas::Camera::default(),
             cursor_mm: None,
+            selection_filter: Default::default(),
+            active_bar_menu: None,
+            placement_paused: false,
         }
     }
 

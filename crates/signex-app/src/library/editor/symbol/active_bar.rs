@@ -2,147 +2,192 @@
 //! `.snxsym` canvas, mirroring the schematic editor's Altium-style
 //! Active Bar pattern but with SchLib-specific tools.
 //!
-//! Built on top of the reusable
-//! [`signex_widgets::active_bar`] widget so the same component
-//! powers (eventually) the schematic, schematic library, PCB, and
-//! PCB library editors. Each editor builds its own
-//! `Vec<ActiveBarItem<M>>` describing icon + tooltip + selection
-//! state + on_press; the widget renders.
+//! v0.13 — Eight Altium dropdown menus (Filter / Snap / Place /
+//! Select / Align / Pin / Text / Shapes) live at the FRONT of the
+//! bar; their bodies come from `active_bar_dropdowns::entries`. The
+//! Select / Place Pin tool slots stay at the end of the bar for
+//! quick keyboard / single-click access. Pure-graphics tools (Line /
+//! Arc / Circle / Rectangle) live in the Shapes dropdown to keep the
+//! bar slim.
 //!
-//! # SchLib tool set (Altium parity)
-//!
-//! | Slot | Tool | Wired? |
-//! |------|------|--------|
-//! | 1    | Select          | ✓ |
-//! | 2    | Place Pin       | ✓ |
-//! | 3    | Place Line      | ✓ |
-//! | 4    | Place Rectangle | ✓ |
-//! | 5    | Place Round Rectangle | stub |
-//! | 6    | Place Polygon   | stub |
-//! | 7    | Place Ellipse (Circle) | ✓ |
-//! | 8    | Place Pie Chart | stub |
-//! | 9    | Place Elliptical Arc | stub |
-//! | 10   | Place Arc       | ✓ |
-//! | 11   | Place Bezier    | stub |
-//! | 12   | Place Text String | ✓ |
-//! | 13   | Place Text Frame | stub |
-//! | 14   | Place Image     | stub |
-//!
-//! Stub tools render with a greyed icon and no `on_press` so the
-//! Active Bar visually matches Altium's full toolbox; the actual
-//! wiring lands in v0.9.x.
+//! Built on top of the unified
+//! `signex_widgets::active_bar::view_with_overlay` so a single call
+//! returns the bar + dropdown overlay + click-outside backstop —
+//! identical pattern across schematic / footprint / SchLib /
+//! upcoming PCB editors.
 
 use std::path::PathBuf;
 
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 
-use crate::icons;
+use crate::app::SymbolEditorState;
+use crate::icons as ic;
 use crate::library::editor::symbol::canvas::SymbolTool;
+use crate::library::editor::symbol::state::{
+    SymActiveBarMenu, SymbolSelectionFilter,
+};
 use crate::library::messages::{LibraryMessage, PrimitiveEditorMsg, SymbolToolMsg};
 
-/// Build the SchLib Active Bar items for the given editor state +
-/// active theme. `path` is the editor's `.snxsym` path so the
-/// emitted `LibraryMessage::PrimitiveEditorEvent` is keyed correctly.
-pub fn items(
-    path: &PathBuf,
-    active_tool: SymbolTool,
+/// Build the SchLib bar items + render via the unified widget.
+pub fn view<'a>(
+    editor: &'a SymbolEditorState,
     theme_id: ThemeId,
+    tokens: &'a ThemeTokens,
+) -> iced::Element<'a, LibraryMessage> {
+    let path = editor.path.clone();
+    let active_tool = editor.tool;
+    let selection_filter = editor.selection_filter;
+
+    // 1) Eight chevron-trigger buttons (Filter / Snap / Place /
+    // Select / Align / Pin / Text / Shapes) at the FRONT.
+    let mut items: Vec<ActiveBarItem<LibraryMessage>> =
+        dropdown_trigger_items(editor, theme_id);
+    items.push(ActiveBarItem::Separator);
+
+    // 2) Tool slots — Select + Place Pin. Other shape tools live in
+    // the Shapes dropdown.
+    items.push(ActiveBarItem::Button(ActiveBarButton {
+        icon: ActiveBarIcon::Svg(ic::icon_select(theme_id)),
+        tooltip: "Select".into(),
+        enabled: true,
+        selected: active_tool == SymbolTool::Select,
+        on_press: Some(LibraryMessage::PrimitiveEditorEvent {
+            path: path.clone(),
+            msg: PrimitiveEditorMsg::SymbolSetTool(SymbolToolMsg::Select),
+        }),
+        ..ActiveBarButton::default()
+    }));
+    items.push(ActiveBarItem::Button(ActiveBarButton {
+        // No dedicated pin SVG yet — use the arrow glyph.
+        icon: ActiveBarIcon::Glyph("\u{2192}"),
+        tooltip: "Place Pin".into(),
+        enabled: true,
+        selected: active_tool == SymbolTool::AddPin,
+        on_press: Some(LibraryMessage::PrimitiveEditorEvent {
+            path: path.clone(),
+            msg: PrimitiveEditorMsg::SymbolSetTool(SymbolToolMsg::AddPin),
+        }),
+        ..ActiveBarButton::default()
+    }));
+
+    let close_msg = LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::SymbolCloseActiveBarMenu,
+    };
+    let path_for_entries = path.clone();
+
+    signex_widgets::active_bar::view_with_overlay::<LibraryMessage, SymActiveBarMenu>(
+        items,
+        editor.active_bar_menu,
+        close_msg,
+        move |menu| {
+            crate::library::editor::symbol::active_bar_dropdowns::entries(
+                menu,
+                selection_filter,
+                active_tool,
+                path_for_entries.clone(),
+                theme_id,
+            )
+        },
+        |menu| match menu {
+            SymActiveBarMenu::Filter => None,
+            SymActiveBarMenu::Snap => Some(240.0),
+            SymActiveBarMenu::Place => Some(240.0),
+            SymActiveBarMenu::Select => Some(220.0),
+            SymActiveBarMenu::Align => Some(320.0),
+            SymActiveBarMenu::Pin => Some(220.0),
+            SymActiveBarMenu::Text => Some(180.0),
+            SymActiveBarMenu::Shapes => Some(220.0),
+        },
+        tokens,
+    )
+}
+
+/// Dropdown trigger items for the SchLib bar. Same dual-action
+/// pattern as the schematic / footprint bars: left-click runs the
+/// default action (or toggles the menu when there's no obvious
+/// default), right-click opens the dropdown.
+fn dropdown_trigger_items(
+    editor: &SymbolEditorState,
+    tid: ThemeId,
 ) -> Vec<ActiveBarItem<LibraryMessage>> {
-    let tool = |label: &str,
-                tool: SymbolTool,
-                msg: SymbolToolMsg,
-                icon: ActiveBarIcon|
-     -> ActiveBarItem<LibraryMessage> {
+    let path = editor.path.clone();
+    let active = editor.active_bar_menu;
+    let _ = SymbolSelectionFilter::default; // silences unused-import lint
+
+    let dual = |label: &str,
+                icon: ActiveBarIcon,
+                menu: SymActiveBarMenu,
+                left: Option<PrimitiveEditorMsg>|
+         -> ActiveBarItem<LibraryMessage> {
+        let on_press = Some(LibraryMessage::PrimitiveEditorEvent {
+            path: path.clone(),
+            msg: left.unwrap_or(PrimitiveEditorMsg::SymbolToggleActiveBarMenu(menu)),
+        });
+        let on_right_press = Some(LibraryMessage::PrimitiveEditorEvent {
+            path: path.clone(),
+            msg: PrimitiveEditorMsg::SymbolToggleActiveBarMenu(menu),
+        });
         ActiveBarItem::Button(ActiveBarButton {
             icon,
             tooltip: label.to_string(),
             enabled: true,
-            selected: active_tool == tool,
-            on_press: Some(LibraryMessage::PrimitiveEditorEvent {
-                path: path.clone(),
-                msg: PrimitiveEditorMsg::SymbolSetTool(msg),
-            }),
-            ..ActiveBarButton::default()
-        })
-    };
-    let stub = |label: &str, glyph: &'static str| -> ActiveBarItem<LibraryMessage> {
-        ActiveBarItem::Button(ActiveBarButton {
-            icon: ActiveBarIcon::Glyph(glyph),
-            tooltip: format!("{label} (coming soon)"),
-            enabled: false,
-            selected: false,
-            on_press: None,
-            ..ActiveBarButton::default()
+            selected: active == Some(menu),
+            on_press,
+            on_right_press,
+            dropdown_indicator: Some(ActiveBarIcon::Svg(ic::icon_chevron_45(tid))),
         })
     };
 
     vec![
-        tool(
-            "Select",
-            SymbolTool::Select,
-            SymbolToolMsg::Select,
-            ActiveBarIcon::Svg(icons::icon_select(theme_id)),
+        dual(
+            "Selection Filter (left or right click for menu)",
+            ActiveBarIcon::Svg(ic::icon_filter(tid)),
+            SymActiveBarMenu::Filter,
+            None,
         ),
-        tool(
-            "Place Pin",
-            SymbolTool::AddPin,
-            SymbolToolMsg::AddPin,
-            // No dedicated pin svg yet — use the move glyph as a
-            // placeholder shape until a pin svg lands.
-            ActiveBarIcon::Glyph("\u{2192}"), // → arrow (pin tip)
+        dual(
+            "Snap Options (left or right click for menu)",
+            ActiveBarIcon::Svg(ic::icon_dd_align_grid(tid)),
+            SymActiveBarMenu::Snap,
+            None,
         ),
-        tool(
-            "Place Line",
-            SymbolTool::PlaceLine,
-            SymbolToolMsg::PlaceLine,
-            ActiveBarIcon::Svg(icons::icon_shape_line(theme_id)),
+        dual(
+            "Place / Move (right-click for menu)",
+            ActiveBarIcon::Svg(ic::icon_move(tid)),
+            SymActiveBarMenu::Place,
+            Some(PrimitiveEditorMsg::SymbolActiveBarStub("Move")),
         ),
-        tool(
-            "Place Rectangle",
-            SymbolTool::PlaceRectangle,
-            SymbolToolMsg::PlaceRectangle,
-            ActiveBarIcon::Svg(icons::icon_shape_rect(theme_id)),
+        dual(
+            "Select (right-click for selection-mode menu)",
+            ActiveBarIcon::Svg(ic::icon_select(tid)),
+            SymActiveBarMenu::Select,
+            Some(PrimitiveEditorMsg::SymbolSetTool(SymbolToolMsg::Select)),
         ),
-        stub("Place Round Rectangle", "\u{25A2}"), // ▢
-        stub("Place Polygon", "\u{2B20}"),         // ⬠
-        tool(
-            "Place Ellipse",
-            SymbolTool::PlaceCircle,
-            SymbolToolMsg::PlaceCircle,
-            ActiveBarIcon::Svg(icons::icon_shape_circle(theme_id)),
+        dual(
+            "Align / Distribute (right-click for menu)",
+            ActiveBarIcon::Svg(ic::icon_align(tid)),
+            SymActiveBarMenu::Align,
+            Some(PrimitiveEditorMsg::SymbolActiveBarStub("Align To Grid")),
         ),
-        stub("Place Pie Chart", "\u{25D4}"),      // ◔
-        stub("Place Elliptical Arc", "\u{27D3}"), // ⟓
-        tool(
-            "Place Arc",
-            SymbolTool::PlaceArc,
-            SymbolToolMsg::PlaceArc,
-            ActiveBarIcon::Svg(icons::icon_shape_arc(theme_id)),
+        dual(
+            "Pin (left-click places a pin, right-click for variants)",
+            ActiveBarIcon::Glyph("\u{2192}"),
+            SymActiveBarMenu::Pin,
+            Some(PrimitiveEditorMsg::SymbolSetTool(SymbolToolMsg::AddPin)),
         ),
-        stub("Place Bezier", "\u{223F}"), // ∿
-        tool(
-            "Place Text String",
-            SymbolTool::PlaceText,
-            SymbolToolMsg::PlaceText,
-            // No dedicated text svg in the icon registry — use
-            // the canonical "T" glyph.
-            ActiveBarIcon::Glyph("T"),
+        dual(
+            "Text (left-click places String, right-click for menu)",
+            ActiveBarIcon::Svg(ic::icon_text(tid)),
+            SymActiveBarMenu::Text,
+            Some(PrimitiveEditorMsg::SymbolSetTool(SymbolToolMsg::PlaceText)),
         ),
-        stub("Place Text Frame", "\u{25AD}"), // ▭
-        stub("Place Image", "\u{25A3}"),      // ▣
+        dual(
+            "Shapes (right-click for shape menu)",
+            ActiveBarIcon::Svg(ic::icon_shapes(tid)),
+            SymActiveBarMenu::Shapes,
+            None,
+        ),
     ]
-}
-
-/// Convenience wrapper — build the items + render via
-/// [`signex_widgets::active_bar::view`]. Most callers use this; the
-/// raw `items` builder is exposed for tests / per-editor variants
-/// that need to splice their own buttons in.
-pub fn view<'a>(
-    path: &PathBuf,
-    active_tool: SymbolTool,
-    theme_id: ThemeId,
-    tokens: &'a ThemeTokens,
-) -> iced::Element<'a, LibraryMessage> {
-    signex_widgets::active_bar::view(items(path, active_tool, theme_id), tokens)
 }

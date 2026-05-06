@@ -1417,6 +1417,17 @@ pub enum PrimitiveEditorMsg {
     /// `editor.primitive_mut().name` so the rename mirrors into the
     /// .snxfpt envelope on next save.
     FootprintSetName(String),
+    // ── v0.13 — Symbol library editor active bar ─────────
+    /// Toggle a symbol-editor active-bar dropdown menu.
+    SymbolToggleActiveBarMenu(crate::library::editor::symbol::state::SymActiveBarMenu),
+    /// Close any open symbol-editor active-bar dropdown.
+    SymbolCloseActiveBarMenu,
+    /// "Coming soon" stub for symbol-editor active-bar items.
+    SymbolActiveBarStub(&'static str),
+    /// Toggle a kind on the symbol-editor selection filter.
+    SymbolToggleSelectionFilter(
+        crate::library::editor::symbol::state::SymbolFilterKind,
+    ),
     /// v0.13.2 — Canvas left-click in Sketch mode while a multi-click
     /// drawing tool is active. The dispatcher advances the per-tool
     /// state machine on `tool_pending` and emits the appropriate
