@@ -4768,10 +4768,13 @@ impl Signex {
             let theme_id = self.ui_state.theme_id;
             let tokens = &document.panel_ctx.tokens;
             let custom_presets = &interaction.custom_filter_presets;
-            // `unified_active_bar::view` already wraps the bar in a
-            // `container().width(Fill).align_x(Center)` via
-            // `view_with_overlay`. Don't double-wrap — that's the
-            // 2 px offset source.
+            // Match the schematic's exact chain at this layer site:
+            // `column![Space, container(map_wrapped_bar).width(Fill)
+            // .align_x(Center)]`. `unified_active_bar::view` returns
+            // the raw bar widget (no container) so the .map and the
+            // centring container compose in the same order as the
+            // schematic — keeping `Element::map` INSIDE the container
+            // rather than wrapping it.
             let bar = crate::library::editor::footprint::unified_active_bar::view(
                 editor,
                 theme_id,
@@ -4782,7 +4785,9 @@ impl Signex {
             layers.push(
                 column![
                     iced::widget::Space::new().height(y_offset + 4.0),
-                    bar,
+                    container(bar)
+                        .width(Length::Fill)
+                        .align_x(iced::alignment::Horizontal::Center),
                 ]
                 .into(),
             );
@@ -4799,8 +4804,8 @@ impl Signex {
                 + if document.tabs.is_empty() { 0.0 } else { 28.0 };
             let theme_id = self.ui_state.theme_id;
             let tokens = &document.panel_ctx.tokens;
-            // Symbol active bar's view also wraps via
-            // `view_with_overlay` — don't double-wrap.
+            // Same byte-for-byte structure as the footprint + schematic
+            // mounts.
             let bar = crate::library::editor::symbol::active_bar::view(
                 editor, theme_id, tokens,
             )
@@ -4808,7 +4813,9 @@ impl Signex {
             layers.push(
                 column![
                     iced::widget::Space::new().height(y_offset + 4.0),
-                    bar,
+                    container(bar)
+                        .width(Length::Fill)
+                        .align_x(iced::alignment::Horizontal::Center),
                 ]
                 .into(),
             );
