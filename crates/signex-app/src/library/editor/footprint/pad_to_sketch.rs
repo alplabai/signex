@@ -543,4 +543,58 @@ mod tests {
         assert_eq!(format_f64(1.27), "1.27");
         assert_eq!(format_f64(0.0), "0");
     }
+
+    #[test]
+    fn shape_change_preserves_corner_positions() {
+        // v0.22 Phase D3 — verifying that flipping a pad's shape
+        // (Round → RoundRect, etc.) leaves the corner-outline Points
+        // untouched. The corners track the pad's bbox, which is
+        // derived from position + size only — shape isn't an input,
+        // so no re-mint or re-position is needed on shape change.
+        use crate::library::editor::footprint::state::FootprintEditorState;
+
+        let mut fp = Footprint::empty("test");
+        let mut pad = editor_pad("1", 0.0, 0.0);
+        pad.shape = LibPadShape::Round;
+        mirror_add_pad_to_sketch(&mut pad, &mut fp);
+
+        let corner_ids = pad.corner_entity_ids.expect("corners minted");
+        let snapshot_corner_pos = |fp: &Footprint| -> Vec<(f64, f64)> {
+            corner_ids
+                .iter()
+                .map(|id| {
+                    let entity = fp
+                        .sketch
+                        .as_ref()
+                        .unwrap()
+                        .entities
+                        .iter()
+                        .find(|e| e.id == *id)
+                        .expect("corner Point present");
+                    match entity.kind {
+                        EntityKind::Point { x, y } => (x, y),
+                        _ => panic!("corner must be Point"),
+                    }
+                })
+                .collect()
+        };
+
+        let before = snapshot_corner_pos(&fp);
+
+        // Flip the shape — emulating a Properties-panel shape change.
+        // Pads-mode dispatch paths call `with_selected_pad` which
+        // ultimately calls `sync_pads_to_primitive`; that path does
+        // NOT touch corner positions because shape is bbox-orthogonal.
+        pad.shape = LibPadShape::RoundRect { radius_ratio: 0.25 };
+        let mut s = FootprintEditorState::empty();
+        s.pads = vec![pad.clone()];
+        FootprintEditorState::sync_pads_to_primitive(&s, &mut fp);
+
+        let after = snapshot_corner_pos(&fp);
+
+        assert_eq!(
+            before, after,
+            "corner positions must remain stable across shape changes"
+        );
+    }
 }
