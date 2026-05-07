@@ -2407,3 +2407,319 @@ fn reverse_mirror_updates_pad_stack_corner_radius_pct() {
         "corner_radius_pct = corner_r/min(W,H)*100 = 0.25/1*100 = 25; got {pct}"
     );
 }
+
+// ─────────────────────────────────────────────────────────────────
+// v0.24 Phase 4 (Track A6) — Chamfered pad parametric mint
+// ─────────────────────────────────────────────────────────────────
+
+/// v0.24 Track A6 — placing a Chamfered pad in Pads mode mirrors
+/// into the sketch as a parametric outline. With only the top_left +
+/// top_right corners enabled, the mint should:
+///   - 1 centre Point + 4 bbox corner Points = 5 Points (baseline).
+///   - Per ENABLED corner: 2 anchor Points (8 entries' worth ÷ 2
+///     corners = 4 anchor Points total).
+///   - A single shared `chamfer_len_<slug>` sketch parameter.
+///   - Per-corner sidecar keys recording each anchor's UUID so a
+///     future Unlink-chamfer-length action can resolve them.
+#[test]
+fn mirror_add_chamfered_pad_mints_anchors_per_enabled_corner() {
+    use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
+    use signex_app::library::editor::footprint::state::EditorPad;
+    use signex_library::primitive::footprint::{ChamferedCorners, Footprint, PadShape};
+    use signex_sketch::entity::EntityKind;
+
+    let mut pad = EditorPad::new_default("1".into(), (0.0, 0.0));
+    pad.shape = PadShape::Chamfered {
+        chamfer_ratio: 0.25,
+        corners: ChamferedCorners {
+            top_left: true,
+            top_right: true,
+            bottom_left: false,
+            bottom_right: false,
+        },
+    };
+    pad.size_mm = (2.0, 1.0); // W=2, H=1, min=1, chamfer_len = 0.25 * 1 = 0.25mm
+    let mut fp = Footprint::empty("test");
+
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+
+    let sketch = fp.sketch.as_ref().expect("sketch minted");
+
+    // Chamfered pad mints no Arcs and no Circles.
+    let arcs: Vec<_> = sketch
+        .entities
+        .iter()
+        .filter(|e| matches!(e.kind, EntityKind::Arc { .. }))
+        .collect();
+    let circles: Vec<_> = sketch
+        .entities
+        .iter()
+        .filter(|e| matches!(e.kind, EntityKind::Circle { .. }))
+        .collect();
+    assert!(arcs.is_empty(), "Chamfered pad mints no Arcs");
+    assert!(circles.is_empty(), "Chamfered pad mints no Circles");
+
+    // Points: 1 centre + 4 bbox corners + 2 enabled corners × 2
+    // anchors each = 9 Points.
+    let points: Vec<_> = sketch
+        .entities
+        .iter()
+        .filter(|e| matches!(e.kind, EntityKind::Point { .. }))
+        .collect();
+    assert_eq!(
+        points.len(),
+        9,
+        "1 centre + 4 bbox + 2 corners × 2 anchors = 9 Points; got {}",
+        points.len()
+    );
+
+    // Lines: per the outline traversal —
+    //   - 1 chamfer-cut line per enabled corner (2 enabled = 2
+    //     chamfer-cut Lines).
+    //   - 4 edges (NE→SE, SE→SW, SW→NW, NW→NE) connecting the bbox
+    //     corner / anchor of each side.
+    //   - Total Lines = enabled + 4 = 2 + 4 = 6.
+    let lines: Vec<_> = sketch
+        .entities
+        .iter()
+        .filter(|e| matches!(e.kind, EntityKind::Line { .. }))
+        .collect();
+    assert_eq!(
+        lines.len(),
+        6,
+        "2 chamfer cuts + 4 edge lines = 6 Lines; got {}",
+        lines.len()
+    );
+
+    // pad.shape_params binds the shared chamfer length param.
+    let param_name = pad
+        .shape_params
+        .get("chamfer_len")
+        .expect("'chamfer_len' key bound on Chamfered pad");
+    assert!(
+        param_name.starts_with("chamfer_len_"),
+        "param name has the chamfer_len_<slug> form (got `{param_name}`)"
+    );
+
+    // sketch.parameters records the literal chamfer length
+    // (= 0.25 * min(W,H) = 0.25mm).
+    let raw = sketch
+        .parameters
+        .get_raw(param_name)
+        .expect("chamfer_len parameter is registered on sketch.parameters");
+    assert_eq!(
+        raw, "0.25mm",
+        "chamfer_len parameter records the literal length"
+    );
+
+    // Per-corner anchor sidecar keys present for both enabled corners
+    // and absent for the disabled ones. Y-down naming:
+    // top_right == NE, top_left == NW, bottom_right == SE,
+    // bottom_left == SW.
+    assert!(
+        pad.shape_params.contains_key("chamfer_ne_anchor1"),
+        "chamfer_ne_anchor1 sidecar key present (top_right enabled)"
+    );
+    assert!(
+        pad.shape_params.contains_key("chamfer_ne_anchor2"),
+        "chamfer_ne_anchor2 sidecar key present (top_right enabled)"
+    );
+    assert!(
+        pad.shape_params.contains_key("chamfer_nw_anchor1"),
+        "chamfer_nw_anchor1 sidecar key present (top_left enabled)"
+    );
+    assert!(
+        pad.shape_params.contains_key("chamfer_nw_anchor2"),
+        "chamfer_nw_anchor2 sidecar key present (top_left enabled)"
+    );
+    assert!(
+        !pad.shape_params.contains_key("chamfer_se_anchor1"),
+        "chamfer_se_* sidecars omitted when bottom_right is disabled"
+    );
+    assert!(
+        !pad.shape_params.contains_key("chamfer_sw_anchor1"),
+        "chamfer_sw_* sidecars omitted when bottom_left is disabled"
+    );
+
+    // The pad's `corner_entity_ids` is the standard 4 bbox corners —
+    // anchors live in shape_params, not corner_entity_ids.
+    let bbox_corners = pad
+        .corner_entity_ids
+        .expect("Chamfered pad still mints the 4 bbox corners");
+    assert_eq!(bbox_corners.len(), 4, "4 bbox corners");
+}
+
+/// v0.24 Track A6 — editing the shared `chamfer_len_<slug>`
+/// parameter routes through the FootprintSketchEditParameter
+/// dispatch path: rewrites the sketch parameter, runs a fresh
+/// solve+rebake, and the post-solve chamfer-anchor mirror
+/// (`mirror_solve_to_chamfer_anchors`) rewrites the anchor Point
+/// coordinates from the resolved chamfer_len value. Verifies that
+/// the shared-parameter wiring is end-to-end live (parameter
+/// rewrite → solve → entity-position update).
+#[test]
+fn editing_chamfer_len_propagates_through_solve() {
+    use signex_app::app::FootprintEditorState;
+    use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
+    use signex_app::library::editor::footprint::state::EditorPad;
+    use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
+    use signex_library::primitive::footprint::{
+        ChamferedCorners, Footprint, FootprintFile, PadShape,
+    };
+    use signex_sketch::entity::EntityKind;
+    use signex_sketch::id::SketchEntityId;
+
+    let path = PathBuf::from("test-a6-edit-chamfer-len.snxfpt");
+    let mut fp = Footprint::empty("test");
+    let mut pad = EditorPad::new_default("1".into(), (0.0, 0.0));
+    pad.shape = PadShape::Chamfered {
+        chamfer_ratio: 0.25,
+        corners: ChamferedCorners {
+            top_left: true,
+            top_right: true,
+            bottom_left: false,
+            bottom_right: false,
+        },
+    };
+    pad.size_mm = (2.0, 1.0); // chamfer_len = 0.25 * min(2,1) = 0.25mm
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+
+    let parameter_name = pad
+        .shape_params
+        .get("chamfer_len")
+        .cloned()
+        .expect("chamfer_len minted at pad-add time");
+    let ne_anchor1_slug = pad
+        .shape_params
+        .get("chamfer_ne_anchor1")
+        .cloned()
+        .expect("chamfer_ne_anchor1 sidecar minted");
+    let ne_anchor1_id = {
+        let uuid = uuid::Uuid::parse_str(&ne_anchor1_slug).expect("sidecar value is a UUID slug");
+        SketchEntityId(uuid)
+    };
+
+    // Sanity — pre-edit, NE anchor1 sits at (xmax - r, ymin) =
+    // (1 - 0.25, -0.5) = (0.75, -0.5). For pad centred at origin
+    // with size 2×1, bbox is (-1..1, -0.5..0.5). Y-down so ymin
+    // = -0.5 (top edge).
+    let pre_pos = fp
+        .sketch
+        .as_ref()
+        .unwrap()
+        .entities
+        .iter()
+        .find(|e| e.id == ne_anchor1_id)
+        .and_then(|e| match e.kind {
+            EntityKind::Point { x, y } => Some((x, y)),
+            _ => None,
+        })
+        .expect("NE anchor1 is a Point");
+    assert!(
+        (pre_pos.0 - 0.75).abs() < 1e-9 && (pre_pos.1 - (-0.5)).abs() < 1e-9,
+        "before edit, NE anchor1 sits at (xmax - r, ymin) = (0.75, -0.5); got {pre_pos:?}"
+    );
+
+    let file = FootprintFile::from_footprint(fp);
+    let mut editor = FootprintEditorState::new(path.clone(), file);
+    editor.state.pads = vec![pad];
+    editor.state.selected_pad = Some(0);
+
+    let (mut app, _initial_task) = Signex::new();
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), editor);
+    app.document_state.tabs.push(signex_app::app::TabInfo {
+        title: "test".into(),
+        path: path.clone(),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: signex_app::app::TabKind::FootprintEditor(path.clone()),
+    });
+    app.document_state.active_tab = 0;
+
+    // Edit the shared chamfer_len parameter to 0.5mm.
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchEditParameter {
+            name: parameter_name.clone(),
+            expr: "0.5mm".into(),
+        },
+    }));
+
+    let editor = app
+        .document_state
+        .footprint_editors
+        .get(&path)
+        .expect("editor still registered");
+    let sketch = editor.file.footprints[0]
+        .sketch
+        .as_ref()
+        .expect("sketch present after edit");
+
+    // Parameter rewrote on disk. The dispatcher's
+    // `FootprintSketchEditParameter` handler upserts via
+    // `SketchEdit::EditParameter` and then runs a fresh solve+bake.
+    let raw = sketch
+        .parameters
+        .get_raw(&parameter_name)
+        .expect("chamfer_len parameter still registered");
+    assert_eq!(
+        raw, "0.5mm",
+        "FootprintSketchEditParameter rewrites the bound parameter"
+    );
+
+    // Solve completed cleanly — no warnings means the resolver
+    // accepted the new expression and the bake re-emitted the pad
+    // without errors.
+    assert!(
+        editor.state.solve_warnings.is_empty(),
+        "solve completed without warnings; got {:?}",
+        editor.state.solve_warnings
+    );
+
+    // shape_params bindings survived the rebake. `chamfer_len` and
+    // every per-corner anchor sidecar must still be present so the
+    // Properties row + future Unlink action keep their data.
+    let pad_after = &editor.state.pads[0];
+    assert_eq!(
+        pad_after.shape_params.get("chamfer_len"),
+        Some(&parameter_name),
+        "chamfer_len binding survives solve+rebake"
+    );
+    for key in [
+        "chamfer_ne_anchor1",
+        "chamfer_ne_anchor2",
+        "chamfer_nw_anchor1",
+        "chamfer_nw_anchor2",
+    ] {
+        assert!(
+            pad_after.shape_params.contains_key(key),
+            "{key} sidecar survives solve+rebake"
+        );
+    }
+
+    // Anchor moved post-solve. The post-solve mirror walks the
+    // pad's chamfer sidecars and rewrites each anchor's coords from
+    // the resolved chamfer_len. Expected new position for NE
+    // anchor1: (xmax - 0.5, ymin) = (0.5, -0.5).
+    let post_pos = sketch
+        .entities
+        .iter()
+        .find(|e| e.id == ne_anchor1_id)
+        .and_then(|e| match e.kind {
+            EntityKind::Point { x, y } => Some((x, y)),
+            _ => None,
+        })
+        .expect("NE anchor1 still present after solve");
+    assert!(
+        (post_pos.0 - 0.5).abs() < 1e-9 && (post_pos.1 - (-0.5)).abs() < 1e-9,
+        "after editing chamfer_len = 0.5mm, NE anchor1 sits at \
+         (xmax - 0.5, ymin) = (0.5, -0.5); got {post_pos:?}"
+    );
+    assert!(
+        (post_pos.0 - pre_pos.0).abs() > 1e-6,
+        "anchor1 X moved after parameter edit (was {pre_pos:?}, now {post_pos:?})"
+    );
+}
