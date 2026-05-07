@@ -86,6 +86,13 @@ pub fn auto_mint_for_literal_pads(pads: &mut [EditorPad], footprint: &mut Footpr
 /// mirror the new pad into the sketch as a `Point` + `PadAttr`.
 /// Stores the minted sketch entity ID back on the editor pad so
 /// later moves / deletes can mirror through.
+///
+/// v0.24 Track A — when the pad shape is `Round`, also mint a
+/// dedicated `Circle` entity referencing the centre Point and a
+/// `diameter_<slug>` sketch parameter. `pad.shape_params` records
+/// `"diameter" → param_name` so the Properties row (A2) can find
+/// the bound parameter on later edits. Other shapes keep the v0.16
+/// 4-Line bbox outline.
 pub fn mirror_add_pad_to_sketch(pad: &mut EditorPad, footprint: &mut Footprint) {
     // No-op when the sketch already has a backing entity for this
     // pad (e.g. caller already wired it up).
@@ -106,9 +113,24 @@ pub fn mirror_add_pad_to_sketch(pad: &mut EditorPad, footprint: &mut Footprint) 
     entity.pad = Some(pad_attr_from_editor_pad(pad));
     sketch.entities.push(entity);
     pad.sketch_entity_id = Some(entity_id);
-    // v0.16 — outline-corner Points + Lines, construction-only.
-    let corners = mint_pad_corner_outline(sketch, plane_id, pad);
-    pad.corner_entity_ids = Some(corners);
+
+    // v0.24 Track A — branch on pad shape. Round mints a Circle +
+    // `diameter_<slug>` parameter; other shapes keep the v0.16
+    // 4-Line bbox outline.
+    match &pad.shape {
+        LibPadShape::Round => {
+            mint_round_pad_geometry(sketch, plane_id, pad, entity_id);
+            // Round pads have no rectangular outline — leave
+            // corner_entity_ids unset so move/delete mirrors skip
+            // bbox-corner repositioning.
+            pad.corner_entity_ids = None;
+        }
+        _ => {
+            // v0.16 — outline-corner Points + Lines, construction-only.
+            let corners = mint_pad_corner_outline(sketch, plane_id, pad);
+            pad.corner_entity_ids = Some(corners);
+        }
+    }
 }
 
 /// v0.15 — when a pad moves in Pads mode (drag), update its backing
@@ -151,6 +173,10 @@ pub fn mirror_move_pad_in_sketch(pad: &EditorPad, footprint: &mut Footprint) {
 /// v0.15 — when a pad is deleted in Pads mode, also drop its
 /// backing sketch entity (and any constraints that referenced it).
 /// No-op when the pad has no backing sketch entity yet.
+///
+/// v0.24 Track A — also drop linked Circle entities (Round pads)
+/// and any sketch parameters keyed by the centre-Point UUID slug
+/// (`diameter_<slug>`, `corner_r_<slug>`, etc.).
 pub fn mirror_delete_pad_from_sketch(pad: &EditorPad, footprint: &mut Footprint) {
     let Some(entity_id) = pad.sketch_entity_id else {
         return;
@@ -171,10 +197,20 @@ pub fn mirror_delete_pad_from_sketch(pad: &EditorPad, footprint: &mut Footprint)
         if drop_set.contains(&e.id) {
             return false;
         }
-        if let EntityKind::Line { start, end } = e.kind {
-            if drop_set.contains(&start) || drop_set.contains(&end) {
-                return false;
+        match &e.kind {
+            EntityKind::Line { start, end } => {
+                if drop_set.contains(start) || drop_set.contains(end) {
+                    return false;
+                }
             }
+            EntityKind::Circle { center, .. } => {
+                // v0.24 Track A — drop Round pad's Circle when its
+                // centre Point is in the drop set.
+                if drop_set.contains(center) {
+                    return false;
+                }
+            }
+            EntityKind::Arc { .. } | EntityKind::Point { .. } => {}
         }
         true
     });
@@ -185,6 +221,11 @@ pub fn mirror_delete_pad_from_sketch(pad: &EditorPad, footprint: &mut Footprint)
     sketch
         .constraints
         .retain(|c| !format!("{:?}", c.kind).contains(&id_str));
+
+    // v0.24 Track A — drop shape parameters (`diameter_<slug>`,
+    // `corner_r_<slug>`, etc.) keyed by the centre-Point UUID slug.
+    let slug = id_slug(entity_id);
+    sketch.parameters.0.retain(|name, _| !name.ends_with(&slug));
 }
 
 /// v0.16 — mint 4 corner Points + 4 Lines outlining a pad's bbox.
@@ -234,6 +275,48 @@ fn mint_pad_corner_outline(
         sketch.entities.push(line);
     }
     ids
+}
+
+/// v0.24 Track A — mint a Round pad's geometry: 1 Circle entity
+/// referencing the centre `Point` (the pad's `sketch_entity_id`) +
+/// a `diameter_<slug>` sketch parameter recording the literal
+/// diameter for later parametric edits. The Properties row (A2)
+/// reads this parameter via `pad.shape_params["diameter"]`.
+fn mint_round_pad_geometry(
+    sketch: &mut SketchData,
+    plane_id: PlaneId,
+    pad: &mut EditorPad,
+    centre_id: SketchEntityId,
+) {
+    // Round pad's diameter equals its W (and H — it's a circle, so
+    // size_mm.0 == size_mm.1 by definition). The Circle entity stores
+    // the radius literal so the bake produces correct geometry; the
+    // parameter records the diameter for the Properties-row link.
+    let diameter = pad.size_mm.0;
+    let radius = diameter / 2.0;
+    let circle = Entity::new(
+        SketchEntityId::new(),
+        plane_id,
+        EntityKind::Circle {
+            center: centre_id,
+            radius,
+        },
+    );
+    sketch.entities.push(circle);
+
+    let slug = id_slug(centre_id);
+    let param_name = format!("diameter_{slug}");
+    sketch
+        .parameters
+        .insert(param_name.clone(), format!("{}mm", format_f64(diameter)));
+    pad.shape_params.insert("diameter".into(), param_name);
+}
+
+/// v0.24 Track A — UUID slug for parameter-name namespacing. Strips
+/// dashes so the resulting parameter name is a valid identifier in
+/// the expression language.
+fn id_slug(id: SketchEntityId) -> String {
+    id.0.simple().to_string()
 }
 
 fn ensure_board_top_plane(footprint: &mut Footprint) -> PlaneId {
@@ -547,15 +630,22 @@ mod tests {
     #[test]
     fn shape_change_preserves_corner_positions() {
         // v0.22 Phase D3 — verifying that flipping a pad's shape
-        // (Round → RoundRect, etc.) leaves the corner-outline Points
+        // (Rect → Oval, etc.) leaves the corner-outline Points
         // untouched. The corners track the pad's bbox, which is
         // derived from position + size only — shape isn't an input,
         // so no re-mint or re-position is needed on shape change.
+        //
+        // v0.24 Track A note: Round / RoundRect now mint
+        // shape-specific geometry (Circle / Arcs) instead of the
+        // v0.16 bbox outline, so this test exercises Rect → Oval —
+        // both of which still mint the 4-Point bbox outline. Round /
+        // RoundRect get their own dedicated regression coverage in
+        // `crates/signex-app/tests/regression.rs`.
         use crate::library::editor::footprint::state::FootprintEditorState;
 
         let mut fp = Footprint::empty("test");
         let mut pad = editor_pad("1", 0.0, 0.0);
-        pad.shape = LibPadShape::Round;
+        pad.shape = LibPadShape::Rect;
         mirror_add_pad_to_sketch(&mut pad, &mut fp);
 
         let corner_ids = pad.corner_entity_ids.expect("corners minted");
@@ -585,7 +675,7 @@ mod tests {
         // Pads-mode dispatch paths call `with_selected_pad` which
         // ultimately calls `sync_pads_to_primitive`; that path does
         // NOT touch corner positions because shape is bbox-orthogonal.
-        pad.shape = LibPadShape::RoundRect { radius_ratio: 0.25 };
+        pad.shape = LibPadShape::Oval;
         let mut s = FootprintEditorState::empty();
         s.pads = vec![pad.clone()];
         FootprintEditorState::sync_pads_to_primitive(&s, &mut fp);
