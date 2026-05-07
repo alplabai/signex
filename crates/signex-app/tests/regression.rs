@@ -1318,3 +1318,322 @@ fn footprint_editor_new_mutation_clears_redo_stack() {
     editor.push_history();
     assert!(editor.redo.is_empty());
 }
+
+// ─────────────────────────────────────────────────────────────────
+// v0.24 Track D — live numeric placement input
+// ─────────────────────────────────────────────────────────────────
+
+/// v0.24 Track D — Line tool's second click honours the typed
+/// `placement_input` length. With a buffer of "10" set against the
+/// `LineLength` kind, a click that lands at `(20, 0)` must place the
+/// line's second endpoint at exactly `(10, 0)` along the cursor's
+/// azimuth from the first endpoint at the origin — not `(20, 0)`.
+///
+/// Drives the dispatcher via `Message::Library(PrimitiveEditorEvent
+/// { ... })` so the integration matches what the canvas + bootstrap
+/// keyboard handler emit.
+#[test]
+fn placement_input_line_length_pins_second_click_at_exact_distance() {
+    use signex_app::app::FootprintEditorState;
+    use signex_app::library::editor::footprint::state::{
+        EditorMode, PlacementInput, PlacementInputKind, SketchTool,
+    };
+    use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
+    use signex_library::{Footprint, FootprintFile};
+    use signex_sketch::entity::EntityKind;
+
+    let tmp = TempDir::new().expect("tempdir");
+    let path = tmp.path().join("track-d.snxfpt");
+    fs::write(&path, b"{}").expect("write .snxfpt placeholder");
+
+    // Empty `Signex` + a fresh footprint editor state pre-populated in
+    // `document_state.footprint_editors` so the dispatcher's
+    // path-keyed lookup resolves.
+    let (mut app, _initial_task) = Signex::new();
+    let fp = Footprint::empty("track-d-fixture");
+    let file = FootprintFile::from_footprint(fp);
+    let mut editor = FootprintEditorState::new(path.clone(), file);
+    editor.state.mode = EditorMode::Sketch;
+    editor.state.active_tool = SketchTool::Line;
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), editor);
+
+    // First click → first endpoint at (0, 0). The dispatcher mints
+    // a Point entity and sets `tool_pending = LineFirst { first }`.
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchToolClick {
+            x_mm: 0.0,
+            y_mm: 0.0,
+            snap_id: None,
+        },
+    }));
+
+    // Pin the placement input: user types "10" while the gesture is
+    // mid-flight. With `LineLength` kind, the next click commits the
+    // line at exactly 10 mm from the first endpoint.
+    {
+        let editor = app
+            .document_state
+            .footprint_editors
+            .get_mut(&path)
+            .expect("editor present after first click");
+        editor.state.placement_input = Some(PlacementInput {
+            buffer: "10".into(),
+            kind: PlacementInputKind::LineLength,
+        });
+    }
+
+    // Second click — cursor at (20, 0). Without placement_input the
+    // line's end would land at (20, 0); with the buffer pinned, it
+    // must land at (10, 0).
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchToolClick {
+            x_mm: 20.0,
+            y_mm: 0.0,
+            snap_id: None,
+        },
+    }));
+
+    let editor = app
+        .document_state
+        .footprint_editors
+        .get(&path)
+        .expect("editor present after second click");
+    let sketch = editor
+        .primitive()
+        .sketch
+        .as_ref()
+        .expect("sketch present after the click pair");
+
+    // Find the Line entity + resolve its `end` Point's coords.
+    let line = sketch
+        .entities
+        .iter()
+        .find(|e| matches!(e.kind, EntityKind::Line { .. }))
+        .expect("line entity emitted by the second click");
+    let (start_id, end_id) = match line.kind {
+        EntityKind::Line { start, end } => (start, end),
+        _ => unreachable!(),
+    };
+    let start_pt = sketch
+        .entities
+        .iter()
+        .find(|e| e.id == start_id)
+        .and_then(|e| match e.kind {
+            EntityKind::Point { x, y } => Some((x, y)),
+            _ => None,
+        })
+        .expect("line start endpoint resolves to a Point");
+    let end_pt = sketch
+        .entities
+        .iter()
+        .find(|e| e.id == end_id)
+        .and_then(|e| match e.kind {
+            EntityKind::Point { x, y } => Some((x, y)),
+            _ => None,
+        })
+        .expect("line end endpoint resolves to a Point");
+
+    assert!(
+        (start_pt.0 - 0.0).abs() < 1e-9 && (start_pt.1 - 0.0).abs() < 1e-9,
+        "first endpoint should remain at the origin; got {:?}",
+        start_pt
+    );
+    assert!(
+        (end_pt.0 - 10.0).abs() < 1e-9,
+        "second endpoint x should be 10 mm (typed length), not the cursor's 20 mm; got {}",
+        end_pt.0
+    );
+    assert!(
+        (end_pt.1 - 0.0).abs() < 1e-9,
+        "second endpoint y should be 0 (cursor azimuth); got {}",
+        end_pt.1
+    );
+}
+
+/// v0.24 Track D — `state.placement_input` clears to `None` once the
+/// click that consumed it commits. The user has to type again before
+/// the next gesture step to keep the chain explicit.
+#[test]
+fn placement_input_clears_after_commit() {
+    use signex_app::app::FootprintEditorState;
+    use signex_app::library::editor::footprint::state::{
+        EditorMode, PlacementInput, PlacementInputKind, SketchTool,
+    };
+    use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
+    use signex_library::{Footprint, FootprintFile};
+
+    let tmp = TempDir::new().expect("tempdir");
+    let path = tmp.path().join("track-d-clear.snxfpt");
+    fs::write(&path, b"{}").expect("write .snxfpt placeholder");
+
+    let (mut app, _initial_task) = Signex::new();
+    let fp = Footprint::empty("track-d-fixture");
+    let file = FootprintFile::from_footprint(fp);
+    let mut editor = FootprintEditorState::new(path.clone(), file);
+    editor.state.mode = EditorMode::Sketch;
+    editor.state.active_tool = SketchTool::Line;
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), editor);
+
+    // First click — drops the first endpoint.
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchToolClick {
+            x_mm: 0.0,
+            y_mm: 0.0,
+            snap_id: None,
+        },
+    }));
+
+    // Type "10" before the second click.
+    {
+        let editor = app
+            .document_state
+            .footprint_editors
+            .get_mut(&path)
+            .expect("editor present after first click");
+        editor.state.placement_input = Some(PlacementInput {
+            buffer: "10".into(),
+            kind: PlacementInputKind::LineLength,
+        });
+    }
+
+    // Second click — commits, must consume + clear the buffer.
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchToolClick {
+            x_mm: 20.0,
+            y_mm: 0.0,
+            snap_id: None,
+        },
+    }));
+
+    let editor = app
+        .document_state
+        .footprint_editors
+        .get(&path)
+        .expect("editor present after second click");
+    assert!(
+        editor.state.placement_input.is_none(),
+        "placement_input must clear after the click that consumed it; \
+         leaked buffer = {:?}",
+        editor.state.placement_input.as_ref().map(|p| &p.buffer)
+    );
+}
+
+/// v0.24 Track D — typed character path. The user types '5' then
+/// '.', then '2' against an active Line tool with first click
+/// landed; the dispatcher's char-append handler must validate
+/// (single decimal point) and grow `buffer = "5.2"` keyed off
+/// `LineLength`.
+#[test]
+fn placement_input_char_append_validates_decimal_point() {
+    use signex_app::app::FootprintEditorState;
+    use signex_app::library::editor::footprint::state::{
+        EditorMode, PlacementInputKind, SketchTool,
+    };
+    use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
+    use signex_library::{Footprint, FootprintFile};
+
+    let tmp = TempDir::new().expect("tempdir");
+    let path = tmp.path().join("track-d-buffer.snxfpt");
+    fs::write(&path, b"{}").expect("write .snxfpt placeholder");
+
+    let (mut app, _initial_task) = Signex::new();
+    let fp = Footprint::empty("track-d-fixture");
+    let file = FootprintFile::from_footprint(fp);
+    let mut editor = FootprintEditorState::new(path.clone(), file);
+    editor.state.mode = EditorMode::Sketch;
+    editor.state.active_tool = SketchTool::Line;
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), editor);
+
+    // First click — anchors the gesture so the dispatcher accepts
+    // numeric input on subsequent keypresses.
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchToolClick {
+            x_mm: 0.0,
+            y_mm: 0.0,
+            snap_id: None,
+        },
+    }));
+
+    for ch in ['5', '.', '2'] {
+        let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+            path: path.clone(),
+            msg: PrimitiveEditorMsg::FootprintSketchPlacementInputChar(ch),
+        }));
+    }
+    // Second decimal — must be rejected.
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchPlacementInputChar('.'),
+    }));
+
+    let editor = app
+        .document_state
+        .footprint_editors
+        .get(&path)
+        .expect("editor present after keypress sequence");
+    let input = editor
+        .state
+        .placement_input
+        .as_ref()
+        .expect("buffer minted by the first digit press");
+    assert_eq!(input.buffer, "5.2");
+    assert_eq!(input.kind, PlacementInputKind::LineLength);
+}
+
+/// v0.24 Track D — Escape clears the buffer immediately; subsequent
+/// click commits at the cursor with no override, as if no buffer
+/// had been typed.
+#[test]
+fn placement_input_escape_clears_buffer() {
+    use signex_app::app::FootprintEditorState;
+    use signex_app::library::editor::footprint::state::{
+        EditorMode, PlacementInput, PlacementInputKind, SketchTool,
+    };
+    use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
+    use signex_library::{Footprint, FootprintFile};
+
+    let tmp = TempDir::new().expect("tempdir");
+    let path = tmp.path().join("track-d-escape.snxfpt");
+    fs::write(&path, b"{}").expect("write .snxfpt placeholder");
+
+    let (mut app, _initial_task) = Signex::new();
+    let fp = Footprint::empty("track-d-fixture");
+    let file = FootprintFile::from_footprint(fp);
+    let mut editor = FootprintEditorState::new(path.clone(), file);
+    editor.state.mode = EditorMode::Sketch;
+    editor.state.active_tool = SketchTool::Line;
+    editor.state.placement_input = Some(PlacementInput {
+        buffer: "42".into(),
+        kind: PlacementInputKind::LineLength,
+    });
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), editor);
+
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchPlacementInputEscape,
+    }));
+
+    let editor = app
+        .document_state
+        .footprint_editors
+        .get(&path)
+        .expect("editor present after Esc");
+    assert!(
+        editor.state.placement_input.is_none(),
+        "Esc must clear placement_input; leaked = {:?}",
+        editor.state.placement_input.as_ref().map(|p| &p.buffer)
+    );
+}
