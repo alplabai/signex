@@ -3731,6 +3731,7 @@ impl Signex {
             ui.grid_size_mm,
             &interaction.canvas_for_window(window_id).selected,
             &document.panel_ctx.tokens,
+            document.inflight_git_commits.len(),
         )
         .map(Message::StatusBar);
 

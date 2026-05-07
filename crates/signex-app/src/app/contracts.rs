@@ -600,6 +600,18 @@ pub enum Message {
         path: std::path::PathBuf,
         result: Result<Vec<signex_widgets::HistoryEntry>, String>,
     },
+    /// v0.23 — Async project-git commit completed. The dispatcher
+    /// removes the `(project_root, rel_path)` entry from
+    /// `inflight_git_commits` and logs success/failure. `result.Ok`
+    /// carries the formatted commit OID; `result.Err` carries the
+    /// error string. Best-effort — a failure here doesn't roll back
+    /// the on-disk save (data is already on disk; this just means git
+    /// didn't capture it).
+    ProjectGitCommitDone {
+        project_root: std::path::PathBuf,
+        rel_path: std::path::PathBuf,
+        result: Result<String, String>,
+    },
     /// v0.14.2 — keyboard shortcut for footprint editor mode switch.
     /// Routed from the global `1` / `2` / `3` key handler in
     /// `bootstrap.rs::subscription`. The dispatcher checks whether

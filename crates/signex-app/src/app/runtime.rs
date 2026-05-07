@@ -32,7 +32,13 @@ impl Signex {
         // the generation counter and kick off an async load. Stale
         // results check `generation == history.generation` and drop
         // themselves on mismatch.
-        self.refresh_history_panel()
+        let history = self.refresh_history_panel();
+        // v0.23 — Drain any queued git commits onto the iced task
+        // pool so they run off the update thread. The "Saving…" pill
+        // in the status bar reads from `inflight_git_commits` until
+        // each Task::perform completion fires `ProjectGitCommitDone`.
+        let commits = self.drain_pending_git_commits();
+        Task::batch([history, commits])
     }
 
     /// Recompute the History panel's target path from the active tab,
