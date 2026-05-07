@@ -5876,6 +5876,154 @@ pub(crate) fn apply_footprint_primitive_edit(
                         };
                     }
                 },
+                SketchTool::Mirror => {
+                    // v0.22 Phase B1 — Mirror tool. Pre-condition: a
+                    // Line entity must already be selected via the
+                    // Select tool; clicks while no Line is selected
+                    // are silent no-ops. The active click resolves a
+                    // Point (`resolved_id`) which we mirror across
+                    // the selected Line by minting a fresh Point at
+                    // the reflected position and adding a
+                    // SymmetricAboutLine constraint linking the pair.
+                    //
+                    // Scope: Points only. Mirroring Lines / Arcs /
+                    // Circles requires per-endpoint reflection +
+                    // chained constraints, deferred to v0.22.x.
+                    use signex_sketch::constraint::{Constraint, ConstraintKind};
+                    use signex_sketch::id::ConstraintId;
+
+                    let line_id = match editor.state.selected_sketch {
+                        Some(id) => id,
+                        None => {
+                            editor.state.solve_warnings.push(
+                                "Mirror: select a Line first (Select tool, click a Line, then click here to mirror)"
+                                    .into(),
+                            );
+                            editor.state.tool_pending = ToolPending::Idle;
+                            editor.canvas_cache.clear();
+                            return;
+                        }
+                    };
+
+                    // Verify selection is actually a Line; resolve
+                    // both endpoints' positions and the picked
+                    // Point's position from the sketch.
+                    let sketch_ref = match editor.primitive().sketch.as_ref() {
+                        Some(s) => s,
+                        None => {
+                            editor.state.tool_pending = ToolPending::Idle;
+                            return;
+                        }
+                    };
+                    let line_endpoints = sketch_ref
+                        .entities
+                        .iter()
+                        .find(|e| e.id == line_id)
+                        .and_then(|e| match e.kind {
+                            EntityKind::Line { start, end } => Some((start, end)),
+                            _ => None,
+                        });
+                    let (a_id, b_id) = match line_endpoints {
+                        Some(p) => p,
+                        None => {
+                            editor.state.solve_warnings.push(
+                                "Mirror: selection is not a Line — pick a Line entity first"
+                                    .into(),
+                            );
+                            editor.state.tool_pending = ToolPending::Idle;
+                            editor.canvas_cache.clear();
+                            return;
+                        }
+                    };
+
+                    let pos_of = |id: SketchEntityId| -> Option<(f64, f64)> {
+                        sketch_ref
+                            .entities
+                            .iter()
+                            .find(|e| e.id == id)
+                            .and_then(|e| match e.kind {
+                                EntityKind::Point { x, y } => Some((x, y)),
+                                _ => None,
+                            })
+                    };
+                    let picked_kind = sketch_ref
+                        .entities
+                        .iter()
+                        .find(|e| e.id == resolved_id)
+                        .map(|e| matches!(e.kind, EntityKind::Point { .. }));
+                    if picked_kind != Some(true) {
+                        editor.state.solve_warnings.push(
+                            "Mirror: pick a Point to mirror (Lines / Arcs / Circles deferred to v0.22.x)"
+                                .into(),
+                        );
+                        editor.state.tool_pending = ToolPending::Idle;
+                        editor.canvas_cache.clear();
+                        return;
+                    }
+                    let (ax, ay) = match pos_of(a_id) {
+                        Some(p) => p,
+                        None => return,
+                    };
+                    let (bx, by) = match pos_of(b_id) {
+                        Some(p) => p,
+                        None => return,
+                    };
+                    let (px, py) = match pos_of(resolved_id) {
+                        Some(p) => p,
+                        None => return,
+                    };
+
+                    // Reflect (px, py) across the line through
+                    // (ax, ay) → (bx, by). Standard reflection:
+                    //   v = b - a; t = ((p - a) · v) / (v · v)
+                    //   foot = a + t·v; reflected = 2·foot - p
+                    let vx = bx - ax;
+                    let vy = by - ay;
+                    let v_dot_v = vx * vx + vy * vy;
+                    if v_dot_v <= 1e-12 {
+                        editor.state.solve_warnings.push(
+                            "Mirror: degenerate Line (zero length)".into(),
+                        );
+                        editor.state.tool_pending = ToolPending::Idle;
+                        editor.canvas_cache.clear();
+                        return;
+                    }
+                    let t = ((px - ax) * vx + (py - ay) * vy) / v_dot_v;
+                    let foot_x = ax + t * vx;
+                    let foot_y = ay + t * vy;
+                    let rx = 2.0 * foot_x - px;
+                    let ry = 2.0 * foot_y - py;
+
+                    let new_id = SketchEntityId::new();
+                    let new_entity = flag(Entity::new(
+                        new_id,
+                        plane_id,
+                        EntityKind::Point { x: rx, y: ry },
+                    ));
+                    editor.with_parts(|state, primitive| {
+                        apply_sketch_edit_with_warnings(
+                            state,
+                            primitive,
+                            SketchEdit::AddEntity(new_entity),
+                        );
+                    });
+                    let constraint = Constraint {
+                        id: ConstraintId::new(),
+                        kind: ConstraintKind::SymmetricAboutLine {
+                            p1: resolved_id,
+                            p2: new_id,
+                            line: line_id,
+                        },
+                    };
+                    editor.with_parts(|state, primitive| {
+                        apply_sketch_edit_with_warnings(
+                            state,
+                            primitive,
+                            SketchEdit::AddConstraint(constraint),
+                        );
+                    });
+                    editor.state.tool_pending = ToolPending::Idle;
+                }
             }
             editor.canvas_cache.clear();
             editor.dirty = true;

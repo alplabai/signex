@@ -141,6 +141,9 @@ fn view_tool_palette<'a>(
             SketchTool::RoundedRectangle => "click first corner (radius from input)".into(),
             SketchTool::Circle => "click centre".into(),
             SketchTool::Arc => "click centre".into(),
+            SketchTool::Mirror => {
+                "select a Line first, then click a Point to mirror".into()
+            }
         },
         ToolPending::LineFirst { .. } => "click second endpoint (Esc to cancel)".into(),
         ToolPending::RectangleFirst { .. } => "click opposite corner (Esc to cancel)".into(),

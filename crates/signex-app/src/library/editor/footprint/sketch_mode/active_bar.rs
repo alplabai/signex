@@ -180,6 +180,11 @@ pub fn items<'a>(
             SketchTool::Arc,
             ActiveBarIcon::Svg(icons::icon_shape_arc(theme_id)),
         ),
+        mk_tool(
+            "Mirror — pre-select a Line with the Select tool, then click a Point to mirror",
+            SketchTool::Mirror,
+            ActiveBarIcon::Glyph("\u{29B5}"), // ⦵
+        ),
         ActiveBarItem::Separator,
         // Section 3: Constrain (selection-aware)
         mk_constraint(

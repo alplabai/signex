@@ -1113,6 +1113,12 @@ pub enum SketchTool {
     RoundedRectangle,
     Circle,
     Arc,
+    /// v0.22 Phase B1 — Mirror tool. Click 1 picks the mirror line
+    /// (a `Line` entity), click 2 picks any entity to mirror. The
+    /// dispatcher generates a symmetric copy and adds the
+    /// `SymmetricAboutLine` constraint linking each Point of the
+    /// original to its mirror counterpart. Esc / right-click cancels.
+    Mirror,
 }
 
 /// Transient per-tool gesture state. The canvas Program reads + writes
