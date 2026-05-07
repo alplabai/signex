@@ -5637,7 +5637,9 @@ pub(crate) fn apply_footprint_primitive_edit(
         } => {
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            use crate::library::editor::footprint::state::{SketchTool, ToolPending};
+            use crate::library::editor::footprint::state::{
+                PlacementInputKind, SketchTool, ToolPending,
+            };
             use signex_sketch::entity::{Entity, EntityKind};
             use signex_sketch::id::SketchEntityId;
             use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
@@ -5692,7 +5694,161 @@ pub(crate) fn apply_footprint_primitive_edit(
                 }
             };
 
-            let resolved_id: SketchEntityId = match snap_id {
+            // v0.24 Track D — consume `state.placement_input` if it
+            // matches the active tool's pending state. The buffer is
+            // parsed as `f64` mm (length / radius) or degrees
+            // (sweep), translated into an effective click position
+            // overriding `x_mm` / `y_mm`, and the snap target is
+            // dropped so the typed-length wins over a coincidence
+            // hit. Returns the effective `(x, y)` and a flag whose
+            // `true` value means the click was geometry-pinned by a
+            // numeric input — used to (1) ignore `snap_id` and (2)
+            // clear `state.placement_input` after the gesture
+            // commits.
+            let placement_input_kind = editor.state.placement_input.as_ref().map(|p| p.kind);
+            let placement_input_value = editor
+                .state
+                .placement_input
+                .as_ref()
+                .and_then(|p| p.buffer.parse::<f64>().ok());
+            let resolve_point_xy =
+                |id: SketchEntityId, primitive: &signex_library::primitive::footprint::Footprint| -> Option<(f64, f64)> {
+                    primitive
+                        .sketch
+                        .as_ref()
+                        .and_then(|s| s.entities.iter().find(|e| e.id == id))
+                        .and_then(|e| match e.kind {
+                            EntityKind::Point { x, y } => Some((x, y)),
+                            _ => None,
+                        })
+                };
+            let (eff_x_mm, eff_y_mm, used_placement_input): (f64, f64, bool) = match (
+                placement_input_kind,
+                placement_input_value,
+                editor.state.active_tool,
+                editor.state.tool_pending.clone(),
+            ) {
+                // Line second click — pin distance from `first` along
+                // the cursor azimuth.
+                (
+                    Some(PlacementInputKind::LineLength),
+                    Some(len),
+                    SketchTool::Line,
+                    ToolPending::LineFirst { first },
+                ) if len > 0.0 => {
+                    let primitive = editor.primitive();
+                    if let Some((fx, fy)) = resolve_point_xy(first, primitive) {
+                        let dx = x_mm - fx;
+                        let dy = y_mm - fy;
+                        let cursor_len = (dx * dx + dy * dy).sqrt();
+                        if cursor_len > 1e-9 {
+                            let ux = dx / cursor_len;
+                            let uy = dy / cursor_len;
+                            (fx + len * ux, fy + len * uy, true)
+                        } else {
+                            // Cursor coincides with the first
+                            // endpoint — no azimuth to pin to. Fall
+                            // back to the raw click so the user gets
+                            // visible feedback that nothing happened.
+                            (x_mm, y_mm, false)
+                        }
+                    } else {
+                        (x_mm, y_mm, false)
+                    }
+                }
+                // Circle second click — radius from centre, along
+                // the cursor azimuth.
+                (
+                    Some(PlacementInputKind::CircleRadius),
+                    Some(r),
+                    SketchTool::Circle,
+                    ToolPending::CircleCenter { center },
+                ) if r > 0.0 => {
+                    let primitive = editor.primitive();
+                    if let Some((cx, cy)) = resolve_point_xy(center, primitive) {
+                        let dx = x_mm - cx;
+                        let dy = y_mm - cy;
+                        let cursor_len = (dx * dx + dy * dy).sqrt();
+                        if cursor_len > 1e-9 {
+                            let ux = dx / cursor_len;
+                            let uy = dy / cursor_len;
+                            (cx + r * ux, cy + r * uy, true)
+                        } else {
+                            // Cursor at centre → fall back; the user
+                            // can re-position before clicking.
+                            (x_mm, y_mm, false)
+                        }
+                    } else {
+                        (x_mm, y_mm, false)
+                    }
+                }
+                // Arc second click — start endpoint at exact radius
+                // from centre, along cursor azimuth.
+                (
+                    Some(PlacementInputKind::ArcRadius),
+                    Some(r),
+                    SketchTool::Arc,
+                    ToolPending::ArcCenter { center },
+                ) if r > 0.0 => {
+                    let primitive = editor.primitive();
+                    if let Some((cx, cy)) = resolve_point_xy(center, primitive) {
+                        let dx = x_mm - cx;
+                        let dy = y_mm - cy;
+                        let cursor_len = (dx * dx + dy * dy).sqrt();
+                        if cursor_len > 1e-9 {
+                            let ux = dx / cursor_len;
+                            let uy = dy / cursor_len;
+                            (cx + r * ux, cy + r * uy, true)
+                        } else {
+                            (x_mm, y_mm, false)
+                        }
+                    } else {
+                        (x_mm, y_mm, false)
+                    }
+                }
+                // Arc third click — sweep from `start` by typed
+                // degrees CCW around `center`. Radius is the
+                // committed |centre, start| distance.
+                (
+                    Some(PlacementInputKind::ArcSweep),
+                    Some(deg),
+                    SketchTool::Arc,
+                    ToolPending::ArcStart { center, start },
+                ) => {
+                    let primitive = editor.primitive();
+                    let parts = (
+                        resolve_point_xy(center, primitive),
+                        resolve_point_xy(start, primitive),
+                    );
+                    if let (Some((cx, cy)), Some((sx, sy))) = parts {
+                        let r = ((sx - cx).powi(2) + (sy - cy).powi(2)).sqrt();
+                        if r > 1e-9 {
+                            let start_ang = (sy - cy).atan2(sx - cx);
+                            let end_ang = start_ang + deg.to_radians();
+                            (
+                                cx + r * end_ang.cos(),
+                                cy + r * end_ang.sin(),
+                                true,
+                            )
+                        } else {
+                            (x_mm, y_mm, false)
+                        }
+                    } else {
+                        (x_mm, y_mm, false)
+                    }
+                }
+                _ => (x_mm, y_mm, false),
+            };
+            // When numeric input pinned the click, ignore the snap
+            // hit (the user explicitly asked for a different
+            // distance / angle).
+            let effective_snap_id = if used_placement_input {
+                None
+            } else {
+                snap_id
+            };
+
+            let resolved_id: SketchEntityId = match effective_snap_id {
                 Some(target) if matches!(editor.state.active_tool, SketchTool::Point) => {
                     use signex_sketch::constraint::{Constraint, ConstraintKind};
                     use signex_sketch::id::ConstraintId;
@@ -5701,7 +5857,10 @@ pub(crate) fn apply_footprint_primitive_edit(
                     let entity = flag(Entity::new(
                         new_id,
                         plane_id,
-                        EntityKind::Point { x: x_mm, y: y_mm },
+                        EntityKind::Point {
+                            x: eff_x_mm,
+                            y: eff_y_mm,
+                        },
                     ));
                     editor.with_parts(|state, primitive| {
                         apply_sketch_edit_with_warnings(
@@ -5732,7 +5891,10 @@ pub(crate) fn apply_footprint_primitive_edit(
                     let entity = flag(Entity::new(
                         id,
                         plane_id,
-                        EntityKind::Point { x: x_mm, y: y_mm },
+                        EntityKind::Point {
+                            x: eff_x_mm,
+                            y: eff_y_mm,
+                        },
                     ));
                     editor.with_parts(|state, primitive| {
                         apply_sketch_edit_with_warnings(
@@ -6936,6 +7098,15 @@ pub(crate) fn apply_footprint_primitive_edit(
                     });
                     editor.state.tool_pending = ToolPending::Idle;
                 }
+            }
+            // v0.24 Track D — buffer is consumed once per click. The
+            // user has to type again before the next gesture step,
+            // mirroring Fusion. Always clear when the resolve step
+            // honoured the buffer; leave alone otherwise so a stray
+            // pre-tool-pending keystroke survives until the user
+            // either commits or Esc-clears.
+            if used_placement_input {
+                editor.state.placement_input = None;
             }
             editor.canvas_cache.clear();
             editor.dirty = true;
