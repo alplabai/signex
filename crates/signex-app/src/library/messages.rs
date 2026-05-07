@@ -767,6 +767,27 @@ pub enum EditorMsg {
     /// v0.13.2 — Escape during a multi-click gesture; clears
     /// `tool_pending` without emitting a SketchEdit.
     FootprintSketchToolEscape,
+    /// v0.24 Track D — append a typed character to
+    /// `state.placement_input.buffer`. Mints a fresh `PlacementInput`
+    /// keyed off the active sketch tool when the field is `None`.
+    /// Validation (one decimal point, leading minus only for ArcSweep)
+    /// lives in the dispatcher.
+    FootprintSketchPlacementInputChar(char),
+    /// v0.24 Track D — pop the trailing character from
+    /// `state.placement_input.buffer`. Clears `placement_input` to
+    /// `None` once the buffer empties so the next keypress mints a
+    /// fresh entry.
+    FootprintSketchPlacementInputBackspace,
+    /// v0.24 Track D — Enter while the placement-input overlay is
+    /// open. No-op on state — the buffer waits for the next click to
+    /// consume it. Surfaced as a distinct message so the canvas can
+    /// stop forwarding the keypress to other handlers (find / replace
+    /// / etc.).
+    FootprintSketchPlacementInputEnter,
+    /// v0.24 Track D — Escape while the placement-input overlay is
+    /// open. Clears `state.placement_input = None`; the next click
+    /// commits at the cursor position as if no buffer had been typed.
+    FootprintSketchPlacementInputEscape,
     /// v0.13.3 — Sketch entity selection from canvas. `None` = clear.
     FootprintSketchSelect {
         id: Option<signex_sketch::id::SketchEntityId>,
@@ -1455,6 +1476,28 @@ pub enum PrimitiveEditorMsg {
     /// v0.13.2 — Escape during a multi-click gesture: discard
     /// `tool_pending` without emitting a SketchEdit.
     FootprintSketchToolEscape,
+    /// v0.24 Track D — append a typed character to
+    /// `state.placement_input.buffer`. Mints a fresh `PlacementInput`
+    /// keyed off the active sketch tool when the field is `None`.
+    /// Validation (one decimal point, leading minus only for
+    /// `ArcSweep`) lives in the dispatcher; the canvas filters out
+    /// non-numeric characters before publishing.
+    FootprintSketchPlacementInputChar(char),
+    /// v0.24 Track D — pop the trailing character from
+    /// `state.placement_input.buffer`. Clears `placement_input` to
+    /// `None` once the buffer empties so the next keypress mints a
+    /// fresh entry.
+    FootprintSketchPlacementInputBackspace,
+    /// v0.24 Track D — Enter while the placement-input overlay is
+    /// open. No-op on state — the buffer waits for the next click to
+    /// consume it. Surfaced as a distinct message so the canvas can
+    /// capture the keypress and prevent it from triggering global
+    /// shortcuts (Search, Run, …).
+    FootprintSketchPlacementInputEnter,
+    /// v0.24 Track D — Escape while the placement-input overlay is
+    /// open. Clears `state.placement_input = None`; the next click
+    /// commits at the cursor position as if no buffer had been typed.
+    FootprintSketchPlacementInputEscape,
 
     // ── v0.13.3 — selection / constraint submenu / dimension ──
     /// v0.13.3 — Select a sketch entity. `None` clears the selection;

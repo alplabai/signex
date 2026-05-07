@@ -1018,6 +1018,18 @@ fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEditorMsg {
             snap_id,
         },
         EditorMsg::FootprintSketchToolEscape => PrimitiveEditorMsg::FootprintSketchToolEscape,
+        EditorMsg::FootprintSketchPlacementInputChar(c) => {
+            PrimitiveEditorMsg::FootprintSketchPlacementInputChar(c)
+        }
+        EditorMsg::FootprintSketchPlacementInputBackspace => {
+            PrimitiveEditorMsg::FootprintSketchPlacementInputBackspace
+        }
+        EditorMsg::FootprintSketchPlacementInputEnter => {
+            PrimitiveEditorMsg::FootprintSketchPlacementInputEnter
+        }
+        EditorMsg::FootprintSketchPlacementInputEscape => {
+            PrimitiveEditorMsg::FootprintSketchPlacementInputEscape
+        }
         EditorMsg::FootprintSketchSelect { id, shift } => {
             PrimitiveEditorMsg::FootprintSketchSelect { id, shift }
         }

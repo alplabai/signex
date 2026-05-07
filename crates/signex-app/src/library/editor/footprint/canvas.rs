@@ -11,6 +11,7 @@
 //! since Canvas doesn't surface keyboard events.
 
 use iced::event::Event;
+use iced::keyboard;
 use iced::mouse;
 use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point, Rectangle, Renderer, Theme};
@@ -785,6 +786,99 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         y_mm: world.1,
                     },
                 }));
+            }
+            // v0.24 Track D — keyboard intercept for the live numeric
+            // placement input. Active only while a multi-click sketch
+            // tool (Line / Circle / Arc) has its first click pending,
+            // so digit keys outside Sketch mode never get swallowed.
+            // Modifiers must be empty so global shortcuts (Ctrl+Z,
+            // Ctrl+S, …) still reach the app dispatcher.
+            Event::Keyboard(keyboard::Event::KeyPressed {
+                key,
+                modifiers,
+                text,
+                ..
+            }) => {
+                use crate::library::editor::footprint::state::{
+                    EditorMode, PlacementInputKind, ToolPending,
+                };
+                if !matches!(self.state.mode, EditorMode::Sketch) {
+                    return None;
+                }
+                // Only intercept when there's either an open buffer or
+                // an in-progress gesture that could accept one — both
+                // are required so a stray digit press at idle (no
+                // first click yet) doesn't open an overlay against an
+                // empty tool state.
+                let has_open_buffer = self.state.placement_input.is_some();
+                let kind_for_active = PlacementInputKind::from_active_tool(
+                    self.state.active_tool,
+                    &self.state.tool_pending,
+                );
+                if !has_open_buffer && kind_for_active.is_none() {
+                    return None;
+                }
+                if matches!(self.state.tool_pending, ToolPending::Idle) && !has_open_buffer {
+                    return None;
+                }
+                if modifiers.command() || modifiers.alt() || modifiers.logo() {
+                    return None;
+                }
+                let publish = |msg: EditorMsg| -> Option<canvas::Action<LibraryMessage>> {
+                    Some(
+                        canvas::Action::publish(LibraryMessage::EditorEvent {
+                            library_path: self.address.library_path.clone(),
+                            table: self.address.table.clone(),
+                            row_id: self.address.row_id,
+                            msg,
+                        })
+                        .and_capture(),
+                    )
+                };
+                match key {
+                    keyboard::Key::Named(keyboard::key::Named::Backspace) => {
+                        if has_open_buffer {
+                            return publish(EditorMsg::FootprintSketchPlacementInputBackspace);
+                        }
+                    }
+                    keyboard::Key::Named(keyboard::key::Named::Enter) => {
+                        if has_open_buffer {
+                            return publish(EditorMsg::FootprintSketchPlacementInputEnter);
+                        }
+                    }
+                    keyboard::Key::Named(keyboard::key::Named::Escape) => {
+                        if has_open_buffer {
+                            return publish(EditorMsg::FootprintSketchPlacementInputEscape);
+                        }
+                    }
+                    _ => {
+                        // Use the platform-supplied `text` so we get
+                        // exactly the codepoint the user typed
+                        // (handles Numpad digits, decimal-point
+                        // localisation pre-conversion, etc.). Only
+                        // forward digits / `.` / `-`; everything else
+                        // falls through to the generic catch-all.
+                        if let Some(s) = text.as_ref() {
+                            if let Some(ch) = s.chars().next() {
+                                let useful = ch.is_ascii_digit()
+                                    || ch == '.'
+                                    || (ch == '-'
+                                        && kind_for_active
+                                            .or_else(|| {
+                                                self.state.placement_input.as_ref().map(|p| p.kind)
+                                            })
+                                            .map(|k| k.allows_negative())
+                                            .unwrap_or(false));
+                                if useful {
+                                    return publish(EditorMsg::FootprintSketchPlacementInputChar(
+                                        ch,
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+                return None;
             }
             _ => {}
         }

@@ -548,6 +548,46 @@ pub enum PlacementInputKind {
     ArcSweep,
 }
 
+impl PlacementInputKind {
+    /// v0.24 Track D — pick the matching numeric-input kind for the
+    /// active sketch tool + pending state. Returns `None` for tools
+    /// that don't accept a numeric input on the next click (Select /
+    /// Point / Rectangle / Mirror / Offset / Pattern). Caller checks
+    /// `tool_pending` so a digit press during the FIRST click of a
+    /// Line tool is silently ignored — there's no first-click length
+    /// to honour.
+    pub fn from_active_tool(tool: SketchTool, pending: &ToolPending) -> Option<Self> {
+        match (tool, pending) {
+            // Line second click → length.
+            (SketchTool::Line, ToolPending::LineFirst { .. }) => Some(Self::LineLength),
+            // Circle second click → radius.
+            (SketchTool::Circle, ToolPending::CircleCenter { .. }) => Some(Self::CircleRadius),
+            // Arc — second click is the start endpoint (radius = |centre, start|),
+            // third click is the end endpoint (sweep angle).
+            (SketchTool::Arc, ToolPending::ArcCenter { .. }) => Some(Self::ArcRadius),
+            (SketchTool::Arc, ToolPending::ArcStart { .. }) => Some(Self::ArcSweep),
+            _ => None,
+        }
+    }
+
+    /// v0.24 Track D — `true` when the buffer accepts a leading minus
+    /// sign. Only `ArcSweep` is signed; lengths and radii are always
+    /// non-negative so a stray `-` press is ignored.
+    pub fn allows_negative(self) -> bool {
+        matches!(self, Self::ArcSweep)
+    }
+
+    /// v0.24 Track D — short label rendered in the cursor overlay so
+    /// the user can tell at a glance what unit they're typing in.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::LineLength => "len",
+            Self::CircleRadius | Self::ArcRadius => "r",
+            Self::ArcSweep => "deg",
+        }
+    }
+}
+
 /// v0.20 — Pad Stack section's tab strip. Matches Altium's three
 /// tabs verbatim:
 /// - `Simple`: one row per stack family (COPPER / HOLE / PASTE /
