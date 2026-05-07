@@ -784,6 +784,66 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 "Over-constrained",
                 s.over_constraint_count.to_string(),
             );
+
+            // v0.22 Phase E3+E4 — list of over-constrained
+            // constraints. Each row shows the kind label + residual
+            // magnitude, sorted descending so the worst offender is
+            // first. Click → select the focus entity (first Point /
+            // Line referenced by the constraint) so the canvas pans
+            // and the red constraint icon sits in view. Hidden when
+            // count == 0; the user reads "Over-constrained: 0" and
+            // moves on.
+            if !s.over_constraints.is_empty() {
+                col = col.push(
+                    container(text("Conflicts (worst first)").size(10).color(muted))
+                        .padding([4, 8])
+                        .width(Length::Fill),
+                );
+                for oc in s.over_constraints.iter().take(8) {
+                    let label = format!(
+                        "{} — residual {:.3e}",
+                        oc.kind_label, oc.residual_magnitude
+                    );
+                    let oc_row: Element<'_, _> = if let Some(focus_id) = oc.focus_entity_id {
+                        button(
+                            text(label)
+                                .size(10)
+                                .color(Color::from_rgba(1.00, 0.55, 0.55, 1.00)),
+                        )
+                        .padding([2, 8])
+                        .width(Length::Fill)
+                        .on_press(PanelMsg::FpEditorSelectSketchEntity { id: focus_id })
+                        .style(move |_t: &Theme, _| iced::widget::button::Style {
+                            background: Some(iced::Background::Color(
+                                iced::Color::from_rgba(1.0, 0.30, 0.30, 0.06),
+                            )),
+                            ..iced::widget::button::Style::default()
+                        })
+                        .into()
+                    } else {
+                        container(
+                            text(label)
+                                .size(10)
+                                .color(Color::from_rgba(1.00, 0.55, 0.55, 1.00)),
+                        )
+                        .padding([2, 8])
+                        .width(Length::Fill)
+                        .into()
+                    };
+                    col = col.push(oc_row);
+                }
+                if s.over_constraints.len() > 8 {
+                    col = col.push(
+                        container(
+                            text(format!("… +{} more", s.over_constraints.len() - 8))
+                                .size(9)
+                                .color(muted),
+                        )
+                        .padding([2, 8])
+                        .width(Length::Fill),
+                    );
+                }
+            }
         } else {
             col = col.push(
                 container(text("(no solve yet)").size(10).color(muted))

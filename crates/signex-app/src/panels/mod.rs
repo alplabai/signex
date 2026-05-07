@@ -831,6 +831,29 @@ pub struct FootprintSolveSummary {
     pub elapsed_ms: u64,
     pub final_residual_norm: f64,
     pub over_constraint_count: usize,
+    /// v0.22 Phase E3+E4 — per-over-constraint summary so the
+    /// Properties panel can list the conflicts and the user can
+    /// click each to focus the canvas on the offending geometry.
+    /// Sorted descending by `residual_magnitude` so the worst
+    /// offender is first. Empty when `over_constraint_count == 0`.
+    pub over_constraints: Vec<OverConstraintSummary>,
+}
+
+#[derive(Debug, Clone)]
+pub struct OverConstraintSummary {
+    /// Kind label — "Coincident", "DistancePtPt", "Horizontal", etc.
+    /// Static string avoids allocating per-row.
+    pub kind_label: &'static str,
+    /// Post-solve residual magnitude. The LM iteration drives this
+    /// below `Solver::tolerance` for satisfiable constraints; values
+    /// above `RANK_TOL` indicate the constraint couldn't be met
+    /// alongside the others.
+    pub residual_magnitude: f64,
+    /// First Point entity the constraint touches. Click → select
+    /// this Point so the canvas pans and the constraint icon
+    /// rendered in red sits in view. `None` for constraints with
+    /// no Point endpoints (rare — Fixed pseudo-rows).
+    pub focus_entity_id: Option<signex_sketch::id::SketchEntityId>,
 }
 
 #[derive(Debug, Clone)]
@@ -1633,6 +1656,14 @@ pub enum PanelMsg {
     /// `sketch_entity_id` matches this id. No-op when no pad has
     /// this entity as its backing point.
     FpEditorEditSketchPadInPads {
+        id: signex_sketch::id::SketchEntityId,
+    },
+    /// v0.22 Phase E3+E4 — Properties-panel "Conflicts (worst first)"
+    /// over-constrained constraint row. Click → select the row's
+    /// focus entity in the sketch so the canvas re-renders with the
+    /// constraint icon highlighted. The handler dispatches the
+    /// equivalent `FootprintSketchSelect` library message.
+    FpEditorSelectSketchEntity {
         id: signex_sketch::id::SketchEntityId,
     },
     /// v0.16.4 — Pour-role sub-form. The handler mutates the

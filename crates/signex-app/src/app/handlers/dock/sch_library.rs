@@ -767,6 +767,19 @@ impl Signex {
                 self.refresh_panel_ctx();
                 true
             }
+            crate::panels::PanelMsg::FpEditorSelectSketchEntity { id } => {
+                // v0.22 Phase E3+E4 — Properties-panel "Conflicts"
+                // row click → set the sketch entity as the primary
+                // selection so the canvas re-renders with that
+                // entity's constraint icons highlighted in red.
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.state.selected_sketch = Some(*id);
+                    editor.state.selected_sketch_secondary = None;
+                    editor.canvas_cache.clear();
+                }
+                self.refresh_panel_ctx();
+                true
+            }
             crate::panels::PanelMsg::FpEditorToggleSilkFilled(on) => {
                 if let Some(editor) = self.active_footprint_editor_mut() {
                     if let Some(idx) = editor.state.selected_silk_f {
