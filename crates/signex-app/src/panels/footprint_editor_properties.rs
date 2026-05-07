@@ -4376,6 +4376,46 @@ fn render_pattern_subform<'a>(
         .width(Length::Fill),
     );
 
+    // v0.25 polish — BGA-specific config rows. Surface only when the
+    // array's numbering is BgaRowCol so the user gets the IPC-7351
+    // letter-skip toggle + the start letter / column inputs.
+    if let Some(bga) = arr.bga_config.as_ref() {
+        col = col.push(pad_check_row(
+            "Skip I/O/Q/S/X/Z (IPC-7351)",
+            bga.skip_letters,
+            move |v| PanelMsg::FpEditorSetBgaSkipLetters {
+                array_id,
+                value: v,
+            },
+            muted,
+            primary,
+        ));
+        col = col.push(pad_input_row(
+            "Start row",
+            "A",
+            bga.start_row.to_string(),
+            move |v| PanelMsg::FpEditorSetBgaStartRow {
+                array_id,
+                value: v,
+            },
+            muted,
+            primary,
+            border_c,
+        ));
+        col = col.push(pad_input_row(
+            "Start col",
+            "1",
+            bga.start_col.to_string(),
+            move |v| PanelMsg::FpEditorSetBgaStartCol {
+                array_id,
+                value: v,
+            },
+            muted,
+            primary,
+            border_c,
+        ));
+    }
+
     // Delete button — destructive style. Source entity stays put.
     col = col.push(
         container(

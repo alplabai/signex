@@ -1556,6 +1556,21 @@ fn build_footprint_editor_panel_ctx(
             }
             NumberingScheme::Explicit { .. } => crate::panels::NumberingSchemeKindUi::Explicit,
         };
+        // v0.25 polish — surface BGA-specific config when the
+        // numbering scheme is BgaRowCol so the Properties panel can
+        // render skip_letters / start_row / start_col rows.
+        let bga_config = match &array.numbering {
+            NumberingScheme::BgaRowCol {
+                skip_letters,
+                start_row,
+                start_col,
+            } => Some(crate::panels::BgaConfigSummary {
+                skip_letters: *skip_letters,
+                start_row: *start_row,
+                start_col: *start_col,
+            }),
+            _ => None,
+        };
         let repicking_polar_center = matches!(
             editor.state.tool_pending,
             ToolPending::RepickPolarCenter { array_id } if array_id == array.id
@@ -1565,6 +1580,7 @@ fn build_footprint_editor_panel_ctx(
             kind,
             numbering,
             repicking_polar_center,
+            bga_config,
         })
     });
 

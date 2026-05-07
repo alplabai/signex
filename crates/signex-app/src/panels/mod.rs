@@ -790,6 +790,25 @@ pub struct ArraySummary {
     /// `true` when the polar centre re-pick is active — the next
     /// sketch click on a Point sets `array.center`.
     pub repicking_polar_center: bool,
+    /// v0.25 polish — when `numbering == BgaRowCol`, this carries the
+    /// BGA-specific config (skip_letters / start_row / start_col) so
+    /// the Properties panel can surface editable rows for each. `None`
+    /// for Linear / Explicit numbering schemes.
+    pub bga_config: Option<BgaConfigSummary>,
+}
+
+/// v0.25 polish — surface for BGA numbering scheme parameters.
+/// Mirror of [`signex_sketch::array::NumberingScheme::BgaRowCol`].
+#[derive(Debug, Clone)]
+pub struct BgaConfigSummary {
+    /// IPC-7351 letter-skip convention (omits I/O/Q/S/X/Z to avoid
+    /// confusion with numerals). Default `true` matches Altium.
+    pub skip_letters: bool,
+    /// First row letter (e.g. `'A'`). Drives the row labels in the
+    /// baked replicas.
+    pub start_row: char,
+    /// First column number (e.g. `1`).
+    pub start_col: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -1901,6 +1920,25 @@ pub enum PanelMsg {
     FpEditorSetArrayNumberingScheme {
         array_id: signex_sketch::array::ArrayId,
         scheme: NumberingSchemeKindUi,
+    },
+    /// v0.25 polish — toggle BGA `skip_letters`. Active only when the
+    /// array's numbering is BgaRowCol; ignored for Linear / Explicit.
+    FpEditorSetBgaSkipLetters {
+        array_id: signex_sketch::array::ArrayId,
+        value: bool,
+    },
+    /// v0.25 polish — set BGA `start_row` letter. Empty input no-ops;
+    /// non-letter input no-ops; multi-char input takes the first
+    /// letter. Uppercased before storage.
+    FpEditorSetBgaStartRow {
+        array_id: signex_sketch::array::ArrayId,
+        value: String,
+    },
+    /// v0.25 polish — set BGA `start_col` integer. Empty input no-ops;
+    /// non-numeric input no-ops; bounds are otherwise unconstrained.
+    FpEditorSetBgaStartCol {
+        array_id: signex_sketch::array::ArrayId,
+        value: String,
     },
     /// v0.23 — Delete the array entirely. The source entity stays put.
     FpEditorDeleteArray {

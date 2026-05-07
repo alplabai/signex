@@ -928,6 +928,18 @@ impl Signex {
                 self.fp_editor_set_array_numbering_scheme(*array_id, *scheme);
                 true
             }
+            crate::panels::PanelMsg::FpEditorSetBgaSkipLetters { array_id, value } => {
+                self.fp_editor_set_bga_skip_letters(*array_id, *value);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetBgaStartRow { array_id, value } => {
+                self.fp_editor_set_bga_start_row(*array_id, value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetBgaStartCol { array_id, value } => {
+                self.fp_editor_set_bga_start_col(*array_id, value.clone());
+                true
+            }
             crate::panels::PanelMsg::FpEditorDeleteArray { array_id } => {
                 self.fp_editor_delete_array(*array_id);
                 true
@@ -2715,6 +2727,103 @@ impl Signex {
                             names: Vec::new(),
                         },
                     };
+                }
+            }
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
+            use crate::library::editor::footprint::sketch_mode::SketchEdit;
+            editor.with_parts(|state, primitive| {
+                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+            });
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+        }
+        self.refresh_panel_ctx();
+    }
+
+    /// v0.25 polish — toggle BGA `skip_letters`. Only fires for arrays
+    /// with NumberingScheme::BgaRowCol; switching schemes clears it.
+    pub(crate) fn fp_editor_set_bga_skip_letters(
+        &mut self,
+        array_id: signex_sketch::array::ArrayId,
+        skip_letters: bool,
+    ) {
+        use signex_sketch::array::NumberingScheme;
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
+                if let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id) {
+                    if let NumberingScheme::BgaRowCol { skip_letters: s, .. } = &mut array.numbering
+                    {
+                        *s = skip_letters;
+                    }
+                }
+            }
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
+            use crate::library::editor::footprint::sketch_mode::SketchEdit;
+            editor.with_parts(|state, primitive| {
+                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+            });
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+        }
+        self.refresh_panel_ctx();
+    }
+
+    /// v0.25 polish — set BGA `start_row` letter. Empty / non-letter
+    /// input no-ops; multi-char takes the first letter; uppercased
+    /// before storage. Letters I/O/Q/S/X/Z are valid starts even when
+    /// `skip_letters = true` (the skip applies to the row alphabet,
+    /// not the start point).
+    pub(crate) fn fp_editor_set_bga_start_row(
+        &mut self,
+        array_id: signex_sketch::array::ArrayId,
+        value: String,
+    ) {
+        use signex_sketch::array::NumberingScheme;
+        let Some(first_char) = value.chars().next() else {
+            return;
+        };
+        if !first_char.is_ascii_alphabetic() {
+            return;
+        }
+        let upper = first_char.to_ascii_uppercase();
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
+                if let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id) {
+                    if let NumberingScheme::BgaRowCol { start_row, .. } = &mut array.numbering {
+                        *start_row = upper;
+                    }
+                }
+            }
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
+            use crate::library::editor::footprint::sketch_mode::SketchEdit;
+            editor.with_parts(|state, primitive| {
+                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+            });
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+        }
+        self.refresh_panel_ctx();
+    }
+
+    /// v0.25 polish — set BGA `start_col` integer. Empty / non-numeric
+    /// no-ops; values are u32 so negatives are silently rejected by
+    /// the parse.
+    pub(crate) fn fp_editor_set_bga_start_col(
+        &mut self,
+        array_id: signex_sketch::array::ArrayId,
+        value: String,
+    ) {
+        use signex_sketch::array::NumberingScheme;
+        let trimmed = value.trim();
+        let Ok(parsed) = trimmed.parse::<u32>() else {
+            return;
+        };
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
+                if let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id) {
+                    if let NumberingScheme::BgaRowCol { start_col, .. } = &mut array.numbering {
+                        *start_col = parsed;
+                    }
                 }
             }
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
