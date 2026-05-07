@@ -2067,3 +2067,343 @@ fn mirror_add_round_rect_pad_mints_4_arcs_linked_to_corner_r() {
         );
     }
 }
+
+// ─────────────────────────────────────────────────────────────────
+// v0.24 Phase 3 — A2/A3/A4 Properties row + Unlink + reverse-mirror
+// ─────────────────────────────────────────────────────────────────
+
+/// v0.24 Phase 3 (Track A2) — placing a RoundRect pad in Pads mode
+/// registers a `corner_r` shape_params binding that the panel
+/// context surfaces as a `PadShapeParamSummary` so the Properties
+/// panel can render an editable "Corner radius" row.
+#[test]
+fn properties_panel_shows_corner_radius_for_round_rect_pad() {
+    use signex_app::app::FootprintEditorState;
+    use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
+    use signex_app::library::editor::footprint::state::EditorPad;
+    use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
+    use signex_library::{Footprint, FootprintFile, PadShape};
+
+    let path = PathBuf::from("test-a2-corner-radius-row.snxfpt");
+    let mut fp = Footprint::empty("test");
+
+    // Build the editor state directly so the pad's shape_params get
+    // populated via mirror_add_pad_to_sketch — which is the path the
+    // app dispatcher takes when the user places a pad in Pads mode.
+    let mut pad = EditorPad::new_default("1".into(), (0.0, 0.0));
+    pad.shape = PadShape::RoundRect { radius_ratio: 0.25 };
+    pad.size_mm = (2.0, 1.0);
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+
+    let file = FootprintFile::from_footprint(fp);
+    let mut editor = FootprintEditorState::new(path.clone(), file);
+    editor.state.pads = vec![pad];
+    editor.state.selected_pad = Some(0);
+
+    let (mut app, _initial_task) = Signex::new();
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), editor);
+
+    // Open a tab pointing at the editor so build_footprint_editor_panel_ctx
+    // resolves it. Using TabKind::FootprintEditor matches what the
+    // app does when the user double-clicks a .snxfpt in the tree.
+    app.document_state.tabs.push(signex_app::app::TabInfo {
+        title: "test".into(),
+        path: path.clone(),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: signex_app::app::TabKind::FootprintEditor(path.clone()),
+    });
+    app.document_state.active_tab = 0;
+
+    // Trigger a panel refresh by dispatching a no-op selection
+    // (FootprintSelectPad re-selects the pad and triggers
+    // refresh_panel_ctx in the post-dispatch flow).
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSelectPad(Some(0)),
+    }));
+
+    let ctx = app
+        .document_state
+        .panel_ctx
+        .footprint_editor
+        .as_ref()
+        .expect("footprint editor panel ctx populated");
+
+    let entries = &ctx.selected_pad_shape_params;
+    let corner_r_entry = entries
+        .iter()
+        .find(|e| e.key == "corner_r")
+        .expect("corner_r entry surfaced on selected pad shape_params");
+    assert_eq!(
+        corner_r_entry.label, "Corner radius",
+        "label is the user-facing 'Corner radius' string"
+    );
+    assert!(
+        corner_r_entry.parameter_name.starts_with("corner_r_"),
+        "parameter_name follows corner_r_<slug> convention; got `{}`",
+        corner_r_entry.parameter_name,
+    );
+    assert_eq!(
+        corner_r_entry.current_expr, "0.25mm",
+        "current_expr reads the live sketch parameter expression"
+    );
+}
+
+/// v0.24 Phase 3 (Track A2) — dispatching FpEditorEditPadShapeParam
+/// rewrites the bound sketch parameter and triggers a solve+rebake
+/// (warnings list stays empty).
+#[test]
+fn editing_corner_radius_updates_all_4_arcs() {
+    use signex_app::app::FootprintEditorState;
+    use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
+    use signex_app::library::editor::footprint::state::EditorPad;
+    use signex_library::{Footprint, FootprintFile, PadShape};
+
+    let path = PathBuf::from("test-a2-edit-corner-radius.snxfpt");
+    let mut fp = Footprint::empty("test");
+    let mut pad = EditorPad::new_default("1".into(), (0.0, 0.0));
+    pad.shape = PadShape::RoundRect { radius_ratio: 0.25 };
+    pad.size_mm = (2.0, 1.0);
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+
+    let parameter_name = pad
+        .shape_params
+        .get("corner_r")
+        .cloned()
+        .expect("corner_r minted at pad-add time");
+
+    let file = FootprintFile::from_footprint(fp);
+    let mut editor = FootprintEditorState::new(path.clone(), file);
+    editor.state.pads = vec![pad];
+    editor.state.selected_pad = Some(0);
+
+    let (mut app, _initial_task) = Signex::new();
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), editor);
+    app.document_state.tabs.push(signex_app::app::TabInfo {
+        title: "test".into(),
+        path: path.clone(),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: signex_app::app::TabKind::FootprintEditor(path.clone()),
+    });
+    app.document_state.active_tab = 0;
+
+    // Dispatch the Properties-panel edit. PanelMsg flows through the
+    // dock dispatcher which forwards to FootprintSketchEditParameter.
+    let _ = app.update(Message::Dock(signex_app::dock::DockMessage::Panel(
+        signex_app::panels::PanelMsg::FpEditorEditPadShapeParam {
+            pad_idx: 0,
+            key: "corner_r".into(),
+            value: "0.5mm".into(),
+        },
+    )));
+
+    let editor = app
+        .document_state
+        .footprint_editors
+        .get(&path)
+        .expect("editor still registered");
+    let sketch = editor.file.footprints[0]
+        .sketch
+        .as_ref()
+        .expect("sketch present after edit");
+    let raw = sketch
+        .parameters
+        .get_raw(&parameter_name)
+        .expect("corner_r parameter still registered");
+    assert_eq!(
+        raw, "0.5mm",
+        "FpEditorEditPadShapeParam rewrites the bound parameter"
+    );
+    assert!(
+        editor.state.solve_warnings.is_empty(),
+        "solve completed without warnings; got {:?}",
+        editor.state.solve_warnings
+    );
+}
+
+/// v0.24 Phase 3 (Track A3) — dispatching FootprintSketchUnlinkCornerRadius
+/// for one of the 4 corner Arcs mints a per-corner parameter and
+/// records the override on `pad.shape_params`. The shared corner_r
+/// binding stays in place so the other 3 corners follow it.
+#[test]
+fn unlink_corner_radius_mints_per_corner_param() {
+    use signex_app::app::FootprintEditorState;
+    use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
+    use signex_app::library::editor::footprint::state::EditorPad;
+    use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
+    use signex_library::{Footprint, FootprintFile, PadShape};
+    use signex_sketch::entity::EntityKind;
+    use signex_sketch::id::SketchEntityId;
+
+    let path = PathBuf::from("test-a3-unlink.snxfpt");
+    let mut fp = Footprint::empty("test");
+    let mut pad = EditorPad::new_default("1".into(), (0.0, 0.0));
+    pad.shape = PadShape::RoundRect { radius_ratio: 0.25 };
+    pad.size_mm = (2.0, 1.0);
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+
+    // Pick the NE arc — its UUID slug lives at
+    // `shape_params["corner_r_ne_arc"]`. Resolve back to the entity
+    // id by parsing the slug.
+    let ne_slug = pad
+        .shape_params
+        .get("corner_r_ne_arc")
+        .cloned()
+        .expect("corner_r_ne_arc sidecar minted");
+    let arc_entity_id = {
+        let uuid = uuid::Uuid::parse_str(&ne_slug).expect("sidecar value is a UUID slug");
+        SketchEntityId(uuid)
+    };
+    // Sanity: the entity actually is an Arc.
+    let sketch_pre = fp.sketch.as_ref().unwrap();
+    let arc_kind = sketch_pre
+        .entities
+        .iter()
+        .find(|e| e.id == arc_entity_id)
+        .map(|e| matches!(e.kind, EntityKind::Arc { .. }))
+        .unwrap_or(false);
+    assert!(arc_kind, "sidecar UUID points at an Arc entity");
+
+    let file = FootprintFile::from_footprint(fp);
+    let mut editor = FootprintEditorState::new(path.clone(), file);
+    editor.state.pads = vec![pad];
+    editor.state.selected_pad = Some(0);
+
+    let (mut app, _initial_task) = Signex::new();
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), editor);
+    app.document_state.tabs.push(signex_app::app::TabInfo {
+        title: "test".into(),
+        path: path.clone(),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: signex_app::app::TabKind::FootprintEditor(path.clone()),
+    });
+    app.document_state.active_tab = 0;
+
+    // Dispatch the Unlink action.
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchUnlinkCornerRadius { arc_entity_id },
+    }));
+
+    let editor = app
+        .document_state
+        .footprint_editors
+        .get(&path)
+        .expect("editor still registered");
+    let pad_after = &editor.state.pads[0];
+
+    // Both shared and per-corner keys are present.
+    assert!(
+        pad_after.shape_params.contains_key("corner_r"),
+        "shared corner_r binding stays intact"
+    );
+    assert!(
+        pad_after.shape_params.contains_key("corner_r_ne"),
+        "per-corner corner_r_ne override added"
+    );
+    // The per-corner parameter is registered on the sketch.
+    let per_corner_name = pad_after
+        .shape_params
+        .get("corner_r_ne")
+        .expect("corner_r_ne value points at a parameter name");
+    let sketch = editor.file.footprints[0]
+        .sketch
+        .as_ref()
+        .expect("sketch present after unlink");
+    let raw = sketch
+        .parameters
+        .get_raw(per_corner_name)
+        .expect("per-corner parameter registered on sketch.parameters");
+    assert_eq!(
+        raw, "0.25mm",
+        "per-corner parameter copies the shared expression as initial value"
+    );
+}
+
+/// v0.24 Phase 3 (Track A4) — after every solve, the reverse mirror
+/// re-derives `EditorPad.stack.corner_radius_pct` from the resolved
+/// corner_r parameter so the Pads-mode "Corner radius %" input stays
+/// in sync with sketch-side edits.
+#[test]
+fn reverse_mirror_updates_pad_stack_corner_radius_pct() {
+    use signex_app::app::FootprintEditorState;
+    use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
+    use signex_app::library::editor::footprint::state::EditorPad;
+    use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
+    use signex_library::{Footprint, FootprintFile, PadShape};
+
+    let path = PathBuf::from("test-a4-reverse-mirror.snxfpt");
+    let mut fp = Footprint::empty("test");
+    let mut pad = EditorPad::new_default("1".into(), (0.0, 0.0));
+    pad.shape = PadShape::RoundRect { radius_ratio: 0.25 };
+    pad.size_mm = (2.0, 1.0); // W=2, H=1, min=1, corner_r = 0.25*1 = 0.25mm
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+
+    let file = FootprintFile::from_footprint(fp);
+    let mut editor = FootprintEditorState::new(path.clone(), file);
+    editor.state.pads = vec![pad];
+
+    let (mut app, _initial_task) = Signex::new();
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), editor);
+    app.document_state.tabs.push(signex_app::app::TabInfo {
+        title: "test".into(),
+        path: path.clone(),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: signex_app::app::TabKind::FootprintEditor(path.clone()),
+    });
+    app.document_state.active_tab = 0;
+
+    // Trigger a solve+bake by editing a parameter (no-op rewrite of
+    // the same value; still forces resolve + bake).
+    let parameter_name = app
+        .document_state
+        .footprint_editors
+        .get(&path)
+        .unwrap()
+        .state
+        .pads[0]
+        .shape_params
+        .get("corner_r")
+        .cloned()
+        .unwrap();
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchEditParameter {
+            name: parameter_name,
+            expr: "0.25mm".into(),
+        },
+    }));
+
+    let editor = app
+        .document_state
+        .footprint_editors
+        .get(&path)
+        .expect("editor still registered");
+    let pad_after = &editor.state.pads[0];
+
+    // corner_r = 0.25mm, min(W,H) = 1mm → pct = 25%.
+    let pct = pad_after
+        .stack
+        .corner_radius_pct
+        .expect("reverse mirror populated corner_radius_pct");
+    assert!(
+        (pct - 25.0).abs() < 1e-6,
+        "corner_radius_pct = corner_r/min(W,H)*100 = 0.25/1*100 = 25; got {pct}"
+    );
+}
