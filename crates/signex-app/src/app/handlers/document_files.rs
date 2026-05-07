@@ -249,6 +249,72 @@ impl Signex {
         Ok(())
     }
 
+    /// v0.22 Phase 8.4 — auto-commit a saved file into the owning
+    /// project's local Git repo when `enable_git` is on.
+    ///
+    /// Walks `document_state.projects` looking for the project whose
+    /// `data.dir` is a prefix of `file_path`. If found AND
+    /// `data.enable_git == true`, opens
+    /// [`LocalGitProjectAdapter`] and runs `commit_path`.
+    ///
+    /// Failure is best-effort: logged + surfaced as a non-modal
+    /// status warning, never blocks the save. The user's data is on
+    /// disk regardless of whether git captures it.
+    ///
+    /// Synchronous for v0.22 — git2 commits on small repos finish
+    /// in <10 ms. Async polish (Task::perform off the iced thread +
+    /// "Saving…" pill) is in PROJECT_GIT_PLAN.md as a follow-up.
+    fn commit_save_to_project_git(&self, file_path: &std::path::Path, default_message: &str) {
+        let owning = self
+            .document_state
+            .projects
+            .iter()
+            .find(|p| {
+                if !p.data.enable_git {
+                    return false;
+                }
+                let dir = std::path::Path::new(&p.data.dir);
+                file_path.starts_with(dir)
+            });
+        let Some(project) = owning else {
+            return;
+        };
+        let project_root = std::path::PathBuf::from(&project.data.dir);
+        let rel_path = match file_path.strip_prefix(&project_root) {
+            Ok(p) => p.to_path_buf(),
+            Err(_) => return,
+        };
+
+        let adapter = match signex_library::adapters::local_git_project::LocalGitProjectAdapter::open_or_init(
+            project_root.clone(),
+        ) {
+            Ok(a) => a,
+            Err(e) => {
+                crate::diagnostics::log_warning(format!(
+                    "[git] open_or_init({}) failed: {e}",
+                    project_root.display()
+                ));
+                return;
+            }
+        };
+        match adapter.commit_path(&rel_path, default_message) {
+            Ok(oid) => {
+                crate::diagnostics::log_info(format!(
+                    "[git] committed {} in {} ({})",
+                    rel_path.display(),
+                    project_root.display(),
+                    oid
+                ));
+            }
+            Err(e) => {
+                crate::diagnostics::log_warning(format!(
+                    "[git] commit_path({}) failed: {e}",
+                    rel_path.display()
+                ));
+            }
+        }
+    }
+
     fn save_active_document(&mut self) -> Result<iced::Task<Message>> {
         // Standalone `.snxsym` / `.snxfpt` document tabs route Ctrl+S
         // through `save_primitive_tab_at` so JSON persistence happens
@@ -291,6 +357,18 @@ impl Signex {
             result.context("save active schematic session")?;
             let path = self.active_tab_path().unwrap_or_default();
             crate::diagnostics::log_info(format!("[save] Wrote {}", path.display()));
+            // v0.22 Phase 8.4 — auto-commit the saved schematic into
+            // the owning project's git repo when enable_git is on.
+            // Best-effort; failure logged + ignored (user data is on
+            // disk regardless).
+            if !path.as_os_str().is_empty() {
+                let label = path
+                    .file_name()
+                    .map(|f| f.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| path.display().to_string());
+                let msg = format!("Save {label}");
+                self.commit_save_to_project_git(&path, &msg);
+            }
         }
         // Save the active project's `.snxprj` if it's dirty (right-
         // click → Add Existing flips the dirty bit). Best-effort: a
@@ -416,6 +494,14 @@ impl Signex {
                     "[save] Wrote project {}",
                     project_path.display()
                 ));
+                // v0.22 Phase 8.4 — auto-commit the .snxprj file into
+                // its own project git repo when enable_git is on.
+                let label = project_path
+                    .file_name()
+                    .map(|f| f.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| project_path.display().to_string());
+                let msg = format!("Save {label}");
+                self.commit_save_to_project_git(&project_path, &msg);
                 // Rebuild the panel ctx so the project root row drops
                 // its dirty marker. Without this, the cached
                 // `ProjectPanelInfo.is_dirty` snapshot stays `true`
