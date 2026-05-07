@@ -532,6 +532,46 @@ impl Signex {
                 self.refresh_panel_ctx();
                 true
             }
+            crate::panels::PanelMsg::FpEditorSetNextPadHoleTolerancePlus(v) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.state.next_pad_defaults.hole_tolerance_plus_mm =
+                        fp_parse_optional_mm(v);
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadHoleToleranceMinus(v) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.state.next_pad_defaults.hole_tolerance_minus_mm =
+                        fp_parse_optional_mm(v);
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadHoleRotation(v) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.state.next_pad_defaults.hole_rotation_deg =
+                        v.trim().parse::<f64>().ok();
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadCopperOffsetX(v) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.state.next_pad_defaults.copper_offset_x_mm =
+                        fp_parse_optional_mm(v);
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadCopperOffsetY(v) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.state.next_pad_defaults.copper_offset_y_mm =
+                        fp_parse_optional_mm(v);
+                }
+                self.refresh_panel_ctx();
+                true
+            }
             crate::panels::PanelMsg::FpEditorToggleSilkFilled(on) => {
                 if let Some(editor) = self.active_footprint_editor_mut() {
                     if let Some(idx) = editor.state.selected_silk_f {

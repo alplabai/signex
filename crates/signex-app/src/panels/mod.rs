@@ -670,6 +670,13 @@ pub struct FootprintEditorPanelContext {
     pub footprint_default_designator: String,
     pub footprint_component_type: signex_library::primitive::footprint::ComponentType,
     pub footprint_height_mm: Option<f64>,
+    /// v0.21 — Pad Hole detail fields surfaced for the Multi-Layer
+    /// pad placement form.
+    pub next_pad_hole_tolerance_plus_mm: Option<f64>,
+    pub next_pad_hole_tolerance_minus_mm: Option<f64>,
+    pub next_pad_hole_rotation_deg: Option<f64>,
+    pub next_pad_copper_offset_x_mm: Option<f64>,
+    pub next_pad_copper_offset_y_mm: Option<f64>,
     /// v0.16.4 — Pour-role sub-form values for the selected entity.
     /// `None` when the entity isn't a pour. Carries the net string,
     /// fill type, and a snapshot of thermal-relief defaults so the
@@ -1461,6 +1468,12 @@ pub enum PanelMsg {
     FpEditorSetSilkTextSize(String),
     FpEditorSetSilkStrokeWidth(String),
     FpEditorToggleSilkFilled(bool),
+    /// v0.21 — Pad Hole detail fields (Multi-Layer only).
+    FpEditorSetNextPadHoleTolerancePlus(String),
+    FpEditorSetNextPadHoleToleranceMinus(String),
+    FpEditorSetNextPadHoleRotation(String),
+    FpEditorSetNextPadCopperOffsetX(String),
+    FpEditorSetNextPadCopperOffsetY(String),
     /// v0.16.4 — Pour-role sub-form. The handler mutates the
     /// selected entity's `pour` attr and runs solve+bake.
     FpEditorSetPourNet {

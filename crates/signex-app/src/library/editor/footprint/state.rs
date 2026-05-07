@@ -644,9 +644,9 @@ impl PadSide {
     pub const ALL_OPTIONS: &'static [PadSide] = &[PadSide::Top, PadSide::Bottom, PadSide::All];
     pub fn label(self) -> &'static str {
         match self {
-            PadSide::Top => "Top",
-            PadSide::Bottom => "Bottom",
-            PadSide::All => "All (THT)",
+            PadSide::Top => "Top Layer",
+            PadSide::Bottom => "Bottom Layer",
+            PadSide::All => "Multi-Layer",
         }
     }
 }

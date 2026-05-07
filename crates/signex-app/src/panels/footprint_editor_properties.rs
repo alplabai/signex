@@ -1014,6 +1014,12 @@ struct PadFormValues {
     electrical_type: signex_sketch::attr::ElectricalType,
     net: String,
     locked: bool,
+    /// v0.21 — Pad Hole detail fields (Multi-Layer only).
+    hole_tolerance_plus_mm: Option<f64>,
+    hole_tolerance_minus_mm: Option<f64>,
+    hole_rotation_deg: Option<f64>,
+    copper_offset_x_mm: Option<f64>,
+    copper_offset_y_mm: Option<f64>,
 }
 
 impl PadFormValues {
@@ -1037,6 +1043,11 @@ impl PadFormValues {
             electrical_type: fp.next_pad_electrical_type,
             net: fp.next_pad_net.clone(),
             locked: fp.next_pad_locked,
+            hole_tolerance_plus_mm: fp.next_pad_hole_tolerance_plus_mm,
+            hole_tolerance_minus_mm: fp.next_pad_hole_tolerance_minus_mm,
+            hole_rotation_deg: fp.next_pad_hole_rotation_deg,
+            copper_offset_x_mm: fp.next_pad_copper_offset_x_mm,
+            copper_offset_y_mm: fp.next_pad_copper_offset_y_mm,
         }
     }
     fn from_selected_pad(pad: &FootprintPadSummary, fp: &FootprintEditorPanelContext) -> Self {
@@ -1059,6 +1070,11 @@ impl PadFormValues {
             electrical_type: pad.electrical_type,
             net: pad.net.clone(),
             locked: pad.locked,
+            hole_tolerance_plus_mm: None,
+            hole_tolerance_minus_mm: None,
+            hole_rotation_deg: None,
+            copper_offset_x_mm: None,
+            copper_offset_y_mm: None,
         }
     }
 }
@@ -1632,6 +1648,70 @@ fn render_pad_form_pad_stack<'a>(
             muted,
             primary,
             border_c,
+        ));
+        // v0.21 — Hole detail fields. Tolerance is reporting-only
+        // (drives IPC-356 / drill table), Rotation orients Slot/Rect
+        // holes, Copper Offset shifts the copper outline relative to
+        // the hole centre. Only shown for Multi-Layer pads.
+        col = col.push(
+            container(text("Hole Details").size(9).color(muted))
+                .padding([6, 8])
+                .width(Length::Fill),
+        );
+        let tol_p_buf = values
+            .hole_tolerance_plus_mm
+            .map(|v| format!("{v:.3}"))
+            .unwrap_or_default();
+        col = col.push(pad_input_row(
+            "Tolerance + (mm)",
+            "0",
+            tol_p_buf,
+            PanelMsg::FpEditorSetNextPadHoleTolerancePlus,
+            muted, primary, border_c,
+        ));
+        let tol_m_buf = values
+            .hole_tolerance_minus_mm
+            .map(|v| format!("{v:.3}"))
+            .unwrap_or_default();
+        col = col.push(pad_input_row(
+            "Tolerance − (mm)",
+            "0",
+            tol_m_buf,
+            PanelMsg::FpEditorSetNextPadHoleToleranceMinus,
+            muted, primary, border_c,
+        ));
+        let rot_buf = values
+            .hole_rotation_deg
+            .map(|v| format!("{v:.1}"))
+            .unwrap_or_default();
+        col = col.push(pad_input_row(
+            "Hole rotation (°)",
+            "0",
+            rot_buf,
+            PanelMsg::FpEditorSetNextPadHoleRotation,
+            muted, primary, border_c,
+        ));
+        let cox_buf = values
+            .copper_offset_x_mm
+            .map(|v| format!("{v:.3}"))
+            .unwrap_or_default();
+        col = col.push(pad_input_row(
+            "Copper offset X (mm)",
+            "0",
+            cox_buf,
+            PanelMsg::FpEditorSetNextPadCopperOffsetX,
+            muted, primary, border_c,
+        ));
+        let coy_buf = values
+            .copper_offset_y_mm
+            .map(|v| format!("{v:.3}"))
+            .unwrap_or_default();
+        col = col.push(pad_input_row(
+            "Copper offset Y (mm)",
+            "0",
+            coy_buf,
+            PanelMsg::FpEditorSetNextPadCopperOffsetY,
+            muted, primary, border_c,
         ));
     }
 
