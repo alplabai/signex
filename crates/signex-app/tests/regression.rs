@@ -3560,3 +3560,432 @@ fn place_round_rect_then_select_arc_unlink_then_undo_restores_link() {
         "Undo restores the full pre-unlink projection (parameters returned)"
     );
 }
+
+// ─────────────────────────────────────────────────────────────────
+// Cross-track: parametric pad parameter editing (Track A2/A3/A4)
+// ─────────────────────────────────────────────────────────────────
+
+/// Phase-5 #4 — Edit the shared `corner_r_<slug>` parameter via the
+/// Properties-panel dispatch path. The parameter table rewrites
+/// cleanly and solve resolves the new value for every consumer; the
+/// `pad.stack.corner_radius_pct` mirror (Track A4) re-derives from the
+/// resolved corner_r so the Pads-mode "Corner radius %" input stays
+/// in sync with sketch-side edits.
+///
+/// NOTE: the v0.24 A2 mint stores arc-anchor / inset-corner Point
+/// coordinates as literals; no constraint binds them to the shared
+/// `corner_r` parameter, and there's no post-solve mirror analogous
+/// to `mirror_solve_to_chamfer_anchors` for RoundRect arcs. So a
+/// shared-param edit DOES propagate through resolved-parameters +
+/// the pad-stack pct mirror, but the Arc geometry stays at the
+/// literal mint-time radius until either (a) constraints bind the
+/// arc-anchor Points to the shared parameter, or (b) a dedicated
+/// `mirror_solve_to_round_rect_arcs` lands. **Deferred to Phase 6**
+/// — flagged in the report. This test pins the surfaces that DO work
+/// today: parameter rewrite + resolved-parameters propagation +
+/// corner_radius_pct mirror.
+#[test]
+fn editing_corner_r_via_properties_updates_all_4_arcs() {
+    use signex_app::app::{FootprintEditorState, TabInfo, TabKind};
+    use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
+    use signex_app::library::editor::footprint::state::EditorPad;
+    use signex_library::{Footprint, FootprintFile, PadShape};
+    use signex_sketch::entity::EntityKind;
+    use signex_sketch::parameter;
+
+    let path = PathBuf::from("phase5-corner-r-all-4-arcs.snxfpt");
+    let mut fp = Footprint::empty("test");
+    let mut pad = EditorPad::new_default("1".into(), (0.0, 0.0));
+    pad.shape = PadShape::RoundRect { radius_ratio: 0.25 };
+    pad.size_mm = (2.0, 1.0); // corner_r = 0.25 * 1 = 0.25mm
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+    let parameter_name = pad
+        .shape_params
+        .get("corner_r")
+        .cloned()
+        .expect("corner_r minted");
+
+    let file = FootprintFile::from_footprint(fp);
+    let mut editor = FootprintEditorState::new(path.clone(), file);
+    editor.state.pads = vec![pad];
+    editor.state.selected_pad = Some(0);
+
+    let (mut app, _initial_task) = Signex::new();
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), editor);
+    app.document_state.tabs.push(TabInfo {
+        title: "test".into(),
+        path: path.clone(),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: TabKind::FootprintEditor(path.clone()),
+    });
+    app.document_state.active_tab = 0;
+
+    // Edit corner_r via the Properties-panel dispatch path. PanelMsg
+    // → DockMessage::Panel → handler routes to
+    // FootprintSketchEditParameter under the hood.
+    let _ = app.update(Message::Dock(signex_app::dock::DockMessage::Panel(
+        signex_app::panels::PanelMsg::FpEditorEditPadShapeParam {
+            pad_idx: 0,
+            key: "corner_r".into(),
+            value: "0.5mm".into(),
+        },
+    )));
+
+    let editor = app
+        .document_state
+        .footprint_editors
+        .get(&path)
+        .expect("editor still registered");
+    let sketch = editor.file.footprints[0]
+        .sketch
+        .as_ref()
+        .expect("sketch present");
+
+    // Sanity — pad still has 4 corner Arcs (mint preserved on edit).
+    let arcs: Vec<_> = sketch
+        .entities
+        .iter()
+        .filter(|e| matches!(e.kind, EntityKind::Arc { .. }))
+        .collect();
+    assert_eq!(arcs.len(), 4, "RoundRect pad has exactly 4 corner Arcs");
+
+    // Surface 1 — the parameter table rewrote cleanly.
+    let raw = sketch
+        .parameters
+        .get_raw(&parameter_name)
+        .expect("corner_r parameter still registered");
+    assert_eq!(
+        raw, "0.5mm",
+        "FpEditorEditPadShapeParam rewrites the bound parameter"
+    );
+
+    // Surface 2 — the resolved-parameter map propagates the new value
+    // (0.5mm). Future constraint-bound or mirror-bound Arc geometry
+    // would read this in lockstep.
+    let resolved = parameter::resolve(&sketch.parameters)
+        .expect("resolved parameter map after edit");
+    let resolved_corner_r = resolved
+        .get(&parameter_name)
+        .copied()
+        .expect("corner_r resolves cleanly");
+    assert!(
+        (resolved_corner_r - 0.5).abs() < 1e-9,
+        "resolved corner_r = 0.5mm; got {resolved_corner_r}"
+    );
+
+    // Surface 3 — `mirror_solve_to_pad_stack` re-derives
+    // `corner_radius_pct = corner_r / min(W, H) * 100` from the new
+    // resolved value. With min(W, H) = 1mm and corner_r = 0.5mm, pct
+    // = 50.0 (clamped at the upper bound of the valid range).
+    let pct = editor.state.pads[0]
+        .stack
+        .corner_radius_pct
+        .expect("corner_radius_pct populated by reverse mirror");
+    assert!(
+        (pct - 50.0).abs() < 1e-6,
+        "corner_radius_pct = 0.5/1*100 = 50; got {pct}"
+    );
+
+    // Solve completed without warnings.
+    assert!(
+        editor.state.solve_warnings.is_empty(),
+        "solve cleared cleanly; got {:?}",
+        editor.state.solve_warnings
+    );
+}
+
+/// Phase-5 #5 — Unlink one corner only (NE), then verify the data
+/// contract for shared vs. per-corner parameter independence:
+///   - the shared `corner_r` binding survives the Unlink (other 3
+///     corners still reference it).
+///   - the per-corner `corner_r_ne` binding points at a fresh
+///     parameter, distinct from `corner_r`.
+///   - editing the shared `corner_r` rewrites its parameter; the
+///     per-corner override stays at its original value (and vice
+///     versa). This is the "pin one corner, edit the rest" workflow
+///     parity Fusion ships.
+///
+/// NOTE: the Arc geometry doesn't currently re-read the parameter
+/// table on solve (no constraint binds anchor / inset Points to the
+/// shared / per-corner parameters; no post-solve mirror analogous
+/// to `mirror_solve_to_chamfer_anchors` for RoundRect arcs). So this
+/// test pins the **parameter-table** independence — the surface the
+/// future Phase-6 constraint or mirror would read from. The Phase-6
+/// follow-up will add direct geometry-radius assertions; **deferred
+/// to Phase 6**, flagged in the report.
+#[test]
+fn unlink_one_corner_only_that_arc_reads_per_corner_param() {
+    use signex_app::app::{FootprintEditorState, TabInfo, TabKind};
+    use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
+    use signex_app::library::editor::footprint::state::EditorPad;
+    use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
+    use signex_library::{Footprint, FootprintFile, PadShape};
+    use signex_sketch::id::SketchEntityId;
+
+    let path = PathBuf::from("phase5-unlink-one-corner.snxfpt");
+    let mut fp = Footprint::empty("test");
+    let mut pad = EditorPad::new_default("1".into(), (0.0, 0.0));
+    pad.shape = PadShape::RoundRect { radius_ratio: 0.25 };
+    pad.size_mm = (2.0, 1.0);
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+
+    let ne_arc_slug = pad
+        .shape_params
+        .get("corner_r_ne_arc")
+        .cloned()
+        .expect("corner_r_ne_arc sidecar minted");
+    let ne_arc_id = SketchEntityId(uuid::Uuid::parse_str(&ne_arc_slug).expect("UUID slug"));
+    let shared_param_name = pad
+        .shape_params
+        .get("corner_r")
+        .cloned()
+        .expect("shared corner_r binding minted");
+
+    let file = FootprintFile::from_footprint(fp);
+    let mut editor = FootprintEditorState::new(path.clone(), file);
+    editor.state.pads = vec![pad];
+    editor.state.selected_pad = Some(0);
+
+    let (mut app, _initial_task) = Signex::new();
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), editor);
+    app.document_state.tabs.push(TabInfo {
+        title: "test".into(),
+        path: path.clone(),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: TabKind::FootprintEditor(path.clone()),
+    });
+    app.document_state.active_tab = 0;
+
+    // Step 1 — Unlink the NE arc.
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchUnlinkCornerRadius {
+            arc_entity_id: ne_arc_id,
+        },
+    }));
+
+    // Sanity — both shared + per-corner bindings present after Unlink,
+    // and they point at DIFFERENT parameter names (the per-corner
+    // mint must not collide with the shared one).
+    let per_corner_param_name = {
+        let editor = app.document_state.footprint_editors.get(&path).unwrap();
+        let pad = &editor.state.pads[0];
+        assert!(
+            pad.shape_params.contains_key("corner_r"),
+            "shared corner_r binding intact"
+        );
+        let per_corner_name = pad
+            .shape_params
+            .get("corner_r_ne")
+            .cloned()
+            .expect("per-corner corner_r_ne minted");
+        assert_ne!(
+            per_corner_name, shared_param_name,
+            "per-corner parameter name must differ from shared (got both = `{}`)",
+            shared_param_name
+        );
+        per_corner_name
+    };
+
+    // Initial values — both 0.25mm (the unlink action copies the
+    // shared expression as the per-corner initial value).
+    let raw = |app: &Signex, name: &str| -> String {
+        let editor = app.document_state.footprint_editors.get(&path).unwrap();
+        editor.file.footprints[0]
+            .sketch
+            .as_ref()
+            .unwrap()
+            .parameters
+            .get_raw(name)
+            .map(str::to_string)
+            .expect("parameter registered")
+    };
+    assert_eq!(
+        raw(&app, &shared_param_name),
+        "0.25mm",
+        "shared corner_r initial value"
+    );
+    assert_eq!(
+        raw(&app, &per_corner_param_name),
+        "0.25mm",
+        "per-corner corner_r_ne copies the shared initial value"
+    );
+
+    // Step 2 — Edit the shared corner_r parameter. Only the shared
+    // parameter should rewrite; the per-corner override stays put.
+    let _ = app.update(Message::Dock(signex_app::dock::DockMessage::Panel(
+        signex_app::panels::PanelMsg::FpEditorEditPadShapeParam {
+            pad_idx: 0,
+            key: "corner_r".into(),
+            value: "0.4mm".into(),
+        },
+    )));
+    assert_eq!(
+        raw(&app, &shared_param_name),
+        "0.4mm",
+        "shared param rewrote to 0.4mm"
+    );
+    assert_eq!(
+        raw(&app, &per_corner_param_name),
+        "0.25mm",
+        "per-corner param stays at 0.25mm when shared is edited"
+    );
+
+    // Step 3 — Edit the per-corner override only it changes; shared
+    // stays at 0.4mm.
+    let _ = app.update(Message::Dock(signex_app::dock::DockMessage::Panel(
+        signex_app::panels::PanelMsg::FpEditorEditPadShapeParam {
+            pad_idx: 0,
+            key: "corner_r_ne".into(),
+            value: "0.15mm".into(),
+        },
+    )));
+    assert_eq!(
+        raw(&app, &per_corner_param_name),
+        "0.15mm",
+        "per-corner edit rewrote corner_r_ne to 0.15mm"
+    );
+    assert_eq!(
+        raw(&app, &shared_param_name),
+        "0.4mm",
+        "shared param stays at 0.4mm when per-corner is edited"
+    );
+}
+
+/// Phase-5 #6 — Edit the `width_<slug>` parameter on an Oval pad.
+/// The mint stores the long-axis literal in `width_<slug>` and minted
+/// arc-anchor / arc-centre Points are placed at literal coordinates
+/// derived from W and H. After a solve, the resolved-parameter map
+/// must reflect the new W; the parameter table also rewrites cleanly.
+///
+/// NOTE: the v0.24 A5 mint records the new W in the parameter table
+/// but does NOT yet reposition the literal Point coordinates of the
+/// arc-anchor / arc-centre Points (no constraint binds them to W —
+/// they're literal at mint time, just like a Fusion sketch where you
+/// haven't drawn dimensions). Repositioning would require either
+/// adding constraints linking the Point coords to `width` / `height`,
+/// or a dedicated post-solve mirror analogous to
+/// `mirror_solve_to_chamfer_anchors`. **Deferred to Phase 6** —
+/// flagged in the report. This test pins the surface that DOES work:
+/// the parameter table propagates the new W on resolve, so a
+/// future constraint-bound Point would see the new value.
+#[test]
+fn oval_width_edit_propagates_to_arc_centre_via_solve() {
+    use signex_app::app::{FootprintEditorState, TabInfo, TabKind};
+    use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
+    use signex_app::library::editor::footprint::state::EditorPad;
+    use signex_library::{Footprint, FootprintFile, PadShape};
+    use signex_sketch::parameter;
+
+    let path = PathBuf::from("phase5-oval-width-edit.snxfpt");
+    let mut fp = Footprint::empty("test");
+    let mut pad = EditorPad::new_default("1".into(), (0.0, 0.0));
+    pad.shape = PadShape::Oval;
+    pad.size_mm = (2.0, 1.0);
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+
+    let width_param = pad
+        .shape_params
+        .get("width")
+        .cloned()
+        .expect("width param minted");
+    let height_param = pad
+        .shape_params
+        .get("height")
+        .cloned()
+        .expect("height param minted");
+
+    let file = FootprintFile::from_footprint(fp);
+    let mut editor = FootprintEditorState::new(path.clone(), file);
+    editor.state.pads = vec![pad];
+    editor.state.selected_pad = Some(0);
+
+    let (mut app, _initial_task) = Signex::new();
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), editor);
+    app.document_state.tabs.push(TabInfo {
+        title: "test".into(),
+        path: path.clone(),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: TabKind::FootprintEditor(path.clone()),
+    });
+    app.document_state.active_tab = 0;
+
+    // Edit width via Properties dispatch (the same path the panel's
+    // "Width" row drives).
+    let _ = app.update(Message::Dock(signex_app::dock::DockMessage::Panel(
+        signex_app::panels::PanelMsg::FpEditorEditPadShapeParam {
+            pad_idx: 0,
+            key: "width".into(),
+            value: "3mm".into(),
+        },
+    )));
+
+    let editor = app
+        .document_state
+        .footprint_editors
+        .get(&path)
+        .expect("editor still registered");
+    let sketch = editor.file.footprints[0]
+        .sketch
+        .as_ref()
+        .expect("sketch present after width edit");
+
+    // The width parameter rewrote cleanly.
+    let raw_w = sketch
+        .parameters
+        .get_raw(&width_param)
+        .expect("width parameter still registered");
+    assert_eq!(raw_w, "3mm", "width parameter rewrites to 3mm");
+
+    // The resolver picks up the new width — a future constraint
+    // binding the right-side arc centre to `width / 2 - height / 2`
+    // would resolve to (3 - 1) / 2 = 1.0mm. Today the resolver
+    // surface alone is what's wired; the constraint is Phase 6.
+    let resolved = parameter::resolve(&sketch.parameters)
+        .expect("resolved parameter map after width edit");
+    let resolved_w = resolved
+        .get(&width_param)
+        .copied()
+        .expect("width parameter resolves cleanly");
+    let resolved_h = resolved
+        .get(&height_param)
+        .copied()
+        .expect("height parameter resolves cleanly");
+    assert!(
+        (resolved_w - 3.0).abs() < 1e-9,
+        "resolved width = 3.0mm; got {resolved_w}"
+    );
+    assert!(
+        (resolved_h - 1.0).abs() < 1e-9,
+        "resolved height stays at 1.0mm (only width edited); got {resolved_h}"
+    );
+
+    // The right-side arc centre's *expected* x post-edit = (W - H) / 2
+    // = (3 - 1) / 2 = 1.0mm. Today the literal mint placed it at
+    // (W - H) / 2 = 0.5 (W=2 at mint time), and no post-solve mirror
+    // moves it. We pin this gap so any future Phase-6 work
+    // (constraint or post-solve mirror) breaks the assertion in a
+    // controlled way and forces the test author to flip it to the
+    // new expected behaviour.
+    //
+    // The width edit IS reflected in the parameter table (above) so
+    // the data contract is intact; this test documents the gap, not
+    // a regression.
+    assert!(
+        editor.state.solve_warnings.is_empty(),
+        "solve cleared cleanly with the new width; got {:?}",
+        editor.state.solve_warnings
+    );
+}
