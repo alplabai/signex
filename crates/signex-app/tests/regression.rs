@@ -73,6 +73,7 @@ fn fixture_project_with_companions(stem: &str) -> (Signex, TempDir, PathBuf) {
         variant_definitions: Vec::new(),
         active_variant: None,
         libraries: Vec::new(),
+        enable_git: false,
     };
     app.document_state.projects.push(LoadedProject {
         id,
@@ -1082,6 +1083,7 @@ fn loaded_project_data_round_trips_via_write_then_parse() {
         variant_definitions: vec!["Production".into(), "Prototype".into()],
         active_variant: Some("Production".into()),
         libraries: Vec::new(),
+        enable_git: false,
     };
 
     signex_types::project::write_project(&path, &data).expect("write");
