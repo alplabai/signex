@@ -2574,7 +2574,12 @@ fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a, PanelMsg> 
             // Geometry constants.
             let pad_w = self.size_x_mm.max(0.001);
             let pad_h = self.size_y_mm.max(0.001);
-            let mask_outset_mm = pad_w.max(pad_h) * 0.10; // 10% of pad
+            // v0.25 — UAT: blue mask diameter should match the copper
+            // diameter (Altium parity). The 10% outset was added in
+            // v0.20 as a visualisation hint but the user's reference
+            // shows mask flush with copper.  Setting outset = 0 keeps
+            // mask_w / mask_h equal to pad_w / pad_h.
+            let mask_outset_mm: f64 = 0.0;
             let mask_w = pad_w + 2.0 * mask_outset_mm;
             let mask_h = pad_h + 2.0 * mask_outset_mm;
             // Visual thickness — exaggerated vs. real (~0.05mm copper)
@@ -2836,19 +2841,28 @@ fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a, PanelMsg> 
             }
             fill_poly(&mut frame, &cu_top_pts, copper_color);
 
-            // ── Hole (THT only): silver inner wall + black void disc.
-            //    Matches Altium''s Pad Stack preview convention: the
-            //    plated-through wall reads as a reflective silver
-            //    ring (the FAR side of the cylinder is visible above
-            //    the disc edge in the iso view) and the hole''s top
-            //    surface is the actual punched void rendered black
-            //    so the eye distinguishes "wall" from "open air".
+            // ── Hole (THT only): silver inner wall (visible looking
+            //    DOWN into the hole) + black void disc at the
+            //    BOTTOM of the through-hole.
             //
-            //    Order matters: render side walls first, disc on top
-            //    so the disc covers the NEAR walls (which would
-            //    otherwise stick up in front of the hole and look
-            //    like a plug). The strip_visible_world predicate
-            //    drops near-side strips during the loop.
+            //    Geometry: the disc sits at z = mask_z_bot (very
+            //    bottom of the stack) so the camera looking down
+            //    past the copper top edge sees the silver inner
+            //    walls rising up from the bottom void to the top
+            //    rim of the hole — matches Altium''s Pad Stack
+            //    preview convention.
+            //
+            //    Visibility predicate is INVERTED for the hole vs.
+            //    the outer-perimeter walls: the hole''s outward
+            //    normal (right of CCW walk) points away from the
+            //    void centre, so the camera-facing wall is the
+            //    one whose outward goes AWAY from camera (i.e.
+            //    `outward_x + outward_y > 0` → `dy > dx` —
+            //    opposite of `strip_visible_world`).
+            //
+            //    Order: walls first, disc last on top so any
+            //    leftover near-wall fragments above the bottom
+            //    plane get covered by the void disc.
             if let Some(d) = self.drill_diameter_mm {
                 let hr = (d / 2.0) as f32;
                 let hole_world: Vec<(f32, f32)> = (0..segments)
@@ -2865,15 +2879,20 @@ fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a, PanelMsg> 
                     .iter()
                     .map(|(x, y)| project(*x, *y, mask_z_bot))
                     .collect();
-                // Reflective silver wall — light enough to pop
-                // against both the copper red and the panel''s dark
-                // background.
                 let wall_silver = iced::Color::from_rgba8(0xC0, 0xC0, 0xC0, 1.0);
                 for i in 0..hole_top_pts.len() {
-                    if !strip_visible_world(&hole_world, i) {
+                    // Inverted predicate for hole walls: visible
+                    // when outward_x + outward_y > 0 (i.e. the
+                    // wall faces away from the camera, but since
+                    // we''re INSIDE the cylinder void, the
+                    // camera-visible face is the back-side wall
+                    // which is what this predicate selects).
+                    let j = (i + 1) % hole_world.len();
+                    let dx = hole_world[j].0 - hole_world[i].0;
+                    let dy = hole_world[j].1 - hole_world[i].1;
+                    if dy <= dx {
                         continue;
                     }
-                    let j = (i + 1) % hole_top_pts.len();
                     let quad = [
                         hole_bot_pts[i],
                         hole_bot_pts[j],
@@ -2882,12 +2901,13 @@ fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a, PanelMsg> 
                     ];
                     fill_poly(&mut frame, &quad, wall_silver);
                 }
-                // Void disc — flush with the copper top, dark fill so
-                // the hole reads as open air rather than a silver
-                // plug. Renders LAST so it covers the near-side wall
-                // strips that would otherwise look like a protrusion.
-                let void_top = iced::Color::from_rgba8(0x08, 0x08, 0x08, 1.0);
-                fill_poly(&mut frame, &hole_top_pts, void_top);
+                // Void disc at the BOTTOM of the through-hole.
+                // Camera looks down past the silver walls to land
+                // on this dark disc — the actual punched-through
+                // open air. Black `#080808` so it reads as open
+                // air rather than a silver plug.
+                let void_bot = iced::Color::from_rgba8(0x08, 0x08, 0x08, 1.0);
+                fill_poly(&mut frame, &hole_bot_pts, void_bot);
                 let _ = hole_color;
                 let _ = hole_dark;
             }
