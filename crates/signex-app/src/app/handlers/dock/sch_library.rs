@@ -13,7 +13,7 @@ impl Signex {
     /// v0.18.8 — convenience: resolve the active tab's `.snxfpt`
     /// path, if any. The Footprint Library panel handlers below all
     /// need this; centralising it keeps the dispatch arms tight.
-    fn active_footprint_editor_path(&self) -> Option<std::path::PathBuf> {
+    pub(crate) fn active_footprint_editor_path(&self) -> Option<std::path::PathBuf> {
         let active_tab = self
             .document_state
             .tabs

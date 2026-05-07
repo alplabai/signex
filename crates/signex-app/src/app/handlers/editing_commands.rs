@@ -17,6 +17,20 @@ impl Signex {
     }
 
     pub(crate) fn handle_undo_requested(&mut self) {
+        // v0.24 Phase 1 (Track B) — footprint editor undo. When the
+        // active tab is a footprint editor, route through that
+        // editor's per-instance history stack instead of the
+        // schematic engine. Schematic + PCB tabs continue to use
+        // the engine path below.
+        if let Some(path) = self.active_footprint_editor_path() {
+            if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
+                if editor.undo() {
+                    self.refresh_panel_ctx();
+                }
+                return;
+            }
+        }
+
         // Net-colour floods aren't persisted to the Standard document so
         // they don't enter the engine's history. Check the app-level
         // net_color_undo stack first; only fall through to the engine
@@ -39,12 +53,22 @@ impl Signex {
     }
 
     pub(crate) fn handle_redo_requested(&mut self) {
+        // v0.24 Phase 1 (Track B) — same fork as undo.
+        if let Some(path) = self.active_footprint_editor_path() {
+            if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
+                if editor.redo() {
+                    self.refresh_panel_ctx();
+                }
+                return;
+            }
+        }
         let redone = self.apply_engine_redo(true);
 
         if redone {
             self.interaction_state.active_canvas_mut().selected.clear();
         }
     }
+
 
     pub(crate) fn handle_selection_rotate_requested(&mut self) {
         if let Some(engine) = self.document_state.active_engine()

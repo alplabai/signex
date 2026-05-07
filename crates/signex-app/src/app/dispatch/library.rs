@@ -4222,6 +4222,17 @@ pub(crate) fn apply_footprint_primitive_edit(
         }
     }
 
+    // v0.24 Phase 1 (Track B) — capture an undo snapshot ahead of
+    // any mutating message. Selection-only / cursor-tracking /
+    // tool-state messages are pure UI state and don't need history;
+    // everything else gets a snapshot so Ctrl+Z reverses it. The
+    // dispatcher is the canonical entry point for footprint
+    // mutations, so wrapping here covers every message type
+    // uniformly without each arm needing its own push.
+    if mutates_footprint_state(&msg) {
+        editor.push_history();
+    }
+
     match msg {
         // v0.18.7 — switch the active footprint within the multi-
         // footprint envelope. Resets the canvas pad list off the
@@ -5218,6 +5229,7 @@ pub(crate) fn apply_footprint_primitive_edit(
                         hole_rotation_deg: None,
                         copper_offset_x_mm: None,
                         copper_offset_y_mm: None,
+                        shape_params: crate::library::editor::footprint::state::ShapeParamMap::new(),
                     });
                 }
                 (false, Some(idx)) => {
@@ -6867,6 +6879,57 @@ pub(crate) fn apply_footprint_primitive_edit(
         | PrimitiveEditorMsg::SymbolActiveBarStub(_)
         | PrimitiveEditorMsg::SymbolToggleSelectionFilter(_)
         | PrimitiveEditorMsg::Save => {}
+    }
+}
+
+/// v0.24 Phase 1 (Track B) — message-kind classifier driving the
+/// `push_history` decision in [`apply_footprint_primitive_edit`].
+/// Returns `true` for messages that mutate persisted footprint /
+/// sketch state (so undo can roll them back), `false` for pure UI
+/// state (selection, cursor tracking, tool mode toggles, panel
+/// pickers — these don't enter the history because rolling back a
+/// "click happened here" doesn't make sense to the user).
+///
+/// Lean toward `true` when in doubt — extra history entries cost
+/// memory but never break correctness; missing entries leave edits
+/// unreversable.
+fn mutates_footprint_state(msg: &PrimitiveEditorMsg) -> bool {
+    use PrimitiveEditorMsg::*;
+    match msg {
+        // Pure UI state — selection / hover / cursor / tool mode.
+        // These don't change persisted geometry and shouldn't enter
+        // the history.
+        FootprintCursorAt { .. }
+        | FootprintSelectPad(_)
+        | FootprintSelectSilkF(_)
+        | FootprintToggleLayer(_)
+        | FootprintSetPadsTool(_)
+        | FootprintToolEscape
+        | FootprintToggleActiveBarMenu(_)
+        | FootprintCloseActiveBarMenu
+        | FootprintActiveBarStub(_)
+        | FootprintActiveBarToggleSnap(_)
+        | FootprintActiveBarSetSnappingMode(_)
+        | FootprintActiveBarSetSnapSubTab(_)
+        | FootprintActiveBarSelectAll
+        | FootprintActiveBarClearSelection
+        | FootprintActiveBarSetSketchTool(_)
+        | FootprintSetMode(_)
+        | FootprintSketchSetTool(_)
+        | FootprintSketchToggleConstruction
+        | FootprintSketchToggleCenterline
+        | FootprintTogglePlacementPause
+        | FootprintSketchToolEscape
+        | FootprintSketchSelect { .. }
+        | FootprintSketchDimensionInput(_)
+        | FootprintToggleSelectionFilter(_)
+        | FootprintToggleAutoFit
+        | FootprintSelectActiveIdx(_)
+        | Save => false,
+        // All other variants either add/remove/move geometry,
+        // mutate pad attributes, or rebuild the sketch — they all
+        // need a history snapshot.
+        _ => true,
     }
 }
 

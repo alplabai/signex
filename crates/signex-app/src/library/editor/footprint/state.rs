@@ -90,7 +90,24 @@ pub struct EditorPad {
     /// v0.20 — Copper offset relative to hole centre.
     pub copper_offset_x_mm: Option<f64>,
     pub copper_offset_y_mm: Option<f64>,
+    /// v0.24 Phase 1 (Track A stub) — Per-pad parametric handles for
+    /// shape-driven attributes. Maps a feature key (e.g.
+    /// `"corner_r"`, `"chamfer_len"`, `"diameter"`) to a sketch-
+    /// parameter name. Phase 2 (Agent A) populates this on
+    /// `mirror_add_pad_to_sketch` and writes the corresponding
+    /// parameter into `sketch.parameters`. The `LinkedRadius` enum
+    /// in `signex-sketch::attr` controls "shared by default,
+    /// splittable on right-click" semantics. Empty (= no parametric
+    /// handles bound) on existing footprints — the Phase 2 mirror
+    /// builds it lazily on first sketch-mode visit.
+    pub shape_params: ShapeParamMap,
 }
+
+/// v0.24 Phase 1 (Track A stub) — per-pad parametric handle map.
+/// Type alias keeps the field flexible for Phase 2 to swap in a
+/// dedicated struct if the linked/unlinked semantics get richer
+/// (e.g. per-corner overrides for Chamfered).
+pub type ShapeParamMap = std::collections::HashMap<String, String>;
 
 /// v0.20 — UI-side mirror of `Pad`'s pad-stack override fields. All
 /// values in mm (already evaluated). `None` on a margin override
@@ -162,6 +179,7 @@ impl EditorPad {
             hole_rotation_deg: None,
             copper_offset_x_mm: None,
             copper_offset_y_mm: None,
+            shape_params: ShapeParamMap::new(),
         }
     }
 
@@ -197,6 +215,7 @@ impl EditorPad {
             hole_rotation_deg: None,
             copper_offset_x_mm: None,
             copper_offset_y_mm: None,
+            shape_params: ShapeParamMap::new(),
         }
     }
 
@@ -258,6 +277,7 @@ impl EditorPad {
             hole_rotation_deg: p.hole_rotation_deg,
             copper_offset_x_mm: p.copper_offset_x_mm,
             copper_offset_y_mm: p.copper_offset_y_mm,
+            shape_params: ShapeParamMap::new(),
         }
     }
 
@@ -492,6 +512,40 @@ pub struct FootprintEditorState {
     /// Stack body the right-dock Properties panel renders. Mirrors
     /// the Altium PCB Library tab strip on the same section.
     pub pad_stack_tab: PadStackTab,
+    /// v0.24 Phase 1 (Track D) — live numeric input during sketch-tool
+    /// placement. Set when the user types a digit while a tool is
+    /// pending; the next click commits at the typed length / radius
+    /// instead of the cursor position. `None` (default) preserves the
+    /// v0.22 click-only flow.
+    pub placement_input: Option<PlacementInput>,
+}
+
+/// v0.24 Phase 1 (Track D stub) — numeric-input overlay state for
+/// sketch-tool placement. Phase 2 (Agent D) wires the keypress
+/// handler + the cursor overlay; Phase 1 just declares the field
+/// so other agents don't compete for the insertion point on
+/// `FootprintEditorState`.
+#[derive(Debug, Clone)]
+pub struct PlacementInput {
+    /// User-typed digits (and optional decimal point / minus).
+    pub buffer: String,
+    /// Which dimension the buffer represents. Drives unit interpretation
+    /// + commit math at click time.
+    pub kind: PlacementInputKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlacementInputKind {
+    /// Line tool — second click commits at exactly `buffer` mm from
+    /// the first endpoint, along the cursor's azimuth.
+    LineLength,
+    /// Circle tool — radius commit; second click ignores cursor delta.
+    CircleRadius,
+    /// Arc tool radius — second click ignores cursor delta from centre.
+    ArcRadius,
+    /// Arc tool sweep angle (degrees) — third click commits at the
+    /// typed sweep relative to start.
+    ArcSweep,
 }
 
 /// v0.20 — Pad Stack section's tab strip. Matches Altium's three
@@ -1253,6 +1307,7 @@ impl FootprintEditorState {
             snapping_mode: SnappingMode::default(),
             active_bar_menu: None,
             pad_stack_tab: PadStackTab::default(),
+            placement_input: None,
         };
         s.recompute_courtyard();
         s
@@ -1298,6 +1353,7 @@ impl FootprintEditorState {
             snapping_mode: SnappingMode::default(),
             active_bar_menu: None,
             pad_stack_tab: PadStackTab::default(),
+            placement_input: None,
         };
         s.recompute_courtyard();
         s
