@@ -340,7 +340,7 @@ impl Signex {
         self.interaction_state.current_tool = Tool::Select;
     }
 
-    fn apply_loaded_pcb_document(&mut self, fit_to_board: bool, refresh_panel_ctx: bool) {
+    pub(crate) fn apply_loaded_pcb_document(&mut self, fit_to_board: bool, refresh_panel_ctx: bool) {
         self.clear_schematic_ui_state();
         self.sync_pcb_canvas_from_visible_board();
         if fit_to_board {
@@ -369,7 +369,7 @@ impl Signex {
         }
     }
 
-    fn apply_loaded_schematic(
+    pub(crate) fn apply_loaded_schematic(
         &mut self,
         schematic: Option<SchematicSheet>,
         clear_bg_cache: bool,
