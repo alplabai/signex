@@ -518,6 +518,16 @@ fn solve_and_bake(
                 // / corner_entity_ids by matching pad.number across
                 // the old + new lists.
                 state.refresh_pads_from_primitive(footprint);
+
+                // v0.24 Phase 3 (Track A4) — reverse mirror. Walk
+                // each pad's shape_params (preserved across the
+                // refresh above) and re-derive
+                // EditorPad.stack.corner_radius_pct from the live
+                // resolved corner_r value. Keeps the Pads-mode
+                // "Corner radius %" input in sync when the sketch
+                // parameter is edited from elsewhere (Properties row,
+                // parameter table, drag handle).
+                super::pad_to_sketch::mirror_solve_to_pad_stack(state, &resolved);
             }
 
             state.last_solve = Some(out);

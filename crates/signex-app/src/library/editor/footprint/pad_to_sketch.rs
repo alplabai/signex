@@ -663,6 +663,57 @@ fn format_f64(v: f64) -> String {
     }
 }
 
+/// v0.24 Phase 3 (Track A4) — reverse mirror. After every successful
+/// solve, walk each pad's `shape_params` and re-derive the
+/// `EditorPad.stack.corner_radius_pct` value from the live
+/// `sketch.parameters[corner_r_<slug>]` expression. Keeps the
+/// Pads-mode "Corner radius %" input in sync when the user edits the
+/// sketch parameter from the Sketch-mode Properties row, drags a
+/// corner handle, or uses the parameter table.
+///
+/// Uses the resolved-parameter map (canonical-mm) computed by the
+/// solver so dependent expressions like `"corner_r_<slug> = w/4"`
+/// are reflected correctly. Silently skips pads whose `shape_params`
+/// has no `"corner_r"` binding (Round / Rect / Oval / Chamfered) or
+/// whose bound parameter isn't in the resolved map (defensive — a
+/// missing parameter shouldn't desync the mirror).
+pub fn mirror_solve_to_pad_stack(
+    state: &mut super::state::FootprintEditorState,
+    resolved: &std::collections::HashMap<String, f64>,
+) {
+    for pad in state.pads.iter_mut() {
+        let Some(parameter_name) = pad.shape_params.get("corner_r") else {
+            continue;
+        };
+        let Some(corner_r_mm) = resolved.get(parameter_name).copied() else {
+            tracing::warn!(
+                target: "signex::v024",
+                "mirror_solve_to_pad_stack: parameter {parameter_name} missing from resolved \
+                 map; skipping pad {}",
+                pad.number
+            );
+            continue;
+        };
+        let min_dim = pad.size_mm.0.min(pad.size_mm.1);
+        if min_dim <= f64::EPSILON {
+            tracing::warn!(
+                target: "signex::v024",
+                "mirror_solve_to_pad_stack: pad {} has zero/negative min dimension; skipping",
+                pad.number
+            );
+            continue;
+        }
+        // ratio = corner_r / min(W,H) ∈ [0..0.5]; pct = ratio * 100.
+        let pct = (corner_r_mm / min_dim) * 100.0;
+        // Clamp to valid range (0..50). A radius_ratio > 0.5 is
+        // geometrically degenerate (corners would overlap) so the
+        // mirror caps the surfaced value rather than letting the UI
+        // show a bad number.
+        let clamped = pct.clamp(0.0, 50.0);
+        pad.stack.corner_radius_pct = Some(clamped);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

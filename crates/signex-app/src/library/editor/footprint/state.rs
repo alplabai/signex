@@ -1623,11 +1623,19 @@ impl FootprintEditorState {
     /// through `Pad`, so we re-attach them by matching `pad.number`.
     /// Brand-new pads (e.g., array expansions) keep `None` for these
     /// fields; the next Sketch-mode entry's auto-mint can populate.
+    ///
+    /// v0.24 Phase 3 (Track A4) — `shape_params` (parametric handle
+    /// bindings — `corner_r` / `diameter` / etc.) likewise don't
+    /// round-trip through `Pad`, so we preserve them by matching
+    /// `pad.number` too. Without this, every solve+rebake cycle
+    /// would reset the bindings and the Properties-panel rows would
+    /// disappear.
     pub fn refresh_pads_from_primitive(&mut self, fp: &Footprint) {
         use std::collections::HashMap;
         type Link = (
             Option<signex_sketch::id::SketchEntityId>,
             Option<[signex_sketch::id::SketchEntityId; 4]>,
+            ShapeParamMap,
         );
         let old_links: HashMap<String, Link> = self
             .pads
@@ -1635,15 +1643,20 @@ impl FootprintEditorState {
             .map(|p| {
                 (
                     p.number.clone(),
-                    (p.sketch_entity_id, p.corner_entity_ids),
+                    (
+                        p.sketch_entity_id,
+                        p.corner_entity_ids,
+                        p.shape_params.clone(),
+                    ),
                 )
             })
             .collect();
         let mut new_pads: Vec<EditorPad> = fp.pads.iter().map(EditorPad::from_pad).collect();
         for p in &mut new_pads {
-            if let Some((sid, cids)) = old_links.get(&p.number) {
+            if let Some((sid, cids, params)) = old_links.get(&p.number) {
                 p.sketch_entity_id = *sid;
                 p.corner_entity_ids = *cids;
+                p.shape_params = params.clone();
             }
         }
         self.pads = new_pads;
