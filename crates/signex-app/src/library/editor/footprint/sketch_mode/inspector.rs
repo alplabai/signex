@@ -144,6 +144,9 @@ fn view_tool_palette<'a>(
             SketchTool::Mirror => {
                 "select a Line first, then click a Point to mirror".into()
             }
+            SketchTool::Offset => {
+                "select a Line / Arc / Circle first, then click on the side to offset (distance from input)".into()
+            }
         },
         ToolPending::LineFirst { .. } => "click second endpoint (Esc to cancel)".into(),
         ToolPending::RectangleFirst { .. } => "click opposite corner (Esc to cancel)".into(),

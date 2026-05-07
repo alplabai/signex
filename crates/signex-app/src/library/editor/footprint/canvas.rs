@@ -504,7 +504,8 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 | SketchTool::RoundedRectangle
                                 | SketchTool::Circle
                                 | SketchTool::Arc
-                                | SketchTool::Mirror => EditorMsg::FootprintSketchToolClick {
+                                | SketchTool::Mirror
+                                | SketchTool::Offset => EditorMsg::FootprintSketchToolClick {
                                     x_mm: click_world.0,
                                     y_mm: click_world.1,
                                     snap_id,

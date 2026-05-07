@@ -185,6 +185,11 @@ pub fn items<'a>(
             SketchTool::Mirror,
             ActiveBarIcon::Glyph("\u{29B5}"), // ⦵
         ),
+        mk_tool(
+            "Offset — pre-select a Line / Arc / Circle, then click on the side to offset (distance from dim input, default 0.5 mm)",
+            SketchTool::Offset,
+            ActiveBarIcon::Glyph("\u{29C8}"), // ⧈
+        ),
         ActiveBarItem::Separator,
         // Section 3: Constrain (selection-aware)
         mk_constraint(

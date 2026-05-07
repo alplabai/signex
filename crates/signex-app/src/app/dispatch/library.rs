@@ -6121,6 +6121,311 @@ pub(crate) fn apply_footprint_primitive_edit(
                     }
                     editor.state.tool_pending = ToolPending::Idle;
                 }
+                SketchTool::Offset => {
+                    // v0.22 Phase B2 — Offset tool. Pre-condition: a
+                    // Line / Arc / Circle is in `selected_sketch`. The
+                    // click position determines which side of the
+                    // source curve the offset lands on. Offset
+                    // distance comes from `state.dimension_input`,
+                    // default 0.5 mm.
+                    //
+                    // Lines: emits a parallel Line at perpendicular
+                    // distance and adds (Parallel + DistancePtLine)
+                    // constraints so the relationship survives source
+                    // edits.
+                    //
+                    // Circles / Arcs: emits a concentric copy that
+                    // shares the source's centre Point so the centres
+                    // stay locked. The new radius is a literal
+                    // (source.radius ± dist) — the schema has no
+                    // radius-dimension constraint, so further radius
+                    // edits don't auto-propagate; the user can
+                    // re-offset or edit the literal directly.
+                    use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
+                    use signex_sketch::id::ConstraintId;
+
+                    let source_id = match editor.state.selected_sketch {
+                        Some(id) => id,
+                        None => {
+                            editor.state.solve_warnings.push(
+                                "Offset: select a Line / Arc / Circle first (Select tool, click the curve, then click on the side to offset)"
+                                    .into(),
+                            );
+                            editor.state.tool_pending = ToolPending::Idle;
+                            editor.canvas_cache.clear();
+                            return;
+                        }
+                    };
+                    let dist = editor
+                        .state
+                        .dimension_input
+                        .trim()
+                        .parse::<f64>()
+                        .ok()
+                        .filter(|d| d.is_finite() && *d > 1e-9)
+                        .unwrap_or(0.5);
+
+                    let sketch_ref = match editor.primitive().sketch.as_ref() {
+                        Some(s) => s,
+                        None => {
+                            editor.state.tool_pending = ToolPending::Idle;
+                            return;
+                        }
+                    };
+                    let pos_of = |id: SketchEntityId| -> Option<(f64, f64)> {
+                        sketch_ref
+                            .entities
+                            .iter()
+                            .find(|e| e.id == id)
+                            .and_then(|e| match e.kind {
+                                EntityKind::Point { x, y } => Some((x, y)),
+                                _ => None,
+                            })
+                    };
+                    let source_kind = sketch_ref
+                        .entities
+                        .iter()
+                        .find(|e| e.id == source_id)
+                        .map(|e| e.kind.clone());
+                    let source_kind = match source_kind {
+                        Some(k) => k,
+                        None => {
+                            editor.state.solve_warnings.push(
+                                "Offset: selection no longer exists in the sketch".into(),
+                            );
+                            editor.state.tool_pending = ToolPending::Idle;
+                            editor.canvas_cache.clear();
+                            return;
+                        }
+                    };
+
+                    match source_kind {
+                        EntityKind::Line { start, end } => {
+                            let (ax, ay) = match pos_of(start) {
+                                Some(p) => p,
+                                None => return,
+                            };
+                            let (bx, by) = match pos_of(end) {
+                                Some(p) => p,
+                                None => return,
+                            };
+                            let dx = bx - ax;
+                            let dy = by - ay;
+                            let len = (dx * dx + dy * dy).sqrt();
+                            if len < 1e-9 {
+                                editor.state.solve_warnings.push(
+                                    "Offset: degenerate Line (zero length)".into(),
+                                );
+                                editor.state.tool_pending = ToolPending::Idle;
+                                editor.canvas_cache.clear();
+                                return;
+                            }
+                            // Perpendicular unit vector. Sign from the
+                            // cross of (line direction) × (click −
+                            // line start): positive = click is on the
+                            // (-dy, dx) side, negative = (dy, -dx)
+                            // side.
+                            let cx = x_mm - ax;
+                            let cy = y_mm - ay;
+                            let cross = dx * cy - dy * cx;
+                            let sign = if cross >= 0.0 { 1.0 } else { -1.0 };
+                            let nx = -dy / len * sign;
+                            let ny = dx / len * sign;
+                            let off_x = nx * dist;
+                            let off_y = ny * dist;
+
+                            let new_a = SketchEntityId::new();
+                            let new_b = SketchEntityId::new();
+                            let new_line_id = SketchEntityId::new();
+                            let a_entity = flag(Entity::new(
+                                new_a,
+                                plane_id,
+                                EntityKind::Point {
+                                    x: ax + off_x,
+                                    y: ay + off_y,
+                                },
+                            ));
+                            let b_entity = flag(Entity::new(
+                                new_b,
+                                plane_id,
+                                EntityKind::Point {
+                                    x: bx + off_x,
+                                    y: by + off_y,
+                                },
+                            ));
+                            let new_line = flag(Entity::new(
+                                new_line_id,
+                                plane_id,
+                                EntityKind::Line {
+                                    start: new_a,
+                                    end: new_b,
+                                },
+                            ));
+                            editor.with_parts(|state, primitive| {
+                                apply_sketch_edit_with_warnings(
+                                    state,
+                                    primitive,
+                                    SketchEdit::AddEntity(a_entity),
+                                );
+                                apply_sketch_edit_with_warnings(
+                                    state,
+                                    primitive,
+                                    SketchEdit::AddEntity(b_entity),
+                                );
+                                apply_sketch_edit_with_warnings(
+                                    state,
+                                    primitive,
+                                    SketchEdit::AddEntity(new_line),
+                                );
+                            });
+                            // Parallel + DistancePtLine on the start
+                            // endpoint pins the offset distance
+                            // parametrically. The end endpoint is left
+                            // free along the offset line direction —
+                            // the user can drag it without breaking
+                            // the offset relationship.
+                            let parallel = Constraint {
+                                id: ConstraintId::new(),
+                                kind: ConstraintKind::Parallel {
+                                    l1: source_id,
+                                    l2: new_line_id,
+                                },
+                            };
+                            let dist_constraint = Constraint {
+                                id: ConstraintId::new(),
+                                kind: ConstraintKind::DistancePtLine {
+                                    point: new_a,
+                                    line: source_id,
+                                    target: DimTarget::Literal(dist),
+                                },
+                            };
+                            editor.with_parts(|state, primitive| {
+                                apply_sketch_edit_with_warnings(
+                                    state,
+                                    primitive,
+                                    SketchEdit::AddConstraint(parallel),
+                                );
+                                apply_sketch_edit_with_warnings(
+                                    state,
+                                    primitive,
+                                    SketchEdit::AddConstraint(dist_constraint),
+                                );
+                            });
+                        }
+                        EntityKind::Circle { center, radius } => {
+                            let (cx, cy) = match pos_of(center) {
+                                Some(p) => p,
+                                None => return,
+                            };
+                            // Click distance from centre — inside the
+                            // circle = shrink (-dist), outside =
+                            // expand (+dist). Clamp to a positive
+                            // radius so we don't mint a degenerate
+                            // shape.
+                            let click_r = ((x_mm - cx).powi(2) + (y_mm - cy).powi(2)).sqrt();
+                            let signed = if click_r < radius { -dist } else { dist };
+                            let new_radius = (radius + signed).max(1e-6);
+                            let new_circle_id = SketchEntityId::new();
+                            let new_circle = flag(Entity::new(
+                                new_circle_id,
+                                plane_id,
+                                EntityKind::Circle {
+                                    center,
+                                    radius: new_radius,
+                                },
+                            ));
+                            editor.with_parts(|state, primitive| {
+                                apply_sketch_edit_with_warnings(
+                                    state,
+                                    primitive,
+                                    SketchEdit::AddEntity(new_circle),
+                                );
+                            });
+                        }
+                        EntityKind::Arc {
+                            center,
+                            start,
+                            end,
+                            sweep_ccw,
+                        } => {
+                            let (cx, cy) = match pos_of(center) {
+                                Some(p) => p,
+                                None => return,
+                            };
+                            let (sx, sy) = match pos_of(start) {
+                                Some(p) => p,
+                                None => return,
+                            };
+                            let (ex, ey) = match pos_of(end) {
+                                Some(p) => p,
+                                None => return,
+                            };
+                            // Source radius from start position;
+                            // direction from start angle.
+                            let source_r =
+                                ((sx - cx).powi(2) + (sy - cy).powi(2)).sqrt();
+                            let click_r =
+                                ((x_mm - cx).powi(2) + (y_mm - cy).powi(2)).sqrt();
+                            let signed = if click_r < source_r { -dist } else { dist };
+                            let new_r = (source_r + signed).max(1e-6);
+                            let scale = new_r / source_r.max(1e-9);
+
+                            let new_start = SketchEntityId::new();
+                            let new_end = SketchEntityId::new();
+                            let new_arc_id = SketchEntityId::new();
+                            let s_entity = flag(Entity::new(
+                                new_start,
+                                plane_id,
+                                EntityKind::Point {
+                                    x: cx + (sx - cx) * scale,
+                                    y: cy + (sy - cy) * scale,
+                                },
+                            ));
+                            let e_entity = flag(Entity::new(
+                                new_end,
+                                plane_id,
+                                EntityKind::Point {
+                                    x: cx + (ex - cx) * scale,
+                                    y: cy + (ey - cy) * scale,
+                                },
+                            ));
+                            let new_arc = flag(Entity::new(
+                                new_arc_id,
+                                plane_id,
+                                EntityKind::Arc {
+                                    center,
+                                    start: new_start,
+                                    end: new_end,
+                                    sweep_ccw,
+                                },
+                            ));
+                            editor.with_parts(|state, primitive| {
+                                apply_sketch_edit_with_warnings(
+                                    state,
+                                    primitive,
+                                    SketchEdit::AddEntity(s_entity),
+                                );
+                                apply_sketch_edit_with_warnings(
+                                    state,
+                                    primitive,
+                                    SketchEdit::AddEntity(e_entity),
+                                );
+                                apply_sketch_edit_with_warnings(
+                                    state,
+                                    primitive,
+                                    SketchEdit::AddEntity(new_arc),
+                                );
+                            });
+                        }
+                        EntityKind::Point { .. } => {
+                            editor.state.solve_warnings.push(
+                                "Offset: selection is a Point — pick a Line / Arc / Circle"
+                                    .into(),
+                            );
+                        }
+                    }
+                    editor.state.tool_pending = ToolPending::Idle;
+                }
             }
             editor.canvas_cache.clear();
             editor.dirty = true;

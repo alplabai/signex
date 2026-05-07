@@ -1117,6 +1117,17 @@ pub enum SketchTool {
     /// `SymmetricAboutLine` constraint linking each Point of the
     /// original to its mirror counterpart. Esc / right-click cancels.
     Mirror,
+    /// v0.22 Phase B2 — Offset tool. Pre-condition: a Line / Arc /
+    /// Circle is selected via Select tool. Click determines which
+    /// side of the source curve the offset is generated on. Offset
+    /// distance comes from `state.dimension_input` (default 0.5 mm).
+    /// Lines: emits a parallel Line at perpendicular distance + a
+    /// `Parallel` and `DistancePtLine` constraint pair so the
+    /// distance survives source edits. Circles / Arcs: emits a
+    /// concentric copy sharing the source's centre Point so the
+    /// centres stay locked; the radius literal is set to source ±
+    /// dist. Esc / right-click cancels.
+    Offset,
 }
 
 /// Transient per-tool gesture state. The canvas Program reads + writes
