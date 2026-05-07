@@ -516,6 +516,13 @@ fn solve_and_bake(
                     &mut footprint.body_3d,
                     &mut state.solve_warnings,
                 )?;
+
+                // v0.22 Phase D2 — refresh editor-side pads cache so
+                // the canvas + Pads-mode Properties panel see what
+                // the bake just produced. Preserves sketch_entity_id
+                // / corner_entity_ids by matching pad.number across
+                // the old + new lists.
+                state.refresh_pads_from_primitive(footprint);
             }
 
             state.last_solve = Some(out);

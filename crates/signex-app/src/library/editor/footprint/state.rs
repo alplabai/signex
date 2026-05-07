@@ -1456,6 +1456,48 @@ impl FootprintEditorState {
         self.recompute_courtyard();
     }
 
+    /// v0.22 Phase D2 — Inverse of `sync_pads_to_primitive`. After a
+    /// Sketch-mode solve+bake regenerates `Footprint::pads` from the
+    /// sketch source-of-truth, refresh the editor-side `pads` cache so
+    /// the canvas / Pads-mode Properties panel reads the same values
+    /// that just got baked.
+    ///
+    /// `sketch_entity_id` and `corner_entity_ids` don't round-trip
+    /// through `Pad`, so we re-attach them by matching `pad.number`.
+    /// Brand-new pads (e.g., array expansions) keep `None` for these
+    /// fields; the next Sketch-mode entry's auto-mint can populate.
+    pub fn refresh_pads_from_primitive(&mut self, fp: &Footprint) {
+        use std::collections::HashMap;
+        type Link = (
+            Option<signex_sketch::id::SketchEntityId>,
+            Option<[signex_sketch::id::SketchEntityId; 4]>,
+        );
+        let old_links: HashMap<String, Link> = self
+            .pads
+            .iter()
+            .map(|p| {
+                (
+                    p.number.clone(),
+                    (p.sketch_entity_id, p.corner_entity_ids),
+                )
+            })
+            .collect();
+        let mut new_pads: Vec<EditorPad> = fp.pads.iter().map(EditorPad::from_pad).collect();
+        for p in &mut new_pads {
+            if let Some((sid, cids)) = old_links.get(&p.number) {
+                p.sketch_entity_id = *sid;
+                p.corner_entity_ids = *cids;
+            }
+        }
+        self.pads = new_pads;
+        // selected_pad index might now point past the new vec — clamp.
+        if let Some(idx) = self.selected_pad {
+            if idx >= self.pads.len() {
+                self.selected_pad = None;
+            }
+        }
+    }
+
     /// Write the canvas-side pad list back onto the primitive. Called
     /// after every mutation so the saved row sees the current pad
     /// layout. Other Footprint fields (graphics, body_3d, etc.) are
