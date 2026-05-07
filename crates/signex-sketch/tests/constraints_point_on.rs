@@ -376,6 +376,100 @@ fn point_on_arc_residual_uses_start_for_radius_not_end() {
     );
 }
 
+// ─── DistancePtCircle (v0.23) ───────────────────────────────────────
+
+#[test]
+fn distance_pt_circle_residual_zero_when_on_circle() {
+    // Circle centred at origin with radius 5; P=(5,0) sits on the
+    // circle, target=0 → residual = 0.
+    let mut s = Sketch::new();
+    let centre = s.add_point(0.0, 0.0);
+    let circle = s.add_circle(centre, 5.0);
+    let p = s.add_point(5.0, 0.0);
+    let packed = pack(&s.data);
+
+    let c = Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::DistancePtCircle {
+            point: p,
+            circle,
+            target: DimTarget::Literal(0.0),
+        },
+    };
+    let r = residual(&c, &packed.vector, &packed.index, &s.data, &empty_params()).unwrap();
+    assert_eq!(r.len(), 1);
+    assert!(r[0].abs() < EPS, "expected 0, got {}", r[0]);
+}
+
+#[test]
+fn distance_pt_circle_residual_positive_outside() {
+    // Circle radius 5; P=(8,0) is 8 from centre → distance to
+    // boundary = 3. With target=2, residual = 8 − 5 − 2 = 1.
+    let mut s = Sketch::new();
+    let centre = s.add_point(0.0, 0.0);
+    let circle = s.add_circle(centre, 5.0);
+    let p = s.add_point(8.0, 0.0);
+    let packed = pack(&s.data);
+
+    let c = Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::DistancePtCircle {
+            point: p,
+            circle,
+            target: DimTarget::Literal(2.0),
+        },
+    };
+    let r = residual(&c, &packed.vector, &packed.index, &s.data, &empty_params()).unwrap();
+    assert!((r[0] - 1.0).abs() < EPS, "expected 1, got {}", r[0]);
+}
+
+#[test]
+fn distance_pt_circle_residual_negative_inside() {
+    // Circle radius 5; P=(3,0) is 3 from centre → distance to
+    // boundary = -2 (inside). With target=-3, residual = 3 - 5 - (-3) = 1.
+    let mut s = Sketch::new();
+    let centre = s.add_point(0.0, 0.0);
+    let circle = s.add_circle(centre, 5.0);
+    let p = s.add_point(3.0, 0.0);
+    let packed = pack(&s.data);
+
+    let c = Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::DistancePtCircle {
+            point: p,
+            circle,
+            target: DimTarget::Literal(-3.0),
+        },
+    };
+    let r = residual(&c, &packed.vector, &packed.index, &s.data, &empty_params()).unwrap();
+    assert!((r[0] - 1.0).abs() < EPS, "expected 1, got {}", r[0]);
+}
+
+#[test]
+fn distance_pt_circle_works_on_arc() {
+    // Arc centred at origin with start=(5,0). Underlying radius = 5.
+    // P=(7,0) is 7 from centre → distance to boundary = 2. target=2
+    // → residual = 7 − 5 − 2 = 0.
+    let mut s = Sketch::new();
+    let centre = s.add_point(0.0, 0.0);
+    let start = s.add_point(5.0, 0.0);
+    let end = s.add_point(0.0, 5.0);
+    let arc = s.add_arc(centre, start, end, true);
+    let p = s.add_point(7.0, 0.0);
+    let packed = pack(&s.data);
+
+    let c = Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::DistancePtCircle {
+            point: p,
+            circle: arc,
+            target: DimTarget::Literal(2.0),
+        },
+    };
+    let r = residual(&c, &packed.vector, &packed.index, &s.data, &empty_params()).unwrap();
+    assert!(r[0].abs() < EPS, "expected 0, got {}", r[0]);
+}
+
 // ─── residual_count() sanity ────────────────────────────────────────
 
 #[test]

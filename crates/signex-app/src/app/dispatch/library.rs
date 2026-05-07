@@ -6551,11 +6551,66 @@ pub(crate) fn apply_footprint_primitive_edit(
                                     radius: new_radius,
                                 },
                             ));
+                            // v0.23 — parametric link: mint an anchor
+                            // Point on the new circle and pin its
+                            // distance to the source circle to
+                            // `signed`. Combined with a DistancePtCircle
+                            // on the new circle (target=0), this
+                            // forces `new_radius = source_radius +
+                            // signed` through the solver — so when
+                            // the user edits the target via the
+                            // Properties panel later, the new
+                            // circle's radius follows.
+                            let scale = if click_r > 1e-9 {
+                                new_radius / click_r
+                            } else {
+                                1.0
+                            };
+                            let anchor_id = SketchEntityId::new();
+                            let anchor = flag(Entity::new(
+                                anchor_id,
+                                plane_id,
+                                EntityKind::Point {
+                                    x: cx + (x_mm - cx) * scale,
+                                    y: cy + (y_mm - cy) * scale,
+                                },
+                            ));
+                            let on_new_circle = Constraint {
+                                id: ConstraintId::new(),
+                                kind: ConstraintKind::DistancePtCircle {
+                                    point: anchor_id,
+                                    circle: new_circle_id,
+                                    target: DimTarget::Literal(0.0),
+                                },
+                            };
+                            let parametric_offset = Constraint {
+                                id: ConstraintId::new(),
+                                kind: ConstraintKind::DistancePtCircle {
+                                    point: anchor_id,
+                                    circle: source_id,
+                                    target: DimTarget::Literal(signed),
+                                },
+                            };
                             editor.with_parts(|state, primitive| {
                                 apply_sketch_edit_with_warnings(
                                     state,
                                     primitive,
+                                    SketchEdit::AddEntity(anchor),
+                                );
+                                apply_sketch_edit_with_warnings(
+                                    state,
+                                    primitive,
                                     SketchEdit::AddEntity(new_circle),
+                                );
+                                apply_sketch_edit_with_warnings(
+                                    state,
+                                    primitive,
+                                    SketchEdit::AddConstraint(on_new_circle),
+                                );
+                                apply_sketch_edit_with_warnings(
+                                    state,
+                                    primitive,
+                                    SketchEdit::AddConstraint(parametric_offset),
                                 );
                             });
                         }
@@ -6616,6 +6671,31 @@ pub(crate) fn apply_footprint_primitive_edit(
                                     sweep_ccw,
                                 },
                             ));
+                            // v0.23 — parametric link: pin both new
+                            // endpoints to be `signed` away from the
+                            // source arc's underlying circle. Since
+                            // both arcs share the same `center`, this
+                            // forces the new arc's radius to track
+                            // source_radius + signed through the
+                            // solver. End Point's angle is left free
+                            // — the user can drag it without breaking
+                            // the parametric distance.
+                            let dist_start = Constraint {
+                                id: ConstraintId::new(),
+                                kind: ConstraintKind::DistancePtCircle {
+                                    point: new_start,
+                                    circle: source_id,
+                                    target: DimTarget::Literal(signed),
+                                },
+                            };
+                            let dist_end = Constraint {
+                                id: ConstraintId::new(),
+                                kind: ConstraintKind::DistancePtCircle {
+                                    point: new_end,
+                                    circle: source_id,
+                                    target: DimTarget::Literal(signed),
+                                },
+                            };
                             editor.with_parts(|state, primitive| {
                                 apply_sketch_edit_with_warnings(
                                     state,
@@ -6631,6 +6711,16 @@ pub(crate) fn apply_footprint_primitive_edit(
                                     state,
                                     primitive,
                                     SketchEdit::AddEntity(new_arc),
+                                );
+                                apply_sketch_edit_with_warnings(
+                                    state,
+                                    primitive,
+                                    SketchEdit::AddConstraint(dist_start),
+                                );
+                                apply_sketch_edit_with_warnings(
+                                    state,
+                                    primitive,
+                                    SketchEdit::AddConstraint(dist_end),
                                 );
                             });
                         }

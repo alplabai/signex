@@ -1338,6 +1338,15 @@ fn draw_constraint_icons(
                 }
                 ("d", v)
             }
+            ConstraintKind::DistancePtCircle { point, circle, .. } => {
+                let mut v = vec![*point];
+                if let Some(c) = circle_center_local(sketch, *circle) {
+                    v.push(c);
+                } else if let Some((c, _, _, _)) = arc_refs_local(sketch, *circle) {
+                    v.push(c);
+                }
+                ("\u{29bf}", v) // ⦿ "DistancePtCircle"
+            }
             ConstraintKind::Fixed { point } => ("\u{1F512}", vec![*point]),
             // v0.13.3 — remaining constraint glyphs.
             ConstraintKind::PointOnArc { point, arc } => {

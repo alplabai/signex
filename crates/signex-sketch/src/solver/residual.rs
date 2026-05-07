@@ -183,6 +183,14 @@ pub fn residual(
             let t = resolve_dim(target, params)?;
             point_on::distance_pt_line(*point, *line, t, state, index, sketch)
         }
+        DistancePtCircle {
+            point,
+            circle,
+            target,
+        } => {
+            let t = resolve_dim(target, params)?;
+            point_on::distance_pt_circle(*point, *circle, t, state, index, sketch)
+        }
 
         // ─── Task 2.6: equal_tangent ───
         EqualLength { l1, l2 } => equal_tangent::equal_length(*l1, *l2, state, index, sketch),

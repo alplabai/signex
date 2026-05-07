@@ -219,6 +219,10 @@ fn points_touched(kind: &ConstraintKind, sketch: &SketchData) -> Vec<SketchEntit
             out.push(*point);
             extend_with_entity_points(*line, sketch, &mut out);
         }
+        DistancePtCircle { point, circle, .. } => {
+            out.push(*point);
+            extend_with_entity_points(*circle, sketch, &mut out);
+        }
         EqualLength { l1, l2 } => {
             extend_with_entity_points(*l1, sketch, &mut out);
             extend_with_entity_points(*l2, sketch, &mut out);

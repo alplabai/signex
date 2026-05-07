@@ -155,3 +155,87 @@ fn lm_already_converged_returns_quickly() {
     assert!((x2 - 5.0).abs() < 1e-9);
     assert!(y2.abs() < 1e-9);
 }
+
+#[test]
+fn lm_solves_offset_circle_via_distance_pt_circle() {
+    // v0.23 — the Offset tool's Circle path mints two
+    // DistancePtCircle constraints to parametrically link the new
+    // circle's radius to the source. This test pins the residual: a
+    // source circle of radius 5 (pinned via a Fixed anchor on its
+    // boundary) + an anchor on the new circle +
+    // DistancePtCircle(anchor, source, target=2) and
+    // DistancePtCircle(anchor, new_circle, target=0) should drive
+    // the new circle's radius to 7 (= 5 + 2).
+    use signex_sketch::entity::{Entity, EntityKind};
+    use signex_sketch::id::SketchEntityId;
+    use signex_sketch::solver::state::circle_radius;
+
+    let mut s = Sketch::new();
+    let centre = s.add_point(0.0, 0.0);
+    s.data.constraints.push(Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::Fixed { point: centre },
+    });
+    let source = s.add_circle(centre, 5.0);
+    // Pin the source's radius via a Fixed point on its boundary so
+    // the solver can't shrink the source to satisfy the offset
+    // residuals — mirroring the real-world case where the user
+    // already has a constraint anchoring the source's radius.
+    let src_anchor = s.add_point(5.0, 0.0);
+    s.data.constraints.push(Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::Fixed { point: src_anchor },
+    });
+    s.data.constraints.push(Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::DistancePtCircle {
+            point: src_anchor,
+            circle: source,
+            target: DimTarget::Literal(0.0),
+        },
+    });
+
+    // Mint the new circle ENTITY with a deliberately wrong seed
+    // radius (3.0) so we can see the solver pull it to 7.0.
+    let new_circle = SketchEntityId::new();
+    s.data.entities.push(Entity::new(
+        new_circle,
+        s.plane,
+        EntityKind::Circle {
+            center: centre,
+            radius: 3.0,
+        },
+    ));
+    let anchor = s.add_point(8.0, 0.0);
+
+    s.data.constraints.push(Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::DistancePtCircle {
+            point: anchor,
+            circle: new_circle,
+            target: DimTarget::Literal(0.0),
+        },
+    });
+    s.data.constraints.push(Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::DistancePtCircle {
+            point: anchor,
+            circle: source,
+            target: DimTarget::Literal(2.0),
+        },
+    });
+
+    let result = solve_lm(&s.data, &empty_params(), 5_000, 1e-12, 100)
+        .expect("LM should converge on the offset-circle parametric system");
+    let r_new = circle_radius(new_circle, &result.state, &result.index)
+        .expect("new circle has a radius slot");
+    assert!(
+        (r_new - 7.0).abs() < 1e-6,
+        "new circle radius converged to {r_new}, expected 7.0"
+    );
+    assert!(
+        result.final_residual_norm < 1e-6,
+        "final residual {} should be ~0",
+        result.final_residual_norm
+    );
+}

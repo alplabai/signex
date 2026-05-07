@@ -741,3 +741,64 @@ fn populated_sketch_round_trip() {
     let back: SketchData = toml::from_str(&s).unwrap();
     assert_eq!(data, back);
 }
+
+#[test]
+fn distance_pt_circle_constraint_round_trip() {
+    // v0.23 — the new parametric DistancePtCircle constraint must
+    // round-trip through TOML cleanly, including its DimTarget. Both
+    // literal and Expr targets are exercised.
+    use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
+
+    let mut data = SketchData::default();
+    let plane_id = PlaneId::new();
+    data.planes.push(Plane {
+        id: plane_id,
+        kind: PlaneKind::BoardTop,
+    });
+    let centre_id = SketchEntityId::new();
+    let circle_id = SketchEntityId::new();
+    let anchor_id = SketchEntityId::new();
+    data.entities.push(Entity::new(
+        centre_id,
+        plane_id,
+        EntityKind::Point { x: 0.0, y: 0.0 },
+    ));
+    data.entities.push(Entity::new(
+        circle_id,
+        plane_id,
+        EntityKind::Circle {
+            center: centre_id,
+            radius: 5.0,
+        },
+    ));
+    data.entities.push(Entity::new(
+        anchor_id,
+        plane_id,
+        EntityKind::Point { x: 7.0, y: 0.0 },
+    ));
+    // Literal-target constraint
+    data.constraints.push(Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::DistancePtCircle {
+            point: anchor_id,
+            circle: circle_id,
+            target: DimTarget::Literal(2.0),
+        },
+    });
+    // Expr-target constraint (parametric)
+    data.constraints.push(Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::DistancePtCircle {
+            point: anchor_id,
+            circle: circle_id,
+            target: DimTarget::Expr("offset_dist".into()),
+        },
+    });
+    data.parameters
+        .0
+        .insert("offset_dist".into(), "0.5mm".into());
+
+    let s = toml::to_string(&data).unwrap();
+    let back: SketchData = toml::from_str(&s).unwrap();
+    assert_eq!(data, back);
+}
