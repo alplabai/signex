@@ -747,6 +747,26 @@ impl Signex {
                 self.refresh_panel_ctx();
                 true
             }
+            crate::panels::PanelMsg::FpEditorEditSketchPadInPads { id } => {
+                // v0.22 Phase D6 — mirror of FpEditorEditPadInSketch:
+                // resolve the EditorPad whose `sketch_entity_id` ==
+                // `id`, switch to Pads mode, and select that pad.
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    let pad_idx = editor
+                        .state
+                        .pads
+                        .iter()
+                        .position(|p| p.sketch_entity_id == Some(*id));
+                    editor.state.mode =
+                        crate::library::editor::footprint::state::EditorMode::Normal;
+                    editor.state.selected_sketch = None;
+                    editor.state.selected_sketch_secondary = None;
+                    editor.state.selected_pad = pad_idx;
+                    editor.canvas_cache.clear();
+                }
+                self.refresh_panel_ctx();
+                true
+            }
             crate::panels::PanelMsg::FpEditorToggleSilkFilled(on) => {
                 if let Some(editor) = self.active_footprint_editor_mut() {
                     if let Some(idx) = editor.state.selected_silk_f {

@@ -1628,6 +1628,14 @@ pub enum PanelMsg {
     /// selects the entity. No-op when the pad has no
     /// `sketch_entity_id` (placed before sketch-mode auto-mint).
     FpEditorEditPadInSketch { pad_idx: usize },
+    /// v0.22 Phase D6 — Mirror of `FpEditorEditPadInSketch` going the
+    /// other direction. From a sketch entity carrying a `PadAttr`,
+    /// switch to Pads mode and select the EditorPad whose
+    /// `sketch_entity_id` matches this id. No-op when no pad has
+    /// this entity as its backing point.
+    FpEditorEditSketchPadInPads {
+        id: signex_sketch::id::SketchEntityId,
+    },
     /// v0.16.4 — Pour-role sub-form. The handler mutates the
     /// selected entity's `pour` attr and runs solve+bake.
     FpEditorSetPourNet {

@@ -3531,6 +3531,22 @@ fn render_sketch_pad_subform<'a>(
         ));
     }
 
+    // v0.22 Phase D6 — "Edit in Pads ▸" jump button. Mirror of the
+    // v0.21 "Edit in Sketch ▸" button on the Pads-mode pad form. Flips
+    // the editor to Pads mode and selects the pad whose
+    // `sketch_entity_id` matches this entity. The dispatcher resolves
+    // the EditorPad index from the entity ID.
+    col = col.push(
+        container(
+            iced::widget::button(text("Edit in Pads ▸").size(10).color(primary))
+                .padding([4, 10])
+                .on_press(PanelMsg::FpEditorEditSketchPadInPads { id })
+                .style(iced::widget::button::primary),
+        )
+        .padding([6, 8])
+        .width(Length::Fill),
+    );
+
     col
 }
 
