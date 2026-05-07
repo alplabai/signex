@@ -132,7 +132,21 @@ pub(super) fn view_footprint_editor_properties<'a>(
                     .padding([6, 8])
                     .width(Length::Fill),
                 );
-                return scrollable(col).width(Length::Fill).into();
+                // v0.25 polish — reserve 12 px on the right so the
+                // scrollbar doesn't overlap input fields. Without
+                // this, picklists and text_inputs that extend to
+                // Length::Fill end exactly under the scrollbar's
+                // track and the user can't reach the right edge.
+                return scrollable(
+                    container(col).padding(iced::Padding {
+                        top: 0.0,
+                        right: 12.0,
+                        bottom: 0.0,
+                        left: 0.0,
+                    }),
+                )
+                .width(Length::Fill)
+                .into();
             }
         }
         if in_placement {
@@ -947,7 +961,16 @@ pub(super) fn view_footprint_editor_properties<'a>(
     // branch above can render the same footer.
     col = render_fp_settings_and_hint(col, fp, muted, primary, border_c, collapsed_sections);
 
-    scrollable(col).width(Length::Fill).into()
+    // v0.25 polish — see early-return scrollable wrappers above for
+    // why the 12 px right padding lives here.
+    scrollable(container(col).padding(iced::Padding {
+        top: 0.0,
+        right: 12.0,
+        bottom: 0.0,
+        left: 0.0,
+    }))
+    .width(Length::Fill)
+    .into()
 }
 
 /// v0.20 — common Settings + Hint footer. Always renders the
