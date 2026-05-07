@@ -153,6 +153,7 @@ fn view_tool_palette<'a>(
             SketchTool::CircularPattern => {
                 "click an entity to mint a 4-instance circular array (360°; centre 5 mm right of source)".into()
             }
+            SketchTool::TangentArc => "click first endpoint of tangent arc".into(),
         },
         ToolPending::LineFirst { .. } => "click second endpoint (Esc to cancel)".into(),
         ToolPending::RectangleFirst { .. } => "click opposite corner (Esc to cancel)".into(),
@@ -163,6 +164,7 @@ fn view_tool_palette<'a>(
         ToolPending::RepickPolarCenter { .. } => {
             "click a Point to set polar centre (Esc to cancel)".into()
         }
+        ToolPending::TangentArcFirst { .. } => "click second endpoint (Esc to cancel)".into(),
     };
 
     row![

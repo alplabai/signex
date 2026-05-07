@@ -227,6 +227,16 @@ pub fn items<'a>(
         SketchTool::Arc,
         ActiveBarIcon::Svg(icons::icon_shape_arc(theme_id)),
     ));
+    // v0.24 Track C — Tangent Arc. Two-click chained arc segment that
+    // mints an Arc tangent to whatever Line ends at the first click.
+    // Mirrors the Arc entry visually (same arc SVG glyph) but emits a
+    // distinct SketchTool variant + adds a TangentLineArc constraint
+    // when committed so the tangency survives further edits.
+    items.push(mk_tool(
+        "Place Tangent Arc (chains tangent to previous Line)",
+        SketchTool::TangentArc,
+        ActiveBarIcon::Svg(icons::icon_shape_arc(theme_id)),
+    ));
 
     // Section 3: Modify — only visible when an entity is selected
     // (these tools all consume `editor.state.selected_sketch`). With

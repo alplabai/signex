@@ -111,6 +111,10 @@ pub fn anchor_for_tool(
         // v0.23 — Polar centre re-pick has no anchor; the click sets
         // the centre directly without a tethered preview.
         ToolPending::RepickPolarCenter { .. } => return None,
+        // v0.24 Track C — Tangent Arc anchors to the first endpoint
+        // so cursor snap pulls onto the first click position while
+        // the user picks the second endpoint.
+        ToolPending::TangentArcFirst { first } => first,
     };
     point_pos(id, sketch, state)
 }

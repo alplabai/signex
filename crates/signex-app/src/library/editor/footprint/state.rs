@@ -1208,6 +1208,18 @@ pub enum SketchTool {
     /// User adjusts the centre + parameters via JSON or the (future)
     /// Pattern Properties sub-form.
     CircularPattern,
+    /// v0.24 Track C — Tangent Arc tool. Two-click chained arc
+    /// segment: click 1 stashes the first endpoint; click 2 mints an
+    /// `Arc` entity tangent to the most recently committed `Line`
+    /// whose end Point matches the first click. The dispatcher also
+    /// emits a `TangentLineArc` constraint so the tangency survives
+    /// further edits. If no incident Line is found at the first
+    /// click, a placeholder centre is computed (perpendicular to the
+    /// chord midpoint) and a warning is published. Esc / right-click
+    /// cancels back to Select. Per the project's no-canvas-gestures
+    /// rule, this tool is invoked explicitly via the active-bar
+    /// button — it's not an implicit drag-mode of the Line tool.
+    TangentArc,
 }
 
 /// Transient per-tool gesture state. The canvas Program reads + writes
@@ -1256,6 +1268,13 @@ pub enum ToolPending {
     /// `array_id`. Cancels with Esc.
     RepickPolarCenter {
         array_id: signex_sketch::array::ArrayId,
+    },
+    /// v0.24 Track C — Tangent Arc, first endpoint placed; awaiting
+    /// the second endpoint click. The dispatcher mints an `Arc`
+    /// tangent to whatever `Line` ends at `first` (or a placeholder
+    /// arc with a warning when no incident Line exists).
+    TangentArcFirst {
+        first: signex_sketch::id::SketchEntityId,
     },
 }
 

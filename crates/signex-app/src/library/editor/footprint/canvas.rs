@@ -516,7 +516,8 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 | SketchTool::Mirror
                                 | SketchTool::Offset
                                 | SketchTool::RectPattern
-                                | SketchTool::CircularPattern => EditorMsg::FootprintSketchToolClick {
+                                | SketchTool::CircularPattern
+                                | SketchTool::TangentArc => EditorMsg::FootprintSketchToolClick {
                                     x_mm: click_world.0,
                                     y_mm: click_world.1,
                                     snap_id,
@@ -2622,6 +2623,114 @@ fn draw_sketch_tool_preview(
         // v0.23 — Polar centre re-pick has no preview shape; the
         // cursor PIP at the top of this match is the only visual cue.
         ToolPending::RepickPolarCenter { .. } => {}
+        // v0.24 Track C — Tangent Arc, first endpoint placed.
+        // Mirror the dispatcher's geometry: locate a Line ending at
+        // `first`, compute the tangent-circle centre on the line's
+        // perpendicular through `first` that passes through the
+        // cursor, and stroke a dashed ghost arc from `first` to the
+        // cursor along that circle.
+        //
+        // Without an incident line, fall back to a dashed straight
+        // segment (matches the LineFirst preview) so the user still
+        // gets visual feedback while the dispatcher will publish a
+        // placeholder warning on commit.
+        ToolPending::TangentArcFirst { first } => {
+            let Some(first_world) = resolve_point(first) else {
+                return;
+            };
+            // Find a Line ending at `first` (most recent first, same
+            // priority the dispatcher uses).
+            let incident_line: Option<(f64, f64)> =
+                sketch.entities.iter().rev().find_map(|e| match e.kind {
+                    EntityKind::Line { start, end } if end == first => resolve_point(start),
+                    EntityKind::Line { start, end } if start == first => resolve_point(end),
+                    _ => None,
+                });
+            let p0 = cstate.world_to_screen(first_world);
+            match incident_line {
+                Some(line_other) => {
+                    // Line direction (line_other -> first).
+                    let lx = first_world.0 - line_other.0;
+                    let ly = first_world.1 - line_other.1;
+                    let llen_sq = lx * lx + ly * ly;
+                    if llen_sq <= 1e-12 {
+                        dashed(frame, p0, cursor_screen);
+                        return;
+                    }
+                    let llen = llen_sq.sqrt();
+                    // Perpendicular to the line at `first`.
+                    let nx = -ly / llen;
+                    let ny = lx / llen;
+                    // Solve for the centre (see dispatcher comment).
+                    let dx = first_world.0 - cursor.0;
+                    let dy = first_world.1 - cursor.1;
+                    let denom = 2.0 * (dx * nx + dy * ny);
+                    let chord_sq = dx * dx + dy * dy;
+                    if denom.abs() <= 1e-9 || chord_sq <= 1e-9 {
+                        // Cursor on the tangent line — preview the
+                        // straight segment until the cursor pulls off
+                        // axis.
+                        dashed(frame, p0, cursor_screen);
+                        return;
+                    }
+                    let t = -chord_sq / denom;
+                    let cx = first_world.0 + t * nx;
+                    let cy = first_world.1 + t * ny;
+                    // Radius (use the start-side distance — both
+                    // sides should match within solver tolerance).
+                    let rx = first_world.0 - cx;
+                    let ry = first_world.1 - cy;
+                    let r_world = (rx * rx + ry * ry).sqrt();
+                    if r_world <= 1e-9 {
+                        dashed(frame, p0, cursor_screen);
+                        return;
+                    }
+                    // Sweep direction — match the dispatcher's logic.
+                    let ex = cursor.0 - first_world.0;
+                    let ey = cursor.1 - first_world.1;
+                    let sweep_ccw = lx * ey - ly * ex >= 0.0;
+                    // Stroke the dashed arc.
+                    let c_screen =
+                        cstate.world_to_screen((cx, cy));
+                    let r_screen = (r_world as f32) * cstate.scale;
+                    let start_angle =
+                        (first_world.1 - cy).atan2(first_world.0 - cx) as f32;
+                    let end_angle = (cursor.1 - cy).atan2(cursor.0 - cx) as f32;
+                    let mut delta = end_angle - start_angle;
+                    if sweep_ccw {
+                        while delta < 0.0 {
+                            delta += std::f32::consts::TAU;
+                        }
+                    } else {
+                        while delta > 0.0 {
+                            delta -= std::f32::consts::TAU;
+                        }
+                    }
+                    let segments = 32;
+                    for i in (0..segments).step_by(2) {
+                        let t0 = i as f32 / segments as f32;
+                        let t1 = (i + 1) as f32 / segments as f32;
+                        let a0 = start_angle + delta * t0;
+                        let a1 = start_angle + delta * t1;
+                        let q0 = Point::new(
+                            c_screen.x + r_screen * a0.cos(),
+                            c_screen.y + r_screen * a0.sin(),
+                        );
+                        let q1 = Point::new(
+                            c_screen.x + r_screen * a1.cos(),
+                            c_screen.y + r_screen * a1.sin(),
+                        );
+                        frame.stroke(&Path::line(q0, q1), stroke);
+                    }
+                }
+                None => {
+                    // No incident line — show a dashed chord so the
+                    // user gets a visual cue. Dispatcher publishes
+                    // the "no incident line" warning on commit.
+                    dashed(frame, p0, cursor_screen);
+                }
+            }
+        }
     }
 }
 

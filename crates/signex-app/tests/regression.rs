@@ -1318,3 +1318,217 @@ fn footprint_editor_new_mutation_clears_redo_stack() {
     editor.push_history();
     assert!(editor.redo.is_empty());
 }
+
+// ─────────────────────────────────────────────────────────────────
+// v0.24 Track C — Tangent Arc sketch sub-tool
+//
+// Drives the dispatcher via Signex::update(Message::Library(...))
+// against a FootprintEditorState parked in document_state.footprint
+// _editors so the dispatcher's existing routing keeps the test
+// realistic. Tool-based gesture only — never a click-and-drag mode
+// (per feedback_no_canvas_gestures.md / the user's spec for v0.24
+// Track C).
+// ─────────────────────────────────────────────────────────────────
+
+#[test]
+fn tangent_arc_tool_first_click_sets_pending() {
+    use signex_app::app::FootprintEditorState;
+    use signex_app::library::editor::footprint::state::{SketchTool, ToolPending};
+    use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
+    use signex_library::{Footprint, FootprintFile};
+    use signex_sketch::SketchData;
+    use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
+
+    let path = PathBuf::from("test-tangent-arc-c1.snxfpt");
+    let mut fp = Footprint::empty("test");
+    // Provide a plane so the dispatcher doesn't have to mint one
+    // (keeps the state setup focused on the tool gesture itself).
+    fp.sketch = Some(SketchData {
+        planes: vec![Plane {
+            id: PlaneId::new(),
+            kind: PlaneKind::BoardTop,
+        }],
+        ..SketchData::default()
+    });
+    let file = FootprintFile::from_footprint(fp);
+    let mut editor = FootprintEditorState::new(path.clone(), file);
+    editor.state.active_tool = SketchTool::TangentArc;
+
+    let (mut app, _initial_task) = Signex::new();
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), editor);
+
+    // First click — dispatcher mints a Point at the click position
+    // (no snap target supplied) and stashes it as TangentArcFirst.
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchToolClick {
+            x_mm: 0.0,
+            y_mm: 0.0,
+            snap_id: None,
+        },
+    }));
+
+    let editor = app
+        .document_state
+        .footprint_editors
+        .get(&path)
+        .expect("footprint editor still registered");
+
+    // tool_pending must transition to TangentArcFirst.
+    assert!(
+        matches!(editor.state.tool_pending, ToolPending::TangentArcFirst { .. }),
+        "tool_pending = {:?}, expected TangentArcFirst",
+        editor.state.tool_pending
+    );
+
+    // The Point at the first click must be in the sketch — it's
+    // referenced by `first` for the second click to resolve against.
+    let sketch = editor
+        .file
+        .footprints
+        .first()
+        .and_then(|f| f.sketch.as_ref())
+        .expect("sketch present");
+    assert!(
+        sketch
+            .entities
+            .iter()
+            .any(|e| matches!(e.kind, signex_sketch::entity::EntityKind::Point { x, y } if x == 0.0 && y == 0.0)),
+        "first-click Point not minted"
+    );
+}
+
+#[test]
+fn tangent_arc_tool_second_click_mints_arc_and_tangent_constraint() {
+    use signex_app::app::FootprintEditorState;
+    use signex_app::library::editor::footprint::state::{SketchTool, ToolPending};
+    use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
+    use signex_library::{Footprint, FootprintFile};
+    use signex_sketch::SketchData;
+    use signex_sketch::constraint::ConstraintKind;
+    use signex_sketch::entity::{Entity, EntityKind};
+    use signex_sketch::id::SketchEntityId;
+    use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
+
+    let path = PathBuf::from("test-tangent-arc-c2.snxfpt");
+    let mut fp = Footprint::empty("test");
+    let plane_id = PlaneId::new();
+
+    // Pre-seed: Point A at (0, 0), Point B at (5, 0), Line A→B.
+    // The Line ends at B, so a TangentArc click at B should find
+    // this Line and emit a TangentLineArc constraint linking it to
+    // the new Arc.
+    let a_id = SketchEntityId::new();
+    let b_id = SketchEntityId::new();
+    let line_id = SketchEntityId::new();
+    let pt_a = Entity::new(a_id, plane_id, EntityKind::Point { x: 0.0, y: 0.0 });
+    let pt_b = Entity::new(b_id, plane_id, EntityKind::Point { x: 5.0, y: 0.0 });
+    let line = Entity::new(
+        line_id,
+        plane_id,
+        EntityKind::Line {
+            start: a_id,
+            end: b_id,
+        },
+    );
+
+    fp.sketch = Some(SketchData {
+        planes: vec![Plane {
+            id: plane_id,
+            kind: PlaneKind::BoardTop,
+        }],
+        entities: vec![pt_a, pt_b, line],
+        ..SketchData::default()
+    });
+
+    let file = FootprintFile::from_footprint(fp);
+    let mut editor = FootprintEditorState::new(path.clone(), file);
+    editor.state.active_tool = SketchTool::TangentArc;
+    // Click 1 already happened — pre-seed the pending state with
+    // first = B (the Line's end). The next click is click 2.
+    editor.state.tool_pending = ToolPending::TangentArcFirst { first: b_id };
+
+    let (mut app, _initial_task) = Signex::new();
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), editor);
+
+    // Snapshot pre-click counts so we can assert deltas without
+    // relying on absolute totals (the FROM_FOOTPRINT path may
+    // implicitly reorder/auto-mint pad-backed Points in future).
+    let (entities_before, constraints_before) = {
+        let editor = app.document_state.footprint_editors.get(&path).unwrap();
+        let sketch = editor.file.footprints[0].sketch.as_ref().unwrap();
+        (sketch.entities.len(), sketch.constraints.len())
+    };
+
+    // Click 2 — pick a point off the line so the tangent circle has
+    // a non-degenerate radius. (3, 4) is 5 mm from B and 1.41 mm off
+    // the line, well above the perpendicular-cursor degeneracy
+    // threshold the dispatcher uses.
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchToolClick {
+            x_mm: 3.0,
+            y_mm: 4.0,
+            snap_id: None,
+        },
+    }));
+
+    let editor = app.document_state.footprint_editors.get(&path).unwrap();
+    let sketch = editor.file.footprints[0].sketch.as_ref().unwrap();
+
+    // Tool reset to Idle after commit.
+    assert!(
+        matches!(editor.state.tool_pending, ToolPending::Idle),
+        "tool_pending = {:?}, expected Idle after click 2",
+        editor.state.tool_pending
+    );
+
+    // The dispatcher mints two new entities on click 2: the second
+    // endpoint Point (at the click) and the centre Point of the
+    // tangent circle, plus the Arc itself — three new entities.
+    // We assert the Arc is present + at least one new entity, since
+    // the centre minting is the dispatcher's choice.
+    assert!(
+        sketch.entities.len() >= entities_before + 2,
+        "expected at least the second endpoint + centre + arc to be minted (entities: {} → {})",
+        entities_before,
+        sketch.entities.len()
+    );
+    let arc_count = sketch
+        .entities
+        .iter()
+        .filter(|e| matches!(e.kind, EntityKind::Arc { .. }))
+        .count();
+    assert_eq!(arc_count, 1, "expected exactly one Arc entity to be minted");
+
+    // The Arc's start endpoint must be the pre-stashed `first`
+    // (b_id), proving the click chained off the previous Line.
+    let arc = sketch
+        .entities
+        .iter()
+        .find(|e| matches!(e.kind, EntityKind::Arc { .. }))
+        .unwrap();
+    let (arc_start, arc_id) = match arc.kind {
+        EntityKind::Arc { start, .. } => (start, arc.id),
+        _ => unreachable!(),
+    };
+    assert_eq!(arc_start, b_id, "Arc.start must be the first-click Point");
+
+    // The TangentLineArc constraint must reference the pre-existing
+    // Line + the freshly minted Arc.
+    assert!(
+        sketch.constraints.len() > constraints_before,
+        "expected a new constraint to be added"
+    );
+    assert!(
+        sketch.constraints.iter().any(|c| matches!(
+            c.kind,
+            ConstraintKind::TangentLineArc { line, arc } if line == line_id && arc == arc_id
+        )),
+        "expected a TangentLineArc {{ line, arc }} constraint linking the seed Line to the new Arc"
+    );
+}
