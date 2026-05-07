@@ -1186,7 +1186,16 @@ fn build_footprint_editor_panel_ctx(
                     let mut entries: Vec<crate::panels::PadShapeParamSummary> = pad
                         .shape_params
                         .iter()
-                        .map(|(key, parameter_name)| {
+                        .filter_map(|(key, parameter_name)| {
+                            // v0.24 Phase 3 — Sidecar keys ending
+                            // in `_arc` map a corner key (e.g.
+                            // `corner_r_ne`) to the matching Arc
+                            // entity ID, NOT a sketch parameter.
+                            // Filter them out so they don't render
+                            // as Properties rows.
+                            if key.ends_with("_arc") {
+                                return None;
+                            }
                             let label = match key.as_str() {
                                 "corner_r" => "Corner radius".to_string(),
                                 "diameter" => "Diameter".to_string(),
@@ -1202,12 +1211,12 @@ fn build_footprint_editor_panel_ctx(
                                 .and_then(|p| p.get_raw(parameter_name))
                                 .unwrap_or("")
                                 .to_string();
-                            crate::panels::PadShapeParamSummary {
+                            Some(crate::panels::PadShapeParamSummary {
                                 key: key.clone(),
                                 label,
                                 parameter_name: parameter_name.clone(),
                                 current_expr,
-                            }
+                            })
                         })
                         .collect();
                     // Sort by label so the Properties panel renders the

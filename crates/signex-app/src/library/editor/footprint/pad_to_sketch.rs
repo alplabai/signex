@@ -488,14 +488,28 @@ fn mint_round_rect_pad_geometry(
     //   SE: start = SE_right (anchor[2]), end = SE_bot   (anchor[3])
     //   SW: start = SW_bot   (anchor[4]), end = SW_left  (anchor[5])
     //   NW: start = NW_left  (anchor[6]), end = NW_top   (anchor[7])
-    for (centre_idx, start, end) in [
+    //
+    // v0.24 Phase 3 (Track A3) — also record per-corner Arc IDs on
+    // `pad.shape_params` via sidecar keys (`corner_r_ne_arc` ..
+    // `corner_r_nw_arc`). The Unlink action looks up which corner an
+    // Arc represents by reverse-lookup against this map; without the
+    // sidecar we'd have to infer corner from arc-centre position vs
+    // pad bbox centre, which gets brittle when the pad is rotated or
+    // an array instance applies a flip.
+    let arc_keys: [&str; 4] = ["corner_r_ne_arc", "corner_r_se_arc",
+                                "corner_r_sw_arc", "corner_r_nw_arc"];
+    for (corner_idx, (centre_idx, start, end)) in [
         (0usize, anchor_ids[0], anchor_ids[1]),
         (1, anchor_ids[2], anchor_ids[3]),
         (2, anchor_ids[4], anchor_ids[5]),
         (3, anchor_ids[6], anchor_ids[7]),
-    ] {
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let arc_id = SketchEntityId::new();
         let arc = Entity::new(
-            SketchEntityId::new(),
+            arc_id,
             plane_id,
             EntityKind::Arc {
                 center: inset_ids[centre_idx],
@@ -505,6 +519,8 @@ fn mint_round_rect_pad_geometry(
             },
         );
         sketch.entities.push(arc);
+        pad.shape_params
+            .insert(arc_keys[corner_idx].into(), arc_id.0.simple().to_string());
     }
 
     // ── 6. Shared corner_r parameter. All four arcs read radius

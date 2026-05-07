@@ -1390,6 +1390,19 @@ pub enum PrimitiveEditorMsg {
     /// not a Line, the line is not part of a closed loop, or no
     /// solve has run yet.
     FootprintSketchMakePadFromProfile,
+    /// v0.24 Phase 3 (Track A3) — Right-click action on an Arc that
+    /// belongs to a RoundRect pad's corner outline. Mints a fresh
+    /// per-corner sketch parameter (`corner_r_<slug>_<corner>`),
+    /// copies the current shared parameter's value into it, and
+    /// records the per-corner override on the owning pad's
+    /// `shape_params` (e.g. `"corner_r_ne" -> "<new_param>"`). The
+    /// other three corners stay on the shared `corner_r` parameter
+    /// so the user can edit one corner independently while leaving
+    /// the rest in lockstep. No-op (with a `tracing::warn`) when the
+    /// arc doesn't belong to any pad's `shape_params` graph.
+    FootprintSketchUnlinkCornerRadius {
+        arc_entity_id: signex_sketch::id::SketchEntityId,
+    },
     /// v0.15 — Pads-mode tool switch (Select / PlacePad). Right-
     /// click cancels back to Select via the same dispatch.
     FootprintSetPadsTool(crate::library::editor::footprint::state::PadsTool),

@@ -797,6 +797,31 @@ impl Signex {
                 }
                 true
             }
+            crate::panels::PanelMsg::FpEditorUnlinkCornerRadius { arc_entity_id } => {
+                // v0.24 Phase 3 (Track A3) — forward to the
+                // `FootprintSketchUnlinkCornerRadius` PrimitiveEditorMsg.
+                // The dispatcher walks pads for the matching arc,
+                // mints the per-corner parameter, and triggers a
+                // solve+rebake. Undo snapshot captured at dispatcher
+                // level via mutates_footprint_state.
+                if let Some(active_tab) =
+                    self.document_state.tabs.get(self.document_state.active_tab)
+                {
+                    if let Some(path) = active_tab.kind.as_footprint_editor() {
+                        let path = path.clone();
+                        let _ = self.update(Message::Library(
+                            crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                                path,
+                                msg: crate::library::messages::PrimitiveEditorMsg::FootprintSketchUnlinkCornerRadius {
+                                    arc_entity_id: *arc_entity_id,
+                                },
+                            },
+                        ));
+                        self.refresh_panel_ctx();
+                    }
+                }
+                true
+            }
             crate::panels::PanelMsg::FpEditorEditSketchPadInPads { id } => {
                 // v0.22 Phase D6 — mirror of FpEditorEditPadInSketch:
                 // resolve the EditorPad whose `sketch_entity_id` ==

@@ -262,6 +262,34 @@ pub(super) fn view_footprint_editor_properties<'a>(
             }
             } // end if !fp_sketch_entity collapsed
 
+            // v0.24 Phase 3 (Track A3) — Unlink corner radius button.
+            // Visible when the selected entity is an Arc that's part
+            // of a RoundRect pad's corner outline — detected by
+            // walking pads for any whose `corner_r_*_arc` sidecar
+            // value matches the selected entity's id slug. The
+            // button is the Properties-panel surface for the
+            // right-click "Unlink radius" action; clicking it mints
+            // a per-corner override for that one Arc and leaves the
+            // other 3 corners on the shared corner_r parameter.
+            if ent.kind_label == "Arc" {
+                if let Some(id) = fp.selected_sketch_entity_id {
+                    col = col.push(
+                        container(
+                            iced::widget::button(
+                                text("Unlink corner radius").size(10).color(primary),
+                            )
+                            .padding([4, 10])
+                            .on_press(PanelMsg::FpEditorUnlinkCornerRadius {
+                                arc_entity_id: id,
+                            })
+                            .style(iced::widget::button::secondary),
+                        )
+                        .padding([6, 8])
+                        .width(Length::Fill),
+                    );
+                }
+            }
+
             // v0.16.2 — Role pick_list. Visible when an entity is
             // selected; pick_list value mirrors the entity's
             // currently-attached `*Attr` slot (or `Unassigned`).

@@ -4119,6 +4119,7 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintSketchDimensionInput(_)
         | PrimitiveEditorMsg::FootprintSketchSetRole { .. }
         | PrimitiveEditorMsg::FootprintSketchMakePadFromProfile
+        | PrimitiveEditorMsg::FootprintSketchUnlinkCornerRadius { .. }
         | PrimitiveEditorMsg::Save => {}
     }
 }
@@ -5508,6 +5509,127 @@ pub(crate) fn apply_footprint_primitive_edit(
                     primitive,
                     SketchEdit::AddEntity(centre),
                 );
+            });
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintSketchUnlinkCornerRadius { arc_entity_id } => {
+            // v0.24 Phase 3 (Track A3) — split a RoundRect pad's
+            // shared `corner_r_<slug>` parameter into a per-corner
+            // override for the right-clicked Arc.
+            //
+            // Lookup chain:
+            //   1. Walk every EditorPad to find the one whose
+            //      `shape_params` contains a `corner_r_<corner>_arc`
+            //      key whose value (UUID slug) matches `arc_entity_id`.
+            //   2. From that match, derive the corner key
+            //      (`corner_r_ne` / `_se` / `_sw` / `_nw`).
+            //   3. Mint a fresh parameter `<shared_name>_<corner>`,
+            //      copy the current shared expression as its value,
+            //      and bind the corner key on `pad.shape_params`.
+            //   4. Trigger a `ForceRebuild` so the solver re-runs and
+            //      the bake reflects the new parametric link.
+            //
+            // Defensive: arc not part of any pad → tracing::warn +
+            // no-op. Pad has no shared `corner_r` binding (e.g.
+            // legacy data) → tracing::warn + no-op.
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
+            use crate::library::editor::footprint::sketch_mode::SketchEdit;
+
+            let arc_id_str = arc_entity_id.0.simple().to_string();
+
+            // Locate the pad + corner this arc belongs to.
+            let pad_corner: Option<(usize, &'static str)> = editor
+                .state
+                .pads
+                .iter()
+                .enumerate()
+                .find_map(|(idx, pad)| {
+                    let arc_keys: [(&str, &str); 4] = [
+                        ("corner_r_ne_arc", "corner_r_ne"),
+                        ("corner_r_se_arc", "corner_r_se"),
+                        ("corner_r_sw_arc", "corner_r_sw"),
+                        ("corner_r_nw_arc", "corner_r_nw"),
+                    ];
+                    for (sidecar_key, corner_key) in arc_keys {
+                        if pad.shape_params.get(sidecar_key).map(|s| s.as_str())
+                            == Some(arc_id_str.as_str())
+                        {
+                            return Some((idx, corner_key));
+                        }
+                    }
+                    None
+                });
+
+            let Some((pad_idx, corner_key)) = pad_corner else {
+                tracing::warn!(
+                    target: "signex::v024",
+                    "FootprintSketchUnlinkCornerRadius: arc {arc_entity_id:?} doesn't belong \
+                     to any pad's shape_params; ignoring"
+                );
+                return;
+            };
+
+            // Already unlinked → no-op (idempotent).
+            if editor.state.pads[pad_idx]
+                .shape_params
+                .contains_key(corner_key)
+            {
+                tracing::warn!(
+                    target: "signex::v024",
+                    "FootprintSketchUnlinkCornerRadius: corner {corner_key} on pad {pad_idx} \
+                     is already unlinked; ignoring"
+                );
+                return;
+            }
+
+            // Resolve the shared parameter name + current value.
+            let shared_name = match editor.state.pads[pad_idx]
+                .shape_params
+                .get("corner_r")
+                .cloned()
+            {
+                Some(n) => n,
+                None => {
+                    tracing::warn!(
+                        target: "signex::v024",
+                        "FootprintSketchUnlinkCornerRadius: pad {pad_idx} has no shared \
+                         corner_r binding; ignoring"
+                    );
+                    return;
+                }
+            };
+            let shared_value = editor
+                .primitive()
+                .sketch
+                .as_ref()
+                .and_then(|s| s.parameters.get_raw(&shared_name).map(str::to_string))
+                .unwrap_or_default();
+
+            // Mint the per-corner parameter name. Use the corner_key
+            // suffix (e.g. `_ne`) appended to the shared name's slug
+            // so the per-corner names cluster together in the
+            // parameter table for inspection.
+            let corner_suffix = corner_key
+                .strip_prefix("corner_r_")
+                .unwrap_or(corner_key);
+            let new_param_name = format!("{shared_name}_{corner_suffix}");
+
+            // Apply the rewrite. push_history is already captured at
+            // the top of this dispatcher arm via mutates_footprint_state.
+            editor.with_parts(|state, primitive| {
+                // Mint the new parameter on the sketch.
+                if let Some(sketch) = primitive.sketch.as_mut() {
+                    sketch.parameters.insert(new_param_name.clone(), shared_value.clone());
+                }
+                // Record the per-corner override on the pad.
+                if let Some(pad) = state.pads.get_mut(pad_idx) {
+                    pad.shape_params
+                        .insert(corner_key.to_string(), new_param_name.clone());
+                }
+                // ForceRebuild → solver re-runs, bake regenerates pad
+                // geometry from the (now per-corner-aware) parameters.
+                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
             });
             editor.dirty = true;
             editor.canvas_cache.clear();
