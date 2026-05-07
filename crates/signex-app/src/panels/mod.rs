@@ -690,6 +690,9 @@ pub struct FootprintEditorPanelContext {
     /// v0.16.4 — BoardCutout-role sub-form values for the selected
     /// entity. `None` when the entity isn't a board cutout.
     pub selected_cutout: Option<CutoutSummary>,
+    /// v0.21 — pad-role sub-form values for the selected sketch
+    /// entity. `Some` when the entity carries a `PadAttr`.
+    pub selected_sketch_pad: Option<SketchPadAttrSummary>,
     /// v0.17.0 — empty-canvas Snap Options. Surfaced on the
     /// Properties panel default branch (no selection) so the user
     /// can toggle each priority chain step.
@@ -871,6 +874,36 @@ pub struct FootprintPadSummary {
 }
 
 /// v0.18.24 — Read-only summary of the currently-selected silk-front
+/// v0.21 — sketch-mode pad attribute snapshot. Mirrors the new
+/// fields we added to `PadAttr` so the sketch-entity Properties
+/// branch can render an editable Pad Attributes section.
+#[derive(Debug, Clone)]
+pub struct SketchPadAttrSummary {
+    pub id: signex_sketch::id::SketchEntityId,
+    pub electrical_type: signex_sketch::attr::ElectricalType,
+    pub net: String,
+    pub locked: bool,
+    pub template: String,
+    pub template_library: String,
+    pub feature_top: signex_sketch::attr::PadFeature,
+    pub feature_bottom: signex_sketch::attr::PadFeature,
+    pub testpoint: signex_sketch::attr::TestpointFlags,
+    pub thermal_relief: bool,
+    pub mask_top_tented: bool,
+    pub mask_bottom_tented: bool,
+    pub paste_top_enabled: bool,
+    pub paste_bottom_enabled: bool,
+    pub corner_radius_pct: Option<f64>,
+    pub hole_tolerance_plus_mm: Option<f64>,
+    pub hole_tolerance_minus_mm: Option<f64>,
+    pub hole_rotation_deg: Option<f64>,
+    pub copper_offset_x_mm: Option<f64>,
+    pub copper_offset_y_mm: Option<f64>,
+    /// `true` when the pad has a drill spec (i.e. THT / NPT). Used
+    /// to gate Hole-detail UI rows.
+    pub has_drill: bool,
+}
+
 /// graphic (`FpGraphic` in `silk_f`). Drives the Properties panel's
 /// silk-selection branch with full per-kind editable fields.
 #[derive(Debug, Clone)]
@@ -1492,6 +1525,99 @@ pub enum PanelMsg {
     FpEditorSetSelectedPadCopperOffsetX { idx: usize, value: String },
     FpEditorSetSelectedPadCopperOffsetY { idx: usize, value: String },
     FpEditorToggleSelectedPadPlated { idx: usize, value: bool },
+    /// v0.21 — Sketch-mode pad attribute edits. Mutate the `PadAttr`
+    /// on the selected sketch entity (identified by SketchEntityId)
+    /// and re-run solve+bake. Mirrors the new pad fields surfaced in
+    /// Pads-mode but addressed by the sketch entity rather than the
+    /// flat-pad index.
+    FpEditorSetSketchPadElectricalType {
+        id: signex_sketch::id::SketchEntityId,
+        value: signex_sketch::attr::ElectricalType,
+    },
+    FpEditorSetSketchPadNet {
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    },
+    FpEditorToggleSketchPadLocked {
+        id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
+    FpEditorSetSketchPadTemplate {
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    },
+    FpEditorSetSketchPadTemplateLibrary {
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    },
+    FpEditorSetSketchPadFeatureTop {
+        id: signex_sketch::id::SketchEntityId,
+        value: signex_sketch::attr::PadFeature,
+    },
+    FpEditorSetSketchPadFeatureBottom {
+        id: signex_sketch::id::SketchEntityId,
+        value: signex_sketch::attr::PadFeature,
+    },
+    FpEditorToggleSketchPadTestpointTopAssembly {
+        id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
+    FpEditorToggleSketchPadTestpointTopFab {
+        id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
+    FpEditorToggleSketchPadTestpointBottomAssembly {
+        id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
+    FpEditorToggleSketchPadTestpointBottomFab {
+        id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
+    FpEditorToggleSketchPadThermalRelief {
+        id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
+    FpEditorToggleSketchPadMaskTentedTop {
+        id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
+    FpEditorToggleSketchPadMaskTentedBottom {
+        id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
+    FpEditorToggleSketchPadPasteEnabledTop {
+        id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
+    FpEditorToggleSketchPadPasteEnabledBottom {
+        id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
+    FpEditorSetSketchPadHoleTolerancePlus {
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    },
+    FpEditorSetSketchPadHoleToleranceMinus {
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    },
+    FpEditorSetSketchPadHoleRotation {
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    },
+    FpEditorSetSketchPadCopperOffsetX {
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    },
+    FpEditorSetSketchPadCopperOffsetY {
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    },
+    FpEditorSetSketchPadCornerRadiusPct {
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    },
     /// v0.16.4 — Pour-role sub-form. The handler mutates the
     /// selected entity's `pour` attr and runs solve+bake.
     FpEditorSetPourNet {

@@ -1284,7 +1284,8 @@ fn build_footprint_editor_panel_ctx(
     // v0.16.4 — role sub-form summaries. Populated only when the
     // selected entity carries the matching `*Attr`; the Properties
     // panel renders the sub-form conditionally below the Role pick_list.
-    let (selected_pour, selected_keepout, selected_cutout) = match selected_sketch_entity_id {
+    let (selected_pour, selected_keepout, selected_cutout, selected_sketch_pad) =
+        match selected_sketch_entity_id {
         Some(id) => editor
             .primitive()
             .sketch
@@ -1311,10 +1312,33 @@ fn build_footprint_editor_panel_ctx(
                         edge_radius_expr: c.edge_radius_expr.clone(),
                         through: c.through,
                     });
-                (pour, keepout, cutout)
+                let sketch_pad = e.pad.as_ref().map(|p| crate::panels::SketchPadAttrSummary {
+                    id: e.id,
+                    electrical_type: p.electrical_type,
+                    net: p.net.clone(),
+                    locked: p.locked,
+                    template: p.template.clone(),
+                    template_library: p.library.clone(),
+                    feature_top: p.feature_top,
+                    feature_bottom: p.feature_bottom,
+                    testpoint: p.testpoint,
+                    thermal_relief: p.stack.thermal_relief,
+                    mask_top_tented: p.stack.mask_top_tented,
+                    mask_bottom_tented: p.stack.mask_bottom_tented,
+                    paste_top_enabled: p.stack.paste_top_enabled,
+                    paste_bottom_enabled: p.stack.paste_bottom_enabled,
+                    corner_radius_pct: p.stack.corner_radius_pct,
+                    hole_tolerance_plus_mm: p.hole_tolerance_plus_mm,
+                    hole_tolerance_minus_mm: p.hole_tolerance_minus_mm,
+                    hole_rotation_deg: p.hole_rotation_deg,
+                    copper_offset_x_mm: p.copper_offset_x_mm,
+                    copper_offset_y_mm: p.copper_offset_y_mm,
+                    has_drill: p.drill.is_some(),
+                });
+                (pour, keepout, cutout, sketch_pad)
             })
-            .unwrap_or((None, None, None)),
-        None => (None, None, None),
+            .unwrap_or((None, None, None, None)),
+        None => (None, None, None, None),
     };
 
     // v0.18.8 — surface every footprint inside the active envelope
@@ -1428,6 +1452,7 @@ fn build_footprint_editor_panel_ctx(
         selected_pour,
         selected_keepout,
         selected_cutout,
+        selected_sketch_pad,
         snap_options: editor.state.snap_options,
         selection_filter: editor.state.selection_filter,
         snap_subtab: editor.state.snap_subtab,

@@ -613,6 +613,124 @@ impl Signex {
                 });
                 true
             }
+            // v0.21 — sketch-pad attribute mutations. Each routes
+            // through `with_selected_sketch_pad` which mutates the
+            // entity's `PadAttr` then triggers solve+bake so geometry
+            // re-derives if the change affected dependent expressions.
+            crate::panels::PanelMsg::FpEditorSetSketchPadElectricalType { id, value } => {
+                let v = *value;
+                self.with_selected_sketch_pad(*id, |attr| attr.electrical_type = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSketchPadNet { id, value } => {
+                let v = value.clone();
+                self.with_selected_sketch_pad(*id, |attr| attr.net = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSketchPadLocked { id, value } => {
+                let v = *value;
+                self.with_selected_sketch_pad(*id, |attr| attr.locked = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSketchPadTemplate { id, value } => {
+                let v = value.clone();
+                self.with_selected_sketch_pad(*id, |attr| attr.template = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSketchPadTemplateLibrary { id, value } => {
+                let v = value.clone();
+                self.with_selected_sketch_pad(*id, |attr| attr.library = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSketchPadFeatureTop { id, value } => {
+                let v = *value;
+                self.with_selected_sketch_pad(*id, |attr| attr.feature_top = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSketchPadFeatureBottom { id, value } => {
+                let v = *value;
+                self.with_selected_sketch_pad(*id, |attr| attr.feature_bottom = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSketchPadTestpointTopAssembly { id, value } => {
+                let v = *value;
+                self.with_selected_sketch_pad(*id, |attr| attr.testpoint.top_assembly = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSketchPadTestpointTopFab { id, value } => {
+                let v = *value;
+                self.with_selected_sketch_pad(*id, |attr| attr.testpoint.top_fab = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSketchPadTestpointBottomAssembly { id, value } => {
+                let v = *value;
+                self.with_selected_sketch_pad(*id, |attr| attr.testpoint.bottom_assembly = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSketchPadTestpointBottomFab { id, value } => {
+                let v = *value;
+                self.with_selected_sketch_pad(*id, |attr| attr.testpoint.bottom_fab = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSketchPadThermalRelief { id, value } => {
+                let v = *value;
+                self.with_selected_sketch_pad(*id, |attr| attr.stack.thermal_relief = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSketchPadMaskTentedTop { id, value } => {
+                let v = *value;
+                self.with_selected_sketch_pad(*id, |attr| attr.stack.mask_top_tented = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSketchPadMaskTentedBottom { id, value } => {
+                let v = *value;
+                self.with_selected_sketch_pad(*id, |attr| attr.stack.mask_bottom_tented = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSketchPadPasteEnabledTop { id, value } => {
+                let v = *value;
+                self.with_selected_sketch_pad(*id, |attr| attr.stack.paste_top_enabled = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSketchPadPasteEnabledBottom { id, value } => {
+                let v = *value;
+                self.with_selected_sketch_pad(*id, |attr| attr.stack.paste_bottom_enabled = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSketchPadHoleTolerancePlus { id, value } => {
+                let v = fp_parse_optional_mm(value);
+                self.with_selected_sketch_pad(*id, |attr| attr.hole_tolerance_plus_mm = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSketchPadHoleToleranceMinus { id, value } => {
+                let v = fp_parse_optional_mm(value);
+                self.with_selected_sketch_pad(*id, |attr| attr.hole_tolerance_minus_mm = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSketchPadHoleRotation { id, value } => {
+                let v = value.trim().parse::<f64>().ok();
+                self.with_selected_sketch_pad(*id, |attr| attr.hole_rotation_deg = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSketchPadCopperOffsetX { id, value } => {
+                let v = fp_parse_optional_mm(value);
+                self.with_selected_sketch_pad(*id, |attr| attr.copper_offset_x_mm = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSketchPadCopperOffsetY { id, value } => {
+                let v = fp_parse_optional_mm(value);
+                self.with_selected_sketch_pad(*id, |attr| attr.copper_offset_y_mm = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSketchPadCornerRadiusPct { id, value } => {
+                let v = value
+                    .trim()
+                    .parse::<f64>()
+                    .ok()
+                    .filter(|v| (0.0..=50.0).contains(v));
+                self.with_selected_sketch_pad(*id, |attr| attr.stack.corner_radius_pct = v);
+                true
+            }
             crate::panels::PanelMsg::FpEditorToggleSilkFilled(on) => {
                 if let Some(editor) = self.active_footprint_editor_mut() {
                     if let Some(idx) = editor.state.selected_silk_f {
@@ -1852,6 +1970,33 @@ impl Signex {
                 });
                 editor.dirty = true;
                 editor.canvas_cache.clear();
+            }
+        }
+        self.refresh_panel_ctx();
+    }
+
+    /// v0.21 — sketch-mode counterpart of `with_selected_pad`. Looks
+    /// up the sketch entity by id, runs the closure on its `PadAttr`
+    /// (creating one only if it already exists; non-pad entities are
+    /// silently skipped), then dirty-marks the editor + clears the
+    /// canvas cache. Solve+bake is queued on the next mutation cycle.
+    fn with_selected_sketch_pad<F>(
+        &mut self,
+        id: signex_sketch::id::SketchEntityId,
+        f: F,
+    ) where
+        F: FnOnce(&mut signex_sketch::attr::PadAttr),
+    {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            let sketch = editor.primitive_mut().sketch.as_mut();
+            if let Some(sketch) = sketch {
+                if let Some(entity) = sketch.entities.iter_mut().find(|e| e.id == id) {
+                    if let Some(attr) = entity.pad.as_mut() {
+                        f(attr);
+                        editor.dirty = true;
+                        editor.canvas_cache.clear();
+                    }
+                }
             }
         }
         self.refresh_panel_ctx();
