@@ -486,6 +486,65 @@ impl Signex {
                 self.refresh_panel_ctx();
                 true
             }
+            crate::panels::PanelMsg::FpEditorSetSilkLineFromX(v) => {
+                self.fp_editor_set_silk_line_endpoint(SilkLineEndpoint::FromX, v.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSilkLineFromY(v) => {
+                self.fp_editor_set_silk_line_endpoint(SilkLineEndpoint::FromY, v.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSilkLineToX(v) => {
+                self.fp_editor_set_silk_line_endpoint(SilkLineEndpoint::ToX, v.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSilkLineToY(v) => {
+                self.fp_editor_set_silk_line_endpoint(SilkLineEndpoint::ToY, v.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSilkTextPositionX(v) => {
+                self.fp_editor_set_silk_text_field(SilkTextField::PositionX, v.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSilkTextPositionY(v) => {
+                self.fp_editor_set_silk_text_field(SilkTextField::PositionY, v.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSilkTextSize(v) => {
+                self.fp_editor_set_silk_text_field(SilkTextField::Size, v.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSilkStrokeWidth(v) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    let parsed = v.trim().parse::<f64>().ok();
+                    if let Some(idx) = editor.state.selected_silk_f {
+                        if let Some(g) = editor.primitive_mut().silk_f.get_mut(idx) {
+                            if let Some(w) = parsed {
+                                if w >= 0.0 {
+                                    g.stroke_width = w;
+                                    editor.dirty = true;
+                                    editor.canvas_cache.clear();
+                                }
+                            }
+                        }
+                    }
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSilkFilled(on) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    if let Some(idx) = editor.state.selected_silk_f {
+                        if let Some(g) = editor.primitive_mut().silk_f.get_mut(idx) {
+                            g.filled = *on;
+                            editor.dirty = true;
+                            editor.canvas_cache.clear();
+                        }
+                    }
+                }
+                self.refresh_panel_ctx();
+                true
+            }
             crate::panels::PanelMsg::FpEditorSetPourNet { id, value } => {
                 self.fp_editor_set_pour_net(*id, value.clone());
                 true
@@ -2112,6 +2171,91 @@ impl Signex {
 /// Click-to-cycle the symbol's local color override through a small
 /// preset palette and back to `None` (= inherit). 5 steps total:
 /// None → red → green → blue → yellow → back to None.
+/// v0.21 — Silk Line endpoint to mutate.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum SilkLineEndpoint {
+    FromX,
+    FromY,
+    ToX,
+    ToY,
+}
+
+/// v0.21 — Silk Text field to mutate.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum SilkTextField {
+    PositionX,
+    PositionY,
+    Size,
+}
+
+impl Signex {
+    pub(crate) fn fp_editor_set_silk_line_endpoint(
+        &mut self,
+        endpoint: SilkLineEndpoint,
+        value: String,
+    ) {
+        let parsed = value.trim().parse::<f64>().ok();
+        if let Some(parsed) = parsed {
+            if let Some(editor) = self.active_footprint_editor_mut() {
+                if let Some(idx) = editor.state.selected_silk_f {
+                    if let Some(g) = editor.primitive_mut().silk_f.get_mut(idx) {
+                        if let signex_library::primitive::footprint::FpGraphicKind::Line {
+                            from,
+                            to,
+                        } = &mut g.kind
+                        {
+                            match endpoint {
+                                SilkLineEndpoint::FromX => from[0] = parsed,
+                                SilkLineEndpoint::FromY => from[1] = parsed,
+                                SilkLineEndpoint::ToX => to[0] = parsed,
+                                SilkLineEndpoint::ToY => to[1] = parsed,
+                            }
+                            editor.dirty = true;
+                            editor.canvas_cache.clear();
+                        }
+                    }
+                }
+            }
+        }
+        self.refresh_panel_ctx();
+    }
+
+    pub(crate) fn fp_editor_set_silk_text_field(
+        &mut self,
+        field: SilkTextField,
+        value: String,
+    ) {
+        let parsed = value.trim().parse::<f64>().ok();
+        if let Some(parsed) = parsed {
+            if let Some(editor) = self.active_footprint_editor_mut() {
+                if let Some(idx) = editor.state.selected_silk_f {
+                    if let Some(g) = editor.primitive_mut().silk_f.get_mut(idx) {
+                        if let signex_library::primitive::footprint::FpGraphicKind::Text {
+                            position,
+                            size,
+                            ..
+                        } = &mut g.kind
+                        {
+                            match field {
+                                SilkTextField::PositionX => position[0] = parsed,
+                                SilkTextField::PositionY => position[1] = parsed,
+                                SilkTextField::Size => {
+                                    if parsed > 0.0 {
+                                        *size = parsed;
+                                    }
+                                }
+                            }
+                            editor.dirty = true;
+                            editor.canvas_cache.clear();
+                        }
+                    }
+                }
+            }
+        }
+        self.refresh_panel_ctx();
+    }
+}
+
 /// v0.20 — parse a Properties-panel mm input as `Option<f64>`.
 /// Empty / whitespace = `None` (means "use rule"); non-numeric =
 /// `None` (the form re-displays the previous value, so the user

@@ -1330,25 +1330,42 @@ fn build_footprint_editor_panel_ctx(
         .collect();
     let internal_selected_idx = editor.panel_selected_idx;
 
-    // v0.18.24 — selected silk-front graphic summary. Only populated
-    // when `selected_silk_f` points at a valid index; the Properties
-    // panel reads `text_content` to decide whether to render the
-    // Text edit input.
+    // v0.21 — selected silk-front graphic summary with full per-kind
+    // editable geometry. Line + Text get dedicated forms; Arc /
+    // Rectangle / Circle / Polygon collapse to `Other` and the
+    // panel surfaces a sketch-mode hint instead of a custom form.
     let selected_silk_summary = editor.state.selected_silk_f.and_then(|idx| {
         let g = editor.primitive().silk_f.get(idx)?;
+        use crate::panels::SilkKindGeometry;
         use signex_library::primitive::footprint::FpGraphicKind;
-        let (kind_label, text_content) = match &g.kind {
-            FpGraphicKind::Line { .. } => ("Line", None),
-            FpGraphicKind::Rectangle { .. } => ("Rectangle", None),
-            FpGraphicKind::Circle { .. } => ("Circle", None),
-            FpGraphicKind::Arc { .. } => ("Arc", None),
-            FpGraphicKind::Polygon { .. } => ("Polygon", None),
-            FpGraphicKind::Text { content, .. } => ("Text", Some(content.clone())),
+        let (kind_label, kind) = match &g.kind {
+            FpGraphicKind::Line { from, to } => (
+                "Line",
+                SilkKindGeometry::Line { from_mm: *from, to_mm: *to },
+            ),
+            FpGraphicKind::Text {
+                position,
+                content,
+                size,
+            } => (
+                "Text",
+                SilkKindGeometry::Text {
+                    position_mm: *position,
+                    content: content.clone(),
+                    size_mm: *size,
+                },
+            ),
+            FpGraphicKind::Rectangle { .. } => ("Rectangle", SilkKindGeometry::Other),
+            FpGraphicKind::Circle { .. } => ("Circle", SilkKindGeometry::Other),
+            FpGraphicKind::Arc { .. } => ("Arc", SilkKindGeometry::Other),
+            FpGraphicKind::Polygon { .. } => ("Polygon", SilkKindGeometry::Other),
         };
         Some(crate::panels::FootprintSelectedSilkSummary {
             idx,
             kind_label,
-            text_content,
+            stroke_width_mm: g.stroke_width,
+            filled: g.filled,
+            kind,
         })
     });
 

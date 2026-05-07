@@ -857,15 +857,37 @@ pub struct FootprintPadSummary {
 
 /// v0.18.24 — Read-only summary of the currently-selected silk-front
 /// graphic (`FpGraphic` in `silk_f`). Drives the Properties panel's
-/// silk-selection branch: kind label + Text content input + Delete.
+/// silk-selection branch with full per-kind editable fields.
 #[derive(Debug, Clone)]
 pub struct FootprintSelectedSilkSummary {
     pub idx: usize,
     pub kind_label: &'static str,
-    /// Content of a `FpGraphicKind::Text { content, .. }`. `None` for
-    /// non-Text kinds; the Properties panel only surfaces the Text
-    /// edit input when this is `Some`.
-    pub text_content: Option<String>,
+    /// Stroke width in mm.
+    pub stroke_width_mm: f64,
+    /// `true` = solid fill; `false` = outline only.
+    pub filled: bool,
+    /// Per-kind geometry — only the field set matching `kind_label`
+    /// is meaningful at any given time. `None` slots stay None.
+    pub kind: SilkKindGeometry,
+}
+
+/// v0.21 — per-`FpGraphicKind` editable geometry. We surface
+/// dedicated editable forms only for Line (Track) and Text (String);
+/// Arc / Rectangle / Circle / Polygon collapse to `Other` and get a
+/// minimal banner pointing the user at sketch mode for parametric
+/// editing.
+#[derive(Debug, Clone)]
+pub enum SilkKindGeometry {
+    Line { from_mm: [f64; 2], to_mm: [f64; 2] },
+    Text {
+        position_mm: [f64; 2],
+        content: String,
+        size_mm: f64,
+    },
+    /// Fallback for Arc / Rectangle / Circle / Polygon — the
+    /// Properties panel surfaces stroke width / filled / locked /
+    /// delete and a hint to switch to Sketch mode for full editing.
+    Other,
 }
 
 #[derive(Debug, Clone)]
@@ -1428,6 +1450,17 @@ pub enum PanelMsg {
     FpEditorSetFootprintDefaultDesignator(String),
     FpEditorSetFootprintComponentType(signex_library::primitive::footprint::ComponentType),
     FpEditorSetFootprintHeight(String),
+    /// v0.21 — Selected silk graphic edits (Line + Text only;
+    /// Arc/Region/Fill/etc are sketch-mode-authored).
+    FpEditorSetSilkLineFromX(String),
+    FpEditorSetSilkLineFromY(String),
+    FpEditorSetSilkLineToX(String),
+    FpEditorSetSilkLineToY(String),
+    FpEditorSetSilkTextPositionX(String),
+    FpEditorSetSilkTextPositionY(String),
+    FpEditorSetSilkTextSize(String),
+    FpEditorSetSilkStrokeWidth(String),
+    FpEditorToggleSilkFilled(bool),
     /// v0.16.4 — Pour-role sub-form. The handler mutates the
     /// selected entity's `pour` attr and runs solve+bake.
     FpEditorSetPourNet {
