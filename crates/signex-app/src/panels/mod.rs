@@ -950,6 +950,11 @@ pub struct FootprintSketchEntitySummary {
     /// `true` if this is a construction entity (solver scaffolding
     /// only, no baked geometry).
     pub construction: bool,
+    /// v0.22 Phase A3 — solver-state colour for the entity. `Some` for
+    /// Points (looked up in `last_solve.colours`); `None` for other
+    /// entity kinds whose DOF state is implicitly the min of their
+    /// endpoints'. Drives the "DOF" row in the Properties panel.
+    pub dof_state: Option<signex_sketch::solver::dof::DofColor>,
 }
 
 /// Context handed to the right-dock Properties panel and the SCH-Library

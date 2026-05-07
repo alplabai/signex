@@ -1516,10 +1516,20 @@ fn build_sketch_entity_summary(
         .iter()
         .filter(|c| format!("{:?}", c.kind).contains(&id_str))
         .count();
+    // v0.22 Phase A3 — Look up the entity's solver DOF colour, if any.
+    // Only Points carry a per-entity colour in `last_solve.colours`;
+    // other kinds inherit from their endpoints (caller decides whether
+    // to render).
+    let dof_state = editor
+        .state
+        .last_solve
+        .as_ref()
+        .and_then(|s| s.colours.get(&id).copied());
     Some(crate::panels::FootprintSketchEntitySummary {
         kind_label,
         position_mm,
         attached_constraint_count,
         construction: entity.construction,
+        dof_state,
     })
 }

@@ -212,6 +212,41 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 "Attached constraints",
                 ent.attached_constraint_count.to_string(),
             );
+            // v0.22 Phase A3+A4 — DOF state row. Surfaces the solver's
+            // per-Point colour code (blue under / green fully / red
+            // over) so the user can see the constraint state without
+            // hunting for the canvas tint. Hidden when the entity has
+            // no DOF colour (non-Point entities or pre-solve state).
+            if let Some(dof) = ent.dof_state {
+                use signex_sketch::solver::dof::DofColor;
+                let (label, c) = match dof {
+                    DofColor::Under => (
+                        "Under-constrained",
+                        Color::from_rgba(0.20, 0.40, 1.00, 1.00),
+                    ),
+                    DofColor::Full => (
+                        "Fully constrained",
+                        Color::from_rgba(0.20, 0.85, 0.30, 1.00),
+                    ),
+                    DofColor::Over => (
+                        "Over-constrained",
+                        Color::from_rgba(1.00, 0.20, 0.20, 1.00),
+                    ),
+                };
+                col = col.push(
+                    container(
+                        row![
+                            container(text("DOF").size(10).color(muted))
+                                .width(Length::FillPortion(1)),
+                            container(text(label).size(10).color(c))
+                                .width(Length::FillPortion(2)),
+                        ]
+                        .align_y(iced::Alignment::Center),
+                    )
+                    .padding([3, 8])
+                    .width(Length::Fill),
+                );
+            }
             } // end if !fp_sketch_entity collapsed
 
             // v0.16.2 — Role pick_list. Visible when an entity is
