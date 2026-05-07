@@ -147,6 +147,12 @@ fn view_tool_palette<'a>(
             SketchTool::Offset => {
                 "select a Line / Arc / Circle first, then click on the side to offset (distance from input)".into()
             }
+            SketchTool::RectPattern => {
+                "click an entity to mint a 2×2 grid array (5 mm × 5 mm; edit via JSON or Properties)".into()
+            }
+            SketchTool::CircularPattern => {
+                "click an entity to mint a 4-instance circular array (360°; centre 5 mm right of source)".into()
+            }
         },
         ToolPending::LineFirst { .. } => "click second endpoint (Esc to cancel)".into(),
         ToolPending::RectangleFirst { .. } => "click opposite corner (Esc to cancel)".into(),

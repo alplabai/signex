@@ -6599,6 +6599,89 @@ pub(crate) fn apply_footprint_primitive_edit(
                     }
                     editor.state.tool_pending = ToolPending::Idle;
                 }
+                SketchTool::RectPattern => {
+                    // v0.22 Phase B3 — Rectangular Pattern. Click 1
+                    // picks the source entity (whatever was clicked,
+                    // including a freshly-minted Point if the click
+                    // missed everything). Mints a default 2×2 grid
+                    // with 5 mm spacing, sequential numbering. User
+                    // edits via JSON until a Properties sub-form
+                    // lands.
+                    use signex_sketch::array::{Array, ArrayId, ArrayKind, NumberingScheme};
+                    let array = Array {
+                        id: ArrayId::new(),
+                        kind: ArrayKind::Grid {
+                            source: resolved_id,
+                            nx_expr: "2".into(),
+                            ny_expr: "2".into(),
+                            dx_expr: "5mm".into(),
+                            dy_expr: "5mm".into(),
+                            depopulation: None,
+                        },
+                        numbering: NumberingScheme::default(),
+                    };
+                    let sketch = editor
+                        .primitive_mut()
+                        .sketch
+                        .get_or_insert_with(signex_sketch::SketchData::default);
+                    sketch.arrays.push(array);
+                    editor.with_parts(|state, primitive| {
+                        apply_sketch_edit_with_warnings(
+                            state,
+                            primitive,
+                            SketchEdit::ForceRebuild,
+                        );
+                    });
+                    editor.state.tool_pending = ToolPending::Idle;
+                }
+                SketchTool::CircularPattern => {
+                    // v0.22 Phase B4 — Circular Pattern. Click 1
+                    // picks the source entity. The polar array
+                    // requires a centre Point — mint a fresh one
+                    // 5 mm to the right of the click position so the
+                    // array doesn't all stack on the source. Default
+                    // count 4, sweep 360°.
+                    use signex_sketch::array::{Array, ArrayId, ArrayKind, NumberingScheme};
+                    let centre_id = SketchEntityId::new();
+                    let centre = flag(Entity::new(
+                        centre_id,
+                        plane_id,
+                        EntityKind::Point {
+                            x: x_mm + 5.0,
+                            y: y_mm,
+                        },
+                    ));
+                    editor.with_parts(|state, primitive| {
+                        apply_sketch_edit_with_warnings(
+                            state,
+                            primitive,
+                            SketchEdit::AddEntity(centre),
+                        );
+                    });
+                    let array = Array {
+                        id: ArrayId::new(),
+                        kind: ArrayKind::Polar {
+                            source: resolved_id,
+                            center: centre_id,
+                            count_expr: "4".into(),
+                            sweep_angle_expr: "360deg".into(),
+                        },
+                        numbering: NumberingScheme::default(),
+                    };
+                    let sketch = editor
+                        .primitive_mut()
+                        .sketch
+                        .get_or_insert_with(signex_sketch::SketchData::default);
+                    sketch.arrays.push(array);
+                    editor.with_parts(|state, primitive| {
+                        apply_sketch_edit_with_warnings(
+                            state,
+                            primitive,
+                            SketchEdit::ForceRebuild,
+                        );
+                    });
+                    editor.state.tool_pending = ToolPending::Idle;
+                }
             }
             editor.canvas_cache.clear();
             editor.dirty = true;

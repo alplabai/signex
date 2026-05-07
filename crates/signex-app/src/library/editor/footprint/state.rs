@@ -1128,6 +1128,19 @@ pub enum SketchTool {
     /// centres stay locked; the radius literal is set to source ±
     /// dist. Esc / right-click cancels.
     Offset,
+    /// v0.22 Phase B3 — Rectangular Pattern tool. Click 1 picks the
+    /// source entity; the dispatcher mints a default `ArrayKind::Grid`
+    /// with `nx=2`, `ny=2`, `dx=5mm`, `dy=5mm`. The user edits
+    /// per-instance parameters via the sketch JSON until a Properties
+    /// sub-form lands.
+    RectPattern,
+    /// v0.22 Phase B4 — Circular (Polar) Pattern tool. Click 1 picks
+    /// the source entity; the dispatcher mints a default
+    /// `ArrayKind::Polar` with `count=4`, `sweep_angle=360°`, and a
+    /// fresh centre Point offset 5 mm from the source position.
+    /// User adjusts the centre + parameters via JSON or the (future)
+    /// Pattern Properties sub-form.
+    CircularPattern,
 }
 
 /// Transient per-tool gesture state. The canvas Program reads + writes

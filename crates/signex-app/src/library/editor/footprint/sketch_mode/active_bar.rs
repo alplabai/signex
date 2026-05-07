@@ -225,6 +225,16 @@ pub fn items<'a>(
             SketchTool::Offset,
             ActiveBarIcon::Glyph("\u{29C8}"), // ⧈
         ),
+        mk_tool(
+            "Rectangular Pattern — click an entity to mint a 2×2 grid array (5 mm × 5 mm)",
+            SketchTool::RectPattern,
+            ActiveBarIcon::Glyph("\u{229E}"), // ⊞ squared plus (grid)
+        ),
+        mk_tool(
+            "Circular Pattern — click an entity to mint a 4-instance polar array (360°)",
+            SketchTool::CircularPattern,
+            ActiveBarIcon::Glyph("\u{233E}"), // ⌾ apl functional symbol circle jot
+        ),
         make_pad_button,
         ActiveBarItem::Separator,
         // Section 3: Constrain (selection-aware)
