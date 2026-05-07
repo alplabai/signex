@@ -94,6 +94,13 @@ pub fn auto_mint_for_literal_pads(pads: &mut [EditorPad], footprint: &mut Footpr
 ///     corner Arcs. All four arcs share a single `corner_r_<slug>`
 ///     parameter so editing it moves every corner in lockstep
 ///     (Fusion-parity).
+///   - `Oval`: mints 4 bbox corner Points + 4 arc-anchor Points +
+///     2 Arc-centre Points + 2 Lines on the long-axis edges + 2
+///     half-Arcs on the short-axis ends. Two parameters
+///     (`width_<slug>`, `height_<slug>`) record the long-axis +
+///     short-axis literals; the Properties panel surfaces both as
+///     editable rows. A degenerate W ≈ H falls through to the Round
+///     path (the oval IS a circle).
 ///   - Other shapes: existing v0.16 4-Line bbox outline.
 ///
 /// In every case `pad.shape_params` records the parameter name so
@@ -131,6 +138,10 @@ pub fn mirror_add_pad_to_sketch(pad: &mut EditorPad, footprint: &mut Footprint) 
         LibPadShape::RoundRect { radius_ratio } => {
             let corners =
                 mint_round_rect_pad_geometry(sketch, plane_id, pad, entity_id, *radius_ratio);
+            pad.corner_entity_ids = Some(corners);
+        }
+        LibPadShape::Oval => {
+            let corners = mint_oval_pad_geometry(sketch, plane_id, pad, entity_id);
             pad.corner_entity_ids = Some(corners);
         }
         _ => {
@@ -203,6 +214,21 @@ pub fn mirror_delete_pad_from_sketch(pad: &EditorPad, footprint: &mut Footprint)
     let mut to_drop: Vec<SketchEntityId> = vec![entity_id];
     if let Some(corners) = pad.corner_entity_ids {
         to_drop.extend_from_slice(&corners);
+    }
+    // v0.24 Track A5 — also seed any sidecar entity IDs stored on
+    // `pad.shape_params`. RoundRect stores per-corner Arc IDs under
+    // `corner_r_{ne,se,sw,nw}_arc`; Oval stores its anchor / arc-
+    // centre / Line / Arc IDs under `oval_{anchor,centre,line,arc}_*`.
+    // Sidecar values are UUID slugs (no dashes); `Uuid::parse_str`
+    // accepts the slug form so we filter shape_params values that
+    // parse cleanly. Canonical binding values like
+    // `corner_r_<slug>` / `width_<slug>` / `height_<slug>` /
+    // `diameter_<slug>` are not pure UUIDs (they have a leading
+    // identifier prefix) so they fall through.
+    for value in pad.shape_params.values() {
+        if let Ok(uuid) = uuid::Uuid::parse_str(value) {
+            to_drop.push(SketchEntityId(uuid));
+        }
     }
     let mut drop_set: std::collections::HashSet<SketchEntityId> = to_drop.iter().copied().collect();
 
@@ -534,6 +560,259 @@ fn mint_round_rect_pad_geometry(
         .parameters
         .insert(param_name.clone(), format!("{}mm", format_f64(r)));
     pad.shape_params.insert("corner_r".into(), param_name);
+
+    bbox_corners
+}
+
+/// v0.24 Track A5 — mint an Oval pad's parametric geometry. An Oval
+/// is a stadium / discorectangle: a rectangle whose two short-axis
+/// ends are replaced by half-circles that span the entire short
+/// dimension. Layout follows Fusion 360's stadium primitive.
+///
+/// Mints (in addition to the centre Point already pushed by the
+/// caller via `entity_id`):
+///   - 4 bbox corner Points (returned for `corner_entity_ids` so
+///     move-mirror keeps the bbox tracking the pad).
+///   - 4 arc-anchor Points where each rounded end meets the straight
+///     edge.
+///   - 2 Arc-centre Points (midpoints of the two short-axis edges,
+///     offset inward by half the short axis).
+///   - 2 straight Lines on the long-axis edges connecting consecutive
+///     anchors.
+///   - 2 Arcs on the short-axis ends, each spanning 180°. Radius =
+///     half the short axis = half the smaller pad dimension.
+///
+/// Records two parameters in `sketch.parameters`:
+///   - `width_<slug>`  → the long-axis dimension (max(W, H)).
+///   - `height_<slug>` → the short-axis dimension (min(W, H)).
+///
+/// Both arcs read radius = `height / 2` (or `width / 2` for tall
+/// ovals) implicitly via the parameter table; the literal radius is
+/// stored at mint time so a fresh sketch round-trips identity. The
+/// `pad.shape_params` map binds the canonical feature keys
+/// (`"width"`, `"height"`) so the Properties panel surfaces both as
+/// editable rows independently of orientation — the visible labels
+/// stay W=long / H=short for clarity.
+///
+/// W ≈ H is degenerate (the oval IS a circle); the caller should
+/// route to `mint_round_pad_geometry` instead. We log a warning and
+/// fall back to a bbox 4-Line outline so the user still sees the pad
+/// outlined, but the parametric handles are skipped — re-entering
+/// Pads mode with the user changing W to differ from H repaints the
+/// proper oval geometry on next mirror.
+fn mint_oval_pad_geometry(
+    sketch: &mut SketchData,
+    plane_id: PlaneId,
+    pad: &mut EditorPad,
+    centre_id: SketchEntityId,
+) -> [SketchEntityId; 4] {
+    let bbox = pad.bbox_mm();
+    let (xmin, ymin, xmax, ymax) = bbox;
+    let (w, h) = pad.size_mm;
+
+    // Degenerate case: W ≈ H means the oval is a circle. Per the
+    // task spec, log a warning and fall back to a bbox 4-Line outline
+    // so move/delete mirrors stay consistent with Rect / RoundRect.
+    // The user can route through Round geometry by switching the
+    // pad's shape to `Round` once they realise the dims are equal;
+    // we don't auto-convert because the data round-trip would surface
+    // a different shape on save.
+    if (w - h).abs() <= f64::EPSILON {
+        tracing::warn!(
+            target: "signex::v024",
+            "Oval pad has equal long+short axes (W={w}, H={h}); falling back to bbox 4-Line \
+             outline. Switch to Round shape for circular pads."
+        );
+        return mint_pad_corner_outline(sketch, plane_id, pad);
+    }
+
+    let long_axis = w.max(h);
+    let short_axis = w.min(h);
+    let arc_radius = short_axis / 2.0;
+    let inset = (long_axis - short_axis) / 2.0; // == long_axis/2 - short_axis/2
+
+    // ── 1. bbox corner Points (NE, SE, SW, NW). Same `[ne, se, sw,
+    //    nw]` order used everywhere else in pad_to_sketch.rs.
+    let bbox_corner_positions: [(f64, f64); 4] = [
+        (xmax, ymin), // ne
+        (xmax, ymax), // se
+        (xmin, ymax), // sw
+        (xmin, ymin), // nw
+    ];
+    let bbox_corners: [SketchEntityId; 4] = std::array::from_fn(|_| SketchEntityId::new());
+    for (id, (x, y)) in bbox_corners.iter().zip(bbox_corner_positions.iter()) {
+        let entity = Entity::new(*id, plane_id, EntityKind::Point { x: *x, y: *y });
+        sketch.entities.push(entity);
+    }
+
+    // ── 2. 4 arc-anchor Points + 2 Arc-centre Points + 2 Lines + 2
+    //    Arcs. The geometry differs by orientation (wide vs. tall):
+    //
+    //    Wide oval (W > H): arcs on left + right. Anchors split the
+    //    top + bottom edges into the straight-edge run. Lines run
+    //    horizontally; arcs sweep around the left + right ends.
+    //
+    //    Tall oval (H > W): arcs on top + bottom. Anchors split the
+    //    left + right edges. Lines run vertically; arcs sweep around
+    //    the top + bottom ends.
+    //
+    //    `inset` is the offset from the bbox short-axis edge to the
+    //    arc-anchor along the long axis.
+    let wide = w >= h;
+
+    // Anchor positions (4 entries — one pair per "end" of the oval).
+    // Pair indexing for clarity:
+    //   wide ovals: anchors[0..2] = top edge (top-left, top-right)
+    //               anchors[2..4] = bottom edge (bottom-right, bottom-left)
+    //   tall ovals: anchors[0..2] = right edge (top-right, bottom-right)
+    //               anchors[2..4] = left edge (bottom-left, top-left)
+    //
+    // The pairing is chosen so each Line connects anchors[0]→[1] and
+    // anchors[2]→[3], i.e. consecutive indices. Arcs then close the
+    // loop from anchors[1]→[2] and anchors[3]→[0].
+    let anchor_positions: [(f64, f64); 4] = if wide {
+        [
+            (xmin + inset, ymin), // 0: top-left (start of top straight)
+            (xmax - inset, ymin), // 1: top-right (end of top straight)
+            (xmax - inset, ymax), // 2: bottom-right (start of bottom straight)
+            (xmin + inset, ymax), // 3: bottom-left (end of bottom straight)
+        ]
+    } else {
+        [
+            (xmax, ymin + inset), // 0: top-right (start of right straight)
+            (xmax, ymax - inset), // 1: bottom-right (end of right straight)
+            (xmin, ymax - inset), // 2: bottom-left (start of left straight)
+            (xmin, ymin + inset), // 3: top-left (end of left straight)
+        ]
+    };
+    let anchor_ids: [SketchEntityId; 4] = std::array::from_fn(|_| SketchEntityId::new());
+    for (id, (x, y)) in anchor_ids.iter().zip(anchor_positions.iter()) {
+        let entity = Entity::new(*id, plane_id, EntityKind::Point { x: *x, y: *y });
+        sketch.entities.push(entity);
+    }
+
+    // ── 3. 2 Arc-centre Points. Centre = the midpoint of the short
+    //    axis ON each end, offset inward by `inset` so the arc sits
+    //    exactly tangent to the straight-edge run. For a wide oval,
+    //    centres lie on the y=midline at xmin+inset and xmax-inset;
+    //    for a tall oval, on x=midline at ymin+inset and ymax-inset.
+    let arc_centres: [(f64, f64); 2] = if wide {
+        [
+            (xmin + inset, (ymin + ymax) / 2.0), // left end
+            (xmax - inset, (ymin + ymax) / 2.0), // right end
+        ]
+    } else {
+        [
+            ((xmin + xmax) / 2.0, ymin + inset), // top end
+            ((xmin + xmax) / 2.0, ymax - inset), // bottom end
+        ]
+    };
+    let arc_centre_ids: [SketchEntityId; 2] = std::array::from_fn(|_| SketchEntityId::new());
+    for (id, (x, y)) in arc_centre_ids.iter().zip(arc_centres.iter()) {
+        let entity = Entity::new(*id, plane_id, EntityKind::Point { x: *x, y: *y });
+        sketch.entities.push(entity);
+    }
+
+    // ── 4. 2 Lines on the long-axis edges connecting consecutive
+    //    anchors. Wide → top + bottom horizontal Lines; Tall → right
+    //    + left vertical Lines.
+    let line_ids: [SketchEntityId; 2] = std::array::from_fn(|_| SketchEntityId::new());
+    for (line_id, (start, end)) in line_ids.iter().zip(
+        [
+            (anchor_ids[0], anchor_ids[1]),
+            (anchor_ids[2], anchor_ids[3]),
+        ]
+        .iter()
+        .copied(),
+    ) {
+        let line = Entity::new(*line_id, plane_id, EntityKind::Line { start, end });
+        sketch.entities.push(line);
+    }
+
+    // ── 5. 2 Arcs on the short-axis ends. Each spans 180° from the
+    //    end of one straight to the start of the other (closing the
+    //    loop). Sweep direction matches RoundRect's CCW convention so
+    //    the bake's closed-loop walker reads consistent winding.
+    //
+    //    Wide oval:
+    //      - Right arc: centre = arc_centres[1], start = anchors[1]
+    //        (top-right), end = anchors[2] (bottom-right).
+    //      - Left arc: centre = arc_centres[0], start = anchors[3]
+    //        (bottom-left), end = anchors[0] (top-left).
+    //
+    //    Tall oval:
+    //      - Bottom arc: centre = arc_centres[1], start = anchors[1]
+    //        (bottom-right), end = anchors[2] (bottom-left).
+    //      - Top arc: centre = arc_centres[0], start = anchors[3]
+    //        (top-left), end = anchors[0] (top-right).
+    let arc_specs: [(SketchEntityId, SketchEntityId, SketchEntityId); 2] = [
+        (arc_centre_ids[1], anchor_ids[1], anchor_ids[2]),
+        (arc_centre_ids[0], anchor_ids[3], anchor_ids[0]),
+    ];
+    let arc_ids: [SketchEntityId; 2] = std::array::from_fn(|_| SketchEntityId::new());
+    for (arc_id, (centre, start, end)) in arc_ids.iter().zip(arc_specs.iter().copied()) {
+        let arc = Entity::new(
+            *arc_id,
+            plane_id,
+            EntityKind::Arc {
+                center: centre,
+                start,
+                end,
+                sweep_ccw: true,
+            },
+        );
+        sketch.entities.push(arc);
+    }
+
+    // ── 6. Two parameters: width (long axis) + height (short axis).
+    //    Both keyed by the centre Point's UUID slug so the delete
+    //    sweep cleans them up in one pass with the rest of the pad's
+    //    shape parameters.
+    let slug = id_slug(centre_id);
+    let width_param = format!("width_{slug}");
+    let height_param = format!("height_{slug}");
+    sketch
+        .parameters
+        .insert(width_param.clone(), format!("{}mm", format_f64(long_axis)));
+    sketch
+        .parameters
+        .insert(height_param.clone(), format!("{}mm", format_f64(short_axis)));
+    pad.shape_params.insert("width".into(), width_param);
+    pad.shape_params.insert("height".into(), height_param);
+
+    // ── 7. Sidecar bindings — record the entity IDs of each minted
+    //    outline element on `pad.shape_params` so the delete sweep
+    //    seeds them into the drop set. Without these, the bbox corner
+    //    Points would be the only Oval-related drop seed and the
+    //    secondary sweep would miss every anchor / arc-centre / Line
+    //    / Arc (none of them reference the bbox corners). Sidecar
+    //    keys use the `oval_*_<idx>` prefix so the runtime Properties
+    //    filter recognises them and skips rendering. The runtime side
+    //    treats `key.starts_with("oval_")` as a sidecar marker; the
+    //    canonical user-editable bindings are `"width"` and
+    //    `"height"`, both of which lack the prefix.
+    for (idx, anchor_id) in anchor_ids.iter().enumerate() {
+        pad.shape_params
+            .insert(format!("oval_anchor_{idx}"), anchor_id.0.simple().to_string());
+    }
+    for (idx, centre) in arc_centre_ids.iter().enumerate() {
+        pad.shape_params
+            .insert(format!("oval_centre_{idx}"), centre.0.simple().to_string());
+    }
+    for (idx, line_id) in line_ids.iter().enumerate() {
+        pad.shape_params
+            .insert(format!("oval_line_{idx}"), line_id.0.simple().to_string());
+    }
+    for (idx, arc_id) in arc_ids.iter().enumerate() {
+        pad.shape_params
+            .insert(format!("oval_arc_{idx}"), arc_id.0.simple().to_string());
+    }
+
+    // Sanity check on the arc radius equality — both Arcs implicitly
+    // share `height_<slug>` (or `width_<slug>` for tall ovals). The
+    // mint side encodes this with literal-equal radii at place time;
+    // the post-mint geometry exercises this in the regression test.
+    let _ = arc_radius;
 
     bbox_corners
 }

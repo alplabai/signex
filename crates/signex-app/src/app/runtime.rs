@@ -1196,6 +1196,16 @@ fn build_footprint_editor_panel_ctx(
                             if key.ends_with("_arc") {
                                 return None;
                             }
+                            // v0.24 Track A5 — Oval pads store anchor
+                            // / arc-centre / Line / Arc entity IDs
+                            // under `oval_{anchor,centre,line,arc}_*`
+                            // sidecar keys so the delete sweep can
+                            // pick them up via `Uuid::parse_str`.
+                            // None of these surface as user-editable
+                            // Properties rows.
+                            if key.starts_with("oval_") {
+                                return None;
+                            }
                             let label = match key.as_str() {
                                 "corner_r" => "Corner radius".to_string(),
                                 "diameter" => "Diameter".to_string(),
