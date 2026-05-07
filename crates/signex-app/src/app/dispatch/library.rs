@@ -3576,6 +3576,13 @@ impl Signex {
             // mounted library (lone-file edit) or when the adapter
             // has no version control (database backend).
             self.commit_external_change_for(path, &format!("save symbol {sym_name}"));
+            // v0.22 Phase 8.4 extension — also commit into the
+            // owning project's git repo (if `enable_git` is on for
+            // that project). When both library- and project-scope VC
+            // are enabled the file picks up two parallel commit
+            // histories — library tracks symbol-only churn, project
+            // tracks the full project snapshot.
+            self.commit_save_to_project_git(path, &format!("Save symbol {sym_name}"));
             // Refresh the matching library's primitive cache so the
             // picker modal picks up the new symbol immediately.
             self.refresh_primitive_cache_for(path);
@@ -3635,6 +3642,12 @@ impl Signex {
                 tab.dirty = false;
             }
             self.commit_external_change_for(path, &format!("save footprint {fp_name}"));
+            // v0.22 Phase 8.4 extension — same as the symbol branch:
+            // also commit into the owning project's git repo when
+            // its `enable_git` is on. Library + project repos can
+            // run in parallel; nested `.snxlib/.git/` is opaque to
+            // the project repo at the same path.
+            self.commit_save_to_project_git(path, &format!("Save footprint {fp_name}"));
             self.refresh_primitive_cache_for(path);
             self.reload_primitive_in_library_set(path);
             // v0.14.2 — same F10 pattern as the schematic save: the

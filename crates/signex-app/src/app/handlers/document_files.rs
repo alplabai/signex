@@ -264,7 +264,7 @@ impl Signex {
     /// Synchronous for v0.22 — git2 commits on small repos finish
     /// in <10 ms. Async polish (Task::perform off the iced thread +
     /// "Saving…" pill) is in PROJECT_GIT_PLAN.md as a follow-up.
-    fn commit_save_to_project_git(&self, file_path: &std::path::Path, default_message: &str) {
+    pub(crate) fn commit_save_to_project_git(&self, file_path: &std::path::Path, default_message: &str) {
         let owning = self
             .document_state
             .projects
