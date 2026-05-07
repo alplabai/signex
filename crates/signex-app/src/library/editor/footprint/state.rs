@@ -324,7 +324,7 @@ pub enum EditorMode {
 /// the canvas's hit-test + draw layer.
 ///
 /// `PartialEq` is intentionally NOT derived: Phase 5.3 added
-/// `sketch_solver` / `last_solve` / `auto_pause` whose underlying
+/// `sketch_solver` / `last_solve` whose underlying
 /// types in `signex-sketch` don't implement `PartialEq`. The editor
 /// uses pointer-equality / dirty-flag patterns elsewhere; no test or
 /// production call site compared two `FootprintEditorState` values
@@ -353,12 +353,10 @@ pub struct FootprintEditorState {
     /// Carried so the canvas DOF overlay + render layer can read the
     /// solved entity coordinates without rerunning the LM iteration.
     pub last_solve: Option<signex_sketch::solver::FullSolveOutput>,
-    /// Hysteresis state for live-solve auto-pause. Phase 3.6 ships
-    /// `AutoPauseState`; the dispatcher feeds elapsed_ms into it on
-    /// every solve.
-    pub auto_pause: signex_sketch::solver::timeout::AutoPauseState,
     /// Last solve's audit / over-constraint warnings. Cleared per
-    /// solve. Surfaced by the inspector panel in Phase 6.
+    /// solve. Surfaced by the inspector panel. v0.22 — solver
+    /// timeouts are also surfaced here as a hard warning instead of
+    /// being silently swallowed by the old auto-pause hysteresis.
     pub solve_warnings: Vec<String>,
     /// v0.13.2 — currently-active sketch tool. The inspector tool
     /// palette emits `FootprintSketchSetTool(...)`; the canvas
@@ -1185,7 +1183,6 @@ impl FootprintEditorState {
             mode: EditorMode::Normal,
             sketch_solver: signex_sketch::solver::Solver::default(),
             last_solve: None,
-            auto_pause: signex_sketch::solver::timeout::AutoPauseState::default(),
             solve_warnings: Vec::new(),
             active_tool: SketchTool::default(),
             tool_pending: ToolPending::default(),
@@ -1230,7 +1227,6 @@ impl FootprintEditorState {
             mode: EditorMode::Normal,
             sketch_solver: signex_sketch::solver::Solver::default(),
             last_solve: None,
-            auto_pause: signex_sketch::solver::timeout::AutoPauseState::default(),
             solve_warnings: Vec::new(),
             active_tool: SketchTool::default(),
             tool_pending: ToolPending::default(),

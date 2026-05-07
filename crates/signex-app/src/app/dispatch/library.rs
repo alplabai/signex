@@ -4090,7 +4090,6 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintSetMode(_)
         | PrimitiveEditorMsg::FootprintSketchPlacePoint { .. }
         | PrimitiveEditorMsg::FootprintSketchEditParameter { .. }
-        | PrimitiveEditorMsg::FootprintSketchToggleAutoPause
         | PrimitiveEditorMsg::FootprintSketchSetTool(_)
         | PrimitiveEditorMsg::FootprintSketchToggleConstruction
         | PrimitiveEditorMsg::FootprintSketchToggleCenterline
@@ -4599,19 +4598,6 @@ pub(crate) fn apply_footprint_primitive_edit(
             });
             editor.canvas_cache.clear();
             editor.dirty = true;
-        }
-        PrimitiveEditorMsg::FootprintSketchToggleAutoPause => {
-            if editor.state.auto_pause.paused() {
-                editor.state.auto_pause.unpause();
-            }
-            // Flip via a deliberate ForceRebuild so a successful solve
-            // resets the consecutive-overrun counter.
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
-            use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
-            });
-            editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintSketchSetTool(tool) => {
             editor.state.active_tool = tool;

@@ -8,16 +8,17 @@
 //! Design:
 //! - The dispatcher is a free function so it can be unit-tested
 //!   without spinning up an iced runtime.
-//! - The auto-pause state lives on `FootprintEditorState`; the
-//!   dispatcher feeds it elapsed_ms after every solve and skips the
-//!   next solve if `paused()`.
-//! - Errors that aren't `SolveError::Timeout` propagate as
-//!   `SketchError::SolveFailed` so the caller can surface them in
-//!   the inspector. Timeout is consumed silently — the auto-pause
-//!   state machine handles user-visible feedback.
+//! - The solver is always live. v0.22 stripped the previous
+//!   auto-pause hysteresis: footprint sketches stay small enough
+//!   that every solve completes well under the per-frame budget,
+//!   and a "paused" state was confusing for both users and the
+//!   downstream Signal AI agent reading solver state.
+//! - All `SketchError` cases — including timeouts — propagate as
+//!   `SketchError::SolveFailed`. The `_with_warnings` wrappers
+//!   surface them in `state.solve_warnings`; nothing is silently
+//!   swallowed.
 
 use signex_library::primitive::footprint::Footprint;
-use signex_sketch::error::SolveError;
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::{SketchData, SketchError, parameter};
 
@@ -341,25 +342,23 @@ fn apply_edit_inner(footprint: &mut Footprint, edit: SketchEdit) {
         SketchEdit::DeleteParameter { name } => {
             sketch.parameters.0.remove(&name);
         }
-        SketchEdit::SetMode(_) | SketchEdit::ForceRebuild | SketchEdit::ToggleAutoPause => {
-            // Mode / pause state machine lives in FootprintEditorState
-            // and is set by the iced update path before calling this
-            // function; nothing to apply at the SketchData level.
+        SketchEdit::SetMode(_) | SketchEdit::ForceRebuild => {
+            // Mode lives in FootprintEditorState and is set by the
+            // iced update path before calling this function; nothing
+            // to apply at the SketchData level.
         }
     }
 }
 
 /// Resolve parameters, run LM, capture DOF, bake pads.
 ///
-/// v0.16.1 — solver is always live. The previous auto-pause /
-/// hysteresis early-return was removed because footprint sketches
-/// stay small (tens-to-low-hundreds of entities) and the solver's
-/// per-frame cost is well below the per-frame budget. `AutoPauseState`
-/// still observes elapsed_ms for telemetry but never blocks.
-///
-/// On `SolveError::Timeout`: feeds the AutoPauseState and returns
-/// `Ok(())` (silent — UI handles the pause toast). Other errors
-/// propagate.
+/// v0.22 — solver is always live, no hysteresis, no pause state. All
+/// `SolveError` variants (including `Timeout`) propagate as
+/// `SketchError::SolveFailed` so the `_with_warnings` wrappers
+/// surface them to the user in `state.solve_warnings`. Footprint
+/// sketches stay small (tens-to-low-hundreds of entities); a
+/// timeout indicates a real solver problem worth showing, not a
+/// transient that can be silently swallowed.
 fn solve_and_bake(
     state: &mut FootprintEditorState,
     footprint: &mut Footprint,
@@ -375,10 +374,6 @@ fn solve_and_bake(
 
     match state.sketch_solver.solve(sketch, &resolved) {
         Ok(out) => {
-            state
-                .auto_pause
-                .observe(out.result.elapsed_ms, state.sketch_solver.timeout_ms);
-
             // Phase 7.3 — bake pads + arrays into the footprint, but
             // skip the overwrite on an empty sketch: a fresh
             // SetMode(Sketch) toggle on a footprint with literal pads
@@ -526,12 +521,6 @@ fn solve_and_bake(
             }
 
             state.last_solve = Some(out);
-        }
-        Err(SolveError::Timeout {
-            elapsed_ms,
-            budget_ms,
-        }) => {
-            state.auto_pause.observe(elapsed_ms, budget_ms);
         }
         Err(e) => return Err(SketchError::SolveFailed(e)),
     }

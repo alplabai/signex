@@ -498,11 +498,10 @@ mod tests {
     }
 
     #[test]
-    fn solver_always_runs_even_when_auto_pause_observed() {
-        // v0.16.1 — the auto-pause early-return was removed. The
-        // AutoPauseState struct still observes elapsed_ms for
-        // telemetry but never blocks the solve / bake. This test
-        // asserts the new always-live behavior.
+    fn solver_runs_on_every_edit() {
+        // v0.22 — the auto-pause hysteresis was removed entirely.
+        // Every edit dispatches a fresh solve + bake. This test
+        // pins the always-live behavior.
         let mut fp = empty_footprint();
         let plane = PlaneId::new();
         let (e1, _p1) = point_with_pad(plane, 0.0, 0.0, "1");
@@ -516,17 +515,43 @@ mod tests {
         });
         let mut state = FootprintEditorState::from_footprint(&fp);
 
-        // Push the auto-pause state machine into "paused" — used to
-        // mean "skip the solve". As of v0.16.1 it's purely
-        // informational and shouldn't gate anything.
-        state.auto_pause.observe(60, 50);
-        state.auto_pause.observe(60, 50);
-        assert!(state.auto_pause.paused());
-
         apply_sketch_edit(&mut state, &mut fp, SketchEdit::ForceRebuild).unwrap();
-        // Solver ran — last_solve populated, pads re-baked from the
-        // single PadAttr-carrying Point.
         assert!(state.last_solve.is_some());
         assert_eq!(fp.pads.len(), 1);
+    }
+
+    #[test]
+    fn solver_errors_surface_in_solve_warnings_not_silently_swallowed() {
+        // v0.22 — every SolveError variant (including the previously
+        // silently-swallowed Timeout) now propagates as
+        // SketchError::SolveFailed. The _with_warnings wrapper writes
+        // it into state.solve_warnings so the inspector can show it.
+        // We force the broader SketchError::Expr path by injecting a
+        // malformed parameter expression — same wrapper path,
+        // doesn't depend on solver-iteration timing.
+        use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
+
+        let mut fp = empty_footprint();
+        let plane = PlaneId::new();
+        let (e1, _p1) = point_with_pad(plane, 0.0, 0.0, "1");
+        let mut params = signex_sketch::parameter::ParameterTable::default();
+        params.insert("bad", "$$$");
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            entities: vec![e1],
+            parameters: params,
+            ..SketchData::default()
+        });
+        let mut state = FootprintEditorState::from_footprint(&fp);
+
+        apply_sketch_edit_with_warnings(&mut state, &mut fp, SketchEdit::ForceRebuild);
+
+        assert!(
+            !state.solve_warnings.is_empty(),
+            "expected SketchError surfaced in solve_warnings, got nothing"
+        );
     }
 }

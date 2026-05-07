@@ -1341,10 +1341,6 @@ pub enum PrimitiveEditorMsg {
     /// Sketch inspector — edit / insert a parameter source string.
     /// Triggers a solve + bake.
     FootprintSketchEditParameter { name: String, expr: String },
-    /// Sketch inspector — toggle the auto-pause hysteresis state
-    /// machine. Used by the inspector's "Live solve paused (resume)"
-    /// button.
-    FootprintSketchToggleAutoPause,
     /// v0.13.2 — Tool palette: switch the active drawing tool.
     /// Clears any in-flight multi-click gesture (`tool_pending`) so
     /// switching tools mid-gesture doesn't leave dangling anchors.

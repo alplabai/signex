@@ -1,8 +1,11 @@
-//! Task 3.6 — Solver public API + timeout hysteresis tests.
+//! Task 3.6 — Solver public API tests.
 //!
 //! Exercises the high-level `Solver::solve` façade (LM + DOF in one
-//! shot) and the `AutoPauseState` hysteresis state used by the live-
-//! solve UI.
+//! shot). The previous `AutoPauseState` hysteresis was removed in
+//! v0.22 — footprint sketches stay small enough that every solve
+//! completes well under the per-frame budget; pause mode added a
+//! confusing UI state and complicated downstream agents reading
+//! solver state.
 
 mod common;
 use common::Sketch;
@@ -14,7 +17,6 @@ use signex_sketch::solver::Solver;
 use signex_sketch::solver::dof::DofColor;
 use signex_sketch::solver::residual::ResolvedParams;
 use signex_sketch::solver::state::point_xy;
-use signex_sketch::solver::timeout::AutoPauseState;
 
 fn empty_params() -> ResolvedParams {
     ResolvedParams::new()
@@ -251,23 +253,3 @@ fn solver_tolerance_field_is_honoured() {
     );
 }
 
-// ─────────────────────────────────────────────────────────────────────
-// AutoPauseState — exposed for completeness; the unit tests inside
-// solver/timeout.rs already cover the basic cases. These are
-// integration-level smoke tests that exercise the type via a public
-// import, catching breakage if the module's pub surface changes.
-// ─────────────────────────────────────────────────────────────────────
-
-#[test]
-fn auto_pause_smoke_default_unpaused() {
-    let s = AutoPauseState::default();
-    assert!(!s.paused());
-}
-
-#[test]
-fn auto_pause_smoke_two_overruns_pauses() {
-    let mut s = AutoPauseState::new();
-    s.observe(60, 50);
-    s.observe(60, 50);
-    assert!(s.paused());
-}

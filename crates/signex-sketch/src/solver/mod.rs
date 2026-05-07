@@ -6,7 +6,6 @@ pub mod math;
 pub mod residual;
 pub mod residuals;
 pub mod state;
-pub mod timeout;
 
 use std::collections::HashMap;
 

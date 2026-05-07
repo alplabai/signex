@@ -1081,7 +1081,6 @@ fn build_footprint_editor_panel_ctx(
             elapsed_ms: out.result.elapsed_ms,
             final_residual_norm: out.result.final_residual_norm,
             over_constraint_count: out.over_constraints.len(),
-            auto_paused: editor.state.auto_pause.paused(),
         });
 
     // Pad summary — populated only when in Pads mode AND a pad is

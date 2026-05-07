@@ -831,7 +831,6 @@ pub struct FootprintSolveSummary {
     pub elapsed_ms: u64,
     pub final_residual_norm: f64,
     pub over_constraint_count: usize,
-    pub auto_paused: bool,
 }
 
 #[derive(Debug, Clone)]

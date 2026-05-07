@@ -361,21 +361,6 @@ fn view_dof<'a>(
     let elapsed = last.map(|o| o.result.elapsed_ms).unwrap_or(0);
     let iters = last.map(|o| o.result.iterations).unwrap_or(0);
 
-    let auto_paused = editor.state.auto_pause.paused();
-    let pause_path = editor.path.clone();
-
-    let pause_row: Element<'a, LibraryMessage> = if auto_paused {
-        button(text("Live solve PAUSED — resume").size(10).color(text_c))
-            .padding([2, 6])
-            .on_press(LibraryMessage::PrimitiveEditorEvent {
-                path: pause_path,
-                msg: PrimitiveEditorMsg::FootprintSketchToggleAutoPause,
-            })
-            .into()
-    } else {
-        text("Live solve: on").size(10).color(muted).into()
-    };
-
     column![
         text("DOF").size(11).color(text_c),
         text(format!(
@@ -386,7 +371,6 @@ fn view_dof<'a>(
         text(format!("iters={iters}  elapsed={elapsed}ms"))
             .size(10)
             .color(muted),
-        pause_row,
     ]
     .spacing(2)
     .into()
