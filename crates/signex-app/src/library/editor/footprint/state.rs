@@ -1466,6 +1466,43 @@ impl FootprintEditorState {
                 [c.min_x, c.max_y],
             ]);
         }
+        // v0.22 Phase D1 — Pads-mode → Sketch attribute mirror. For
+        // every editor-side pad backed by a sketch entity, copy the
+        // enum/bool/Option<f64> attribute fields onto the entity's
+        // PadAttr so a subsequent Sketch-mode session reads the same
+        // Net / Locked / ElectricalType / Template / Library /
+        // Feature / Testpoint / Hole-Details state. Geometry-shaping
+        // expressions (size_x_expr / mask_margin_expr / paste_*_expr
+        // / drill spec) intentionally stay sketch-parameterised — only
+        // attribute fields cross. Designator (number) also mirrors
+        // so a Pads-mode rename propagates to the entity.
+        if let Some(sketch) = fp.sketch.as_mut() {
+            for pad in &canvas.pads {
+                let Some(id) = pad.sketch_entity_id else {
+                    continue;
+                };
+                let Some(entity) = sketch.entities.iter_mut().find(|e| e.id == id) else {
+                    continue;
+                };
+                let Some(attr) = entity.pad.as_mut() else {
+                    continue;
+                };
+                attr.number = pad.number.clone();
+                attr.net = pad.net.clone();
+                attr.locked = pad.locked;
+                attr.electrical_type = pad.electrical_type;
+                attr.template = pad.template.clone();
+                attr.library = pad.template_library.clone();
+                attr.feature_top = pad.feature_top;
+                attr.feature_bottom = pad.feature_bottom;
+                attr.testpoint = pad.testpoint;
+                attr.hole_tolerance_plus_mm = pad.hole_tolerance_plus_mm;
+                attr.hole_tolerance_minus_mm = pad.hole_tolerance_minus_mm;
+                attr.hole_rotation_deg = pad.hole_rotation_deg;
+                attr.copper_offset_x_mm = pad.copper_offset_x_mm;
+                attr.copper_offset_y_mm = pad.copper_offset_y_mm;
+            }
+        }
     }
 }
 
