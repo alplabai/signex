@@ -1095,3 +1095,136 @@ fn loaded_project_data_round_trips_via_write_then_parse() {
     assert_eq!(loaded.variant_definitions.len(), 2);
     assert_eq!(loaded.active_variant.as_deref(), Some("Production"));
 }
+
+// ─────────────────────────────────────────────────────────────────
+// v0.23 — async git commit pipeline
+// ─────────────────────────────────────────────────────────────────
+
+#[test]
+fn project_git_commit_done_clears_inflight_entry() {
+    // The async pipeline tracks (project_root, rel_path) pairs in
+    // `inflight_git_commits` while the commit runs in the
+    // background. `Message::ProjectGitCommitDone` must remove the
+    // pair regardless of success/failure so the "Saving…" pill
+    // clears.
+    let (mut app, _tmp, prj_path) = fixture_project_with_companions("Foxtrot");
+    let project_root = prj_path.parent().unwrap().to_path_buf();
+    let rel_path = PathBuf::from("Foxtrot.snxsch");
+    let key = (project_root.clone(), rel_path.clone());
+    app.document_state.inflight_git_commits.insert(key.clone());
+    assert!(app.document_state.inflight_git_commits.contains(&key));
+
+    // Success path.
+    let _ = app.update(Message::ProjectGitCommitDone {
+        project_root: project_root.clone(),
+        rel_path: rel_path.clone(),
+        result: Ok("deadbeef".to_string()),
+    });
+    assert!(
+        !app.document_state.inflight_git_commits.contains(&key),
+        "inflight entry must be cleared on success"
+    );
+
+    // Failure path also clears (data is on disk regardless of git).
+    app.document_state.inflight_git_commits.insert(key.clone());
+    let _ = app.update(Message::ProjectGitCommitDone {
+        project_root: project_root.clone(),
+        rel_path: rel_path.clone(),
+        result: Err("commit_path: …".to_string()),
+    });
+    assert!(
+        !app.document_state.inflight_git_commits.contains(&key),
+        "inflight entry must be cleared on failure too"
+    );
+}
+
+#[test]
+fn commit_save_to_project_git_skips_when_enable_git_off() {
+    // The save-handler should silently skip the queue + inflight
+    // mutation when the owning project hasn't opted into git.
+    // Otherwise every save would burn an entry the dispatcher
+    // would later have to clear.
+    let (mut app, _tmp, prj_path) = fixture_project_with_companions("Golf");
+    let project_root = prj_path.parent().unwrap().to_path_buf();
+    let sch_path = project_root.join("Golf.snxsch");
+    assert!(!app.document_state.projects[0].data.enable_git);
+
+    app.commit_save_to_project_git(&sch_path, "Save Golf.snxsch");
+    assert!(app.document_state.pending_git_commits.is_empty());
+    assert!(app.document_state.inflight_git_commits.is_empty());
+}
+
+#[test]
+fn commit_save_to_project_git_enqueues_when_enable_git_on() {
+    // With enable_git on, save handler pushes a PendingGitCommit
+    // and adds (project_root, rel_path) to the inflight set so the
+    // status bar's "Saving…" pill renders immediately.
+    let (mut app, _tmp, prj_path) = fixture_project_with_companions("Hotel2");
+    app.document_state.projects[0].data.enable_git = true;
+    let project_root = prj_path.parent().unwrap().to_path_buf();
+    let sch_path = project_root.join("Hotel2.snxsch");
+
+    app.commit_save_to_project_git(&sch_path, "Save Hotel2.snxsch");
+    assert_eq!(app.document_state.pending_git_commits.len(), 1);
+    assert_eq!(app.document_state.inflight_git_commits.len(), 1);
+
+    // Idempotent: a second enqueue for the same (root, rel) while
+    // the first is still inflight is a silent no-op.
+    app.commit_save_to_project_git(&sch_path, "Save Hotel2.snxsch (retry)");
+    assert_eq!(
+        app.document_state.pending_git_commits.len(),
+        1,
+        "duplicate enqueue must be ignored while inflight"
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────
+// v0.23 — sketch-mode pattern dispatchers (signex-sketch state side)
+// ─────────────────────────────────────────────────────────────────
+
+#[test]
+fn array_kind_residual_count_is_one_per_kind_for_distance_pt_circle() {
+    // Spot-check the new ConstraintKind variant integrates with
+    // the residual_count machinery the panel relies on.
+    use signex_sketch::constraint::{ConstraintKind, DimTarget};
+    use signex_sketch::id::SketchEntityId;
+
+    let kind = ConstraintKind::DistancePtCircle {
+        point: SketchEntityId::new(),
+        circle: SketchEntityId::new(),
+        target: DimTarget::Literal(1.0),
+    };
+    assert_eq!(kind.residual_count(), 1);
+}
+
+#[test]
+fn grid_depopulation_round_trips_suppressed_instances_through_app_layer() {
+    // App layer never authors GridDepopulation directly — but
+    // .snxfpt files load through signex-library and into the
+    // FootprintEditorState's primitive. This test pins the schema:
+    // empty mask + non-empty suppression list survives a TOML
+    // round trip via signex-sketch.
+    use signex_sketch::array::{
+        Array, ArrayId, ArrayKind, GridDepopulation, NumberingScheme,
+    };
+    use signex_sketch::id::SketchEntityId;
+
+    let a = Array {
+        id: ArrayId::new(),
+        kind: ArrayKind::Grid {
+            source: SketchEntityId::new(),
+            nx_expr: "3".into(),
+            ny_expr: "3".into(),
+            dx_expr: "1mm".into(),
+            dy_expr: "1mm".into(),
+            depopulation: Some(GridDepopulation {
+                mask_expr: String::new(),
+                suppressed_instances: vec![(0, 0), (1, 1)],
+            }),
+        },
+        numbering: NumberingScheme::default(),
+    };
+    let s = toml::to_string(&a).unwrap();
+    let back: Array = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
+}

@@ -16,6 +16,17 @@ use super::{
     KeepoutKindFlag, PanelMsg, SnapOptionFlag,
 };
 
+/// v0.23 — Per-instance checkbox grid safety cap for Grid arrays.
+/// Dense BGAs can declare hundreds of cells per axis; rendering a
+/// 50×50 = 2500-checkbox grid would blow the panel viewport. Above
+/// this cap the user keeps editing via `mask_expr`.
+const MAX_GRID_CHECKBOX_DIM: u32 = 32;
+
+/// v0.23 — Per-instance checkbox row safety cap for Polar arrays.
+/// 64 instances covers 5° increments around a full circle; finer
+/// patterns continue to author through `mask_expr`.
+const MAX_POLAR_CHECKBOX_COUNT: u32 = 64;
+
 /// v0.14.2 — Properties panel body for the Footprint editor. Switches
 /// between three contexts:
 ///
@@ -4066,8 +4077,8 @@ fn render_pattern_subform<'a>(
             // driven counts (e.g. "= row_count") fall back to the mask
             // expression input.
             if let (Some(nx), Some(ny)) = (nx_value, ny_value) {
-                let nx = (*nx).min(32) as u32;
-                let ny = (*ny).min(32) as u32;
+                let nx = (*nx).min(MAX_GRID_CHECKBOX_DIM);
+                let ny = (*ny).min(MAX_GRID_CHECKBOX_DIM);
                 col = col.push(
                     container(text("Instances").size(10).color(muted))
                         .padding([6, 8])
@@ -4189,7 +4200,7 @@ fn render_pattern_subform<'a>(
             // v0.23 — Per-instance checkbox row for Polar arrays.
             // Renders only when count resolves to a concrete integer.
             if let Some(count) = count_value {
-                let count = (*count).min(64) as u32;
+                let count = (*count).min(MAX_POLAR_CHECKBOX_COUNT);
                 col = col.push(
                     container(text("Instances").size(10).color(muted))
                         .padding([6, 8])

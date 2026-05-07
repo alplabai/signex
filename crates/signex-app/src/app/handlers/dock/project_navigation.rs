@@ -331,49 +331,65 @@ impl Signex {
                 // ship their own `.gitattributes` via the original
                 // LocalGitAdapter init path.
                 if matches!(state.scope, crate::app::VersionControlScope::Project) {
-                    if let Ok(adapter) = signex_library::adapters::local_git_project::LocalGitProjectAdapter::open_or_init(
+                    // v0.23 — gate `enable_git=true` on the adapter
+                    // succeeding. v0.22's path silently swallowed
+                    // `open_or_init` failures and still flipped the
+                    // flag, leaving the project in a mismatch state.
+                    // Now any failure logs through diagnostics AND
+                    // skips the flag flip so the user re-runs Enable
+                    // VC after fixing the underlying issue.
+                    let mut adapter_ok = false;
+                    match signex_library::adapters::local_git_project::LocalGitProjectAdapter::open_or_init(
                         state.project_dir.clone(),
                     ) {
-                        if let Err(e) = adapter.write_gitattributes(state.use_lfs) {
-                            crate::diagnostics::log_warning(format!(
-                                "[git] write_gitattributes failed: {e}"
-                            ));
-                        } else {
-                            // Best-effort follow-up commit. Failure
-                            // logged + ignored — the file is on disk
-                            // and the next save will pick it up via
-                            // the 8.4 auto-commit hook.
-                            if let Err(e) = adapter.commit_path(
-                                std::path::Path::new(".gitattributes"),
-                                "Sync .gitattributes to Signex v0.22 spec",
-                            ) {
+                        Ok(adapter) => match adapter.write_gitattributes(state.use_lfs) {
+                            Ok(()) => {
+                                if let Err(e) = adapter.commit_path(
+                                    std::path::Path::new(".gitattributes"),
+                                    "Sync .gitattributes to Signex v0.22 spec",
+                                ) {
+                                    crate::diagnostics::log_warning(format!(
+                                        "[git] commit .gitattributes failed: {e}"
+                                    ));
+                                }
+                                adapter_ok = true;
+                            }
+                            Err(e) => {
                                 crate::diagnostics::log_warning(format!(
-                                    "[git] commit .gitattributes failed: {e}"
+                                    "[git] write_gitattributes failed: {e} — \
+                                     enable_git left off; re-run Enable VC after fix"
                                 ));
                             }
+                        },
+                        Err(e) => {
+                            crate::diagnostics::log_warning(format!(
+                                "[git] open_or_init failed for {}: {e} — \
+                                 enable_git left off; re-run Enable VC after fix",
+                                state.project_dir.display()
+                            ));
                         }
                     }
 
                     // Flip `enable_git = true` on the matching
                     // project + mark it dirty so the .snxprj save
-                    // captures the flag. Match by `data.dir` since
-                    // the modal targets a specific project, which
-                    // may not be the active one if the user opened
-                    // it from a non-active project's right-click
-                    // menu.
-                    let target_dir = state.project_dir.clone();
-                    let mut snxprj_path: Option<std::path::PathBuf> = None;
-                    if let Some(loaded) = self
-                        .document_state
-                        .projects
-                        .iter_mut()
-                        .find(|p| std::path::Path::new(&p.data.dir) == target_dir)
-                    {
-                        loaded.data.enable_git = true;
-                        snxprj_path = Some(loaded.path.clone());
-                    }
-                    if let Some(p) = snxprj_path {
-                        self.document_state.dirty_paths.insert(p);
+                    // captures the flag. Match by `data.dir`. Only
+                    // flips when the adapter setup succeeded — see
+                    // comment above.
+                    if adapter_ok {
+                        let target_dir = state.project_dir.clone();
+                        let mut snxprj_path: Option<std::path::PathBuf> = None;
+                        if let Some(loaded) = self
+                            .document_state
+                            .projects
+                            .iter_mut()
+                            .find(|p| std::path::Path::new(&p.data.dir) == target_dir)
+                        {
+                            loaded.data.enable_git = true;
+                            snxprj_path = Some(loaded.path.clone());
+                        }
+                        if let Some(p) = snxprj_path {
+                            self.document_state.dirty_paths.insert(p);
+                        }
                     }
                 }
 

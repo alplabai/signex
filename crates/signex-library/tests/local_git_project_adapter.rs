@@ -296,3 +296,119 @@ fn commit_external_change_creates_a_user_edit_commit() {
         entries[0].subject
     );
 }
+
+#[test]
+fn commit_path_rejects_absolute_rel_path() {
+    // v0.23 — `commit_path` guards against `rel_path` escaping the
+    // project root. An absolute path would land git2's `add_path`
+    // outside the working tree and corrupt the index.
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().to_path_buf();
+    let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+
+    let abs_path = if cfg!(windows) {
+        Path::new("C:\\Windows\\System32\\drivers\\etc\\hosts")
+    } else {
+        Path::new("/etc/passwd")
+    };
+    let err = adapter
+        .commit_path(abs_path, "should fail")
+        .expect_err("absolute rel_path must be rejected");
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("project-relative") || msg.contains("`..`"),
+        "expected guard message, got {msg}"
+    );
+}
+
+#[test]
+fn commit_path_rejects_parent_dir_traversal() {
+    // v0.23 — `..` components in `rel_path` would break out of the
+    // project root. Reject them in the guard.
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().to_path_buf();
+    let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+
+    let err = adapter
+        .commit_path(Path::new("../escape.txt"), "should fail")
+        .expect_err("parent-dir rel_path must be rejected");
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("project-relative") || msg.contains("`..`"),
+        "expected guard message, got {msg}"
+    );
+}
+
+#[test]
+fn commit_path_populates_history_diff_stats() {
+    // v0.23 — file_history rows now carry `additions`, `deletions`,
+    // and `files_changed` populated from `Diff::stats`. v0.22 left
+    // them empty, which made the History panel unable to render
+    // change summaries.
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().to_path_buf();
+    let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+
+    // First commit — 3 lines added (root commit path counts newlines).
+    write_file(&root, "main.snxsch", "line1\nline2\nline3\n");
+    adapter
+        .commit_path(Path::new("main.snxsch"), "v1")
+        .unwrap();
+
+    // Second commit — 2 lines added, 1 deleted relative to the first.
+    write_file(&root, "main.snxsch", "line1\nline2_modified\nline4\nline5\n");
+    adapter
+        .commit_path(Path::new("main.snxsch"), "v2")
+        .unwrap();
+
+    let entries = adapter.file_history(Path::new("main.snxsch"), 10).unwrap();
+    assert_eq!(entries.len(), 2, "expected two commits in history");
+    let v2 = &entries[0]; // newest first
+    assert_eq!(v2.files_changed, vec!["main.snxsch".to_string()]);
+    // Diff stats are non-zero — exact counts depend on git2's diff
+    // algorithm (one modification + two additions = 3 inserts, 1
+    // deletion in the typical line-based diff). Assert non-empty.
+    assert!(
+        v2.additions > 0,
+        "expected v2 additions > 0, got {}",
+        v2.additions
+    );
+    assert!(
+        v2.deletions > 0,
+        "expected v2 deletions > 0, got {}",
+        v2.deletions
+    );
+
+    let v1 = &entries[1];
+    assert_eq!(v1.files_changed, vec!["main.snxsch".to_string()]);
+    // Root commit — additions = newline count of initial blob (3).
+    assert_eq!(v1.additions, 3);
+    assert_eq!(v1.deletions, 0);
+}
+
+#[test]
+fn file_history_caps_walker_iterations_for_dos_protection() {
+    // v0.23 — the walker visits at most `10 * limit` commits before
+    // giving up so a fork that rarely touches `rel_path` doesn't
+    // hang the History panel. Empty result on a never-committed
+    // path even when the graph has plenty of commits.
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().to_path_buf();
+    let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+
+    // 30 commits to a different file. The walker should give up
+    // before scanning all 30 when looking for `untouched.snxsch`.
+    for i in 0..30 {
+        write_file(&root, "other.snxsch", &format!("v{i}\n"));
+        adapter
+            .commit_path(Path::new("other.snxsch"), &format!("commit {i}"))
+            .unwrap();
+    }
+
+    // Limit 1 → walker visits at most 10 commits. Path is never
+    // touched so the result is empty without hanging.
+    let entries = adapter
+        .file_history(Path::new("untouched.snxsch"), 1)
+        .unwrap();
+    assert!(entries.is_empty());
+}

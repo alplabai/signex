@@ -272,7 +272,7 @@ impl Signex {
     /// emits one `Task::perform` per queued commit. Result lands as
     /// `Message::ProjectGitCommitDone`; the handler clears the
     /// inflight entry.
-    pub(crate) fn commit_save_to_project_git(
+    pub fn commit_save_to_project_git(
         &mut self,
         file_path: &std::path::Path,
         default_message: &str,
@@ -321,6 +321,19 @@ impl Signex {
     /// `Message::ProjectGitCommitDone` which clears the matching
     /// `inflight_git_commits` entry. Returns `Task::none()` when the
     /// queue is empty.
+    ///
+    /// **Ordering note:** Concurrent commits to the same project
+    /// repo are serialised by libgit2's `.git/index.lock` (and the
+    /// `LocalGitProjectAdapter::git_lock` mutex), but **not** by
+    /// this dispatcher. If the user types fast enough to fire two
+    /// saves before the first commit completes, the second
+    /// `Task::perform` may race the first; in practice both
+    /// commits land sequentially with the OS-level lock determining
+    /// order. The first commit's blob can therefore reflect
+    /// post-second-save content if the rapid sequence overlaps
+    /// `index.add_path` with the user's next save. Not data loss —
+    /// every save's content is captured by *some* commit — but the
+    /// commit-message vs blob-content correspondence is best-effort.
     pub(crate) fn drain_pending_git_commits(&mut self) -> iced::Task<crate::app::Message> {
         if self.document_state.pending_git_commits.is_empty() {
             return iced::Task::none();
@@ -635,29 +648,20 @@ impl Signex {
                     _ => unreachable!(),
                 };
                 // v0.23 — reload-after-restore for `.snxlib` tabs.
-                // Walks `library.open_libraries` for the matching
-                // root, looks the adapter up by `library_id`, and
-                // re-runs `reload_tables` so the table view picks up
-                // the restored TSVs without the user having to close
-                // and re-open the library. Failures (adapter dropped,
-                // disk read error) log + drop into an empty cache —
-                // the user can still explicitly reload from the
-                // Library panel as a fallback.
-                let library_id = self
-                    .library
-                    .library_at(&lib_path)
-                    .map(|lib| lib.library_id);
-                let Some(library_id) = library_id else {
+                // Re-opens a fresh `LocalGitAdapter` against the
+                // on-disk root (the mounted adapter's git2 caches
+                // are stale after `restore_at`) and re-runs
+                // `reload_tables` so the table view picks up the
+                // restored TSVs. Bails early if no library is
+                // currently open at this path; failures log + drop
+                // into an empty cache.
+                if self.library.library_at(&lib_path).is_none() {
                     crate::diagnostics::log_warning(format!(
                         "[reload] LibraryBrowser tab {} has no open library to refresh",
                         lib_path.display()
                     ));
                     return;
-                };
-                // Split the borrows: hold the adapter immutably from
-                // `set.get`, then mutate the OpenLibrary entry.
-                use signex_library::LibraryAdapter as _;
-                let _ = library_id;
+                }
                 if let Some(open_lib) = self.library.library_at_mut(&lib_path) {
                     // Re-open the on-disk adapter rather than reusing
                     // the mounted one — `restore_at` rewrote the
@@ -750,8 +754,8 @@ impl Signex {
         // v0.23 — PCB save-hook auto-commit. The PCB editor doesn't
         // own a save-back-to-disk path yet (Pcb tabs render from
         // `cached_document` and never mutate the parsed `.snxpcb`
-        // through this dispatcher). When the PCB save path lands —
-        // likely as part of the v0.13 PCB-editor work — wire the same
+        // through this dispatcher). When the PCB save path lands as
+        // part of future PCB-editor work, wire the same
         // `commit_save_to_project_git` call here so PCB edits get
         // captured by the v0.22 project-git pipeline:
         //
