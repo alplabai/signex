@@ -3696,6 +3696,90 @@ fn editing_corner_r_via_properties_updates_all_4_arcs() {
         "solve cleared cleanly; got {:?}",
         editor.state.solve_warnings
     );
+
+    // Phase 6 — `mirror_solve_to_round_rect_geometry` (post-solve hook)
+    // rewrites each corner Arc's centre + start + end Points from the
+    // resolved corner_r. With W=2 / H=1 / corner_r=0.5:
+    //   bbox: xmin=-1, ymin=-0.5, xmax=1, ymax=0.5
+    //   NE corner: centre = (xmax-r, ymin+r) = (0.5, 0.0)
+    //              start (top-edge anchor)  = (0.5, -0.5)
+    //              end   (right-edge anchor)= (1.0, 0.0)
+    //   SE corner: centre = (xmax-r, ymax-r) = (0.5, 0.0)  [coincides
+    //              vertically with NE because corner_r = h/2 in this
+    //              degenerate-but-legal case; the test still validates
+    //              the per-corner-position table by checking start/end]
+    //              start = (1.0, 0.0)
+    //              end   = (0.5, 0.5)
+    let ne_arc_id = pad_arc_id(editor, 0, "corner_r_ne_arc");
+    let (ne_centre_id, ne_start_id, ne_end_id) =
+        arc_endpoint_ids(sketch, ne_arc_id);
+    let ne_centre = point_pos(sketch, ne_centre_id);
+    let ne_start = point_pos(sketch, ne_start_id);
+    let ne_end = point_pos(sketch, ne_end_id);
+    assert!(approx_eq_pt(ne_centre, (0.5, 0.0)),
+        "NE arc centre at (0.5, 0.0) after corner_r=0.5 edit; got {ne_centre:?}");
+    assert!(approx_eq_pt(ne_start, (0.5, -0.5)),
+        "NE arc start (top anchor) at (0.5, -0.5); got {ne_start:?}");
+    assert!(approx_eq_pt(ne_end, (1.0, 0.0)),
+        "NE arc end (right anchor) at (1.0, 0.0); got {ne_end:?}");
+}
+
+/// Helpers used by the Phase 6 geometric-assertion tightening of
+/// the v0.24 deferred suite. Centralised to keep the assertion
+/// blocks above readable.
+fn pad_arc_id(
+    editor: &signex_app::app::FootprintEditorState,
+    pad_idx: usize,
+    sidecar_key: &str,
+) -> signex_sketch::id::SketchEntityId {
+    let pad = &editor.state.pads[pad_idx];
+    let slug = pad
+        .shape_params
+        .get(sidecar_key)
+        .unwrap_or_else(|| panic!("pad {pad_idx} sidecar {sidecar_key} missing"));
+    let uuid = uuid::Uuid::parse_str(slug)
+        .unwrap_or_else(|_| panic!("sidecar {sidecar_key} value {slug} not a UUID slug"));
+    signex_sketch::id::SketchEntityId(uuid)
+}
+
+fn arc_endpoint_ids(
+    sketch: &signex_sketch::SketchData,
+    arc_id: signex_sketch::id::SketchEntityId,
+) -> (
+    signex_sketch::id::SketchEntityId,
+    signex_sketch::id::SketchEntityId,
+    signex_sketch::id::SketchEntityId,
+) {
+    use signex_sketch::entity::EntityKind;
+    let arc = sketch
+        .entities
+        .iter()
+        .find(|e| e.id == arc_id)
+        .unwrap_or_else(|| panic!("arc {arc_id:?} not in sketch"));
+    match arc.kind {
+        EntityKind::Arc { center, start, end, .. } => (center, start, end),
+        ref other => panic!("entity {arc_id:?} not an Arc: {other:?}"),
+    }
+}
+
+fn point_pos(
+    sketch: &signex_sketch::SketchData,
+    id: signex_sketch::id::SketchEntityId,
+) -> (f64, f64) {
+    use signex_sketch::entity::EntityKind;
+    let pt = sketch
+        .entities
+        .iter()
+        .find(|e| e.id == id)
+        .unwrap_or_else(|| panic!("point {id:?} not in sketch"));
+    match pt.kind {
+        EntityKind::Point { x, y } => (x, y),
+        ref other => panic!("entity {id:?} not a Point: {other:?}"),
+    }
+}
+
+fn approx_eq_pt(a: (f64, f64), b: (f64, f64)) -> bool {
+    (a.0 - b.0).abs() < 1e-6 && (a.1 - b.1).abs() < 1e-6
 }
 
 /// Phase-5 #5 — Unlink one corner only (NE), then verify the data
@@ -3858,6 +3942,36 @@ fn unlink_one_corner_only_that_arc_reads_per_corner_param() {
         "0.4mm",
         "shared param stays at 0.4mm when per-corner is edited"
     );
+
+    // Step 4 (Phase 6) — `mirror_solve_to_round_rect_geometry`
+    // reads the per-corner override before falling back to shared.
+    // After Step 3, the NE corner's arc geometry must reflect
+    // r_ne = 0.15mm; the SE / SW / NW arcs must reflect r_shared
+    // = 0.4mm. With pad bbox W=2 / H=1 (xmin=-1, ymin=-0.5,
+    // xmax=1, ymax=0.5):
+    //   NE centre (per-corner r=0.15) = (xmax-r, ymin+r) = (0.85, -0.35)
+    //   SE centre (shared r=0.4)      = (xmax-r, ymax-r) = (0.6, 0.1)
+    //   SW centre (shared r=0.4)      = (xmin+r, ymax-r) = (-0.6, 0.1)
+    //   NW centre (shared r=0.4)      = (xmin+r, ymin+r) = (-0.6, -0.1)
+    let editor = app.document_state.footprint_editors.get(&path).unwrap();
+    let sketch = editor.file.footprints[0].sketch.as_ref().unwrap();
+    let centre_pos_for = |key: &str| -> (f64, f64) {
+        let arc_id = pad_arc_id(editor, 0, key);
+        let (centre_id, _, _) = arc_endpoint_ids(sketch, arc_id);
+        point_pos(sketch, centre_id)
+    };
+    let ne_centre = centre_pos_for("corner_r_ne_arc");
+    let se_centre = centre_pos_for("corner_r_se_arc");
+    let sw_centre = centre_pos_for("corner_r_sw_arc");
+    let nw_centre = centre_pos_for("corner_r_nw_arc");
+    assert!(approx_eq_pt(ne_centre, (0.85, -0.35)),
+        "NE centre uses per-corner r=0.15 → (0.85, -0.35); got {ne_centre:?}");
+    assert!(approx_eq_pt(se_centre, (0.6, 0.1)),
+        "SE centre uses shared r=0.4 → (0.6, 0.1); got {se_centre:?}");
+    assert!(approx_eq_pt(sw_centre, (-0.6, 0.1)),
+        "SW centre uses shared r=0.4 → (-0.6, 0.1); got {sw_centre:?}");
+    assert!(approx_eq_pt(nw_centre, (-0.6, -0.1)),
+        "NW centre uses shared r=0.4 → (-0.6, -0.1); got {nw_centre:?}");
 }
 
 /// Phase-5 #6 — Edit the `width_<slug>` parameter on an Oval pad.
