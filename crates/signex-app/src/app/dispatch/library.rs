@@ -6796,10 +6796,262 @@ pub(crate) fn apply_footprint_primitive_edit(
                 }
                 SketchTool::TangentArc => {
                     // v0.24 Track C — Tangent Arc. Two-click chained
-                    // arc tangent to the previously committed Line.
-                    // Stub in C1; full Arc-mint + TangentLineArc
-                    // constraint flow lands in C2.
-                    editor.state.tool_pending = ToolPending::Idle;
+                    // arc segment that mints an Arc tangent to the
+                    // most recently committed Line whose end Point
+                    // matches the first click. The dispatcher also
+                    // emits a `TangentLineArc` constraint so the
+                    // tangency survives further edits.
+                    //
+                    // - Click 1: stash the resolved Point as
+                    //   `ToolPending::TangentArcFirst { first }`.
+                    //   Mirrors the Line tool's first-click flow.
+                    // - Click 2: locate a Line whose `end == first`.
+                    //   Compute the tangent centre on the line's
+                    //   perpendicular bisector through `first` so
+                    //   the arc starts off the line tangentially.
+                    //   Mint an Arc entity + TangentLineArc
+                    //   constraint and chain back to Idle.
+                    //
+                    // Fallback: when no incident Line is found, the
+                    // dispatcher mints a placeholder centre at the
+                    // perpendicular bisector of the chord (no
+                    // tangency reference) and publishes a warning
+                    // via `solve_warnings`. The Arc still appears in
+                    // the sketch so the user can constrain it
+                    // manually if desired.
+                    use signex_sketch::constraint::{Constraint, ConstraintKind};
+                    use signex_sketch::id::ConstraintId;
+
+                    match editor.state.tool_pending {
+                        ToolPending::TangentArcFirst { first } => {
+                            // Look up the first endpoint position +
+                            // any Line ending at `first`.
+                            let (
+                                first_pos,
+                                end_pos,
+                                incident_line,
+                            ): ((f64, f64), (f64, f64), Option<(SketchEntityId, (f64, f64))>) = {
+                                let sketch_ref = match editor.primitive().sketch.as_ref() {
+                                    Some(s) => s,
+                                    None => {
+                                        editor.state.tool_pending = ToolPending::Idle;
+                                        return;
+                                    }
+                                };
+                                let pos_of = |id: SketchEntityId| -> Option<(f64, f64)> {
+                                    sketch_ref
+                                        .entities
+                                        .iter()
+                                        .find(|e| e.id == id)
+                                        .and_then(|e| match e.kind {
+                                            EntityKind::Point { x, y } => Some((x, y)),
+                                            _ => None,
+                                        })
+                                };
+                                let first_p = match pos_of(first) {
+                                    Some(p) => p,
+                                    None => {
+                                        editor.state.tool_pending = ToolPending::Idle;
+                                        return;
+                                    }
+                                };
+                                let end_p = match pos_of(resolved_id) {
+                                    Some(p) => p,
+                                    None => {
+                                        editor.state.tool_pending = ToolPending::Idle;
+                                        return;
+                                    }
+                                };
+                                // Find a Line whose end matches `first`.
+                                // Prefer the most recently authored one
+                                // (last in the list) so chained sketches
+                                // pick up the immediately preceding
+                                // Line, not an unrelated old one.
+                                let line = sketch_ref
+                                    .entities
+                                    .iter()
+                                    .rev()
+                                    .find_map(|e| match e.kind {
+                                        EntityKind::Line { start, end } if end == first => {
+                                            pos_of(start).map(|p| (e.id, p))
+                                        }
+                                        EntityKind::Line { start, end } if start == first => {
+                                            pos_of(end).map(|p| (e.id, p))
+                                        }
+                                        _ => None,
+                                    });
+                                (first_p, end_p, line)
+                            };
+
+                            // Compute the tangent centre.
+                            //
+                            // With an incident Line, the centre lies
+                            // on the line's perpendicular through
+                            // `first`. We pick the side of the chord
+                            // (`first` → `end_pos`) that lets the arc
+                            // reach `end` along that perpendicular,
+                            // and place the centre on the
+                            // perpendicular bisector of the chord
+                            // intersected with the line-perpendicular
+                            // through `first`. That intersection is
+                            // the unique circle that is tangent to
+                            // the line at `first` and passes through
+                            // `end_pos`.
+                            //
+                            // Without an incident Line, fall back to
+                            // the chord's perpendicular bisector
+                            // midpoint shifted by half-chord —
+                            // produces a 90° arc as a sane default.
+                            let (cx, cy) = match incident_line {
+                                Some((_, line_other_pos)) => {
+                                    // Line direction (line_other -> first)
+                                    let lx = first_pos.0 - line_other_pos.0;
+                                    let ly = first_pos.1 - line_other_pos.1;
+                                    let llen_sq = lx * lx + ly * ly;
+                                    if llen_sq <= 1e-12 {
+                                        // Degenerate; treat as no line.
+                                        let mx = (first_pos.0 + end_pos.0) * 0.5;
+                                        let my = (first_pos.1 + end_pos.1) * 0.5;
+                                        let dx = end_pos.0 - first_pos.0;
+                                        let dy = end_pos.1 - first_pos.1;
+                                        // Rotate 90° CCW for placeholder.
+                                        (mx + (-dy) * 0.5, my + dx * 0.5)
+                                    } else {
+                                        // Perpendicular to the line at first.
+                                        let llen = llen_sq.sqrt();
+                                        let nx = -ly / llen;
+                                        let ny = lx / llen;
+                                        // Centre is on the line through `first`
+                                        // along (nx, ny). Solve for the t such
+                                        // that |centre - end| = |centre - first|:
+                                        //   (first.x + t*nx - end.x)^2
+                                        //   + (first.y + t*ny - end.y)^2 = t^2
+                                        // Expanding:
+                                        //   |first - end|^2
+                                        //   + 2*t*((first.x - end.x)*nx + (first.y - end.y)*ny)
+                                        //   = 0
+                                        // → t = -|first - end|^2 /
+                                        //       (2 * ((first - end) · n))
+                                        let dx = first_pos.0 - end_pos.0;
+                                        let dy = first_pos.1 - end_pos.1;
+                                        let denom = 2.0 * (dx * nx + dy * ny);
+                                        let chord_sq = dx * dx + dy * dy;
+                                        if denom.abs() <= 1e-9 {
+                                            // end is on the line — tangent
+                                            // circle is undefined (would be
+                                            // infinite radius / a straight
+                                            // line). Fall back to the chord
+                                            // midpoint perpendicular.
+                                            let mx = (first_pos.0 + end_pos.0) * 0.5;
+                                            let my = (first_pos.1 + end_pos.1) * 0.5;
+                                            (mx + nx * 0.5, my + ny * 0.5)
+                                        } else {
+                                            let t = -chord_sq / denom;
+                                            (first_pos.0 + t * nx, first_pos.1 + t * ny)
+                                        }
+                                    }
+                                }
+                                None => {
+                                    // Placeholder centre — perpendicular
+                                    // to the chord at the midpoint, half
+                                    // chord length out (gives a 90°
+                                    // arc). The user will typically
+                                    // re-constrain manually.
+                                    editor.state.solve_warnings.push(
+                                        "Tangent Arc: no incident line found, placeholder centre"
+                                            .into(),
+                                    );
+                                    let mx = (first_pos.0 + end_pos.0) * 0.5;
+                                    let my = (first_pos.1 + end_pos.1) * 0.5;
+                                    let dx = end_pos.0 - first_pos.0;
+                                    let dy = end_pos.1 - first_pos.1;
+                                    // Rotate 90° CCW.
+                                    (mx + (-dy) * 0.5, my + dx * 0.5)
+                                }
+                            };
+
+                            // Mint the centre Point.
+                            let centre_id = SketchEntityId::new();
+                            let centre = flag(Entity::new(
+                                centre_id,
+                                plane_id,
+                                EntityKind::Point { x: cx, y: cy },
+                            ));
+                            editor.with_parts(|state, primitive| {
+                                apply_sketch_edit_with_warnings(
+                                    state,
+                                    primitive,
+                                    SketchEdit::AddEntity(centre),
+                                );
+                            });
+
+                            // Mint the Arc entity. Sweep direction
+                            // chosen so the arc opens away from the
+                            // incident line (when present); without a
+                            // line, default CCW.
+                            let arc_id = SketchEntityId::new();
+                            let sweep_ccw = match incident_line {
+                                Some((_, line_other_pos)) => {
+                                    // Cross product of (line_other -> first)
+                                    // and (first -> end) tells us which
+                                    // side of the line `end` is on.
+                                    let lx = first_pos.0 - line_other_pos.0;
+                                    let ly = first_pos.1 - line_other_pos.1;
+                                    let ex = end_pos.0 - first_pos.0;
+                                    let ey = end_pos.1 - first_pos.1;
+                                    // Cross > 0 → end is to the left of
+                                    // the incoming line direction → CCW
+                                    // arc opens left.
+                                    lx * ey - ly * ex >= 0.0
+                                }
+                                None => true,
+                            };
+                            let arc = flag(Entity::new(
+                                arc_id,
+                                plane_id,
+                                EntityKind::Arc {
+                                    center: centre_id,
+                                    start: first,
+                                    end: resolved_id,
+                                    sweep_ccw,
+                                },
+                            ));
+                            editor.with_parts(|state, primitive| {
+                                apply_sketch_edit_with_warnings(
+                                    state,
+                                    primitive,
+                                    SketchEdit::AddEntity(arc),
+                                );
+                            });
+
+                            // Add the TangentLineArc constraint when
+                            // we have an incident Line.
+                            if let Some((line_id, _)) = incident_line {
+                                let constraint = Constraint {
+                                    id: ConstraintId::new(),
+                                    kind: ConstraintKind::TangentLineArc {
+                                        line: line_id,
+                                        arc: arc_id,
+                                    },
+                                };
+                                editor.with_parts(|state, primitive| {
+                                    apply_sketch_edit_with_warnings(
+                                        state,
+                                        primitive,
+                                        SketchEdit::AddConstraint(constraint),
+                                    );
+                                });
+                            }
+
+                            editor.state.tool_pending = ToolPending::Idle;
+                        }
+                        _ => {
+                            // First click — stash the endpoint and
+                            // wait for click 2.
+                            editor.state.tool_pending =
+                                ToolPending::TangentArcFirst { first: resolved_id };
+                        }
+                    }
                 }
                 SketchTool::CircularPattern => {
                     // v0.22 Phase B4 — Circular Pattern. Click 1
