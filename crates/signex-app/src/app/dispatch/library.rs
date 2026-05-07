@@ -6776,14 +6776,34 @@ pub(crate) fn apply_footprint_primitive_edit(
                             return;
                         }
                     };
-                    let dist = editor
+                    // v0.25 polish — prefer placement_input over the
+                    // legacy `dimension_input` text field. The
+                    // keypress-driven cursor overlay is the
+                    // discoverable path; `dimension_input` stays as
+                    // the Properties-panel fallback for users who
+                    // already have a value there.
+                    let dist_from_placement = editor
                         .state
-                        .dimension_input
-                        .trim()
-                        .parse::<f64>()
-                        .ok()
-                        .filter(|d| d.is_finite() && *d > 1e-9)
-                        .unwrap_or(0.5);
+                        .placement_input
+                        .as_ref()
+                        .filter(|p| p.kind == PlacementInputKind::OffsetDistance)
+                        .and_then(|p| p.buffer.parse::<f64>().ok())
+                        .filter(|d| d.is_finite() && *d > 1e-9);
+                    let dist = dist_from_placement.unwrap_or_else(|| {
+                        editor
+                            .state
+                            .dimension_input
+                            .trim()
+                            .parse::<f64>()
+                            .ok()
+                            .filter(|d| d.is_finite() && *d > 1e-9)
+                            .unwrap_or(0.5)
+                    });
+                    // Clear the buffer so the next Offset click
+                    // doesn''t accidentally reuse the old value.
+                    if dist_from_placement.is_some() {
+                        editor.state.placement_input = None;
+                    }
 
                     let sketch_ref = match editor.primitive().sketch.as_ref() {
                         Some(s) => s,

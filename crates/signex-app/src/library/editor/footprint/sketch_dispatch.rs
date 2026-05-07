@@ -529,6 +529,13 @@ fn solve_and_bake(
                 // parameter table, drag handle).
                 super::pad_to_sketch::mirror_solve_to_pad_stack(state, &resolved);
 
+                // v0.25 polish — Oval pads: width/height parameter
+                // edits propagate back to `pad.size_mm` so the bbox
+                // tracks the resolved values. Without this, the
+                // subsequent mirror_solve_to_oval_geometry call would
+                // reposition anchors against a stale bbox.
+                super::pad_to_sketch::mirror_solve_to_oval_size(state, &resolved);
+
                 // v0.24 Track A6 — chamfer anchor reposition. The
                 // shared `chamfer_len_<slug>` parameter doesn't drive
                 // the anchor Points via solver constraints (literal

@@ -1241,6 +1241,68 @@ pub fn mirror_solve_to_pad_stack(
     }
 }
 
+/// v0.25 polish — Oval reverse-mirror: when the user edits
+/// `width_<slug>` or `height_<slug>` from the Properties panel, the
+/// resolved value should also propagate back to `pad.size_mm` so
+/// the bbox follows the parameter. Without this, `mirror_solve_to_
+/// oval_geometry` repositions anchors / centres against a stale
+/// bbox, which collapses the geometry when long_axis - short_axis
+/// exceeds the pre-edit bbox extent.
+///
+/// Mirrors `mirror_solve_to_pad_stack`'s pattern — same call site
+/// in `apply_sketch_edit_with_warnings`, same defensive
+/// "skip-on-missing" behaviour. Only fires for pads with both
+/// `width` and `height` shape_params (i.e. Oval pads); other pads
+/// get an early continue.
+///
+/// Long / short axis mapping: the resolved values match the user's
+/// W / H input regardless of orientation. `pad.size_mm.0` is W
+/// (horizontal extent), `.1` is H (vertical). A user typing
+/// width=1, height=3 swaps the orientation — `pad.size_mm` follows
+/// to (1, 3) and the next solve repositions anchors against the
+/// new tall-oval bbox.
+pub fn mirror_solve_to_oval_size(
+    state: &mut super::state::FootprintEditorState,
+    resolved: &std::collections::HashMap<String, f64>,
+) {
+    for pad in state.pads.iter_mut() {
+        let Some(width_param) = pad.shape_params.get("width") else {
+            continue;
+        };
+        let Some(height_param) = pad.shape_params.get("height") else {
+            continue;
+        };
+        let Some(w) = resolved.get(width_param).copied() else {
+            tracing::warn!(
+                target: "signex::v025",
+                "mirror_solve_to_oval_size: width parameter {width_param} missing \
+                 from resolved map; skipping pad {}",
+                pad.number
+            );
+            continue;
+        };
+        let Some(h) = resolved.get(height_param).copied() else {
+            tracing::warn!(
+                target: "signex::v025",
+                "mirror_solve_to_oval_size: height parameter {height_param} missing \
+                 from resolved map; skipping pad {}",
+                pad.number
+            );
+            continue;
+        };
+        if w <= f64::EPSILON || h <= f64::EPSILON {
+            tracing::warn!(
+                target: "signex::v025",
+                "mirror_solve_to_oval_size: pad {} resolved to non-positive size \
+                 ({w}, {h}); skipping",
+                pad.number
+            );
+            continue;
+        }
+        pad.size_mm = (w, h);
+    }
+}
+
 /// v0.24 Track A6 — after every successful solve, re-derive the
 /// chamfer anchor Point coordinates from the resolved
 /// `chamfer_len_<slug>` parameter. Keeps anchors moving when the

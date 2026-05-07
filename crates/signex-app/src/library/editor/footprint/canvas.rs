@@ -1052,6 +1052,94 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 draw_pad(frame, cstate, pad, self.state.selected_pad == Some(idx));
             }
 
+            // v0.25 polish — Source-pad indicator. When a pad is the
+            // `source` of an Array (Linear / Grid / Polar), render a
+            // small "+N" badge at the top-right corner of its bbox
+            // showing the replica count. Makes the linkage visible
+            // at a glance — without it, users can't tell which pad
+            // is the authoring source vs a baked replica.
+            if let Some(sketch) = self.sketch {
+                let array_source_counts: std::collections::HashMap<
+                    signex_sketch::id::SketchEntityId,
+                    usize,
+                > = sketch
+                    .arrays
+                    .iter()
+                    .filter_map(|a| {
+                        use signex_sketch::array::ArrayKind;
+                        let (source, count) = match &a.kind {
+                            ArrayKind::Linear { source, count_expr, .. } => {
+                                (*source, count_expr.trim().parse::<usize>().unwrap_or(0))
+                            }
+                            ArrayKind::Grid { source, nx_expr, ny_expr, .. } => {
+                                let nx = nx_expr.trim().parse::<usize>().unwrap_or(0);
+                                let ny = ny_expr.trim().parse::<usize>().unwrap_or(0);
+                                (*source, nx * ny)
+                            }
+                            ArrayKind::Polar { source, count_expr, .. } => {
+                                (*source, count_expr.trim().parse::<usize>().unwrap_or(0))
+                            }
+                        };
+                        if count > 0 {
+                            Some((source, count))
+                        } else {
+                            None
+                        }
+                    })
+                    .fold(
+                        std::collections::HashMap::new(),
+                        |mut acc, (id, count)| {
+                            *acc.entry(id).or_insert(0) += count;
+                            acc
+                        },
+                    );
+
+                if !array_source_counts.is_empty() && cstate.scale >= 12.0 {
+                    for pad in self.state.pads.iter() {
+                        let Some(entity_id) = pad.sketch_entity_id else {
+                            continue;
+                        };
+                        let Some(replica_count) = array_source_counts.get(&entity_id) else {
+                            continue;
+                        };
+                        if !self.state.layer_visibility.get(pad.primary_layer()) {
+                            continue;
+                        }
+                        let (_, _, x1, y1) = pad.bbox_mm();
+                        let p1 = cstate.world_to_screen((x1, y1));
+                        // Badge: 18×12 px rounded rect, accent fill,
+                        // white "+N" text. Positioned 6 px above + to
+                        // the right of the bbox top-right corner so
+                        // it doesn't overlap the pad outline.
+                        let badge_w: f32 = 22.0;
+                        let badge_h: f32 = 12.0;
+                        let bx = p1.x + 4.0;
+                        let by = p1.y - 6.0 - badge_h;
+                        let badge_rect = Path::rectangle(
+                            Point::new(bx, by),
+                            iced::Size::new(badge_w, badge_h),
+                        );
+                        // Altium-orange accent fill.
+                        frame.fill(&badge_rect, Color::from_rgba(0.96, 0.62, 0.18, 0.95));
+                        frame.stroke(
+                            &badge_rect,
+                            Stroke::default()
+                                .with_width(0.8)
+                                .with_color(Color::from_rgba(0.0, 0.0, 0.0, 0.6)),
+                        );
+                        frame.fill_text(canvas::Text {
+                            content: format!("+{replica_count}"),
+                            position: Point::new(bx + badge_w / 2.0, by + 1.0),
+                            color: Color::WHITE,
+                            size: 9.5.into(),
+                            align_x: iced::alignment::Horizontal::Center.into(),
+                            align_y: iced::alignment::Vertical::Top,
+                            ..canvas::Text::default()
+                        });
+                    }
+                }
+            }
+
             // v0.16.1 — Pads-mode placement ghost. When PlacePad is
             // active, render a solid 1×1 mm rectangle at the cursor
             // showing where the next pad will land. Mirrors the

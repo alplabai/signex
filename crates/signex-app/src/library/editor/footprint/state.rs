@@ -546,6 +546,12 @@ pub enum PlacementInputKind {
     /// Arc tool sweep angle (degrees) — third click commits at the
     /// typed sweep relative to start.
     ArcSweep,
+    /// v0.25 polish — Offset tool: typed buffer is the offset distance
+    /// (mm) from the source curve. The Offset tool already reads from
+    /// `state.dimension_input` as a fallback; the keypress capture
+    /// preferentially writes here so a fresh per-tool digit press
+    /// works without first navigating to the panel.
+    OffsetDistance,
 }
 
 impl PlacementInputKind {
@@ -566,6 +572,12 @@ impl PlacementInputKind {
             // third click is the end endpoint (sweep angle).
             (SketchTool::Arc, ToolPending::ArcCenter { .. }) => Some(Self::ArcRadius),
             (SketchTool::Arc, ToolPending::ArcStart { .. }) => Some(Self::ArcSweep),
+            // v0.25 polish — Offset tool: any pending state. The
+            // Offset tool's click is single-shot (it doesn't have
+            // multi-click pending states like Line / Arc), so any
+            // tool_pending lets the user type a digit before
+            // clicking the offset side.
+            (SketchTool::Offset, _) => Some(Self::OffsetDistance),
             _ => None,
         }
     }
@@ -584,6 +596,7 @@ impl PlacementInputKind {
             Self::LineLength => "len",
             Self::CircleRadius | Self::ArcRadius => "r",
             Self::ArcSweep => "deg",
+            Self::OffsetDistance => "dist",
         }
     }
 }
