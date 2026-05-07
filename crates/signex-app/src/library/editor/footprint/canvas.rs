@@ -335,36 +335,40 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                             .and_capture(),
                         );
                     }
-                    if let Some(pad_idx) = self.state.pad_at(world.0, world.1) {
-                        let pad = &self.state.pads[pad_idx];
-                        cstate.drag = Some(DragState {
-                            pad_idx,
-                            sketch_point: None,
-                            grab_offset_mm: (
-                                world.0 - pad.position_mm.0,
-                                world.1 - pad.position_mm.1,
-                            ),
-                            last_world: world,
-                            press_screen: cursor_pos,
-                            moved: false,
-                        });
-                        // Emit a select message so the model
-                        // highlights the pad on press.
-                        return Some(
-                            canvas::Action::publish(LibraryMessage::EditorEvent {
-                                library_path: self.address.library_path.clone(),
-                                table: self.address.table.clone(),
-                                row_id: self.address.row_id,
-                                msg: EditorMsg::FootprintSelectPad(Some(pad_idx)),
-                            })
-                            .and_capture(),
-                        );
+                    // v0.21 — Pad hit is gated on the Selection Filter
+                    // pad bit. When `pads` is off, pads stay
+                    // unselectable and clicks fall through to the
+                    // silk-hit / empty-canvas branches below.
+                    if self.state.selection_filter.pads {
+                        if let Some(pad_idx) = self.state.pad_at(world.0, world.1) {
+                            let pad = &self.state.pads[pad_idx];
+                            cstate.drag = Some(DragState {
+                                pad_idx,
+                                sketch_point: None,
+                                grab_offset_mm: (
+                                    world.0 - pad.position_mm.0,
+                                    world.1 - pad.position_mm.1,
+                                ),
+                                last_world: world,
+                                press_screen: cursor_pos,
+                                moved: false,
+                            });
+                            return Some(
+                                canvas::Action::publish(LibraryMessage::EditorEvent {
+                                    library_path: self.address.library_path.clone(),
+                                    table: self.address.table.clone(),
+                                    row_id: self.address.row_id,
+                                    msg: EditorMsg::FootprintSelectPad(Some(pad_idx)),
+                                })
+                                .and_capture(),
+                            );
+                        }
                     }
-                    // v0.18.18 — Pads-mode Select tool also tries
-                    // a silk-front graphic hit before falling
-                    // through to the empty-area click-add path.
-                    // The dispatcher's `FootprintSelectSilkF` arm
-                    // clears `selected_pad` symmetrically.
+                    // v0.18.18 — Silk-front graphic hit, filter-gated
+                    // per kind. v0.21 maps each FpGraphicKind to its
+                    // matching `selection_filter.*` bit so the user
+                    // can disable Tracks / Arcs / Texts / Regions /
+                    // Fills independently.
                     {
                         use crate::library::editor::footprint::state::{
                             EditorMode as Em2, PadsTool as Pt2,
@@ -376,15 +380,45 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                             if let Some(silk_idx) =
                                 silk_f_hit_at(self.silk_f, world.0, world.1, tolerance)
                             {
-                                return Some(
-                                    canvas::Action::publish(LibraryMessage::EditorEvent {
-                                        library_path: self.address.library_path.clone(),
-                                        table: self.address.table.clone(),
-                                        row_id: self.address.row_id,
-                                        msg: EditorMsg::FootprintSelectSilkF(Some(silk_idx)),
-                                    })
-                                    .and_capture(),
-                                );
+                                use signex_library::primitive::footprint::FpGraphicKind;
+                                let g = &self.silk_f[silk_idx];
+                                let allowed = match &g.kind {
+                                    FpGraphicKind::Line { .. } => {
+                                        self.state.selection_filter.tracks
+                                    }
+                                    FpGraphicKind::Arc { .. }
+                                    | FpGraphicKind::Circle { .. } => {
+                                        self.state.selection_filter.arcs
+                                    }
+                                    FpGraphicKind::Rectangle { .. } => {
+                                        if g.filled {
+                                            self.state.selection_filter.fills
+                                        } else {
+                                            self.state.selection_filter.tracks
+                                        }
+                                    }
+                                    FpGraphicKind::Polygon { .. } => {
+                                        if g.filled {
+                                            self.state.selection_filter.regions
+                                        } else {
+                                            self.state.selection_filter.tracks
+                                        }
+                                    }
+                                    FpGraphicKind::Text { .. } => {
+                                        self.state.selection_filter.texts
+                                    }
+                                };
+                                if allowed {
+                                    return Some(
+                                        canvas::Action::publish(LibraryMessage::EditorEvent {
+                                            library_path: self.address.library_path.clone(),
+                                            table: self.address.table.clone(),
+                                            row_id: self.address.row_id,
+                                            msg: EditorMsg::FootprintSelectSilkF(Some(silk_idx)),
+                                        })
+                                        .and_capture(),
+                                    );
+                                }
                             }
                         }
                     }
