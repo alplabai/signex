@@ -60,6 +60,15 @@ pub enum ArrayKind {
         center: SketchEntityId,
         count_expr: String,
         sweep_angle_expr: String,
+        /// v0.22 Phase B5 — per-instance suppression. Mirrors
+        /// [`GridDepopulation`] from `ArrayKind::Grid`. The
+        /// expression is evaluated per index `i in 0..count`
+        /// (the `j` bound from Grid is unused; consider it 0).
+        /// `false` skips the instance without breaking the
+        /// parametric chain. `None` (the default) keeps every
+        /// instance.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        depopulation: Option<GridDepopulation>,
     },
 }
 

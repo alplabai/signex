@@ -513,6 +513,31 @@ fn polar_array_round_trip() {
             center: SketchEntityId::new(),
             count_expr: "8".into(),
             sweep_angle_expr: "360deg".into(),
+            depopulation: None,
+        },
+        numbering: NumberingScheme::LinearIncrement {
+            start_expr: "1".into(),
+            step_expr: "1".into(),
+        },
+    };
+    let s = toml::to_string(&a).unwrap();
+    let back: Array = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
+}
+
+#[test]
+fn polar_array_with_depopulation_round_trip() {
+    // v0.22 Phase B5 — Polar gains depopulation parity with Grid.
+    let a = Array {
+        id: ArrayId::new(),
+        kind: ArrayKind::Polar {
+            source: SketchEntityId::new(),
+            center: SketchEntityId::new(),
+            count_expr: "8".into(),
+            sweep_angle_expr: "360deg".into(),
+            depopulation: Some(GridDepopulation {
+                mask_expr: "i != 3".into(),
+            }),
         },
         numbering: NumberingScheme::LinearIncrement {
             start_expr: "1".into(),

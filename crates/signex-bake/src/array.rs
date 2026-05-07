@@ -104,12 +104,14 @@ pub fn bake_arrays(
                 center,
                 count_expr,
                 sweep_angle_expr,
+                depopulation,
             } => {
                 bake_polar(
                     *source,
                     *center,
                     count_expr,
                     sweep_angle_expr,
+                    depopulation.as_ref(),
                     &array.numbering,
                     &params_ast,
                     sketch,
@@ -417,12 +419,17 @@ fn bake_grid(
 /// per-instance position is the source rotated by
 /// `i * sweep_angle_rad / count` around `center` (the source itself
 /// stays in place at i=0 — matches Altium's polar-array convention).
+///
+/// v0.22 Phase B5 — optional `depopulation` works the same as Grid:
+/// `mask_expr` is evaluated per `(i, j=0)` and `false` skips the
+/// instance without breaking the parametric chain.
 #[allow(clippy::too_many_arguments)]
 fn bake_polar(
     source: SketchEntityId,
     center: SketchEntityId,
     count_expr: &str,
     sweep_angle_expr: &str,
+    depopulation: Option<&signex_sketch::array::GridDepopulation>,
     numbering: &NumberingScheme,
     params_ast: &BTreeMap<String, ExprNode>,
     sketch: &SketchData,
@@ -507,7 +514,34 @@ fn bake_polar(
     let dx_src = sx - cx;
     let dy_src = sy - cy;
 
+    // v0.22 Phase B5 — pre-parse the depopulation mask, if any.
+    let mask_ast = depopulation
+        .map(|d| parse(strip_eq_prefix(&d.mask_expr)))
+        .transpose()
+        .map_err(SketchError::Expr)?;
+
     for i in 0..count {
+        // Depopulation predicate — non-zero / true keeps the
+        // instance, zero / false skips. `j` is bound to 0 (Grid's
+        // second axis isn't meaningful for Polar). Defaults to keep
+        // on eval failure (warned, never silently dropped).
+        if let Some(ast) = mask_ast.as_ref() {
+            let mask_ctx = EvalContext {
+                params: params_ast.clone(),
+                array_index: Some((i, 0)),
+            };
+            match eval(ast, &mask_ctx) {
+                Ok(q) => {
+                    if q.value.abs() < 1e-9 {
+                        continue;
+                    }
+                }
+                Err(e) => warnings.push(format!(
+                    "polar array source {source}: depopulation eval failed at i={i}: {e:?} — keeping instance"
+                )),
+            }
+        }
+
         let theta = (i as f64) * sweep_rad / denom;
         let cos_t = theta.cos();
         let sin_t = theta.sin();

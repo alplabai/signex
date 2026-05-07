@@ -6678,6 +6678,7 @@ pub(crate) fn apply_footprint_primitive_edit(
                             center: centre_id,
                             count_expr: "4".into(),
                             sweep_angle_expr: "360deg".into(),
+                            depopulation: None,
                         },
                         numbering: NumberingScheme::default(),
                     };
