@@ -192,6 +192,52 @@ fn restore_at_round_trips_a_prior_version() {
 }
 
 #[test]
+fn write_gitattributes_writes_the_v022_spec_with_lfs_off() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().to_path_buf();
+    let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+
+    adapter.write_gitattributes(false).unwrap();
+    let body = fs::read_to_string(root.join(".gitattributes")).unwrap();
+    assert!(body.contains("*.snxsch\ttext eol=lf"));
+    assert!(body.contains("*.snxpcb\ttext eol=lf"));
+    assert!(body.contains("*.snxprj\ttext eol=lf"));
+    assert!(body.contains("*.step\tbinary"));
+    assert!(body.contains("*.pdf\tbinary"));
+    assert!(
+        !body.contains("filter=lfs"),
+        "LFS line must not appear when use_lfs=false"
+    );
+}
+
+#[test]
+fn write_gitattributes_includes_lfs_filter_when_use_lfs_is_on() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().to_path_buf();
+    let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+
+    adapter.write_gitattributes(true).unwrap();
+    let body = fs::read_to_string(root.join(".gitattributes")).unwrap();
+    assert!(
+        body.contains("assets/3d-models/**\tfilter=lfs diff=lfs merge=lfs -text"),
+        "LFS line must appear when use_lfs=true; got:\n{body}"
+    );
+}
+
+#[test]
+fn write_gitattributes_overwrites_existing_file() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().to_path_buf();
+    let adapter = LocalGitProjectAdapter::open_or_init(root.clone()).unwrap();
+
+    fs::write(root.join(".gitattributes"), "stale-content").unwrap();
+    adapter.write_gitattributes(false).unwrap();
+    let body = fs::read_to_string(root.join(".gitattributes")).unwrap();
+    assert!(!body.contains("stale-content"));
+    assert!(body.contains("*.snxsch"));
+}
+
+#[test]
 fn commit_external_change_creates_a_user_edit_commit() {
     let tmp = TempDir::new().unwrap();
     let root = tmp.path().to_path_buf();
