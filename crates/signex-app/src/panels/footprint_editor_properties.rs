@@ -2814,7 +2814,33 @@ fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a, PanelMsg> 
                 ];
                 fill_poly(&mut frame, &quad, mask_dark);
             }
-            fill_poly(&mut frame, &mask_top_pts, mask_color);
+            // v0.25 — same ring-tile pattern as the copper top so
+            // the mask's hole goes through too. Without this, the
+            // mask top would block the view of the silver inner
+            // wall AND the copper''s hole would look like a
+            // step-up onto a solid blue disc.
+            if let Some(d) = self.drill_diameter_mm.filter(|d| *d > f32::EPSILON as f64) {
+                let hr = (d / 2.0) as f32;
+                let n = mask_top_pts.len();
+                let inner_mask_top_pts: Vec<iced::Point> = (0..n)
+                    .map(|i| {
+                        let t = i as f32 / n as f32 * std::f32::consts::TAU;
+                        project(hr * t.cos(), hr * t.sin(), mask_z_top)
+                    })
+                    .collect();
+                for i in 0..n {
+                    let j = (i + 1) % n;
+                    let quad = [
+                        mask_top_pts[i],
+                        mask_top_pts[j],
+                        inner_mask_top_pts[j],
+                        inner_mask_top_pts[i],
+                    ];
+                    fill_poly(&mut frame, &quad, mask_color);
+                }
+            } else {
+                fill_poly(&mut frame, &mask_top_pts, mask_color);
+            }
 
             // ── Copper: side walls + top face.
             let cu_world = perimeter_world(pad_hw, pad_hh, segments);
@@ -2839,7 +2865,39 @@ fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a, PanelMsg> 
                 ];
                 fill_poly(&mut frame, &quad, copper_dark);
             }
-            fill_poly(&mut frame, &cu_top_pts, copper_color);
+            // v0.25 — for THT pads, render the copper top as a RING
+            // (donut) so the user sees the punched-through hole.
+            // iced''s fill_poly has no hole support, so we triangulate
+            // the ring as quads between outer + inner perimeters
+            // sampled at the same theta angles. SMD pads (no drill)
+            // keep the simple solid-disc fill.
+            if let Some(d) = self.drill_diameter_mm.filter(|d| *d > f32::EPSILON as f64) {
+                let hr = (d / 2.0) as f32;
+                let n = cu_top_pts.len();
+                // Sample the hole perimeter at the SAME N angular
+                // steps as the outer perimeter so each (outer[i],
+                // inner[i]) pair lines up. The ring quad
+                // (outer[i], outer[j], inner[j], inner[i]) tiles
+                // between them.
+                let inner_top_pts: Vec<iced::Point> = (0..n)
+                    .map(|i| {
+                        let t = i as f32 / n as f32 * std::f32::consts::TAU;
+                        project(hr * t.cos(), hr * t.sin(), copper_z_top)
+                    })
+                    .collect();
+                for i in 0..n {
+                    let j = (i + 1) % n;
+                    let quad = [
+                        cu_top_pts[i],
+                        cu_top_pts[j],
+                        inner_top_pts[j],
+                        inner_top_pts[i],
+                    ];
+                    fill_poly(&mut frame, &quad, copper_color);
+                }
+            } else {
+                fill_poly(&mut frame, &cu_top_pts, copper_color);
+            }
 
             // ── Hole (THT only): silver inner wall (visible looking
             //    DOWN into the hole) + black void disc at the
