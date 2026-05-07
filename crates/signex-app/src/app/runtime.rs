@@ -1193,7 +1193,19 @@ fn build_footprint_editor_panel_ctx(
                             // entity ID, NOT a sketch parameter.
                             // Filter them out so they don't render
                             // as Properties rows.
-                            if key.ends_with("_arc") {
+                            //
+                            // v0.24 Track A6 — Chamfered pads register
+                            // `chamfer_<corner>_anchor1` /
+                            // `..._anchor2` sidecar keys with the
+                            // anchor Point UUIDs as values. These are
+                            // referenced by a future Unlink-chamfer
+                            // action; like `_arc`, they're not sketch
+                            // parameters so we skip them here.
+                            if key.ends_with("_arc")
+                                || key.ends_with("_anchor")
+                                || key.ends_with("_anchor1")
+                                || key.ends_with("_anchor2")
+                            {
                                 return None;
                             }
                             // v0.24 Track A5 — Oval pads store anchor
@@ -1211,6 +1223,7 @@ fn build_footprint_editor_panel_ctx(
                                 "diameter" => "Diameter".to_string(),
                                 "width" => "Width".to_string(),
                                 "height" => "Height".to_string(),
+                                "chamfer_len" => "Chamfer length".to_string(),
                                 "corner_r_ne" => "Corner radius (NE)".to_string(),
                                 "corner_r_se" => "Corner radius (SE)".to_string(),
                                 "corner_r_sw" => "Corner radius (SW)".to_string(),

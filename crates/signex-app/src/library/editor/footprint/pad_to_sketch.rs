@@ -15,7 +15,8 @@
 //!   the matching sketch entity.
 
 use signex_library::primitive::footprint::{
-    Footprint, PadKind as LibPadKind, PadShape as LibPadShape,
+    ChamferedCorners as LibChamferedCorners, Footprint, PadKind as LibPadKind,
+    PadShape as LibPadShape,
 };
 use signex_sketch::attr::{
     ChamferedCorners as SkChamferedCorners, CustomPadShape, PadAttr, PadKind as SkPadKind,
@@ -144,6 +145,20 @@ pub fn mirror_add_pad_to_sketch(pad: &mut EditorPad, footprint: &mut Footprint) 
             let corners = mint_oval_pad_geometry(sketch, plane_id, pad, entity_id);
             pad.corner_entity_ids = Some(corners);
         }
+        LibPadShape::Chamfered {
+            chamfer_ratio,
+            corners,
+        } => {
+            let bbox_corners = mint_chamfered_pad_geometry(
+                sketch,
+                plane_id,
+                pad,
+                entity_id,
+                *chamfer_ratio,
+                *corners,
+            );
+            pad.corner_entity_ids = Some(bbox_corners);
+        }
         _ => {
             // v0.16 — outline-corner Points + Lines, construction-only.
             let corners = mint_pad_corner_outline(sketch, plane_id, pad);
@@ -195,11 +210,24 @@ pub fn mirror_move_pad_in_sketch(pad: &EditorPad, footprint: &mut Footprint) {
 ///
 /// v0.24 Track A — also drop linked Circle / Arc entities and any
 /// sketch parameters keyed by the centre-Point UUID slug
-/// (`diameter_<slug>`, `corner_r_<slug>`, etc.). RoundRect's
-/// anchor / inset-corner Points are pulled into the drop set via a
-/// secondary sweep — they're referenced indirectly by Arcs whose
-/// `center` is the inset corner; once those Arcs and their adjacent
-/// Lines are dropped, the orphan Points get cleaned up too.
+/// (`diameter_<slug>`, `corner_r_<slug>`, `chamfer_len_<slug>`,
+/// etc.). RoundRect's anchor / inset-corner Points are pulled into
+/// the drop set via a secondary sweep — they're referenced
+/// indirectly by Arcs whose `center` is the inset corner; once those
+/// Arcs and their adjacent Lines are dropped, the orphan Points get
+/// cleaned up too.
+///
+/// v0.24 Track A6 — Chamfered pads add per-corner anchor Points
+/// keyed under `chamfer_<corner>_anchor1` / `..._anchor2` on
+/// `pad.shape_params`. The secondary sweep already picks up
+/// anchor Points via the Lines that connect them to the bbox
+/// corners (whose IDs are in `corner_entity_ids` and therefore in
+/// the initial drop set). The chamfer-cut Lines (anchor → anchor)
+/// are then caught when their endpoints get added to `drop_set` by
+/// the secondary sweep. Anchor IDs themselves are pulled out of
+/// `pad.shape_params` for completeness so the drop set covers them
+/// even on degenerate sketches where the connecting Lines went
+/// missing.
 pub fn mirror_delete_pad_from_sketch(pad: &EditorPad, footprint: &mut Footprint) {
     let Some(entity_id) = pad.sketch_entity_id else {
         return;
@@ -215,14 +243,16 @@ pub fn mirror_delete_pad_from_sketch(pad: &EditorPad, footprint: &mut Footprint)
     if let Some(corners) = pad.corner_entity_ids {
         to_drop.extend_from_slice(&corners);
     }
-    // v0.24 Track A5 — also seed any sidecar entity IDs stored on
-    // `pad.shape_params`. RoundRect stores per-corner Arc IDs under
-    // `corner_r_{ne,se,sw,nw}_arc`; Oval stores its anchor / arc-
-    // centre / Line / Arc IDs under `oval_{anchor,centre,line,arc}_*`.
-    // Sidecar values are UUID slugs (no dashes); `Uuid::parse_str`
-    // accepts the slug form so we filter shape_params values that
-    // parse cleanly. Canonical binding values like
-    // `corner_r_<slug>` / `width_<slug>` / `height_<slug>` /
+    // v0.24 Track A5 + A6 — also seed any sidecar entity IDs stored
+    // on `pad.shape_params`. RoundRect stores per-corner Arc IDs
+    // under `corner_r_{ne,se,sw,nw}_arc`; Oval stores its anchor /
+    // arc-centre / Line / Arc IDs under
+    // `oval_{anchor,centre,line,arc}_*`; Chamfered stores anchors
+    // under `chamfer_<corner>_anchor1` / `..._anchor2`. All sidecar
+    // values are UUID slugs (no dashes); `Uuid::parse_str` accepts
+    // the slug form so we filter shape_params values that parse
+    // cleanly. Canonical binding values like `corner_r_<slug>` /
+    // `width_<slug>` / `height_<slug>` / `chamfer_len_<slug>` /
     // `diameter_<slug>` are not pure UUIDs (they have a leading
     // identifier prefix) so they fall through.
     for value in pad.shape_params.values() {
@@ -817,6 +847,224 @@ fn mint_oval_pad_geometry(
     bbox_corners
 }
 
+/// v0.24 Track A6 — mint a Chamfered pad's parametric geometry.
+/// Like RoundRect, the bbox corner Points are minted in the
+/// canonical `[ne, se, sw, nw]` order (returned for
+/// `corner_entity_ids`). For each ENABLED chamfered corner (per
+/// `chamfer_corners.<key>`), two "chamfer-anchor" Points are minted
+/// along the two edges adjacent to that bbox corner, each `r`
+/// (= chamfer length) away from the bbox corner. Adjacent anchors
+/// (and disabled bbox corners) are then connected by Lines so the
+/// resulting outline hugs the chamfered shape — disabled corners
+/// stay as 90° angles.
+///
+/// All four enabled corners read their length from a single shared
+/// `chamfer_len_<slug>` sketch parameter (mirrors RoundRect's
+/// shared `corner_r` pattern). A future "Unlink chamfer length"
+/// action (out of scope for A6 MVP) can mint per-corner override
+/// parameters; the per-corner anchor sidecar keys
+/// (`chamfer_ne_anchor1` / `..._anchor2`) record which Points belong
+/// to which corner so the unlink path has the data it needs.
+///
+/// Initial value of `chamfer_len_<slug>` is
+/// `chamfer_ratio * min(W, H)` so existing pads on disk mint with
+/// the right visual length.
+///
+/// Degenerate case (no corners enabled, or chamfer_len ≤ 0): warns
+/// and falls through to the v0.16 4-Line bbox outline.
+fn mint_chamfered_pad_geometry(
+    sketch: &mut SketchData,
+    plane_id: PlaneId,
+    pad: &mut EditorPad,
+    centre_id: SketchEntityId,
+    chamfer_ratio: f64,
+    corner_flags: LibChamferedCorners,
+) -> [SketchEntityId; 4] {
+    let bbox = pad.bbox_mm();
+    let (xmin, ymin, xmax, ymax) = bbox;
+    let (w, h) = pad.size_mm;
+    // Chamfer length = chamfer_ratio * min(W, H). Clamp to the bbox
+    // half-extent so a pathological chamfer_ratio (>0.5) cannot push
+    // anchors past each other on a single edge.
+    let r = (chamfer_ratio.max(0.0) * w.min(h)).min(w.min(h) / 2.0);
+
+    let any_enabled = corner_flags.top_left
+        || corner_flags.top_right
+        || corner_flags.bottom_left
+        || corner_flags.bottom_right;
+    if !any_enabled {
+        tracing::warn!(
+            target: "signex::v024",
+            "Chamfered pad has no enabled corners; falling back to bbox 4-Line outline"
+        );
+        return mint_pad_corner_outline(sketch, plane_id, pad);
+    }
+    if r <= f64::EPSILON {
+        tracing::warn!(
+            target: "signex::v024",
+            "Chamfered pad has zero / negative chamfer length (ratio = {chamfer_ratio}); \
+             falling back to bbox 4-Line outline"
+        );
+        return mint_pad_corner_outline(sketch, plane_id, pad);
+    }
+
+    // ── 1. bbox corner Points (NE, SE, SW, NW). Same canonical
+    //    order used everywhere else in pad_to_sketch.rs. The
+    //    `corner_entity_ids` array maps directly to these so move/
+    //    delete mirrors keep tracking the bbox.
+    //
+    //    `LibChamferedCorners` uses Y-down naming (top_left = NW,
+    //    top_right = NE, bottom_left = SW, bottom_right = SE) so we
+    //    align corner_flags → (NE/SE/SW/NW) explicitly here.
+    let bbox_corner_positions: [(f64, f64); 4] = [
+        (xmax, ymin), // ne — top_right (Y-down: top is min-Y)
+        (xmax, ymax), // se — bottom_right
+        (xmin, ymax), // sw — bottom_left
+        (xmin, ymin), // nw — top_left
+    ];
+    let bbox_corners: [SketchEntityId; 4] = std::array::from_fn(|_| SketchEntityId::new());
+    for (id, (x, y)) in bbox_corners.iter().zip(bbox_corner_positions.iter()) {
+        let entity = Entity::new(*id, plane_id, EntityKind::Point { x: *x, y: *y });
+        sketch.entities.push(entity);
+    }
+
+    // ── 2. Per-corner anchor Points (only for ENABLED corners).
+    //    For an enabled corner, two anchors sit on the two adjacent
+    //    edges, each `r` away from the bbox corner. `anchor1` /
+    //    `anchor2` follow CCW outline traversal so the Lines pick
+    //    them up cleanly:
+    //      NE: anchor1 = top-edge anchor   (xmax - r, ymin)
+    //          anchor2 = right-edge anchor (xmax,     ymin + r)
+    //      SE: anchor1 = right-edge anchor (xmax,     ymax - r)
+    //          anchor2 = bot-edge anchor   (xmax - r, ymax)
+    //      SW: anchor1 = bot-edge anchor   (xmin + r, ymax)
+    //          anchor2 = left-edge anchor  (xmin,     ymax - r)
+    //      NW: anchor1 = left-edge anchor  (xmin,     ymin + r)
+    //          anchor2 = top-edge anchor   (xmin + r, ymin)
+    let corner_specs: [(usize, bool, &str, &str, (f64, f64), (f64, f64)); 4] = [
+        (
+            0,
+            corner_flags.top_right,
+            "chamfer_ne_anchor1",
+            "chamfer_ne_anchor2",
+            (xmax - r, ymin),
+            (xmax, ymin + r),
+        ),
+        (
+            1,
+            corner_flags.bottom_right,
+            "chamfer_se_anchor1",
+            "chamfer_se_anchor2",
+            (xmax, ymax - r),
+            (xmax - r, ymax),
+        ),
+        (
+            2,
+            corner_flags.bottom_left,
+            "chamfer_sw_anchor1",
+            "chamfer_sw_anchor2",
+            (xmin + r, ymax),
+            (xmin, ymax - r),
+        ),
+        (
+            3,
+            corner_flags.top_left,
+            "chamfer_nw_anchor1",
+            "chamfer_nw_anchor2",
+            (xmin, ymin + r),
+            (xmin + r, ymin),
+        ),
+    ];
+
+    // anchors[i] = Some((a1, a2)) for enabled corner i, or None.
+    // We hold IDs paired with the bbox corner index they belong to
+    // so step 3 can stitch the outline correctly.
+    let mut anchors: [Option<(SketchEntityId, SketchEntityId)>; 4] = [None, None, None, None];
+    for (corner_idx, enabled, key1, key2, pos1, pos2) in corner_specs {
+        if !enabled {
+            continue;
+        }
+        let a1_id = SketchEntityId::new();
+        let a2_id = SketchEntityId::new();
+        sketch.entities.push(Entity::new(
+            a1_id,
+            plane_id,
+            EntityKind::Point { x: pos1.0, y: pos1.1 },
+        ));
+        sketch.entities.push(Entity::new(
+            a2_id,
+            plane_id,
+            EntityKind::Point { x: pos2.0, y: pos2.1 },
+        ));
+        anchors[corner_idx] = Some((a1_id, a2_id));
+        // Per-corner sidecar keys — record which Points belong to
+        // which corner so a future Unlink-chamfer-length action has
+        // the data it needs. The Properties summary loop filters any
+        // key ending in `_anchor` so these don't render as rows.
+        pad.shape_params
+            .insert(key1.into(), a1_id.0.simple().to_string());
+        pad.shape_params
+            .insert(key2.into(), a2_id.0.simple().to_string());
+    }
+
+    // ── 3. Outline traversal. Walking CCW: NE → SE → SW → NW → NE.
+    //    For each consecutive corner pair (i, i+1):
+    //      - The chamfer-cut line at corner i (anchor1 → anchor2)
+    //        is added once per enabled corner.
+    //      - The edge between corner i and corner i+1 connects
+    //        end-of-i (= anchor2 if enabled, else bbox corner) to
+    //        start-of-(i+1) (= anchor1 if enabled, else bbox corner).
+    //
+    //    Yields: each enabled corner contributes 1 chamfer-cut line +
+    //    its outgoing edge; each disabled corner contributes only its
+    //    outgoing edge (the bbox corner stays as a sharp 90°). Total
+    //    Lines = enabled_count + 4.
+    for i in 0..4 {
+        let next = (i + 1) % 4;
+        // Chamfer-cut line for corner i, only when enabled.
+        if let Some((a1, a2)) = anchors[i] {
+            let line = Entity::new(
+                SketchEntityId::new(),
+                plane_id,
+                EntityKind::Line { start: a1, end: a2 },
+            );
+            sketch.entities.push(line);
+        }
+        // Edge connecting the end of corner i to the start of corner
+        // i+1.
+        let edge_start = match anchors[i] {
+            Some((_, a2)) => a2,
+            None => bbox_corners[i],
+        };
+        let edge_end = match anchors[next] {
+            Some((a1, _)) => a1,
+            None => bbox_corners[next],
+        };
+        let line = Entity::new(
+            SketchEntityId::new(),
+            plane_id,
+            EntityKind::Line {
+                start: edge_start,
+                end: edge_end,
+            },
+        );
+        sketch.entities.push(line);
+    }
+
+    // ── 4. Shared chamfer_len parameter. All enabled corners share
+    //    this single parameter (Fusion-parity). The literal length is
+    //    stored as the parameter expression so a fresh sketch
+    //    round-trips identity.
+    let slug = id_slug(centre_id);
+    let param_name = format!("chamfer_len_{slug}");
+    sketch
+        .parameters
+        .insert(param_name.clone(), format!("{}mm", format_f64(r)));
+    pad.shape_params.insert("chamfer_len".into(), param_name);
+
+    bbox_corners
+}
+
 /// v0.24 Track A — UUID slug for parameter-name namespacing. Strips
 /// dashes so the resulting parameter name is a valid identifier in
 /// the expression language.
@@ -990,6 +1238,117 @@ pub fn mirror_solve_to_pad_stack(
         // show a bad number.
         let clamped = pct.clamp(0.0, 50.0);
         pad.stack.corner_radius_pct = Some(clamped);
+    }
+}
+
+/// v0.24 Track A6 — after every successful solve, re-derive the
+/// chamfer anchor Point coordinates from the resolved
+/// `chamfer_len_<slug>` parameter. Keeps anchors moving when the
+/// Properties-row edit (or any other parameter-table edit) rewrites
+/// the shared `chamfer_len` value.
+///
+/// MVP scope — anchor coords are otherwise literal at mint time.
+/// This helper is what makes the shared-parameter binding feel
+/// "live" without introducing solver-side constraints (a follow-up
+/// task on Track A). For each pad with a `chamfer_len` binding:
+///
+///   1. Look up the bound parameter in the `resolved` map (canonical
+///      mm).
+///   2. Walk `pad.shape_params` for every `chamfer_<corner>_anchor1`
+///      / `..._anchor2` sidecar; resolve each UUID to a Point in
+///      `sketch.entities`; recompute its (x, y) given the pad bbox
+///      and the corner identity.
+///
+/// Defensive on missing data — a pad without `chamfer_len` is
+/// silently skipped, a sidecar whose UUID doesn't resolve is
+/// logged at warn level.
+///
+/// The sketch is taken as an explicit `&mut SketchData` borrow
+/// rather than via `&mut FootprintEditorState` so the dispatcher
+/// can hold both the editor state (immutable for `pads`) and the
+/// sketch (mutable for entity coords) at the same call site
+/// without overlapping mutable borrows on `Footprint`.
+pub fn mirror_solve_to_chamfer_anchors(
+    state: &super::state::FootprintEditorState,
+    sketch: &mut SketchData,
+    resolved: &std::collections::HashMap<String, f64>,
+) {
+    for pad in state.pads.iter() {
+        let Some(parameter_name) = pad.shape_params.get("chamfer_len") else {
+            continue;
+        };
+        let Some(chamfer_len_mm) = resolved.get(parameter_name).copied() else {
+            tracing::warn!(
+                target: "signex::v024",
+                "mirror_solve_to_chamfer_anchors_with_sketch: parameter {parameter_name} \
+                 missing from resolved map; skipping pad {}",
+                pad.number
+            );
+            continue;
+        };
+        let bbox = pad.bbox_mm();
+        let (xmin, ymin, xmax, ymax) = bbox;
+        let (w, h) = pad.size_mm;
+        let r = chamfer_len_mm.max(0.0).min(w.min(h) / 2.0);
+
+        // Per-corner expected (x, y) for each (anchor1, anchor2),
+        // matching the `mint_chamfered_pad_geometry` order.
+        let corners: [(&str, &str, (f64, f64), (f64, f64)); 4] = [
+            (
+                "chamfer_ne_anchor1",
+                "chamfer_ne_anchor2",
+                (xmax - r, ymin),
+                (xmax, ymin + r),
+            ),
+            (
+                "chamfer_se_anchor1",
+                "chamfer_se_anchor2",
+                (xmax, ymax - r),
+                (xmax - r, ymax),
+            ),
+            (
+                "chamfer_sw_anchor1",
+                "chamfer_sw_anchor2",
+                (xmin + r, ymax),
+                (xmin, ymax - r),
+            ),
+            (
+                "chamfer_nw_anchor1",
+                "chamfer_nw_anchor2",
+                (xmin, ymin + r),
+                (xmin + r, ymin),
+            ),
+        ];
+
+        for (key1, key2, pos1, pos2) in corners {
+            let Some(slug1) = pad.shape_params.get(key1) else {
+                continue;
+            };
+            let Some(slug2) = pad.shape_params.get(key2) else {
+                continue;
+            };
+            let id1 = match uuid::Uuid::parse_str(slug1) {
+                Ok(u) => SketchEntityId(u),
+                Err(_) => continue,
+            };
+            let id2 = match uuid::Uuid::parse_str(slug2) {
+                Ok(u) => SketchEntityId(u),
+                Err(_) => continue,
+            };
+            for entity in sketch.entities.iter_mut() {
+                if entity.id == id1 {
+                    if let EntityKind::Point { x, y } = &mut entity.kind {
+                        *x = pos1.0;
+                        *y = pos1.1;
+                    }
+                } else if entity.id == id2 {
+                    if let EntityKind::Point { x, y } = &mut entity.kind {
+                        *x = pos2.0;
+                        *y = pos2.1;
+                    }
+                }
+            }
+        }
     }
 }
 

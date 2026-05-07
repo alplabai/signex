@@ -1630,6 +1630,12 @@ impl FootprintEditorState {
     /// `pad.number` too. Without this, every solve+rebake cycle
     /// would reset the bindings and the Properties-panel rows would
     /// disappear.
+    ///
+    /// v0.24 Track A6 — Chamfered pads' `chamfer_len` shared
+    /// parameter and the per-corner `chamfer_<corner>_anchor1` /
+    /// `..._anchor2` sidecar keys are carried by the same
+    /// `shape_params.clone()` step, so they survive solve+rebake
+    /// without any chamfer-specific bookkeeping here.
     pub fn refresh_pads_from_primitive(&mut self, fp: &Footprint) {
         use std::collections::HashMap;
         type Link = (

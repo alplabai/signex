@@ -528,6 +528,19 @@ fn solve_and_bake(
                 // parameter is edited from elsewhere (Properties row,
                 // parameter table, drag handle).
                 super::pad_to_sketch::mirror_solve_to_pad_stack(state, &resolved);
+
+                // v0.24 Track A6 — chamfer anchor reposition. The
+                // shared `chamfer_len_<slug>` parameter doesn't drive
+                // the anchor Points via solver constraints (literal
+                // mint), so this post-solve pass rewrites the
+                // anchor coords from the resolved chamfer_len value.
+                // Only fires for pads with a `chamfer_len` binding;
+                // other pads get an early return inside the helper.
+                if let Some(sketch) = footprint.sketch.as_mut() {
+                    super::pad_to_sketch::mirror_solve_to_chamfer_anchors(
+                        state, sketch, &resolved,
+                    );
+                }
             }
 
             state.last_solve = Some(out);
