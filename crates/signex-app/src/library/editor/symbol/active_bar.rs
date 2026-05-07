@@ -70,10 +70,13 @@ pub fn bar_items(
 
 /// Build the dropdown overlay (panel + click-outside backstop) for
 /// the currently-open menu. `None` when no menu open.
+///
+/// `top_padding_px`: see [`crate::library::editor::footprint::unified_active_bar::dropdown_overlay`].
 pub fn dropdown_overlay<'a>(
     editor: &'a SymbolEditorState,
     theme_id: ThemeId,
     tokens: &'a ThemeTokens,
+    top_padding_px: u16,
 ) -> Option<iced::Element<'a, LibraryMessage>> {
     use iced::widget::{Stack, container, mouse_area, Space};
     use iced::Length;
@@ -98,7 +101,7 @@ pub fn dropdown_overlay<'a>(
     };
     let panel = signex_widgets::active_bar_dropdown::view(entries, tokens, width_hint);
     let panel_anchor = container(panel)
-        .padding([46, 10])
+        .padding([top_padding_px, 10])
         .center_x(Length::Fill)
         .align_y(iced::alignment::Vertical::Top);
     let backstop = mouse_area(

@@ -4789,12 +4789,20 @@ impl Signex {
                 ]
                 .into(),
             );
+            // Position the dropdown panel directly below the bar's
+            // bottom edge. Bar-height = 28 button + 6 padding + 2
+            // border = 36; plus the 4 px top margin from the column
+            // above = 40 px tall block. `y_offset + 40` is the bar's
+            // bottom; add a 2 px gap so the dropdown visually
+            // touches without overlapping the border.
+            let dropdown_top: u16 = (y_offset as u16).saturating_add(42);
             if let Some(overlay) =
                 crate::library::editor::footprint::unified_active_bar::dropdown_overlay(
                     editor,
                     theme_id,
                     tokens,
                     custom_presets,
+                    dropdown_top,
                 )
             {
                 layers.push(overlay.map(Message::Library));
@@ -4829,9 +4837,10 @@ impl Signex {
                 ]
                 .into(),
             );
+            let dropdown_top: u16 = (y_offset as u16).saturating_add(42);
             if let Some(overlay) =
                 crate::library::editor::symbol::active_bar::dropdown_overlay(
-                    editor, theme_id, tokens,
+                    editor, theme_id, tokens, dropdown_top,
                 )
             {
                 layers.push(overlay.map(Message::Library));

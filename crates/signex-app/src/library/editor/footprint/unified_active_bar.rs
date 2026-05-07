@@ -48,11 +48,19 @@ pub fn bar_items(
 /// Build the dropdown overlay (panel + click-outside backstop) for
 /// the currently-open menu. Returns `None` when no menu is open.
 /// Caller pushes the result as a separate layer above the bar.
+///
+/// `top_padding_px` is the y-offset (from the overlay's top edge,
+/// which sits at window y=0) where the dropdown panel should land —
+/// callers compute it as `y_offset + 4 + bar_height + small_gap` so
+/// the panel touches the bar's bottom edge regardless of whether the
+/// tab strip is showing. Hard-coded values drift when the menu bar
+/// or tab-strip heights shift, so the caller owns the formula.
 pub fn dropdown_overlay<'a>(
     editor: &'a FootprintEditorState,
     theme_id: ThemeId,
     tokens: &'a ThemeTokens,
     custom_filter_presets: &[crate::active_bar::CustomFilterPreset],
+    top_padding_px: u16,
 ) -> Option<iced::Element<'a, LibraryMessage>> {
     use iced::widget::{Stack, container, mouse_area, Space};
     use iced::Length;
@@ -78,7 +86,7 @@ pub fn dropdown_overlay<'a>(
     };
     let panel = signex_widgets::active_bar_dropdown::view(entries, tokens, width_hint);
     let panel_anchor = container(panel)
-        .padding([46, 10])
+        .padding([top_padding_px, 10])
         .center_x(Length::Fill)
         .align_y(iced::alignment::Vertical::Top);
 
