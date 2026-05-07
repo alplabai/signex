@@ -1318,3 +1318,219 @@ fn footprint_editor_new_mutation_clears_redo_stack() {
     editor.push_history();
     assert!(editor.redo.is_empty());
 }
+
+// ─────────────────────────────────────────────────────────────────
+// v0.24 Phase 1 Track A — parametric pad geometry mirror
+// ─────────────────────────────────────────────────────────────────
+
+#[test]
+fn mirror_add_round_pad_mints_circle_with_diameter_param() {
+    // v0.24 Track A — placing a Round pad in Pads mode should mirror
+    // into the sketch as 1 centre Point + 1 Circle entity referencing
+    // that centre, plus a `diameter_<slug>` sketch parameter
+    // recording the pad's diameter literal. `pad.shape_params` should
+    // record `"diameter" -> param_name` so the Phase 3 Properties row
+    // can look up the binding.
+    use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
+    use signex_app::library::editor::footprint::state::EditorPad;
+    use signex_library::primitive::footprint::{Footprint, PadShape};
+    use signex_sketch::entity::EntityKind;
+
+    let mut pad = EditorPad::new_default("1".into(), (2.0, 3.0));
+    pad.shape = PadShape::Round;
+    pad.size_mm = (1.5, 1.5);
+    let mut fp = Footprint::empty("test");
+
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+
+    let sketch = fp.sketch.as_ref().expect("sketch minted");
+
+    // Exactly 1 Point (the centre) + 1 Circle.
+    let points: Vec<_> = sketch
+        .entities
+        .iter()
+        .filter(|e| matches!(e.kind, EntityKind::Point { .. }))
+        .collect();
+    let circles: Vec<_> = sketch
+        .entities
+        .iter()
+        .filter(|e| matches!(e.kind, EntityKind::Circle { .. }))
+        .collect();
+    let arcs: Vec<_> = sketch
+        .entities
+        .iter()
+        .filter(|e| matches!(e.kind, EntityKind::Arc { .. }))
+        .collect();
+    let lines: Vec<_> = sketch
+        .entities
+        .iter()
+        .filter(|e| matches!(e.kind, EntityKind::Line { .. }))
+        .collect();
+    assert_eq!(points.len(), 1, "Round pad mints exactly 1 centre Point");
+    assert_eq!(circles.len(), 1, "Round pad mints exactly 1 Circle");
+    assert!(arcs.is_empty(), "Round pad mints no Arcs");
+    assert!(lines.is_empty(), "Round pad mints no Lines");
+
+    // The Circle's centre must reference the centre Point ID.
+    let centre_id = pad.sketch_entity_id.expect("centre id minted");
+    if let EntityKind::Circle { center, radius } = circles[0].kind {
+        assert_eq!(center, centre_id, "Circle.center references centre Point");
+        // radius = diameter / 2 = 0.75
+        assert!((radius - 0.75).abs() < 1e-9, "Circle.radius is half the diameter");
+    } else {
+        unreachable!()
+    }
+
+    // No bbox-corner outline for Round pads.
+    assert!(
+        pad.corner_entity_ids.is_none(),
+        "Round pads skip the bbox 4-Point outline"
+    );
+
+    // pad.shape_params binds "diameter" to a named parameter.
+    let param_name = pad
+        .shape_params
+        .get("diameter")
+        .expect("'diameter' key bound on Round pad");
+    assert!(
+        param_name.starts_with("diameter_"),
+        "param name has the diameter_<slug> form (got `{param_name}`)"
+    );
+
+    // sketch.parameters must contain that exact parameter, holding
+    // the literal diameter expression.
+    let raw = sketch
+        .parameters
+        .get_raw(param_name)
+        .expect("diameter parameter is registered on sketch.parameters");
+    assert_eq!(raw, "1.5mm", "diameter parameter records the W literal");
+}
+
+#[test]
+fn mirror_add_round_rect_pad_mints_4_arcs_linked_to_corner_r() {
+    // v0.24 Track A — placing a RoundRect pad in Pads mode should
+    // mirror into the sketch as the full Fusion-parity parametric
+    // outline:
+    //   - 1 centre Point
+    //   - 4 bbox corner Points
+    //   - 8 arc-anchor Points
+    //   - 4 inset corner Points (arc centres)
+    //   = 17 Points
+    //   + 4 shorter Lines + 4 corner Arcs = 25 entities
+    // All 4 Arcs must read from the same `corner_r_<slug>` parameter
+    // so they stay linked implicitly. `pad.shape_params` should
+    // record `"corner_r" -> param_name`.
+    use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
+    use signex_app::library::editor::footprint::state::EditorPad;
+    use signex_library::primitive::footprint::{Footprint, PadShape};
+    use signex_sketch::entity::EntityKind;
+
+    let mut pad = EditorPad::new_default("1".into(), (0.0, 0.0));
+    pad.shape = PadShape::RoundRect { radius_ratio: 0.25 };
+    pad.size_mm = (2.0, 1.0); // W=2, H=1, min=1, r = 0.25 * 1 = 0.25
+    let mut fp = Footprint::empty("test");
+
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+
+    let sketch = fp.sketch.as_ref().expect("sketch minted");
+
+    // Exactly 4 Arc entities.
+    let arcs: Vec<_> = sketch
+        .entities
+        .iter()
+        .filter(|e| matches!(e.kind, EntityKind::Arc { .. }))
+        .collect();
+    assert_eq!(arcs.len(), 4, "RoundRect pad mints exactly 4 corner Arcs");
+
+    // Exactly 4 Lines (the shorter edge-anchor connectors).
+    let lines: Vec<_> = sketch
+        .entities
+        .iter()
+        .filter(|e| matches!(e.kind, EntityKind::Line { .. }))
+        .collect();
+    assert_eq!(lines.len(), 4, "RoundRect pad mints 4 shorter edge Lines");
+
+    // 1 centre + 4 bbox corners + 8 anchors + 4 inset corners = 17 Points.
+    let points: Vec<_> = sketch
+        .entities
+        .iter()
+        .filter(|e| matches!(e.kind, EntityKind::Point { .. }))
+        .collect();
+    assert_eq!(
+        points.len(),
+        17,
+        "RoundRect pad mints 1 centre + 4 bbox + 8 anchors + 4 inset = 17 Points"
+    );
+
+    // pad.shape_params must bind "corner_r" to a named parameter.
+    let param_name = pad
+        .shape_params
+        .get("corner_r")
+        .expect("'corner_r' key bound on RoundRect pad");
+    assert!(
+        param_name.starts_with("corner_r_"),
+        "param name has the corner_r_<slug> form (got `{param_name}`)"
+    );
+
+    // sketch.parameters must contain that exact parameter, holding
+    // the literal radius (= 0.25 * min(W,H) = 0.25 mm).
+    let raw = sketch
+        .parameters
+        .get_raw(param_name)
+        .expect("corner_r parameter is registered on sketch.parameters");
+    assert_eq!(
+        raw, "0.25mm",
+        "corner_r parameter records the literal inset distance"
+    );
+
+    // All 4 Arcs implicitly share the same corner_r parameter — the
+    // mint side encodes this by giving the arcs equal radii at mint
+    // time (literal-equal because they all read the same parameter
+    // expression). Verify by extracting the radius implied by each
+    // Arc's geometry and checking they're all equal.
+    //
+    // Arc radius = distance from center Point to start Point. We
+    // grab each Arc's center+start, look up the Point coords, and
+    // compute the radius. All 4 must be equal (within EPS).
+    let mut arc_radii: Vec<f64> = Vec::with_capacity(4);
+    for arc in &arcs {
+        let (center_id, start_id) = match arc.kind {
+            EntityKind::Arc {
+                center, start, ..
+            } => (center, start),
+            _ => unreachable!(),
+        };
+        let center_pos = sketch
+            .entities
+            .iter()
+            .find(|e| e.id == center_id)
+            .and_then(|e| match e.kind {
+                EntityKind::Point { x, y } => Some((x, y)),
+                _ => None,
+            })
+            .expect("Arc.center references a Point");
+        let start_pos = sketch
+            .entities
+            .iter()
+            .find(|e| e.id == start_id)
+            .and_then(|e| match e.kind {
+                EntityKind::Point { x, y } => Some((x, y)),
+                _ => None,
+            })
+            .expect("Arc.start references a Point");
+        let dx = start_pos.0 - center_pos.0;
+        let dy = start_pos.1 - center_pos.1;
+        arc_radii.push((dx * dx + dy * dy).sqrt());
+    }
+    let first = arc_radii[0];
+    for r in &arc_radii {
+        assert!(
+            (r - first).abs() < 1e-9,
+            "all 4 Arc radii must be equal (corner_r-linked); got {arc_radii:?}"
+        );
+        assert!(
+            (r - 0.25).abs() < 1e-9,
+            "Arc radius must equal corner_r = 0.25mm; got {r}"
+        );
+    }
+}
