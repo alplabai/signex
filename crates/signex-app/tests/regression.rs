@@ -2407,3 +2407,257 @@ fn reverse_mirror_updates_pad_stack_corner_radius_pct() {
         "corner_radius_pct = corner_r/min(W,H)*100 = 0.25/1*100 = 25; got {pct}"
     );
 }
+
+// ─────────────────────────────────────────────────────────────────
+// v0.24 Phase 4 Track A5 — Oval pad parametric mint
+// ─────────────────────────────────────────────────────────────────
+
+/// v0.24 Track A5 — placing an Oval pad in Pads mode should mirror
+/// into the sketch as the full Fusion-parity stadium primitive:
+///   - 1 centre Point
+///   - 4 bbox corner Points
+///   - 4 arc-anchor Points (where the rounded ends meet the
+///     straight edges)
+///   - 2 Arc-centre Points (offset inward from the short-axis edges
+///     by half the short axis)
+///   = 11 Points
+///   + 2 long-axis Lines + 2 short-axis Arcs = 15 entities
+/// `pad.shape_params` records `"width" -> width_<slug>` and
+/// `"height" -> height_<slug>` so the Properties panel can surface
+/// both as editable rows.
+#[test]
+fn mirror_add_oval_pad_mints_2_arcs_2_lines_with_w_and_h_params() {
+    use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
+    use signex_app::library::editor::footprint::state::EditorPad;
+    use signex_library::primitive::footprint::{Footprint, PadShape};
+    use signex_sketch::entity::EntityKind;
+
+    // Wide oval: W=2mm, H=1mm. Rounded ends on the left + right
+    // edges; arc radius = H/2 = 0.5mm.
+    let mut pad = EditorPad::new_default("1".into(), (0.0, 0.0));
+    pad.shape = PadShape::Oval;
+    pad.size_mm = (2.0, 1.0);
+    let mut fp = Footprint::empty("test");
+
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+
+    let sketch = fp.sketch.as_ref().expect("sketch minted");
+
+    // Exactly 2 Arc entities — one per short-axis end, each spanning
+    // 180°.
+    let arcs: Vec<_> = sketch
+        .entities
+        .iter()
+        .filter(|e| matches!(e.kind, EntityKind::Arc { .. }))
+        .collect();
+    assert_eq!(arcs.len(), 2, "Oval pad mints exactly 2 short-axis Arcs");
+
+    // Exactly 2 Lines on the long-axis edges connecting anchor pairs.
+    let lines: Vec<_> = sketch
+        .entities
+        .iter()
+        .filter(|e| matches!(e.kind, EntityKind::Line { .. }))
+        .collect();
+    assert_eq!(lines.len(), 2, "Oval pad mints exactly 2 long-axis Lines");
+
+    // 1 centre + 4 bbox + 4 anchors + 2 arc-centres = 11 Points.
+    let points: Vec<_> = sketch
+        .entities
+        .iter()
+        .filter(|e| matches!(e.kind, EntityKind::Point { .. }))
+        .collect();
+    assert_eq!(
+        points.len(),
+        11,
+        "Oval pad mints 1 centre + 4 bbox + 4 anchors + 2 arc-centres = 11 Points"
+    );
+
+    // No Circles (Round-only).
+    let circles: Vec<_> = sketch
+        .entities
+        .iter()
+        .filter(|e| matches!(e.kind, EntityKind::Circle { .. }))
+        .collect();
+    assert!(circles.is_empty(), "Oval pad mints no Circle entities");
+
+    // pad.shape_params binds "width" + "height" to named parameters.
+    let width_param = pad
+        .shape_params
+        .get("width")
+        .expect("'width' key bound on Oval pad");
+    let height_param = pad
+        .shape_params
+        .get("height")
+        .expect("'height' key bound on Oval pad");
+    assert!(
+        width_param.starts_with("width_"),
+        "width param has the width_<slug> form (got `{width_param}`)"
+    );
+    assert!(
+        height_param.starts_with("height_"),
+        "height param has the height_<slug> form (got `{height_param}`)"
+    );
+
+    // sketch.parameters records both literal values.
+    let raw_w = sketch
+        .parameters
+        .get_raw(width_param)
+        .expect("width parameter is registered on sketch.parameters");
+    let raw_h = sketch
+        .parameters
+        .get_raw(height_param)
+        .expect("height parameter is registered on sketch.parameters");
+    assert_eq!(raw_w, "2mm", "width parameter records the long-axis literal");
+    assert_eq!(raw_h, "1mm", "height parameter records the short-axis literal");
+
+    // Both Arcs implicitly share the same `height_<slug>` parameter
+    // (= H/2 = 0.5mm). Verify both Arc radii are equal and match.
+    let mut arc_radii: Vec<f64> = Vec::with_capacity(2);
+    for arc in &arcs {
+        let (center_id, start_id) = match arc.kind {
+            EntityKind::Arc {
+                center, start, ..
+            } => (center, start),
+            _ => unreachable!(),
+        };
+        let center_pos = sketch
+            .entities
+            .iter()
+            .find(|e| e.id == center_id)
+            .and_then(|e| match e.kind {
+                EntityKind::Point { x, y } => Some((x, y)),
+                _ => None,
+            })
+            .expect("Arc.center references a Point");
+        let start_pos = sketch
+            .entities
+            .iter()
+            .find(|e| e.id == start_id)
+            .and_then(|e| match e.kind {
+                EntityKind::Point { x, y } => Some((x, y)),
+                _ => None,
+            })
+            .expect("Arc.start references a Point");
+        let dx = start_pos.0 - center_pos.0;
+        let dy = start_pos.1 - center_pos.1;
+        arc_radii.push((dx * dx + dy * dy).sqrt());
+    }
+    assert!(
+        (arc_radii[0] - arc_radii[1]).abs() < 1e-9,
+        "both Arc radii must be equal (height-linked); got {arc_radii:?}"
+    );
+    assert!(
+        (arc_radii[0] - 0.5).abs() < 1e-9,
+        "Arc radius must equal height/2 = 0.5mm; got {}",
+        arc_radii[0]
+    );
+
+    // The 4 bbox corners come back via corner_entity_ids so move +
+    // delete mirrors keep the bbox tracking the pad.
+    assert!(
+        pad.corner_entity_ids.is_some(),
+        "Oval pad sets corner_entity_ids to the 4 bbox Points"
+    );
+}
+
+/// v0.24 Track A5 — editing the `width_<slug>` parameter via the
+/// dispatcher (the same path the Properties-panel "Width" row drives)
+/// rewrites the bound parameter and runs a solve cleanly. The
+/// resolved parameter map reflects the new width so any future
+/// constraint linking Line endpoints to `width` would see the
+/// updated value; we assert the resolved value here as the surface
+/// proxy for "endpoint reflects the new width".
+#[test]
+fn editing_oval_width_param_propagates_through_solve() {
+    use signex_app::app::FootprintEditorState;
+    use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
+    use signex_app::library::editor::footprint::state::EditorPad;
+    use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
+    use signex_library::{Footprint, FootprintFile, PadShape};
+    use signex_sketch::parameter;
+
+    let path = PathBuf::from("test-a5-oval-edit-width.snxfpt");
+    let mut fp = Footprint::empty("test");
+    let mut pad = EditorPad::new_default("1".into(), (0.0, 0.0));
+    pad.shape = PadShape::Oval;
+    pad.size_mm = (2.0, 1.0); // wide oval
+    mirror_add_pad_to_sketch(&mut pad, &mut fp);
+
+    let width_param_name = pad
+        .shape_params
+        .get("width")
+        .cloned()
+        .expect("width parameter minted at pad-add time");
+
+    let file = FootprintFile::from_footprint(fp);
+    let mut editor = FootprintEditorState::new(path.clone(), file);
+    editor.state.pads = vec![pad];
+    editor.state.selected_pad = Some(0);
+
+    let (mut app, _initial_task) = Signex::new();
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), editor);
+    app.document_state.tabs.push(signex_app::app::TabInfo {
+        title: "test".into(),
+        path: path.clone(),
+        cached_document: None,
+        dirty: false,
+        project_id: None,
+        kind: signex_app::app::TabKind::FootprintEditor(path.clone()),
+    });
+    app.document_state.active_tab = 0;
+
+    // Edit width via the same dispatcher path that the Properties
+    // "Width" row drives.
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchEditParameter {
+            name: width_param_name.clone(),
+            expr: "3mm".into(),
+        },
+    }));
+
+    let editor = app
+        .document_state
+        .footprint_editors
+        .get(&path)
+        .expect("editor still registered");
+    let sketch = editor.file.footprints[0]
+        .sketch
+        .as_ref()
+        .expect("sketch present after edit");
+
+    // Surface 1 — the parameter table records the new expression.
+    let raw = sketch
+        .parameters
+        .get_raw(&width_param_name)
+        .expect("width parameter still registered");
+    assert_eq!(
+        raw, "3mm",
+        "FootprintSketchEditParameter rewrites the bound width parameter"
+    );
+
+    // Surface 2 — the resolved-parameter map reads 3.0mm. The Lines'
+    // endpoints (and a future width-linked constraint) would propagate
+    // this value when the solver next runs.
+    let resolved = parameter::resolve(&sketch.parameters)
+        .expect("resolved parameter map after width edit");
+    let resolved_width = resolved
+        .get(&width_param_name)
+        .copied()
+        .expect("width parameter resolves cleanly");
+    assert!(
+        (resolved_width - 3.0).abs() < 1e-9,
+        "width parameter resolves to 3.0mm (canonical mm); got {resolved_width}"
+    );
+
+    // Surface 3 — solve completed without warnings (no
+    // SolverFailed / Expr error / etc.). The Oval mint runs through
+    // the same apply_sketch_edit pipeline as RoundRect's corner_r.
+    assert!(
+        editor.state.solve_warnings.is_empty(),
+        "solve completed without warnings; got {:?}",
+        editor.state.solve_warnings
+    );
+}
