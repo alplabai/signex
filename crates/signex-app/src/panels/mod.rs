@@ -862,6 +862,12 @@ pub struct FootprintPadSummary {
     pub net: String,
     /// v0.21 — locked flag.
     pub locked: bool,
+    /// v0.21 — Pad Hole detail fields for the selected pad.
+    pub hole_tolerance_plus_mm: Option<f64>,
+    pub hole_tolerance_minus_mm: Option<f64>,
+    pub hole_rotation_deg: Option<f64>,
+    pub copper_offset_x_mm: Option<f64>,
+    pub copper_offset_y_mm: Option<f64>,
 }
 
 /// v0.18.24 — Read-only summary of the currently-selected silk-front
@@ -1479,6 +1485,13 @@ pub enum PanelMsg {
     /// v0.21 — Plated toggle on the Pad Hole row. `true` = THT
     /// (plated), `false` = NPT (non-plated).
     FpEditorToggleNextPadPlated(bool),
+    /// v0.21 — Selected-pad hole-detail mirror.
+    FpEditorSetSelectedPadHoleTolerancePlus { idx: usize, value: String },
+    FpEditorSetSelectedPadHoleToleranceMinus { idx: usize, value: String },
+    FpEditorSetSelectedPadHoleRotation { idx: usize, value: String },
+    FpEditorSetSelectedPadCopperOffsetX { idx: usize, value: String },
+    FpEditorSetSelectedPadCopperOffsetY { idx: usize, value: String },
+    FpEditorToggleSelectedPadPlated { idx: usize, value: bool },
     /// v0.16.4 — Pour-role sub-form. The handler mutates the
     /// selected entity's `pour` attr and runs solve+bake.
     FpEditorSetPourNet {

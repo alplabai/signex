@@ -1062,6 +1062,11 @@ impl PadFormValues {
             shape: pad.shape.clone(),
             kind: pad.kind,
             size_x_mm: pad.size_mm[0],
+            // v0.21 — selected-pad hole-detail values pulled from
+            // FootprintPadSummary (populated in runtime.rs).
+            // (Note: the Default::default()-set fields below are
+            // overridden after the struct literal — this comment
+            // is intentional anchor for v0.22 cleanup.)
             size_y_mm: pad.size_mm[1],
             drill_diameter_mm: pad.drill_diameter_mm,
             drill_slot_length_mm: None, // selected-pad slot_length follow-up in v0.21
@@ -1073,11 +1078,11 @@ impl PadFormValues {
             electrical_type: pad.electrical_type,
             net: pad.net.clone(),
             locked: pad.locked,
-            hole_tolerance_plus_mm: None,
-            hole_tolerance_minus_mm: None,
-            hole_rotation_deg: None,
-            copper_offset_x_mm: None,
-            copper_offset_y_mm: None,
+            hole_tolerance_plus_mm: pad.hole_tolerance_plus_mm,
+            hole_tolerance_minus_mm: pad.hole_tolerance_minus_mm,
+            hole_rotation_deg: pad.hole_rotation_deg,
+            copper_offset_x_mm: pad.copper_offset_x_mm,
+            copper_offset_y_mm: pad.copper_offset_y_mm,
         }
     }
 }
@@ -1101,6 +1106,54 @@ fn pad_locked_msg(t: PadEditTarget, v: bool) -> PanelMsg {
         PadEditTarget::Next => PanelMsg::FpEditorToggleNextPadLocked(v),
         PadEditTarget::Selected(idx) => {
             PanelMsg::FpEditorToggleSelectedPadLocked { idx, value: v }
+        }
+    }
+}
+fn pad_hole_tolerance_plus_msg(t: PadEditTarget, v: String) -> PanelMsg {
+    match t {
+        PadEditTarget::Next => PanelMsg::FpEditorSetNextPadHoleTolerancePlus(v),
+        PadEditTarget::Selected(idx) => {
+            PanelMsg::FpEditorSetSelectedPadHoleTolerancePlus { idx, value: v }
+        }
+    }
+}
+fn pad_hole_tolerance_minus_msg(t: PadEditTarget, v: String) -> PanelMsg {
+    match t {
+        PadEditTarget::Next => PanelMsg::FpEditorSetNextPadHoleToleranceMinus(v),
+        PadEditTarget::Selected(idx) => {
+            PanelMsg::FpEditorSetSelectedPadHoleToleranceMinus { idx, value: v }
+        }
+    }
+}
+fn pad_hole_rotation_msg(t: PadEditTarget, v: String) -> PanelMsg {
+    match t {
+        PadEditTarget::Next => PanelMsg::FpEditorSetNextPadHoleRotation(v),
+        PadEditTarget::Selected(idx) => {
+            PanelMsg::FpEditorSetSelectedPadHoleRotation { idx, value: v }
+        }
+    }
+}
+fn pad_copper_offset_x_msg(t: PadEditTarget, v: String) -> PanelMsg {
+    match t {
+        PadEditTarget::Next => PanelMsg::FpEditorSetNextPadCopperOffsetX(v),
+        PadEditTarget::Selected(idx) => {
+            PanelMsg::FpEditorSetSelectedPadCopperOffsetX { idx, value: v }
+        }
+    }
+}
+fn pad_copper_offset_y_msg(t: PadEditTarget, v: String) -> PanelMsg {
+    match t {
+        PadEditTarget::Next => PanelMsg::FpEditorSetNextPadCopperOffsetY(v),
+        PadEditTarget::Selected(idx) => {
+            PanelMsg::FpEditorSetSelectedPadCopperOffsetY { idx, value: v }
+        }
+    }
+}
+fn pad_plated_msg(t: PadEditTarget, v: bool) -> PanelMsg {
+    match t {
+        PadEditTarget::Next => PanelMsg::FpEditorToggleNextPadPlated(v),
+        PadEditTarget::Selected(idx) => {
+            PanelMsg::FpEditorToggleSelectedPadPlated { idx, value: v }
         }
     }
 }
@@ -1645,17 +1698,7 @@ fn render_pad_form_pad_stack<'a>(
                 ),
                 pad_table_check_cell(
                     !matches!(values.kind, signex_library::PadKind::NptHole),
-                    move |v| match target {
-                        PadEditTarget::Next => PanelMsg::FpEditorToggleNextPadPlated(v),
-                        PadEditTarget::Selected(idx) => {
-                            // Selected-pad plated toggle is a v0.21
-                            // follow-up — for now no-op via the
-                            // existing slot-length stub so the
-                            // checkbox at least refreshes context.
-                            let _ = idx;
-                            pad_drill_slot_length_msg(target, String::new())
-                        }
-                    },
+                    move |v| pad_plated_msg(target, v),
                 ),
             ],
             &[2, 2, 3, 1],
@@ -1680,7 +1723,7 @@ fn render_pad_form_pad_stack<'a>(
             "Tolerance + (mm)",
             "0",
             tol_p_buf,
-            PanelMsg::FpEditorSetNextPadHoleTolerancePlus,
+            move |v| pad_hole_tolerance_plus_msg(target, v),
             muted, primary, border_c,
         ));
         let tol_m_buf = values
@@ -1691,7 +1734,7 @@ fn render_pad_form_pad_stack<'a>(
             "Tolerance − (mm)",
             "0",
             tol_m_buf,
-            PanelMsg::FpEditorSetNextPadHoleToleranceMinus,
+            move |v| pad_hole_tolerance_minus_msg(target, v),
             muted, primary, border_c,
         ));
         let rot_buf = values
@@ -1702,7 +1745,7 @@ fn render_pad_form_pad_stack<'a>(
             "Hole rotation (°)",
             "0",
             rot_buf,
-            PanelMsg::FpEditorSetNextPadHoleRotation,
+            move |v| pad_hole_rotation_msg(target, v),
             muted, primary, border_c,
         ));
         let cox_buf = values
@@ -1713,7 +1756,7 @@ fn render_pad_form_pad_stack<'a>(
             "Copper offset X (mm)",
             "0",
             cox_buf,
-            PanelMsg::FpEditorSetNextPadCopperOffsetX,
+            move |v| pad_copper_offset_x_msg(target, v),
             muted, primary, border_c,
         ));
         let coy_buf = values
@@ -1724,7 +1767,7 @@ fn render_pad_form_pad_stack<'a>(
             "Copper offset Y (mm)",
             "0",
             coy_buf,
-            PanelMsg::FpEditorSetNextPadCopperOffsetY,
+            move |v| pad_copper_offset_y_msg(target, v),
             muted, primary, border_c,
         ));
     }

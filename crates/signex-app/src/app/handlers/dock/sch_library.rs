@@ -580,6 +580,39 @@ impl Signex {
                 self.refresh_panel_ctx();
                 true
             }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadHoleTolerancePlus { idx, value } => {
+                let v = fp_parse_optional_mm(value);
+                self.with_selected_pad(*idx, |pad| pad.hole_tolerance_plus_mm = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadHoleToleranceMinus { idx, value } => {
+                let v = fp_parse_optional_mm(value);
+                self.with_selected_pad(*idx, |pad| pad.hole_tolerance_minus_mm = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadHoleRotation { idx, value } => {
+                let v = value.trim().parse::<f64>().ok();
+                self.with_selected_pad(*idx, |pad| pad.hole_rotation_deg = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadCopperOffsetX { idx, value } => {
+                let v = fp_parse_optional_mm(value);
+                self.with_selected_pad(*idx, |pad| pad.copper_offset_x_mm = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadCopperOffsetY { idx, value } => {
+                let v = fp_parse_optional_mm(value);
+                self.with_selected_pad(*idx, |pad| pad.copper_offset_y_mm = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSelectedPadPlated { idx, value } => {
+                use signex_library::PadKind as Pk;
+                let plated = *value;
+                self.with_selected_pad(*idx, |pad| {
+                    pad.kind = if plated { Pk::Tht } else { Pk::NptHole };
+                });
+                true
+            }
             crate::panels::PanelMsg::FpEditorToggleSilkFilled(on) => {
                 if let Some(editor) = self.active_footprint_editor_mut() {
                     if let Some(idx) = editor.state.selected_silk_f {

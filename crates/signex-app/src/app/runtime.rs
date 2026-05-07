@@ -1133,6 +1133,11 @@ fn build_footprint_editor_panel_ctx(
                     electrical_type: pad.electrical_type,
                     net: pad.net.clone(),
                     locked: pad.locked,
+                    hole_tolerance_plus_mm: pad.hole_tolerance_plus_mm,
+                    hole_tolerance_minus_mm: pad.hole_tolerance_minus_mm,
+                    hole_rotation_deg: pad.hole_rotation_deg,
+                    copper_offset_x_mm: pad.copper_offset_x_mm,
+                    copper_offset_y_mm: pad.copper_offset_y_mm,
                 }
             })
         })
