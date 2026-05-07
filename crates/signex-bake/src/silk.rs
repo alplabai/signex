@@ -47,7 +47,7 @@ pub fn bake_silk(
     warnings: &mut Vec<String>,
 ) -> Result<(), SketchError> {
     for entity in &sketch.entities {
-        if entity.construction {
+        if entity.bake_skipped() {
             continue;
         }
         let attr = match entity.silk.as_ref() {

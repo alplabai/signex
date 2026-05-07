@@ -1652,7 +1652,7 @@ fn draw_sketch_overlay(
                     None => continue,
                 };
                 let p = cstate.world_to_screen(world);
-                let r = if entity.construction { 2.5 } else { 4.0 };
+                let r = if entity.bake_skipped() { 2.5 } else { 4.0 };
                 let path = Path::circle(Point::new(p.x, p.y), r);
                 let col = dof_colour(entity.id);
                 frame.fill(&path, col);
@@ -1677,7 +1677,15 @@ fn draw_sketch_overlay(
                 };
                 let p0 = cstate.world_to_screen(s);
                 let p1 = cstate.world_to_screen(e);
-                let col = dof_colour(start);
+                // v0.22 Phase A5 — Centerline lines render in Altium /
+                // Fusion gold (#c9a04b) regardless of DOF colour, so
+                // axis / mirror lines stay visually distinct from
+                // construction scaffolding.
+                let col = if entity.centerline {
+                    Color::from_rgba(0.79, 0.63, 0.30, 1.00)
+                } else {
+                    dof_colour(start)
+                };
                 let stroke = Stroke::default().with_width(1.5).with_color(col);
                 if entity.construction {
                     // Dashed line via short segments.
@@ -1693,6 +1701,42 @@ fn draw_sketch_overlay(
                             let q0 = Point::new(p0.x + dx * t0, p0.y + dy * t0);
                             let q1 = Point::new(p0.x + dx * t1, p0.y + dy * t1);
                             frame.stroke(&Path::line(q0, q1), stroke);
+                        }
+                    }
+                } else if entity.centerline {
+                    // v0.22 Phase A5 — long-dash + dot pattern.
+                    // Walk the line in screen-space cycles of
+                    // [long-dash 12 px][gap 4][dot 1.5][gap 4]; ~21 px
+                    // per cycle. Matches Altium's centerline glyph.
+                    let dx = p1.x - p0.x;
+                    let dy = p1.y - p0.y;
+                    let len = (dx * dx + dy * dy).sqrt();
+                    if len > 0.5 {
+                        let cycle = 21.5_f32;
+                        let mut t = 0.0_f32;
+                        while t < len {
+                            let long_end = (t + 12.0).min(len);
+                            let q0 =
+                                Point::new(p0.x + dx * (t / len), p0.y + dy * (t / len));
+                            let q1 = Point::new(
+                                p0.x + dx * (long_end / len),
+                                p0.y + dy * (long_end / len),
+                            );
+                            frame.stroke(&Path::line(q0, q1), stroke);
+                            let dot_start = t + 16.0;
+                            let dot_end = (dot_start + 1.5).min(len);
+                            if dot_start < len {
+                                let q2 = Point::new(
+                                    p0.x + dx * (dot_start / len),
+                                    p0.y + dy * (dot_start / len),
+                                );
+                                let q3 = Point::new(
+                                    p0.x + dx * (dot_end / len),
+                                    p0.y + dy * (dot_end / len),
+                                );
+                                frame.stroke(&Path::line(q2, q3), stroke);
+                            }
+                            t += cycle;
                         }
                     }
                 } else {
@@ -1876,10 +1920,14 @@ fn draw_filled_closed_loops(
         if let EntityKind::Line { start, end } = e.kind {
             adj.entry(start)
                 .or_default()
-                .push((end, e.id, e.construction));
+                // v0.22 Phase A5 — Treat centerline lines the same
+                // as construction for closed-loop fill detection: a
+                // loop made entirely of skipped lines must not paint
+                // a profile fill (Altium / Fusion convention).
+                .push((end, e.id, e.bake_skipped()));
             adj.entry(end)
                 .or_default()
-                .push((start, e.id, e.construction));
+                .push((start, e.id, e.bake_skipped()));
         }
     }
 
@@ -1896,7 +1944,7 @@ fn draw_filled_closed_loops(
         // ... until we return to seed_start or fail.
         let mut points: Vec<SketchEntityId> = vec![seed_start];
         let mut lines: Vec<SketchEntityId> = vec![seed.id];
-        let mut all_construction = seed.construction;
+        let mut all_construction = seed.bake_skipped();
         let mut current = seed_end;
         let mut prev_line = seed.id;
         let mut closed = false;

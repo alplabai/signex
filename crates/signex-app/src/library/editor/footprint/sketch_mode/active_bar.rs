@@ -111,6 +111,29 @@ pub fn items<'a>(
         ..ActiveBarButton::default()
     });
 
+    // v0.22 Phase A5 — Centerline-mode toggle. Mirrors construction-
+    // mode but stamps `entity.centerline = true` instead. Renders as a
+    // long-dash gold pattern in the canvas; bake skips it identically
+    // to construction. Mutually exclusive with construction-mode at
+    // the dispatcher level.
+    let centerline_on = editor.state.centerline_mode;
+    let centerline_path = path.clone();
+    let centerline_button = ActiveBarItem::Button(ActiveBarButton {
+        icon: ActiveBarIcon::Glyph("\u{2501}"), // ━ heavy long-dash hint
+        tooltip: if centerline_on {
+            "Centerline mode: ON (new geometry is a centerline)".into()
+        } else {
+            "Centerline mode: OFF".into()
+        },
+        enabled: true,
+        selected: centerline_on,
+        on_press: Some(LibraryMessage::PrimitiveEditorEvent {
+            path: centerline_path,
+            msg: PrimitiveEditorMsg::FootprintSketchToggleCenterline,
+        }),
+        ..ActiveBarButton::default()
+    });
+
     // Section 4 — Dimension input as a Custom slot. Sized to fit
     // ~6 digits + "mm" hint inside the bar's vertical rhythm.
     let dim_input = build_dimension_input(editor, tokens);
@@ -213,9 +236,12 @@ pub fn items<'a>(
         // Section 4: Dimension input
         ActiveBarItem::Custom(dim_input),
         ActiveBarItem::Separator,
-        // Section 5: Construction toggle. Solver is always live in
-        // v0.16.1 — the pause toggle was retired.
+        // Section 5: Linetype toggles. Construction (dashed grey) and
+        // Centerline (long-dash gold) are mutually exclusive — both
+        // skipped by bake. Solver is always live in v0.16.1 — the
+        // pause toggle was retired.
         construction_button,
+        centerline_button,
     ]
 }
 

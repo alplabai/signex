@@ -4093,6 +4093,7 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintSketchToggleAutoPause
         | PrimitiveEditorMsg::FootprintSketchSetTool(_)
         | PrimitiveEditorMsg::FootprintSketchToggleConstruction
+        | PrimitiveEditorMsg::FootprintSketchToggleCenterline
         | PrimitiveEditorMsg::FootprintTogglePlacementPause
         | PrimitiveEditorMsg::FootprintSketchToolClick { .. }
         | PrimitiveEditorMsg::FootprintSketchToolEscape
@@ -4619,6 +4620,21 @@ pub(crate) fn apply_footprint_primitive_edit(
         }
         PrimitiveEditorMsg::FootprintSketchToggleConstruction => {
             editor.state.construction_mode = !editor.state.construction_mode;
+            // v0.22 Phase A5 — mutual exclusivity with centerline.
+            if editor.state.construction_mode {
+                editor.state.centerline_mode = false;
+            }
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintSketchToggleCenterline => {
+            editor.state.centerline_mode = !editor.state.centerline_mode;
+            // Mutual exclusivity — enabling centerline clears
+            // construction (same Fusion 360 convention as the
+            // Linetype submenu where Normal/Construction/Centerline
+            // are radio-style).
+            if editor.state.centerline_mode {
+                editor.state.construction_mode = false;
+            }
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintTogglePlacementPause => {
@@ -5342,8 +5358,10 @@ pub(crate) fn apply_footprint_primitive_edit(
             // construction entities and a construction pad would
             // disappear from the rendered output.
             let construction_mode = editor.state.construction_mode;
+            let centerline_mode = editor.state.centerline_mode;
             let mut flag = |mut e: Entity| -> Entity {
                 e.construction = construction_mode;
+                e.centerline = centerline_mode;
                 e
             };
 
@@ -6304,6 +6322,7 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::FootprintSetPadsTool(_)
         | EditorMsg::FootprintSketchSetTool(_)
         | EditorMsg::FootprintSketchToggleConstruction
+        | EditorMsg::FootprintSketchToggleCenterline
         | EditorMsg::FootprintTogglePlacementPause
         | EditorMsg::FootprintSketchSetRole { .. }
         | EditorMsg::SaveFootprint(_, _)

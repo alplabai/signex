@@ -799,6 +799,11 @@ pub enum EditorMsg {
     /// sketch active bar; when on, every newly-minted entity gets
     /// `construction = true`.
     FootprintSketchToggleConstruction,
+    /// v0.22 Phase A5 — toggle centerline-mode. Sister to
+    /// construction-mode; mutually exclusive (enabling clears
+    /// construction). Newly-minted entities get `centerline = true`,
+    /// rendered as long-dash gold and skipped by the bake.
+    FootprintSketchToggleCenterline,
     /// v0.16.1 — TAB pause/resume during pad placement. Toggles
     /// `state.placement_paused`; while `true` the canvas ignores
     /// empty-canvas clicks so the user can adjust defaults.
@@ -1346,6 +1351,9 @@ pub enum PrimitiveEditorMsg {
     FootprintSketchSetTool(crate::library::editor::footprint::state::SketchTool),
     /// v0.16.1 — toggle construction-mode (sticky).
     FootprintSketchToggleConstruction,
+    /// v0.22 Phase A5 — toggle centerline-mode (sticky). Mutually
+    /// exclusive with construction-mode.
+    FootprintSketchToggleCenterline,
     /// v0.16.1 — TAB pause/resume during pad placement.
     FootprintTogglePlacementPause,
     /// v0.16.2 — set the role attr on a sketch entity. Inspector

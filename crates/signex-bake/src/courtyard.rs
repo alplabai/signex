@@ -37,7 +37,7 @@ pub fn bake_courtyard(
 ) -> Result<(), SketchError> {
     let mut found_first = false;
     for entity in &sketch.entities {
-        if entity.construction {
+        if entity.bake_skipped() {
             continue;
         }
         if entity.courtyard.is_none() {

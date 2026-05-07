@@ -398,6 +398,12 @@ pub struct FootprintEditorState {
     /// useful for guides + symmetry without affecting the baked
     /// pad / silk / courtyard output.
     pub construction_mode: bool,
+    /// v0.22 Phase A5 — Centerline-mode mint flag. Sister to
+    /// `construction_mode`: while on, every newly-minted entity gets
+    /// `centerline = true`, rendered as long-dash gold and skipped
+    /// by the bake. Mutually exclusive with `construction_mode` —
+    /// enabling one disables the other (Fusion convention).
+    pub centerline_mode: bool,
     /// v0.16.1 — TAB pause-during-placement. When `true`, the canvas
     /// ignores empty-canvas clicks during PadsTool::PlacePad so the
     /// user can adjust pad-stack defaults before resuming. TAB
@@ -1182,6 +1188,7 @@ impl FootprintEditorState {
             dimension_input: String::new(),
             pads_tool: PadsTool::default(),
             construction_mode: false,
+            centerline_mode: false,
             placement_paused: false,
             next_pad_defaults: NextPadDefaults::default(),
             snap_options: SnapOptions::default(),
@@ -1226,6 +1233,7 @@ impl FootprintEditorState {
             dimension_input: String::new(),
             pads_tool: PadsTool::default(),
             construction_mode: false,
+            centerline_mode: false,
             placement_paused: false,
             next_pad_defaults: NextPadDefaults::default(),
             snap_options: SnapOptions::default(),

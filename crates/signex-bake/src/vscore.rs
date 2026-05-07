@@ -41,7 +41,7 @@ pub fn bake_v_scores(
 ) -> Result<(), SketchError> {
     let ctx = build_ctx(params_canonical);
     for entity in &sketch.entities {
-        if entity.construction {
+        if entity.bake_skipped() {
             continue;
         }
         let attr = match entity.v_score.as_ref() {

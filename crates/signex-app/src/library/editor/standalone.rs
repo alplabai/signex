@@ -1039,6 +1039,9 @@ fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEditorMsg {
         EditorMsg::FootprintSketchToggleConstruction => {
             PrimitiveEditorMsg::FootprintSketchToggleConstruction
         }
+        EditorMsg::FootprintSketchToggleCenterline => {
+            PrimitiveEditorMsg::FootprintSketchToggleCenterline
+        }
         EditorMsg::FootprintTogglePlacementPause => {
             PrimitiveEditorMsg::FootprintTogglePlacementPause
         }

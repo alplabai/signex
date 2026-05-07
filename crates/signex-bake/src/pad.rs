@@ -77,7 +77,7 @@ pub fn bake_pads(
     }
 
     for entity in &sketch.entities {
-        if entity.construction {
+        if entity.bake_skipped() {
             continue;
         }
         let pad_attr = match entity.pad.as_ref() {

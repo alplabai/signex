@@ -93,7 +93,7 @@ where
     let mut visited_seeds: std::collections::HashSet<signex_sketch::id::SketchEntityId> =
         std::collections::HashSet::new();
     for entity in &sketch.entities {
-        if entity.construction {
+        if entity.bake_skipped() {
             continue;
         }
         let layer = match attr_extract(entity) {

@@ -257,7 +257,7 @@ fn push_arc_interior_if_arc(
 fn collect_edges(sketch: &SketchData) -> HashMap<SketchEntityId, &Entity> {
     let mut out = HashMap::new();
     for e in &sketch.entities {
-        if e.construction {
+        if e.bake_skipped() {
             continue;
         }
         if matches!(e.kind, EntityKind::Line { .. } | EntityKind::Arc { .. }) {
