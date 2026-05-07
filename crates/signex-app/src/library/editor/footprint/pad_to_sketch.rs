@@ -1352,6 +1352,278 @@ pub fn mirror_solve_to_chamfer_anchors(
     }
 }
 
+/// v0.24 Phase 6 — post-solve mirror for RoundRect pad geometry.
+/// When the user edits `corner_r_<slug>` from the Properties panel,
+/// the parameter table records the new value but the Arc / anchor /
+/// inset-corner Points still hold the literal coords from mint time.
+/// This helper walks each pad with a `corner_r` binding, reads the
+/// resolved parameter from `resolved`, and rewrites the per-corner
+/// Arc-centre Point + the two adjacent anchor Points so the rendered
+/// geometry matches the new radius.
+///
+/// Sister to `mirror_solve_to_chamfer_anchors` — same post-solve hook
+/// site (`apply_sketch_edit_with_warnings`), same pattern of
+/// "parameter is canonical; geometry follows".
+///
+/// **Per-corner override caveat:** when a corner has been unlinked
+/// (Phase 3 A3 stored a `corner_r_<corner>` per-corner key on
+/// `shape_params`), this helper reads that per-corner parameter
+/// instead of the shared `corner_r`. Linked corners read shared.
+pub fn mirror_solve_to_round_rect_geometry(
+    state: &super::state::FootprintEditorState,
+    sketch: &mut SketchData,
+    resolved: &std::collections::HashMap<String, f64>,
+) {
+    for pad in state.pads.iter() {
+        // Only RoundRect pads carry the shared `corner_r` sidecar.
+        // Skip everything else (Round / Oval / Chamfered have their
+        // own helpers; Rect / Custom have no parametric corners).
+        let Some(shared_param) = pad.shape_params.get("corner_r") else {
+            continue;
+        };
+        let Some(shared_r) = resolved.get(shared_param).copied() else {
+            tracing::warn!(
+                target: "signex::v024",
+                "mirror_solve_to_round_rect_geometry: shared parameter \
+                 {shared_param} missing from resolved map; skipping pad {}",
+                pad.number
+            );
+            continue;
+        };
+        let bbox = pad.bbox_mm();
+        let (xmin, ymin, xmax, ymax) = bbox;
+        let (w, h) = pad.size_mm;
+        let half_min = w.min(h) / 2.0;
+
+        // Per-corner expected positions for the Arc's three Point
+        // references (centre, start, end) given a resolved radius `r`.
+        // Order matches `mint_round_rect_pad_geometry`'s arc_keys
+        // (NE / SE / SW / NW).
+        let positions = |r: f64| -> [(SketchEntityId, (f64, f64), (f64, f64), (f64, f64)); 4] {
+            // Returns (placeholder_id, centre_pos, start_pos, end_pos)
+            // per corner. Caller substitutes the actual ID by reading
+            // the Arc entity.
+            [
+                (
+                    SketchEntityId(uuid::Uuid::nil()),
+                    (xmax - r, ymin + r),       // NE centre
+                    (xmax - r, ymin),            // NE start (top edge)
+                    (xmax, ymin + r),            // NE end (right edge)
+                ),
+                (
+                    SketchEntityId(uuid::Uuid::nil()),
+                    (xmax - r, ymax - r),       // SE centre
+                    (xmax, ymax - r),            // SE start (right edge)
+                    (xmax - r, ymax),            // SE end (bottom edge)
+                ),
+                (
+                    SketchEntityId(uuid::Uuid::nil()),
+                    (xmin + r, ymax - r),       // SW centre
+                    (xmin + r, ymax),            // SW start (bottom edge)
+                    (xmin, ymax - r),            // SW end (left edge)
+                ),
+                (
+                    SketchEntityId(uuid::Uuid::nil()),
+                    (xmin + r, ymin + r),       // NW centre
+                    (xmin, ymin + r),            // NW start (left edge)
+                    (xmin + r, ymin),            // NW end (top edge)
+                ),
+            ]
+        };
+
+        let arc_keys: [&str; 4] = [
+            "corner_r_ne_arc",
+            "corner_r_se_arc",
+            "corner_r_sw_arc",
+            "corner_r_nw_arc",
+        ];
+        let per_corner_keys: [&str; 4] = [
+            "corner_r_ne",
+            "corner_r_se",
+            "corner_r_sw",
+            "corner_r_nw",
+        ];
+
+        for (idx, (arc_key, per_corner_key)) in
+            arc_keys.iter().zip(per_corner_keys.iter()).enumerate()
+        {
+            // Resolve the radius for this corner — per-corner override
+            // wins if present (Phase 3 A3 unlink path); shared
+            // otherwise.
+            let r = if let Some(per_corner_param) = pad.shape_params.get(*per_corner_key) {
+                resolved.get(per_corner_param).copied().unwrap_or(shared_r)
+            } else {
+                shared_r
+            };
+            // Clamp to the bbox half-extent so a runaway parameter
+            // can't push anchors past each other.
+            let r = r.max(0.0).min(half_min);
+
+            let Some(arc_slug) = pad.shape_params.get(*arc_key) else {
+                continue;
+            };
+            let Ok(arc_uuid) = uuid::Uuid::parse_str(arc_slug) else {
+                continue;
+            };
+            let arc_id = SketchEntityId(arc_uuid);
+
+            // Read the Arc's three Point references — the Arc entity
+            // wasn't moved, so its `center` / `start` / `end` IDs are
+            // still the same Points the mint created.
+            let (centre_id, start_id, end_id) =
+                match sketch.entities.iter().find(|e| e.id == arc_id) {
+                    Some(e) => match e.kind {
+                        EntityKind::Arc { center, start, end, .. } => (center, start, end),
+                        _ => continue,
+                    },
+                    None => continue,
+                };
+
+            let pos_table = positions(r);
+            let (_, centre_pos, start_pos, end_pos) = pos_table[idx];
+
+            // Reposition centre, start, end. Each lookup is O(N) but N
+            // is small (~20 entities per pad × pad count); the post-
+            // solve hook fires at most a few times per second, so the
+            // simple find loop stays cheap.
+            for entity in sketch.entities.iter_mut() {
+                if entity.id == centre_id {
+                    if let EntityKind::Point { x, y } = &mut entity.kind {
+                        *x = centre_pos.0;
+                        *y = centre_pos.1;
+                    }
+                } else if entity.id == start_id {
+                    if let EntityKind::Point { x, y } = &mut entity.kind {
+                        *x = start_pos.0;
+                        *y = start_pos.1;
+                    }
+                } else if entity.id == end_id {
+                    if let EntityKind::Point { x, y } = &mut entity.kind {
+                        *x = end_pos.0;
+                        *y = end_pos.1;
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// v0.24 Phase 6 — post-solve mirror for Oval pad geometry. When the
+/// user edits `width_<slug>` or `height_<slug>` from the Properties
+/// panel, this helper rewrites the 4 anchor Points + 2 arc-centre
+/// Points based on the resolved parameters. Bbox corner Points stay
+/// pinned (they track `pad.size_mm`, which doesn't change from
+/// parameter edits today — that reverse-mirror is a separate v0.25
+/// follow-up).
+///
+/// The helper handles both wide (W ≥ H) and tall (H > W) orientations
+/// — it reads the orientation from the resolved parameter values, not
+/// the literal `pad.size_mm`, so a parameter edit can swap orientation
+/// (e.g. typing W=1, H=3 makes a previously-wide oval go tall).
+pub fn mirror_solve_to_oval_geometry(
+    state: &super::state::FootprintEditorState,
+    sketch: &mut SketchData,
+    resolved: &std::collections::HashMap<String, f64>,
+) {
+    for pad in state.pads.iter() {
+        let Some(width_param) = pad.shape_params.get("width") else {
+            continue;
+        };
+        let Some(height_param) = pad.shape_params.get("height") else {
+            continue;
+        };
+        let Some(width_mm) = resolved.get(width_param).copied() else {
+            continue;
+        };
+        let Some(height_mm) = resolved.get(height_param).copied() else {
+            continue;
+        };
+
+        // Pad bbox stays anchored to the pad's centre + size_mm. The
+        // anchors / arc centres reposition relative to bbox using the
+        // resolved width / height as the long / short axes.
+        let (cx, cy) = pad.position_mm;
+        let (w, h) = pad.size_mm;
+        let xmin = cx - w / 2.0;
+        let xmax = cx + w / 2.0;
+        let ymin = cy - h / 2.0;
+        let ymax = cy + h / 2.0;
+        let wide = width_mm >= height_mm;
+        let long_axis = width_mm.max(height_mm);
+        let short_axis = width_mm.min(height_mm);
+        let inset = (long_axis - short_axis) / 2.0;
+        let arc_radius = short_axis / 2.0;
+        let _ = arc_radius;
+
+        // Anchor positions match `mint_oval_pad_geometry`'s order.
+        let anchor_positions: [(f64, f64); 4] = if wide {
+            [
+                (xmin + inset, ymin),
+                (xmax - inset, ymin),
+                (xmax - inset, ymax),
+                (xmin + inset, ymax),
+            ]
+        } else {
+            [
+                (xmax, ymin + inset),
+                (xmax, ymax - inset),
+                (xmin, ymax - inset),
+                (xmin, ymin + inset),
+            ]
+        };
+        let centre_positions: [(f64, f64); 2] = if wide {
+            [
+                (xmin + inset, (ymin + ymax) / 2.0),
+                (xmax - inset, (ymin + ymax) / 2.0),
+            ]
+        } else {
+            [
+                ((xmin + xmax) / 2.0, ymin + inset),
+                ((xmin + xmax) / 2.0, ymax - inset),
+            ]
+        };
+
+        // Reposition anchors via the `oval_anchor_<idx>` sidecars.
+        for (idx, target) in anchor_positions.iter().enumerate() {
+            let key = format!("oval_anchor_{idx}");
+            let Some(slug) = pad.shape_params.get(&key) else {
+                continue;
+            };
+            let Ok(uuid) = uuid::Uuid::parse_str(slug) else {
+                continue;
+            };
+            let id = SketchEntityId(uuid);
+            for entity in sketch.entities.iter_mut() {
+                if entity.id == id {
+                    if let EntityKind::Point { x, y } = &mut entity.kind {
+                        *x = target.0;
+                        *y = target.1;
+                    }
+                }
+            }
+        }
+        // Reposition arc centres via the `oval_centre_<idx>` sidecars.
+        for (idx, target) in centre_positions.iter().enumerate() {
+            let key = format!("oval_centre_{idx}");
+            let Some(slug) = pad.shape_params.get(&key) else {
+                continue;
+            };
+            let Ok(uuid) = uuid::Uuid::parse_str(slug) else {
+                continue;
+            };
+            let id = SketchEntityId(uuid);
+            for entity in sketch.entities.iter_mut() {
+                if entity.id == id {
+                    if let EntityKind::Point { x, y } = &mut entity.kind {
+                        *x = target.0;
+                        *y = target.1;
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

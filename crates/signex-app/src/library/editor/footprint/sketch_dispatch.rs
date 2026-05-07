@@ -536,8 +536,20 @@ fn solve_and_bake(
                 // anchor coords from the resolved chamfer_len value.
                 // Only fires for pads with a `chamfer_len` binding;
                 // other pads get an early return inside the helper.
+                //
+                // v0.24 Phase 6 — same pattern for RoundRect arcs and
+                // Oval anchors / centres. Each helper bails early on
+                // pads whose `shape_params` don't carry the matching
+                // canonical key, so all three run unconditionally
+                // without per-shape branching here.
                 if let Some(sketch) = footprint.sketch.as_mut() {
                     super::pad_to_sketch::mirror_solve_to_chamfer_anchors(
+                        state, sketch, &resolved,
+                    );
+                    super::pad_to_sketch::mirror_solve_to_round_rect_geometry(
+                        state, sketch, &resolved,
+                    );
+                    super::pad_to_sketch::mirror_solve_to_oval_geometry(
                         state, sketch, &resolved,
                     );
                 }
