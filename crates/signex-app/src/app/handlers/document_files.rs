@@ -690,6 +690,22 @@ impl Signex {
                 self.commit_save_to_project_git(&path, &msg);
             }
         }
+        // v0.23 — PCB save-hook auto-commit. The PCB editor doesn't
+        // own a save-back-to-disk path yet (Pcb tabs render from
+        // `cached_document` and never mutate the parsed `.snxpcb`
+        // through this dispatcher). When the PCB save path lands —
+        // likely as part of the v0.13 PCB-editor work — wire the same
+        // `commit_save_to_project_git` call here so PCB edits get
+        // captured by the v0.22 project-git pipeline:
+        //
+        //     if let TabKind::Pcb = active_tab.kind {
+        //         pcb_session.save()?;
+        //         let label = path.file_name()…;
+        //         self.commit_save_to_project_git(&path, &format!("Save {label}"));
+        //     }
+        //
+        // Tracked in PROJECT_GIT_PLAN.md "Deferred to v0.23" → "PCB
+        // save-hook wiring".
         // Save the active project's `.snxprj` if it's dirty (right-
         // click → Add Existing flips the dirty bit). Best-effort: a
         // failure here is logged but doesn't block the schematic save.
