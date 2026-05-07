@@ -1410,6 +1410,7 @@ fn build_footprint_editor_panel_ctx(
         next_pad_electrical_type: editor.state.next_pad_defaults.electrical_type,
         next_pad_net: editor.state.next_pad_defaults.net.clone(),
         next_pad_locked: editor.state.next_pad_defaults.locked,
+        next_pad_kind: editor.state.next_pad_defaults.kind,
         footprint_description: editor.primitive().description.clone(),
         footprint_default_designator: editor.primitive().default_designator.clone(),
         footprint_component_type: editor.primitive().component_type,

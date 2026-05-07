@@ -999,6 +999,7 @@ struct PadFormValues {
     template: String,
     template_library: String,
     shape: signex_library::PadShape,
+    kind: signex_library::PadKind,
     size_x_mm: f64,
     size_y_mm: f64,
     drill_diameter_mm: Option<f64>,
@@ -1031,6 +1032,7 @@ impl PadFormValues {
             template: fp.next_pad_template.clone(),
             template_library: fp.next_pad_template_library.clone(),
             shape: fp.next_pad_shape.clone(),
+            kind: fp.next_pad_kind,
             size_x_mm: fp.next_pad_size_x_mm,
             size_y_mm: fp.next_pad_size_y_mm,
             drill_diameter_mm: fp.next_pad_drill_diameter_mm,
@@ -1058,6 +1060,7 @@ impl PadFormValues {
             template: pad.template.clone(),
             template_library: pad.template_library.clone(),
             shape: pad.shape.clone(),
+            kind: pad.kind,
             size_x_mm: pad.size_mm[0],
             size_y_mm: pad.size_mm[1],
             drill_diameter_mm: pad.drill_diameter_mm,
@@ -1640,9 +1643,20 @@ fn render_pad_form_pad_stack<'a>(
                         }
                     },
                 ),
-                pad_table_check_cell(values.drill_diameter_mm.is_some(), move |_v| {
-                    pad_drill_slot_length_msg(target, String::new())
-                }),
+                pad_table_check_cell(
+                    !matches!(values.kind, signex_library::PadKind::NptHole),
+                    move |v| match target {
+                        PadEditTarget::Next => PanelMsg::FpEditorToggleNextPadPlated(v),
+                        PadEditTarget::Selected(idx) => {
+                            // Selected-pad plated toggle is a v0.21
+                            // follow-up — for now no-op via the
+                            // existing slot-length stub so the
+                            // checkbox at least refreshes context.
+                            let _ = idx;
+                            pad_drill_slot_length_msg(target, String::new())
+                        }
+                    },
+                ),
             ],
             &[2, 2, 3, 1],
             muted,
@@ -1730,19 +1744,31 @@ fn render_pad_form_pad_stack<'a>(
             .paste_margin_top
             .map(|v| format!("{v:.3}"))
             .unwrap_or_default();
+        let paste_top_mode = if values.stack.paste_margin_top.is_some() {
+            ExpansionMode::Manual
+        } else {
+            ExpansionMode::Rule
+        };
         col = col.push(pad_table_row(
             "Top Paste",
             vec![
                 pad_table_input_cell(
                     paste_top_buf,
-                    "0",
+                    "(rule)",
                     move |v| pad_paste_top_msg(target, v),
                     muted,
                     primary,
                     border_c,
                 ),
                 pad_table_disabled_cell("0%", muted, border_c),
-                pad_table_static_cell("Rule Expansion", muted),
+                pad_table_picklist_cell(
+                    ExpansionMode::ALL,
+                    paste_top_mode,
+                    move |m: ExpansionMode| match m {
+                        ExpansionMode::Rule => pad_paste_top_msg(target, String::new()),
+                        ExpansionMode::Manual => pad_paste_top_msg(target, "0".into()),
+                    },
+                ),
                 pad_table_check_cell(values.stack.paste_enabled_top, move |v| {
                     pad_paste_enabled_top_msg(target, v)
                 }),
@@ -1759,19 +1785,31 @@ fn render_pad_form_pad_stack<'a>(
             .paste_margin_bottom
             .map(|v| format!("{v:.3}"))
             .unwrap_or_default();
+        let paste_bot_mode = if values.stack.paste_margin_bottom.is_some() {
+            ExpansionMode::Manual
+        } else {
+            ExpansionMode::Rule
+        };
         col = col.push(pad_table_row(
             "Bottom Paste",
             vec![
                 pad_table_input_cell(
                     paste_bot_buf,
-                    "0",
+                    "(rule)",
                     move |v| pad_paste_bottom_msg(target, v),
                     muted,
                     primary,
                     border_c,
                 ),
                 pad_table_disabled_cell("0%", muted, border_c),
-                pad_table_static_cell("Rule Expansion", muted),
+                pad_table_picklist_cell(
+                    ExpansionMode::ALL,
+                    paste_bot_mode,
+                    move |m: ExpansionMode| match m {
+                        ExpansionMode::Rule => pad_paste_bottom_msg(target, String::new()),
+                        ExpansionMode::Manual => pad_paste_bottom_msg(target, "0".into()),
+                    },
+                ),
                 pad_table_check_cell(values.stack.paste_enabled_bottom, move |v| {
                     pad_paste_enabled_bottom_msg(target, v)
                 }),
@@ -1798,18 +1836,30 @@ fn render_pad_form_pad_stack<'a>(
             .mask_margin_top
             .map(|v| format!("{v:.3}"))
             .unwrap_or_default();
+        let mask_top_mode = if values.stack.mask_margin_top.is_some() {
+            ExpansionMode::Manual
+        } else {
+            ExpansionMode::Rule
+        };
         col = col.push(pad_table_row(
             "Top Solder Mask",
             vec![
                 pad_table_input_cell(
                     mask_top_buf,
-                    "0",
+                    "(rule)",
                     move |v| pad_mask_top_msg(target, v),
                     muted,
                     primary,
                     border_c,
                 ),
-                pad_table_static_cell("Rule Expansion", muted),
+                pad_table_picklist_cell(
+                    ExpansionMode::ALL,
+                    mask_top_mode,
+                    move |m: ExpansionMode| match m {
+                        ExpansionMode::Rule => pad_mask_top_msg(target, String::new()),
+                        ExpansionMode::Manual => pad_mask_top_msg(target, "0".into()),
+                    },
+                ),
                 pad_table_check_cell(values.stack.mask_tented_top, move |v| {
                     pad_mask_tented_top_msg(target, v)
                 }),
@@ -1826,18 +1876,30 @@ fn render_pad_form_pad_stack<'a>(
             .mask_margin_bottom
             .map(|v| format!("{v:.3}"))
             .unwrap_or_default();
+        let mask_bot_mode = if values.stack.mask_margin_bottom.is_some() {
+            ExpansionMode::Manual
+        } else {
+            ExpansionMode::Rule
+        };
         col = col.push(pad_table_row(
             "Bottom Solder Mask",
             vec![
                 pad_table_input_cell(
                     mask_bot_buf,
-                    "0",
+                    "(rule)",
                     move |v| pad_mask_bottom_msg(target, v),
                     muted,
                     primary,
                     border_c,
                 ),
-                pad_table_static_cell("Rule Expansion", muted),
+                pad_table_picklist_cell(
+                    ExpansionMode::ALL,
+                    mask_bot_mode,
+                    move |m: ExpansionMode| match m {
+                        ExpansionMode::Rule => pad_mask_bottom_msg(target, String::new()),
+                        ExpansionMode::Manual => pad_mask_bottom_msg(target, "0".into()),
+                    },
+                ),
                 pad_table_check_cell(values.stack.mask_tented_bottom, move |v| {
                     pad_mask_tented_bottom_msg(target, v)
                 }),
@@ -2654,6 +2716,29 @@ impl std::fmt::Display for HoleShapeChoice {
         f.write_str(match self {
             HoleShapeChoice::Round => "Round",
             HoleShapeChoice::Slot => "Slot",
+        })
+    }
+}
+
+/// v0.21 — Altium-parity PASTE / SOLDER expansion mode picker.
+/// `Rule` defers to the per-board design rule (Solder Mask Expansion
+/// / Paste Mask Expansion). `Manual` overrides with an explicit
+/// per-pad value (consumed by the matching expansion column).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ExpansionMode {
+    Rule,
+    Manual,
+}
+
+impl ExpansionMode {
+    const ALL: &'static [ExpansionMode] = &[ExpansionMode::Rule, ExpansionMode::Manual];
+}
+
+impl std::fmt::Display for ExpansionMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            ExpansionMode::Rule => "Rule Expansion",
+            ExpansionMode::Manual => "Manual",
         })
     }
 }

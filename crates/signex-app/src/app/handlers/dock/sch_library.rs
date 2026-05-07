@@ -572,6 +572,14 @@ impl Signex {
                 self.refresh_panel_ctx();
                 true
             }
+            crate::panels::PanelMsg::FpEditorToggleNextPadPlated(plated) => {
+                use signex_library::PadKind as Pk;
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.state.next_pad_defaults.kind = if *plated { Pk::Tht } else { Pk::NptHole };
+                }
+                self.refresh_panel_ctx();
+                true
+            }
             crate::panels::PanelMsg::FpEditorToggleSilkFilled(on) => {
                 if let Some(editor) = self.active_footprint_editor_mut() {
                     if let Some(idx) = editor.state.selected_silk_f {

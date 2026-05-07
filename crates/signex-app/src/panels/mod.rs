@@ -664,6 +664,8 @@ pub struct FootprintEditorPanelContext {
     pub next_pad_net: String,
     /// v0.21 — locked flag for the next placed pad.
     pub next_pad_locked: bool,
+    /// v0.21 — Pad mounting kind for the next placed pad.
+    pub next_pad_kind: signex_library::PadKind,
     /// v0.21 — Altium-parity component-level fields. Surface in the
     /// empty-canvas Footprint summary form.
     pub footprint_description: String,
@@ -1474,6 +1476,9 @@ pub enum PanelMsg {
     FpEditorSetNextPadHoleRotation(String),
     FpEditorSetNextPadCopperOffsetX(String),
     FpEditorSetNextPadCopperOffsetY(String),
+    /// v0.21 — Plated toggle on the Pad Hole row. `true` = THT
+    /// (plated), `false` = NPT (non-plated).
+    FpEditorToggleNextPadPlated(bool),
     /// v0.16.4 — Pour-role sub-form. The handler mutates the
     /// selected entity's `pour` attr and runs solve+bake.
     FpEditorSetPourNet {
