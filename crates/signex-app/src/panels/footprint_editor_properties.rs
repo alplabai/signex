@@ -998,16 +998,11 @@ fn render_fp_settings_and_hint<'a>(
         border_c,
     ));
     if !fp_is_collapsed("fp_settings", collapsed_sections) {
-        let auto_fit_label = if fp.auto_fit_courtyard {
-            "Auto-fit Courtyard \u{2713}"
-        } else {
-            "Auto-fit Courtyard"
-        };
-        let auto_fit_btn = iced::widget::button(text(auto_fit_label).size(10).color(primary))
-            .padding([4, 10])
-            .on_press(PanelMsg::FpEditorToggleAutoFitCourtyard)
-            .style(iced::widget::button::primary);
-        col = col.push(container(auto_fit_btn).padding([4, 8]).width(Length::Fill));
+        // v0.26-I — auto-courtyard toggle removed. The courtyard is
+        // an authored shape (silk / sketch entity), not an auto-
+        // derived bbox. Section header kept (other settings can
+        // land here in v0.27+).
+        let _ = fp.auto_fit_courtyard;
     }
 
     col = col.push(props_section_header(

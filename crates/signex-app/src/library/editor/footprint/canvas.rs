@@ -55,6 +55,16 @@ pub struct FootprintCanvasState {
     /// stay quiet" (motion crossed the threshold). Reset on every
     /// right-press.
     pan_moved: bool,
+    /// v0.26-I — rubber-band selection state. `Some` while the user
+    /// is left-dragging on empty canvas with the Select tool active.
+    /// Stores the press position (screen-space) so the draw pass can
+    /// render the rectangle from press → current cursor. Cleared on
+    /// release.
+    box_select_anchor_screen: Option<Point>,
+    /// v0.26-I — current cursor screen position during a box-select
+    /// drag. Updated per CursorMoved tick so the draw pass can
+    /// render the rubber-band rectangle to the live cursor.
+    box_select_current_screen: Option<Point>,
     /// Drag state — `Some` while the user is mid-drag on a pad.
     drag: Option<DragState>,
     /// The pad index reported as `selected_pad` on the model the
@@ -104,6 +114,8 @@ impl Default for FootprintCanvasState {
             panning: false,
             last_pan_pos: None,
             pan_moved: false,
+            box_select_anchor_screen: None,
+            box_select_current_screen: None,
             drag: None,
             last_known_selected: None,
             last_snap: None,
@@ -473,6 +485,21 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         press_screen: cursor_pos,
                         moved: false,
                     });
+                    // v0.26-I — Select-tool empty-canvas press also
+                    // arms the rubber-band rectangle. Sketch / Pads-
+                    // tool placements are unaffected (their drag
+                    // continues to commit a placement on release if
+                    // it didn''t cross the move threshold). The draw
+                    // pass renders the rubber band only when both
+                    // `box_select_anchor_screen` and
+                    // `box_select_current_screen` are Some, so a
+                    // brief un-moved drag never paints a rectangle.
+                    if matches!(self.state.mode, super::state::EditorMode::Normal)
+                        && self.state.pads_tool == super::state::PadsTool::Select
+                    {
+                        cstate.box_select_anchor_screen = Some(cursor_pos);
+                        cstate.box_select_current_screen = Some(cursor_pos);
+                    }
                     return Some(canvas::Action::capture());
                 }
             }
@@ -732,6 +759,11 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         // every other pads_tool handles the click
                         // above (place / drop / etc.).
                         if self.state.pads_tool == PadsTool::Select {
+                            // Clean the box-select arming we set on
+                            // press — un-moved click stays a click,
+                            // not a rubber band.
+                            cstate.box_select_anchor_screen = None;
+                            cstate.box_select_current_screen = None;
                             return Some(canvas::Action::publish(LibraryMessage::EditorEvent {
                                 library_path: self.address.library_path.clone(),
                                 table: self.address.table.clone(),
@@ -742,6 +774,56 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         return None;
                     }
                     if drag.moved {
+                        // v0.26-I — rubber-band release. If the press
+                        // armed a box-select (Select tool, empty
+                        // canvas) AND the drag actually moved, walk
+                        // the pad list and pick the first pad whose
+                        // bbox lies inside the rectangle. Multi-
+                        // select is queued; for now the rubber band
+                        // is a single-pad picker that lets the user
+                        // grab a pad without an exact left-click.
+                        if let (Some(a), Some(c)) = (
+                            cstate.box_select_anchor_screen.take(),
+                            cstate.box_select_current_screen.take(),
+                        ) {
+                            let world_a = cstate.screen_to_world(a);
+                            let world_c = cstate.screen_to_world(c);
+                            let (x0, x1) = if world_a.0 <= world_c.0 {
+                                (world_a.0, world_c.0)
+                            } else {
+                                (world_c.0, world_a.0)
+                            };
+                            let (y0, y1) = if world_a.1 <= world_c.1 {
+                                (world_a.1, world_c.1)
+                            } else {
+                                (world_c.1, world_a.1)
+                            };
+                            let mut hit: Option<usize> = None;
+                            for (idx, pad) in self.state.pads.iter().enumerate() {
+                                let (px0, py0, px1, py1) = pad.bbox_mm();
+                                if px0 >= x0 && px1 <= x1 && py0 >= y0 && py1 <= y1 {
+                                    hit = Some(idx);
+                                    break;
+                                }
+                            }
+                            self.cache.clear();
+                            if let Some(idx) = hit {
+                                return Some(canvas::Action::publish(
+                                    LibraryMessage::EditorEvent {
+                                        library_path: self.address.library_path.clone(),
+                                        table: self.address.table.clone(),
+                                        row_id: self.address.row_id,
+                                        msg: EditorMsg::FootprintSelectPad(Some(idx)),
+                                    },
+                                ));
+                            }
+                            return Some(canvas::Action::publish(LibraryMessage::EditorEvent {
+                                library_path: self.address.library_path.clone(),
+                                table: self.address.table.clone(),
+                                row_id: self.address.row_id,
+                                msg: EditorMsg::FootprintSelectPad(None),
+                            }));
+                        }
                         // Final move position is already published per
                         // CursorMoved tick — nothing to do on release.
                         self.cache.clear();
@@ -817,6 +899,14 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     let dy = (cursor_pos.y - drag.press_screen.y).abs();
                     if !drag.moved && dx.max(dy) >= DRAG_THRESHOLD_PX {
                         drag.moved = true;
+                    }
+                    // v0.26-I — keep the box-select endpoint in lock-
+                    // step with the cursor so the draw pass paints a
+                    // live rubber band. Cleared on release alongside
+                    // the anchor.
+                    if cstate.box_select_anchor_screen.is_some() {
+                        cstate.box_select_current_screen = Some(cursor_pos);
+                        self.cache.clear();
                     }
                     // v0.16 — sketch Point drag (Sketch mode + Select
                     // tool with a hit on a Point entity). Publish a
@@ -1474,6 +1564,40 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
             // gesture (Select / PlacePad / PlaceHole / PlaceString).
             if matches!(self.state.mode, super::state::EditorMode::Normal) {
                 draw_pads_tool_preview(frame, cstate, self.state);
+            }
+
+            // v0.26-I — rubber-band selection rectangle. Drawn only
+            // when both anchor + current are set and they''re at
+            // least the drag threshold apart (so an un-moved click
+            // doesn''t flash a 0×0 rect on screen).
+            if let (Some(a), Some(c)) = (
+                cstate.box_select_anchor_screen,
+                cstate.box_select_current_screen,
+            ) {
+                let dx = (c.x - a.x).abs();
+                let dy = (c.y - a.y).abs();
+                if dx.max(dy) >= DRAG_THRESHOLD_PX {
+                    let x0 = a.x.min(c.x);
+                    let y0 = a.y.min(c.y);
+                    let w = (c.x - a.x).abs();
+                    let h = (c.y - a.y).abs();
+                    let rect_path = Path::rectangle(
+                        Point::new(x0, y0),
+                        iced::Size::new(w, h),
+                    );
+                    // Altium pen: cyan-ish translucent fill +
+                    // dashed-look outline at 1 px.
+                    frame.fill(
+                        &rect_path,
+                        Color::from_rgba(0.30, 0.55, 0.90, 0.18),
+                    );
+                    frame.stroke(
+                        &rect_path,
+                        Stroke::default()
+                            .with_width(1.0)
+                            .with_color(Color::from_rgba(0.50, 0.75, 1.00, 0.95)),
+                    );
+                }
             }
 
             // v0.13.1 Phase 6.2 — sketch entities overlay. Only drawn

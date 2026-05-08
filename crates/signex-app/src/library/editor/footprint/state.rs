@@ -1427,7 +1427,13 @@ impl FootprintEditorState {
             pads,
             layer_visibility: LayerVisibility::default(),
             selected_pad: None,
-            auto_fit_courtyard: true,
+            // v0.26-I — auto-courtyard mode removed. Courtyard is
+            // authored explicitly by the user (silk graphic / sketch
+            // entity) rather than auto-derived from pad bbox. Default
+            // false; the recompute_courtyard early-returns so the
+            // automatic recompute calls become no-ops without
+            // requiring a touch at every call site.
+            auto_fit_courtyard: false,
             courtyard_mm: None,
             cursor_mm: None,
             mode: EditorMode::Normal,
@@ -1476,7 +1482,13 @@ impl FootprintEditorState {
             pads: Vec::new(),
             layer_visibility: LayerVisibility::default(),
             selected_pad: None,
-            auto_fit_courtyard: true,
+            // v0.26-I — auto-courtyard mode removed. Courtyard is
+            // authored explicitly by the user (silk graphic / sketch
+            // entity) rather than auto-derived from pad bbox. Default
+            // false; the recompute_courtyard early-returns so the
+            // automatic recompute calls become no-ops without
+            // requiring a touch at every call site.
+            auto_fit_courtyard: false,
             courtyard_mm: None,
             cursor_mm: None,
             mode: EditorMode::Normal,
