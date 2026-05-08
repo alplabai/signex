@@ -496,18 +496,27 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         // relative to bounds.
                         let screen_x = bounds.x + cursor_pos.x;
                         let screen_y = bounds.y + cursor_pos.y;
-                        // v0.26-B — hit-test the pad list at the
-                        // right-click world position so the menu
-                        // renders the on-pad variant (Cut / Copy /
-                        // Pad Actions stub) when the cursor lands on
-                        // a pad. Falls through to Empty when the
-                        // hit-test misses.
+                        // v0.26-B/C — hit-test the pad list first
+                        // (top z-order in PCB convention), then fall
+                        // through to silk graphics, then Empty. Pads
+                        // win because they''re drawn on top of silk
+                        // in the rendered footprint.
                         use crate::library::editor::footprint::state
                             ::FootprintContextTarget;
                         let world = cstate.screen_to_world(cursor_pos);
-                        let target = match self.state.pad_at(world.0, world.1) {
-                            Some(idx) => FootprintContextTarget::Pad(idx),
-                            None => FootprintContextTarget::Empty,
+                        let target = if let Some(idx) =
+                            self.state.pad_at(world.0, world.1)
+                        {
+                            FootprintContextTarget::Pad(idx)
+                        } else {
+                            // Same tolerance the left-click silk
+                            // pick uses (4 px in screen → world via
+                            // current zoom).
+                            let tol = 4.0_f64 / (cstate.scale.max(1.0) as f64);
+                            match silk_f_hit_at(self.silk_f, world.0, world.1, tol) {
+                                Some(idx) => FootprintContextTarget::SilkF(idx),
+                                None => FootprintContextTarget::Empty,
+                            }
                         };
                         return Some(
                             canvas::Action::publish(LibraryMessage::EditorEvent {

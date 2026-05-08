@@ -1665,6 +1665,7 @@ impl FootprintEditorState {
         None
     }
 
+
     /// Recompute the courtyard polygon when auto-fit is enabled.
     pub fn recompute_courtyard(&mut self) {
         if !self.auto_fit_courtyard {

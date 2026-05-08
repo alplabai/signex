@@ -28,6 +28,21 @@ use crate::library::editor::footprint::state::{
 use crate::library::messages::{LibraryMessage, PrimitiveEditorMsg};
 use crate::styles::ti;
 
+/// v0.26-C — surface the silk graphic''s kind in the menu header so
+/// the user can tell at a glance what they''re about to delete /
+/// inspect. Mirrors Altium''s naming.
+fn silk_kind_label(kind: &signex_library::FpGraphicKind) -> &'static str {
+    use signex_library::FpGraphicKind;
+    match kind {
+        FpGraphicKind::Line { .. } => "Track",
+        FpGraphicKind::Rectangle { .. } => "Rectangle",
+        FpGraphicKind::Circle { .. } => "Circle",
+        FpGraphicKind::Arc { .. } => "Arc",
+        FpGraphicKind::Text { .. } => "String",
+        FpGraphicKind::Polygon { .. } => "Region",
+    }
+}
+
 const MENU_WIDTH: f32 = 220.0;
 const ROW_PAD_X: u16 = 12;
 const ROW_PAD_Y: u16 = 5;
@@ -194,20 +209,29 @@ pub fn view_context_menu<'a>(
         }
 
         FootprintContextTarget::SilkF(idx) => {
-            // Reserved for the silk-front graphic right-click pass.
-            // Wired by canvas hit-test in a follow-up; here so that
-            // the variant compiles + renders something useful when
-            // it does land.
-            let header = format!("Silk graphic {idx}");
+            // v0.26-C — silk graphic header carries the kind so the
+            // user can tell at a glance what they''re inspecting /
+            // deleting. Falls back to the bare index when the
+            // primitive''s silk_f vec doesn''t contain the expected
+            // entry (e.g. concurrent mutation between hit-test +
+            // render).
+            let header = match editor.primitive().silk_f.get(idx) {
+                Some(g) => format!("{} (silk)", silk_kind_label(&g.kind)),
+                None => format!("Silk graphic {idx}"),
+            };
             items.push(item_disabled(tokens, &header, ""));
             items.push(separator(tokens));
 
             items.push(item_disabled(tokens, "Properties...", ""));
+            // SilkF dispatches via FootprintDeleteSilkF which reads
+            // `state.selected_silk_f` — the show-context-menu handler
+            // set that when target == SilkF(idx) so this fires the
+            // right delete.
             items.push(item_msg(
                 tokens,
                 "Delete",
                 "Del",
-                make_msg(PrimitiveEditorMsg::FootprintDeleteSelected),
+                make_msg(PrimitiveEditorMsg::FootprintDeleteSilkF),
             ));
             items.push(separator(tokens));
             items.push(item_disabled(tokens, "Find Similar Objects...", ""));
