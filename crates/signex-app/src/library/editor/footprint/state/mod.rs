@@ -36,7 +36,7 @@ pub use context_menu::{
 pub use mode::{EditorMode, FpActiveBarMenu, PadStackTab};
 pub use pad::{CourtyardRect, EditorPad, NextPadDefaults, PadSide, PadStackUi, ShapeParamMap};
 pub use placement::{PlaceArcPending, PlacementInput, PlacementInputKind};
-pub use selection_filter::{SelectionFilter, SelectionFilterKind};
+pub use selection_filter::{FpSelectionMode, SelectionFilter, SelectionFilterKind};
 pub use snap_options::{GridDef, GridDisplay, Guide, GuideAxis, SnapOptions, SnapSubTab, SnappingMode};
 pub use tool::{PadsTool, SketchTool, ToolPending};
 
@@ -121,6 +121,10 @@ pub struct FootprintEditorState {
     pub global_snap_disabled: bool,
     /// v0.18.13 — Altium Selection Filter pill row state.
     pub selection_filter: SelectionFilter,
+    /// v0.27 — rubber-band selection mode (Inside / Touching /
+    /// Outside) sourced from the active-bar Selection Mode picker.
+    /// Drives the `box_select` release picker in `canvas/mod.rs`.
+    pub selection_mode_2d: FpSelectionMode,
     /// v0.18.13 — active sub-tab in the Snap Options section.
     pub snap_subtab: SnapSubTab,
     /// v0.18.13 — Snapping 3-state.
@@ -197,6 +201,7 @@ impl FootprintEditorState {
             active_grid_idx: 0,
             global_snap_disabled: false,
             selection_filter: SelectionFilter::default(),
+            selection_mode_2d: FpSelectionMode::default(),
             snap_subtab: SnapSubTab::default(),
             snapping_mode: SnappingMode::default(),
             active_bar_menu: None,

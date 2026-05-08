@@ -107,6 +107,11 @@ pub struct FootprintCanvasState {
     /// `draw_sketch_tool_preview`. Cleared each tick before the
     /// next compute.
     last_snap: Option<SnapResult>,
+    /// v0.27 — `Some(pad_idx)` while the user is mid-drag on a Round
+    /// pad's diameter handle (cyan disc on the east edge of the
+    /// minted Circle entity). Per-tick cursor moves publish
+    /// `FootprintSketchResizeRoundPad`. Cleared on release.
+    round_resize_drag: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -150,6 +155,7 @@ impl Default for FootprintCanvasState {
             drag: None,
             last_known_selected: None,
             last_snap: None,
+            round_resize_drag: None,
         }
     }
 }
@@ -383,6 +389,45 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         cstate.last_snap = Some(result);
                         result.pos
                     };
+                    // v0.27 — Sketch mode + Select tool: hit-test the
+                    // east-edge cyan diameter handle of any Round pad
+                    // before the generic Point-snap. The handle is
+                    // drawn at (pad.position + (pad.size_x/2, 0)) with
+                    // a 4 px radius, so allow a 6 px hit slop.
+                    if matches!(self.state.mode, _EM::Sketch)
+                        && self.state.active_tool == _ST::Select
+                    {
+                        const HANDLE_HIT_RADIUS_PX: f32 = 6.0;
+                        for (idx, pad) in self.state.pads.iter().enumerate() {
+                            if !matches!(pad.shape, signex_library::PadShape::Round) {
+                                continue;
+                            }
+                            if pad.sketch_entity_id.is_none() {
+                                continue;
+                            }
+                            let handle_world = (
+                                pad.position_mm.0 + pad.size_mm.0 / 2.0,
+                                pad.position_mm.1,
+                            );
+                            let handle_screen = cstate.world_to_screen(handle_world);
+                            let dx = cursor_pos.x - handle_screen.x;
+                            let dy = cursor_pos.y - handle_screen.y;
+                            if dx * dx + dy * dy
+                                <= HANDLE_HIT_RADIUS_PX * HANDLE_HIT_RADIUS_PX
+                            {
+                                cstate.round_resize_drag = Some(idx);
+                                cstate.drag = Some(DragState {
+                                    pad_idx: usize::MAX,
+                                    sketch_point: None,
+                                    grab_offset_mm: pad.position_mm,
+                                    last_world: world,
+                                    press_screen: cursor_pos,
+                                    moved: false,
+                                });
+                                return Some(canvas::Action::capture());
+                            }
+                        }
+                    }
                     if matches!(self.state.mode, _EM::Sketch)
                         && self.state.active_tool == _ST::Select
                         && let Some(point_id) = sketch_snap(self.sketch, cstate, raw_world)
@@ -601,6 +646,14 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 if *button == mouse::Button::Left
                     && let Some(drag) = cstate.drag.take()
                 {
+                    // v0.27 — round-pad resize drag releases here.
+                    // The CursorMoved handler has been streaming
+                    // FootprintSketchResizeRoundPad per tick; release
+                    // just clears the drag state.
+                    if cstate.round_resize_drag.take().is_some() {
+                        self.cache.clear();
+                        return None;
+                    }
                     // v0.16 — sketch-Point drag releases here. The
                     // press handler already published the select and
                     // CursorMoved has been streaming
@@ -634,6 +687,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 cstate.box_select_anchor_screen.take(),
                                 cstate.box_select_current_screen.take(),
                             ) {
+                                use super::state::FpSelectionMode;
                                 let world_a = cstate.screen_to_world(a);
                                 let world_c = cstate.screen_to_world(c);
                                 let (x0, x1) = if world_a.0 <= world_c.0 {
@@ -646,14 +700,30 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 } else {
                                     (world_c.1, world_a.1)
                                 };
+                                // v0.27 — honour the active-bar
+                                // Selection picker. Inside (default):
+                                // pad bbox fully inside rect.
+                                // Touching: pad bbox intersects rect.
+                                // Outside: pad bbox fully outside.
+                                let mode = self.state.selection_mode_2d;
                                 let mut hit: Option<usize> = None;
                                 for (idx, pad) in self.state.pads.iter().enumerate() {
                                     let (px0, py0, px1, py1) = pad.bbox_mm();
-                                    if px0 >= x0
+                                    let fully_inside = px0 >= x0
                                         && px1 <= x1
                                         && py0 >= y0
-                                        && py1 <= y1
-                                    {
+                                        && py1 <= y1;
+                                    let fully_outside = px1 < x0
+                                        || px0 > x1
+                                        || py1 < y0
+                                        || py0 > y1;
+                                    let touching = !fully_outside;
+                                    let keep = match mode {
+                                        FpSelectionMode::Inside => fully_inside,
+                                        FpSelectionMode::Touching => touching,
+                                        FpSelectionMode::Outside => fully_outside,
+                                    };
+                                    if keep {
                                         hit = Some(idx);
                                         break;
                                     }
@@ -740,15 +810,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         // so TAB-pause suppresses click-add until the
                         // user resumes (TAB again).
                         use crate::library::editor::footprint::state::PadsTool;
-                        // PlaceVia routes through the same AddPad
-                        // handler — `next_pad_defaults` carries the via
-                        // shape (Round + drill) the user has dialed in
-                        // via Properties; the dispatcher mints a pad
-                        // with that geometry. Without this branch the
-                        // via tool was a no-op (clicks fell through to
-                        // the Select-tool deselect path).
-                        if (self.state.pads_tool == PadsTool::PlacePad
-                            || self.state.pads_tool == PadsTool::PlaceVia)
+                        if self.state.pads_tool == PadsTool::PlacePad
                             && !self.state.placement_paused
                         {
                             return Some(canvas::Action::publish(LibraryMessage::EditorEvent {
@@ -756,6 +818,24 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 table: self.address.table.clone(),
                                 row_id: self.address.row_id,
                                 msg: EditorMsg::FootprintAddPad {
+                                    x_mm: drag.grab_offset_mm.0,
+                                    y_mm: drag.grab_offset_mm.1,
+                                },
+                            }));
+                        }
+                        // v0.27 — PlaceVia drops a canonical via (Round
+                        // 0.6 mm copper + 0.3 mm drill + Multi-Layer)
+                        // via a dedicated dispatcher path. Bypasses
+                        // `next_pad_defaults` so the via geometry is
+                        // always correct regardless of Pads-mode dial-in.
+                        if self.state.pads_tool == PadsTool::PlaceVia
+                            && !self.state.placement_paused
+                        {
+                            return Some(canvas::Action::publish(LibraryMessage::EditorEvent {
+                                library_path: self.address.library_path.clone(),
+                                table: self.address.table.clone(),
+                                row_id: self.address.row_id,
+                                msg: EditorMsg::FootprintAddVia {
                                     x_mm: drag.grab_offset_mm.0,
                                     y_mm: drag.grab_offset_mm.1,
                                 },
@@ -946,6 +1026,34 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     cstate.last_snap = Some(result);
                     result.pos
                 };
+                // v0.27 — round-pad diameter handle drag: take the
+                // armed pad index, compute the new diameter from the
+                // cursor's world distance to the pad centre, publish
+                // a resize message. Bypass the generic drag handler
+                // so the Point-drag / pad-drag paths don't fire.
+                if let Some(pad_idx) = cstate.round_resize_drag {
+                    let centre = self
+                        .state
+                        .pads
+                        .get(pad_idx)
+                        .map(|p| p.position_mm);
+                    if let Some(centre) = centre {
+                        let dx_mm = world.0 - centre.0;
+                        let dy_mm = world.1 - centre.1;
+                        let r_mm = (dx_mm * dx_mm + dy_mm * dy_mm).sqrt();
+                        let diameter_mm = (2.0 * r_mm).max(0.05);
+                        self.cache.clear();
+                        return Some(canvas::Action::publish(LibraryMessage::EditorEvent {
+                            library_path: self.address.library_path.clone(),
+                            table: self.address.table.clone(),
+                            row_id: self.address.row_id,
+                            msg: EditorMsg::FootprintSketchResizeRoundPad {
+                                pad_idx,
+                                diameter_mm,
+                            },
+                        }));
+                    }
+                }
                 if let Some(drag) = cstate.drag.as_mut() {
                     let dx = (cursor_pos.x - drag.press_screen.x).abs();
                     let dy = (cursor_pos.y - drag.press_screen.y).abs();
@@ -1610,6 +1718,36 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                             Stroke::default().with_width(0.75).with_color(ghost_stroke),
                         );
                     }
+                }
+            }
+
+            // v0.27 — PlaceVia ghost preview. Vias have canonical
+            // geometry (Round 0.6 mm copper / 0.3 mm drill) so the
+            // ghost reads off hardcoded constants rather than
+            // `next_pad_defaults`. Renders a small translucent green
+            // disc with a black drilled hole — visually distinct
+            // from the red PlacePad ghost so the user can tell the
+            // tools apart at a glance.
+            if matches!(self.state.mode, EditorMode::Normal)
+                && self.state.pads_tool == PadsTool::PlaceVia
+                && !self.state.placement_paused
+                && let Some((cx, cy)) = self.state.cursor_mm
+            {
+                const VIA_DIAMETER_MM: f64 = 0.6;
+                const VIA_DRILL_MM: f64 = 0.3;
+                let centre = cstate.world_to_screen((cx, cy));
+                let r_px = (VIA_DIAMETER_MM / 2.0) as f32 * cstate.scale;
+                let drill_r_px = (VIA_DRILL_MM / 2.0) as f32 * cstate.scale;
+                let copper = Color::from_rgba(0.20, 0.75, 0.40, 0.85);
+                let outline = Color::from_rgba(0.10, 0.95, 0.50, 1.0);
+                let hole = Color::from_rgba(0.05, 0.05, 0.05, 0.95);
+                frame.fill(&Path::circle(centre, r_px), copper);
+                frame.stroke(
+                    &Path::circle(centre, r_px),
+                    Stroke::default().with_width(1.0).with_color(outline),
+                );
+                if drill_r_px > 0.5 {
+                    frame.fill(&Path::circle(centre, drill_r_px), hole);
                 }
             }
 

@@ -1036,6 +1036,16 @@ fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEditorMsg {
         EditorMsg::FootprintSketchMovePoint { id, dx, dy } => {
             PrimitiveEditorMsg::FootprintSketchMovePoint { id, dx, dy }
         }
+        EditorMsg::FootprintSketchResizeRoundPad { pad_idx, diameter_mm } => {
+            PrimitiveEditorMsg::FootprintSketchResizeRoundPad { pad_idx, diameter_mm }
+        }
+        EditorMsg::FootprintSetSelectionMode2d(mode) => {
+            PrimitiveEditorMsg::FootprintSetSelectionMode2d(mode)
+        }
+        EditorMsg::FootprintSelectAllOnLayer => PrimitiveEditorMsg::FootprintSelectAllOnLayer,
+        EditorMsg::FootprintAddVia { x_mm, y_mm } => {
+            PrimitiveEditorMsg::FootprintAddVia { x_mm, y_mm }
+        }
         EditorMsg::FootprintMovePad { idx, x_mm, y_mm } => {
             PrimitiveEditorMsg::FootprintMovePad { idx, x_mm, y_mm }
         }

@@ -1,4 +1,31 @@
 //! v0.18.13 — Altium-style Selection Filter (12 togglable kinds).
+//!
+//! v0.27 — also home for the rubber-band selection mode (Inside /
+//! Touching / Outside) wired to the active-bar Selection Mode picker.
+
+/// v0.27 — Altium-parity rubber-band selection mode picker. Drives
+/// which pads the box-select picker accepts on release.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FpSelectionMode {
+    /// Pads whose bbox is fully inside the dragged rectangle.
+    #[default]
+    Inside,
+    /// Pads whose bbox intersects the rectangle (default Altium pen).
+    Touching,
+    /// Pads whose bbox is fully outside the rectangle.
+    Outside,
+}
+
+impl FpSelectionMode {
+    pub fn label(self) -> &'static str {
+        match self {
+            FpSelectionMode::Inside => "Inside Area",
+            FpSelectionMode::Touching => "Touching Rectangle",
+            FpSelectionMode::Outside => "Outside Area",
+        }
+    }
+}
+
 
 /// Each flag gates whether the corresponding kind is selectable in
 /// the canvas. `Pads` is the only one functionally wired today; the

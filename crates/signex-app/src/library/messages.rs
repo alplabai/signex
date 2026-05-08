@@ -799,6 +799,30 @@ pub enum EditorMsg {
         dx: f64,
         dy: f64,
     },
+    /// v0.27 — Drag the diameter handle of a Round pad in Sketch
+    /// mode. The dispatcher updates pad.size_mm = (d, d), the
+    /// matching Circle entity's radius, and the bound
+    /// `diameter_<slug>` parameter expression so all three stay in
+    /// sync. Triggered by the canvas's east-edge handle drag.
+    FootprintSketchResizeRoundPad {
+        pad_idx: usize,
+        diameter_mm: f64,
+    },
+    /// v0.27 — pick the rubber-band selection mode from the active
+    /// bar Selection picker (Inside / Touching / Outside).
+    FootprintSetSelectionMode2d(crate::library::editor::footprint::state::FpSelectionMode),
+    /// v0.27 — select every pad on the same primary layer as the
+    /// currently-active layer (or `F.Cu` when nothing is selected).
+    FootprintSelectAllOnLayer,
+    /// v0.27 — drop a via at the cursor. Vias are a small Round
+    /// plated-through pad with a tight drill; the dispatcher mints a
+    /// pad with via-canonical defaults (0.6 mm copper, 0.3 mm drill,
+    /// Multi-Layer F.Cu + B.Cu + masks) regardless of the user's
+    /// Pads-mode `next_pad_defaults`.
+    FootprintAddVia {
+        x_mm: f64,
+        y_mm: f64,
+    },
     /// Select / deselect a pad. `None` deselects everything.
     FootprintSelectPad(Option<usize>),
     /// Delete-key — remove the currently-selected pad.
@@ -1597,6 +1621,22 @@ pub enum PrimitiveEditorMsg {
         dx: f64,
         dy: f64,
     },
+    /// v0.27 — Resize a Round pad's diameter via the east-edge
+    /// handle drag in Sketch mode. The dispatcher updates pad.size_mm
+    /// and the matching Circle entity + diameter parameter.
+    FootprintSketchResizeRoundPad {
+        pad_idx: usize,
+        diameter_mm: f64,
+    },
+    /// v0.27 — pick the rubber-band selection mode (Inside /
+    /// Touching / Outside) from the active-bar Selection picker.
+    FootprintSetSelectionMode2d(crate::library::editor::footprint::state::FpSelectionMode),
+    /// v0.27 — select every pad on the active primary layer.
+    FootprintSelectAllOnLayer,
+    /// v0.27 — drop a via at the cursor (Round, 0.6 mm copper,
+    /// 0.3 mm drill, Multi-Layer plated). Bypasses Pads-mode
+    /// `next_pad_defaults` so the via geometry is canonical.
+    FootprintAddVia { x_mm: f64, y_mm: f64 },
     /// v0.13.3 — Add a constraint based on the current selection.
     /// The inspector's selection-aware submenu emits a `Tag` that
     /// the dispatcher maps into the appropriate `ConstraintKind`

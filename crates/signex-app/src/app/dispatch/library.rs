@@ -4136,6 +4136,10 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintSketchPlacementInputEscape
         | PrimitiveEditorMsg::FootprintSketchSelect { .. }
         | PrimitiveEditorMsg::FootprintSketchMovePoint { .. }
+        | PrimitiveEditorMsg::FootprintSketchResizeRoundPad { .. }
+        | PrimitiveEditorMsg::FootprintSetSelectionMode2d(_)
+        | PrimitiveEditorMsg::FootprintSelectAllOnLayer
+        | PrimitiveEditorMsg::FootprintAddVia { .. }
         | PrimitiveEditorMsg::FootprintSketchAddConstraintForSelection(_)
         | PrimitiveEditorMsg::FootprintSketchDimensionInput(_)
         | PrimitiveEditorMsg::FootprintSketchSetRole { .. }
@@ -4416,6 +4420,43 @@ pub(crate) fn apply_footprint_primitive_edit(
                 if let Some(pad) = state.pads.get_mut(idx) {
                     if footprint_sketch_is_active(primitive) {
                         pad_to_sketch::mirror_add_pad_to_sketch(pad, primitive);
+                    }
+                }
+                CanvasState::sync_pads_to_primitive(state, primitive);
+            });
+            editor.canvas_cache.clear();
+            editor.dirty = true;
+        }
+        PrimitiveEditorMsg::FootprintAddVia { x_mm, y_mm } => {
+            // v0.27 — vias are a small Round plated-through pad. The
+            // canonical via geometry is fixed (0.6 mm copper / 0.3 mm
+            // drill / Multi-Layer F.Cu+B.Cu+masks) so the user gets a
+            // proper via regardless of what `next_pad_defaults` looks
+            // like. Bypasses `add_pad_at` (which inherits Pads-mode
+            // defaults) and constructs the EditorPad directly.
+            use crate::library::editor::footprint::state::EditorPad;
+            use signex_library::{LayerId, PadKind, PadShape};
+            const VIA_DIAMETER_MM: f64 = 0.6;
+            const VIA_DRILL_MM: f64 = 0.3;
+            editor.with_parts(|state, primitive| {
+                let number = state.next_pad_number();
+                let mut pad = EditorPad::new_default(number, (x_mm, y_mm));
+                pad.size_mm = (VIA_DIAMETER_MM, VIA_DIAMETER_MM);
+                pad.shape = PadShape::Round;
+                pad.kind = PadKind::Tht;
+                pad.drill_diameter_mm = Some(VIA_DRILL_MM);
+                pad.layers = vec![
+                    LayerId::new("F.Cu"),
+                    LayerId::new("F.Mask"),
+                    LayerId::new("B.Cu"),
+                    LayerId::new("B.Mask"),
+                ];
+                state.pads.push(pad);
+                let idx = state.pads.len() - 1;
+                state.selected_pad = Some(idx);
+                if let Some(p) = state.pads.get_mut(idx) {
+                    if footprint_sketch_is_active(primitive) {
+                        pad_to_sketch::mirror_add_pad_to_sketch(p, primitive);
                     }
                 }
                 CanvasState::sync_pads_to_primitive(state, primitive);
@@ -5475,6 +5516,86 @@ pub(crate) fn apply_footprint_primitive_edit(
             }
             editor.canvas_cache.clear();
             editor.dirty = true;
+        }
+        PrimitiveEditorMsg::FootprintSketchResizeRoundPad {
+            pad_idx,
+            diameter_mm,
+        } => {
+            // v0.27 — round-pad diameter handle drag. Update three
+            // sources of truth in lockstep so the on-canvas handle
+            // motion, the bake output, and the parameter table stay
+            // consistent:
+            //   1. `pad.size_mm = (d, d)` — Editor mirror of the bbox.
+            //   2. Circle entity radius — sketch-side geometry the
+            //      Sketch overlay renders.
+            //   3. `diameter_<slug>` parameter expression + the
+            //      centre Point's PadAttr size_x_expr / size_y_expr —
+            //      the bake reads these to emit the baked pad.
+            let d = diameter_mm.max(0.05);
+            let centre_id = editor.state.pads.get(pad_idx).and_then(|p| p.sketch_entity_id);
+            let diameter_param =
+                editor.state.pads.get(pad_idx).and_then(|p| {
+                    p.shape_params.get("diameter").cloned()
+                });
+            if let Some(pad) = editor.state.pads.get_mut(pad_idx) {
+                pad.size_mm = (d, d);
+            }
+            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
+                use signex_sketch::entity::EntityKind;
+                if let Some(cid) = centre_id {
+                    for entity in sketch.entities.iter_mut() {
+                        if let EntityKind::Circle { center, radius } = &mut entity.kind {
+                            if *center == cid {
+                                *radius = d / 2.0;
+                            }
+                        }
+                        if entity.id == cid {
+                            if let Some(attr) = entity.pad.as_mut() {
+                                attr.size_x_expr = format!("{:.4}mm", d);
+                                attr.size_y_expr = format!("{:.4}mm", d);
+                            }
+                        }
+                    }
+                }
+                if let Some(name) = diameter_param.as_deref() {
+                    sketch
+                        .parameters
+                        .insert(name.to_string(), format!("{:.4}mm", d));
+                }
+            }
+            editor.with_parts(|state, primitive| {
+                CanvasState::sync_pads_to_primitive(state, primitive);
+            });
+            editor.canvas_cache.clear();
+            editor.dirty = true;
+        }
+        PrimitiveEditorMsg::FootprintSetSelectionMode2d(mode) => {
+            // v0.27 — active-bar Selection picker rows. The rubber-
+            // band release picker reads this on commit so Inside /
+            // Touching / Outside semantics apply.
+            editor.state.selection_mode_2d = mode;
+            editor.state.active_bar_menu = None;
+        }
+        PrimitiveEditorMsg::FootprintSelectAllOnLayer => {
+            // v0.27 — pick the layer of the currently-selected pad
+            // (or the first visible layer if nothing is selected),
+            // then walk the pad list. Selection is a single-pad
+            // surface today; surface the first match. Multi-select
+            // is queued for v0.28.
+            let layer = editor
+                .state
+                .selected_pad
+                .and_then(|idx| editor.state.pads.get(idx))
+                .map(|p| p.primary_layer())
+                .unwrap_or(crate::library::editor::footprint::layers::FpLayer::FCu);
+            let hit = editor
+                .state
+                .pads
+                .iter()
+                .position(|p| p.primary_layer() == layer);
+            editor.state.selected_pad = hit;
+            editor.state.active_bar_menu = None;
+            editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintSketchDimensionInput(s) => {
             editor.state.dimension_input = s;
@@ -8244,6 +8365,10 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::FootprintSketchPlacementInputEscape
         | EditorMsg::FootprintSketchSelect { .. }
         | EditorMsg::FootprintSketchMovePoint { .. }
+        | EditorMsg::FootprintSketchResizeRoundPad { .. }
+        | EditorMsg::FootprintSetSelectionMode2d(_)
+        | EditorMsg::FootprintSelectAllOnLayer
+        | EditorMsg::FootprintAddVia { .. }
         | EditorMsg::FootprintMovePad { .. }
         | EditorMsg::FootprintCursorAt { .. }
         | EditorMsg::FootprintSelectPad(_)

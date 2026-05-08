@@ -50,33 +50,25 @@ pub(super) fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a,
             // Geometry constants.
             let pad_w = self.size_x_mm.max(0.001);
             let pad_h = self.size_y_mm.max(0.001);
-            // v0.25 — UAT: blue mask diameter should match the copper
-            // diameter (Altium parity). The 10% outset was added in
-            // v0.20 as a visualisation hint but the user's reference
-            // shows mask flush with copper.  Setting outset = 0 keeps
-            // mask_w / mask_h equal to pad_w / pad_h.
-            let mask_outset_mm: f64 = 0.0;
+            // v0.27 — restore a small mask outset so the blue
+            // soldermask reads as a visible ring around the copper.
+            // The v0.25 UAT change set this to 0 (mask flush with
+            // copper) which left only the front side-wall sliver
+            // visible. Real soldermask expansion is ~0.075 mm
+            // (Altium default); using 8% of pad width keeps it
+            // proportional across pad sizes.
+            let mask_outset_mm: f64 = pad_w.max(pad_h) * 0.08;
             let mask_w = pad_w + 2.0 * mask_outset_mm;
             let mask_h = pad_h + 2.0 * mask_outset_mm;
-            // v0.25 — Altium-parity layer thicknesses. Real PCB:
-            // copper foil ≈ 35µm, mask ≈ 25µm, substrate (FR4) ≈
-            // 1.6mm. So the substrate dominates by 30-50× the
-            // foils. Mirroring that ratio at panel scale:
-            //   copper_thickness = 0.05 of pad long-axis
-            //   mask_thickness   = 0.05
-            //   substrate_gap    = 0.25 (5× the foils)
-            // gives a tall silver cylinder visible through the
-            // hole rather than a shallow disc-dominated view —
-            // matches the reference''s "drilled-through PCB"
-            // proportions.
-            let copper_thickness_mm = pad_w.max(pad_h) * 0.05;
-            let mask_thickness_mm = copper_thickness_mm;
-            // Vertical gap = bare substrate. Renders as dark canvas
-            // background visible between the copper and mask rings.
-            // Drives the inner-wall (silver) visible depth: depth =
-            // mask + gap + copper = 0.05 + 0.25 + 0.05 = 0.35 of
-            // pad long-axis.
-            let substrate_gap_mm = pad_w.max(pad_h) * 0.25;
+            // v0.27 — tighter stack ratios. The v0.25 substrate_gap
+            // = 25% of pad width made the stack look like two
+            // separate floating layers rather than a cohesive pad.
+            // Reduce gap to 8% so the mask + copper read as a
+            // single pad-stack volume, matching Altium's compact
+            // preview chrome.
+            let copper_thickness_mm = pad_w.max(pad_h) * 0.06;
+            let mask_thickness_mm = pad_w.max(pad_h) * 0.06;
+            let substrate_gap_mm = pad_w.max(pad_h) * 0.08;
 
             // 30° isometric projection — matches `preview3d.rs`. Both
             // X+ and Y+ rotate to screen-up directions, Z+ is screen-up.

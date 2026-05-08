@@ -324,6 +324,7 @@ fn place_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessag
 }
 
 fn select_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessage>> {
+    use crate::library::editor::footprint::state::FpSelectionMode;
     vec![
         DropdownEntry::Item(stub("Select overlapped", path.clone())),
         DropdownEntry::Item(stub("Select next", path.clone())),
@@ -333,20 +334,39 @@ fn select_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessa
             ic::icon_dd_select_lasso(tid),
         )),
         DropdownEntry::Separator,
-        DropdownEntry::Item(stub_with_icon(
-            "Inside Area",
-            path.clone(),
-            ic::icon_dd_select_inside(tid),
+        DropdownEntry::Item(
+            DropdownItem::new(
+                "Inside Area",
+                fp(
+                    path.clone(),
+                    PrimitiveEditorMsg::FootprintSetSelectionMode2d(FpSelectionMode::Inside),
+                ),
+            )
+            .icon(ic::icon_dd_select_inside(tid)),
+        ),
+        DropdownEntry::Item(
+            DropdownItem::new(
+                "Outside Area",
+                fp(
+                    path.clone(),
+                    PrimitiveEditorMsg::FootprintSetSelectionMode2d(FpSelectionMode::Outside),
+                ),
+            )
+            .icon(ic::icon_dd_select_outside(tid)),
+        ),
+        DropdownEntry::Item(DropdownItem::new(
+            "Touching Rectangle",
+            fp(
+                path.clone(),
+                PrimitiveEditorMsg::FootprintSetSelectionMode2d(FpSelectionMode::Touching),
+            ),
         )),
-        DropdownEntry::Item(stub_with_icon(
-            "Outside Area",
-            path.clone(),
-            ic::icon_dd_select_outside(tid),
-        )),
-        DropdownEntry::Item(stub("Touching Rectangle", path.clone())),
         DropdownEntry::Item(stub("Touching Line", path.clone())),
         DropdownEntry::Separator,
-        DropdownEntry::Item(stub("All on Layer", path.clone())),
+        DropdownEntry::Item(DropdownItem::new(
+            "All on Layer",
+            fp(path.clone(), PrimitiveEditorMsg::FootprintSelectAllOnLayer),
+        )),
         DropdownEntry::Item(
             DropdownItem::new(
                 "All",
