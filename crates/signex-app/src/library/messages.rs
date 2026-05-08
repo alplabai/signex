@@ -823,8 +823,17 @@ pub enum EditorMsg {
         x_mm: f64,
         y_mm: f64,
     },
+    /// v0.27 — Altium parity: multi-select every pad whose centre
+    /// is NOT on the active snap grid step. Useful for catching
+    /// pads accidentally dropped between grid points.
+    FootprintSelectOffGridPads,
     /// Select / deselect a pad. `None` deselects everything.
     FootprintSelectPad(Option<usize>),
+    /// v0.27 — Multi-select replacement. Replaces the entire
+    /// selection with `pads`. First entry becomes primary (drives
+    /// the Properties form); rest go to `selected_pads_extra`.
+    /// Empty Vec deselects all.
+    FootprintSelectPads(Vec<usize>),
     /// Delete-key — remove the currently-selected pad.
     FootprintDeleteSelected,
     /// Toolbar — toggle a layer's visibility. Carries the Standard layer
@@ -1412,6 +1421,11 @@ pub enum PrimitiveEditorMsg {
     FootprintCursorAt { x_mm: f64, y_mm: f64 },
     /// Select / deselect a pad. `None` deselects everything.
     FootprintSelectPad(Option<usize>),
+    /// v0.27 — Multi-select replacement. Replaces the entire
+    /// selection with `pads`. First entry becomes primary (drives
+    /// the Properties form); rest go to `selected_pads_extra`.
+    /// Empty Vec deselects all.
+    FootprintSelectPads(Vec<usize>),
     /// Delete-key — remove the currently-selected pad.
     FootprintDeleteSelected,
     /// Toolbar — toggle a layer's visibility. Carries the Standard layer
@@ -1637,6 +1651,8 @@ pub enum PrimitiveEditorMsg {
     /// 0.3 mm drill, Multi-Layer plated). Bypasses Pads-mode
     /// `next_pad_defaults` so the via geometry is canonical.
     FootprintAddVia { x_mm: f64, y_mm: f64 },
+    /// v0.27 — multi-select every pad off the current snap grid.
+    FootprintSelectOffGridPads,
     /// v0.13.3 — Add a constraint based on the current selection.
     /// The inspector's selection-aware submenu emits a `Tag` that
     /// the dispatcher maps into the appropriate `ConstraintKind`

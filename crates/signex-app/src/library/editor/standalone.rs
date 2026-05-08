@@ -1046,6 +1046,7 @@ fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEditorMsg {
         EditorMsg::FootprintAddVia { x_mm, y_mm } => {
             PrimitiveEditorMsg::FootprintAddVia { x_mm, y_mm }
         }
+        EditorMsg::FootprintSelectOffGridPads => PrimitiveEditorMsg::FootprintSelectOffGridPads,
         EditorMsg::FootprintMovePad { idx, x_mm, y_mm } => {
             PrimitiveEditorMsg::FootprintMovePad { idx, x_mm, y_mm }
         }
@@ -1053,6 +1054,7 @@ fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEditorMsg {
             PrimitiveEditorMsg::FootprintCursorAt { x_mm, y_mm }
         }
         EditorMsg::FootprintSelectPad(sel) => PrimitiveEditorMsg::FootprintSelectPad(sel),
+        EditorMsg::FootprintSelectPads(pads) => PrimitiveEditorMsg::FootprintSelectPads(pads),
         EditorMsg::FootprintDeleteSelected => PrimitiveEditorMsg::FootprintDeleteSelected,
         EditorMsg::FootprintToggleLayer(name) => PrimitiveEditorMsg::FootprintToggleLayer(name),
         EditorMsg::FootprintToggleAutoFit => PrimitiveEditorMsg::FootprintToggleAutoFit,

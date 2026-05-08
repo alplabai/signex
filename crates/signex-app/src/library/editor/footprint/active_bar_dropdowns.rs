@@ -374,7 +374,10 @@ fn select_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessa
             )
             .icon(ic::icon_dd_select_all(tid)),
         ),
-        DropdownEntry::Item(stub("Off Grid Pads", path.clone())),
+        DropdownEntry::Item(DropdownItem::new(
+            "Off Grid Pads",
+            fp(path.clone(), PrimitiveEditorMsg::FootprintSelectOffGridPads),
+        )),
         DropdownEntry::Separator,
         DropdownEntry::Item(
             DropdownItem::new(

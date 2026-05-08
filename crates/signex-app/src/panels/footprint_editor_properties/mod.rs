@@ -89,18 +89,32 @@ pub(super) fn view_footprint_editor_properties<'a>(
 
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
 
+    // v0.27 — multi-select indicator. With > 1 pad selected, show a
+    // "(N pads selected)" tag next to the mode label so the user
+    // knows the form below shows only the primary pad's properties
+    // while highlights cover everything.
+    let multi_select_tag = if fp.selected_pad_count > 1 {
+        Some(format!("({} pads selected)", fp.selected_pad_count))
+    } else {
+        None
+    };
+
+    let mut header_row = row![
+        text(&fp.footprint_name).size(12).color(primary),
+        text("·").size(12).color(muted),
+        text(mode_label).size(11).color(muted),
+    ]
+    .spacing(6)
+    .align_y(iced::Alignment::Center);
+    if let Some(tag) = multi_select_tag {
+        header_row = header_row.push(text("·").size(12).color(muted));
+        header_row = header_row.push(text(tag).size(11).color(accent_c));
+    }
+
     col = col.push(
-        container(
-            row![
-                text(&fp.footprint_name).size(12).color(primary),
-                text("·").size(12).color(muted),
-                text(mode_label).size(11).color(muted),
-            ]
-            .spacing(6)
-            .align_y(iced::Alignment::Center),
-        )
-        .padding([6, 8])
-        .width(Length::Fill),
+        container(header_row)
+            .padding([6, 8])
+            .width(Length::Fill),
     );
     col = col.push(super::thin_sep(border_c));
 

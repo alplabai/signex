@@ -561,6 +561,12 @@ pub struct FootprintEditorPanelContext {
     /// Read-only summary of the selected pad — populated when in
     /// Pads mode and a pad is selected.
     pub selected_pad: Option<FootprintPadSummary>,
+    /// v0.27 — total number of selected pads (primary + extras).
+    /// Drives the multi-select "(N selected)" indicator in the
+    /// Properties panel header. `1` for a single-select; `> 1` when
+    /// the rubber band picked multiple pads or All-on-Layer / All
+    /// fired.
+    pub selected_pad_count: usize,
     /// Read-only summary of the primary selected sketch entity —
     /// populated when in Sketch mode and an entity is selected.
     pub selected_sketch_entity: Option<FootprintSketchEntitySummary>,

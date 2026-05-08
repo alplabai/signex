@@ -706,7 +706,11 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 // Touching: pad bbox intersects rect.
                                 // Outside: pad bbox fully outside.
                                 let mode = self.state.selection_mode_2d;
-                                let mut hit: Option<usize> = None;
+                                // v0.27 — Altium-parity rubber-band
+                                // multi-select. Collect EVERY pad
+                                // matching the active mode rather
+                                // than breaking at the first hit.
+                                let mut hits: Vec<usize> = Vec::new();
                                 for (idx, pad) in self.state.pads.iter().enumerate() {
                                     let (px0, py0, px1, py1) = pad.bbox_mm();
                                     let fully_inside = px0 >= x0
@@ -724,8 +728,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                         FpSelectionMode::Outside => fully_outside,
                                     };
                                     if keep {
-                                        hit = Some(idx);
-                                        break;
+                                        hits.push(idx);
                                     }
                                 }
                                 self.cache.clear();
@@ -734,7 +737,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                         library_path: self.address.library_path.clone(),
                                         table: self.address.table.clone(),
                                         row_id: self.address.row_id,
-                                        msg: EditorMsg::FootprintSelectPad(hit),
+                                        msg: EditorMsg::FootprintSelectPads(hits),
                                     },
                                 ));
                             }
@@ -1476,7 +1479,10 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 if !self.state.layer_visibility.get(pad.primary_layer()) {
                     continue;
                 }
-                draw_pad(frame, cstate, pad, self.state.selected_pad == Some(idx));
+                // v0.27 — multi-select highlight: primary OR extras.
+                let is_selected = self.state.selected_pad == Some(idx)
+                    || self.state.selected_pads_extra.contains(&idx);
+                draw_pad(frame, cstate, pad, is_selected);
             }
 
             // v0.25 polish — Source-pad indicator. When a pad is the

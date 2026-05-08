@@ -1629,6 +1629,11 @@ fn build_footprint_editor_panel_ctx(
         sketch_constraint_count,
         last_solve,
         selected_pad,
+        selected_pad_count: editor
+            .state
+            .selected_pad
+            .map(|_| 1 + editor.state.selected_pads_extra.len())
+            .unwrap_or(0),
         selected_sketch_entity,
         auto_fit_courtyard: editor.state.auto_fit_courtyard,
         library_siblings,

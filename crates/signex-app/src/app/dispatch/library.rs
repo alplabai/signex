@@ -4102,6 +4102,7 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintMovePad { .. }
         | PrimitiveEditorMsg::FootprintCursorAt { .. }
         | PrimitiveEditorMsg::FootprintSelectPad(_)
+        | PrimitiveEditorMsg::FootprintSelectPads(_)
         | PrimitiveEditorMsg::FootprintDeleteSelected
         | PrimitiveEditorMsg::FootprintToggleLayer(_)
         | PrimitiveEditorMsg::FootprintToggleAutoFit
@@ -4140,6 +4141,7 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintSetSelectionMode2d(_)
         | PrimitiveEditorMsg::FootprintSelectAllOnLayer
         | PrimitiveEditorMsg::FootprintAddVia { .. }
+        | PrimitiveEditorMsg::FootprintSelectOffGridPads
         | PrimitiveEditorMsg::FootprintSketchAddConstraintForSelection(_)
         | PrimitiveEditorMsg::FootprintSketchDimensionInput(_)
         | PrimitiveEditorMsg::FootprintSketchSetRole { .. }
@@ -4676,6 +4678,9 @@ pub(crate) fn apply_footprint_primitive_edit(
         }
         PrimitiveEditorMsg::FootprintSelectPad(sel) => {
             editor.state.selected_pad = sel;
+            // v0.27 — single-pad select replaces the multi-select
+            // extras too. Multi-select uses FootprintSelectPads.
+            editor.state.selected_pads_extra.clear();
             // v0.18.18 — pad and silk selection are mutually
             // exclusive in the Properties panel; clear the silk
             // selection when a pad is picked.
@@ -4685,6 +4690,25 @@ pub(crate) fn apply_footprint_primitive_edit(
             // v0.25 polish — clear verbatim numeric buffers on
             // selection change so a stale "0.1." buffer from one
             // pad doesn't follow the user to the next pad's input.
+            editor.state.numeric_buffers.clear();
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintSelectPads(mut pads) => {
+            // v0.27 — Altium-parity multi-select. Empty list = clear.
+            // First entry becomes the primary (drives Properties);
+            // rest land in `selected_pads_extra` for highlight only.
+            // Dedupe so a sloppy caller passing [3, 3, 7] still gets
+            // [3, 7] selected.
+            pads.sort_unstable();
+            pads.dedup();
+            if pads.is_empty() {
+                editor.state.selected_pad = None;
+                editor.state.selected_pads_extra.clear();
+            } else {
+                editor.state.selected_pad = Some(pads[0]);
+                editor.state.selected_pads_extra = pads[1..].to_vec();
+                editor.state.selected_silk_f = None;
+            }
             editor.state.numeric_buffers.clear();
             editor.canvas_cache.clear();
         }
@@ -5155,9 +5179,9 @@ pub(crate) fn apply_footprint_primitive_edit(
             editor.dirty = true;
         }
         PrimitiveEditorMsg::FootprintActiveBarSelectAll => {
-            // Single-pad-selection limitation: pick the first pad in
-            // Pads mode; pick the first sketch entity in Sketch mode.
-            // Multi-select is a follow-up state refactor.
+            // v0.27 — Altium-parity: Select All multi-selects every
+            // pad in Pads mode; Sketch mode still picks the first
+            // entity (sketch-side multi-select is a v0.28 follow-up).
             use crate::library::editor::footprint::state::EditorMode;
             match editor.state.mode {
                 EditorMode::Sketch => {
@@ -5170,8 +5194,10 @@ pub(crate) fn apply_footprint_primitive_edit(
                     }
                 }
                 EditorMode::Normal => {
-                    if !editor.state.pads.is_empty() && editor.state.selected_pad.is_none() {
+                    if !editor.state.pads.is_empty() {
                         editor.state.selected_pad = Some(0);
+                        editor.state.selected_pads_extra =
+                            (1..editor.state.pads.len()).collect();
                     }
                 }
                 EditorMode::View3d => {}
@@ -5181,6 +5207,7 @@ pub(crate) fn apply_footprint_primitive_edit(
         }
         PrimitiveEditorMsg::FootprintActiveBarClearSelection => {
             editor.state.selected_pad = None;
+            editor.state.selected_pads_extra.clear();
             editor.state.selected_sketch = None;
             editor.state.selected_sketch_secondary = None;
             editor.state.selected_silk_f = None;
@@ -5577,23 +5604,71 @@ pub(crate) fn apply_footprint_primitive_edit(
             editor.state.active_bar_menu = None;
         }
         PrimitiveEditorMsg::FootprintSelectAllOnLayer => {
-            // v0.27 — pick the layer of the currently-selected pad
-            // (or the first visible layer if nothing is selected),
-            // then walk the pad list. Selection is a single-pad
-            // surface today; surface the first match. Multi-select
-            // is queued for v0.28.
+            // v0.27 — multi-select every pad on the active layer.
+            // Active layer = layer of the currently-selected pad,
+            // or F.Cu when nothing is selected.
             let layer = editor
                 .state
                 .selected_pad
                 .and_then(|idx| editor.state.pads.get(idx))
                 .map(|p| p.primary_layer())
                 .unwrap_or(crate::library::editor::footprint::layers::FpLayer::FCu);
-            let hit = editor
+            let mut matches: Vec<usize> = editor
                 .state
                 .pads
                 .iter()
-                .position(|p| p.primary_layer() == layer);
-            editor.state.selected_pad = hit;
+                .enumerate()
+                .filter_map(|(idx, p)| {
+                    if p.primary_layer() == layer {
+                        Some(idx)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            if matches.is_empty() {
+                editor.state.selected_pad = None;
+                editor.state.selected_pads_extra.clear();
+            } else {
+                editor.state.selected_pad = Some(matches.remove(0));
+                editor.state.selected_pads_extra = matches;
+            }
+            editor.state.active_bar_menu = None;
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintSelectOffGridPads => {
+            // v0.27 — pads whose centre falls between grid steps.
+            // The active grid step lives on snap_options; defaults
+            // to 1 mm. Tolerance is 1% of the step so pads exactly
+            // on the grid (with floating-point noise) don't
+            // false-positive.
+            let step = editor.state.snap_options.grid_step_mm.max(1e-6);
+            let tol = step * 0.01;
+            let on_grid = |v: f64| -> bool {
+                let r = (v / step).round() * step;
+                (v - r).abs() <= tol
+            };
+            let mut matches: Vec<usize> = editor
+                .state
+                .pads
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, p)| {
+                    let (x, y) = p.position_mm;
+                    if !on_grid(x) || !on_grid(y) {
+                        Some(idx)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            if matches.is_empty() {
+                editor.state.selected_pad = None;
+                editor.state.selected_pads_extra.clear();
+            } else {
+                editor.state.selected_pad = Some(matches.remove(0));
+                editor.state.selected_pads_extra = matches;
+            }
             editor.state.active_bar_menu = None;
             editor.canvas_cache.clear();
         }
@@ -8369,9 +8444,11 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::FootprintSetSelectionMode2d(_)
         | EditorMsg::FootprintSelectAllOnLayer
         | EditorMsg::FootprintAddVia { .. }
+        | EditorMsg::FootprintSelectOffGridPads
         | EditorMsg::FootprintMovePad { .. }
         | EditorMsg::FootprintCursorAt { .. }
         | EditorMsg::FootprintSelectPad(_)
+        | EditorMsg::FootprintSelectPads(_)
         | EditorMsg::FootprintDeleteSelected
         | EditorMsg::FootprintToggleLayer(_)
         | EditorMsg::FootprintToggleAutoFit

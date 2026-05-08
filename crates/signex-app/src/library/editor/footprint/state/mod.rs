@@ -61,8 +61,17 @@ const COURTYARD_SLACK_MM: f64 = 0.25;
 pub struct FootprintEditorState {
     pub pads: Vec<EditorPad>,
     pub layer_visibility: LayerVisibility,
-    /// `Some(idx)` while a pad is selected.
+    /// `Some(idx)` while a pad is selected. With multi-select, this
+    /// is the **primary** selection — the pad whose properties drive
+    /// the right-dock Properties panel form. Extra rubber-band /
+    /// ctrl-click selections live in `selected_pads_extra`.
     pub selected_pad: Option<usize>,
+    /// v0.27 — Altium-style additional pads in the selection.
+    /// Highlighted on canvas like `selected_pad` but don't drive the
+    /// Properties form. Cleared whenever `selected_pad` is replaced
+    /// via a non-multi action (single click on a different pad,
+    /// click on empty canvas, Esc).
+    pub selected_pads_extra: Vec<usize>,
     /// `true` when the courtyard polygon should track the pad bbox.
     pub auto_fit_courtyard: bool,
     pub courtyard_mm: Option<CourtyardRect>,
@@ -171,6 +180,7 @@ impl FootprintEditorState {
             pads,
             layer_visibility: LayerVisibility::default(),
             selected_pad: None,
+            selected_pads_extra: Vec::new(),
             // v0.26-I — auto-courtyard mode removed; courtyard is
             // authored explicitly via silk graphic / sketch entity.
             auto_fit_courtyard: false,
