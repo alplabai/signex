@@ -907,6 +907,39 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 use crate::library::editor::footprint::state::{
                     EditorMode, PlacementInputKind, ToolPending,
                 };
+
+                // v0.26-F — Ctrl+X / Ctrl+C / Ctrl+V clipboard
+                // shortcuts. Mode-agnostic (works in Normal AND
+                // Sketch) so they behave the same as the right-click
+                // menu items they mirror. Publishes via EditorEvent
+                // so the standalone-editor translation in
+                // `editor_msg_to_primitive_msg` carries them through.
+                // Canvas captures the event so iced''s global key
+                // subscription doesn''t fire a duplicate handler.
+                if modifiers.command()
+                    && !modifiers.shift()
+                    && !modifiers.alt()
+                    && let keyboard::Key::Character(c) = key.as_ref()
+                {
+                    let cb_msg = match c {
+                        "x" | "X" => Some(EditorMsg::FootprintCutPad),
+                        "c" | "C" => Some(EditorMsg::FootprintCopyPad),
+                        "v" | "V" => Some(EditorMsg::FootprintPastePad),
+                        _ => None,
+                    };
+                    if let Some(msg) = cb_msg {
+                        return Some(
+                            canvas::Action::publish(LibraryMessage::EditorEvent {
+                                library_path: self.address.library_path.clone(),
+                                table: self.address.table.clone(),
+                                row_id: self.address.row_id,
+                                msg,
+                            })
+                            .and_capture(),
+                        );
+                    }
+                }
+
                 if !matches!(self.state.mode, EditorMode::Sketch) {
                     return None;
                 }
