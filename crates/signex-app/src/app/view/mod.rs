@@ -2,7 +2,7 @@ use iced::widget::{canvas, column, container, row, text_input};
 use iced::{Element, Length};
 
 pub(crate) mod dialogs;
-mod translate;
+pub(crate) mod translate;
 
 use super::*;
 
@@ -4803,6 +4803,7 @@ impl Signex {
                     tokens,
                     custom_presets,
                     dropdown_top,
+                    self.ui_state.window_size.0,
                 )
             {
                 layers.push(overlay.map(Message::Library));
@@ -4886,7 +4887,11 @@ impl Signex {
             let dropdown_top: u16 = (y_offset as u16).saturating_add(42);
             if let Some(overlay) =
                 crate::library::editor::symbol::active_bar::dropdown_overlay(
-                    editor, theme_id, tokens, dropdown_top,
+                    editor,
+                    theme_id,
+                    tokens,
+                    dropdown_top,
+                    self.ui_state.window_size.0,
                 )
             {
                 layers.push(overlay.map(Message::Library));

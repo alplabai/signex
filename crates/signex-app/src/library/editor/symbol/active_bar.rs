@@ -29,6 +29,16 @@ use crate::library::editor::symbol::state::{
 };
 use crate::library::messages::{LibraryMessage, PrimitiveEditorMsg, SymbolToolMsg};
 
+// v0.26-H — layout constants mirror `signex_widgets::active_bar`'s
+// private constants (BTN_SIZE / SEP_W / BAR_PADDING / ROW_SPACING).
+// Drift = misaligned dropdowns; the widget's constants are private
+// so we mirror them here.
+const BTN_SIZE: f32 = 26.0;
+const SEP_W: f32 = 1.0;
+const BAR_PADDING: f32 = 2.0;
+const ROW_SPACING: f32 = 2.0;
+const STEP_BTN: f32 = BTN_SIZE + ROW_SPACING;
+
 /// Build the SchLib bar items only — caller mounts via
 /// `signex_widgets::active_bar::view(items, tokens)` so the chain is
 /// identical to the schematic.
@@ -68,15 +78,56 @@ pub fn bar_items(
     items
 }
 
+/// v0.26-H — horizontal offset (in px) of a dropdown trigger
+/// button's LEFT edge, measured from the bar's own left edge.
+/// Mirror of [`crate::library::editor::footprint::unified_active_bar
+/// ::dropdown_x_offset`] for the symbol editor's 8-dropdown layout.
+pub fn dropdown_x_offset(menu: SymActiveBarMenu) -> f32 {
+    let idx: f32 = match menu {
+        SymActiveBarMenu::Filter => 0.0,
+        SymActiveBarMenu::Snap => 1.0,
+        SymActiveBarMenu::Place => 2.0,
+        SymActiveBarMenu::Select => 3.0,
+        SymActiveBarMenu::Align => 4.0,
+        SymActiveBarMenu::Pin => 5.0,
+        SymActiveBarMenu::Text => 6.0,
+        SymActiveBarMenu::Shapes => 7.0,
+    };
+    BAR_PADDING + idx * STEP_BTN
+}
+
+/// v0.26-H — total bar width in px. Computed from item count so
+/// dropdown positioning math knows the bar's centre-aligned left edge.
+pub fn bar_width(editor: &SymbolEditorState, theme_id: ThemeId) -> f32 {
+    let items = bar_items(editor, theme_id);
+    let mut w = 2.0 * BAR_PADDING;
+    for (i, item) in items.iter().enumerate() {
+        if i > 0 {
+            w += ROW_SPACING;
+        }
+        match item {
+            ActiveBarItem::Button(_) => w += BTN_SIZE,
+            ActiveBarItem::Separator => w += SEP_W,
+            ActiveBarItem::Custom(_) => w += 60.0,
+        }
+    }
+    w
+}
+
 /// Build the dropdown overlay (panel + click-outside backstop) for
 /// the currently-open menu. `None` when no menu open.
 ///
+/// v0.26-H — Translate-positioned so the panel lands directly below
+/// the trigger button instead of centred in the viewport.
+///
 /// `top_padding_px`: see [`crate::library::editor::footprint::unified_active_bar::dropdown_overlay`].
+/// `window_width`: current window pixel width — for bar centre math.
 pub fn dropdown_overlay<'a>(
     editor: &'a SymbolEditorState,
     theme_id: ThemeId,
     tokens: &'a ThemeTokens,
     top_padding_px: u16,
+    window_width: f32,
 ) -> Option<iced::Element<'a, LibraryMessage>> {
     use iced::widget::{Stack, container, mouse_area, Space};
     use iced::Length;
@@ -100,10 +151,21 @@ pub fn dropdown_overlay<'a>(
         SymActiveBarMenu::Shapes => Some(220.0),
     };
     let panel = signex_widgets::active_bar_dropdown::view(entries, tokens, width_hint);
-    let panel_anchor = container(panel)
-        .padding([top_padding_px, 10])
-        .center_x(Length::Fill)
-        .align_y(iced::alignment::Vertical::Top);
+
+    let bar_w = bar_width(editor, theme_id);
+    let bar_left = ((window_width - bar_w) / 2.0).max(0.0);
+    let panel_w = width_hint.unwrap_or(220.0);
+    let raw_x = bar_left + dropdown_x_offset(menu);
+    let edge_margin: f32 = 4.0;
+    let abs_x = if raw_x + panel_w + edge_margin > window_width {
+        (window_width - panel_w - edge_margin).max(0.0)
+    } else {
+        raw_x
+    };
+
+    let panel_anchor =
+        crate::app::view::translate::Translate::new(panel, (abs_x, top_padding_px as f32));
+
     let backstop = mouse_area(
         container(Space::new())
             .width(Length::Fill)
