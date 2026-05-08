@@ -72,6 +72,15 @@ pub struct FootprintEditorState {
     /// via a non-multi action (single click on a different pad,
     /// click on empty canvas, Esc).
     pub selected_pads_extra: Vec<usize>,
+    /// v0.27 — `true` while the Lasso Select tool is armed. Each
+    /// canvas left-click appends a world-mm vertex to
+    /// `lasso_vertices`. Right-click / Esc commits the polygon: any
+    /// pad whose centre falls inside selects via
+    /// `FootprintSelectPads`. After commit / cancel, both this flag
+    /// and the vertex list reset.
+    pub lasso_mode_active: bool,
+    /// v0.27 — vertex stash for the Lasso Select tool. World mm.
+    pub lasso_vertices: Vec<(f64, f64)>,
     /// `true` when the courtyard polygon should track the pad bbox.
     pub auto_fit_courtyard: bool,
     pub courtyard_mm: Option<CourtyardRect>,
@@ -181,6 +190,8 @@ impl FootprintEditorState {
             layer_visibility: LayerVisibility::default(),
             selected_pad: None,
             selected_pads_extra: Vec::new(),
+            lasso_mode_active: false,
+            lasso_vertices: Vec::new(),
             // v0.26-I — auto-courtyard mode removed; courtyard is
             // authored explicitly via silk graphic / sketch entity.
             auto_fit_courtyard: false,

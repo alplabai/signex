@@ -1047,6 +1047,12 @@ fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEditorMsg {
             PrimitiveEditorMsg::FootprintAddVia { x_mm, y_mm }
         }
         EditorMsg::FootprintSelectOffGridPads => PrimitiveEditorMsg::FootprintSelectOffGridPads,
+        EditorMsg::FootprintLassoArm => PrimitiveEditorMsg::FootprintLassoArm,
+        EditorMsg::FootprintLassoAddVertex { x_mm, y_mm } => {
+            PrimitiveEditorMsg::FootprintLassoAddVertex { x_mm, y_mm }
+        }
+        EditorMsg::FootprintLassoCommit => PrimitiveEditorMsg::FootprintLassoCommit,
+        EditorMsg::FootprintLassoCancel => PrimitiveEditorMsg::FootprintLassoCancel,
         EditorMsg::FootprintMovePad { idx, x_mm, y_mm } => {
             PrimitiveEditorMsg::FootprintMovePad { idx, x_mm, y_mm }
         }

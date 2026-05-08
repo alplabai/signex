@@ -4142,6 +4142,10 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintSelectAllOnLayer
         | PrimitiveEditorMsg::FootprintAddVia { .. }
         | PrimitiveEditorMsg::FootprintSelectOffGridPads
+        | PrimitiveEditorMsg::FootprintLassoArm
+        | PrimitiveEditorMsg::FootprintLassoAddVertex { .. }
+        | PrimitiveEditorMsg::FootprintLassoCommit
+        | PrimitiveEditorMsg::FootprintLassoCancel
         | PrimitiveEditorMsg::FootprintSketchAddConstraintForSelection(_)
         | PrimitiveEditorMsg::FootprintSketchDimensionInput(_)
         | PrimitiveEditorMsg::FootprintSketchSetRole { .. }
@@ -5634,6 +5638,77 @@ pub(crate) fn apply_footprint_primitive_edit(
                 editor.state.selected_pads_extra = matches;
             }
             editor.state.active_bar_menu = None;
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintLassoArm => {
+            editor.state.lasso_mode_active = true;
+            editor.state.lasso_vertices.clear();
+            editor.state.active_bar_menu = None;
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintLassoAddVertex { x_mm, y_mm } => {
+            if editor.state.lasso_mode_active {
+                editor.state.lasso_vertices.push((x_mm, y_mm));
+                editor.canvas_cache.clear();
+            }
+        }
+        PrimitiveEditorMsg::FootprintLassoCancel => {
+            editor.state.lasso_mode_active = false;
+            editor.state.lasso_vertices.clear();
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintLassoCommit => {
+            // v0.27 — close the polygon, multi-select every pad whose
+            // centre lies inside (even-odd ray casting). Anything
+            // less than three vertices is a degenerate polygon and
+            // commits as deselect-all so a stray click doesn't leave
+            // the user stuck in lasso mode with no feedback.
+            let verts: Vec<(f64, f64)> = std::mem::take(&mut editor.state.lasso_vertices);
+            editor.state.lasso_mode_active = false;
+            let in_poly = |px: f64, py: f64| -> bool {
+                if verts.len() < 3 {
+                    return false;
+                }
+                let mut inside = false;
+                let n = verts.len();
+                let mut j = n - 1;
+                for i in 0..n {
+                    let (xi, yi) = verts[i];
+                    let (xj, yj) = verts[j];
+                    let denom = yj - yi;
+                    if denom.abs() < 1e-10 {
+                        j = i;
+                        continue;
+                    }
+                    let intersect = ((yi > py) != (yj > py))
+                        && (px < (xj - xi) * (py - yi) / denom + xi);
+                    if intersect {
+                        inside = !inside;
+                    }
+                    j = i;
+                }
+                inside
+            };
+            let mut hits: Vec<usize> = editor
+                .state
+                .pads
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, p)| {
+                    if in_poly(p.position_mm.0, p.position_mm.1) {
+                        Some(idx)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            if hits.is_empty() {
+                editor.state.selected_pad = None;
+                editor.state.selected_pads_extra.clear();
+            } else {
+                editor.state.selected_pad = Some(hits.remove(0));
+                editor.state.selected_pads_extra = hits;
+            }
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintSelectOffGridPads => {
@@ -8445,6 +8520,10 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::FootprintSelectAllOnLayer
         | EditorMsg::FootprintAddVia { .. }
         | EditorMsg::FootprintSelectOffGridPads
+        | EditorMsg::FootprintLassoArm
+        | EditorMsg::FootprintLassoAddVertex { .. }
+        | EditorMsg::FootprintLassoCommit
+        | EditorMsg::FootprintLassoCancel
         | EditorMsg::FootprintMovePad { .. }
         | EditorMsg::FootprintCursorAt { .. }
         | EditorMsg::FootprintSelectPad(_)

@@ -112,6 +112,11 @@ pub struct FootprintCanvasState {
     /// minted Circle entity). Per-tick cursor moves publish
     /// `FootprintSketchResizeRoundPad`. Cleared on release.
     round_resize_drag: Option<usize>,
+    /// v0.27 — most recent modifier state from the iced
+    /// ModifiersChanged event. Mouse events don't carry modifiers
+    /// on iced 0.14, so we track them out-of-band and read on press
+    /// for Ctrl/Cmd-click toggle + Shift-click extend semantics.
+    current_modifiers: keyboard::Modifiers,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -156,6 +161,7 @@ impl Default for FootprintCanvasState {
             last_known_selected: None,
             last_snap: None,
             round_resize_drag: None,
+            current_modifiers: keyboard::Modifiers::empty(),
         }
     }
 }
@@ -325,6 +331,20 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         EditorMode, PadsTool, SketchTool, ToolPending,
                     };
                     if *button == mouse::Button::Right {
+                        // v0.27 — Lasso Select right-click commits
+                        // the polygon. Pre-empts the generic tool-
+                        // cancel logic below.
+                        if self.state.lasso_mode_active {
+                            return Some(
+                                canvas::Action::publish(LibraryMessage::EditorEvent {
+                                    library_path: self.address.library_path.clone(),
+                                    table: self.address.table.clone(),
+                                    row_id: self.address.row_id,
+                                    msg: EditorMsg::FootprintLassoCommit,
+                                })
+                                .and_capture(),
+                            );
+                        }
                         let cancel_msg: Option<EditorMsg> = match self.state.mode {
                             EditorMode::Normal => {
                                 if self.state.pads_tool != PadsTool::Select {
@@ -369,6 +389,27 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 if *button == mouse::Button::Left
                     && let Some(cursor_pos) = cursor.position_in(bounds)
                 {
+                    // v0.27 — Lasso Select intercept. While the
+                    // lasso tool is armed (set from the active-bar
+                    // Selection Mode dropdown), each left-click adds
+                    // a vertex to the in-flight polygon. Right-click
+                    // commits / Esc cancels are handled in their own
+                    // arms below.
+                    if self.state.lasso_mode_active {
+                        let world = cstate.screen_to_world(cursor_pos);
+                        return Some(
+                            canvas::Action::publish(LibraryMessage::EditorEvent {
+                                library_path: self.address.library_path.clone(),
+                                table: self.address.table.clone(),
+                                row_id: self.address.row_id,
+                                msg: EditorMsg::FootprintLassoAddVertex {
+                                    x_mm: world.0,
+                                    y_mm: world.1,
+                                },
+                            })
+                            .and_capture(),
+                        );
+                    }
                     let raw_world = cstate.screen_to_world(cursor_pos);
                     // v0.18.8 — Snap Options (Point / H/V / Angle /
                     // Grid) apply in BOTH Sketch and Pads modes. Each
@@ -482,12 +523,36 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 press_screen: cursor_pos,
                                 moved: false,
                             });
+                            // v0.27 — Altium-parity modifier handling
+                            // on the pad-hit branch. Ctrl/Cmd toggles
+                            // the pad in/out of the multi-select set;
+                            // Shift extends without removal; bare
+                            // click replaces the selection.
+                            let cmd = cstate.current_modifiers.command();
+                            let shift = cstate.current_modifiers.shift();
+                            let select_msg = if cmd || shift {
+                                let mut current: Vec<usize> =
+                                    self.state.selected_pad.into_iter().collect();
+                                current.extend(self.state.selected_pads_extra.iter().copied());
+                                if cmd {
+                                    if let Some(pos) = current.iter().position(|&i| i == pad_idx) {
+                                        current.remove(pos);
+                                    } else {
+                                        current.push(pad_idx);
+                                    }
+                                } else if !current.contains(&pad_idx) {
+                                    current.push(pad_idx);
+                                }
+                                EditorMsg::FootprintSelectPads(current)
+                            } else {
+                                EditorMsg::FootprintSelectPad(Some(pad_idx))
+                            };
                             return Some(
                                 canvas::Action::publish(LibraryMessage::EditorEvent {
                                     library_path: self.address.library_path.clone(),
                                     table: self.address.table.clone(),
                                     row_id: self.address.row_id,
-                                    msg: EditorMsg::FootprintSelectPad(Some(pad_idx)),
+                                    msg: select_msg,
                                 })
                                 .and_capture(),
                             );
@@ -731,13 +796,45 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                         hits.push(idx);
                                     }
                                 }
+                                // v0.27 — Ctrl/Shift modifier on
+                                // release combines the rubber-band
+                                // hits with the existing selection.
+                                // Ctrl toggles each hit in/out;
+                                // Shift unions; no modifier replaces.
+                                let cmd = cstate.current_modifiers.command();
+                                let shift = cstate.current_modifiers.shift();
+                                let combined: Vec<usize> = if cmd || shift {
+                                    let mut acc: Vec<usize> =
+                                        self.state.selected_pad.into_iter().collect();
+                                    acc.extend(
+                                        self.state.selected_pads_extra.iter().copied(),
+                                    );
+                                    if cmd {
+                                        for h in &hits {
+                                            if let Some(p) = acc.iter().position(|i| i == h) {
+                                                acc.remove(p);
+                                            } else {
+                                                acc.push(*h);
+                                            }
+                                        }
+                                    } else {
+                                        for h in &hits {
+                                            if !acc.contains(h) {
+                                                acc.push(*h);
+                                            }
+                                        }
+                                    }
+                                    acc
+                                } else {
+                                    hits
+                                };
                                 self.cache.clear();
                                 return Some(canvas::Action::publish(
                                     LibraryMessage::EditorEvent {
                                         library_path: self.address.library_path.clone(),
                                         table: self.address.table.clone(),
                                         row_id: self.address.row_id,
-                                        msg: EditorMsg::FootprintSelectPads(hits),
+                                        msg: EditorMsg::FootprintSelectPads(combined),
                                     },
                                 ));
                             }
@@ -1132,7 +1229,11 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         self.state.pads_tool,
                         PadsTool::PlacePad | PadsTool::PlaceVia
                     );
-                if in_sketch_with_anchor || in_pads_place {
+                // v0.27 — re-render lasso ghost as the cursor moves
+                // so the open polygon edge tracks live to the cursor.
+                let in_lasso = self.state.lasso_mode_active
+                    && !self.state.lasso_vertices.is_empty();
+                if in_sketch_with_anchor || in_pads_place || in_lasso {
                     self.cache.clear();
                 }
 
@@ -1147,6 +1248,16 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         y_mm: world.1,
                     },
                 }));
+            }
+            // v0.27 — track the live modifier state so the press
+            // handler can branch on Ctrl/Cmd (toggle pad in
+            // selection) and Shift (extend selection). Mouse events
+            // on iced 0.14 don't carry modifiers, so we mirror
+            // ModifiersChanged into cstate. Returns None so the rest
+            // of the app still receives the event.
+            Event::Keyboard(keyboard::Event::ModifiersChanged(mods)) => {
+                cstate.current_modifiers = *mods;
+                return None;
             }
             // v0.24 Track D — keyboard intercept for the live numeric
             // placement input. Active only while a multi-click sketch
@@ -1278,6 +1389,14 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         }
                     }
                     keyboard::Key::Named(keyboard::key::Named::Escape) => {
+                        // v0.27 — Lasso Select cancel via Esc.
+                        // Pre-empts the placement-input Esc which
+                        // also fires here; lasso mode wins because
+                        // it's the more recent intent (the user
+                        // armed it from the active bar).
+                        if self.state.lasso_mode_active {
+                            return publish(EditorMsg::FootprintLassoCancel);
+                        }
                         if has_open_buffer {
                             return publish(EditorMsg::FootprintSketchPlacementInputEscape);
                         }
@@ -1763,6 +1882,40 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
             // gesture (Select / PlacePad / PlaceHole / PlaceString).
             if matches!(self.state.mode, super::state::EditorMode::Normal) {
                 draw_pads_tool_preview(frame, cstate, self.state);
+            }
+
+            // v0.27 — Lasso Select polygon ghost. Renders the
+            // captured vertices as cyan dots + a closed-loop
+            // outline back to the live cursor so the user sees
+            // the polygon they're stroking. Right-click commits;
+            // Esc cancels.
+            if self.state.lasso_mode_active && !self.state.lasso_vertices.is_empty() {
+                let lasso_col = Color::from_rgba(0.30, 0.85, 1.00, 0.95);
+                let lasso_fill = Color::from_rgba(0.30, 0.55, 0.90, 0.18);
+                let path = Path::new(|builder| {
+                    let first = cstate.world_to_screen(self.state.lasso_vertices[0]);
+                    builder.move_to(first);
+                    for v in self.state.lasso_vertices.iter().skip(1) {
+                        builder.line_to(cstate.world_to_screen(*v));
+                    }
+                    if let Some(cur_world) = self.state.cursor_mm {
+                        builder.line_to(cstate.world_to_screen(cur_world));
+                    }
+                    if self.state.lasso_vertices.len() >= 2 {
+                        builder.line_to(first);
+                    }
+                });
+                if self.state.lasso_vertices.len() >= 2 {
+                    frame.fill(&path, lasso_fill);
+                }
+                frame.stroke(
+                    &path,
+                    Stroke::default().with_width(1.2).with_color(lasso_col),
+                );
+                for v in &self.state.lasso_vertices {
+                    let p = cstate.world_to_screen(*v);
+                    frame.fill(&Path::circle(p, 3.0), lasso_col);
+                }
             }
 
             // v0.26-I — rubber-band selection rectangle. Drawn only

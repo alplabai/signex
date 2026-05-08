@@ -827,6 +827,19 @@ pub enum EditorMsg {
     /// is NOT on the active snap grid step. Useful for catching
     /// pads accidentally dropped between grid points.
     FootprintSelectOffGridPads,
+    /// v0.27 — arm the Lasso Select tool. Subsequent canvas left-
+    /// clicks append a world-mm vertex to `state.lasso_vertices`;
+    /// Esc / right-click commits via `FootprintLassoCommit` /
+    /// `FootprintLassoCancel`.
+    FootprintLassoArm,
+    /// v0.27 — append a vertex to the in-flight lasso polygon.
+    FootprintLassoAddVertex { x_mm: f64, y_mm: f64 },
+    /// v0.27 — commit the lasso polygon: walk pads, multi-select
+    /// every pad whose centre is inside the polygon. Disarms.
+    FootprintLassoCommit,
+    /// v0.27 — drop the lasso vertex list and disarm without
+    /// touching the existing selection.
+    FootprintLassoCancel,
     /// Select / deselect a pad. `None` deselects everything.
     FootprintSelectPad(Option<usize>),
     /// v0.27 — Multi-select replacement. Replaces the entire
@@ -1653,6 +1666,11 @@ pub enum PrimitiveEditorMsg {
     FootprintAddVia { x_mm: f64, y_mm: f64 },
     /// v0.27 — multi-select every pad off the current snap grid.
     FootprintSelectOffGridPads,
+    /// v0.27 — Lasso tool lifecycle.
+    FootprintLassoArm,
+    FootprintLassoAddVertex { x_mm: f64, y_mm: f64 },
+    FootprintLassoCommit,
+    FootprintLassoCancel,
     /// v0.13.3 — Add a constraint based on the current selection.
     /// The inspector's selection-aware submenu emits a `Tag` that
     /// the dispatcher maps into the appropriate `ConstraintKind`

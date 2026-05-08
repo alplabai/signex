@@ -328,11 +328,13 @@ fn select_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessa
     vec![
         DropdownEntry::Item(stub("Select overlapped", path.clone())),
         DropdownEntry::Item(stub("Select next", path.clone())),
-        DropdownEntry::Item(stub_with_icon(
-            "Lasso Select",
-            path.clone(),
-            ic::icon_dd_select_lasso(tid),
-        )),
+        DropdownEntry::Item(
+            DropdownItem::new(
+                "Lasso Select",
+                fp(path.clone(), PrimitiveEditorMsg::FootprintLassoArm),
+            )
+            .icon(ic::icon_dd_select_lasso(tid)),
+        ),
         DropdownEntry::Separator,
         DropdownEntry::Item(
             DropdownItem::new(
