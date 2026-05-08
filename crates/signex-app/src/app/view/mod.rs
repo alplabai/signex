@@ -4807,6 +4807,49 @@ impl Signex {
             {
                 layers.push(overlay.map(Message::Library));
             }
+
+            // v0.26 — right-click context menu overlay for the
+            // footprint canvas. Sits above the active-bar dropdown so
+            // a long-press menu is occluded by — never under — its
+            // own dismiss layer. Window-absolute (x, y) come from the
+            // canvas''s ButtonReleased(Right) handler.
+            if let Some(menu_state) = editor.state.context_menu.as_ref()
+                && let Some(card) =
+                    crate::library::editor::footprint::context_menu::view_context_menu(
+                        editor, tokens, path,
+                    )
+            {
+                // Dismiss layer — left-click anywhere outside closes
+                // the menu. Right-press passes through to the canvas
+                // (so a right-drag-to-pan gesture starts pan motion +
+                // closes the menu via the CursorMoved threshold).
+                let close_msg = Message::Library(
+                    crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                        path: path.to_path_buf(),
+                        msg: crate::library::messages::PrimitiveEditorMsg
+                            ::FootprintCloseContextMenu,
+                    },
+                );
+                layers.push(Self::dismiss_layer(close_msg));
+                let card_msg = card.map(Message::Library);
+                let (ww, wh) = self.ui_state.window_size;
+                // Conservative footprint estimate so the card stays on
+                // screen near right / bottom edges.
+                let est_menu_w: f32 = 220.0;
+                let est_menu_h: f32 = 320.0;
+                let edge_margin: f32 = 4.0;
+                let x = if menu_state.x + est_menu_w + edge_margin > ww {
+                    (ww - est_menu_w - edge_margin).max(0.0)
+                } else {
+                    menu_state.x
+                };
+                let y = if menu_state.y + est_menu_h + edge_margin > wh {
+                    (menu_state.y - est_menu_h).max(0.0)
+                } else {
+                    menu_state.y
+                };
+                layers.push(super::view::translate::Translate::new(card_msg, (x, y)).into());
+            }
         }
 
         // v0.13 — symbol library editor active bar mounted at the

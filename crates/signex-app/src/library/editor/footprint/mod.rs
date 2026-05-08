@@ -10,6 +10,7 @@
 pub mod active_bar_dropdowns;
 pub mod body3d;
 pub mod canvas;
+pub mod context_menu;
 pub mod layers;
 pub mod pad_to_sketch;
 pub mod pads_active_bar;

@@ -1057,6 +1057,18 @@ fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEditorMsg {
         EditorMsg::FootprintTogglePlacementPause => {
             PrimitiveEditorMsg::FootprintTogglePlacementPause
         }
+        EditorMsg::FootprintShowContextMenu { x, y, target } => {
+            PrimitiveEditorMsg::FootprintShowContextMenu { x, y, target }
+        }
+        EditorMsg::FootprintCloseContextMenu => {
+            PrimitiveEditorMsg::FootprintCloseContextMenu
+        }
+        EditorMsg::FootprintContextMenuOpenSubmenu(sm) => {
+            PrimitiveEditorMsg::FootprintContextMenuOpenSubmenu(sm)
+        }
+        EditorMsg::FootprintContextMenuAction(act) => {
+            PrimitiveEditorMsg::FootprintContextMenuAction(act)
+        }
         EditorMsg::FootprintSketchSetRole { id, role } => {
             PrimitiveEditorMsg::FootprintSketchSetRole { id, role }
         }

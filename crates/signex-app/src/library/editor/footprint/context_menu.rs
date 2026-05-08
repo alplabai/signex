@@ -1,0 +1,362 @@
+//! v0.26 — Right-click canvas context menu for the footprint editor.
+//!
+//! Mirrors Altium's PCB Library Editor right-click conventions:
+//!  - On bare canvas: Place ▸ / View ▸ / Selection ▸ / Properties /
+//!    Find Similar.
+//!  - On a pad: Properties / Pad Actions ▸ stub / Cut / Copy / Delete /
+//!    Find Similar.
+//!  - On a silk graphic: Properties / Cut / Copy / Delete / Find Similar.
+//!
+//! Mounting site: the layer-site loop at `app/view/mod.rs::collect_overlays`
+//! pushes `view_context_menu(...)` immediately after the active bar
+//! overlay so the dismiss layer occludes everything else.
+//!
+//! Coords: `editor.state.context_menu.x/y` are window-absolute screen
+//! coords (computed in `canvas.rs::ButtonReleased(Right)` from
+//! `bounds.x + cursor.x`). The Translate widget at the call site
+//! positions the card at exactly those pixels.
+
+use iced::widget::{button, column, container, row, text};
+use iced::{Background, Border, Color, Element, Length, Padding};
+
+use signex_types::theme::ThemeTokens;
+
+use crate::app::FootprintEditorState;
+use crate::library::editor::footprint::state::{
+    FootprintContextAction, FootprintContextSubmenu, FootprintContextTarget,
+};
+use crate::library::messages::{LibraryMessage, PrimitiveEditorMsg};
+use crate::styles::ti;
+
+const MENU_WIDTH: f32 = 220.0;
+const ROW_PAD_X: u16 = 12;
+const ROW_PAD_Y: u16 = 5;
+const FONT_SIZE: f32 = 11.0;
+
+/// Build the right-click context menu card for the active footprint
+/// editor. Returns `None` when the menu is closed.
+pub fn view_context_menu<'a>(
+    editor: &'a FootprintEditorState,
+    tokens: &'a ThemeTokens,
+    path: &'a std::path::Path,
+) -> Option<Element<'a, LibraryMessage>> {
+    let menu_state = editor.state.context_menu.as_ref()?;
+
+    let path_owned = path.to_path_buf();
+    let make_msg = move |msg: PrimitiveEditorMsg| LibraryMessage::PrimitiveEditorEvent {
+        path: path_owned.clone(),
+        msg,
+    };
+
+    let mut items: Vec<Element<'a, LibraryMessage>> = Vec::new();
+
+    // Top entries vary by hit target. The MVP routes both Empty and
+    // on-pad to the same set; per-target divergence is queued for
+    // v0.26-B (Pad Actions / Track Actions submenus).
+    match menu_state.target {
+        FootprintContextTarget::Empty
+        | FootprintContextTarget::Pad(_)
+        | FootprintContextTarget::SilkF(_) => {
+            items.push(item_disabled(tokens, "Find Similar Objects...", ""));
+            items.push(separator(tokens));
+
+            // Place ▸ — switches the Pads-mode tool. v0.26 MVP only
+            // surfaces the four most-used Place targets; the rest of
+            // the Pads palette is still reachable via the active bar.
+            let place_open =
+                menu_state.submenu == Some(FootprintContextSubmenu::Place);
+            items.push(item_submenu_header(
+                tokens,
+                "Place",
+                place_open,
+                make_msg(PrimitiveEditorMsg::FootprintContextMenuOpenSubmenu(Some(
+                    FootprintContextSubmenu::Place,
+                ))),
+            ));
+            if place_open {
+                use crate::library::editor::footprint::state::PadsTool;
+                items.push(item_indented(
+                    tokens,
+                    "Pad",
+                    "P",
+                    make_msg(PrimitiveEditorMsg::FootprintSetPadsTool(
+                        PadsTool::PlacePad,
+                    )),
+                ));
+                items.push(item_indented(
+                    tokens,
+                    "Track",
+                    "T",
+                    make_msg(PrimitiveEditorMsg::FootprintSetPadsTool(
+                        PadsTool::PlaceTrack,
+                    )),
+                ));
+                items.push(item_indented(
+                    tokens,
+                    "Arc",
+                    "A",
+                    make_msg(PrimitiveEditorMsg::FootprintSetPadsTool(
+                        PadsTool::PlaceArc,
+                    )),
+                ));
+                items.push(item_indented(
+                    tokens,
+                    "Polygon (Region)",
+                    "R",
+                    make_msg(PrimitiveEditorMsg::FootprintSetPadsTool(
+                        PadsTool::PlacePolygon,
+                    )),
+                ));
+                items.push(item_indented(
+                    tokens,
+                    "String (Text)",
+                    "S",
+                    make_msg(PrimitiveEditorMsg::FootprintSetPadsTool(
+                        PadsTool::PlaceString,
+                    )),
+                ));
+            }
+
+            // Selection ▸ — Select All / Deselect All.
+            let sel_open =
+                menu_state.submenu == Some(FootprintContextSubmenu::Selection);
+            items.push(item_submenu_header(
+                tokens,
+                "Selection",
+                sel_open,
+                make_msg(PrimitiveEditorMsg::FootprintContextMenuOpenSubmenu(Some(
+                    FootprintContextSubmenu::Selection,
+                ))),
+            ));
+            if sel_open {
+                items.push(item_indented(
+                    tokens,
+                    "Select All",
+                    "Ctrl+A",
+                    make_msg(PrimitiveEditorMsg::FootprintContextMenuAction(
+                        FootprintContextAction::SelectAllPads,
+                    )),
+                ));
+                items.push(item_indented(
+                    tokens,
+                    "Deselect All",
+                    "Ctrl+Shift+A",
+                    make_msg(PrimitiveEditorMsg::FootprintContextMenuAction(
+                        FootprintContextAction::DeselectAll,
+                    )),
+                ));
+            }
+
+            // View ▸ — Fit Document only for now.
+            let view_open =
+                menu_state.submenu == Some(FootprintContextSubmenu::View);
+            items.push(item_submenu_header(
+                tokens,
+                "View",
+                view_open,
+                make_msg(PrimitiveEditorMsg::FootprintContextMenuOpenSubmenu(Some(
+                    FootprintContextSubmenu::View,
+                ))),
+            ));
+            if view_open {
+                items.push(item_indented(
+                    tokens,
+                    "Fit to Window",
+                    "V, F",
+                    make_msg(PrimitiveEditorMsg::FootprintContextMenuAction(
+                        FootprintContextAction::FitToWindow,
+                    )),
+                ));
+            }
+
+            items.push(separator(tokens));
+
+            // Delete-when-something-selected mirrors the Altium Edit
+            // group at the bottom.
+            if editor.state.selected_pad.is_some()
+                || editor.state.selected_silk_f.is_some()
+                || editor.state.selected_sketch.is_some()
+            {
+                items.push(item_msg(
+                    tokens,
+                    "Delete",
+                    "Del",
+                    make_msg(PrimitiveEditorMsg::FootprintDeleteSelected),
+                ));
+                items.push(separator(tokens));
+            }
+
+            items.push(item_disabled(tokens, "Properties...", ""));
+        }
+    }
+
+    let card_bg = ti(tokens.panel_bg);
+    let border_c = ti(tokens.border);
+    let card = container(column(items).spacing(0))
+        .padding(Padding::from([4u16, 0u16]))
+        .style(move |_: &iced::Theme| container::Style {
+            background: Some(Background::Color(card_bg)),
+            border: Border {
+                color: border_c,
+                width: 1.0,
+                radius: 4.0.into(),
+            },
+            ..container::Style::default()
+        })
+        .width(MENU_WIDTH);
+
+    Some(card.into())
+}
+
+// ── helpers ─────────────────────────────────────────────────────────
+
+fn item_msg<'a>(
+    tokens: &'a ThemeTokens,
+    label: &str,
+    shortcut: &str,
+    message: LibraryMessage,
+) -> Element<'a, LibraryMessage> {
+    let text_c = ti(tokens.text);
+    let secondary = ti(tokens.text_secondary);
+    let hover_c = ti(tokens.hover);
+    button(
+        row![
+            text(label.to_string()).size(FONT_SIZE).color(text_c),
+            iced::widget::Space::new().width(Length::Fill),
+            text(shortcut.to_string()).size(10).color(secondary),
+        ]
+        .spacing(8)
+        .align_y(iced::Alignment::Center)
+        .width(Length::Fill),
+    )
+    .width(MENU_WIDTH)
+    .padding([ROW_PAD_Y, ROW_PAD_X])
+    .on_press(message)
+    .style(move |_: &iced::Theme, status: iced::widget::button::Status| {
+        let bg = match status {
+            iced::widget::button::Status::Hovered => {
+                Some(Background::Color(hover_c))
+            }
+            _ => None,
+        };
+        iced::widget::button::Style {
+            background: bg,
+            border: Border::default(),
+            text_color: text_c,
+            ..iced::widget::button::Style::default()
+        }
+    })
+    .into()
+}
+
+fn item_indented<'a>(
+    tokens: &'a ThemeTokens,
+    label: &str,
+    shortcut: &str,
+    message: LibraryMessage,
+) -> Element<'a, LibraryMessage> {
+    let text_c = ti(tokens.text);
+    let secondary = ti(tokens.text_secondary);
+    let hover_c = ti(tokens.hover);
+    button(
+        row![
+            iced::widget::Space::new().width(16),
+            text(label.to_string()).size(FONT_SIZE).color(text_c),
+            iced::widget::Space::new().width(Length::Fill),
+            text(shortcut.to_string()).size(10).color(secondary),
+        ]
+        .spacing(8)
+        .align_y(iced::Alignment::Center)
+        .width(Length::Fill),
+    )
+    .width(MENU_WIDTH)
+    .padding([ROW_PAD_Y, ROW_PAD_X])
+    .on_press(message)
+    .style(move |_: &iced::Theme, status: iced::widget::button::Status| {
+        let bg = match status {
+            iced::widget::button::Status::Hovered => {
+                Some(Background::Color(hover_c))
+            }
+            _ => None,
+        };
+        iced::widget::button::Style {
+            background: bg,
+            border: Border::default(),
+            text_color: text_c,
+            ..iced::widget::button::Style::default()
+        }
+    })
+    .into()
+}
+
+fn item_disabled<'a>(
+    tokens: &'a ThemeTokens,
+    label: &str,
+    shortcut: &str,
+) -> Element<'a, LibraryMessage> {
+    let muted = ti(tokens.text_secondary);
+    container(
+        row![
+            text(label.to_string()).size(FONT_SIZE).color(muted),
+            iced::widget::Space::new().width(Length::Fill),
+            text(shortcut.to_string()).size(10).color(muted),
+        ]
+        .spacing(8)
+        .align_y(iced::Alignment::Center)
+        .width(Length::Fill),
+    )
+    .width(MENU_WIDTH)
+    .padding([ROW_PAD_Y, ROW_PAD_X])
+    .into()
+}
+
+fn item_submenu_header<'a>(
+    tokens: &'a ThemeTokens,
+    label: &str,
+    expanded: bool,
+    message: LibraryMessage,
+) -> Element<'a, LibraryMessage> {
+    let text_c = ti(tokens.text);
+    let hover_c = ti(tokens.hover);
+    let chev = if expanded { "▾" } else { "▸" };
+    button(
+        row![
+            text(label.to_string()).size(FONT_SIZE).color(text_c),
+            iced::widget::Space::new().width(Length::Fill),
+            text(chev.to_string()).size(11).color(text_c),
+        ]
+        .spacing(8)
+        .align_y(iced::Alignment::Center)
+        .width(Length::Fill),
+    )
+    .width(MENU_WIDTH)
+    .padding([ROW_PAD_Y, ROW_PAD_X])
+    .on_press(message)
+    .style(move |_: &iced::Theme, status: iced::widget::button::Status| {
+        let bg = match status {
+            iced::widget::button::Status::Hovered | iced::widget::button::Status::Pressed => {
+                Some(Background::Color(hover_c))
+            }
+            _ => None,
+        };
+        iced::widget::button::Style {
+            background: bg,
+            border: Border::default(),
+            text_color: text_c,
+            ..iced::widget::button::Style::default()
+        }
+    })
+    .into()
+}
+
+fn separator<'a>(tokens: &'a ThemeTokens) -> Element<'a, LibraryMessage> {
+    let c = ti(tokens.border);
+    container(iced::widget::Space::new().height(1))
+        .padding(Padding::from([4u16, 0u16]))
+        .width(MENU_WIDTH)
+        .style(move |_: &iced::Theme| container::Style {
+            background: Some(Background::Color(c)),
+            ..container::Style::default()
+        })
+        .into()
+}

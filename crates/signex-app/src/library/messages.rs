@@ -829,6 +829,31 @@ pub enum EditorMsg {
     /// `state.placement_paused`; while `true` the canvas ignores
     /// empty-canvas clicks so the user can adjust defaults.
     FootprintTogglePlacementPause,
+    /// v0.26 — open the canvas right-click context menu at the given
+    /// **window-absolute** screen position. `target` carries the
+    /// hit-tested object (or `Empty`) so the renderer can pick the
+    /// right items. Closes any other dropdowns / submenus first.
+    FootprintShowContextMenu {
+        x: f32,
+        y: f32,
+        target: crate::library::editor::footprint::state::FootprintContextTarget,
+    },
+    /// v0.26 — dismiss the context menu (Esc, click outside, action
+    /// pick, pan-drag start). No-op if no menu is open.
+    FootprintCloseContextMenu,
+    /// v0.26 — hover-expand a submenu. `None` collapses any open
+    /// submenu without closing the parent menu.
+    FootprintContextMenuOpenSubmenu(
+        Option<crate::library::editor::footprint::state::FootprintContextSubmenu>,
+    ),
+    /// v0.26 — execute one of the lightweight context-menu actions
+    /// that don''t already have a dedicated handler (Select All /
+    /// Deselect All / Fit to Window). Items that overlap with
+    /// existing handlers (Delete, PadsTool switch, Properties focus)
+    /// reuse those messages directly.
+    FootprintContextMenuAction(
+        crate::library::editor::footprint::state::FootprintContextAction,
+    ),
     /// v0.16.2 — assign / clear a role attr (PadAttr / SilkAttr /
     /// CourtyardAttr / etc.) on the entity at `id`. The dispatcher
     /// clears every `*Attr` slot first, then writes the matching one
@@ -1373,6 +1398,23 @@ pub enum PrimitiveEditorMsg {
     FootprintSketchToggleCenterline,
     /// v0.16.1 — TAB pause/resume during pad placement.
     FootprintTogglePlacementPause,
+    /// v0.26 — open the canvas right-click context menu at the given
+    /// **window-absolute** screen position.
+    FootprintShowContextMenu {
+        x: f32,
+        y: f32,
+        target: crate::library::editor::footprint::state::FootprintContextTarget,
+    },
+    /// v0.26 — dismiss the context menu.
+    FootprintCloseContextMenu,
+    /// v0.26 — hover-expand a context-menu submenu. `None` collapses.
+    FootprintContextMenuOpenSubmenu(
+        Option<crate::library::editor::footprint::state::FootprintContextSubmenu>,
+    ),
+    /// v0.26 — execute one of the context-menu lightweight actions.
+    FootprintContextMenuAction(
+        crate::library::editor::footprint::state::FootprintContextAction,
+    ),
     /// v0.16.2 — set the role attr on a sketch entity. Inspector
     /// emits this when the user picks a value from the Role dropdown;
     /// dispatcher routes through

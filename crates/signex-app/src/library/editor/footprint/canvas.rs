@@ -49,6 +49,12 @@ pub struct FootprintCanvasState {
     pub did_initial_fit: bool,
     panning: bool,
     last_pan_pos: Option<Point>,
+    /// v0.26 — `true` once the right-button drag has moved further than
+    /// 2 px from the press point. Drives the right-release branch
+    /// between "show context menu" (no motion) and "this was a pan,
+    /// stay quiet" (motion crossed the threshold). Reset on every
+    /// right-press.
+    pan_moved: bool,
     /// Drag state — `Some` while the user is mid-drag on a pad.
     drag: Option<DragState>,
     /// The pad index reported as `selected_pad` on the model the
@@ -97,6 +103,7 @@ impl Default for FootprintCanvasState {
             did_initial_fit: false,
             panning: false,
             last_pan_pos: None,
+            pan_moved: false,
             drag: None,
             last_known_selected: None,
             last_snap: None,
@@ -284,6 +291,9 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     // → start a pan as usual.
                     cstate.panning = true;
                     cstate.last_pan_pos = cursor.position_in(bounds);
+                    // v0.26 — track motion so right-release without
+                    // pan motion opens the context menu instead.
+                    cstate.pan_moved = false;
                     return Some(canvas::Action::capture());
                 }
                 if *button == mouse::Button::Left
@@ -447,8 +457,44 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
             }
             Event::Mouse(mouse::Event::ButtonReleased(button)) => {
                 if matches!(button, mouse::Button::Right | mouse::Button::Middle) {
+                    let did_pan = cstate.pan_moved;
                     cstate.panning = false;
                     cstate.last_pan_pos = None;
+                    cstate.pan_moved = false;
+                    // v0.26 — right-release without pan motion opens
+                    // the canvas context menu. Middle-click never
+                    // shows a menu (Altium parity: middle is pure
+                    // pan).
+                    if !did_pan
+                        && *button == mouse::Button::Right
+                        && let Some(cursor_pos) = cursor.position_in(bounds)
+                    {
+                        // Window-absolute screen coords for the
+                        // overlay: bounds.x/y is the canvas's
+                        // top-left within the window, cursor_pos is
+                        // relative to bounds.
+                        let screen_x = bounds.x + cursor_pos.x;
+                        let screen_y = bounds.y + cursor_pos.y;
+                        // v0.26 MVP — always Empty target; per-pad
+                        // hit-test routing comes in v0.26-B. Publishes
+                        // an `EditorEvent` so the standalone .snxfpt
+                        // path picks it up via `editor_msg_to_primitive_msg`.
+                        use crate::library::editor::footprint::state
+                            ::FootprintContextTarget;
+                        return Some(
+                            canvas::Action::publish(LibraryMessage::EditorEvent {
+                                library_path: self.address.library_path.clone(),
+                                table: self.address.table.clone(),
+                                row_id: self.address.row_id,
+                                msg: EditorMsg::FootprintShowContextMenu {
+                                    x: screen_x,
+                                    y: screen_y,
+                                    target: FootprintContextTarget::Empty,
+                                },
+                            })
+                            .and_capture(),
+                        );
+                    }
                     return None;
                 }
                 if *button == mouse::Button::Left
@@ -672,10 +718,31 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 if cstate.panning
                     && let Some(last) = cstate.last_pan_pos
                 {
-                    cstate.offset.x += cursor_pos.x - last.x;
-                    cstate.offset.y += cursor_pos.y - last.y;
+                    let dx = cursor_pos.x - last.x;
+                    let dy = cursor_pos.y - last.y;
+                    cstate.offset.x += dx;
+                    cstate.offset.y += dy;
                     cstate.last_pan_pos = Some(cursor_pos);
                     self.cache.clear();
+                    // v0.26 — first time the right-button drag crosses
+                    // the 2 px threshold, mark `pan_moved` so the
+                    // matching ButtonReleased branch knows to skip
+                    // the context menu, and close any open menu. The
+                    // context menu and a pan can't coexist.
+                    if !cstate.pan_moved && (dx.abs() > 2.0 || dy.abs() > 2.0) {
+                        cstate.pan_moved = true;
+                        if self.state.context_menu.is_some() {
+                            return Some(
+                                canvas::Action::publish(LibraryMessage::EditorEvent {
+                                    library_path: self.address.library_path.clone(),
+                                    table: self.address.table.clone(),
+                                    row_id: self.address.row_id,
+                                    msg: EditorMsg::FootprintCloseContextMenu,
+                                })
+                                .and_capture(),
+                            );
+                        }
+                    }
                     // v0.14.2: publish the cursor world position
                     // alongside .and_capture(). `capture()` alone is
                     // not enough to make iced schedule a redraw, so
@@ -1270,6 +1337,28 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     &path,
                     Stroke::default().with_width(1.0).with_color(ghost_stroke),
                 );
+
+                // v0.26 — drill hole on the ghost so the user sees
+                // the THT punch BEFORE clicking. Drawn as a dark disc
+                // at the pad centre so it reads against the red /
+                // grey pad fill without a stroke ring (the rendered
+                // pad uses the same convention).
+                if let Some(d) = defaults.drill_diameter_mm.filter(|d| *d > f32::EPSILON as f64)
+                {
+                    let r_px = (d / 2.0) as f32 * cstate.scale;
+                    if r_px > 0.5 {
+                        let hole_color = if paused {
+                            Color { r: 0.10, g: 0.10, b: 0.10, a: 0.85 }
+                        } else {
+                            Color { r: 0.05, g: 0.05, b: 0.05, a: 0.95 }
+                        };
+                        frame.fill(&Path::circle(centre, r_px), hole_color);
+                        frame.stroke(
+                            &Path::circle(centre, r_px),
+                            Stroke::default().with_width(0.75).with_color(ghost_stroke),
+                        );
+                    }
+                }
             }
 
             // v0.18.16 — Pads-mode multi-click gesture previews

@@ -536,6 +536,55 @@ pub struct FootprintEditorState {
     /// is incremental — fields not yet on this map continue to
     /// behave as before.
     pub numeric_buffers: std::collections::HashMap<String, String>,
+    /// v0.26 — right-click canvas context menu. `Some` while the
+    /// floating popup is mounted on the editor''s overlay layer. Set by
+    /// `FootprintShowContextMenu` (canvas right-release without pan
+    /// motion); cleared by `FootprintCloseContextMenu` (Esc, click
+    /// outside, action selection, or pan-drag start).
+    pub context_menu: Option<FootprintContextMenuState>,
+}
+
+/// v0.26 — right-click canvas context menu state. `(x, y)` are
+/// **window-absolute** screen coords (already include menu-bar +
+/// tab-bar offsets). `target` records what the cursor was over at
+/// right-click time so the renderer can pick between the empty-
+/// canvas variant and the on-pad variant. `submenu` tracks which
+/// submenu (if any) is hover-expanded.
+#[derive(Debug, Clone)]
+pub struct FootprintContextMenuState {
+    pub x: f32,
+    pub y: f32,
+    pub target: FootprintContextTarget,
+    pub submenu: Option<FootprintContextSubmenu>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FootprintContextTarget {
+    /// Right-clicked on bare canvas (no pad / silk / sketch hit).
+    Empty,
+    /// Right-clicked on pad index `idx` in `state.pads`.
+    Pad(usize),
+    /// Right-clicked on silk-front graphic index `idx` in `silk_f`.
+    SilkF(usize),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FootprintContextSubmenu {
+    Place,
+    View,
+    Selection,
+}
+
+/// v0.26 — actions issued from the context menu that don''t already
+/// have a dedicated `PrimitiveEditorMsg` variant. Most items in the
+/// menu route to existing handlers (PadsTool switch, DeleteSelected,
+/// FitToWindow, etc.); this enum carries only the new pure-action
+/// commands surfaced from the menu.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FootprintContextAction {
+    SelectAllPads,
+    DeselectAll,
+    FitToWindow,
 }
 
 /// v0.24 Phase 1 (Track D stub) — numeric-input overlay state for
@@ -1399,6 +1448,7 @@ impl FootprintEditorState {
             pad_stack_tab: PadStackTab::default(),
             placement_input: None,
             numeric_buffers: std::collections::HashMap::new(),
+            context_menu: None,
         };
         s.recompute_courtyard();
         s
@@ -1446,6 +1496,7 @@ impl FootprintEditorState {
             pad_stack_tab: PadStackTab::default(),
             placement_input: None,
             numeric_buffers: std::collections::HashMap::new(),
+            context_menu: None,
         };
         s.recompute_courtyard();
         s

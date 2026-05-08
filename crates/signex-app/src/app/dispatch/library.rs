@@ -4120,6 +4120,10 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintSketchSetRole { .. }
         | PrimitiveEditorMsg::FootprintSketchMakePadFromProfile
         | PrimitiveEditorMsg::FootprintSketchUnlinkCornerRadius { .. }
+        | PrimitiveEditorMsg::FootprintShowContextMenu { .. }
+        | PrimitiveEditorMsg::FootprintCloseContextMenu
+        | PrimitiveEditorMsg::FootprintContextMenuOpenSubmenu(_)
+        | PrimitiveEditorMsg::FootprintContextMenuAction(_)
         | PrimitiveEditorMsg::Save => {}
     }
 }
@@ -4660,6 +4664,66 @@ pub(crate) fn apply_footprint_primitive_edit(
         PrimitiveEditorMsg::FootprintTogglePlacementPause => {
             editor.state.placement_paused = !editor.state.placement_paused;
             editor.canvas_cache.clear();
+        }
+        // v0.26 — right-click context menu plumbing. State-only
+        // mutations; canvas cache is left untouched because the menu
+        // overlay lives outside the canvas geometry layer.
+        PrimitiveEditorMsg::FootprintShowContextMenu { x, y, target } => {
+            // Close any active dropdown before opening the context
+            // menu so two popups never coexist (Altium parity).
+            editor.state.active_bar_menu = None;
+            editor.state.context_menu = Some(
+                crate::library::editor::footprint::state::FootprintContextMenuState {
+                    x,
+                    y,
+                    target,
+                    submenu: None,
+                },
+            );
+        }
+        PrimitiveEditorMsg::FootprintCloseContextMenu => {
+            editor.state.context_menu = None;
+        }
+        PrimitiveEditorMsg::FootprintContextMenuOpenSubmenu(sm) => {
+            if let Some(ref mut menu) = editor.state.context_menu {
+                menu.submenu = sm;
+            }
+        }
+        PrimitiveEditorMsg::FootprintContextMenuAction(action) => {
+            use crate::library::editor::footprint::state::FootprintContextAction as Act;
+            match action {
+                Act::SelectAllPads => {
+                    // Existing semantics: SelectAll only meaningful
+                    // when there's at least one pad. With multi-
+                    // select not yet implemented, "Select All" maps
+                    // to selecting the first pad as a stand-in until
+                    // the v0.26 multi-pad selection lands. The dock
+                    // SelectAll path on the active bar already does
+                    // the right thing — defer to it once it grows.
+                    if !editor.state.pads.is_empty() {
+                        editor.state.selected_pad = Some(0);
+                    }
+                    editor.state.context_menu = None;
+                    editor.canvas_cache.clear();
+                }
+                Act::DeselectAll => {
+                    editor.state.selected_pad = None;
+                    editor.state.selected_silk_f = None;
+                    editor.state.selected_sketch = None;
+                    editor.state.selected_sketch_secondary = None;
+                    editor.state.context_menu = None;
+                    editor.canvas_cache.clear();
+                }
+                Act::FitToWindow => {
+                    // v0.26 MVP — Fit-to-window has to plumb through
+                    // `FootprintCanvasState.did_initial_fit` which
+                    // lives inside the canvas Program, so the menu
+                    // closes here and a follow-up commit wires the
+                    // re-fit signal. Leaving the menu close here so
+                    // the click is at least dismissed.
+                    editor.state.context_menu = None;
+                }
+            }
         }
         PrimitiveEditorMsg::FootprintSetPadsTool(tool) => {
             editor.state.pads_tool = tool;
@@ -7601,6 +7665,10 @@ fn mutates_footprint_state(msg: &PrimitiveEditorMsg) -> bool {
         | FootprintToggleSelectionFilter(_)
         | FootprintToggleAutoFit
         | FootprintSelectActiveIdx(_)
+        | FootprintShowContextMenu { .. }
+        | FootprintCloseContextMenu
+        | FootprintContextMenuOpenSubmenu(_)
+        | FootprintContextMenuAction(_)
         | Save => false,
         // All other variants either add/remove/move geometry,
         // mutate pad attributes, or rebuild the sketch — they all
@@ -8022,6 +8090,10 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::FootprintSketchToggleConstruction
         | EditorMsg::FootprintSketchToggleCenterline
         | EditorMsg::FootprintTogglePlacementPause
+        | EditorMsg::FootprintShowContextMenu { .. }
+        | EditorMsg::FootprintCloseContextMenu
+        | EditorMsg::FootprintContextMenuOpenSubmenu(_)
+        | EditorMsg::FootprintContextMenuAction(_)
         | EditorMsg::FootprintSketchSetRole { .. }
         | EditorMsg::SaveFootprint(_, _)
         | EditorMsg::SetBodyHeight(_)
