@@ -54,6 +54,7 @@ pub fn view_context_menu<'a>(
     editor: &'a FootprintEditorState,
     tokens: &'a ThemeTokens,
     path: &'a std::path::Path,
+    has_clipboard: bool,
 ) -> Option<Element<'a, LibraryMessage>> {
     let menu_state = editor.state.context_menu.as_ref()?;
 
@@ -167,8 +168,27 @@ pub fn view_context_menu<'a>(
                 ));
             }
 
-            items.push(separator(tokens));
-            items.push(item_disabled(tokens, "Properties...", ""));
+            // v0.26-E — Paste from clipboard. Visible (active) only
+            // when there''s a pad on the clipboard. Pastes at cursor
+            // — the canvas''s last-known cursor world position; falls
+            // back to a 1 mm offset of the original when cursor is
+            // unknown.
+            if has_clipboard {
+                items.push(item_msg(
+                    tokens,
+                    "Paste",
+                    "Ctrl+V",
+                    make_msg(PrimitiveEditorMsg::FootprintPastePad),
+                ));
+                items.push(separator(tokens));
+            }
+
+            items.push(item_msg(
+                tokens,
+                "Properties...",
+                "",
+                make_msg(PrimitiveEditorMsg::FootprintCloseContextMenu),
+            ));
         }
 
         FootprintContextTarget::Pad(idx) => {
@@ -183,7 +203,12 @@ pub fn view_context_menu<'a>(
             items.push(item_disabled(tokens, &header, ""));
             items.push(separator(tokens));
 
-            items.push(item_disabled(tokens, "Properties...", ""));
+            items.push(item_msg(
+                tokens,
+                "Properties...",
+                "",
+                make_msg(PrimitiveEditorMsg::FootprintCloseContextMenu),
+            ));
 
             // Pad Actions ▸ — Altium has a rich submenu (Add Region,
             // Custom Pad ops, Thermal Connection points). For v0.26-B
@@ -194,8 +219,27 @@ pub fn view_context_menu<'a>(
 
             items.push(separator(tokens));
 
-            items.push(item_disabled(tokens, "Cut", "Ctrl+X"));
-            items.push(item_disabled(tokens, "Copy", "Ctrl+C"));
+            // v0.26-E — wired clipboard ops on the selected pad.
+            items.push(item_msg(
+                tokens,
+                "Cut",
+                "Ctrl+X",
+                make_msg(PrimitiveEditorMsg::FootprintCutPad),
+            ));
+            items.push(item_msg(
+                tokens,
+                "Copy",
+                "Ctrl+C",
+                make_msg(PrimitiveEditorMsg::FootprintCopyPad),
+            ));
+            if has_clipboard {
+                items.push(item_msg(
+                    tokens,
+                    "Paste",
+                    "Ctrl+V",
+                    make_msg(PrimitiveEditorMsg::FootprintPastePad),
+                ));
+            }
             items.push(item_msg(
                 tokens,
                 "Delete",

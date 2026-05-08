@@ -4816,7 +4816,10 @@ impl Signex {
             if let Some(menu_state) = editor.state.context_menu.as_ref()
                 && let Some(card) =
                     crate::library::editor::footprint::context_menu::view_context_menu(
-                        editor, tokens, path,
+                        editor,
+                        tokens,
+                        path,
+                        document.pad_clipboard.is_some(),
                     )
             {
                 // Dismiss layer — left-click anywhere outside closes

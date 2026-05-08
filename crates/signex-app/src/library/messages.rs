@@ -858,6 +858,18 @@ pub enum EditorMsg {
     /// request has been honoured. Dispatcher clears
     /// `editor.state.fit_pending` so the next event tick sees false.
     FootprintFitConsumed,
+    /// v0.26-E — copy the currently-selected pad to the document-state
+    /// `pad_clipboard`. No-op when nothing is selected.
+    FootprintCopyPad,
+    /// v0.26-E — copy the selected pad to the clipboard then delete it.
+    /// Combines Copy + Delete in one history snapshot so undo restores
+    /// the pad in one step.
+    FootprintCutPad,
+    /// v0.26-E — paste the clipboard pad at the cursor position (or
+    /// the original pad position offset by 1 mm if cursor is unknown).
+    /// Picks a free designator. Selects the new pad post-paste so the
+    /// user can immediately drag / nudge.
+    FootprintPastePad,
     /// v0.16.2 — assign / clear a role attr (PadAttr / SilkAttr /
     /// CourtyardAttr / etc.) on the entity at `id`. The dispatcher
     /// clears every `*Attr` slot first, then writes the matching one
@@ -1422,6 +1434,10 @@ pub enum PrimitiveEditorMsg {
     /// v0.26-C — canvas signals that the pending Fit-to-Window
     /// request has been honoured. See EditorMsg::FootprintFitConsumed.
     FootprintFitConsumed,
+    /// v0.26-E — clipboard ops on the selected pad.
+    FootprintCopyPad,
+    FootprintCutPad,
+    FootprintPastePad,
     /// v0.16.2 — set the role attr on a sketch entity. Inspector
     /// emits this when the user picks a value from the Role dropdown;
     /// dispatcher routes through

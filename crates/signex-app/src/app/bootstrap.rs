@@ -173,6 +173,7 @@ impl Signex {
                 engines: std::collections::HashMap::new(),
                 symbol_editors: std::collections::HashMap::new(),
                 footprint_editors: std::collections::HashMap::new(),
+                pad_clipboard: None,
                 active_path: None,
                 projects: Vec::new(),
                 active_project: None,

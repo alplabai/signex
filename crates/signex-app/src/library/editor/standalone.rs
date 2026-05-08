@@ -1070,6 +1070,9 @@ fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEditorMsg {
             PrimitiveEditorMsg::FootprintContextMenuAction(act)
         }
         EditorMsg::FootprintFitConsumed => PrimitiveEditorMsg::FootprintFitConsumed,
+        EditorMsg::FootprintCopyPad => PrimitiveEditorMsg::FootprintCopyPad,
+        EditorMsg::FootprintCutPad => PrimitiveEditorMsg::FootprintCutPad,
+        EditorMsg::FootprintPastePad => PrimitiveEditorMsg::FootprintPastePad,
         EditorMsg::FootprintSketchSetRole { id, role } => {
             PrimitiveEditorMsg::FootprintSketchSetRole { id, role }
         }

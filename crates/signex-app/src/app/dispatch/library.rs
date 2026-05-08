@@ -3496,6 +3496,27 @@ impl Signex {
             return Task::none();
         }
 
+        // v0.26-E — clipboard ops need both `pad_clipboard` and the
+        // editor mutable simultaneously, so split-borrow at the call
+        // site instead of routing through `apply_footprint_primitive_edit`.
+        match &msg {
+            PrimitiveEditorMsg::FootprintCopyPad
+            | PrimitiveEditorMsg::FootprintCutPad
+            | PrimitiveEditorMsg::FootprintPastePad => {
+                let crate::app::DocumentState {
+                    footprint_editors,
+                    pad_clipboard,
+                    ..
+                } = &mut self.document_state;
+                if let Some(editor) = footprint_editors.get_mut(&path) {
+                    apply_footprint_clipboard_op(editor, pad_clipboard, &msg);
+                }
+                self.refresh_panel_ctx();
+                return Task::none();
+            }
+            _ => {}
+        }
+
         // Footprint-only mutations.
         if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
             apply_footprint_primitive_edit(editor, msg);
@@ -4125,6 +4146,9 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintContextMenuOpenSubmenu(_)
         | PrimitiveEditorMsg::FootprintContextMenuAction(_)
         | PrimitiveEditorMsg::FootprintFitConsumed
+        | PrimitiveEditorMsg::FootprintCopyPad
+        | PrimitiveEditorMsg::FootprintCutPad
+        | PrimitiveEditorMsg::FootprintPastePad
         | PrimitiveEditorMsg::Save => {}
     }
 }
@@ -4204,6 +4228,104 @@ fn graphic_handle_msg_to_state(
         GraphicHandleMsg::ArcStart => GraphicHandle::ArcStart,
         GraphicHandleMsg::ArcEnd => GraphicHandle::ArcEnd,
         GraphicHandleMsg::TextAnchor => GraphicHandle::TextAnchor,
+    }
+}
+
+/// v0.26-E — apply Cut / Copy / Paste against the document-level
+/// `pad_clipboard`. Split-borrowed at the call site so both the
+/// editor and the clipboard slot are mutable.
+///
+/// Behaviour:
+///  - **Copy**: clones the selected pad into the clipboard. No-op
+///    when nothing is selected.
+///  - **Cut**: Copy + delete; mirrors into the sketch + invalidates
+///    the canvas cache.
+///  - **Paste**: places a clone of the clipboard pad at the cursor
+///    (or `original.position + (1mm, 1mm)` if cursor is unknown),
+///    picks a free designator (max + 1), pre-computes a fresh
+///    `sketch_entity_id` so the new pad mirrors into the sketch on
+///    its first edit, and selects the new pad post-paste.
+pub(crate) fn apply_footprint_clipboard_op(
+    editor: &mut crate::app::FootprintEditorState,
+    clipboard: &mut Option<crate::library::editor::footprint::state::EditorPad>,
+    msg: &PrimitiveEditorMsg,
+) {
+    use crate::library::editor::footprint::pad_to_sketch;
+    use crate::library::editor::footprint::state::FootprintEditorState as CanvasState;
+
+    match msg {
+        PrimitiveEditorMsg::FootprintCopyPad => {
+            let Some(idx) = editor.state.selected_pad else {
+                return;
+            };
+            let Some(pad) = editor.state.pads.get(idx) else {
+                return;
+            };
+            *clipboard = Some(pad.clone());
+        }
+        PrimitiveEditorMsg::FootprintCutPad => {
+            let Some(idx) = editor.state.selected_pad else {
+                return;
+            };
+            // Snapshot history BEFORE the mutation so undo restores
+            // the pad. Mirrors the v0.24 push_history pattern.
+            editor.push_history();
+            let did_delete = editor.with_parts(|state, primitive| {
+                let Some(pad) = state.pads.get(idx).cloned() else {
+                    return false;
+                };
+                *clipboard = Some(pad.clone());
+                pad_to_sketch::mirror_delete_pad_from_sketch(&pad, primitive);
+                state.delete_pad(idx);
+                CanvasState::sync_pads_to_primitive(state, primitive);
+                true
+            });
+            if did_delete {
+                editor.canvas_cache.clear();
+                editor.dirty = true;
+            }
+        }
+        PrimitiveEditorMsg::FootprintPastePad => {
+            let Some(template) = clipboard.clone() else {
+                return;
+            };
+            // Paste position: prefer the cursor; fall back to the
+            // template''s original + a tiny diagonal offset so the
+            // user sees the new pad rather than overlap.
+            let (px, py) = match editor.state.cursor_mm {
+                Some((cx, cy)) => (cx, cy),
+                None => (template.position_mm.0 + 1.0, template.position_mm.1 + 1.0),
+            };
+            // Pick a designator: max-existing + 1, falling back to
+            // the template''s number when nothing parses.
+            let next_num = editor
+                .state
+                .pads
+                .iter()
+                .filter_map(|p| p.number.parse::<u64>().ok())
+                .max()
+                .map(|n| (n + 1).to_string())
+                .unwrap_or_else(|| template.number.clone());
+            editor.push_history();
+            editor.with_parts(|state, primitive| {
+                let mut new_pad = template.clone();
+                new_pad.position_mm = (px, py);
+                new_pad.number = next_num.clone();
+                // Reset sketch links so the pad mirrors freshly into
+                // the sketch on the next mode switch (avoids two
+                // pads sharing an entity id).
+                new_pad.sketch_entity_id = None;
+                new_pad.corner_entity_ids = None;
+                state.pads.push(new_pad);
+                let new_idx = state.pads.len() - 1;
+                state.selected_pad = Some(new_idx);
+                state.recompute_courtyard();
+                CanvasState::sync_pads_to_primitive(state, primitive);
+            });
+            editor.canvas_cache.clear();
+            editor.dirty = true;
+        }
+        _ => {}
     }
 }
 
@@ -4715,6 +4837,13 @@ pub(crate) fn apply_footprint_primitive_edit(
         PrimitiveEditorMsg::FootprintFitConsumed => {
             editor.state.fit_pending = false;
         }
+        // v0.26-E — clipboard ops intercepted at the call site
+        // (apply_footprint_clipboard_op needs split-borrow with
+        // document_state.pad_clipboard). The match arm here is
+        // unreachable in practice but required for exhaustiveness.
+        PrimitiveEditorMsg::FootprintCopyPad
+        | PrimitiveEditorMsg::FootprintCutPad
+        | PrimitiveEditorMsg::FootprintPastePad => {}
         PrimitiveEditorMsg::FootprintContextMenuAction(action) => {
             use crate::library::editor::footprint::state::FootprintContextAction as Act;
             match action {
@@ -7699,6 +7828,12 @@ fn mutates_footprint_state(msg: &PrimitiveEditorMsg) -> bool {
         | FootprintContextMenuOpenSubmenu(_)
         | FootprintContextMenuAction(_)
         | FootprintFitConsumed
+        // v0.26-E — clipboard ops handle their own push_history at
+        // call site, so the snapshot-classifier here returns false
+        // (Copy mutates nothing; Cut + Paste already snapshotted).
+        | FootprintCopyPad
+        | FootprintCutPad
+        | FootprintPastePad
         | Save => false,
         // All other variants either add/remove/move geometry,
         // mutate pad attributes, or rebuild the sketch — they all
@@ -8125,6 +8260,9 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::FootprintContextMenuOpenSubmenu(_)
         | EditorMsg::FootprintContextMenuAction(_)
         | EditorMsg::FootprintFitConsumed
+        | EditorMsg::FootprintCopyPad
+        | EditorMsg::FootprintCutPad
+        | EditorMsg::FootprintPastePad
         | EditorMsg::FootprintSketchSetRole { .. }
         | EditorMsg::SaveFootprint(_, _)
         | EditorMsg::SetBodyHeight(_)

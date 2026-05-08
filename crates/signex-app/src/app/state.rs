@@ -398,6 +398,13 @@ pub struct DocumentState {
     /// Per-tab state for open `.snxfpt` document tabs. Keyed the same
     /// way as `symbol_editors`.
     pub footprint_editors: std::collections::HashMap<PathBuf, super::FootprintEditorState>,
+    /// v0.26-E — process-local clipboard for footprint-editor pad
+    /// Cut / Copy / Paste. Survives tab switches so a pad copied from
+    /// one footprint can be pasted into another. `None` until the
+    /// first Cut / Copy. Replaced wholesale on every copy. Keyed by
+    /// no path on purpose — Altium parity is single-slot, last-write-
+    /// wins.
+    pub pad_clipboard: Option<crate::library::editor::footprint::state::EditorPad>,
     /// The path of the schematic the main window is currently editing.
     /// `active_engine()` reads `engines.get(active_path)`. `None` means
     /// no schematic tab is active (e.g. a PCB tab is active, or nothing
