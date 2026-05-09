@@ -1476,12 +1476,82 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     }
                     // v0.27 — Line drag tick. Translate both endpoints
                     // in one solver pass via FootprintSketchMoveLine.
+                    // The cursor delta is projected onto the line's
+                    // perpendicular so dragging an edge only pushes
+                    // it in its natural resize direction (Fusion-
+                    // style). Without this, a horizontal line would
+                    // also slide left/right under the user's mouse,
+                    // which doesn't match what the cursor cue (↕)
+                    // promises.
                     if drag.moved
                         && let Some(line_id) = drag.sketch_line
+                        && let Some(sketch_ref) = self.sketch
                     {
-                        let dx_mm = world.0 - drag.last_world.0;
-                        let dy_mm = world.1 - drag.last_world.1;
-                        drag.last_world = world;
+                        let raw_dx = world.0 - drag.last_world.0;
+                        let raw_dy = world.1 - drag.last_world.1;
+                        // Resolve the line's current direction. Falls
+                        // back to the raw delta if the lookup fails
+                        // (entity vanished mid-drag, etc.).
+                        let endpoints = sketch_ref
+                            .entities
+                            .iter()
+                            .find(|e| e.id == line_id)
+                            .and_then(|e| match e.kind {
+                                signex_sketch::entity::EntityKind::Line { start, end } => {
+                                    Some((start, end))
+                                }
+                                _ => None,
+                            });
+                        let pos_of = |id: signex_sketch::id::SketchEntityId| -> Option<(f64, f64)> {
+                            if let Some(solve) = self.state.last_solve.as_ref()
+                                && let Some(p) = signex_sketch::solver::state::point_xy(
+                                    id,
+                                    &solve.result.state,
+                                    &solve.result.index,
+                                    sketch_ref,
+                                )
+                            {
+                                return Some(p);
+                            }
+                            sketch_ref
+                                .entities
+                                .iter()
+                                .find(|e| e.id == id)
+                                .and_then(|e| match e.kind {
+                                    signex_sketch::entity::EntityKind::Point { x, y } => {
+                                        Some((x, y))
+                                    }
+                                    _ => None,
+                                })
+                        };
+                        let (dx_mm, dy_mm) = match endpoints
+                            .and_then(|(s, e)| pos_of(s).zip(pos_of(e)))
+                        {
+                            Some(((ax, ay), (bx, by))) => {
+                                let lx = bx - ax;
+                                let ly = by - ay;
+                                let llen = (lx * lx + ly * ly).sqrt();
+                                if llen <= 1e-9 {
+                                    (raw_dx, raw_dy)
+                                } else {
+                                    // Unit perpendicular (rotate
+                                    // tangent +90°): (-ly, lx)/llen.
+                                    let nx = -ly / llen;
+                                    let ny = lx / llen;
+                                    let proj = raw_dx * nx + raw_dy * ny;
+                                    (proj * nx, proj * ny)
+                                }
+                            }
+                            None => (raw_dx, raw_dy),
+                        };
+                        // Advance last_world by the CONSTRAINED delta
+                        // so the cursor's parallel motion accumulates
+                        // (instead of dropping silently each tick and
+                        // forcing the user to overshoot).
+                        drag.last_world = (
+                            drag.last_world.0 + dx_mm,
+                            drag.last_world.1 + dy_mm,
+                        );
                         self.cache.clear();
                         return Some(canvas::Action::publish(LibraryMessage::EditorEvent {
                             library_path: self.address.library_path.clone(),
@@ -1886,12 +1956,17 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 }
             }
 
-            // Origin crosshair — Altium-style yellow + at world (0, 0).
-            // v0.16.2.2 swapped from theme-derived white to a
-            // saturated Altium yellow so the origin pops against the
-            // black canvas background.
+            // Origin crosshair — Altium-style yellow on the dark
+            // Pads canvas, dark slate grey on the Fusion-style
+            // white sketch canvas. v0.27 — bright yellow read as
+            // a stray stray cursor on white; the slate grey keeps
+            // the origin marker visible without dominating.
             let origin = cstate.world_to_screen((0.0, 0.0));
-            let origin_color = Color::from_rgba(1.0, 0.95, 0.30, 0.85);
+            let origin_color = if matches!(self.state.mode, EditorMode::Sketch) {
+                Color::from_rgba(0.20, 0.25, 0.32, 0.85)
+            } else {
+                Color::from_rgba(1.0, 0.95, 0.30, 0.85)
+            };
             frame.stroke(
                 &Path::line(
                     Point::new(origin.x - 8.0, origin.y),
@@ -2306,6 +2381,38 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 );
             }
 
+            // v0.27 — Select-tool cursor mark. Sketch mode hides
+            // the OS cursor (the Crosshair variant rendered as a
+            // pale ghost on white with the user's cursor scheme),
+            // so we draw our own dark "+" at the raw cursor
+            // position when the Select tool is active. Placement
+            // tools have the dark-blue reticle above; Select gets
+            // this lighter mark since it isn't pinned to a snap
+            // target.
+            if in_sketch
+                && in_select_tool
+                && !context_menu_open
+                && let Some(p) = cursor_screen
+            {
+                let arm = 5.0_f32;
+                let near_black = Color::from_rgba(0.10, 0.10, 0.10, 0.90);
+                let stroke = Stroke::default().with_width(1.0).with_color(near_black);
+                frame.stroke(
+                    &Path::line(
+                        Point::new(p.x - arm, p.y),
+                        Point::new(p.x + arm, p.y),
+                    ),
+                    stroke,
+                );
+                frame.stroke(
+                    &Path::line(
+                        Point::new(p.x, p.y - arm),
+                        Point::new(p.x, p.y + arm),
+                    ),
+                    stroke,
+                );
+            }
+
             // v0.27 — Touching Line ghost. After the first click
             // armed the line, the second-endpoint preview tracks
             // the cursor live. Same cyan accent as Lasso so the
@@ -2546,26 +2653,45 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                             let py = a.1 + tc * dy;
                             let d2 = (px - world.0).powi(2) + (py - world.1).powi(2);
                             if d2 <= tol_mm * tol_mm {
-                                // Direction-agnostic resize cursor:
-                                // line ≈ vertical → ↔ (drag left/right
-                                // to resize width); line ≈ horizontal
-                                // → ↕ (drag up/down).
-                                let is_vertical = dy.abs() > dx.abs();
-                                return if is_vertical {
+                                // v0.27 — bucket the line's angle
+                                // into the four cardinal cursors.
+                                // The cursor points along the
+                                // perpendicular (the direction the
+                                // user drags to push the edge).
+                                //
+                                //   horizontal line  →   ↕  (drag up/down)
+                                //   vertical line    →   ↔  (drag left/right)
+                                //   "/" diagonal     →   ↘↖ ResizingDiagonallyDown
+                                //   "\" diagonal     →   ↗↙ ResizingDiagonallyUp
+                                //
+                                // World coords share screen Y-down
+                                // (world_to_screen does no flip), so
+                                // dy/dx > 0 reads as "going down-and-
+                                // right" on screen, which is the "\"
+                                // slope visually.
+                                let angle_deg = dy
+                                    .atan2(dx)
+                                    .to_degrees()
+                                    .rem_euclid(180.0);
+                                return if angle_deg < 22.5 || angle_deg >= 157.5 {
+                                    mouse::Interaction::ResizingVertically
+                                } else if angle_deg < 67.5 {
+                                    mouse::Interaction::ResizingDiagonallyUp
+                                } else if angle_deg < 112.5 {
                                     mouse::Interaction::ResizingHorizontally
                                 } else {
-                                    mouse::Interaction::ResizingVertically
+                                    mouse::Interaction::ResizingDiagonallyDown
                                 };
                             }
                         }
                     }
                 }
-                if self.state.active_tool == super::state::SketchTool::Select {
-                    // No line hover — show crosshair so the user
-                    // sees something concrete to click with.
-                    return mouse::Interaction::Crosshair;
-                }
-                // Placement tools — reticle is the cursor.
+                // Sketch mode hides the OS cursor in BOTH Select
+                // and Placement tools. Select draws its own dark
+                // "+" at the raw cursor position (see draw); the
+                // OS Crosshair was rendering as a pale "ghost" on
+                // the white canvas with the user's cursor scheme
+                // and breaking the dark-on-white expectation.
                 mouse::Interaction::Hidden
             } else {
                 mouse::Interaction::Crosshair
