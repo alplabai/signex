@@ -565,7 +565,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         && self.state.active_tool == _ST::Select
                         && let Some(sketch_ref) = self.sketch
                     {
-                        const LINE_HIT_TOL_PX: f32 = 6.0;
+                        const LINE_HIT_TOL_PX: f32 = 10.0;
                         let tol_mm =
                             (LINE_HIT_TOL_PX / cstate.scale.max(1.0)) as f64;
                         let mut best_line: Option<(f64, signex_sketch::id::SketchEntityId)> =
@@ -617,6 +617,10 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                             }
                         }
                         if let Some((_, line_id)) = best_line {
+                            // Make sure no stale rubber-band anchor
+                            // is left over from a prior gesture.
+                            cstate.box_select_anchor_screen = None;
+                            cstate.box_select_current_screen = None;
                             cstate.drag = Some(DragState {
                                 pad_idx: usize::MAX,
                                 sketch_point: None,
@@ -1391,13 +1395,22 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 // in both Sketch and Pads modes; per-priority gating
                 // lives in `snap::snap_cursor` via `state.snap_options`.
                 // v0.27 — Select tool sees the raw cursor so the
-                // click hit-test isn't pulled to the grid.
+                // click hit-test isn't pulled to the grid. EXCEPT
+                // while a Line drag is in flight — Fusion-style edge
+                // resize should respect the user's Snap Options
+                // (grid / point / H/V) so the moved edge lands on
+                // grid as the user expects.
                 use crate::library::editor::footprint::state::{
                     EditorMode as _EMt, SketchTool as _STt,
                 };
                 let select_mode_tick = matches!(self.state.mode, _EMt::Sketch)
                     && self.state.active_tool == _STt::Select;
-                let world = if select_mode_tick {
+                let line_drag_active = cstate
+                    .drag
+                    .as_ref()
+                    .map(|d| d.sketch_line.is_some())
+                    .unwrap_or(false);
+                let world = if select_mode_tick && !line_drag_active {
                     cstate.last_snap = None;
                     raw_world
                 } else {
