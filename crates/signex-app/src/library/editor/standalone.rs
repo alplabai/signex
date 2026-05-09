@@ -1047,6 +1047,9 @@ fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEditorMsg {
             PrimitiveEditorMsg::FootprintAddVia { x_mm, y_mm }
         }
         EditorMsg::FootprintSelectOffGridPads => PrimitiveEditorMsg::FootprintSelectOffGridPads,
+        EditorMsg::FootprintRecomputeCourtyardOutline => {
+            PrimitiveEditorMsg::FootprintRecomputeCourtyardOutline
+        }
         EditorMsg::FootprintLassoArm => PrimitiveEditorMsg::FootprintLassoArm,
         EditorMsg::FootprintLassoAddVertex { x_mm, y_mm } => {
             PrimitiveEditorMsg::FootprintLassoAddVertex { x_mm, y_mm }

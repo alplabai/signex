@@ -827,6 +827,10 @@ pub enum EditorMsg {
     /// is NOT on the active snap grid step. Useful for catching
     /// pads accidentally dropped between grid points.
     FootprintSelectOffGridPads,
+    /// v0.27 — Rebuild the outline-following courtyard polygon
+    /// from the current pad layout. Stores the result on
+    /// `state.courtyard_outline_mm`.
+    FootprintRecomputeCourtyardOutline,
     /// v0.27 — arm the Lasso Select tool. Subsequent canvas left-
     /// clicks append a world-mm vertex to `state.lasso_vertices`;
     /// Esc / right-click commits via `FootprintLassoCommit` /
@@ -1679,6 +1683,10 @@ pub enum PrimitiveEditorMsg {
     /// 0.3 mm drill, Multi-Layer plated). Bypasses Pads-mode
     /// `next_pad_defaults` so the via geometry is canonical.
     FootprintAddVia { x_mm: f64, y_mm: f64 },
+    /// v0.27 — Rebuild the outline-following courtyard polygon
+    /// from the current pad layout (union + offset). Stores the
+    /// result on `state.courtyard_outline_mm`.
+    FootprintRecomputeCourtyardOutline,
     /// v0.27 — multi-select every pad off the current snap grid.
     FootprintSelectOffGridPads,
     /// v0.27 — Lasso tool lifecycle.

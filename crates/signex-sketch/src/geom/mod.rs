@@ -17,6 +17,7 @@ pub mod aabb_index;
 pub mod boolean;
 pub mod boolean_general;
 pub mod curves;
+pub mod halfedge;
 pub mod hull;
 pub mod offset;
 pub mod predicates;

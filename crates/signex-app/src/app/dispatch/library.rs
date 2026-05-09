@@ -4142,6 +4142,7 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintSelectAllOnLayer
         | PrimitiveEditorMsg::FootprintAddVia { .. }
         | PrimitiveEditorMsg::FootprintSelectOffGridPads
+        | PrimitiveEditorMsg::FootprintRecomputeCourtyardOutline
         | PrimitiveEditorMsg::FootprintLassoArm
         | PrimitiveEditorMsg::FootprintLassoAddVertex { .. }
         | PrimitiveEditorMsg::FootprintLassoCommit
@@ -5858,6 +5859,15 @@ pub(crate) fn apply_footprint_primitive_edit(
             editor.state.selected_pads_extra.clear();
             editor.state.active_bar_menu = None;
             editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintRecomputeCourtyardOutline => {
+            // v0.27 — outline-following courtyard. Pure read-write
+            // on the editor state; the new polygon lands on
+            // `state.courtyard_outline_mm` and the canvas draws it
+            // in preference to the bbox.
+            editor.state.recompute_courtyard_outline();
+            editor.canvas_cache.clear();
+            editor.dirty = true;
         }
         PrimitiveEditorMsg::FootprintSelectOffGridPads => {
             // v0.27 — pads whose centre falls between grid steps.
@@ -8702,6 +8712,7 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::FootprintSelectAllOnLayer
         | EditorMsg::FootprintAddVia { .. }
         | EditorMsg::FootprintSelectOffGridPads
+        | EditorMsg::FootprintRecomputeCourtyardOutline
         | EditorMsg::FootprintLassoArm
         | EditorMsg::FootprintLassoAddVertex { .. }
         | EditorMsg::FootprintLassoCommit

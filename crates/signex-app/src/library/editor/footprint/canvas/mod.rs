@@ -1649,22 +1649,38 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 draw_silk_graphics(frame, cstate, self.silk_b, FpLayer::BSilks, None);
             }
 
-            // Courtyard — drawn as a hollow rectangle on Edge.Cuts.
-            if self.state.layer_visibility.get(FpLayer::EdgeCuts)
-                && let Some(c) = self.state.courtyard_mm
-            {
-                let p0 = cstate.world_to_screen((c.min_x, c.min_y));
-                let p1 = cstate.world_to_screen((c.max_x, c.max_y));
-                let rect = Path::rectangle(
-                    Point::new(p0.x, p0.y),
-                    iced::Size::new(p1.x - p0.x, p1.y - p0.y),
-                );
-                frame.stroke(
-                    &rect,
-                    Stroke::default()
-                        .with_width(1.5)
-                        .with_color(FpLayer::EdgeCuts.color()),
-                );
+            // Courtyard — outline-following polygon takes
+            // precedence over the bbox rectangle when present
+            // (v0.27); fall back to the bbox for legacy state.
+            if self.state.layer_visibility.get(FpLayer::EdgeCuts) {
+                let edge_color = FpLayer::EdgeCuts.color();
+                if let Some(outline) = self.state.courtyard_outline_mm.as_ref() {
+                    if outline.len() >= 3 {
+                        let path = Path::new(|b| {
+                            let first = cstate.world_to_screen(outline[0]);
+                            b.move_to(first);
+                            for v in outline.iter().skip(1) {
+                                b.line_to(cstate.world_to_screen(*v));
+                            }
+                            b.line_to(first);
+                        });
+                        frame.stroke(
+                            &path,
+                            Stroke::default().with_width(1.5).with_color(edge_color),
+                        );
+                    }
+                } else if let Some(c) = self.state.courtyard_mm {
+                    let p0 = cstate.world_to_screen((c.min_x, c.min_y));
+                    let p1 = cstate.world_to_screen((c.max_x, c.max_y));
+                    let rect = Path::rectangle(
+                        Point::new(p0.x, p0.y),
+                        iced::Size::new(p1.x - p0.x, p1.y - p0.y),
+                    );
+                    frame.stroke(
+                        &rect,
+                        Stroke::default().with_width(1.5).with_color(edge_color),
+                    );
+                }
             }
 
             // Pads — render last so they sit on top.

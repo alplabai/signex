@@ -276,15 +276,16 @@ pub(super) fn draw_constraint_icons(
         let is_over = over_set.contains(&c.id);
         let colour = match (hover, is_over) {
             // Specific row hovered + this is the row → full red.
-            (Some(h), _) if h == c.id => Color::from_rgba(1.0, 0.20, 0.20, 1.00),
-            // Specific row hovered + this is NOT the row → dimmed
-            // (other over-constraints get the same dim as
-            // non-over-constraints so the focus stays singular).
-            (Some(_), _) => Color::from_rgba(0.85, 0.85, 0.85, 0.15),
+            (Some(h), _) if h == c.id => Color::from_rgba(0.85, 0.10, 0.10, 1.00),
+            // Specific row hovered + this is NOT the row → dimmed.
+            (Some(_), _) => Color::from_rgba(0.40, 0.40, 0.40, 0.30),
             // No row hover + over-constrained → red (set-wide focus).
-            (None, true) => Color::from_rgba(1.0, 0.20, 0.20, 1.00),
-            // Default — non-over-constrained, no hover.
-            (None, false) => Color::from_rgba(0.85, 0.85, 0.85, 0.85),
+            (None, true) => Color::from_rgba(0.85, 0.10, 0.10, 1.00),
+            // v0.27 — non-over-constrained constraint glyph at dark
+            // grey so it reads against both the dark Pads-mode
+            // canvas and the white Sketch-mode canvas without
+            // washing out on either.
+            (None, false) => Color::from_rgba(0.30, 0.30, 0.30, 0.95),
         };
         frame.fill_text(canvas::Text {
             content: glyph.to_string(),
@@ -628,7 +629,10 @@ pub(super) fn draw_dof_direction_arrows(
     const ARROW_LEN_PX: f32 = 10.0;
     const HEAD_LEN_PX: f32 = 3.0;
     const HEAD_SPREAD_RAD: f64 = 0.5; // ~28°
-    let cyan = Color::from_rgba(0.30, 0.85, 0.95, 0.85);
+    // v0.27 — DOF arrow shifted to a darker cyan so it reads
+    // against the white sketch canvas without competing with the
+    // blue under-constrained DOF dot underneath.
+    let cyan = Color::from_rgba(0.05, 0.55, 0.80, 1.00);
     let stroke = Stroke::default().with_width(1.0).with_color(cyan);
 
     let m_rows = solve.jacobian.len();
@@ -1007,6 +1011,11 @@ pub(super) fn draw_filled_closed_loops(
             .chain(points.iter())
             .filter_map(|id| sketch.entities.iter().find(|e| e.id == *id))
             .find_map(role_color);
+        // v0.27 — sketch closed-loop fill tuned for the white
+        // canvas. Role hits stay at the layer colour but at higher
+        // alpha so saturation reads on white. Neutral (no role)
+        // shifts to a soft Fusion-style blue tint instead of cool
+        // grey — grey at 10% alpha is invisible against white.
         let fill = match loop_role {
             Some(layer) => {
                 let c = layer.color();
@@ -1014,14 +1023,14 @@ pub(super) fn draw_filled_closed_loops(
                     r: c.r,
                     g: c.g,
                     b: c.b,
-                    a: 0.20, // brighter than neutral grey to make role visible
+                    a: 0.25,
                 }
             }
             None => Color {
-                r: 0.50,
-                g: 0.55,
-                b: 0.60,
-                a: 0.10,
+                r: 0.20,
+                g: 0.45,
+                b: 0.85,
+                a: 0.12,
             },
         };
         let path = Path::new(|builder| {
