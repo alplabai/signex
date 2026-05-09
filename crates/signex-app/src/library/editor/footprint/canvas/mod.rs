@@ -1490,8 +1490,26 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
         _cursor: mouse::Cursor,
     ) -> Vec<canvas::Geometry> {
         let geom = self.cache.draw(renderer, bounds.size(), |frame| {
-            // Background.
-            frame.fill_rectangle(Point::ORIGIN, bounds.size(), self.bg_color);
+            // v0.27 — Sketch mode flips to a Fusion-style white
+            // canvas so the geometric primitives (Points / Lines /
+            // Arcs / Circles) read against a familiar high-contrast
+            // background. Pads-mode keeps the dark theme that
+            // matches Altium's PCB Library editor. The grid colour
+            // also follows so coarse / fine grid stays visible
+            // against either backdrop.
+            use crate::library::editor::footprint::state::EditorMode;
+            let in_sketch = matches!(self.state.mode, EditorMode::Sketch);
+            let bg = if in_sketch {
+                Color::WHITE
+            } else {
+                self.bg_color
+            };
+            let grid = if in_sketch {
+                Color::from_rgba(0.78, 0.78, 0.78, 1.0)
+            } else {
+                self.grid_color
+            };
+            frame.fill_rectangle(Point::ORIGIN, bounds.size(), bg);
 
             // v0.18.19 — fine + coarse grid display follows the
             // Cartesian Grid Editor's per-style picker. Step is
@@ -1506,10 +1524,16 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
             // Fine pass — only when each cell is at least 6 px wide
             // so we don't chew tessellation budget on dense grids
             // at low zoom.
+            // v0.27 — Sketch mode runs on a white background, so
+            // the alpha multiplier needs to bias the OTHER way:
+            // fine gridlines that were 10% bright on dark land at
+            // 30% on white so they read at the same visual weight,
+            // and coarse gridlines climb to 55%.
+            let (fine_alpha, coarse_alpha) = if in_sketch { (0.30, 0.55) } else { (0.10, 0.30) };
             if fine_step >= 6.0 {
                 let fine_color = Color {
-                    a: 0.10,
-                    ..self.grid_color
+                    a: fine_alpha,
+                    ..grid
                 };
                 match fine_style {
                     Gd::Lines => {
@@ -1521,10 +1545,14 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     Gd::Hidden => {}
                 }
             }
-            if coarse_step >= 8.0 {
+            // v0.27 — Fusion-style sketch grid uses ONLY a single
+            // fine grid (no coarse overlay). The coarse pass below
+            // is skipped while in sketch mode; Pads-mode keeps the
+            // 2-tier grid for Altium parity.
+            if !in_sketch && coarse_step >= 8.0 {
                 let coarse_color = Color {
-                    a: 0.30,
-                    ..self.grid_color
+                    a: coarse_alpha,
+                    ..grid
                 };
                 match coarse_style {
                     Gd::Lines => {
@@ -1746,7 +1774,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
             // entirely so the cursor position no longer implies a
             // placement target — the user adjusts properties first,
             // then TAB resumes.
-            use crate::library::editor::footprint::state::{EditorMode, PadsTool};
+            use crate::library::editor::footprint::state::PadsTool;
             if matches!(self.state.mode, EditorMode::Normal)
                 && self.state.pads_tool == PadsTool::PlacePad
                 && !self.state.placement_paused
@@ -1941,7 +1969,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         Some(c) => cstate.world_to_screen(c),
                         None => p0,
                     };
-                    let line_col = Color::from_rgba(0.30, 0.85, 1.00, 0.95);
+                    let line_col = Color::from_rgba(0.10, 0.55, 0.85, 1.00);
                     frame.stroke(
                         &Path::line(p0, p1),
                         Stroke::default().with_width(1.5).with_color(line_col),
@@ -1957,7 +1985,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
             // the polygon they're stroking. Right-click commits;
             // Esc cancels.
             if self.state.lasso_mode_active && !self.state.lasso_vertices.is_empty() {
-                let lasso_col = Color::from_rgba(0.30, 0.85, 1.00, 0.95);
+                let lasso_col = Color::from_rgba(0.10, 0.55, 0.85, 1.00);
                 let lasso_fill = Color::from_rgba(0.30, 0.55, 0.90, 0.18);
                 let path = Path::new(|builder| {
                     let first = cstate.world_to_screen(self.state.lasso_vertices[0]);

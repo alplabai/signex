@@ -338,17 +338,23 @@ pub(super) fn draw_sketch_overlay(
             })
     }
 
+    // v0.27 — Fusion-style DOF palette tuned for the white sketch
+    // canvas. Under-constrained → blue, fully-constrained → black,
+    // over-constrained → red, no-solve → dark grey. The pre-v0.27
+    // light-grey "no solve" colour was effectively invisible
+    // against white; dark grey reads at the same weight as the
+    // black fully-constrained state without competing with it.
     let dof_colour = |id: SketchEntityId| -> Color {
         use signex_sketch::solver::dof::DofColor;
         if let Some(solve) = state.last_solve.as_ref() {
             match solve.colours.get(&id) {
-                Some(DofColor::Under) => Color::from_rgba(0.20, 0.40, 1.00, 1.00), // blue
-                Some(DofColor::Over) => Color::from_rgba(1.00, 0.20, 0.20, 1.00),  // red
-                Some(DofColor::Full) => Color::from_rgba(0.20, 0.85, 0.30, 1.00),  // green
-                None => Color::from_rgba(0.85, 0.85, 0.85, 1.00),
+                Some(DofColor::Under) => Color::from_rgba(0.10, 0.30, 0.85, 1.00),
+                Some(DofColor::Over) => Color::from_rgba(0.85, 0.10, 0.10, 1.00),
+                Some(DofColor::Full) => Color::from_rgba(0.0, 0.0, 0.0, 1.00),
+                None => Color::from_rgba(0.40, 0.40, 0.40, 1.00),
             }
         } else {
-            Color::from_rgba(0.85, 0.85, 0.85, 1.00)
+            Color::from_rgba(0.40, 0.40, 0.40, 1.00)
         }
     };
 
@@ -480,39 +486,38 @@ pub(super) fn draw_sketch_overlay(
                 let centre = cstate.world_to_screen(c);
                 let r_screen = (radius as f32) * cstate.scale;
                 let path = Path::circle(Point::new(centre.x, centre.y), r_screen);
-                // v0.27 — bump Circle stroke so the round-pad diameter
-                // primitive reads against the pad fill underneath.
-                // The 1.5 px grey stroke from the pre-Circle-mint era
-                // was effectively invisible on a saturated pad colour.
-                // Use a bright cyan accent + 2.5 px width when the
-                // entity has no DOF colour yet (no solve has run since
-                // mint) so the user can see + grab the handle.
+                // v0.27 — Circle entity stroke. Pre-solve uses a
+                // darker cyan that reads against white sketch
+                // canvas; post-solve drops to the DOF palette so
+                // the constraint state shows through.
                 let dof = dof_colour(entity.id);
                 let unsolved = state.last_solve.is_none();
                 let col = if unsolved {
-                    Color::from_rgba(0.30, 0.85, 1.00, 1.00)
+                    Color::from_rgba(0.10, 0.55, 0.85, 1.00)
                 } else {
                     dof
                 };
-                let width = if unsolved { 2.5 } else { 1.5 };
+                let width = if unsolved { 2.0 } else { 1.5 };
                 frame.stroke(&path, Stroke::default().with_width(width).with_color(col));
-                // v0.27 — diameter handle Point at the east edge of
-                // the Circle. Renders as a small cyan-filled disc the
-                // user can grab to resize. Independent of the actual
-                // sketch entity list (purely visual chrome — the
-                // resize edit happens via the `diameter_<...>`
-                // parameter row in Properties for now).
+                // v0.27 — diameter handle Point on the east edge.
+                // Filled cyan disc with a darker outline; the
+                // outline picks up the DOF palette so a fully-
+                // constrained Circle's handle is rimmed in black.
                 let handle =
                     Path::circle(Point::new(centre.x + r_screen, centre.y), 4.0);
                 frame.fill(
                     &handle,
-                    Color::from_rgba(0.30, 0.85, 1.00, 1.00),
+                    Color::from_rgba(0.20, 0.65, 0.95, 1.00),
                 );
                 frame.stroke(
                     &handle,
                     Stroke::default()
                         .with_width(1.0)
-                        .with_color(Color::from_rgba(0.10, 0.40, 0.55, 1.0)),
+                        .with_color(if unsolved {
+                            Color::from_rgba(0.05, 0.30, 0.55, 1.0)
+                        } else {
+                            dof
+                        }),
                 );
             }
             EntityKind::Arc {
@@ -751,7 +756,10 @@ pub(super) fn draw_sketch_snap_glyph(
         None => return,
     };
     let p = cstate.world_to_screen(snap.pos);
-    let c = Color::from_rgba(0.30, 0.90, 1.00, 0.95);
+    // v0.27 — slightly darkened cyan so the snap badge reads
+    // against both the dark Pads-mode canvas and the white
+    // Sketch-mode canvas without competing.
+    let c = Color::from_rgba(0.10, 0.60, 0.90, 1.00);
     let fill = Color { a: 0.30, ..c };
     let stroke = Stroke::default().with_width(1.5).with_color(c);
 

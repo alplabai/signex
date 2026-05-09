@@ -6023,34 +6023,68 @@ pub(crate) fn apply_footprint_primitive_edit(
             use signex_sketch::id::SketchEntityId;
             use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
 
-            let line_id = match editor.state.selected_sketch {
-                Some(id) => id,
-                None => {
-                    editor
-                        .state
-                        .solve_warnings
-                        .push("Make Pad from Profile: select a Line first".into());
-                    editor.canvas_cache.clear();
-                    return;
+            // v0.27 — accept a wider selection range. A Line works
+            // directly; a Point falls back to any incident Line; no
+            // selection at all walks every Line and uses the first
+            // one that's part of a closed loop. The earlier "must
+            // be a Line" rule was hostile to the natural workflow
+            // of "draw a rectangle, select all, make it a pad" —
+            // the closed loop walker doesn't care which seed edge
+            // it gets, so any Line on the loop will do.
+            let line_id: SketchEntityId = {
+                let sketch_lookup = editor.primitive().sketch.as_ref();
+                let kind_of = |id: SketchEntityId| -> Option<EntityKind> {
+                    sketch_lookup
+                        .and_then(|s| s.entities.iter().find(|e| e.id == id))
+                        .map(|e| e.kind.clone())
+                };
+                match editor.state.selected_sketch.and_then(|id| kind_of(id).map(|k| (id, k))) {
+                    // Primary selection IS a Line — use it.
+                    Some((id, EntityKind::Line { .. })) => id,
+                    // Primary is a Point — find any incident Line.
+                    Some((point_id, EntityKind::Point { .. })) => {
+                        match sketch_lookup.and_then(|s| {
+                            s.entities.iter().find(|e| match e.kind {
+                                EntityKind::Line { start, end } => {
+                                    start == point_id || end == point_id
+                                }
+                                _ => false,
+                            })
+                        }) {
+                            Some(line_e) => line_e.id,
+                            None => {
+                                editor.state.solve_warnings.push(
+                                    "Make Pad from Profile: selected Point has no incident Line — draw at least one Line first"
+                                        .into(),
+                                );
+                                editor.canvas_cache.clear();
+                                return;
+                            }
+                        }
+                    }
+                    // Primary is some other entity (Arc/Circle) — use it
+                    // verbatim; the loop walker will produce a useful error
+                    // if it's not seedable.
+                    Some((id, _)) => id,
+                    // Nothing selected — pick the first Line in the sketch.
+                    None => match sketch_lookup.and_then(|s| {
+                        s.entities
+                            .iter()
+                            .find(|e| matches!(e.kind, EntityKind::Line { .. }))
+                            .map(|e| e.id)
+                    }) {
+                        Some(id) => id,
+                        None => {
+                            editor.state.solve_warnings.push(
+                                "Make Pad from Profile: no Lines in the sketch — draw a closed shape first"
+                                    .into(),
+                            );
+                            editor.canvas_cache.clear();
+                            return;
+                        }
+                    },
                 }
             };
-
-            // Verify the selection is a Line.
-            let is_line = editor
-                .primitive()
-                .sketch
-                .as_ref()
-                .and_then(|s| s.entities.iter().find(|e| e.id == line_id))
-                .map(|e| matches!(e.kind, EntityKind::Line { .. }))
-                .unwrap_or(false);
-            if !is_line {
-                editor.state.solve_warnings.push(
-                    "Make Pad from Profile: selection is not a Line — pick a Line entity first"
-                        .into(),
-                );
-                editor.canvas_cache.clear();
-                return;
-            }
 
             // Walk the loop to compute the centroid; needs a fresh
             // solve so vertex positions are accurate.
