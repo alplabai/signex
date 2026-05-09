@@ -710,6 +710,12 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     if matches!(self.state.mode, _EM::Normal) && self.state.selection_filter.pads {
                         if let Some(pad_idx) = self.state.pad_at(world.0, world.1) {
                             let pad = &self.state.pads[pad_idx];
+                            // v0.27 — defensively clear any stale
+                            // rubber-band anchor from a prior gesture
+                            // so the pad drag doesn't render alongside
+                            // a phantom selection box.
+                            cstate.box_select_anchor_screen = None;
+                            cstate.box_select_current_screen = None;
                             cstate.drag = Some(DragState {
                                 pad_idx,
                                 sketch_point: None,
