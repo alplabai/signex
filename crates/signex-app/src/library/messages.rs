@@ -799,6 +799,16 @@ pub enum EditorMsg {
         dx: f64,
         dy: f64,
     },
+    /// v0.27 — Drag a Line entity by translating both its endpoints
+    /// by `(dx, dy)` mm in a single solver pass. Used by the
+    /// canvas's Line-drag gesture so edges of closed shapes can be
+    /// grabbed and pushed; the constraint solver re-converges the
+    /// shape (H/V/Distance constraints stay valid).
+    FootprintSketchMoveLine {
+        id: signex_sketch::id::SketchEntityId,
+        dx: f64,
+        dy: f64,
+    },
     /// v0.27 — Drag the diameter handle of a Round pad in Sketch
     /// mode. The dispatcher updates pad.size_mm = (d, d), the
     /// matching Circle entity's radius, and the bound
@@ -1671,6 +1681,13 @@ pub enum PrimitiveEditorMsg {
     /// from the canvas while the user drags a selected Point in
     /// Sketch mode. Emits `SketchEdit::MovePoint`.
     FootprintSketchMovePoint {
+        id: signex_sketch::id::SketchEntityId,
+        dx: f64,
+        dy: f64,
+    },
+    /// v0.27 — Drag-move a Line entity by translating both its
+    /// endpoints. Per-tick `(dx, dy)` delta in mm.
+    FootprintSketchMoveLine {
         id: signex_sketch::id::SketchEntityId,
         dx: f64,
         dy: f64,

@@ -1036,6 +1036,9 @@ fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEditorMsg {
         EditorMsg::FootprintSketchMovePoint { id, dx, dy } => {
             PrimitiveEditorMsg::FootprintSketchMovePoint { id, dx, dy }
         }
+        EditorMsg::FootprintSketchMoveLine { id, dx, dy } => {
+            PrimitiveEditorMsg::FootprintSketchMoveLine { id, dx, dy }
+        }
         EditorMsg::FootprintSketchResizeRoundPad { pad_idx, diameter_mm } => {
             PrimitiveEditorMsg::FootprintSketchResizeRoundPad { pad_idx, diameter_mm }
         }

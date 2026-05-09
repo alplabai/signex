@@ -4138,6 +4138,7 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintSketchPlacementInputEscape
         | PrimitiveEditorMsg::FootprintSketchSelect { .. }
         | PrimitiveEditorMsg::FootprintSketchMovePoint { .. }
+        | PrimitiveEditorMsg::FootprintSketchMoveLine { .. }
         | PrimitiveEditorMsg::FootprintSketchResizeRoundPad { .. }
         | PrimitiveEditorMsg::FootprintSetSelectionMode2d(_)
         | PrimitiveEditorMsg::FootprintSelectAllOnLayer
@@ -5664,6 +5665,59 @@ pub(crate) fn apply_footprint_primitive_edit(
             editor.canvas_cache.clear();
             editor.dirty = true;
         }
+        PrimitiveEditorMsg::FootprintSketchMoveLine { id, dx, dy } => {
+            // v0.27 — drag a Line edge by translating both its
+            // endpoints in one solver pass. The dispatcher reads
+            // the Line's start/end IDs, then emits MovePoint for
+            // each. The solver re-runs once after both moves so
+            // H/V/Distance constraints converge correctly without
+            // the brief mid-tick "one corner moved, the other
+            // didn't" state a two-message split would produce.
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
+            use crate::library::editor::footprint::sketch_mode::SketchEdit;
+            use signex_sketch::entity::EntityKind;
+            let endpoints = editor
+                .primitive()
+                .sketch
+                .as_ref()
+                .and_then(|s| s.entities.iter().find(|e| e.id == id))
+                .and_then(|e| match e.kind {
+                    EntityKind::Line { start, end } => Some((start, end)),
+                    _ => None,
+                });
+            let Some((start, end)) = endpoints else {
+                return;
+            };
+            for pid in [start, end] {
+                editor.with_parts(|state, primitive| {
+                    apply_sketch_edit_with_warnings(
+                        state,
+                        primitive,
+                        SketchEdit::MovePoint { id: pid, dx, dy },
+                    );
+                });
+            }
+            // Mirror the corner translation onto any pads whose
+            // outline-corner Points include either endpoint, so
+            // construction-outline-bound pads track the line drag
+            // (same parity the MovePoint arm provides).
+            for pid in [start, end] {
+                let centre_pad_idx = editor
+                    .state
+                    .pads
+                    .iter()
+                    .position(|p| p.sketch_entity_id == Some(pid));
+                if let Some(pad_idx) = centre_pad_idx {
+                    editor.state.pads[pad_idx].position_mm.0 += dx;
+                    editor.state.pads[pad_idx].position_mm.1 += dy;
+                }
+            }
+            editor.with_parts(|state, primitive| {
+                CanvasState::sync_pads_to_primitive(state, primitive);
+            });
+            editor.canvas_cache.clear();
+            editor.dirty = true;
+        }
         PrimitiveEditorMsg::FootprintSketchResizeRoundPad {
             pad_idx,
             diameter_mm,
@@ -6369,6 +6423,16 @@ pub(crate) fn apply_footprint_primitive_edit(
                     SketchEdit::AddEntity(centre),
                 );
             });
+            // v0.27 — pivot the selection onto the new pad's centre
+            // Point. Without this, the Role dropdown still reads
+            // "Unassigned" because the user's prior selection (the
+            // Line we walked) has no PadAttr — the new PadAttr lives
+            // on the freshly-minted centre. Clearing extras avoids
+            // a confusing "primary is the centre but extras still
+            // point at the loop's lines" state right after Make Pad.
+            editor.state.selected_sketch = Some(centre_id);
+            editor.state.selected_sketch_secondary = None;
+            editor.state.selected_sketch_extra.clear();
             editor.dirty = true;
             editor.canvas_cache.clear();
         }
@@ -9483,6 +9547,7 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::FootprintSketchPlacementInputEscape
         | EditorMsg::FootprintSketchSelect { .. }
         | EditorMsg::FootprintSketchMovePoint { .. }
+        | EditorMsg::FootprintSketchMoveLine { .. }
         | EditorMsg::FootprintSketchResizeRoundPad { .. }
         | EditorMsg::FootprintSetSelectionMode2d(_)
         | EditorMsg::FootprintSelectAllOnLayer

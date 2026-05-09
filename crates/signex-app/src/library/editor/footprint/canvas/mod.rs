@@ -131,6 +131,11 @@ struct DragState {
     /// per-tick CursorMoved publishes `FootprintSketchMovePoint`
     /// with the world-mm delta.
     sketch_point: Option<signex_sketch::id::SketchEntityId>,
+    /// v0.27 — `Some(id)` when the drag originated on a sketch
+    /// `Line` entity. Per-tick CursorMoved publishes
+    /// `FootprintSketchMoveLine` with the world-mm delta; the
+    /// dispatcher translates both endpoints in one solver pass.
+    sketch_line: Option<signex_sketch::id::SketchEntityId>,
     /// World-mm offset between the drag origin and the pad/Point
     /// centre. Subtract from cursor position to get the pad's new
     /// centre OR (for sketch Point drags) compute the per-tick
@@ -500,6 +505,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 cstate.drag = Some(DragState {
                                     pad_idx: usize::MAX,
                                     sketch_point: None,
+                                    sketch_line: None,
                                     grab_offset_mm: pad.position_mm,
                                     last_world: world,
                                     press_screen: cursor_pos,
@@ -516,6 +522,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         cstate.drag = Some(DragState {
                             pad_idx: usize::MAX,
                             sketch_point: Some(point_id),
+                            sketch_line: None,
                             grab_offset_mm: (0.0, 0.0),
                             last_world: world,
                             press_screen: cursor_pos,
@@ -535,6 +542,93 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                             })
                             .and_capture(),
                         );
+                    }
+                    // v0.27 — Fusion-style Line drag. In Sketch mode +
+                    // Select tool, a click within ~6 px of a Line's
+                    // stroke (but missing the snap radius for both
+                    // endpoints) starts a Line-drag gesture: the
+                    // dispatcher translates BOTH endpoints by the
+                    // per-tick delta in one solver pass so an edge
+                    // of a closed shape can be pushed without having
+                    // to grab a corner.
+                    if matches!(self.state.mode, _EM::Sketch)
+                        && self.state.active_tool == _ST::Select
+                        && let Some(sketch_ref) = self.sketch
+                    {
+                        const LINE_HIT_TOL_PX: f32 = 6.0;
+                        let tol_mm =
+                            (LINE_HIT_TOL_PX / cstate.scale.max(1.0)) as f64;
+                        let mut best_line: Option<(f64, signex_sketch::id::SketchEntityId)> =
+                            None;
+                        let pos_of = |id: signex_sketch::id::SketchEntityId| -> Option<(f64, f64)> {
+                            if let Some(solve) = self.state.last_solve.as_ref()
+                                && let Some(p) = signex_sketch::solver::state::point_xy(
+                                    id,
+                                    &solve.result.state,
+                                    &solve.result.index,
+                                    sketch_ref,
+                                )
+                            {
+                                return Some(p);
+                            }
+                            sketch_ref
+                                .entities
+                                .iter()
+                                .find(|e| e.id == id)
+                                .and_then(|e| match e.kind {
+                                    signex_sketch::entity::EntityKind::Point { x, y } => {
+                                        Some((x, y))
+                                    }
+                                    _ => None,
+                                })
+                        };
+                        for ent in &sketch_ref.entities {
+                            if let signex_sketch::entity::EntityKind::Line { start, end } =
+                                ent.kind
+                                && let (Some(a), Some(b)) = (pos_of(start), pos_of(end))
+                            {
+                                let dx = b.0 - a.0;
+                                let dy = b.1 - a.1;
+                                let llen2 = dx * dx + dy * dy;
+                                if llen2 <= 1e-12 {
+                                    continue;
+                                }
+                                let t = ((world.0 - a.0) * dx + (world.1 - a.1) * dy)
+                                    / llen2;
+                                let tc = t.clamp(0.0, 1.0);
+                                let px = a.0 + tc * dx;
+                                let py = a.1 + tc * dy;
+                                let d2 = (px - world.0).powi(2) + (py - world.1).powi(2);
+                                if d2 <= tol_mm * tol_mm
+                                    && best_line.as_ref().is_none_or(|(b2, _)| d2 < *b2)
+                                {
+                                    best_line = Some((d2, ent.id));
+                                }
+                            }
+                        }
+                        if let Some((_, line_id)) = best_line {
+                            cstate.drag = Some(DragState {
+                                pad_idx: usize::MAX,
+                                sketch_point: None,
+                                sketch_line: Some(line_id),
+                                grab_offset_mm: (0.0, 0.0),
+                                last_world: world,
+                                press_screen: cursor_pos,
+                                moved: false,
+                            });
+                            return Some(
+                                canvas::Action::publish(LibraryMessage::EditorEvent {
+                                    library_path: self.address.library_path.clone(),
+                                    table: self.address.table.clone(),
+                                    row_id: self.address.row_id,
+                                    msg: EditorMsg::FootprintSketchSelect {
+                                        id: Some(line_id),
+                                        shift: false,
+                                    },
+                                })
+                                .and_capture(),
+                            );
+                        }
                     }
                     // v0.27 — Fusion-style "click the fill, select the
                     // closed shape." Only in Sketch mode + Select tool,
@@ -593,6 +687,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                             cstate.drag = Some(DragState {
                                 pad_idx,
                                 sketch_point: None,
+                                sketch_line: None,
                                 grab_offset_mm: (
                                     world.0 - pad.position_mm.0,
                                     world.1 - pad.position_mm.1,
@@ -699,6 +794,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     cstate.drag = Some(DragState {
                         pad_idx: usize::MAX,
                         sketch_point: None,
+                        sketch_line: None,
                         grab_offset_mm: (world.0, world.1),
                         last_world: world,
                         press_screen: cursor_pos,
@@ -1353,6 +1449,26 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                             row_id: self.address.row_id,
                             msg: EditorMsg::FootprintSketchMovePoint {
                                 id: point_id,
+                                dx: dx_mm,
+                                dy: dy_mm,
+                            },
+                        }));
+                    }
+                    // v0.27 — Line drag tick. Translate both endpoints
+                    // in one solver pass via FootprintSketchMoveLine.
+                    if drag.moved
+                        && let Some(line_id) = drag.sketch_line
+                    {
+                        let dx_mm = world.0 - drag.last_world.0;
+                        let dy_mm = world.1 - drag.last_world.1;
+                        drag.last_world = world;
+                        self.cache.clear();
+                        return Some(canvas::Action::publish(LibraryMessage::EditorEvent {
+                            library_path: self.address.library_path.clone(),
+                            table: self.address.table.clone(),
+                            row_id: self.address.row_id,
+                            msg: EditorMsg::FootprintSketchMoveLine {
+                                id: line_id,
                                 dx: dx_mm,
                                 dy: dy_mm,
                             },
