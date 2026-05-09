@@ -926,12 +926,24 @@ pub(super) fn find_closed_loops(
             })
     }
 
+    // v0.27 — adjacency now includes Arc edges as well as Lines so
+    // the rounded-rectangle (line + arc + line + arc + ...) walks
+    // as a single closed loop. The fill renderer was missing
+    // rounded shapes for the same reason; extending the walker
+    // here keeps both in sync.
     let mut adj: HashMap<SketchEntityId, Vec<(SketchEntityId, SketchEntityId, bool)>> =
         HashMap::new();
     for e in &sketch.entities {
-        if let EntityKind::Line { start, end } = e.kind {
-            adj.entry(start).or_default().push((end, e.id, e.bake_skipped()));
-            adj.entry(end).or_default().push((start, e.id, e.bake_skipped()));
+        match e.kind {
+            EntityKind::Line { start, end } => {
+                adj.entry(start).or_default().push((end, e.id, e.bake_skipped()));
+                adj.entry(end).or_default().push((start, e.id, e.bake_skipped()));
+            }
+            EntityKind::Arc { start, end, .. } => {
+                adj.entry(start).or_default().push((end, e.id, e.bake_skipped()));
+                adj.entry(end).or_default().push((start, e.id, e.bake_skipped()));
+            }
+            _ => {}
         }
     }
     let mut visited: HashSet<SketchEntityId> = HashSet::new();
@@ -939,6 +951,7 @@ pub(super) fn find_closed_loops(
     for seed in &sketch.entities {
         let (s_a, s_b) = match seed.kind {
             EntityKind::Line { start, end } => (start, end),
+            EntityKind::Arc { start, end, .. } => (start, end),
             _ => continue,
         };
         if visited.contains(&seed.id) {
@@ -1083,21 +1096,35 @@ pub(super) fn draw_filled_closed_loops(
             })
     }
 
-    // Build adjacency: Point ID -> Vec<(other_endpoint, line_id, construction)>.
+    // Build adjacency: Point ID -> Vec<(other_endpoint, edge_id, construction)>.
+    // v0.27 — Arcs are now full participants alongside Lines so the
+    // rounded-rectangle (line + arc + line + arc + ...) reads as
+    // one closed loop and the fill paints across the whole shape.
     let mut adj: HashMap<SketchEntityId, Vec<(SketchEntityId, SketchEntityId, bool)>> =
         HashMap::new();
     for e in &sketch.entities {
-        if let EntityKind::Line { start, end } = e.kind {
-            adj.entry(start)
-                .or_default()
-                // v0.22 Phase A5 — Treat centerline lines the same
-                // as construction for closed-loop fill detection: a
-                // loop made entirely of skipped lines must not paint
-                // a profile fill (Altium / Fusion convention).
-                .push((end, e.id, e.bake_skipped()));
-            adj.entry(end)
-                .or_default()
-                .push((start, e.id, e.bake_skipped()));
+        match e.kind {
+            EntityKind::Line { start, end } => {
+                adj.entry(start)
+                    .or_default()
+                    // v0.22 Phase A5 — Treat centerline lines the same
+                    // as construction for closed-loop fill detection: a
+                    // loop made entirely of skipped lines must not paint
+                    // a profile fill (Altium / Fusion convention).
+                    .push((end, e.id, e.bake_skipped()));
+                adj.entry(end)
+                    .or_default()
+                    .push((start, e.id, e.bake_skipped()));
+            }
+            EntityKind::Arc { start, end, .. } => {
+                adj.entry(start)
+                    .or_default()
+                    .push((end, e.id, e.bake_skipped()));
+                adj.entry(end)
+                    .or_default()
+                    .push((start, e.id, e.bake_skipped()));
+            }
+            _ => {}
         }
     }
 
@@ -1105,6 +1132,7 @@ pub(super) fn draw_filled_closed_loops(
     for seed in &sketch.entities {
         let (seed_start, seed_end) = match seed.kind {
             EntityKind::Line { start, end } => (start, end),
+            EntityKind::Arc { start, end, .. } => (start, end),
             _ => continue,
         };
         if visited_lines.contains(&seed.id) {
@@ -1469,6 +1497,19 @@ pub(super) fn draw_sketch_tool_preview(
                     }
                 }
             }
+            // v0.27 — width / height / radius dim pills.
+            let p0_screen = cstate.world_to_screen(first_world);
+            let cur_screen = cstate.world_to_screen(cursor);
+            let width_mm = (cursor.0 - first_world.0).abs();
+            let height_mm = (cursor.1 - first_world.1).abs();
+            let top_mid = Point::new((p0_screen.x + cur_screen.x) / 2.0, p0_screen.y - 18.0);
+            let left_mid = Point::new(p0_screen.x - 18.0, (p0_screen.y + cur_screen.y) / 2.0);
+            draw_dim_pill(frame, top_mid, &format!("{:.3} mm", width_mm));
+            draw_dim_pill(frame, left_mid, &format!("{:.3} mm", height_mm));
+            // Radius pill near the cursor so the user sees the
+            // clamped corner radius (driven by `dimension_input`).
+            let r_label = Point::new(cur_screen.x + 24.0, cur_screen.y + 24.0);
+            draw_dim_pill(frame, r_label, &format!("r {:.3} mm", r));
         }
         ToolPending::CircleCenter { center } => {
             let Some(c_world) = resolve_point(center) else {
@@ -1496,6 +1537,20 @@ pub(super) fn draw_sketch_tool_preview(
             }
             // Radial guide from centre to cursor.
             dashed(frame, c_screen, cursor_screen);
+            // v0.27 — radius pill near the cursor.
+            let mid = Point::new(
+                (c_screen.x + cursor_screen.x) / 2.0,
+                (c_screen.y + cursor_screen.y) / 2.0,
+            );
+            // Perpendicular offset so the pill sits beside the
+            // radial guide, not on top of it.
+            let dx_s = cursor_screen.x - c_screen.x;
+            let dy_s = cursor_screen.y - c_screen.y;
+            let len_s = (dx_s * dx_s + dy_s * dy_s).sqrt().max(1.0);
+            let nx = -dy_s / len_s;
+            let ny = dx_s / len_s;
+            let label = Point::new(mid.x + nx * 18.0, mid.y + ny * 18.0);
+            draw_dim_pill(frame, label, &format!("r {:.3} mm", r_world));
         }
         ToolPending::ArcCenter { center } => {
             // Centre placed; cursor will become the start point. Show
@@ -1505,6 +1560,20 @@ pub(super) fn draw_sketch_tool_preview(
             };
             let c_screen = cstate.world_to_screen(c_world);
             dashed(frame, c_screen, cursor_screen);
+            // v0.27 — radius pill on the radial midpoint.
+            let r_world =
+                ((cursor.0 - c_world.0).powi(2) + (cursor.1 - c_world.1).powi(2)).sqrt();
+            let mid = Point::new(
+                (c_screen.x + cursor_screen.x) / 2.0,
+                (c_screen.y + cursor_screen.y) / 2.0,
+            );
+            let dx_s = cursor_screen.x - c_screen.x;
+            let dy_s = cursor_screen.y - c_screen.y;
+            let len_s = (dx_s * dx_s + dy_s * dy_s).sqrt().max(1.0);
+            let nx = -dy_s / len_s;
+            let ny = dx_s / len_s;
+            let label = Point::new(mid.x + nx * 18.0, mid.y + ny * 18.0);
+            draw_dim_pill(frame, label, &format!("r {:.3} mm", r_world));
         }
         ToolPending::ArcStart { center, start } => {
             // Centre + start placed; cursor will become the end. Draw
@@ -1546,6 +1615,12 @@ pub(super) fn draw_sketch_tool_preview(
             let s_screen = cstate.world_to_screen(s_world);
             dashed(frame, c_screen, s_screen);
             dashed(frame, c_screen, cursor_screen);
+            // v0.27 — sweep angle pill (deg). Radius is fixed by
+            // the start endpoint so we surface the sweep, which is
+            // what changes as the cursor moves.
+            let sweep_deg = (delta.to_degrees().rem_euclid(360.0)) as f64;
+            let label = Point::new(cursor_screen.x + 24.0, cursor_screen.y + 24.0);
+            draw_dim_pill(frame, label, &format!("{:.1} deg", sweep_deg));
         }
         // v0.23 — Polar centre re-pick has no preview shape; the
         // cursor PIP at the top of this match is the only visual cue.
