@@ -11,7 +11,7 @@ use super::geometry::screen_dist_to_segment_sq;
 /// v0.13.2 — Snap radius in screen pixels. A click within this
 /// distance of an existing sketch Point's screen position resolves
 /// to that Point (auto-Coincident).
-const SKETCH_SNAP_RADIUS_PX: f32 = 8.0;
+const SKETCH_SNAP_RADIUS_PX: f32 = 12.0;
 
 /// v0.13.3 — Hit-test Lines / Arcs / Circles (everything that isn't
 /// a Point — Points are caught by `sketch_snap`). Returns the

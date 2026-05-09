@@ -529,6 +529,11 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         && self.state.active_tool == _ST::Select
                         && let Some(point_id) = sketch_snap(self.sketch, cstate, raw_world)
                     {
+                        // Defensive: clear any stale rubber-band
+                        // anchor so it can't render alongside the
+                        // Point drag.
+                        cstate.box_select_anchor_screen = None;
+                        cstate.box_select_current_screen = None;
                         cstate.drag = Some(DragState {
                             pad_idx: usize::MAX,
                             sketch_point: Some(point_id),
@@ -1405,12 +1410,12 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 };
                 let select_mode_tick = matches!(self.state.mode, _EMt::Sketch)
                     && self.state.active_tool == _STt::Select;
-                let line_drag_active = cstate
+                let drag_active_for_snap = cstate
                     .drag
                     .as_ref()
-                    .map(|d| d.sketch_line.is_some())
+                    .map(|d| d.sketch_line.is_some() || d.sketch_point.is_some())
                     .unwrap_or(false);
-                let world = if select_mode_tick && !line_drag_active {
+                let world = if select_mode_tick && !drag_active_for_snap {
                     cstate.last_snap = None;
                     raw_world
                 } else {
