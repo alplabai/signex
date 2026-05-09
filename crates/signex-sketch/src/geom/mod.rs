@@ -16,6 +16,7 @@
 pub mod aabb_index;
 pub mod boolean;
 pub mod boolean_general;
+pub mod curves;
 pub mod hull;
 pub mod offset;
 pub mod predicates;
@@ -25,6 +26,7 @@ pub mod triangulate;
 pub use aabb_index::{Aabb, AabbIndex};
 pub use boolean::intersect_convex_clip;
 pub use boolean_general::{polygon_op, BoolOp};
+pub use curves::{arc_arc_intersections, arc_circle_intersections, circle_circle_intersections};
 pub use hull::convex_hull;
 pub use offset::{offset_polygon, CornerStyle};
 pub use predicates::{orient2d, signed_area, Sign};

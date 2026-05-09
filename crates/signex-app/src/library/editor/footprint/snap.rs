@@ -358,6 +358,39 @@ pub fn snap_cursor(
                 }
             }
 
+            // v0.27 — Curve × curve. Circle × Circle, Arc × Arc,
+            // Arc × Circle. Round out the snap so any pair of
+            // sketch curves yields a snap target at their
+            // crossing.
+            use signex_sketch::geom::{
+                arc_arc_intersections, arc_circle_intersections,
+                circle_circle_intersections,
+            };
+            for i in 0..circles.len() {
+                for j in (i + 1)..circles.len() {
+                    let a = Circle2::new(circles[i].0, circles[i].1);
+                    let b = Circle2::new(circles[j].0, circles[j].1);
+                    for pt in circle_circle_intersections(a, b) {
+                        consider(pt, &mut best);
+                    }
+                }
+            }
+            for i in 0..arcs.len() {
+                for j in (i + 1)..arcs.len() {
+                    for pt in arc_arc_intersections(arcs[i], arcs[j]) {
+                        consider(pt, &mut best);
+                    }
+                }
+            }
+            for arc in &arcs {
+                for c in &circles {
+                    let circle = Circle2::new(c.0, c.1);
+                    for pt in arc_circle_intersections(*arc, circle) {
+                        consider(pt, &mut best);
+                    }
+                }
+            }
+
             if let Some((_, pos)) = best {
                 return SnapResult {
                     pos,
