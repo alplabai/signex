@@ -66,6 +66,9 @@ pub enum SnapKind {
     /// an X-guide and a Y-guide fire on the same cursor pass the
     /// snap pins both axes.
     Guide,
+    /// v0.27 — snapped onto the intersection of two sketch Line
+    /// entities. Powered by `signex_sketch::geom::segment_segment_intersection`.
+    Intersection,
     /// Fell through to grid snap.
     Grid,
 }
@@ -225,6 +228,69 @@ pub fn snap_cursor(
                 pos: (snapped_x.unwrap_or(raw.0), snapped_y.unwrap_or(raw.1)),
                 kind: SnapKind::Guide,
             };
+        }
+    }
+
+    // v0.27 — Intersection snap. Walks every pair of sketch Line
+    // entities, computes their intersection through the geom
+    // module's segment_segment_intersection, and snaps to the
+    // nearest hit within `snap_distance_mm`. Quadratic in line
+    // count which is fine for typical pad-corner-outline sketches
+    // (<100 Lines); a 2D BVH would beat this once line counts
+    // climb past ~500.
+    if opts.snap_intersections {
+        if let Some(sketch) = sketch {
+            use signex_sketch::entity::EntityKind;
+            use signex_sketch::geom::{
+                segment_segment_intersection, Point2, Segment2, SegmentIntersection,
+            };
+
+            let resolve = |id: SketchEntityId| -> Option<(f64, f64)> {
+                point_pos(id, Some(sketch), state)
+            };
+
+            let lines: Vec<(Point2, Point2)> = sketch
+                .entities
+                .iter()
+                .filter_map(|e| {
+                    if let EntityKind::Line { start, end } = e.kind {
+                        let s = resolve(start)?;
+                        let f = resolve(end)?;
+                        Some((Point2::new(s.0, s.1), Point2::new(f.0, f.1)))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            let tol = state.snap_options.snap_distance_mm.max(1e-6);
+            let tol_sq = tol * tol;
+            let mut best: Option<(f64, (f64, f64))> = None;
+            for i in 0..lines.len() {
+                for j in (i + 1)..lines.len() {
+                    let s_a = Segment2::new(lines[i].0, lines[i].1);
+                    let s_b = Segment2::new(lines[j].0, lines[j].1);
+                    if let SegmentIntersection::Point { pt, .. } =
+                        segment_segment_intersection(s_a, s_b)
+                    {
+                        let dx = pt.x - raw.0;
+                        let dy = pt.y - raw.1;
+                        let d_sq = dx * dx + dy * dy;
+                        if d_sq <= tol_sq {
+                            match best {
+                                Some((b_sq, _)) if b_sq <= d_sq => {}
+                                _ => best = Some((d_sq, (pt.x, pt.y))),
+                            }
+                        }
+                    }
+                }
+            }
+            if let Some((_, pos)) = best {
+                return SnapResult {
+                    pos,
+                    kind: SnapKind::Intersection,
+                };
+            }
         }
     }
 

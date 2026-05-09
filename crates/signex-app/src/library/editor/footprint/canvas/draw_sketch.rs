@@ -798,6 +798,20 @@ pub(super) fn draw_sketch_snap_glyph(
                 stroke,
             );
         }
+        SnapKind::Intersection => {
+            // v0.27 — small "+" badge marks an intersection snap.
+            let r = 6.0;
+            frame.stroke(
+                &Path::line(Point::new(p.x - r, p.y), Point::new(p.x + r, p.y)),
+                stroke,
+            );
+            frame.stroke(
+                &Path::line(Point::new(p.x, p.y - r), Point::new(p.x, p.y + r)),
+                stroke,
+            );
+            let path = Path::circle(Point::new(p.x, p.y), 2.5);
+            frame.fill(&path, c);
+        }
         SnapKind::Guide | SnapKind::Grid | SnapKind::Raw => {}
     }
 }

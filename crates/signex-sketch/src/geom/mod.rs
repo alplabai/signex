@@ -14,11 +14,13 @@
 //! Public entry point: re-exports below.
 
 pub mod hull;
+pub mod offset;
 pub mod predicates;
 pub mod segment;
 pub mod triangulate;
 
 pub use hull::convex_hull;
+pub use offset::{offset_polygon, CornerStyle};
 pub use predicates::{orient2d, signed_area, Sign};
 pub use segment::{
     segment_arc_intersections, segment_circle_intersections, segment_segment_intersection,
