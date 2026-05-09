@@ -1097,6 +1097,44 @@ pub(super) fn draw_filled_closed_loops(
 ///   (cursor will become the start endpoint).
 /// - **Arc tool, after click 2** → ghost arc from start through the
 ///   cursor angle, around the centre.
+/// v0.27 — Fusion-style dimension pill chrome. Centred at
+/// `centre` (screen coords), draws a soft grey rounded-look
+/// rectangle behind a centred white label. Used by the live
+/// dimension overlays during sketch tool placement so the user
+/// sees the running length / width / height / angle as they
+/// move the cursor.
+fn draw_dim_pill(frame: &mut canvas::Frame, centre: Point, label: &str) {
+    // Label text first so we can size the background plate from
+    // its rough advance width. Iosevka 11px averages ≈ 6 px per
+    // character; pad ±5 px on each side and 3 px top/bottom.
+    let glyph_w = 6.5_f32;
+    let pad_x = 5.0_f32;
+    let pad_y = 2.0_f32;
+    let body_w = glyph_w * (label.chars().count() as f32) + pad_x * 2.0;
+    let body_h = 14.0_f32 + pad_y * 2.0;
+    let plate_origin = Point::new(centre.x - body_w / 2.0, centre.y - body_h / 2.0);
+    frame.fill_rectangle(
+        plate_origin,
+        iced::Size::new(body_w, body_h),
+        Color::from_rgba(0.20, 0.22, 0.26, 0.92),
+    );
+    frame.stroke(
+        &Path::rectangle(plate_origin, iced::Size::new(body_w, body_h)),
+        Stroke::default()
+            .with_width(0.8)
+            .with_color(Color::from_rgba(0.10, 0.12, 0.15, 1.0)),
+    );
+    frame.fill_text(canvas::Text {
+        content: label.to_string(),
+        position: centre,
+        color: Color::from_rgba(0.95, 0.95, 0.97, 1.0),
+        size: iced::Pixels(11.0),
+        align_x: iced::alignment::Horizontal::Center.into(),
+        align_y: iced::alignment::Vertical::Center,
+        ..canvas::Text::default()
+    });
+}
+
 pub(super) fn draw_sketch_tool_preview(
     frame: &mut canvas::Frame,
     cstate: &FootprintCanvasState,
@@ -1176,6 +1214,28 @@ pub(super) fn draw_sketch_tool_preview(
             };
             let p0 = cstate.world_to_screen(first_world);
             dashed(frame, p0, cursor_screen);
+            // v0.27 — Fusion-style live dimension pill. Length =
+            // distance(first, cursor) in mm; angle = direction in
+            // degrees. Length pill sits next to the segment
+            // midpoint; angle pill sits offset from the cursor.
+            let length_mm =
+                ((cursor.0 - first_world.0).powi(2) + (cursor.1 - first_world.1).powi(2)).sqrt();
+            let angle_deg =
+                ((cursor.1 - first_world.1).atan2(cursor.0 - first_world.0)).to_degrees();
+            let mid = Point::new((p0.x + cursor_screen.x) / 2.0, (p0.y + cursor_screen.y) / 2.0);
+            // Perpendicular offset for the length pill so it sits
+            // beside the segment, not on top of it.
+            let dx = cursor_screen.x - p0.x;
+            let dy = cursor_screen.y - p0.y;
+            let len_screen = (dx * dx + dy * dy).sqrt().max(1.0);
+            let nx = -dy / len_screen;
+            let ny = dx / len_screen;
+            let length_label =
+                Point::new(mid.x + nx * 18.0, mid.y + ny * 18.0);
+            draw_dim_pill(frame, length_label, &format!("{:.3} mm", length_mm));
+            // Angle pill — offset down-right from the cursor.
+            let angle_label = Point::new(cursor_screen.x + 22.0, cursor_screen.y + 22.0);
+            draw_dim_pill(frame, angle_label, &format!("{:.1} deg", angle_deg));
         }
         ToolPending::RectangleFirst { first } => {
             // v0.15 — preview the axis-aligned rectangle from the
@@ -1191,6 +1251,14 @@ pub(super) fn draw_sketch_tool_preview(
             dashed(frame, p1, p2);
             dashed(frame, p2, p3);
             dashed(frame, p3, p0);
+            // v0.27 — Fusion-style width + height dimension pills.
+            // Width along the top edge; height along the left edge.
+            let width_mm = (cursor.0 - first_world.0).abs();
+            let height_mm = (cursor.1 - first_world.1).abs();
+            let top_mid = Point::new((p0.x + p1.x) / 2.0, p0.y - 18.0);
+            let left_mid = Point::new(p0.x - 18.0, (p0.y + p3.y) / 2.0);
+            draw_dim_pill(frame, top_mid, &format!("{:.3} mm", width_mm));
+            draw_dim_pill(frame, left_mid, &format!("{:.3} mm", height_mm));
         }
         ToolPending::RoundedRectangleFirst { first } => {
             // v0.16 — preview the rounded rectangle. Compute the bbox
@@ -1454,6 +1522,10 @@ pub(super) fn draw_sketch_tool_preview(
                 }
             }
         }
+        // v0.27 — Fillet, first Line picked. The tool is waiting for
+        // the user's second-line click; no shape preview to draw,
+        // the cursor reticle is the sole visual cue.
+        ToolPending::FilletFirst { .. } => {}
     }
 
     // v0.24 Track D — modeless live numeric placement-input overlay.

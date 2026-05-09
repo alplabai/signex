@@ -28,6 +28,8 @@ pub enum PlacementInputKind {
     ArcSweep,
     /// v0.25 polish — Offset tool: typed buffer is the offset distance.
     OffsetDistance,
+    /// v0.27 — Fillet tool: typed buffer is the fillet radius (mm).
+    FilletRadius,
 }
 
 impl PlacementInputKind {
@@ -40,6 +42,7 @@ impl PlacementInputKind {
             (SketchTool::Arc, ToolPending::ArcCenter { .. }) => Some(Self::ArcRadius),
             (SketchTool::Arc, ToolPending::ArcStart { .. }) => Some(Self::ArcSweep),
             (SketchTool::Offset, _) => Some(Self::OffsetDistance),
+            (SketchTool::Fillet, _) => Some(Self::FilletRadius),
             _ => None,
         }
     }
@@ -56,6 +59,7 @@ impl PlacementInputKind {
             Self::CircleRadius | Self::ArcRadius => "r",
             Self::ArcSweep => "deg",
             Self::OffsetDistance => "dist",
+            Self::FilletRadius => "r",
         }
     }
 }

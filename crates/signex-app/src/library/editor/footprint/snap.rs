@@ -118,6 +118,10 @@ pub fn anchor_for_tool(
         // so cursor snap pulls onto the first click position while
         // the user picks the second endpoint.
         ToolPending::TangentArcFirst { first } => first,
+        // v0.27 — Fillet first-click stashes a Line, not a Point.
+        // Lines aren't valid snap anchors here, so suppress the
+        // tethered preview by returning None.
+        ToolPending::FilletFirst { .. } => return None,
     };
     point_pos(id, sketch, state)
 }

@@ -238,6 +238,25 @@ pub fn items<'a>(
         ActiveBarIcon::Svg(icons::icon_shape_arc(theme_id)),
     ));
 
+    // v0.27 — Fillet + Trim. Always available (no pre-selection
+    // required). Fillet picks two adjacent Lines via two clicks
+    // and rounds the corner with a tangent arc; Trim removes the
+    // segment of a Line/Arc bounded by its nearest intersections
+    // with other sketch entities. These are EDA-shaped — typical
+    // use is rounding silk / courtyard corners + cleaning up
+    // overlapping outline geometry.
+    items.push(ActiveBarItem::Separator);
+    items.push(mk_tool(
+        "Fillet — click two adjacent Lines to round the corner with a tangent arc",
+        SketchTool::Fillet,
+        ActiveBarIcon::Glyph("\u{231C}"), // ⌜
+    ));
+    items.push(mk_tool(
+        "Trim — click a segment to remove it up to its nearest intersections",
+        SketchTool::Trim,
+        ActiveBarIcon::Glyph("\u{2702}"), // ✂
+    ));
+
     // Section 3: Modify — only visible when an entity is selected
     // (these tools all consume `editor.state.selected_sketch`). With
     // nothing selected they would all be silent no-ops with warnings,

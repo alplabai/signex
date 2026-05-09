@@ -49,6 +49,17 @@ pub enum SketchTool {
     CircularPattern,
     /// v0.24 Track C — Tangent Arc tool.
     TangentArc,
+    /// v0.27 — Fillet two adjacent lines with a tangent arc. Click
+    /// the first line, then the second; the dispatcher splices a
+    /// constant-radius arc across the corner and shortens the lines.
+    /// EDA use: rounding silk / courtyard / pad-from-rect corners
+    /// without redrawing them by hand.
+    Fillet,
+    /// v0.27 — Trim a segment of a line/arc up to its nearest
+    /// intersections with other sketch entities. Click the segment
+    /// you want gone. EDA use: cleaning up overlapping silk/outline
+    /// without manual delete + redraw.
+    Trim,
 }
 
 /// Transient per-tool gesture state. The canvas Program reads + writes
@@ -93,5 +104,9 @@ pub enum ToolPending {
     /// v0.24 Track C — Tangent Arc, first endpoint placed.
     TangentArcFirst {
         first: signex_sketch::id::SketchEntityId,
+    },
+    /// v0.27 — Fillet, first Line picked. Awaiting second Line.
+    FilletFirst {
+        line: signex_sketch::id::SketchEntityId,
     },
 }

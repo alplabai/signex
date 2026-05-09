@@ -1011,7 +1011,9 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 | SketchTool::Offset
                                 | SketchTool::RectPattern
                                 | SketchTool::CircularPattern
-                                | SketchTool::TangentArc => EditorMsg::FootprintSketchToolClick {
+                                | SketchTool::TangentArc
+                                | SketchTool::Fillet
+                                | SketchTool::Trim => EditorMsg::FootprintSketchToolClick {
                                     x_mm: click_world.0,
                                     y_mm: click_world.1,
                                     snap_id,
@@ -2092,41 +2094,35 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 let p = cstate.world_to_screen((cx, cy));
                 let half = 7.0_f32;
                 let arm = 4.5_f32;
-                let blue = Color::from_rgba(0.10, 0.50, 0.85, 1.0);
-                let halo = Color::WHITE;
-                // Square outline — halo first then blue core so the
-                // ring reads on both white and dark backgrounds.
+                // v0.27 — darker reticle: solid dark-blue square +
+                // black crosshair, no white halo. The white halo we
+                // had was reading as a "ghost cursor" against the
+                // white sketch canvas. Pure dark stroke is enough.
+                let dark_blue = Color::from_rgba(0.05, 0.30, 0.55, 1.0);
+                let near_black = Color::from_rgba(0.10, 0.10, 0.10, 1.0);
                 let square_path = Path::rectangle(
                     Point::new(p.x - half, p.y - half),
                     iced::Size::new(half * 2.0, half * 2.0),
                 );
                 frame.stroke(
                     &square_path,
-                    Stroke::default().with_width(3.0).with_color(halo),
+                    Stroke::default().with_width(1.5).with_color(dark_blue),
+                );
+                let stroke = Stroke::default().with_width(1.0).with_color(near_black);
+                frame.stroke(
+                    &Path::line(
+                        Point::new(p.x - arm, p.y),
+                        Point::new(p.x + arm, p.y),
+                    ),
+                    stroke,
                 );
                 frame.stroke(
-                    &square_path,
-                    Stroke::default().with_width(1.5).with_color(blue),
+                    &Path::line(
+                        Point::new(p.x, p.y - arm),
+                        Point::new(p.x, p.y + arm),
+                    ),
+                    stroke,
                 );
-                // Inner crosshair — short arms inside the square so
-                // the centre of the reticle is precisely visible.
-                for (col, w) in [(halo, 2.5_f32), (blue, 1.0)] {
-                    let stroke = Stroke::default().with_width(w).with_color(col);
-                    frame.stroke(
-                        &Path::line(
-                            Point::new(p.x - arm, p.y),
-                            Point::new(p.x + arm, p.y),
-                        ),
-                        stroke,
-                    );
-                    frame.stroke(
-                        &Path::line(
-                            Point::new(p.x, p.y - arm),
-                            Point::new(p.x, p.y + arm),
-                        ),
-                        stroke,
-                    );
-                }
             }
 
             // v0.27 — Touching Line ghost. After the first click
@@ -2318,7 +2314,15 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
         }
 
         if cursor.is_over(bounds) {
-            mouse::Interaction::Crosshair
+            // v0.27 — in Sketch mode the OS crosshair shows up as a
+            // pale "ghost" cursor on the white Fusion-style canvas
+            // and competes with our own dark-blue snap reticle.
+            // Hide the OS cursor entirely; the reticle is the cursor.
+            if self.state.mode == EditorMode::Sketch {
+                mouse::Interaction::Hidden
+            } else {
+                mouse::Interaction::Crosshair
+            }
         } else {
             mouse::Interaction::default()
         }
