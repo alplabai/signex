@@ -34,8 +34,8 @@ use draw_grid::{draw_grid, draw_grid_dots};
 use draw_pad::{draw_pad, draw_pads_tool_preview};
 use draw_silk::draw_silk_graphics;
 use draw_sketch::{
-    draw_dof_direction_arrows, draw_sketch_overlay, draw_sketch_snap_glyph,
-    draw_sketch_tool_preview,
+    ClosedLoop, draw_dof_direction_arrows, draw_sketch_overlay, draw_sketch_snap_glyph,
+    draw_sketch_tool_preview, find_closed_loops,
 };
 use geometry::{point_in_polygon, point_to_segment_dist, polygon_outline_hit};
 use hit_test::{sketch_hit_other, sketch_snap};
@@ -535,6 +535,44 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                             })
                             .and_capture(),
                         );
+                    }
+                    // v0.27 — Fusion-style "click the fill, select the
+                    // closed shape." Only in Sketch mode + Select tool,
+                    // and only when the Point-snap path missed. We
+                    // walk the same closed-loop adjacency the fill
+                    // renderer uses (`find_closed_loops`), and on a
+                    // point-in-polygon hit we dispatch a SelectMany
+                    // carrying every Line + Point in the loop. This
+                    // gives the user the "closed shape is selected as
+                    // a single profile" experience the rubber-band
+                    // path was failing to deliver, and feeds straight
+                    // into Make Pad from Profile.
+                    if matches!(self.state.mode, _EM::Sketch)
+                        && self.state.active_tool == _ST::Select
+                        && let Some(sketch_ref) = self.sketch
+                    {
+                        let loops = find_closed_loops(sketch_ref, self.state);
+                        let mut hit: Option<&ClosedLoop> = None;
+                        for lp in &loops {
+                            if point_in_polygon(world.0, world.1, &lp.polygon) {
+                                hit = Some(lp);
+                                break;
+                            }
+                        }
+                        if let Some(lp) = hit {
+                            let mut ids: Vec<signex_sketch::id::SketchEntityId> =
+                                lp.lines.clone();
+                            ids.extend(lp.points.iter().copied());
+                            return Some(
+                                canvas::Action::publish(LibraryMessage::EditorEvent {
+                                    library_path: self.address.library_path.clone(),
+                                    table: self.address.table.clone(),
+                                    row_id: self.address.row_id,
+                                    msg: EditorMsg::FootprintSketchSelectMany(ids),
+                                })
+                                .and_capture(),
+                            );
+                        }
                     }
                     // v0.21 — Pad hit is gated on the Selection Filter
                     // pad bit. When `pads` is off, pads stay

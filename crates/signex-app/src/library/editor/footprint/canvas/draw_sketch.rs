@@ -877,6 +877,122 @@ pub(super) fn draw_sketch_snap_glyph(
 /// The first hit picks the fill colour from the matching layer in
 /// [`super::layers::FpLayer`]. Loops with no role assignment fall
 /// back to neutral grey.
+/// v0.27 — closed-loop record exposed to the click handler so a
+/// single click on the polygon fill can select every entity in the
+/// loop. Mirrors what `draw_filled_closed_loops` walks internally.
+pub(super) struct ClosedLoop {
+    pub lines: Vec<signex_sketch::id::SketchEntityId>,
+    pub points: Vec<signex_sketch::id::SketchEntityId>,
+    /// Vertex array shaped as `[[x, y]; n]` for direct hand-off to
+    /// `super::geometry::point_in_polygon`.
+    pub polygon: Vec<[f64; 2]>,
+}
+
+/// v0.27 — find every closed loop in the sketch. Same adjacency
+/// walk as the fill renderer; centralised so the click handler can
+/// reuse it. Skips loops where every line is bake-skipped (purely
+/// construction loops); those are visible only as dashed strokes
+/// and selecting them via fill would surprise the user.
+pub(super) fn find_closed_loops(
+    sketch: &signex_sketch::SketchData,
+    state: &FootprintEditorState,
+) -> Vec<ClosedLoop> {
+    use signex_sketch::entity::EntityKind;
+    use signex_sketch::id::SketchEntityId;
+    use std::collections::{HashMap, HashSet};
+
+    fn pos(
+        id: SketchEntityId,
+        sketch: &signex_sketch::SketchData,
+        state: &FootprintEditorState,
+    ) -> Option<(f64, f64)> {
+        if let Some(solve) = state.last_solve.as_ref()
+            && let Some(p) = signex_sketch::solver::state::point_xy(
+                id,
+                &solve.result.state,
+                &solve.result.index,
+                sketch,
+            )
+        {
+            return Some(p);
+        }
+        sketch
+            .entities
+            .iter()
+            .find(|e| e.id == id)
+            .and_then(|e| match e.kind {
+                EntityKind::Point { x, y } => Some((x, y)),
+                _ => None,
+            })
+    }
+
+    let mut adj: HashMap<SketchEntityId, Vec<(SketchEntityId, SketchEntityId, bool)>> =
+        HashMap::new();
+    for e in &sketch.entities {
+        if let EntityKind::Line { start, end } = e.kind {
+            adj.entry(start).or_default().push((end, e.id, e.bake_skipped()));
+            adj.entry(end).or_default().push((start, e.id, e.bake_skipped()));
+        }
+    }
+    let mut visited: HashSet<SketchEntityId> = HashSet::new();
+    let mut out: Vec<ClosedLoop> = Vec::new();
+    for seed in &sketch.entities {
+        let (s_a, s_b) = match seed.kind {
+            EntityKind::Line { start, end } => (start, end),
+            _ => continue,
+        };
+        if visited.contains(&seed.id) {
+            continue;
+        }
+        let mut points = vec![s_a];
+        let mut lines = vec![seed.id];
+        let mut all_skipped = seed.bake_skipped();
+        let mut current = s_b;
+        let mut prev_line = seed.id;
+        let mut closed = false;
+        for _ in 0..256 {
+            if current == s_a {
+                closed = true;
+                break;
+            }
+            let neigh = match adj.get(&current) {
+                Some(n) if n.len() == 2 => n,
+                _ => break,
+            };
+            match neigh.iter().find(|(_, lid, _)| *lid != prev_line) {
+                Some((other, lid, skipped)) => {
+                    points.push(current);
+                    lines.push(*lid);
+                    all_skipped &= *skipped;
+                    prev_line = *lid;
+                    current = *other;
+                }
+                None => break,
+            }
+        }
+        if !closed || points.len() < 3 || all_skipped {
+            visited.insert(seed.id);
+            continue;
+        }
+        for lid in &lines {
+            visited.insert(*lid);
+        }
+        let polygon: Vec<[f64; 2]> = points
+            .iter()
+            .filter_map(|id| pos(*id, sketch, state).map(|(x, y)| [x, y]))
+            .collect();
+        if polygon.len() < 3 {
+            continue;
+        }
+        out.push(ClosedLoop {
+            lines,
+            points,
+            polygon,
+        });
+    }
+    out
+}
+
 pub(super) fn draw_filled_closed_loops(
     frame: &mut canvas::Frame,
     cstate: &FootprintCanvasState,
