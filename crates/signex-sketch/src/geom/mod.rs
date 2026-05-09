@@ -20,6 +20,7 @@ pub mod curves;
 pub mod halfedge;
 pub mod hull;
 pub mod offset;
+pub mod polylabel;
 pub mod predicates;
 pub mod segment;
 pub mod triangulate;
@@ -30,6 +31,7 @@ pub use boolean_general::{polygon_op, BoolOp};
 pub use curves::{arc_arc_intersections, arc_circle_intersections, circle_circle_intersections};
 pub use hull::convex_hull;
 pub use offset::{offset_polygon, CornerStyle};
+pub use polylabel::pole_of_inaccessibility;
 pub use predicates::{orient2d, signed_area, Sign};
 pub use segment::{
     segment_arc_intersections, segment_circle_intersections, segment_segment_intersection,
