@@ -129,6 +129,12 @@ pub struct FootprintEditorState {
     pub selected_sketch: Option<signex_sketch::id::SketchEntityId>,
     /// v0.13.3 — secondary selected sketch entity.
     pub selected_sketch_secondary: Option<signex_sketch::id::SketchEntityId>,
+    /// v0.27 — Altium / Fusion-style multi-select for sketch
+    /// entities. Populated by the sketch-mode rubber-band release
+    /// + Ctrl/Shift modifier clicks. Drawn with the same selection
+    /// highlight as `selected_sketch`. Cleared whenever a single-
+    /// click select fires without a modifier.
+    pub selected_sketch_extra: Vec<signex_sketch::id::SketchEntityId>,
     /// v0.13.3 — Dimension tool's pending value (text input).
     pub dimension_input: String,
     /// v0.15 — Pads-mode tool.
@@ -234,6 +240,7 @@ impl FootprintEditorState {
             tool_pending: ToolPending::default(),
             selected_sketch: None,
             selected_sketch_secondary: None,
+            selected_sketch_extra: Vec::new(),
             dimension_input: String::new(),
             pads_tool: PadsTool::default(),
             construction_mode: false,

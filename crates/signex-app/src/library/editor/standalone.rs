@@ -1078,6 +1078,9 @@ fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEditorMsg {
         }
         EditorMsg::FootprintSelectPad(sel) => PrimitiveEditorMsg::FootprintSelectPad(sel),
         EditorMsg::FootprintSelectPads(pads) => PrimitiveEditorMsg::FootprintSelectPads(pads),
+        EditorMsg::FootprintSketchSelectMany(ids) => {
+            PrimitiveEditorMsg::FootprintSketchSelectMany(ids)
+        }
         EditorMsg::FootprintDeleteSelected => PrimitiveEditorMsg::FootprintDeleteSelected,
         EditorMsg::FootprintToggleLayer(name) => PrimitiveEditorMsg::FootprintToggleLayer(name),
         EditorMsg::FootprintToggleAutoFit => PrimitiveEditorMsg::FootprintToggleAutoFit,

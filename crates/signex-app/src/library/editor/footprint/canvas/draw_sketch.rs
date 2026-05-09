@@ -359,6 +359,18 @@ pub(super) fn draw_sketch_overlay(
         }
     };
 
+    // v0.27 — Fusion-style selection highlight. Entities in the
+    // primary / secondary / extras selection sets render with a
+    // saturated orange instead of the DOF palette, so the user
+    // can see which entities the rubber-band picked. Mirrors the
+    // colour Altium / Fusion use for selected sketch geometry.
+    let selection_colour = Color::from_rgba(1.00, 0.45, 0.05, 1.00);
+    let is_selected = |id: SketchEntityId| -> bool {
+        state.selected_sketch == Some(id)
+            || state.selected_sketch_secondary == Some(id)
+            || state.selected_sketch_extra.contains(&id)
+    };
+
     // v0.13.2 Phase 6.6 — Constraint icon overlay. Render BEFORE
     // entities so glyphs sit underneath the geometry layer and don't
     // hide pad-edge clicks. Tinted red for over-constrained
@@ -388,9 +400,16 @@ pub(super) fn draw_sketch_overlay(
                 // Construction (bake-skipped) Points stay smaller
                 // than authored Points so they read as secondary
                 // chrome, but both are now grab-friendly.
-                let r = if entity.bake_skipped() { 4.0 } else { 5.5 };
+                let mut r = if entity.bake_skipped() { 4.0 } else { 5.5 };
+                if is_selected(entity.id) {
+                    r += 1.5;
+                }
                 let path = Path::circle(Point::new(p.x, p.y), r);
-                let col = dof_colour(entity.id);
+                let col = if is_selected(entity.id) {
+                    selection_colour
+                } else {
+                    dof_colour(entity.id)
+                };
                 frame.fill(&path, col);
                 frame.stroke(
                     &path,
@@ -417,12 +436,15 @@ pub(super) fn draw_sketch_overlay(
                 // Fusion gold (#c9a04b) regardless of DOF colour, so
                 // axis / mirror lines stay visually distinct from
                 // construction scaffolding.
-                let col = if entity.centerline {
+                let col = if is_selected(entity.id) {
+                    selection_colour
+                } else if entity.centerline {
                     Color::from_rgba(0.79, 0.63, 0.30, 1.00)
                 } else {
                     dof_colour(start)
                 };
-                let stroke = Stroke::default().with_width(1.5).with_color(col);
+                let line_width = if is_selected(entity.id) { 2.5 } else { 1.5 };
+                let stroke = Stroke::default().with_width(line_width).with_color(col);
                 if entity.construction {
                     // Dashed line via short segments.
                     let dx = p1.x - p0.x;
@@ -493,12 +515,21 @@ pub(super) fn draw_sketch_overlay(
                 // the constraint state shows through.
                 let dof = dof_colour(entity.id);
                 let unsolved = state.last_solve.is_none();
-                let col = if unsolved {
+                let selected = is_selected(entity.id);
+                let col = if selected {
+                    selection_colour
+                } else if unsolved {
                     Color::from_rgba(0.10, 0.55, 0.85, 1.00)
                 } else {
                     dof
                 };
-                let width = if unsolved { 2.0 } else { 1.5 };
+                let width = if selected {
+                    2.5
+                } else if unsolved {
+                    2.0
+                } else {
+                    1.5
+                };
                 frame.stroke(&path, Stroke::default().with_width(width).with_color(col));
                 // v0.27 — diameter handle Point on the east edge.
                 // Filled cyan disc with a darker outline; the
@@ -562,7 +593,13 @@ pub(super) fn draw_sketch_overlay(
                 }
                 let segs = 16;
                 let mut prev = cstate.world_to_screen(s);
-                let col = dof_colour(entity.id);
+                let selected = is_selected(entity.id);
+                let col = if selected {
+                    selection_colour
+                } else {
+                    dof_colour(entity.id)
+                };
+                let arc_width = if selected { 2.5 } else { 1.5 };
                 for i in 1..=segs {
                     let t = (i as f64) / (segs as f64);
                     let a = a0 + delta * t;
@@ -570,7 +607,7 @@ pub(super) fn draw_sketch_overlay(
                     let q = cstate.world_to_screen(p);
                     frame.stroke(
                         &Path::line(prev, q),
-                        Stroke::default().with_width(1.5).with_color(col),
+                        Stroke::default().with_width(arc_width).with_color(col),
                     );
                     prev = q;
                 }

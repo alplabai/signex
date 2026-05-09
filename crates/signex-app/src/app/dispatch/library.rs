@@ -4103,6 +4103,7 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintCursorAt { .. }
         | PrimitiveEditorMsg::FootprintSelectPad(_)
         | PrimitiveEditorMsg::FootprintSelectPads(_)
+        | PrimitiveEditorMsg::FootprintSketchSelectMany(_)
         | PrimitiveEditorMsg::FootprintDeleteSelected
         | PrimitiveEditorMsg::FootprintToggleLayer(_)
         | PrimitiveEditorMsg::FootprintToggleAutoFit
@@ -4728,6 +4729,25 @@ pub(crate) fn apply_footprint_primitive_edit(
                 editor.state.last_click_world_mm = editor.state.cursor_mm;
             }
             editor.state.numeric_buffers.clear();
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintSketchSelectMany(ids) => {
+            // v0.27 — Sketch-mode multi-select replacement. First
+            // entity is primary (drives the inspector + DOF
+            // overlay focus); the second slots into the secondary
+            // (used by the constraint submenu's "two entities"
+            // pairing); the rest land in extras. Empty list
+            // deselects everything.
+            if ids.is_empty() {
+                editor.state.selected_sketch = None;
+                editor.state.selected_sketch_secondary = None;
+                editor.state.selected_sketch_extra.clear();
+            } else {
+                editor.state.selected_sketch = Some(ids[0]);
+                editor.state.selected_sketch_secondary = ids.get(1).copied();
+                editor.state.selected_sketch_extra =
+                    ids.iter().skip(2).copied().collect();
+            }
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintDeleteSelected => {
@@ -6033,14 +6053,13 @@ pub(crate) fn apply_footprint_primitive_edit(
             use signex_sketch::id::SketchEntityId;
             use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
 
-            // v0.27 — accept a wider selection range. A Line works
-            // directly; a Point falls back to any incident Line; no
-            // selection at all walks every Line and uses the first
-            // one that's part of a closed loop. The earlier "must
-            // be a Line" rule was hostile to the natural workflow
-            // of "draw a rectangle, select all, make it a pad" —
-            // the closed loop walker doesn't care which seed edge
-            // it gets, so any Line on the loop will do.
+            // v0.27 — walk the full sketch selection (primary +
+            // secondary + extras) for the first Line. The
+            // closed-loop walker doesn't care which seed edge it
+            // gets — any Line on the loop seeds the trace. Falls
+            // back to scanning every sketch Line when nothing
+            // suitable is selected, so the action also works on a
+            // bare "select-nothing-and-click-Make-Pad" workflow.
             let line_id: SketchEntityId = {
                 let sketch_lookup = editor.primitive().sketch.as_ref();
                 let kind_of = |id: SketchEntityId| -> Option<EntityKind> {
@@ -6048,51 +6067,55 @@ pub(crate) fn apply_footprint_primitive_edit(
                         .and_then(|s| s.entities.iter().find(|e| e.id == id))
                         .map(|e| e.kind.clone())
                 };
-                match editor.state.selected_sketch.and_then(|id| kind_of(id).map(|k| (id, k))) {
-                    // Primary selection IS a Line — use it.
-                    Some((id, EntityKind::Line { .. })) => id,
-                    // Primary is a Point — find any incident Line.
-                    Some((point_id, EntityKind::Point { .. })) => {
-                        match sketch_lookup.and_then(|s| {
-                            s.entities.iter().find(|e| match e.kind {
-                                EntityKind::Line { start, end } => {
-                                    start == point_id || end == point_id
-                                }
-                                _ => false,
-                            })
-                        }) {
-                            Some(line_e) => line_e.id,
-                            None => {
-                                editor.state.solve_warnings.push(
-                                    "Make Pad from Profile: selected Point has no incident Line — draw at least one Line first"
-                                        .into(),
-                                );
-                                editor.canvas_cache.clear();
-                                return;
-                            }
-                        }
+                let selection: Vec<SketchEntityId> = editor
+                    .state
+                    .selected_sketch
+                    .into_iter()
+                    .chain(editor.state.selected_sketch_secondary.into_iter())
+                    .chain(editor.state.selected_sketch_extra.iter().copied())
+                    .collect();
+
+                // First pass — Line directly in the selection.
+                let direct_line = selection
+                    .iter()
+                    .find(|id| matches!(kind_of(**id), Some(EntityKind::Line { .. })))
+                    .copied();
+                // Second pass — a selected Point's incident Line.
+                let incident_line = selection.iter().find_map(|id| {
+                    if matches!(kind_of(*id), Some(EntityKind::Point { .. })) {
+                        sketch_lookup.and_then(|s| {
+                            s.entities
+                                .iter()
+                                .find(|e| match e.kind {
+                                    EntityKind::Line { start, end } => {
+                                        start == *id || end == *id
+                                    }
+                                    _ => false,
+                                })
+                                .map(|e| e.id)
+                        })
+                    } else {
+                        None
                     }
-                    // Primary is some other entity (Arc/Circle) — use it
-                    // verbatim; the loop walker will produce a useful error
-                    // if it's not seedable.
-                    Some((id, _)) => id,
-                    // Nothing selected — pick the first Line in the sketch.
-                    None => match sketch_lookup.and_then(|s| {
-                        s.entities
-                            .iter()
-                            .find(|e| matches!(e.kind, EntityKind::Line { .. }))
-                            .map(|e| e.id)
-                    }) {
-                        Some(id) => id,
-                        None => {
-                            editor.state.solve_warnings.push(
-                                "Make Pad from Profile: no Lines in the sketch — draw a closed shape first"
-                                    .into(),
-                            );
-                            editor.canvas_cache.clear();
-                            return;
-                        }
-                    },
+                });
+                // Third pass — any sketch Line at all.
+                let any_line = sketch_lookup.and_then(|s| {
+                    s.entities
+                        .iter()
+                        .find(|e| matches!(e.kind, EntityKind::Line { .. }))
+                        .map(|e| e.id)
+                });
+
+                match direct_line.or(incident_line).or(any_line) {
+                    Some(id) => id,
+                    None => {
+                        editor.state.solve_warnings.push(
+                            "Make Pad from Profile: no Lines in the sketch — draw a closed shape first"
+                                .into(),
+                        );
+                        editor.canvas_cache.clear();
+                        return;
+                    }
                 }
             };
 
@@ -8727,6 +8750,7 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::FootprintCursorAt { .. }
         | EditorMsg::FootprintSelectPad(_)
         | EditorMsg::FootprintSelectPads(_)
+        | EditorMsg::FootprintSketchSelectMany(_)
         | EditorMsg::FootprintDeleteSelected
         | EditorMsg::FootprintToggleLayer(_)
         | EditorMsg::FootprintToggleAutoFit

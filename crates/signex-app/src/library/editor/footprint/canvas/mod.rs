@@ -666,18 +666,18 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         press_screen: cursor_pos,
                         moved: false,
                     });
-                    // v0.26-I — Select-tool empty-canvas press also
-                    // arms the rubber-band rectangle. Sketch / Pads-
-                    // tool placements are unaffected (their drag
-                    // continues to commit a placement on release if
-                    // it didn''t cross the move threshold). The draw
-                    // pass renders the rubber band only when both
-                    // `box_select_anchor_screen` and
-                    // `box_select_current_screen` are Some, so a
-                    // brief un-moved drag never paints a rectangle.
-                    if matches!(self.state.mode, super::state::EditorMode::Normal)
-                        && self.state.pads_tool == super::state::PadsTool::Select
-                    {
+                    // v0.26-I + v0.27 — Select-tool empty-canvas
+                    // press arms the rubber-band rectangle. Fires
+                    // for Pads mode (PadsTool::Select) + Sketch mode
+                    // (SketchTool::Select). Each mode's release
+                    // picker walks the appropriate entity list.
+                    let arm_rubber = matches!(
+                        self.state.mode,
+                        super::state::EditorMode::Normal
+                    ) && self.state.pads_tool == super::state::PadsTool::Select
+                        || matches!(self.state.mode, super::state::EditorMode::Sketch)
+                            && self.state.active_tool == super::state::SketchTool::Select;
+                    if arm_rubber {
                         cstate.box_select_anchor_screen = Some(cursor_pos);
                         cstate.box_select_current_screen = Some(cursor_pos);
                     }
@@ -792,7 +792,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 cstate.box_select_anchor_screen.take(),
                                 cstate.box_select_current_screen.take(),
                             ) {
-                                use super::state::FpSelectionMode;
+                                use super::state::{EditorMode, FpSelectionMode};
                                 let world_a = cstate.screen_to_world(a);
                                 let world_c = cstate.screen_to_world(c);
                                 let (x0, x1) = if world_a.0 <= world_c.0 {
@@ -805,6 +805,90 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 } else {
                                     (world_c.1, world_a.1)
                                 };
+                                // v0.27 — Sketch-mode rubber-band:
+                                // pick every entity whose bbox is
+                                // inside the rect. Bbox per kind:
+                                //   Point — single point (snap to inside)
+                                //   Line — bbox of (start, end)
+                                //   Arc — bbox of (centre±radius), pruned
+                                //         by sweep, approximated as
+                                //         centre ± radius for simplicity
+                                //   Circle — bbox of (centre±radius)
+                                if matches!(self.state.mode, EditorMode::Sketch) {
+                                    if let Some(sketch) = self.sketch {
+                                        use signex_sketch::entity::EntityKind;
+                                        let resolve =
+                                            |id: signex_sketch::id::SketchEntityId|
+                                                -> Option<(f64, f64)> {
+                                                sketch
+                                                    .entities
+                                                    .iter()
+                                                    .find(|e| e.id == id)
+                                                    .and_then(|e| match e.kind {
+                                                        EntityKind::Point { x, y } => Some((x, y)),
+                                                        _ => None,
+                                                    })
+                                            };
+                                        let bbox_of = |e: &signex_sketch::entity::Entity|
+                                            -> Option<(f64, f64, f64, f64)> {
+                                            match e.kind {
+                                                EntityKind::Point { x, y } => Some((x, y, x, y)),
+                                                EntityKind::Line { start, end } => {
+                                                    let s = resolve(start)?;
+                                                    let f = resolve(end)?;
+                                                    Some((
+                                                        s.0.min(f.0),
+                                                        s.1.min(f.1),
+                                                        s.0.max(f.0),
+                                                        s.1.max(f.1),
+                                                    ))
+                                                }
+                                                EntityKind::Circle { center, radius } => {
+                                                    let c = resolve(center)?;
+                                                    Some((
+                                                        c.0 - radius,
+                                                        c.1 - radius,
+                                                        c.0 + radius,
+                                                        c.1 + radius,
+                                                    ))
+                                                }
+                                                EntityKind::Arc {
+                                                    center, start, ..
+                                                } => {
+                                                    let c = resolve(center)?;
+                                                    let s = resolve(start)?;
+                                                    let r = ((s.0 - c.0).powi(2)
+                                                        + (s.1 - c.1).powi(2))
+                                                    .sqrt();
+                                                    Some((c.0 - r, c.1 - r, c.0 + r, c.1 + r))
+                                                }
+                                            }
+                                        };
+                                        let mut hits: Vec<signex_sketch::id::SketchEntityId> =
+                                            Vec::new();
+                                        for e in &sketch.entities {
+                                            let Some((bx0, by0, bx1, by1)) = bbox_of(e) else {
+                                                continue;
+                                            };
+                                            let fully_inside = bx0 >= x0
+                                                && bx1 <= x1
+                                                && by0 >= y0
+                                                && by1 <= y1;
+                                            if fully_inside {
+                                                hits.push(e.id);
+                                            }
+                                        }
+                                        self.cache.clear();
+                                        return Some(canvas::Action::publish(
+                                            LibraryMessage::EditorEvent {
+                                                library_path: self.address.library_path.clone(),
+                                                table: self.address.table.clone(),
+                                                row_id: self.address.row_id,
+                                                msg: EditorMsg::FootprintSketchSelectMany(hits),
+                                            },
+                                        ));
+                                    }
+                                }
                                 // v0.27 — honour the active-bar
                                 // Selection picker. Inside (default):
                                 // pad bbox fully inside rect.

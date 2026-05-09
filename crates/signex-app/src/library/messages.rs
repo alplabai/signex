@@ -866,6 +866,10 @@ pub enum EditorMsg {
     /// the Properties form); rest go to `selected_pads_extra`.
     /// Empty Vec deselects all.
     FootprintSelectPads(Vec<usize>),
+    /// v0.27 — Multi-select for sketch entities. Replaces the
+    /// sketch selection. First → primary, second → secondary,
+    /// rest → `selected_sketch_extra`. Empty = clear.
+    FootprintSketchSelectMany(Vec<signex_sketch::id::SketchEntityId>),
     /// Delete-key — remove the currently-selected pad.
     FootprintDeleteSelected,
     /// Toolbar — toggle a layer's visibility. Carries the Standard layer
@@ -1458,6 +1462,10 @@ pub enum PrimitiveEditorMsg {
     /// the Properties form); rest go to `selected_pads_extra`.
     /// Empty Vec deselects all.
     FootprintSelectPads(Vec<usize>),
+    /// v0.27 — Multi-select for sketch entities. Replaces the
+    /// sketch selection. First → primary, second → secondary,
+    /// rest → `selected_sketch_extra`. Empty = clear.
+    FootprintSketchSelectMany(Vec<signex_sketch::id::SketchEntityId>),
     /// Delete-key — remove the currently-selected pad.
     FootprintDeleteSelected,
     /// Toolbar — toggle a layer's visibility. Carries the Standard layer
