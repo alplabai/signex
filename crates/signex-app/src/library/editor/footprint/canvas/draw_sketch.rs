@@ -1196,15 +1196,10 @@ pub(super) fn draw_sketch_tool_preview(
 
     let cursor_screen = cstate.world_to_screen(cursor);
 
-    // v0.15 — only show the cursor pip when a multi-click tool is
-    // mid-gesture (Line / Circle / Arc with first endpoint placed).
-    // For Select / idle tools the OS cursor is enough; an
-    // always-visible ring read as a stale entity in v0.14.2.
-    let pip_visible = !matches!(state.tool_pending, ToolPending::Idle);
-    if pip_visible {
-        let pip = Path::circle(cursor_screen, 3.0);
-        frame.stroke(&pip, Stroke::default().with_width(1.0).with_color(ghost));
-    }
+    // v0.27 — suppress the bright cyan cursor pip; the dark-blue
+    // snap reticle (drawn later in canvas/mod.rs) already marks the
+    // snap target. The pip + reticle stacking read as "too bright"
+    // on the white sketch canvas.
 
     match state.tool_pending {
         ToolPending::Idle => {}

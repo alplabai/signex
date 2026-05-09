@@ -6211,9 +6211,67 @@ pub(crate) fn apply_footprint_primitive_edit(
                     return;
                 }
             };
-            let n = vertices.len() as f64;
-            let cx = vertices.iter().map(|p| p[0]).sum::<f64>() / n;
-            let cy = vertices.iter().map(|p| p[1]).sum::<f64>() / n;
+            // v0.27 — area-weighted centroid + axis-aligned bbox of
+            // the closed-loop polygon. The arithmetic mean of vertex
+            // positions only matches the geometric centroid for
+            // regular polygons; for an arbitrary triangle / outline
+            // it lands biased toward whichever side has the most
+            // densely-spaced vertices (which is why the user saw
+            // the pad mint near a corner instead of inside the
+            // shape). The shoelace centroid is the proper EDA
+            // answer — pad sits at the geometric middle of its own
+            // copper outline.
+            let n_v = vertices.len();
+            let mut signed_area = 0.0_f64;
+            let mut cx_acc = 0.0_f64;
+            let mut cy_acc = 0.0_f64;
+            for i in 0..n_v {
+                let (x0, y0) = (vertices[i][0], vertices[i][1]);
+                let (x1, y1) = (
+                    vertices[(i + 1) % n_v][0],
+                    vertices[(i + 1) % n_v][1],
+                );
+                let cross = x0 * y1 - x1 * y0;
+                signed_area += cross;
+                cx_acc += (x0 + x1) * cross;
+                cy_acc += (y0 + y1) * cross;
+            }
+            let area = signed_area * 0.5;
+            let (cx, cy) = if area.abs() > 1e-12 {
+                let s = 1.0 / (6.0 * area);
+                (cx_acc * s, cy_acc * s)
+            } else {
+                // Degenerate polygon — fall back to mean.
+                let n = n_v as f64;
+                (
+                    vertices.iter().map(|p| p[0]).sum::<f64>() / n,
+                    vertices.iter().map(|p| p[1]).sum::<f64>() / n,
+                )
+            };
+            // Axis-aligned bbox — drives `size_x_expr` / `size_y_expr`
+            // so the synced `state.pads` row is at least bbox-sized
+            // (instead of the default 1mm × 1mm). Polygon-shape
+            // rendering on the editor canvas is a follow-up.
+            let mut min_x = f64::INFINITY;
+            let mut min_y = f64::INFINITY;
+            let mut max_x = f64::NEG_INFINITY;
+            let mut max_y = f64::NEG_INFINITY;
+            for p in &vertices {
+                if p[0] < min_x {
+                    min_x = p[0];
+                }
+                if p[1] < min_y {
+                    min_y = p[1];
+                }
+                if p[0] > max_x {
+                    max_x = p[0];
+                }
+                if p[1] > max_y {
+                    max_y = p[1];
+                }
+            }
+            let bbox_w = (max_x - min_x).max(0.05);
+            let bbox_h = (max_y - min_y).max(0.05);
 
             // Plane: reuse the seed Line's plane so the new pad
             // entity ends up on the same one.
@@ -6259,8 +6317,8 @@ pub(crate) fn apply_footprint_primitive_edit(
                 shape: PadShape::Custom(CustomPadShape::SketchProfile {
                     source: vec![line_id],
                 }),
-                size_x_expr: "1mm".into(),
-                size_y_expr: "1mm".into(),
+                size_x_expr: format!("{:.3}mm", bbox_w),
+                size_y_expr: format!("{:.3}mm", bbox_h),
                 rotation_expr: None,
                 offset_x_expr: None,
                 offset_y_expr: None,

@@ -2098,8 +2098,8 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 // black crosshair, no white halo. The white halo we
                 // had was reading as a "ghost cursor" against the
                 // white sketch canvas. Pure dark stroke is enough.
-                let dark_blue = Color::from_rgba(0.05, 0.30, 0.55, 1.0);
-                let near_black = Color::from_rgba(0.10, 0.10, 0.10, 1.0);
+                let dark_blue = Color::from_rgba(0.04, 0.18, 0.36, 1.0);
+                let near_black = Color::from_rgba(0.08, 0.08, 0.08, 1.0);
                 let square_path = Path::rectangle(
                     Point::new(p.x - half, p.y - half),
                     iced::Size::new(half * 2.0, half * 2.0),
