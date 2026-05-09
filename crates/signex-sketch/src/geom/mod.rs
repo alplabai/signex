@@ -25,6 +25,7 @@ pub mod offset_arc;
 pub mod polylabel;
 pub mod predicates;
 pub mod segment;
+pub mod simplify;
 pub mod triangulate;
 
 pub use aabb_index::{Aabb, AabbIndex};
@@ -35,12 +36,13 @@ pub use hull::convex_hull;
 pub use offset::{offset_polygon, CornerStyle};
 pub use offset_arc::{offset_arc_polyline, PolyElement};
 pub use polylabel::pole_of_inaccessibility;
+pub use simplify::{dedup, merge_colinear, simplify_polygon, snap_to_grid, MultiContour};
 pub use predicates::{orient2d, signed_area, Sign};
 pub use segment::{
     segment_arc_intersections, segment_circle_intersections, segment_segment_intersection,
     Arc2, Circle2, Segment2, SegmentIntersection,
 };
-pub use triangulate::ear_clip;
+pub use triangulate::{ear_clip, ear_clip_with_holes};
 
 /// Plain-old 2D point in plane-local mm. The crate's `EntityKind::Point`
 /// uses bare `(x, y): f64` fields; this struct lets the geom helpers
