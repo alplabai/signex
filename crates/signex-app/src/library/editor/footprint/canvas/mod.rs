@@ -1599,8 +1599,13 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
             } else {
                 self.bg_color
             };
+            // v0.27 — Fusion-style sketch grid: darker base so the
+            // grid reads cleanly against the white canvas. Pure
+            // grey (0.55) at higher alpha lands at ~#BFBFBF —
+            // matches Fusion's mid-grey grid weight rather than the
+            // washed-out near-white we had before.
             let grid = if in_sketch {
-                Color::from_rgba(0.78, 0.78, 0.78, 1.0)
+                Color::from_rgba(0.55, 0.55, 0.55, 1.0)
             } else {
                 self.grid_color
             };
@@ -1619,12 +1624,12 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
             // Fine pass — only when each cell is at least 6 px wide
             // so we don't chew tessellation budget on dense grids
             // at low zoom.
-            // v0.27 — Sketch mode runs on a white background, so
-            // the alpha multiplier needs to bias the OTHER way:
-            // fine gridlines that were 10% bright on dark land at
-            // 30% on white so they read at the same visual weight,
-            // and coarse gridlines climb to 55%.
-            let (fine_alpha, coarse_alpha) = if in_sketch { (0.30, 0.55) } else { (0.10, 0.30) };
+            // v0.27 — Sketch mode runs on a white background. The
+            // grid's base RGB is darker (0.55 grey) so the alpha
+            // multiplier can stay modest while still reading
+            // visibly. Fine = 50% alpha → ~#BFBFBF, matches the
+            // Fusion sketch grid weight.
+            let (fine_alpha, coarse_alpha) = if in_sketch { (0.50, 0.55) } else { (0.10, 0.30) };
             if fine_step >= 6.0 {
                 let fine_color = Color {
                     a: fine_alpha,
@@ -2069,31 +2074,43 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 draw_pads_tool_preview(frame, cstate, self.state);
             }
 
-            // v0.27 — Sketch-mode custom cursor crosshair. The OS
-            // cursor on a white background can wash out under
-            // certain themes (Windows "white cursor" mode in
-            // particular), so we paint a fixed-contrast black
-            // crosshair with a white halo at the RAW cursor screen
-            // position. Tracking raw (not the snapped `cursor_mm`)
-            // keeps the crosshair coincident with the OS cursor so
-            // the user sees a single visual indicator; the snap
-            // glyph is drawn separately at the snapped position.
-            //
-            // Suppressed when:
-            //  - The right-click context menu is mounted (Altium-
-            //    parity: stop painting interaction chrome while a
-            //    menu is open).
-            //  - The cursor is OUTSIDE the canvas bounds (no point
-            //    in painting a phantom crosshair on a panel border).
+            // v0.27 — Fusion-style sketch reticle. A small square
+            // with an inner crosshair painted at the SNAP target
+            // (state.cursor_mm), so the user sees exactly where
+            // the next click will commit even when the OS cursor
+            // is hovering a few pixels away because snap fired.
+            // The OS cursor stays as the raw mouse position; the
+            // reticle is the "click here" indicator. Hidden while
+            // the right-click context menu is open (the menu owns
+            // the interaction).
             let context_menu_open = self.state.context_menu.is_some();
             if in_sketch
                 && !context_menu_open
-                && let Some(p) = cursor_screen
+                && let Some((cx, cy)) = self.state.cursor_mm
+                && cursor_screen.is_some()
             {
-                let arm = 8.0_f32;
+                let p = cstate.world_to_screen((cx, cy));
+                let half = 7.0_f32;
+                let arm = 4.5_f32;
+                let blue = Color::from_rgba(0.10, 0.50, 0.85, 1.0);
                 let halo = Color::WHITE;
-                let core = Color::from_rgba(0.05, 0.05, 0.05, 1.0);
-                for (col, w) in [(halo, 3.0_f32), (core, 1.0)] {
+                // Square outline — halo first then blue core so the
+                // ring reads on both white and dark backgrounds.
+                let square_path = Path::rectangle(
+                    Point::new(p.x - half, p.y - half),
+                    iced::Size::new(half * 2.0, half * 2.0),
+                );
+                frame.stroke(
+                    &square_path,
+                    Stroke::default().with_width(3.0).with_color(halo),
+                );
+                frame.stroke(
+                    &square_path,
+                    Stroke::default().with_width(1.5).with_color(blue),
+                );
+                // Inner crosshair — short arms inside the square so
+                // the centre of the reticle is precisely visible.
+                for (col, w) in [(halo, 2.5_f32), (blue, 1.0)] {
                     let stroke = Stroke::default().with_width(w).with_color(col);
                     frame.stroke(
                         &Path::line(
