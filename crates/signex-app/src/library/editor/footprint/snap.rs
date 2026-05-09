@@ -231,24 +231,25 @@ pub fn snap_cursor(
         }
     }
 
-    // v0.27 — Intersection snap. Walks every pair of sketch Line
-    // entities, computes their intersection through the geom
-    // module's segment_segment_intersection, and snaps to the
-    // nearest hit within `snap_distance_mm`. Quadratic in line
-    // count which is fine for typical pad-corner-outline sketches
-    // (<100 Lines); a 2D BVH would beat this once line counts
-    // climb past ~500.
+    // v0.27 — Intersection snap. Walks Line×Line, Line×Arc, and
+    // Line×Circle pairs through the geom module helpers, snaps to
+    // the closest hit within `snap_distance_mm`. Arc×Arc and
+    // Arc×Circle pairs are queued — they need a curve×curve
+    // intersection helper that doesn't exist yet.
     if opts.snap_intersections {
         if let Some(sketch) = sketch {
             use signex_sketch::entity::EntityKind;
             use signex_sketch::geom::{
-                segment_segment_intersection, Point2, Segment2, SegmentIntersection,
+                segment_arc_intersections, segment_circle_intersections,
+                segment_segment_intersection, Arc2, Circle2, Point2, Segment2,
+                SegmentIntersection,
             };
 
             let resolve = |id: SketchEntityId| -> Option<(f64, f64)> {
                 point_pos(id, Some(sketch), state)
             };
 
+            // Lines as (start, end) world-mm pairs.
             let lines: Vec<(Point2, Point2)> = sketch
                 .entities
                 .iter()
@@ -263,9 +264,67 @@ pub fn snap_cursor(
                 })
                 .collect();
 
+            // Circles as (centre, radius).
+            let circles: Vec<(Point2, f64)> = sketch
+                .entities
+                .iter()
+                .filter_map(|e| {
+                    if let EntityKind::Circle { center, radius } = e.kind {
+                        let c = resolve(center)?;
+                        Some((Point2::new(c.0, c.1), radius))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            // Arcs as (centre, radius, start_rad, end_rad, sweep_ccw).
+            let arcs: Vec<Arc2> = sketch
+                .entities
+                .iter()
+                .filter_map(|e| {
+                    if let EntityKind::Arc {
+                        center,
+                        start,
+                        end,
+                        sweep_ccw,
+                    } = e.kind
+                    {
+                        let c = resolve(center)?;
+                        let s = resolve(start)?;
+                        let f = resolve(end)?;
+                        let radius = ((s.0 - c.0).powi(2) + (s.1 - c.1).powi(2)).sqrt();
+                        let start_rad = (s.1 - c.1).atan2(s.0 - c.0);
+                        let end_rad = (f.1 - c.1).atan2(f.0 - c.0);
+                        Some(Arc2::new(
+                            Point2::new(c.0, c.1),
+                            radius,
+                            start_rad,
+                            end_rad,
+                            sweep_ccw,
+                        ))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
             let tol = state.snap_options.snap_distance_mm.max(1e-6);
             let tol_sq = tol * tol;
             let mut best: Option<(f64, (f64, f64))> = None;
+            let mut consider = |pt: Point2, best: &mut Option<(f64, (f64, f64))>| {
+                let dx = pt.x - raw.0;
+                let dy = pt.y - raw.1;
+                let d_sq = dx * dx + dy * dy;
+                if d_sq <= tol_sq {
+                    match best {
+                        Some((b_sq, _)) if *b_sq <= d_sq => {}
+                        _ => *best = Some((d_sq, (pt.x, pt.y))),
+                    }
+                }
+            };
+
+            // Line × Line.
             for i in 0..lines.len() {
                 for j in (i + 1)..lines.len() {
                     let s_a = Segment2::new(lines[i].0, lines[i].1);
@@ -273,18 +332,32 @@ pub fn snap_cursor(
                     if let SegmentIntersection::Point { pt, .. } =
                         segment_segment_intersection(s_a, s_b)
                     {
-                        let dx = pt.x - raw.0;
-                        let dy = pt.y - raw.1;
-                        let d_sq = dx * dx + dy * dy;
-                        if d_sq <= tol_sq {
-                            match best {
-                                Some((b_sq, _)) if b_sq <= d_sq => {}
-                                _ => best = Some((d_sq, (pt.x, pt.y))),
-                            }
-                        }
+                        consider(pt, &mut best);
                     }
                 }
             }
+
+            // Line × Arc.
+            for line in &lines {
+                let seg = Segment2::new(line.0, line.1);
+                for arc in &arcs {
+                    for (pt, _) in segment_arc_intersections(seg, *arc) {
+                        consider(pt, &mut best);
+                    }
+                }
+            }
+
+            // Line × Circle.
+            for line in &lines {
+                let seg = Segment2::new(line.0, line.1);
+                for c in &circles {
+                    let circle = Circle2::new(c.0, c.1);
+                    for (pt, _) in segment_circle_intersections(seg, circle) {
+                        consider(pt, &mut best);
+                    }
+                }
+            }
+
             if let Some((_, pos)) = best {
                 return SnapResult {
                     pos,
