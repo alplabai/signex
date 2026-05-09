@@ -4359,6 +4359,33 @@ pub(crate) fn apply_footprint_primitive_edit(
 
     use crate::library::editor::footprint::pad_to_sketch;
 
+    // v0.27 — Role=Pad on a Line is shorthand for "make this loop a
+    // pad." Rewrite the message here so the SetRole arm only ever
+    // sees Point-targeted Pad role assignments (where it makes
+    // sense). Without this, Role=Pad on a Line was a silent no-op
+    // — the Properties dropdown read as broken.
+    let msg = if let PrimitiveEditorMsg::FootprintSketchSetRole {
+        id,
+        role: crate::library::messages::RoleTag::Pad,
+    } = &msg
+    {
+        let is_line = editor
+            .primitive()
+            .sketch
+            .as_ref()
+            .and_then(|s| s.entities.iter().find(|e| e.id == *id))
+            .map(|e| matches!(e.kind, signex_sketch::entity::EntityKind::Line { .. }))
+            .unwrap_or(false);
+        if is_line {
+            editor.state.selected_sketch = Some(*id);
+            PrimitiveEditorMsg::FootprintSketchMakePadFromProfile
+        } else {
+            msg
+        }
+    } else {
+        msg
+    };
+
     /// v0.15 — gate the Pads → Sketch mirror on whether the
     /// footprint already has a sketch (i.e. the user has visited
     /// Sketch mode at least once OR auto-mint has already fired).
@@ -5990,6 +6017,13 @@ pub(crate) fn apply_footprint_primitive_edit(
                 LayerId, PadKind as LibPadKind, PadShape as LibPadShape,
             };
 
+            // v0.27 — the Role=Pad-on-a-Line case is rewritten to
+            // MakePadFromProfile at the top of
+            // `apply_footprint_primitive_edit`, so this arm only
+            // sees Point-targeted Pad assignments + every other
+            // role. PadAttr is Point-only on the schema side, so
+            // dispatching to `apply_sketch_role_with_warnings` is
+            // always meaningful from here on.
             editor.with_parts(|state, primitive| {
                 apply_sketch_role_with_warnings(state, primitive, id, role);
             });

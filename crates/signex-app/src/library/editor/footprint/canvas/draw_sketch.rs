@@ -1164,27 +1164,52 @@ pub(super) fn draw_filled_closed_loops(
             .chain(points.iter())
             .filter_map(|id| sketch.entities.iter().find(|e| e.id == *id))
             .find_map(role_color);
-        // v0.27 — sketch closed-loop fill tuned for the white
-        // canvas. Role hits stay at the layer colour but at higher
-        // alpha so saturation reads on white. Neutral (no role)
-        // shifts to a soft Fusion-style blue tint instead of cool
-        // grey — grey at 10% alpha is invisible against white.
-        let fill = match loop_role {
-            Some(layer) => {
-                let c = layer.color();
-                Color {
-                    r: c.r,
-                    g: c.g,
-                    b: c.b,
-                    a: 0.25,
+        // v0.27 — Fusion-style two-tone fill. The fill is the
+        // primary visual cue of "this is a closed shape" — Fusion
+        // shows pale-blue when idle and saturated-blue when the
+        // whole loop is selected. We mirror that here: detect a
+        // loop-wide selection by checking whether any line / point
+        // ID is in the user's selection set, then pick the
+        // saturated-blue plate; otherwise stay pale.
+        //
+        // Role-tagged loops (Pad / Silk / Courtyard / etc.)
+        // override the pale fill with the layer colour at higher
+        // alpha so the user can still distinguish role assignments
+        // at a glance. Selection still wins to make the active
+        // shape pop.
+        let mut selected_set: std::collections::HashSet<SketchEntityId> =
+            std::collections::HashSet::new();
+        if let Some(id) = state.selected_sketch {
+            selected_set.insert(id);
+        }
+        if let Some(id) = state.selected_sketch_secondary {
+            selected_set.insert(id);
+        }
+        for id in &state.selected_sketch_extra {
+            selected_set.insert(*id);
+        }
+        let loop_selected = !selected_set.is_empty()
+            && (lines.iter().any(|l| selected_set.contains(l))
+                || points.iter().any(|p| selected_set.contains(p)));
+        let fill = if loop_selected {
+            // Fusion saturated-blue selected fill.
+            Color::from_rgba(0.30, 0.55, 0.92, 0.45)
+        } else {
+            match loop_role {
+                Some(layer) => {
+                    let c = layer.color();
+                    Color {
+                        r: c.r,
+                        g: c.g,
+                        b: c.b,
+                        a: 0.20,
+                    }
+                }
+                None => {
+                    // Fusion idle pale-blue.
+                    Color::from_rgba(0.55, 0.75, 0.98, 0.18)
                 }
             }
-            None => Color {
-                r: 0.20,
-                g: 0.45,
-                b: 0.85,
-                a: 0.12,
-            },
         };
         let path = Path::new(|builder| {
             let p0 = cstate.world_to_screen(positions[0]);
