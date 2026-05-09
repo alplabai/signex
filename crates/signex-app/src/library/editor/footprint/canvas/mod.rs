@@ -468,7 +468,17 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     use crate::library::editor::footprint::state::{
                         EditorMode as _EM, SketchTool as _ST,
                     };
-                    let world = {
+                    // v0.27 — Select tool gets the raw cursor so a
+                    // click can target a specific entity without
+                    // jumping to the grid. Placement tools still go
+                    // through `snap::snap_cursor` so Line / Circle /
+                    // Arc etc. land on snap targets.
+                    let select_mode = matches!(self.state.mode, _EM::Sketch)
+                        && self.state.active_tool == _ST::Select;
+                    let world = if select_mode {
+                        cstate.last_snap = None;
+                        raw_world
+                    } else {
                         let point_hit = sketch_snap(self.sketch, cstate, raw_world);
                         let result =
                             snap::snap_cursor(raw_world, self.sketch, self.state, point_hit);
@@ -1380,7 +1390,17 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 // v0.18.8 — Snap (Point / H/V / Angle / Grid) applies
                 // in both Sketch and Pads modes; per-priority gating
                 // lives in `snap::snap_cursor` via `state.snap_options`.
-                let world = {
+                // v0.27 — Select tool sees the raw cursor so the
+                // click hit-test isn't pulled to the grid.
+                use crate::library::editor::footprint::state::{
+                    EditorMode as _EMt, SketchTool as _STt,
+                };
+                let select_mode_tick = matches!(self.state.mode, _EMt::Sketch)
+                    && self.state.active_tool == _STt::Select;
+                let world = if select_mode_tick {
+                    cstate.last_snap = None;
+                    raw_world
+                } else {
                     let point_hit = sketch_snap(self.sketch, cstate, raw_world);
                     let result = snap::snap_cursor(raw_world, self.sketch, self.state, point_hit);
                     cstate.last_snap = Some(result);
@@ -2240,7 +2260,14 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
             // the right-click context menu is open (the menu owns
             // the interaction).
             let context_menu_open = self.state.context_menu.is_some();
+            // v0.27 — only draw the reticle while a placement tool
+            // is active; the Select tool wants the OS cursor (now
+            // re-enabled in mouse_interaction) so click hit-testing
+            // reads as direct pointer interaction, not a snap-target
+            // glyph hovering near the cursor.
+            let in_select_tool = self.state.active_tool == super::state::SketchTool::Select;
             if in_sketch
+                && !in_select_tool
                 && !context_menu_open
                 && let Some((cx, cy)) = self.state.cursor_mm
                 && cursor_screen.is_some()
@@ -2468,11 +2495,77 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
         }
 
         if cursor.is_over(bounds) {
-            // v0.27 — in Sketch mode the OS crosshair shows up as a
-            // pale "ghost" cursor on the white Fusion-style canvas
-            // and competes with our own dark-blue snap reticle.
-            // Hide the OS cursor entirely; the reticle is the cursor.
+            // v0.27 — in Sketch mode + Select tool, hover-test the
+            // sketch's Line entities and surface a Resize cursor
+            // (↔ for vertical lines that resize horizontally, ↕
+            // for horizontal lines that resize vertically, ✥ for
+            // diagonals). This is the visible cue that the edge is
+            // draggable. Placement tools still hide the cursor so
+            // the reticle is the only visual marker.
             if self.state.mode == EditorMode::Sketch {
+                if self.state.active_tool == super::state::SketchTool::Select
+                    && let Some(c) = cursor.position_in(bounds)
+                    && let Some(sketch_ref) = self.sketch
+                {
+                    const LINE_HIT_TOL_PX: f32 = 6.0;
+                    let world = cstate.screen_to_world(c);
+                    let tol_mm = (LINE_HIT_TOL_PX / cstate.scale.max(1.0)) as f64;
+                    let pos_of = |id: signex_sketch::id::SketchEntityId| -> Option<(f64, f64)> {
+                        if let Some(solve) = self.state.last_solve.as_ref()
+                            && let Some(p) = signex_sketch::solver::state::point_xy(
+                                id,
+                                &solve.result.state,
+                                &solve.result.index,
+                                sketch_ref,
+                            )
+                        {
+                            return Some(p);
+                        }
+                        sketch_ref
+                            .entities
+                            .iter()
+                            .find(|e| e.id == id)
+                            .and_then(|e| match e.kind {
+                                signex_sketch::entity::EntityKind::Point { x, y } => Some((x, y)),
+                                _ => None,
+                            })
+                    };
+                    for ent in &sketch_ref.entities {
+                        if let signex_sketch::entity::EntityKind::Line { start, end } = ent.kind
+                            && let (Some(a), Some(b)) = (pos_of(start), pos_of(end))
+                        {
+                            let dx = b.0 - a.0;
+                            let dy = b.1 - a.1;
+                            let llen2 = dx * dx + dy * dy;
+                            if llen2 <= 1e-12 {
+                                continue;
+                            }
+                            let t = ((world.0 - a.0) * dx + (world.1 - a.1) * dy) / llen2;
+                            let tc = t.clamp(0.0, 1.0);
+                            let px = a.0 + tc * dx;
+                            let py = a.1 + tc * dy;
+                            let d2 = (px - world.0).powi(2) + (py - world.1).powi(2);
+                            if d2 <= tol_mm * tol_mm {
+                                // Direction-agnostic resize cursor:
+                                // line ≈ vertical → ↔ (drag left/right
+                                // to resize width); line ≈ horizontal
+                                // → ↕ (drag up/down).
+                                let is_vertical = dy.abs() > dx.abs();
+                                return if is_vertical {
+                                    mouse::Interaction::ResizingHorizontally
+                                } else {
+                                    mouse::Interaction::ResizingVertically
+                                };
+                            }
+                        }
+                    }
+                }
+                if self.state.active_tool == super::state::SketchTool::Select {
+                    // No line hover — show crosshair so the user
+                    // sees something concrete to click with.
+                    return mouse::Interaction::Crosshair;
+                }
+                // Placement tools — reticle is the cursor.
                 mouse::Interaction::Hidden
             } else {
                 mouse::Interaction::Crosshair
