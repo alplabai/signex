@@ -483,20 +483,31 @@ impl PinRenderGeometry {
             n_cw
         };
 
-        // Text rotation normalized to (-π/2, π/2] so text is never upside-down.
-        let mut text_rotation = (unit.y as f32).atan2(unit.x as f32);
+        // Text rotation for iced screen space.
+        //
+        // World coordinates are Y-up; iced canvas is Y-down. The world→screen
+        // transform is: screen_y = oy − world_y × scale, which negates the Y
+        // component. To make text align with the pin direction in screen space
+        // we must negate unit.y: atan2(−uy, ux).
+        //
+        // Normalize to (−π/2, π/2] so text is never upside-down.
+        // Use strict `<` for the lower bound so that Up-pin angle (exactly
+        // −π/2) is kept as-is — it makes text flow upward on screen, which
+        // is the correct readable direction for Up pins.
+        let mut text_rotation = (-(unit.y as f32)).atan2(unit.x as f32);
         let flipped: bool;
         if text_rotation > std::f32::consts::FRAC_PI_2 {
             text_rotation -= std::f32::consts::PI;
             flipped = true;
-        } else if text_rotation <= -std::f32::consts::FRAC_PI_2 {
+        } else if text_rotation < -std::f32::consts::FRAC_PI_2 {
             text_rotation += std::f32::consts::PI;
             flipped = true;
         } else {
             flipped = false;
         }
-        // When flipped, the text's +x axis reverses — reverse h_align accordingly
-        // so the name extends away from the tip rather than toward it.
+        // When flipped (only Left-facing pins after normalization), the text's
+        // local +x axis points opposite the pin direction — reverse h_align so
+        // the name still extends away from the tip.
         let name_h_align = if flipped { HAlign::Right } else { HAlign::Left };
 
         let number_offset_mm = PIN_TEXT_LAYOUT.pin_pitch_mm as f64
