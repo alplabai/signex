@@ -651,19 +651,31 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                             return Some(canvas::Action::capture());
                         }
                         if let Some(sel) = state::hit_test(self.symbol, wx, wy) {
-                            // Start dragging immediately on first click —
-                            // no need for a second click on an already-selected item.
+                            // Pins are moved individually; clicking a graphic
+                            // body selects All and drags the whole symbol so
+                            // the body rect acts as a move handle for the
+                            // entire component (Altium-style behaviour).
+                            let effective_sel = match sel {
+                                SymbolSelection::Graphic(_) => SymbolSelection::All,
+                                other => other,
+                            };
+
                             state.dragging = true;
-                            state.last_drag_world_pos = None;
-                            state.drag_anchor_offset = selection_anchor(self.symbol, sel)
+                            state.last_drag_world_pos = if effective_sel == SymbolSelection::All {
+                                Some((wx, wy))
+                            } else {
+                                None
+                            };
+                            state.drag_anchor_offset = selection_anchor(self.symbol, effective_sel)
                                 .map(|(anchor_x, anchor_y)| (anchor_x - wx, anchor_y - wy));
 
-                            if self.selected == Some(sel) {
+                            if self.selected == Some(effective_sel) {
                                 return Some(canvas::Action::capture());
                             }
-                            // First click: publish Select, drag starts on
-                            // the next CursorMoved.
-                            Some(canvas::Action::publish(CanvasAction::Select(sel)).and_capture())
+                            Some(
+                                canvas::Action::publish(CanvasAction::Select(effective_sel))
+                                    .and_capture(),
+                            )
                         } else {
                             state.dragging = false;
                             state.drag_anchor_offset = None;
