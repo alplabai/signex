@@ -26,7 +26,8 @@ use crate::library::editor::footprint::layers::FpLayer;
 use crate::library::editor::symbol::canvas::{self as sym_canvas, SymbolCanvas};
 use crate::library::editor::symbol::state as sym_state;
 use crate::library::messages::{
-    EditorMsg, GraphicHandleMsg, LibraryMessage, PrimitiveEditorMsg, SymbolSelectionMsg,
+    EditorMsg, GraphicHandleMsg, LibraryMessage, PrimitiveEditorMsg, SymbolRotatePivotMsg,
+    SymbolSelectionMsg,
 };
 use crate::library::state::LibraryDisplaySettings;
 use crate::panels::PanelContext;
@@ -288,6 +289,7 @@ fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> Primitive
         CanvasAction::Select(sel) => PrimitiveEditorMsg::SymbolSelect(symbol_selection_to_msg(sel)),
         CanvasAction::Deselect => PrimitiveEditorMsg::SymbolDeselect,
         CanvasAction::Move { x, y } => PrimitiveEditorMsg::SymbolMoveSelected { x, y },
+        CanvasAction::MoveAll { dx, dy } => PrimitiveEditorMsg::SymbolMoveAll { dx, dy },
         CanvasAction::MoveGraphicHandle { idx, handle, x, y } => {
             PrimitiveEditorMsg::SymbolMoveGraphicHandle {
                 idx,
@@ -296,6 +298,13 @@ fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> Primitive
                 y,
             }
         }
+        CanvasAction::RotateSelected {
+            clockwise,
+            pivot_mode,
+        } => PrimitiveEditorMsg::SymbolRotateSelected {
+            clockwise,
+            pivot: rotate_pivot_to_msg(pivot_mode),
+        },
         CanvasAction::DeleteSelected => PrimitiveEditorMsg::SymbolDeleteSelected,
         CanvasAction::Pan { dx, dy } => PrimitiveEditorMsg::SymbolPan { dx, dy },
         CanvasAction::Zoom { sx, sy, delta } => PrimitiveEditorMsg::SymbolZoom { sx, sy, delta },
@@ -316,6 +325,13 @@ fn graphic_handle_to_msg(handle: sym_state::GraphicHandle) -> GraphicHandleMsg {
     }
 }
 
+fn rotate_pivot_to_msg(pivot_mode: sym_canvas::RotatePivotMode) -> SymbolRotatePivotMsg {
+    match pivot_mode {
+        sym_canvas::RotatePivotMode::WorldOrigin => SymbolRotatePivotMsg::WorldOrigin,
+        sym_canvas::RotatePivotMode::GeometryCenter => SymbolRotatePivotMsg::GeometryCenter,
+    }
+}
+
 fn symbol_selection_to_msg(sel: sym_state::SymbolSelection) -> SymbolSelectionMsg {
     use sym_state::{FieldKey, SymbolSelection};
     match sel {
@@ -323,6 +339,7 @@ fn symbol_selection_to_msg(sel: sym_state::SymbolSelection) -> SymbolSelectionMs
         SymbolSelection::Field(FieldKey::Reference) => SymbolSelectionMsg::FieldReference,
         SymbolSelection::Field(FieldKey::Value) => SymbolSelectionMsg::FieldValue,
         SymbolSelection::Graphic(idx) => SymbolSelectionMsg::Graphic(idx),
+        SymbolSelection::All => SymbolSelectionMsg::All,
     }
 }
 

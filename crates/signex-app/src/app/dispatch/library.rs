@@ -15,7 +15,8 @@ use super::super::*;
 use crate::library::commands;
 use crate::library::messages::{
     BrowserEditMsg, CloseLibraryChoice, EditorMsg, GraphicHandleMsg, LibraryMessage, ParamKindMsg,
-    PickerMsg, PrimitiveEditorMsg, PrimitivePickerMsg, SettingsMsg, SymbolSelectionMsg,
+    PickerMsg, PrimitiveEditorMsg, PrimitivePickerMsg, SettingsMsg, SymbolRotatePivotMsg,
+    SymbolSelectionMsg,
     SymbolToolMsg,
 };
 use crate::library::state::{
@@ -3878,6 +3879,7 @@ pub(crate) fn apply_symbol_primitive_edit(
                 SymbolSelectionMsg::FieldReference => SymbolSelection::Field(FieldKey::Reference),
                 SymbolSelectionMsg::FieldValue => SymbolSelection::Field(FieldKey::Value),
                 SymbolSelectionMsg::Graphic(idx) => SymbolSelection::Graphic(idx),
+                SymbolSelectionMsg::All => SymbolSelection::All,
             });
             editor.canvas_cache.clear();
         }
@@ -3896,6 +3898,15 @@ pub(crate) fn apply_symbol_primitive_edit(
             editor.dirty = true;
             editor.canvas_cache.clear();
         }
+        PrimitiveEditorMsg::SymbolMoveAll { dx, dy } => {
+            crate::library::editor::symbol::state::move_all(
+                editor.primitive_mut(),
+                dx,
+                dy,
+            );
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+        }
         PrimitiveEditorMsg::SymbolMoveGraphicHandle { idx, handle, x, y } => {
             let h = graphic_handle_msg_to_state(handle);
             crate::library::editor::symbol::state::move_graphic_handle(
@@ -3904,6 +3915,18 @@ pub(crate) fn apply_symbol_primitive_edit(
                 h,
                 x,
                 y,
+            );
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::SymbolRotateSelected { clockwise, pivot } => {
+            let selected = editor.selected;
+            let pivot_mode = rotate_pivot_msg_to_state(pivot);
+            crate::library::editor::symbol::state::rotate_selected_with_pivot(
+                editor.primitive_mut(),
+                selected,
+                clockwise,
+                pivot_mode,
             );
             editor.dirty = true;
             editor.canvas_cache.clear();
@@ -4110,53 +4133,77 @@ fn atomic_write(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
 /// graphic. Used by `SymbolFit` so the dispatcher can compute a
 /// `Camera::fit_rect` against the active symbol without reaching
 /// into the canvas program. Matches the `SymbolCanvas::bbox` shape
-/// (pad 5.08 mm around the body, 1.27 mm around every pin) so
-/// click-Fit and Home key produce the same viewport.
+/// so click-Fit and Home key produce the same viewport.
 fn symbol_bbox(sym: &signex_library::Symbol) -> (f64, f64, f64, f64) {
     use signex_library::SymbolGraphicKind;
-    let mut min_x: f64 = -10.16;
-    let mut min_y: f64 = -7.62;
-    let mut max_x: f64 = 10.16;
-    let mut max_y: f64 = 7.62;
+    let mut bounds: Option<(f64, f64, f64, f64)> = None;
+    let include_rect =
+        |bounds: &mut Option<(f64, f64, f64, f64)>, x0: f64, y0: f64, x1: f64, y1: f64| {
+            let rx0 = x0.min(x1);
+            let ry0 = y0.min(y1);
+            let rx1 = x0.max(x1);
+            let ry1 = y0.max(y1);
+            if let Some((min_x, min_y, max_x, max_y)) = bounds.as_mut() {
+                *min_x = (*min_x).min(rx0);
+                *min_y = (*min_y).min(ry0);
+                *max_x = (*max_x).max(rx1);
+                *max_y = (*max_y).max(ry1);
+            } else {
+                *bounds = Some((rx0, ry0, rx1, ry1));
+            }
+        };
+
     for g in &sym.graphics {
         if let SymbolGraphicKind::Rectangle { from, to } = &g.kind {
-            min_x = min_x.min(from[0]).min(to[0]) - 5.08;
-            min_y = min_y.min(from[1]).min(to[1]) - 5.08;
-            max_x = max_x.max(from[0]).max(to[0]) + 5.08;
-            max_y = max_y.max(from[1]).max(to[1]) + 5.08;
+            include_rect(
+                &mut bounds,
+                from[0].min(to[0]) - 5.08,
+                from[1].min(to[1]) - 5.08,
+                from[0].max(to[0]) + 5.08,
+                from[1].max(to[1]) + 5.08,
+            );
             break;
         }
     }
+
     for pin in &sym.pins {
-        min_x = min_x.min(pin.position[0] - 1.27);
-        min_y = min_y.min(pin.position[1] - 1.27);
-        max_x = max_x.max(pin.position[0] + pin.length + 1.27);
-        max_y = max_y.max(pin.position[1] + 1.27);
+        include_rect(
+            &mut bounds,
+            pin.position[0] - 1.27,
+            pin.position[1] - 1.27,
+            pin.position[0] + pin.length + 1.27,
+            pin.position[1] + 1.27,
+        );
     }
+
     for g in &sym.graphics {
         match &g.kind {
             SymbolGraphicKind::Rectangle { from, to } | SymbolGraphicKind::Line { from, to } => {
-                min_x = min_x.min(from[0]).min(to[0]);
-                min_y = min_y.min(from[1]).min(to[1]);
-                max_x = max_x.max(from[0]).max(to[0]);
-                max_y = max_y.max(from[1]).max(to[1]);
+                include_rect(&mut bounds, from[0], from[1], to[0], to[1]);
             }
             SymbolGraphicKind::Circle { center, radius }
             | SymbolGraphicKind::Arc { center, radius, .. } => {
-                min_x = min_x.min(center[0] - radius);
-                min_y = min_y.min(center[1] - radius);
-                max_x = max_x.max(center[0] + radius);
-                max_y = max_y.max(center[1] + radius);
+                include_rect(
+                    &mut bounds,
+                    center[0] - radius,
+                    center[1] - radius,
+                    center[0] + radius,
+                    center[1] + radius,
+                );
             }
             SymbolGraphicKind::Text { position, size, .. } => {
-                min_x = min_x.min(position[0] - size);
-                min_y = min_y.min(position[1] - size);
-                max_x = max_x.max(position[0] + size);
-                max_y = max_y.max(position[1] + size);
+                include_rect(
+                    &mut bounds,
+                    position[0] - size,
+                    position[1] - size,
+                    position[0] + size,
+                    position[1] + size,
+                );
             }
         }
     }
-    (min_x, min_y, max_x, max_y)
+
+    bounds.unwrap_or((-1.27, -1.27, 1.27, 1.27))
 }
 
 /// Translate the pure-data [`GraphicHandleMsg`] back into the
@@ -4172,6 +4219,17 @@ fn graphic_handle_msg_to_state(
         GraphicHandleMsg::ArcStart => GraphicHandle::ArcStart,
         GraphicHandleMsg::ArcEnd => GraphicHandle::ArcEnd,
         GraphicHandleMsg::TextAnchor => GraphicHandle::TextAnchor,
+    }
+}
+
+/// Translate pure-data rotate pivot messages into Symbol-state pivot mode.
+fn rotate_pivot_msg_to_state(
+    msg: SymbolRotatePivotMsg,
+) -> crate::library::editor::symbol::state::GraphicRotationPivotMode {
+    use crate::library::editor::symbol::state::GraphicRotationPivotMode;
+    match msg {
+        SymbolRotatePivotMsg::WorldOrigin => GraphicRotationPivotMode::WorldOrigin,
+        SymbolRotatePivotMsg::GeometryCenter => GraphicRotationPivotMode::GeometryCenter,
     }
 }
 
@@ -5735,7 +5793,9 @@ pub(crate) fn apply_footprint_primitive_edit(
         | PrimitiveEditorMsg::SymbolSelect(_)
         | PrimitiveEditorMsg::SymbolDeselect
         | PrimitiveEditorMsg::SymbolMoveSelected { .. }
+        | PrimitiveEditorMsg::SymbolMoveAll { .. }
         | PrimitiveEditorMsg::SymbolMoveGraphicHandle { .. }
+        | PrimitiveEditorMsg::SymbolRotateSelected { .. }
         | PrimitiveEditorMsg::SymbolDeleteSelected
         | PrimitiveEditorMsg::SymbolSetPinNumber { .. }
         | PrimitiveEditorMsg::SymbolSetPinName { .. }
@@ -6133,6 +6193,7 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::SymbolSelect(_)
         | EditorMsg::SymbolDeselect
         | EditorMsg::SymbolMoveSelected { .. }
+        | EditorMsg::SymbolMoveAll { .. }
         | EditorMsg::SymbolDeleteSelected
         | EditorMsg::SymbolSetField { .. }
         | EditorMsg::SymbolSetPinNumber { .. }

@@ -954,7 +954,7 @@ fn build_symbol_editor_panel_ctx(
                 })
             })
             .unwrap_or(SymbolEditorSelection::None),
-        None => SymbolEditorSelection::None,
+        Some(sym_state::SymbolSelection::All) | None => SymbolEditorSelection::None,
     };
 
     let active_max_part = sym_state::max_part_number(sym);

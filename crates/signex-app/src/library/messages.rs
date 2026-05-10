@@ -648,6 +648,9 @@ pub enum EditorMsg {
         x: f64,
         y: f64,
     },
+    /// Shift every pin and graphic by `(dx, dy)` mm.
+    /// Emitted while the user drags with All selected (Ctrl+A).
+    SymbolMoveAll { dx: f64, dy: f64 },
     /// Delete-key — drop the currently-selected element.
     SymbolDeleteSelected,
     /// Properties pane — set the value text of one of the canonical
@@ -1122,6 +1125,8 @@ pub enum SymbolSelectionMsg {
     /// symbol's `graphics` vector. Drives the right-dock Properties
     /// panel's Graphic branch.
     Graphic(usize),
+    /// All pins and graphics — emitted by Ctrl+A on the symbol canvas.
+    All,
 }
 
 /// Symbol field key — pure-data alias of
@@ -1152,6 +1157,16 @@ pub enum GraphicHandleMsg {
     ArcEnd,
     /// Text anchor / `position` field.
     TextAnchor,
+}
+
+/// Pivot mode for Symbol-graphic rotate operations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[allow(dead_code)]
+pub enum SymbolRotatePivotMsg {
+    /// Legacy orbit around world origin `(0, 0)`.
+    WorldOrigin,
+    /// Rotate around each selected graphic's geometry center.
+    GeometryCenter,
 }
 
 /// Inner messages for a [`LibraryMessage::PrimitiveEditorEvent`]
@@ -1189,6 +1204,8 @@ pub enum PrimitiveEditorMsg {
     /// Drag the currently-selected element to a new grid-snapped
     /// world position.
     SymbolMoveSelected { x: f64, y: f64 },
+    /// Shift every pin and graphic by `(dx, dy)` mm (All selection drag).
+    SymbolMoveAll { dx: f64, dy: f64 },
     /// Drag-to-resize: move one resize handle of the graphic at
     /// `idx` to grid-snapped world coordinates `(x, y)`. Fires
     /// continuously while the user holds and drags a graphic handle
@@ -1200,6 +1217,14 @@ pub enum PrimitiveEditorMsg {
         handle: GraphicHandleMsg,
         x: f64,
         y: f64,
+    },
+    /// Rotate the current Symbol-canvas selection by 90°.
+    ///
+    /// `clockwise=true` (Space), `clockwise=false` (Shift+Space).
+    /// `pivot=GeometryCenter` when Option/Alt is held.
+    SymbolRotateSelected {
+        clockwise: bool,
+        pivot: SymbolRotatePivotMsg,
     },
     /// Delete-key — drop the currently-selected element.
     SymbolDeleteSelected,

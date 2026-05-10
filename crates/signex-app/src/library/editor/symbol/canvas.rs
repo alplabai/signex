@@ -88,6 +88,12 @@ pub enum CanvasAction {
         x: f64,
         y: f64,
     },
+    /// Shift every pin and graphic by `(dx, dy)` mm.
+    /// Emitted while the user drags with `SymbolSelection::All`.
+    MoveAll {
+        dx: f64,
+        dy: f64,
+    },
     /// Drag-to-resize a graphic handle. Fired continuously while the
     /// user drags the handle of a placed graphic in the Select tool.
     MoveGraphicHandle {
@@ -176,6 +182,10 @@ pub struct CanvasState {
     /// Anchor offset (anchor - cursor) captured on drag start so
     /// selected items keep their click point while moving.
     pub drag_anchor_offset: Option<(f64, f64)>,
+    /// Last world position during an All-selection drag. Used to
+    /// compute delta-based `MoveAll` events since there is no single
+    /// anchor to absolute-position against.
+    pub last_drag_world_pos: Option<(f64, f64)>,
     /// True while the user holds right- or middle-button to pan.
     pub panning: bool,
     /// Last cursor screen position during a pan, used to compute
@@ -610,7 +620,7 @@ fn selection_anchor(symbol: &Symbol, selection: SymbolSelection) -> Option<(f64,
             }
             SymbolGraphicKind::Text { position, .. } => (position[0], position[1]),
         }),
-        SymbolSelection::Field(_) => None,
+        SymbolSelection::Field(_) | SymbolSelection::All => None,
     }
 }
 
@@ -630,33 +640,34 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                 let (wx, wy) = world_for(self, pos.x, pos.y, bounds);
                 match self.tool {
                     SymbolTool::Select => {
-                        // Resize handles win over pin hits — corners /
-                        // endpoints / radius are usually inside or right
-                        // next to the body where pins might also live.
+                        // Resize handles win over pin hits.
                         if let Some((idx, handle)) =
                             state::hit_test_graphic_handle(self.symbol, wx, wy)
                         {
                             state.dragging_handle = Some((idx, handle));
                             state.dragging = false;
                             state.drag_anchor_offset = None;
-                            // Capture without publishing — the actual
-                            // geometry mutation rides on CursorMoved.
+                            state.last_drag_world_pos = None;
                             return Some(canvas::Action::capture());
                         }
                         if let Some(sel) = state::hit_test(self.symbol, wx, wy) {
+                            // Start dragging immediately on first click —
+                            // no need for a second click on an already-selected item.
+                            state.dragging = true;
+                            state.last_drag_world_pos = None;
+                            state.drag_anchor_offset = selection_anchor(self.symbol, sel)
+                                .map(|(anchor_x, anchor_y)| (anchor_x - wx, anchor_y - wy));
+
                             if self.selected == Some(sel) {
-                                state.dragging = true;
-                                state.drag_anchor_offset = selection_anchor(self.symbol, sel)
-                                    .map(|(anchor_x, anchor_y)| (anchor_x - wx, anchor_y - wy));
                                 return Some(canvas::Action::capture());
                             }
-
-                            state.dragging = false;
-                            state.drag_anchor_offset = None;
+                            // First click: publish Select, drag starts on
+                            // the next CursorMoved.
                             Some(canvas::Action::publish(CanvasAction::Select(sel)).and_capture())
                         } else {
                             state.dragging = false;
                             state.drag_anchor_offset = None;
+                            state.last_drag_world_pos = None;
                             Some(canvas::Action::publish(CanvasAction::Deselect).and_capture())
                         }
                     }
@@ -725,6 +736,24 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                     }));
                 }
                 if state.dragging {
+                    // All-selection: delta-based, track last position.
+                    if self.selected == Some(SymbolSelection::All) {
+                        if let Some((last_wx, last_wy)) = state.last_drag_world_pos {
+                            let dx = wx - last_wx;
+                            let dy = wy - last_wy;
+                            state.last_drag_world_pos = Some((wx, wy));
+                            if dx.abs() > f64::EPSILON || dy.abs() > f64::EPSILON {
+                                return Some(canvas::Action::publish(CanvasAction::MoveAll {
+                                    dx,
+                                    dy,
+                                }));
+                            }
+                        } else {
+                            state.last_drag_world_pos = Some((wx, wy));
+                        }
+                        return None;
+                    }
+                    // Single-item selection: absolute positioning with anchor offset.
                     let (move_x, move_y) = state
                         .drag_anchor_offset
                         .map(|(dx, dy)| (wx + dx, wy + dy))
@@ -772,6 +801,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                 state.dragging = false;
                 state.dragging_handle = None;
                 state.drag_anchor_offset = None;
+                state.last_drag_world_pos = None;
                 None
             }
             Event::Keyboard(iced::keyboard::Event::KeyPressed {
@@ -785,6 +815,12 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                 }
                 iced::keyboard::Key::Named(iced::keyboard::key::Named::Home) => {
                     Some(canvas::Action::publish(CanvasAction::Fit))
+                }
+                iced::keyboard::Key::Character(c) if c.as_str() == "a" && modifiers.command() => {
+                    Some(
+                        canvas::Action::publish(CanvasAction::Select(SymbolSelection::All))
+                            .and_capture(),
+                    )
                 }
                 iced::keyboard::Key::Named(iced::keyboard::key::Named::Space) => {
                     let pivot_mode = if modifiers.alt() {

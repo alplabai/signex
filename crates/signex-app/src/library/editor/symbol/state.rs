@@ -58,6 +58,11 @@ pub enum SymbolSelection {
     /// canvas hit-test on Select-tool clicks that miss every pin and
     /// every graphic resize handle but land inside a graphic body.
     Graphic(usize),
+    /// All pins and graphics selected together (Ctrl+A). Drag moves
+    /// the whole symbol body as a unit; rotate/delete are no-ops so
+    /// the user cannot accidentally wipe the entire symbol with a
+    /// key press.
+    All,
 }
 
 /// Pivot mode for Symbol graphic rotation.
@@ -275,7 +280,23 @@ pub fn move_selected(sym: &mut Symbol, sel: Option<SymbolSelection>, x: f64, y: 
         // SymbolSelection::Field — no-op; the on-canvas designator /
         // value drag re-binds against `ComponentRow` once that pipeline
         // ships.
-        Some(SymbolSelection::Field(_)) | None => {}
+        // SymbolSelection::All — use move_all for delta-based movement.
+        Some(SymbolSelection::Field(_)) | Some(SymbolSelection::All) | None => {}
+    }
+}
+
+/// Shift every pin and every graphic by `(dx, dy)` mm.
+///
+/// Used when the user drags with `SymbolSelection::All` active (Ctrl+A
+/// select-all). The caller is responsible for computing the delta and
+/// for grid-snapping if desired.
+pub fn move_all(sym: &mut Symbol, dx: f64, dy: f64) {
+    for pin in &mut sym.pins {
+        pin.position[0] += dx;
+        pin.position[1] += dy;
+    }
+    for graphic in &mut sym.graphics {
+        translate_graphic_by(&mut graphic.kind, dx, dy);
     }
 }
 
@@ -318,7 +339,7 @@ pub fn rotate_selected_with_pivot(
         Some(SymbolSelection::Graphic(idx)) => {
             rotate_graphic_90(sym, idx, clockwise, graphic_pivot_mode)
         }
-        Some(SymbolSelection::Field(_)) | None => {}
+        Some(SymbolSelection::Field(_)) | Some(SymbolSelection::All) | None => {}
     }
 }
 
@@ -557,6 +578,28 @@ fn translate_graphic_to(sym: &mut Symbol, idx: usize, x: f64, y: f64) {
     }
 }
 
+/// Shift a single graphic kind by `(dx, dy)` mm in-place.
+pub fn translate_graphic_by(kind: &mut SymbolGraphicKind, dx: f64, dy: f64) {
+    match kind {
+        SymbolGraphicKind::Rectangle { from, to } => {
+            from[0] += dx; from[1] += dy;
+            to[0]   += dx; to[1]   += dy;
+        }
+        SymbolGraphicKind::Line { from, to } => {
+            from[0] += dx; from[1] += dy;
+            to[0]   += dx; to[1]   += dy;
+        }
+        SymbolGraphicKind::Circle { center, .. } | SymbolGraphicKind::Arc { center, .. } => {
+            center[0] += dx;
+            center[1] += dy;
+        }
+        SymbolGraphicKind::Text { position, .. } => {
+            position[0] += dx;
+            position[1] += dy;
+        }
+    }
+}
+
 /// Delete whatever is currently selected. Returns `Some(new_sel)` if
 /// the caller should update its selection (typically `None` after a
 /// pin removal), or `None` if no selection change is needed.
@@ -582,6 +625,7 @@ pub fn delete_selected(
             }
         }
         Some(SymbolSelection::Field(_)) => None,
+        Some(SymbolSelection::All) => None,
         None => None,
     }
 }
