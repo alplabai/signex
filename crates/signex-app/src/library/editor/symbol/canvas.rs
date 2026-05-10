@@ -1116,15 +1116,25 @@ impl<'a> SymbolCanvas<'a> {
 
             // Keep pin labels aligned with the pin axis while avoiding
             // upside-down horizontal text for left-facing pins.
+            // When we flip the rotation by ±π the text's local +x axis
+            // reverses direction, so the name h_align must also be
+            // reversed (Right instead of Left) to keep text extending
+            // away from the tip toward the symbol body.
             let mut text_rotation = (uy as f32).atan2(ux as f32);
+            let text_flipped;
             if text_rotation > std::f32::consts::FRAC_PI_2 {
                 text_rotation -= std::f32::consts::PI;
+                text_flipped = true;
             } else if text_rotation <= -std::f32::consts::FRAC_PI_2 {
                 // Use <= so Down pins (atan2 = exactly -π/2) are also
                 // normalized to +π/2, keeping vertical text reading
                 // direction consistent with Up pins.
                 text_rotation += std::f32::consts::PI;
+                text_flipped = true;
+            } else {
+                text_flipped = false;
             }
+            let name_h_align = if text_flipped { HAlign::Right } else { HAlign::Left };
 
             let along_mm = seg_len * PIN_TEXT_LAYOUT.number_along_ratio as f64;
             let number_offset_mm = PIN_TEXT_LAYOUT.pin_pitch_mm as f64
@@ -1165,7 +1175,7 @@ impl<'a> SymbolCanvas<'a> {
                 bold: false,
                 italic: false,
                 rotation_rad: text_rotation,
-                h_align: HAlign::Left,
+                h_align: name_h_align,
                 v_align: VAlign::Center,
             });
         }
