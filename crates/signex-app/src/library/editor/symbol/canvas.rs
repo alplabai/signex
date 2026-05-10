@@ -94,6 +94,10 @@ pub enum CanvasAction {
         x: f64,
         y: f64,
     },
+    RotateSelected {
+        clockwise: bool,
+        pivot_mode: RotatePivotMode,
+    },
     DeleteSelected,
     // ── View / camera ──
     /// Pan the camera by `(dx, dy)` screen pixels. Fired by right-
@@ -117,6 +121,13 @@ pub enum CanvasAction {
         x_mm: Option<f64>,
         y_mm: Option<f64>,
     },
+}
+
+/// Pivot mode carried by rotate actions emitted from the Symbol canvas.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RotatePivotMode {
+    WorldOrigin,
+    GeometryCenter,
 }
 
 /// Canvas tools — Altium-style `Tool` enum scoped to this surface.
@@ -160,6 +171,9 @@ pub struct CanvasState {
     /// with `dragging` — a click either lands on a pin or on a
     /// graphic handle, never both.
     pub dragging_handle: Option<(usize, GraphicHandle)>,
+    /// Anchor offset (anchor - cursor) captured on drag start so
+    /// selected items keep their click point while moving.
+    pub drag_anchor_offset: Option<(f64, f64)>,
     /// True while the user holds right- or middle-button to pan.
     pub panning: bool,
     /// Last cursor screen position during a pan, used to compute
@@ -414,7 +428,7 @@ const PIN_TEXT_LAYOUT: PinTextLayout = PinTextLayout {
     number_size_mm: 1.27,
     pin_pitch_mm: 2.54,
     number_offset_ratio_of_pitch: 0.10,
-    number_along_ratio: 0.50,
+    number_along_ratio: 0.18,
     name_size_mm: 1.27,
     name_offset_x_mm: 0.50,
     name_offset_y_mm: 0.00,
@@ -489,6 +503,22 @@ fn world_unsnapped(canvas: &SymbolCanvas<'_>, sx: f32, sy: f32, bounds: Rectangl
     (world.x as f64, -world.y as f64)
 }
 
+fn selection_anchor(symbol: &Symbol, selection: SymbolSelection) -> Option<(f64, f64)> {
+    match selection {
+        SymbolSelection::Pin(idx) => symbol.pins.get(idx).map(|pin| (pin.position[0], pin.position[1])),
+        SymbolSelection::Graphic(idx) => symbol.graphics.get(idx).map(|graphic| match &graphic.kind {
+            SymbolGraphicKind::Rectangle { from, .. } | SymbolGraphicKind::Line { from, .. } => {
+                (from[0], from[1])
+            }
+            SymbolGraphicKind::Circle { center, .. } | SymbolGraphicKind::Arc { center, .. } => {
+                (center[0], center[1])
+            }
+            SymbolGraphicKind::Text { position, .. } => (position[0], position[1]),
+        }),
+        SymbolSelection::Field(_) => None,
+    }
+}
+
 impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
     type State = CanvasState;
 
@@ -512,14 +542,26 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                             state::hit_test_graphic_handle(self.symbol, wx, wy)
                         {
                             state.dragging_handle = Some((idx, handle));
+                            state.dragging = false;
+                            state.drag_anchor_offset = None;
                             // Capture without publishing — the actual
                             // geometry mutation rides on CursorMoved.
                             return Some(canvas::Action::capture());
                         }
                         if let Some(sel) = state::hit_test(self.symbol, wx, wy) {
-                            state.dragging = true;
+                            if self.selected == Some(sel) {
+                                state.dragging = true;
+                                state.drag_anchor_offset = selection_anchor(self.symbol, sel)
+                                    .map(|(anchor_x, anchor_y)| (anchor_x - wx, anchor_y - wy));
+                                return Some(canvas::Action::capture());
+                            }
+
+                            state.dragging = false;
+                            state.drag_anchor_offset = None;
                             Some(canvas::Action::publish(CanvasAction::Select(sel)).and_capture())
                         } else {
+                            state.dragging = false;
+                            state.drag_anchor_offset = None;
                             Some(canvas::Action::publish(CanvasAction::Deselect).and_capture())
                         }
                     }
@@ -588,7 +630,14 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                     }));
                 }
                 if state.dragging {
-                    return Some(canvas::Action::publish(CanvasAction::Move { x: wx, y: wy }));
+                    let (move_x, move_y) = state
+                        .drag_anchor_offset
+                        .map(|(dx, dy)| (wx + dx, wy + dy))
+                        .unwrap_or((wx, wy));
+                    return Some(canvas::Action::publish(CanvasAction::Move {
+                        x: move_x,
+                        y: move_y,
+                    }));
                 }
                 // Idle cursor — publish the unsnapped world position
                 // for the status footer X/Y readout.
@@ -627,15 +676,48 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
                 state.dragging = false;
                 state.dragging_handle = None;
+                state.drag_anchor_offset = None;
                 None
             }
-            Event::Keyboard(iced::keyboard::Event::KeyPressed { key, .. }) => match key {
+            Event::Keyboard(iced::keyboard::Event::KeyPressed {
+                key,
+                modifiers,
+                ..
+            }) => match key {
                 iced::keyboard::Key::Named(iced::keyboard::key::Named::Delete)
                 | iced::keyboard::Key::Named(iced::keyboard::key::Named::Backspace) => {
                     Some(canvas::Action::publish(CanvasAction::DeleteSelected))
                 }
                 iced::keyboard::Key::Named(iced::keyboard::key::Named::Home) => {
                     Some(canvas::Action::publish(CanvasAction::Fit))
+                }
+                iced::keyboard::Key::Named(iced::keyboard::key::Named::Space) => {
+                    let pivot_mode = if modifiers.alt() {
+                        RotatePivotMode::GeometryCenter
+                    } else {
+                        RotatePivotMode::WorldOrigin
+                    };
+                    Some(
+                        canvas::Action::publish(CanvasAction::RotateSelected {
+                            clockwise: !modifiers.shift(),
+                            pivot_mode,
+                        })
+                        .and_capture(),
+                    )
+                }
+                iced::keyboard::Key::Character(c) if c == " " => {
+                    let pivot_mode = if modifiers.alt() {
+                        RotatePivotMode::GeometryCenter
+                    } else {
+                        RotatePivotMode::WorldOrigin
+                    };
+                    Some(
+                        canvas::Action::publish(CanvasAction::RotateSelected {
+                            clockwise: !modifiers.shift(),
+                            pivot_mode,
+                        })
+                        .and_capture(),
+                    )
                 }
                 _ => None,
             },
@@ -1024,7 +1106,25 @@ impl<'a> SymbolCanvas<'a> {
             let uy = dy / seg_len;
             let (n1x, n1y) = (-uy, ux);
             let (n2x, n2y) = (uy, -ux);
-            let (nx, ny) = if n1y >= n2y { (n1x, n1y) } else { (n2x, n2y) };
+            // Prefer the visually "outer" side: top in world-Y, and left on ties.
+            let choose_n1 = if (n1y - n2y).abs() > f64::EPSILON {
+                n1y > n2y
+            } else {
+                n1x < n2x
+            };
+            let (nx, ny) = if choose_n1 { (n1x, n1y) } else { (n2x, n2y) };
+
+            // Keep pin labels aligned with the pin axis while avoiding
+            // upside-down horizontal text for left-facing pins.
+            let mut text_rotation = (uy as f32).atan2(ux as f32);
+            if text_rotation > std::f32::consts::FRAC_PI_2 {
+                text_rotation -= std::f32::consts::PI;
+            } else if text_rotation <= -std::f32::consts::FRAC_PI_2 {
+                // Use <= so Down pins (atan2 = exactly -π/2) are also
+                // normalized to +π/2, keeping vertical text reading
+                // direction consistent with Up pins.
+                text_rotation += std::f32::consts::PI;
+            }
 
             let along_mm = seg_len * PIN_TEXT_LAYOUT.number_along_ratio as f64;
             let number_offset_mm = PIN_TEXT_LAYOUT.pin_pitch_mm as f64
@@ -1041,14 +1141,18 @@ impl<'a> SymbolCanvas<'a> {
                 color: to_rgba(self.text_color),
                 bold: false,
                 italic: false,
-                rotation_rad: 0.0,
+                rotation_rad: text_rotation,
                 h_align: HAlign::Center,
                 v_align: VAlign::Bottom,
             });
 
             let name_pos = [
-                pin.position[0] + dx + PIN_TEXT_LAYOUT.name_offset_x_mm as f64,
-                pin.position[1] + dy + PIN_TEXT_LAYOUT.name_offset_y_mm as f64,
+                pin.position[0]
+                    + ux * (seg_len + PIN_TEXT_LAYOUT.name_offset_x_mm as f64)
+                    + nx * number_offset_mm,
+                pin.position[1]
+                    + uy * (seg_len + PIN_TEXT_LAYOUT.name_offset_x_mm as f64)
+                    + ny * number_offset_mm,
             ];
             pin_texts.push(signex_renderer::schematic::TextInput {
                 content: pin.name.clone(),
@@ -1060,7 +1164,7 @@ impl<'a> SymbolCanvas<'a> {
                 }),
                 bold: false,
                 italic: false,
-                rotation_rad: 0.0,
+                rotation_rad: text_rotation,
                 h_align: HAlign::Left,
                 v_align: VAlign::Center,
             });

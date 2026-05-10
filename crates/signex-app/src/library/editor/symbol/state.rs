@@ -8,7 +8,12 @@
 //! the canvas + AI-stub apply behaviour the pre-refactor `SymbolDoc`
 //! had.
 
-use signex_library::{PinDirection, PinOrientation, Symbol, SymbolGraphicKind, SymbolPin};
+use signex_library::{PinOrientation, Symbol, SymbolGraphicKind, SymbolPin};
+use signex_types::anchor2d::rotate_vec;
+use signex_types::rotation2d::{
+    normalize_angle_rad, rotate_object, Pose2d, Rotatable2d, RotationPivot, RotationSpace,
+    Vec2d,
+};
 
 /// Coarse pin classification — kept independent of the canonical
 /// [`PinDirection`] so the AI-stub heuristic can hand back a
@@ -53,6 +58,16 @@ pub enum SymbolSelection {
     /// canvas hit-test on Select-tool clicks that miss every pin and
     /// every graphic resize handle but land inside a graphic body.
     Graphic(usize),
+}
+
+/// Pivot mode for Symbol graphic rotation.
+///
+/// `WorldOrigin` preserves legacy behavior where geometry orbits `(0, 0)`.
+/// `GeometryCenter` rotates each graphic around its own center.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum GraphicRotationPivotMode {
+    WorldOrigin,
+    GeometryCenter,
 }
 
 /// Resize-handle identity for a placed [`SymbolGraphic`]. Each
@@ -261,6 +276,247 @@ pub fn move_selected(sym: &mut Symbol, sel: Option<SymbolSelection>, x: f64, y: 
         // value drag re-binds against `ComponentRow` once that pipeline
         // ships.
         Some(SymbolSelection::Field(_)) | None => {}
+    }
+}
+
+/// Rotate the selected entity by 90°.
+///
+/// Pins rotate in place around their own center (orientation only),
+/// while graphics rotate around world origin to preserve the existing
+/// symbol-body rotate behavior.
+/// `clockwise = true` rotates CW, `false` rotates CCW.
+pub fn rotate_selected(sym: &mut Symbol, sel: Option<SymbolSelection>, clockwise: bool) {
+    rotate_selected_with_pivot(sym, sel, clockwise, GraphicRotationPivotMode::WorldOrigin);
+}
+
+/// Rotate the selected entity by 90° with explicit graphic pivot mode.
+pub fn rotate_selected_with_pivot(
+    sym: &mut Symbol,
+    sel: Option<SymbolSelection>,
+    clockwise: bool,
+    graphic_pivot_mode: GraphicRotationPivotMode,
+) {
+    match sel {
+        Some(SymbolSelection::Pin(idx)) => {
+            if let Some(pin) = sym.pins.get_mut(idx) {
+                // Rotate tip around the body-end so the symbol-body
+                // attachment point stays fixed (B-type anchor behavior).
+                let (dx, dy) = pin_body_delta(pin);
+                let body_end = Vec2d::new(pin.position[0] + dx, pin.position[1] + dy);
+                let tip_local = Vec2d::new(-dx, -dy);
+                let delta = if clockwise {
+                    -std::f64::consts::FRAC_PI_2
+                } else {
+                    std::f64::consts::FRAC_PI_2
+                };
+                let new_tip_local = rotate_vec(tip_local, delta);
+                pin.position[0] = snap_axis_value(body_end.x + new_tip_local.x);
+                pin.position[1] = snap_axis_value(body_end.y + new_tip_local.y);
+                pin.orientation = rotate_pin_orientation_90(pin.orientation, clockwise);
+            }
+        }
+        Some(SymbolSelection::Graphic(idx)) => {
+            rotate_graphic_90(sym, idx, clockwise, graphic_pivot_mode)
+        }
+        Some(SymbolSelection::Field(_)) | None => {}
+    }
+}
+
+/// Convenience wrapper for geometry-center graphic rotation scenarios.
+pub fn rotate_selected_about_geometry_center(
+    sym: &mut Symbol,
+    sel: Option<SymbolSelection>,
+    clockwise: bool,
+) {
+    rotate_selected_with_pivot(sym, sel, clockwise, GraphicRotationPivotMode::GeometryCenter);
+}
+
+fn rotate_graphic_90(
+    sym: &mut Symbol,
+    idx: usize,
+    clockwise: bool,
+    graphic_pivot_mode: GraphicRotationPivotMode,
+) {
+    let Some(g) = sym.graphics.get_mut(idx) else {
+        return;
+    };
+
+    let geometry_center = graphic_geometry_center(&g.kind);
+    let pivot = match graphic_pivot_mode {
+        GraphicRotationPivotMode::WorldOrigin => RotationPivot::WorldOrigin,
+        GraphicRotationPivotMode::GeometryCenter => RotationPivot::GeometryCenter,
+    };
+
+    match &mut g.kind {
+        SymbolGraphicKind::Rectangle { from, to } | SymbolGraphicKind::Line { from, to } => {
+            *from = rotate_graphic_point_90(
+                *from,
+                geometry_center,
+                clockwise,
+                RotationSpace::World,
+                pivot,
+            );
+            *to = rotate_graphic_point_90(
+                *to,
+                geometry_center,
+                clockwise,
+                RotationSpace::World,
+                pivot,
+            );
+        }
+        SymbolGraphicKind::Circle { center, .. } => {
+            *center = rotate_graphic_point_90(
+                *center,
+                geometry_center,
+                clockwise,
+                RotationSpace::World,
+                pivot,
+            );
+        }
+        SymbolGraphicKind::Arc {
+            center,
+            start_deg,
+            end_deg,
+            ..
+        } => {
+            *center = rotate_graphic_point_90(
+                *center,
+                geometry_center,
+                clockwise,
+                RotationSpace::World,
+                pivot,
+            );
+            let delta = if clockwise {
+                -std::f64::consts::FRAC_PI_2
+            } else {
+                std::f64::consts::FRAC_PI_2
+            };
+            *start_deg = normalize_angle_rad((*start_deg).to_radians() + delta)
+                .to_degrees()
+                .rem_euclid(360.0);
+            *end_deg = normalize_angle_rad((*end_deg).to_radians() + delta)
+                .to_degrees()
+                .rem_euclid(360.0);
+        }
+        SymbolGraphicKind::Text { position, .. } => {
+            *position = rotate_graphic_point_90(
+                *position,
+                geometry_center,
+                clockwise,
+                RotationSpace::World,
+                pivot,
+            );
+        }
+    }
+}
+
+fn graphic_geometry_center(kind: &SymbolGraphicKind) -> [f64; 2] {
+    match kind {
+        SymbolGraphicKind::Rectangle { from, to } | SymbolGraphicKind::Line { from, to } => {
+            [(from[0] + to[0]) * 0.5, (from[1] + to[1]) * 0.5]
+        }
+        SymbolGraphicKind::Circle { center, .. } | SymbolGraphicKind::Arc { center, .. } => {
+            *center
+        }
+        SymbolGraphicKind::Text { position, .. } => *position,
+    }
+}
+
+fn rotate_graphic_point_90(
+    p: [f64; 2],
+    geometry_center_world: [f64; 2],
+    clockwise: bool,
+    space: RotationSpace,
+    pivot: RotationPivot,
+) -> [f64; 2] {
+    let delta = if clockwise {
+        -std::f64::consts::FRAC_PI_2
+    } else {
+        std::f64::consts::FRAC_PI_2
+    };
+
+    let mut point_object = GraphicPointObject::new(p, geometry_center_world);
+    rotate_object(&mut point_object, space, pivot, delta);
+    point_object.world_point()
+}
+
+fn snap_axis_value(v: f64) -> f64 {
+    if v.abs() < 1e-12 {
+        return 0.0;
+    }
+
+    let rounded = v.round();
+    if (v - rounded).abs() < 1e-12 {
+        rounded
+    } else {
+        v
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct GraphicPointObject {
+    pose: Pose2d,
+    geometry_center_local: Vec2d,
+}
+
+impl GraphicPointObject {
+    fn new(world_point: [f64; 2], geometry_center_world: [f64; 2]) -> Self {
+        let point_origin = Vec2d::new(world_point[0], world_point[1]);
+        let center_local = Vec2d::new(
+            geometry_center_world[0] - world_point[0],
+            geometry_center_world[1] - world_point[1],
+        );
+        Self {
+            pose: Pose2d::new(point_origin, 0.0),
+            geometry_center_local: center_local,
+        }
+    }
+
+    fn world_point(self) -> [f64; 2] {
+        [
+            snap_axis_value(self.pose.origin.x),
+            snap_axis_value(self.pose.origin.y),
+        ]
+    }
+}
+
+impl Rotatable2d for GraphicPointObject {
+    fn pose(&self) -> Pose2d {
+        self.pose
+    }
+
+    fn geometry_center_local(&self) -> Vec2d {
+        self.geometry_center_local
+    }
+
+    fn set_pose(&mut self, pose: Pose2d) {
+        self.pose = pose;
+    }
+}
+
+/// Returns the (dx, dy) vector from the tip (connection point) to the
+/// body-end (symbol-body attachment point) based on orientation and length.
+fn pin_body_delta(pin: &SymbolPin) -> (f64, f64) {
+    match pin.orientation {
+        PinOrientation::Right => (pin.length, 0.0),
+        PinOrientation::Up => (0.0, pin.length),
+        PinOrientation::Left => (-pin.length, 0.0),
+        PinOrientation::Down => (0.0, -pin.length),
+        _ => (-pin.length, 0.0),
+    }
+}
+
+fn rotate_pin_orientation_90(o: PinOrientation, clockwise: bool) -> PinOrientation {
+    match (o, clockwise) {
+        (PinOrientation::Up, true) => PinOrientation::Right,
+        (PinOrientation::Right, true) => PinOrientation::Down,
+        (PinOrientation::Down, true) => PinOrientation::Left,
+        (PinOrientation::Left, true) => PinOrientation::Up,
+        (PinOrientation::Up, false) => PinOrientation::Left,
+        (PinOrientation::Left, false) => PinOrientation::Down,
+        (PinOrientation::Down, false) => PinOrientation::Right,
+        (PinOrientation::Right, false) => PinOrientation::Up,
+        _ => o,
     }
 }
 
@@ -487,9 +743,9 @@ pub fn graphic_handle_position(
     })
 }
 
-/// Enumerate every resize handle for the graphic at `idx` (variant
-/// + world position). Used by the canvas to draw the handle squares
-/// when the Select tool is active.
+/// Enumerate every resize handle for the graphic at `idx`.
+/// Returns `(handle_variant, world_position)` pairs for Select-tool
+/// handle rendering.
 pub fn graphic_handles(sym: &Symbol, idx: usize) -> Vec<(GraphicHandle, [f64; 2])> {
     let Some(g) = sym.graphics.get(idx) else {
         return Vec::new();
@@ -626,7 +882,7 @@ mod tests {
     #[test]
     fn add_pin_assigns_next_number() {
         let mut s = Symbol::empty("test");
-        // Symbol::empty seeds one default pin "1".
+        add_pin(&mut s, 0.0, 0.0, 1); // seed first pin so numbering starts at "1"
         let idx = add_pin(&mut s, 1.0, 1.0, 1);
         assert_eq!(idx, 1);
         assert_eq!(s.pins[1].number, "2");
@@ -664,14 +920,15 @@ mod tests {
         let twos = s.pins.iter().filter(|p| p.part_number == 2).count();
         let ones = s.pins.iter().filter(|p| p.part_number == 1).count();
         assert_eq!(twos, 0);
-        // 1 default + 2 demoted = 3 ones
-        assert_eq!(ones, 3);
+        // 2 demoted from part 2, no default pin
+        assert_eq!(ones, 2);
     }
 
     #[test]
     fn delete_pin_clears_selection_via_return() {
         let mut s = Symbol::empty("test");
-        add_pin(&mut s, 1.0, 1.0, 1);
+        add_pin(&mut s, 0.0, 0.0, 1); // first pin
+        add_pin(&mut s, 1.0, 1.0, 1); // second pin
         let new_sel = delete_selected(&mut s, Some(SymbolSelection::Pin(0)));
         assert_eq!(new_sel, Some(None));
         assert_eq!(s.pins.len(), 1);
@@ -680,6 +937,7 @@ mod tests {
     #[test]
     fn move_selected_updates_position() {
         let mut s = Symbol::empty("test");
+        add_pin(&mut s, 0.0, 0.0, 1);
         move_selected(&mut s, Some(SymbolSelection::Pin(0)), 5.5, -2.0);
         assert_eq!(s.pins[0].position, [5.5, -2.0]);
     }
@@ -687,7 +945,7 @@ mod tests {
     #[test]
     fn hit_test_returns_pin() {
         let mut s = Symbol::empty("test");
-        s.pins[0].position = [3.0, 4.0];
+        add_pin(&mut s, 3.0, 4.0, 1);
         let sel = hit_test(&s, 3.0, 4.0);
         assert_eq!(sel, Some(SymbolSelection::Pin(0)));
     }
@@ -772,8 +1030,7 @@ mod tests {
             },
             stroke_width: 0.15,
         });
-        // Pin still at default (0, 0) — would have to move it for clean test.
-        s.pins[0].position = [-99.0, -99.0]; // park the pin off-canvas
+        // No pins in empty symbol — graphic hit is unambiguous.
         let hit = hit_test(&s, 5.0, 2.5);
         assert_eq!(hit, Some(SymbolSelection::Graphic(0)));
     }
@@ -795,6 +1052,91 @@ mod tests {
                 assert_eq!(*to, [13.0, 12.0]);
             }
             _ => panic!("expected Rectangle"),
+        }
+    }
+
+    #[test]
+    fn rotate_selected_rotates_rectangle_clockwise_around_origin() {
+        let mut s = Symbol::empty("test");
+        s.graphics.push(signex_library::SymbolGraphic {
+            kind: SymbolGraphicKind::Rectangle {
+                from: [1.0, 2.0],
+                to: [3.0, 4.0],
+            },
+            stroke_width: 0.15,
+        });
+
+        rotate_selected(&mut s, Some(SymbolSelection::Graphic(0)), true);
+
+        match &s.graphics[0].kind {
+            SymbolGraphicKind::Rectangle { from, to } => {
+                assert_eq!(*from, [2.0, -1.0]);
+                assert_eq!(*to, [4.0, -3.0]);
+            }
+            _ => panic!("expected Rectangle"),
+        }
+    }
+
+    #[test]
+    fn rotate_selected_rotates_pin_orientation_in_place() {
+        let mut s = Symbol::empty("test");
+        let idx = add_pin(&mut s, 2.0, 1.0, 1);
+        s.pins[idx].orientation = PinOrientation::Right;
+
+        rotate_selected(&mut s, Some(SymbolSelection::Pin(idx)), false);
+
+        // Body-end (pivot) was at (2.0 + 2.54, 1.0) = (4.54, 1.0).
+        // Tip orbits around it CCW by 90°: new tip = (4.54, -1.54).
+        assert_eq!(s.pins[idx].position, [4.54, -1.54]);
+        assert_eq!(s.pins[idx].orientation, PinOrientation::Up);
+    }
+
+    #[test]
+    fn rotate_selected_about_geometry_center_keeps_rectangle_center() {
+        let mut s = Symbol::empty("test");
+        s.graphics.push(signex_library::SymbolGraphic {
+            kind: SymbolGraphicKind::Rectangle {
+                from: [1.0, 2.0],
+                to: [3.0, 4.0],
+            },
+            stroke_width: 0.15,
+        });
+
+        rotate_selected_with_pivot(
+            &mut s,
+            Some(SymbolSelection::Graphic(0)),
+            true,
+            GraphicRotationPivotMode::GeometryCenter,
+        );
+
+        match &s.graphics[0].kind {
+            SymbolGraphicKind::Rectangle { from, to } => {
+                assert_eq!(*from, [1.0, 4.0]);
+                assert_eq!(*to, [3.0, 2.0]);
+            }
+            _ => panic!("expected Rectangle"),
+        }
+    }
+
+    #[test]
+    fn rotate_selected_about_geometry_center_keeps_text_anchor_fixed() {
+        let mut s = Symbol::empty("test");
+        s.graphics.push(signex_library::SymbolGraphic {
+            kind: SymbolGraphicKind::Text {
+                position: [5.0, -7.0],
+                content: "R".into(),
+                size: 1.0,
+            },
+            stroke_width: 0.15,
+        });
+
+        rotate_selected_about_geometry_center(&mut s, Some(SymbolSelection::Graphic(0)), false);
+
+        match &s.graphics[0].kind {
+            SymbolGraphicKind::Text { position, .. } => {
+                assert_eq!(*position, [5.0, -7.0]);
+            }
+            _ => panic!("expected Text"),
         }
     }
 
