@@ -32,6 +32,8 @@ use iced::mouse;
 use iced::widget::canvas;
 use signex_gfx::scene::{DirtyFlags, Scene};
 use signex_library::{Symbol, SymbolGraphicKind, SymbolPin};
+use signex_types::anchor2d::rotate_vec;
+use signex_types::rotation2d::Vec2d;
 use signex_renderer::schematic::{
     ArcInput, JunctionInput, OverlayInputs, PolygonInput, SchematicRenderer,
     SchematicSnapshot as RendererSnapshot, ViewRenderer, WireInput,
@@ -433,6 +435,88 @@ const PIN_TEXT_LAYOUT: PinTextLayout = PinTextLayout {
     name_offset_x_mm: 0.50,
     name_offset_y_mm: 0.00,
 };
+
+/// Pre-computed render geometry for one pin.
+///
+/// All positions are in world-mm. Derived once per frame from the pin's
+/// `position`, `orientation`, and `length` so that
+/// `build_symbol_renderer_snapshot` contains only push calls.
+struct PinRenderGeometry {
+    tip:           Vec2d,
+    body_end:      Vec2d,
+    number_pos:    Vec2d,
+    name_pos:      Vec2d,
+    text_rotation: f32,
+    name_h_align:  HAlign,
+}
+
+impl PinRenderGeometry {
+    fn compute(pin: &SymbolPin) -> Self {
+        use signex_library::PinOrientation;
+        use std::f64::consts::FRAC_PI_2;
+
+        // Orientation → angle (CCW from +x axis), tip → body direction.
+        let angle_rad: f64 = match pin.orientation {
+            PinOrientation::Right => 0.0,
+            PinOrientation::Up    => FRAC_PI_2,
+            PinOrientation::Left  => std::f64::consts::PI,
+            PinOrientation::Down  => -FRAC_PI_2,
+            _                     => std::f64::consts::PI,
+        };
+
+        let tip  = Vec2d::new(pin.position[0], pin.position[1]);
+        let unit = rotate_vec(Vec2d::new(1.0, 0.0), angle_rad);
+        let body_end = Vec2d::new(
+            tip.x + unit.x * pin.length,
+            tip.y + unit.y * pin.length,
+        );
+
+        // Outer normal: 90° CCW from unit = (-unit.y, unit.x).
+        // Pick the side that is visually "outer": prefer +y, break ties with -x.
+        let n_ccw = rotate_vec(unit, FRAC_PI_2);
+        let n_cw  = Vec2d::new(-n_ccw.x, -n_ccw.y);
+        let normal = if (n_ccw.y - n_cw.y).abs() > f64::EPSILON {
+            if n_ccw.y > n_cw.y { n_ccw } else { n_cw }
+        } else if n_ccw.x < n_cw.x {
+            n_ccw
+        } else {
+            n_cw
+        };
+
+        // Text rotation normalized to (-π/2, π/2] so text is never upside-down.
+        let mut text_rotation = (unit.y as f32).atan2(unit.x as f32);
+        let flipped: bool;
+        if text_rotation > std::f32::consts::FRAC_PI_2 {
+            text_rotation -= std::f32::consts::PI;
+            flipped = true;
+        } else if text_rotation <= -std::f32::consts::FRAC_PI_2 {
+            text_rotation += std::f32::consts::PI;
+            flipped = true;
+        } else {
+            flipped = false;
+        }
+        // When flipped, the text's +x axis reverses — reverse h_align accordingly
+        // so the name extends away from the tip rather than toward it.
+        let name_h_align = if flipped { HAlign::Right } else { HAlign::Left };
+
+        let number_offset_mm = PIN_TEXT_LAYOUT.pin_pitch_mm as f64
+            * PIN_TEXT_LAYOUT.number_offset_ratio_of_pitch as f64;
+        let along_mm = pin.length * PIN_TEXT_LAYOUT.number_along_ratio as f64;
+
+        let number_pos = Vec2d::new(
+            tip.x + unit.x * along_mm   + normal.x * number_offset_mm,
+            tip.y + unit.y * along_mm   + normal.y * number_offset_mm,
+        );
+        let name_pos = Vec2d::new(
+            tip.x + unit.x * (pin.length + PIN_TEXT_LAYOUT.name_offset_x_mm as f64)
+                  + normal.x * number_offset_mm,
+            tip.y + unit.y * (pin.length + PIN_TEXT_LAYOUT.name_offset_x_mm as f64)
+                  + normal.y * number_offset_mm,
+        );
+
+        Self { tip, body_end, number_pos, name_pos, text_rotation, name_h_align }
+    }
+}
 
 fn text_size_px_from_mm(size_mm: f32, scale: f32) -> f32 {
     let em_mm = size_mm.max(0.1) / MM_PER_EM;
@@ -1046,28 +1130,17 @@ impl<'a> SymbolCanvas<'a> {
                 continue;
             }
 
-            use signex_library::PinOrientation;
-            let (dx, dy) = match pin.orientation {
-                PinOrientation::Right => (pin.length, 0.0),
-                PinOrientation::Up => (0.0, pin.length),
-                PinOrientation::Left => (-pin.length, 0.0),
-                PinOrientation::Down => (0.0, -pin.length),
-                _ => (-pin.length, 0.0),
-            };
-
+            let geom = PinRenderGeometry::compute(pin);
             let selected = matches!(self.selected, Some(SymbolSelection::Pin(j)) if j == i);
-            let stroke_color = if selected {
-                self.selected_color
-            } else {
-                self.pin_color
-            };
+            let stroke_color = if selected { self.selected_color } else { self.pin_color };
 
-            let tip = [pin.position[0] as f32, pin.position[1] as f32];
-            let body_end = [(pin.position[0] + dx) as f32, (pin.position[1] + dy) as f32];
+            let tip_f32 = [geom.tip.x as f32, geom.tip.y as f32];
+            let body_f32 = [geom.body_end.x as f32, geom.body_end.y as f32];
+
             wires.push(WireInput {
                 id: 100_000 + i as u64,
-                p0: tip,
-                p1: body_end,
+                p0: tip_f32,
+                p1: body_f32,
                 width_mm: stroke_world_mm(
                     if selected {
                         signex_types::schematic::PIN_STROKE_SELECTED_PX
@@ -1080,7 +1153,7 @@ impl<'a> SymbolCanvas<'a> {
             });
 
             junctions.push(JunctionInput {
-                center: tip,
+                center: tip_f32,
                 radius_mm: screen_px_to_world_mm(2.5, scale),
                 color: to_rgba(stroke_color),
             });
@@ -1088,7 +1161,7 @@ impl<'a> SymbolCanvas<'a> {
             if selected {
                 polygons.push(PolygonInput {
                     vertices: circle_vertices(
-                        [pin.position[0], pin.position[1]],
+                        [geom.tip.x, geom.tip.y],
                         screen_px_to_world_mm(5.0, scale),
                         40,
                     ),
@@ -1101,81 +1174,27 @@ impl<'a> SymbolCanvas<'a> {
                 });
             }
 
-            let seg_len = (dx * dx + dy * dy).sqrt().max(1e-6);
-            let ux = dx / seg_len;
-            let uy = dy / seg_len;
-            let (n1x, n1y) = (-uy, ux);
-            let (n2x, n2y) = (uy, -ux);
-            // Prefer the visually "outer" side: top in world-Y, and left on ties.
-            let choose_n1 = if (n1y - n2y).abs() > f64::EPSILON {
-                n1y > n2y
-            } else {
-                n1x < n2x
-            };
-            let (nx, ny) = if choose_n1 { (n1x, n1y) } else { (n2x, n2y) };
-
-            // Keep pin labels aligned with the pin axis while avoiding
-            // upside-down horizontal text for left-facing pins.
-            // When we flip the rotation by ±π the text's local +x axis
-            // reverses direction, so the name h_align must also be
-            // reversed (Right instead of Left) to keep text extending
-            // away from the tip toward the symbol body.
-            let mut text_rotation = (uy as f32).atan2(ux as f32);
-            let text_flipped;
-            if text_rotation > std::f32::consts::FRAC_PI_2 {
-                text_rotation -= std::f32::consts::PI;
-                text_flipped = true;
-            } else if text_rotation <= -std::f32::consts::FRAC_PI_2 {
-                // Use <= so Down pins (atan2 = exactly -π/2) are also
-                // normalized to +π/2, keeping vertical text reading
-                // direction consistent with Up pins.
-                text_rotation += std::f32::consts::PI;
-                text_flipped = true;
-            } else {
-                text_flipped = false;
-            }
-            let name_h_align = if text_flipped { HAlign::Right } else { HAlign::Left };
-
-            let along_mm = seg_len * PIN_TEXT_LAYOUT.number_along_ratio as f64;
-            let number_offset_mm = PIN_TEXT_LAYOUT.pin_pitch_mm as f64
-                * PIN_TEXT_LAYOUT.number_offset_ratio_of_pitch as f64;
-            let number_pos = [
-                pin.position[0] + ux * along_mm + nx * number_offset_mm,
-                pin.position[1] + uy * along_mm + ny * number_offset_mm,
-            ];
-
             pin_texts.push(signex_renderer::schematic::TextInput {
                 content: pin.number.clone(),
-                position: [number_pos[0] as f32, number_pos[1] as f32],
+                position: [geom.number_pos.x as f32, geom.number_pos.y as f32],
                 size_mm: PIN_TEXT_LAYOUT.number_size_mm,
                 color: to_rgba(self.text_color),
                 bold: false,
                 italic: false,
-                rotation_rad: text_rotation,
+                rotation_rad: geom.text_rotation,
                 h_align: HAlign::Center,
                 v_align: VAlign::Bottom,
             });
 
-            let name_pos = [
-                pin.position[0]
-                    + ux * (seg_len + PIN_TEXT_LAYOUT.name_offset_x_mm as f64)
-                    + nx * number_offset_mm,
-                pin.position[1]
-                    + uy * (seg_len + PIN_TEXT_LAYOUT.name_offset_x_mm as f64)
-                    + ny * number_offset_mm,
-            ];
             pin_texts.push(signex_renderer::schematic::TextInput {
                 content: pin.name.clone(),
-                position: [name_pos[0] as f32, name_pos[1] as f32],
+                position: [geom.name_pos.x as f32, geom.name_pos.y as f32],
                 size_mm: PIN_TEXT_LAYOUT.name_size_mm,
-                color: to_rgba(Color {
-                    a: 0.85,
-                    ..self.text_color
-                }),
+                color: to_rgba(Color { a: 0.85, ..self.text_color }),
                 bold: false,
                 italic: false,
-                rotation_rad: text_rotation,
-                h_align: name_h_align,
+                rotation_rad: geom.text_rotation,
+                h_align: geom.name_h_align,
                 v_align: VAlign::Center,
             });
         }
