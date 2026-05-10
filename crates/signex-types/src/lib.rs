@@ -1,3 +1,4 @@
+pub mod anchor2d;
 pub mod atomic_io;
 pub mod coord;
 pub mod format;
