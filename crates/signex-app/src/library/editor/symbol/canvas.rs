@@ -45,7 +45,7 @@ use std::collections::HashMap;
 use super::state::{self, GraphicHandle, SymbolSelection};
 
 /// The actions a [`SymbolCanvas`] can emit upward.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum CanvasAction {
     AddPin {
         x: f64,
@@ -191,6 +191,16 @@ pub struct CanvasState {
     /// Last cursor screen position during a pan, used to compute
     /// per-frame deltas.
     pub last_pan_pos: Option<iced::Point>,
+    /// World-space anchor of a rubber-band box selection in progress.
+    /// Set on `ButtonPressed(Left)` that hits empty space; cleared on
+    /// `ButtonReleased(Left)`.
+    pub box_select_origin: Option<(f64, f64)>,
+    /// Current cursor world position while a box selection is being
+    /// dragged. Updated every `CursorMoved`; used by `draw()` to
+    /// paint the rubber band in real time. Direction:
+    /// `current.x > origin.x` → Window (blue),
+    /// `current.x < origin.x` → Crossing (green).
+    pub box_select_current: Option<(f64, f64)>,
 }
 
 /// Builder for the per-render [`SymbolCanvas`] — all the inputs the
@@ -608,10 +618,10 @@ fn world_unsnapped(canvas: &SymbolCanvas<'_>, sx: f32, sy: f32, bounds: Rectangl
     (world.x as f64, -world.y as f64)
 }
 
-fn selection_anchor(symbol: &Symbol, selection: SymbolSelection) -> Option<(f64, f64)> {
+fn selection_anchor(symbol: &Symbol, selection: &SymbolSelection) -> Option<(f64, f64)> {
     match selection {
-        SymbolSelection::Pin(idx) => symbol.pins.get(idx).map(|pin| (pin.position[0], pin.position[1])),
-        SymbolSelection::Graphic(idx) => symbol.graphics.get(idx).map(|graphic| match &graphic.kind {
+        SymbolSelection::Pin(idx) => symbol.pins.get(*idx).map(|pin| (pin.position[0], pin.position[1])),
+        SymbolSelection::Graphic(idx) => symbol.graphics.get(*idx).map(|graphic| match &graphic.kind {
             SymbolGraphicKind::Rectangle { from, .. } | SymbolGraphicKind::Line { from, .. } => {
                 (from[0], from[1])
             }
@@ -620,7 +630,37 @@ fn selection_anchor(symbol: &Symbol, selection: SymbolSelection) -> Option<(f64,
             }
             SymbolGraphicKind::Text { position, .. } => (position[0], position[1]),
         }),
-        SymbolSelection::Field(_) | SymbolSelection::All => None,
+        SymbolSelection::Field(_) | SymbolSelection::All | SymbolSelection::Multiple { .. } => None,
+    }
+}
+
+/// Returns `true` when `item` (a single-element selection) belongs to the
+/// multi-element `group` selection. Used to decide whether a click on an
+/// already-selected item should start a group drag rather than replace the
+/// selection.
+fn item_in_selection(group: &SymbolSelection, item: &SymbolSelection) -> bool {
+    match (group, item) {
+        (SymbolSelection::All, _) => true,
+        (SymbolSelection::Multiple { pin_indices, .. }, SymbolSelection::Pin(idx)) => {
+            pin_indices.contains(idx)
+        }
+        (SymbolSelection::Multiple { graphic_indices, .. }, SymbolSelection::Graphic(idx)) => {
+            graphic_indices.contains(idx)
+        }
+        _ => false,
+    }
+}
+
+/// Returns `true` when the graphic at `idx` should be drawn in the
+/// selection colour. Handles single-graphic, Multiple, and All selections.
+fn is_graphic_selected(sel: &Option<SymbolSelection>, idx: usize) -> bool {
+    match sel {
+        Some(SymbolSelection::Graphic(i)) => *i == idx,
+        Some(SymbolSelection::Multiple { graphic_indices, .. }) => {
+            graphic_indices.contains(&idx)
+        }
+        Some(SymbolSelection::All) => true,
+        _ => false,
     }
 }
 
@@ -640,7 +680,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                 let (wx, wy) = world_for(self, pos.x, pos.y, bounds);
                 match self.tool {
                     SymbolTool::Select => {
-                        // Resize handles win over pin hits.
+                        // Resize handles win over everything else.
                         if let Some((idx, handle)) =
                             state::hit_test_graphic_handle(self.symbol, wx, wy)
                         {
@@ -648,28 +688,45 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                             state.dragging = false;
                             state.drag_anchor_offset = None;
                             state.last_drag_world_pos = None;
+                            state.box_select_origin = None;
+                            state.box_select_current = None;
                             return Some(canvas::Action::capture());
                         }
                         if let Some(sel) = state::hit_test(self.symbol, wx, wy) {
-                            // Pins are moved individually; clicking a graphic
-                            // body selects All and drags the whole symbol so
-                            // the body rect acts as a move handle for the
-                            // entire component (Altium-style behaviour).
+                            state.box_select_origin = None;
+                            state.box_select_current = None;
+
+                            // If the clicked item is inside the current Multiple /
+                            // All selection, drag the whole group as a unit.
+                            let in_group = self.selected.as_ref().map_or(false, |s| {
+                                item_in_selection(s, &sel)
+                            });
+                            if in_group {
+                                state.dragging = true;
+                                state.last_drag_world_pos = Some((wx, wy));
+                                state.drag_anchor_offset = None;
+                                return Some(canvas::Action::capture());
+                            }
+
+                            // Graphic body click → promote to All so the body
+                            // rect acts as a move handle (Altium-style).
                             let effective_sel = match sel {
                                 SymbolSelection::Graphic(_) => SymbolSelection::All,
                                 other => other,
                             };
 
+                            let is_delta = matches!(effective_sel, SymbolSelection::All);
                             state.dragging = true;
-                            state.last_drag_world_pos = if effective_sel == SymbolSelection::All {
+                            state.last_drag_world_pos = if is_delta {
                                 Some((wx, wy))
                             } else {
                                 None
                             };
-                            state.drag_anchor_offset = selection_anchor(self.symbol, effective_sel)
-                                .map(|(anchor_x, anchor_y)| (anchor_x - wx, anchor_y - wy));
+                            state.drag_anchor_offset =
+                                selection_anchor(self.symbol, &effective_sel)
+                                    .map(|(ax, ay)| (ax - wx, ay - wy));
 
-                            if self.selected == Some(effective_sel) {
+                            if self.selected.as_ref() == Some(&effective_sel) {
                                 return Some(canvas::Action::capture());
                             }
                             Some(
@@ -677,10 +734,13 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                                     .and_capture(),
                             )
                         } else {
+                            // Empty space — start a rubber-band box selection.
                             state.dragging = false;
                             state.drag_anchor_offset = None;
                             state.last_drag_world_pos = None;
-                            Some(canvas::Action::publish(CanvasAction::Deselect).and_capture())
+                            state.box_select_origin = Some((wx, wy));
+                            state.box_select_current = Some((wx, wy));
+                            Some(canvas::Action::capture())
                         }
                     }
                     SymbolTool::AddPin => Some(
@@ -748,8 +808,12 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                     }));
                 }
                 if state.dragging {
-                    // All-selection: delta-based, track last position.
-                    if self.selected == Some(SymbolSelection::All) {
+                    // All or Multiple selection: delta-based drag.
+                    let is_delta_based = matches!(
+                        self.selected,
+                        Some(SymbolSelection::All) | Some(SymbolSelection::Multiple { .. })
+                    );
+                    if is_delta_based {
                         if let Some((last_wx, last_wy)) = state.last_drag_world_pos {
                             let dx = wx - last_wx;
                             let dy = wy - last_wy;
@@ -774,6 +838,11 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                         x: move_x,
                         y: move_y,
                     }));
+                }
+                // Update rubber-band box while the user drags on empty space.
+                if state.box_select_origin.is_some() {
+                    state.box_select_current = Some((wx, wy));
+                    return Some(canvas::Action::capture());
                 }
                 // Idle cursor — publish the unsnapped world position
                 // for the status footer X/Y readout.
@@ -814,6 +883,35 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                 state.dragging_handle = None;
                 state.drag_anchor_offset = None;
                 state.last_drag_world_pos = None;
+
+                // Commit a rubber-band box selection if one was in progress.
+                if let (Some((ox, oy)), Some((cx, cy))) =
+                    (state.box_select_origin.take(), state.box_select_current.take())
+                {
+                    let drag_dist_sq = (cx - ox).powi(2) + (cy - oy).powi(2);
+                    if drag_dist_sq > 0.5 * 0.5 {
+                        // Enough movement — commit as a box selection.
+                        let kind = if cx >= ox {
+                            state::BoxSelectKind::Window
+                        } else {
+                            state::BoxSelectKind::Crossing
+                        };
+                        let result =
+                            state::select_in_box(self.symbol, ox, oy, cx, cy, kind);
+                        return Some(match result {
+                            Some(sel) => canvas::Action::publish(CanvasAction::Select(sel))
+                                .and_capture(),
+                            None => canvas::Action::publish(CanvasAction::Deselect)
+                                .and_capture(),
+                        });
+                    } else {
+                        // Micro-drag treated as a click → deselect.
+                        return Some(
+                            canvas::Action::publish(CanvasAction::Deselect).and_capture(),
+                        );
+                    }
+                }
+
                 None
             }
             Event::Keyboard(iced::keyboard::Event::KeyPressed {
@@ -870,7 +968,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
 
     fn draw(
         &self,
-        _state: &Self::State,
+        state: &Self::State,
         renderer: &Renderer,
         _theme: &Theme,
         bounds: Rectangle,
@@ -972,11 +1070,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         // ── Body + every other graphic ──
         // All symbol graphics and pin primitives now flow through the
         // renderer scene bridge so stroke/zoom behavior is unified.
-        let selected_graphic_idx = match self.selected {
-            Some(SymbolSelection::Graphic(i)) => Some(i),
-            _ => None,
-        };
-        self.draw_symbol_with_renderer(&mut frame, selected_graphic_idx, scale);
+        self.draw_symbol_with_renderer(&mut frame, &self.selected, scale);
 
         // Resize handles for every placed graphic — visible when the
         // Select tool is active so the user can grab any corner /
@@ -1001,8 +1095,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         }
 
         // Tool hint.
-        let tool_label = match self.tool {
-            SymbolTool::Select => "Tool: Select  (Del to remove)",
+        let tool_label = match self.tool {            SymbolTool::Select => "Tool: Select  (Del to remove)",
             SymbolTool::AddPin => "Tool: Add Pin  (click to place)",
             SymbolTool::PlaceRectangle => "Tool: Place Rectangle  (click)",
             SymbolTool::PlaceLine => "Tool: Place Line  (click)",
@@ -1022,6 +1115,44 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
             ..canvas::Text::default()
         });
 
+        // Rubber-band box selection overlay — drawn on top of everything
+        // so the dashed border is always visible.
+        if let (Some((ox, oy)), Some((cx, cy))) =
+            (state.box_select_origin, state.box_select_current)
+        {
+            let p0 = w2s(ox, oy);
+            let p1 = w2s(cx, cy);
+            let left = p0.x.min(p1.x);
+            let top = p0.y.min(p1.y);
+            let width = (p1.x - p0.x).abs();
+            let height = (p1.y - p0.y).abs();
+
+            // Direction determines colour:
+            //   cx > ox  (L→R) = Window selection  → blue fill + blue outline
+            //   cx < ox  (R→L) = Crossing selection → green fill + green outline
+            let is_crossing = cx < ox;
+            let (fill_color, stroke_color) = if is_crossing {
+                (
+                    Color::from_rgba(0.1, 0.85, 0.25, 0.08),
+                    Color::from_rgba(0.1, 0.85, 0.25, 0.90),
+                )
+            } else {
+                (
+                    Color::from_rgba(0.15, 0.45, 0.95, 0.08),
+                    Color::from_rgba(0.15, 0.45, 0.95, 0.90),
+                )
+            };
+            let rect_origin = iced::Point::new(left, top);
+            let rect_size = Size::new(width, height);
+            frame.fill_rectangle(rect_origin, rect_size, fill_color);
+            frame.stroke(
+                &canvas::Path::rectangle(rect_origin, rect_size),
+                canvas::Stroke::default()
+                    .with_color(stroke_color)
+                    .with_width(1.5),
+            );
+        }
+
         vec![frame.into_geometry()]
     }
 }
@@ -1030,10 +1161,10 @@ impl<'a> SymbolCanvas<'a> {
     fn draw_symbol_with_renderer(
         &self,
         frame: &mut canvas::Frame,
-        selected_graphic_idx: Option<usize>,
+        selected: &Option<SymbolSelection>,
         scale: f32,
     ) {
-        let snapshot = self.build_symbol_renderer_snapshot(selected_graphic_idx, scale);
+        let snapshot = self.build_symbol_renderer_snapshot(selected, scale);
         if snapshot.wires.is_empty()
             && snapshot.junctions.is_empty()
             && snapshot.arcs.is_empty()
@@ -1076,7 +1207,7 @@ impl<'a> SymbolCanvas<'a> {
 
     fn build_symbol_renderer_snapshot(
         &self,
-        selected_graphic_idx: Option<usize>,
+        selected: &Option<SymbolSelection>,
         scale: f32,
     ) -> RendererSnapshot {
         let mut wires = Vec::new();
@@ -1088,7 +1219,7 @@ impl<'a> SymbolCanvas<'a> {
 
         let mut body_drawn = false;
         for (i, g) in self.symbol.graphics.iter().enumerate() {
-            let is_selected = selected_graphic_idx == Some(i);
+            let is_selected = is_graphic_selected(selected, i);
             let stroke_color = if is_selected {
                 self.selected_color
             } else {
@@ -1190,7 +1321,14 @@ impl<'a> SymbolCanvas<'a> {
             }
 
             let geom = PinRenderGeometry::compute(pin);
-            let selected = matches!(self.selected, Some(SymbolSelection::Pin(j)) if j == i);
+            let selected = match selected {
+                Some(SymbolSelection::Pin(j)) => *j == i,
+                Some(SymbolSelection::Multiple { pin_indices, .. }) => {
+                    pin_indices.contains(&i)
+                }
+                Some(SymbolSelection::All) => true,
+                _ => false,
+            };
             let stroke_color = if selected { self.selected_color } else { self.pin_color };
 
             let tip_f32 = [geom.tip.x as f32, geom.tip.y as f32];

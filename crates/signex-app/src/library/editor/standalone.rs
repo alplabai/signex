@@ -251,7 +251,7 @@ fn view_symbol_canvas<'a>(
     let tokens = &panel_ctx.tokens;
     let program = SymbolCanvas::new(
         editor.primitive(),
-        editor.selected,
+        editor.selected.clone(),
         editor.tool,
         editor.active_part,
         &editor.camera,
@@ -340,6 +340,9 @@ fn symbol_selection_to_msg(sel: sym_state::SymbolSelection) -> SymbolSelectionMs
         SymbolSelection::Field(FieldKey::Value) => SymbolSelectionMsg::FieldValue,
         SymbolSelection::Graphic(idx) => SymbolSelectionMsg::Graphic(idx),
         SymbolSelection::All => SymbolSelectionMsg::All,
+        SymbolSelection::Multiple { pin_indices, graphic_indices } => {
+            SymbolSelectionMsg::Multiple { pin_indices, graphic_indices }
+        }
     }
 }
 

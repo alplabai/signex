@@ -931,7 +931,7 @@ fn build_symbol_editor_panel_ctx(
         })
         .collect();
 
-    let selected = match editor.selected {
+    let selected = match editor.selected.clone() {
         Some(sym_state::SymbolSelection::Pin(idx)) => pins
             .get(idx)
             .cloned()
@@ -954,7 +954,9 @@ fn build_symbol_editor_panel_ctx(
                 })
             })
             .unwrap_or(SymbolEditorSelection::None),
-        Some(sym_state::SymbolSelection::All) | None => SymbolEditorSelection::None,
+        Some(sym_state::SymbolSelection::All)
+        | Some(sym_state::SymbolSelection::Multiple { .. })
+        | None => SymbolEditorSelection::None,
     };
 
     let active_max_part = sym_state::max_part_number(sym);

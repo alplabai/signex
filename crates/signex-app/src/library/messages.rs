@@ -1115,7 +1115,7 @@ impl std::fmt::Display for RoleTag {
 
 /// Selection target on the Symbol canvas — pure-data version of
 /// `editor::symbol::state::SymbolSelection`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(dead_code)]
 pub enum SymbolSelectionMsg {
     Pin(usize),
@@ -1127,6 +1127,11 @@ pub enum SymbolSelectionMsg {
     Graphic(usize),
     /// All pins and graphics — emitted by Ctrl+A on the symbol canvas.
     All,
+    /// A subset of pins and graphics from a rubber-band box selection.
+    Multiple {
+        pin_indices:     Vec<usize>,
+        graphic_indices: Vec<usize>,
+    },
 }
 
 /// Symbol field key — pure-data alias of

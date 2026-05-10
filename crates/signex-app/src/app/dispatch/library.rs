@@ -3880,6 +3880,9 @@ pub(crate) fn apply_symbol_primitive_edit(
                 SymbolSelectionMsg::FieldValue => SymbolSelection::Field(FieldKey::Value),
                 SymbolSelectionMsg::Graphic(idx) => SymbolSelection::Graphic(idx),
                 SymbolSelectionMsg::All => SymbolSelection::All,
+                SymbolSelectionMsg::Multiple { pin_indices, graphic_indices } => {
+                    SymbolSelection::Multiple { pin_indices, graphic_indices }
+                }
             });
             editor.canvas_cache.clear();
         }
@@ -3888,7 +3891,7 @@ pub(crate) fn apply_symbol_primitive_edit(
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::SymbolMoveSelected { x, y } => {
-            let selected = editor.selected;
+            let selected = editor.selected.clone();
             crate::library::editor::symbol::state::move_selected(
                 editor.primitive_mut(),
                 selected,
@@ -3899,11 +3902,26 @@ pub(crate) fn apply_symbol_primitive_edit(
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::SymbolMoveAll { dx, dy } => {
-            crate::library::editor::symbol::state::move_all(
-                editor.primitive_mut(),
-                dx,
-                dy,
-            );
+            match &editor.selected {
+                Some(SymbolSelection::Multiple { pin_indices, graphic_indices }) => {
+                    let pins = pin_indices.clone();
+                    let graphics = graphic_indices.clone();
+                    crate::library::editor::symbol::state::move_multiple(
+                        editor.primitive_mut(),
+                        &pins,
+                        &graphics,
+                        dx,
+                        dy,
+                    );
+                }
+                _ => {
+                    crate::library::editor::symbol::state::move_all(
+                        editor.primitive_mut(),
+                        dx,
+                        dy,
+                    );
+                }
+            }
             editor.dirty = true;
             editor.canvas_cache.clear();
         }
@@ -3920,7 +3938,7 @@ pub(crate) fn apply_symbol_primitive_edit(
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::SymbolRotateSelected { clockwise, pivot } => {
-            let selected = editor.selected;
+            let selected = editor.selected.clone();
             let pivot_mode = rotate_pivot_msg_to_state(pivot);
             crate::library::editor::symbol::state::rotate_selected_with_pivot(
                 editor.primitive_mut(),
@@ -3932,7 +3950,7 @@ pub(crate) fn apply_symbol_primitive_edit(
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::SymbolDeleteSelected => {
-            let selected = editor.selected;
+            let selected = editor.selected.clone();
             if let Some(new_sel) = crate::library::editor::symbol::state::delete_selected(
                 editor.primitive_mut(),
                 selected,
