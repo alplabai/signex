@@ -3486,7 +3486,32 @@ impl Signex {
 
         // Symbol-only mutations.
         if let Some(editor) = self.document_state.symbol_editors.get_mut(&path) {
+            // Classify the message before mutating so we can decide
+            // whether the Properties panel needs a full context rebuild.
+            let needs_panel_refresh = matches!(
+                msg,
+                PrimitiveEditorMsg::SymbolSelect(_)
+                    | PrimitiveEditorMsg::SymbolDeselect
+                    | PrimitiveEditorMsg::SymbolAddPin { .. }
+                    | PrimitiveEditorMsg::SymbolAddRectangle { .. }
+                    | PrimitiveEditorMsg::SymbolAddLine { .. }
+                    | PrimitiveEditorMsg::SymbolAddCircle { .. }
+                    | PrimitiveEditorMsg::SymbolAddArc { .. }
+                    | PrimitiveEditorMsg::SymbolAddText { .. }
+                    | PrimitiveEditorMsg::SymbolDeleteSelected
+                    | PrimitiveEditorMsg::SymbolMoveSelected { .. }
+                    | PrimitiveEditorMsg::SymbolMoveGraphicHandle { .. }
+                    | PrimitiveEditorMsg::SymbolSetPinNumber { .. }
+                    | PrimitiveEditorMsg::SymbolSetPinName { .. }
+                    | PrimitiveEditorMsg::SymbolPrevPart
+                    | PrimitiveEditorMsg::SymbolNextPart
+                    | PrimitiveEditorMsg::SymbolNewPart
+                    | PrimitiveEditorMsg::SymbolRemovePart
+            );
             apply_symbol_primitive_edit(editor, msg);
+            if needs_panel_refresh {
+                self.refresh_panel_ctx();
+            }
             return Task::none();
         }
 
