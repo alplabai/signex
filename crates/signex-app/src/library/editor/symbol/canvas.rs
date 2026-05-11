@@ -238,6 +238,11 @@ pub struct CanvasState {
     pub arc_radius_start: Option<(f64, f64)>,
     /// Live cursor for arc rubber-band preview (both Phase 1 and 2).
     pub arc_cursor: Option<(f64, f64)>,
+    /// Unwrapped (cumulative) end-angle in degrees, updated every
+    /// `CursorMoved` while Phase 2 is active. Unlike a raw `atan2`
+    /// result this never jumps at the ±180° boundary so arcs that
+    /// cross 0° / 360° render continuously.
+    pub arc_end_deg_unwrapped: Option<f64>,
 }
 
 /// Builder for the per-render [`SymbolCanvas`] — all the inputs the
@@ -599,6 +604,19 @@ fn stroke_px_at_zoom(base_width_px_at_100: f32, scale: f32) -> f32 {
     scaled.clamp(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX, max_stroke)
 }
 
+/// Unwrap a raw `atan2` angle (in degrees, range `[-180, 180]`) so that
+/// the result stays within 180° of `prev`. This removes the ±180° branch
+/// cut when tracking a continuously-moving cursor angle.
+///
+/// Example: prev = 170°, raw = -170° → returns 190° (not -170°).
+fn unwrap_angle(prev: f64, raw: f64) -> f64 {
+    let mut delta = raw - prev;
+    // Bring delta into (-180, 180] so we always take the short arc.
+    if delta > 180.0 { delta -= 360.0; }
+    if delta <= -180.0 { delta += 360.0; }
+    prev + delta
+}
+
 fn stroke_world_mm(base_width_px_at_100: f32, scale: f32) -> f32 {
     (stroke_px_at_zoom(base_width_px_at_100, scale) / scale.max(0.001))
         .max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM as f32)
@@ -840,9 +858,15 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                             // Third click — commit the arc.
                             let (cx, cy) = state.arc_center.take().unwrap_or((wx, wy));
                             state.arc_cursor = None;
-                            let dx = wx - cx;
-                            let dy = wy - cy;
-                            let end_deg = dy.atan2(dx).to_degrees();
+                            // Use the unwrapped end angle so arcs that swept
+                            // past ±180° are stored correctly. Fall back to a
+                            // fresh atan2 only if the cursor never moved after
+                            // the second click.
+                            let end_deg = state.arc_end_deg_unwrapped.take().unwrap_or_else(|| {
+                                let dx = wx - cx;
+                                let dy = wy - cy;
+                                dy.atan2(dx).to_degrees()
+                            });
                             Some(
                                 canvas::Action::publish(CanvasAction::AddArc {
                                     cx,
@@ -860,6 +884,9 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                             let radius = (dx * dx + dy * dy).sqrt().max(0.1);
                             let start_deg = dy.atan2(dx).to_degrees();
                             state.arc_radius_start = Some((radius, start_deg));
+                            // Seed the unwrapped tracker at the start angle so
+                            // the first CursorMoved won't produce a large jump.
+                            state.arc_end_deg_unwrapped = Some(start_deg);
                             Some(canvas::Action::capture())
                         } else {
                             // First click — set the center and wait.
@@ -894,6 +921,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                     state.arc_center = None;
                     state.arc_radius_start = None;
                     state.arc_cursor = None;
+                    state.arc_end_deg_unwrapped = None;
                     return Some(canvas::Action::capture());
                 }
                 let pos = cursor.position_in(bounds)?;
@@ -1004,6 +1032,17 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                     && (state.arc_center.is_some() || state.arc_radius_start.is_some())
                 {
                     state.arc_cursor = Some((wx, wy));
+                    // Phase 2: keep a continuous (unwrapped) end angle so
+                    // arcs that sweep past ±180° don't jump.
+                    if let Some((cx, cy)) = state.arc_center {
+                        if state.arc_radius_start.is_some() {
+                            let raw = (wy - cy).atan2(wx - cx).to_degrees();
+                            state.arc_end_deg_unwrapped = Some(match state.arc_end_deg_unwrapped {
+                                Some(prev) => unwrap_angle(prev, raw),
+                                None => raw,
+                            });
+                        }
+                    }
                     return Some(
                         canvas::Action::publish(CanvasAction::CursorAt {
                             x_mm: Some(ux),
@@ -1112,6 +1151,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                             state.arc_center = None;
                             state.arc_radius_start = None;
                             state.arc_cursor = None;
+                            state.arc_end_deg_unwrapped = None;
                             true
                         }
                         _ => false,
@@ -1519,9 +1559,13 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                     // canvas::path::Arc lives in screen space (y-down), so we
                     // negate the world-space angles to compensate for the y-flip
                     // applied by w2s: screen_angle = -world_angle.
-                    let dx = cur_x - cx;
-                    let dy = cur_y - cy;
-                    let end_deg = dy.atan2(dx).to_degrees();
+                    // Use the unwrapped end angle from state to avoid the ±180°
+                    // discontinuity that raw atan2 would introduce.
+                    let end_deg = state.arc_end_deg_unwrapped.unwrap_or_else(|| {
+                        let dx = cur_x - cx;
+                        let dy = cur_y - cy;
+                        dy.atan2(dx).to_degrees()
+                    });
                     let arc_path = canvas::Path::new(|builder| {
                         builder.arc(canvas::path::Arc {
                             center: center_p,
