@@ -17,6 +17,25 @@ impl Signex {
     }
 
     pub(crate) fn handle_undo_requested(&mut self) {
+        // If the active tab is a symbol editor, delegate undo to it.
+        if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
+            && let Some(path) = active_tab.kind.as_symbol_editor().cloned()
+        {
+            if let Some(editor) = self.document_state.symbol_editors.get_mut(&path) {
+                if let Some(snapshot) = editor.undo_snapshots.pop() {
+                    let current = editor.primitive().clone();
+                    editor.redo_snapshots.push(current);
+                    *editor.primitive_mut() = snapshot;
+                    editor.mid_drag = false;
+                    editor.selected = None;
+                    editor.dirty = true;
+                    editor.canvas_cache.clear();
+                    self.refresh_panel_ctx();
+                }
+            }
+            return;
+        }
+
         // Net-colour floods aren't persisted to the Standard document so
         // they don't enter the engine's history. Check the app-level
         // net_color_undo stack first; only fall through to the engine
@@ -39,6 +58,25 @@ impl Signex {
     }
 
     pub(crate) fn handle_redo_requested(&mut self) {
+        // If the active tab is a symbol editor, delegate redo to it.
+        if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
+            && let Some(path) = active_tab.kind.as_symbol_editor().cloned()
+        {
+            if let Some(editor) = self.document_state.symbol_editors.get_mut(&path) {
+                if let Some(snapshot) = editor.redo_snapshots.pop() {
+                    let current = editor.primitive().clone();
+                    editor.undo_snapshots.push(current);
+                    *editor.primitive_mut() = snapshot;
+                    editor.mid_drag = false;
+                    editor.selected = None;
+                    editor.dirty = true;
+                    editor.canvas_cache.clear();
+                    self.refresh_panel_ctx();
+                }
+            }
+            return;
+        }
+
         let redone = self.apply_engine_redo(true);
 
         if redone {

@@ -46,6 +46,7 @@ pub fn view_symbol<'a>(
     panel_ctx: &'a PanelContext,
     display: LibraryDisplaySettings,
     theme_id: signex_types::theme::ThemeId,
+    path: &'a std::path::PathBuf,
 ) -> Element<'a, LibraryMessage> {
     let tokens = &panel_ctx.tokens;
     let toolbar = view_symbol_toolbar(editor, panel_ctx);
@@ -69,7 +70,7 @@ pub fn view_symbol<'a>(
         .width(Length::Fill)
         .height(Length::Fill);
 
-    let status_line = view_symbol_status(editor, panel_ctx, display);
+    let status_line = view_symbol_status(editor, panel_ctx, display, path);
 
     let outer = column![body, Space::new().height(4), status_line]
         .spacing(0)
@@ -93,10 +94,12 @@ fn view_symbol_status<'a>(
     editor: &'a SymbolEditorState,
     panel_ctx: &'a PanelContext,
     display: LibraryDisplaySettings,
+    path: &'a std::path::PathBuf,
 ) -> Element<'a, LibraryMessage> {
     let tokens = &panel_ctx.tokens;
     let muted = theme_ext::text_secondary(tokens);
     let text_c = theme_ext::text_primary(tokens);
+    let border = theme_ext::border_color(tokens);
 
     let unit = display.unit;
     let coord_text = match editor.cursor_mm {
@@ -108,9 +111,34 @@ fn view_symbol_status<'a>(
 
     let sep = || text("|").size(10).color(muted);
 
-    // Sheet / grid / unit live in Tools ▸ Document Options
-    // (per Altium parity) — the footer is read-only quick info
-    // (cursor / zoom / pin count + hint).
+    // Grid toggle button.
+    let grid_vis_label = if display.grid_visible { "Grid: ON" } else { "Grid: OFF" };
+    let grid_toggle = button(
+        text(grid_vis_label).size(11).color(text_c),
+    )
+    .padding([2, 6])
+    .on_press(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::SymbolToggleGrid,
+    })
+    .style(move |theme: &Theme, status| {
+        symbol_tool_button_style(false, border)(theme, status)
+    });
+
+    // Grid size cycle button.
+    let grid_size_label = format!("{:.3} mm", display.grid_size_mm);
+    let grid_cycle = button(
+        text(grid_size_label).size(11).color(muted),
+    )
+    .padding([2, 6])
+    .on_press(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::SymbolCycleGridSize,
+    })
+    .style(move |theme: &Theme, status| {
+        symbol_tool_button_style(false, border)(theme, status)
+    });
+
     container(
         row![
             text(coord_text).size(11).color(text_c),
@@ -118,11 +146,14 @@ fn view_symbol_status<'a>(
             text(zoom_text).size(11).color(muted),
             sep(),
             text(pin_count).size(11).color(muted),
+            sep(),
+            grid_toggle,
+            grid_cycle,
             Space::new().width(Length::Fill),
             text(if editor.selected.is_some() {
                 "Del removes · drag to move · scroll zooms · right-drag pans · Home fits"
             } else {
-                "Tools ▸ Document Options for sheet / grid / unit · scroll zooms · right-drag pans · Home fits"
+                "Ctrl+Z undo · Ctrl+Y redo · scroll zooms · right-drag pans · Home fits"
             })
             .size(10)
             .color(muted),
@@ -323,6 +354,9 @@ fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> Primitive
         CanvasAction::Zoom { sx, sy, delta } => PrimitiveEditorMsg::SymbolZoom { sx, sy, delta },
         CanvasAction::Fit => PrimitiveEditorMsg::SymbolFit,
         CanvasAction::CursorAt { x_mm, y_mm } => PrimitiveEditorMsg::SymbolCursorAt { x_mm, y_mm },
+        CanvasAction::DragCommit => PrimitiveEditorMsg::SymbolDragCommit,
+        CanvasAction::Undo => PrimitiveEditorMsg::SymbolUndo,
+        CanvasAction::Redo => PrimitiveEditorMsg::SymbolRedo,
     }
 }
 

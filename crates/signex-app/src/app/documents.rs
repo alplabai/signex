@@ -243,6 +243,20 @@ pub struct SymbolEditorState {
         Option<crate::library::editor::symbol::state::SymActiveBarMenu>,
     /// v0.13 — Pause flag for placement (TAB during Place Pin / etc.).
     pub placement_paused: bool,
+    /// Snapshot stack for undo. Each entry is a full clone of the
+    /// `Symbol` at the moment before a mutation was applied. Max 100
+    /// entries; oldest entries are dropped when the limit is exceeded.
+    pub undo_snapshots: Vec<signex_library::Symbol>,
+    /// Snapshot stack for redo. Cleared whenever a new mutation is
+    /// recorded; populated by `SymbolUndo` so the user can step
+    /// forward again after undoing.
+    pub redo_snapshots: Vec<signex_library::Symbol>,
+    /// Set to `true` on the first `Move`/`MoveAll`/`MoveGraphicHandle`
+    /// in a drag sequence so subsequent move events in the same drag do
+    /// NOT push additional snapshots (the pre-drag snapshot is already
+    /// on the undo stack). Cleared by `SymbolDragCommit` (emitted on
+    /// `ButtonReleased`).
+    pub mid_drag: bool,
 }
 
 impl SymbolEditorState {
@@ -268,6 +282,9 @@ impl SymbolEditorState {
             selection_filter: Default::default(),
             active_bar_menu: None,
             placement_paused: false,
+            undo_snapshots: Vec::new(),
+            redo_snapshots: Vec::new(),
+            mid_drag: false,
         };
         state.reset_camera_origin_center();
         state

@@ -3507,6 +3507,8 @@ impl Signex {
                     | PrimitiveEditorMsg::SymbolNextPart
                     | PrimitiveEditorMsg::SymbolNewPart
                     | PrimitiveEditorMsg::SymbolRemovePart
+                    | PrimitiveEditorMsg::SymbolUndo
+                    | PrimitiveEditorMsg::SymbolRedo
             );
             apply_symbol_primitive_edit(editor, msg);
             if needs_panel_refresh {
@@ -3768,6 +3770,17 @@ pub(crate) fn apply_symbol_primitive_edit(
     use crate::library::editor::symbol::canvas::SymbolTool;
     use crate::library::editor::symbol::state::{FieldKey, SymbolSelection};
 
+    /// Push a snapshot of the current symbol onto the undo stack and
+    /// clear the redo stack. Capped at 100 entries; oldest are dropped.
+    fn push_undo(editor: &mut crate::app::SymbolEditorState) {
+        let snapshot = editor.primitive().clone();
+        editor.undo_snapshots.push(snapshot);
+        if editor.undo_snapshots.len() > 100 {
+            editor.undo_snapshots.remove(0);
+        }
+        editor.redo_snapshots.clear();
+    }
+
     match msg {
         PrimitiveEditorMsg::SymbolSetTool(tool) => {
             editor.tool = match tool {
@@ -3803,6 +3816,7 @@ pub(crate) fn apply_symbol_primitive_edit(
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::SymbolAddPin { x, y } => {
+            push_undo(editor);
             let active_part = editor.active_part;
             let idx = crate::library::editor::symbol::state::add_pin(
                 editor.primitive_mut(),
@@ -3815,6 +3829,7 @@ pub(crate) fn apply_symbol_primitive_edit(
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::SymbolAddRectangle { x, y } => {
+            push_undo(editor);
             // Default 10×5 mm rectangle centred on the click. User
             // edits the corners later via Properties (graphics-properties
             // surface lands in a follow-up; for now they can move/delete
@@ -3835,6 +3850,7 @@ pub(crate) fn apply_symbol_primitive_edit(
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::SymbolAddLine { from_x, from_y, to_x, to_y } => {
+            push_undo(editor);
             editor
                 .primitive_mut()
                 .graphics
@@ -3849,6 +3865,7 @@ pub(crate) fn apply_symbol_primitive_edit(
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::SymbolAddArc { cx, cy, radius, start_deg, end_deg } => {
+            push_undo(editor);
             editor
                 .primitive_mut()
                 .graphics
@@ -3865,6 +3882,7 @@ pub(crate) fn apply_symbol_primitive_edit(
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::SymbolAddText { x, y } => {
+            push_undo(editor);
             // Default "Text" label at the click position. User edits
             // the content + size via Properties.
             editor
@@ -3882,6 +3900,7 @@ pub(crate) fn apply_symbol_primitive_edit(
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::SymbolAddCircle { cx, cy, radius } => {
+            push_undo(editor);
             editor
                 .primitive_mut()
                 .graphics
@@ -3913,6 +3932,10 @@ pub(crate) fn apply_symbol_primitive_edit(
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::SymbolMoveSelected { x, y } => {
+            if !editor.mid_drag {
+                push_undo(editor);
+                editor.mid_drag = true;
+            }
             let selected = editor.selected.clone();
             crate::library::editor::symbol::state::move_selected(
                 editor.primitive_mut(),
@@ -3924,6 +3947,10 @@ pub(crate) fn apply_symbol_primitive_edit(
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::SymbolMoveAll { dx, dy } => {
+            if !editor.mid_drag {
+                push_undo(editor);
+                editor.mid_drag = true;
+            }
             match &editor.selected {
                 Some(SymbolSelection::Multiple { pin_indices, graphic_indices }) => {
                     let pins = pin_indices.clone();
@@ -3948,6 +3975,10 @@ pub(crate) fn apply_symbol_primitive_edit(
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::SymbolMoveGraphicHandle { idx, handle, x, y } => {
+            if !editor.mid_drag {
+                push_undo(editor);
+                editor.mid_drag = true;
+            }
             let h = graphic_handle_msg_to_state(handle);
             crate::library::editor::symbol::state::move_graphic_handle(
                 editor.primitive_mut(),
@@ -3960,6 +3991,7 @@ pub(crate) fn apply_symbol_primitive_edit(
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::SymbolRotateSelected { clockwise, pivot } => {
+            push_undo(editor);
             let selected = editor.selected.clone();
             let pivot_mode = rotate_pivot_msg_to_state(pivot);
             crate::library::editor::symbol::state::rotate_selected_with_pivot(
@@ -3972,6 +4004,7 @@ pub(crate) fn apply_symbol_primitive_edit(
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::SymbolDeleteSelected => {
+            push_undo(editor);
             let selected = editor.selected.clone();
             if let Some(new_sel) = crate::library::editor::symbol::state::delete_selected(
                 editor.primitive_mut(),
@@ -3983,12 +4016,14 @@ pub(crate) fn apply_symbol_primitive_edit(
             }
         }
         PrimitiveEditorMsg::SymbolSetPinNumber { idx, number } => {
+            push_undo(editor);
             if let Some(pin) = editor.primitive_mut().pins.get_mut(idx) {
                 pin.number = number;
                 editor.dirty = true;
             }
         }
         PrimitiveEditorMsg::SymbolSetPinName { idx, name } => {
+            push_undo(editor);
             if let Some(pin) = editor.primitive_mut().pins.get_mut(idx) {
                 pin.name = name;
                 editor.dirty = true;
@@ -4069,6 +4104,7 @@ pub(crate) fn apply_symbol_primitive_edit(
             }
         }
         PrimitiveEditorMsg::SymbolNewPart => {
+            push_undo(editor);
             // Bump the symbol's max declared part by one and switch
             // to it. The new part starts pinless; the user adds pins
             // in Add Pin mode with the new active_part selected.
@@ -4079,6 +4115,7 @@ pub(crate) fn apply_symbol_primitive_edit(
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::SymbolRemovePart => {
+            push_undo(editor);
             // Refuse to remove if this is the only part — a single-
             // part symbol must always have part 1 active.
             let max = crate::library::editor::symbol::state::max_part_number(editor.primitive());
@@ -4105,6 +4142,31 @@ pub(crate) fn apply_symbol_primitive_edit(
         // Footprint variants are no-ops on a Symbol editor — the
         // dispatcher uses path-keyed lookup so a misrouted event
         // can't actually reach this match arm in practice.
+        PrimitiveEditorMsg::SymbolUndo => {
+            if let Some(snapshot) = editor.undo_snapshots.pop() {
+                let current = editor.primitive().clone();
+                editor.redo_snapshots.push(current);
+                *editor.primitive_mut() = snapshot;
+                editor.mid_drag = false;
+                editor.selected = None;
+                editor.dirty = true;
+                editor.canvas_cache.clear();
+            }
+        }
+        PrimitiveEditorMsg::SymbolRedo => {
+            if let Some(snapshot) = editor.redo_snapshots.pop() {
+                let current = editor.primitive().clone();
+                editor.undo_snapshots.push(current);
+                *editor.primitive_mut() = snapshot;
+                editor.mid_drag = false;
+                editor.selected = None;
+                editor.dirty = true;
+                editor.canvas_cache.clear();
+            }
+        }
+        PrimitiveEditorMsg::SymbolDragCommit => {
+            editor.mid_drag = false;
+        }
         PrimitiveEditorMsg::FootprintSelectActiveIdx(_)
         | PrimitiveEditorMsg::FootprintAddNewSibling
         | PrimitiveEditorMsg::FootprintAddPad { .. }
@@ -5856,6 +5918,9 @@ pub(crate) fn apply_footprint_primitive_edit(
         | PrimitiveEditorMsg::SymbolCloseActiveBarMenu
         | PrimitiveEditorMsg::SymbolActiveBarStub(_)
         | PrimitiveEditorMsg::SymbolToggleSelectionFilter(_)
+        | PrimitiveEditorMsg::SymbolUndo
+        | PrimitiveEditorMsg::SymbolRedo
+        | PrimitiveEditorMsg::SymbolDragCommit
         | PrimitiveEditorMsg::Save => {}
     }
 }

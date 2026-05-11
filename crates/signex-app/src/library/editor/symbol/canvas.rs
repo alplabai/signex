@@ -139,6 +139,14 @@ pub enum CanvasAction {
         x_mm: Option<f64>,
         y_mm: Option<f64>,
     },
+    /// Emitted on `ButtonReleased(Left)` when a drag was in progress.
+    /// The dispatcher uses this to clear `mid_drag` so the next drag
+    /// starts a fresh undo snapshot group.
+    DragCommit,
+    /// Undo — Ctrl+Z while the canvas has keyboard focus.
+    Undo,
+    /// Redo — Ctrl+Y / Ctrl+Shift+Z while the canvas has keyboard focus.
+    Redo,
 }
 
 /// Pivot mode carried by rotate actions emitted from the Symbol canvas.
@@ -1038,6 +1046,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                 )
             }
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
+                let was_dragging = state.dragging || state.dragging_handle.is_some();
                 state.dragging = false;
                 state.dragging_handle = None;
                 state.drag_anchor_offset = None;
@@ -1069,6 +1078,12 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                             canvas::Action::publish(CanvasAction::Deselect).and_capture(),
                         );
                     }
+                }
+
+                // Notify dispatcher that a move drag completed so it can
+                // close the coalesced undo snapshot group.
+                if was_dragging {
+                    return Some(canvas::Action::publish(CanvasAction::DragCommit));
                 }
 
                 None
@@ -1145,6 +1160,25 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                             pivot_mode,
                         })
                         .and_capture(),
+                    )
+                }
+                // Undo: Ctrl+Z
+                iced::keyboard::Key::Character(c)
+                    if c.as_str() == "z" && modifiers.command() && !modifiers.shift() =>
+                {
+                    Some(
+                        canvas::Action::publish(CanvasAction::Undo).and_capture(),
+                    )
+                }
+                // Redo: Ctrl+Y  or  Ctrl+Shift+Z
+                iced::keyboard::Key::Character(c)
+                    if (c.as_str() == "y" && modifiers.command())
+                        || (c.as_str() == "z"
+                            && modifiers.command()
+                            && modifiers.shift()) =>
+                {
+                    Some(
+                        canvas::Action::publish(CanvasAction::Redo).and_capture(),
                     )
                 }
                 _ => None,

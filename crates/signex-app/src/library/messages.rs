@@ -1301,6 +1301,16 @@ pub enum PrimitiveEditorMsg {
     /// the data, lose only the partition); the active part falls
     /// back to `1`. No-op when only one part exists.
     SymbolRemovePart,
+    /// Undo the last symbol mutation. Pops from `undo_snapshots`
+    /// and restores the previous `Symbol` state.
+    SymbolUndo,
+    /// Redo — reapply an undone symbol mutation. Pops from
+    /// `redo_snapshots`.
+    SymbolRedo,
+    /// Drag committed — clears `mid_drag` so the next drag starts a
+    /// fresh undo snapshot group. Emitted on `ButtonReleased(Left)`
+    /// when a move drag was in progress.
+    SymbolDragCommit,
 
     // ── Footprint ──────────────────────────────────────────
     /// v0.18.7 — switch which footprint inside the multi-footprint

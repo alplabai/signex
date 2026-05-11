@@ -4168,7 +4168,7 @@ impl Signex {
                     .unwrap_or_default();
                 let theme_id = self.ui_state.theme_id;
                 return crate::library::editor::standalone::view_symbol(
-                    editor, panel_ctx, display, theme_id,
+                    editor, panel_ctx, display, theme_id, path,
                 )
                 .map(Message::Library);
             }
