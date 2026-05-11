@@ -69,16 +69,23 @@ pub enum CanvasAction {
         to_x: f64,
         to_y: f64,
     },
-    /// Stamp a circle of radius 2 mm centred on `(x, y)`.
+    /// Place a circle with center `(cx, cy)` and the given radius.
+    /// Emitted on the second click of a two-click draw flow
+    /// (1st click = center, 2nd click = edge defines radius).
     AddCircle {
-        x: f64,
-        y: f64,
+        cx: f64,
+        cy: f64,
+        radius: f64,
     },
-    /// Stamp a default 2 mm-radius arc centred on `(x, y)` sweeping
-    /// 0°→90° (quadrant arc).
+    /// Place an arc with center, radius, and start/end angles in degrees
+    /// (0° = right, 90° = up in world coords). Emitted on the third
+    /// click of a three-click draw flow.
     AddArc {
-        x: f64,
-        y: f64,
+        cx: f64,
+        cy: f64,
+        radius: f64,
+        start_deg: f64,
+        end_deg: f64,
     },
     /// Stamp a default text label "Text" anchored at `(x, y)`.
     AddText {
@@ -211,6 +218,18 @@ pub struct CanvasState {
     /// Cursor position (snapped) updated every `CursorMoved` while
     /// `line_from.is_some()`, used to paint the rubber-band preview.
     pub line_cursor: Option<(f64, f64)>,
+    /// First click center while in the `PlaceCircle` two-click draw flow.
+    pub circle_center: Option<(f64, f64)>,
+    /// Live cursor (snapped) while `circle_center.is_some()`, used for
+    /// the radius rubber-band preview.
+    pub circle_cursor: Option<(f64, f64)>,
+    /// First click center while in the `PlaceArc` three-click draw flow.
+    pub arc_center: Option<(f64, f64)>,
+    /// Second click: `(radius_mm, start_deg)` once the radius and start
+    /// angle have been committed by the second click.
+    pub arc_radius_start: Option<(f64, f64)>,
+    /// Live cursor for arc rubber-band preview (both Phase 1 and 2).
+    pub arc_cursor: Option<(f64, f64)>,
 }
 
 /// Builder for the per-render [`SymbolCanvas`] — all the inputs the
@@ -780,14 +799,61 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                             Some(canvas::Action::capture())
                         }
                     }
-                    SymbolTool::PlaceCircle => Some(
-                        canvas::Action::publish(CanvasAction::AddCircle { x: wx, y: wy })
-                            .and_capture(),
-                    ),
-                    SymbolTool::PlaceArc => Some(
-                        canvas::Action::publish(CanvasAction::AddArc { x: wx, y: wy })
-                            .and_capture(),
-                    ),
+                    SymbolTool::PlaceCircle => {
+                        if let Some((center_x, center_y)) = state.circle_center.take() {
+                            // Second click — commit the circle.
+                            let dx = wx - center_x;
+                            let dy = wy - center_y;
+                            let radius = (dx * dx + dy * dy).sqrt().max(0.1);
+                            state.circle_cursor = None;
+                            Some(
+                                canvas::Action::publish(CanvasAction::AddCircle {
+                                    cx: center_x,
+                                    cy: center_y,
+                                    radius,
+                                })
+                                .and_capture(),
+                            )
+                        } else {
+                            // First click — set the center and wait.
+                            state.circle_center = Some((wx, wy));
+                            state.circle_cursor = Some((wx, wy));
+                            Some(canvas::Action::capture())
+                        }
+                    }
+                    SymbolTool::PlaceArc => {
+                        if let Some((radius, start_deg)) = state.arc_radius_start.take() {
+                            // Third click — commit the arc.
+                            let (cx, cy) = state.arc_center.take().unwrap_or((wx, wy));
+                            state.arc_cursor = None;
+                            let dx = wx - cx;
+                            let dy = wy - cy;
+                            let end_deg = dy.atan2(dx).to_degrees();
+                            Some(
+                                canvas::Action::publish(CanvasAction::AddArc {
+                                    cx,
+                                    cy,
+                                    radius,
+                                    start_deg,
+                                    end_deg,
+                                })
+                                .and_capture(),
+                            )
+                        } else if let Some((cx, cy)) = state.arc_center {
+                            // Second click — define radius + start angle.
+                            let dx = wx - cx;
+                            let dy = wy - cy;
+                            let radius = (dx * dx + dy * dy).sqrt().max(0.1);
+                            let start_deg = dy.atan2(dx).to_degrees();
+                            state.arc_radius_start = Some((radius, start_deg));
+                            Some(canvas::Action::capture())
+                        } else {
+                            // First click — set the center and wait.
+                            state.arc_center = Some((wx, wy));
+                            state.arc_cursor = Some((wx, wy));
+                            Some(canvas::Action::capture())
+                        }
+                    }
                     SymbolTool::PlaceText => Some(
                         canvas::Action::publish(CanvasAction::AddText { x: wx, y: wy })
                             .and_capture(),
@@ -796,11 +862,24 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
             }
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right))
             | Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Middle)) => {
-                // Right-click cancels an in-progress line draw;
+                // Right-click cancels any in-progress multi-click draw;
                 // otherwise starts a pan (same as schematic canvas).
-                if self.tool == SymbolTool::PlaceLine && state.line_from.is_some() {
+                let draw_in_progress = match self.tool {
+                    SymbolTool::PlaceLine => state.line_from.is_some(),
+                    SymbolTool::PlaceCircle => state.circle_center.is_some(),
+                    SymbolTool::PlaceArc => {
+                        state.arc_center.is_some() || state.arc_radius_start.is_some()
+                    }
+                    _ => false,
+                };
+                if draw_in_progress {
                     state.line_from = None;
                     state.line_cursor = None;
+                    state.circle_center = None;
+                    state.circle_cursor = None;
+                    state.arc_center = None;
+                    state.arc_radius_start = None;
+                    state.arc_cursor = None;
                     return Some(canvas::Action::capture());
                 }
                 let pos = cursor.position_in(bounds)?;
@@ -884,11 +963,35 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                         .and_capture(),
                     );
                 }
-                // While waiting for the second click in PlaceLine,
-                // update the rubber-band preview cursor and force a
-                // redraw so the preview line animates in real time.
+                // While waiting for a subsequent click in a multi-click
+                // draw flow, update the rubber-band cursor and force a
+                // redraw so the preview animates in real time.
                 if self.tool == SymbolTool::PlaceLine && state.line_from.is_some() {
                     state.line_cursor = Some((wx, wy));
+                    let (ux, uy) = world_unsnapped(self, pos.x, pos.y, bounds);
+                    return Some(
+                        canvas::Action::publish(CanvasAction::CursorAt {
+                            x_mm: Some(ux),
+                            y_mm: Some(uy),
+                        })
+                        .and_capture(),
+                    );
+                }
+                if self.tool == SymbolTool::PlaceCircle && state.circle_center.is_some() {
+                    state.circle_cursor = Some((wx, wy));
+                    let (ux, uy) = world_unsnapped(self, pos.x, pos.y, bounds);
+                    return Some(
+                        canvas::Action::publish(CanvasAction::CursorAt {
+                            x_mm: Some(ux),
+                            y_mm: Some(uy),
+                        })
+                        .and_capture(),
+                    );
+                }
+                if self.tool == SymbolTool::PlaceArc
+                    && (state.arc_center.is_some() || state.arc_radius_start.is_some())
+                {
+                    state.arc_cursor = Some((wx, wy));
                     let (ux, uy) = world_unsnapped(self, pos.x, pos.y, bounds);
                     return Some(
                         canvas::Action::publish(CanvasAction::CursorAt {
@@ -974,10 +1077,29 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                 ..
             }) => match key {
                 iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape) => {
-                    // Cancel an in-progress two-click line draw.
-                    if self.tool == SymbolTool::PlaceLine && state.line_from.is_some() {
-                        state.line_from = None;
-                        state.line_cursor = None;
+                    let cancelled = match self.tool {
+                        SymbolTool::PlaceLine if state.line_from.is_some() => {
+                            state.line_from = None;
+                            state.line_cursor = None;
+                            true
+                        }
+                        SymbolTool::PlaceCircle if state.circle_center.is_some() => {
+                            state.circle_center = None;
+                            state.circle_cursor = None;
+                            true
+                        }
+                        SymbolTool::PlaceArc
+                            if state.arc_center.is_some()
+                                || state.arc_radius_start.is_some() =>
+                        {
+                            state.arc_center = None;
+                            state.arc_radius_start = None;
+                            state.arc_cursor = None;
+                            true
+                        }
+                        _ => false,
+                    };
+                    if cancelled {
                         return Some(canvas::Action::capture());
                     }
                     None
@@ -1208,8 +1330,8 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
             SymbolTool::AddPin => "Tool: Add Pin  (click to place)",
             SymbolTool::PlaceRectangle => "Tool: Place Rectangle  (click)",
             SymbolTool::PlaceLine => "Tool: Place Line  (click start, click end / Esc to cancel)",
-            SymbolTool::PlaceCircle => "Tool: Place Ellipse  (click)",
-            SymbolTool::PlaceArc => "Tool: Place Arc  (click)",
+            SymbolTool::PlaceCircle => "Tool: Place Ellipse  (click center, click edge / Esc to cancel)",
+            SymbolTool::PlaceArc => "Tool: Place Arc  (click center, click start, click end / Esc to cancel)",
             SymbolTool::PlaceText => "Tool: Place Text  (click)",
         };
         frame.fill_text(canvas::Text {
@@ -1284,6 +1406,108 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                     .with_width(stroke_px_at_zoom(SYMBOL_GRAPHIC_STROKE_PX_AT_100, scale))
                     .with_line_cap(canvas::LineCap::Round),
             );
+        }
+
+        // Rubber-band circle preview — two-click flow: center set,
+        // waiting for the edge click that defines the radius.
+        if let (Some((cx, cy)), Some((cur_x, cur_y))) =
+            (state.circle_center, state.circle_cursor)
+        {
+            let center_p = w2s(cx, cy);
+            let dx = cur_x - cx;
+            let dy = cur_y - cy;
+            let radius_world = (dx * dx + dy * dy).sqrt().max(0.1);
+            let radius_screen = (radius_world as f32) * scale;
+            let preview_color = Color {
+                a: 0.55,
+                ..self.selected_color
+            };
+            // Center dot.
+            frame.fill(&canvas::Path::circle(center_p, 3.0), preview_color);
+            // Radius line to the cursor.
+            let cursor_p = w2s(cur_x, cur_y);
+            frame.stroke(
+                &canvas::Path::line(center_p, cursor_p),
+                canvas::Stroke::default()
+                    .with_color(preview_color)
+                    .with_width(1.0),
+            );
+            // Circle outline at current radius.
+            frame.stroke(
+                &canvas::Path::circle(center_p, radius_screen),
+                canvas::Stroke::default()
+                    .with_color(preview_color)
+                    .with_width(stroke_px_at_zoom(SYMBOL_GRAPHIC_STROKE_PX_AT_100, scale)),
+            );
+        }
+
+        // Rubber-band arc preview — three-click flow.
+        // Phase 1 (center set, radius not yet): center dot + radius line.
+        // Phase 2 (center + radius/start set): faint circle + start dot + arc to cursor.
+        if let Some((cx, cy)) = state.arc_center {
+            let center_p = w2s(cx, cy);
+            let preview_color = Color {
+                a: 0.55,
+                ..self.selected_color
+            };
+            frame.fill(&canvas::Path::circle(center_p, 3.0), preview_color);
+            if let Some((radius, start_deg)) = state.arc_radius_start {
+                // Phase 2: radius and start angle are committed.
+                let radius_screen = (radius as f32) * scale;
+                // Faint full-circle ghost to show the radius.
+                let faint = Color {
+                    a: 0.18,
+                    ..self.selected_color
+                };
+                frame.stroke(
+                    &canvas::Path::circle(center_p, radius_screen),
+                    canvas::Stroke::default().with_color(faint).with_width(1.0),
+                );
+                // Start-angle endpoint dot.
+                let start_rad = start_deg.to_radians();
+                let sp = w2s(
+                    cx + radius * start_rad.cos(),
+                    cy + radius * start_rad.sin(),
+                );
+                frame.fill(&canvas::Path::circle(sp, 3.0), preview_color);
+                // Line from center to cursor (end-angle preview).
+                if let Some((cur_x, cur_y)) = state.arc_cursor {
+                    let cursor_p = w2s(cur_x, cur_y);
+                    frame.stroke(
+                        &canvas::Path::line(center_p, cursor_p),
+                        canvas::Stroke::default()
+                            .with_color(preview_color)
+                            .with_width(1.0),
+                    );
+                    // Arc sweep from start to cursor angle.
+                    let dx = cur_x - cx;
+                    let dy = cur_y - cy;
+                    let end_deg = dy.atan2(dx).to_degrees();
+                    let arc_path = canvas::Path::new(|builder| {
+                        builder.arc(canvas::path::Arc {
+                            center: center_p,
+                            radius: radius_screen,
+                            start_angle: iced::Radians((start_deg as f32).to_radians()),
+                            end_angle: iced::Radians((end_deg as f32).to_radians()),
+                        });
+                    });
+                    frame.stroke(
+                        &arc_path,
+                        canvas::Stroke::default()
+                            .with_color(preview_color)
+                            .with_width(stroke_px_at_zoom(SYMBOL_GRAPHIC_STROKE_PX_AT_100, scale)),
+                    );
+                }
+            } else if let Some((cur_x, cur_y)) = state.arc_cursor {
+                // Phase 1: just show the radius line to the cursor.
+                let cursor_p = w2s(cur_x, cur_y);
+                frame.stroke(
+                    &canvas::Path::line(center_p, cursor_p),
+                    canvas::Stroke::default()
+                        .with_color(preview_color)
+                        .with_width(1.0),
+                );
+            }
         }
 
         vec![frame.into_geometry()]

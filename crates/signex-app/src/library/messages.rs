@@ -1200,12 +1200,13 @@ pub enum PrimitiveEditorMsg {
         to_x: f64,
         to_y: f64,
     },
-    /// Stamp a 2 mm-radius circle (Altium "Ellipse") centred on
-    /// `(x, y)`.
-    SymbolAddCircle { x: f64, y: f64 },
-    /// Stamp a default arc (radius 2 mm, 0°→90° quadrant) centred
-    /// on `(x, y)`.
-    SymbolAddArc { x: f64, y: f64 },
+    /// Place a circle with center `(cx, cy)` and the given radius.
+    /// Emitted on the second click of the two-click canvas draw flow.
+    SymbolAddCircle { cx: f64, cy: f64, radius: f64 },
+    /// Place an arc with center, radius, and start/end angles in degrees
+    /// (0° = right, 90° = up). Emitted on the third click of the
+    /// three-click canvas draw flow.
+    SymbolAddArc { cx: f64, cy: f64, radius: f64, start_deg: f64, end_deg: f64 },
     /// Stamp a default "Text" label anchored at `(x, y)`. Edit the
     /// content via the Properties panel after placement.
     SymbolAddText { x: f64, y: f64 },

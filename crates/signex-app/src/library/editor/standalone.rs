@@ -292,8 +292,12 @@ fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> Primitive
         CanvasAction::AddLine { from_x, from_y, to_x, to_y } => {
             PrimitiveEditorMsg::SymbolAddLine { from_x, from_y, to_x, to_y }
         }
-        CanvasAction::AddCircle { x, y } => PrimitiveEditorMsg::SymbolAddCircle { x, y },
-        CanvasAction::AddArc { x, y } => PrimitiveEditorMsg::SymbolAddArc { x, y },
+        CanvasAction::AddCircle { cx, cy, radius } => {
+            PrimitiveEditorMsg::SymbolAddCircle { cx, cy, radius }
+        }
+        CanvasAction::AddArc { cx, cy, radius, start_deg, end_deg } => {
+            PrimitiveEditorMsg::SymbolAddArc { cx, cy, radius, start_deg, end_deg }
+        }
         CanvasAction::AddText { x, y } => PrimitiveEditorMsg::SymbolAddText { x, y },
         CanvasAction::Select(sel) => PrimitiveEditorMsg::SymbolSelect(symbol_selection_to_msg(sel)),
         CanvasAction::Deselect => PrimitiveEditorMsg::SymbolDeselect,

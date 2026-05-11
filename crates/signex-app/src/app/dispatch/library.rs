@@ -3779,6 +3779,9 @@ pub(crate) fn apply_symbol_primitive_edit(
                 SymbolToolMsg::PlaceArc => SymbolTool::PlaceArc,
                 SymbolToolMsg::PlaceText => SymbolTool::PlaceText,
             };
+            // Close the active-bar dropdown so the user can immediately
+            // start drawing without an extra click to dismiss the menu.
+            editor.active_bar_menu = None;
         }
         PrimitiveEditorMsg::SymbolToggleActiveBarMenu(menu) => {
             editor.active_bar_menu = match editor.active_bar_menu {
@@ -3845,19 +3848,16 @@ pub(crate) fn apply_symbol_primitive_edit(
             editor.dirty = true;
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::SymbolAddArc { x, y } => {
-            // Default 2 mm-radius arc, 0°→90° quadrant centred on
-            // the click. User edits start/end angle via Properties
-            // (or drag-to-resize the start/end handles).
+        PrimitiveEditorMsg::SymbolAddArc { cx, cy, radius, start_deg, end_deg } => {
             editor
                 .primitive_mut()
                 .graphics
                 .push(signex_library::SymbolGraphic {
                     kind: signex_library::SymbolGraphicKind::Arc {
-                        center: [x, y],
-                        radius: 2.0,
-                        start_deg: 0.0,
-                        end_deg: 90.0,
+                        center: [cx, cy],
+                        radius,
+                        start_deg,
+                        end_deg,
                     },
                     stroke_width: 0.15,
                 });
@@ -3881,15 +3881,14 @@ pub(crate) fn apply_symbol_primitive_edit(
             editor.dirty = true;
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::SymbolAddCircle { x, y } => {
-            // 2 mm-radius circle centred on the click.
+        PrimitiveEditorMsg::SymbolAddCircle { cx, cy, radius } => {
             editor
                 .primitive_mut()
                 .graphics
                 .push(signex_library::SymbolGraphic {
                     kind: signex_library::SymbolGraphicKind::Circle {
-                        center: [x, y],
-                        radius: 2.0,
+                        center: [cx, cy],
+                        radius,
                     },
                     stroke_width: 0.15,
                 });
