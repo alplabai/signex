@@ -577,8 +577,8 @@ impl PinRenderGeometry {
         let along_mm = pin.length * PIN_TEXT_LAYOUT.number_along_ratio as f64;
 
         let number_pos = Vec2d::new(
-            tip.x + unit.x * along_mm,
-            tip.y + unit.y * along_mm,
+            tip.x + unit.x * along_mm + normal.x * number_offset_mm,
+            tip.y + unit.y * along_mm + normal.y * number_offset_mm,
         );
         let name_pos = Vec2d::new(
             tip.x + unit.x * (pin.length + PIN_TEXT_LAYOUT.name_offset_x_mm as f64),
@@ -1814,7 +1814,7 @@ impl<'a> SymbolCanvas<'a> {
                 italic: false,
                 rotation_rad: geom.text_rotation,
                 h_align: HAlign::Center,
-                v_align: VAlign::Center,
+                v_align: VAlign::Bottom,
             });
 
             pin_texts.push(signex_renderer::schematic::TextInput {
