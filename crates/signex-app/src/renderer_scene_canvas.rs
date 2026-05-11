@@ -135,12 +135,15 @@ fn draw_arc_bucket<F>(
 
         let center = world_to_screen(arc.center);
         let radius = options.radius_px(arc.radius);
+        // canvas::path::Arc operates in screen space (y-down). Arc angles are
+        // stored as world-space radians (y-up), so negate to convert:
+        // screen_angle = -world_angle.
         let path = canvas::Path::new(|builder| {
             builder.arc(canvas::path::Arc {
                 center,
                 radius,
-                start_angle: iced::Radians(arc.start_angle),
-                end_angle: iced::Radians(arc.end_angle),
+                start_angle: iced::Radians(-arc.start_angle),
+                end_angle: iced::Radians(-arc.end_angle),
             });
         });
         frame.stroke(
