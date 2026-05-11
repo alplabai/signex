@@ -706,7 +706,12 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         match event {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 let pos = cursor.position_in(bounds)?;
+                // Placement tools need grid-snapped coordinates; hit-testing for
+                // the Select tool must use the raw (unsnapped) cursor position so
+                // that objects not sitting exactly on the snap grid can still be
+                // clicked. We compute both up-front and choose per tool arm.
                 let (wx, wy) = world_for(self, pos.x, pos.y, bounds);
+                let (ux, uy) = world_unsnapped(self, pos.x, pos.y, bounds);
                 match self.tool {
                     SymbolTool::Select => {
                         // Resize handles win over everything else.
@@ -715,7 +720,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                         let tol_mm = (8.0_f32 / self.camera.scale.max(0.01))
                             .clamp(0.5, 4.0) as f64;
                         if let Some((idx, handle)) =
-                            state::hit_test_graphic_handle(self.symbol, wx, wy, tol_mm)
+                            state::hit_test_graphic_handle(self.symbol, ux, uy, tol_mm)
                         {
                             state.dragging_handle = Some((idx, handle));
                             state.dragging = false;
@@ -725,7 +730,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                             state.box_select_current = None;
                             return Some(canvas::Action::capture());
                         }
-                        if let Some(sel) = state::hit_test(self.symbol, wx, wy) {
+                        if let Some(sel) = state::hit_test(self.symbol, ux, uy) {
                             state.box_select_origin = None;
                             state.box_select_current = None;
 
@@ -736,7 +741,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                             });
                             if in_group {
                                 state.dragging = true;
-                                state.last_drag_world_pos = Some((wx, wy));
+                                state.last_drag_world_pos = Some((ux, uy));
                                 state.drag_anchor_offset = None;
                                 return Some(canvas::Action::capture());
                             }
@@ -746,13 +751,13 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                             let is_delta = matches!(effective_sel, SymbolSelection::All);
                             state.dragging = true;
                             state.last_drag_world_pos = if is_delta {
-                                Some((wx, wy))
+                                Some((ux, uy))
                             } else {
                                 None
                             };
                             state.drag_anchor_offset =
                                 selection_anchor(self.symbol, &effective_sel)
-                                    .map(|(ax, ay)| (ax - wx, ay - wy));
+                                    .map(|(ax, ay)| (ax - ux, ay - uy));
 
                             if self.selected.as_ref() == Some(&effective_sel) {
                                 return Some(canvas::Action::capture());
@@ -763,11 +768,12 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                             )
                         } else {
                             // Empty space — start a rubber-band box selection.
+                            // Use unsnapped coords so box corners track the pointer exactly.
                             state.dragging = false;
                             state.drag_anchor_offset = None;
                             state.last_drag_world_pos = None;
-                            state.box_select_origin = Some((wx, wy));
-                            state.box_select_current = Some((wx, wy));
+                            state.box_select_origin = Some((ux, uy));
+                            state.box_select_current = Some((ux, uy));
                             Some(canvas::Action::capture())
                         }
                     }
@@ -908,6 +914,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                     return None;
                 }
                 let (wx, wy) = world_for(self, pos.x, pos.y, bounds);
+                let (ux, uy) = world_unsnapped(self, pos.x, pos.y, bounds);
                 if let Some((idx, handle)) = state.dragging_handle {
                     return Some(canvas::Action::publish(CanvasAction::MoveGraphicHandle {
                         idx,
@@ -953,8 +960,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                 // state-changing message, which triggers draw() on the next
                 // frame so the rubber band animates in real time.
                 if state.box_select_origin.is_some() {
-                    state.box_select_current = Some((wx, wy));
-                    let (ux, uy) = world_unsnapped(self, pos.x, pos.y, bounds);
+                    state.box_select_current = Some((ux, uy));
                     return Some(
                         canvas::Action::publish(CanvasAction::CursorAt {
                             x_mm: Some(ux),
@@ -968,7 +974,6 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                 // redraw so the preview animates in real time.
                 if self.tool == SymbolTool::PlaceLine && state.line_from.is_some() {
                     state.line_cursor = Some((wx, wy));
-                    let (ux, uy) = world_unsnapped(self, pos.x, pos.y, bounds);
                     return Some(
                         canvas::Action::publish(CanvasAction::CursorAt {
                             x_mm: Some(ux),
@@ -979,7 +984,6 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                 }
                 if self.tool == SymbolTool::PlaceCircle && state.circle_center.is_some() {
                     state.circle_cursor = Some((wx, wy));
-                    let (ux, uy) = world_unsnapped(self, pos.x, pos.y, bounds);
                     return Some(
                         canvas::Action::publish(CanvasAction::CursorAt {
                             x_mm: Some(ux),
@@ -992,7 +996,6 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                     && (state.arc_center.is_some() || state.arc_radius_start.is_some())
                 {
                     state.arc_cursor = Some((wx, wy));
-                    let (ux, uy) = world_unsnapped(self, pos.x, pos.y, bounds);
                     return Some(
                         canvas::Action::publish(CanvasAction::CursorAt {
                             x_mm: Some(ux),
@@ -1003,7 +1006,6 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                 }
                 // Idle cursor — publish the unsnapped world position
                 // for the status footer X/Y readout.
-                let (ux, uy) = world_unsnapped(self, pos.x, pos.y, bounds);
                 Some(canvas::Action::publish(CanvasAction::CursorAt {
                     x_mm: Some(ux),
                     y_mm: Some(uy),
