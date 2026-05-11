@@ -3,7 +3,7 @@
 //! for multi-click drawing tools.
 
 use iced::widget::canvas::{self, Path, Stroke};
-use iced::{Color, Point};
+use iced::{Color, Point, Radians, Vector};
 
 use super::super::layers::FpLayer;
 use super::super::snap::{self, SnapKind, SnapResult};
@@ -99,60 +99,74 @@ pub(super) fn draw_constraint_icons(
     }
 
     for c in &sketch.constraints {
-        let (glyph, points): (&str, Vec<SketchEntityId>) = match &c.kind {
-            ConstraintKind::Coincident { p1, p2 } => ("=", vec![*p1, *p2]),
+        // v0.27 — `primary_line` carries the two endpoint IDs of the
+        // line whose direction the glyph should track. Set for every
+        // line-anchored constraint so the H / V / // / ⊥ / = glyph
+        // rotates with the line during a drag instead of staying
+        // upright while the geometry rotates underneath it.
+        let (glyph, points, primary_line): (
+            &str,
+            Vec<SketchEntityId>,
+            Option<(SketchEntityId, SketchEntityId)>,
+        ) = match &c.kind {
+            ConstraintKind::Coincident { p1, p2 } => ("=", vec![*p1, *p2], Some((*p1, *p2))),
             ConstraintKind::PointOnLine { point, line } => {
                 let mut v = vec![*point];
-                if let Some((s, e)) = line_endpoints_local(*line) {
+                let lp = line_endpoints_local(*line);
+                if let Some((s, e)) = lp {
                     v.push(s);
                     v.push(e);
                 }
-                ("|", v)
+                ("|", v, lp)
             }
             ConstraintKind::Horizontal { line } => {
+                let lp = line_endpoints_local(*line);
                 let mut v = Vec::new();
-                if let Some((s, e)) = line_endpoints_local(*line) {
+                if let Some((s, e)) = lp {
                     v.push(s);
                     v.push(e);
                 }
-                ("H", v)
+                ("H", v, lp)
             }
             ConstraintKind::Vertical { line } => {
+                let lp = line_endpoints_local(*line);
                 let mut v = Vec::new();
-                if let Some((s, e)) = line_endpoints_local(*line) {
+                if let Some((s, e)) = lp {
                     v.push(s);
                     v.push(e);
                 }
-                ("V", v)
+                ("V", v, lp)
             }
             ConstraintKind::Parallel { l1, l2 } => {
+                let lp = line_endpoints_local(*l1);
                 let mut v = Vec::new();
-                if let Some((s, e)) = line_endpoints_local(*l1) {
+                if let Some((s, e)) = lp {
                     v.extend([s, e]);
                 }
                 if let Some((s, e)) = line_endpoints_local(*l2) {
                     v.extend([s, e]);
                 }
-                ("//", v)
+                ("//", v, lp)
             }
             ConstraintKind::Perpendicular { l1, l2 } => {
+                let lp = line_endpoints_local(*l1);
                 let mut v = Vec::new();
-                if let Some((s, e)) = line_endpoints_local(*l1) {
+                if let Some((s, e)) = lp {
                     v.extend([s, e]);
                 }
                 if let Some((s, e)) = line_endpoints_local(*l2) {
                     v.extend([s, e]);
                 }
-                ("L", v)
+                ("L", v, lp)
             }
-            ConstraintKind::DistancePtPt { p1, p2, .. } => ("D", vec![*p1, *p2]),
+            ConstraintKind::DistancePtPt { p1, p2, .. } => ("D", vec![*p1, *p2], None),
             ConstraintKind::DistancePtLine { point, line, .. } => {
                 let mut v = vec![*point];
                 if let Some((s, e)) = line_endpoints_local(*line) {
                     v.push(s);
                     v.push(e);
                 }
-                ("d", v)
+                ("d", v, None)
             }
             ConstraintKind::DistancePtCircle { point, circle, .. } => {
                 let mut v = vec![*point];
@@ -161,16 +175,16 @@ pub(super) fn draw_constraint_icons(
                 } else if let Some((c, _, _, _)) = arc_refs_local(sketch, *circle) {
                     v.push(c);
                 }
-                ("\u{29bf}", v) // ⦿ "DistancePtCircle"
+                ("\u{29bf}", v, None) // ⦿ "DistancePtCircle"
             }
-            ConstraintKind::Fixed { point } => ("\u{1F512}", vec![*point]),
+            ConstraintKind::Fixed { point } => ("\u{1F512}", vec![*point], None),
             // v0.13.3 — remaining constraint glyphs.
             ConstraintKind::PointOnArc { point, arc } => {
                 let mut v = vec![*point];
                 if let Some((c, s, e, _)) = arc_refs_local(sketch, *arc) {
                     v.extend([c, s, e]);
                 }
-                ("\u{2192}", v) // → "PointOnArc"
+                ("\u{2192}", v, None) // → "PointOnArc"
             }
             ConstraintKind::Angle { l1, l2, .. } => {
                 let mut v = Vec::new();
@@ -180,17 +194,18 @@ pub(super) fn draw_constraint_icons(
                 if let Some((s, e)) = line_endpoints_local(*l2) {
                     v.extend([s, e]);
                 }
-                ("A", v)
+                ("A", v, None)
             }
             ConstraintKind::EqualLength { l1, l2 } => {
+                let lp = line_endpoints_local(*l1);
                 let mut v = Vec::new();
-                if let Some((s, e)) = line_endpoints_local(*l1) {
+                if let Some((s, e)) = lp {
                     v.extend([s, e]);
                 }
                 if let Some((s, e)) = line_endpoints_local(*l2) {
                     v.extend([s, e]);
                 }
-                ("=L", v)
+                ("=L", v, lp)
             }
             ConstraintKind::EqualRadius { e1, e2 } => {
                 let mut v = Vec::new();
@@ -208,17 +223,18 @@ pub(super) fn draw_constraint_icons(
                         v.push(c);
                     }
                 }
-                ("=R", v)
+                ("=R", v, None)
             }
             ConstraintKind::TangentLineArc { line, arc } => {
+                let lp = line_endpoints_local(*line);
                 let mut v = Vec::new();
-                if let Some((s, e)) = line_endpoints_local(*line) {
+                if let Some((s, e)) = lp {
                     v.extend([s, e]);
                 }
                 if let Some((c, _, _, _)) = arc_refs_local(sketch, *arc) {
                     v.push(c);
                 }
-                ("T", v)
+                ("T", v, lp)
             }
             ConstraintKind::TangentArcArc { a1, a2, .. } => {
                 let mut v = Vec::new();
@@ -228,24 +244,26 @@ pub(super) fn draw_constraint_icons(
                 if let Some((c, _, _, _)) = arc_refs_local(sketch, *a2) {
                     v.push(c);
                 }
-                ("TT", v)
+                ("TT", v, None)
             }
             ConstraintKind::SymmetricAboutLine { p1, p2, line } => {
+                let lp = line_endpoints_local(*line);
                 let mut v = vec![*p1, *p2];
-                if let Some((s, e)) = line_endpoints_local(*line) {
+                if let Some((s, e)) = lp {
                     v.extend([s, e]);
                 }
-                ("\u{29C7}", v) // ⧇ "Symmetric"
+                ("\u{29C7}", v, lp) // ⧇ "Symmetric"
             }
             ConstraintKind::SymmetricAboutPoint { p1, p2, center } => {
-                ("\u{29C7}", vec![*p1, *p2, *center])
+                ("\u{29C7}", vec![*p1, *p2, *center], Some((*p1, *p2)))
             }
             ConstraintKind::Midpoint { point, line } => {
+                let lp = line_endpoints_local(*line);
                 let mut v = vec![*point];
-                if let Some((s, e)) = line_endpoints_local(*line) {
+                if let Some((s, e)) = lp {
                     v.extend([s, e]);
                 }
-                ("M", v)
+                ("M", v, lp)
             }
         };
         if glyph.is_empty() || points.is_empty() {
@@ -287,13 +305,53 @@ pub(super) fn draw_constraint_icons(
             // washing out on either.
             (None, false) => Color::from_rgba(0.30, 0.30, 0.30, 0.95),
         };
-        frame.fill_text(canvas::Text {
+        // v0.27 — rotate the glyph along its primary line so an H,
+        // V, //, ⊥, =, =L etc. follows the line's current direction
+        // during a drag. Without this the glyph reads upright while
+        // the geometry rotates underneath, which looks decoupled.
+        // For non-line-anchored constraints (Fixed, distance values,
+        // tangent-arc-arc, etc.) `primary_line` is None and the
+        // glyph stays upright.
+        let rotation = primary_line.and_then(|(a_id, b_id)| {
+            let a = point_world_local(a_id)?;
+            let b = point_world_local(b_id)?;
+            let a_screen = cstate.world_to_screen(a);
+            let b_screen = cstate.world_to_screen(b);
+            let dx = b_screen.x - a_screen.x;
+            let dy = b_screen.y - a_screen.y;
+            if dx.hypot(dy) <= 1.0 {
+                return None;
+            }
+            // v0.27 — track the raw line angle. Earlier revisions
+            // clamped to [-π/2, π/2] to keep the glyph upright, but
+            // that decoupled the glyph orientation from a freely
+            // rotating line and read as "limited". Now the glyph
+            // follows the line through a full 360°.
+            Some(dy.atan2(dx))
+        });
+        let text = canvas::Text {
             content: glyph.to_string(),
-            position: Point::new(p.x + 6.0, p.y - 6.0),
+            // Glyph centred on its draw position when rotated; when
+            // upright we keep the legacy +6 / -6 nudge so the
+            // existing constraint cluster doesn't jump.
+            position: if rotation.is_some() {
+                Point::new(0.0, -10.0)
+            } else {
+                Point::new(p.x + 6.0, p.y - 6.0)
+            },
             color: colour,
             size: iced::Pixels(11.0),
             ..canvas::Text::default()
-        });
+        };
+        if let Some(angle) = rotation {
+            frame.with_save(|inner| {
+                inner.translate(Vector::new(p.x, p.y));
+                inner.rotate(Radians(angle));
+                inner.fill_text(text);
+            });
+        } else {
+            frame.fill_text(text);
+        }
     }
 }
 

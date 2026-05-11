@@ -44,7 +44,7 @@ use iced::event::Event;
 use iced::keyboard;
 use iced::mouse;
 use iced::widget::canvas::{self, Path, Stroke};
-use iced::{Color, Point, Rectangle, Renderer, Theme};
+use iced::{Color, Point, Radians, Rectangle, Renderer, Theme, Vector};
 
 use crate::library::messages::{EditorMsg, LibraryMessage};
 use crate::library::state::EditorAddress;
@@ -2427,6 +2427,13 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
             // tools have the dark-blue reticle above; Select gets
             // this lighter mark since it isn't pinned to a snap
             // target.
+            //
+            // When the cursor hovers a sketch Line the "+" is
+            // replaced by a double-headed arrow rotated to the
+            // line's perpendicular. OS resize cursors only carry
+            // four cardinal shapes (↔ ↕ ↗ ↘) — for arbitrary line
+            // angles they bucket and look "off". This in-canvas
+            // glyph matches the exact angle.
             if in_sketch
                 && in_select_tool
                 && !context_menu_open
@@ -2435,20 +2442,152 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 let arm = 5.0_f32;
                 let near_black = Color::from_rgba(0.10, 0.10, 0.10, 0.90);
                 let stroke = Stroke::default().with_width(1.0).with_color(near_black);
-                frame.stroke(
-                    &Path::line(
-                        Point::new(p.x - arm, p.y),
-                        Point::new(p.x + arm, p.y),
-                    ),
-                    stroke,
-                );
-                frame.stroke(
-                    &Path::line(
-                        Point::new(p.x, p.y - arm),
-                        Point::new(p.x, p.y + arm),
-                    ),
-                    stroke,
-                );
+
+                // Hit-test the cursor against sketch Lines to find
+                // the one we'd resize on drag. Same tolerance as
+                // mouse_interaction's hover test so the cursor
+                // glyph swaps in/out at the same threshold the
+                // grab gesture activates.
+                let hovered_line_angle: Option<f32> =
+                    if let Some(sketch_ref) = self.sketch {
+                        const LINE_HIT_TOL_PX: f32 = 6.0;
+                        let world = cstate.screen_to_world(p);
+                        let tol_mm = (LINE_HIT_TOL_PX / cstate.scale.max(1.0)) as f64;
+                        let pos_of = |pid: signex_sketch::id::SketchEntityId|
+                            -> Option<(f64, f64)> {
+                            if let Some(solve) = self.state.last_solve.as_ref()
+                                && let Some(q) = signex_sketch::solver::state::point_xy(
+                                    pid,
+                                    &solve.result.state,
+                                    &solve.result.index,
+                                    sketch_ref,
+                                )
+                            {
+                                return Some(q);
+                            }
+                            sketch_ref
+                                .entities
+                                .iter()
+                                .find(|e| e.id == pid)
+                                .and_then(|e| match e.kind {
+                                    signex_sketch::entity::EntityKind::Point { x, y } => {
+                                        Some((x, y))
+                                    }
+                                    _ => None,
+                                })
+                        };
+                        let mut hit: Option<f32> = None;
+                        for ent in &sketch_ref.entities {
+                            if let signex_sketch::entity::EntityKind::Line { start, end } =
+                                ent.kind
+                                && let (Some(a), Some(b)) = (pos_of(start), pos_of(end))
+                            {
+                                let line_dx = b.0 - a.0;
+                                let line_dy = b.1 - a.1;
+                                let llen2 = line_dx * line_dx + line_dy * line_dy;
+                                if llen2 <= 1e-12 {
+                                    continue;
+                                }
+                                let t = ((world.0 - a.0) * line_dx
+                                    + (world.1 - a.1) * line_dy)
+                                    / llen2;
+                                let tc = t.clamp(0.0, 1.0);
+                                let px = a.0 + tc * line_dx;
+                                let py = a.1 + tc * line_dy;
+                                let d2 = (px - world.0).powi(2) + (py - world.1).powi(2);
+                                if d2 <= tol_mm * tol_mm {
+                                    // World coords use the same Y-down
+                                    // mapping as screen (cstate.world_to_screen
+                                    // does no Y flip), so atan2 in
+                                    // world space matches the screen-
+                                    // space angle the user sees.
+                                    let a_screen = cstate.world_to_screen(a);
+                                    let b_screen = cstate.world_to_screen(b);
+                                    let sdx = b_screen.x - a_screen.x;
+                                    let sdy = b_screen.y - a_screen.y;
+                                    hit = Some(sdy.atan2(sdx));
+                                    break;
+                                }
+                            }
+                        }
+                        hit
+                    } else {
+                        None
+                    };
+
+                if let Some(line_angle) = hovered_line_angle {
+                    // Perpendicular to the line — that's the drag
+                    // axis. The glyph is a double-headed arrow with
+                    // filled triangle heads (cleaner than the
+                    // earlier stroked V's) plus a small white halo
+                    // underneath so it reads against both the dark
+                    // pad copper and the white sketch canvas.
+                    let perp = line_angle + std::f32::consts::FRAC_PI_2;
+                    let length = 16.0_f32; // shaft + head tip extent
+                    let head_len = 7.0_f32;
+                    let head_half = 5.0_f32;
+                    let shaft_stroke =
+                        Stroke::default().with_width(2.2).with_color(near_black);
+                    let halo_stroke = Stroke::default()
+                        .with_width(4.5)
+                        .with_color(Color::from_rgba(1.0, 1.0, 1.0, 0.85));
+                    frame.with_save(|inner| {
+                        inner.translate(Vector::new(p.x, p.y));
+                        inner.rotate(Radians(perp));
+                        // Halo behind the shaft so the arrow stays
+                        // legible over silk / pad fills.
+                        inner.stroke(
+                            &Path::line(
+                                Point::new(-length + head_len, 0.0),
+                                Point::new(length - head_len, 0.0),
+                            ),
+                            halo_stroke,
+                        );
+                        // Shaft.
+                        inner.stroke(
+                            &Path::line(
+                                Point::new(-length + head_len, 0.0),
+                                Point::new(length - head_len, 0.0),
+                            ),
+                            shaft_stroke,
+                        );
+                        // Right arrowhead — filled triangle.
+                        let right_head = Path::new(|b| {
+                            b.move_to(Point::new(length, 0.0));
+                            b.line_to(Point::new(length - head_len, -head_half));
+                            b.line_to(Point::new(length - head_len, head_half));
+                            b.close();
+                        });
+                        // Left arrowhead — filled triangle.
+                        let left_head = Path::new(|b| {
+                            b.move_to(Point::new(-length, 0.0));
+                            b.line_to(Point::new(-length + head_len, -head_half));
+                            b.line_to(Point::new(-length + head_len, head_half));
+                            b.close();
+                        });
+                        // White outline pass first so a thin halo
+                        // wraps each filled head.
+                        inner.stroke(&right_head, halo_stroke);
+                        inner.stroke(&left_head, halo_stroke);
+                        inner.fill(&right_head, near_black);
+                        inner.fill(&left_head, near_black);
+                    });
+                } else {
+                    frame.stroke(
+                        &Path::line(
+                            Point::new(p.x - arm, p.y),
+                            Point::new(p.x + arm, p.y),
+                        ),
+                        stroke,
+                    );
+                    frame.stroke(
+                        &Path::line(
+                            Point::new(p.x, p.y - arm),
+                            Point::new(p.x, p.y + arm),
+                        ),
+                        stroke,
+                    );
+                }
             }
 
             // v0.27 — Touching Line ghost. After the first click
@@ -2691,35 +2830,19 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                             let py = a.1 + tc * dy;
                             let d2 = (px - world.0).powi(2) + (py - world.1).powi(2);
                             if d2 <= tol_mm * tol_mm {
-                                // v0.27 — bucket the line's angle
-                                // into the four cardinal cursors.
-                                // The cursor points along the
-                                // perpendicular (the direction the
-                                // user drags to push the edge).
-                                //
-                                //   horizontal line  →   ↕  (drag up/down)
-                                //   vertical line    →   ↔  (drag left/right)
-                                //   "/" diagonal     →   ↘↖ ResizingDiagonallyDown
-                                //   "\" diagonal     →   ↗↙ ResizingDiagonallyUp
-                                //
-                                // World coords share screen Y-down
-                                // (world_to_screen does no flip), so
-                                // dy/dx > 0 reads as "going down-and-
-                                // right" on screen, which is the "\"
-                                // slope visually.
-                                let angle_deg = dy
-                                    .atan2(dx)
-                                    .to_degrees()
-                                    .rem_euclid(180.0);
-                                return if angle_deg < 22.5 || angle_deg >= 157.5 {
-                                    mouse::Interaction::ResizingVertically
-                                } else if angle_deg < 67.5 {
-                                    mouse::Interaction::ResizingDiagonallyUp
-                                } else if angle_deg < 112.5 {
-                                    mouse::Interaction::ResizingHorizontally
-                                } else {
-                                    mouse::Interaction::ResizingDiagonallyDown
-                                };
+                                // v0.27 — line-hover resize cue is
+                                // drawn in-canvas as a rotated
+                                // double-headed arrow (see draw()).
+                                // Returning Hidden here keeps the
+                                // OS cursor invisible so the canvas
+                                // glyph is the only indicator at
+                                // the exact line angle. The
+                                // previous four-cardinal bucket
+                                // (↕↔↗↘) only matched line angles
+                                // within ±22.5° of an axis or
+                                // diagonal — for arbitrary angles
+                                // it read as "off".
+                                return mouse::Interaction::Hidden;
                             }
                         }
                     }
