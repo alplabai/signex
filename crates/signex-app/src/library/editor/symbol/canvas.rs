@@ -1302,26 +1302,98 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
             // try to plot millions of dots.
             let cols = ((world_x1 - world_x0) / g).abs() as i64 + 1;
             let rows = ((world_y1 - world_y0) / g).abs() as i64 + 1;
-            // Skip render entirely when dots would be < 4 px apart
-            // (they'd just smear into noise).
+            // Zoom-adaptive: skip render when grid points would be < 4 px apart.
             let dot_screen_spacing = (g as f32) * scale;
             if cols * rows < 60_000 && dot_screen_spacing >= 4.0 {
-                let dot_radius = (scale * 0.3).clamp(0.5, 2.0);
-                let mut gx = (world_x0 / g).floor() * g;
-                while gx <= world_x1 {
+                // Size/length scales with spacing, clamped to keep dots/crosses
+                // visible but not overwhelming at any zoom level.
+                let dot_radius = (scale * (g as f32) * 0.03).clamp(0.5, 2.0);
+                let cross_arm = (dot_screen_spacing * 0.18).clamp(1.5, 4.0);
+                let grid_style = crate::render_config::symbol_grid_style();
+                let cross_stroke = canvas::Stroke::default()
+                    .with_color(self.grid_color)
+                    .with_width(0.6);
+
+                // Lines style: draw full grid lines instead of per-point glyphs.
+                if matches!(grid_style, crate::render_config::GridStyle::Lines) {
+                    let mut gx = (world_x0 / g).floor() * g;
+                    while gx <= world_x1 {
+                        let sx = w2s(gx, 0.0).x;
+                        if sx >= 0.0 && sx <= bounds.width {
+                            let top_sy = w2s(0.0, world_y1).y.max(0.0);
+                            let bot_sy = w2s(0.0, world_y0).y.min(bounds.height);
+                            if top_sy < bot_sy {
+                                frame.stroke(
+                                    &canvas::Path::line(
+                                        iced::Point::new(sx, top_sy),
+                                        iced::Point::new(sx, bot_sy),
+                                    ),
+                                    cross_stroke,
+                                );
+                            }
+                        }
+                        gx += g;
+                    }
                     let mut gy = (world_y0 / g).floor() * g;
                     while gy <= world_y1 {
-                        let p = w2s(gx, gy);
-                        if p.x >= -dot_radius
-                            && p.x <= bounds.width + dot_radius
-                            && p.y >= -dot_radius
-                            && p.y <= bounds.height + dot_radius
-                        {
-                            frame.fill(&canvas::Path::circle(p, dot_radius), self.grid_color);
+                        let sy = w2s(0.0, gy).y;
+                        if sy >= 0.0 && sy <= bounds.height {
+                            let left_sx = w2s(world_x0, 0.0).x.max(0.0);
+                            let right_sx = w2s(world_x1, 0.0).x.min(bounds.width);
+                            if left_sx < right_sx {
+                                frame.stroke(
+                                    &canvas::Path::line(
+                                        iced::Point::new(left_sx, sy),
+                                        iced::Point::new(right_sx, sy),
+                                    ),
+                                    cross_stroke,
+                                );
+                            }
                         }
                         gy += g;
                     }
-                    gx += g;
+                } else {
+                    let mut gx = (world_x0 / g).floor() * g;
+                    while gx <= world_x1 {
+                        let mut gy = (world_y0 / g).floor() * g;
+                        while gy <= world_y1 {
+                            let p = w2s(gx, gy);
+                            if p.x >= -cross_arm
+                                && p.x <= bounds.width + cross_arm
+                                && p.y >= -cross_arm
+                                && p.y <= bounds.height + cross_arm
+                            {
+                                match grid_style {
+                                    crate::render_config::GridStyle::Dots => {
+                                        frame.fill(
+                                            &canvas::Path::circle(p, dot_radius),
+                                            self.grid_color,
+                                        );
+                                    }
+                                    crate::render_config::GridStyle::SmallCrosses => {
+                                        frame.stroke(
+                                            &canvas::Path::line(
+                                                iced::Point::new(p.x - cross_arm, p.y),
+                                                iced::Point::new(p.x + cross_arm, p.y),
+                                            ),
+                                            cross_stroke,
+                                        );
+                                        frame.stroke(
+                                            &canvas::Path::line(
+                                                iced::Point::new(p.x, p.y - cross_arm),
+                                                iced::Point::new(p.x, p.y + cross_arm),
+                                            ),
+                                            cross_stroke,
+                                        );
+                                    }
+                                    // Lines handled above; unreachable here.
+                                    crate::render_config::GridStyle::Lines => unreachable!(),
+                                }
+                            }
+                            gy += g;
+                        }
+                        gx += g;
+                    }
                 }
             }
         }

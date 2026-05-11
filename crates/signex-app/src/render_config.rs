@@ -89,6 +89,8 @@ struct CanvasTextConfig {
     label_style: LabelStyle,
     multisheet_style: MultisheetStyle,
     grid_style: GridStyle,
+    /// Grid style for the symbol editor (independent of schematic grid style).
+    symbol_grid_style: GridStyle,
 }
 
 fn build_font(name: &'static str, bold: bool, italic: bool) -> iced::Font {
@@ -121,6 +123,7 @@ fn canvas_text_config() -> &'static RwLock<CanvasTextConfig> {
             label_style: LabelStyle::Standard,
             multisheet_style: MultisheetStyle::Standard,
             grid_style: GridStyle::Dots,
+            symbol_grid_style: GridStyle::Dots,
         })
     })
 }
@@ -197,6 +200,19 @@ pub fn grid_style() -> GridStyle {
     canvas_text_config()
         .read()
         .map(|c| c.grid_style)
+        .unwrap_or(GridStyle::Dots)
+}
+
+pub fn set_symbol_grid_style(style: GridStyle) {
+    if let Ok(mut cfg) = canvas_text_config().write() {
+        cfg.symbol_grid_style = style;
+    }
+}
+
+pub fn symbol_grid_style() -> GridStyle {
+    canvas_text_config()
+        .read()
+        .map(|c| c.symbol_grid_style)
         .unwrap_or(GridStyle::Dots)
 }
 

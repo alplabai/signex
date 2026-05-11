@@ -649,6 +649,34 @@ pub fn write_symbol_grid_size_mm_pref(grid_size_mm: f32) {
     })
 }
 
+/// Read the symbol-editor grid style preference. Defaults to `Dots`.
+pub fn read_symbol_grid_style_pref() -> GridStyle {
+    let raw = read_prefs_json(&prefs_path())
+        .and_then(|j| j["symbol_grid_style"].as_str().map(str::to_string))
+        .unwrap_or_default();
+    if raw.eq_ignore_ascii_case("lines") {
+        GridStyle::Lines
+    } else if raw.eq_ignore_ascii_case("crosses")
+        || raw.eq_ignore_ascii_case("small_crosses")
+        || raw.eq_ignore_ascii_case("smallcrosses")
+    {
+        GridStyle::SmallCrosses
+    } else {
+        GridStyle::Dots
+    }
+}
+
+pub fn write_symbol_grid_style_pref(style: GridStyle) {
+    let token = match style {
+        GridStyle::Dots => "dots",
+        GridStyle::Lines => "lines",
+        GridStyle::SmallCrosses => "crosses",
+    };
+    update_prefs_json(&prefs_path(), |json| {
+        json["symbol_grid_style"] = serde_json::Value::String(token.to_string());
+    })
+}
+
 /// Read ERC severity overrides from preferences file. Returns an empty
 /// map if the file is absent or the key missing — callers treat "no
 /// entry" as "use the rule's default severity", matching the ui_state

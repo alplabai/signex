@@ -86,6 +86,8 @@ pub struct UiState {
     /// Default symbol-editor grid size (mm) — used when a library is
     /// first opened. Changed from Preferences ▸ Appearance ▸ Symbol Editor.
     pub preferences_draft_symbol_grid_size_mm: f32,
+    /// Symbol-editor grid display style (Dots / Crosses / Lines).
+    pub preferences_draft_symbol_grid_style: crate::render_config::GridStyle,
     pub preferences_dirty: bool,
     pub custom_theme: Option<signex_types::theme::CustomThemeFile>,
     /// Rename-sheet modal state. Opened from the Projects-panel tree

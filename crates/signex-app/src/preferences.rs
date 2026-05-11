@@ -93,6 +93,8 @@ pub enum PrefMsg {
     DraftGridStyle(GridStyle),
     /// Update the default symbol-editor grid size. Persisted on Save.
     DraftSymbolGridSize(f32),
+    /// Update the symbol-editor grid style (applies immediately, persisted).
+    DraftSymbolGridStyle(GridStyle),
     /// Open a file picker to import a custom theme JSON.
     ImportTheme,
     /// Save the current draft theme as a JSON file.
@@ -176,6 +178,7 @@ pub fn view<'a>(
     draft_multisheet_style: MultisheetStyle,
     draft_grid_style: GridStyle,
     draft_symbol_grid_size_mm: f32,
+    draft_symbol_grid_style: GridStyle,
     custom_name: Option<&'a str>,
     dirty: bool,
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
@@ -194,6 +197,7 @@ pub fn view<'a>(
         draft_multisheet_style,
         draft_grid_style,
         draft_symbol_grid_size_mm,
+        draft_symbol_grid_style,
         custom_name,
         dirty,
         erc_overrides,
@@ -242,6 +246,7 @@ pub(crate) fn view_body<'a>(
     draft_multisheet_style: MultisheetStyle,
     draft_grid_style: GridStyle,
     draft_symbol_grid_size_mm: f32,
+    draft_symbol_grid_style: GridStyle,
     custom_name: Option<&'a str>,
     dirty: bool,
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
@@ -260,6 +265,7 @@ pub(crate) fn view_body<'a>(
         draft_multisheet_style,
         draft_grid_style,
         draft_symbol_grid_size_mm,
+        draft_symbol_grid_style,
         custom_name,
         dirty,
         erc_overrides,
@@ -281,6 +287,7 @@ fn build_dialog<'a>(
     draft_multisheet_style: MultisheetStyle,
     draft_grid_style: GridStyle,
     draft_symbol_grid_size_mm: f32,
+    draft_symbol_grid_style: GridStyle,
     custom_name: Option<&'a str>,
     dirty: bool,
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
@@ -338,6 +345,7 @@ fn build_dialog<'a>(
             draft_multisheet_style,
             draft_grid_style,
             draft_symbol_grid_size_mm,
+            draft_symbol_grid_style,
             custom_name,
             erc_overrides,
             distributor_settings,
@@ -471,6 +479,7 @@ fn build_content<'a>(
     draft_multisheet_style: MultisheetStyle,
     draft_grid_style: GridStyle,
     draft_symbol_grid_size_mm: f32,
+    draft_symbol_grid_style: GridStyle,
     custom_name: Option<&'a str>,
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
     distributor_settings: &'a crate::library::state::DistributorSettings,
@@ -485,7 +494,9 @@ fn build_content<'a>(
             draft_power_port_style,
             draft_label_style,
             draft_multisheet_style,
+            draft_grid_style,
             draft_symbol_grid_size_mm,
+            draft_symbol_grid_style,
             custom_name,
         ),
         PrefNav::Erc => content_erc(erc_overrides),
@@ -561,7 +572,9 @@ fn content_appearance<'a>(
     draft_power_port_style: PowerPortStyle,
     draft_label_style: LabelStyle,
     draft_multisheet_style: MultisheetStyle,
+    draft_grid_style: GridStyle,
     draft_symbol_grid_size_mm: f32,
+    draft_symbol_grid_style: GridStyle,
     custom_name: Option<&'a str>,
 ) -> Element<'a, PrefMsg> {
     let mut col = column![].spacing(0).padding([16, 20]);
@@ -686,6 +699,34 @@ fn content_appearance<'a>(
     );
     col = col.push(Space::new().height(20));
 
+    // ── Section: Schematic Editor ──
+    col = col.push(h_sep());
+    col = col.push(Space::new().height(16));
+    col = col.push(section_title("Schematic Editor"));
+    col = col.push(Space::new().height(10));
+    col = col.push(
+        row![
+            column![
+                text("Grid Style").size(12).color(TEXT_PRI),
+                text("Appearance of snap points on the schematic canvas.")
+                    .size(10)
+                    .color(TEXT_MUT),
+            ]
+            .spacing(3)
+            .width(200),
+            Space::new().width(Length::Fill),
+            iced::widget::pick_list(
+                GridStyle::ALL,
+                Some(draft_grid_style),
+                PrefMsg::DraftGridStyle,
+            )
+            .text_size(12)
+            .width(200),
+        ]
+        .align_y(iced::Alignment::Center),
+    );
+    col = col.push(Space::new().height(20));
+
     // ── Section: Power Port Symbols ──
     col = col.push(section_title("Power Ports"));
     col = col.push(Space::new().height(10));
@@ -798,6 +839,28 @@ fn content_appearance<'a>(
                         .unwrap_or(1.27);
                     PrefMsg::DraftSymbolGridSize(mm)
                 },
+            )
+            .text_size(12)
+            .width(200),
+        ]
+        .align_y(iced::Alignment::Center),
+    );
+    col = col.push(Space::new().height(16));
+    col = col.push(
+        row![
+            column![
+                text("Grid Style").size(12).color(TEXT_PRI),
+                text("Appearance of snap points on the symbol editor canvas.")
+                    .size(10)
+                    .color(TEXT_MUT),
+            ]
+            .spacing(3)
+            .width(200),
+            Space::new().width(Length::Fill),
+            iced::widget::pick_list(
+                GridStyle::ALL,
+                Some(draft_symbol_grid_style),
+                PrefMsg::DraftSymbolGridStyle,
             )
             .text_size(12)
             .width(200),
