@@ -3758,29 +3758,49 @@ impl Signex {
     }
 }
 
-/// Apply a primitive-editor event to a standalone Symbol editor
-/// state. Mirrors the symbol-tab arms of `apply_inline_edit` but
-/// against the path-keyed standalone state. Visibility is
-/// `pub(crate)` so unit tests in sibling modules can drive the editor
-/// through the same code path the dispatcher uses.
-pub(crate) fn apply_symbol_primitive_edit(
-    editor: &mut crate::app::SymbolEditorState,
-    msg: PrimitiveEditorMsg,
-) {
-    use crate::library::editor::symbol::canvas::SymbolTool;
-    use crate::library::editor::symbol::state::{FieldKey, SymbolSelection};
+// ── Symbol editor helpers ─────────────────────────────────────────────────────
 
-    /// Push a snapshot of the current symbol onto the undo stack and
-    /// clear the redo stack. Capped at 100 entries; oldest are dropped.
-    fn push_undo(editor: &mut crate::app::SymbolEditorState) {
-        let snapshot = editor.primitive().clone();
-        editor.undo_snapshots.push(snapshot);
-        if editor.undo_snapshots.len() > 100 {
-            editor.undo_snapshots.remove(0);
-        }
-        editor.redo_snapshots.clear();
+type SymEditor = crate::app::SymbolEditorState;
+
+/// Push a full snapshot onto the undo stack; clear the redo stack.
+/// Capped at 100 entries — oldest entry is evicted when the cap is hit.
+fn push_undo(editor: &mut SymEditor) {
+    let snapshot = editor.primitive().clone();
+    editor.undo_snapshots.push(snapshot);
+    if editor.undo_snapshots.len() > 100 {
+        editor.undo_snapshots.remove(0);
     }
+    editor.redo_snapshots.clear();
+}
 
+/// Record the first event of a drag gesture.
+/// Subsequent events in the same drag are no-ops (mid_drag stays true).
+fn begin_drag_if_needed(editor: &mut SymEditor) {
+    if !editor.mid_drag {
+        push_undo(editor);
+        editor.mid_drag = true;
+    }
+}
+
+/// Mark the symbol as dirty and invalidate the canvas cache.
+fn mark_dirty(editor: &mut SymEditor) {
+    editor.dirty = true;
+    editor.canvas_cache.clear();
+}
+
+/// Push a graphic onto the symbol, recording an undo snapshot first.
+fn push_graphic(
+    editor: &mut SymEditor,
+    kind: signex_library::SymbolGraphicKind,
+    stroke_width: f64,
+) {
+    push_undo(editor);
+    editor.primitive_mut().graphics.push(signex_library::SymbolGraphic { kind, stroke_width });
+    mark_dirty(editor);
+}
+
+fn apply_symbol_ui(editor: &mut SymEditor, msg: PrimitiveEditorMsg) {
+    use crate::library::editor::symbol::canvas::SymbolTool;
     match msg {
         PrimitiveEditorMsg::SymbolSetTool(tool) => {
             editor.tool = match tool {
@@ -3792,8 +3812,6 @@ pub(crate) fn apply_symbol_primitive_edit(
                 SymbolToolMsg::PlaceArc => SymbolTool::PlaceArc,
                 SymbolToolMsg::PlaceText => SymbolTool::PlaceText,
             };
-            // Close the active-bar dropdown so the user can immediately
-            // start drawing without an extra click to dismiss the menu.
             editor.active_bar_menu = None;
         }
         PrimitiveEditorMsg::SymbolToggleActiveBarMenu(menu) => {
@@ -3815,105 +3833,13 @@ pub(crate) fn apply_symbol_primitive_edit(
             editor.selection_filter.toggle(kind);
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::SymbolAddPin { x, y } => {
-            push_undo(editor);
-            let active_part = editor.active_part;
-            let idx = crate::library::editor::symbol::state::add_pin(
-                editor.primitive_mut(),
-                x,
-                y,
-                active_part,
-            );
-            editor.selected = Some(SymbolSelection::Pin(idx));
-            editor.dirty = true;
-            editor.canvas_cache.clear();
-        }
-        PrimitiveEditorMsg::SymbolAddRectangle { x, y } => {
-            push_undo(editor);
-            // Default 10×5 mm rectangle centred on the click. User
-            // edits the corners later via Properties (graphics-properties
-            // surface lands in a follow-up; for now they can move/delete
-            // through the Select tool).
-            const W: f64 = 5.08; // half-width 5.08 mm → 10.16 mm overall
-            const H: f64 = 2.54; // half-height
-            editor
-                .primitive_mut()
-                .graphics
-                .push(signex_library::SymbolGraphic {
-                    kind: signex_library::SymbolGraphicKind::Rectangle {
-                        from: [x - W, y - H],
-                        to: [x + W, y + H],
-                    },
-                    stroke_width: 0.15,
-                });
-            editor.dirty = true;
-            editor.canvas_cache.clear();
-        }
-        PrimitiveEditorMsg::SymbolAddLine { from_x, from_y, to_x, to_y } => {
-            push_undo(editor);
-            editor
-                .primitive_mut()
-                .graphics
-                .push(signex_library::SymbolGraphic {
-                    kind: signex_library::SymbolGraphicKind::Line {
-                        from: [from_x, from_y],
-                        to: [to_x, to_y],
-                    },
-                    stroke_width: 0.15,
-                });
-            editor.dirty = true;
-            editor.canvas_cache.clear();
-        }
-        PrimitiveEditorMsg::SymbolAddArc { cx, cy, radius, start_deg, end_deg } => {
-            push_undo(editor);
-            editor
-                .primitive_mut()
-                .graphics
-                .push(signex_library::SymbolGraphic {
-                    kind: signex_library::SymbolGraphicKind::Arc {
-                        center: [cx, cy],
-                        radius,
-                        start_deg,
-                        end_deg,
-                    },
-                    stroke_width: 0.15,
-                });
-            editor.dirty = true;
-            editor.canvas_cache.clear();
-        }
-        PrimitiveEditorMsg::SymbolAddText { x, y } => {
-            push_undo(editor);
-            // Default "Text" label at the click position. User edits
-            // the content + size via Properties.
-            editor
-                .primitive_mut()
-                .graphics
-                .push(signex_library::SymbolGraphic {
-                    kind: signex_library::SymbolGraphicKind::Text {
-                        position: [x, y],
-                        content: "Text".to_string(),
-                        size: 1.27,
-                    },
-                    stroke_width: 0.0,
-                });
-            editor.dirty = true;
-            editor.canvas_cache.clear();
-        }
-        PrimitiveEditorMsg::SymbolAddCircle { cx, cy, radius } => {
-            push_undo(editor);
-            editor
-                .primitive_mut()
-                .graphics
-                .push(signex_library::SymbolGraphic {
-                    kind: signex_library::SymbolGraphicKind::Circle {
-                        center: [cx, cy],
-                        radius,
-                    },
-                    stroke_width: 0.15,
-                });
-            editor.dirty = true;
-            editor.canvas_cache.clear();
-        }
+        _ => {}
+    }
+}
+
+fn apply_symbol_selection(editor: &mut SymEditor, msg: PrimitiveEditorMsg) {
+    use crate::library::editor::symbol::state::{FieldKey, SymbolSelection};
+    match msg {
         PrimitiveEditorMsg::SymbolSelect(sel) => {
             editor.selected = Some(match sel {
                 SymbolSelectionMsg::Pin(idx) => SymbolSelection::Pin(idx),
@@ -3931,88 +3857,67 @@ pub(crate) fn apply_symbol_primitive_edit(
             editor.selected = None;
             editor.canvas_cache.clear();
         }
+        _ => {}
+    }
+}
+
+fn apply_symbol_move(editor: &mut SymEditor, msg: PrimitiveEditorMsg) {
+    use crate::library::editor::symbol::state::SymbolSelection;
+    begin_drag_if_needed(editor);
+    match msg {
         PrimitiveEditorMsg::SymbolMoveSelected { x, y } => {
-            if !editor.mid_drag {
-                push_undo(editor);
-                editor.mid_drag = true;
-            }
             let selected = editor.selected.clone();
             crate::library::editor::symbol::state::move_selected(
-                editor.primitive_mut(),
-                selected,
-                x,
-                y,
+                editor.primitive_mut(), selected, x, y,
             );
-            editor.dirty = true;
-            editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::SymbolMoveAll { dx, dy } => {
-            if !editor.mid_drag {
-                push_undo(editor);
-                editor.mid_drag = true;
-            }
             match &editor.selected {
                 Some(SymbolSelection::Multiple { pin_indices, graphic_indices }) => {
                     let pins = pin_indices.clone();
                     let graphics = graphic_indices.clone();
                     crate::library::editor::symbol::state::move_multiple(
-                        editor.primitive_mut(),
-                        &pins,
-                        &graphics,
-                        dx,
-                        dy,
+                        editor.primitive_mut(), &pins, &graphics, dx, dy,
                     );
                 }
                 _ => {
                     crate::library::editor::symbol::state::move_all(
-                        editor.primitive_mut(),
-                        dx,
-                        dy,
+                        editor.primitive_mut(), dx, dy,
                     );
                 }
             }
-            editor.dirty = true;
-            editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::SymbolMoveGraphicHandle { idx, handle, x, y } => {
-            if !editor.mid_drag {
-                push_undo(editor);
-                editor.mid_drag = true;
-            }
             let h = graphic_handle_msg_to_state(handle);
             crate::library::editor::symbol::state::move_graphic_handle(
-                editor.primitive_mut(),
-                idx,
-                h,
-                x,
-                y,
+                editor.primitive_mut(), idx, h, x, y,
             );
-            editor.dirty = true;
-            editor.canvas_cache.clear();
         }
+        _ => {}
+    }
+    mark_dirty(editor);
+}
+
+fn apply_symbol_transform(editor: &mut SymEditor, msg: PrimitiveEditorMsg) {
+    use crate::library::editor::symbol::state::SymbolSelection;
+    match msg {
         PrimitiveEditorMsg::SymbolRotateSelected { clockwise, pivot } => {
             push_undo(editor);
             let selected = editor.selected.clone();
             let pivot_mode = rotate_pivot_msg_to_state(pivot);
             crate::library::editor::symbol::state::rotate_selected_with_pivot(
-                editor.primitive_mut(),
-                selected,
-                clockwise,
-                pivot_mode,
+                editor.primitive_mut(), selected, clockwise, pivot_mode,
             );
-            editor.dirty = true;
-            editor.canvas_cache.clear();
+            mark_dirty(editor);
         }
         PrimitiveEditorMsg::SymbolDeleteSelected => {
             push_undo(editor);
             let selected = editor.selected.clone();
             if let Some(new_sel) = crate::library::editor::symbol::state::delete_selected(
-                editor.primitive_mut(),
-                selected,
+                editor.primitive_mut(), selected,
             ) {
                 editor.selected = new_sel;
-                editor.dirty = true;
-                editor.canvas_cache.clear();
+                mark_dirty(editor);
             }
         }
         PrimitiveEditorMsg::SymbolSetPinNumber { idx, number } => {
@@ -4029,47 +3934,31 @@ pub(crate) fn apply_symbol_primitive_edit(
                 editor.dirty = true;
             }
         }
-        // ── View / camera ────────────────────────────────────────
+        _ => {}
+    }
+}
+
+fn apply_symbol_camera(editor: &mut SymEditor, msg: PrimitiveEditorMsg) {
+    match msg {
         PrimitiveEditorMsg::SymbolPan { dx, dy } => {
             editor.camera.pan(dx, dy);
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::SymbolZoom { sx, sy, delta } => {
-            // Wheel events feed `delta`; the camera applies its own
-            // ZOOM_FACTOR + clamp inside `zoom_at`.
-            let viewport = iced::Rectangle {
-                x: 0.0,
-                y: 0.0,
-                width: 1.0,
-                height: 1.0,
-            };
-            if editor
-                .camera
-                .zoom_at(iced::Point::new(sx, sy), delta, viewport)
-            {
+            let viewport = iced::Rectangle { x: 0.0, y: 0.0, width: 1.0, height: 1.0 };
+            if editor.camera.zoom_at(iced::Point::new(sx, sy), delta, viewport) {
                 editor.canvas_cache.clear();
             }
         }
         PrimitiveEditorMsg::SymbolFit => {
-            // Compute the symbol bbox using the canvas helper, then
-            // ask the camera to fit it. We don't have the actual
-            // viewport size here — use a sensible default so the
-            // first Fit recovers from any pan/zoom; the user can
-            // press Home again after resizing the window for a
-            // tighter fit.
             let (min_x, min_y, max_x, max_y) = symbol_bbox(editor.primitive());
             let world_rect = iced::Rectangle {
                 x: min_x as f32,
-                y: -(max_y as f32), // Standard y-up → screen y-down
+                y: -(max_y as f32),
                 width: (max_x - min_x).max(1.0) as f32,
                 height: (max_y - min_y).max(1.0) as f32,
             };
-            let viewport = iced::Rectangle {
-                x: 0.0,
-                y: 0.0,
-                width: 800.0,
-                height: 500.0,
-            };
+            let viewport = iced::Rectangle { x: 0.0, y: 0.0, width: 800.0, height: 500.0 };
             editor.camera.fit_rect(world_rect, viewport);
             editor.canvas_cache.clear();
         }
@@ -4079,17 +3968,12 @@ pub(crate) fn apply_symbol_primitive_edit(
                 _ => None,
             };
         }
-        // SymbolSetSheetColor / SymbolToggleGrid / SymbolCycleGridSize
-        // / SymbolCycleUnit are intercepted in handle_primitive_editor_event
-        // before this match runs — they mutate `OpenLibrary.display`,
-        // not the per-tab editor state. List them here so the
-        // dispatcher stays exhaustive across the enum (and matches
-        // the footprint catch-all).
-        PrimitiveEditorMsg::SymbolSetSheetColor(_)
-        | PrimitiveEditorMsg::SymbolToggleGrid
-        | PrimitiveEditorMsg::SymbolCycleGridSize
-        | PrimitiveEditorMsg::SymbolCycleUnit => {}
-        // ── Multi-part component ────────────────────────────────
+        _ => {}
+    }
+}
+
+fn apply_symbol_parts(editor: &mut SymEditor, msg: PrimitiveEditorMsg) {
+    match msg {
         PrimitiveEditorMsg::SymbolPrevPart => {
             if editor.active_part > 1 {
                 editor.active_part -= 1;
@@ -4105,43 +3989,36 @@ pub(crate) fn apply_symbol_primitive_edit(
         }
         PrimitiveEditorMsg::SymbolNewPart => {
             push_undo(editor);
-            // Bump the symbol's max declared part by one and switch
-            // to it. The new part starts pinless; the user adds pins
-            // in Add Pin mode with the new active_part selected.
             let new_part =
                 crate::library::editor::symbol::state::max_part_number(editor.primitive()) + 1;
             editor.active_part = new_part;
-            editor.dirty = true;
-            editor.canvas_cache.clear();
+            mark_dirty(editor);
         }
         PrimitiveEditorMsg::SymbolRemovePart => {
-            push_undo(editor);
-            // Refuse to remove if this is the only part — a single-
-            // part symbol must always have part 1 active.
             let max = crate::library::editor::symbol::state::max_part_number(editor.primitive());
             if max <= 1 || editor.active_part <= 1 {
-                // No-op; surface a tracing line so a user-visible
-                // toast can land later if needed.
                 tracing::debug!(
                     target: "signex::library",
                     active = editor.active_part,
                     max,
                     "SymbolRemovePart: refusing to remove the only part"
                 );
-            } else {
-                let to_remove = editor.active_part;
-                crate::library::editor::symbol::state::demote_part_pins_to_part_one(
-                    editor.primitive_mut(),
-                    to_remove,
-                );
-                editor.active_part = 1;
-                editor.dirty = true;
-                editor.canvas_cache.clear();
+                return;
             }
+            push_undo(editor);
+            let to_remove = editor.active_part;
+            crate::library::editor::symbol::state::demote_part_pins_to_part_one(
+                editor.primitive_mut(), to_remove,
+            );
+            editor.active_part = 1;
+            mark_dirty(editor);
         }
-        // Footprint variants are no-ops on a Symbol editor — the
-        // dispatcher uses path-keyed lookup so a misrouted event
-        // can't actually reach this match arm in practice.
+        _ => {}
+    }
+}
+
+fn apply_symbol_history(editor: &mut SymEditor, msg: PrimitiveEditorMsg) {
+    match msg {
         PrimitiveEditorMsg::SymbolUndo => {
             if let Some(snapshot) = editor.undo_snapshots.pop() {
                 let current = editor.primitive().clone();
@@ -4149,8 +4026,7 @@ pub(crate) fn apply_symbol_primitive_edit(
                 *editor.primitive_mut() = snapshot;
                 editor.mid_drag = false;
                 editor.selected = None;
-                editor.dirty = true;
-                editor.canvas_cache.clear();
+                mark_dirty(editor);
             }
         }
         PrimitiveEditorMsg::SymbolRedo => {
@@ -4160,13 +4036,116 @@ pub(crate) fn apply_symbol_primitive_edit(
                 *editor.primitive_mut() = snapshot;
                 editor.mid_drag = false;
                 editor.selected = None;
-                editor.dirty = true;
-                editor.canvas_cache.clear();
+                mark_dirty(editor);
             }
         }
         PrimitiveEditorMsg::SymbolDragCommit => {
             editor.mid_drag = false;
         }
+        _ => {}
+    }
+}
+
+/// Apply a primitive-editor event to a standalone Symbol editor
+/// state. Mirrors the symbol-tab arms of `apply_inline_edit` but
+/// against the path-keyed standalone state. Visibility is
+/// `pub(crate)` so unit tests in sibling modules can drive the editor
+/// through the same code path the dispatcher uses.
+pub(crate) fn apply_symbol_primitive_edit(
+    editor: &mut crate::app::SymbolEditorState,
+    msg: PrimitiveEditorMsg,
+) {
+    use crate::library::editor::symbol::state::SymbolSelection;
+
+    match msg {
+        // ── UI / toolbar (no undo) ───────────────────────────────
+        PrimitiveEditorMsg::SymbolSetTool(_)
+        | PrimitiveEditorMsg::SymbolToggleActiveBarMenu(_)
+        | PrimitiveEditorMsg::SymbolCloseActiveBarMenu
+        | PrimitiveEditorMsg::SymbolActiveBarStub(_)
+        | PrimitiveEditorMsg::SymbolToggleSelectionFilter(_) => apply_symbol_ui(editor, msg),
+
+        // ── Graphics placement ───────────────────────────────────
+        PrimitiveEditorMsg::SymbolAddPin { x, y } => {
+            push_undo(editor);
+            let active_part = editor.active_part;
+            let idx = crate::library::editor::symbol::state::add_pin(
+                editor.primitive_mut(), x, y, active_part,
+            );
+            editor.selected = Some(SymbolSelection::Pin(idx));
+            mark_dirty(editor);
+        }
+        PrimitiveEditorMsg::SymbolAddRectangle { x, y } => {
+            const W: f64 = 5.08;
+            const H: f64 = 2.54;
+            push_graphic(editor, signex_library::SymbolGraphicKind::Rectangle {
+                from: [x - W, y - H],
+                to: [x + W, y + H],
+            }, 0.15);
+        }
+        PrimitiveEditorMsg::SymbolAddLine { from_x, from_y, to_x, to_y } => {
+            push_graphic(editor, signex_library::SymbolGraphicKind::Line {
+                from: [from_x, from_y],
+                to: [to_x, to_y],
+            }, 0.15);
+        }
+        PrimitiveEditorMsg::SymbolAddArc { cx, cy, radius, start_deg, end_deg } => {
+            push_graphic(editor, signex_library::SymbolGraphicKind::Arc {
+                center: [cx, cy], radius, start_deg, end_deg,
+            }, 0.15);
+        }
+        PrimitiveEditorMsg::SymbolAddText { x, y } => {
+            push_graphic(editor, signex_library::SymbolGraphicKind::Text {
+                position: [x, y],
+                content: "Text".to_string(),
+                size: 1.27,
+            }, 0.0);
+        }
+        PrimitiveEditorMsg::SymbolAddCircle { cx, cy, radius } => {
+            push_graphic(editor, signex_library::SymbolGraphicKind::Circle {
+                center: [cx, cy], radius,
+            }, 0.15);
+        }
+
+        // ── Selection ────────────────────────────────────────────
+        PrimitiveEditorMsg::SymbolSelect(_)
+        | PrimitiveEditorMsg::SymbolDeselect => apply_symbol_selection(editor, msg),
+
+        // ── Move (coalesced undo per drag gesture) ───────────────
+        PrimitiveEditorMsg::SymbolMoveSelected { .. }
+        | PrimitiveEditorMsg::SymbolMoveAll { .. }
+        | PrimitiveEditorMsg::SymbolMoveGraphicHandle { .. } => apply_symbol_move(editor, msg),
+
+        // ── Transform ────────────────────────────────────────────
+        PrimitiveEditorMsg::SymbolRotateSelected { .. }
+        | PrimitiveEditorMsg::SymbolDeleteSelected
+        | PrimitiveEditorMsg::SymbolSetPinNumber { .. }
+        | PrimitiveEditorMsg::SymbolSetPinName { .. } => apply_symbol_transform(editor, msg),
+
+        // ── Camera / viewport (no undo) ──────────────────────────
+        PrimitiveEditorMsg::SymbolPan { .. }
+        | PrimitiveEditorMsg::SymbolZoom { .. }
+        | PrimitiveEditorMsg::SymbolFit
+        | PrimitiveEditorMsg::SymbolCursorAt { .. } => apply_symbol_camera(editor, msg),
+
+        // ── Display settings intercepted upstream; no-op here ────
+        PrimitiveEditorMsg::SymbolSetSheetColor(_)
+        | PrimitiveEditorMsg::SymbolToggleGrid
+        | PrimitiveEditorMsg::SymbolCycleGridSize
+        | PrimitiveEditorMsg::SymbolCycleUnit => {}
+
+        // ── Multi-part management ────────────────────────────────
+        PrimitiveEditorMsg::SymbolPrevPart
+        | PrimitiveEditorMsg::SymbolNextPart
+        | PrimitiveEditorMsg::SymbolNewPart
+        | PrimitiveEditorMsg::SymbolRemovePart => apply_symbol_parts(editor, msg),
+
+        // ── Undo / redo / drag-commit ────────────────────────────
+        PrimitiveEditorMsg::SymbolUndo
+        | PrimitiveEditorMsg::SymbolRedo
+        | PrimitiveEditorMsg::SymbolDragCommit => apply_symbol_history(editor, msg),
+
+        // Footprint messages are no-ops in the symbol editor.
         PrimitiveEditorMsg::FootprintSelectActiveIdx(_)
         | PrimitiveEditorMsg::FootprintAddNewSibling
         | PrimitiveEditorMsg::FootprintAddPad { .. }

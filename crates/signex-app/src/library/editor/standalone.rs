@@ -121,9 +121,7 @@ fn view_symbol_status<'a>(
         path: path.clone(),
         msg: PrimitiveEditorMsg::SymbolToggleGrid,
     })
-    .style(move |theme: &Theme, status| {
-        symbol_tool_button_style(false, border)(theme, status)
-    });
+    .style(symbol_tool_button_style(false, border));
 
     // Grid size cycle button.
     let grid_size_label = format!("{:.3} mm", display.grid_size_mm);
@@ -135,9 +133,7 @@ fn view_symbol_status<'a>(
         path: path.clone(),
         msg: PrimitiveEditorMsg::SymbolCycleGridSize,
     })
-    .style(move |theme: &Theme, status| {
-        symbol_tool_button_style(false, border)(theme, status)
-    });
+    .style(symbol_tool_button_style(false, border));
 
     container(
         row![
@@ -193,66 +189,28 @@ fn view_symbol_toolbar<'a>(
     let border = theme_ext::border_color(tokens);
     let path = editor.path.clone();
 
-    let save_path = path.clone();
-    let save_btn = button(
-        text(if editor.dirty { "Save *" } else { "Save" })
-            .size(11)
-            .color(text_c),
-    )
-    .padding([4, 10])
-    .on_press(LibraryMessage::PrimitiveEditorEvent {
-        path: save_path,
-        msg: PrimitiveEditorMsg::Save,
-    })
-    .style(symbol_tool_button_style(false, border));
+    // Helper: create a small toolbar button that emits a PrimitiveEditorEvent.
+    let btn = |label: &'static str, msg: PrimitiveEditorMsg| {
+        button(text(label).size(11).color(text_c))
+            .padding([4, 10])
+            .on_press(LibraryMessage::PrimitiveEditorEvent { path: path.clone(), msg })
+            .style(symbol_tool_button_style(false, border))
+    };
 
-    // Active Part picker. `← Part X / N →` reads + steps the active
-    // sub-part. Arrows clamp at 1 / max — Tools ▸ New Part is the
-    // way to add new parts, not the right arrow (mirrors Altium).
     let max_part = crate::library::editor::symbol::state::max_part_number(editor.primitive());
     let active_part = editor.active_part;
-    let prev_path = path.clone();
-    let next_path = path.clone();
-    let prev_btn = button(text("\u{2190}").size(11).color(text_c))
-        .padding([4, 8])
-        .on_press(LibraryMessage::PrimitiveEditorEvent {
-            path: prev_path,
-            msg: PrimitiveEditorMsg::SymbolPrevPart,
-        })
-        .style(symbol_tool_button_style(false, border));
-    let next_btn = button(text("\u{2192}").size(11).color(text_c))
-        .padding([4, 8])
-        .on_press(LibraryMessage::PrimitiveEditorEvent {
-            path: next_path,
-            msg: PrimitiveEditorMsg::SymbolNextPart,
-        })
-        .style(symbol_tool_button_style(false, border));
-    let part_label = text(format!("Part {active_part} / {max_part}"))
-        .size(11)
-        .color(text_c);
 
-    // Fit button stays on the in-tab strip — quick access to
-    // viewport reset; tool selection moves to the floating Active Bar
-    // below this strip. Sheet color picker moves to Properties ▸
-    // Document Options (selection-driven UI).
-    let fit_path = path.clone();
-    let fit_btn = button(text("Fit").size(11).color(text_c))
-        .padding([4, 8])
-        .on_press(LibraryMessage::PrimitiveEditorEvent {
-            path: fit_path,
-            msg: PrimitiveEditorMsg::SymbolFit,
-        })
-        .style(symbol_tool_button_style(false, border));
+    let save_label = if editor.dirty { "Save *" } else { "Save" };
 
     container(
         row![
-            fit_btn,
+            btn("Fit", PrimitiveEditorMsg::SymbolFit),
             Space::new().width(Length::Fill),
-            prev_btn,
-            part_label,
-            next_btn,
+            btn("\u{2190}", PrimitiveEditorMsg::SymbolPrevPart),
+            text(format!("Part {active_part} / {max_part}")).size(11).color(text_c),
+            btn("\u{2192}", PrimitiveEditorMsg::SymbolNextPart),
             Space::new().width(8),
-            save_btn,
+            btn(save_label, PrimitiveEditorMsg::Save),
         ]
         .spacing(6)
         .align_y(iced::Alignment::Center),
