@@ -741,7 +741,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                             });
                             if in_group {
                                 state.dragging = true;
-                                state.last_drag_world_pos = Some((ux, uy));
+                                state.last_drag_world_pos = Some((wx, wy));
                                 state.drag_anchor_offset = None;
                                 return Some(canvas::Action::capture());
                             }
@@ -751,13 +751,13 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                             let is_delta = matches!(effective_sel, SymbolSelection::All);
                             state.dragging = true;
                             state.last_drag_world_pos = if is_delta {
-                                Some((ux, uy))
+                                Some((wx, wy))
                             } else {
                                 None
                             };
                             state.drag_anchor_offset =
                                 selection_anchor(self.symbol, &effective_sel)
-                                    .map(|(ax, ay)| (ax - ux, ay - uy));
+                                    .map(|(ax, ay)| (ax - wx, ay - wy));
 
                             if self.selected.as_ref() == Some(&effective_sel) {
                                 return Some(canvas::Action::capture());
