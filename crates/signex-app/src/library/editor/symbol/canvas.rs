@@ -1480,6 +1480,9 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                             .with_width(1.0),
                     );
                     // Arc sweep from start to cursor angle.
+                    // canvas::path::Arc lives in screen space (y-down), so we
+                    // negate the world-space angles to compensate for the y-flip
+                    // applied by w2s: screen_angle = -world_angle.
                     let dx = cur_x - cx;
                     let dy = cur_y - cy;
                     let end_deg = dy.atan2(dx).to_degrees();
@@ -1487,8 +1490,8 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                         builder.arc(canvas::path::Arc {
                             center: center_p,
                             radius: radius_screen,
-                            start_angle: iced::Radians((start_deg as f32).to_radians()),
-                            end_angle: iced::Radians((end_deg as f32).to_radians()),
+                            start_angle: iced::Radians(-(start_deg as f32).to_radians()),
+                            end_angle: iced::Radians(-(end_deg as f32).to_radians()),
                         });
                     });
                     frame.stroke(
