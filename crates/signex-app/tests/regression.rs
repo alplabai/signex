@@ -5675,3 +5675,102 @@ fn v027_sketch_line_drag_resizes_rect_pad_bbox() {
         pad_after.position_mm.0
     );
 }
+
+// ─────────────────────────────────────────────────────────────────
+// v0.13.0 — footprint editor gated off for release
+//
+// The footprint / sketch editor is feature-incomplete and is hidden
+// behind `signex_app::feature_flags::FOOTPRINT_EDITOR_ENABLED` for the
+// v0.13.0 "Symbol & Library" release. These tests pin the gate at the
+// two behavioural funnels every footprint-editor entry routes through:
+//
+//   * OPEN  — `Message::FileOpened` → `open_document_path` →
+//     `handle_open_primitive` ("snxfpt" arm). A valid `.snxfpt` must
+//     NOT push an editable FootprintEditor tab while the flag is off.
+//   * The symbol path (`.snxsym`) is the positive control — it MUST
+//     still open, proving the gate is footprint-specific, not a
+//     blanket primitive-open break.
+//
+// When the footprint editor is ready, flip the flag to `true` and
+// these tests flip with it (the open-blocked assertion is guarded on
+// the flag so it documents intent rather than hard-coding "off").
+// ─────────────────────────────────────────────────────────────────
+
+/// Write a valid single-footprint `.snxfpt` envelope to `path`.
+/// Uses the real `FootprintFile::to_toml_string` so the file parses
+/// cleanly — the test then proves the *gate* blocks the open, not a
+/// parse failure (which would be a false green).
+fn write_valid_snxfpt(path: &Path, name: &str) {
+    use signex_library::{Footprint, FootprintFile};
+    let file = FootprintFile::from_footprint(Footprint::empty(name));
+    let toml = file.to_toml_string().expect("serialise .snxfpt envelope");
+    fs::write(path, toml).expect("write .snxfpt");
+}
+
+/// Write a valid single-symbol `.snxsym` envelope to `path`.
+fn write_valid_snxsym(path: &Path, name: &str) {
+    use signex_library::{Symbol, SymbolFile};
+    let file = SymbolFile::from_symbol(Symbol::empty(name));
+    let toml = file.to_toml_string().expect("serialise .snxsym envelope");
+    fs::write(path, toml).expect("write .snxsym");
+}
+
+#[test]
+fn opening_snxfpt_does_not_create_editable_tab_when_gated() {
+    use signex_app::app::TabKind;
+
+    let tmp = TempDir::new().expect("tempdir");
+    let fpt = tmp.path().join("gated.snxfpt");
+    write_valid_snxfpt(&fpt, "GATED");
+
+    let (mut app, _t) = Signex::new();
+    let _ = app.update(Message::FileOpened(Some(fpt.clone())));
+
+    let opened_footprint_tab = app
+        .document_state
+        .tabs
+        .iter()
+        .any(|t| matches!(t.kind, TabKind::FootprintEditor(_)));
+
+    if signex_app::feature_flags::FOOTPRINT_EDITOR_ENABLED {
+        assert!(
+            opened_footprint_tab,
+            "flag is ON — a valid .snxfpt should open a FootprintEditor tab"
+        );
+    } else {
+        assert!(
+            !opened_footprint_tab,
+            "flag is OFF — opening a .snxfpt must not create a FootprintEditor tab"
+        );
+        assert!(
+            !app.document_state.footprint_editors.contains_key(&fpt),
+            "flag is OFF — no FootprintEditorState should be registered for the path"
+        );
+    }
+}
+
+#[test]
+fn opening_snxsym_still_creates_editable_tab() {
+    use signex_app::app::TabKind;
+
+    let tmp = TempDir::new().expect("tempdir");
+    let sym = tmp.path().join("control.snxsym");
+    write_valid_snxsym(&sym, "CONTROL");
+
+    let (mut app, _t) = Signex::new();
+    let _ = app.update(Message::FileOpened(Some(sym.clone())));
+
+    // Positive control: the symbol editor is the headline feature of
+    // v0.13.0 and must open regardless of the footprint gate.
+    assert!(
+        app.document_state
+            .tabs
+            .iter()
+            .any(|t| matches!(t.kind, TabKind::SymbolEditor(_))),
+        "a valid .snxsym must open a SymbolEditor tab (footprint gate must not affect symbols)"
+    );
+    assert!(
+        app.document_state.symbol_editors.contains_key(&sym),
+        "a SymbolEditorState should be registered for the opened .snxsym path"
+    );
+}

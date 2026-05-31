@@ -510,12 +510,16 @@ impl Signex {
                 "",
                 Message::Menu(crate::menu_bar::MenuMessage::AddLibrarySymbol),
             ));
-            items.push(self.ctx_menu_item_msg(
-                None,
-                "Add New ▸ Footprint Library",
-                "",
-                Message::Menu(crate::menu_bar::MenuMessage::AddLibraryFootprint),
-            ));
+            // v0.13.0 — footprint editor gated off; hide the create
+            // entry so the user never reaches a dead flow.
+            if crate::feature_flags::FOOTPRINT_EDITOR_ENABLED {
+                items.push(self.ctx_menu_item_msg(
+                    None,
+                    "Add New ▸ Footprint Library",
+                    "",
+                    Message::Menu(crate::menu_bar::MenuMessage::AddLibraryFootprint),
+                ));
+            }
             items.push(self.ctx_menu_sep());
             // Stage 18 distributor refresh stub — fires
             // `LibraryRefreshAllPricing` so the wiring is observable
@@ -1329,16 +1333,20 @@ impl Signex {
                     "PCB",
                     Some("v2.0"),
                 ));
-                items.push(self.ctx_menu_item_msg(
-                    Some(ic::icon_component(tid)),
-                    "PCB Library",
-                    "",
-                    Message::ProjectTreeAction(
-                        crate::app::ProjectTreeAction::AddProjectFootprintLibrary(
-                            target_path.clone(),
+                // v0.13.0 — footprint editor gated off; hide the
+                // "PCB Library" create entry on the project-root menu.
+                if crate::feature_flags::FOOTPRINT_EDITOR_ENABLED {
+                    items.push(self.ctx_menu_item_msg(
+                        Some(ic::icon_component(tid)),
+                        "PCB Library",
+                        "",
+                        Message::ProjectTreeAction(
+                            crate::app::ProjectTreeAction::AddProjectFootprintLibrary(
+                                target_path.clone(),
+                            ),
                         ),
-                    ),
-                ));
+                    ));
+                }
                 items.push(self.ctx_menu_sep());
                 items.push(self.ctx_menu_item_disabled(
                     Some(ic::icon_dd_text_string(tid)),

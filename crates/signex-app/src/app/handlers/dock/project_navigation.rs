@@ -848,6 +848,14 @@ impl Signex {
         &mut self,
         tree_path: Vec<usize>,
     ) -> iced::Task<Message> {
+        // v0.13.0 — footprint editor gated off for release. The create
+        // flow is hidden from the palette + tree menus; guard the
+        // single create chokepoint too so any lingering dispatch is a
+        // no-op. Flip `feature_flags::FOOTPRINT_EDITOR_ENABLED` to
+        // re-enable.
+        if !crate::feature_flags::FOOTPRINT_EDITOR_ENABLED {
+            return iced::Task::none();
+        }
         let Some(&project_idx) = tree_path.first() else {
             return iced::Task::none();
         };

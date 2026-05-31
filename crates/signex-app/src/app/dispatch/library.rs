@@ -3323,6 +3323,20 @@ impl Signex {
                 Task::none()
             }
             "snxfpt" => {
+                // v0.13.0 — footprint editor gated off for release.
+                // A `.snxfpt` opened from the tree / file dialog must
+                // not push an editable FootprintEditor tab. Read-only
+                // preview + Pick-Footprint binding of existing files
+                // stay available elsewhere. Flip
+                // `feature_flags::FOOTPRINT_EDITOR_ENABLED` to re-enable.
+                if !crate::feature_flags::FOOTPRINT_EDITOR_ENABLED {
+                    tracing::info!(
+                        target: "signex::library",
+                        path = %path.display(),
+                        "open primitive: footprint editor disabled (v0.13.0) — ignoring .snxfpt open",
+                    );
+                    return Task::none();
+                }
                 let bytes = match std::fs::read_to_string(&path) {
                     Ok(s) => s,
                     Err(e) => {

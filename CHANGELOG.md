@@ -6,12 +6,88 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
-> The v0.12 milestone is queued — a clean-room reimplementation of
-> `crates/signex-render/src/schematic/` and the field-autoplace
-> heuristic in `crates/signex-engine/src/transform.rs`, executed
-> against Signex-only specifications (`docs/RENDERING_RULES.md`,
-> Altium parity goals, IEEE-Std-91). The plan lives at
-> `docs/internal/CLEANROOM_REWRITE_PLAN.md`.
+## [0.13.0] — 2026-05-31
+
+The **v0.13 Symbol & Library** milestone. This release pairs the
+cleanroom schematic renderer (the work planned as v0.12) with a wave of
+symbol-editor and library polish. There is no separate v0.12.0 tag — the
+cleanroom rewrite ships here. The workspace version had already advanced
+to `0.13.0`, so this release adopts that number rather than bumping
+backward.
+
+### Headline — cleanroom schematic renderer
+
+- **Clean-room reimplementation** of `crates/signex-renderer/src/schematic.rs`
+  (label / symbol / field-style rendering) and the field-autoplace
+  heuristic, executed against Signex-only specifications
+  (`docs/RENDERING_RULES.md`, Altium parity goals, IEEE-Std-91) rather
+  than any third-party EDA source. Schematic rendering output changes
+  subtly versus v0.11 — label placement, field rotation/justification,
+  and IEEE-Std-91 pin decorators are now driven by the documented rules.
+  This is the milestone tracked as "v0.12" in prior READMEs.
+
+### Added — symbol editor
+
+- **Unified active-bar widget.** The `.snxsym` editor adopts the generic
+  `signex_widgets::active_bar` in a single-call form, so the symbol
+  editor's floating toolbar matches the schematic editor byte-for-byte
+  (root highlight, dropdown panels, right-click, chevron). New
+  `active_bar_dropdowns` module backs the per-tool dropdown overlays;
+  dropdown panels position relative to the bar's `y_offset` so they open
+  directly under their trigger button.
+- **`.snxsym` TOML+TSV envelope.** Standalone symbol files serialise to
+  the same TOML-header + TSV-bulk envelope as the rest of the Signex
+  format family (`SymbolFile::to_toml_string` / `from_bytes`), so pin
+  tables are line-diffable in git. Legacy JSON `.snxsym` files still load
+  (auto-detected on open).
+
+### Added — library
+
+- Library-subsystem polish across the Library Browser, Component
+  Preview, and standalone primitive tabs: inline Pick Symbol / Pick
+  Footprint binding with read-only cells, project-tree listing of
+  `.snxsym` / `.snxfpt` files (rather than individual primitives),
+  Save-As flow for standalone primitive libraries, and assorted binding
+  / refresh fixes.
+
+### Added — per-file history
+
+- **Per-file Git history right-dock panel** refinements — the History
+  panel follows the active tab and renders the file's recent commits via
+  `signex_widgets::history_pane`, async-loaded with a generation counter
+  to drop stale results on tab switch.
+
+### Changed — footprint editor hidden for this release
+
+- **The footprint / sketch editor is gated off in v0.13.0.** It is
+  feature-incomplete and was under heavy daily iteration; rather than
+  ship an unfinished editor, its user-facing entry points are disabled
+  behind a compile-time flag (`signex_app::feature_flags::FOOTPRINT_EDITOR_ENABLED`).
+  Opening a `.snxfpt` no longer pushes an editable Footprint Editor tab,
+  and the "New Footprint / PCB Library" create flow is removed from the
+  command palette and project-tree menus.
+- **Footprints remain first-class data.** Read-only footprint preview in
+  the Component Preview tab, Pick Footprint binding of existing `.snxfpt`
+  files into component rows, the footprint column in the Library Browser,
+  and the bake / library backend are all unchanged. Only the *editor*
+  surface is hidden. The full editor returns in a later release by
+  flipping the flag.
+
+### Tests
+
+- New regression coverage pinning the footprint gate
+  (`opening_snxfpt_does_not_create_editable_tab_when_gated`) plus a
+  positive control proving the symbol editor still opens
+  (`opening_snxsym_still_creates_editable_tab`). Full `cargo test
+  --workspace` green.
+
+### Constraints — Apache-clean invariants (carry forward from v0.9.0)
+
+- Zero `kicad`/`KiCad`/`KICAD` substrings under `crates/`; no
+  `kicad-parser` / `kicad-writer` deps or imports; no removed-API
+  surface re-introduced; `cargo-deny check licenses` green. The
+  cleanroom renderer was authored against Signex-only specs with no
+  third-party EDA source in context.
 
 ## [0.11.0] — 2026-05-01
 
