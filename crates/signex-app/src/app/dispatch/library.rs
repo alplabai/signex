@@ -6955,6 +6955,19 @@ pub(crate) fn apply_footprint_primitive_edit(
             };
             let p_kind = primary.and_then(kind_of);
             let s_kind = secondary.and_then(kind_of);
+            // v0.15 — third entity for the 3-entity Symmetric
+            // constraints comes from the rubber-band extra slot.
+            let extra = editor.state.selected_sketch_extra.first().copied();
+            let extra_kind = extra.and_then(kind_of);
+            // Angle's DimTarget is stored in radians (canonical unit);
+            // the dim-input field is degrees, so convert here.
+            let angle_target = editor
+                .state
+                .dimension_input
+                .trim()
+                .parse::<f64>()
+                .ok()
+                .map(|deg| DimTarget::Literal(deg.to_radians()));
 
             let new_kind: Option<ConstraintKind> = match (tag, p_kind, s_kind, primary, secondary) {
                 (SketchConstraintTag::Fixed, Some("Point"), _, Some(p), _) => {
@@ -7017,6 +7030,122 @@ pub(crate) fn apply_footprint_primitive_edit(
                 (SketchConstraintTag::Midpoint, Some("Line"), Some("Point"), Some(l), Some(p)) => {
                     Some(ConstraintKind::Midpoint { point: p, line: l })
                 }
+                // --- v0.15: 9 additional constraint kinds ---
+                (
+                    SketchConstraintTag::TangentLineArc,
+                    Some("Line"),
+                    Some("Arc"),
+                    Some(line),
+                    Some(arc),
+                ) => Some(ConstraintKind::TangentLineArc { line, arc }),
+                (
+                    SketchConstraintTag::TangentLineArc,
+                    Some("Arc"),
+                    Some("Line"),
+                    Some(arc),
+                    Some(line),
+                ) => Some(ConstraintKind::TangentLineArc { line, arc }),
+                (
+                    SketchConstraintTag::TangentArcArc,
+                    Some("Arc"),
+                    Some("Arc"),
+                    Some(a1),
+                    Some(a2),
+                ) => Some(ConstraintKind::TangentArcArc {
+                    a1,
+                    a2,
+                    internal: false,
+                }),
+                (SketchConstraintTag::Angle, Some("Line"), Some("Line"), Some(l1), Some(l2)) => {
+                    angle_target.map(|t| ConstraintKind::Angle { l1, l2, target: t })
+                }
+                // EqualRadius spans any two of Circle / Arc.
+                (
+                    SketchConstraintTag::EqualRadius,
+                    Some("Circle") | Some("Arc"),
+                    Some("Circle") | Some("Arc"),
+                    Some(e1),
+                    Some(e2),
+                ) => Some(ConstraintKind::EqualRadius { e1, e2 }),
+                (
+                    SketchConstraintTag::PointOnArc,
+                    Some("Point"),
+                    Some("Arc"),
+                    Some(point),
+                    Some(arc),
+                ) => Some(ConstraintKind::PointOnArc { point, arc }),
+                (
+                    SketchConstraintTag::PointOnArc,
+                    Some("Arc"),
+                    Some("Point"),
+                    Some(arc),
+                    Some(point),
+                ) => Some(ConstraintKind::PointOnArc { point, arc }),
+                (
+                    SketchConstraintTag::DistancePtLine,
+                    Some("Point"),
+                    Some("Line"),
+                    Some(point),
+                    Some(line),
+                ) => dim_target.map(|t| ConstraintKind::DistancePtLine {
+                    point,
+                    line,
+                    target: t,
+                }),
+                (
+                    SketchConstraintTag::DistancePtLine,
+                    Some("Line"),
+                    Some("Point"),
+                    Some(line),
+                    Some(point),
+                ) => dim_target.map(|t| ConstraintKind::DistancePtLine {
+                    point,
+                    line,
+                    target: t,
+                }),
+                // DistancePtCircle: the `circle` field accepts a Circle
+                // or an Arc (radius read from live state in both cases).
+                (
+                    SketchConstraintTag::DistancePtCircle,
+                    Some("Point"),
+                    Some("Circle") | Some("Arc"),
+                    Some(point),
+                    Some(circle),
+                ) => dim_target.map(|t| ConstraintKind::DistancePtCircle {
+                    point,
+                    circle,
+                    target: t,
+                }),
+                (
+                    SketchConstraintTag::DistancePtCircle,
+                    Some("Circle") | Some("Arc"),
+                    Some("Point"),
+                    Some(circle),
+                    Some(point),
+                ) => dim_target.map(|t| ConstraintKind::DistancePtCircle {
+                    point,
+                    circle,
+                    target: t,
+                }),
+                // 3-entity Symmetric constraints: primary + secondary
+                // are the two governed Points; the third entity (mirror
+                // Line / centre Point) comes from the extra slot.
+                (
+                    SketchConstraintTag::SymmetricAboutLine,
+                    Some("Point"),
+                    Some("Point"),
+                    Some(p1),
+                    Some(p2),
+                ) if extra_kind == Some("Line") => extra
+                    .map(|line| ConstraintKind::SymmetricAboutLine { p1, p2, line }),
+                (
+                    SketchConstraintTag::SymmetricAboutPoint,
+                    Some("Point"),
+                    Some("Point"),
+                    Some(p1),
+                    Some(p2),
+                ) if extra_kind == Some("Point") => extra
+                    .map(|center| ConstraintKind::SymmetricAboutPoint { p1, p2, center }),
                 _ => None,
             };
 

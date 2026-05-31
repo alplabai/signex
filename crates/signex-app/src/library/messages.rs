@@ -1166,6 +1166,27 @@ pub enum SketchConstraintTag {
     PointOnLine,
     /// 1 Point + 1 Line selected → midpoint.
     Midpoint,
+    /// 1 Line + 1 Arc selected → line tangent to arc.
+    TangentLineArc,
+    /// 2 Arcs selected → arcs tangent to each other (external).
+    TangentArcArc,
+    /// 2 Lines selected + dimension input → Angle(target_deg).
+    Angle,
+    /// 2 Circles/Arcs selected → equal radius.
+    EqualRadius,
+    /// 1 Point + 1 Arc selected → point on arc.
+    PointOnArc,
+    /// 1 Point + 1 Line selected + dimension input →
+    /// DistancePtLine(target_mm).
+    DistancePtLine,
+    /// 1 Point + 1 Circle/Arc selected + dimension input →
+    /// DistancePtCircle(target_mm).
+    DistancePtCircle,
+    /// 2 Points + 1 Line (in the extra slot) → symmetric about line.
+    SymmetricAboutLine,
+    /// 3 Points (third in the extra slot) → symmetric about the
+    /// third (centre) point.
+    SymmetricAboutPoint,
 }
 
 /// v0.16.2 — role tag attached to a sketch entity. The Sketch-mode
