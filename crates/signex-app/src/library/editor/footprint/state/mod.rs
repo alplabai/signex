@@ -12,7 +12,7 @@
 //!
 //! Submodules:
 //! - [`pad`] — `EditorPad`, `PadStackUi`, `NextPadDefaults`, `PadSide`,
-//!   `CourtyardRect`, `ShapeParamMap`.
+//!   `CourtyardRect`, `ShapeParamMap`, `AlignOp`.
 //! - [`mode`] — `EditorMode`, `FpActiveBarMenu`, `PadStackTab`.
 //! - [`context_menu`] — right-click menu state types.
 //! - [`placement`] — `PlacementInput*`, `PlaceArcPending`.
@@ -34,7 +34,9 @@ pub use context_menu::{
     FootprintContextTarget,
 };
 pub use mode::{EditorMode, FpActiveBarMenu, PadStackTab};
-pub use pad::{CourtyardRect, EditorPad, NextPadDefaults, PadSide, PadStackUi, ShapeParamMap};
+pub use pad::{
+    AlignOp, CourtyardRect, EditorPad, NextPadDefaults, PadSide, PadStackUi, ShapeParamMap,
+};
 pub use placement::{PlaceArcPending, PlacementInput, PlacementInputKind};
 pub use selection_filter::{FpSelectionMode, SelectionFilter, SelectionFilterKind};
 pub use snap_options::{GridDef, GridDisplay, Guide, GuideAxis, SnapOptions, SnapSubTab, SnappingMode};

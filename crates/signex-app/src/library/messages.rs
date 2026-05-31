@@ -1627,6 +1627,13 @@ pub enum PrimitiveEditorMsg {
     /// Active-bar Align → Move All Components Origin To Grid. Snap
     /// every pad's centre to the nearest active-grid step.
     FootprintActiveBarMoveOriginToGrid,
+    /// Active-bar Align → align / distribute / re-space the current
+    /// pad selection. Operates on `selected_pad` + `selected_pads_extra`
+    /// (the combined set); a no-op when fewer than two pads are
+    /// selected (fewer than three for the distribute ops). See
+    /// [`AlignOp`](crate::library::editor::footprint::state::AlignOp)
+    /// for the per-operation geometry.
+    FootprintAlignPads(crate::library::editor::footprint::state::AlignOp),
     /// Active-bar Selection → Select All. Pads mode picks the first
     /// pad; Sketch mode picks the first sketch entity.
     FootprintActiveBarSelectAll,

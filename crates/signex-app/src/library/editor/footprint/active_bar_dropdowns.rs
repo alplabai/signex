@@ -52,6 +52,27 @@ fn stub_with_icon(
     .icon(icon)
 }
 
+/// v0.14 — real Align/Distribute/Spacing item, no icon. Emits
+/// [`PrimitiveEditorMsg::FootprintAlignPads`] so the dispatcher
+/// transforms the current pad selection.
+fn align_item(
+    label: &'static str,
+    path: PathBuf,
+    op: crate::library::editor::footprint::state::AlignOp,
+) -> DropdownItem<LibraryMessage> {
+    DropdownItem::new(label, fp(path, PrimitiveEditorMsg::FootprintAlignPads(op)))
+}
+
+/// v0.14 — real Align/Distribute item with an icon.
+fn align_item_with_icon(
+    label: &'static str,
+    path: PathBuf,
+    op: crate::library::editor::footprint::state::AlignOp,
+    icon: iced::widget::svg::Handle,
+) -> DropdownItem<LibraryMessage> {
+    DropdownItem::new(label, fp(path, PrimitiveEditorMsg::FootprintAlignPads(op))).icon(icon)
+}
+
 /// Build the entries for the dropdown matching `menu`. `tid` resolves
 /// the per-theme accent tint on each SVG icon (icons are reused from
 /// the schematic active bar's icon set for visual consistency).
@@ -407,62 +428,110 @@ fn select_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessa
 }
 
 fn align_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessage>> {
+    use crate::library::editor::footprint::state::AlignOp;
     vec![
+        // The generic "Align…" dialog launcher stays a stub for v0.14 —
+        // the concrete operations below cover the day-to-day flow; the
+        // dialog (per-axis radio + reference picker) is a later task.
         DropdownEntry::Item(stub_with_icon(
             "Align…",
             path.clone(),
             ic::icon_dd_align_menu(tid),
         )),
         DropdownEntry::Separator,
-        DropdownEntry::Item(stub_with_icon(
+        DropdownEntry::Item(align_item_with_icon(
             "Align Left",
             path.clone(),
+            AlignOp::Left,
             ic::icon_dd_align_left(tid),
         )),
-        DropdownEntry::Item(stub_with_icon(
+        DropdownEntry::Item(align_item_with_icon(
             "Align Right",
             path.clone(),
+            AlignOp::Right,
             ic::icon_dd_align_right(tid),
         )),
-        DropdownEntry::Item(stub("Align Left (maintain spacing)", path.clone())),
-        DropdownEntry::Item(stub("Align Right (maintain spacing)", path.clone())),
-        DropdownEntry::Item(stub_with_icon(
+        // "maintain spacing" variants align the selection's edge while
+        // preserving each pad's offset on the OTHER axis — which for a
+        // pure left/right align is exactly the centre-X move (the
+        // cross-axis Y is untouched). Same target as the plain align.
+        DropdownEntry::Item(align_item(
+            "Align Left (maintain spacing)",
+            path.clone(),
+            AlignOp::Left,
+        )),
+        DropdownEntry::Item(align_item(
+            "Align Right (maintain spacing)",
+            path.clone(),
+            AlignOp::Right,
+        )),
+        DropdownEntry::Item(align_item_with_icon(
             "Align Horizontal Centers",
             path.clone(),
+            AlignOp::CenterH,
             ic::icon_dd_align_hcenter(tid),
         )),
-        DropdownEntry::Item(stub_with_icon(
+        DropdownEntry::Item(align_item_with_icon(
             "Distribute Horizontally",
             path.clone(),
+            AlignOp::DistributeH,
             ic::icon_dd_dist_horiz(tid),
         )),
-        DropdownEntry::Item(stub("Increase Horizontal Spacing", path.clone())),
-        DropdownEntry::Item(stub("Decrease Horizontal Spacing", path.clone())),
+        DropdownEntry::Item(align_item(
+            "Increase Horizontal Spacing",
+            path.clone(),
+            AlignOp::IncreaseHSpacing,
+        )),
+        DropdownEntry::Item(align_item(
+            "Decrease Horizontal Spacing",
+            path.clone(),
+            AlignOp::DecreaseHSpacing,
+        )),
         DropdownEntry::Separator,
-        DropdownEntry::Item(stub_with_icon(
+        DropdownEntry::Item(align_item_with_icon(
             "Align Top",
             path.clone(),
+            AlignOp::Top,
             ic::icon_dd_align_top(tid),
         )),
-        DropdownEntry::Item(stub_with_icon(
+        DropdownEntry::Item(align_item_with_icon(
             "Align Bottom",
             path.clone(),
+            AlignOp::Bottom,
             ic::icon_dd_align_bottom(tid),
         )),
-        DropdownEntry::Item(stub("Align Top (maintain spacing)", path.clone())),
-        DropdownEntry::Item(stub("Align Bottom (maintain spacing)", path.clone())),
-        DropdownEntry::Item(stub_with_icon(
+        DropdownEntry::Item(align_item(
+            "Align Top (maintain spacing)",
+            path.clone(),
+            AlignOp::Top,
+        )),
+        DropdownEntry::Item(align_item(
+            "Align Bottom (maintain spacing)",
+            path.clone(),
+            AlignOp::Bottom,
+        )),
+        DropdownEntry::Item(align_item_with_icon(
             "Align Vertical Centers",
             path.clone(),
+            AlignOp::CenterV,
             ic::icon_dd_align_vcenter(tid),
         )),
-        DropdownEntry::Item(stub_with_icon(
+        DropdownEntry::Item(align_item_with_icon(
             "Distribute Vertically",
             path.clone(),
+            AlignOp::DistributeV,
             ic::icon_dd_dist_vert(tid),
         )),
-        DropdownEntry::Item(stub("Increase Vertical Spacing", path.clone())),
-        DropdownEntry::Item(stub("Decrease Vertical Spacing", path.clone())),
+        DropdownEntry::Item(align_item(
+            "Increase Vertical Spacing",
+            path.clone(),
+            AlignOp::IncreaseVSpacing,
+        )),
+        DropdownEntry::Item(align_item(
+            "Decrease Vertical Spacing",
+            path.clone(),
+            AlignOp::DecreaseVSpacing,
+        )),
         DropdownEntry::Separator,
         DropdownEntry::Item(
             DropdownItem::new(

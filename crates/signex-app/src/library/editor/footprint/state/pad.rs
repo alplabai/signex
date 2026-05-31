@@ -393,3 +393,39 @@ pub struct CourtyardRect {
     pub max_x: f64,
     pub max_y: f64,
 }
+
+/// v0.14 — active-bar Align / Distribute / Spacing operations. Carried
+/// by [`crate::library::messages::PrimitiveEditorMsg::FootprintAlignPads`].
+/// Pure data — the geometry lives in the dispatcher's `align_pads`
+/// helper. Align variants act on ≥2 selected pads; the two Distribute
+/// variants need ≥3.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AlignOp {
+    /// Move every selected pad so its centre sits at the minimum X
+    /// (leftmost centre) among the selection.
+    Left,
+    /// Centres → maximum X (rightmost centre).
+    Right,
+    /// Centres → minimum Y (topmost centre, screen-down +Y).
+    Top,
+    /// Centres → maximum Y (bottommost centre).
+    Bottom,
+    /// Centres → mean X of the selection (horizontal centring).
+    CenterH,
+    /// Centres → mean Y of the selection (vertical centring).
+    CenterV,
+    /// Keep the extreme-X pads fixed; space the in-between pads at
+    /// equal centre-to-centre gaps (Altium "Distribute Horizontally").
+    DistributeH,
+    /// Keep the extreme-Y pads fixed; equalise vertical gaps.
+    DistributeV,
+    /// Expand horizontal centre-to-centre gaps by one grid step,
+    /// pivoting about the selection's mean X.
+    IncreaseHSpacing,
+    /// Contract horizontal gaps by one grid step (never past overlap).
+    DecreaseHSpacing,
+    /// Expand vertical gaps by one grid step about the mean Y.
+    IncreaseVSpacing,
+    /// Contract vertical gaps by one grid step.
+    DecreaseVSpacing,
+}
