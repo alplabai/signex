@@ -887,11 +887,35 @@ mod tests {
     use crate::primitive::polygon::GpuPolygon;
     use crate::primitive::text::{TextHAlign, TextItem, TextVAlign};
 
+    /// Headless CI (no Vulkan/Metal/DX12/GL adapter) can't run the GPU
+    /// smoke passes. Treat "no adapter/device" as a skip — the tests
+    /// still run and assert wherever a real adapter is available.
+    fn is_headless_skip(err: &str) -> bool {
+        err.contains("failed to acquire adapter") || err.contains("failed to acquire device")
+    }
+
+    /// Unwrap a smoke-pass `Result`, or skip the test (early `return`)
+    /// when the failure is just "no GPU adapter in this environment".
+    /// A real error still panics.
+    macro_rules! gpu_or_skip {
+        ($expr:expr, $what:expr) => {
+            match $expr {
+                Ok(v) => v,
+                Err(e) if is_headless_skip(&e) => {
+                    eprintln!("skipping GPU smoke test ({}): {e}", $what);
+                    return;
+                }
+                Err(e) => panic!("{}: {e}", $what),
+            }
+        };
+    }
+
     #[test]
     fn line_circle_smoke_pass_runs_for_multiple_scales() {
-        let low_zoom = pollster::block_on(run_line_circle_smoke_pass(8.0)).expect("low zoom pass");
+        let low_zoom =
+            gpu_or_skip!(pollster::block_on(run_line_circle_smoke_pass(8.0)), "low zoom pass");
         let high_zoom =
-            pollster::block_on(run_line_circle_smoke_pass(64.0)).expect("high zoom pass");
+            gpu_or_skip!(pollster::block_on(run_line_circle_smoke_pass(64.0)), "high zoom pass");
 
         assert_eq!(low_zoom.line_instances, 2);
         assert_eq!(low_zoom.circle_instances, 1);
@@ -901,7 +925,7 @@ mod tests {
 
     #[test]
     fn arc_smoke_pass_runs() {
-        let count = pollster::block_on(run_arc_smoke_pass()).expect("arc pass");
+        let count = gpu_or_skip!(pollster::block_on(run_arc_smoke_pass()), "arc pass");
         assert_eq!(count, 1);
     }
 
@@ -920,8 +944,10 @@ mod tests {
             _pad: [0.0; 3],
         }];
 
-        let count =
-            pollster::block_on(run_arc_smoke_pass_with(8.0, &arcs)).expect("wraparound arc pass");
+        let count = gpu_or_skip!(
+            pollster::block_on(run_arc_smoke_pass_with(8.0, &arcs)),
+            "wraparound arc pass"
+        );
         assert_eq!(count, 1);
     }
 
@@ -937,14 +963,17 @@ mod tests {
             _pad: [0.0; 3],
         }];
 
-        let count =
-            pollster::block_on(run_arc_smoke_pass_with(64.0, &arcs)).expect("tiny radius arc pass");
+        let count = gpu_or_skip!(
+            pollster::block_on(run_arc_smoke_pass_with(64.0, &arcs)),
+            "tiny radius arc pass"
+        );
         assert_eq!(count, 1);
     }
 
     #[test]
     fn polygon_smoke_pass_runs() {
-        let vertex_count = pollster::block_on(run_polygon_smoke_pass()).expect("polygon pass");
+        let vertex_count =
+            gpu_or_skip!(pollster::block_on(run_polygon_smoke_pass()), "polygon pass");
         assert_eq!(vertex_count, 6);
     }
 
@@ -957,10 +986,14 @@ mod tests {
             stroke_width: 0.0,
         }];
 
-        let low_zoom_count =
-            pollster::block_on(run_polygon_smoke_pass_with(8.0, &polygons)).expect("polygon low");
-        let high_zoom_count = pollster::block_on(run_polygon_smoke_pass_with(64.0, &polygons))
-            .expect("polygon high");
+        let low_zoom_count = gpu_or_skip!(
+            pollster::block_on(run_polygon_smoke_pass_with(8.0, &polygons)),
+            "polygon low"
+        );
+        let high_zoom_count = gpu_or_skip!(
+            pollster::block_on(run_polygon_smoke_pass_with(64.0, &polygons)),
+            "polygon high"
+        );
 
         assert_eq!(low_zoom_count, 6);
         assert_eq!(high_zoom_count, 6);
@@ -983,22 +1016,26 @@ mod tests {
             },
         ];
 
-        let count = pollster::block_on(run_polygon_smoke_pass_with(32.0, &polygons))
-            .expect("polygon degenerate filter");
+        let count = gpu_or_skip!(
+            pollster::block_on(run_polygon_smoke_pass_with(32.0, &polygons)),
+            "polygon degenerate filter"
+        );
         assert_eq!(count, 6);
     }
 
     #[test]
     fn grid_smoke_pass_runs() {
-        let report = pollster::block_on(run_grid_smoke_pass()).expect("grid pass");
+        let report = gpu_or_skip!(pollster::block_on(run_grid_smoke_pass()), "grid pass");
         assert!((0.0..=1.0).contains(&report.minor_lod_alpha));
         assert!((0.0..=1.0).contains(&report.major_lod_alpha));
     }
 
     #[test]
     fn grid_smoke_pass_lod_changes_with_zoom() {
-        let low_zoom = pollster::block_on(run_grid_smoke_pass_with(0.5)).expect("grid low");
-        let high_zoom = pollster::block_on(run_grid_smoke_pass_with(64.0)).expect("grid high");
+        let low_zoom =
+            gpu_or_skip!(pollster::block_on(run_grid_smoke_pass_with(0.5)), "grid low");
+        let high_zoom =
+            gpu_or_skip!(pollster::block_on(run_grid_smoke_pass_with(64.0)), "grid high");
 
         assert!(high_zoom.minor_lod_alpha > low_zoom.minor_lod_alpha);
         assert!(high_zoom.major_lod_alpha > low_zoom.major_lod_alpha);
@@ -1006,7 +1043,7 @@ mod tests {
 
     #[test]
     fn text_smoke_pass_runs() {
-        let text_count = pollster::block_on(run_text_smoke_pass()).expect("text pass");
+        let text_count = gpu_or_skip!(pollster::block_on(run_text_smoke_pass()), "text pass");
         assert_eq!(text_count, 2);
     }
 
@@ -1048,10 +1085,14 @@ mod tests {
             },
         ];
 
-        let low_zoom_count =
-            pollster::block_on(run_text_smoke_pass_with(8.0, &texts)).expect("text pass low");
-        let high_zoom_count = pollster::block_on(run_text_smoke_pass_with(64.0, &texts))
-            .expect("text pass high");
+        let low_zoom_count = gpu_or_skip!(
+            pollster::block_on(run_text_smoke_pass_with(8.0, &texts)),
+            "text pass low"
+        );
+        let high_zoom_count = gpu_or_skip!(
+            pollster::block_on(run_text_smoke_pass_with(64.0, &texts)),
+            "text pass high"
+        );
 
         assert_eq!(low_zoom_count, 3);
         assert_eq!(high_zoom_count, 3);
@@ -1084,8 +1125,10 @@ mod tests {
             },
         ];
 
-        let count =
-            pollster::block_on(run_text_smoke_pass_with(32.0, &texts)).expect("text clipping pass");
+        let count = gpu_or_skip!(
+            pollster::block_on(run_text_smoke_pass_with(32.0, &texts)),
+            "text clipping pass"
+        );
         assert_eq!(count, 1);
     }
 
@@ -1127,15 +1170,19 @@ mod tests {
             },
         ];
 
-        let count =
-            pollster::block_on(run_text_smoke_pass_with(32.0, &texts)).expect("text overlap pass");
+        let count = gpu_or_skip!(
+            pollster::block_on(run_text_smoke_pass_with(32.0, &texts)),
+            "text overlap pass"
+        );
         assert_eq!(count, 3);
     }
 
     #[test]
     fn text_compositing_order_places_text_above_geometry() {
-        let report = pollster::block_on(run_text_geometry_composite_smoke_pass())
-            .expect("text geometry composite pass");
+        let report = gpu_or_skip!(
+            pollster::block_on(run_text_geometry_composite_smoke_pass()),
+            "text geometry composite pass"
+        );
 
         assert_eq!(report.polygon_vertices, 6);
         assert_eq!(report.text_instances, 1);
@@ -1147,8 +1194,10 @@ mod tests {
 
     #[test]
     fn overlay_compositing_order_places_overlay_between_geometry_and_text() {
-        let report = pollster::block_on(run_grid_overlay_text_composite_smoke_pass())
-            .expect("grid overlay text composite pass");
+        let report = gpu_or_skip!(
+            pollster::block_on(run_grid_overlay_text_composite_smoke_pass()),
+            "grid overlay text composite pass"
+        );
 
         assert_eq!(report.geometry_vertices, 6);
         assert_eq!(report.overlay_instances, 2);
@@ -1192,18 +1241,24 @@ mod tests {
             v_align: TextVAlign::Top,
         }];
 
-        let baseline = pollster::block_on(run_grid_overlay_text_composite_smoke_pass_with(
-            32.0, true, true, true, &polygons, &overlays, &texts,
-        ))
-        .expect("baseline composite pass");
-        let overlay_off = pollster::block_on(run_grid_overlay_text_composite_smoke_pass_with(
-            32.0, true, false, true, &polygons, &overlays, &texts,
-        ))
-        .expect("overlay toggle off pass");
-        let grid_off = pollster::block_on(run_grid_overlay_text_composite_smoke_pass_with(
-            32.0, false, true, true, &polygons, &overlays, &texts,
-        ))
-        .expect("grid toggle off pass");
+        let baseline = gpu_or_skip!(
+            pollster::block_on(run_grid_overlay_text_composite_smoke_pass_with(
+                32.0, true, true, true, &polygons, &overlays, &texts,
+            )),
+            "baseline composite pass"
+        );
+        let overlay_off = gpu_or_skip!(
+            pollster::block_on(run_grid_overlay_text_composite_smoke_pass_with(
+                32.0, true, false, true, &polygons, &overlays, &texts,
+            )),
+            "overlay toggle off pass"
+        );
+        let grid_off = gpu_or_skip!(
+            pollster::block_on(run_grid_overlay_text_composite_smoke_pass_with(
+                32.0, false, true, true, &polygons, &overlays, &texts,
+            )),
+            "grid toggle off pass"
+        );
 
         assert_eq!(baseline.geometry_vertices, overlay_off.geometry_vertices);
         assert_eq!(baseline.geometry_vertices, grid_off.geometry_vertices);
