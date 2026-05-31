@@ -18,7 +18,7 @@
 //! O(n²) worst-case in the polygon vertex count for the
 //! point-to-polygon distance step; the recursion depth is
 //! bounded by `log2(bbox / precision)` so it converges quickly
-//! for typical sketcher polygons.
+//! for typical sketch polygons.
 
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
