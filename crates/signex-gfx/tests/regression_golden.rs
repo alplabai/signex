@@ -364,21 +364,49 @@ fn build_upload_fixture_scene() -> Scene {
     scene
 }
 
+/// Headless CI (no Vulkan/Metal/DX12/GL adapter) can't run the GPU
+/// smoke passes. Treat "no adapter/device" as a skip — the tests
+/// still run and assert wherever a real adapter is available.
+fn is_headless_skip(err: &str) -> bool {
+    err.contains("failed to acquire adapter") || err.contains("failed to acquire device")
+}
+
+/// Unwrap a smoke-pass `Result`, or skip the test (early `return`)
+/// when the failure is just "no GPU adapter in this environment".
+/// A real error still panics.
+macro_rules! gpu_or_skip {
+    ($expr:expr, $what:expr) => {
+        match $expr {
+            Ok(v) => v,
+            Err(e) if is_headless_skip(&e) => {
+                eprintln!("skipping GPU smoke test ({}): {e}", $what);
+                return;
+            }
+            Err(e) => panic!("{}: {e}", $what),
+        }
+    };
+}
+
 #[test]
 fn regression_golden_smoke_reports_match_fixture_baseline() {
     let golden = load_golden_fixture();
 
     let line_circle =
-        pollster::block_on(run_line_circle_smoke_pass(32.0)).expect("line-circle smoke report");
-    let arc_instances = pollster::block_on(run_arc_smoke_pass()).expect("arc smoke report");
+        gpu_or_skip!(pollster::block_on(run_line_circle_smoke_pass(32.0)), "line-circle smoke report");
+    let arc_instances = gpu_or_skip!(pollster::block_on(run_arc_smoke_pass()), "arc smoke report");
     let polygon_vertices =
-        pollster::block_on(run_polygon_smoke_pass()).expect("polygon smoke report");
-    let text_instances = pollster::block_on(run_text_smoke_pass()).expect("text smoke report");
-    let grid = pollster::block_on(run_grid_smoke_pass()).expect("grid smoke report");
-    let text_geometry = pollster::block_on(run_text_geometry_composite_smoke_pass())
-        .expect("text-geometry composite smoke report");
-    let overlay = pollster::block_on(run_grid_overlay_text_composite_smoke_pass())
-        .expect("grid-overlay-text composite smoke report");
+        gpu_or_skip!(pollster::block_on(run_polygon_smoke_pass()), "polygon smoke report");
+    let text_instances =
+        gpu_or_skip!(pollster::block_on(run_text_smoke_pass()), "text smoke report");
+    let grid = gpu_or_skip!(pollster::block_on(run_grid_smoke_pass()), "grid smoke report");
+    let text_geometry = gpu_or_skip!(
+        pollster::block_on(run_text_geometry_composite_smoke_pass()),
+        "text-geometry composite smoke report"
+    );
+    let overlay = gpu_or_skip!(
+        pollster::block_on(run_grid_overlay_text_composite_smoke_pass()),
+        "grid-overlay-text composite smoke report"
+    );
 
     assert_eq!(line_circle.line_instances, golden.smoke.line_instances);
     assert_eq!(line_circle.circle_instances, golden.smoke.circle_instances);
