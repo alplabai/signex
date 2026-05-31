@@ -2,7 +2,7 @@
 //!
 //! These wrap the textbook formulae for orientation and signed area
 //! with a tolerance-aware sign so callers don't have to repeat the
-//! same `det.abs() < EPS` boilerplate everywhere. PCB sketcher
+//! same `det.abs() < EPS` boilerplate everywhere. PCB sketch
 //! tolerances live at the mm scale where IEEE-754 f64 has ~12
 //! decimal digits of headroom; the relative + absolute bound check
 //! below is enough without a multi-precision fallback.
@@ -37,7 +37,7 @@ impl Sign {
 }
 
 /// Default absolute tolerance for predicate sign decisions. 1e-9 mm
-/// = 1 fm at sketcher scale — well below any physical PCB feature
+/// = 1 fm at sketch scale — well below any physical PCB feature
 /// and well above f64 noise on typical operands.
 pub const DEFAULT_TOL: f64 = 1.0e-9;
 
