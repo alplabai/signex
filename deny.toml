@@ -52,11 +52,27 @@ multiple-versions = "warn"
 deny = []
 
 [advisories]
-# Surface RUSTSEC advisories at "warn" — security advisories are
-# informational in CI (the workflow's continue-on-error: true).
-# Critical advisories should still be addressed.
+# Yanked crates are surfaced as warnings, not hard errors — the only
+# yanked entry (core2) is a deep transitive with no non-yanked release.
 yanked = "warn"
-ignore = []
+# Ignored advisories. Each entry is a transitive dependency for which
+# `cargo update` finds no safe upgrade; the only remedy would be a
+# major-version bump of `iced 0.14` or `tantivy 0.22`, which is out of
+# scope here. Re-evaluate when those upstreams move.
+ignore = [
+    # core2 unmaintained, all versions yanked. Pulled via
+    # bitstream-io -> rav1e -> ravif -> image -> iced (AVIF decode).
+    "RUSTSEC-2026-0105",
+    # core2 unsound Buf::read_exact. Same dead transitive path as
+    # above; not reachable from our usage.
+    "RUSTSEC-2026-0008",
+    # instant unmaintained (superseded by web-time). Pulled via
+    # measure_time -> tantivy; no safe upgrade until tantivy drops it.
+    "RUSTSEC-2024-0384",
+    # paste unmaintained proc-macro (superseded by pastey). Pulled via
+    # rav1e -> ravif -> image -> iced; no safe upgrade in this tree.
+    "RUSTSEC-2024-0436",
+]
 
 [sources]
 # Only crates.io and the official rust-lang git registry are allowed.

@@ -39,6 +39,10 @@ fn delete_pad_clears_selection() {
 #[test]
 fn auto_fit_courtyard_tracks_pads() {
     let mut s = FootprintEditorState::empty();
+    // Auto-fit defaults off (v0.26-I) — courtyard is authored
+    // explicitly. Enable it the way the active-bar toggle does
+    // before asserting it tracks the pad bbox.
+    s.toggle_auto_fit();
     s.add_pad_at(-2.0, -1.0);
     s.add_pad_at(2.0, 1.0);
     let c = s
