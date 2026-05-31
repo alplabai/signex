@@ -13,6 +13,8 @@ mod ui;
 
 impl Signex {
     pub(crate) fn dispatch_update(&mut self, message: Message) -> Task<Message> {
+        self.apply_pcb_renderer_dirty_hint(&message);
+
         match message {
             Message::Menu(_) | Message::Tab { .. } | Message::Dock(_) | Message::Selection(_) => {
                 self.dispatch_routed_message(message)
@@ -27,6 +29,22 @@ impl Signex {
             | Message::WindowResized(_, _)
             | Message::DragEnd
             | Message::GridCycle
+            | Message::GridPickerOpen
+            | Message::GridPickerClose
+            | Message::GridPickerSelect(_)
+            | Message::GridPropertiesOpen
+            | Message::GridPropertiesClose
+            | Message::GridPropertiesSetStepX(_)
+            | Message::GridPropertiesSetStepY(_)
+            | Message::GridPropertiesToggleLink
+            | Message::GridPropertiesApply
+            | Message::GridPropertiesSetFineDisplay(_)
+            | Message::GridPropertiesSetCoarseDisplay(_)
+            | Message::GridPropertiesSetMultiplier(_)
+            | Message::OpenSelectionFilterCustom
+            | Message::CloseSelectionFilterCustom
+            | Message::ToggleSelectionFilterCustomKind(_)
+            | Message::ApplySelectionFilterCustom
             | Message::StatusBar(_) => self.dispatch_ui_message(message),
             Message::TextEditChanged(_) | Message::TextEditSubmit => {
                 self.dispatch_text_edit_message(message)
@@ -247,6 +265,12 @@ impl Signex {
                             ModalId::EnableVersionControl => {
                                 self.ui_state.enable_version_control = None;
                             }
+                            ModalId::GridProperties => {
+                                self.ui_state.grid_properties = None;
+                            }
+                            ModalId::SelectionFilterCustom => {
+                                self.ui_state.selection_filter_custom = None;
+                            }
                         },
                         // Closing an undocked-tab window is the reattach
                         // gesture — the tab itself stays in
@@ -320,7 +344,7 @@ impl Signex {
                 let mut per_window = crate::canvas::SchematicCanvas::new();
                 if let Some(engine) = self.document_state.engines.get(&path) {
                     per_window.set_render_cache(Some(
-                        signex_render::schematic::SchematicRenderCache::from_sheet(
+                        crate::schematic_runtime::SchematicRenderCache::from_sheet(
                             engine.document(),
                         ),
                     ));
@@ -548,7 +572,7 @@ impl Signex {
                     let poly: Vec<(f64, f64)> = pts.iter().map(|p| (p.x, p.y)).collect();
                     let filters = self.interaction_state.selection_filters.clone();
                     self.interaction_state.active_canvas_mut().selected =
-                        signex_render::schematic::hit_test::hit_test_polygon(snapshot, &poly)
+                        crate::schematic_runtime::hit_test::hit_test_polygon(snapshot, &poly)
                             .into_iter()
                             .filter(|h| {
                                 super::handlers::selection_workflow::passes_filter(
@@ -565,10 +589,12 @@ impl Signex {
                 Task::none()
             }
             Message::CycleSelectionMode => {
-                use signex_render::schematic::hit_test::SelectionMode;
+                use crate::schematic_runtime::hit_test::SelectionMode;
                 self.ui_state.selection_mode = match self.ui_state.selection_mode {
                     SelectionMode::Inside => SelectionMode::Touching,
                     SelectionMode::Touching => SelectionMode::Inside,
+                    SelectionMode::Single => SelectionMode::Inside,
+                    _ => SelectionMode::Inside,
                 };
                 crate::diagnostics::log_info(format!(
                     "Selection mode: {:?}",
@@ -680,14 +706,69 @@ impl Signex {
                     return Task::none();
                 }
                 self.document_state.history.loading = false;
-                self.document_state.history.mode =
-                    crate::panels::history::HistoryRenderMode::Ready;
+                self.document_state.history.mode = crate::panels::history::HistoryRenderMode::Ready;
                 self.document_state.history.entries = match result {
                     Ok(entries) => entries,
                     Err(_) => Vec::new(),
                 };
-                self.document_state.panel_ctx.history =
-                    self.document_state.history.clone();
+                self.document_state.panel_ctx.history = self.document_state.history.clone();
+                Task::none()
+            }
+            Message::ProjectGitCommitDone {
+                project_root,
+                rel_path,
+                result,
+            } => {
+                self.handle_project_git_commit_done(project_root, rel_path, result);
+                Task::none()
+            }
+            Message::EscapePressed => {
+                // v0.15 — if active tab is a footprint editor, reset
+                // its tool state via `FootprintToolEscape`; otherwise
+                // fall back to the schematic Tool::Select reset.
+                let footprint_path = self
+                    .document_state
+                    .tabs
+                    .get(self.document_state.active_tab)
+                    .and_then(|t| t.kind.as_footprint_editor())
+                    .cloned();
+                if let Some(path) = footprint_path {
+                    let _ = self.update(Message::Library(
+                        crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                            path,
+                            msg: crate::library::messages::PrimitiveEditorMsg::FootprintToolEscape,
+                        },
+                    ));
+                } else {
+                    let _ = self.update(Message::Tool(crate::app::ToolMessage::SelectTool(
+                        crate::app::Tool::Select,
+                    )));
+                }
+                Task::none()
+            }
+            Message::FootprintModeShortcut(target) => {
+                // v0.14.2 — gate on "active tab is a footprint
+                // editor". When yes, route through the existing
+                // FootprintSetMode dispatch (which also runs the
+                // sketch dispatcher's SetMode handler so the
+                // SetMode side-effects fire). Otherwise no-op so the
+                // bare digits don't hijack other tabs.
+                let path = self
+                    .document_state
+                    .tabs
+                    .get(self.document_state.active_tab)
+                    .and_then(|t| t.kind.as_footprint_editor())
+                    .cloned();
+                if let Some(path) = path {
+                    let _ = self.update(Message::Library(
+                        crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                            path,
+                            msg: crate::library::messages::PrimitiveEditorMsg::FootprintSetMode(
+                                target,
+                            ),
+                        },
+                    ));
+                }
                 Task::none()
             }
             Message::Noop => Task::none(),

@@ -14,11 +14,28 @@ impl Signex {
                 self.finish_update()
             }
             Message::DeleteSelected => {
-                // Delete falls through to the schematic engine; the
-                // Component Preview tab is read-only and Footprint
-                // editing happens in the standalone `.snxfpt` tab,
-                // which owns its own delete handling.
-                self.handle_selection_delete_requested();
+                // v0.20 — if the active tab is a footprint editor,
+                // route the Delete key to FootprintDeleteSelected so
+                // the selected pad / silk graphic is removed via the
+                // footprint dispatcher. Otherwise fall through to
+                // the schematic engine's delete (Component Preview
+                // is read-only, so it's a no-op there).
+                let footprint_path = self
+                    .document_state
+                    .tabs
+                    .get(self.document_state.active_tab)
+                    .and_then(|t| t.kind.as_footprint_editor())
+                    .cloned();
+                if let Some(path) = footprint_path {
+                    let _ = self.update(Message::Library(
+                        crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                            path,
+                            msg: crate::library::messages::PrimitiveEditorMsg::FootprintDeleteSelected,
+                        },
+                    ));
+                } else {
+                    self.handle_selection_delete_requested();
+                }
                 self.finish_update()
             }
             Message::Undo => {
@@ -369,26 +386,22 @@ impl Signex {
             Message::BomPreviewColumnResizeStart(idx) => {
                 let cursor_x = self.interaction_state.last_mouse_pos.0;
                 if let Some(p) = self.document_state.bom_preview.as_mut() {
-                    let start_width = p
-                        .column_widths
-                        .get(&idx)
-                        .copied()
-                        .unwrap_or_else(|| {
-                            // Fall back to the per-BomColumn default
-                            // table the view function uses.
-                            use signex_output::BomColumn;
-                            match p.options.columns.get(idx) {
-                                Some(BomColumn::Name) => 140.0,
-                                Some(BomColumn::Description) => 220.0,
-                                Some(BomColumn::Designator) | Some(BomColumn::Reference) => 220.0,
-                                Some(BomColumn::Value) => 110.0,
-                                Some(BomColumn::Footprint) => 140.0,
-                                Some(BomColumn::LibRef) => 160.0,
-                                Some(BomColumn::Qty) => 50.0,
-                                Some(BomColumn::Custom(_)) => 120.0,
-                                None => 120.0,
-                            }
-                        });
+                    let start_width = p.column_widths.get(&idx).copied().unwrap_or_else(|| {
+                        // Fall back to the per-BomColumn default
+                        // table the view function uses.
+                        use signex_output::BomColumn;
+                        match p.options.columns.get(idx) {
+                            Some(BomColumn::Name) => 140.0,
+                            Some(BomColumn::Description) => 220.0,
+                            Some(BomColumn::Designator) | Some(BomColumn::Reference) => 220.0,
+                            Some(BomColumn::Value) => 110.0,
+                            Some(BomColumn::Footprint) => 140.0,
+                            Some(BomColumn::LibRef) => 160.0,
+                            Some(BomColumn::Qty) => 50.0,
+                            Some(BomColumn::Custom(_)) => 120.0,
+                            None => 120.0,
+                        }
+                    });
                     p.column_resize = Some(crate::app::state::ColumnResizeState {
                         idx,
                         start_x: cursor_x,

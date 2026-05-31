@@ -5,18 +5,38 @@
 //! - Provide the canonical canvas font constant (Iosevka).
 //! - Read / write the UI font preference from a simple JSON config file.
 //!
-//! Config file: `~/.config/signex/prefs.json`
+//! Config file: OS-canonical config dir (`%APPDATA%\signex\prefs.json`
+//! on Windows, `~/Library/Application Support/signex/prefs.json` on
+//! macOS, `$XDG_CONFIG_HOME/signex/prefs.json` on Linux).
 //! Format: `{"ui_font": "Roboto"}`
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
-use signex_render::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
+use crate::render_config::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeId;
 
 /// Default UI font family name. Used when no preference file is found.
 pub const DEFAULT_UI_FONT: &str = "Roboto";
+
+/// MD-32: persist `bytes` to `path` atomically (tmp + rename via
+/// `signex_types::atomic_io`) and `tracing::debug!` on failure
+/// instead of the `let _ = std::fs::write(...)` pattern that swallows
+/// disk-full / permission errors silently. Used by every preferences
+/// write in this module so a single source of failures shows up in
+/// `RUST_LOG=signex_app::fonts=debug` instead of nowhere.
+fn write_pref_atomic(path: &Path, bytes: &[u8], context: &str) {
+    if let Err(e) = signex_types::atomic_io::atomic_write(path, bytes) {
+        tracing::debug!(
+            target = "signex::prefs",
+            path = %path.display(),
+            context = context,
+            error = %e,
+            "preference write failed (best-effort, will retry on next change)"
+        );
+    }
+}
 
 /// Default canvas (schematic / PCB) font family name.
 /// Iosevka is bundled in `assets/fonts/` and loaded at startup.
@@ -146,8 +166,96 @@ pub fn system_font_families() -> &'static Vec<String> {
 // Preferences file
 // ──────────────────────────────────────────────────────────────────────────
 
+/// Canonical OS-native preferences-file location:
+/// - Windows: `%APPDATA%\signex\prefs.json`
+/// - macOS:   `~/Library/Application Support/signex/prefs.json`
+/// - Linux:   `$XDG_CONFIG_HOME/signex/prefs.json` (or `~/.config/...`)
+///
+/// Computed once per process (via `OnceLock`) so the legacy-prefs
+/// migration runs at most once.
 fn prefs_path() -> PathBuf {
-    // Respect XDG_CONFIG_HOME if set, otherwise use ~/.config
+    use std::sync::OnceLock;
+    static PATH: OnceLock<PathBuf> = OnceLock::new();
+    PATH.get_or_init(|| {
+        let canonical = dirs::config_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("signex")
+            .join("prefs.json");
+        let legacy = legacy_posix_prefs_path();
+        migrate_legacy_prefs(&canonical, &legacy);
+        canonical
+    })
+    .clone()
+}
+
+/// One-shot startup migrations applied to `prefs.json` before any
+/// reader sees the file. Idempotent — runs at most once per process
+/// because [`prefs_path`] caches via `OnceLock`.
+///
+/// **F1** (Windows prefs path bug): pre-v0.12 the path was hardcoded
+/// to `$XDG_CONFIG_HOME/signex/prefs.json` or
+/// `$HOME/.config/signex/prefs.json`. On Windows that landed in a
+/// `.config` subfolder of the user dir rather than the canonical
+/// `%APPDATA%\signex\`. If the legacy path has a file but the
+/// canonical path doesn't, copy it forward.
+///
+/// **F3** (stale label-style discriminants): pre-v0.10 prefs files
+/// carried label-style tokens that aren't in the current canonical
+/// set. The reader silently falls through to `LabelStyle::Standard`
+/// for unknown discriminants, but the literal stale string lingers
+/// in user-space `prefs.json` until the user changes label style +
+/// saves. Rewrite once on startup so unknown tokens normalise to
+/// the canonical default.
+///
+/// `legacy` is the legacy (pre-v0.12) POSIX-shaped prefs path to
+/// pull from when canonical is missing. Production passes
+/// [`legacy_posix_prefs_path()`]; tests inject a tempdir-shaped path.
+pub fn migrate_legacy_prefs(canonical: &Path, legacy: &Path) {
+    // F1: copy legacy path → canonical, but only if canonical is empty.
+    if !canonical.exists() {
+        if legacy != canonical && legacy.exists() {
+            if let Some(parent) = canonical.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            let _ = std::fs::copy(legacy, canonical);
+        }
+    }
+
+    // F3: rewrite any non-canonical label_style discriminant → "standard".
+    // Canonical writers emit lowercase "standard" / "altium"; we accept any
+    // case match and rewrite anything else to the default.
+    const CANONICAL_LABEL_STYLES: &[&str] = &["standard", "altium"];
+    let Ok(bytes) = std::fs::read(canonical) else {
+        return;
+    };
+    let Ok(mut json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        return;
+    };
+    let stale_label = json
+        .get("label_style")
+        .and_then(|v| v.as_str())
+        .map(|s| {
+            !CANONICAL_LABEL_STYLES
+                .iter()
+                .any(|c| s.eq_ignore_ascii_case(c))
+        })
+        .unwrap_or(false);
+    if stale_label {
+        json["label_style"] = serde_json::Value::String("standard".to_string());
+        if let Ok(serialized) = serde_json::to_string_pretty(&json) {
+            write_pref_atomic(
+                canonical,
+                serialized.as_bytes(),
+                "migrate_legacy_label_style",
+            );
+        }
+    }
+}
+
+/// Pre-v0.12 prefs path: POSIX-style under `$XDG_CONFIG_HOME` or
+/// `$HOME/.config`. Only used by [`migrate_legacy_prefs`] to find
+/// existing user files for one-shot migration.
+fn legacy_posix_prefs_path() -> PathBuf {
     let base = std::env::var("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|_| {
@@ -160,39 +268,26 @@ fn prefs_path() -> PathBuf {
 /// Read only the `ui_font` key from the preferences file.
 /// Returns `DEFAULT_UI_FONT` if the file is absent, malformed, or the key missing.
 pub fn read_ui_font_pref() -> String {
-    let path = prefs_path();
-    let Ok(bytes) = std::fs::read(&path) else {
-        return DEFAULT_UI_FONT.to_string();
-    };
-    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
-        return DEFAULT_UI_FONT.to_string();
-    };
-    json["ui_font"]
-        .as_str()
-        .unwrap_or(DEFAULT_UI_FONT)
-        .to_string()
+    read_ui_font_pref_at(&prefs_path())
+}
+
+pub fn read_ui_font_pref_at(path: &Path) -> String {
+    read_prefs_json(path)
+        .and_then(|j| j["ui_font"].as_str().map(str::to_string))
+        .unwrap_or_else(|| DEFAULT_UI_FONT.to_string())
 }
 
 /// Persist the given `ui_font` choice to the preferences file.
 /// Creates parent directories if they do not exist.
 /// Silently ignores I/O errors (non-critical preference).
 pub fn write_ui_font_pref(font_name: &str) {
-    let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
+    write_ui_font_pref_at(&prefs_path(), font_name)
+}
 
-    // Read existing prefs so we don't clobber other keys.
-    let mut json: serde_json::Value = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(serde_json::json!({}));
-
-    json["ui_font"] = serde_json::Value::String(font_name.to_string());
-
-    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
-    }
+pub fn write_ui_font_pref_at(path: &Path, font_name: &str) {
+    update_prefs_json(path, |json| {
+        json["ui_font"] = serde_json::Value::String(font_name.to_string());
+    })
 }
 
 /// Read the user's component-class list from the prefs file. Falls
@@ -224,9 +319,6 @@ pub fn read_component_classes_pref() -> Vec<ComponentClassEntry> {
 /// — preferences are best-effort.
 pub fn write_component_classes_pref(classes: &[ComponentClassEntry]) {
     let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
     let mut json: serde_json::Value = std::fs::read(&path)
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
@@ -235,162 +327,142 @@ pub fn write_component_classes_pref(classes: &[ComponentClassEntry]) {
         json["component_classes"] = value;
     }
     if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
+        write_pref_atomic(&path, serialized.as_bytes(), "component_classes");
     }
 }
 
 /// Read `power_port_style` from preferences file.
 /// Defaults to `Altium` when missing or invalid.
 pub fn read_power_port_style_pref() -> PowerPortStyle {
-    let path = prefs_path();
-    let Ok(bytes) = std::fs::read(&path) else {
-        return PowerPortStyle::Altium;
-    };
-    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
-        return PowerPortStyle::Altium;
-    };
+    read_power_port_style_pref_at(&prefs_path())
+}
 
-    match json["power_port_style"].as_str().unwrap_or("altium") {
-        "standard" | "Standard" => PowerPortStyle::Standard,
-        _ => PowerPortStyle::Altium,
+pub fn read_power_port_style_pref_at(path: &Path) -> PowerPortStyle {
+    let raw = read_prefs_json(path)
+        .and_then(|j| j["power_port_style"].as_str().map(str::to_string))
+        .unwrap_or_default();
+    if raw.eq_ignore_ascii_case("standard") {
+        PowerPortStyle::Standard
+    } else {
+        PowerPortStyle::Altium
     }
 }
 
 /// Persist power port style without clobbering other preference keys.
 pub fn write_power_port_style_pref(style: PowerPortStyle) {
-    let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
+    write_power_port_style_pref_at(&prefs_path(), style)
+}
 
-    let mut json: serde_json::Value = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(serde_json::json!({}));
-
-    json["power_port_style"] = serde_json::Value::String(match style {
-        PowerPortStyle::Standard => "standard".to_string(),
-        PowerPortStyle::Altium => "altium".to_string(),
-    });
-
-    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
-    }
+pub fn write_power_port_style_pref_at(path: &Path, style: PowerPortStyle) {
+    let token = match style {
+        PowerPortStyle::Standard => "standard",
+        PowerPortStyle::Altium => "altium",
+    };
+    update_prefs_json(path, |json| {
+        json["power_port_style"] = serde_json::Value::String(token.to_string());
+    })
 }
 
 /// Read `label_style` from preferences file.
 /// Defaults to `Standard` when missing or invalid.
 pub fn read_label_style_pref() -> LabelStyle {
-    let path = prefs_path();
-    let Ok(bytes) = std::fs::read(&path) else {
-        return LabelStyle::Standard;
-    };
-    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
-        return LabelStyle::Standard;
-    };
+    read_label_style_pref_at(&prefs_path())
+}
 
-    match json["label_style"].as_str().unwrap_or("standard") {
-        "altium" | "Altium" => LabelStyle::Altium,
-        _ => LabelStyle::Standard,
+pub fn read_label_style_pref_at(path: &Path) -> LabelStyle {
+    let raw = read_prefs_json(path)
+        .and_then(|j| j["label_style"].as_str().map(str::to_string))
+        .unwrap_or_default();
+    if raw.eq_ignore_ascii_case("altium") {
+        LabelStyle::Altium
+    } else {
+        LabelStyle::Standard
     }
 }
 
 /// Persist label style without clobbering other preference keys.
 pub fn write_label_style_pref(style: LabelStyle) {
-    let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
+    write_label_style_pref_at(&prefs_path(), style)
+}
 
-    let mut json: serde_json::Value = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(serde_json::json!({}));
-
-    json["label_style"] = serde_json::Value::String(match style {
-        LabelStyle::Standard => "standard".to_string(),
-        LabelStyle::Altium => "altium".to_string(),
-    });
-
-    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
-    }
+pub fn write_label_style_pref_at(path: &Path, style: LabelStyle) {
+    let token = match style {
+        LabelStyle::Standard => "standard",
+        LabelStyle::Altium => "altium",
+    };
+    update_prefs_json(path, |json| {
+        json["label_style"] = serde_json::Value::String(token.to_string());
+    })
 }
 
 /// Read `multisheet_style` from preferences file.
 /// Defaults to `Standard` when missing or invalid.
 pub fn read_multisheet_style_pref() -> MultisheetStyle {
-    let path = prefs_path();
-    let Ok(bytes) = std::fs::read(&path) else {
-        return MultisheetStyle::Standard;
-    };
-    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
-        return MultisheetStyle::Standard;
-    };
+    read_multisheet_style_pref_at(&prefs_path())
+}
 
-    match json["multisheet_style"].as_str().unwrap_or("standard") {
-        "altium" | "Altium" => MultisheetStyle::Altium,
-        _ => MultisheetStyle::Standard,
+pub fn read_multisheet_style_pref_at(path: &Path) -> MultisheetStyle {
+    let raw = read_prefs_json(path)
+        .and_then(|j| j["multisheet_style"].as_str().map(str::to_string))
+        .unwrap_or_default();
+    if raw.eq_ignore_ascii_case("altium") {
+        MultisheetStyle::Altium
+    } else {
+        MultisheetStyle::Standard
     }
 }
 
 /// Persist multisheet style without clobbering other preference keys.
 pub fn write_multisheet_style_pref(style: MultisheetStyle) {
-    let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
+    write_multisheet_style_pref_at(&prefs_path(), style)
+}
 
-    let mut json: serde_json::Value = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(serde_json::json!({}));
-
-    json["multisheet_style"] = serde_json::Value::String(match style {
-        MultisheetStyle::Standard => "standard".to_string(),
-        MultisheetStyle::Altium => "altium".to_string(),
-    });
-
-    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
-    }
+pub fn write_multisheet_style_pref_at(path: &Path, style: MultisheetStyle) {
+    let token = match style {
+        MultisheetStyle::Standard => "standard",
+        MultisheetStyle::Altium => "altium",
+    };
+    update_prefs_json(path, |json| {
+        json["multisheet_style"] = serde_json::Value::String(token.to_string());
+    })
 }
 
 /// Read the schematic visible-grid `grid_style` preference. Defaults
 /// to `Dots` (matches the previous hard-coded behaviour).
 pub fn read_grid_style_pref() -> GridStyle {
-    let path = prefs_path();
-    let Ok(bytes) = std::fs::read(&path) else {
-        return GridStyle::Dots;
-    };
-    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
-        return GridStyle::Dots;
-    };
-    match json["grid_style"].as_str().unwrap_or("dots") {
-        "lines" | "Lines" => GridStyle::Lines,
-        "crosses" | "small_crosses" | "SmallCrosses" => GridStyle::SmallCrosses,
-        _ => GridStyle::Dots,
+    read_grid_style_pref_at(&prefs_path())
+}
+
+pub fn read_grid_style_pref_at(path: &Path) -> GridStyle {
+    let raw = read_prefs_json(path)
+        .and_then(|j| j["grid_style"].as_str().map(str::to_string))
+        .unwrap_or_default();
+    if raw.eq_ignore_ascii_case("lines") {
+        GridStyle::Lines
+    } else if raw.eq_ignore_ascii_case("crosses")
+        || raw.eq_ignore_ascii_case("small_crosses")
+        || raw.eq_ignore_ascii_case("smallcrosses")
+    {
+        GridStyle::SmallCrosses
+    } else {
+        GridStyle::Dots
     }
 }
 
 /// Persist grid style without clobbering other preference keys.
 pub fn write_grid_style_pref(style: GridStyle) {
-    let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let mut json: serde_json::Value = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(serde_json::json!({}));
-    json["grid_style"] = serde_json::Value::String(match style {
-        GridStyle::Dots => "dots".to_string(),
-        GridStyle::Lines => "lines".to_string(),
-        GridStyle::SmallCrosses => "crosses".to_string(),
-    });
-    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
-    }
+    write_grid_style_pref_at(&prefs_path(), style)
+}
+
+pub fn write_grid_style_pref_at(path: &Path, style: GridStyle) {
+    let token = match style {
+        GridStyle::Dots => "dots",
+        GridStyle::Lines => "lines",
+        GridStyle::SmallCrosses => "crosses",
+    };
+    update_prefs_json(path, |json| {
+        json["grid_style"] = serde_json::Value::String(token.to_string());
+    })
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -402,148 +474,166 @@ pub fn write_grid_style_pref(style: GridStyle) {
 // when the prefs file is absent or the key missing — the same as a
 // fresh install.
 
+// ──────────────────────────────────────────────────────────────────────
+// Generic prefs helpers (testability + dedup).
+// ──────────────────────────────────────────────────────────────────────
+
+/// Read `prefs.json` at `path` and parse to JSON value. Returns `None`
+/// when the file is absent OR malformed — same semantics every read
+/// pref needs ("treat as missing, use default").
+fn read_prefs_json(path: &Path) -> Option<serde_json::Value> {
+    let bytes = std::fs::read(path).ok()?;
+    serde_json::from_slice::<serde_json::Value>(&bytes).ok()
+}
+
+/// Update one key of `prefs.json` at `path` without clobbering other
+/// keys. Creates the parent dir if missing. I/O failures are
+/// best-effort but logged at `debug` (MD-32) — set
+/// `RUST_LOG=signex_app::fonts=debug` to see them.
+fn update_prefs_json(path: &Path, mut mutator: impl FnMut(&mut serde_json::Value)) {
+    let mut json: serde_json::Value = std::fs::read(path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or(serde_json::json!({}));
+    mutator(&mut json);
+    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
+        write_pref_atomic(path, serialized.as_bytes(), "update_prefs_json");
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Theme
+// ──────────────────────────────────────────────────────────────────────
+
 /// Read the last-applied theme. Defaults to `ThemeId::Signex`.
 pub fn read_theme_pref() -> ThemeId {
-    let path = prefs_path();
-    let Ok(bytes) = std::fs::read(&path) else {
-        return ThemeId::Signex;
-    };
-    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
-        return ThemeId::Signex;
-    };
-    json.get("theme")
-        .cloned()
+    read_theme_pref_at(&prefs_path())
+}
+
+/// Same as [`read_theme_pref`] but reads from `path` — exposed for
+/// integration tests that inject a tempdir prefs file.
+pub fn read_theme_pref_at(path: &Path) -> ThemeId {
+    read_prefs_json(path)
+        .and_then(|json| json.get("theme").cloned())
         .and_then(|v| serde_json::from_value(v).ok())
         .unwrap_or(ThemeId::Signex)
 }
 
 /// Persist theme without clobbering other preference keys.
 pub fn write_theme_pref(theme: ThemeId) {
-    let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let mut json: serde_json::Value = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(serde_json::json!({}));
-    if let Ok(value) = serde_json::to_value(theme) {
-        json["theme"] = value;
-    }
-    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
-    }
+    write_theme_pref_at(&prefs_path(), theme)
 }
+
+/// Same as [`write_theme_pref`] but writes to `path` — exposed for tests.
+pub fn write_theme_pref_at(path: &Path, theme: ThemeId) {
+    update_prefs_json(path, |json| {
+        if let Ok(value) = serde_json::to_value(theme) {
+            json["theme"] = value;
+        }
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Unit
+// ──────────────────────────────────────────────────────────────────────
 
 /// Read the last-active coordinate unit. Defaults to `Unit::Mm`.
 pub fn read_unit_pref() -> Unit {
-    let path = prefs_path();
-    let Ok(bytes) = std::fs::read(&path) else {
-        return Unit::Mm;
-    };
-    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
-        return Unit::Mm;
-    };
-    json.get("unit")
-        .cloned()
+    read_unit_pref_at(&prefs_path())
+}
+
+pub fn read_unit_pref_at(path: &Path) -> Unit {
+    read_prefs_json(path)
+        .and_then(|json| json.get("unit").cloned())
         .and_then(|v| serde_json::from_value(v).ok())
         .unwrap_or(Unit::Mm)
 }
 
 /// Persist coordinate unit without clobbering other preference keys.
 pub fn write_unit_pref(unit: Unit) {
-    let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let mut json: serde_json::Value = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(serde_json::json!({}));
-    if let Ok(value) = serde_json::to_value(unit) {
-        json["unit"] = value;
-    }
-    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
-    }
+    write_unit_pref_at(&prefs_path(), unit)
 }
+
+pub fn write_unit_pref_at(path: &Path, unit: Unit) {
+    update_prefs_json(path, |json| {
+        if let Ok(value) = serde_json::to_value(unit) {
+            json["unit"] = value;
+        }
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Grid visible
+// ──────────────────────────────────────────────────────────────────────
 
 /// Read the last grid-visible toggle. Defaults to `true`.
 pub fn read_grid_visible_pref() -> bool {
-    let path = prefs_path();
-    let Ok(bytes) = std::fs::read(&path) else {
-        return true;
-    };
-    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
-        return true;
-    };
-    json["grid_visible"].as_bool().unwrap_or(true)
+    read_grid_visible_pref_at(&prefs_path())
+}
+
+pub fn read_grid_visible_pref_at(path: &Path) -> bool {
+    read_prefs_json(path)
+        .and_then(|json| json["grid_visible"].as_bool())
+        .unwrap_or(true)
 }
 
 pub fn write_grid_visible_pref(visible: bool) {
-    let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let mut json: serde_json::Value = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(serde_json::json!({}));
-    json["grid_visible"] = serde_json::Value::Bool(visible);
-    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
-    }
+    write_grid_visible_pref_at(&prefs_path(), visible)
 }
+
+pub fn write_grid_visible_pref_at(path: &Path, visible: bool) {
+    update_prefs_json(path, |json| {
+        json["grid_visible"] = serde_json::Value::Bool(visible);
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Snap enabled
+// ──────────────────────────────────────────────────────────────────────
 
 /// Read the last snap-enabled toggle. Defaults to `true`.
 pub fn read_snap_enabled_pref() -> bool {
-    let path = prefs_path();
-    let Ok(bytes) = std::fs::read(&path) else {
-        return true;
-    };
-    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
-        return true;
-    };
-    json["snap_enabled"].as_bool().unwrap_or(true)
+    read_snap_enabled_pref_at(&prefs_path())
+}
+
+pub fn read_snap_enabled_pref_at(path: &Path) -> bool {
+    read_prefs_json(path)
+        .and_then(|json| json["snap_enabled"].as_bool())
+        .unwrap_or(true)
 }
 
 pub fn write_snap_enabled_pref(enabled: bool) {
-    let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let mut json: serde_json::Value = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(serde_json::json!({}));
-    json["snap_enabled"] = serde_json::Value::Bool(enabled);
-    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
-    }
+    write_snap_enabled_pref_at(&prefs_path(), enabled)
 }
+
+pub fn write_snap_enabled_pref_at(path: &Path, enabled: bool) {
+    update_prefs_json(path, |json| {
+        json["snap_enabled"] = serde_json::Value::Bool(enabled);
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Grid size (mm)
+// ──────────────────────────────────────────────────────────────────────
 
 /// Read the last grid size (mm). Returns `None` when missing so the
 /// caller can fall back to the engine's preferred default.
 pub fn read_grid_size_mm_pref() -> Option<f32> {
-    let path = prefs_path();
-    let bytes = std::fs::read(&path).ok()?;
-    let json: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
-    json["grid_size_mm"].as_f64().map(|v| v as f32)
+    read_grid_size_mm_pref_at(&prefs_path())
+}
+
+pub fn read_grid_size_mm_pref_at(path: &Path) -> Option<f32> {
+    read_prefs_json(path).and_then(|json| json["grid_size_mm"].as_f64().map(|v| v as f32))
 }
 
 pub fn write_grid_size_mm_pref(grid_size_mm: f32) {
-    let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let mut json: serde_json::Value = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or(serde_json::json!({}));
-    json["grid_size_mm"] = serde_json::json!(grid_size_mm);
-    if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
-    }
+    write_grid_size_mm_pref_at(&prefs_path(), grid_size_mm)
+}
+
+pub fn write_grid_size_mm_pref_at(path: &Path, grid_size_mm: f32) {
+    update_prefs_json(path, |json| {
+        json["grid_size_mm"] = serde_json::json!(grid_size_mm);
+    })
 }
 
 /// Read ERC severity overrides from preferences file. Returns an empty
@@ -582,10 +672,6 @@ pub fn write_erc_severity_overrides(
     overrides: &std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
 ) {
     let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-
     let mut json: serde_json::Value = std::fs::read(&path)
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
@@ -601,7 +687,7 @@ pub fn write_erc_severity_overrides(
     json["erc_severity"] = serde_json::Value::Object(obj);
 
     if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
+        write_pref_atomic(&path, serialized.as_bytes(), "erc_severity_overrides");
     }
 }
 
@@ -676,9 +762,6 @@ pub fn read_custom_filter_presets() -> Vec<crate::active_bar::CustomFilterPreset
 /// clobbering other preference keys.
 pub fn write_custom_filter_presets(presets: &[crate::active_bar::CustomFilterPreset]) {
     let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
     let mut json: serde_json::Value = std::fs::read(&path)
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
@@ -687,7 +770,7 @@ pub fn write_custom_filter_presets(presets: &[crate::active_bar::CustomFilterPre
         json["custom_filter_presets"] = array;
     }
     if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
+        write_pref_atomic(&path, serialized.as_bytes(), "fonts_pref");
     }
 }
 
@@ -695,9 +778,6 @@ pub fn write_custom_filter_presets(presets: &[crate::active_bar::CustomFilterPre
 /// so the next session reopens with the same layout.
 pub fn write_dock_layout(dock: &crate::dock::DockArea) {
     let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
     let mut json: serde_json::Value = std::fs::read(&path)
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
@@ -725,7 +805,7 @@ pub fn write_dock_layout(dock: &crate::dock::DockArea) {
     });
 
     if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
+        write_pref_atomic(&path, serialized.as_bytes(), "fonts_pref");
     }
 }
 
@@ -790,6 +870,7 @@ fn panel_kind_key(k: crate::panels::PanelKind) -> &'static str {
         NetClasses => "net_classes",
         Library => "library",
         SchLibrary => "sch_library",
+        FootprintLibrary => "footprint_library",
         History => "history",
     }
 }
@@ -819,6 +900,7 @@ fn parse_panel_kind(s: &str) -> Option<crate::panels::PanelKind> {
         "net_classes" => NetClasses,
         "library" => Library,
         "sch_library" => SchLibrary,
+        "footprint_library" => FootprintLibrary,
         "history" => History,
         _ => return None,
     })
@@ -871,9 +953,6 @@ pub fn write_pin_matrix_overrides(
     overrides: &std::collections::HashMap<(u8, u8), signex_erc::Severity>,
 ) {
     let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
     let mut json: serde_json::Value = std::fs::read(&path)
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
@@ -887,7 +966,7 @@ pub fn write_pin_matrix_overrides(
     }
     json["pin_matrix"] = serde_json::Value::Object(obj);
     if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
+        write_pref_atomic(&path, serialized.as_bytes(), "fonts_pref");
     }
 }
 
@@ -913,16 +992,13 @@ pub fn read_first_run_tour_dismissed() -> bool {
 /// Persist the dismissal flag without clobbering other keys.
 pub fn write_first_run_tour_dismissed(dismissed: bool) {
     let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
     let mut json: serde_json::Value = std::fs::read(&path)
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or(serde_json::json!({}));
     json["first_run_tour_dismissed"] = serde_json::Value::Bool(dismissed);
     if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
+        write_pref_atomic(&path, serialized.as_bytes(), "fonts_pref");
     }
 }
 
@@ -941,25 +1017,19 @@ pub fn read_component_filter() -> String {
     let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
         return String::new();
     };
-    json["component_filter"]
-        .as_str()
-        .unwrap_or("")
-        .to_string()
+    json["component_filter"].as_str().unwrap_or("").to_string()
 }
 
 /// Persist the Components-panel filter without clobbering other keys.
 pub fn write_component_filter(query: &str) {
     let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
     let mut json: serde_json::Value = std::fs::read(&path)
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or(serde_json::json!({}));
     json["component_filter"] = serde_json::Value::String(query.to_string());
     if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
+        write_pref_atomic(&path, serialized.as_bytes(), "fonts_pref");
     }
 }
 
@@ -976,7 +1046,9 @@ pub fn read_library_browser_searches() -> std::collections::HashMap<PathBuf, Str
     let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
         return out;
     };
-    let Some(obj) = json.get("library_browser_searches").and_then(|v| v.as_object())
+    let Some(obj) = json
+        .get("library_browser_searches")
+        .and_then(|v| v.as_object())
     else {
         return out;
     };
@@ -996,9 +1068,6 @@ pub fn read_library_browser_searches() -> std::collections::HashMap<PathBuf, Str
 /// is out of scope for prefs).
 pub fn write_library_browser_search(library_path: &std::path::Path, query: &str) {
     let path = prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
     let mut json: serde_json::Value = std::fs::read(&path)
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
@@ -1018,6 +1087,6 @@ pub fn write_library_browser_search(library_path: &std::path::Path, query: &str)
         }
     }
     if let Ok(serialized) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, serialized);
+        write_pref_atomic(&path, serialized.as_bytes(), "fonts_pref");
     }
 }

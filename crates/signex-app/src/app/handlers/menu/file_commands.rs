@@ -47,6 +47,7 @@ impl Signex {
             MenuMessage::ExportPdf => Some(self.update(Message::ExportPdfOpenDialog)),
             MenuMessage::ExportNetlist => self.handle_export_netlist_requested(),
             MenuMessage::ExportBom => Some(self.handle_bom_preview_open()),
+            MenuMessage::Exit => Some(self.update(Message::CloseMainWindow)),
             MenuMessage::LibraryOpenLibrary => Some(self.update(Message::Library(
                 crate::library::LibraryMessage::OpenLibraryDialog,
             ))),
@@ -161,121 +162,36 @@ impl Signex {
     ) -> Task<Message> {
         use signex_library::PrimitiveKind;
 
-        // The right-clicked tree path lives on `project_tree_context_menu`.
-        // Library leaves sit at depth 3 (`[project_idx, libraries_idx, library_idx]`)
-        // — see `view_project_tree_context_menu` for the same gate.
+        // Library-context "Add New ▸ Symbol/Footprint" reuses the
+        // project-root flow — the user wants both surfaces to behave
+        // identically: Save-As scoped to the project dir, file written
+        // empty, registered as a project library entry, opened as a
+        // primitive editor tab. The library node we right-clicked from
+        // is informational only; the file lands at project level.
         let tree_path = match self
             .interaction_state
             .project_tree_context_menu
             .as_ref()
             .and_then(|m| m.path.clone())
         {
-            Some(p) if p.len() == 3 => p,
+            Some(p) if !p.is_empty() => p,
             _ => {
                 tracing::warn!(
                     target: "signex::library",
                     ?kind,
-                    "Add Library primitive: no library node in context menu state"
+                    "Add Library primitive: no project node in context menu state"
                 );
                 return Task::none();
             }
         };
-
-        let project_idx = tree_path[0];
-        let library_idx = tree_path[2];
-
-        let resolved_root = match self
-            .document_state
-            .projects
-            .get(project_idx)
-            .and_then(|loaded| {
-                loaded
-                    .data
-                    .libraries
-                    .get(library_idx)
-                    .map(|entry| loaded.data.resolve_library_path(entry))
-            }) {
-            Some(p) => p,
-            None => {
-                tracing::warn!(
-                    target: "signex::library",
-                    project_idx,
-                    library_idx,
-                    "Add Library primitive: cannot resolve library entry"
-                );
-                return Task::none();
-            }
-        };
-
-        // `resolved_root` is the `.snxlib` *file* path (it's the
-        // library's identity). For the on-disk `symbols/` /
-        // `footprints/` siblings we need the file's *parent* dir —
-        // grab it via `OpenLibrary::root_dir()` so a future shift in
-        // how `root` is laid out only has to touch that helper.
-        let (library_id, disk_root) = match self.library.library_at(&resolved_root) {
-            Some(lib) => match lib.root_dir() {
-                Some(dir) => (lib.library_id, dir.to_path_buf()),
-                None => {
-                    tracing::warn!(
-                        target: "signex::library",
-                        root = %resolved_root.display(),
-                        "Add Library primitive: library has no parent dir"
-                    );
-                    return Task::none();
-                }
-            },
-            None => {
-                tracing::warn!(
-                    target: "signex::library",
-                    root = %resolved_root.display(),
-                    "Add Library primitive: library not mounted"
-                );
-                return Task::none();
-            }
-        };
-
-        let adapter = match self.library.set.get(library_id) {
-            Some(a) => a,
-            None => {
-                tracing::warn!(
-                    target: "signex::library",
-                    %library_id,
-                    "Add Library primitive: adapter not in LibrarySet"
-                );
-                return Task::none();
-            }
-        };
-
-        // We deliberately do NOT call `adapter.save_symbol` /
-        // `save_footprint` here — that's what was auto-persisting
-        // every "Add New ▸ Symbol" click to disk before the user had
-        // a chance to discard or rename the new primitive. Instead,
-        // build the editor state in memory (dirty = true) and let the
-        // user's explicit Save be the first disk write. The adapter is
-        // dropped to release the borrow on `self.library` so the
-        // `handle_open_*_in_memory` calls below can mutate
-        // `self.document_state` freely.
-        let _ = (adapter, library_id); // intentionally unused after this point
+        // Drop the menu state before delegating so the dispatcher's
+        // post-action refresh doesn't re-show it.
+        self.interaction_state.project_tree_context_menu = None;
+        self.interaction_state.context_submenu = None;
+        let project_path = vec![tree_path[0]];
         match kind {
-            PrimitiveKind::Symbol => {
-                let target = self.unique_new_symbol_path(&disk_root, "NewSymbol");
-                let sym = signex_library::Symbol::empty("NewSymbol");
-                let file = signex_library::SymbolFile::from_symbol(sym);
-
-                self.interaction_state.project_tree_context_menu = None;
-                self.interaction_state.context_submenu = None;
-                self.handle_open_new_symbol_in_memory(target, file);
-                Task::none()
-            }
-            PrimitiveKind::Footprint => {
-                let target = self.unique_new_footprint_path(&disk_root, "NewFootprint");
-                let fp = signex_library::Footprint::empty("NewFootprint");
-
-                self.interaction_state.project_tree_context_menu = None;
-                self.interaction_state.context_submenu = None;
-                self.handle_open_new_footprint_in_memory(target, fp);
-                Task::none()
-            }
+            PrimitiveKind::Symbol => self.add_project_symbol_library(project_path),
+            PrimitiveKind::Footprint => self.add_project_footprint_library(project_path),
             PrimitiveKind::Sim => {
                 tracing::warn!(
                     target: "signex::library",
@@ -297,11 +213,7 @@ impl Signex {
     /// Pick a path under `<root>/symbols/` that doesn't collide with
     /// an existing file on disk OR an in-memory editor tab. Tries
     /// `<base>.snxsym` first, then `<base>-2.snxsym`, `<base>-3`, etc.
-    fn unique_new_symbol_path(
-        &self,
-        root: &std::path::Path,
-        base: &str,
-    ) -> std::path::PathBuf {
+    fn unique_new_symbol_path(&self, root: &std::path::Path, base: &str) -> std::path::PathBuf {
         let dir = root.join("symbols");
         let mut name = format!("{base}.snxsym");
         let mut path = dir.join(&name);
@@ -321,11 +233,7 @@ impl Signex {
     }
 
     /// Counterpart to `unique_new_symbol_path` for footprints.
-    fn unique_new_footprint_path(
-        &self,
-        root: &std::path::Path,
-        base: &str,
-    ) -> std::path::PathBuf {
+    fn unique_new_footprint_path(&self, root: &std::path::Path, base: &str) -> std::path::PathBuf {
         let dir = root.join("footprints");
         let mut name = format!("{base}.snxfpt");
         let mut path = dir.join(&name);
@@ -369,10 +277,7 @@ impl Signex {
                     file.symbols[0].name.clone()
                 }
             });
-        let project_id = self
-            .document_state
-            .project_for_path(&path)
-            .map(|p| p.id);
+        let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
 
         let mut state = crate::app::SymbolEditorState::new(path.clone(), file);
         state.dirty = true;
@@ -407,13 +312,15 @@ impl Signex {
             .file_stem()
             .map(|s| s.to_string_lossy().into_owned())
             .unwrap_or_else(|| primitive.name.clone());
-        let project_id = self
-            .document_state
-            .project_for_path(&path)
-            .map(|p| p.id);
+        let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
 
-        let mut state =
-            crate::app::FootprintEditorState::new(path.clone(), primitive);
+        // v0.18.6 — wrap into a FootprintFile envelope so the editor
+        // can save through the same multi-footprint path as the
+        // disk-loaded flow.
+        let file = signex_library::FootprintFile::from_footprint(primitive);
+        // HI-23: same snap-state seeding as the open-from-disk path.
+        let mut state = crate::app::FootprintEditorState::new(path.clone(), file)
+            .with_global_snap_disabled(!self.ui_state.snap_enabled);
         state.dirty = true;
         self.document_state
             .footprint_editors
@@ -458,7 +365,8 @@ fn find_symbol_file_for_uuid(
             Ok(b) => b,
             Err(_) => continue,
         };
-        if let Ok(file) = signex_library::SymbolFile::from_json(&bytes)
+        // v0.18.4 — auto-detect TOML vs legacy JSON.
+        if let Ok(file) = signex_library::SymbolFile::from_bytes(&bytes)
             && file.symbols.iter().any(|s| s.uuid == uuid)
         {
             return Some(path);

@@ -1,0 +1,320 @@
+# Legacy v1 footprint fixture — 32-pin Quad Flat Package, 8 pads per side.
+#
+# Authored by hand for the v1 → v2 migration corpus. Intentionally
+# omits `schema_version` and `sketch` (legacy v1 had neither).
+# 0.8 mm pitch, 7.0 mm centre-to-centre row/column spacing,
+# pad size 1.5 × 0.4 mm. Pin numbering follows IEEE convention:
+# pin 1 at top-left, counting CCW around the body.
+
+uuid = "0193a8c0-0010-7000-8000-000000000002"
+name = "QFP-32"
+anchor = [0.0, 0.0]
+courtyard = { points = [[-4.5, -4.5], [4.5, -4.5], [4.5, 4.5], [-4.5, 4.5]] }
+silk_f = []
+silk_b = []
+fab_f = []
+fab_b = []
+pcb_params = {}
+version = "0.0.1"
+released = false
+created = "2026-04-15T12:30:00Z"
+updated = "2026-04-15T12:30:00Z"
+
+[body_3d]
+shape = "Extrude"
+height_mm = 1.4
+offset_z_mm = 0.1
+top_color = [0.10, 0.10, 0.10, 1.0]
+side_color = [0.20, 0.20, 0.20, 1.0]
+
+# Side 1 (left edge, pins 1..8, top to bottom) — pads horizontal, x = -3.5.
+[[pads]]
+number = "1"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [1.5, 0.4]
+position = [-3.5, 2.8]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "2"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [1.5, 0.4]
+position = [-3.5, 2.0]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "3"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [1.5, 0.4]
+position = [-3.5, 1.2]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "4"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [1.5, 0.4]
+position = [-3.5, 0.4]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "5"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [1.5, 0.4]
+position = [-3.5, -0.4]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "6"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [1.5, 0.4]
+position = [-3.5, -1.2]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "7"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [1.5, 0.4]
+position = [-3.5, -2.0]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "8"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [1.5, 0.4]
+position = [-3.5, -2.8]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+# Side 2 (bottom edge, pins 9..16, left to right) — pads vertical, y = -3.5.
+[[pads]]
+number = "9"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [0.4, 1.5]
+position = [-2.8, -3.5]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "10"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [0.4, 1.5]
+position = [-2.0, -3.5]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "11"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [0.4, 1.5]
+position = [-1.2, -3.5]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "12"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [0.4, 1.5]
+position = [-0.4, -3.5]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "13"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [0.4, 1.5]
+position = [0.4, -3.5]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "14"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [0.4, 1.5]
+position = [1.2, -3.5]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "15"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [0.4, 1.5]
+position = [2.0, -3.5]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "16"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [0.4, 1.5]
+position = [2.8, -3.5]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+# Side 3 (right edge, pins 17..24, bottom to top) — pads horizontal, x = +3.5.
+[[pads]]
+number = "17"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [1.5, 0.4]
+position = [3.5, -2.8]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "18"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [1.5, 0.4]
+position = [3.5, -2.0]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "19"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [1.5, 0.4]
+position = [3.5, -1.2]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "20"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [1.5, 0.4]
+position = [3.5, -0.4]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "21"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [1.5, 0.4]
+position = [3.5, 0.4]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "22"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [1.5, 0.4]
+position = [3.5, 1.2]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "23"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [1.5, 0.4]
+position = [3.5, 2.0]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "24"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [1.5, 0.4]
+position = [3.5, 2.8]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+# Side 4 (top edge, pins 25..32, right to left) — pads vertical, y = +3.5.
+[[pads]]
+number = "25"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [0.4, 1.5]
+position = [2.8, 3.5]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "26"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [0.4, 1.5]
+position = [2.0, 3.5]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "27"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [0.4, 1.5]
+position = [1.2, 3.5]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "28"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [0.4, 1.5]
+position = [0.4, 3.5]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "29"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [0.4, 1.5]
+position = [-0.4, 3.5]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "30"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [0.4, 1.5]
+position = [-1.2, 3.5]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "31"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [0.4, 1.5]
+position = [-2.0, 3.5]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "32"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [0.4, 1.5]
+position = [-2.8, 3.5]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]

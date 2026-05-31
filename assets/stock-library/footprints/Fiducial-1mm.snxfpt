@@ -1,0 +1,81 @@
+format = "snxfpt/1"
+file_uuid = "019df45d-af66-75c0-b9cf-2bbf173b0066"
+display_name = "Fiducial-1mm"
+created = "2026-05-04T19:01:13.702958300Z"
+updated = "2026-05-04T19:01:13.702958300Z"
+
+[[footprints]]
+uuid = "019df45d-af66-75c0-b9cf-2ba7e253d69c"
+name = "Fiducial-1mm"
+anchor = [
+    0.0,
+    0.0,
+]
+pads_tsv = '''
+number	kind	shape	size_x	size_y	pos_x	pos_y	rotation	layers	drill_diameter	drill_slot_length	solder_mask_margin	paste_margin
+'''
+silk_f = []
+silk_b = []
+fab_f = []
+fab_b = []
+version = "0.0.1"
+released = false
+created = "2026-05-04T19:01:13.702918600Z"
+updated = "2026-05-04T19:01:13.702918600Z"
+schema_version = 3
+
+[footprints.courtyard]
+points = []
+
+[footprints.body_3d]
+shape = "Extrude"
+height_mm = 1.0
+offset_z_mm = 0.0
+top_color = [
+    0.20000000298023224,
+    0.20000000298023224,
+    0.20000000298023224,
+    1.0,
+]
+side_color = [
+    0.30000001192092896,
+    0.30000001192092896,
+    0.30000001192092896,
+    1.0,
+]
+
+[footprints.pcb_params]
+
+[footprints.sketch]
+constraints = []
+arrays = []
+
+[[footprints.sketch.planes]]
+id = "7c74fab9-10b4-4550-aad0-cec6d5b2c3e9"
+kind = "BoardTop"
+
+[[footprints.sketch.entities]]
+id = "4373d9fb-b5a8-49e6-adc7-5f6307803a36"
+plane = "7c74fab9-10b4-4550-aad0-cec6d5b2c3e9"
+construction = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "FID1"
+kind = "Fiducial"
+side = "Top"
+size_x_expr = "copper_dia"
+size_y_expr = "copper_dia"
+mask_margin_expr = "0.5mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Round"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[footprints.sketch.parameters]
+copper_dia = "1.0mm"
+mask_dia = "2.0mm"

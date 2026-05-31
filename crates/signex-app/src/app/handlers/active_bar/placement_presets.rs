@@ -280,6 +280,7 @@ impl Signex {
                 ref_text: None,
                 val_text: None,
                 fields_autoplaced: false,
+                fields_user_placed: false,
                 dnp: false,
                 in_bom: true,
                 on_board: true,

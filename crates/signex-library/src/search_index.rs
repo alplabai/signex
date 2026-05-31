@@ -375,7 +375,17 @@ impl TantivySearchIndex {
         let mut clauses: Vec<(Occur, Box<dyn Query>)> = Vec::new();
 
         if let Some(text) = &q.text {
-            let trimmed = text.trim();
+            // HI-21: cap query text so a megabyte-long input can't drag
+            // the tokenizer + parser into pathological work. Anything
+            // beyond the limit is silently truncated; component MPNs and
+            // descriptions are shorter than 1 KiB in practice.
+            const MAX_QUERY_TEXT_BYTES: usize = 1_000;
+            let bounded = if text.len() > MAX_QUERY_TEXT_BYTES {
+                &text[..MAX_QUERY_TEXT_BYTES]
+            } else {
+                text.as_str()
+            };
+            let trimmed = bounded.trim();
             if !trimmed.is_empty() {
                 let parser = QueryParser::for_index(
                     &self.index,
@@ -590,7 +600,14 @@ impl TantivySearchIndex {
 
 impl SearchIndex for TantivySearchIndex {
     fn query(&self, q: &SearchQuery) -> Vec<ComponentSummary> {
-        let limit = if q.limit == 0 { 50 } else { q.limit };
+        // HI-21: bound `limit` so a `usize::MAX` query can't ask Tantivy
+        // for an absurdly large `TopDocs` heap. 500 is roughly 10× the
+        // largest UI grid we render.
+        const MAX_QUERY_LIMIT: usize = 500;
+        let limit = match q.limit {
+            0 => 50,
+            n => n.min(MAX_QUERY_LIMIT),
+        };
 
         // M6: no manual reload — `ReloadPolicy::OnCommitWithDelay` (set in
         // `open_internal`) already refreshes the searcher after each commit.
@@ -602,9 +619,16 @@ impl SearchIndex for TantivySearchIndex {
         let query = match self.build_query(q) {
             Ok(qq) => qq,
             Err(e) => {
-                if std::env::var("SIGNEX_TANTIVY_TRACE").is_ok() {
-                    eprintln!("[tantivy] build_query error: {e}");
-                }
+                // MD-31: was previously gated behind `SIGNEX_TANTIVY_TRACE`,
+                // which meant production users saw an empty result list
+                // with no signal in logs. Always log at `warn` so an
+                // index-error → empty-result outcome is distinguishable
+                // from a legitimate "no matches" outcome.
+                tracing::warn!(
+                    target = "signex::search",
+                    error = %e,
+                    "search build_query failed; returning empty result set"
+                );
                 return Vec::new();
             }
         };
@@ -612,9 +636,11 @@ impl SearchIndex for TantivySearchIndex {
         let top = match searcher.search(&query, &TopDocs::with_limit(limit)) {
             Ok(t) => t,
             Err(e) => {
-                if std::env::var("SIGNEX_TANTIVY_TRACE").is_ok() {
-                    eprintln!("[tantivy] search error: {e}");
-                }
+                tracing::warn!(
+                    target = "signex::search",
+                    error = %e,
+                    "tantivy search failed; returning empty result set"
+                );
                 return Vec::new();
             }
         };

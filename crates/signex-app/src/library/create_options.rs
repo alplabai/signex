@@ -59,9 +59,7 @@ pub fn view<'a>(
         .on_toggle(|_| LibraryMessage::LibraryCreateOptionsToggleGit)
         .into();
 
-    let git_label = text("Enable version control (Git)")
-        .size(12)
-        .color(text_c);
+    let git_label = text("Enable version control (Git)").size(12).color(text_c);
     let git_help = text(
         "Initialise a Git repository at the library's parent directory and \
          commit on every save. Off by default — leave plain files unless \

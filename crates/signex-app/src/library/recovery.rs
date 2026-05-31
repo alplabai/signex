@@ -1,4 +1,4 @@
-﻿//! Library recovery dialogs (`v0.9-snxlib-as-file-plan.md` §2 Stage H).
+//! Library recovery dialogs (`v0.9-snxlib-as-file-plan.md` §2 Stage H).
 //!
 //! When [`signex_library::LocalGitAdapter::open`] fails with a
 //! recoverable error — the `.snxlib` file went missing, the `.git/`
@@ -294,12 +294,8 @@ fn git_missing_view<'a>(
     .style(crate::styles::modal_footer_strip(tokens));
 
     container(
-        column![
-            header,
-            container(summary_lines).padding([14, 16]),
-            footer
-        ]
-        .width(Length::Fixed(MODAL_W)),
+        column![header, container(summary_lines).padding([14, 16]), footer]
+            .width(Length::Fixed(MODAL_W)),
     )
     .style(crate::styles::modal_card(tokens))
     .clip(true)

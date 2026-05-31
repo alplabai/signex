@@ -137,6 +137,84 @@ const SEP_H: f32 = 18.0;
 const BAR_PADDING: f32 = 2.0;
 const BAR_RADIUS: f32 = 4.0;
 
+/// Render the bar + an open dropdown overlay (when one is open).
+///
+/// `open_menu` indicates which dropdown is currently open (or `None`
+/// when nothing is open). When `Some(key)`, the widget renders the
+/// bar AND a dropdown panel below it AND a transparent backstop
+/// layer behind the bar that fires `close_msg` on any click outside
+/// the bar / panel — Altium-style click-outside-to-dismiss.
+///
+/// `entries_for(key)` is called only when a menu is open and produces
+/// the rows for that menu. `width_hint_for(key)` controls the per-
+/// menu fixed width (None = auto-size from the chip-wrap layout).
+///
+/// Both the trigger button on the bar AND the dropdown items emit
+/// the editor's own message type `M`, so the editor wires its own
+/// state mutations + dispatch arms.
+///
+/// Single-call API: each editor (schematic / footprint / symbol /
+/// upcoming PCB) builds its bar items + a `dropdown_for` closure +
+/// a `close_msg`, then mounts THIS widget directly inside its canvas
+/// Stack. No per-editor overlay-composition code needed.
+pub fn view_with_overlay<'a, M, K>(
+    items: Vec<ActiveBarItem<M>>,
+    open_menu: Option<K>,
+    close_msg: M,
+    entries_for: impl Fn(K) -> Vec<crate::active_bar_dropdown::DropdownEntry<M>>,
+    width_hint_for: impl Fn(K) -> Option<f32>,
+    tokens: &'a ThemeTokens,
+) -> Element<'a, M>
+where
+    M: 'static + Clone,
+    K: 'static + Copy,
+{
+    // The bar centred horizontally at the top of its parent layer.
+    // CALLER owns the centring container + vertical offset so the
+    // structure matches the schematic's `container(view_bar(...).
+    // map(Msg)).width(Fill).align_x(Center)` chain byte-for-byte
+    // (preventing a 2 px layout-pass shift from `Element::map`
+    // wrapping a container vs being wrapped by a container).
+    let bar: Element<'a, M> = view(items, tokens);
+
+    let Some(menu) = open_menu else {
+        return bar;
+    };
+
+    // Build the dropdown panel + backstop layer.
+    let entries = entries_for(menu);
+    let width_hint = width_hint_for(menu);
+    let panel = crate::active_bar_dropdown::view(entries, tokens, width_hint);
+    let panel_anchor = container(panel)
+        .padding([46, 10])
+        .center_x(Length::Fill)
+        .align_y(iced::alignment::Vertical::Top);
+
+    // Backstop: full-area transparent button. Click-outside dismisses
+    // the menu via `close_msg`. Mounted UNDER the panel + bar so
+    // panel/bar clicks don't fall through to the canvas.
+    let backstop = iced::widget::mouse_area(
+        container(iced::widget::Space::new())
+            .width(Length::Fill)
+            .height(Length::Fill),
+    )
+    .on_press(close_msg);
+
+    // When a menu is open, wrap the centred bar in a Stack with the
+    // backstop + panel. The bar gets a centring container HERE only;
+    // when no menu is open, the caller owns the centring (see early
+    // return above) so the no-menu path matches the schematic chain
+    // exactly.
+    let centred_bar = container(bar)
+        .width(Length::Fill)
+        .align_x(iced::alignment::Horizontal::Center);
+    iced::widget::Stack::new()
+        .push(backstop)
+        .push(centred_bar)
+        .push(panel_anchor)
+        .into()
+}
+
 /// Render the bar.
 ///
 /// Returns an `Element<M>` ready to push into a `Stack` overlay

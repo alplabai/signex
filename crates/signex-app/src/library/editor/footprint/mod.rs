@@ -7,12 +7,22 @@
 //! `body3d`, `preview3d`, and `step_attach` remain on disk for the
 //! eventual standalone Body 3D / STEP attach editor side-pane.
 
+pub mod active_bar_dropdowns;
 pub mod body3d;
 pub mod canvas;
+pub mod context_menu;
 pub mod layers;
+pub mod pad_to_sketch;
+pub mod pads_active_bar;
 pub mod preview3d;
+pub mod sketch_dispatch;
+#[cfg(test)]
+mod sketch_dispatch_tests;
+pub mod sketch_mode;
+pub mod snap;
 pub mod state;
 pub mod step_attach;
+pub mod unified_active_bar;
 
 #[cfg(test)]
 mod tests;

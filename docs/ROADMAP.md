@@ -98,7 +98,7 @@ complete on their own schedules.
 
 | ID      | Name                          | Owns                                         |
 |---------|-------------------------------|----------------------------------------------|
-| **WS-D**  | Document Layer              | `kicad-document`                             |
+| **WS-D**  | Document Layer              | `signex-document` (native `.snx*` raw doc)   |
 | **WS-M**  | Semantic Model              | `signex-model`                               |
 | **WS-E**  | Engine                      | `signex-engine`                              |
 | **WS-R**  | Render                      | `signex-render`                              |
@@ -106,7 +106,7 @@ complete on their own schedules.
 | **WS-V**  | Validation (ERC/DRC)        | `signex-erc`, `signex-drc`                   |
 | **WS-O**  | Output                      | export modules (PDF, BOM, Gerber, etc.)      |
 | **WS-P**  | PCB Geometry + Router       | `pcb-geom`, `pcb-router`                     |
-| **WS-3D** | 3D Viewer                   | `signex-render-3d`, `step-loader`            |
+| **WS-3D** | 3D Viewer                   | `signex-model-import`, `signex-render-3d`    |
 | **WS-S**  | Simulation                  | `spice-bridge`, `openems-bridge`, etc.       |
 | **WS-AI** | Signal AI (Pro)             | `signex-signal`                              |
 | **WS-C**  | Collaboration (Pro)         | `signex-collab`, Supabase backend            |
@@ -118,7 +118,17 @@ These workstream IDs are referenced throughout the rest of this document.
 
 ## 5. Phase 0 — The Foundation Gate
 
-**Goal:** prove that the architectural foundation works on real KiCad files
+> **Historical note (post-v0.9):** Phase 0 as written below was the pre-v0.9
+> foundation gate, framed around a KiCad-native parser/writer in the main
+> workspace. After the v0.9 Apache-clean cutover (issue #62), Signex's
+> canonical formats are native `.snxsch` / `.snxpcb` / `.snxlib` / `.snxsym`
+> / `.snxfpt` and the KiCad parser/writer have been relocated to the
+> separate GPL-3.0 companion repo `signex-kicad-import` (one-way KiCad →
+> Signex import only). The phase description below is preserved as
+> historical record of the pre-v0.9 plan; current foundation work targets
+> the native S-expression-style `.snx*` formats.
+
+**Goal:** prove that the architectural foundation works on real design files
 before building anything that depends on it.
 
 **Duration estimate:** 8–12 weeks with one engineer; 6–8 weeks with two.
@@ -129,19 +139,23 @@ before building anything that depends on it.
 
 #### Phase 0.1 — Parser
 
-- `kicad-document` crate scaffold
+- `signex-document` crate scaffold (pre-v0.9 plan named this `kicad-document`;
+  since v0.9 it targets native `.snx*` formats)
 - S-expression tokenizer
 - S-expression tree builder with arena allocation, `NodeHandle` identity, span
   tracking
-- Parsers for `.kicad_sch`, `.kicad_pcb`, `.kicad_sym`, `.kicad_pro`
+- Parsers for `.snxsch`, `.snxpcb`, `.snxsym`, `.snxpro` (pre-v0.9 plan listed
+  `.kicad_sch`/`.kicad_pcb`/`.kicad_sym`/`.kicad_pro`; KiCad parsing has since
+  moved to the GPL-3.0 companion repo `signex-kicad-import`)
 - Unknown-node preservation in the tree structure
 - Round-trip test harness (parse → write → parse → assert equal)
 
 #### Phase 0.2 — Writer
 
 - Minimal-diff writer that preserves node order, spans, and unknown content
-- Configurable formatting to target KiCad's own writer output where reasonable
-- Diff comparison against KiCad's output on the fixture corpus
+- Configurable formatting; round-trip stability against the native `.snx*`
+  fixture corpus (pre-v0.9 plan compared against KiCad's own writer output)
+- Diff comparison against the canonical writer output on the fixture corpus
 
 #### Phase 0.3 — Semantic Model Skeleton
 
@@ -166,10 +180,12 @@ before building anything that depends on it.
 
 Phase 0 is complete when **all** of the following are true:
 
-1. **20+ real KiCad projects** parse without error. Fixture corpus is
-   committed to the repository.
+1. **20+ real Signex projects** parse without error. Fixture corpus is
+   committed to the repository. (Pre-v0.9 plan used 20+ KiCad projects;
+   updated post-issue-#62 to native `.snx*` fixtures.)
 2. **Round-trip stability:** every fixture project, parsed and written
-   without modification, produces output that KiCad opens with zero warnings.
+   without modification, produces byte-stable output that the Signex parser
+   re-reads without warnings.
 3. **Diff stability:** the written output differs from the original by no
    more than whitespace and ordering of irrelevant constructs (defined by an
    automated diff classifier).
@@ -194,8 +210,9 @@ The following architectural decisions are made or finalized during Phase 0:
 - **Lossless trivia preservation** in the parser (whitespace, comments)
 - **UI stack lock-in** (iced + wgpu, or a switch if iced proves insufficient
   during early prototyping at the end of Phase 0)
-- **First-class KiCad version target** (currently 9.x; revisit if usage data
-  during Phase 0 suggests otherwise)
+- **Native `.snx*` schema versioning policy** (forward/backward compat rules
+  for the canonical `.snxsch` / `.snxpcb` / `.snxlib` formats; pre-v0.9 plan
+  listed "first-class KiCad version target" here, dropped post-issue-#62)
 
 After Phase 0 ends, these decisions are locked.
 
@@ -203,8 +220,9 @@ After Phase 0 ends, these decisions are locked.
 
 ## 6. v1.0 — Schematic Editor (Community)
 
-**Goal:** ship a Community schematic editor that a KiCad user can use as a
-daily driver.
+**Goal:** ship a Community schematic editor that a working EDA user (whether
+coming from KiCad, Altium, or starting fresh in Signex) can use as a daily
+driver.
 
 **Total duration estimate:** 10–14 months from end of Phase 0, with a small
 team (2–3 engineers).
@@ -248,12 +266,12 @@ support for full schematic types).
 
 **Duration:** 6–8 weeks.
 
-**Goal:** Open a KiCad project and render every schematic element correctly.
+**Goal:** Open a Signex project and render every schematic element correctly.
 
 **Deliverables:**
 
 - File → Open Project dialog
-- Parse `.kicad_pro`, populate Projects panel with sheet hierarchy
+- Parse `.snxpro`, populate Projects panel with sheet hierarchy
 - Render all schematic element types: wires, symbols, pins, labels (all four
   kinds), junctions, no-connects, buses, bus entries, drawings, text
 - Sheet borders, title blocks, multiple paper sizes
@@ -263,8 +281,7 @@ support for full schematic types).
 
 **Exit criteria:**
 
-- Five real KiCad demo projects render correctly with no visible difference
-  from KiCad's own rendering
+- Five real Signex fixture projects render correctly across all six themes
 - 500-symbol schematic pans and zooms at 60 fps
 - All six themes render every element type correctly
 
@@ -296,8 +313,8 @@ undo/redo, save. The engine becomes real.
 
 **Exit criteria:**
 
-- A KiCad schematic can be loaded, edited (place, move, wire, delete,
-  property change), saved, and reopened in KiCad with zero unexpected diffs
+- A Signex `.snxsch` schematic can be loaded, edited (place, move, wire,
+  delete, property change), saved, and reopened with zero unexpected diffs
 - The Invariant holds after every operation in a 200-command stress test
 - Undo/redo works correctly across all command types
 
@@ -329,7 +346,8 @@ undo/redo, save. The engine becomes real.
 - All shortcuts in `UX_REFERENCE_ALTIUM.md` Section 4 work as documented
 - A user can build a non-trivial schematic from scratch using only the
   editor and library browser
-- Library browser displays all installed KiCad symbol libraries
+- Library browser displays all mounted `.snxlib` libraries (with optional
+  KiCad-symbol-library import via the `signex-kicad-import` companion repo)
 
 ### Phase 5 — Validation and Annotation (v0.7)
 
@@ -371,7 +389,8 @@ WS-E (annotation commands).
 
 - PDF export (single sheet, multi-sheet, configurable DPI and color mode)
 - BOM export (CSV, TSV, HTML, Excel)
-- Netlist export (KiCad S-expression)
+- Netlist export (Signex S-expression; optional KiCad-format export via the
+  `signex-kicad-import` companion repo on the round-trip side once it lands)
 - Print via system dialog
 - Sheet templates (ISO A4, ANSI A)
 - Title block field substitution (=Title, =Date, =Rev, etc.)
@@ -382,17 +401,19 @@ WS-E (annotation commands).
   corpus
 - Stability pass: fix all P0 bugs from the issue tracker
 - Installer for Windows (.msi), macOS (.dmg), Linux (.AppImage)
-- Native file associations for `.kicad_sch`, `.kicad_pcb`, `.kicad_pro`
+- Native file associations for the canonical `.snx*` family (`.snxsch`,
+  `.snxpcb`, `.snxpro`, `.snxlib`, `.snxsym`, `.snxfpt`, etc.)
 - Documentation: user guide, keyboard reference, getting-started tutorial
 
 **Exit criteria — v1.0 RELEASE:**
 
 - All v1.0 must-do items from `MASTER_PLAN.md` Section 5.1 are complete
 - All exit criteria of all previous phases still pass
-- Fixture corpus has grown to 50+ real KiCad projects, all round-tripping
-  cleanly
-- A non-developer beta tester can install Signex, open their KiCad project,
-  edit it, and save it without consulting a developer
+- Fixture corpus has grown to 50+ real Signex projects, all round-tripping
+  cleanly through the native `.snx*` parser/writer
+- A non-developer beta tester can install Signex, create or open a project
+  in the native format (with optional one-way KiCad import via
+  `signex-kicad-import`), edit it, and save it without consulting a developer
 - The issue tracker has zero P0 bugs
 
 ---
@@ -413,7 +434,7 @@ continues to receive bug fixes and refinement during v2.0 development.
 
 **Duration:** 8–10 weeks.
 
-**Goal:** Open and render KiCad PCB files. No editing yet.
+**Goal:** Open and render Signex `.snxpcb` files. No editing yet.
 
 **Deliverables:**
 
@@ -431,7 +452,7 @@ continues to receive bug fixes and refinement during v2.0 development.
 
 **Exit criteria:**
 
-- Five real KiCad PCB projects render correctly
+- Five real Signex `.snxpcb` fixtures render correctly
 - 10,000-track PCB pans and zooms at 60 fps
 - Cross-probe works bidirectionally
 
@@ -455,7 +476,7 @@ continues to receive bug fixes and refinement during v2.0 development.
 **Exit criteria:**
 
 - A PCB can be modified (components moved, zones edited, outline changed)
-- All edits round-trip cleanly through KiCad
+- All edits round-trip cleanly through the native `.snxpcb` parser/writer
 
 ### Phase 9 — Routing (v2.1)
 
@@ -469,8 +490,10 @@ continues to receive bug fixes and refinement during v2.0 development.
 plan including crate layout, algorithms, library choices, and quality
 gates.)*
 
-**Goal:** Interactive routing comparable to KiCad 9's PNS, implemented
-clean-room under Apache-2.0.
+**Goal:** Professional-grade interactive routing (greedy → walkaround →
+push-and-shove → diff pair / length tuning → copper pour), implemented
+clean-room under Apache-2.0 with no reference to other EDA tools' source
+code or public format docs (per cleanroom rules).
 
 **Sub-phases (each is its own shippable release):**
 
@@ -502,7 +525,8 @@ clean-room under Apache-2.0.
 - Shove converges in ≤ 8 iterations on 95% of actions
 - Median action latency ≤ 16 ms (one frame at 60 Hz); 95th percentile
   ≤ 33 ms
-- Push-and-shove quality matches KiCad on the standard PNS test cases
+- Push-and-shove quality matches the documented Signex shove-test fixture
+  set (own benchmark suite; no comparison against other tools' source)
 
 ### Phase 10 — DRC and Design Rules (v1.4)
 
@@ -531,11 +555,16 @@ that drives it.
 
 ### Phase 11 — PCB Output and v2.0 Polish (v1.5 → v2.0)
 
-**Active workstreams:** WS-O (primary), all others (polish).
+**Active workstreams:** WS-O (primary), WS-3D (activates here), all others (polish).
 
 **Duration:** 10–12 weeks.
 
-**Goal:** Manufacturing-ready output and v2.0 release polish.
+**Goal:** Manufacturing-ready output, interactive 3D viewer, and v2.0 release polish.
+
+WS-3D activation: `signex-model-import` converts STEP/VRML/GLTF source models to
+GLB cache artifacts; `signex-render-3d` consumes the GLB artifacts via the runtime
+contract established in Milestone C. See renderer-phase-notes Milestone D for the
+full import pipeline preparation package.
 
 **Deliverables:**
 
@@ -545,6 +574,7 @@ that drives it.
 - Pick-and-place CSV
 - IPC-2581 export
 - STEP 3D export (board body)
+- Interactive 3D viewer (PCB + component models; STEP/VRML/GLTF source support via `signex-model-import`)
 - Assembly drawings (SVG)
 - Performance pass on PCB editor
 - Stability pass

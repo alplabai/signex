@@ -60,18 +60,252 @@ impl Signex {
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.finish_update()
             }
+            Message::GridPickerOpen => {
+                // v0.18.10 — only mount the picker when the active
+                // tab is a Footprint editor; the schematic / PCB
+                // grid systems aren't wired through this picker yet.
+                let active_tab_kind = self
+                    .document_state
+                    .tabs
+                    .get(self.document_state.active_tab)
+                    .map(|t| t.kind.clone());
+                let footprint_active = matches!(
+                    active_tab_kind,
+                    Some(crate::app::TabKind::FootprintEditor(_))
+                );
+                tracing::info!(
+                    target: "signex::ui",
+                    footprint_active = footprint_active,
+                    last_mouse_pos = ?self.interaction_state.last_mouse_pos,
+                    "GridPickerOpen received",
+                );
+                if footprint_active {
+                    let (x, y) = self.interaction_state.last_mouse_pos;
+                    self.interaction_state.grid_picker = Some(crate::app::GridPickerState { x, y });
+                }
+                self.finish_update()
+            }
+            Message::GridPickerClose => {
+                self.interaction_state.grid_picker = None;
+                self.finish_update()
+            }
+            Message::GridPickerSelect(step_mm) => {
+                self.interaction_state.grid_picker = None;
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    if step_mm > 0.0 && step_mm.is_finite() {
+                        editor.state.snap_options.grid_step_mm = step_mm;
+                        // v0.18.21 — mirror onto active grid row.
+                        let idx = editor.state.active_grid_idx;
+                        if let Some(row) = editor.state.grids.get_mut(idx) {
+                            row.step_mm = step_mm;
+                        }
+                        editor.canvas_cache.clear();
+                    }
+                }
+                self.refresh_panel_ctx();
+                self.finish_update()
+            }
+            Message::GridPropertiesOpen => {
+                // Pre-populate from the active footprint editor's
+                // current step. No-op for non-footprint tabs (the
+                // modal would have nothing to drive).
+                let editor_snap = self.active_footprint_editor().map(|e| e.state.snap_options);
+                tracing::info!(
+                    target: "signex::ui",
+                    has_snap = editor_snap.is_some(),
+                    "GridPropertiesOpen received",
+                );
+                if let Some(opts) = editor_snap {
+                    let step = opts.grid_step_mm;
+                    let s = format!("{step:.4}");
+                    self.ui_state.grid_properties = Some(crate::app::GridPropertiesState {
+                        step_x_mm: s.clone(),
+                        step_y_mm: s,
+                        link_xy: true,
+                        fine_display: opts.fine_grid_display,
+                        coarse_display: opts.coarse_grid_display,
+                        multiplier: opts.coarse_multiplier,
+                    });
+                }
+                self.finish_update()
+            }
+            Message::GridPropertiesSetFineDisplay(d) => {
+                if let Some(state) = self.ui_state.grid_properties.as_mut() {
+                    state.fine_display = d;
+                }
+                self.finish_update()
+            }
+            Message::GridPropertiesSetCoarseDisplay(d) => {
+                if let Some(state) = self.ui_state.grid_properties.as_mut() {
+                    state.coarse_display = d;
+                }
+                self.finish_update()
+            }
+            Message::GridPropertiesSetMultiplier(m) => {
+                if let Some(state) = self.ui_state.grid_properties.as_mut() {
+                    state.multiplier = m.max(1);
+                }
+                self.finish_update()
+            }
+            Message::GridPropertiesClose => {
+                self.ui_state.grid_properties = None;
+                self.finish_update()
+            }
+            Message::GridPropertiesSetStepX(value) => {
+                if let Some(state) = self.ui_state.grid_properties.as_mut() {
+                    state.step_x_mm = value;
+                    if state.link_xy {
+                        state.step_y_mm = state.step_x_mm.clone();
+                    }
+                }
+                self.finish_update()
+            }
+            Message::GridPropertiesSetStepY(value) => {
+                if let Some(state) = self.ui_state.grid_properties.as_mut() {
+                    state.step_y_mm = value;
+                    if state.link_xy {
+                        state.step_x_mm = state.step_y_mm.clone();
+                    }
+                }
+                self.finish_update()
+            }
+            Message::GridPropertiesToggleLink => {
+                if let Some(state) = self.ui_state.grid_properties.as_mut() {
+                    state.link_xy = !state.link_xy;
+                    if state.link_xy {
+                        // Re-link mirrors X into Y so re-enabling
+                        // doesn't keep a desynced pair.
+                        state.step_y_mm = state.step_x_mm.clone();
+                    }
+                }
+                self.finish_update()
+            }
+            Message::OpenSelectionFilterCustom => {
+                if let Some(editor) = self.active_footprint_editor() {
+                    let f = editor.state.selection_filter;
+                    self.ui_state.selection_filter_custom =
+                        Some(crate::app::SelectionFilterCustomState {
+                            pads: f.pads,
+                            tracks: f.tracks,
+                            arcs: f.arcs,
+                            pours: f.pours,
+                            bodies_3d: f.bodies_3d,
+                            keepouts: f.keepouts,
+                            cutouts: f.cutouts,
+                            texts: f.texts,
+                            vias: f.vias,
+                            regions: f.regions,
+                            fills: f.fills,
+                            other: f.other,
+                        });
+                }
+                self.finish_update()
+            }
+            Message::CloseSelectionFilterCustom => {
+                self.ui_state.selection_filter_custom = None;
+                self.finish_update()
+            }
+            Message::ToggleSelectionFilterCustomKind(kind) => {
+                use crate::library::editor::footprint::state::SelectionFilterKind as K;
+                if let Some(state) = self.ui_state.selection_filter_custom.as_mut() {
+                    match kind {
+                        K::Pads => state.pads = !state.pads,
+                        K::Tracks => state.tracks = !state.tracks,
+                        K::Arcs => state.arcs = !state.arcs,
+                        K::Pours => state.pours = !state.pours,
+                        K::Bodies3d => state.bodies_3d = !state.bodies_3d,
+                        K::Keepouts => state.keepouts = !state.keepouts,
+                        K::Cutouts => state.cutouts = !state.cutouts,
+                        K::Texts => state.texts = !state.texts,
+                        K::Vias => state.vias = !state.vias,
+                        K::Regions => state.regions = !state.regions,
+                        K::Fills => state.fills = !state.fills,
+                        K::Other => state.other = !state.other,
+                    }
+                }
+                self.finish_update()
+            }
+            Message::ApplySelectionFilterCustom => {
+                let draft = self.ui_state.selection_filter_custom.take();
+                if let (Some(d), Some(editor)) = (draft, self.active_footprint_editor_mut()) {
+                    editor.state.selection_filter =
+                        crate::library::editor::footprint::state::SelectionFilter {
+                            pads: d.pads,
+                            tracks: d.tracks,
+                            arcs: d.arcs,
+                            pours: d.pours,
+                            bodies_3d: d.bodies_3d,
+                            keepouts: d.keepouts,
+                            cutouts: d.cutouts,
+                            texts: d.texts,
+                            vias: d.vias,
+                            regions: d.regions,
+                            fills: d.fills,
+                            other: d.other,
+                        };
+                    editor.canvas_cache.clear();
+                }
+                self.refresh_panel_ctx();
+                self.finish_update()
+            }
+            Message::GridPropertiesApply => {
+                // Validate the X step (Y is taken from X for now —
+                // single-axis steps in `SnapOptions`; the Y field
+                // exists in the dialog for forward compatibility).
+                let draft = self.ui_state.grid_properties.clone();
+                let parsed_x = draft
+                    .as_ref()
+                    .and_then(|s| s.step_x_mm.trim().parse::<f64>().ok());
+                if let (Some(d), Some(editor)) = (draft, self.active_footprint_editor_mut()) {
+                    let opts = &mut editor.state.snap_options;
+                    if let Some(step) = parsed_x {
+                        if step > 0.0 && step.is_finite() {
+                            opts.grid_step_mm = step;
+                        }
+                    }
+                    opts.fine_grid_display = d.fine_display;
+                    opts.coarse_grid_display = d.coarse_display;
+                    opts.coarse_multiplier = d.multiplier.max(1);
+                    // v0.18.21 — mirror onto the active grid row so
+                    // multi-grid CRUD stays consistent. The Manager
+                    // displays per-row values from `grids[idx]`, so a
+                    // commit through the legacy modal must update the
+                    // matching row too.
+                    let active_idx = editor.state.active_grid_idx;
+                    if let Some(row) = editor.state.grids.get_mut(active_idx) {
+                        row.step_mm = opts.grid_step_mm;
+                        row.fine_display = opts.fine_grid_display;
+                        row.coarse_display = opts.coarse_grid_display;
+                        row.coarse_multiplier = opts.coarse_multiplier;
+                    }
+                    editor.canvas_cache.clear();
+                }
+                self.ui_state.grid_properties = None;
+                self.refresh_panel_ctx();
+                self.finish_update()
+            }
             Message::StatusBar(StatusBarRequest::ToggleSnap) => {
                 self.ui_state.snap_enabled = !self.ui_state.snap_enabled;
                 self.interaction_state.active_canvas_mut().snap_enabled =
                     self.ui_state.snap_enabled;
                 crate::fonts::write_snap_enabled_pref(self.ui_state.snap_enabled);
+                // v0.18.25.1 — mirror the global toggle into every open
+                // footprint editor so the .snxfpt snap chain (guides /
+                // grid / point-hit / angle) short-circuits in lockstep
+                // with the schematic + PCB canvases.
+                let disabled = !self.ui_state.snap_enabled;
+                for editor in self.document_state.footprint_editors.values_mut() {
+                    editor.state.global_snap_disabled = disabled;
+                    editor.canvas_cache.clear();
+                }
                 self.finish_update()
             }
             Message::StatusBar(StatusBarRequest::TogglePanelList) => {
                 self.dispatch_overlay_message(Message::TogglePanelList)
             }
-            Message::StatusBar(StatusBarRequest::OpenPropertiesForSelection) => self
-                .dispatch_overlay_message(Message::Menu(MenuMessage::OpenPropertiesPanel)),
+            Message::StatusBar(StatusBarRequest::OpenPropertiesForSelection) => {
+                self.dispatch_overlay_message(Message::Menu(MenuMessage::OpenPropertiesPanel))
+            }
             Message::CanvasEvent(event) => {
                 // First user gesture on the canvas dismisses the
                 // first-run tour card (UX §4.3). Cheap inline check —

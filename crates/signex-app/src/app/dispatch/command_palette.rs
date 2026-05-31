@@ -69,8 +69,7 @@ impl Signex {
     fn execute_command_palette_selected(&mut self) -> Task<Message> {
         let catalog = build_catalog(self);
         let ranked = rank_results(&catalog, &self.ui_state.command_palette.query);
-        let Some(&(catalog_idx, _)) =
-            ranked.get(self.ui_state.command_palette.selected_index)
+        let Some(&(catalog_idx, _)) = ranked.get(self.ui_state.command_palette.selected_index)
         else {
             // Empty result list — close the palette quietly.
             self.ui_state.command_palette.open = false;
@@ -86,14 +85,10 @@ impl Signex {
         self.ui_state.command_palette.selected_index = 0;
 
         match action {
-            CommandAction::Menu(menu_msg) => {
-                Task::done(Message::Menu(menu_msg))
-            }
+            CommandAction::Menu(menu_msg) => Task::done(Message::Menu(menu_msg)),
             CommandAction::Panel(panel) => Task::done(Message::OpenPanel(panel)),
             CommandAction::OpenFile(path) => Task::done(Message::FileOpened(Some(path))),
-            CommandAction::FocusSymbol { reference } => {
-                self.focus_symbol_by_reference(&reference)
-            }
+            CommandAction::FocusSymbol { reference } => self.focus_symbol_by_reference(&reference),
         }
     }
 

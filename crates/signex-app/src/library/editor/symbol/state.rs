@@ -82,6 +82,113 @@ pub enum GraphicHandle {
 const DEFAULT_PIN_LENGTH_MM: f64 = 2.54;
 
 /// Highest declared part number across every pin on `sym`. `0`
+/// v0.13 — SchLib editor active-bar dropdown menu identifier. One
+/// per chevron-bearing button on the unified active bar. Mirrors the
+/// footprint editor's `FpActiveBarMenu`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SymActiveBarMenu {
+    Filter,
+    Snap,
+    Place,
+    Select,
+    Align,
+    /// Place Pin variants (input / output / passive / etc.).
+    Pin,
+    /// String / Text Frame.
+    Text,
+    /// Line / Arc / Ellipse / Polygon / Rectangle / Round Rectangle /
+    /// Bezier — full SchLib shape set.
+    Shapes,
+}
+
+/// v0.13 — Per-kind selectable flags for the SchLib editor.
+/// Mirrors the footprint editor's SelectionFilter struct.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SymbolSelectionFilter {
+    pub pins: bool,
+    pub drawings: bool,
+    pub texts: bool,
+    pub designators: bool,
+    pub values: bool,
+    pub parameters: bool,
+    pub other: bool,
+}
+
+impl Default for SymbolSelectionFilter {
+    fn default() -> Self {
+        Self {
+            pins: true,
+            drawings: true,
+            texts: true,
+            designators: true,
+            values: true,
+            parameters: true,
+            other: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SymbolFilterKind {
+    Pins,
+    Drawings,
+    Texts,
+    Designators,
+    Values,
+    Parameters,
+    Other,
+}
+
+impl SymbolFilterKind {
+    pub const ALTIUM_PILLS: &'static [SymbolFilterKind] = &[
+        Self::Pins,
+        Self::Drawings,
+        Self::Texts,
+        Self::Designators,
+        Self::Values,
+        Self::Parameters,
+        Self::Other,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Pins => "Pins",
+            Self::Drawings => "Drawings",
+            Self::Texts => "Texts",
+            Self::Designators => "Designators",
+            Self::Values => "Values",
+            Self::Parameters => "Parameters",
+            Self::Other => "Other",
+        }
+    }
+}
+
+impl SymbolSelectionFilter {
+    pub fn get(&self, kind: SymbolFilterKind) -> bool {
+        match kind {
+            SymbolFilterKind::Pins => self.pins,
+            SymbolFilterKind::Drawings => self.drawings,
+            SymbolFilterKind::Texts => self.texts,
+            SymbolFilterKind::Designators => self.designators,
+            SymbolFilterKind::Values => self.values,
+            SymbolFilterKind::Parameters => self.parameters,
+            SymbolFilterKind::Other => self.other,
+        }
+    }
+
+    pub fn toggle(&mut self, kind: SymbolFilterKind) {
+        match kind {
+            SymbolFilterKind::Pins => self.pins = !self.pins,
+            SymbolFilterKind::Drawings => self.drawings = !self.drawings,
+            SymbolFilterKind::Texts => self.texts = !self.texts,
+            SymbolFilterKind::Designators => self.designators = !self.designators,
+            SymbolFilterKind::Values => self.values = !self.values,
+            SymbolFilterKind::Parameters => self.parameters = !self.parameters,
+            SymbolFilterKind::Other => self.other = !self.other,
+        }
+    }
+}
+
 /// (Part Zero) is excluded — it's the special "appears on every
 /// part" marker, not a real part. Returns `1` for symbols with no
 /// pins or only Part Zero pins so multi-part wiring still has a

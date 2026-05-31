@@ -234,11 +234,16 @@ impl FontCatalog {
 
     /// Register a font, returning its Ref. Same font registered twice returns
     /// the same Ref.
-    pub fn register(&mut self, font: PdfFont) -> Ref {
+    ///
+    /// MD-35: `base_ref` is the first Ref id this catalog is allowed to
+    /// hand out — callers reserve a contiguous range starting there.
+    /// The previous hard-coded base of `100` collided with the page-tree
+    /// allocator once the sheet count exceeded ~97.
+    pub fn register(&mut self, font: PdfFont, base_ref: i32) -> Ref {
         if let Some((_, ref_id)) = self.fonts.iter().find(|(f, _)| f == &font) {
             return *ref_id;
         }
-        let ref_id = Ref::new(100 + self.fonts.len() as i32);
+        let ref_id = Ref::new(base_ref + self.fonts.len() as i32);
         self.fonts.push((font, ref_id));
         ref_id
     }
@@ -312,17 +317,17 @@ mod tests {
     #[test]
     fn font_catalog_registers_unique() {
         let mut cat = FontCatalog::new();
-        let r1 = cat.register(PdfFont::RobotoRegular);
-        let r2 = cat.register(PdfFont::RobotoRegular);
+        let r1 = cat.register(PdfFont::RobotoRegular, 100);
+        let r2 = cat.register(PdfFont::RobotoRegular, 100);
         assert_eq!(r1, r2);
-        let r3 = cat.register(PdfFont::RobotoBold);
+        let r3 = cat.register(PdfFont::RobotoBold, 100);
         assert_ne!(r1, r3);
     }
 
     #[test]
     fn font_catalog_get_retrieves() {
         let mut cat = FontCatalog::new();
-        cat.register(PdfFont::RobotoRegular);
+        cat.register(PdfFont::RobotoRegular, 100);
         assert!(cat.get(PdfFont::RobotoRegular).is_some());
         assert!(cat.get(PdfFont::RobotoBold).is_none());
     }
@@ -339,7 +344,7 @@ mod tests {
     fn embeds_roboto_font() {
         // Test that the font catalog can register and reference a font
         let mut cat = FontCatalog::new();
-        let roboto_ref = cat.register(PdfFont::RobotoRegular);
+        let roboto_ref = cat.register(PdfFont::RobotoRegular, 100);
 
         // Verify the font is registered
         assert!(cat.get(PdfFont::RobotoRegular).is_some());
@@ -360,8 +365,8 @@ mod tests {
 
         // Verify font data method returns all registered fonts
         let mut cat = FontCatalog::new();
-        cat.register(PdfFont::RobotoRegular);
-        cat.register(PdfFont::IosevkaRegular);
+        cat.register(PdfFont::RobotoRegular, 100);
+        cat.register(PdfFont::IosevkaRegular, 100);
 
         let font_data = cat.font_data();
         assert_eq!(font_data.len(), 2);

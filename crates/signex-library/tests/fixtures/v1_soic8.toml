@@ -1,0 +1,103 @@
+# Legacy v1 footprint fixture — SOIC-8 surface-mount package.
+#
+# Authored by hand for the Footprint v1 → v2 migration corpus
+# (Tasks 5.1 + 5.2 of SKETCH_MODE_v0.13_PLAN.md). Intentionally
+# omits the `schema_version` and `sketch` keys so the test proves
+# legacy footprints deserialise into the v2 struct with sensible
+# defaults: `schema_version = 2` (via `default_schema_v2`) and
+# `sketch = None`.
+
+uuid = "0193a8c0-0010-7000-8000-000000000001"
+name = "SOIC-8"
+anchor = [0.0, 0.0]
+courtyard = { points = [[-2.5, -2.5], [2.5, -2.5], [2.5, 2.5], [-2.5, 2.5]] }
+silk_f = []
+silk_b = []
+fab_f = []
+fab_b = []
+pcb_params = {}
+version = "0.0.1"
+released = false
+created = "2026-04-15T12:00:00Z"
+updated = "2026-04-15T12:00:00Z"
+
+[body_3d]
+shape = "Extrude"
+height_mm = 1.75
+offset_z_mm = 0.1
+top_color = [0.10, 0.10, 0.10, 1.0]
+side_color = [0.20, 0.20, 0.20, 1.0]
+
+# Left column — pins 1..4 (top to bottom), x = -2.7 mm.
+[[pads]]
+number = "1"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [0.6, 1.55]
+position = [-2.7, 1.905]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "2"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [0.6, 1.55]
+position = [-2.7, 0.635]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "3"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [0.6, 1.55]
+position = [-2.7, -0.635]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "4"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [0.6, 1.55]
+position = [-2.7, -1.905]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+# Right column — pins 5..8 (bottom to top), x = +2.7 mm.
+[[pads]]
+number = "5"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [0.6, 1.55]
+position = [2.7, -1.905]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "6"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [0.6, 1.55]
+position = [2.7, -0.635]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "7"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [0.6, 1.55]
+position = [2.7, 0.635]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]
+
+[[pads]]
+number = "8"
+kind = "Smd"
+shape = { kind = "rect" }
+size = [0.6, 1.55]
+position = [2.7, 1.905]
+rotation = 0.0
+layers = ["F.Cu", "F.Mask", "F.Paste"]

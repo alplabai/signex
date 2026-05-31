@@ -2,7 +2,10 @@
 
 use iced::mouse;
 use iced::widget::canvas;
-use iced::widget::{Column, Row, Space, column, container, row, scrollable, svg, text};
+use iced::widget::{
+    Column, Row, Space, button, column, container, pick_list, row, scrollable, svg, text,
+    text_input,
+};
 use iced::{Background, Border, Color, Element, Length, Point, Rectangle, Renderer, Theme};
 use iced_aw::{NumberInput, Wrap};
 use signex_types::coord::Unit;
@@ -12,7 +15,30 @@ use signex_widgets::tree_view::{TreeIcon, TreeMsg, TreeNode, TreeView};
 use std::sync::OnceLock;
 
 pub mod components_panel;
+mod element_properties;
+mod footprint_editor_properties;
 pub mod history;
+mod properties_parameters;
+mod symbol_editor_properties;
+
+use element_properties::{
+    view_child_sheet_properties, view_drawing_properties, view_selected_element_properties,
+};
+use footprint_editor_properties::view_footprint_editor_properties;
+// HI-22: re-export the form / layout helpers extracted into
+// `properties_parameters.rs` so sibling modules (element_properties,
+// symbol_editor_properties, footprint_editor_properties) and other
+// view fns still in this file can reach them via `super::name(...)`.
+pub(super) use properties_parameters::{
+    canvas_font_popup, custom_filter_tab, empty_section_row, font_style_row, form_check_row,
+    form_check_row_shortcut, form_edit_row, form_font_link_row, form_grid_row, form_grid_size_row,
+    form_input_row, form_int_edit_row, form_label, form_label_row, form_mm_edit_row, form_pick_row,
+    justification_grid, net_numeric_row, net_params_add_bar, net_params_header, net_params_tabs,
+    param_table_row, preplacement_justification_grid, preset_chip, props_tab_btn, section_hdr,
+    seg_btn, tag_btn, thin_sep, view_custom_selection_filters_section,
+};
+use properties_parameters::{view_properties_general, view_properties_parameters};
+use symbol_editor_properties::view_symbol_editor_properties;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[allow(dead_code)]
@@ -46,6 +72,12 @@ pub enum PanelKind {
     /// editor's `active_idx`. Visible whenever a Symbol editor tab
     /// is focused.
     SchLibrary,
+    /// v0.14.2 — Altium PCB Library panel parity. Lists every
+    /// `.snxfpt` sibling inside the containing `.snxlib`'s
+    /// `footprints/` directory; clicking opens that footprint as a
+    /// new tab (same `Open ▸ Footprint` flow). Visible whenever a
+    /// Footprint editor tab is focused.
+    FootprintLibrary,
     /// VSCode-style per-file Git history. Right-dock surface that
     /// follows the active tab and shows the file's last 50 commits
     /// via `signex_widgets::history_pane`.
@@ -76,6 +108,7 @@ pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::Todo,
     PanelKind::Wiki,
     PanelKind::SchLibrary,
+    PanelKind::FootprintLibrary,
     PanelKind::History,
 ];
 
@@ -128,6 +161,7 @@ impl PanelKind {
             PanelKind::OutputJobs => "Output Jobs",
             PanelKind::Library => "Library",
             PanelKind::SchLibrary => "SCH Library",
+            PanelKind::FootprintLibrary => "Footprint Library",
             PanelKind::History => "History",
         }
     }
@@ -157,6 +191,13 @@ pub struct SheetInfo {
     /// viewing (`document_state.tabs[active_tab].path == sheet path`).
     /// Drives the highlighted row background — Altium parity.
     pub is_active: bool,
+    /// F24 (2026-05-03) — `true` when the file backing this entry
+    /// is registered on the project but no longer exists on disk
+    /// (orphan reference, e.g. user moved/deleted outside Signex).
+    /// Drives the `(missing)` suffix in `build_project_tree` so the
+    /// user sees the broken state at a glance instead of having to
+    /// double-click and read an error.
+    pub missing: bool,
 }
 
 /// Per-project bundle surfaced to the Projects panel. One entry per
@@ -175,11 +216,16 @@ pub struct ProjectPanelInfo {
     pub project_file_open: bool,
     pub project_file_dirty: bool,
     pub project_file_active: bool,
+    /// F24 — same `(missing)` indicator as on `SheetInfo` but for the
+    /// project's root schematic.
+    pub project_file_missing: bool,
     /// Companion PCB filename, when present.
     pub pcb_file: Option<String>,
     pub pcb_file_open: bool,
     pub pcb_file_dirty: bool,
     pub pcb_file_active: bool,
+    /// F24 — `(missing)` indicator for the companion PCB file.
+    pub pcb_file_missing: bool,
     pub sheets: Vec<SheetInfo>,
     /// Component libraries attached to this project. One entry per
     /// `Project::libraries[]`. Drives the `Libraries` branch under
@@ -220,6 +266,29 @@ pub struct LibraryNodeInfo {
     /// `LibraryState::open_libraries`. Drives the icon tint —
     /// unmounted entries render in the muted "missing" colour.
     pub mounted: bool,
+    /// F24 — `true` when the `.snxlib` file is registered on the
+    /// project but no longer exists on disk. Drives the `(missing)`
+    /// suffix in the tree so the user spots orphan references
+    /// without double-clicking through to a "Library not mounted"
+    /// recovery message.
+    pub missing: bool,
+    /// F29 — names of `.snxsym` files inside this library. Populated
+    /// from `OpenLibrary::cached_symbols` when the library is
+    /// mounted. Empty when the library is unmounted or has no
+    /// symbols yet. Used by `build_project_tree` to surface a
+    /// `Symbols` subbranch under the library node so the user can
+    /// navigate to a specific symbol file directly from the tree.
+    pub symbols: Vec<String>,
+    /// F29 — same as `symbols` but for `.snxfpt` footprints. Used to
+    /// build the `Footprints` subbranch under the library node.
+    pub footprints: Vec<String>,
+    /// v0.13 — `true` when this `.snxlib` is currently open as a tab
+    /// (Library Browser). Drives the white open-dot indicator in the
+    /// project tree, matching schematic / pcb sheet open status.
+    pub is_open: bool,
+    /// v0.13 — `true` when the `.snxlib` has unsaved changes. Drives
+    /// the red dirty-dot indicator in the project tree.
+    pub is_dirty: bool,
 }
 
 /// Context passed to panels — owned data to avoid lifetime issues.
@@ -259,6 +328,36 @@ pub enum ErcSeverityLite {
     Error,
     Warning,
     Info,
+}
+
+/// Detail for the row currently selected in the active Library
+/// Browser tab. Surfaces in the right-edge Properties panel so
+/// primitive binding (Pick Symbol / Pick Footprint) lives next to
+/// every other "what am I selected?" affordance the user looks for
+/// there. F15 (2026-05-03 library polish): "right pane can be opened
+/// on properties instead."
+///
+/// Populated by `refresh_panel_ctx` when the active tab is
+/// `TabKind::LibraryBrowser(path)` AND the matching browser state's
+/// `selected_row` is `Some(_)`. Cleared otherwise.
+#[derive(Debug, Clone)]
+pub struct LibraryRowDetail {
+    pub library_path: std::path::PathBuf,
+    pub table: String,
+    pub row_id: uuid::Uuid,
+    pub internal_pn: String,
+    /// Class string stored on the row — derived from the table name
+    /// at create time per F20 (Tables-only model). Surfaced as
+    /// read-only metadata only; users can't edit it directly.
+    pub class: String,
+    /// Pretty `LifecycleState` token ("Draft", "Released", …).
+    pub lifecycle_label: String,
+    /// "Symbol bound" / "Symbol unresolved (UUID not mounted)" /
+    /// "Symbol unbound". Same shape as the legacy preview pane's
+    /// `symbol_summary` first line.
+    pub symbol_summary: String,
+    /// Same shape for footprint — "Footprint bound", "unbound", …
+    pub footprint_summary: String,
 }
 
 pub struct PanelContext {
@@ -323,6 +422,18 @@ pub struct PanelContext {
     pub components_split: f32,
     /// Persistent project tree — toggle state survives across renders.
     pub project_tree: Vec<TreeNode>,
+    /// Path of the currently single-clicked tree row, used to drive
+    /// the row highlight independently of which document is active.
+    /// Set on `TreeMsg::Select`, cleared when the tree resets.
+    pub project_tree_selected: Option<Vec<usize>>,
+    /// F15 — detail for the row currently selected in the active
+    /// Library Browser tab. `Some` when (a) the active tab is a
+    /// `LibraryBrowser(path)` AND (b) `library_browsers[path]
+    /// .selected_row` is `Some`. `view_properties` reads this and
+    /// renders the row's metadata + Pick Symbol / Pick Footprint
+    /// buttons; outside of a Library Browser tab the field stays
+    /// `None` and the panel falls through to its existing branches.
+    pub library_row_detail: Option<LibraryRowDetail>,
     // Selection info for Properties panel
     /// How many items are currently selected.
     pub selection_count: usize,
@@ -408,11 +519,641 @@ pub struct PanelContext {
     /// without the in-tab editor having to embed its own properties pane.
     /// `None` for any other tab kind.
     pub symbol_editor: Option<SymbolEditorPanelContext>,
+    /// v0.14.2 — context for the right-dock Properties panel when the
+    /// active tab is a `.snxfpt` standalone footprint editor.
+    /// Surfaces editor mode (Pads / Sketch / 3D View) + the current
+    /// selection so the panel can switch its body between pad
+    /// properties, sketch entity properties, or footprint defaults.
+    /// `None` for any other tab kind.
+    pub footprint_editor: Option<FootprintEditorPanelContext>,
     /// Per-file Git history snapshot for the right-dock History
     /// panel. Mirrored from [`crate::app::DocumentState::history`]
     /// each refresh; the panel reads it directly without holding a
     /// borrow into the document state.
     pub history: history::HistoryPanelState,
+}
+
+/// Context handed to the Properties panel when a `.snxfpt` editor
+/// tab is active. Mirrors a small read-only slice of the live
+/// `FootprintEditorState` — the panel never mutates this, edits flow
+/// back through `LibraryMessage::PrimitiveEditorEvent` like every
+/// other primitive editor.
+#[derive(Debug, Clone)]
+pub struct FootprintEditorPanelContext {
+    /// Open `.snxfpt` path (the tab key).
+    pub path: std::path::PathBuf,
+    /// `Footprint::name` — surfaced as the panel header.
+    pub footprint_name: String,
+    /// `Footprint::version` — semver-style revision string.
+    pub version: String,
+    /// Current editor mode — drives the Properties panel body branch.
+    pub mode_kind: FootprintModeKind,
+    /// Number of baked pads on the footprint primitive.
+    pub pad_count: usize,
+    /// Number of sketch entities (Points + Lines + Arcs + Circles)
+    /// when a sketch is present.
+    pub sketch_entity_count: usize,
+    /// Number of sketch constraints when a sketch is present.
+    pub sketch_constraint_count: usize,
+    /// Number of free DoF the most recent solve reported, plus
+    /// elapsed_ms. `None` if no solve has run yet.
+    pub last_solve: Option<FootprintSolveSummary>,
+    /// Read-only summary of the selected pad — populated when in
+    /// Pads mode and a pad is selected.
+    pub selected_pad: Option<FootprintPadSummary>,
+    /// v0.27 — total number of selected pads (primary + extras).
+    /// Drives the multi-select "(N selected)" indicator in the
+    /// Properties panel header. `1` for a single-select; `> 1` when
+    /// the rubber band picked multiple pads or All-on-Layer / All
+    /// fired.
+    pub selected_pad_count: usize,
+    /// Read-only summary of the primary selected sketch entity —
+    /// populated when in Sketch mode and an entity is selected.
+    pub selected_sketch_entity: Option<FootprintSketchEntitySummary>,
+    /// Mirrors `editor.state.auto_fit_courtyard`. v0.14.2 — drives
+    /// the Properties panel's Auto-fit Courtyard toggle (the
+    /// equivalent active-bar button stays for quick access).
+    pub auto_fit_courtyard: bool,
+    /// v0.14.2 — every `.snxfpt` sibling inside the containing
+    /// `.snxlib`'s `footprints/` directory. Drives the new Footprint
+    /// Library panel (mirror of SCH Library). Empty when the active
+    /// footprint lives outside any mounted library.
+    pub library_siblings: Vec<FootprintLibSibling>,
+    /// Display name of the containing `.snxlib` (file stem) — used
+    /// in the Footprint Library panel breadcrumb. `None` for
+    /// lone-file edits.
+    pub library_stem: Option<String>,
+    /// v0.18.8 — every footprint inside the active multi-footprint
+    /// `.snxfpt` envelope. Mirror of one row in Altium's PCB Library
+    /// panel. Drives the Footprint Library panel's primary list.
+    pub internal_footprints: Vec<FootprintLibInternalRow>,
+    /// v0.18.8 — single-click selection within the panel's internal
+    /// footprint list. `None` until the user clicks a row. Drives
+    /// the Place / Delete / Edit button enable state.
+    pub internal_selected_idx: Option<usize>,
+    /// v0.16.2 — Sketch parameter table (name → expression). Drives
+    /// the Properties panel's Parameters section in Sketch mode.
+    /// Empty when the footprint has no `SketchData` yet.
+    pub sketch_parameters: Vec<(String, String)>,
+    /// v0.16.2 — solver warnings from the most recent solve + bake.
+    /// Drives the Properties panel's "Solve warnings" section.
+    pub solve_warnings: Vec<String>,
+    /// v0.16.2 — sketch-entity ID of the primary selection. Wired
+    /// through so the Properties panel's Role pick_list can emit
+    /// `FootprintSketchSetRole` with the right id.
+    pub selected_sketch_entity_id: Option<signex_sketch::id::SketchEntityId>,
+    /// v0.16.2 — current role of the primary selected sketch entity
+    /// (or `Unassigned` when no entity is selected). Inspected via
+    /// `current_role_of` against the entity's `*Attr` slots.
+    pub selected_sketch_role: crate::library::messages::RoleTag,
+    /// v0.16.2 — `true` when the primary selected sketch entity is a
+    /// Point. Drives the "Pad role applies to Points only" hint on
+    /// the Role pick_list.
+    pub selected_sketch_is_point: bool,
+    /// v0.16.3 — `true` when the Pads-mode tool is `PlacePad`. Drives
+    /// visibility of the "Pad placement defaults" form on the
+    /// Properties panel (designator override + size_x / size_y / side).
+    pub placement_active: bool,
+    /// v0.16.3 — `true` when TAB has paused click-publish during pad
+    /// placement. Adds a "PAUSED — TAB to resume" hint to the form.
+    pub placement_paused: bool,
+    /// v0.16.3 — designator override for the next placed pad. `None`
+    /// = use the auto-incrementing numeric designator.
+    pub next_pad_designator_override: Option<String>,
+    /// v0.16.3 — size_x of the next placed pad in mm.
+    pub next_pad_size_x_mm: f64,
+    /// v0.16.3 — size_y of the next placed pad in mm.
+    pub next_pad_size_y_mm: f64,
+    /// v0.16.3 — copper side for the next placed pad.
+    pub next_pad_side: crate::library::editor::footprint::state::PadSide,
+    /// v0.16.6 — rotation in degrees (CCW positive) for the next
+    /// placed pad. Persists through `EditorPad.rotation_deg` →
+    /// `Pad::rotation` so the saved file carries the value.
+    pub next_pad_rotation_deg: f64,
+    /// v0.20 — Altium-parity pad-stack defaults for the next placed
+    /// pad. Mirrors `editor.state.next_pad_defaults.stack` for the
+    /// Properties panel "Pad Stack" section. UI mutates these via
+    /// `FpEditorSetNextPad*` messages; the dispatcher writes the
+    /// value back so `add_pad_at` picks it up on the next click.
+    pub next_pad_stack: crate::library::editor::footprint::state::PadStackUi,
+    /// v0.20 — pad shape for the next placed pad (read out of
+    /// `EditorPad::shape` after mint). Defaults to `Rect`.
+    pub next_pad_shape: signex_library::PadShape,
+    /// v0.20 — drill diameter for the next placed pad in mm. `None`
+    /// = SMD pad (no hole). Drives the HOLE → Hole size row.
+    pub next_pad_drill_diameter_mm: Option<f64>,
+    /// v0.20 — drill slot length for the next placed pad in mm.
+    /// `None` = round drill; `Some(l)` = oval slot of length l.
+    /// Drives the HOLE → Shape pick_list (Round vs Slot) and the
+    /// Slot length input visibility.
+    pub next_pad_drill_slot_length_mm: Option<f64>,
+    /// v0.20 — pad-template name for the next placed pad. Empty =
+    /// no template.
+    pub next_pad_template: String,
+    /// v0.20 — pad-template library reference for the next placed
+    /// pad. Empty = local.
+    pub next_pad_template_library: String,
+    /// v0.20 — top-side surface feature for the next placed pad.
+    pub next_pad_feature_top: signex_sketch::attr::PadFeature,
+    /// v0.20 — bottom-side surface feature for the next placed pad.
+    pub next_pad_feature_bottom: signex_sketch::attr::PadFeature,
+    /// v0.20 — test-point participation flags for the next placed
+    /// pad. All `false` = not a test point.
+    pub next_pad_testpoint: signex_sketch::attr::TestpointFlags,
+    /// v0.20 — currently-active Pad Stack tab (Simple / Top-Middle-
+    /// Bottom / Full Stack). Drives which body the Pad Stack section
+    /// renders. UI-only state; not persisted to disk.
+    pub pad_stack_tab: crate::library::editor::footprint::state::PadStackTab,
+    /// v0.21 — Altium-parity electrical-type for the next placed pad.
+    pub next_pad_electrical_type: signex_sketch::attr::ElectricalType,
+    /// v0.21 — net assignment for the next placed pad.
+    pub next_pad_net: String,
+    /// v0.21 — locked flag for the next placed pad.
+    pub next_pad_locked: bool,
+    /// v0.21 — Pad mounting kind for the next placed pad.
+    pub next_pad_kind: signex_library::PadKind,
+    /// v0.21 — Altium-parity component-level fields. Surface in the
+    /// empty-canvas Footprint summary form.
+    pub footprint_description: String,
+    pub footprint_default_designator: String,
+    pub footprint_component_type: signex_library::primitive::footprint::ComponentType,
+    pub footprint_height_mm: Option<f64>,
+    /// v0.21 — Pad Hole detail fields surfaced for the Multi-Layer
+    /// pad placement form.
+    pub next_pad_hole_tolerance_plus_mm: Option<f64>,
+    pub next_pad_hole_tolerance_minus_mm: Option<f64>,
+    pub next_pad_hole_rotation_deg: Option<f64>,
+    pub next_pad_copper_offset_x_mm: Option<f64>,
+    pub next_pad_copper_offset_y_mm: Option<f64>,
+    /// v0.16.4 — Pour-role sub-form values for the selected entity.
+    /// `None` when the entity isn't a pour. Carries the net string,
+    /// fill type, and a snapshot of thermal-relief defaults so the
+    /// panel can show + edit each field.
+    pub selected_pour: Option<PourSummary>,
+    /// v0.16.4 — Keepout-role sub-form values for the selected
+    /// entity. `None` when the entity isn't a keepout.
+    pub selected_keepout: Option<KeepoutSummary>,
+    /// v0.16.4 — BoardCutout-role sub-form values for the selected
+    /// entity. `None` when the entity isn't a board cutout.
+    pub selected_cutout: Option<CutoutSummary>,
+    /// v0.21 — pad-role sub-form values for the selected sketch
+    /// entity. `Some` when the entity carries a `PadAttr`.
+    pub selected_sketch_pad: Option<SketchPadAttrSummary>,
+    /// v0.17.0 — empty-canvas Snap Options. Surfaced on the
+    /// Properties panel default branch (no selection) so the user
+    /// can toggle each priority chain step.
+    pub snap_options: crate::library::editor::footprint::state::SnapOptions,
+    /// v0.18.13 — Altium 5-section Properties layout state.
+    pub selection_filter: crate::library::editor::footprint::state::SelectionFilter,
+    pub snap_subtab: crate::library::editor::footprint::state::SnapSubTab,
+    pub snapping_mode: crate::library::editor::footprint::state::SnappingMode,
+    /// v0.18.20 — Altium-style guide lines visible to the Guide
+    /// Manager UI table. Cloned out of `editor.state.guides` so the
+    /// panel can iterate them without holding a borrow into the
+    /// document state.
+    pub guides: Vec<crate::library::editor::footprint::state::Guide>,
+    /// v0.18.21 — Altium grid table rows. Cloned out of
+    /// `editor.state.grids`; the active row is `active_grid_idx`.
+    pub grids: Vec<crate::library::editor::footprint::state::GridDef>,
+    /// v0.18.21 — index into `grids` of the active row (mirror of
+    /// `editor.state.active_grid_idx`).
+    pub active_grid_idx: usize,
+    /// v0.18.24 — selected silk-front graphic summary. `None` when
+    /// no silk graphic is selected; the Properties panel only renders
+    /// the silk-selection branch when this is `Some`.
+    pub selected_silk_summary: Option<FootprintSelectedSilkSummary>,
+    /// v0.25 polish — verbatim per-input buffers for Properties-panel
+    /// numeric fields. Renderer reads `numeric_buffers.get(key)` and
+    /// uses the literal buffer if present; falls back to formatting
+    /// the canonical f64 otherwise. See
+    /// [`crate::library::editor::footprint::state::FootprintEditorState::numeric_buffers`]
+    /// for the buffer contract.
+    pub numeric_buffers: std::collections::HashMap<String, String>,
+    /// v0.23 — Array (Pattern) summary surfaced when the selected
+    /// sketch entity is the `source` of an array. Drives the
+    /// Properties panel "Pattern" sub-section.
+    pub selected_array: Option<ArraySummary>,
+    /// v0.24 Phase 3 (Track A2) — parametric handle summary for the
+    /// selected pad. Empty when the pad has no `shape_params` bindings
+    /// (e.g. legacy pads minted before v0.24, or pads whose shape has
+    /// no parametric handles like Rect / Oval). One entry per
+    /// (feature_key → parameter) binding; the Properties panel
+    /// renders one editable row per entry so the user can edit the
+    /// shared sketch parameter without entering Sketch mode.
+    pub selected_pad_shape_params: Vec<PadShapeParamSummary>,
+}
+
+/// v0.24 Phase 3 (Track A2) — surface entry for one parametric pad
+/// handle. Carries the feature key (e.g. `"corner_r"`, `"diameter"`),
+/// the resolved sketch parameter name, the current expression string
+/// (read out of `sketch.parameters`), and a UI label so the
+/// Properties panel can render a localised row label without each
+/// editor having to repeat the mapping.
+#[derive(Debug, Clone)]
+pub struct PadShapeParamSummary {
+    /// Feature key as stored on `EditorPad.shape_params`
+    /// (e.g. `"corner_r"`, `"diameter"`).
+    pub key: String,
+    /// Display label for the Properties panel row.
+    pub label: String,
+    /// Resolved parameter name in `sketch.parameters` (the value
+    /// stored under `key` in `pad.shape_params`).
+    pub parameter_name: String,
+    /// Current expression string (e.g. `"0.25mm"`). Empty when the
+    /// parameter is missing from `sketch.parameters` (defensive — the
+    /// row still renders so the user can re-bind via direct edit).
+    pub current_expr: String,
+}
+
+/// v0.16.4 — Pour role properties surfaced on the Properties panel.
+#[derive(Debug, Clone)]
+pub struct PourSummary {
+    pub net: Option<String>,
+    pub fill_type: signex_sketch::attr::PourFillType,
+    pub priority: u32,
+}
+
+/// v0.16.4 — Keepout role properties surfaced on the Properties panel.
+#[derive(Debug, Clone)]
+pub struct KeepoutSummary {
+    pub no_routing: bool,
+    pub no_components: bool,
+    pub no_copper: bool,
+    pub no_vias: bool,
+    pub no_drilling: bool,
+    pub no_pours: bool,
+}
+
+/// v0.16.4 — BoardCutout role properties surfaced on the Properties panel.
+#[derive(Debug, Clone)]
+pub struct CutoutSummary {
+    pub edge_radius_expr: Option<String>,
+    pub through: bool,
+}
+
+/// v0.23 — Array (Pattern) properties surfaced on the Properties panel
+/// when the selected sketch entity is the source of an
+/// [`signex_sketch::array::Array`]. The handler resolves the array by
+/// `array_id`, mutates the matching field, then runs solve+bake.
+#[derive(Debug, Clone)]
+pub struct ArraySummary {
+    pub array_id: signex_sketch::array::ArrayId,
+    pub kind: ArrayKindSummary,
+    pub numbering: NumberingSchemeKindUi,
+    /// `true` when the polar centre re-pick is active — the next
+    /// sketch click on a Point sets `array.center`.
+    pub repicking_polar_center: bool,
+    /// v0.25 polish — when `numbering == BgaRowCol`, this carries the
+    /// BGA-specific config (skip_letters / start_row / start_col) so
+    /// the Properties panel can surface editable rows for each. `None`
+    /// for Linear / Explicit numbering schemes.
+    pub bga_config: Option<BgaConfigSummary>,
+}
+
+/// v0.25 polish — surface for BGA numbering scheme parameters.
+/// Mirror of [`signex_sketch::array::NumberingScheme::BgaRowCol`].
+#[derive(Debug, Clone)]
+pub struct BgaConfigSummary {
+    /// IPC-7351 letter-skip convention (omits I/O/Q/S/X/Z to avoid
+    /// confusion with numerals). Default `true` matches Altium.
+    pub skip_letters: bool,
+    /// First row letter (e.g. `'A'`). Drives the row labels in the
+    /// baked replicas.
+    pub start_row: char,
+    /// First column number (e.g. `1`).
+    pub start_col: u32,
+}
+
+#[derive(Debug, Clone)]
+pub enum ArrayKindSummary {
+    Linear {
+        count_expr: String,
+        dx_expr: String,
+        dy_expr: String,
+    },
+    Grid {
+        nx_expr: String,
+        ny_expr: String,
+        dx_expr: String,
+        dy_expr: String,
+        /// Empty string when the array has no `GridDepopulation`.
+        mask_expr: String,
+        /// Per-instance suppression carried alongside `mask_expr`. The
+        /// bake honours both — a (i, j) pair in this list skips the
+        /// instance regardless of the mask predicate. Stored as
+        /// `(i, j)` 0-based row/column indices. Drives the v0.23 B5
+        /// per-instance checkbox grid in the Properties panel.
+        suppressed_instances: Vec<(u32, u32)>,
+        /// Snapshot of `nx` after evaluation — drives the checkbox
+        /// grid's column count. `None` when the expression isn't
+        /// numeric (e.g. references a parameter that isn't bound).
+        nx_value: Option<u32>,
+        /// Snapshot of `ny` — checkbox grid's row count.
+        ny_value: Option<u32>,
+    },
+    Polar {
+        count_expr: String,
+        sweep_angle_expr: String,
+        center_position_mm: Option<[f64; 2]>,
+        mask_expr: String,
+        /// Per-instance suppression for Polar; the j coordinate is
+        /// always 0 (Polar arrays are 1-D).
+        suppressed_instances: Vec<u32>,
+        /// Snapshot of the evaluated `count` — drives the checkbox row
+        /// length. `None` when the expression isn't numeric.
+        count_value: Option<u32>,
+    },
+}
+
+/// v0.23 — Numbering scheme kind for the Properties panel pick_list.
+/// Mirrors [`signex_sketch::array::NumberingScheme`]'s tag. The handler
+/// preserves the inner expression fields when flipping kinds where
+/// possible (e.g. switching to LinearIncrement keeps any prior
+/// start/step expressions; switching to Explicit clears them).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NumberingSchemeKindUi {
+    LinearIncrement,
+    BgaRowCol,
+    Explicit,
+}
+
+impl NumberingSchemeKindUi {
+    pub const ALL: [Self; 3] = [
+        Self::LinearIncrement,
+        Self::BgaRowCol,
+        Self::Explicit,
+    ];
+}
+
+impl std::fmt::Display for NumberingSchemeKindUi {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::LinearIncrement => "Linear (1, 2, 3, …)",
+            Self::BgaRowCol => "BGA (A1, A2, …)",
+            Self::Explicit => "Explicit list",
+        })
+    }
+}
+
+/// v0.23 — Field discriminator for [`PanelMsg::FpEditorEditArrayParam`].
+/// Each variant maps to a single text-input on one [`ArrayKindSummary`]
+/// branch; the handler uses the variant to disambiguate the target
+/// field when mutating the array in place.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArrayParamField {
+    LinearCountExpr,
+    LinearDxExpr,
+    LinearDyExpr,
+    GridNxExpr,
+    GridNyExpr,
+    GridDxExpr,
+    GridDyExpr,
+    PolarCountExpr,
+    PolarSweepAngleExpr,
+    /// Maps to `GridDepopulation.mask_expr` for both Grid and Polar
+    /// arrays. Empty string clears the depopulation entirely (set
+    /// `Option::None` on the array).
+    MaskExpr,
+}
+
+/// v0.16.4 — discrete bit identifier for [`KeepoutSummary`] flags.
+/// PanelMsg-friendly so the Keepout sub-form's checklist can carry
+/// "which flag" without smuggling a closure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeepoutKindFlag {
+    NoRouting,
+    NoComponents,
+    NoCopper,
+    NoVias,
+    NoDrilling,
+    NoPours,
+}
+
+/// v0.17.0 — discrete identifier for the four `SnapOptions` flags.
+/// Used by the Properties-panel snap checklist to carry "which
+/// flag" through `PanelMsg`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SnapOptionFlag {
+    PointHit,
+    HorizontalVertical,
+    Angle,
+    Grid,
+    // v0.13 — Altium "Objects for snapping" set.
+    TrackVertices,
+    TrackLines,
+    ArcCenters,
+    Intersections,
+    PadCenters,
+    PadVertices,
+    PadEdges,
+    ViaCenters,
+    Texts,
+    Regions,
+    FootprintOrigins,
+    Body3dPoints,
+    /// Independent target-category toggles (Altium PCB Library
+    /// editor): each can be on simultaneously.
+    SnapToGrids,
+    SnapToGuides,
+    SnapToAxes,
+}
+
+/// One row in the Footprint Library panel — a sibling `.snxfpt`
+/// living next to the active footprint inside the same `.snxlib`'s
+/// `footprints/` directory.
+#[derive(Debug, Clone)]
+pub struct FootprintLibSibling {
+    /// Absolute path to the `.snxfpt` on disk.
+    pub path: std::path::PathBuf,
+    /// File stem ("SOIC-8") — falls back to filename when the stem
+    /// can't be resolved.
+    pub display_name: String,
+    /// `true` when this sibling is the currently-open footprint
+    /// (the active tab). The panel renders this row with the
+    /// selection highlight.
+    pub is_active: bool,
+}
+
+/// v0.18.8 — one row in the Footprint Library panel representing a
+/// footprint *inside* the active `.snxfpt` envelope. Mirror of one
+/// component row in Altium's PCB Library panel.
+#[derive(Debug, Clone)]
+pub struct FootprintLibInternalRow {
+    /// `Footprint::name` — primary display label.
+    pub name: String,
+    /// Pad count, surfaced in a secondary column.
+    pub pad_count: usize,
+    /// `true` when this index matches the editor's `active_idx` —
+    /// the row that the canvas / Properties panel currently shows.
+    pub is_active: bool,
+}
+
+/// Editor mode mirror — kept in this crate so the panel doesn't need
+/// to import `library::editor::footprint::state::EditorMode`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FootprintModeKind {
+    Pads,
+    Sketch,
+    View3d,
+}
+
+#[derive(Debug, Clone)]
+pub struct FootprintSolveSummary {
+    pub iterations: usize,
+    pub elapsed_ms: u64,
+    pub final_residual_norm: f64,
+    pub over_constraint_count: usize,
+    /// v0.22 Phase E3+E4 — per-over-constraint summary so the
+    /// Properties panel can list the conflicts and the user can
+    /// click each to focus the canvas on the offending geometry.
+    /// Sorted descending by `residual_magnitude` so the worst
+    /// offender is first. Empty when `over_constraint_count == 0`.
+    pub over_constraints: Vec<OverConstraintSummary>,
+}
+
+#[derive(Debug, Clone)]
+pub struct OverConstraintSummary {
+    /// v0.23 — Constraint ID used by the canvas to render the
+    /// specific row at full red while everything else (including
+    /// other over-constraints) dims. Drives per-row hover precision
+    /// in the Properties panel "Conflicts" list.
+    pub constraint_id: signex_sketch::id::ConstraintId,
+    /// Kind label — "Coincident", "DistancePtPt", "Horizontal", etc.
+    /// Static string avoids allocating per-row.
+    pub kind_label: &'static str,
+    /// Post-solve residual magnitude. The LM iteration drives this
+    /// below `Solver::tolerance` for satisfiable constraints; values
+    /// above `RANK_TOL` indicate the constraint couldn't be met
+    /// alongside the others.
+    pub residual_magnitude: f64,
+    /// First Point entity the constraint touches. Click → select
+    /// this Point so the canvas pans and the constraint icon
+    /// rendered in red sits in view. `None` for constraints with
+    /// no Point endpoints (rare — Fixed pseudo-rows).
+    pub focus_entity_id: Option<signex_sketch::id::SketchEntityId>,
+}
+
+#[derive(Debug, Clone)]
+pub struct FootprintPadSummary {
+    pub idx: usize,
+    pub number: String,
+    pub kind_label: &'static str,
+    pub shape_label: &'static str,
+    pub size_mm: [f64; 2],
+    pub position_mm: [f64; 2],
+    pub rotation_deg: f64,
+    pub layer_count: usize,
+    pub has_drill: bool,
+    /// v0.20 — full snapshot of editable pad state surfaced for the
+    /// selected-pad Properties panel. Mirrors the same fields the
+    /// next-pad form binds to so the selected-pad branch can render
+    /// the same Properties / Pad Stack / Pad Features sections.
+    pub side: crate::library::editor::footprint::state::PadSide,
+    pub shape: signex_library::PadShape,
+    pub kind: signex_library::PadKind,
+    pub drill_diameter_mm: Option<f64>,
+    pub stack: crate::library::editor::footprint::state::PadStackUi,
+    pub feature_top: signex_sketch::attr::PadFeature,
+    pub feature_bottom: signex_sketch::attr::PadFeature,
+    pub testpoint: signex_sketch::attr::TestpointFlags,
+    pub template: String,
+    pub template_library: String,
+    /// v0.21 — Altium-parity electrical-type.
+    pub electrical_type: signex_sketch::attr::ElectricalType,
+    /// v0.21 — net assignment.
+    pub net: String,
+    /// v0.21 — locked flag.
+    pub locked: bool,
+    /// v0.21 — Pad Hole detail fields for the selected pad.
+    pub hole_tolerance_plus_mm: Option<f64>,
+    pub hole_tolerance_minus_mm: Option<f64>,
+    pub hole_rotation_deg: Option<f64>,
+    pub copper_offset_x_mm: Option<f64>,
+    pub copper_offset_y_mm: Option<f64>,
+}
+
+/// v0.18.24 — Read-only summary of the currently-selected silk-front
+/// v0.21 — sketch-mode pad attribute snapshot. Mirrors the new
+/// fields we added to `PadAttr` so the sketch-entity Properties
+/// branch can render an editable Pad Attributes section.
+#[derive(Debug, Clone)]
+pub struct SketchPadAttrSummary {
+    pub id: signex_sketch::id::SketchEntityId,
+    pub electrical_type: signex_sketch::attr::ElectricalType,
+    pub net: String,
+    pub locked: bool,
+    pub template: String,
+    pub template_library: String,
+    pub feature_top: signex_sketch::attr::PadFeature,
+    pub feature_bottom: signex_sketch::attr::PadFeature,
+    pub testpoint: signex_sketch::attr::TestpointFlags,
+    pub thermal_relief: bool,
+    pub mask_top_tented: bool,
+    pub mask_bottom_tented: bool,
+    pub paste_top_enabled: bool,
+    pub paste_bottom_enabled: bool,
+    pub corner_radius_pct: Option<f64>,
+    pub hole_tolerance_plus_mm: Option<f64>,
+    pub hole_tolerance_minus_mm: Option<f64>,
+    pub hole_rotation_deg: Option<f64>,
+    pub copper_offset_x_mm: Option<f64>,
+    pub copper_offset_y_mm: Option<f64>,
+    /// `true` when the pad has a drill spec (i.e. THT / NPT). Used
+    /// to gate Hole-detail UI rows.
+    pub has_drill: bool,
+}
+
+/// graphic (`FpGraphic` in `silk_f`). Drives the Properties panel's
+/// silk-selection branch with full per-kind editable fields.
+#[derive(Debug, Clone)]
+pub struct FootprintSelectedSilkSummary {
+    pub idx: usize,
+    pub kind_label: &'static str,
+    /// Stroke width in mm.
+    pub stroke_width_mm: f64,
+    /// `true` = solid fill; `false` = outline only.
+    pub filled: bool,
+    /// Per-kind geometry — only the field set matching `kind_label`
+    /// is meaningful at any given time. `None` slots stay None.
+    pub kind: SilkKindGeometry,
+}
+
+/// v0.21 — per-`FpGraphicKind` editable geometry. We surface
+/// dedicated editable forms only for Line (Track) and Text (String);
+/// Arc / Rectangle / Circle / Polygon collapse to `Other` and get a
+/// minimal banner pointing the user at sketch mode for parametric
+/// editing.
+#[derive(Debug, Clone)]
+pub enum SilkKindGeometry {
+    Line { from_mm: [f64; 2], to_mm: [f64; 2] },
+    Text {
+        position_mm: [f64; 2],
+        content: String,
+        size_mm: f64,
+    },
+    /// Fallback for Arc / Rectangle / Circle / Polygon — the
+    /// Properties panel surfaces stroke width / filled / locked /
+    /// delete and a hint to switch to Sketch mode for full editing.
+    Other,
+}
+
+#[derive(Debug, Clone)]
+pub struct FootprintSketchEntitySummary {
+    /// Display label for the entity kind ("Point", "Line", "Arc",
+    /// "Circle"). Wrapper avoids importing the sketch enum.
+    pub kind_label: &'static str,
+    /// Coordinates in mm — for Points only; None for Lines/Arcs/Circles.
+    pub position_mm: Option<[f64; 2]>,
+    /// Number of attached constraints touching this entity.
+    pub attached_constraint_count: usize,
+    /// `true` if this is a construction entity (solver scaffolding
+    /// only, no baked geometry).
+    pub construction: bool,
+    /// v0.22 Phase A3 — solver-state colour for the entity. `Some` for
+    /// Points (looked up in `last_solve.colours`); `None` for other
+    /// entity kinds whose DOF state is implicitly the min of their
+    /// endpoints'. Drives the "DOF" row in the Properties panel.
+    pub dof_state: Option<signex_sketch::solver::dof::DofColor>,
 }
 
 /// Context handed to the right-dock Properties panel and the SCH-Library
@@ -836,6 +1577,498 @@ pub enum PanelMsg {
     Tree(TreeMsg),
     SetUnit(Unit),
     RunErc,
+    /// v0.14.2 — Properties panel toggle for the active footprint
+    /// editor's Auto-fit Courtyard setting. Routes through
+    /// `handle_dock_sch_library_message` (same dispatcher every other
+    /// `Sym*` / `FpEditor*` panel msg uses) which resolves the active
+    /// footprint editor by tab and flips its `auto_fit_courtyard`
+    /// flag via the existing `FootprintToggleAutoFit` path.
+    FpEditorToggleAutoFitCourtyard,
+    /// v0.16.2 — Properties-panel Role pick_list emit. Routed
+    /// through the dock handler which forwards to
+    /// `LibraryMessage::PrimitiveEditorEvent { ... FootprintSketchSetRole }`
+    /// keyed on the active footprint editor tab.
+    FpEditorSetRole {
+        id: signex_sketch::id::SketchEntityId,
+        role: crate::library::messages::RoleTag,
+    },
+    /// v0.16.2 — Properties-panel Parameter row text input. Routed
+    /// through the dock handler which forwards to
+    /// `LibraryMessage::PrimitiveEditorEvent { ... FootprintSketchEditParameter }`.
+    FpEditorEditParameter {
+        name: String,
+        expr: String,
+    },
+    /// v0.16.3 — Properties-panel "Pad placement defaults" form
+    /// updates. The handler mutates `editor.state.next_pad_defaults`
+    /// directly so the next `add_pad_at` picks up the new values.
+    FpEditorSetNextPadDesignator(String),
+    FpEditorSetNextPadSizeX(String),
+    FpEditorSetNextPadSizeY(String),
+    FpEditorSetNextPadSide(crate::library::editor::footprint::state::PadSide),
+    /// v0.16.6 — Properties-panel rotation input for the next placed
+    /// pad. String-typed so the user can erase / type freely.
+    FpEditorSetNextPadRotation(String),
+    /// v0.16.6 — Properties-panel rotation input for the SELECTED
+    /// pad in Pads mode. Mutates `state.pads[idx].rotation_deg`
+    /// directly + dirty-marks the tab.
+    FpEditorSetSelectedPadRotation {
+        idx: usize,
+        value: String,
+    },
+    /// v0.20 — Altium-parity Pad Properties / Pad Stack / Pad Features
+    /// form for the next placed pad. Each variant maps to one row in
+    /// the right-dock Properties panel; the dispatcher writes the
+    /// parsed value into `editor.state.next_pad_defaults` (or the
+    /// matching sub-struct) so the next `add_pad_at` picks it up.
+    /// String-typed inputs preserve the per-field typing buffer
+    /// behaviour we use for size_x / size_y / rotation.
+    FpEditorSetNextPadShape(signex_library::PadShape),
+    FpEditorSetNextPadKind(signex_library::PadKind),
+    FpEditorSetNextPadDrillDiameter(String),
+    FpEditorSetNextPadDrillSlotLength(String),
+    FpEditorSetNextPadCornerRadiusPct(String),
+    FpEditorSetNextPadTemplate(String),
+    FpEditorSetNextPadTemplateLibrary(String),
+    FpEditorSetNextPadPasteMarginTop(String),
+    FpEditorSetNextPadPasteMarginBottom(String),
+    FpEditorToggleNextPadPasteEnabledTop(bool),
+    FpEditorToggleNextPadPasteEnabledBottom(bool),
+    FpEditorSetNextPadMaskMarginTop(String),
+    FpEditorSetNextPadMaskMarginBottom(String),
+    FpEditorToggleNextPadMaskTentedTop(bool),
+    FpEditorToggleNextPadMaskTentedBottom(bool),
+    FpEditorToggleNextPadThermalRelief(bool),
+    FpEditorSetNextPadFeatureTop(signex_sketch::attr::PadFeature),
+    FpEditorSetNextPadFeatureBottom(signex_sketch::attr::PadFeature),
+    FpEditorToggleNextPadTestpointTopAssembly(bool),
+    FpEditorToggleNextPadTestpointTopFab(bool),
+    FpEditorToggleNextPadTestpointBottomAssembly(bool),
+    FpEditorToggleNextPadTestpointBottomFab(bool),
+    /// v0.20 — Altium-parity Pad Properties / Pad Stack / Pad Features
+    /// editing for the SELECTED pad. Each handler mutates
+    /// `state.pads[idx]` (and dirty-marks the editor + syncs the
+    /// primitive). String-typed numeric inputs preserve the
+    /// per-field typing buffer behaviour.
+    FpEditorSetSelectedPadDesignator { idx: usize, value: String },
+    FpEditorSetSelectedPadSide { idx: usize, side: crate::library::editor::footprint::state::PadSide },
+    FpEditorSetSelectedPadShape { idx: usize, shape: signex_library::PadShape },
+    FpEditorSetSelectedPadKind { idx: usize, kind: signex_library::PadKind },
+    FpEditorSetSelectedPadSizeX { idx: usize, value: String },
+    FpEditorSetSelectedPadSizeY { idx: usize, value: String },
+    FpEditorSetSelectedPadDrillDiameter { idx: usize, value: String },
+    FpEditorSetSelectedPadDrillSlotLength { idx: usize, value: String },
+    FpEditorSetSelectedPadCornerRadiusPct { idx: usize, value: String },
+    FpEditorSetSelectedPadTemplate { idx: usize, value: String },
+    FpEditorSetSelectedPadTemplateLibrary { idx: usize, value: String },
+    FpEditorSetSelectedPadPasteMarginTop { idx: usize, value: String },
+    FpEditorSetSelectedPadPasteMarginBottom { idx: usize, value: String },
+    FpEditorToggleSelectedPadPasteEnabledTop { idx: usize, value: bool },
+    FpEditorToggleSelectedPadPasteEnabledBottom { idx: usize, value: bool },
+    FpEditorSetSelectedPadMaskMarginTop { idx: usize, value: String },
+    FpEditorSetSelectedPadMaskMarginBottom { idx: usize, value: String },
+    FpEditorToggleSelectedPadMaskTentedTop { idx: usize, value: bool },
+    FpEditorToggleSelectedPadMaskTentedBottom { idx: usize, value: bool },
+    FpEditorToggleSelectedPadThermalRelief { idx: usize, value: bool },
+    FpEditorSetSelectedPadFeatureTop { idx: usize, value: signex_sketch::attr::PadFeature },
+    FpEditorSetSelectedPadFeatureBottom { idx: usize, value: signex_sketch::attr::PadFeature },
+    FpEditorToggleSelectedPadTestpointTopAssembly { idx: usize, value: bool },
+    FpEditorToggleSelectedPadTestpointTopFab { idx: usize, value: bool },
+    FpEditorToggleSelectedPadTestpointBottomAssembly { idx: usize, value: bool },
+    FpEditorToggleSelectedPadTestpointBottomFab { idx: usize, value: bool },
+    /// v0.20 — switch the Pad Stack section's tab (Simple /
+    /// Top-Middle-Bottom / Full Stack). UI-only; mutates
+    /// `editor.state.pad_stack_tab`.
+    FpEditorSetPadStackTab(crate::library::editor::footprint::state::PadStackTab),
+    /// v0.21 — Altium-parity Net / Locked / Electrical Type fields
+    /// for both placement-defaults and selected-pad targets.
+    FpEditorSetNextPadElectricalType(signex_sketch::attr::ElectricalType),
+    FpEditorSetNextPadNet(String),
+    FpEditorToggleNextPadLocked(bool),
+    FpEditorSetSelectedPadElectricalType {
+        idx: usize,
+        value: signex_sketch::attr::ElectricalType,
+    },
+    FpEditorSetSelectedPadNet {
+        idx: usize,
+        value: String,
+    },
+    FpEditorToggleSelectedPadLocked {
+        idx: usize,
+        value: bool,
+    },
+    /// v0.21 — Footprint (component-level) edits.
+    FpEditorSetFootprintDescription(String),
+    FpEditorSetFootprintDefaultDesignator(String),
+    FpEditorSetFootprintComponentType(signex_library::primitive::footprint::ComponentType),
+    FpEditorSetFootprintHeight(String),
+    /// v0.21 — Selected silk graphic edits (Line + Text only;
+    /// Arc/Region/Fill/etc are sketch-mode-authored).
+    FpEditorSetSilkLineFromX(String),
+    FpEditorSetSilkLineFromY(String),
+    FpEditorSetSilkLineToX(String),
+    FpEditorSetSilkLineToY(String),
+    FpEditorSetSilkTextPositionX(String),
+    FpEditorSetSilkTextPositionY(String),
+    FpEditorSetSilkTextSize(String),
+    FpEditorSetSilkStrokeWidth(String),
+    FpEditorToggleSilkFilled(bool),
+    /// v0.21 — Pad Hole detail fields (Multi-Layer only).
+    FpEditorSetNextPadHoleTolerancePlus(String),
+    FpEditorSetNextPadHoleToleranceMinus(String),
+    FpEditorSetNextPadHoleRotation(String),
+    FpEditorSetNextPadCopperOffsetX(String),
+    FpEditorSetNextPadCopperOffsetY(String),
+    /// v0.21 — Plated toggle on the Pad Hole row. `true` = THT
+    /// (plated), `false` = NPT (non-plated).
+    FpEditorToggleNextPadPlated(bool),
+    /// v0.21 — Selected-pad hole-detail mirror.
+    FpEditorSetSelectedPadHoleTolerancePlus { idx: usize, value: String },
+    FpEditorSetSelectedPadHoleToleranceMinus { idx: usize, value: String },
+    FpEditorSetSelectedPadHoleRotation { idx: usize, value: String },
+    FpEditorSetSelectedPadCopperOffsetX { idx: usize, value: String },
+    FpEditorSetSelectedPadCopperOffsetY { idx: usize, value: String },
+    FpEditorToggleSelectedPadPlated { idx: usize, value: bool },
+    /// v0.21 — Sketch-mode pad attribute edits. Mutate the `PadAttr`
+    /// on the selected sketch entity (identified by SketchEntityId)
+    /// and re-run solve+bake. Mirrors the new pad fields surfaced in
+    /// Pads-mode but addressed by the sketch entity rather than the
+    /// flat-pad index.
+    FpEditorSetSketchPadElectricalType {
+        id: signex_sketch::id::SketchEntityId,
+        value: signex_sketch::attr::ElectricalType,
+    },
+    FpEditorSetSketchPadNet {
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    },
+    FpEditorToggleSketchPadLocked {
+        id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
+    FpEditorSetSketchPadTemplate {
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    },
+    FpEditorSetSketchPadTemplateLibrary {
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    },
+    FpEditorSetSketchPadFeatureTop {
+        id: signex_sketch::id::SketchEntityId,
+        value: signex_sketch::attr::PadFeature,
+    },
+    FpEditorSetSketchPadFeatureBottom {
+        id: signex_sketch::id::SketchEntityId,
+        value: signex_sketch::attr::PadFeature,
+    },
+    FpEditorToggleSketchPadTestpointTopAssembly {
+        id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
+    FpEditorToggleSketchPadTestpointTopFab {
+        id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
+    FpEditorToggleSketchPadTestpointBottomAssembly {
+        id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
+    FpEditorToggleSketchPadTestpointBottomFab {
+        id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
+    FpEditorToggleSketchPadThermalRelief {
+        id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
+    FpEditorToggleSketchPadMaskTentedTop {
+        id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
+    FpEditorToggleSketchPadMaskTentedBottom {
+        id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
+    FpEditorToggleSketchPadPasteEnabledTop {
+        id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
+    FpEditorToggleSketchPadPasteEnabledBottom {
+        id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
+    FpEditorSetSketchPadHoleTolerancePlus {
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    },
+    FpEditorSetSketchPadHoleToleranceMinus {
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    },
+    FpEditorSetSketchPadHoleRotation {
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    },
+    FpEditorSetSketchPadCopperOffsetX {
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    },
+    FpEditorSetSketchPadCopperOffsetY {
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    },
+    FpEditorSetSketchPadCornerRadiusPct {
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    },
+    /// v0.21 — "Edit in Sketch" jump from a selected pad to its
+    /// backing sketch entity. Switches editor mode to Sketch and
+    /// selects the entity. No-op when the pad has no
+    /// `sketch_entity_id` (placed before sketch-mode auto-mint).
+    FpEditorEditPadInSketch { pad_idx: usize },
+    /// v0.24 Phase 3 (Track A2) — Properties-panel parametric handle
+    /// row edit. The handler looks up `pad.shape_params[key]` to
+    /// resolve the bound parameter name, writes `value` into
+    /// `sketch.parameters[parameter_name]`, then dispatches a sketch
+    /// `ForceRebuild` so the solver re-runs and every entity bound to
+    /// that parameter (e.g. all 4 corner Arcs of a RoundRect) updates
+    /// in lockstep.
+    FpEditorEditPadShapeParam {
+        pad_idx: usize,
+        key: String,
+        value: String,
+    },
+    /// v0.24 Phase 3 (Track A3) — sketch-canvas right-click action.
+    /// "Unlink corner radius" mints a fresh per-corner parameter and
+    /// rebinds the clicked Arc to it so the user can override that
+    /// one corner independently. The other three corners stay on the
+    /// shared `corner_r` parameter. No-op when the Arc isn't part of
+    /// any pad's `shape_params` graph.
+    FpEditorUnlinkCornerRadius {
+        arc_entity_id: signex_sketch::id::SketchEntityId,
+    },
+    /// v0.22 Phase D6 — Mirror of `FpEditorEditPadInSketch` going the
+    /// other direction. From a sketch entity carrying a `PadAttr`,
+    /// switch to Pads mode and select the EditorPad whose
+    /// `sketch_entity_id` matches this id. No-op when no pad has
+    /// this entity as its backing point.
+    FpEditorEditSketchPadInPads {
+        id: signex_sketch::id::SketchEntityId,
+    },
+    /// v0.22 Phase E3+E4 — Properties-panel "Conflicts (worst first)"
+    /// over-constrained constraint row. Click → select the row's
+    /// focus entity in the sketch so the canvas re-renders with the
+    /// constraint icon highlighted. The handler dispatches the
+    /// equivalent `FootprintSketchSelect` library message.
+    FpEditorSelectSketchEntity {
+        id: signex_sketch::id::SketchEntityId,
+    },
+    /// v0.22 Phase 8.5 — Right-dock History panel "Restore this
+    /// version" button. The handler resolves the active tab's
+    /// owning project, opens `LocalGitProjectAdapter`, and runs
+    /// `restore_at(rel_path, oid)` to overwrite the working-tree
+    /// file with the historical blob. Marks the file dirty so the
+    /// next save commits the restored content.
+    HistoryRestoreClicked {
+        sha: String,
+    },
+    /// v0.22 Phase E3+E4 polish — Hover state for the Properties
+    /// panel's "Conflicts (worst first)" list. `true` on row
+    /// `on_enter`, `false` on `on_exit`. The handler flips
+    /// `editor.state.hovered_over_constraint` between
+    /// v0.22 Phase E3+E4 → v0.23 — Per-row hover on a Properties
+    /// panel "Conflicts" list row. `Some(constraint_id)` highlights
+    /// the specific constraint at full red and dims everything else
+    /// (including other over-constraints) so the user can isolate a
+    /// single offender. `None` clears the isolation back to the
+    /// default rendering.
+    FpEditorHoverOverConstraint {
+        constraint: Option<signex_sketch::id::ConstraintId>,
+    },
+    /// v0.16.4 — Pour-role sub-form. The handler mutates the
+    /// selected entity's `pour` attr and runs solve+bake.
+    FpEditorSetPourNet {
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    },
+    FpEditorSetPourFillType {
+        id: signex_sketch::id::SketchEntityId,
+        value: signex_sketch::attr::PourFillType,
+    },
+    FpEditorSetPourPriority {
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    },
+    /// v0.16.4 — Keepout-role kinds checklist. The handler mutates
+    /// the matching `kinds.<flag>` and runs solve+bake.
+    FpEditorSetKeepoutKind {
+        id: signex_sketch::id::SketchEntityId,
+        kind: KeepoutKindFlag,
+        value: bool,
+    },
+    /// v0.16.4 — BoardCutout-role edge-radius expression input.
+    FpEditorSetCutoutEdgeRadius {
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    },
+    /// v0.16.4 — BoardCutout-role through-vs-partial-depth toggle.
+    FpEditorSetCutoutThrough {
+        id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
+    /// v0.23 — Pattern Properties sub-form text-input edit. The
+    /// handler walks `sketch.arrays`, finds the array with `array_id`,
+    /// mutates the field identified by `field`, then runs
+    /// `SketchEdit::ForceRebuild` so the bake re-expands.
+    FpEditorEditArrayParam {
+        array_id: signex_sketch::array::ArrayId,
+        field: ArrayParamField,
+        value: String,
+    },
+    /// v0.23 — Switch the numbering scheme on an array. The handler
+    /// preserves the existing inner fields when possible (LinearIncrement
+    /// keeps prior start/step exprs; flipping to Explicit clears the
+    /// names list).
+    FpEditorSetArrayNumberingScheme {
+        array_id: signex_sketch::array::ArrayId,
+        scheme: NumberingSchemeKindUi,
+    },
+    /// v0.25 polish — toggle BGA `skip_letters`. Active only when the
+    /// array's numbering is BgaRowCol; ignored for Linear / Explicit.
+    FpEditorSetBgaSkipLetters {
+        array_id: signex_sketch::array::ArrayId,
+        value: bool,
+    },
+    /// v0.25 polish — set BGA `start_row` letter. Empty input no-ops;
+    /// non-letter input no-ops; multi-char input takes the first
+    /// letter. Uppercased before storage.
+    FpEditorSetBgaStartRow {
+        array_id: signex_sketch::array::ArrayId,
+        value: String,
+    },
+    /// v0.25 polish — set BGA `start_col` integer. Empty input no-ops;
+    /// non-numeric input no-ops; bounds are otherwise unconstrained.
+    FpEditorSetBgaStartCol {
+        array_id: signex_sketch::array::ArrayId,
+        value: String,
+    },
+    /// v0.23 — Delete the array entirely. The source entity stays put.
+    FpEditorDeleteArray {
+        array_id: signex_sketch::array::ArrayId,
+    },
+    /// v0.23 — Begin re-picking the polar centre. Sets
+    /// `ToolPending::RepickPolarCenter { array_id }` so the next sketch
+    /// click on a Point overwrites `array.center`. Cancels with Esc.
+    FpEditorBeginRepickPolarCenter {
+        array_id: signex_sketch::array::ArrayId,
+    },
+    /// v0.23 — Toggle a single (i, j) instance in a Grid array's
+    /// `GridDepopulation.suppressed_instances`. `value=true` re-enables
+    /// the instance; `value=false` suppresses it.
+    FpEditorToggleArrayInstance {
+        array_id: signex_sketch::array::ArrayId,
+        i: u32,
+        j: u32,
+        value: bool,
+    },
+    /// v0.17.0 — empty-canvas Snap Options toggles. The handler
+    /// flips the matching `SnapOptions` flag.
+    FpEditorToggleSnapOption(SnapOptionFlag),
+    /// v0.18.9 — author-controlled snap grid step (mm). The handler
+    /// parses the string and writes
+    /// `state.snap_options.grid_step_mm`. Invalid / empty strings
+    /// no-op so the input doesn't fight intermediate keystrokes.
+    FpEditorSetSnapGridStep(String),
+    /// v0.13 — Altium "Snap Distance" numeric input.
+    FpEditorSetSnapDistance(String),
+    /// v0.13 — Altium "Axis Snap Range" numeric input.
+    FpEditorSetAxisSnapRange(String),
+    /// v0.13 — Properties panel rename for the active internal
+    /// footprint. Routes to `editor.primitive_mut().name`.
+    FpEditorSetFootprintName(String),
+    /// v0.18.13 — Altium Selection Filter pill toggle. The pills
+    /// live on the v0.18.14 unified active bar; the Properties
+    /// panel surfaces the toggle through this same message.
+    FpEditorToggleSelectionFilter(crate::library::editor::footprint::state::SelectionFilterKind),
+    /// v0.18.13 — open the Custom Selection Filter modal. Stubbed
+    /// until v0.18.14 ships the modal body alongside the active
+    /// bar pills.
+    FpEditorOpenSelectionFilterCustom,
+    /// v0.18.13 — Snap Options sub-tab switch (Grids / Guides / Axes).
+    FpEditorSetSnapSubTab(crate::library::editor::footprint::state::SnapSubTab),
+    /// v0.18.13 — Snapping mode 3-state toggle.
+    FpEditorSetSnappingMode(crate::library::editor::footprint::state::SnappingMode),
+    /// v0.18.13 — `Add` button on the Grid Manager table (placeholder
+    /// for the multi-grid CRUD that lands with the v0.18.14 grid
+    /// system). Dispatch logs a warn for now.
+    FpEditorGridManagerAdd,
+    /// v0.18.13 — `Properties` button on the Grid Manager row;
+    /// reuses the Ctrl+G Cartesian Grid Editor modal.
+    FpEditorGridManagerProperties,
+    /// v0.18.13 — `Delete` button on the Grid Manager row
+    /// (placeholder until multi-grid CRUD lands).
+    FpEditorGridManagerDelete,
+    /// v0.18.21 — Activate the row at the given index. Mirrors the
+    /// row's step / display style / multiplier onto `snap_options` so
+    /// the canvas + snap logic switch to the new grid.
+    FpEditorGridSetActive(usize),
+    /// v0.18.24 — Edit the `content` field of a selected silk-front
+    /// `FpGraphicKind::Text { content, .. }` entry. The dispatcher
+    /// finds `editor.state.selected_silk_f` and mutates the matching
+    /// `silk_f[idx]` if it's a Text. No-op for non-Text selections.
+    FpEditorSetSilkText(String),
+    /// v0.18.24 — Delete the selected silk-front graphic. Mirrors the
+    /// existing `FootprintDeleteSilkF` PrimitiveEditorMsg surface but
+    /// is emitted from the Properties panel's silk-selection branch.
+    FpEditorDeleteSelectedSilk,
+    /// v0.18.13 — `Add` button on the Guide Manager table
+    /// (placeholder until guide system lands).
+    FpEditorGuideManagerAdd,
+    /// v0.18.20 — `Add Vertical` button on the Guide Manager footer.
+    /// Appends a new vertical guide at world X = 0 mm.
+    FpEditorGuideAddVertical,
+    /// v0.18.20 — `Add Horizontal` button on the Guide Manager footer.
+    /// Appends a new horizontal guide at world Y = 0 mm.
+    FpEditorGuideAddHorizontal,
+    /// v0.18.20 — Per-row delete button on the Guide Manager. Removes
+    /// the guide at the given index.
+    FpEditorGuideDelete(usize),
+    /// v0.18.20 — Per-row enabled toggle on the Guide Manager. Flips
+    /// `guides[idx].enabled` so the user can hide individual guides
+    /// without deleting them.
+    FpEditorGuideToggle(usize),
+    /// v0.18.20 — Per-row position edit on the Guide Manager. The text
+    /// input emits the raw string; the dispatcher parses to f64 and
+    /// no-ops on invalid input so intermediate keystrokes don't fight
+    /// the user.
+    FpEditorGuideSetPosition(usize, String),
+    /// v0.14.2 — open a sibling `.snxfpt` from the Footprint Library
+    /// panel. The handler routes through the existing
+    /// `handle_open_primitive` flow so the file gets a fresh tab + a
+    /// `FootprintEditorState` (or activates an existing tab).
+    FpLibraryOpenSibling(std::path::PathBuf),
+    /// v0.18.8 — Footprint Library panel single-click on an internal
+    /// footprint row. Sets `panel_selected_idx` (independent of
+    /// `active_idx`) so the row highlights and the bottom button
+    /// row gates Place / Delete / Edit on it.
+    FpLibrarySelectInternal(usize),
+    /// v0.18.8 — `+ Add` button: append an empty `Footprint` to the
+    /// active envelope and switch onto it. Routes through the
+    /// existing `FootprintAddNewSibling` handler.
+    FpLibraryAddInternal,
+    /// v0.18.8 — `Delete` button: remove the selected internal
+    /// footprint from the envelope. The active footprint clamps to
+    /// the new last index when the deleted row was the active one.
+    FpLibraryDeleteInternal(usize),
+    /// v0.18.8 — `Edit` button (also fires on row double-click):
+    /// promote `panel_selected_idx` to `active_idx` so the canvas
+    /// switches to the selected sibling.
+    FpLibraryEditInternal(usize),
+    /// v0.18.8 — `Place` button: place the selected internal
+    /// footprint as a Component on the active PCB. Stubbed until
+    /// the PCB integration lands; for now no-op + tracing-warn.
+    FpLibraryPlaceInternal(usize),
     /// Clear the current ERC violations list and canvas markers.
     ClearErc,
     /// Focus a specific ERC diagnostic row from the global flattened list.
@@ -856,6 +2089,14 @@ pub enum PanelMsg {
     SelectComponent(String),
     DragComponentsSplit,
     ComponentFilter(String),
+    /// F15 — Properties panel: open the primitive picker (symbol /
+    /// footprint) for the row described by the active
+    /// `PanelContext.library_row_detail`. Routes to
+    /// `LibraryMessage::OpenPrimitivePicker` with a
+    /// `PrimitivePickerTarget::BrowserRow` so the pick applies +
+    /// persists through the existing adapter path.
+    LibraryRowPickSymbol,
+    LibraryRowPickFootprint,
     /// Toggle a collapsible section (by section key).
     ToggleSection(String),
     /// Edit a symbol's designator (committed on submit).
@@ -1197,6 +2438,7 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
             ctx,
         ),
         PanelKind::SchLibrary => view_sch_library(ctx),
+        PanelKind::FootprintLibrary => view_footprint_library(ctx),
         PanelKind::History => return history::view_history(ctx),
     };
 
@@ -1220,7 +2462,10 @@ fn chevron_down() -> svg::Handle {
         .clone()
 }
 
-fn shape_icon_handle(elem_type: &str, theme: signex_types::theme::ThemeId) -> Option<svg::Handle> {
+pub(super) fn shape_icon_handle(
+    elem_type: &str,
+    theme: signex_types::theme::ThemeId,
+) -> Option<svg::Handle> {
     match elem_type {
         "Line" => Some(crate::icons::icon_shape_line(theme)),
         "Rectangle" => Some(crate::icons::icon_shape_rect(theme)),
@@ -1231,14 +2476,16 @@ fn shape_icon_handle(elem_type: &str, theme: signex_types::theme::ThemeId) -> Op
     }
 }
 
-/// Collapsible section: clickable header with SVG chevron, hides content when collapsed.
-fn collapsible_section<'a>(
+/// Just the header part of a collapsible section — clickable button
+/// with SVG chevron + 1px rule. Returns whether the section is
+/// collapsed via `is_collapsed_section(...)` so callers can guard
+/// their body push without using a closure.
+pub(super) fn collapsible_section_header<'a>(
     key: &str,
     title: &str,
     collapsed: &CollapsedSections,
     header_color: Color,
     border_c: Color,
-    content: impl FnOnce() -> Column<'a, PanelMsg>,
 ) -> Column<'a, PanelMsg> {
     let is_collapsed = collapsed.contains(key);
     let chevron_handle = if is_collapsed {
@@ -1250,7 +2497,6 @@ fn collapsible_section<'a>(
 
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
 
-    // Clickable header with SVG chevron
     col = col.push(
         iced::widget::button(
             container(
@@ -1261,12 +2507,12 @@ fn collapsible_section<'a>(
                         .style(move |_: &Theme, _| iced::widget::svg::Style {
                             color: Some(header_color),
                         }),
-                    text(title.to_string()).size(10).color(header_color),
+                    text(title.to_string()).size(12).color(header_color),
                 ]
-                .spacing(4)
+                .spacing(6)
                 .align_y(iced::Alignment::Center),
             )
-            .padding([4, 8])
+            .padding([6, 8])
             .width(Length::Fill),
         )
         .padding(0)
@@ -1285,17 +2531,37 @@ fn collapsible_section<'a>(
         }),
     );
     col = col.push(thin_sep(border_c));
+    col
+}
 
-    // Content (only when expanded)
+pub(super) fn is_section_collapsed(key: &str, collapsed: &CollapsedSections) -> bool {
+    collapsed.contains(key)
+}
+
+/// Collapsible section: clickable header with SVG chevron, hides content when collapsed.
+pub(super) fn collapsible_section<'a>(
+    key: &str,
+    title: &str,
+    collapsed: &CollapsedSections,
+    header_color: Color,
+    border_c: Color,
+    content: impl FnOnce() -> Column<'a, PanelMsg>,
+) -> Column<'a, PanelMsg> {
+    let is_collapsed = collapsed.contains(key);
+    let mut col = collapsible_section_header(key, title, collapsed, header_color, border_c);
     if !is_collapsed {
         col = col.push(content());
     }
-
     col
 }
 
 /// Property key-value row (owned strings to avoid lifetime issues in closures).
-fn prop_kv_row<'a>(key: &str, value: &str, key_c: Color, val_c: Color) -> Element<'a, PanelMsg> {
+pub(super) fn prop_kv_row<'a>(
+    key: &str,
+    value: &str,
+    key_c: Color,
+    val_c: Color,
+) -> Element<'a, PanelMsg> {
     container(
         row![
             text(key.to_string()).size(10).color(key_c).width(84),
@@ -1427,22 +2693,39 @@ fn view_sch_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         return scrollable(col).width(Length::Fill).into();
     };
 
-    // ── File header ──
-    col = col.push(
-        container(
-            text(format!(
-                "{} ({} symbols)",
-                sym.path
-                    .file_name()
-                    .map(|s| s.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| "<untitled>".to_string()),
-                sym.symbols_in_file.len(),
-            ))
-            .size(10)
-            .color(muted),
-        )
-        .padding([4, 8]),
-    );
+    // ── Breadcrumb header — F28 (2026-05-03) ──
+    // Shows `<library_name>  >  <symbol_file>  (N symbols)` so the
+    // user always knows which `.snxlib` the active `.snxsym` belongs
+    // to. Walk `sym.path` ancestors looking for the first directory
+    // ending in `.snxlib`; fall back to just the filename when the
+    // file lives outside any library.
+    let symbol_file = sym
+        .path
+        .file_name()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "<untitled>".to_string());
+    let library_stem: Option<String> = sym
+        .path
+        .ancestors()
+        .find(|p| {
+            p.extension()
+                .and_then(|e| e.to_str())
+                .map(|e| e.eq_ignore_ascii_case("snxlib"))
+                .unwrap_or(false)
+        })
+        .and_then(|p| p.file_stem())
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_string());
+    let breadcrumb = match library_stem {
+        Some(lib) => format!(
+            "{}  ›  {}  ({} symbols)",
+            lib,
+            symbol_file,
+            sym.symbols_in_file.len(),
+        ),
+        None => format!("{}  ({} symbols)", symbol_file, sym.symbols_in_file.len()),
+    };
+    col = col.push(container(text(breadcrumb).size(10).color(muted)).padding([4, 8]));
     col = col.push(thin_sep(border_c));
 
     // ── Column header — Altium SCH Library parity. Two columns:
@@ -1639,10 +2922,7 @@ pub fn build_project_tree(ctx: &PanelContext) -> Vec<TreeNode> {
         return vec![];
     }
 
-    ctx.projects
-        .iter()
-        .map(project_root_node)
-        .collect()
+    ctx.projects.iter().map(project_root_node).collect()
 }
 
 /// One project root — "Source Documents" / "Libraries" / "Settings".
@@ -1653,11 +2933,25 @@ pub fn build_project_tree(ctx: &PanelContext) -> Vec<TreeNode> {
 fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
     let mut source_docs: Vec<TreeNode> = Vec::new();
 
+    // F24 — surface a `(missing)` suffix on every leaf whose backing
+    // file is registered on the project but absent from disk. Catches
+    // orphan references (e.g. user moved/deleted a file outside Signex,
+    // or a previous library-create attempt left an entry behind without
+    // the file). User sees the broken state at a glance instead of
+    // having to double-click and read an error.
+    fn missing_label(filename: &str, is_missing: bool) -> String {
+        if is_missing {
+            format!("{filename}  (missing)")
+        } else {
+            filename.to_string()
+        }
+    }
+
     if !project.sheets.is_empty() {
         for sheet in &project.sheets {
             let icon = TreeIcon::for_path(&sheet.filename);
             source_docs.push(
-                TreeNode::leaf(sheet.filename.clone(), icon)
+                TreeNode::leaf(missing_label(&sheet.filename, sheet.missing), icon)
                     .with_open(sheet.is_open)
                     .with_dirty(sheet.is_dirty)
                     .with_active(sheet.is_active),
@@ -1666,7 +2960,7 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
     } else if let Some(file) = &project.project_file {
         let icon = TreeIcon::for_path(file);
         source_docs.push(
-            TreeNode::leaf(file.clone(), icon)
+            TreeNode::leaf(missing_label(file, project.project_file_missing), icon)
                 .with_open(project.project_file_open)
                 .with_dirty(project.project_file_dirty)
                 .with_active(project.project_file_active),
@@ -1676,7 +2970,7 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
     if let Some(pcb) = &project.pcb_file {
         let icon = TreeIcon::for_path(pcb);
         source_docs.push(
-            TreeNode::leaf(pcb.clone(), icon)
+            TreeNode::leaf(missing_label(pcb, project.pcb_file_missing), icon)
                 .with_open(project.pcb_file_open)
                 .with_dirty(project.pcb_file_dirty)
                 .with_active(project.pcb_file_active),
@@ -1700,12 +2994,42 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
     // advertised symbols the project hadn't actually mounted, which
     // caused real confusion (a project with nothing saved would show
     // "222 symbols loaded" sourced from globally-mounted libraries).
+    // F29 — when a library is mounted and exposes symbols /
+    // footprints, render a `Symbols` and `Footprints` subbranch
+    // underneath the `.snxlib` node so the user can navigate to a
+    // specific primitive directly from the tree. Unmounted /
+    // missing / empty libraries collapse to a plain leaf (matches
+    // the previous behaviour).
+    // Libraries branch: every entry renders as a single leaf with the
+    // file's full filename (incl. extension). `.snxlib` (Component
+    // Libraries), `.snxsym` (Symbol Libraries), and `.snxfpt` (PCB
+    // Libraries) all live as siblings under this branch — Altium
+    // parity. No nested Symbols / Footprints subbranches: a `.snxlib`
+    // can hold thousands of primitives and surfacing them in the tree
+    // would explode the panel; opening the `.snxlib` shows the
+    // browser instead.
     let lib_children: Vec<TreeNode> = project
         .libraries
         .iter()
         .map(|lib| {
-            let display = format!("{}.snxlib", lib.display_name);
-            TreeNode::leaf(display, TreeIcon::SnxLibrary)
+            let filename = lib
+                .root
+                .file_name()
+                .and_then(|s| s.to_str())
+                .map(str::to_string)
+                .unwrap_or_else(|| format!("{}.snxlib", lib.display_name));
+            let display = if lib.missing {
+                format!("{filename}  (missing)")
+            } else {
+                filename.clone()
+            };
+            let icon = TreeIcon::for_path(&filename);
+            // v0.13 — surface the white open-dot / red dirty-dot
+            // indicators on `.snxlib` leaves so library files match
+            // the visual rhythm of `.snxsch` / `.snxpcb` sheets.
+            TreeNode::leaf(display, icon)
+                .with_open(lib.is_open)
+                .with_dirty(lib.is_dirty)
         })
         .collect();
 
@@ -1745,6 +3069,212 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
         .with_dirty(project.is_dirty)
 }
 
+/// v0.18.8 — Footprint Library panel. Mirror of Altium's PCB Library
+/// panel: rows are the footprints *inside* the active `.snxfpt`
+/// envelope (one per `file.footprints[i]`), with a Place / Add /
+/// Delete / Edit button row at the bottom. Single-click highlights;
+/// double-click (or Edit) promotes the selection to `active_idx`.
+///
+/// Cross-file navigation (sibling `.snxfpt` files inside the same
+/// `.snxlib`) is reachable through the project tree — keeping the
+/// panel single-purpose so the button row's targets are unambiguous.
+fn view_footprint_library<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
+    let muted = theme_ext::text_secondary(&ctx.tokens);
+    let primary = theme_ext::text_primary(&ctx.tokens);
+    let border_c = theme_ext::border_color(&ctx.tokens);
+    let bg_active = crate::styles::ti(ctx.tokens.selection);
+
+    let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
+    col = col.push(
+        container(text("Footprint Library").size(11).color(primary))
+            .padding([6, 8])
+            .width(Length::Fill),
+    );
+    col = col.push(thin_sep(border_c));
+
+    let Some(fp) = ctx.footprint_editor.as_ref() else {
+        col = col.push(
+            container(
+                text(
+                    "Open a `.snxfpt` to see its footprints here. Right-click a \
+                     `.snxlib` (or a project) in the project tree and pick \
+                     `Add New ▸ Footprint Library` to create one.",
+                )
+                .size(10)
+                .color(muted),
+            )
+            .padding([6, 8])
+            .width(Length::Fill),
+        );
+        return scrollable(col).width(Length::Fill).into();
+    };
+
+    // Breadcrumb — file name + footprint count.
+    let file_name = fp
+        .path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("<unknown>")
+        .to_string();
+    let breadcrumb = format!(
+        "{}  ({} footprint{})",
+        file_name,
+        fp.internal_footprints.len(),
+        if fp.internal_footprints.len() == 1 {
+            ""
+        } else {
+            "s"
+        },
+    );
+    col = col.push(container(text(breadcrumb).size(10).color(muted)).padding([4, 8]));
+    col = col.push(thin_sep(border_c));
+
+    // Two-column header: Name + Pads (right-aligned count).
+    col = col.push(
+        container(
+            row![
+                text("Name").size(10).color(muted).width(Length::Fill),
+                text("Pads").size(10).color(muted),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([4, 8])
+        .width(Length::Fill),
+    );
+    col = col.push(thin_sep(border_c));
+
+    // Internal-footprint rows.
+    for (idx, footprint_row) in fp.internal_footprints.iter().enumerate() {
+        let is_selected = fp.internal_selected_idx == Some(idx);
+        let is_active = footprint_row.is_active;
+        // Active row paints with the selection tint; selected-only
+        // (not yet active) paints with a slightly lighter tint so the
+        // user can tell selection apart from "currently editing".
+        let bg = if is_active {
+            iced::Background::Color(bg_active)
+        } else if is_selected {
+            iced::Background::Color(iced::Color {
+                a: 0.4,
+                ..bg_active
+            })
+        } else {
+            iced::Background::Color(iced::Color::TRANSPARENT)
+        };
+        let label_color = if is_active || is_selected {
+            primary
+        } else {
+            muted
+        };
+        let row_btn = iced::widget::button(
+            row![
+                text(footprint_row.name.clone())
+                    .size(10)
+                    .color(label_color)
+                    .width(Length::Fill),
+                text(footprint_row.pad_count.to_string())
+                    .size(10)
+                    .color(label_color),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([3, 8])
+        .on_press(PanelMsg::FpLibrarySelectInternal(idx))
+        .style(move |_: &Theme, _| iced::widget::button::Style {
+            background: Some(bg),
+            border: iced::Border {
+                width: 0.0,
+                radius: 0.0.into(),
+                color: iced::Color::TRANSPARENT,
+            },
+            ..iced::widget::button::Style::default()
+        })
+        .width(Length::Fill);
+        col = col.push(row_btn);
+    }
+
+    // Place / Add / Delete / Edit button row pinned at the bottom of
+    // the panel (Altium PCB Library parity). Place / Delete / Edit
+    // require a selection; greyed when `internal_selected_idx` is
+    // None. Add is always live.
+    let selected = fp.internal_selected_idx;
+    let footer = view_footprint_library_button_row(ctx, selected);
+
+    iced::widget::column![
+        scrollable(col).width(Length::Fill).height(Length::Fill),
+        thin_sep(border_c),
+        footer,
+    ]
+    .into()
+}
+
+/// Bottom button row for the Footprint Library panel — Altium's
+/// `Place / Add / Delete / Edit` quartet.
+fn view_footprint_library_button_row<'a>(
+    ctx: &'a PanelContext,
+    selected: Option<usize>,
+) -> Element<'a, PanelMsg> {
+    let muted = theme_ext::text_secondary(&ctx.tokens);
+    let primary = theme_ext::text_primary(&ctx.tokens);
+    let border_c = theme_ext::border_color(&ctx.tokens);
+
+    let mk_btn = |label: &'static str, on_press: Option<PanelMsg>| -> Element<'a, PanelMsg> {
+        let enabled = on_press.is_some();
+        let label_color = if enabled { primary } else { muted };
+        let mut btn = iced::widget::button(
+            text(label)
+                .size(11)
+                .color(label_color)
+                .align_x(iced::alignment::Horizontal::Center),
+        )
+        .padding([4, 12])
+        .width(Length::Fixed(64.0))
+        .style(move |_: &Theme, status| {
+            let bg = match status {
+                iced::widget::button::Status::Hovered if enabled => {
+                    iced::Color::from_rgba(1.0, 1.0, 1.0, 0.06)
+                }
+                _ => iced::Color::from_rgba(1.0, 1.0, 1.0, 0.02),
+            };
+            iced::widget::button::Style {
+                background: Some(iced::Background::Color(bg)),
+                border: iced::Border {
+                    width: 1.0,
+                    radius: 3.0.into(),
+                    color: border_c,
+                },
+                ..iced::widget::button::Style::default()
+            }
+        });
+        if let Some(msg) = on_press {
+            btn = btn.on_press(msg);
+        }
+        btn.into()
+    };
+
+    let place = mk_btn(
+        "Place",
+        // PCB integration not wired yet — keep the button visible
+        // but disabled to advertise the intended affordance.
+        selected
+            .map(PanelMsg::FpLibraryPlaceInternal)
+            .filter(|_| false),
+    );
+    let add = mk_btn("Add", Some(PanelMsg::FpLibraryAddInternal));
+    let delete = mk_btn("Delete", selected.map(PanelMsg::FpLibraryDeleteInternal));
+    let edit = mk_btn("Edit", selected.map(PanelMsg::FpLibraryEditInternal));
+
+    container(
+        row![place, add, delete, edit]
+            .spacing(4)
+            .align_y(iced::Alignment::Center),
+    )
+    .padding([6, 8])
+    .width(Length::Fill)
+    .into()
+}
+
 fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     if ctx.project_tree.is_empty() {
         let muted = theme_ext::text_secondary(&ctx.tokens);
@@ -1763,11 +3293,13 @@ fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         // first row doesn't sit flush against the panel's tab-strip
         // border (matches the breathing room Altium leaves below its
         // panel tabs).
-        container(
-            TreeView::new(&ctx.project_tree, &ctx.tokens)
-                .view()
-                .map(PanelMsg::Tree),
-        )
+        container({
+            let mut tree = TreeView::new(&ctx.project_tree, &ctx.tokens);
+            if let Some(sel) = ctx.project_tree_selected.as_deref() {
+                tree = tree.selected(sel);
+            }
+            tree.view().map(PanelMsg::Tree)
+        })
         .padding(iced::Padding {
             top: 6.0,
             right: 0.0,
@@ -2106,10 +3638,98 @@ fn view_navigator<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
 // ─── Properties Panel (matched to Altium Designer) ───────────
 
-const LABEL_W: f32 = 76.0;
-const PROPERTY_LABEL_PORTION: u16 = 2;
-const PROPERTY_CONTROL_PORTION: u16 = 5;
-const PROPERTY_ROW_PAD_X: u16 = 6;
+pub(super) const LABEL_W: f32 = 76.0;
+pub(super) const PROPERTY_LABEL_PORTION: u16 = 2;
+pub(super) const PROPERTY_CONTROL_PORTION: u16 = 5;
+pub(super) const PROPERTY_ROW_PAD_X: u16 = 6;
+
+/// F15 — Library Browser row detail in the Properties panel. Shows
+/// the row's identifier line + Symbol / Footprint binding status with
+/// Pick buttons. Mirrors what the Library Browser's inline preview
+/// pane used to render; surfacing here means the user gets the row's
+/// detail in the canonical "selected thing" panel, freeing horizontal
+/// space inside the browser tab for the grid.
+fn view_library_row_properties<'a>(
+    d: &'a LibraryRowDetail,
+    muted: iced::Color,
+    primary: iced::Color,
+    border_c: iced::Color,
+    tokens: &'a ThemeTokens,
+) -> Element<'a, PanelMsg> {
+    let _ = tokens;
+    // Truncate the row UUID to its first 8 hex chars for a
+    // human-scannable identity line.
+    let row_id_short = {
+        let s = d.row_id.simple().to_string();
+        if s.len() >= 8 { s[..8].to_string() } else { s }
+    };
+    let pn_text = if d.internal_pn.is_empty() {
+        "(unnamed row)".to_string()
+    } else {
+        d.internal_pn.clone()
+    };
+
+    let pick_symbol_btn = button(text("Pick Symbol…").size(11).color(primary))
+        .padding([4, 10])
+        .on_press(PanelMsg::LibraryRowPickSymbol)
+        .style(move |_: &Theme, _| iced::widget::button::Style {
+            background: Some(iced::Background::Color(iced::Color::from_rgba(
+                1.0, 1.0, 1.0, 0.04,
+            ))),
+            text_color: primary,
+            border: Border {
+                width: 1.0,
+                radius: 3.0.into(),
+                color: border_c,
+            },
+            ..iced::widget::button::Style::default()
+        });
+
+    let pick_footprint_btn = button(text("Pick Footprint…").size(11).color(primary))
+        .padding([4, 10])
+        .on_press(PanelMsg::LibraryRowPickFootprint)
+        .style(move |_: &Theme, _| iced::widget::button::Style {
+            background: Some(iced::Background::Color(iced::Color::from_rgba(
+                1.0, 1.0, 1.0, 0.04,
+            ))),
+            text_color: primary,
+            border: Border {
+                width: 1.0,
+                radius: 3.0.into(),
+                color: border_c,
+            },
+            ..iced::widget::button::Style::default()
+        });
+
+    let body = column![
+        text("Library Row").size(11).color(muted),
+        Space::new().height(4),
+        text(pn_text).size(13).color(primary),
+        Space::new().height(2),
+        text(format!(
+            "table: {}  ·  class: {}  ·  {}  ·  row {}",
+            d.table, d.class, d.lifecycle_label, row_id_short,
+        ))
+        .size(10)
+        .color(muted),
+        Space::new().height(12),
+        text("Symbol").size(11).color(muted),
+        Space::new().height(4),
+        text(d.symbol_summary.clone()).size(11).color(primary),
+        Space::new().height(6),
+        pick_symbol_btn,
+        Space::new().height(14),
+        text("Footprint").size(11).color(muted),
+        Space::new().height(4),
+        text(d.footprint_summary.clone()).size(11).color(primary),
+        Space::new().height(6),
+        pick_footprint_btn,
+    ]
+    .spacing(0)
+    .padding(10);
+
+    container(body).width(Length::Fill).into()
+}
 
 fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let muted = theme_ext::text_secondary(&ctx.tokens);
@@ -2118,6 +3738,16 @@ fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let input_bg = crate::styles::ti(ctx.tokens.selection);
     let input_bdr = crate::styles::ti(ctx.tokens.accent);
 
+    // Library Browser tab — Properties panel surfaces the selected
+    // row's metadata + Pick Symbol / Pick Footprint. F15 (2026-05-03
+    // library polish): "right pane can be opened on properties
+    // instead." Takes precedence over the schematic / pre-placement /
+    // symbol-editor branches so when a Library Browser tab is active
+    // the panel stays focused on it.
+    if let Some(detail) = ctx.library_row_detail.as_ref() {
+        return view_library_row_properties(detail, muted, primary, border_c, &ctx.tokens);
+    }
+
     // Symbol-editor tab takes precedence — when the user is editing a
     // `.snxsym` the right-dock Properties panel shows symbol/pin
     // properties driven by `panel_ctx.symbol_editor`. Matches Altium's
@@ -2125,6 +3755,39 @@ fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     // based on selection. (#62 / v0.9 phase 1)
     if let Some(sym) = ctx.symbol_editor.as_ref() {
         return view_symbol_editor_properties(sym, muted, primary, border_c);
+    }
+
+    // v0.14.2 — Footprint-editor tab. Properties panel switches body
+    // based on (mode × selection): Pads-mode pad selected → pad
+    // properties; Sketch-mode entity selected → sketch entity
+    // properties; nothing selected → footprint summary + solve stats.
+    if let Some(fp) = ctx.footprint_editor.as_ref() {
+        let accent_c = crate::styles::ti(ctx.tokens.accent);
+        let tag_hover = {
+            let c = crate::styles::ti(ctx.tokens.accent);
+            Color {
+                r: (c.r * 1.3).min(1.0),
+                g: (c.g * 1.3).min(1.0),
+                b: (c.b * 1.3).min(1.0),
+                ..c
+            }
+        };
+        let seg_hover = crate::styles::ti(ctx.tokens.hover);
+        return view_footprint_editor_properties(
+            fp,
+            muted,
+            primary,
+            border_c,
+            input_bg,
+            input_bdr,
+            ctx.custom_filter_presets.clone(),
+            ctx.active_custom_filter_tab,
+            &ctx.collapsed_sections,
+            accent_c,
+            tag_hover,
+            ctx.unit,
+            seg_hover,
+        );
     }
 
     if !ctx.has_schematic {
@@ -2267,1620 +3930,8 @@ fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     scrollable(col).width(Length::Fill).into()
 }
 
-/// IEEE-symbol pick_list row used four times (Inside / Inside Edge /
-/// Outside Edge / Outside) on the pin Properties surface. `slot`
-/// matches the `SymEditorSetPinSymbol::slot` numbering: 0 / 1 / 2 / 3.
-fn view_pin_symbol_picker<'a>(
-    label: &str,
-    current: signex_library::PinSymbolKind,
-    pin_idx: usize,
-    slot: u8,
-    muted: Color,
-) -> Element<'a, PanelMsg> {
-    use signex_library::PinSymbolKind as K;
-    let options = [
-        ("None", K::None),
-        ("Dot (active-low bubble)", K::Dot),
-        ("Clock edge", K::ClockEdge),
-        ("Active-low input", K::ActiveLowInput),
-        ("Active-low output", K::ActiveLowOutput),
-        ("Schmitt trigger", K::SchmittTrigger),
-        ("Analog (≈)", K::Analog),
-        ("Digital (square wave)", K::Digital),
-        ("Shift-right (▷)", K::ShiftRight),
-        ("Shift-left (◁)", K::ShiftLeft),
-        ("Pi (π)", K::Pi),
-        ("Sigma (Σ)", K::Sigma),
-        ("Open collector", K::OpenCollector),
-        ("Open emitter", K::OpenEmitter),
-        ("Hi-Z (tri-state)", K::HiZ),
-    ];
-    let labels: Vec<String> = options.iter().map(|(l, _)| l.to_string()).collect();
-    let lookup: Vec<(String, K)> = options.iter().map(|(l, v)| (l.to_string(), *v)).collect();
-    let current_label = options
-        .iter()
-        .find(|(_, v)| *v == current)
-        .map(|(l, _)| l.to_string())
-        .unwrap_or_else(|| "None".to_string());
-    let picker = iced::widget::pick_list(labels, Some(current_label), move |chosen: String| {
-        let value = lookup
-            .iter()
-            .find(|(l, _)| l == &chosen)
-            .map(|(_, v)| *v)
-            .unwrap_or(K::None);
-        PanelMsg::SymEditorSetPinSymbol {
-            pin_idx,
-            slot,
-            value,
-        }
-    })
-    .padding([2, 4])
-    .text_size(10);
-    container(
-        row![
-            text(label.to_string())
-                .size(10)
-                .color(muted)
-                .width(Length::FillPortion(2)),
-            container(picker).width(Length::FillPortion(3)),
-        ]
-        .spacing(4)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([3, 8])
-    .width(Length::Fill)
-    .into()
-}
-
-/// Properties panel content for the active `.snxsym` standalone editor
-/// tab. Mirrors Altium SchLib's right-dock Properties: pin selected →
-/// pin properties (editable Designator / Name / Length, read-only
-/// Electrical / Position / Orientation), field selected → field
-/// properties, nothing selected → symbol-level defaults (Name /
-/// UUID / pin count) with Name editable.
-/// Render one Local Colors row — three click-to-cycle swatches
-/// (Fills / Lines / Pins). Each swatch shows the current override
-/// colour or a striped "inherit" pattern when `None`. Clicking
-/// cycles through a small preset palette + back to None.
-fn local_colors_row<'a>(
-    label: &'a str,
-    fill: Option<[u8; 4]>,
-    line: Option<[u8; 4]>,
-    pin: Option<[u8; 4]>,
-    muted: Color,
-) -> Element<'a, PanelMsg> {
-    let swatch = |slot_label: &'a str, c: Option<[u8; 4]>, msg: PanelMsg| {
-        let bg = match c {
-            Some([r, g, b, a]) => iced::Color::from_rgba8(r, g, b, (a as f32) / 255.0),
-            None => iced::Color::from_rgba(0.5, 0.5, 0.5, 0.25),
-        };
-        let border = if c.is_some() {
-            iced::Color::from_rgba(0.0, 0.0, 0.0, 0.35)
-        } else {
-            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.30)
-        };
-        column![
-            text(slot_label).size(9).color(muted),
-            iced::widget::button(iced::widget::Space::new())
-                .padding(0)
-                .width(Length::Fixed(28.0))
-                .height(Length::Fixed(16.0))
-                .on_press(msg)
-                .style(
-                    move |_: &iced::Theme, _status: iced::widget::button::Status| {
-                        iced::widget::button::Style {
-                            background: Some(iced::Background::Color(bg)),
-                            border: iced::Border {
-                                width: 1.0,
-                                radius: 2.0.into(),
-                                color: border,
-                            },
-                            ..iced::widget::button::Style::default()
-                        }
-                    }
-                ),
-        ]
-        .spacing(2)
-        .align_x(iced::Alignment::Center)
-    };
-
-    container(
-        row![
-            text(label.to_string())
-                .size(10)
-                .color(muted)
-                .width(Length::FillPortion(2)),
-            row![
-                swatch("Fills", fill, PanelMsg::SymEditorCycleLocalFillColor),
-                Space::new().width(8),
-                swatch("Lines", line, PanelMsg::SymEditorCycleLocalLineColor),
-                Space::new().width(8),
-                swatch("Pins", pin, PanelMsg::SymEditorCycleLocalPinColor),
-            ]
-            .width(Length::FillPortion(3)),
-        ]
-        .spacing(4)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([3, 8])
-    .width(Length::Fill)
-    .into()
-}
-
-fn view_symbol_editor_properties<'a>(
-    sym: &'a SymbolEditorPanelContext,
-    muted: Color,
-    primary: Color,
-    border_c: Color,
-) -> Element<'a, PanelMsg> {
-    let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
-
-    let header_label = match &sym.selected {
-        SymbolEditorSelection::None => "Symbol",
-        SymbolEditorSelection::Pin(_) => "Pin",
-        SymbolEditorSelection::FieldReference => "Field — Reference",
-        SymbolEditorSelection::FieldValue => "Field — Value",
-        SymbolEditorSelection::Graphic(g) => match &g.kind {
-            GraphicKindSummary::Rectangle { .. } => "Graphic — Rectangle",
-            GraphicKindSummary::Line { .. } => "Graphic — Line",
-            GraphicKindSummary::Circle { .. } => "Graphic — Circle",
-            GraphicKindSummary::Arc { .. } => "Graphic — Arc",
-            GraphicKindSummary::Text { .. } => "Graphic — Text",
-        },
-    };
-    col = col.push(
-        container(text(header_label).size(11).color(primary))
-            .padding([6, 8])
-            .width(Length::Fill),
-    );
-    col = col.push(thin_sep(border_c));
-
-    let prop_row_static = |label: &str, value: String| {
-        container(
-            row![
-                text(label.to_string())
-                    .size(10)
-                    .color(muted)
-                    .width(Length::FillPortion(2)),
-                text(value)
-                    .size(10)
-                    .color(primary)
-                    .width(Length::FillPortion(3)),
-            ]
-            .spacing(4),
-        )
-        .padding([3, 8])
-        .width(Length::Fill)
-    };
-
-    match &sym.selected {
-        SymbolEditorSelection::None => {
-            // The .snxsym editor is a SYMBOL editor — symbol-level
-            // visual / geometric properties only. Component metadata
-            // (Designator / Comment / Description / Type / Parameters)
-            // lives on the host ComponentRow in the component library
-            // and is edited from the Library Browser / Component
-            // Editor, not here.
-
-            // Helper — labelled text_input row.
-            let text_field = |label: &'a str,
-                              value: &'a str,
-                              placeholder: &'a str,
-                              on_input: fn(String) -> PanelMsg|
-             -> Element<'a, PanelMsg> {
-                container(
-                    row![
-                        text(label)
-                            .size(10)
-                            .color(muted)
-                            .width(Length::FillPortion(2)),
-                        iced::widget::text_input(placeholder, value)
-                            .padding([2, 4])
-                            .size(11)
-                            .on_input(on_input)
-                            .width(Length::FillPortion(3)),
-                    ]
-                    .spacing(4)
-                    .align_y(iced::Alignment::Center),
-                )
-                .padding([3, 8])
-                .width(Length::Fill)
-                .into()
-            };
-
-            // ── ▾ Symbol ──
-            col = col.push(thin_sep(border_c));
-            col = col.push(container(text("Symbol").size(11).color(primary)).padding([6, 8]));
-            col = col.push(text_field(
-                "Design Item ID",
-                sym.symbol_name.as_str(),
-                "Symbol name",
-                PanelMsg::SymEditorSetSymbolName,
-            ));
-            col = col.push(prop_row_static("UUID", sym.symbol_uuid.to_string()));
-            col = col.push(prop_row_static("Pins", sym.pins.len().to_string()));
-            col = col.push(prop_row_static("Graphics", sym.graphics.len().to_string()));
-
-            // Part of Parts (Altium "Part B / of Parts: 2") — surfaces
-            // the multi-part picker the user already drives via the
-            // toolbar arrows or the SCH Library tree-expander.
-            let part_label = if sym.active_max_part > 1 {
-                format!(
-                    "Part {} / of Parts {}",
-                    sym.active_part, sym.active_max_part
-                )
-            } else {
-                "Single-part".to_string()
-            };
-            col = col.push(prop_row_static("Part", part_label));
-
-            // ── ▾ Graphical ──
-            col = col.push(thin_sep(border_c));
-            col = col.push(container(text("Graphical").size(11).color(primary)).padding([6, 8]));
-            let mirrored_row: Element<'a, PanelMsg> = container(
-                row![
-                    text("Mirrored")
-                        .size(10)
-                        .color(muted)
-                        .width(Length::FillPortion(2)),
-                    iced::widget::checkbox(sym.symbol_mirrored)
-                        .size(14)
-                        .on_toggle(|_| PanelMsg::SymEditorToggleSymbolMirrored),
-                ]
-                .spacing(4)
-                .align_y(iced::Alignment::Center),
-            )
-            .padding([3, 8])
-            .width(Length::Fill)
-            .into();
-            col = col.push(mirrored_row);
-
-            // ── Local Colors (Fills / Lines / Pins) ──
-            // Three click-to-cycle swatches. None = inherit from
-            // sheet palette; clicking cycles through 4 preset
-            // overrides + back to None. Each slot has its own
-            // Set message so the dispatcher can clear / set
-            // independently.
-            col = col.push(local_colors_row(
-                "Local Colors",
-                sym.symbol_local_fill_color,
-                sym.symbol_local_line_color,
-                sym.symbol_local_pin_color,
-                muted,
-            ));
-        }
-        SymbolEditorSelection::Pin(pin) => {
-            let pin_idx = pin.idx;
-
-            // ── Designator (text) ──
-            let designator_row: Element<'a, PanelMsg> = container(
-                row![
-                    text("Designator")
-                        .size(10)
-                        .color(muted)
-                        .width(Length::FillPortion(2)),
-                    iced::widget::text_input("number", pin.number.as_str())
-                        .padding([2, 4])
-                        .size(11)
-                        .on_input(move |s| PanelMsg::SymEditorSetPinNumber { pin_idx, value: s })
-                        .width(Length::FillPortion(3)),
-                ]
-                .spacing(4)
-                .align_y(iced::Alignment::Center),
-            )
-            .padding([3, 8])
-            .width(Length::Fill)
-            .into();
-            col = col.push(designator_row);
-
-            // ── Name (text) ──
-            let name_row: Element<'a, PanelMsg> = container(
-                row![
-                    text("Name")
-                        .size(10)
-                        .color(muted)
-                        .width(Length::FillPortion(2)),
-                    iced::widget::text_input("name", pin.name.as_str())
-                        .padding([2, 4])
-                        .size(11)
-                        .on_input(move |s| PanelMsg::SymEditorSetPinName { pin_idx, value: s })
-                        .width(Length::FillPortion(3)),
-                ]
-                .spacing(4)
-                .align_y(iced::Alignment::Center),
-            )
-            .padding([3, 8])
-            .width(Length::Fill)
-            .into();
-            col = col.push(name_row);
-
-            // ── Electrical Type (pick_list) ──
-            let electrical_options = [
-                ("Input", signex_library::PinDirection::Input),
-                ("I/O", signex_library::PinDirection::Bidirectional),
-                ("Output", signex_library::PinDirection::Output),
-                (
-                    "Open Collector",
-                    signex_library::PinDirection::OpenCollector,
-                ),
-                ("Passive", signex_library::PinDirection::Passive),
-                ("HiZ", signex_library::PinDirection::Tristate),
-                (
-                    "Open Emitter",
-                    signex_library::PinDirection::OpenEmitter,
-                ),
-                ("Power", signex_library::PinDirection::Power),
-                (
-                    "Not Connected",
-                    signex_library::PinDirection::NotConnected,
-                ),
-                (
-                    "Unspecified",
-                    signex_library::PinDirection::Unspecified,
-                ),
-            ];
-            let current_label = electrical_options
-                .iter()
-                .find(|(_, v)| format!("{:?}", v) == pin.electrical)
-                .map(|(label, _)| label.to_string())
-                .unwrap_or_else(|| pin.electrical.clone());
-            let labels: Vec<String> = electrical_options
-                .iter()
-                .map(|(label, _)| label.to_string())
-                .collect();
-            let labels_for_msg: Vec<(String, signex_library::PinDirection)> =
-                electrical_options
-                    .iter()
-                    .map(|(label, v)| (label.to_string(), *v))
-                    .collect();
-            let electrical_picker =
-                iced::widget::pick_list(labels, Some(current_label), move |chosen: String| {
-                    let value = labels_for_msg
-                        .iter()
-                        .find(|(label, _)| label == &chosen)
-                        .map(|(_, v)| *v)
-                        .unwrap_or(signex_library::PinDirection::Unspecified);
-                    PanelMsg::SymEditorSetPinElectrical { pin_idx, value }
-                })
-                .padding([2, 4])
-                .text_size(11);
-            let electrical_row: Element<'a, PanelMsg> = container(
-                row![
-                    text("Electrical")
-                        .size(10)
-                        .color(muted)
-                        .width(Length::FillPortion(2)),
-                    container(electrical_picker).width(Length::FillPortion(3)),
-                ]
-                .spacing(4)
-                .align_y(iced::Alignment::Center),
-            )
-            .padding([3, 8])
-            .width(Length::Fill)
-            .into();
-            col = col.push(electrical_row);
-
-            // ── Position (X, Y) ──
-            let pos_x = pin.position[0];
-            let pos_y = pin.position[1];
-            let pos_x_row: Element<'a, PanelMsg> = container(
-                row![
-                    text("X")
-                        .size(10)
-                        .color(muted)
-                        .width(Length::FillPortion(2)),
-                    iced::widget::text_input("mm", &format!("{:.3}", pos_x))
-                        .padding([2, 4])
-                        .size(11)
-                        .on_input(move |s| {
-                            let parsed = s.trim().parse::<f64>().unwrap_or(pos_x);
-                            PanelMsg::SymEditorSetPinX {
-                                pin_idx,
-                                value: parsed,
-                            }
-                        })
-                        .width(Length::FillPortion(3)),
-                ]
-                .spacing(4)
-                .align_y(iced::Alignment::Center),
-            )
-            .padding([3, 8])
-            .width(Length::Fill)
-            .into();
-            col = col.push(pos_x_row);
-
-            let pos_y_row: Element<'a, PanelMsg> = container(
-                row![
-                    text("Y")
-                        .size(10)
-                        .color(muted)
-                        .width(Length::FillPortion(2)),
-                    iced::widget::text_input("mm", &format!("{:.3}", pos_y))
-                        .padding([2, 4])
-                        .size(11)
-                        .on_input(move |s| {
-                            let parsed = s.trim().parse::<f64>().unwrap_or(pos_y);
-                            PanelMsg::SymEditorSetPinY {
-                                pin_idx,
-                                value: parsed,
-                            }
-                        })
-                        .width(Length::FillPortion(3)),
-                ]
-                .spacing(4)
-                .align_y(iced::Alignment::Center),
-            )
-            .padding([3, 8])
-            .width(Length::Fill)
-            .into();
-            col = col.push(pos_y_row);
-
-            // ── Orientation (pick_list) ──
-            let orientation_options = [
-                ("Right", signex_library::PinOrientation::Right),
-                ("Up", signex_library::PinOrientation::Up),
-                ("Left", signex_library::PinOrientation::Left),
-                ("Down", signex_library::PinOrientation::Down),
-            ];
-            let current_orient = orientation_options
-                .iter()
-                .find(|(_, v)| format!("{:?}", v) == pin.orientation)
-                .map(|(label, _)| label.to_string())
-                .unwrap_or_else(|| pin.orientation.clone());
-            let orient_labels: Vec<String> = orientation_options
-                .iter()
-                .map(|(label, _)| label.to_string())
-                .collect();
-            let orient_msg_lookup: Vec<(String, signex_library::PinOrientation)> =
-                orientation_options
-                    .iter()
-                    .map(|(label, v)| (label.to_string(), *v))
-                    .collect();
-            let orientation_picker = iced::widget::pick_list(
-                orient_labels,
-                Some(current_orient),
-                move |chosen: String| {
-                    let value = orient_msg_lookup
-                        .iter()
-                        .find(|(label, _)| label == &chosen)
-                        .map(|(_, v)| *v)
-                        .unwrap_or(signex_library::PinOrientation::Right);
-                    PanelMsg::SymEditorSetPinOrientation { pin_idx, value }
-                },
-            )
-            .padding([2, 4])
-            .text_size(11);
-            let orientation_row: Element<'a, PanelMsg> = container(
-                row![
-                    text("Orientation")
-                        .size(10)
-                        .color(muted)
-                        .width(Length::FillPortion(2)),
-                    container(orientation_picker).width(Length::FillPortion(3)),
-                ]
-                .spacing(4)
-                .align_y(iced::Alignment::Center),
-            )
-            .padding([3, 8])
-            .width(Length::Fill)
-            .into();
-            col = col.push(orientation_row);
-
-            // ── Length (numeric) ──
-            let length_row: Element<'a, PanelMsg> = container(
-                row![
-                    text("Length")
-                        .size(10)
-                        .color(muted)
-                        .width(Length::FillPortion(2)),
-                    iced::widget::text_input("mm", &format!("{:.3}", pin.length))
-                        .padding([2, 4])
-                        .size(11)
-                        .on_input(move |s| {
-                            let parsed = s.trim().parse::<f64>().unwrap_or(0.0);
-                            PanelMsg::SymEditorSetPinLength {
-                                pin_idx,
-                                value: parsed,
-                            }
-                        })
-                        .width(Length::FillPortion(3)),
-                ]
-                .spacing(4)
-                .align_y(iced::Alignment::Center),
-            )
-            .padding([3, 8])
-            .width(Length::Fill)
-            .into();
-            col = col.push(length_row);
-
-            // ── Part Number (multi-part components) ──
-            let part_now = pin.details.part_number;
-            let part_row: Element<'a, PanelMsg> = container(
-                row![
-                    text("Part Number")
-                        .size(10)
-                        .color(muted)
-                        .width(Length::FillPortion(2)),
-                    iced::widget::text_input("1, or 0 for shared", &part_now.to_string(),)
-                        .padding([2, 4])
-                        .size(11)
-                        .on_input(move |s| {
-                            let parsed = s.trim().parse::<u8>().unwrap_or(part_now);
-                            PanelMsg::SymEditorSetPinPartNumber {
-                                pin_idx,
-                                value: parsed,
-                            }
-                        })
-                        .width(Length::FillPortion(3)),
-                ]
-                .spacing(4)
-                .align_y(iced::Alignment::Center),
-            )
-            .padding([3, 8])
-            .width(Length::Fill)
-            .into();
-            col = col.push(part_row);
-
-            // ── Description (text) ──
-            let description_row: Element<'a, PanelMsg> = container(
-                row![
-                    text("Description")
-                        .size(10)
-                        .color(muted)
-                        .width(Length::FillPortion(2)),
-                    iced::widget::text_input("free text", pin.details.description.as_str())
-                        .padding([2, 4])
-                        .size(11)
-                        .on_input(move |s| PanelMsg::SymEditorSetPinDescription {
-                            pin_idx,
-                            value: s,
-                        })
-                        .width(Length::FillPortion(3)),
-                ]
-                .spacing(4)
-                .align_y(iced::Alignment::Center),
-            )
-            .padding([3, 8])
-            .width(Length::Fill)
-            .into();
-            col = col.push(description_row);
-
-            // ── Function (comma-separated alt-names) ──
-            let function_csv = pin.details.function.join(", ");
-            let function_row: Element<'a, PanelMsg> = container(
-                row![
-                    text("Function")
-                        .size(10)
-                        .color(muted)
-                        .width(Length::FillPortion(2)),
-                    iced::widget::text_input("alt-names, comma-separated", &function_csv)
-                        .padding([2, 4])
-                        .size(11)
-                        .on_input(move |s| PanelMsg::SymEditorSetPinFunctionCsv {
-                            pin_idx,
-                            value: s,
-                        })
-                        .width(Length::FillPortion(3)),
-                ]
-                .spacing(4)
-                .align_y(iced::Alignment::Center),
-            )
-            .padding([3, 8])
-            .width(Length::Fill)
-            .into();
-            col = col.push(function_row);
-
-            // ── Visibility / state toggles ──
-            let toggle_row =
-                |label: &'static str, value: bool, msg: PanelMsg| -> Element<'a, PanelMsg> {
-                    row![
-                        iced::widget::checkbox(value)
-                            .size(14)
-                            .on_toggle(move |_| msg.clone()),
-                        text(label.to_string()).size(10).color(muted),
-                    ]
-                    .spacing(6)
-                    .align_y(iced::Alignment::Center)
-                    .into()
-                };
-            let toggles_row: Element<'a, PanelMsg> = container(
-                column![
-                    toggle_row(
-                        "Designator visible",
-                        pin.details.designator_visible,
-                        PanelMsg::SymEditorTogglePinDesignatorVisible(pin_idx),
-                    ),
-                    toggle_row(
-                        "Name visible",
-                        pin.details.name_visible,
-                        PanelMsg::SymEditorTogglePinNameVisible(pin_idx),
-                    ),
-                    toggle_row(
-                        "Hidden (Pin Hide)",
-                        pin.details.hidden,
-                        PanelMsg::SymEditorTogglePinHidden(pin_idx),
-                    ),
-                    toggle_row(
-                        "Locked",
-                        pin.details.locked,
-                        PanelMsg::SymEditorTogglePinLocked(pin_idx),
-                    ),
-                ]
-                .spacing(2),
-            )
-            .padding([6, 8])
-            .width(Length::Fill)
-            .into();
-            col = col.push(toggles_row);
-
-            // ── IEEE Symbols (Inside / Inside Edge / Outside Edge / Outside) ──
-            col = col.push(thin_sep(border_c));
-            col = col.push(container(text("Symbols").size(10).color(primary)).padding([4, 8]));
-            col = col.push(view_pin_symbol_picker(
-                "Inside",
-                pin.details.inside_symbol,
-                pin_idx,
-                0,
-                muted,
-            ));
-            col = col.push(view_pin_symbol_picker(
-                "Inside Edge",
-                pin.details.inside_edge_symbol,
-                pin_idx,
-                1,
-                muted,
-            ));
-            col = col.push(view_pin_symbol_picker(
-                "Outside Edge",
-                pin.details.outside_edge_symbol,
-                pin_idx,
-                2,
-                muted,
-            ));
-            col = col.push(view_pin_symbol_picker(
-                "Outside",
-                pin.details.outside_symbol,
-                pin_idx,
-                3,
-                muted,
-            ));
-        }
-        SymbolEditorSelection::Graphic(g) => {
-            let g_idx = g.idx;
-            // Per-shape numeric fields. Each invokes
-            // `PanelMsg::SymEditorSetGraphicField`; mismatched fields
-            // (e.g. CircleRadius on a Line) silently no-op in the
-            // dispatcher so a stale Properties pane can't corrupt
-            // geometry.
-            let num_field =
-                |label: &'static str, field: GraphicFieldId, value: f64| -> Element<'a, PanelMsg> {
-                    container(
-                        row![
-                            text(label.to_string())
-                                .size(10)
-                                .color(muted)
-                                .width(Length::FillPortion(2)),
-                            iced::widget::text_input("mm", &format!("{:.3}", value))
-                                .padding([2, 4])
-                                .size(11)
-                                .on_input(move |s| {
-                                    let parsed = s.trim().parse::<f64>().unwrap_or(value);
-                                    PanelMsg::SymEditorSetGraphicField {
-                                        idx: g_idx,
-                                        field,
-                                        value: parsed,
-                                    }
-                                })
-                                .width(Length::FillPortion(3)),
-                        ]
-                        .spacing(4)
-                        .align_y(iced::Alignment::Center),
-                    )
-                    .padding([3, 8])
-                    .width(Length::Fill)
-                    .into()
-                };
-
-            match &g.kind {
-                GraphicKindSummary::Rectangle { from, to } => {
-                    col = col.push(num_field("From X", GraphicFieldId::FromX, from[0]));
-                    col = col.push(num_field("From Y", GraphicFieldId::FromY, from[1]));
-                    col = col.push(num_field("To X", GraphicFieldId::ToX, to[0]));
-                    col = col.push(num_field("To Y", GraphicFieldId::ToY, to[1]));
-                }
-                GraphicKindSummary::Line { from, to } => {
-                    col = col.push(num_field("Start X", GraphicFieldId::FromX, from[0]));
-                    col = col.push(num_field("Start Y", GraphicFieldId::FromY, from[1]));
-                    col = col.push(num_field("End X", GraphicFieldId::ToX, to[0]));
-                    col = col.push(num_field("End Y", GraphicFieldId::ToY, to[1]));
-                }
-                GraphicKindSummary::Circle { center, radius } => {
-                    col = col.push(num_field("Center X", GraphicFieldId::CenterX, center[0]));
-                    col = col.push(num_field("Center Y", GraphicFieldId::CenterY, center[1]));
-                    col = col.push(num_field("Radius", GraphicFieldId::Radius, *radius));
-                }
-                GraphicKindSummary::Arc {
-                    center,
-                    radius,
-                    start_deg,
-                    end_deg,
-                } => {
-                    col = col.push(num_field("Center X", GraphicFieldId::CenterX, center[0]));
-                    col = col.push(num_field("Center Y", GraphicFieldId::CenterY, center[1]));
-                    col = col.push(num_field("Radius", GraphicFieldId::Radius, *radius));
-                    col = col.push(num_field(
-                        "Start \u{00B0}",
-                        GraphicFieldId::StartDeg,
-                        *start_deg,
-                    ));
-                    col = col.push(num_field("End \u{00B0}", GraphicFieldId::EndDeg, *end_deg));
-                }
-                GraphicKindSummary::Text {
-                    position,
-                    content,
-                    size: text_size,
-                } => {
-                    col = col.push(num_field("X", GraphicFieldId::PositionX, position[0]));
-                    col = col.push(num_field("Y", GraphicFieldId::PositionY, position[1]));
-                    col = col.push(num_field("Size", GraphicFieldId::TextSize, *text_size));
-                    let content_row: Element<'a, PanelMsg> = container(
-                        row![
-                            text("Content")
-                                .size(10)
-                                .color(muted)
-                                .width(Length::FillPortion(2)),
-                            iced::widget::text_input("text", content.as_str())
-                                .padding([2, 4])
-                                .size(11)
-                                .on_input(move |s| PanelMsg::SymEditorSetGraphicText {
-                                    idx: g_idx,
-                                    value: s,
-                                })
-                                .width(Length::FillPortion(3)),
-                        ]
-                        .spacing(4)
-                        .align_y(iced::Alignment::Center),
-                    )
-                    .padding([3, 8])
-                    .width(Length::Fill)
-                    .into();
-                    col = col.push(content_row);
-                }
-            }
-            // Stroke width — common to every variant.
-            col = col.push(num_field(
-                "Stroke (mm)",
-                GraphicFieldId::StrokeWidth,
-                g.stroke_width,
-            ));
-        }
-        SymbolEditorSelection::FieldReference => {
-            col = col.push(prop_row_static(
-                "Field",
-                "Reference (designator)".to_string(),
-            ));
-            col = col.push(
-                container(
-                    text("Bound to the host Component's designator at place-time.")
-                        .size(10)
-                        .color(muted),
-                )
-                .padding([4, 8]),
-            );
-        }
-        SymbolEditorSelection::FieldValue => {
-            col = col.push(prop_row_static("Field", "Value".to_string()));
-            col = col.push(
-                container(
-                    text("Bound to the host Component's value at place-time.")
-                        .size(10)
-                        .color(muted),
-                )
-                .padding([4, 8]),
-            );
-        }
-    }
-
-    col = col.push(thin_sep(border_c));
-    col = col.push(
-        container(
-            text(
-                "Click on the canvas to select. Drawing tools (rectangle, line, arc) land in v0.9 phase 3c.",
-            )
-            .size(10)
-            .color(muted),
-        )
-        .padding([6, 8]),
-    );
-
-    scrollable(col).width(Length::Fill).into()
-}
-
 /// Altium-style context-aware properties for a single selected element.
 /// Shows EDITABLE fields for symbols, labels, and text notes.
-fn view_selected_element_properties<'a>(
-    ctx: &'a PanelContext,
-    muted: Color,
-    primary: Color,
-    border_c: Color,
-) -> Element<'a, PanelMsg> {
-    let input_bg = crate::styles::ti(ctx.tokens.selection);
-    let input_bdr = crate::styles::ti(ctx.tokens.accent);
-    let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
-
-    let elem_type = ctx
-        .selection_info
-        .iter()
-        .find(|(k, _)| k == "Type")
-        .map(|(_, v)| v.as_str())
-        .unwrap_or("Object");
-
-    let uuid = ctx.selected_uuid;
-    let selected_kind = ctx.selected_kind;
-    let get = |key: &str| -> String {
-        ctx.selection_info
-            .iter()
-            .find(|(k, _)| k == key)
-            .map(|(_, v)| v.clone())
-            .unwrap_or_default()
-    };
-
-    // ── Header ──
-    col = col.push(
-        container(text(elem_type.to_owned()).size(11).color(primary))
-            .padding([6, 8])
-            .width(Length::Fill),
-    );
-    col = col.push(thin_sep(border_c));
-
-    // ── Editable properties based on element type ──
-    // Power ports get their own Altium-style panel; regular symbols keep the
-    // existing designator/value/footprint layout.
-    let is_power_port = elem_type == "Power Port";
-
-    if is_power_port && let Some(id) = uuid {
-        let value = get("Value");
-        let position = get("Position");
-        let rotation_str = get("Rotation");
-        let lib_id = get("Library ID");
-        let rotation_deg = rotation_str
-            .trim_end_matches('°')
-            .trim()
-            .parse::<f64>()
-            .unwrap_or(0.0);
-        // Pick a Style token by looking inside the lib_id (same logic the
-        // built-in power renderer uses).
-        let lid = lib_id.to_lowercase();
-        let current_style =
-            if lid.contains("gnd") && !lid.contains("earth") && !lid.contains("gndref") {
-                "Power Ground"
-            } else if lid.contains("gndref") {
-                "Signal Ground"
-            } else if lid.contains("earth") {
-                "Earth"
-            } else if lid.contains("arrow") {
-                "Arrow"
-            } else if lid.contains("wave") {
-                "Wave"
-            } else if lid.contains("circle") {
-                "Circle"
-            } else {
-                "Bar"
-            };
-        let style_options: Vec<String> = [
-            "Bar",
-            "Arrow",
-            "Wave",
-            "Circle",
-            "Power Ground",
-            "Signal Ground",
-            "Earth",
-        ]
-        .iter()
-        .map(|s| (*s).to_string())
-        .collect();
-
-        // ── Location ──
-        let pos_loc = position.clone();
-        let rot_current = rotation_deg;
-        col = col.push(collapsible_section(
-            "sel_location",
-            "Location",
-            &ctx.collapsed_sections,
-            primary,
-            border_c,
-            move || {
-                let mut c = Column::new().spacing(0).width(Length::Fill);
-                c = c.push(form_input_row(
-                    "(X/Y)", &pos_loc, muted, input_bg, input_bdr,
-                ));
-                let rotation_opts: Vec<String> = vec![
-                    "0 Degrees".into(),
-                    "90 Degrees".into(),
-                    "180 Degrees".into(),
-                    "270 Degrees".into(),
-                ];
-                let rot_label = format!("{:.0} Degrees", rot_current);
-                c = c.push(form_pick_row(
-                    "Rotation",
-                    rotation_opts,
-                    rot_label,
-                    move |s| {
-                        let deg = s
-                            .split_whitespace()
-                            .next()
-                            .and_then(|n| n.parse::<f64>().ok())
-                            .unwrap_or(0.0);
-                        PanelMsg::EditSymbolRotation(id, deg)
-                    },
-                    muted,
-                ));
-                c
-            },
-        ));
-
-        // ── Properties (Name, Style) ──
-        let name_val = value.clone();
-        let base_lib = lib_id.clone();
-        col = col.push(collapsible_section(
-            "sel_props",
-            "Properties",
-            &ctx.collapsed_sections,
-            primary,
-            border_c,
-            move || {
-                let mut c = Column::new().spacing(0).width(Length::Fill);
-                c = c.push(form_edit_row("Name", &name_val, muted, move |s| {
-                    PanelMsg::EditSymbolValue(id, s)
-                }));
-                let base_lib = base_lib.clone();
-                let current_rot = rot_current;
-                c = c.push(form_pick_row(
-                    "Style",
-                    style_options,
-                    current_style.to_string(),
-                    move |style_label| {
-                        // Map Altium Style label → lib_id keyword the built-in
-                        // power renderer recognizes.
-                        let tag = match style_label.as_str() {
-                            "Bar" => "bar",
-                            "Arrow" => "arrow",
-                            "Wave" => "wave",
-                            "Circle" => "circle",
-                            "Power Ground" => "GND",
-                            "Signal Ground" => "GNDREF",
-                            "Earth" => "Earth",
-                            _ => "bar",
-                        };
-                        let new_lib = format!("power:{tag}");
-                        // The built-in renderer flips body direction when
-                        // lib_id contains "gnd". Compensate rotation so the
-                        // port keeps its current visual orientation: if we
-                        // are switching between gnd-like and non-gnd-like,
-                        // rotate by +180° from current, else keep current.
-                        let old_gnd = base_lib.to_lowercase().contains("gnd")
-                            && !base_lib.to_lowercase().contains("earth");
-                        let new_gnd = new_lib.to_lowercase().contains("gnd")
-                            && !new_lib.to_lowercase().contains("earth");
-                        let target_rot = if old_gnd != new_gnd {
-                            (current_rot + 180.0).rem_euclid(360.0)
-                        } else {
-                            current_rot
-                        };
-                        PanelMsg::EditPowerPortStyle {
-                            symbol_id: id,
-                            new_lib_id: new_lib,
-                            rotation_degrees: target_rot,
-                        }
-                    },
-                    muted,
-                ));
-                c
-            },
-        ));
-
-        // Add Font + B/I/U/T row to Properties section via a second collapsible
-        col = col.push(collapsible_section(
-            "sel_props_font",
-            "Font",
-            &ctx.collapsed_sections,
-            primary,
-            border_c,
-            move || {
-                let mut c = Column::new().spacing(0).width(Length::Fill);
-                let font_opts: Vec<String> = vec![
-                    "Iosevka Fixed SS03".into(),
-                    "Roboto".into(),
-                    "Fira Code".into(),
-                    "Arial".into(),
-                    "Times New Roman".into(),
-                ];
-                c = c.push(form_pick_row(
-                    "Font",
-                    font_opts,
-                    "Iosevka Fixed SS03".to_string(),
-                    |_| PanelMsg::Noop,
-                    muted,
-                ));
-                let size_opts: Vec<String> = [6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72]
-                    .iter()
-                    .map(|n| n.to_string())
-                    .collect();
-                c = c.push(form_pick_row(
-                    "Size",
-                    size_opts,
-                    "10".to_string(),
-                    move |s| {
-                        let pt: u32 = s.parse().unwrap_or(10);
-                        PanelMsg::EditSymbolValueFontSizePt(id, pt)
-                    },
-                    muted,
-                ));
-                c = c.push(font_style_row(muted, primary, input_bg, input_bdr));
-                c
-            },
-        ));
-
-        // ── General (Net) — informational ──
-        let phys_name = value.clone();
-        col = col.push(collapsible_section(
-            "sel_net",
-            "General (Net)",
-            &ctx.collapsed_sections,
-            primary,
-            border_c,
-            move || {
-                let mut c = Column::new().spacing(0).width(Length::Fill);
-                c = c.push(form_input_row(
-                    "Physical Name",
-                    &phys_name,
-                    muted,
-                    input_bg,
-                    input_bdr,
-                ));
-                c = c.push(form_input_row(
-                    "Net Name", &phys_name, muted, input_bg, input_bdr,
-                ));
-                c = c.push(net_numeric_row(
-                    "Power Net",
-                    "0.000",
-                    "V",
-                    muted,
-                    input_bg,
-                    input_bdr,
-                ));
-                c = c.push(net_numeric_row(
-                    "High Speed",
-                    "0.000",
-                    "Hz",
-                    muted,
-                    input_bg,
-                    input_bdr,
-                ));
-                let dp_opts: Vec<String> = vec!["None".into()];
-                c = c.push(form_pick_row(
-                    "Differential Pair",
-                    dp_opts,
-                    "None".to_string(),
-                    |_| PanelMsg::Noop,
-                    muted,
-                ));
-                c
-            },
-        ));
-
-        // ── Parameters (Net) — placeholder (no parameters/rules/classes yet) ──
-        col = col.push(collapsible_section(
-            "sel_net_params",
-            "Parameters (Net)",
-            &ctx.collapsed_sections,
-            primary,
-            border_c,
-            move || {
-                let mut c = Column::new().spacing(0).width(Length::Fill);
-                c = c.push(net_params_tabs(primary, muted, input_bg, input_bdr));
-                c = c.push(net_params_header(muted, border_c));
-                c = c.push(empty_section_row("No Parameters", muted, border_c));
-                c = c.push(empty_section_row("No Rules", muted, border_c));
-                c = c.push(empty_section_row("No Classes", muted, border_c));
-                c = c.push(net_params_add_bar(muted, input_bg, input_bdr));
-                c
-            },
-        ));
-
-        return scrollable(col).width(Length::Fill).into();
-    }
-
-    match selected_kind {
-        Some(signex_types::schematic::SelectedKind::Symbol) => {
-            let reference = get("Reference");
-            let value = get("Value");
-            let description = get("Description");
-            let datasheet = get("Datasheet");
-            let footprint = get("Footprint");
-            let lib_id = get("Library ID");
-            let position = get("Position");
-            let rotation = get("Rotation");
-            let locked = get("Locked") == "Yes";
-            let dnp = get("DNP") == "Yes";
-            let has_mirror_x = ctx
-                .selection_info
-                .iter()
-                .any(|(k, v)| k == "Mirror" && v == "X");
-            let has_mirror_y = ctx
-                .selection_info
-                .iter()
-                .any(|(k, v)| k == "Mirror" && v == "Y");
-            // Custom parameters: every ("Param: NAME", value) tuple.
-            let params: Vec<(String, String)> = ctx
-                .selection_info
-                .iter()
-                .filter_map(|(k, v)| {
-                    k.strip_prefix("Param: ")
-                        .map(|name| (name.to_string(), v.clone()))
-                })
-                .collect();
-
-            if let Some(id) = uuid {
-                // General section — editable
-                col = col.push(collapsible_section(
-                    "sel_general",
-                    "General",
-                    &ctx.collapsed_sections,
-                    muted,
-                    border_c,
-                    move || {
-                        let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(form_edit_row("Designator", &reference, muted, move |s| {
-                            PanelMsg::EditSymbolDesignator(id, s)
-                        }));
-                        c = c.push(form_edit_row("Value", &value, muted, move |s| {
-                            PanelMsg::EditSymbolValue(id, s)
-                        }));
-                        if !description.is_empty() {
-                            c = c.push(form_input_row(
-                                "Description",
-                                &description,
-                                muted,
-                                input_bg,
-                                input_bdr,
-                            ));
-                        }
-                        c = c.push(form_edit_row("Footprint", &footprint, muted, move |s| {
-                            PanelMsg::EditSymbolFootprint(id, s)
-                        }));
-                        if !datasheet.is_empty() {
-                            c = c.push(form_input_row(
-                                "Datasheet",
-                                &datasheet,
-                                muted,
-                                input_bg,
-                                input_bdr,
-                            ));
-                        }
-                        c = c.push(form_input_row(
-                            "Library ID",
-                            &lib_id,
-                            muted,
-                            input_bg,
-                            input_bdr,
-                        ));
-                        c
-                    },
-                ));
-
-                // Location section — read-only for now
-                col = col.push(collapsible_section(
-                    "sel_location",
-                    "Location",
-                    &ctx.collapsed_sections,
-                    muted,
-                    border_c,
-                    move || {
-                        let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(form_input_row(
-                            "Position", &position, muted, input_bg, input_bdr,
-                        ));
-                        c = c.push(form_input_row(
-                            "Rotation", &rotation, muted, input_bg, input_bdr,
-                        ));
-                        c
-                    },
-                ));
-
-                // Graphical section — checkboxes
-                col = col.push(collapsible_section(
-                    "sel_graphical",
-                    "Graphical",
-                    &ctx.collapsed_sections,
-                    muted,
-                    border_c,
-                    move || {
-                        let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(form_check_row(
-                            "Mirror X",
-                            has_mirror_x,
-                            PanelMsg::ToggleSymbolMirrorX(id),
-                            muted,
-                        ));
-                        c = c.push(form_check_row(
-                            "Mirror Y",
-                            has_mirror_y,
-                            PanelMsg::ToggleSymbolMirrorY(id),
-                            muted,
-                        ));
-                        c = c.push(form_check_row(
-                            "Locked",
-                            locked,
-                            PanelMsg::ToggleSymbolLocked(id),
-                            muted,
-                        ));
-                        c = c.push(form_check_row(
-                            "DNP",
-                            dnp,
-                            PanelMsg::ToggleSymbolDnp(id),
-                            muted,
-                        ));
-                        c
-                    },
-                ));
-
-                // Parameters section — custom fields carried on the symbol
-                // instance. Read-only for v0.6; editing per-field lands in
-                // v0.7 with the parameter-manager dialog.
-                let header_label = if params.is_empty() {
-                    "Parameters (none)".to_string()
-                } else {
-                    format!("Parameters ({})", params.len())
-                };
-                let section_params = params.clone();
-                col = col.push(collapsible_section(
-                    "sel_parameters",
-                    &header_label,
-                    &ctx.collapsed_sections,
-                    muted,
-                    border_c,
-                    move || {
-                        let mut c = Column::new().spacing(0).width(Length::Fill);
-                        if section_params.is_empty() {
-                            c = c.push(
-                                container(
-                                    text("No custom parameters".to_string())
-                                        .size(11)
-                                        .color(muted),
-                                )
-                                .padding([6, 8]),
-                            );
-                        } else {
-                            for (name, value) in &section_params {
-                                c = c.push(form_input_row(name, value, muted, input_bg, input_bdr));
-                            }
-                        }
-                        c
-                    },
-                ));
-            }
-        }
-        Some(signex_types::schematic::SelectedKind::SymbolRefField)
-        | Some(signex_types::schematic::SelectedKind::SymbolValField) => {
-            let text_value = get("Text");
-            let position = get("Position");
-            let rotation = get("Rotation");
-            let text_size = get("Text Size");
-            let justify_h = get("Justify H");
-            let justify_v = get("Justify V");
-            let visible = get("Visible");
-            let fields_autoplaced = get("Fields Autoplaced");
-            let is_reference = matches!(
-                selected_kind,
-                Some(signex_types::schematic::SelectedKind::SymbolRefField)
-            );
-
-            if let Some(id) = uuid {
-                col = col.push(collapsible_section(
-                    "sel_basic",
-                    "Basic Properties",
-                    &ctx.collapsed_sections,
-                    muted,
-                    border_c,
-                    move || {
-                        let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(form_input_row(
-                            "Field",
-                            if is_reference { "Reference" } else { "Value" },
-                            muted,
-                            input_bg,
-                            input_bdr,
-                        ));
-                        c = c.push(form_edit_row("Text", &text_value, muted, move |s| {
-                            if is_reference {
-                                PanelMsg::EditSymbolDesignator(id, s)
-                            } else {
-                                PanelMsg::EditSymbolValue(id, s)
-                            }
-                        }));
-                        c = c.push(form_input_row(
-                            "Visible", &visible, muted, input_bg, input_bdr,
-                        ));
-                        c = c.push(form_input_row(
-                            "Fields Autoplaced",
-                            &fields_autoplaced,
-                            muted,
-                            input_bg,
-                            input_bdr,
-                        ));
-                        c
-                    },
-                ));
-
-                col = col.push(collapsible_section(
-                    "sel_text",
-                    "Text Properties",
-                    &ctx.collapsed_sections,
-                    muted,
-                    border_c,
-                    move || {
-                        let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(form_input_row(
-                            "Position", &position, muted, input_bg, input_bdr,
-                        ));
-                        c = c.push(form_input_row(
-                            "Rotation", &rotation, muted, input_bg, input_bdr,
-                        ));
-                        c = c.push(form_input_row(
-                            "Justify H",
-                            &justify_h,
-                            muted,
-                            input_bg,
-                            input_bdr,
-                        ));
-                        c = c.push(form_input_row(
-                            "Justify V",
-                            &justify_v,
-                            muted,
-                            input_bg,
-                            input_bdr,
-                        ));
-                        c = c.push(form_input_row(
-                            "Text Size",
-                            &text_size,
-                            muted,
-                            input_bg,
-                            input_bdr,
-                        ));
-                        c
-                    },
-                ));
-            }
-        }
-        Some(signex_types::schematic::SelectedKind::Label) => {
-            // Net Name stored in Standard escapes `/` as `{slash}`. Show the
-            // visible form in the panel; the edit handler re-escapes on save.
-            let label_text = signex_render::schematic::text::expand_char_escapes(&get("Text"));
-            let position = get("Position");
-            let rotation_str = get("Rotation");
-            let text_size_str = get("Text Size");
-            let justify_h_str = get("Justify H");
-
-            // Parse numeric values for edit controls (with fallbacks).
-            let rotation_deg = rotation_str
-                .trim_end_matches('°')
-                .trim()
-                .parse::<f64>()
-                .unwrap_or(0.0);
-            let text_size_pt = text_size_str.parse::<u32>().unwrap_or(10);
-            let justify_h = match justify_h_str.as_str() {
-                "Left" => signex_types::schematic::HAlign::Left,
-                "Right" => signex_types::schematic::HAlign::Right,
-                _ => signex_types::schematic::HAlign::Center,
-            };
-
-            if let Some(id) = uuid {
-                // ── Location ──
-                let pos_clone = position.clone();
-                let rot_current = rotation_deg;
-                col = col.push(collapsible_section(
-                    "sel_location",
-                    "Location",
-                    &ctx.collapsed_sections,
-                    primary,
-                    border_c,
-                    move || {
-                        let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(form_input_row(
-                            "(X/Y)", &pos_clone, muted, input_bg, input_bdr,
-                        ));
-                        let rotation_opts: Vec<String> = vec![
-                            "0 Degrees".into(),
-                            "90 Degrees".into(),
-                            "180 Degrees".into(),
-                            "270 Degrees".into(),
-                        ];
-                        let rot_label = format!("{:.0} Degrees", rot_current);
-                        c = c.push(form_pick_row(
-                            "Rotation",
-                            rotation_opts,
-                            rot_label,
-                            move |s| {
-                                let deg = s
-                                    .split_whitespace()
-                                    .next()
-                                    .and_then(|n| n.parse::<f64>().ok())
-                                    .unwrap_or(0.0);
-                                PanelMsg::EditLabelRotation(id, deg)
-                            },
-                            muted,
-                        ));
-                        c
-                    },
-                ));
-
-                // ── Properties (Net Name, Font, Justification) ──
-                let net_name = label_text.clone();
-                col = col.push(collapsible_section(
-                    "sel_props",
-                    "Properties",
-                    &ctx.collapsed_sections,
-                    primary,
-                    border_c,
-                    move || {
-                        let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(form_edit_row("Net Name", &net_name, muted, move |s| {
-                            PanelMsg::EditLabelText(id, s)
-                        }));
-                        // Font family + size + color (color + family are cosmetic for now)
-                        let font_opts: Vec<String> = crate::fonts::system_font_families().clone();
-                        let default_font = font_opts
-                            .iter()
-                            .find(|f| f.to_lowercase().contains("iosevka"))
-                            .cloned()
-                            .unwrap_or_else(|| font_opts.first().cloned().unwrap_or_default());
-                        c = c.push(form_pick_row(
-                            "Font",
-                            font_opts,
-                            default_font,
-                            |_| PanelMsg::Noop,
-                            muted,
-                        ));
-                        let size_opts: Vec<String> =
-                            [6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72]
-                                .iter()
-                                .map(|n| n.to_string())
-                                .collect();
-                        c = c.push(form_pick_row(
-                            "Font Size",
-                            size_opts,
-                            text_size_pt.to_string(),
-                            move |s| {
-                                let pt: u32 = s.parse().unwrap_or(10);
-                                PanelMsg::EditLabelFontSizePt(id, pt)
-                            },
-                            muted,
-                        ));
-                        // B/I/U/T row — cosmetic for now.
-                        c = c.push(font_style_row(muted, primary, input_bg, input_bdr));
-                        // 3x3 Justification grid — Altium's 9-point anchor picker.
-                        c = c.push(form_label("Justification", muted));
-                        c = c.push(
-                            container(justification_grid(
-                                id,
-                                rotation_deg,
-                                justify_h,
-                                input_bg,
-                                input_bdr,
-                                primary,
-                                muted,
-                                ctx.theme_id,
-                            ))
-                            .padding([4, 8]),
-                        );
-                        c
-                    },
-                ));
-            }
-        }
-        Some(signex_types::schematic::SelectedKind::TextNote) => {
-            let note_text = get("Text");
-            let position = get("Position");
-            let rotation = get("Rotation");
-            let text_size = get("Text Size");
-            let justify_h = get("Justify H");
-            let justify_v = get("Justify V");
-
-            if let Some(id) = uuid {
-                col = col.push(collapsible_section(
-                    "sel_basic",
-                    "Basic Properties",
-                    &ctx.collapsed_sections,
-                    muted,
-                    border_c,
-                    move || {
-                        let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(form_edit_row("Text", &note_text, muted, move |s| {
-                            PanelMsg::EditTextNoteText(id, s)
-                        }));
-                        c
-                    },
-                ));
-
-                col = col.push(collapsible_section(
-                    "sel_text",
-                    "Text Properties",
-                    &ctx.collapsed_sections,
-                    muted,
-                    border_c,
-                    move || {
-                        let mut c = Column::new().spacing(0).width(Length::Fill);
-                        c = c.push(form_input_row(
-                            "Position", &position, muted, input_bg, input_bdr,
-                        ));
-                        c = c.push(form_input_row(
-                            "Rotation", &rotation, muted, input_bg, input_bdr,
-                        ));
-                        c = c.push(form_input_row(
-                            "Justify H",
-                            &justify_h,
-                            muted,
-                            input_bg,
-                            input_bdr,
-                        ));
-                        c = c.push(form_input_row(
-                            "Justify V",
-                            &justify_v,
-                            muted,
-                            input_bg,
-                            input_bdr,
-                        ));
-                        c = c.push(form_input_row(
-                            "Text Size",
-                            &text_size,
-                            muted,
-                            input_bg,
-                            input_bdr,
-                        ));
-                        c
-                    },
-                ));
-            }
-        }
-        Some(signex_types::schematic::SelectedKind::Drawing) => {
-            col = col.push(view_drawing_properties(ctx, muted, primary, border_c));
-        }
-        Some(signex_types::schematic::SelectedKind::ChildSheet) => {
-            col = col.push(view_child_sheet_properties(ctx, muted, primary, border_c));
-        }
-        _ => {
-            // Generic read-only properties for other types
-            let info: Vec<(String, String)> = ctx
-                .selection_info
-                .iter()
-                .filter(|(k, _)| k != "Type")
-                .cloned()
-                .collect();
-            col = col.push(collapsible_section(
-                "sel_general",
-                "Properties",
-                &ctx.collapsed_sections,
-                muted,
-                border_c,
-                || {
-                    let mut c = Column::new().spacing(0).width(Length::Fill);
-                    for (key, value) in &info {
-                        c = c.push(prop_kv_row(key, value, muted, primary));
-                    }
-                    c
-                },
-            ));
-        }
-    }
-
-    // ── Status bar ──
-    col = col.push(Space::new().height(8.0));
-    col = col.push(thin_sep(border_c));
-    col = col.push(container(text("1 object selected").size(10).color(muted)).padding([4, 8]));
-
-    scrollable(col).width(Length::Fill).into()
-}
 
 /// Pre-placement properties — shown when TAB pressed during a placement tool.
 fn view_pre_placement<'a>(
@@ -4099,9 +4150,40 @@ fn view_pre_placement<'a>(
         .into()
 }
 
+/// Wrap a property-row label `text` in a clipped fill-portion container.
+/// Plain `text(...).width(FillPortion(...)).wrapping(None)` lays out at
+/// the text's intrinsic width and bleeds past the allotted column when
+/// the panel is narrow — covering the value column or the panel edge.
+/// This helper enforces the FillPortion bound and clips visual overflow
+/// inside it. Used by every `form_*_row` and inline property row.
+pub(super) fn property_label<'a, M: 'a>(label: impl Into<String>, color: Color) -> Element<'a, M> {
+    container(
+        text(label.into())
+            .size(11)
+            .color(color)
+            .wrapping(iced::widget::text::Wrapping::None),
+    )
+    .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
+    .clip(true)
+    .into()
+}
+
+/// Like `property_label`, but for size-10 labels (used by `form_edit_row_f64`).
+fn property_label_small<'a, M: 'a>(label: impl Into<String>, color: Color) -> Element<'a, M> {
+    container(
+        text(label.into())
+            .size(10)
+            .color(color)
+            .wrapping(iced::widget::text::Wrapping::None),
+    )
+    .width(Length::FillPortion(2))
+    .clip(true)
+    .into()
+}
+
 /// Numeric edit row used by the shape pre-placement form. Writes on
 /// submit — partial text mid-type doesn't panic via parse failure.
-fn form_edit_row_f64<'a>(
+pub(super) fn form_edit_row_f64<'a>(
     label: &'a str,
     value: f64,
     muted: Color,
@@ -4111,10 +4193,7 @@ fn form_edit_row_f64<'a>(
     let buf = format!("{value:.3}");
     let on_submit_cb = on_submit.clone();
     row![
-        text(label)
-            .size(10)
-            .color(muted)
-            .width(Length::FillPortion(2)),
+        property_label_small(label, muted),
         text_input("", &buf)
             .size(11)
             .on_input(move |s| {
@@ -4185,1899 +4264,6 @@ fn shape_fill_row<'a>(
     .align_y(iced::Alignment::Center)
     .into()
 }
-
-fn view_properties_general<'a>(
-    ctx: &'a PanelContext,
-    muted: Color,
-    primary: Color,
-    border_c: Color,
-) -> Column<'a, PanelMsg> {
-    // Derive button/input colors from tokens (Copy values captured in closures)
-    let input_bg = crate::styles::ti(ctx.tokens.selection); // deep blue tint
-    let input_bdr = crate::styles::ti(ctx.tokens.accent);
-    let tag_hover = {
-        let c = crate::styles::ti(ctx.tokens.accent);
-        Color {
-            r: (c.r * 1.3).min(1.0),
-            g: (c.g * 1.3).min(1.0),
-            b: (c.b * 1.3).min(1.0),
-            ..c
-        }
-    };
-    let seg_hover = crate::styles::ti(ctx.tokens.hover);
-
-    let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
-
-    // Custom Selection Filters (collapsible) — tabbed editor for up to
-    // CUSTOM_FILTER_PRESET_LIMIT named presets that also surface as
-    // shortcut buttons in the Active Bar's filter dropdown.
-    {
-        use crate::active_bar::{CUSTOM_FILTER_PRESET_LIMIT, SelectionFilter};
-        let presets = ctx.custom_filter_presets.clone();
-        let active_tab = ctx
-            .active_custom_filter_tab
-            .min(presets.len().saturating_sub(1));
-        let muted_c = muted;
-        let primary_c = primary;
-        // Border colour for tabs and member chips — matches the Active
-        // Bar Filter dropdown's chip border treatment so the section
-        // reads as one cohesive piece.
-        let accent_c = crate::styles::ti(ctx.tokens.accent);
-        col = col.push(collapsible_section(
-            "prop_sel_filter",
-            "Custom Selection Filters",
-            &ctx.collapsed_sections,
-            primary,
-            border_c,
-            move || {
-                let mut c = Column::new().spacing(6).width(Length::Fill);
-                if presets.is_empty() {
-                    c = c.push(
-                        container(
-                            text("No presets yet. Click + to define one.")
-                                .size(11)
-                                .color(muted_c),
-                        )
-                        .padding([4, 8]),
-                    );
-                    c = c.push(
-                        container(
-                            iced::widget::button(text("+ Add Filter").size(11).color(primary_c))
-                                .padding([4, 10])
-                                .on_press(PanelMsg::AddCustomFilterPreset),
-                        )
-                        .padding([4, 8]),
-                    );
-                    return c;
-                }
-                // Tab strip: one tab per preset + a trailing "+" tab
-                // when room remains. Each tab is its own button — the
-                // active one gets the accent border, others a muted one.
-                let mut tabs = iced::widget::Row::new()
-                    .spacing(2)
-                    .align_y(iced::Alignment::Center);
-                for (idx, preset) in presets.iter().enumerate() {
-                    let label = if preset.name.trim().is_empty() {
-                        format!("Filter {}", idx + 1)
-                    } else {
-                        preset.name.clone()
-                    };
-                    tabs = tabs.push(custom_filter_tab(
-                        label,
-                        idx == active_tab,
-                        idx,
-                        tag_hover,
-                        accent_c,
-                    ));
-                }
-                if presets.len() < CUSTOM_FILTER_PRESET_LIMIT {
-                    tabs = tabs.push(
-                        iced::widget::button(text("+").size(12).color(primary_c))
-                            .padding([3, 10])
-                            .on_press(PanelMsg::AddCustomFilterPreset),
-                    );
-                }
-                c = c.push(container(tabs).padding([4, 8]));
-                // Active tab body — name input + chips + delete.
-                let preset = &presets[active_tab];
-                let included: std::collections::HashSet<SelectionFilter> =
-                    preset.filters.iter().copied().collect();
-                let header = row![
-                    iced::widget::text_input("Preset name", &preset.name)
-                        .size(11)
-                        .padding([3, 6])
-                        .on_input(move |s| PanelMsg::RenameCustomFilterPreset(active_tab, s))
-                        .width(Length::Fill),
-                    iced::widget::button(text("Delete").size(10).color(primary_c))
-                        .padding([3, 8])
-                        .on_press(PanelMsg::RemoveCustomFilterPreset(active_tab)),
-                ]
-                .spacing(4)
-                .align_y(iced::Alignment::Center);
-                let mut wrap = Wrap::new().spacing(4.0).line_spacing(4.0);
-                for &f in SelectionFilter::ALL {
-                    wrap = wrap.push(preset_chip(
-                        f.label(),
-                        active_tab,
-                        f,
-                        included.contains(&f),
-                        tag_hover,
-                        accent_c,
-                    ));
-                }
-                c = c.push(
-                    container(column![header, container(wrap).padding([4, 0])].spacing(4))
-                        .padding([6, 8]),
-                );
-                c
-            },
-        ));
-    }
-
-    // General (collapsible)
-    {
-        let unit = ctx.unit;
-        let grid_size_mm = ctx.grid_size_mm;
-        let visible_grid_mm = ctx.visible_grid_mm;
-        let snap_enabled = ctx.snap_enabled;
-        let snap_hotspots = ctx.snap_hotspots;
-        let grid_visible = ctx.grid_visible;
-        let canvas_font_name = ctx.canvas_font_name.clone();
-        let canvas_font_size = ctx.canvas_font_size;
-        let canvas_font_bold = ctx.canvas_font_bold;
-        let canvas_font_italic = ctx.canvas_font_italic;
-        let canvas_font_popup_open = ctx.canvas_font_popup_open;
-        let sheet_color = ctx.sheet_color;
-        col = col.push(collapsible_section(
-            "prop_general",
-            "General",
-            &ctx.collapsed_sections,
-            primary,
-            border_c,
-            move || {
-                let mut c = Column::new().spacing(0).width(Length::Fill);
-                c = c.push(form_label("Units", muted));
-                c = c.push(
-                    container(
-                        row![
-                            seg_btn(
-                                "mm",
-                                unit == Unit::Mm,
-                                PanelMsg::SetUnit(Unit::Mm),
-                                input_bg,
-                                primary,
-                                muted,
-                                seg_hover,
-                                input_bdr
-                            ),
-                            seg_btn(
-                                "mils",
-                                unit == Unit::Mil,
-                                PanelMsg::SetUnit(Unit::Mil),
-                                input_bg,
-                                primary,
-                                muted,
-                                seg_hover,
-                                input_bdr
-                            ),
-                        ]
-                        .spacing(0.0)
-                        .width(Length::Fill),
-                    )
-                    .padding([2, 8]),
-                );
-                // Altium-style: Visible Grid and Snap Grid are independent
-                c = c.push(form_grid_row(
-                    "Visible Grid",
-                    visible_grid_mm,
-                    unit,
-                    false,
-                    PanelMsg::SetVisibleGridSize,
-                    muted,
-                    grid_visible,
-                    PanelMsg::ToggleGrid,
-                ));
-                c = c.push(form_grid_row(
-                    "Snap Grid",
-                    grid_size_mm,
-                    unit,
-                    true,
-                    PanelMsg::SetGridSize,
-                    muted,
-                    snap_enabled,
-                    PanelMsg::ToggleSnap,
-                ));
-                c = c.push(form_check_row_shortcut(
-                    "Snap to Hotspots",
-                    snap_hotspots,
-                    PanelMsg::ToggleSnapHotspots,
-                    "Shift+E",
-                    muted,
-                ));
-                c = c.push(form_font_link_row(
-                    "Canvas Font",
-                    &canvas_font_name,
-                    canvas_font_size,
-                    canvas_font_bold,
-                    canvas_font_italic,
-                    muted,
-                ));
-                if canvas_font_popup_open {
-                    c = c.push(
-                        container(canvas_font_popup(
-                            &canvas_font_name,
-                            canvas_font_size,
-                            canvas_font_bold,
-                            canvas_font_italic,
-                            muted,
-                            input_bg,
-                            input_bdr,
-                        ))
-                        .padding(iced::Padding {
-                            top: 0.0,
-                            right: 16.0,
-                            bottom: 4.0,
-                            left: 8.0,
-                        }),
-                    );
-                }
-                let sheet_colors: Vec<SheetColor> = SheetColor::ALL.to_vec();
-                c = c.push(form_pick_row(
-                    "Sheet Color",
-                    sheet_colors,
-                    sheet_color,
-                    PanelMsg::SetSheetColor,
-                    muted,
-                ));
-                c
-            },
-        ));
-    }
-
-    // Page Options (collapsible)
-    {
-        let paper_size = ctx.paper_size.clone();
-        let format_mode = ctx.page_format_mode;
-        let margin_v = ctx.margin_vertical;
-        let margin_h = ctx.margin_horizontal;
-        let origin = ctx.page_origin;
-        let custom_w = ctx.custom_paper_w_mm;
-        let custom_h = ctx.custom_paper_h_mm;
-        col = col.push(collapsible_section(
-            "prop_page_opts",
-            "Page Options",
-            &ctx.collapsed_sections,
-            primary,
-            border_c,
-            move || {
-                let mut c = Column::new().spacing(0).width(Length::Fill);
-                c = c.push(form_label("Formatting and Size", muted));
-                c = c.push(
-                    container(
-                        row![
-                            seg_btn(
-                                "Template",
-                                format_mode == PageFormatMode::Template,
-                                PanelMsg::SetPageFormatMode(PageFormatMode::Template),
-                                input_bg,
-                                primary,
-                                muted,
-                                seg_hover,
-                                input_bdr,
-                            ),
-                            seg_btn(
-                                "Standard",
-                                format_mode == PageFormatMode::Standard,
-                                PanelMsg::SetPageFormatMode(PageFormatMode::Standard),
-                                input_bg,
-                                primary,
-                                muted,
-                                seg_hover,
-                                input_bdr,
-                            ),
-                            seg_btn(
-                                "Custom",
-                                format_mode == PageFormatMode::Custom,
-                                PanelMsg::SetPageFormatMode(PageFormatMode::Custom),
-                                input_bg,
-                                primary,
-                                muted,
-                                seg_hover,
-                                input_bdr,
-                            ),
-                        ]
-                        .spacing(0.0)
-                        .width(Length::Fill),
-                    )
-                    .padding([2, 8]),
-                );
-                // Standard + Template modes share the size picker. Custom mode replaces
-                // it with width/height inputs.
-                match format_mode {
-                    PageFormatMode::Standard | PageFormatMode::Template => {
-                        let paper_options: Vec<String> =
-                            PAPER_SIZES.iter().map(|s| (*s).to_string()).collect();
-                        c = c.push(form_pick_row(
-                            "Paper",
-                            paper_options,
-                            paper_size.clone(),
-                            PanelMsg::SetPaperSize,
-                            muted,
-                        ));
-                        let (w, h) = paper_dimensions(&paper_size);
-                        let dims = format!("Width: {w:.0}mm  Height: {h:.0}mm");
-                        c = c.push(container(text(dims).size(10).color(muted)).padding([3, 8]));
-                        if matches!(format_mode, PageFormatMode::Template) {
-                            c = c.push(
-                                container(
-                                    text("Template: using A-series defaults")
-                                        .size(10)
-                                        .color(muted),
-                                )
-                                .padding([0, 8]),
-                            );
-                        }
-                    }
-                    PageFormatMode::Custom => {
-                        c = c.push(form_mm_edit_row(
-                            "Width",
-                            custom_w,
-                            PanelMsg::SetCustomPaperWidth,
-                            muted,
-                            input_bg,
-                            input_bdr,
-                        ));
-                        c = c.push(form_mm_edit_row(
-                            "Height",
-                            custom_h,
-                            PanelMsg::SetCustomPaperHeight,
-                            muted,
-                            input_bg,
-                            input_bdr,
-                        ));
-                    }
-                }
-                c = c.push(form_label("Margin and Zones", muted));
-                c = c.push(form_int_edit_row(
-                    "Vertical",
-                    margin_v,
-                    PanelMsg::SetMarginVertical,
-                    muted,
-                    input_bg,
-                    input_bdr,
-                ));
-                c = c.push(form_int_edit_row(
-                    "Horizontal",
-                    margin_h,
-                    PanelMsg::SetMarginHorizontal,
-                    muted,
-                    input_bg,
-                    input_bdr,
-                ));
-                let origin_opts: Vec<PageOrigin> =
-                    vec![PageOrigin::UpperLeft, PageOrigin::LowerLeft];
-                c = c.push(form_pick_row(
-                    "Origin",
-                    origin_opts,
-                    origin,
-                    PanelMsg::SetPageOrigin,
-                    muted,
-                ));
-                c
-            },
-        ));
-    }
-
-    col
-}
-
-fn view_properties_parameters<'a>(
-    muted: Color,
-    primary: Color,
-    border_c: Color,
-    input_bg: Color,
-    input_bdr: Color,
-    seg_hover: Color,
-) -> Column<'a, PanelMsg> {
-    let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
-
-    col = col.push(section_hdr("\u{25BC} Parameters", primary, border_c));
-
-    // Sub-tabs: All | Parameters | Rules
-    col = col.push(
-        container(
-            row![
-                seg_btn(
-                    "All",
-                    false,
-                    PanelMsg::PropertiesTab(1),
-                    input_bg,
-                    primary,
-                    muted,
-                    seg_hover,
-                    input_bdr
-                ),
-                seg_btn(
-                    "Parameters",
-                    true,
-                    PanelMsg::PropertiesTab(1),
-                    input_bg,
-                    primary,
-                    muted,
-                    seg_hover,
-                    input_bdr
-                ),
-                seg_btn(
-                    "Rules",
-                    false,
-                    PanelMsg::PropertiesTab(1),
-                    input_bg,
-                    primary,
-                    muted,
-                    seg_hover,
-                    input_bdr
-                ),
-            ]
-            .spacing(0.0)
-            .width(Length::Fill),
-        )
-        .padding([4, 8]),
-    );
-
-    // Table header
-    col = col.push(thin_sep(border_c));
-    col = col.push(
-        container(
-            row![
-                text("Name")
-                    .size(10)
-                    .color(muted)
-                    .width(Length::FillPortion(3)),
-                text("Value")
-                    .size(10)
-                    .color(muted)
-                    .width(Length::FillPortion(2)),
-            ]
-            .spacing(4.0),
-        )
-        .padding([4, 8])
-        .width(Length::Fill),
-    );
-    col = col.push(thin_sep(border_c));
-
-    // Parameter rows (standard Altium document parameters)
-    let params: &[(&str, &str)] = &[
-        ("CurrentTime", "*"),
-        ("CurrentDate", "*"),
-        ("Time", "*"),
-        ("Date", "*"),
-        ("DocumentFullPathAndName", "*"),
-        ("DocumentName", "*"),
-        ("ModifiedDate", "*"),
-        ("ApprovedBy", "*"),
-        ("CheckedBy", "*"),
-        ("Author", "*"),
-        ("CompanyName", "*"),
-        ("DrawnBy", "*"),
-        ("Engineer", "*"),
-        ("Organization", "*"),
-        ("Title", "*"),
-        ("Address1", "*"),
-        ("Address2", "*"),
-        ("Address3", "*"),
-        ("Address4", "*"),
-    ];
-
-    for (name, val) in params {
-        col = col.push(param_table_row(name, val, primary, muted, border_c));
-    }
-
-    col
-}
-
-/// Parameter table row with subtle bottom border.
-fn param_table_row<'a, M: 'a>(
-    name: &str,
-    value: &str,
-    name_c: Color,
-    val_c: Color,
-    border_c: Color,
-) -> Element<'a, M> {
-    column![
-        container(
-            row![
-                text(name.to_string())
-                    .size(11)
-                    .color(name_c)
-                    .width(Length::FillPortion(3))
-                    .wrapping(iced::widget::text::Wrapping::None),
-                text(value.to_string())
-                    .size(11)
-                    .color(val_c)
-                    .width(Length::FillPortion(2)),
-            ]
-            .spacing(4.0),
-        )
-        .padding([4, 8])
-        .width(Length::Fill),
-        thin_sep(border_c),
-    ]
-    .spacing(0)
-    .into()
-}
-
-/// Properties panel tab button (General / Parameters).
-fn props_tab_btn(
-    label: &str,
-    active: bool,
-    msg: PanelMsg,
-    text_active: Color,
-    text_inactive: Color,
-    hover_bg: Color,
-    border_c: Color,
-) -> Element<'static, PanelMsg> {
-    let text_c = if active { text_active } else { text_inactive };
-    iced::widget::button(text(label.to_string()).size(11).color(text_c))
-        .padding([4, 12])
-        .on_press(msg)
-        .style(move |_: &Theme, status: iced::widget::button::Status| {
-            let hover = matches!(status, iced::widget::button::Status::Hovered);
-            iced::widget::button::Style {
-                background: if active || hover {
-                    Some(Background::Color(hover_bg))
-                } else {
-                    None
-                },
-                border: Border {
-                    width: 1.0,
-                    radius: 2.0.into(),
-                    color: border_c,
-                },
-                ..iced::widget::button::Style::default()
-            }
-        })
-        .into()
-}
-
-/// Thin 1px separator line.
-fn thin_sep<'a, M: 'a>(border_c: Color) -> Element<'a, M> {
-    container(Space::new())
-        .height(1.0)
-        .width(Length::Fill)
-        .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(border_c)),
-            ..container::Style::default()
-        })
-        .into()
-}
-
-/// Section header: bold label + separator line.
-fn section_hdr<'a, M: 'a>(title: &str, text_c: Color, border_c: Color) -> Column<'a, M> {
-    column![
-        container(text(title.to_string()).size(12).color(text_c))
-            .padding([6, 8])
-            .width(Length::Fill),
-        container(Space::new())
-            .height(1.0)
-            .width(Length::Fill)
-            .style(move |_: &Theme| container::Style {
-                background: Some(Background::Color(border_c)),
-                ..container::Style::default()
-            }),
-    ]
-    .spacing(0)
-}
-
-/// Form row: label | styled input-like value display.
-fn form_input_row<'a, M: 'a>(
-    label: &str,
-    value: &str,
-    label_c: Color,
-    input_bg: Color,
-    input_border: Color,
-) -> Element<'a, M> {
-    container(
-        row![
-            text(label.to_string())
-                .size(11)
-                .color(label_c)
-                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
-                .wrapping(iced::widget::text::Wrapping::None),
-            container(
-                text(value.to_string())
-                    .size(11)
-                    .color(Color::WHITE)
-                    .wrapping(iced::widget::text::Wrapping::None),
-            )
-            .padding([3, 6])
-            .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
-            .style(move |_: &Theme| container::Style {
-                background: Some(Background::Color(input_bg)),
-                border: Border {
-                    width: 1.0,
-                    radius: 2.0.into(),
-                    color: input_border,
-                },
-                ..container::Style::default()
-            }),
-        ]
-        .spacing(8.0)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([2, PROPERTY_ROW_PAD_X])
-    .width(Length::Fill)
-    .into()
-}
-
-/// Form row: label | integer text_input (no spinner buttons).
-fn form_int_edit_row<'a>(
-    label: &str,
-    value: u32,
-    on_change: impl Fn(u32) -> PanelMsg + 'a + Clone,
-    label_c: Color,
-    input_bg: Color,
-    input_border: Color,
-) -> Element<'a, PanelMsg> {
-    let text_value = value.to_string();
-    let on_change_cl = on_change.clone();
-    container(
-        row![
-            text(label.to_string())
-                .size(11)
-                .color(label_c)
-                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
-                .wrapping(iced::widget::text::Wrapping::None),
-            iced::widget::text_input("", &text_value)
-                .on_input(move |s| {
-                    let parsed: u32 = s.trim().parse().unwrap_or(0);
-                    (on_change_cl)(parsed.min(99))
-                })
-                .size(11)
-                .padding([3, 6])
-                .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
-                .style(move |_: &Theme, _| iced::widget::text_input::Style {
-                    background: Background::Color(input_bg),
-                    border: Border {
-                        width: 1.0,
-                        radius: 2.0.into(),
-                        color: input_border,
-                    },
-                    icon: Color::TRANSPARENT,
-                    placeholder: Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0),
-                    value: Color::WHITE,
-                    selection: Color::from_rgba8(0x4D, 0x52, 0x66, 0.6),
-                }),
-        ]
-        .spacing(8.0)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([2, PROPERTY_ROW_PAD_X])
-    .width(Length::Fill)
-    .into()
-}
-
-/// Form row: label | floating-point mm text_input (no spinner buttons).
-fn form_mm_edit_row<'a>(
-    label: &str,
-    value: f32,
-    on_change: impl Fn(f32) -> PanelMsg + 'a + Clone,
-    label_c: Color,
-    input_bg: Color,
-    input_border: Color,
-) -> Element<'a, PanelMsg> {
-    let text_value = format!("{value:.1}");
-    let on_change_cl = on_change.clone();
-    container(
-        row![
-            text(label.to_string())
-                .size(11)
-                .color(label_c)
-                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
-                .wrapping(iced::widget::text::Wrapping::None),
-            iced::widget::text_input("", &text_value)
-                .on_input(move |s| {
-                    let parsed: f32 = s.trim().parse().unwrap_or(0.0);
-                    (on_change_cl)(parsed.clamp(1.0, 2000.0))
-                })
-                .size(11)
-                .padding([3, 6])
-                .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
-                .style(move |_: &Theme, _| iced::widget::text_input::Style {
-                    background: Background::Color(input_bg),
-                    border: Border {
-                        width: 1.0,
-                        radius: 2.0.into(),
-                        color: input_border,
-                    },
-                    icon: Color::TRANSPARENT,
-                    placeholder: Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0),
-                    value: Color::WHITE,
-                    selection: Color::from_rgba8(0x4D, 0x52, 0x66, 0.6),
-                }),
-        ]
-        .spacing(8.0)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([2, PROPERTY_ROW_PAD_X])
-    .width(Length::Fill)
-    .into()
-}
-
-/// Form row: label | pick_list (dropdown).
-fn form_pick_row<'a, T>(
-    label: &str,
-    options: Vec<T>,
-    selected: T,
-    on_change: impl Fn(T) -> PanelMsg + 'a,
-    label_c: Color,
-) -> Element<'a, PanelMsg>
-where
-    T: Clone + Eq + std::fmt::Display + 'static,
-{
-    container(
-        row![
-            text(label.to_string())
-                .size(11)
-                .color(label_c)
-                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
-                .wrapping(iced::widget::text::Wrapping::None),
-            iced::widget::pick_list(options, Some(selected), on_change)
-                .text_size(11)
-                .padding([2, 6])
-                .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
-        ]
-        .spacing(8.0)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([2, PROPERTY_ROW_PAD_X])
-    .width(Length::Fill)
-    .into()
-}
-
-/// Form row: label | custom widget.
-#[allow(dead_code)]
-fn form_label_row<'a>(
-    label: &str,
-    control: Row<'a, PanelMsg>,
-    label_c: Color,
-) -> Element<'a, PanelMsg> {
-    container(
-        row![
-            text(label.to_string())
-                .size(11)
-                .color(label_c)
-                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
-                .wrapping(iced::widget::text::Wrapping::None),
-            container(control).width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
-        ]
-        .spacing(8.0)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([2, PROPERTY_ROW_PAD_X])
-    .width(Length::Fill)
-    .into()
-}
-
-/// Checkbox form row.
-fn form_check_row<'a>(
-    label: &str,
-    checked: bool,
-    msg: PanelMsg,
-    label_c: Color,
-) -> Element<'a, PanelMsg> {
-    container(
-        row![
-            text(label.to_string())
-                .size(11)
-                .color(label_c)
-                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
-                .wrapping(iced::widget::text::Wrapping::None),
-            row![
-                iced::widget::checkbox(checked)
-                    .on_toggle(move |_| msg.clone())
-                    .size(14)
-                    .spacing(4),
-                text(if checked { "On" } else { "Off" })
-                    .size(11)
-                    .color(if checked { Color::WHITE } else { label_c }),
-            ]
-            .spacing(8)
-            .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
-        ]
-        .spacing(8.0)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([2, PROPERTY_ROW_PAD_X])
-    .width(Length::Fill)
-    .into()
-}
-
-/// Form row: label | pick_list for grid size presets (2.54 mm multiples).
-#[allow(dead_code)]
-fn form_grid_size_row(current_mm: f32, label_c: Color) -> Element<'static, PanelMsg> {
-    use crate::canvas::grid::{GRID_SIZE_LABELS, GRID_SIZES_MM};
-    // Find the label that matches the current value (fallback to first).
-    let selected: Option<&'static str> = GRID_SIZES_MM
-        .iter()
-        .zip(GRID_SIZE_LABELS.iter())
-        .find(|(sz, _)| (**sz - current_mm).abs() < 1e-4)
-        .map(|(_, lbl)| *lbl);
-    container(
-        row![
-            text("Visible Grid".to_string())
-                .size(11)
-                .color(label_c)
-                .width(LABEL_W)
-                .wrapping(iced::widget::text::Wrapping::None),
-            iced::widget::pick_list(GRID_SIZE_LABELS, selected, |lbl: &'static str| {
-                // Map label back to mm value
-                let mm = GRID_SIZES_MM
-                    .iter()
-                    .zip(GRID_SIZE_LABELS.iter())
-                    .find(|(_, l)| **l == lbl)
-                    .map(|(v, _)| *v)
-                    .unwrap_or(2.54);
-                PanelMsg::SetGridSize(mm)
-            },)
-            .text_size(11)
-            .width(Length::Fill),
-        ]
-        .spacing(8.0)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([2, 8])
-    .width(Length::Fill)
-    .into()
-}
-
-/// Altium-style grid row: [Label] [checkbox toggle] [pick_list] [shortcut hint]
-/// Used for both "Visible Grid" (eye/visible toggle) and "Snap Grid" (snap enable toggle).
-/// Labels and values are shown in the current `unit` (mm or mil).
-#[allow(clippy::too_many_arguments)]
-fn form_grid_row(
-    label: &'static str,
-    current_mm: f32,
-    unit: Unit,
-    has_checkbox: bool,
-    on_size: impl Fn(f32) -> PanelMsg + 'static,
-    label_c: Color,
-    active: bool,
-    on_toggle: PanelMsg,
-) -> Element<'static, PanelMsg> {
-    use crate::canvas::grid::{GRID_SIZE_LABELS, GRID_SIZE_LABELS_MIL, GRID_SIZES_MM};
-
-    let labels: &'static [&'static str] = if unit == Unit::Mil {
-        GRID_SIZE_LABELS_MIL
-    } else {
-        GRID_SIZE_LABELS
-    };
-
-    let selected: Option<&'static str> = GRID_SIZES_MM
-        .iter()
-        .zip(labels.iter())
-        .find(|(sz, _)| (**sz - current_mm).abs() < 1e-4)
-        .map(|(_, lbl)| *lbl);
-
-    let pick = iced::widget::pick_list(labels, selected, move |lbl: &'static str| {
-        // Map label back to mm value (labels and GRID_SIZES_MM are parallel arrays)
-        let mm = GRID_SIZE_LABELS
-            .iter()
-            .chain(GRID_SIZE_LABELS_MIL.iter())
-            .zip(GRID_SIZES_MM.iter().chain(GRID_SIZES_MM.iter()))
-            .find(|(l, _)| **l == lbl)
-            .map(|(_, v)| *v)
-            .unwrap_or(2.54);
-        on_size(mm)
-    })
-    .text_size(11)
-    .width(Length::Fill);
-
-    let label_widget = text(label.to_string())
-        .size(11)
-        .color(label_c)
-        .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
-        .wrapping(iced::widget::text::Wrapping::None);
-
-    let content: Element<PanelMsg> = if has_checkbox {
-        // Snap Grid row: checkbox before pick_list
-        row![
-            label_widget,
-            iced::widget::checkbox(active)
-                .on_toggle(move |_| on_toggle.clone())
-                .size(12)
-                .spacing(4),
-            container(pick).width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
-        ]
-        .spacing(4)
-        .align_y(iced::Alignment::Center)
-        .into()
-    } else {
-        // Visible Grid row: no checkbox
-        row![
-            label_widget,
-            container(pick).width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
-        ]
-        .spacing(4)
-        .align_y(iced::Alignment::Center)
-        .into()
-    };
-
-    container(content)
-        .padding([2, PROPERTY_ROW_PAD_X])
-        .width(Length::Fill)
-        .into()
-}
-
-/// Form row: checkbox with a keyboard shortcut hint on the right.
-fn form_check_row_shortcut<'a>(
-    label: &'a str,
-    value: bool,
-    on_toggle: PanelMsg,
-    shortcut: &'a str,
-    label_c: Color,
-) -> Element<'a, PanelMsg> {
-    let shortcut_owned = shortcut.to_string();
-    container(
-        row![
-            text(label.to_string())
-                .size(11)
-                .color(label_c)
-                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
-                .wrapping(iced::widget::text::Wrapping::Word),
-            row![
-                iced::widget::checkbox(value)
-                    .on_toggle(move |_| on_toggle.clone())
-                    .size(12)
-                    .spacing(4),
-                Space::new().width(Length::Fill),
-                text(shortcut_owned)
-                    .size(9)
-                    .color(label_c)
-                    .wrapping(iced::widget::text::Wrapping::None),
-            ]
-            .spacing(4)
-            .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
-        ]
-        .spacing(4)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([2, PROPERTY_ROW_PAD_X])
-    .width(Length::Fill)
-    .clip(true)
-    .into()
-}
-
-fn form_font_link_row<'a>(
-    label: &'static str,
-    current_family: &str,
-    current_size_px: f32,
-    _bold: bool,
-    _italic: bool,
-    label_c: Color,
-) -> Element<'a, PanelMsg> {
-    let summary = format!("{current_family}, {:.0}px", current_size_px);
-
-    container(
-        row![
-            text(label)
-                .size(11)
-                .color(label_c)
-                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
-                .wrapping(iced::widget::text::Wrapping::None),
-            iced::widget::button(
-                text(summary)
-                    .size(11)
-                    .color(Color::from_rgb(0.35, 0.7, 1.0))
-                    .width(Length::Fill),
-            )
-            .on_press(PanelMsg::OpenCanvasFontPopup)
-            .padding([1, 0])
-            .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
-            .style(move |_: &Theme, status: iced::widget::button::Status| {
-                let underline = matches!(status, iced::widget::button::Status::Hovered);
-                iced::widget::button::Style {
-                    background: None,
-                    text_color: if underline {
-                        Color::from_rgb(0.55, 0.82, 1.0)
-                    } else {
-                        Color::from_rgb(0.35, 0.7, 1.0)
-                    },
-                    border: Border::default(),
-                    shadow: iced::Shadow::default(),
-                    ..Default::default()
-                }
-            }),
-        ]
-        .spacing(4)
-        .width(Length::Fill)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([2, PROPERTY_ROW_PAD_X])
-    .width(Length::Fill)
-    .into()
-}
-
-fn canvas_font_popup<'a>(
-    current_family: &str,
-    current_size_px: f32,
-    bold: bool,
-    italic: bool,
-    label_c: Color,
-    input_bg: Color,
-    input_bdr: Color,
-) -> Element<'a, PanelMsg> {
-    let families = crate::fonts::system_font_families();
-    let family_pick = iced::widget::pick_list(
-        families.as_slice(),
-        Some(current_family.to_string()),
-        PanelMsg::SetCanvasFont,
-    )
-    .text_size(11)
-    .width(Length::Fill);
-
-    let size_input = NumberInput::new(&current_size_px, 6.0..=36.0, PanelMsg::SetCanvasFontSize)
-        .step(1.0)
-        .width(Length::Fill)
-        .padding(4);
-
-    container(
-        column![
-            row![
-                text("Canvas Font Settings").size(11).color(label_c),
-                Space::new().width(Length::Fill),
-                iced::widget::button(text("Close").size(10))
-                    .on_press(PanelMsg::CloseCanvasFontPopup)
-                    .padding([2, 6])
-            ]
-            .align_y(iced::Alignment::Center),
-            row![
-                text("Family").size(10).color(label_c).width(56),
-                family_pick,
-            ]
-            .spacing(8)
-            .align_y(iced::Alignment::Center),
-            row![text("Size").size(10).color(label_c).width(56), size_input,]
-                .spacing(8)
-                .align_y(iced::Alignment::Center),
-            row![
-                text("Style").size(10).color(label_c).width(56),
-                row![
-                    iced::widget::checkbox(bold)
-                        .on_toggle(PanelMsg::SetCanvasFontBold)
-                        .size(12)
-                        .spacing(4),
-                    text("Bold").size(10).color(label_c),
-                ]
-                .spacing(4)
-                .align_y(iced::Alignment::Center),
-                row![
-                    iced::widget::checkbox(italic)
-                        .on_toggle(PanelMsg::SetCanvasFontItalic)
-                        .size(12)
-                        .spacing(4),
-                    text("Italic").size(10).color(label_c),
-                ]
-                .spacing(4)
-                .align_y(iced::Alignment::Center),
-            ]
-            .spacing(12)
-            .align_y(iced::Alignment::Center),
-            text("Applies immediately to canvas text rendering.")
-                .size(9)
-                .color(label_c),
-        ]
-        .spacing(6),
-    )
-    .padding([6, 8])
-    .style(move |_: &Theme| iced::widget::container::Style {
-        background: Some(Background::Color(input_bg)),
-        border: Border {
-            color: input_bdr,
-            width: 1.0,
-            radius: 4.0.into(),
-        },
-        ..Default::default()
-    })
-    .width(Length::Fill)
-    .into()
-}
-
-/// Form row: label | NumberInput (iced_aw) with step/bounds.
-#[allow(dead_code)]
-fn form_number_row<'a, T>(
-    label: &str,
-    value: T,
-    bounds: impl std::ops::RangeBounds<T> + 'a,
-    step: T,
-    on_change: impl Fn(T) -> PanelMsg + 'static + Clone,
-    label_c: Color,
-) -> Element<'a, PanelMsg>
-where
-    T: num_traits::Num
-        + num_traits::NumAssignOps
-        + PartialOrd
-        + std::fmt::Display
-        + std::str::FromStr
-        + Clone
-        + num_traits::Bounded
-        + 'static,
-{
-    container(
-        row![
-            text(label.to_string())
-                .size(11)
-                .color(label_c)
-                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
-                .wrapping(iced::widget::text::Wrapping::None),
-            NumberInput::new(&value, bounds, on_change)
-                .step(step)
-                .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
-                .padding(4),
-        ]
-        .spacing(8.0)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([2, PROPERTY_ROW_PAD_X])
-    .width(Length::Fill)
-    .into()
-}
-
-/// Form row: label | editable text_input that emits a PanelMsg on input.
-fn form_edit_row<'a>(
-    label: &str,
-    value: &str,
-    label_c: Color,
-    on_input: impl Fn(String) -> PanelMsg + 'a,
-) -> Element<'a, PanelMsg> {
-    container(
-        row![
-            text(label.to_string())
-                .size(11)
-                .color(label_c)
-                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
-                .wrapping(iced::widget::text::Wrapping::None),
-            iced::widget::text_input("", value)
-                .on_input(on_input)
-                .size(11)
-                .padding(4)
-                .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
-        ]
-        .spacing(8.0)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([2, PROPERTY_ROW_PAD_X])
-    .width(Length::Fill)
-    .into()
-}
-
-/// Standalone label row (no value, used before segmented controls).
-fn form_label<'a, M: 'a>(label: &str, label_c: Color) -> Element<'a, M> {
-    container(text(label.to_string()).size(11).color(label_c))
-        .padding([4, 8])
-        .width(Length::Fill)
-        .into()
-}
-
-/// Altium-style B/I/U/T (Bold / Italic / Underline / Strikethrough) row.
-fn font_style_row<'a>(
-    _label_c: Color,
-    primary: Color,
-    input_bg: Color,
-    input_bdr: Color,
-) -> Element<'a, PanelMsg> {
-    let btn = |glyph: &'static str, style: iced::font::Weight| -> Element<'static, PanelMsg> {
-        iced::widget::button(
-            text(glyph.to_string())
-                .size(12)
-                .color(primary)
-                .font(iced::Font {
-                    weight: style,
-                    ..iced::Font::DEFAULT
-                })
-                .align_x(iced::alignment::Horizontal::Center),
-        )
-        .width(Length::Fill)
-        .padding([4, 6])
-        .on_press(PanelMsg::Noop)
-        .style(move |_: &Theme, status: iced::widget::button::Status| {
-            let hovered = matches!(status, iced::widget::button::Status::Hovered);
-            iced::widget::button::Style {
-                background: Some(Background::Color(if hovered {
-                    input_bdr
-                } else {
-                    input_bg
-                })),
-                border: Border {
-                    width: 1.0,
-                    radius: 2.0.into(),
-                    color: input_bdr,
-                },
-                text_color: primary,
-                ..iced::widget::button::Style::default()
-            }
-        })
-        .into()
-    };
-    container(
-        row![
-            btn("B", iced::font::Weight::Bold),
-            btn("I", iced::font::Weight::Normal),
-            btn("U", iced::font::Weight::Normal),
-            btn("T", iced::font::Weight::Normal),
-        ]
-        .spacing(2.0)
-        .width(Length::Fill),
-    )
-    .padding([2, PROPERTY_ROW_PAD_X])
-    .width(Length::Fill)
-    .into()
-}
-
-/// Net-attribute row: label | checkbox | text value | unit. Used for
-/// "Power Net = 0.000 V" and "High Speed = 0.000 Hz".
-fn net_numeric_row<'a>(
-    label: &str,
-    value: &str,
-    unit: &str,
-    label_c: Color,
-    input_bg: Color,
-    input_bdr: Color,
-) -> Element<'a, PanelMsg> {
-    container(
-        row![
-            text(label.to_string())
-                .size(11)
-                .color(label_c)
-                .width(Length::FillPortion(PROPERTY_LABEL_PORTION))
-                .wrapping(iced::widget::text::Wrapping::None),
-            iced::widget::checkbox(false)
-                .on_toggle(|_| PanelMsg::Noop)
-                .size(12)
-                .spacing(4),
-            container(text(value.to_string()).size(11).color(label_c),)
-                .padding([3, 6])
-                .width(Length::Fill)
-                .style(move |_: &Theme| container::Style {
-                    background: Some(Background::Color(input_bg)),
-                    border: Border {
-                        width: 1.0,
-                        radius: 2.0.into(),
-                        color: input_bdr
-                    },
-                    ..container::Style::default()
-                }),
-            text(unit.to_string()).size(10).color(label_c),
-        ]
-        .spacing(6.0)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([2, PROPERTY_ROW_PAD_X])
-    .width(Length::Fill)
-    .into()
-}
-
-/// Parameters (Net) segmented tabs — All / Parameters / Rules / Classes.
-fn net_params_tabs<'a>(
-    primary: Color,
-    label_c: Color,
-    input_bg: Color,
-    input_bdr: Color,
-) -> Element<'a, PanelMsg> {
-    let tab = |label: &'static str, active: bool| -> Element<'static, PanelMsg> {
-        let bg_active = input_bdr;
-        let fg_active = Color::WHITE;
-        let fg_inactive = primary;
-        iced::widget::button(
-            text(label.to_string())
-                .size(11)
-                .color(if active { fg_active } else { fg_inactive })
-                .align_x(iced::alignment::Horizontal::Center),
-        )
-        .padding([3, 12])
-        .on_press(PanelMsg::Noop)
-        .style(move |_: &Theme, status: iced::widget::button::Status| {
-            let hovered = matches!(status, iced::widget::button::Status::Hovered);
-            iced::widget::button::Style {
-                background: Some(Background::Color(if active {
-                    bg_active
-                } else if hovered {
-                    input_bdr
-                } else {
-                    input_bg
-                })),
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: input_bdr,
-                },
-                text_color: if active { fg_active } else { fg_inactive },
-                ..iced::widget::button::Style::default()
-            }
-        })
-        .into()
-    };
-    let _ = label_c;
-    container(
-        row![
-            tab("All", true),
-            tab("Parameters", false),
-            tab("Rules", false),
-            tab("Classes", false),
-        ]
-        .spacing(4.0),
-    )
-    .padding([4, PROPERTY_ROW_PAD_X])
-    .width(Length::Fill)
-    .into()
-}
-
-/// Two-column Name / Value header for the Parameters (Net) table.
-fn net_params_header<'a>(label_c: Color, border_c: Color) -> Element<'a, PanelMsg> {
-    container(
-        row![
-            text("Name".to_string())
-                .size(10)
-                .color(label_c)
-                .width(Length::FillPortion(2)),
-            text("Value".to_string())
-                .size(10)
-                .color(label_c)
-                .width(Length::FillPortion(3)),
-        ]
-        .spacing(4.0),
-    )
-    .padding([4, PROPERTY_ROW_PAD_X])
-    .width(Length::Fill)
-    .style(move |_: &Theme| container::Style {
-        border: Border {
-            width: 1.0,
-            radius: 0.0.into(),
-            color: border_c,
-        },
-        ..container::Style::default()
-    })
-    .into()
-}
-
-/// Empty-state row — centered muted text spanning the whole row.
-fn empty_section_row<'a>(label: &str, label_c: Color, border_c: Color) -> Element<'a, PanelMsg> {
-    container(
-        container(text(label.to_string()).size(10).color(label_c))
-            .width(Length::Fill)
-            .align_x(iced::alignment::Horizontal::Center),
-    )
-    .padding([6, PROPERTY_ROW_PAD_X])
-    .width(Length::Fill)
-    .style(move |_: &Theme| container::Style {
-        border: Border {
-            width: 1.0,
-            radius: 0.0.into(),
-            color: border_c,
-        },
-        ..container::Style::default()
-    })
-    .into()
-}
-
-/// Add / edit / delete toolbar at the bottom of the Parameters table.
-fn net_params_add_bar<'a>(
-    label_c: Color,
-    input_bg: Color,
-    input_bdr: Color,
-) -> Element<'a, PanelMsg> {
-    let icon_btn = |label: &'static str| -> Element<'static, PanelMsg> {
-        iced::widget::button(text(label.to_string()).size(11).color(label_c))
-            .padding([4, 8])
-            .on_press(PanelMsg::Noop)
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(Background::Color(input_bg)),
-                border: Border {
-                    width: 1.0,
-                    radius: 2.0.into(),
-                    color: input_bdr,
-                },
-                text_color: label_c,
-                ..iced::widget::button::Style::default()
-            })
-            .into()
-    };
-    container(
-        row![
-            Space::new().width(Length::Fill),
-            iced::widget::button(
-                text("Add \u{25BE}".to_string())
-                    .size(11)
-                    .color(Color::WHITE)
-            )
-            .padding([4, 12])
-            .on_press(PanelMsg::Noop)
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(Background::Color(input_bdr)),
-                border: Border {
-                    width: 1.0,
-                    radius: 2.0.into(),
-                    color: input_bdr
-                },
-                text_color: Color::WHITE,
-                ..iced::widget::button::Style::default()
-            }),
-            icon_btn("\u{270E}"),
-            icon_btn("\u{1F5D1}"),
-        ]
-        .spacing(4.0)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([6, PROPERTY_ROW_PAD_X])
-    .width(Length::Fill)
-    .into()
-}
-
-/// Altium-style 3x3 justification picker with proper SVG arrow icons.
-/// Only horizontal is wired to state for now; vertical slots toggle visually
-/// but don't mutate the label.
-fn justification_grid(
-    id: uuid::Uuid,
-    rotation_deg: f64,
-    h: signex_types::schematic::HAlign,
-    input_bg: Color,
-    input_bdr: Color,
-    primary: Color,
-    muted: Color,
-    theme: signex_types::theme::ThemeId,
-) -> Element<'static, PanelMsg> {
-    use signex_types::schematic::HAlign;
-    let _ = muted;
-
-    // Cell size mimics Altium's compact 24×24 px anchor picker.
-    const CELL_SIZE: f32 = 24.0;
-    let cell = |handle: iced::widget::svg::Handle,
-                active: bool,
-                on_press: PanelMsg|
-     -> Element<'static, PanelMsg> {
-        let bg_active = input_bdr;
-        let fg_active = Color::WHITE;
-        let fg_inactive = primary;
-        let svg_widget =
-            iced::widget::svg(handle)
-                .width(12.0)
-                .height(12.0)
-                .style(move |_: &Theme, _| iced::widget::svg::Style {
-                    color: Some(if active { fg_active } else { fg_inactive }),
-                });
-        iced::widget::button(
-            container(svg_widget)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .center(Length::Fill),
-        )
-        .width(CELL_SIZE)
-        .height(CELL_SIZE)
-        .padding(0)
-        .on_press(on_press)
-        .style(move |_: &Theme, status: iced::widget::button::Status| {
-            let hovered = matches!(status, iced::widget::button::Status::Hovered);
-            let bg = if active {
-                bg_active
-            } else if hovered {
-                input_bdr
-            } else {
-                input_bg
-            };
-            iced::widget::button::Style {
-                background: Some(Background::Color(bg)),
-                border: Border {
-                    width: 1.0,
-                    radius: 2.0.into(),
-                    color: input_bdr,
-                },
-                text_color: if active { fg_active } else { fg_inactive },
-                ..iced::widget::button::Style::default()
-            }
-        })
-        .into()
-    };
-    #[derive(Clone, Copy, PartialEq, Eq)]
-    enum LabelDir {
-        Left,
-        Up,
-        Right,
-        Down,
-    }
-
-    let normalize_rot = |deg: f64| {
-        let r = (deg.round() as i32) % 360;
-        if r < 0 { r + 360 } else { r }
-    };
-
-    let current_dir = {
-        match normalize_rot(rotation_deg) {
-            90 => LabelDir::Up,
-            270 => LabelDir::Down,
-            180 => {
-                if matches!(h, HAlign::Right) {
-                    LabelDir::Right
-                } else {
-                    LabelDir::Left
-                }
-            }
-            _ => {
-                if matches!(h, HAlign::Right) {
-                    LabelDir::Left
-                } else {
-                    LabelDir::Right
-                }
-            }
-        }
-    };
-
-    let to_msg = |dir: LabelDir| -> PanelMsg {
-        match dir {
-            LabelDir::Right => PanelMsg::EditLabelDirection(id, 0.0, HAlign::Left),
-            LabelDir::Left => PanelMsg::EditLabelDirection(id, 0.0, HAlign::Right),
-            LabelDir::Up => PanelMsg::EditLabelDirection(id, 90.0, HAlign::Left),
-            LabelDir::Down => PanelMsg::EditLabelDirection(id, 270.0, HAlign::Left),
-        }
-    };
-
-    let hl = |dir: LabelDir| current_dir == dir;
-
-    iced::widget::column![
-        iced::widget::row![
-            cell(
-                crate::icons::icon_justify_tl(theme),
-                hl(LabelDir::Up),
-                to_msg(LabelDir::Up)
-            ),
-            cell(
-                crate::icons::icon_justify_t(theme),
-                hl(LabelDir::Up),
-                to_msg(LabelDir::Up)
-            ),
-            cell(
-                crate::icons::icon_justify_tr(theme),
-                hl(LabelDir::Up),
-                to_msg(LabelDir::Up)
-            ),
-        ]
-        .spacing(2),
-        iced::widget::row![
-            cell(
-                crate::icons::icon_justify_l(theme),
-                hl(LabelDir::Left),
-                to_msg(LabelDir::Left)
-            ),
-            cell(
-                crate::icons::icon_justify_c(theme),
-                false,
-                to_msg(current_dir)
-            ),
-            cell(
-                crate::icons::icon_justify_r(theme),
-                hl(LabelDir::Right),
-                to_msg(LabelDir::Right)
-            ),
-        ]
-        .spacing(2),
-        iced::widget::row![
-            cell(
-                crate::icons::icon_justify_bl(theme),
-                hl(LabelDir::Down),
-                to_msg(LabelDir::Down)
-            ),
-            cell(
-                crate::icons::icon_justify_b(theme),
-                hl(LabelDir::Down),
-                to_msg(LabelDir::Down)
-            ),
-            cell(
-                crate::icons::icon_justify_br(theme),
-                hl(LabelDir::Down),
-                to_msg(LabelDir::Down)
-            ),
-        ]
-        .spacing(2),
-    ]
-    .spacing(2)
-    .into()
-}
-
-/// Pre-placement 3x3 justification picker. Same visual grid as the
-/// selection-aware `justification_grid` but dispatches to the
-/// `SetPrePlacementJustifyH` message family (no UUID needed).
-fn preplacement_justification_grid(
-    h: signex_types::schematic::HAlign,
-    input_bg: Color,
-    input_bdr: Color,
-    primary: Color,
-    muted: Color,
-    theme: signex_types::theme::ThemeId,
-) -> Element<'static, PanelMsg> {
-    use signex_types::schematic::HAlign;
-    let _ = muted;
-
-    const CELL_SIZE: f32 = 24.0;
-    let cell = |handle: iced::widget::svg::Handle,
-                active: bool,
-                on_press: PanelMsg|
-     -> Element<'static, PanelMsg> {
-        let bg_active = input_bdr;
-        let fg_active = Color::WHITE;
-        let fg_inactive = primary;
-        let svg_widget =
-            iced::widget::svg(handle)
-                .width(12.0)
-                .height(12.0)
-                .style(move |_: &Theme, _| iced::widget::svg::Style {
-                    color: Some(if active { fg_active } else { fg_inactive }),
-                });
-        iced::widget::button(
-            container(svg_widget)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .center(Length::Fill),
-        )
-        .width(CELL_SIZE)
-        .height(CELL_SIZE)
-        .padding(0)
-        .on_press(on_press)
-        .style(move |_: &Theme, status: iced::widget::button::Status| {
-            let hovered = matches!(status, iced::widget::button::Status::Hovered);
-            let bg = if active {
-                bg_active
-            } else if hovered {
-                input_bdr
-            } else {
-                input_bg
-            };
-            iced::widget::button::Style {
-                background: Some(Background::Color(bg)),
-                border: Border {
-                    width: 1.0,
-                    radius: 2.0.into(),
-                    color: input_bdr,
-                },
-                text_color: if active { fg_active } else { fg_inactive },
-                ..iced::widget::button::Style::default()
-            }
-        })
-        .into()
-    };
-    let hl_mid = |target: HAlign| -> bool { h == target };
-    iced::widget::column![
-        iced::widget::row![
-            cell(
-                crate::icons::icon_justify_tl(theme),
-                false,
-                PanelMsg::SetPrePlacementJustifyH(HAlign::Left)
-            ),
-            cell(
-                crate::icons::icon_justify_t(theme),
-                false,
-                PanelMsg::SetPrePlacementJustifyH(HAlign::Center)
-            ),
-            cell(
-                crate::icons::icon_justify_tr(theme),
-                false,
-                PanelMsg::SetPrePlacementJustifyH(HAlign::Right)
-            ),
-        ]
-        .spacing(2),
-        iced::widget::row![
-            cell(
-                crate::icons::icon_justify_l(theme),
-                hl_mid(HAlign::Left),
-                PanelMsg::SetPrePlacementJustifyH(HAlign::Left)
-            ),
-            cell(
-                crate::icons::icon_justify_c(theme),
-                hl_mid(HAlign::Center),
-                PanelMsg::SetPrePlacementJustifyH(HAlign::Center)
-            ),
-            cell(
-                crate::icons::icon_justify_r(theme),
-                hl_mid(HAlign::Right),
-                PanelMsg::SetPrePlacementJustifyH(HAlign::Right)
-            ),
-        ]
-        .spacing(2),
-        iced::widget::row![
-            cell(
-                crate::icons::icon_justify_bl(theme),
-                false,
-                PanelMsg::SetPrePlacementJustifyH(HAlign::Left)
-            ),
-            cell(
-                crate::icons::icon_justify_b(theme),
-                false,
-                PanelMsg::SetPrePlacementJustifyH(HAlign::Center)
-            ),
-            cell(
-                crate::icons::icon_justify_br(theme),
-                false,
-                PanelMsg::SetPrePlacementJustifyH(HAlign::Right)
-            ),
-        ]
-        .spacing(2),
-    ]
-    .spacing(2)
-    .into()
-}
-
-/// Tab button in the Custom Selection Filters tab strip. Active tab
-/// gets a filled background; both states use the theme accent for the
-/// border so the section reads as one piece with the chips and the
-/// Active Bar dropdown.
-fn custom_filter_tab(
-    label: String,
-    active: bool,
-    idx: usize,
-    hover_bg: Color,
-    border_c: Color,
-) -> Element<'static, PanelMsg> {
-    let active_bg = Color::from_rgba8(0x2E, 0x33, 0x45, 1.0);
-    let text_on = Color::WHITE;
-    let text_off = Color::from_rgba8(0x99, 0x9D, 0xAE, 1.0);
-    iced::widget::button(
-        text(label)
-            .size(11)
-            .color(if active { text_on } else { text_off }),
-    )
-    .padding([3, 10])
-    .on_press(PanelMsg::SelectCustomFilterTab(idx))
-    .style(move |_: &Theme, status: iced::widget::button::Status| {
-        let bg = match status {
-            iced::widget::button::Status::Hovered if !active => Background::Color(hover_bg),
-            _ if active => Background::Color(active_bg),
-            _ => Background::Color(Color::TRANSPARENT),
-        };
-        iced::widget::button::Style {
-            background: Some(bg),
-            border: Border {
-                width: 1.0,
-                radius: 2.0.into(),
-                color: border_c,
-            },
-            text_color: if active { text_on } else { text_off },
-            ..iced::widget::button::Style::default()
-        }
-    })
-    .into()
-}
-
-/// Member chip for a custom-filter preset card (Properties panel).
-/// Border colour matches the Active Bar Filter dropdown chips (theme
-/// accent), so chip styling stays consistent across both surfaces.
-fn preset_chip(
-    label: &str,
-    preset_idx: usize,
-    filter: crate::active_bar::SelectionFilter,
-    enabled: bool,
-    hover_bg: Color,
-    border_c: Color,
-) -> Element<'static, PanelMsg> {
-    let active_bg = Color::from_rgba8(0x2E, 0x33, 0x45, 1.0);
-    let inactive_bg = Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0);
-    let text_on = Color::WHITE;
-    let text_off = Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0);
-    iced::widget::button(
-        text(label.to_string())
-            .size(10)
-            .color(if enabled { text_on } else { text_off })
-            .align_x(iced::alignment::Horizontal::Center),
-    )
-    .padding([3, 8])
-    .on_press(PanelMsg::ToggleCustomFilterPresetMember(preset_idx, filter))
-    .style(move |_: &Theme, status: iced::widget::button::Status| {
-        let bg = match status {
-            iced::widget::button::Status::Hovered => Background::Color(hover_bg),
-            _ => Background::Color(if enabled { active_bg } else { inactive_bg }),
-        };
-        iced::widget::button::Style {
-            background: Some(bg),
-            border: Border {
-                width: 1.0,
-                radius: 2.0.into(),
-                color: border_c,
-            },
-            text_color: if enabled { text_on } else { text_off },
-            ..iced::widget::button::Style::default()
-        }
-    })
-    .into()
-}
-
-/// Selection filter tag button — Altium pill with active/inactive state.
-#[allow(dead_code)]
-fn tag_btn(
-    label: &str,
-    filter: crate::active_bar::SelectionFilter,
-    enabled: bool,
-    hover_bg: Color,
-) -> Element<'static, PanelMsg> {
-    let active_bg = Color::from_rgba8(0x2E, 0x33, 0x45, 1.0);
-    let inactive_bg = Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0);
-    let active_border = Color::from_rgba8(0x4D, 0x52, 0x66, 1.0);
-    let inactive_border = Color::from_rgba8(0x33, 0x36, 0x44, 1.0);
-    let text_on = Color::WHITE;
-    let text_off = Color::from_rgba8(0x66, 0x6A, 0x7E, 1.0);
-    iced::widget::button(
-        text(label.to_string())
-            .size(10)
-            .color(if enabled { text_on } else { text_off })
-            .align_x(iced::alignment::Horizontal::Center),
-    )
-    .padding([3, 8])
-    .on_press(PanelMsg::ToggleSelectionFilter(filter))
-    .style(move |_: &Theme, status: iced::widget::button::Status| {
-        let bg = match status {
-            iced::widget::button::Status::Hovered => Background::Color(hover_bg),
-            _ => Background::Color(if enabled { active_bg } else { inactive_bg }),
-        };
-        iced::widget::button::Style {
-            background: Some(bg),
-            border: Border {
-                width: 1.0,
-                radius: 12.0.into(),
-                color: if enabled {
-                    active_border
-                } else {
-                    inactive_border
-                },
-            },
-            text_color: if enabled { text_on } else { text_off },
-            ..iced::widget::button::Style::default()
-        }
-    })
-    .into()
-}
-
-/// Segmented button (for units toggle etc).
-#[allow(clippy::too_many_arguments)]
-fn seg_btn<'a>(
-    label: &str,
-    active: bool,
-    msg: PanelMsg,
-    active_bg: Color,
-    text_active: Color,
-    text_inactive: Color,
-    hover_bg: Color,
-    seg_border: Color,
-) -> Element<'a, PanelMsg> {
-    let bg = if active {
-        active_bg
-    } else {
-        Color::TRANSPARENT
-    };
-    let text_c = if active { text_active } else { text_inactive };
-    iced::widget::button(
-        text(label.to_string())
-            .size(11)
-            .color(text_c)
-            .align_x(iced::alignment::Horizontal::Center),
-    )
-    .padding([4, 0])
-    .width(Length::Fill)
-    .on_press(msg)
-    .style(move |_: &Theme, status: iced::widget::button::Status| {
-        let hovered = matches!(status, iced::widget::button::Status::Hovered);
-        iced::widget::button::Style {
-            background: Some(Background::Color(if hovered && !active {
-                hover_bg
-            } else {
-                bg
-            })),
-            border: Border {
-                width: 1.0,
-                radius: 2.0.into(),
-                color: seg_border,
-            },
-            ..iced::widget::button::Style::default()
-        }
-    })
-    .into()
-}
-
-// ─── ERC Panel ────────────────────────────────────────────────
 
 fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(2).padding(6).width(Length::Fill);
@@ -6391,1224 +4577,3 @@ fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 }
 
 // ─── Drawing properties editor (post-placement) ──────────────────
-
-fn view_drawing_properties<'a>(
-    ctx: &'a PanelContext,
-    muted: Color,
-    _primary: Color,
-    border_c: Color,
-) -> Element<'a, PanelMsg> {
-    use signex_types::schematic::FillType;
-    let get = |key: &str| -> String {
-        ctx.selection_info
-            .iter()
-            .find(|(k, _)| k == key)
-            .map(|(_, v)| v.clone())
-            .unwrap_or_default()
-    };
-    let parse_pair = |s: &str| -> (f64, f64) {
-        let parts: Vec<&str> = s.split(',').collect();
-        let x = parts
-            .first()
-            .and_then(|p| p.trim().parse::<f64>().ok())
-            .unwrap_or(0.0);
-        let y = parts
-            .get(1)
-            .and_then(|p| p.trim().parse::<f64>().ok())
-            .unwrap_or(0.0);
-        (x, y)
-    };
-    let parse_f64 = |s: &str| -> f64 { s.trim().parse::<f64>().ok().unwrap_or(0.0) };
-    let parse_fill = |s: &str| -> FillType {
-        match s {
-            "Outline" => FillType::Outline,
-            "Background" => FillType::Background,
-            _ => FillType::None,
-        }
-    };
-
-    let elem_type = get("Type");
-    // Line + Arc store their stroke in the `Width` key; Rect / Circle
-    // / Polygon put stroke under `Border` and use `Width` for the
-    // X-dimension (Rect) or nothing (Circle / Polygon). Picking the
-    // wrong one here pre-fills the input with the X-dim or 0.
-    let stroke_w = match elem_type.as_str() {
-        "Line" | "Arc" => parse_f64(&get("Width")),
-        _ => parse_f64(&get("Border")),
-    };
-    let fill = parse_fill(&get("Fill"));
-    let show_fill = matches!(elem_type.as_str(), "Rectangle" | "Circle" | "Polygon");
-
-    let mut col = Column::new().spacing(0).width(Length::Fill);
-    // Header: shape icon + type label. Draft SVGs live at
-    // assets/icons/shape_*.svg and can be swapped out for final art
-    // without touching the panel code.
-    let header_row: Element<'a, PanelMsg> =
-        if let Some(icon) = shape_icon_handle(&elem_type, ctx.theme_id) {
-            row![
-                iced::widget::svg(icon).width(16).height(16),
-                text(elem_type.clone())
-                    .size(11)
-                    .color(Color::from_rgb(0.90, 0.90, 0.92)),
-            ]
-            .spacing(8)
-            .align_y(iced::Alignment::Center)
-            .into()
-        } else {
-            text(elem_type.clone())
-                .size(11)
-                .color(Color::from_rgb(0.90, 0.90, 0.92))
-                .into()
-        };
-    col = col.push(container(header_row).padding([6, 8]).width(Length::Fill));
-    col = col.push(thin_sep(border_c));
-
-    // Live preview canvas — shows the selected shape at panel scale
-    // with optional radius/angle annotations so edits to the rows
-    // below re-render the preview immediately.
-    if let Some(drawing) = &ctx.selected_drawing {
-        let preview = DrawingPreview {
-            drawing: drawing.clone(),
-            stroke: Color::from_rgb(0.94, 0.74, 0.28),
-            fill: Color::from_rgb(0.94, 0.74, 0.28),
-            muted,
-            accent: Color::from_rgb(0.24, 0.62, 0.97),
-        };
-        let canvas_w: Element<'a, PanelMsg> = iced::widget::canvas(preview)
-            .width(Length::Fill)
-            .height(Length::Fixed(160.0))
-            .into();
-        col = col.push(
-            container(canvas_w)
-                .padding([8, 12])
-                .width(Length::Fill)
-                .style(move |_: &Theme| container::Style {
-                    background: Some(Background::Color(Color::from_rgba(0.07, 0.07, 0.08, 0.6))),
-                    border: Border {
-                        width: 1.0,
-                        color: border_c,
-                        radius: 0.0.into(),
-                    },
-                    ..container::Style::default()
-                }),
-        );
-    }
-
-    let buf = &ctx.drawing_edit_buf;
-    match elem_type.as_str() {
-        "Line" => {
-            let (sx, sy) = parse_pair(&get("Start"));
-            let (ex, ey) = parse_pair(&get("End"));
-            col = col.push(collapsible_section(
-                "draw_line",
-                "Properties",
-                &ctx.collapsed_sections,
-                muted,
-                border_c,
-                move || {
-                    let mut c = Column::new().spacing(0).width(Length::Fill);
-                    c = c.push(drawing_num_row(
-                        "Start X",
-                        DrawingFieldId::LineStartX,
-                        sx,
-                        buf,
-                        muted,
-                    ));
-                    c = c.push(drawing_num_row(
-                        "Start Y",
-                        DrawingFieldId::LineStartY,
-                        sy,
-                        buf,
-                        muted,
-                    ));
-                    c = c.push(drawing_num_row(
-                        "End X",
-                        DrawingFieldId::LineEndX,
-                        ex,
-                        buf,
-                        muted,
-                    ));
-                    c = c.push(drawing_num_row(
-                        "End Y",
-                        DrawingFieldId::LineEndY,
-                        ey,
-                        buf,
-                        muted,
-                    ));
-                    c = c.push(drawing_num_row(
-                        "Width (mm)",
-                        DrawingFieldId::LineWidth,
-                        stroke_w,
-                        buf,
-                        muted,
-                    ));
-                    c
-                },
-            ));
-        }
-        "Rectangle" => {
-            let (px, py) = parse_pair(&get("Position"));
-            let w_mm = parse_f64(&get("Width"));
-            let h_mm = parse_f64(&get("Height"));
-            col = col.push(collapsible_section(
-                "draw_rect",
-                "Properties",
-                &ctx.collapsed_sections,
-                muted,
-                border_c,
-                move || {
-                    let mut c = Column::new().spacing(0).width(Length::Fill);
-                    c = c.push(drawing_num_row(
-                        "Position X",
-                        DrawingFieldId::RectStartX,
-                        px,
-                        buf,
-                        muted,
-                    ));
-                    c = c.push(drawing_num_row(
-                        "Position Y",
-                        DrawingFieldId::RectStartY,
-                        py,
-                        buf,
-                        muted,
-                    ));
-                    c = c.push(drawing_num_row(
-                        "Width (mm)",
-                        DrawingFieldId::RectWidth,
-                        w_mm,
-                        buf,
-                        muted,
-                    ));
-                    c = c.push(drawing_num_row(
-                        "Height (mm)",
-                        DrawingFieldId::RectHeight,
-                        h_mm,
-                        buf,
-                        muted,
-                    ));
-                    c = c.push(drawing_num_row(
-                        "Border",
-                        DrawingFieldId::RectBorder,
-                        stroke_w,
-                        buf,
-                        muted,
-                    ));
-                    if show_fill {
-                        c = c.push(drawing_fill_row(fill, muted, border_c));
-                    }
-                    c
-                },
-            ));
-        }
-        "Circle" => {
-            let (cx, cy) = parse_pair(&get("Center"));
-            let radius = parse_f64(&get("Radius"));
-            col = col.push(collapsible_section(
-                "draw_circle",
-                "Properties",
-                &ctx.collapsed_sections,
-                muted,
-                border_c,
-                move || {
-                    let mut c = Column::new().spacing(0).width(Length::Fill);
-                    c = c.push(drawing_num_row(
-                        "Center X",
-                        DrawingFieldId::CircleCenterX,
-                        cx,
-                        buf,
-                        muted,
-                    ));
-                    c = c.push(drawing_num_row(
-                        "Center Y",
-                        DrawingFieldId::CircleCenterY,
-                        cy,
-                        buf,
-                        muted,
-                    ));
-                    c = c.push(drawing_num_row(
-                        "Radius",
-                        DrawingFieldId::CircleRadius,
-                        radius,
-                        buf,
-                        muted,
-                    ));
-                    c = c.push(drawing_num_row(
-                        "Border",
-                        DrawingFieldId::CircleBorder,
-                        stroke_w,
-                        buf,
-                        muted,
-                    ));
-                    if show_fill {
-                        c = c.push(drawing_fill_row(fill, muted, border_c));
-                    }
-                    c
-                },
-            ));
-        }
-        "Arc" => {
-            let (cx, cy) = parse_pair(&get("Center"));
-            let radius = parse_f64(&get("Radius"));
-            let start_angle = parse_f64(&get("Start Angle"));
-            let end_angle = parse_f64(&get("End Angle"));
-            col = col.push(collapsible_section(
-                "draw_arc",
-                "Properties",
-                &ctx.collapsed_sections,
-                muted,
-                border_c,
-                move || {
-                    let mut c = Column::new().spacing(0).width(Length::Fill);
-                    c = c.push(drawing_num_row(
-                        "Center X",
-                        DrawingFieldId::ArcCenterX,
-                        cx,
-                        buf,
-                        muted,
-                    ));
-                    c = c.push(drawing_num_row(
-                        "Center Y",
-                        DrawingFieldId::ArcCenterY,
-                        cy,
-                        buf,
-                        muted,
-                    ));
-                    c = c.push(drawing_num_row(
-                        "Radius",
-                        DrawingFieldId::ArcRadius,
-                        radius,
-                        buf,
-                        muted,
-                    ));
-                    c = c.push(drawing_num_row(
-                        "Start Angle",
-                        DrawingFieldId::ArcStartAngle,
-                        start_angle,
-                        buf,
-                        muted,
-                    ));
-                    c = c.push(drawing_num_row(
-                        "End Angle",
-                        DrawingFieldId::ArcEndAngle,
-                        end_angle,
-                        buf,
-                        muted,
-                    ));
-                    c = c.push(drawing_num_row(
-                        "Width",
-                        DrawingFieldId::ArcWidth,
-                        stroke_w,
-                        buf,
-                        muted,
-                    ));
-                    c
-                },
-            ));
-        }
-        "Polygon" => {
-            let vert_count = parse_f64(&get("Vertices")) as i32;
-            col = col.push(collapsible_section(
-                "draw_poly",
-                "Properties",
-                &ctx.collapsed_sections,
-                muted,
-                border_c,
-                move || {
-                    let mut c = Column::new().spacing(0).width(Length::Fill);
-                    c = c.push(prop_kv_row(
-                        "Vertices",
-                        &vert_count.to_string(),
-                        muted,
-                        Color::from_rgb(0.90, 0.90, 0.92),
-                    ));
-                    c = c.push(drawing_num_row(
-                        "Border",
-                        DrawingFieldId::PolyBorder,
-                        stroke_w,
-                        buf,
-                        muted,
-                    ));
-                    if show_fill {
-                        c = c.push(drawing_fill_row(fill, muted, border_c));
-                    }
-                    c
-                },
-            ));
-        }
-        _ => {
-            for (key, value) in &ctx.selection_info {
-                if key != "Type" {
-                    col = col.push(prop_kv_row(
-                        key,
-                        value,
-                        muted,
-                        Color::from_rgb(0.9, 0.9, 0.92),
-                    ));
-                }
-            }
-        }
-    }
-    // Stroke colour swatch row — applies to every drawing kind that
-    // matched a known variant above. Reads the current stored colour
-    // from the live SchDrawing so the active tile highlights correctly.
-    if matches!(
-        elem_type.as_str(),
-        "Line" | "Rectangle" | "Circle" | "Arc" | "Polygon"
-    ) {
-        let current_color = ctx.selected_drawing.as_ref().and_then(|d| match d {
-            signex_types::schematic::SchDrawing::Line { stroke_color, .. }
-            | signex_types::schematic::SchDrawing::Rect { stroke_color, .. }
-            | signex_types::schematic::SchDrawing::Circle { stroke_color, .. }
-            | signex_types::schematic::SchDrawing::Arc { stroke_color, .. }
-            | signex_types::schematic::SchDrawing::Polyline { stroke_color, .. } => *stroke_color,
-        });
-        col = col.push(drawing_stroke_color_row(current_color, muted));
-    }
-    col.into()
-}
-
-/// Properties section for a single hierarchical child sheet.
-/// Shows read-only info (Name / File / Position / Size) plus
-/// editable Border Colour, Fill Colour and Line Width with a
-/// Reset-to-default button. Colour edits open an iced_aw
-/// ColorPicker overlay anchored to a swatch button.
-fn view_child_sheet_properties<'a>(
-    ctx: &'a PanelContext,
-    muted: Color,
-    primary: Color,
-    border_c: Color,
-) -> Element<'a, PanelMsg> {
-    let Some(child_sheet) = ctx.selected_child_sheet.as_ref() else {
-        return Column::new().width(Length::Fill).into();
-    };
-
-    let id = child_sheet.uuid;
-    let name = child_sheet.name.clone();
-    let filename = child_sheet.filename.clone();
-    let position = format!(
-        "{:.2}, {:.2}",
-        child_sheet.position.x, child_sheet.position.y
-    );
-    let size = format!(
-        "{:.1} x {:.1} mm",
-        child_sheet.size.0, child_sheet.size.1
-    );
-
-    let stroke_width = child_sheet.stroke_width;
-    let stroke_color = child_sheet.stroke_color;
-    let fill_color = child_sheet.fill_color;
-    let border_picker_open = ctx.child_sheet_border_picker_open;
-    let fill_picker_open = ctx.child_sheet_fill_picker_open;
-    let border_advanced_open = ctx.child_sheet_border_advanced_open;
-    let fill_advanced_open = ctx.child_sheet_fill_advanced_open;
-    let stroke_width_buf = ctx.child_sheet_stroke_width_buf.clone();
-
-    let mut col: Column<'a, PanelMsg> = Column::new().spacing(0).width(Length::Fill);
-
-    // ── Properties (read-only identity / geometry) ──
-    col = col.push(collapsible_section(
-        "sel_child_sheet_props",
-        "Properties",
-        &ctx.collapsed_sections,
-        muted,
-        border_c,
-        move || {
-            let mut c = Column::new().spacing(0).width(Length::Fill);
-            c = c.push(prop_kv_row("Name", &name, muted, primary));
-            c = c.push(prop_kv_row("File", &filename, muted, primary));
-            c = c.push(prop_kv_row("Position", &position, muted, primary));
-            c = c.push(prop_kv_row("Size", &size, muted, primary));
-            c
-        },
-    ));
-
-    // ── Style (editable) ──
-    col = col.push(collapsible_section(
-        "sel_child_sheet_style",
-        "Style",
-        &ctx.collapsed_sections,
-        muted,
-        border_c,
-        move || {
-            let mut c = Column::new().spacing(0).width(Length::Fill);
-            c = c.push(child_sheet_color_row(
-                "Border Colour",
-                id,
-                stroke_color,
-                border_picker_open,
-                border_advanced_open,
-                muted,
-                border_c,
-                /* is_border */ true,
-            ));
-            c = c.push(child_sheet_color_row(
-                "Fill Colour",
-                id,
-                fill_color,
-                fill_picker_open,
-                fill_advanced_open,
-                muted,
-                border_c,
-                /* is_border */ false,
-            ));
-            c = c.push(child_sheet_stroke_width_row(
-                id,
-                stroke_width,
-                stroke_width_buf,
-                muted,
-                border_c,
-            ));
-            c = c.push(
-                container(
-                    iced::widget::button(
-                        text("Reset to Default")
-                            .size(10)
-                            .color(Color::from_rgb(0.92, 0.92, 0.94)),
-                    )
-                    .padding([4, 10])
-                    .on_press(PanelMsg::ResetChildSheetStyle(id))
-                    .style(iced::widget::button::secondary),
-                )
-                .padding([6, 8])
-                .width(Length::Fill),
-            );
-            c
-        },
-    ));
-
-    col.into()
-}
-
-/// One swatch row in the child-sheet Style section.
-///
-/// Click flow:
-///   1. Click swatch → expands an inline preset palette panel below
-///      the row (full panel width, like the canvas-font popup) with
-///      a 12-colour grid plus "Custom…" and (when an override is
-///      active) "Reset to Default".
-///   2. Click the swatch again to collapse, or click "Custom…" to
-///      switch to the iced_aw HSV / RGB ColorPicker overlay.
-///
-/// Both the palette pick and the advanced-picker submit reuse the
-/// same `EditChildSheet*Color` message so engine command + undo/redo
-/// round-trip is identical for both paths.
-fn child_sheet_color_row<'a>(
-    label: &'a str,
-    sheet_id: uuid::Uuid,
-    current: Option<signex_types::schematic::StrokeColor>,
-    show_picker: bool,
-    show_advanced: bool,
-    muted: Color,
-    border_c: Color,
-    is_border: bool,
-) -> Element<'a, PanelMsg> {
-    let preview_color = current
-        .map(|c| {
-            iced::Color::from_rgba(
-                c.r as f32 / 255.0,
-                c.g as f32 / 255.0,
-                c.b as f32 / 255.0,
-                c.a as f32 / 255.0,
-            )
-        })
-        .unwrap_or(iced::Color::from_rgba(0.5, 0.5, 0.5, 0.4));
-    let label_text = if current.is_some() {
-        format!(
-            "#{:02X}{:02X}{:02X}",
-            current.unwrap().r,
-            current.unwrap().g,
-            current.unwrap().b
-        )
-    } else {
-        "Default".to_string()
-    };
-
-    let toggle_msg = if is_border {
-        PanelMsg::ToggleChildSheetBorderPicker(sheet_id)
-    } else {
-        PanelMsg::ToggleChildSheetFillPicker(sheet_id)
-    };
-
-    // Swatch button: 18x18 colour fill + small hex / "Default" caption.
-    let swatch_color = preview_color;
-    let swatch: Element<'a, PanelMsg> = container(Space::new())
-        .width(18)
-        .height(18)
-        .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(swatch_color)),
-            border: Border {
-                width: 1.0,
-                color: border_c,
-                radius: 2.0.into(),
-            },
-            ..container::Style::default()
-        })
-        .into();
-
-    let swatch_button = iced::widget::button(
-        row![
-            swatch,
-            text(label_text).size(10).color(Color::from_rgb(0.90, 0.90, 0.92)),
-        ]
-        .spacing(8)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([2, 6])
-    .on_press(toggle_msg)
-    .style(iced::widget::button::secondary);
-
-    // Build the per-channel "submit colour" message.
-    let make_submit = move |c: iced::Color| -> PanelMsg {
-        if is_border {
-            PanelMsg::EditChildSheetBorderColor(sheet_id, c)
-        } else {
-            PanelMsg::EditChildSheetFillColor(sheet_id, c)
-        }
-    };
-
-    // ── Advanced (HSV / RGB) overlay ──
-    if show_advanced {
-        let picker = iced_aw::ColorPicker::new(
-            true,
-            preview_color,
-            swatch_button,
-            PanelMsg::CancelChildSheetColorPicker,
-            move |c| make_submit(c),
-        );
-        return container(
-            row![
-                text(label.to_string()).size(10).color(muted).width(96),
-                picker,
-            ]
-            .spacing(4)
-            .align_y(iced::Alignment::Center),
-        )
-        .padding([4, 8])
-        .width(Length::Fill)
-        .into();
-    }
-
-    // The header row (label + swatch button) is always shown.
-    let header = container(
-        row![
-            text(label.to_string()).size(10).color(muted).width(96),
-            swatch_button,
-        ]
-        .spacing(4)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([4, 8])
-    .width(Length::Fill);
-
-    if !show_picker {
-        return header.into();
-    }
-
-    // ── Inline preset palette (rendered below the row, full width) ──
-    let presets: [(&str, [u8; 3]); 12] = [
-        ("Black",       [0x00, 0x00, 0x00]),
-        ("Dark Gray",   [0x40, 0x40, 0x40]),
-        ("Gray",        [0x80, 0x80, 0x80]),
-        ("White",       [0xFF, 0xFF, 0xFF]),
-        ("Red",         [0xC0, 0x39, 0x2B]),
-        ("Orange",      [0xE6, 0x7E, 0x22]),
-        ("Yellow",      [0xF1, 0xC4, 0x0F]),
-        ("Olive",       [0xB4, 0xA5, 0x58]),
-        ("Green",       [0x27, 0xAE, 0x60]),
-        ("Teal",        [0x16, 0xA0, 0x85]),
-        ("Blue",        [0x29, 0x80, 0xB9]),
-        ("Purple",      [0x8E, 0x44, 0xAD]),
-    ];
-
-    // 6 columns × 2 rows of preset swatches; each cell stretches
-    // proportionally so the grid always fills the available panel
-    // width (no clipping in narrow docks).
-    let mut palette_grid: Column<'a, PanelMsg> = Column::new().spacing(4);
-    for chunk in presets.chunks(6) {
-        let mut r: iced::widget::Row<'a, PanelMsg> = iced::widget::Row::new().spacing(4);
-        for (_name, rgb) in chunk {
-            let c = iced::Color::from_rgb(
-                rgb[0] as f32 / 255.0,
-                rgb[1] as f32 / 255.0,
-                rgb[2] as f32 / 255.0,
-            );
-            let swatch_btn = iced::widget::button(Space::new())
-                .width(Length::Fill)
-                .height(22)
-                .padding(0)
-                .on_press(make_submit(c))
-                .style(move |_t: &Theme, _s| iced::widget::button::Style {
-                    background: Some(Background::Color(c)),
-                    border: Border {
-                        width: 1.0,
-                        color: border_c,
-                        radius: 2.0.into(),
-                    },
-                    ..iced::widget::button::Style::default()
-                });
-            r = r.push(swatch_btn);
-        }
-        palette_grid = palette_grid.push(r);
-    }
-
-    let mut palette_col: Column<'a, PanelMsg> =
-        Column::new().spacing(6).padding([6, 8]).width(Length::Fill);
-    palette_col = palette_col.push(text("Preset Colours").size(10).color(muted));
-    palette_col = palette_col.push(palette_grid);
-
-    let mut action_row: iced::widget::Row<'a, PanelMsg> =
-        iced::widget::Row::new().spacing(4).width(Length::Fill);
-    action_row = action_row.push(
-        iced::widget::button(
-            text("Custom…")
-                .size(10)
-                .color(Color::from_rgb(0.92, 0.92, 0.94)),
-        )
-        .padding([4, 10])
-        .width(Length::Fill)
-        .on_press(PanelMsg::OpenChildSheetAdvancedPicker(sheet_id, is_border))
-        .style(iced::widget::button::secondary),
-    );
-    if current.is_some() {
-        action_row = action_row.push(
-            iced::widget::button(
-                text("Reset to Default")
-                    .size(10)
-                    .color(Color::from_rgb(0.92, 0.92, 0.94)),
-            )
-            .padding([4, 10])
-            .width(Length::Fill)
-            .on_press(PanelMsg::ResetChildSheetStyle(sheet_id))
-            .style(iced::widget::button::secondary),
-        );
-    }
-    palette_col = palette_col.push(action_row);
-
-    let palette_panel = container(palette_col)
-        .width(Length::Fill)
-        .style(move |_t: &Theme| container::Style {
-            background: Some(Background::Color(Color::from_rgb(0.16, 0.16, 0.18))),
-            border: Border {
-                width: 1.0,
-                color: border_c,
-                radius: 4.0.into(),
-            },
-            ..container::Style::default()
-        });
-
-    column![header, container(palette_panel).padding([0, 8])]
-        .spacing(4)
-        .width(Length::Fill)
-        .into()
-}
-
-/// Numeric stroke-width row for the child-sheet Style section.
-fn child_sheet_stroke_width_row<'a>(
-    sheet_id: uuid::Uuid,
-    stored_value: f64,
-    buffered: Option<String>,
-    muted: Color,
-    border_c: Color,
-) -> Element<'a, PanelMsg> {
-    let display = match buffered {
-        Some(s) => s,
-        None => format!("{:.4}", stored_value)
-            .trim_end_matches('0')
-            .trim_end_matches('.')
-            .to_string(),
-    };
-    let display_for_input = display.clone();
-    let input = iced::widget::text_input("0.1524", &display_for_input)
-        .size(11)
-        .padding(4)
-        .width(120)
-        .on_input(move |s| PanelMsg::ChildSheetStrokeWidthTyping(sheet_id, s))
-        .on_submit(PanelMsg::CommitChildSheetStrokeWidth(sheet_id))
-        .style(move |_theme: &Theme, _status| iced::widget::text_input::Style {
-            background: Background::Color(Color::from_rgba(0.07, 0.07, 0.08, 1.0)),
-            border: Border {
-                width: 1.0,
-                color: border_c,
-                radius: 2.0.into(),
-            },
-            icon: Color::from_rgba(0.7, 0.7, 0.7, 1.0),
-            placeholder: Color::from_rgba(0.5, 0.5, 0.5, 1.0),
-            value: Color::from_rgb(0.95, 0.95, 0.96),
-            selection: Color::from_rgba(0.24, 0.62, 0.97, 0.4),
-        });
-
-    container(
-        row![
-            text("Line Width (mm)").size(10).color(muted).width(96),
-            input,
-        ]
-        .spacing(4)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([4, 8])
-    .width(Length::Fill)
-    .into()
-}
-
-/// Buffer-backed numeric row — survives empty / partial input so the
-/// user can erase and retype the whole value. Emits DrawingFieldTyping
-/// on every keystroke; the handler commits to the engine when the
-/// string parses as f64.
-fn drawing_num_row<'a>(
-    label: &'a str,
-    field: DrawingFieldId,
-    stored_value: f64,
-    buf: &std::collections::HashMap<DrawingFieldId, String>,
-    muted: Color,
-) -> Element<'a, PanelMsg> {
-    use iced::widget::{row, text, text_input};
-    let display = buf
-        .get(&field)
-        .cloned()
-        .unwrap_or_else(|| format!("{stored_value:.3}"));
-    row![
-        text(label)
-            .size(10)
-            .color(muted)
-            .width(Length::FillPortion(2)),
-        text_input("", &display)
-            .size(11)
-            .on_input(move |s| PanelMsg::DrawingFieldTyping(field, s))
-            .width(Length::FillPortion(3)),
-    ]
-    .padding([4, PROPERTY_ROW_PAD_X])
-    .spacing(6)
-    .align_y(iced::Alignment::Center)
-    .into()
-}
-
-/// Altium-style stroke colour swatch row. A small preset palette
-/// (Theme/Red/Green/Blue/Yellow/Orange/White/Black) lets the user
-/// recolour a placed shape without committing to a full colour
-/// picker. Each tile dispatches UpdateDrawingEdit::StrokeColor.
-fn drawing_stroke_color_row<'a>(
-    current: Option<signex_types::schematic::StrokeColor>,
-    muted: Color,
-) -> Element<'a, PanelMsg> {
-    use crate::app::contracts::DrawingFieldEdit as E;
-    use iced::widget::{button, row, text};
-    use signex_types::schematic::StrokeColor;
-    let rgb = |r: u8, g: u8, b: u8| -> StrokeColor { StrokeColor { r, g, b, a: 255 } };
-    let tile = |label: &'static str,
-                stored: Option<StrokeColor>,
-                active: bool,
-                fill_color: Color|
-     -> Element<'a, PanelMsg> {
-        button(text(label).size(9))
-            .padding([3, 6])
-            .on_press(PanelMsg::UpdateDrawingEdit(E::StrokeColor(stored)))
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(Background::Color(fill_color)),
-                border: Border {
-                    width: if active { 2.0 } else { 1.0 },
-                    radius: 3.0.into(),
-                    color: if active {
-                        Color::from_rgb(1.0, 1.0, 1.0)
-                    } else {
-                        Color::from_rgb(0.28, 0.28, 0.32)
-                    },
-                },
-                text_color: Color::WHITE,
-                ..iced::widget::button::Style::default()
-            })
-            .into()
-    };
-    let is_active = |c: Option<StrokeColor>| -> bool {
-        match (current, c) {
-            (None, None) => true,
-            (Some(a), Some(b)) => a == b,
-            _ => false,
-        }
-    };
-    let theme_active = current.is_none();
-    row![
-        text("Color")
-            .size(10)
-            .color(muted)
-            .width(Length::FillPortion(2)),
-        row![
-            tile(
-                "Auto",
-                None,
-                theme_active,
-                Color::from_rgba(0.28, 0.28, 0.32, 0.6),
-            ),
-            tile(
-                "",
-                Some(rgb(0xE5, 0x3E, 0x3E)),
-                is_active(Some(rgb(0xE5, 0x3E, 0x3E))),
-                Color::from_rgb(0.90, 0.24, 0.24),
-            ),
-            tile(
-                "",
-                Some(rgb(0x3E, 0xA5, 0x44)),
-                is_active(Some(rgb(0x3E, 0xA5, 0x44))),
-                Color::from_rgb(0.24, 0.65, 0.27),
-            ),
-            tile(
-                "",
-                Some(rgb(0x3C, 0x85, 0xD6)),
-                is_active(Some(rgb(0x3C, 0x85, 0xD6))),
-                Color::from_rgb(0.24, 0.52, 0.84),
-            ),
-            tile(
-                "",
-                Some(rgb(0xE6, 0xB7, 0x1E)),
-                is_active(Some(rgb(0xE6, 0xB7, 0x1E))),
-                Color::from_rgb(0.90, 0.72, 0.12),
-            ),
-            tile(
-                "",
-                Some(rgb(0xE0, 0xE0, 0xE0)),
-                is_active(Some(rgb(0xE0, 0xE0, 0xE0))),
-                Color::from_rgb(0.88, 0.88, 0.88),
-            ),
-        ]
-        .spacing(4)
-        .width(Length::FillPortion(3)),
-    ]
-    .padding([4, PROPERTY_ROW_PAD_X])
-    .spacing(6)
-    .align_y(iced::Alignment::Center)
-    .into()
-}
-
-fn drawing_fill_row<'a>(
-    current: signex_types::schematic::FillType,
-    muted: Color,
-    _border_c: Color,
-) -> Element<'a, PanelMsg> {
-    use crate::app::contracts::DrawingFieldEdit as E;
-    use signex_types::schematic::FillType;
-    let tile = |label: &'static str, ft: FillType, active: bool| -> Element<'a, PanelMsg> {
-        iced::widget::button(text(label).size(10))
-            .padding([3, 8])
-            .on_press(PanelMsg::UpdateDrawingEdit(E::Fill(ft)))
-            .style(move |_: &Theme, _| iced::widget::button::Style {
-                background: Some(Background::Color(if active {
-                    Color::from_rgb(0.20, 0.36, 0.58)
-                } else {
-                    Color::from_rgba(0.25, 0.25, 0.28, 0.4)
-                })),
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: Color::from_rgb(0.28, 0.28, 0.32),
-                },
-                text_color: if active {
-                    Color::from_rgb(1.0, 1.0, 1.0)
-                } else {
-                    muted
-                },
-                ..iced::widget::button::Style::default()
-            })
-            .into()
-    };
-    row![
-        text("Fill")
-            .size(10)
-            .color(muted)
-            .width(Length::FillPortion(2)),
-        row![
-            tile("None", FillType::None, current == FillType::None),
-            tile("Outline", FillType::Outline, current == FillType::Outline),
-            tile(
-                "Background",
-                FillType::Background,
-                current == FillType::Background,
-            ),
-        ]
-        .spacing(4)
-        .width(Length::FillPortion(3)),
-    ]
-    .padding([4, PROPERTY_ROW_PAD_X])
-    .spacing(6)
-    .align_y(iced::Alignment::Center)
-    .into()
-}
-
-// ─── Drawing preview widget ─────────────────────────────────────
-
-#[derive(Debug, Clone)]
-pub struct DrawingPreview {
-    pub drawing: signex_types::schematic::SchDrawing,
-    pub stroke: Color,
-    pub fill: Color,
-    pub muted: Color,
-    pub accent: Color,
-}
-
-impl<Message> canvas::Program<Message> for DrawingPreview {
-    type State = ();
-
-    fn draw(
-        &self,
-        _state: &Self::State,
-        renderer: &Renderer,
-        _theme: &Theme,
-        bounds: Rectangle,
-        _cursor: mouse::Cursor,
-    ) -> Vec<canvas::Geometry> {
-        use signex_types::schematic::SchDrawing;
-        let mut frame = canvas::Frame::new(renderer, bounds.size());
-        let pad = 14.0_f32;
-        let view_w = (bounds.width - 2.0 * pad).max(20.0);
-        let view_h = (bounds.height - 2.0 * pad).max(20.0);
-        let cx_px = bounds.width / 2.0;
-        let cy_px = bounds.height / 2.0;
-
-        let (min_x, min_y, max_x, max_y) = shape_preview_bbox(&self.drawing);
-        let span_w = (max_x - min_x).abs().max(0.1);
-        let span_h = (max_y - min_y).abs().max(0.1);
-        let scale = (view_w as f64 / span_w).min(view_h as f64 / span_h) as f32;
-        let wcx = (min_x + max_x) * 0.5;
-        let wcy = (min_y + max_y) * 0.5;
-        let w2s = |wx: f64, wy: f64| -> Point {
-            Point::new(
-                cx_px + ((wx - wcx) as f32) * scale,
-                cy_px + ((wy - wcy) as f32) * scale,
-            )
-        };
-
-        let stroke = canvas::Stroke::default()
-            .with_color(self.stroke)
-            .with_width(1.8);
-        let dashed = canvas::Stroke::default()
-            .with_color(Color {
-                a: 0.4,
-                ..self.muted
-            })
-            .with_width(1.0);
-        let annotation = canvas::Stroke::default()
-            .with_color(self.accent)
-            .with_width(1.4);
-
-        match &self.drawing {
-            SchDrawing::Line { start, end, .. } => {
-                frame.stroke(
-                    &canvas::Path::line(w2s(start.x, start.y), w2s(end.x, end.y)),
-                    stroke,
-                );
-                let dot = |f: &mut canvas::Frame, p: Point| {
-                    f.fill(&canvas::Path::circle(p, 3.0), self.accent);
-                };
-                dot(&mut frame, w2s(start.x, start.y));
-                dot(&mut frame, w2s(end.x, end.y));
-            }
-            SchDrawing::Rect {
-                start, end, fill, ..
-            } => {
-                let x0 = start.x.min(end.x);
-                let x1 = start.x.max(end.x);
-                let y0 = start.y.min(end.y);
-                let y1 = start.y.max(end.y);
-                let a = w2s(x0, y0);
-                let b = w2s(x1, y1);
-                let rect_pos = Point::new(a.x.min(b.x), a.y.min(b.y));
-                let rect_size =
-                    iced::Size::new((b.x - a.x).abs().max(1.0), (b.y - a.y).abs().max(1.0));
-                let path = canvas::Path::rectangle(rect_pos, rect_size);
-                if !matches!(fill, signex_types::schematic::FillType::None) {
-                    frame.fill(
-                        &path,
-                        Color {
-                            a: 0.25,
-                            ..self.fill
-                        },
-                    );
-                }
-                frame.stroke(&path, stroke);
-            }
-            SchDrawing::Circle {
-                center,
-                radius,
-                fill,
-                ..
-            } => {
-                let cp = w2s(center.x, center.y);
-                let rs = (*radius as f32) * scale;
-                let path = canvas::Path::circle(cp, rs.max(1.0));
-                if !matches!(fill, signex_types::schematic::FillType::None) {
-                    frame.fill(
-                        &path,
-                        Color {
-                            a: 0.22,
-                            ..self.fill
-                        },
-                    );
-                }
-                frame.stroke(&path, stroke);
-                let spoke = canvas::Path::line(cp, Point::new(cp.x + rs, cp.y));
-                frame.stroke(&spoke, annotation);
-            }
-            SchDrawing::Arc {
-                start, mid, end, ..
-            } => {
-                if let Some((cxw, cyw, rw)) =
-                    circumcircle_points_local((start.x, start.y), (mid.x, mid.y), (end.x, end.y))
-                {
-                    let cp = w2s(cxw, cyw);
-                    let rs = (rw as f32) * scale;
-                    frame.stroke(&canvas::Path::circle(cp, rs.max(1.0)), dashed);
-                    let sa = (start.y - cyw).atan2(start.x - cxw);
-                    let ea = (end.y - cyw).atan2(end.x - cxw);
-                    let ma = (mid.y - cyw).atan2(mid.x - cxw);
-                    let (from, to) = arc_sweep_local(sa, ma, ea);
-                    let steps = 64_usize;
-                    let mut prev = w2s(start.x, start.y);
-                    for i in 1..=steps {
-                        let t = i as f64 / steps as f64;
-                        let a = from + (to - from) * t;
-                        let wx = cxw + rw * a.cos();
-                        let wy = cyw + rw * a.sin();
-                        let next = w2s(wx, wy);
-                        frame.stroke(&canvas::Path::line(prev, next), stroke);
-                        prev = next;
-                    }
-                    frame.stroke(&canvas::Path::line(cp, w2s(start.x, start.y)), annotation);
-                    frame.stroke(&canvas::Path::line(cp, w2s(end.x, end.y)), annotation);
-                } else {
-                    frame.stroke(
-                        &canvas::Path::line(w2s(start.x, start.y), w2s(mid.x, mid.y)),
-                        stroke,
-                    );
-                    frame.stroke(
-                        &canvas::Path::line(w2s(mid.x, mid.y), w2s(end.x, end.y)),
-                        stroke,
-                    );
-                }
-            }
-            SchDrawing::Polyline { points, fill, .. } => {
-                if points.len() >= 2 {
-                    let close = !matches!(fill, signex_types::schematic::FillType::None)
-                        && points.len() >= 3;
-                    let path = canvas::Path::new(|b| {
-                        let first = w2s(points[0].x, points[0].y);
-                        b.move_to(first);
-                        for p in &points[1..] {
-                            b.line_to(w2s(p.x, p.y));
-                        }
-                        if close {
-                            b.close();
-                        }
-                    });
-                    if close {
-                        frame.fill(
-                            &path,
-                            Color {
-                                a: 0.22,
-                                ..self.fill
-                            },
-                        );
-                    }
-                    frame.stroke(&path, stroke);
-                    for p in points {
-                        let sp = w2s(p.x, p.y);
-                        frame.fill(&canvas::Path::circle(sp, 2.5), self.accent);
-                    }
-                }
-            }
-        }
-
-        vec![frame.into_geometry()]
-    }
-}
-
-fn shape_preview_bbox(d: &signex_types::schematic::SchDrawing) -> (f64, f64, f64, f64) {
-    use signex_types::schematic::SchDrawing;
-    match d {
-        SchDrawing::Line { start, end, .. } | SchDrawing::Rect { start, end, .. } => (
-            start.x.min(end.x),
-            start.y.min(end.y),
-            start.x.max(end.x),
-            start.y.max(end.y),
-        ),
-        SchDrawing::Circle { center, radius, .. } => (
-            center.x - *radius,
-            center.y - *radius,
-            center.x + *radius,
-            center.y + *radius,
-        ),
-        SchDrawing::Arc {
-            start, mid, end, ..
-        } => {
-            let xs = [start.x, mid.x, end.x];
-            let ys = [start.y, mid.y, end.y];
-            let min_x = xs.iter().cloned().fold(f64::INFINITY, f64::min);
-            let max_x = xs.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-            let min_y = ys.iter().cloned().fold(f64::INFINITY, f64::min);
-            let max_y = ys.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-            (min_x, min_y, max_x, max_y)
-        }
-        SchDrawing::Polyline { points, .. } => {
-            if points.is_empty() {
-                return (-1.0, -1.0, 1.0, 1.0);
-            }
-            let mut min_x = f64::INFINITY;
-            let mut max_x = f64::NEG_INFINITY;
-            let mut min_y = f64::INFINITY;
-            let mut max_y = f64::NEG_INFINITY;
-            for p in points {
-                min_x = min_x.min(p.x);
-                min_y = min_y.min(p.y);
-                max_x = max_x.max(p.x);
-                max_y = max_y.max(p.y);
-            }
-            (min_x, min_y, max_x, max_y)
-        }
-    }
-}
-
-fn circumcircle_points_local(
-    a: (f64, f64),
-    b: (f64, f64),
-    c: (f64, f64),
-) -> Option<(f64, f64, f64)> {
-    let (ax, ay) = a;
-    let (bx, by) = b;
-    let (cx, cy) = c;
-    let d = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
-    if d.abs() < 1e-9 {
-        return None;
-    }
-    let ux = ((ax * ax + ay * ay) * (by - cy)
-        + (bx * bx + by * by) * (cy - ay)
-        + (cx * cx + cy * cy) * (ay - by))
-        / d;
-    let uy = ((ax * ax + ay * ay) * (cx - bx)
-        + (bx * bx + by * by) * (ax - cx)
-        + (cx * cx + cy * cy) * (bx - ax))
-        / d;
-    let r = ((ax - ux) * (ax - ux) + (ay - uy) * (ay - uy)).sqrt();
-    Some((ux, uy, r))
-}
-
-fn arc_sweep_local(s: f64, m: f64, e: f64) -> (f64, f64) {
-    use std::f64::consts::TAU;
-    let norm = |a: f64| -> f64 {
-        let mut t = a % TAU;
-        if t < 0.0 {
-            t += TAU;
-        }
-        t
-    };
-    let ccw = |a: f64, b: f64| -> f64 {
-        let d = b - a;
-        if d < 0.0 { d + TAU } else { d }
-    };
-    let sn = norm(s);
-    let mn = norm(m);
-    let en = norm(e);
-    let s_to_m = ccw(sn, mn);
-    let s_to_e = ccw(sn, en);
-    if s_to_m <= s_to_e {
-        (s, s + s_to_e)
-    } else {
-        (s, s - (TAU - s_to_e))
-    }
-}

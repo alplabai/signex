@@ -34,12 +34,12 @@ impl Signex {
 
     pub(crate) fn active_render_snapshot(
         &self,
-    ) -> Option<&signex_render::schematic::SchematicRenderSnapshot> {
+    ) -> Option<&crate::schematic_runtime::SchematicRenderSnapshot> {
         self.interaction_state.active_canvas().active_snapshot()
     }
 
-    pub(crate) fn active_pcb_snapshot(&self) -> Option<&signex_render::pcb::PcbRenderSnapshot> {
-        self.interaction_state.pcb_canvas.active_snapshot()
+    pub(crate) fn active_pcb_snapshot(&self) -> Option<&PcbBoard> {
+        self.active_pcb()
     }
 
     pub(crate) fn with_active_schematic_session_mut<R>(
@@ -162,19 +162,28 @@ impl Signex {
 
     pub(crate) fn sync_canvas_from_visible_schematic(
         &mut self,
-        invalidation: signex_render::schematic::RenderInvalidation,
+        invalidation: crate::schematic_runtime::RenderInvalidation,
     ) {
         // Active engine drives the render cache — if it's gone the
         // cache is cleared. There is no parked-schematic fallback with
         // HashMap storage: an open schematic tab always has its engine
         // resident in `document_state.engines`.
         if let Some(engine) = self.document_state.active_engine() {
-            if let Some(cache) = self.interaction_state.active_canvas_mut().render_cache.as_mut() {
+            if let Some(cache) = self
+                .interaction_state
+                .active_canvas_mut()
+                .render_cache
+                .as_mut()
+            {
                 cache.update_from_sheet(engine.document(), invalidation);
             } else {
-                self.interaction_state.active_canvas_mut().set_render_cache(Some(
-                    signex_render::schematic::SchematicRenderCache::from_sheet(engine.document()),
-                ));
+                self.interaction_state
+                    .active_canvas_mut()
+                    .set_render_cache(Some(
+                        crate::schematic_runtime::SchematicRenderCache::from_sheet(
+                            engine.document(),
+                        ),
+                    ));
             }
             return;
         }
@@ -185,10 +194,13 @@ impl Signex {
     }
 
     pub(crate) fn sync_pcb_canvas_from_visible_board(&mut self) {
-        self.interaction_state.pcb_canvas.set_render_snapshot(
-            self.active_pcb()
-                .map(signex_render::pcb::PcbRenderSnapshot::from_board),
-        );
+        let renderer_snapshot = self
+            .active_pcb()
+            .map(signex_renderer::pcb::PcbSnapshot::from_board);
+
+        self.interaction_state
+            .pcb_canvas
+            .set_renderer_snapshot(renderer_snapshot);
     }
 
     pub(crate) fn open_schematic_tab(
@@ -233,10 +245,7 @@ impl Signex {
     /// canvas reflects the parked sheet's current state.
     pub(crate) fn attach_parked_schematic_tab(&mut self, path: PathBuf, title: String) {
         self.park_active_schematic_session();
-        let project_id = self
-            .document_state
-            .project_for_path(&path)
-            .map(|p| p.id);
+        let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
         // The parked engine is, by definition, dirty — `close_tab_now`
         // only keeps engines for paths in `dirty_paths`. Mirror that
         // into the new tab so the chrome (red dot, etc.) stays
@@ -261,10 +270,7 @@ impl Signex {
 
     pub(crate) fn open_pcb_tab(&mut self, path: PathBuf, title: String, board: PcbBoard) {
         self.park_active_schematic_session();
-        let project_id = self
-            .document_state
-            .project_for_path(&path)
-            .map(|p| p.id);
+        let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
         self.document_state.tabs.push(TabInfo {
             title,
             path,
@@ -293,10 +299,7 @@ impl Signex {
             .as_ref()
             .map(|p| self.document_state.engines.contains_key(p))
             .unwrap_or(false);
-        let is_pcb = matches!(
-            self.active_tab_cached_document(),
-            Some(TabDocument::Pcb(_))
-        );
+        let is_pcb = matches!(self.active_tab_cached_document(), Some(TabDocument::Pcb(_)));
 
         if is_schematic {
             if self.activate_active_schematic_session() {
@@ -319,16 +322,25 @@ impl Signex {
         // `handlers/document_tabs.rs`, which explicitly prunes the
         // closing tab's entry. GitHub issue #51.
         self.document_state.active_path = None;
-        self.interaction_state.active_canvas_mut().set_render_cache(None);
+        self.interaction_state
+            .active_canvas_mut()
+            .set_render_cache(None);
         self.interaction_state.active_canvas_mut().selected.clear();
-        self.interaction_state.active_canvas_mut().wire_preview.clear();
+        self.interaction_state
+            .active_canvas_mut()
+            .wire_preview
+            .clear();
         self.interaction_state.active_canvas_mut().drawing_mode = false;
-        self.interaction_state.active_canvas_mut().clear_content_cache();
-        self.interaction_state.active_canvas_mut().clear_overlay_cache();
+        self.interaction_state
+            .active_canvas_mut()
+            .clear_content_cache();
+        self.interaction_state
+            .active_canvas_mut()
+            .clear_overlay_cache();
         self.interaction_state.current_tool = Tool::Select;
     }
 
-    fn apply_loaded_pcb_document(&mut self, fit_to_board: bool, refresh_panel_ctx: bool) {
+    pub(crate) fn apply_loaded_pcb_document(&mut self, fit_to_board: bool, refresh_panel_ctx: bool) {
         self.clear_schematic_ui_state();
         self.sync_pcb_canvas_from_visible_board();
         if fit_to_board {
@@ -346,7 +358,7 @@ impl Signex {
 
     fn apply_loaded_empty_document(&mut self, refresh_panel_ctx: bool) {
         self.clear_schematic_ui_state();
-        self.interaction_state.pcb_canvas.set_render_snapshot(None);
+        self.interaction_state.pcb_canvas.set_renderer_snapshot(None);
         self.interaction_state.pcb_canvas.clear_bg_cache();
         self.interaction_state.pcb_canvas.clear_content_cache();
 
@@ -357,7 +369,7 @@ impl Signex {
         }
     }
 
-    fn apply_loaded_schematic(
+    pub(crate) fn apply_loaded_schematic(
         &mut self,
         schematic: Option<SchematicSheet>,
         clear_bg_cache: bool,
@@ -371,7 +383,7 @@ impl Signex {
         if !self.document_state.has_active_engine() {
             return;
         }
-        self.sync_canvas_from_visible_schematic(signex_render::schematic::RenderInvalidation::FULL);
+        self.sync_canvas_from_visible_schematic(crate::schematic_runtime::RenderInvalidation::FULL);
 
         if fit_to_paper {
             self.interaction_state.active_canvas_mut().fit_to_paper();
@@ -379,7 +391,9 @@ impl Signex {
         if clear_bg_cache {
             self.interaction_state.active_canvas_mut().clear_bg_cache();
         }
-        self.interaction_state.active_canvas_mut().clear_content_cache();
+        self.interaction_state
+            .active_canvas_mut()
+            .clear_content_cache();
 
         let _ = commit_to_active_tab;
 

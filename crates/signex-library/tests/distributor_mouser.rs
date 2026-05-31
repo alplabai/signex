@@ -134,8 +134,8 @@ fn empty_search_results_returns_empty_vec() {
 #[ignore = "live API — requires Mouser API key + network"]
 fn live_lookup_smoke() {
     use signex_library::distributors::keyring::KeyringStore;
-    let store = KeyringStore::for_provider("mouser", "default");
+    let store = KeyringStore::for_provider("mouser", "default").expect("keyring backend available");
     let _key = store.get_secret().expect("Mouser API key in keyring");
-    let adapter = MouserAdapter::from_keyring(None);
+    let adapter = MouserAdapter::from_keyring(None).expect("keyring backend available");
     let _ = adapter.lookup_by_mpn("RC0805FR-0710KL").expect("network");
 }

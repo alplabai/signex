@@ -12,6 +12,15 @@ pub enum SemanticPatch {
     SelectionMirrored,
     ObjectPlaced,
     SheetPinsReconciled,
+    /// MD-11: a `SchDrawing::*` (line/rect/circle/arc/polyline) was
+    /// edited. Distinct from `TextUpdated` so consumers branching on
+    /// "did the user change a TextProp" don't take the wrong reflow
+    /// path when geometry changed instead.
+    DrawingMutated,
+    /// MD-11: a child-sheet (or similar container) had a non-text
+    /// style property changed (stroke width / colour / fill colour).
+    /// Pure visual-attribute change, no geometry / text reflow.
+    StyleUpdated,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

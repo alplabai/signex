@@ -4,6 +4,7 @@
 //! No Iced fork — composition only.
 
 pub mod active_bar;
+pub mod active_bar_dropdown;
 pub mod history_pane;
 pub mod icon_button;
 pub mod status_bar;

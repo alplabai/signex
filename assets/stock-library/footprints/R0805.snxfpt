@@ -1,0 +1,110 @@
+format = "snxfpt/1"
+file_uuid = "019df45d-af64-7bb2-b787-add74d246d40"
+display_name = "R0805"
+created = "2026-05-04T19:01:13.700006500Z"
+updated = "2026-05-04T19:01:13.700006500Z"
+
+[[footprints]]
+uuid = "019df45d-af63-7823-b5c3-01594028ccef"
+name = "R0805"
+anchor = [
+    0.0,
+    0.0,
+]
+pads_tsv = '''
+number	kind	shape	size_x	size_y	pos_x	pos_y	rotation	layers	drill_diameter	drill_slot_length	solder_mask_margin	paste_margin
+'''
+silk_f = []
+silk_b = []
+fab_f = []
+fab_b = []
+version = "0.0.1"
+released = false
+created = "2026-05-04T19:01:13.699958200Z"
+updated = "2026-05-04T19:01:13.699958200Z"
+schema_version = 3
+
+[footprints.courtyard]
+points = []
+
+[footprints.body_3d]
+shape = "Extrude"
+height_mm = 1.0
+offset_z_mm = 0.0
+top_color = [
+    0.20000000298023224,
+    0.20000000298023224,
+    0.20000000298023224,
+    1.0,
+]
+side_color = [
+    0.30000001192092896,
+    0.30000001192092896,
+    0.30000001192092896,
+    1.0,
+]
+
+[footprints.pcb_params]
+
+[footprints.sketch]
+constraints = []
+arrays = []
+
+[[footprints.sketch.planes]]
+id = "cdbf6963-91f5-44b7-9f96-a2e01a046265"
+kind = "BoardTop"
+
+[[footprints.sketch.entities]]
+id = "7c39d334-33d5-41a9-be67-8df6b3b0f382"
+plane = "cdbf6963-91f5-44b7-9f96-a2e01a046265"
+construction = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "1"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_w"
+size_y_expr = "pad_h"
+offset_x_expr = "-0.5 * pad_spacing"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[[footprints.sketch.entities]]
+id = "321de7ce-bd80-4bef-9fc4-a2a8fe6bc82c"
+plane = "cdbf6963-91f5-44b7-9f96-a2e01a046265"
+construction = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "2"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_w"
+size_y_expr = "pad_h"
+offset_x_expr = "0.5 * pad_spacing"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[footprints.sketch.parameters]
+body_h = "1.25mm"
+body_w = "2.0mm"
+pad_h = "1.25mm"
+pad_spacing = "2.0mm"
+pad_w = "1.0mm"

@@ -3,8 +3,8 @@ use super::*;
 impl Signex {
     fn render_invalidation_for_patch(
         patch: signex_engine::DocumentPatch,
-    ) -> signex_render::schematic::RenderInvalidation {
-        use signex_render::schematic::RenderInvalidation;
+    ) -> crate::schematic_runtime::RenderInvalidation {
+        use crate::schematic_runtime::RenderInvalidation;
 
         if patch.contains(signex_engine::DocumentPatch::FULL) {
             return RenderInvalidation::FULL;
@@ -67,7 +67,7 @@ impl Signex {
 
         let invalidation = {
             let mut changed_steps = 0usize;
-            let mut invalidation = signex_render::schematic::RenderInvalidation::NONE;
+            let mut invalidation = crate::schematic_runtime::RenderInvalidation::NONE;
 
             for command in commands {
                 match engine.execute(command) {
@@ -92,7 +92,7 @@ impl Signex {
                     .record_engine_marker(changed_steps);
                 invalidation
             } else {
-                signex_render::schematic::RenderInvalidation::NONE
+                crate::schematic_runtime::RenderInvalidation::NONE
             }
         };
 
@@ -114,15 +114,15 @@ impl Signex {
                 let invalidation = result
                     .patch_pair
                     .map(|patch_pair| Self::render_invalidation_for_patch(patch_pair.document))
-                    .unwrap_or(signex_render::schematic::RenderInvalidation::NONE);
+                    .unwrap_or(crate::schematic_runtime::RenderInvalidation::NONE);
                 self.interaction_state.undo_stack.record_engine_marker(1);
                 invalidation
             }
-            Ok(_) => signex_render::schematic::RenderInvalidation::NONE,
+            Ok(_) => crate::schematic_runtime::RenderInvalidation::NONE,
             Err(error) => {
                 let error = anyhow::Error::new(error);
                 crate::diagnostics::log_error("Engine command failed", &error);
-                signex_render::schematic::RenderInvalidation::NONE
+                crate::schematic_runtime::RenderInvalidation::NONE
             }
         };
 
@@ -136,7 +136,7 @@ impl Signex {
             };
 
             let mut undone_steps = 0usize;
-            let mut invalidation = signex_render::schematic::RenderInvalidation::NONE;
+            let mut invalidation = crate::schematic_runtime::RenderInvalidation::NONE;
             for _ in 0..steps {
                 match engine.undo() {
                     Ok(Some(patch_pair)) => {
@@ -155,10 +155,10 @@ impl Signex {
             if undone_steps == steps && self.interaction_state.undo_stack.step_back() {
                 invalidation
             } else {
-                signex_render::schematic::RenderInvalidation::NONE
+                crate::schematic_runtime::RenderInvalidation::NONE
             }
         } else {
-            signex_render::schematic::RenderInvalidation::NONE
+            crate::schematic_runtime::RenderInvalidation::NONE
         };
 
         self.finish_schematic_mutation(invalidation, true, update_selection_info)
@@ -171,7 +171,7 @@ impl Signex {
             };
 
             let mut redone_steps = 0usize;
-            let mut invalidation = signex_render::schematic::RenderInvalidation::NONE;
+            let mut invalidation = crate::schematic_runtime::RenderInvalidation::NONE;
             for _ in 0..steps {
                 match engine.redo() {
                     Ok(Some(patch_pair)) => {
@@ -190,10 +190,10 @@ impl Signex {
             if redone_steps == steps && self.interaction_state.undo_stack.step_forward() {
                 invalidation
             } else {
-                signex_render::schematic::RenderInvalidation::NONE
+                crate::schematic_runtime::RenderInvalidation::NONE
             }
         } else {
-            signex_render::schematic::RenderInvalidation::NONE
+            crate::schematic_runtime::RenderInvalidation::NONE
         };
 
         self.finish_schematic_mutation(invalidation, true, update_selection_info)
@@ -201,11 +201,11 @@ impl Signex {
 
     fn finish_schematic_mutation(
         &mut self,
-        invalidation: signex_render::schematic::RenderInvalidation,
+        invalidation: crate::schematic_runtime::RenderInvalidation,
         clear_overlay_cache: bool,
         update_selection_info: bool,
     ) -> bool {
-        if invalidation == signex_render::schematic::RenderInvalidation::NONE {
+        if invalidation == crate::schematic_runtime::RenderInvalidation::NONE {
             return false;
         }
 

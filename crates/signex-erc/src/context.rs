@@ -1,12 +1,48 @@
 //! Parser-independent ERC context. Built by projecting a
-//! [`SchematicRenderSnapshot`] once; all rule functions read from here so
-//! they never import `signex-render` directly.
+//! [`SchematicSheet`] once; all rule functions read from here so
+//! they stay independent from any legacy renderer crate.
 
 use std::collections::HashMap;
 
-use signex_render::schematic::{SchematicRenderSnapshot, instance_transform};
+use signex_types::schematic::SchematicSheet;
 use signex_types::schematic::{LabelType, PinDirection, Point};
 use uuid::Uuid;
+
+#[derive(Debug, Clone, Copy)]
+struct SymbolTransform {
+    origin: Point,
+    rotation_deg: f64,
+    mirror_x: bool,
+    mirror_y: bool,
+}
+
+impl SymbolTransform {
+    fn from_symbol(symbol: &signex_types::schematic::Symbol) -> Self {
+        Self {
+            origin: symbol.position,
+            rotation_deg: symbol.rotation,
+            mirror_x: symbol.mirror_x,
+            mirror_y: symbol.mirror_y,
+        }
+    }
+
+    fn apply(&self, local: Point) -> Point {
+        let x = local.x;
+        let y = -local.y;
+        let rad = -self.rotation_deg.to_radians();
+        let cos = rad.cos();
+        let sin = rad.sin();
+        let mut rx = x * cos - y * sin;
+        let mut ry = x * sin + y * cos;
+        if self.mirror_y {
+            rx = -rx;
+        }
+        if self.mirror_x {
+            ry = -ry;
+        }
+        Point::new(rx + self.origin.x, ry + self.origin.y)
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Paper size
@@ -22,6 +58,11 @@ pub enum PaperSize {
 }
 
 impl PaperSize {
+    /// Returns `(width_mm, height_mm)` for **landscape** orientation
+    /// (long side first). LO-5: schematic ERC currently treats every
+    /// sheet as landscape; if the schema ever grows an explicit
+    /// orientation flag (e.g. `A4_L` vs `A4`), the consumer should
+    /// swap the tuple instead of expecting this method to do it.
     pub fn dimensions_mm(self) -> (f64, f64) {
         match self {
             PaperSize::A4 => (297.0, 210.0),
@@ -185,13 +226,13 @@ pub struct ErcContext {
 }
 
 impl ErcContext {
-    pub fn from_snapshot(snapshot: &SchematicRenderSnapshot) -> Self {
+    pub fn from_snapshot(snapshot: &SchematicSheet) -> Self {
         Self::project(snapshot, HashMap::new())
     }
 
     pub fn from_snapshot_with_children(
-        snapshot: &SchematicRenderSnapshot,
-        children: &HashMap<String, SchematicRenderSnapshot>,
+        snapshot: &SchematicSheet,
+        children: &HashMap<String, SchematicSheet>,
     ) -> Self {
         let child_ctxs = children
             .iter()
@@ -200,7 +241,7 @@ impl ErcContext {
         Self::project(snapshot, child_ctxs)
     }
 
-    fn project(snapshot: &SchematicRenderSnapshot, children: HashMap<String, ErcContext>) -> Self {
+    fn project(snapshot: &SchematicSheet, children: HashMap<String, ErcContext>) -> Self {
         // --- Step 1: geometry primitives (no symbols yet) -----------------
         let wires: Vec<ErcWire> = snapshot
             .wires
@@ -287,7 +328,8 @@ impl ErcContext {
                     .iter()
                     .filter(|lp| lp.unit == 0 || lp.unit == sym.unit)
                     .map(|lp| {
-                        let (wx, wy) = instance_transform(sym, &lp.pin.position);
+                        let _world = SymbolTransform::from_symbol(sym).apply(lp.pin.position);
+                        let (wx, wy) = (_world.x, _world.y);
                         let world_pos = Point::new(wx, wy);
                         let connected =
                             point_is_connected(&world_pos, &wires, &buses, &labels, &no_connects);
@@ -345,8 +387,10 @@ fn pt_same(a: &Point, b: &Point) -> bool {
     (a.x - b.x).abs() < EPS && (a.y - b.y).abs() < EPS
 }
 
+/// MD-6: see `rules::key` — same 1 µm bucket so context + rule
+/// projections agree on net membership.
 fn pt_key(p: &Point) -> (i64, i64) {
-    ((p.x * 100.0).round() as i64, (p.y * 100.0).round() as i64)
+    ((p.x * 1000.0).round() as i64, (p.y * 1000.0).round() as i64)
 }
 
 /// Returns `true` if any wire/bus endpoint, label, or no-connect sits at `pos`.
@@ -371,24 +415,8 @@ fn point_is_connected(
 // Net derivation (union-find over wire endpoints)
 // ---------------------------------------------------------------------------
 
-fn uf_find(parent: &mut HashMap<(i64, i64), (i64, i64)>, x: (i64, i64)) -> (i64, i64) {
-    let p = *parent.entry(x).or_insert(x);
-    if p == x {
-        x
-    } else {
-        let r = uf_find(parent, p);
-        parent.insert(x, r);
-        r
-    }
-}
-
-fn uf_union(parent: &mut HashMap<(i64, i64), (i64, i64)>, a: (i64, i64), b: (i64, i64)) {
-    let ra = uf_find(parent, a);
-    let rb = uf_find(parent, b);
-    if ra != rb {
-        parent.insert(ra, rb);
-    }
-}
+// Union-find lives in `crate::uf` (HI-17). Import the canonical helpers.
+use crate::uf::{find as uf_find, union as uf_union};
 
 fn derive_nets(
     wires: &[ErcWire],

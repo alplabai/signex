@@ -5,7 +5,8 @@ members = [
     "crates/signex-engine",
     "crates/signex-bom",
     "crates/signex-types",
-    "crates/signex-render",
+    "crates/signex-gfx",
+    "crates/signex-renderer",
     "crates/signex-widgets",
     "crates/signex-erc",
     "crates/signex-erc-dsl",
@@ -13,10 +14,13 @@ members = [
     "crates/chrome-catalog",
     "crates/signex-library",
     "crates/signex-library-server",
+    "crates/signex-sketch",
+    "crates/signex-bake",
+    "crates/signex-3d-model-importer",
 ]
 
 [workspace.package]
-version = "0.11.0"
+version = "0.13.0"
 edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/alplabai/signex"
@@ -59,11 +63,13 @@ ttf-parser = "0.25"
 signex-types = { path = "crates/signex-types" }
 signex-engine = { path = "crates/signex-engine" }
 signex-bom = { path = "crates/signex-bom" }
-signex-render = { path = "crates/signex-render" }
+signex-gfx = { path = "crates/signex-gfx" }
+signex-renderer = { path = "crates/signex-renderer" }
 signex-widgets = { path = "crates/signex-widgets" }
 signex-erc = { path = "crates/signex-erc" }
 signex-erc-dsl = { path = "crates/signex-erc-dsl" }
 signex-output = { path = "crates/signex-output" }
+signex-3d-model-importer = { path = "crates/signex-3d-model-importer" }
 
 # Library subsystem (v0.9 plan, restored at v0.11)
 chrono = { version = "0.4", features = ["serde"] }
@@ -79,12 +85,22 @@ axum = { version = "0.7", features = ["ws"] }
 tokio = { version = "1", features = ["full"] }
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "postgres", "sqlite", "macros", "chrono", "uuid", "migrate"] }
 pdf-extract = "0.7"
-tower-http = { version = "0.6", features = ["cors", "trace", "auth", "validate-request"] }
+tower-http = { version = "0.6", features = ["cors", "trace", "auth", "validate-request", "limit"] }
+# Per-IP rate limiting for the library server (HI-2). Closes the DoS surface
+# on `/locks` (unbounded acquire) + mutating routes. `governor` is the
+# underlying token-bucket impl.
+tower_governor = "0.4"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Internal — library
 signex-library = { path = "crates/signex-library" }
+
+# Internal — sketcher (v0.13)
+signex-sketch = { path = "crates/signex-sketch" }
+
+# Internal — bake pipeline (v0.13 Phase 7)
+signex-bake = { path = "crates/signex-bake" }
 
 [profile.release]
 lto = "thin"

@@ -234,6 +234,15 @@ pub struct SymbolEditorState {
     /// outside the canvas. Per-tab — tracking the cursor is
     /// inherently a single-canvas concept.
     pub cursor_mm: Option<(f64, f64)>,
+    /// v0.13 — SchLib selection filter. Per-kind selectable flags
+    /// gate which entities the canvas hit-tester considers. Mirrors
+    /// the footprint editor's `selection_filter`.
+    pub selection_filter: crate::library::editor::symbol::state::SymbolSelectionFilter,
+    /// v0.13 — Open active-bar dropdown menu. `None` = no menu open.
+    pub active_bar_menu:
+        Option<crate::library::editor::symbol::state::SymActiveBarMenu>,
+    /// v0.13 — Pause flag for placement (TAB during Place Pin / etc.).
+    pub placement_paused: bool,
 }
 
 impl SymbolEditorState {
@@ -253,6 +262,9 @@ impl SymbolEditorState {
             dirty: false,
             camera: crate::canvas::Camera::default(),
             cursor_mm: None,
+            selection_filter: Default::default(),
+            active_bar_menu: None,
+            placement_paused: false,
         }
     }
 
@@ -284,29 +296,246 @@ impl SymbolEditorState {
 /// [`crate::library::editor::footprint::canvas::FootprintCanvas`] +
 /// [`crate::library::editor::footprint::state::FootprintEditorState`]
 /// so the behaviour matches the in-Component Editor experience verbatim.
+///
+/// v0.18.6 — mirrors [`SymbolEditorState`]: the editor backs a multi-
+/// footprint container and dispatches every mutation through
+/// `file.footprints[active_idx]`. Saves preserve `file_uuid` and any
+/// future siblings instead of minting a fresh single-footprint
+/// envelope.
 #[derive(Debug)]
 pub struct FootprintEditorState {
     pub path: PathBuf,
-    pub primitive: Footprint,
+    /// Multi-footprint container backing this `.snxfpt` tab. The
+    /// editor works against `file.footprints[active_idx]`; access
+    /// via [`primitive`](Self::primitive) /
+    /// [`primitive_mut`](Self::primitive_mut).
+    pub file: signex_library::FootprintFile,
+    /// Which footprint within the file is currently being edited.
+    /// The Footprint Library left-dock panel + canvas tab strip
+    /// drive this; defaults to the first footprint.
+    pub active_idx: usize,
+    /// v0.18.8 — Footprint Library panel single-click selection.
+    /// Independent of `active_idx`: a single click highlights the
+    /// row, double-click (or the panel's Edit button) promotes the
+    /// selection to `active_idx`. `None` until the user clicks a
+    /// row.
+    pub panel_selected_idx: Option<usize>,
     pub state: crate::library::editor::footprint::state::FootprintEditorState,
     pub canvas_cache: iced::widget::canvas::Cache,
     pub dirty: bool,
+    /// v0.24 Phase 1 (Track B) — Undo history. Pre-mutation snapshots
+    /// pushed by `push_history` ahead of each dispatcher mutation;
+    /// `undo()` pops the most recent and swaps it in. Capped at
+    /// [`Self::HISTORY_DEPTH`] to keep memory bounded.
+    pub history: Vec<FootprintHistorySnapshot>,
+    /// v0.24 Phase 1 (Track B) — Redo stack. Populated by `undo()`
+    /// with the snapshot it just rolled back; cleared by any new
+    /// mutation that calls `push_history` so the redo lineage stays
+    /// consistent with single-history-tree semantics.
+    pub redo: Vec<FootprintHistorySnapshot>,
+}
+
+/// v0.24 Phase 1 (Track B) — coarse-grained undo snapshot. Captures
+/// the canonical state needed to roll back any footprint edit:
+/// - the full multi-footprint `FootprintFile` (typically <50 KB of
+///   in-memory representation),
+/// - the active footprint index,
+/// - the canvas-side `EditorPad` cache and its selection state,
+/// - sketch selection state.
+///
+/// Stored by-value (not by-Arc) so undo/redo never aliases the live
+/// state. Memory cost: ~5 KB × `HISTORY_DEPTH` = ~500 KB per editor.
+/// Acceptable for v0.24; fine-grained inverse ops can replace this
+/// later if memory becomes load-bearing.
+#[derive(Debug, Clone)]
+pub struct FootprintHistorySnapshot {
+    pub file: signex_library::FootprintFile,
+    pub active_idx: usize,
+    pub pads: Vec<crate::library::editor::footprint::state::EditorPad>,
+    pub selected_pad: Option<usize>,
+    pub selected_sketch: Option<signex_sketch::id::SketchEntityId>,
+    pub selected_sketch_secondary: Option<signex_sketch::id::SketchEntityId>,
 }
 
 impl FootprintEditorState {
-    /// Build a fresh standalone editor state from a primitive loaded
-    /// off disk. `path` is the `.snxfpt` file the user opened.
-    pub fn new(path: PathBuf, primitive: Footprint) -> Self {
+    /// Build a fresh standalone editor state from a `FootprintFile`
+    /// container loaded off disk. `path` is the `.snxfpt` file the
+    /// user opened. The editor opens on the first footprint in the
+    /// file. The caller is responsible for confirming the file is
+    /// non-empty before this call.
+    pub fn new(path: PathBuf, file: signex_library::FootprintFile) -> Self {
+        let active_idx = 0;
         let state = crate::library::editor::footprint::state::FootprintEditorState::from_footprint(
-            &primitive,
+            &file.footprints[active_idx],
         );
         Self {
             path,
-            primitive,
+            file,
+            active_idx,
+            panel_selected_idx: None,
             state,
             canvas_cache: iced::widget::canvas::Cache::default(),
             dirty: false,
+            history: Vec::new(),
+            redo: Vec::new(),
         }
+    }
+
+    /// v0.24 Phase 1 (Track B) — depth cap for `history` / `redo`
+    /// stacks. 100 entries × ~5 KB = ~500 KB per editor; raise if
+    /// users start losing far-back undos and we've moved to
+    /// fine-grained inverse ops.
+    pub const HISTORY_DEPTH: usize = 100;
+
+    /// v0.24 Phase 1 (Track B) — capture a snapshot of the
+    /// canonical state ahead of a mutation. Caller invokes this
+    /// BEFORE the mutation runs; on `undo()` we swap the snapshot
+    /// back in. New mutations clear the redo stack so the history
+    /// stays a single timeline.
+    ///
+    /// Phase 2 wiring: every `dispatch::library` arm that mutates
+    /// state should `push_history()` first, then run the mutation.
+    /// The dispatcher's existing `with_parts` closure is the
+    /// natural integration site.
+    pub fn push_history(&mut self) {
+        let snap = self.snapshot();
+        self.history.push(snap);
+        if self.history.len() > Self::HISTORY_DEPTH {
+            self.history.remove(0);
+        }
+        self.redo.clear();
+    }
+
+    /// v0.24 Phase 1 — undo the most recent edit. Returns `true` if
+    /// a snapshot was popped + applied, `false` if the history was
+    /// empty (i.e. nothing to undo). The current state is pushed
+    /// onto the redo stack so `redo()` can walk forward again.
+    pub fn undo(&mut self) -> bool {
+        let Some(snap) = self.history.pop() else {
+            return false;
+        };
+        let current = self.snapshot();
+        self.redo.push(current);
+        if self.redo.len() > Self::HISTORY_DEPTH {
+            self.redo.remove(0);
+        }
+        self.restore(snap);
+        true
+    }
+
+    /// v0.24 Phase 1 — redo the most recently undone edit. Returns
+    /// `true` if a redo snapshot was popped + applied, `false` when
+    /// the redo stack is empty.
+    pub fn redo(&mut self) -> bool {
+        let Some(snap) = self.redo.pop() else {
+            return false;
+        };
+        let current = self.snapshot();
+        self.history.push(current);
+        if self.history.len() > Self::HISTORY_DEPTH {
+            self.history.remove(0);
+        }
+        self.restore(snap);
+        true
+    }
+
+    /// v0.24 Phase 1 — capture the current state into a snapshot
+    /// without altering the history stack. Used by `push_history`
+    /// + `undo`/`redo` to read the canonical state by-value.
+    fn snapshot(&self) -> FootprintHistorySnapshot {
+        FootprintHistorySnapshot {
+            file: self.file.clone(),
+            active_idx: self.active_idx,
+            pads: self.state.pads.clone(),
+            selected_pad: self.state.selected_pad,
+            selected_sketch: self.state.selected_sketch,
+            selected_sketch_secondary: self.state.selected_sketch_secondary,
+        }
+    }
+
+    /// v0.24 Phase 1 — write a snapshot back into the live editor
+    /// state. Resets the canvas cache so the next render reflects
+    /// the rolled-back geometry.
+    fn restore(&mut self, snap: FootprintHistorySnapshot) {
+        self.file = snap.file;
+        self.active_idx = snap.active_idx;
+        self.state.pads = snap.pads;
+        self.state.selected_pad = snap.selected_pad;
+        self.state.selected_sketch = snap.selected_sketch;
+        self.state.selected_sketch_secondary = snap.selected_sketch_secondary;
+        self.canvas_cache.clear();
+        self.dirty = true;
+    }
+
+    /// HI-23: builder that seeds `global_snap_disabled` from
+    /// `ui_state.snap_enabled` so opening a `.snxfpt` while the user
+    /// has the global snap toggle off doesn't surprise them with snap
+    /// suddenly back on. Call sites pass `!ui_state.snap_enabled`.
+    pub fn with_global_snap_disabled(mut self, disabled: bool) -> Self {
+        self.state.global_snap_disabled = disabled;
+        self
+    }
+
+    /// Borrow the footprint currently being edited. Falls back to
+    /// the first footprint when `active_idx` is out of range
+    /// (defensive — should never happen in practice). Panics only
+    /// when the file has zero footprints, which the loader rejects.
+    pub fn primitive(&self) -> &Footprint {
+        let idx = self
+            .active_idx
+            .min(self.file.footprints.len().saturating_sub(1));
+        &self.file.footprints[idx]
+    }
+
+    /// Mutable borrow of the active footprint — used by canvas
+    /// mutations (add/move/delete pad etc.). Same out-of-range
+    /// fallback as [`primitive`](Self::primitive).
+    pub fn primitive_mut(&mut self) -> &mut Footprint {
+        let idx = self
+            .active_idx
+            .min(self.file.footprints.len().saturating_sub(1));
+        &mut self.file.footprints[idx]
+    }
+
+    /// Split-borrow accessor returning mutable references to
+    /// `state` and the active primitive simultaneously. The two
+    /// fields are disjoint (`state` lives next to `file`), but
+    /// `&mut self`-shaped methods can't express that — calling
+    /// `editor.primitive_mut()` after `&mut editor.state` trips the
+    /// borrow checker. Destructuring `Self` makes disjointness
+    /// explicit. Callers passing both halves into a helper like
+    /// `apply_sketch_edit_with_warnings` reach for this.
+    pub fn parts_mut(
+        &mut self,
+    ) -> (
+        &mut crate::library::editor::footprint::state::FootprintEditorState,
+        &mut Footprint,
+    ) {
+        let Self {
+            state,
+            file,
+            active_idx,
+            ..
+        } = self;
+        let idx = (*active_idx).min(file.footprints.len().saturating_sub(1));
+        (state, &mut file.footprints[idx])
+    }
+
+    /// Closure-shaped split-borrow. The closure runs with both halves
+    /// in scope; the borrows are scoped to its body. Equivalent to
+    /// [`parts_mut`](Self::parts_mut) but plays nicer when the call
+    /// site needs to touch other `editor` fields after the split-
+    /// borrowed work returns — the closure boundary forces NLL to
+    /// release the borrows promptly.
+    pub fn with_parts<R, F>(&mut self, f: F) -> R
+    where
+        F: FnOnce(
+            &mut crate::library::editor::footprint::state::FootprintEditorState,
+            &mut Footprint,
+        ) -> R,
+    {
+        let (state, primitive) = self.parts_mut();
+        f(state, primitive)
     }
 }
 

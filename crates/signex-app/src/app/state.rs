@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use signex_render::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
+use crate::render_config::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
 use signex_types::coord::Unit;
 use signex_types::project::ProjectData;
 use signex_types::theme::ThemeId;
@@ -102,6 +102,15 @@ pub struct UiState {
     /// project root context menu when the project dir has no
     /// `.git/` yet.
     pub enable_version_control: Option<crate::app::EnableVersionControlState>,
+    /// v0.18.11 — Cartesian Grid Editor modal (Ctrl+G in a
+    /// footprint editor). `Some` while the dialog is visible;
+    /// carries the in-flight Step X / Step Y / link buffers so
+    /// keystrokes don't immediately mutate the active editor.
+    pub grid_properties: Option<crate::app::GridPropertiesState>,
+    /// v0.18.14.1 — Custom Selection Filter modal draft. `Some`
+    /// while the dialog is visible; the eight-bool draft mirror
+    /// commits on Apply, discards on Cancel.
+    pub selection_filter_custom: Option<crate::app::SelectionFilterCustomState>,
     /// ERC results for the currently-visible sheet. Driven by the
     /// per-sheet cache below — switching tabs repoints this at the
     /// cached violations for that sheet, so markers and the Messages
@@ -172,7 +181,7 @@ pub struct UiState {
     pub annotate_locked: std::collections::HashSet<uuid::Uuid>,
     /// Altium-style rubber-band selection mode. Drives how the box
     /// drag classifies hits (Inside / Outside / TouchingLine).
-    pub selection_mode: signex_render::schematic::hit_test::SelectionMode,
+    pub selection_mode: crate::schematic_runtime::hit_test::SelectionMode,
     /// Net-color override armed from the Active Bar palette. When Some,
     /// the cursor turns into a paint-bucket over the canvas and the
     /// next click on a wire floods that color across every connected
@@ -307,6 +316,12 @@ pub enum ModalId {
     /// Enable Version Control confirm modal (Projects-panel root →
     /// Enable Version Control...).
     EnableVersionControl,
+    /// v0.18.11 — Cartesian Grid Editor modal (Ctrl+G in a
+    /// footprint editor).
+    GridProperties,
+    /// v0.18.14.1 — Custom Selection Filter modal (8-row checkbox
+    /// table; opens from the Properties `Custom…` button).
+    SelectionFilterCustom,
 }
 
 /// Order in which symbols are visited during Annotate. Mirrors Altium's
@@ -349,6 +364,17 @@ pub struct LoadedProject {
     pub id: ProjectId,
     pub path: PathBuf,
     pub data: ProjectData,
+    /// Libraries the user has authored via the New Library flow but not
+    /// yet committed to disk. The Library Options modal's Create button
+    /// only registers an entry here + flips the project dirty bit;
+    /// `commands::materialize_pending_library` runs at project-save time
+    /// to actually write the `.snxlib`. Closes
+    /// `feedback_no_disk_writes_without_user_save.md`'s "wait for
+    /// explicit user save" invariant. Keyed by a temporary handle that
+    /// becomes the eventual `library_id` once materialised.
+    #[allow(clippy::implicit_hasher)]
+    pub pending_libraries:
+        std::collections::HashMap<uuid::Uuid, crate::library::commands::PendingLibrarySpec>,
 }
 
 pub struct DocumentState {
@@ -372,6 +398,13 @@ pub struct DocumentState {
     /// Per-tab state for open `.snxfpt` document tabs. Keyed the same
     /// way as `symbol_editors`.
     pub footprint_editors: std::collections::HashMap<PathBuf, super::FootprintEditorState>,
+    /// v0.26-E — process-local clipboard for footprint-editor pad
+    /// Cut / Copy / Paste. Survives tab switches so a pad copied from
+    /// one footprint can be pasted into another. `None` until the
+    /// first Cut / Copy. Replaced wholesale on every copy. Keyed by
+    /// no path on purpose — Altium parity is single-slot, last-write-
+    /// wins.
+    pub pad_clipboard: Option<crate::library::editor::footprint::state::EditorPad>,
     /// The path of the schematic the main window is currently editing.
     /// `active_engine()` reads `engines.get(active_path)`. `None` means
     /// no schematic tab is active (e.g. a PCB tab is active, or nothing
@@ -436,6 +469,28 @@ pub struct DocumentState {
     /// last loaded entries, the path the load was issued for. Driven
     /// by `Message::HistoryLoaded` and re-targeted on tab switch.
     pub history: crate::panels::history::HistoryPanelState,
+    /// v0.23 — Async git commit work queue. Save handlers push tuples
+    /// here; `finish_update` drains them into `Task::perform` calls
+    /// that run the actual commit on a tokio `spawn_blocking`. Each
+    /// completion routes through `Message::ProjectGitCommitDone`.
+    pub pending_git_commits: Vec<PendingGitCommit>,
+    /// v0.23 — Set of `(project_root, rel_path)` pairs whose commits
+    /// are currently queued or in flight. Drives the status bar's
+    /// "Saving…" pill — when non-empty the user sees an indicator.
+    /// An entry lands here as soon as
+    /// [`Signex::commit_save_to_project_git`] enqueues the work and
+    /// clears on `Message::ProjectGitCommitDone`.
+    pub inflight_git_commits: std::collections::HashSet<(PathBuf, PathBuf)>,
+}
+
+/// v0.23 — One queued commit for the async git pipeline. Stays
+/// resident in `DocumentState.pending_git_commits` until
+/// `finish_update` drains it into a `Task::perform`.
+#[derive(Debug, Clone)]
+pub struct PendingGitCommit {
+    pub project_root: PathBuf,
+    pub rel_path: PathBuf,
+    pub message: String,
 }
 
 /// Which sidebar tab is currently shown inside the BOM preview's
@@ -727,6 +782,12 @@ pub struct InteractionState {
     /// overlap in actions and the canvas menu depends on placement /
     /// selection state that does not exist in the panel context.
     pub project_tree_context_menu: Option<crate::app::ProjectTreeContextMenuState>,
+    /// v0.18.10 — Altium-style grid picker popup. Anchored at the
+    /// cursor when the user presses `G`. Lists the standard grid
+    /// ladder (1mil…2.5mm). Picking an item writes the active
+    /// footprint editor's `snap_options.grid_step_mm`; outside-click
+    /// or Esc dismisses.
+    pub grid_picker: Option<crate::app::GridPickerState>,
     /// Document-tab right-click menu state. Anchored at the right-click
     /// coordinates inside the tab strip; carries the index of the
     /// clicked tab so per-tab actions ("Close [filename]") resolve

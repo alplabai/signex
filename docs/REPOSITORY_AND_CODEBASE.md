@@ -33,7 +33,7 @@ separate products implemented in separate repositories.**
 
 This matters for three reasons:
 
-- KiCad compatibility logic must not fork
+- Native `.snx*` parser/writer logic must not fork
 - The editing engine must not diverge between editions
 - Community and Pro must open the same projects without format drift or feature
   fragmentation in the core editor
@@ -45,11 +45,18 @@ This matters for three reasons:
 This repository is responsible for:
 
 - The desktop application shell
-- KiCad file parsing and writing
+- Native `.snx*` file parsing and writing (`.snxsch`, `.snxpcb`, `.snxlib`,
+  `.snxsym`, `.snxfpt`, `.snxpro`, etc.)
 - Domain types and editor-facing data structures
 - Rendering and hit-testing
 - Reusable widgets used by the editor UI
 - Product documentation and planning documents
+
+KiCad import is **not** part of this repository. It lives in the separate
+GPL-3.0 companion repo `signex-kicad-import`, which provides one-way
+`KiCad → Signex` conversion only. See the v0.9 Apache-clean cutover and
+issue #62 for the rationale, plus `docs/audit/cleanroom-rewrite-2026-05-01.md`
+for the cleanroom-rewrite audit trail.
 
 This repository is not the right place for:
 
@@ -96,7 +103,7 @@ Pro-specific integrations should remain separable from the editor core so that:
 
 ### 3.3. Hard rule
 
-If a subsystem is required for basic local editing of KiCad-compatible projects,
+If a subsystem is required for basic local editing of native `.snx*` projects,
 it belongs in the shared core, not in a Pro-only layer.
 
 If a subsystem depends on paid infrastructure, account-backed multi-user state,
@@ -114,14 +121,20 @@ signex/
 ├── README.md
 ├── LICENSE
 ├── crates/
-│   ├── kicad-parser/
-│   ├── kicad-writer/
 │   ├── signex-app/
+│   ├── signex-engine/
+│   ├── signex-erc/
 │   ├── signex-render/
 │   ├── signex-types/
 │   └── signex-widgets/
 └── docs/
 ```
+
+> **v0.9 cutover note:** earlier revisions of this document listed
+> `crates/kicad-parser/` and `crates/kicad-writer/` here. Both crates were
+> removed from the main workspace in v0.9 (Apr 2026) as part of the
+> Apache-clean cutover for issue #62, and one-way KiCad → Signex import
+> now lives in the separate GPL-3.0 companion repo `signex-kicad-import`.
 
 This is the correct direction for the current phase of the project: small,
 focused crates with clear boundaries.
@@ -199,25 +212,29 @@ Responsibilities:
 This crate exists to keep `signex-app` from collapsing into a monolith of local
 widget implementations.
 
-### 5.5. `kicad-parser`
+### 5.5. Native `.snx*` parser/writer (in-tree, in-progress)
 
-The KiCad file parsing layer.
+The Signex S-expression-style parser and writer for the native canonical
+formats — `.snxsch`, `.snxpcb`, `.snxlib`, `.snxsym`, `.snxfpt`, `.snxpro` —
+currently lives inside `signex-engine` (and supporting helpers in
+`signex-types`). The medium-term direction (see Section 8) is to extract this
+into its own `signex-document` crate.
 
 Responsibilities:
 
-- reading KiCad S-expression-based formats
+- reading the native S-expression-style `.snx*` formats
 - producing typed data that the rest of the editor can consume
-- compatibility preservation at the parse boundary
+- writing in-memory structures back to disk with minimal output churn and
+  round-trip stability
+- preserving unknown/forward-compatible nodes at the parse boundary
 
-### 5.6. `kicad-writer`
-
-The KiCad file serialization layer.
-
-Responsibilities:
-
-- writing supported Signex in-memory structures back to KiCad-compatible files
-- minimizing output churn where possible
-- protecting round-trip compatibility
+> **Pre-v0.9 history:** earlier revisions of this document listed
+> `kicad-parser` and `kicad-writer` as Sections 5.5 and 5.6. Both crates
+> were removed from this workspace in v0.9 as part of the Apache-clean
+> cutover for issue #62. KiCad I/O is now optional and lives in the
+> separate GPL-3.0 companion repo `signex-kicad-import` (one-way
+> KiCad → Signex import only). License Guard CI enforces that
+> `crates/` contains zero KiCad imports, dependencies, or shaped symbols.
 
 ---
 
@@ -252,8 +269,8 @@ In particular:
 
 - the current app crate still owns more editing flow than the long-term design
   should allow
-- parser/writer responsibilities exist, but the future raw-document and engine
-  split is still ahead
+- native `.snx*` parser/writer responsibilities exist (currently inside
+  `signex-engine`), but the future raw-document and engine split is still ahead
 - some behavior is still organized around application update handlers rather
   than a dedicated engine crate
 
@@ -276,10 +293,14 @@ six-crate layout.
 The most likely additions are:
 
 - `signex-engine` — command execution, patching, undo/redo orchestration
+  *(landed; currently also hosts the native `.snx*` parser/writer)*
 - `signex-model` — semantic model layer
-- `kicad-document` — raw KiCad document representation with node identity and
-  preservation of unknown constructs
-- `signex-erc` — schematic rule check engine (v0.7+)
+- `signex-document` — raw native `.snx*` document representation with node
+  identity and preservation of unknown constructs (extracted from
+  `signex-engine`; pre-v0.9 plan named this `kicad-document`)
+- `signex-erc` — schematic rule check engine *(landed in v0.7)*
+- `signex-sketch` — 2D parametric sketch mode for footprint editor + PCB
+  outline (v0.13+; see `docs/internal/SKETCH_MODE_PLAN.md`)
 - `signex-drc` — PCB design rule check engine (v2.0+)
 - `pcb-geom` — geometry primitives for PCB (polygon offset, R-tree,
   Delaunay, boolean ops) shared by router, DRC, and render. Added in v2.0.
@@ -311,11 +332,18 @@ Edition differences should be introduced behind deliberate seams, not by ad hoc
 If the repository structure changes meaningfully, this document must be updated.
 If architecture direction changes, `ARCHITECTURE.md` must be updated first.
 
-### 9.4. Preserve KiCad compatibility as a repository-wide concern
+### 9.4. Preserve native `.snx*` round-trip stability as a repository-wide concern
 
-Compatibility is not just the parser's problem. It affects parser, writer,
-domain types, rendering assumptions, and editing behavior. Repository layout
-should continue to reflect that shared constraint.
+Round-trip stability is not just the parser's problem. It affects parser,
+writer, domain types, rendering assumptions, and editing behavior. Repository
+layout should continue to reflect that shared constraint.
+
+> **Pre-v0.9 framing:** earlier revisions of this section read "Preserve
+> KiCad compatibility as a repository-wide concern". After the v0.9
+> Apache-clean cutover (issue #62), Signex's canonical formats are the
+> native `.snx*` family; KiCad I/O is optional and one-way via
+> `signex-kicad-import`, so the repo-wide constraint is now native
+> round-trip stability rather than KiCad compatibility.
 
 ---
 
@@ -357,6 +385,8 @@ change rather than by silent drift.
 
 ## 12. One-Sentence Summary
 
-This repository is the shared engineering home of Signex: a KiCad-compatible
-editor core with a clean path to both an Apache-2.0 Community edition and a
-commercial Pro edition from the same codebase.
+This repository is the shared engineering home of Signex: an Apache-clean
+EDA editor core with native `.snx*` formats and a clean path to both an
+Apache-2.0 Community edition and a commercial Pro edition from the same
+codebase. Optional one-way KiCad import lives in the separate GPL-3.0
+companion repo `signex-kicad-import`.

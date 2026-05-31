@@ -285,7 +285,9 @@ pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
 
 fn has_populated_field(component: &BomComponent, candidates: &[&str]) -> bool {
     component.custom.iter().any(|(key, value)| {
-        candidates.iter().any(|candidate| key.eq_ignore_ascii_case(candidate))
+        candidates
+            .iter()
+            .any(|candidate| key.eq_ignore_ascii_case(candidate))
             && !value.trim().is_empty()
     })
 }
@@ -397,7 +399,10 @@ mod tests {
 
         assert_eq!(table.rows.len(), 2);
         assert_eq!(table.rows[0].references, vec!["C1".to_string()]);
-        assert_eq!(table.rows[1].references, vec!["R1".to_string(), "R2".to_string()]);
+        assert_eq!(
+            table.rows[1].references,
+            vec!["R1".to_string(), "R2".to_string()]
+        );
         assert_eq!(table.rows[1].qty, 2);
         assert_eq!(table.rows[1].fitted_qty, 2);
         assert_eq!(table.rows[1].not_fitted_qty, 0);
@@ -459,10 +464,12 @@ mod tests {
         let table = build_table(&ctx, &BomEngineOptions::default());
         let report = validate_table(&ctx, &table, &BomRuleOptions::default());
 
-        assert!(report
-            .issues
-            .iter()
-            .any(|issue| issue.rule == BomRule::DuplicateDesignator));
+        assert!(
+            report
+                .issues
+                .iter()
+                .any(|issue| issue.rule == BomRule::DuplicateDesignator)
+        );
         assert!(report.has_errors());
     }
 
@@ -483,9 +490,11 @@ mod tests {
             },
         );
 
-        assert!(!report
-            .issues
-            .iter()
-            .any(|issue| issue.rule == BomRule::MissingFootprint));
+        assert!(
+            !report
+                .issues
+                .iter()
+                .any(|issue| issue.rule == BomRule::MissingFootprint)
+        );
     }
 }

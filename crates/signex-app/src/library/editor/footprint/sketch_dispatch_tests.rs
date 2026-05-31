@@ -1,0 +1,557 @@
+//! Phase 5.4 + 7.3 dispatcher tests.
+//!
+//! These run as inline tests under `#[cfg(test)]` so they exercise
+//! the dispatcher without spinning up the iced runtime.
+
+#[cfg(test)]
+mod tests {
+    use chrono::Utc;
+    use signex_library::primitive::footprint::Footprint;
+    use signex_sketch::SketchData;
+    use signex_sketch::attr::{PadAttr, PadKind, PadShape, PadSide, PasteAperturePattern};
+    use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
+    use signex_sketch::entity::{Entity, EntityKind};
+    use signex_sketch::id::{ConstraintId, SketchEntityId};
+    use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
+
+    use super::super::sketch_dispatch::{apply_sketch_edit, apply_sketch_edit_with_warnings};
+    use super::super::sketch_mode::SketchEdit;
+    use super::super::state::FootprintEditorState;
+
+    fn empty_footprint() -> Footprint {
+        Footprint::empty("test")
+    }
+
+    fn point_with_pad(plane: PlaneId, x: f64, y: f64, number: &str) -> (Entity, SketchEntityId) {
+        let id = SketchEntityId::new();
+        let mut e = Entity::new(id, plane, EntityKind::Point { x, y });
+        e.pad = Some(PadAttr {
+            number: number.into(),
+            kind: PadKind::Smd,
+            side: PadSide::Top,
+            shape: PadShape::Rect,
+            size_x_expr: "1mm".into(),
+            size_y_expr: "0.5mm".into(),
+            rotation_expr: None,
+            offset_x_expr: None,
+            offset_y_expr: None,
+            drill: None,
+            mask_margin_expr: None,
+            paste_margin_expr: None,
+            paste_apertures: PasteAperturePattern::Single,
+            ..PadAttr::default()
+        });
+        (e, id)
+    }
+
+    #[test]
+    fn add_entity_triggers_solve_and_bake() {
+        let mut fp = empty_footprint();
+        let plane = PlaneId::new();
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            ..SketchData::default()
+        });
+        let mut state = FootprintEditorState::from_footprint(&fp);
+
+        let (entity, _id) = point_with_pad(plane, 0.0, 0.0, "1");
+        apply_sketch_edit(&mut state, &mut fp, SketchEdit::AddEntity(entity)).unwrap();
+
+        assert_eq!(fp.pads.len(), 1);
+        assert_eq!(fp.pads[0].number, "1");
+        assert_eq!(fp.pads[0].position, [0.0, 0.0]);
+        assert!(state.last_solve.is_some());
+    }
+
+    #[test]
+    fn add_constraint_solves_geometry() {
+        let mut fp = empty_footprint();
+        let plane = PlaneId::new();
+        let (e1, p1) = point_with_pad(plane, 0.0, 0.0, "1");
+        let (e2, p2) = point_with_pad(plane, 1.0, 0.0, "2");
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            entities: vec![e1, e2],
+            constraints: vec![
+                Constraint {
+                    id: ConstraintId::new(),
+                    kind: ConstraintKind::Fixed { point: p1 },
+                },
+                Constraint {
+                    id: ConstraintId::new(),
+                    kind: ConstraintKind::Horizontal {
+                        line: SketchEntityId::new(), // dummy — Horizontal needs a real Line
+                    },
+                },
+            ],
+            ..SketchData::default()
+        });
+        // Drop the dummy Horizontal — the dispatcher's solve will then
+        // run a clean Distance constraint that resolves to 5 mm.
+        fp.sketch.as_mut().unwrap().constraints.truncate(1);
+        let mut state = FootprintEditorState::from_footprint(&fp);
+
+        apply_sketch_edit(
+            &mut state,
+            &mut fp,
+            SketchEdit::AddConstraint(Constraint {
+                id: ConstraintId::new(),
+                kind: ConstraintKind::DistancePtPt {
+                    p1,
+                    p2,
+                    target: DimTarget::Literal(5.0),
+                },
+            }),
+        )
+        .unwrap();
+
+        // After the solve P2 should be at distance 5 from origin.
+        assert!(state.last_solve.is_some());
+        assert_eq!(fp.pads.len(), 2);
+        let p2_pad = fp.pads.iter().find(|p| p.number == "2").unwrap();
+        let dist = (p2_pad.position[0].powi(2) + p2_pad.position[1].powi(2)).sqrt();
+        assert!(
+            (dist - 5.0).abs() < 1e-6,
+            "expected P2 at distance 5, got {dist}"
+        );
+    }
+
+    #[test]
+    fn set_mode_initialises_sketch_field_and_preserves_literal_pads() {
+        // Footprint with literal (manually-authored) pads and no sketch
+        // initially. SetMode populates an empty SketchData and runs the
+        // solver; the bake step is gated on `!sketch.entities.is_empty()`
+        // so the existing literal pads survive the first Sketch-mode
+        // toggle. Once the user actually authors sketch entities, the
+        // sketch becomes the source of truth and the bake's output
+        // (possibly an empty Vec) overwrites the literal pads.
+        use signex_library::primitive::footprint::{
+            LayerId, Pad, PadKind as LibPadKind, PadShape as LibPadShape,
+        };
+
+        let mut fp = empty_footprint();
+        // Pre-populate with one literal pad so we can verify it survives.
+        fp.pads.push(Pad {
+            number: "literal".into(),
+            kind: LibPadKind::Smd,
+            shape: LibPadShape::Rect,
+            size: [1.0, 0.5],
+            position: [0.0, 0.0],
+            rotation: 0.0,
+            layers: vec![LayerId::new("Top Layer")],
+            drill: None,
+            solder_mask_margin: None,
+            paste_margin: None,
+            ..Pad::default()
+        });
+
+        let mut state = FootprintEditorState::from_footprint(&fp);
+        apply_sketch_edit(
+            &mut state,
+            &mut fp,
+            SketchEdit::SetMode(super::super::state::EditorMode::Sketch),
+        )
+        .unwrap();
+
+        assert!(fp.sketch.is_some());
+        assert_eq!(
+            fp.pads.len(),
+            1,
+            "literal pad must survive empty Sketch toggle"
+        );
+        assert_eq!(fp.pads[0].number, "literal");
+    }
+
+    #[test]
+    fn line_tool_two_clicks_creates_line_with_snap() {
+        // v0.13.2 Phase 6.4 — drive the Line-tool state machine
+        // through two clicks. Second click snaps onto the first
+        // entity to verify the auto-Coincident path.
+        use crate::library::editor::footprint::sketch_mode::SketchEdit;
+        use crate::library::editor::footprint::state::{SketchTool, ToolPending};
+        use signex_sketch::entity::EntityKind;
+
+        let mut fp = empty_footprint();
+        let plane = PlaneId::new();
+        fp.sketch = Some(signex_sketch::SketchData {
+            planes: vec![signex_sketch::plane::Plane {
+                id: plane,
+                kind: signex_sketch::plane::PlaneKind::BoardTop,
+            }],
+            ..signex_sketch::SketchData::default()
+        });
+        let mut state = FootprintEditorState::from_footprint(&fp);
+        state.active_tool = SketchTool::Line;
+
+        // First click — adds the anchor Point and parks tool_pending
+        // on LineFirst.
+        let p1 = SketchEntityId::new();
+        let pt = Entity::new(p1, plane, EntityKind::Point { x: 0.0, y: 0.0 });
+        apply_sketch_edit(&mut state, &mut fp, SketchEdit::AddEntity(pt)).unwrap();
+        state.tool_pending = ToolPending::LineFirst { first: p1 };
+
+        // Second click — adds endpoint + Line entity. We do this
+        // step manually because the dispatcher in app/dispatch is the
+        // glue; this test verifies the SketchEdit-level behaviour.
+        let p2 = SketchEntityId::new();
+        let pt2 = Entity::new(p2, plane, EntityKind::Point { x: 5.0, y: 0.0 });
+        apply_sketch_edit(&mut state, &mut fp, SketchEdit::AddEntity(pt2)).unwrap();
+        let line_id = SketchEntityId::new();
+        let line = Entity::new(line_id, plane, EntityKind::Line { start: p1, end: p2 });
+        apply_sketch_edit(&mut state, &mut fp, SketchEdit::AddEntity(line)).unwrap();
+
+        let sketch = fp.sketch.as_ref().unwrap();
+        assert_eq!(sketch.entities.len(), 3);
+        assert!(sketch.entities.iter().any(
+            |e| matches!(e.kind, EntityKind::Line { start, end } if start == p1 && end == p2)
+        ));
+    }
+
+    #[test]
+    fn warning_wrapper_captures_parse_error_into_solve_warnings() {
+        // EditParameter with bad expression syntax — the resolver fails
+        // on parse, the dispatcher returns SketchError::Expr, and the
+        // _with_warnings wrapper must capture the message into
+        // state.solve_warnings instead of dropping it on the floor.
+        let mut fp = empty_footprint();
+        let plane = PlaneId::new();
+        let (e1, _p1) = point_with_pad(plane, 0.0, 0.0, "1");
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            entities: vec![e1],
+            ..SketchData::default()
+        });
+        let mut state = FootprintEditorState::from_footprint(&fp);
+
+        // Unbalanced parens — guaranteed parser failure.
+        apply_sketch_edit_with_warnings(
+            &mut state,
+            &mut fp,
+            SketchEdit::EditParameter {
+                name: "bad".into(),
+                expr: "(((".into(),
+            },
+        );
+
+        assert!(
+            !state.solve_warnings.is_empty(),
+            "wrapper should have captured a parse error into solve_warnings"
+        );
+        // Message contains either "parse" or "expression" depending on
+        // the ExprError::Display impl — accept any non-empty warning
+        // for forward compat with the error-message wording.
+        assert!(state.solve_warnings.iter().any(|w| !w.is_empty()));
+    }
+
+    #[test]
+    fn set_role_pad_on_point_attaches_pad_attr_and_bakes() {
+        use super::super::sketch_dispatch::{apply_sketch_role, current_role_of};
+        use crate::library::messages::RoleTag;
+
+        let mut fp = empty_footprint();
+        let plane = PlaneId::new();
+        let pid = SketchEntityId::new();
+        let mut e = Entity::new(pid, plane, EntityKind::Point { x: 1.0, y: 2.0 });
+        e.pad = None; // brand-new Point, Unassigned role
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            entities: vec![e],
+            ..SketchData::default()
+        });
+        let mut state = FootprintEditorState::from_footprint(&fp);
+
+        apply_sketch_role(&mut state, &mut fp, pid, RoleTag::Pad).unwrap();
+
+        let entity = &fp.sketch.as_ref().unwrap().entities[0];
+        assert!(entity.pad.is_some(), "Pad attr must be attached");
+        assert_eq!(current_role_of(entity), RoleTag::Pad);
+        assert_eq!(fp.pads.len(), 1, "bake must emit the pad");
+        assert_eq!(fp.pads[0].position, [1.0, 2.0]);
+    }
+
+    #[test]
+    fn set_role_pad_on_line_is_silent_noop() {
+        use super::super::sketch_dispatch::{apply_sketch_role, current_role_of};
+        use crate::library::messages::RoleTag;
+
+        let mut fp = empty_footprint();
+        let plane = PlaneId::new();
+        let p1 = SketchEntityId::new();
+        let p2 = SketchEntityId::new();
+        let lid = SketchEntityId::new();
+        let pt1 = Entity::new(p1, plane, EntityKind::Point { x: 0.0, y: 0.0 });
+        let pt2 = Entity::new(p2, plane, EntityKind::Point { x: 1.0, y: 0.0 });
+        let line = Entity::new(lid, plane, EntityKind::Line { start: p1, end: p2 });
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            entities: vec![pt1, pt2, line],
+            ..SketchData::default()
+        });
+        let mut state = FootprintEditorState::from_footprint(&fp);
+
+        apply_sketch_role(&mut state, &mut fp, lid, RoleTag::Pad).unwrap();
+
+        let line_entity = fp
+            .sketch
+            .as_ref()
+            .unwrap()
+            .entities
+            .iter()
+            .find(|e| e.id == lid)
+            .unwrap();
+        assert!(
+            line_entity.pad.is_none(),
+            "Pad attr must NOT attach to a Line"
+        );
+        assert_eq!(current_role_of(line_entity), RoleTag::Unassigned);
+    }
+
+    #[test]
+    fn set_role_silk_top_attaches_silk_attr_with_top_layer() {
+        use super::super::sketch_dispatch::{apply_sketch_role, current_role_of};
+        use crate::library::messages::RoleTag;
+        use signex_types::layer::SignexLayer;
+
+        let mut fp = empty_footprint();
+        let plane = PlaneId::new();
+        let p1 = SketchEntityId::new();
+        let p2 = SketchEntityId::new();
+        let lid = SketchEntityId::new();
+        let pt1 = Entity::new(p1, plane, EntityKind::Point { x: 0.0, y: 0.0 });
+        let pt2 = Entity::new(p2, plane, EntityKind::Point { x: 1.0, y: 0.0 });
+        let line = Entity::new(lid, plane, EntityKind::Line { start: p1, end: p2 });
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            entities: vec![pt1, pt2, line],
+            ..SketchData::default()
+        });
+        let mut state = FootprintEditorState::from_footprint(&fp);
+
+        apply_sketch_role(&mut state, &mut fp, lid, RoleTag::SilkTop).unwrap();
+
+        let line_entity = fp
+            .sketch
+            .as_ref()
+            .unwrap()
+            .entities
+            .iter()
+            .find(|e| e.id == lid)
+            .unwrap();
+        assert_eq!(
+            line_entity.silk.as_ref().unwrap().layer,
+            SignexLayer::TopSilk
+        );
+        assert_eq!(current_role_of(line_entity), RoleTag::SilkTop);
+    }
+
+    #[test]
+    fn set_role_unassigned_clears_every_attr() {
+        use super::super::sketch_dispatch::{apply_sketch_role, current_role_of};
+        use crate::library::messages::RoleTag;
+
+        let mut fp = empty_footprint();
+        let plane = PlaneId::new();
+        let (e1, p1) = point_with_pad(plane, 0.0, 0.0, "1");
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            entities: vec![e1],
+            ..SketchData::default()
+        });
+        let mut state = FootprintEditorState::from_footprint(&fp);
+
+        // Confirm starting role is Pad.
+        let entity_before = &fp.sketch.as_ref().unwrap().entities[0];
+        assert_eq!(current_role_of(entity_before), RoleTag::Pad);
+
+        apply_sketch_role(&mut state, &mut fp, p1, RoleTag::Unassigned).unwrap();
+
+        let entity_after = &fp.sketch.as_ref().unwrap().entities[0];
+        assert!(entity_after.pad.is_none());
+        assert!(entity_after.silk.is_none());
+        assert!(entity_after.courtyard.is_none());
+        assert!(entity_after.mask_opening.is_none());
+        assert!(entity_after.mask_exclude.is_none());
+        assert!(entity_after.paste_aperture.is_none());
+        assert!(entity_after.pour.is_none());
+        assert!(entity_after.keepout.is_none());
+        assert!(entity_after.board_cutout.is_none());
+        assert!(entity_after.v_score.is_none());
+        assert_eq!(current_role_of(entity_after), RoleTag::Unassigned);
+    }
+
+    #[test]
+    fn set_role_replaces_existing_attr_atomically() {
+        // Pad → SilkTop must swap, not append. If the dispatcher
+        // forgot to clear before setting, both attrs would be set
+        // simultaneously and the bake would emit duplicate geometry.
+        use super::super::sketch_dispatch::{apply_sketch_role, current_role_of};
+        use crate::library::messages::RoleTag;
+
+        let mut fp = empty_footprint();
+        let plane = PlaneId::new();
+        let (e1, p1) = point_with_pad(plane, 0.0, 0.0, "1");
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            entities: vec![e1],
+            ..SketchData::default()
+        });
+        let mut state = FootprintEditorState::from_footprint(&fp);
+
+        apply_sketch_role(&mut state, &mut fp, p1, RoleTag::SilkTop).unwrap();
+
+        let entity = &fp.sketch.as_ref().unwrap().entities[0];
+        assert!(
+            entity.pad.is_none(),
+            "Pad must be cleared by SilkTop assign"
+        );
+        assert!(entity.silk.is_some());
+        assert_eq!(current_role_of(entity), RoleTag::SilkTop);
+        // Bake must NOT emit a stale pad after the role swap.
+        assert_eq!(fp.pads.len(), 0);
+    }
+
+    #[test]
+    fn set_role_courtyard_attaches_courtyard_attr() {
+        use super::super::sketch_dispatch::{apply_sketch_role, current_role_of};
+        use crate::library::messages::RoleTag;
+
+        let mut fp = empty_footprint();
+        let plane = PlaneId::new();
+        let pid = SketchEntityId::new();
+        let pt = Entity::new(pid, plane, EntityKind::Point { x: 0.0, y: 0.0 });
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            entities: vec![pt],
+            ..SketchData::default()
+        });
+        let mut state = FootprintEditorState::from_footprint(&fp);
+
+        apply_sketch_role(&mut state, &mut fp, pid, RoleTag::Courtyard).unwrap();
+
+        let entity = &fp.sketch.as_ref().unwrap().entities[0];
+        assert!(entity.courtyard.is_some());
+        assert_eq!(current_role_of(entity), RoleTag::Courtyard);
+    }
+
+    #[test]
+    fn set_role_pad_increments_designator_across_entities() {
+        // First Pad gets "1", second Pad gets "2", third gets "3".
+        use super::super::sketch_dispatch::apply_sketch_role;
+        use crate::library::messages::RoleTag;
+
+        let mut fp = empty_footprint();
+        let plane = PlaneId::new();
+        let p1 = SketchEntityId::new();
+        let p2 = SketchEntityId::new();
+        let p3 = SketchEntityId::new();
+        let pt1 = Entity::new(p1, plane, EntityKind::Point { x: 0.0, y: 0.0 });
+        let pt2 = Entity::new(p2, plane, EntityKind::Point { x: 1.0, y: 0.0 });
+        let pt3 = Entity::new(p3, plane, EntityKind::Point { x: 2.0, y: 0.0 });
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            entities: vec![pt1, pt2, pt3],
+            ..SketchData::default()
+        });
+        let mut state = FootprintEditorState::from_footprint(&fp);
+
+        apply_sketch_role(&mut state, &mut fp, p1, RoleTag::Pad).unwrap();
+        apply_sketch_role(&mut state, &mut fp, p2, RoleTag::Pad).unwrap();
+        apply_sketch_role(&mut state, &mut fp, p3, RoleTag::Pad).unwrap();
+
+        let sketch = fp.sketch.as_ref().unwrap();
+        let nums: Vec<&str> = sketch
+            .entities
+            .iter()
+            .filter_map(|e| e.pad.as_ref().map(|a| a.number.as_str()))
+            .collect();
+        assert_eq!(nums, vec!["1", "2", "3"]);
+    }
+
+    #[test]
+    fn solver_runs_on_every_edit() {
+        // v0.22 — the auto-pause hysteresis was removed entirely.
+        // Every edit dispatches a fresh solve + bake. This test
+        // pins the always-live behavior.
+        let mut fp = empty_footprint();
+        let plane = PlaneId::new();
+        let (e1, _p1) = point_with_pad(plane, 0.0, 0.0, "1");
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            entities: vec![e1],
+            ..SketchData::default()
+        });
+        let mut state = FootprintEditorState::from_footprint(&fp);
+
+        apply_sketch_edit(&mut state, &mut fp, SketchEdit::ForceRebuild).unwrap();
+        assert!(state.last_solve.is_some());
+        assert_eq!(fp.pads.len(), 1);
+    }
+
+    #[test]
+    fn solver_errors_surface_in_solve_warnings_not_silently_swallowed() {
+        // v0.22 — every SolveError variant (including the previously
+        // silently-swallowed Timeout) now propagates as
+        // SketchError::SolveFailed. The _with_warnings wrapper writes
+        // it into state.solve_warnings so the inspector can show it.
+        // We force the broader SketchError::Expr path by injecting a
+        // malformed parameter expression — same wrapper path,
+        // doesn't depend on solver-iteration timing.
+        use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
+
+        let mut fp = empty_footprint();
+        let plane = PlaneId::new();
+        let (e1, _p1) = point_with_pad(plane, 0.0, 0.0, "1");
+        let mut params = signex_sketch::parameter::ParameterTable::default();
+        params.insert("bad", "$$$");
+        fp.sketch = Some(SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            entities: vec![e1],
+            parameters: params,
+            ..SketchData::default()
+        });
+        let mut state = FootprintEditorState::from_footprint(&fp);
+
+        apply_sketch_edit_with_warnings(&mut state, &mut fp, SketchEdit::ForceRebuild);
+
+        assert!(
+            !state.solve_warnings.is_empty(),
+            "expected SketchError surfaced in solve_warnings, got nothing"
+        );
+    }
+}

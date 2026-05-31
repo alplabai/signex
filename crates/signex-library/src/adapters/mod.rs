@@ -14,6 +14,9 @@
 #[cfg(feature = "local-git")]
 pub mod local_git;
 
+#[cfg(feature = "local-git")]
+pub mod local_git_project;
+
 #[cfg(feature = "database")]
 pub mod database;
 

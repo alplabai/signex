@@ -49,8 +49,15 @@ impl MouserAdapter {
     /// Production constructor: pulls the API key from `signex-distributor-mouser`
     /// at request time. The username slot defaults to `"default"` to match
     /// what the eventual UI will write.
-    pub fn from_keyring(cache: Option<DistributorCache>) -> Self {
-        Self {
+    ///
+    /// MD-17: returns `Result` because the OS keychain may not be
+    /// available (Linux Docker without dbus, etc). On error, callers
+    /// can fall back to `with_api_key` (env-var-driven) or surface a
+    /// "keychain unavailable" message to the user.
+    pub fn from_keyring(
+        cache: Option<DistributorCache>,
+    ) -> Result<Self, super::keyring::KeyringError> {
+        Ok(Self {
             base_url: MOUSER_DEFAULT_BASE.into(),
             cache,
             throttle: Mutex::new(None),
@@ -58,8 +65,8 @@ impl MouserAdapter {
                 .user_agent("signex-library/0.9 (+https://signex.dev)")
                 .build()
                 .expect("reqwest::blocking::Client::build is infallible with default opts"),
-            auth: AuthSource::Keyring(KeyringStore::for_provider("mouser", "default")),
-        }
+            auth: AuthSource::Keyring(KeyringStore::for_provider("mouser", "default")?),
+        })
     }
 
     /// Test constructor: inline API key, override base URL.
@@ -319,7 +326,11 @@ mod tests {
     #[test]
     fn missing_keyring_key_yields_auth_error() {
         // Force keyring path with a guaranteed-absent username.
-        let store = KeyringStore::for_provider("mouser", "ws-c-deliberately-absent-user");
+        // MD-17: skip on platforms without a keyring daemon.
+        let Ok(store) = KeyringStore::for_provider("mouser", "ws-c-deliberately-absent-user")
+        else {
+            return;
+        };
         let _ = store.delete();
         let adapter = MouserAdapter {
             base_url: "http://unused.invalid".into(),

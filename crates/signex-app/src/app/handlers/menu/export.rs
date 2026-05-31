@@ -63,10 +63,8 @@ impl Signex {
         if let Some(files) = self.document_state.pending_pdf_files.take() {
             ctx.sheets.retain(|s| files.contains(&s.path));
             if ctx.sheets.is_empty() {
-                self.document_state.export_error = Some(
-                    "Cannot export PDF: no files selected in the Settings tab."
-                        .to_string(),
-                );
+                self.document_state.export_error =
+                    Some("Cannot export PDF: no files selected in the Settings tab.".to_string());
                 return Task::none();
             }
         }
@@ -324,7 +322,10 @@ impl Signex {
         if let Some(preview) = self.document_state.bom_preview.as_mut() {
             preview.column_drag_press_x = None;
             if let Some(src) = preview.column_drag.take() {
-                if src != dest && src < preview.options.columns.len() && dest < preview.options.columns.len() {
+                if src != dest
+                    && src < preview.options.columns.len()
+                    && dest < preview.options.columns.len()
+                {
                     let col = preview.options.columns.remove(src);
                     let insert_at = if src < dest { dest } else { dest };
                     let insert_at = insert_at.min(preview.options.columns.len());
@@ -369,8 +370,7 @@ impl Signex {
         let (filter_label, filter_exts) = format_filter;
         let default_name_owned = default_name.to_string();
         let filter_label_owned = filter_label.to_string();
-        let filter_exts_owned: Vec<String> =
-            filter_exts.iter().map(|s| s.to_string()).collect();
+        let filter_exts_owned: Vec<String> = filter_exts.iter().map(|s| s.to_string()).collect();
 
         // Stash the live options + dismiss the preview state. The
         // detached preview window also needs to close so the OS
@@ -378,8 +378,7 @@ impl Signex {
         // `handle_print_preview_export`.
         self.document_state.pending_bom_options = Some(options);
         self.document_state.bom_preview = None;
-        let close_window =
-            self.close_detached_modal(crate::app::state::ModalId::BomPreview);
+        let close_window = self.close_detached_modal(crate::app::state::ModalId::BomPreview);
 
         let dialog = Task::perform(
             async move {
@@ -990,69 +989,68 @@ fn build_export_context(
     // the active document isn't tied to a project (loose .standard_sch),
     // we fall back to the engines map so a single-sheet preview still
     // works.
-    let sheets: Vec<SheetSnapshot> =
-        if let Some(project) = document_state.active_loaded_project() {
-            let project_dir = std::path::Path::new(&project.data.dir);
-            let mut snapshots: Vec<SheetSnapshot> = Vec::new();
-            let total = project.data.sheets.len().max(1);
-            for (i, entry) in project.data.sheets.iter().enumerate() {
-                let abs_path: PathBuf = project_dir.join(&entry.filename);
-                let schematic = match document_state.engines.get(&abs_path) {
-                    Some(engine) => engine.document().clone(),
-                    None => {
-                        let parse_result = std::fs::read_to_string(&abs_path)
-                            .map_err(anyhow::Error::from)
-                            .and_then(|text| {
-                                signex_types::format::SnxSchematic::parse(&text)
-                                    .map(|snx| snx.sheet)
-                                    .map_err(anyhow::Error::from)
-                            });
-                        match parse_result {
-                            Ok(s) => s,
-                            Err(e) => {
-                                log::warn!(
-                                    "Print preview: skipping sheet {} ({}): {e}",
-                                    entry.name,
-                                    abs_path.display()
-                                );
-                                continue;
-                            }
+    let sheets: Vec<SheetSnapshot> = if let Some(project) = document_state.active_loaded_project() {
+        let project_dir = std::path::Path::new(&project.data.dir);
+        let mut snapshots: Vec<SheetSnapshot> = Vec::new();
+        let total = project.data.sheets.len().max(1);
+        for (i, entry) in project.data.sheets.iter().enumerate() {
+            let abs_path: PathBuf = project_dir.join(&entry.filename);
+            let schematic = match document_state.engines.get(&abs_path) {
+                Some(engine) => engine.document().clone(),
+                None => {
+                    let parse_result = std::fs::read_to_string(&abs_path)
+                        .map_err(anyhow::Error::from)
+                        .and_then(|text| {
+                            signex_types::format::SnxSchematic::parse(&text)
+                                .map(|snx| snx.sheet)
+                                .map_err(anyhow::Error::from)
+                        });
+                    match parse_result {
+                        Ok(s) => s,
+                        Err(e) => {
+                            log::warn!(
+                                "Print preview: skipping sheet {} ({}): {e}",
+                                entry.name,
+                                abs_path.display()
+                            );
+                            continue;
                         }
                     }
-                };
-                snapshots.push(SheetSnapshot {
-                    path: abs_path,
-                    schematic,
-                    sheet_name: entry.name.clone(),
+                }
+            };
+            snapshots.push(SheetSnapshot {
+                path: abs_path,
+                schematic,
+                sheet_name: entry.name.clone(),
+                sheet_number: i + 1,
+                sheet_count: total,
+            });
+        }
+        snapshots
+    } else {
+        let mut paths: Vec<PathBuf> = document_state.engines.keys().cloned().collect();
+        paths.sort_by_key(|p| p != active_path);
+        let sheet_count = paths.len();
+        paths
+            .into_iter()
+            .enumerate()
+            .filter_map(|(i, path)| {
+                let engine = document_state.engines.get(&path)?;
+                let sheet_name = path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("Sheet")
+                    .to_string();
+                Some(SheetSnapshot {
+                    path: path.clone(),
+                    schematic: engine.document().clone(),
+                    sheet_name,
                     sheet_number: i + 1,
-                    sheet_count: total,
-                });
-            }
-            snapshots
-        } else {
-            let mut paths: Vec<PathBuf> = document_state.engines.keys().cloned().collect();
-            paths.sort_by_key(|p| p != active_path);
-            let sheet_count = paths.len();
-            paths
-                .into_iter()
-                .enumerate()
-                .filter_map(|(i, path)| {
-                    let engine = document_state.engines.get(&path)?;
-                    let sheet_name = path
-                        .file_stem()
-                        .and_then(|s| s.to_str())
-                        .unwrap_or("Sheet")
-                        .to_string();
-                    Some(SheetSnapshot {
-                        path: path.clone(),
-                        schematic: engine.document().clone(),
-                        sheet_name,
-                        sheet_number: i + 1,
-                        sheet_count,
-                    })
+                    sheet_count,
                 })
-                .collect()
-        };
+            })
+            .collect()
+    };
 
     let tb = &active_engine.document().title_block;
     let comment = |n: usize| tb.get(&format!("comment{n}")).cloned().unwrap_or_default();
@@ -1062,10 +1060,7 @@ fn build_export_context(
         .and_then(|p| p.data.active_variant.clone())
         .unwrap_or_else(|| "Base".to_string());
     if !active_variant.eq_ignore_ascii_case("Base") {
-        custom_fields.insert(
-            "active_variant".to_string(),
-            active_variant,
-        );
+        custom_fields.insert("active_variant".to_string(), active_variant);
     }
     let metadata = ProjectMetadata {
         title: tb.get("title").cloned().unwrap_or_default(),

@@ -1,0 +1,35 @@
+{
+  "smoke": {
+    "line_instances": 2,
+    "circle_instances": 1,
+    "arc_instances": 1,
+    "polygon_vertices": 6,
+    "text_instances": 2,
+    "grid_minor_lod_alpha": 1.0,
+    "grid_major_lod_alpha": 1.0,
+    "text_geometry_text_instances": 1,
+    "text_geometry_stage_order": ["Geometry", "Text"],
+    "overlay_geometry_vertices": 6,
+    "overlay_instances": 2,
+    "overlay_text_instances": 1,
+    "overlay_stage_order": ["Grid", "Geometry", "Overlay", "Text"]
+  },
+  "upload": {
+    "all_dirty_total_updates": 13,
+    "core_culling_total_updates": 5,
+    "core_visible_lines": 1,
+    "core_visible_circles": 1,
+    "core_visible_arcs": 1,
+    "core_visible_polygons": 1,
+    "core_visible_texts": 1,
+    "overlay_culling_total_updates": 6,
+    "overlay_visible_lines": 1,
+    "overlay_visible_circles": 1,
+    "overlay_visible_polygons": 1,
+    "overlay_visible_erc_lines": 1,
+    "overlay_visible_erc_circles": 1,
+    "overlay_visible_erc_polygons": 1,
+    "theme_only_total_updates": 1,
+    "theme_only_geometry_uploads": 0
+  }
+}

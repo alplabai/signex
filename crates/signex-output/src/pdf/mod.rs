@@ -255,6 +255,12 @@ pub enum PdfError {
 
     #[error("font subsetting failed: {0}")]
     Font(String),
+
+    /// MD-29: PDF Ref is `i32` so a project with billions of sheets
+    /// would silently wrap to a negative id. We bail out before
+    /// allocating any refs to keep the output well-formed.
+    #[error("project has {0} pages — exceeds the safe PDF Ref id limit")]
+    TooManyPages(usize),
 }
 
 impl Exporter for PdfExporter {
@@ -281,6 +287,16 @@ impl Exporter for PdfExporter {
 
         let catalog_id = Ref::new(1);
         let page_tree_id = Ref::new(2);
+
+        // MD-29: bound the page count up front so the `usize → i32` cast
+        // below cannot overflow into a negative `Ref` id. Each sheet
+        // claims one page Ref + one content Ref; reserve headroom for
+        // fonts, outline root, and per-bookmark refs by leaving an
+        // ample margin under `i32::MAX`.
+        let max_sheets = (i32::MAX as usize) / 4;
+        if sheet_indices.len() > max_sheets {
+            return Err(PdfError::TooManyPages(sheet_indices.len()));
+        }
 
         // Reserve one Ref per page, starting at 3 (after catalog + page tree).
         let page_refs: Vec<Ref> = (0..sheet_indices.len())
@@ -893,6 +909,7 @@ mod tests {
             ref_text: None,
             val_text: None,
             fields_autoplaced: false,
+            fields_user_placed: false,
             dnp: false,
             in_bom: true,
             on_board: true,
@@ -1138,6 +1155,7 @@ mod tests {
             ref_text: None,
             val_text: None,
             fields_autoplaced: false,
+            fields_user_placed: false,
             dnp: false,
             in_bom: true,
             on_board: true,

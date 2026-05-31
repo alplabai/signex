@@ -21,32 +21,20 @@ fn same(a: &Point, b: &Point) -> bool {
     (a.x - b.x).abs() < ENDPOINT_EPS && (a.y - b.y).abs() < ENDPOINT_EPS
 }
 
+/// MD-6: snap a coordinate to the union-find bucket. The on-disk wire
+/// format stores coordinates in nanometres (1e-9 m); rounding to the
+/// nearest 1 µm (`* 1000.0`) keeps the bucket smaller than any real
+/// schematic snap step (smallest is 25.4 µm = 1 mil) so coincident
+/// endpoints from a TSV round-trip never miss-bucket. The previous
+/// `* 100.0` (10 µm) was looser than the underlying nm precision and
+/// occasionally false-flagged DanglingWire when sub-µm float drift
+/// pushed two endpoints into different buckets.
 fn key(p: &Point) -> (i64, i64) {
-    ((p.x * 100.0).round() as i64, (p.y * 100.0).round() as i64)
+    ((p.x * 1000.0).round() as i64, (p.y * 1000.0).round() as i64)
 }
 
-// ---------------------------------------------------------------------------
-// Union-find (used by net_label_conflict and bus_bit_width_mismatch)
-// ---------------------------------------------------------------------------
-
-fn uf_find(parent: &mut HashMap<(i64, i64), (i64, i64)>, x: (i64, i64)) -> (i64, i64) {
-    let p = *parent.entry(x).or_insert(x);
-    if p == x {
-        x
-    } else {
-        let r = uf_find(parent, p);
-        parent.insert(x, r);
-        r
-    }
-}
-
-fn uf_union(parent: &mut HashMap<(i64, i64), (i64, i64)>, a: (i64, i64), b: (i64, i64)) {
-    let ra = uf_find(parent, a);
-    let rb = uf_find(parent, b);
-    if ra != rb {
-        parent.insert(ra, rb);
-    }
-}
+// Union-find lives in `crate::uf` (HI-17). Import the canonical helpers.
+use crate::uf::{find as uf_find, union as uf_union};
 
 // ---------------------------------------------------------------------------
 // Rule: UnusedPin
@@ -156,8 +144,6 @@ pub(crate) fn hier_port_disconnected(ctx: &ErcContext, out: &mut Vec<Diagnostic>
             )
             .with_primary(sel(label.uuid, SelectedKind::Label)),
         );
-        // Silence unused-severity warning for Severity::Off.
-        let _ = Severity::Off;
     }
 }
 
@@ -251,6 +237,11 @@ pub(crate) fn net_label_conflict(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
 
 pub(crate) fn orphan_label(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     for label in &ctx.labels {
+        // MD-13: Hierarchical and Global labels are handled by
+        // `hier_port_disconnected`. Power labels DO need orphan
+        // detection — a floating `+3V3` label is a real silent net
+        // problem the user wants flagged, the same as a floating
+        // local Net label.
         if matches!(
             label.label_type,
             LabelType::Hierarchical | LabelType::Global
@@ -325,11 +316,16 @@ pub(crate) fn bus_bit_width_mismatch(ctx: &ErcContext, out: &mut Vec<Diagnostic>
         for (_, r) in group {
             *range_counts.entry(*r).or_insert(0) += 1;
         }
-        let (majority_range, _) = range_counts
+        // HI-18: `group.len() >= 2` does NOT imply `range_counts.is_empty() == false`.
+        // If `parse_bus_label` failed on every member of `group`, `range_counts`
+        // is empty and the `.expect()` panics. Skip the group in that case.
+        let Some((majority_range, _)) = range_counts
             .iter()
             .max_by_key(|&(_, c)| *c)
             .map(|(r, c)| (*r, *c))
-            .expect("group len >= 2");
+        else {
+            continue;
+        };
         let Some((ref_lbl, ref_range)) = group.iter().find(|(_, r)| *r == majority_range).copied()
         else {
             continue;
@@ -460,21 +456,57 @@ pub(crate) fn bad_hier_sheet_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
 // ---------------------------------------------------------------------------
 
 pub(crate) fn missing_power_flag(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
-    let label_texts: std::collections::HashSet<&str> =
-        ctx.labels.iter().map(|l| l.text.as_str()).collect();
+    // MD-12: rebuild a position→net union-find so we can verify the
+    // power port shares a NET with a same-text label. The previous
+    // `label_texts.contains(name)` check was a global text match —
+    // a port `+3V3` floating on its own net was suppressed by ANY
+    // other `+3V3` label anywhere on the sheet. The fix routes the
+    // check through the same union-find topology `derive_nets` uses.
+    use std::collections::HashMap;
+    let mut parent: HashMap<(i64, i64), (i64, i64)> = HashMap::new();
+    for w in &ctx.wires {
+        crate::uf::union(&mut parent, key(&w.start), key(&w.end));
+    }
+    for j in &ctx.junctions {
+        crate::uf::find(&mut parent, key(&j.position));
+    }
+    // Map each label text → set of net roots its labels sit on.
+    let mut label_nets: HashMap<&str, std::collections::HashSet<(i64, i64)>> = HashMap::new();
+    for lbl in &ctx.labels {
+        if lbl.text.is_empty() {
+            continue;
+        }
+        let root = crate::uf::find(&mut parent, key(&lbl.position));
+        label_nets
+            .entry(lbl.text.as_str())
+            .or_default()
+            .insert(root);
+    }
+
     for symbol in &ctx.symbols {
         if !symbol.is_power {
             continue;
         }
         let name = symbol.value.as_str();
-        if name.is_empty() || label_texts.contains(name) {
+        if name.is_empty() {
+            continue;
+        }
+        // Power-port symbols carry a single connection point at their
+        // position (no separate pin geometry). Look up the net root
+        // for that point.
+        let port_root = crate::uf::find(&mut parent, key(&symbol.position));
+        let same_net_label = label_nets
+            .get(name)
+            .map(|nets| nets.contains(&port_root))
+            .unwrap_or(false);
+        if same_net_label {
             continue;
         }
         out.push(
             Diagnostic::new(
                 RuleKind::MissingPowerFlag,
                 format!(
-                    "Power port '{name}' is not cross-referenced by a label — add a PWR_FLAG if this is a source net",
+                    "Power port '{name}' is not cross-referenced by a same-net label — add a PWR_FLAG if this is a source net",
                 ),
                 symbol.position,
             )

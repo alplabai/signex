@@ -465,6 +465,7 @@ mod tests {
             ref_text: None,
             val_text: None,
             fields_autoplaced: false,
+            fields_user_placed: false,
             dnp: false,
             in_bom: true,
             on_board: true,
@@ -632,11 +633,7 @@ mod tests {
             ..default_opts()
         };
         let items = build_bookmarks(&ctx, &opts, &[0], 297.0, 210.0, 595.0);
-        assert!(
-            items[0].title.contains("[VarA]"),
-            "got {}",
-            items[0].title
-        );
+        assert!(items[0].title.contains("[VarA]"), "got {}", items[0].title);
     }
 
     #[test]
@@ -670,6 +667,7 @@ mod tests {
             ref_text: None,
             val_text: None,
             fields_autoplaced: false,
+            fields_user_placed: false,
             dnp: false,
             in_bom: true,
             on_board: true,
@@ -744,6 +742,7 @@ mod tests {
                     ref_text: None,
                     val_text: None,
                     fields_autoplaced: false,
+                    fields_user_placed: false,
                     dnp: false,
                     in_bom: true,
                     on_board: true,
@@ -781,8 +780,7 @@ mod tests {
         assert_eq!(items.len(), 9);
 
         // Top-level items = the 3 Sheet bookmarks.
-        let top: Vec<&PendingBookmark> =
-            items.iter().filter(|b| b.parent_idx.is_none()).collect();
+        let top: Vec<&PendingBookmark> = items.iter().filter(|b| b.parent_idx.is_none()).collect();
         assert_eq!(top.len(), 3);
 
         // Each Sheet bookmark has exactly one child (its Components group).

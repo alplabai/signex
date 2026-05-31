@@ -29,7 +29,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::RwLock;
+use std::sync::{Mutex, RwLock};
 
 use serde::{Serialize, de::DeserializeOwned};
 use uuid::Uuid;
@@ -39,7 +39,7 @@ use crate::component::ComponentRow;
 use crate::identity::{InternalPn, RowId};
 use crate::library_file::{LibraryFile, LibraryRow, LibraryTable, SnxlibManifest};
 use crate::manifest::{LibraryMeta, Manifest};
-use crate::primitive::{Footprint, PrimitiveKind, SimModel, Symbol, SymbolFile};
+use crate::primitive::{Footprint, PrimitiveKind, SimFile, SimModel, Symbol, SymbolFile};
 use crate::tables::{TABLE_HEADER, record_to_row, row_to_record};
 
 const SYMBOLS_DIR: &str = "symbols";
@@ -93,6 +93,15 @@ pub struct LocalGitAdapter {
     /// list. Stable for the adapter's lifetime; mutations to
     /// `library_file.tables` do not alter it.
     manifest_synth: Manifest,
+    /// HI-11: serialise concurrent git operations. Each `commit_path`
+    /// call opens a fresh `git2::Repository` and stages an entry; if
+    /// two threads race here, libgit2's index `LOCK` file races on
+    /// itself and the second commit fails with `git add: error`.
+    /// Holding this mutex across `commit_path` makes the in-process
+    /// view of `.git/` linearisable. (Cross-process locking is still
+    /// libgit2's responsibility; this only addresses the in-process
+    /// race that `RwLock<LibraryFile>` does NOT cover.)
+    git_lock: Mutex<()>,
 }
 
 impl LocalGitAdapter {
@@ -182,6 +191,7 @@ impl LocalGitAdapter {
             root_dir,
             library_file: RwLock::new(library_file),
             manifest_synth,
+            git_lock: Mutex::new(()),
         })
     }
 
@@ -217,6 +227,7 @@ impl LocalGitAdapter {
             root_dir,
             library_file: RwLock::new(library_file),
             manifest_synth,
+            git_lock: Mutex::new(()),
         })
     }
 
@@ -291,6 +302,7 @@ impl LocalGitAdapter {
             root_dir,
             library_file: RwLock::new(library_file),
             manifest_synth,
+            git_lock: Mutex::new(()),
         })
     }
 
@@ -348,13 +360,62 @@ impl LocalGitAdapter {
             )));
         }
         let bytes = fs::read(&path)?;
+        // v0.18.4 — `.snxfpt` and `.snxsym` ship as TOML+TSV
+        // envelopes. v0.18.5 — `.snxsim` ships as TOML envelope.
+        // For each primitive kind that's been migrated, build the
+        // file envelope, pull the first contained primitive, then
+        // serde-round-trip through JSON to recover the generic T.
+        if matches!(kind, PrimitiveKind::Footprint) {
+            let file = crate::primitive::FootprintFile::from_bytes(&bytes)
+                .map_err(|e| LibraryError::Backend(format!("read .snxfpt: {e}")))?;
+            let fp = file
+                .footprints
+                .into_iter()
+                .next()
+                .ok_or_else(|| LibraryError::Backend("empty FootprintFile".into()))?;
+            let buf = serde_json::to_vec(&fp)
+                .map_err(|e| LibraryError::Backend(format!("re-serialise footprint: {e}")))?;
+            let value: T = serde_json::from_slice(&buf)
+                .map_err(|e| LibraryError::Backend(format!("read primitive: {e}")))?;
+            return Ok(value);
+        }
+        if matches!(kind, PrimitiveKind::Sim) {
+            let file = SimFile::from_bytes(&bytes)
+                .map_err(|e| LibraryError::Backend(format!("read .snxsim: {e}")))?;
+            let model = file
+                .models
+                .into_iter()
+                .next()
+                .ok_or_else(|| LibraryError::Backend("empty SimFile".into()))?;
+            let buf = serde_json::to_vec(&model)
+                .map_err(|e| LibraryError::Backend(format!("re-serialise sim: {e}")))?;
+            let value: T = serde_json::from_slice(&buf)
+                .map_err(|e| LibraryError::Backend(format!("read primitive: {e}")))?;
+            return Ok(value);
+        }
+        // HI-8: Symbol files are TOML+TSV envelopes since v0.18.4 and
+        // are read via `get_symbol`/`scan_symbol_files` which dispatch
+        // through `SymbolFile::from_bytes`. The generic JSON fallback
+        // below is unreachable on supported kinds; guard it so a
+        // future refactor that adds e.g. `Model3d` doesn't silently
+        // try to parse a TOML file as JSON.
+        debug_assert!(
+            !matches!(kind, PrimitiveKind::Symbol),
+            "read_primitive::<Symbol> must route through get_symbol; this generic path \
+             would attempt serde_json on a TOML envelope and fail at runtime"
+        );
         let value: T = serde_json::from_slice(&bytes)
             .map_err(|e| LibraryError::Backend(format!("read primitive: {e}")))?;
         Ok(value)
     }
 
-    /// Persist a primitive JSON file under `<root>/<subdir>/<uuid>.<ext>`,
+    /// Persist a primitive file under `<root>/<subdir>/<uuid>.<ext>`,
     /// stage + commit it via libgit2 with the supplied message.
+    ///
+    /// `.snxfpt` files emit as TOML+TSV envelope (v0.18.4); `.snxsim`
+    /// files emit as TOML envelope (v0.18.5). `.snxsym` is handled
+    /// outside this generic path via `save_symbol_in_container` so
+    /// multi-symbol containers are preserved.
     fn write_primitive<T: Serialize>(
         &self,
         kind: PrimitiveKind,
@@ -366,9 +427,80 @@ impl LocalGitAdapter {
         fs::create_dir_all(&dir)?;
         let rel_path = format!("{}/{uuid}.{}", primitive_subdir(kind), primitive_ext(kind));
         let abs_path = self.root_dir.join(&rel_path);
-        let bytes = serde_json::to_vec_pretty(value)
-            .map_err(|e| LibraryError::Backend(format!("write primitive: {e}")))?;
-        fs::write(&abs_path, bytes)?;
+        let bytes = if matches!(kind, PrimitiveKind::Footprint) {
+            // T is Footprint here — round-trip through JSON to obtain
+            // the typed value, then merge into the existing envelope
+            // on disk if present (HI-7) so a multi-footprint file
+            // doesn't get clobbered by a single-element rewrite.
+            let buf = serde_json::to_vec(value)
+                .map_err(|e| LibraryError::Backend(format!("re-serialise footprint: {e}")))?;
+            let fp: crate::primitive::Footprint = serde_json::from_slice(&buf)
+                .map_err(|e| LibraryError::Backend(format!("write primitive: {e}")))?;
+            let mut file = match fs::read(&abs_path) {
+                Ok(existing) => crate::primitive::FootprintFile::from_bytes(&existing)
+                    .map_err(|e| LibraryError::Backend(format!("re-read .snxfpt: {e}")))?,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    crate::primitive::FootprintFile::from_footprint(fp.clone())
+                }
+                Err(e) => return Err(LibraryError::from(e)),
+            };
+            // Replace by uuid; preserve siblings.
+            let target_uuid = fp.uuid;
+            if let Some(slot) = file.footprints.iter_mut().find(|f| f.uuid == target_uuid) {
+                *slot = fp;
+            } else {
+                file.footprints.push(fp);
+            }
+            file.updated = chrono::Utc::now();
+            file.to_toml_string()
+                .map_err(|e| LibraryError::Backend(format!("emit .snxfpt: {e}")))?
+                .into_bytes()
+        } else if matches!(kind, PrimitiveKind::Sim) {
+            // T is SimModel here — same JSON round-trip recovery
+            // pattern, then merge into the existing envelope (HI-7)
+            // so the SPICE / Verilog-A multi-element file doesn't
+            // get clobbered.
+            let buf = serde_json::to_vec(value)
+                .map_err(|e| LibraryError::Backend(format!("re-serialise sim: {e}")))?;
+            let model: SimModel = serde_json::from_slice(&buf)
+                .map_err(|e| LibraryError::Backend(format!("write primitive: {e}")))?;
+            let mut file = match fs::read(&abs_path) {
+                Ok(existing) => SimFile::from_bytes(&existing)
+                    .map_err(|e| LibraryError::Backend(format!("re-read .snxsim: {e}")))?,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    SimFile::from_model(model.clone())
+                }
+                Err(e) => return Err(LibraryError::from(e)),
+            };
+            let target_uuid = model.uuid;
+            if let Some(slot) = file.models.iter_mut().find(|m| m.uuid == target_uuid) {
+                *slot = model;
+            } else {
+                file.models.push(model);
+            }
+            file.updated = chrono::Utc::now();
+            file.to_toml_string()
+                .map_err(|e| LibraryError::Backend(format!("emit .snxsim: {e}")))?
+                .into_bytes()
+        } else {
+            // HI-8: Symbols are written via `save_symbol_in_container`,
+            // not this generic path. The pretty-JSON branch is left
+            // for forward-compat with future kinds whose on-disk
+            // format hasn't been migrated.
+            debug_assert!(
+                !matches!(kind, PrimitiveKind::Symbol),
+                "write_primitive::<Symbol> must route through save_symbol_in_container; \
+                 the JSON fallback would write a non-canonical format"
+            );
+            serde_json::to_vec_pretty(value)
+                .map_err(|e| LibraryError::Backend(format!("write primitive: {e}")))?
+        };
+        // HI-6: atomic write — primitive containers (`.snxsim`,
+        // `.snxfpt`, `.snxsym`) are TOML+TSV envelopes; a half-written
+        // file destroys all primitives in the container, so we cannot
+        // afford the in-place truncate that `fs::write` does on
+        // existing destinations.
+        signex_types::atomic_io::atomic_write(&abs_path, &bytes)?;
 
         let fallback = format!("save {} {uuid}", primitive_kind_str(kind));
         self.commit_path(&rel_path, message, &fallback)
@@ -389,6 +521,12 @@ impl LocalGitAdapter {
         if !self.root_dir.join(".git").exists() {
             return Ok(());
         }
+        // HI-11: serialise concurrent commits in this process. Two
+        // threads each opening their own `git2::Repository` and
+        // calling `index().add_path()` race on `.git/index.lock`; the
+        // loser would surface as a `git add: error` failure to the
+        // user despite no real conflict.
+        let _git_guard = self.git_lock.lock().unwrap_or_else(|e| e.into_inner());
         let repo = git2::Repository::open(&self.root_dir)
             .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
         let (sig_name, sig_email) = identity_for_repo(&repo);
@@ -444,7 +582,8 @@ impl LocalGitAdapter {
     /// the appropriate read/write lock.
     fn persist_library_file(&self, lf: &LibraryFile) -> Result<(), LibraryError> {
         let text = lf.write()?;
-        fs::write(&self.file_path, text)?;
+        // HI-6: atomic write — never half-write the manifest.
+        signex_types::atomic_io::atomic_write(&self.file_path, text.as_bytes())?;
         Ok(())
     }
 
@@ -519,7 +658,11 @@ impl LocalGitAdapter {
                 continue;
             }
             let bytes = fs::read(path)?;
-            let file = SymbolFile::from_json(&bytes)
+            // TOML-only (alpha policy, no legacy JSON support — pre-v0.18.4
+            // libraries must be regenerated). `from_bytes` decodes UTF-8 and
+            // hands off to `from_toml_str`; the format-token check inside
+            // surfaces `UnsupportedFormat` for any drift.
+            let file = SymbolFile::from_bytes(&bytes)
                 .map_err(|e| LibraryError::Backend(format!("read symbol file {name}: {e}")))?;
             out.push((path.to_path_buf(), file));
         }
@@ -537,17 +680,21 @@ impl LocalGitAdapter {
                     file.symbols.push(sym.clone());
                     file.updated = chrono::Utc::now();
                 }
-                let bytes = serde_json::to_vec_pretty(&file)
+                // v0.18.4 — emit TOML envelope.
+                let text = file
+                    .to_toml_string()
                     .map_err(|e| LibraryError::Backend(format!("write symbol container: {e}")))?;
-                fs::write(&path, bytes)?;
+                fs::write(&path, text.as_bytes())?;
                 path
             }
             None => {
                 let file = SymbolFile::from_symbol(sym.clone());
                 let path = self.fresh_symbol_file_path(&dir, &file)?;
-                let bytes = serde_json::to_vec_pretty(&file)
+                // v0.18.4 — emit TOML envelope.
+                let text = file
+                    .to_toml_string()
                     .map_err(|e| LibraryError::Backend(format!("write symbol container: {e}")))?;
-                fs::write(&path, bytes)?;
+                fs::write(&path, text.as_bytes())?;
                 path
             }
         };
@@ -634,8 +781,40 @@ impl LocalGitAdapter {
                 continue;
             };
             let bytes = fs::read(path)?;
-            let value: T = serde_json::from_slice(&bytes)
-                .map_err(|e| LibraryError::Backend(format!("list primitive {name}: {e}")))?;
+            // v0.18.4/v0.18.5 — `.snxfpt` and `.snxsim` migrated to
+            // TOML envelopes. Read the envelope, pull the first
+            // contained primitive, then JSON-round-trip into the
+            // generic T (= Footprint or = SimModel).
+            let value: T = if matches!(kind, PrimitiveKind::Footprint) {
+                let file = crate::primitive::FootprintFile::from_bytes(&bytes)
+                    .map_err(|e| LibraryError::Backend(format!("list primitive {name}: {e}")))?;
+                let fp = file
+                    .footprints
+                    .into_iter()
+                    .next()
+                    .ok_or_else(|| LibraryError::Backend(format!("empty .snxfpt {name}")))?;
+                let buf = serde_json::to_vec(&fp).map_err(|e| {
+                    LibraryError::Backend(format!("re-serialise .snxfpt {name}: {e}"))
+                })?;
+                serde_json::from_slice(&buf)
+                    .map_err(|e| LibraryError::Backend(format!("list primitive {name}: {e}")))?
+            } else if matches!(kind, PrimitiveKind::Sim) {
+                let file = SimFile::from_bytes(&bytes)
+                    .map_err(|e| LibraryError::Backend(format!("list primitive {name}: {e}")))?;
+                let model = file
+                    .models
+                    .into_iter()
+                    .next()
+                    .ok_or_else(|| LibraryError::Backend(format!("empty .snxsim {name}")))?;
+                let buf = serde_json::to_vec(&model).map_err(|e| {
+                    LibraryError::Backend(format!("re-serialise .snxsim {name}: {e}"))
+                })?;
+                serde_json::from_slice(&buf)
+                    .map_err(|e| LibraryError::Backend(format!("list primitive {name}: {e}")))?
+            } else {
+                serde_json::from_slice(&bytes)
+                    .map_err(|e| LibraryError::Backend(format!("list primitive {name}: {e}")))?
+            };
             out.push(PrimitiveSummary {
                 uuid,
                 name: name_of(&value).to_string(),
@@ -688,14 +867,14 @@ impl LibraryAdapter for LocalGitAdapter {
         let old_owned = old.to_string();
         let new_trimmed = new.trim().to_string();
         if new_trimmed.is_empty() {
-            return Err(LibraryError::Backend(
-                "table name cannot be empty".into(),
-            ));
+            return Err(LibraryError::Backend("table name cannot be empty".into()));
         }
-        if new_trimmed
-            .chars()
-            .any(|c| matches!(c, '/' | '\\' | '.' | ':' | '*' | '?' | '"' | '<' | '>' | '|'))
-        {
+        if new_trimmed.chars().any(|c| {
+            matches!(
+                c,
+                '/' | '\\' | '.' | ':' | '*' | '?' | '"' | '<' | '>' | '|'
+            )
+        }) {
             return Err(LibraryError::Backend(format!(
                 "table name {new_trimmed:?} contains illegal characters"
             )));
@@ -738,9 +917,9 @@ impl LibraryAdapter for LocalGitAdapter {
                 // atomic and is robust under future reorganisation.
                 use std::collections::btree_map::Entry;
                 match lf.tables.entry(owned.clone()) {
-                    Entry::Vacant(_) => Err(LibraryError::NotFound(format!(
-                        "table {owned:?} not found"
-                    ))),
+                    Entry::Vacant(_) => {
+                        Err(LibraryError::NotFound(format!("table {owned:?} not found")))
+                    }
                     Entry::Occupied(occ) if !occ.get().rows.is_empty() => {
                         Err(LibraryError::Conflict(format!(
                             "table {owned:?} is not empty ({} rows)",
@@ -868,10 +1047,12 @@ impl LibraryAdapter for LocalGitAdapter {
         // identifiers — keeps round-trips through the TOML key safe and
         // avoids surprising the user with a name they can't see in
         // their file browser.
-        if trimmed
-            .chars()
-            .any(|c| matches!(c, '/' | '\\' | '.' | ':' | '*' | '?' | '"' | '<' | '>' | '|'))
-        {
+        if trimmed.chars().any(|c| {
+            matches!(
+                c,
+                '/' | '\\' | '.' | ':' | '*' | '?' | '"' | '<' | '>' | '|'
+            )
+        }) {
             return Err(LibraryError::Backend(format!(
                 "table name {trimmed:?} contains illegal characters"
             )));
@@ -998,9 +1179,9 @@ impl LibraryAdapter for LocalGitAdapter {
                 })?;
                 let target = row_id.as_uuid().to_string();
                 let before = entry.rows.len();
-                entry
-                    .rows
-                    .retain(|r| r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) != Some(target.as_str()));
+                entry.rows.retain(|r| {
+                    r.cells.get(LEGACY_ROW_ID_COL).map(String::as_str) != Some(target.as_str())
+                });
                 if entry.rows.len() == before {
                     return Err(LibraryError::NotFound(format!(
                         "row {row_id} in table {table_owned}"
@@ -1196,8 +1377,8 @@ impl LibraryAdapter for LocalGitAdapter {
 fn commit_to_history_entry(commit: &git2::Commit<'_>) -> HistoryEntry {
     let author = commit.author();
     let secs = author.when().seconds();
-    let time = chrono::DateTime::<chrono::Utc>::from_timestamp(secs, 0)
-        .unwrap_or_else(chrono::Utc::now);
+    let time =
+        chrono::DateTime::<chrono::Utc>::from_timestamp(secs, 0).unwrap_or_else(chrono::Utc::now);
     let raw = commit.message().unwrap_or("");
     let (subject, body) = match raw.find("\n\n") {
         Some(i) => (raw[..i].trim_end().to_string(), raw[i + 2..].to_string()),
@@ -1349,9 +1530,7 @@ fn write_lfs_attributes(root_dir: &Path) -> Result<(), LibraryError> {
          # Written at library-create time when LFS opt-in was selected.\n",
     );
     for ext in LFS_EXTENSIONS {
-        text.push_str(&format!(
-            "*.{ext} filter=lfs diff=lfs merge=lfs -text\n"
-        ));
+        text.push_str(&format!("*.{ext} filter=lfs diff=lfs merge=lfs -text\n"));
     }
     fs::write(&path, text)?;
     Ok(())

@@ -2,7 +2,7 @@ use iced::widget::{canvas, column, container, row, text_input};
 use iced::{Element, Length};
 
 pub(crate) mod dialogs;
-mod translate;
+pub(crate) mod translate;
 
 use super::*;
 
@@ -16,7 +16,111 @@ use super::*;
 const SUBMENU_ARROW: &str = "›";
 const SUBMENU_ARROW_SIZE: f32 = 18.0;
 
+/// Chrome strip search bar width in pixels.
+pub(crate) const CHROME_SEARCH_BAR_WIDTH: f32 = 440.0;
+/// Fixed gap between the chrome search bar's right edge and the
+/// chrome controls (min/max/close).
+pub(crate) const CHROME_SEARCH_BAR_RIGHT_GAP: f32 = 12.0;
+/// One chrome control button (min / max / close) width — see
+/// `chrome_btn` in `view_main_window_chrome`.
+pub(crate) const CHROME_CONTROL_BTN_W: f32 = 46.0;
+/// Total controls strip width — three buttons.
+pub(crate) const CHROME_CONTROLS_W: f32 = CHROME_CONTROL_BTN_W * 3.0;
+/// Minimum left padding between the menu bar's right edge and the
+/// chrome search bar's left edge.
+pub(crate) const CHROME_SEARCH_LEFT_GAP: f32 = 16.0;
+/// Minimum right padding between the chrome search bar's right edge
+/// and the window-controls strip.
+pub(crate) const CHROME_SEARCH_RIGHT_GAP: f32 = 16.0;
+
 impl Signex {
+    /// v0.18.10 — Altium-style grid picker popup body. Renders the
+    /// standard 1mil…2.5mm ladder; clicking a row sends
+    /// `Message::GridPickerSelect(step_mm)` and closes the popup.
+    fn view_grid_picker_menu(&self) -> Element<'_, Message> {
+        use iced::widget::{button, column, container, text};
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let primary = signex_widgets::theme_ext::text_primary(tokens);
+        let muted = signex_widgets::theme_ext::text_secondary(tokens);
+        let panel_bg = signex_widgets::theme_ext::to_color(&tokens.panel_bg);
+        let border_c = signex_widgets::theme_ext::border_color(tokens);
+        let active_step = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .and_then(|t| match &t.kind {
+                crate::app::TabKind::FootprintEditor(p) => {
+                    self.document_state.footprint_editors.get(p)
+                }
+                _ => None,
+            })
+            .map(|e| e.state.snap_options.grid_step_mm);
+
+        // Altium-standard ladder. Mil entries first (imperial designs
+        // anchor on 50mil), metric second.
+        const LADDER: &[(&str, f64)] = &[
+            ("1 Mil", 0.0254),
+            ("5 Mil", 0.127),
+            ("10 Mil", 0.254),
+            ("20 Mil", 0.508),
+            ("25 Mil", 0.635),
+            ("50 Mil", 1.27),
+            ("100 Mil", 2.54),
+            ("0.025 mm", 0.025),
+            ("0.100 mm", 0.100),
+            ("0.250 mm", 0.250),
+            ("0.500 mm", 0.500),
+            ("1.000 mm", 1.000),
+            ("2.500 mm", 2.500),
+        ];
+
+        let mut col = column![].spacing(0).width(iced::Length::Fixed(200.0));
+        for (label, step_mm) in LADDER {
+            let is_active = active_step
+                .map(|s| (s - step_mm).abs() < 1e-9)
+                .unwrap_or(false);
+            let lbl_color = if is_active { primary } else { muted };
+            let row_label = *label;
+            let row_step = *step_mm;
+            let btn = button(
+                container(text(row_label).size(11).color(lbl_color))
+                    .padding([4, 12])
+                    .width(iced::Length::Fill),
+            )
+            .padding(0)
+            .on_press(Message::GridPickerSelect(row_step))
+            .style(move |_: &iced::Theme, status| iced::widget::button::Style {
+                background: match status {
+                    iced::widget::button::Status::Hovered => Some(iced::Background::Color(
+                        iced::Color::from_rgba(1.0, 1.0, 1.0, 0.06),
+                    )),
+                    _ => Some(iced::Background::Color(iced::Color::TRANSPARENT)),
+                },
+                border: iced::Border {
+                    width: 0.0,
+                    radius: 0.0.into(),
+                    color: iced::Color::TRANSPARENT,
+                },
+                ..iced::widget::button::Style::default()
+            })
+            .width(iced::Length::Fill);
+            col = col.push(btn);
+        }
+
+        container(col)
+            .padding(4)
+            .style(move |_: &iced::Theme| iced::widget::container::Style {
+                background: Some(iced::Background::Color(panel_bg)),
+                border: iced::Border {
+                    width: 1.0,
+                    radius: 4.0.into(),
+                    color: border_c,
+                },
+                ..iced::widget::container::Style::default()
+            })
+            .into()
+    }
+
     #[allow(clippy::vec_init_then_push)]
     fn view_context_menu(&self) -> Element<'_, Message> {
         use crate::icons as ic;
@@ -351,11 +455,6 @@ impl Signex {
             });
             items.push(self.ctx_menu_sep());
             items.push(self.ctx_menu_item_disabled(None, "Variants...", Some("v1.1")));
-            items.push(self.ctx_menu_item_disabled(
-                None,
-                "History & Version Control",
-                Some(SUBMENU_ARROW),
-            ));
             items.push(self.ctx_menu_sep());
             items.push(self.ctx_menu_item_disabled(None, "Project Packager...", Some("v4.2")));
             items.push(self.ctx_menu_item_disabled(None, "Project Releaser...", Some("v5.2")));
@@ -400,18 +499,27 @@ impl Signex {
                 "",
                 Message::Menu(crate::menu_bar::MenuMessage::AddLibraryComponent),
             ));
+            // F31 (2026-05-03) — these create FILES, not individual
+            // primitives. A `.snxsym` file holds many symbols (Altium
+            // parity); user edits it via the SCH Library panel after
+            // opening. Labels reworded so the user doesn't expect a
+            // single-symbol creation flow here.
             items.push(self.ctx_menu_item_msg(
                 None,
-                "Add New ▸ Symbol",
+                "Add New ▸ Symbol Library",
                 "",
                 Message::Menu(crate::menu_bar::MenuMessage::AddLibrarySymbol),
             ));
-            items.push(self.ctx_menu_item_msg(
-                None,
-                "Add New ▸ Footprint",
-                "",
-                Message::Menu(crate::menu_bar::MenuMessage::AddLibraryFootprint),
-            ));
+            // v0.13.0 — footprint editor gated off; hide the create
+            // entry so the user never reaches a dead flow.
+            if crate::feature_flags::FOOTPRINT_EDITOR_ENABLED {
+                items.push(self.ctx_menu_item_msg(
+                    None,
+                    "Add New ▸ Footprint Library",
+                    "",
+                    Message::Menu(crate::menu_bar::MenuMessage::AddLibraryFootprint),
+                ));
+            }
             items.push(self.ctx_menu_sep());
             // Stage 18 distributor refresh stub — fires
             // `LibraryRefreshAllPricing` so the wiring is observable
@@ -457,6 +565,19 @@ impl Signex {
                 "Refresh",
                 "",
                 Message::ProjectTreeAction(A::Refresh),
+            ));
+            // F23 — surface "Remove from Project" on library nodes.
+            // Reuses the same RemoveDialog flow as sheet leaves;
+            // `handle_remove_confirm` handles directory deletes
+            // (.snxlib is a dir), library-entry removal from
+            // `project.data.libraries`, and the orphan case where
+            // the file doesn't exist on disk.
+            items.push(self.ctx_menu_sep());
+            items.push(self.ctx_menu_item_msg(
+                None,
+                "Remove from Project...",
+                "",
+                Message::ProjectTreeAction(A::OpenRemoveDialog(path.clone())),
             ));
         } else if is_openable_leaf {
             // Sheet / PCB / library leaf — Altium's per-document menu.
@@ -532,11 +653,6 @@ impl Signex {
                 self.ctx_menu_item_disabled(None, "Print...", None)
             });
             items.push(self.ctx_menu_item_disabled(None, "Show Differences...", Some("v4.3")));
-            items.push(self.ctx_menu_item_disabled(
-                None,
-                "History & Version Control",
-                Some(SUBMENU_ARROW),
-            ));
         } else if is_container {
             // Source Documents / Libraries / Settings folders. These have
             // no Altium direct analogue (Altium groups these under the
@@ -614,34 +730,30 @@ impl Signex {
                 |kind| matches!(kind, WindowKind::UndockedTab { path, .. } if *path == tab.path),
             );
 
-        items.push(self.ctx_menu_item_msg(
-            None,
+        items.push(self.ctx_menu_item_msg_no_icon(
             &format!("Close {title}"),
             "",
             Message::TabContextAction(A::Close(ctx.tab_idx)),
         ));
         if total_tabs > 1 {
-            items.push(self.ctx_menu_item_msg(
-                None,
+            items.push(self.ctx_menu_item_msg_no_icon(
                 "Close All Other Documents",
                 "",
                 Message::TabContextAction(A::CloseAllOthers(ctx.tab_idx)),
             ));
         } else {
-            items.push(self.ctx_menu_item_disabled(None, "Close All Other Documents", None));
+            items.push(self.ctx_menu_item_disabled_no_icon("Close All Other Documents"));
         }
-        items.push(self.ctx_menu_item_msg(
-            None,
+        items.push(self.ctx_menu_item_msg_no_icon(
             "Close All Documents",
             "",
             Message::TabContextAction(A::CloseAll),
         ));
         items.push(self.ctx_menu_sep());
         items.push(if already_undocked {
-            self.ctx_menu_item_disabled(None, "Open In New Window", None)
+            self.ctx_menu_item_disabled_no_icon("Open In New Window")
         } else {
-            self.ctx_menu_item_msg(
-                None,
+            self.ctx_menu_item_msg_no_icon(
                 "Open In New Window",
                 "",
                 Message::TabContextAction(A::Undock(ctx.tab_idx)),
@@ -806,6 +918,71 @@ impl Signex {
                 }
             },
         )
+        .into()
+    }
+
+    /// Icon-less variant of [`ctx_menu_item_msg`] for context menus
+    /// where no item carries an icon (e.g. the tab right-click menu).
+    /// Drops the 26 px icon-slot column so labels start flush with the
+    /// menu's left padding.
+    fn ctx_menu_item_msg_no_icon<'a>(
+        &self,
+        label: &str,
+        shortcut: &str,
+        message: Message,
+    ) -> Element<'a, Message> {
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let text_c = crate::styles::ti(tokens.text);
+        let hover_c = crate::styles::ti(tokens.hover);
+        iced::widget::button(
+            iced::widget::row![
+                iced::widget::text(label.to_string()).size(11).color(text_c),
+                iced::widget::Space::new().width(Length::Fill),
+                iced::widget::text(shortcut.to_string())
+                    .size(10)
+                    .color(crate::styles::ti(tokens.text_secondary)),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center)
+            .width(Length::Fill),
+        )
+        .width(Self::CONTEXT_MENU_WIDTH)
+        .padding([4, 12])
+        .on_press(message)
+        .style(
+            move |_: &iced::Theme, status: iced::widget::button::Status| {
+                let bg = match status {
+                    iced::widget::button::Status::Hovered => Some(iced::Background::Color(hover_c)),
+                    _ => None,
+                };
+                iced::widget::button::Style {
+                    background: bg,
+                    border: iced::Border::default(),
+                    text_color: text_c,
+                    ..iced::widget::button::Style::default()
+                }
+            },
+        )
+        .into()
+    }
+
+    /// Icon-less, disabled-row counterpart to
+    /// [`ctx_menu_item_msg_no_icon`].
+    fn ctx_menu_item_disabled_no_icon<'a>(&self, label: &str) -> Element<'a, Message> {
+        let text_secondary = crate::styles::ti(self.document_state.panel_ctx.tokens.text_secondary);
+        container(
+            iced::widget::row![
+                iced::widget::text(label.to_string())
+                    .size(11)
+                    .color(text_secondary),
+                iced::widget::Space::new().width(Length::Fill),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center)
+            .width(Length::Fill),
+        )
+        .padding([4, 12])
+        .width(Self::CONTEXT_MENU_WIDTH)
         .into()
     }
 
@@ -1122,9 +1299,9 @@ impl Signex {
                     Some(ic::icon_dd_wire(tid)),
                     "Schematic",
                     "",
-                    Message::ProjectTreeAction(
-                        crate::app::ProjectTreeAction::AddNewSchematic(target_path),
-                    ),
+                    Message::ProjectTreeAction(crate::app::ProjectTreeAction::AddNewSchematic(
+                        target_path.clone(),
+                    )),
                 ));
                 // Component Library is the Altium-style replacement
                 // for the legacy "Schematic Library" row. Wired
@@ -1137,16 +1314,39 @@ impl Signex {
                     "",
                     Message::Menu(crate::menu_bar::MenuMessage::AddComponentLibrary),
                 ));
+                // Altium parity: Schematic Library (= our `.snxsym`) is
+                // a top-level project document, not nested inside a
+                // Component Library. Same for PCB Library (= our
+                // `.snxfpt`). Both open a Save-As dialog scoped to the
+                // project dir; the picked file is written empty and
+                // opened as a primitive editor tab.
+                items.push(self.ctx_menu_item_msg(
+                    Some(ic::icon_component(tid)),
+                    "Symbol Library",
+                    "",
+                    Message::ProjectTreeAction(
+                        crate::app::ProjectTreeAction::AddProjectSymbolLibrary(target_path.clone()),
+                    ),
+                ));
                 items.push(self.ctx_menu_item_disabled(
                     Some(ic::icon_dd_part_actions(tid)),
                     "PCB",
                     Some("v2.0"),
                 ));
-                items.push(self.ctx_menu_item_disabled(
-                    Some(ic::icon_component(tid)),
-                    "PCB Library",
-                    Some("v2.0"),
-                ));
+                // v0.13.0 — footprint editor gated off; hide the
+                // "PCB Library" create entry on the project-root menu.
+                if crate::feature_flags::FOOTPRINT_EDITOR_ENABLED {
+                    items.push(self.ctx_menu_item_msg(
+                        Some(ic::icon_component(tid)),
+                        "PCB Library",
+                        "",
+                        Message::ProjectTreeAction(
+                            crate::app::ProjectTreeAction::AddProjectFootprintLibrary(
+                                target_path.clone(),
+                            ),
+                        ),
+                    ));
+                }
                 items.push(self.ctx_menu_sep());
                 items.push(self.ctx_menu_item_disabled(
                     Some(ic::icon_dd_text_string(tid)),
@@ -3185,22 +3385,24 @@ impl Signex {
         .padding(iced::Padding::ZERO)
         .size(11)
         .width(Length::Fill)
-        .style(move |_: &iced::Theme, _status: text_input::Status| text_input::Style {
-            // Outer container owns the chrome border + bg, so the
-            // input itself is transparent. Without this the input's
-            // default frame paints on top of the container's
-            // rounded rect and the corners look doubled.
-            background: Background::Color(Color::TRANSPARENT),
-            border: Border {
-                color: Color::TRANSPARENT,
-                width: 0.0,
-                radius: 0.0.into(),
+        .style(
+            move |_: &iced::Theme, _status: text_input::Status| text_input::Style {
+                // Outer container owns the chrome border + bg, so the
+                // input itself is transparent. Without this the input's
+                // default frame paints on top of the container's
+                // rounded rect and the corners look doubled.
+                background: Background::Color(Color::TRANSPARENT),
+                border: Border {
+                    color: Color::TRANSPARENT,
+                    width: 0.0,
+                    radius: 0.0.into(),
+                },
+                icon: text_c,
+                placeholder: muted_c,
+                value: text_c,
+                selection: Color { a: 0.4, ..text_c },
             },
-            icon: text_c,
-            placeholder: muted_c,
-            value: text_c,
-            selection: Color { a: 0.4, ..text_c },
-        });
+        );
         let search_bar: Element<'_, Message> = container(
             row![search_icon, palette_input]
                 .spacing(8)
@@ -3212,7 +3414,7 @@ impl Signex {
             bottom: 0.0,
             left: 10.0,
         })
-        .width(440)
+        .width(crate::app::view::CHROME_SEARCH_BAR_WIDTH)
         .height(28)
         .align_y(iced::alignment::Vertical::Center)
         .style(move |_: &iced::Theme| container::Style {
@@ -3239,12 +3441,14 @@ impl Signex {
             .into()
         };
 
-        // `width(Length::Fill)` on the row is load-bearing: without it, the
-        // drag zones' Fill-width collapses to 0 because their parent (this
-        // row) is Shrink, and the chrome loses all its draggable real
-        // estate the moment menus + search + controls consume their
-        // natural widths.
-        let inner = row![menu_padded, drag_zone(), search_bar, drag_zone(), controls,]
+        // Original chrome layout — search bar centered between menu
+        // and controls (slightly right of true window center because
+        // the menu section is wider than the window-controls strip,
+        // but visually fine and the layout draggability + redraw
+        // characteristics are correct). Two Fill drag zones flank
+        // the search bar so the entire strip outside the input and
+        // controls is draggable.
+        let inner = row![menu_padded, drag_zone(), search_bar, drag_zone(), controls]
             .width(Length::Fill)
             .align_y(Alignment::Center);
 
@@ -3253,6 +3457,59 @@ impl Signex {
             .height(btn_h)
             .style(crate::styles::toolbar_strip(tokens))
             .into()
+    }
+
+    fn view_preferences_body(&self) -> Element<'_, Message> {
+        use crate::app::view::dialogs::{MODAL_CLOSE_X_HIT_W, MODAL_HEADER_HEIGHT};
+        use iced::widget::{Space, Stack, column as col_widget, mouse_area, row};
+
+        let ui = &self.ui_state;
+        let dialog: Element<'_, Message> = crate::preferences::view_body(
+            ui.preferences_nav,
+            ui.preferences_draft_theme,
+            ui.theme_id,
+            &ui.preferences_draft_font,
+            ui.preferences_draft_power_port_style,
+            ui.preferences_draft_label_style,
+            ui.preferences_draft_multisheet_style,
+            ui.preferences_draft_grid_style,
+            ui.custom_theme.as_ref().map(|c| c.name.as_str()),
+            ui.preferences_dirty,
+            &ui.erc_severity_override,
+            &self.library.settings,
+            &self.document_state.panel_ctx.tokens,
+            &ui.preferences_draft_component_classes,
+            ui.theme_id,
+        )
+        .map(Message::PreferencesMsg);
+
+        // OS-level drag handle covering the header strip, minus the
+        // close-X hit zone on the right. Press anywhere on the title
+        // bar → SC_MOVE drag the borderless OS window. Without this,
+        // `decorations: false` strips the OS title bar so there's
+        // nothing else for the user to grab.
+        let modal = super::state::ModalId::Preferences;
+        let drag_layer: Element<'_, Message> = col_widget![
+            row![
+                mouse_area(
+                    Space::new()
+                        .width(Length::Fill)
+                        .height(Length::Fixed(MODAL_HEADER_HEIGHT))
+                )
+                .on_press(Message::StartDetachedWindowDrag(modal))
+                .interaction(iced::mouse::Interaction::Grab),
+                Space::new()
+                    .width(Length::Fixed(MODAL_CLOSE_X_HIT_W))
+                    .height(Length::Fixed(MODAL_HEADER_HEIGHT)),
+            ]
+            .width(Length::Fill),
+            Space::new().width(Length::Fill).height(Length::Fill),
+        ]
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into();
+
+        Stack::new().push(dialog).push(drag_layer).into()
     }
 
     fn view_detached_modal(&self, modal: super::state::ModalId) -> Element<'_, Message> {
@@ -3303,12 +3560,14 @@ impl Signex {
                 }
                 stack.into()
             }
-            ModalId::Preferences
-            | ModalId::FindReplace
+            ModalId::Preferences => self.view_preferences_body(),
+            ModalId::FindReplace
             | ModalId::RenameDialog
             | ModalId::RemoveDialog
             | ModalId::ProjectOptions
-            | ModalId::EnableVersionControl => {
+            | ModalId::EnableVersionControl
+            | ModalId::GridProperties
+            | ModalId::SelectionFilterCustom => {
                 iced::widget::container(iced::widget::text("Detached modal"))
                     .padding(20)
                     .into()
@@ -3391,6 +3650,17 @@ impl Signex {
         // makes sense in the current app state. `has_schematic` /
         // `has_selection` drive most entries; undo / redo consult
         // the engine's history so they grey out when empty.
+        // v0.14.2: surface the active tab's primitive-editor kind to
+        // the menu so File ▸ Save / Save As enable themselves for
+        // `.snxsym` and `.snxfpt` standalone editor tabs.
+        let active_tab_kind = document.tabs.get(document.active_tab).map(|t| &t.kind);
+        let has_symbol_editor =
+            matches!(active_tab_kind, Some(crate::app::TabKind::SymbolEditor(_)));
+        let has_footprint_editor = matches!(
+            active_tab_kind,
+            Some(crate::app::TabKind::FootprintEditor(_))
+        );
+
         let menu_ctx = crate::menu_bar::MenuContext {
             has_schematic: self.has_active_schematic(),
             has_pcb: self.has_active_pcb(),
@@ -3404,6 +3674,8 @@ impl Signex {
                 .engine_for_window(window_id, ui)
                 .map(|e| e.can_redo())
                 .unwrap_or(false),
+            has_symbol_editor,
+            has_footprint_editor,
             // Secondary windows (detached modal, undocked tab) borrow
             // the main window's scale. Good enough until per-window
             // scale tracking lands — it's only wrong if the user drags
@@ -3467,6 +3739,7 @@ impl Signex {
             ui.grid_size_mm,
             &interaction.canvas_for_window(window_id).selected,
             &document.panel_ctx.tokens,
+            document.inflight_git_commits.len(),
         )
         .map(Message::StatusBar);
 
@@ -3574,7 +3847,26 @@ impl Signex {
         // correct.
         let main: Element<'_, Message> = main.into();
 
-        let has_active_bar = self.has_active_schematic();
+        // v0.13 — `has_active_bar` is now true for ANY editor tab
+        // that mounts an active bar (schematic / footprint /
+        // symbol library) so the layers Stack mounts and the bar
+        // layer fires from `view_main_for` regardless of editor
+        // kind.
+        let active_tab_kind_any = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .map(|t| &t.kind);
+        let has_footprint_bar = matches!(
+            active_tab_kind_any,
+            Some(crate::app::TabKind::FootprintEditor(_))
+        );
+        let has_symbol_bar = matches!(
+            active_tab_kind_any,
+            Some(crate::app::TabKind::SymbolEditor(_))
+        );
+        let has_active_bar =
+            self.has_active_schematic() || has_footprint_bar || has_symbol_bar;
         let dragging_tab = ui.tab_dragging.is_some();
         let needs_overlay = has_active_bar
             || interaction.editing_text.is_some()
@@ -3583,6 +3875,14 @@ impl Signex {
             || interaction.tab_context_menu.is_some()
             || interaction.active_bar_menu.is_some()
             || interaction.canvas.placement_paused
+            || self
+                .document_state
+                .tabs
+                .get(self.document_state.active_tab)
+                .and_then(|tab| tab.kind.as_footprint_editor())
+                .and_then(|path| self.document_state.footprint_editors.get(path))
+                .map(|ed| ed.state.placement_paused || ed.state.active_bar_menu.is_some())
+                .unwrap_or(false)
             || ui.panel_list_open
             || ui.find_replace.open
             || ui.preferences_open
@@ -3593,6 +3893,9 @@ impl Signex {
             || ui.project_close_confirm.is_some()
             || ui.project_options.is_some()
             || ui.enable_version_control.is_some()
+            || ui.grid_properties.is_some()
+            || ui.selection_filter_custom.is_some()
+            || interaction.grid_picker.is_some()
             || document.bom_preview.is_some()
             || ui.annotate_dialog_open
             || ui.annotate_reset_confirm
@@ -3901,8 +4204,15 @@ impl Signex {
                 && let Some(editor) = self.document_state.footprint_editors.get(path)
             {
                 let tokens = &self.document_state.panel_ctx.tokens;
-                return crate::library::editor::standalone::view_footprint(editor, tokens)
-                    .map(Message::Library);
+                let theme_id = self.ui_state.theme_id;
+                let custom_presets = &self.interaction_state.custom_filter_presets;
+                return crate::library::editor::standalone::view_footprint(
+                    editor,
+                    tokens,
+                    theme_id,
+                    custom_presets,
+                )
+                .map(Message::Library);
             }
             // Library Browser tab — `.snxlib` opened as a main-window
             // tab. Per-tab state lives in
@@ -4032,15 +4342,15 @@ impl Signex {
         // Match the schematic's own font (Iosevka by default; whatever
         // the user picked under Preferences ▸ Canvas Font) so the
         // tooltip reads as "this is data from the canvas" rather than
-        // floating Roboto chrome. We reuse the same `IOSEVKA` Font
-        // constant signex-render uses for canvas text so the lookup
+        // floating Roboto chrome. We reuse the app's `IOSEVKA` font
+        // constant for canvas text so the lookup
         // hits the embedded TTF (not whatever the system fontconfig
         // falls back to for `Family::Name`).
         let canvas_font_name: &str = &self.document_state.panel_ctx.canvas_font_name;
         let canvas_font = if canvas_font_name == crate::fonts::DEFAULT_CANVAS_FONT
             || canvas_font_name.is_empty()
         {
-            signex_render::IOSEVKA
+            crate::render_config::IOSEVKA
         } else {
             crate::fonts::iced_font_for_family(canvas_font_name)
         };
@@ -4145,7 +4455,11 @@ impl Signex {
         let catalog = build_catalog(self);
         let ranked = rank_results(&catalog, &self.ui_state.command_palette.query);
         let total = ranked.len();
-        let selected = self.ui_state.command_palette.selected_index.min(total.saturating_sub(1));
+        let selected = self
+            .ui_state
+            .command_palette
+            .selected_index
+            .min(total.saturating_sub(1));
 
         let mut rows: Vec<Element<'_, Message>> = Vec::with_capacity(MAX_RESULTS.min(total));
         for (display_idx, &(catalog_idx, _score)) in ranked.iter().take(MAX_RESULTS).enumerate() {
@@ -4173,12 +4487,9 @@ impl Signex {
             ]
             .spacing(2)
             .width(Length::Fill);
-            let row_inner = row![
-                label_col,
-                text(source_label).size(10).color(muted_c),
-            ]
-            .spacing(10)
-            .align_y(Alignment::Center);
+            let row_inner = row![label_col, text(source_label).size(10).color(muted_c),]
+                .spacing(10)
+                .align_y(Alignment::Center);
             let btn = button(row_inner)
                 .width(Length::Fill)
                 .padding([6, 12])
@@ -4195,7 +4506,11 @@ impl Signex {
                         border: Border {
                             width: if is_active { 1.0 } else { 0.0 },
                             radius: 3.0.into(),
-                            color: if is_active { accent_c } else { Color::TRANSPARENT },
+                            color: if is_active {
+                                accent_c
+                            } else {
+                                Color::TRANSPARENT
+                            },
                         },
                         text_color: text_c,
                         ..button::Style::default()
@@ -4205,14 +4520,10 @@ impl Signex {
         }
 
         let body: Element<'_, Message> = if total == 0 {
-            container(
-                text("No results")
-                    .size(12)
-                    .color(muted_c),
-            )
-            .padding([12, 14])
-            .width(Length::Fill)
-            .into()
+            container(text("No results").size(12).color(muted_c))
+                .padding([12, 14])
+                .width(Length::Fill)
+                .into()
         } else {
             let list = column(rows).spacing(2).padding(4);
             scrollable(list).height(Length::Shrink).into()
@@ -4235,7 +4546,10 @@ impl Signex {
             Space::new().height(0).into()
         };
 
-        let card_w = 520.0_f32;
+        // Card width matches the chrome search bar exactly so the
+        // dropdown reads as an extension of the input rather than a
+        // floating popup that happens to be nearby.
+        let card_w = CHROME_SEARCH_BAR_WIDTH;
         let card = container(column![body, footer])
             .width(card_w)
             .max_height(360.0)
@@ -4251,9 +4565,14 @@ impl Signex {
             });
 
         let (ww, _wh) = self.ui_state.window_size;
-        let x = ((ww - card_w) / 2.0).max(8.0);
-        // Drop just below the chrome strip with a small gap so the
-        // card visually detaches from the menu bar.
+        // Track the chrome search bar's actual layout position so the
+        // dropdown lines up with the input. The chrome row is
+        // `[menu, drag_fill, search, drag_fill, controls]`; the two
+        // Fill drag zones split the leftover evenly, so the search
+        // bar starts at `menu_w + leftover/2`.
+        let menu_w = crate::menu_bar::approx_menu_bar_width();
+        let leftover = (ww - menu_w - card_w - CHROME_CONTROLS_W).max(0.0);
+        let x = (menu_w + leftover / 2.0).max(8.0);
         let y = crate::menu_bar::MENU_BAR_HEIGHT + 4.0;
         super::view::translate::Translate::new(card, (x, y)).into()
     }
@@ -4350,7 +4669,17 @@ impl Signex {
         // with a Resume button. Clicking Resume clears `pre_placement`,
         // un-pauses the canvas, and drops back to the active placement tool
         // so the user can keep dropping objects with the edited properties.
-        if interaction.canvas.placement_paused {
+        // v0.13 — Also fires when a footprint editor's placement is paused
+        // so TAB during pad/via/string placement surfaces the same overlay.
+        let footprint_paused = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .and_then(|tab| tab.kind.as_footprint_editor())
+            .and_then(|path| self.document_state.footprint_editors.get(path))
+            .map(|ed| ed.state.placement_paused)
+            .unwrap_or(false);
+        if interaction.canvas.placement_paused || footprint_paused {
             let tokens = &document.panel_ctx.tokens;
             let panel_bg = crate::styles::ti(tokens.panel_bg);
             let text_c = crate::styles::ti(tokens.text);
@@ -4429,6 +4758,152 @@ impl Signex {
                 ]
                 .into(),
             );
+        }
+
+        // v0.13 — footprint editor active bar mounted at the SAME
+        // app-view layer as the schematic's. Earlier the bar lived
+        // inside the standalone editor body's canvas Stack, which
+        // gave it canvas-relative coordinates that drifted from the
+        // schematic's window-absolute coordinates. Mounting both at
+        // the layers Stack with identical `Space::height(y_offset +
+        // 4.0)` math guarantees pixel-identical screen y.
+        if let Some(active_tab) =
+            self.document_state.tabs.get(self.document_state.active_tab)
+            && let Some(path) = active_tab.kind.as_footprint_editor()
+            && let Some(editor) = self.document_state.footprint_editors.get(path)
+        {
+            let y_offset: f32 = crate::menu_bar::MENU_BAR_HEIGHT
+                + if document.tabs.is_empty() { 0.0 } else { 28.0 };
+            let theme_id = self.ui_state.theme_id;
+            let tokens = &document.panel_ctx.tokens;
+            let custom_presets = &interaction.custom_filter_presets;
+            // Mount BYTE-FOR-BYTE same as the schematic: build items,
+            // call `signex_widgets::active_bar::view` directly, then
+            // `.map(...)` then wrap in container().width(Fill).align_x(
+            // Center). Dropdown overlay is a separate layer pushed
+            // after the bar.
+            let bar_items =
+                crate::library::editor::footprint::unified_active_bar::bar_items(
+                    editor, theme_id, tokens,
+                );
+            let bar = signex_widgets::active_bar::view(bar_items, tokens)
+                .map(Message::Library);
+            layers.push(
+                column![
+                    iced::widget::Space::new().height(y_offset + 4.0),
+                    container(bar)
+                        .width(Length::Fill)
+                        .align_x(iced::alignment::Horizontal::Center),
+                ]
+                .into(),
+            );
+            // Position the dropdown panel directly below the bar's
+            // bottom edge. Bar-height = 28 button + 6 padding + 2
+            // border = 36; plus the 4 px top margin from the column
+            // above = 40 px tall block. `y_offset + 40` is the bar's
+            // bottom; add a 2 px gap so the dropdown visually
+            // touches without overlapping the border.
+            let dropdown_top: u16 = (y_offset as u16).saturating_add(42);
+            if let Some(overlay) =
+                crate::library::editor::footprint::unified_active_bar::dropdown_overlay(
+                    editor,
+                    theme_id,
+                    tokens,
+                    custom_presets,
+                    dropdown_top,
+                    self.ui_state.window_size.0,
+                )
+            {
+                layers.push(overlay.map(Message::Library));
+            }
+
+            // v0.26 — right-click context menu overlay for the
+            // footprint canvas. Sits above the active-bar dropdown so
+            // a long-press menu is occluded by — never under — its
+            // own dismiss layer. Window-absolute (x, y) come from the
+            // canvas''s ButtonReleased(Right) handler.
+            if let Some(menu_state) = editor.state.context_menu.as_ref()
+                && let Some(card) =
+                    crate::library::editor::footprint::context_menu::view_context_menu(
+                        editor,
+                        tokens,
+                        path,
+                        document.pad_clipboard.is_some(),
+                    )
+            {
+                // Dismiss layer — left-click anywhere outside closes
+                // the menu. Right-press passes through to the canvas
+                // (so a right-drag-to-pan gesture starts pan motion +
+                // closes the menu via the CursorMoved threshold).
+                let close_msg = Message::Library(
+                    crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                        path: path.to_path_buf(),
+                        msg: crate::library::messages::PrimitiveEditorMsg
+                            ::FootprintCloseContextMenu,
+                    },
+                );
+                layers.push(Self::dismiss_layer(close_msg));
+                let card_msg = card.map(Message::Library);
+                let (ww, wh) = self.ui_state.window_size;
+                // Conservative footprint estimate so the card stays on
+                // screen near right / bottom edges.
+                let est_menu_w: f32 = 220.0;
+                let est_menu_h: f32 = 320.0;
+                let edge_margin: f32 = 4.0;
+                let x = if menu_state.x + est_menu_w + edge_margin > ww {
+                    (ww - est_menu_w - edge_margin).max(0.0)
+                } else {
+                    menu_state.x
+                };
+                let y = if menu_state.y + est_menu_h + edge_margin > wh {
+                    (menu_state.y - est_menu_h).max(0.0)
+                } else {
+                    menu_state.y
+                };
+                layers.push(super::view::translate::Translate::new(card_msg, (x, y)).into());
+            }
+        }
+
+        // v0.13 — symbol library editor active bar mounted at the
+        // SAME app-view layer as the schematic / footprint bars.
+        if let Some(active_tab) =
+            self.document_state.tabs.get(self.document_state.active_tab)
+            && let Some(path) = active_tab.kind.as_symbol_editor()
+            && let Some(editor) = self.document_state.symbol_editors.get(path)
+        {
+            let y_offset: f32 = crate::menu_bar::MENU_BAR_HEIGHT
+                + if document.tabs.is_empty() { 0.0 } else { 28.0 };
+            let theme_id = self.ui_state.theme_id;
+            let tokens = &document.panel_ctx.tokens;
+            // Same byte-for-byte structure as the footprint + schematic
+            // mounts. Direct call to `signex_widgets::active_bar::view`
+            // — the unified widget's view_with_overlay path is
+            // bypassed at this site so the chain matches schematic.
+            let bar_items =
+                crate::library::editor::symbol::active_bar::bar_items(editor, theme_id);
+            let bar = signex_widgets::active_bar::view(bar_items, tokens)
+                .map(Message::Library);
+            layers.push(
+                column![
+                    iced::widget::Space::new().height(y_offset + 4.0),
+                    container(bar)
+                        .width(Length::Fill)
+                        .align_x(iced::alignment::Horizontal::Center),
+                ]
+                .into(),
+            );
+            let dropdown_top: u16 = (y_offset as u16).saturating_add(42);
+            if let Some(overlay) =
+                crate::library::editor::symbol::active_bar::dropdown_overlay(
+                    editor,
+                    theme_id,
+                    tokens,
+                    dropdown_top,
+                    self.ui_state.window_size.0,
+                )
+            {
+                layers.push(overlay.map(Message::Library));
+            }
         }
 
         if self.has_active_schematic()
@@ -4740,6 +5215,41 @@ impl Signex {
             }
         }
 
+        // v0.18.10 — Altium-style grid picker popup. Floats at the
+        // cursor when `G` is pressed in a footprint editor; rows are
+        // the standard 1mil…2.5mm ladder. Outside-click and Esc both
+        // dismiss via `Message::GridPickerClose`.
+        if let Some(ref picker) = interaction.grid_picker {
+            let menu = self.view_grid_picker_menu();
+            let menu_w: f32 = 200.0;
+            let est_menu_h: f32 = 13.0 * 22.0 + 8.0; // 13 rows + padding
+            let (win_w, win_h) = ui.window_size;
+            let edge_margin: f32 = 4.0;
+            let x = if picker.x + menu_w + edge_margin > win_w {
+                (win_w - menu_w - edge_margin).max(0.0)
+            } else {
+                picker.x
+            };
+            let y = if picker.y + est_menu_h + edge_margin > win_h {
+                (picker.y - est_menu_h).max(0.0)
+            } else {
+                picker.y
+            };
+            layers.push(Self::dismiss_layer(Message::GridPickerClose));
+            layers.push(
+                column![
+                    iced::widget::Space::new().height(y),
+                    row![
+                        iced::widget::Space::new().width(x),
+                        menu,
+                        iced::widget::Space::new().width(Length::Fill),
+                    ]
+                    .width(Length::Fill),
+                ]
+                .into(),
+            );
+        }
+
         if ui.panel_list_open {
             let text_c = crate::styles::ti(document.panel_ctx.tokens.text);
             let text_muted = crate::styles::ti(document.panel_ctx.tokens.text_secondary);
@@ -4888,7 +5398,18 @@ impl Signex {
             }
         }
 
-        if ui.preferences_open {
+        // Preferences renders inline only if it hasn't been detached
+        // into its own OS window. Open-flow auto-detaches via
+        // `handle_preferences_open_requested`, so this in-window path
+        // is the fallback when the detach failed (e.g. window manager
+        // refused to spawn a new window).
+        let prefs_detached = ui.windows.values().any(|kind| {
+            matches!(
+                kind,
+                super::state::WindowKind::DetachedModal(super::state::ModalId::Preferences)
+            )
+        });
+        if ui.preferences_open && !prefs_detached {
             let pref_view = crate::preferences::view(
                 ui.preferences_nav,
                 ui.preferences_draft_theme,
@@ -4919,6 +5440,7 @@ impl Signex {
         if ui.keyboard_shortcuts_open {
             layers.push(crate::keyboard_shortcuts_modal::view(
                 &document.panel_ctx.tokens,
+                ui.theme_id,
             ));
         }
 
@@ -4940,6 +5462,12 @@ impl Signex {
         }
         if ui.enable_version_control.is_some() {
             layers.push(self.view_enable_version_control_dialog());
+        }
+        if ui.grid_properties.is_some() {
+            layers.push(self.view_grid_properties_dialog());
+        }
+        if ui.selection_filter_custom.is_some() {
+            layers.push(self.view_selection_filter_custom_dialog());
         }
 
         // Skip overlay rendering for any modal whose detached OS window
@@ -5014,32 +5542,29 @@ impl Signex {
             } else {
                 library_classes
             };
-            let card = crate::library::new_component::view(
-                &self.library,
-                nc,
-                &document.panel_ctx.tokens,
-                self.ui_state.theme_id,
-                classes_to_show,
-            )
-            .map(Message::Library);
-            let backdrop = container(card)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .center_x(Length::Fill)
-                .center_y(Length::Fill)
-                .style(|_: &iced::Theme| iced::widget::container::Style {
-                    background: Some(iced::Background::Color(iced::Color::from_rgba(
-                        0.0, 0.0, 0.0, 0.45,
-                    ))),
-                    ..Default::default()
-                });
-            layers.push(backdrop.into());
+            // v0.13 — New Component modal removed. "Add Component"
+            // appends a draft row directly to the Library Browser's
+            // inline-editable table; the user types the PN in the
+            // table cell and picks the symbol / footprint via the
+            // Properties panel that surfaces when the row is
+            // selected. The unused `card` here is kept compiled to
+            // keep the form's `view` function exercised — once the
+            // dispatcher migration to "append-row-direct" lands
+            // properly, the whole `library.new_component` state +
+            // its messages can be pruned.
+            let _ = (nc, classes_to_show);
         }
 
-        // Edit Component Details modal (Deliverable B). One per
-        // browser tab; iterate to find the one with a live `edit_modal`.
+        // F25 (2026-05-03) — Edit Component Details modal removed.
+        // Row click selects → Properties panel surfaces detail.
+        // Per-component custom parameters are gone; every value
+        // lives in a table column. Render branch retained behind
+        // `EDIT_MODAL_ENABLED` for one release; prune the supporting
+        // state + dispatchers in a follow-up cleanup pass.
+        const EDIT_MODAL_ENABLED: bool = false;
+        #[allow(clippy::overly_complex_bool_expr)]
         for (lib_path, browser_state) in &self.library.library_browsers {
-            if let Some(edit) = browser_state.edit_modal.as_ref() {
+            if EDIT_MODAL_ENABLED && let Some(edit) = browser_state.edit_modal.as_ref() {
                 // Class registry is per-library — read from the
                 // editing library's manifest. Falls back to the
                 // user's prefs default when the library has no

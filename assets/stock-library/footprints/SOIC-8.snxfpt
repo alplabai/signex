@@ -1,0 +1,263 @@
+format = "snxfpt/1"
+file_uuid = "019df45d-af5f-7bb0-914a-26cc90477b10"
+display_name = "SOIC-8"
+created = "2026-05-04T19:01:13.695326400Z"
+updated = "2026-05-04T19:01:13.695326400Z"
+
+[[footprints]]
+uuid = "019df45d-af5f-7bb0-914a-26b538180e51"
+name = "SOIC-8"
+anchor = [
+    0.0,
+    0.0,
+]
+pads_tsv = '''
+number	kind	shape	size_x	size_y	pos_x	pos_y	rotation	layers	drill_diameter	drill_slot_length	solder_mask_margin	paste_margin
+'''
+silk_f = []
+silk_b = []
+fab_f = []
+fab_b = []
+version = "0.0.1"
+released = false
+created = "2026-05-04T19:01:13.695092100Z"
+updated = "2026-05-04T19:01:13.695092100Z"
+schema_version = 3
+
+[footprints.courtyard]
+points = []
+
+[footprints.body_3d]
+shape = "Extrude"
+height_mm = 1.0
+offset_z_mm = 0.0
+top_color = [
+    0.20000000298023224,
+    0.20000000298023224,
+    0.20000000298023224,
+    1.0,
+]
+side_color = [
+    0.30000001192092896,
+    0.30000001192092896,
+    0.30000001192092896,
+    1.0,
+]
+
+[footprints.pcb_params]
+
+[footprints.sketch]
+constraints = []
+arrays = []
+
+[[footprints.sketch.planes]]
+id = "e09fba70-a152-4bdf-a5b9-63e910b7feb9"
+kind = "BoardTop"
+
+[[footprints.sketch.entities]]
+id = "a8e5614e-fd34-4ed7-843f-4e14aa2ad385"
+plane = "e09fba70-a152-4bdf-a5b9-63e910b7feb9"
+construction = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "1"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_w"
+size_y_expr = "pad_h"
+offset_x_expr = "-row_half"
+offset_y_expr = "1.5 * pad_pitch"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[[footprints.sketch.entities]]
+id = "361ff8ec-6f30-4611-a6ae-23539330f3f6"
+plane = "e09fba70-a152-4bdf-a5b9-63e910b7feb9"
+construction = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "2"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_w"
+size_y_expr = "pad_h"
+offset_x_expr = "-row_half"
+offset_y_expr = "0.5 * pad_pitch"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[[footprints.sketch.entities]]
+id = "ab4568ce-13da-4245-9e41-f5bd0db95882"
+plane = "e09fba70-a152-4bdf-a5b9-63e910b7feb9"
+construction = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "3"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_w"
+size_y_expr = "pad_h"
+offset_x_expr = "-row_half"
+offset_y_expr = "-0.5 * pad_pitch"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[[footprints.sketch.entities]]
+id = "53b621c3-5e5e-4776-935c-4b429da345ad"
+plane = "e09fba70-a152-4bdf-a5b9-63e910b7feb9"
+construction = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "4"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_w"
+size_y_expr = "pad_h"
+offset_x_expr = "-row_half"
+offset_y_expr = "-1.5 * pad_pitch"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[[footprints.sketch.entities]]
+id = "ec21901f-1dec-4e86-9d8e-7f560512dde4"
+plane = "e09fba70-a152-4bdf-a5b9-63e910b7feb9"
+construction = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "5"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_w"
+size_y_expr = "pad_h"
+offset_x_expr = "row_half"
+offset_y_expr = "-1.5 * pad_pitch"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[[footprints.sketch.entities]]
+id = "f8cb1015-8afe-4520-b623-26a290925a83"
+plane = "e09fba70-a152-4bdf-a5b9-63e910b7feb9"
+construction = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "6"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_w"
+size_y_expr = "pad_h"
+offset_x_expr = "row_half"
+offset_y_expr = "-0.5 * pad_pitch"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[[footprints.sketch.entities]]
+id = "cd2740e0-0b32-4aa6-a641-87f428137e6e"
+plane = "e09fba70-a152-4bdf-a5b9-63e910b7feb9"
+construction = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "7"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_w"
+size_y_expr = "pad_h"
+offset_x_expr = "row_half"
+offset_y_expr = "0.5 * pad_pitch"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[[footprints.sketch.entities]]
+id = "2af18275-f777-40c2-90ac-e382bb4da9d2"
+plane = "e09fba70-a152-4bdf-a5b9-63e910b7feb9"
+construction = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "8"
+kind = "Smd"
+side = "Top"
+size_x_expr = "pad_w"
+size_y_expr = "pad_h"
+offset_x_expr = "row_half"
+offset_y_expr = "1.5 * pad_pitch"
+mask_margin_expr = "0.05mm"
+paste_margin_expr = "0mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Rect"
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[footprints.sketch.parameters]
+body_h = "4.9mm"
+body_w = "3.9mm"
+pad_h = "0.6mm"
+pad_pitch = "1.27mm"
+pad_w = "1.55mm"
+row_half = "2.7mm"

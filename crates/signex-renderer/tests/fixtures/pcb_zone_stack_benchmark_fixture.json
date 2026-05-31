@@ -1,0 +1,212 @@
+{
+  "uuid": "11111111-2222-4333-8444-555555555555",
+  "version": 1,
+  "generator": "benchmark_fixture",
+  "thickness": 1.6,
+  "outline": [],
+  "layers": [
+    { "id": 0, "name": "B.Cu", "layer_type": "signal" },
+    { "id": 1, "name": "In1.Cu", "layer_type": "signal" },
+    { "id": 2, "name": "F.Cu", "layer_type": "signal" }
+  ],
+  "setup": null,
+  "nets": [
+    { "number": 0, "name": "" },
+    { "number": 1, "name": "GND" },
+    { "number": 2, "name": "VCC" },
+    { "number": 3, "name": "CLK" },
+    { "number": 4, "name": "IO1" },
+    { "number": 5, "name": "IO2" },
+    { "number": 7, "name": "PWR" },
+    { "number": 9, "name": "RST" }
+  ],
+  "footprints": [],
+  "segments": [],
+  "vias": [],
+  "zones": [
+    {
+      "uuid": "00000000-0000-4000-8000-000000000001",
+      "net": 3,
+      "net_name": "CLK",
+      "layer": "In1.Cu",
+      "outline": [
+        { "x": 8.0, "y": 0.0 },
+        { "x": 11.0, "y": 0.0 },
+        { "x": 11.0, "y": 2.0 },
+        { "x": 8.0, "y": 2.0 }
+      ],
+      "priority": 1,
+      "fill_type": "solid"
+    },
+    {
+      "uuid": "00000000-0000-4000-8000-000000000002",
+      "net": 2,
+      "net_name": "VCC",
+      "layer": "B.Cu",
+      "outline": [
+        { "x": 0.0, "y": 0.0 },
+        { "x": 3.0, "y": 0.0 },
+        { "x": 3.0, "y": 2.0 },
+        { "x": 0.0, "y": 2.0 }
+      ],
+      "priority": 1,
+      "fill_type": "solid"
+    },
+    {
+      "uuid": "00000000-0000-4000-8000-000000000003",
+      "net": 0,
+      "net_name": "",
+      "layer": "F.Cu",
+      "outline": [
+        { "x": 16.0, "y": 0.0 },
+        { "x": 19.0, "y": 0.0 },
+        { "x": 19.0, "y": 2.0 },
+        { "x": 16.0, "y": 2.0 }
+      ],
+      "priority": 1,
+      "fill_type": "rule_area"
+    },
+    {
+      "uuid": "00000000-0000-4000-8000-000000000004",
+      "net": 1,
+      "net_name": "GND",
+      "layer": "B.Cu",
+      "outline": [
+        { "x": 4.0, "y": 0.0 },
+        { "x": 7.0, "y": 0.0 },
+        { "x": 7.0, "y": 2.0 },
+        { "x": 4.0, "y": 2.0 }
+      ],
+      "priority": 3,
+      "fill_type": "solid"
+    },
+    {
+      "uuid": "00000000-0000-4000-8000-000000000005",
+      "net": 7,
+      "net_name": "PWR",
+      "layer": "Eco1.User",
+      "outline": [
+        { "x": 24.0, "y": 0.0 },
+        { "x": 27.0, "y": 0.0 },
+        { "x": 27.0, "y": 2.0 },
+        { "x": 24.0, "y": 2.0 }
+      ],
+      "priority": 4,
+      "fill_type": "solid"
+    },
+    {
+      "uuid": "00000000-0000-4000-8000-000000000006",
+      "net": 0,
+      "net_name": "",
+      "layer": "B.Cu",
+      "outline": [
+        { "x": -4.0, "y": 0.0 },
+        { "x": -1.0, "y": 0.0 },
+        { "x": -1.0, "y": 2.0 },
+        { "x": -4.0, "y": 2.0 }
+      ],
+      "priority": 0,
+      "fill_type": "solid"
+    },
+    {
+      "uuid": "00000000-0000-4000-8000-000000000007",
+      "net": 9,
+      "net_name": "RST",
+      "layer": "F.Cu",
+      "outline": [
+        { "x": 20.0, "y": 0.0 },
+        { "x": 23.0, "y": 0.0 },
+        { "x": 23.0, "y": 2.0 },
+        { "x": 20.0, "y": 2.0 }
+      ],
+      "priority": 0,
+      "fill_type": "solid"
+    },
+    {
+      "uuid": "00000000-0000-4000-8000-000000000008",
+      "net": 2,
+      "net_name": "VCC",
+      "layer": "In1.Cu",
+      "outline": [
+        { "x": 12.0, "y": 0.0 },
+        { "x": 15.0, "y": 0.0 },
+        { "x": 15.0, "y": 2.0 },
+        { "x": 12.0, "y": 2.0 }
+      ],
+      "priority": 2,
+      "fill_type": "solid"
+    },
+    {
+      "uuid": "00000000-0000-4000-8000-000000000009",
+      "net": 4,
+      "net_name": "IO1",
+      "layer": "F.Cu",
+      "outline": [
+        { "x": 16.0, "y": 3.0 },
+        { "x": 19.0, "y": 3.0 },
+        { "x": 19.0, "y": 5.0 },
+        { "x": 16.0, "y": 5.0 }
+      ],
+      "priority": 0,
+      "fill_type": "solid"
+    },
+    {
+      "uuid": "00000000-0000-4000-8000-000000000010",
+      "net": 5,
+      "net_name": "IO2",
+      "layer": "B.Cu",
+      "outline": [
+        { "x": 0.0, "y": 3.0 },
+        { "x": 3.0, "y": 3.0 },
+        { "x": 3.0, "y": 5.0 },
+        { "x": 0.0, "y": 5.0 }
+      ],
+      "priority": 1,
+      "fill_type": "solid"
+    },
+    {
+      "uuid": "00000000-0000-4000-8000-000000000011",
+      "net": 0,
+      "net_name": "",
+      "layer": "In1.Cu",
+      "outline": [
+        { "x": 8.0, "y": 3.0 },
+        { "x": 11.0, "y": 3.0 },
+        { "x": 11.0, "y": 5.0 },
+        { "x": 8.0, "y": 5.0 }
+      ],
+      "priority": 1,
+      "fill_type": "solid"
+    },
+    {
+      "uuid": "00000000-0000-4000-8000-000000000012",
+      "net": 1,
+      "net_name": "GND",
+      "layer": "F.Cu",
+      "outline": [
+        { "x": 20.0, "y": 3.0 },
+        { "x": 23.0, "y": 3.0 },
+        { "x": 23.0, "y": 5.0 },
+        { "x": 20.0, "y": 5.0 }
+      ],
+      "priority": 2,
+      "fill_type": "solid"
+    },
+    {
+      "uuid": "00000000-0000-4000-8000-000000000013",
+      "net": 2,
+      "net_name": "VCC",
+      "layer": "F.Cu",
+      "outline": [
+        { "x": 24.0, "y": 3.0 },
+        { "x": 27.0, "y": 3.0 },
+        { "x": 27.0, "y": 5.0 },
+        { "x": 24.0, "y": 5.0 }
+      ],
+      "priority": 1,
+      "fill_type": "rule_area"
+    }
+  ],
+  "graphics": [],
+  "texts": []
+}

@@ -166,6 +166,118 @@ jobs:
           fi
           echo "No KiCad C++ class names or .cpp file references."
 
+  no-standard-as-comment-word-in-renderer:
+    name: No bare `Standard` as a comment word in renderer / engine
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Forbid `\bStandard\b` substring in signex-render / signex-engine
+        run: |
+          set -e
+          # The v0.10.0 "Standard" rename of KiCad-class names was a
+          # cosmetic substitution that left structural derivation in
+          # place. The v0.12 cleanroom rewrite removed those references
+          # and forbids reintroduction; future contributions must use
+          # neutral terms or reference `docs/RENDERING_RULES.md`
+          # directly. The `Standard` literal in render-style enum
+          # variant names (`PowerPortStyle::Standard`,
+          # `LabelStyle::Standard`, `MultisheetStyle::Standard`) is
+          # whitelisted because it serialises to disk and renaming
+          # would break user files.
+          MATCHES=$(git grep -nE '\bStandard\b' -- 'crates/signex-render/' 'crates/signex-engine/' || true)
+          if [ -n "$MATCHES" ]; then
+            # Whitelist: render-style enum variant declarations + their
+            # Display impls. Anything else is a comment-word euphemism
+            # and fails the rule.
+            FILTERED=$(echo "$MATCHES" | grep -vE '(PowerPortStyle::Standard|LabelStyle::Standard|MultisheetStyle::Standard|"Standard"|^[^:]+:[0-9]+:[[:space:]]+Standard,[[:space:]]*$|Standard => write)' || true)
+            if [ -n "$FILTERED" ]; then
+              echo "$FILTERED"
+              echo ""
+              echo "::error::Bare 'Standard' comment-word detected in signex-render / signex-engine."
+              echo "::error::Source comments must describe behaviour without the v0.10.0 Standard euphemism."
+              echo "::error::Reference docs/RENDERING_RULES.md, IEEE-Std-91, or Altium parity instead."
+              exit 1
+            fi
+          fi
+          echo "No bare 'Standard' comment-words in renderer / engine."
+
+  no-kicad-published-format-substrings:
+    name: No `.kicad_sch` / `.kicad_pcb` / `.kicad_sym` literals
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Forbid published KiCad file-format extension substrings
+        run: |
+          set -e
+          # The Apache-clean Signex repo doesn't read or write KiCad
+          # files; the GPL-3.0 companion does. Any literal containing
+          # `.kicad_sch` / `.kicad_pcb` / `.kicad_sym` (test fixture
+          # filenames, error messages, file dialogs) signals a probable
+          # GPL-companion code drift. Use `.snxsch` / `.snxpcb` / `.snxsym`
+          # in the Apache crates.
+          if git grep -nE '\.kicad_(sch|pcb|sym)\b' -- 'crates/**/*.rs' 'crates/**/*.toml'; then
+            echo ""
+            echo "::error::Published KiCad file-format extension substring detected in crates/."
+            echo "::error::This Apache crate doesn't interop with KiCad files. Use the Signex"
+            echo "::error::extensions (.snxsch / .snxpcb / .snxsym) for fixtures and messages."
+            exit 1
+          fi
+          echo "No KiCad published-format substrings."
+
+  no-third-party-constraint-solver-substrings:
+    name: No SolveSpace / FreeCAD / planegcs / OpenCascade substrings in sketch crates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Forbid third-party constraint-solver substrings under crates/signex-sketch and crates/signex-bake
+        run: |
+          set -e
+          # The v0.13 sketch-mode solver is a cleanroom implementation
+          # derived from textbook references (Hearn & Baker, Numerical
+          # Recipes). Any reference to a third-party constraint-solver
+          # source signals a derivation-shaped contribution and must
+          # be reviewed before merge.
+          #
+          # Word-boundary `\b...\b` so the English word "sketcher" does
+          # not collide with our own `SketchError` type (substring
+          # `Sketcher` inside `SketchError`). The word "sketcher" still
+          # legitimately describes our own product in three audit-allowed
+          # files (Cargo.toml description, lib.rs heading, bench example
+          # comment) — those are excluded via pathspec.
+          if git grep -niE '\b(solvespace|freecad|planegcs|opencascade|sketcher)\b' -- \
+               'crates/signex-sketch/**/*.rs' 'crates/signex-sketch/**/*.toml' \
+               'crates/signex-bake/**/*.rs' 'crates/signex-bake/**/*.toml' \
+               ':!crates/signex-sketch/Cargo.toml' \
+               ':!crates/signex-sketch/src/lib.rs' \
+               ':!crates/signex-sketch/examples/bench_linalg.rs'; then
+            echo ""
+            echo "::error::Third-party constraint-solver substring (SolveSpace / FreeCAD / planegcs / OpenCascade / Sketcher) detected under crates/signex-sketch or crates/signex-bake."
+            echo "::error::Phase 1-7 of v0.13 ships a cleanroom implementation; references must come from textbooks (Hearn & Baker, Numerical Recipes) only."
+            echo "::error::See docs/audit/sketch-solver-2026-05-03.md for the audit trail."
+            exit 1
+          fi
+          echo "No third-party constraint-solver substrings under signex-sketch / signex-bake."
+
+  no-third-party-constraint-solver-attribution:
+    name: No "from SolveSpace" / "based on FreeCAD" attribution comments
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Forbid attribution comments referencing third-party constraint solvers
+        run: |
+          set -e
+          # Catches the form "// from <Solver>" or "// based on
+          # <Solver>" that an agent might use to credit derivation.
+          # Word-boundary the solver names to avoid colliding with our
+          # own English use of "sketcher" in product descriptions.
+          if git grep -niE '(from|based on|adapted from|derived from|copied from|inspired by) [^.]*\b(solvespace|freecad|planegcs|opencascade|sketcher)\b' -- ':!docs/audit/' ':!.github/workflows/license-guard.yml'; then
+            echo ""
+            echo "::error::Attribution comment referencing a third-party constraint solver detected."
+            echo "::error::All algorithm references must cite public textbooks (Hearn & Baker, Numerical Recipes) — see docs/audit/sketch-solver-2026-05-03.md."
+            exit 1
+          fi
+          echo "No third-party constraint-solver attribution comments."
+
   no-derivation-attribution-markers:
     name: No DeepWiki / KiCad-mirror-source markers
     runs-on: ubuntu-latest

@@ -8,7 +8,7 @@ use iced::widget::{
     Column, Space, button, column, container, row, scrollable, svg, text, text_input,
 };
 use iced::{Background, Border, Color, Element, Length, Theme};
-use signex_render::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
+use crate::render_config::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
 use signex_types::theme::ThemeId;
 
 use crate::app::view::dialogs::{
@@ -16,6 +16,7 @@ use crate::app::view::dialogs::{
     MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE,
 };
 use crate::fonts;
+use crate::styles::MODAL_CORNER_RADIUS;
 
 // ─── Navigation Items ─────────────────────────────────────────
 
@@ -130,9 +131,9 @@ pub enum PrefMsg {
 
 // ─── Dialog sizes ─────────────────────────────────────────────
 
-const DLG_W: f32 = 760.0;
-const DLG_H: f32 = 520.0;
-const NAV_W: f32 = 190.0;
+const DLG_W: f32 = 960.0;
+const DLG_H: f32 = 660.0;
+const NAV_W: f32 = 220.0;
 const HDR_H: f32 = 40.0;
 const FOOTER_H: f32 = 44.0;
 
@@ -222,6 +223,47 @@ pub fn view<'a>(
 
 // ─── Dialog shell ─────────────────────────────────────────────
 
+/// Render the Preferences dialog body without the centred backdrop —
+/// used by `view_detached_modal` so the dialog fills its own OS window.
+/// In-window callers go through `view()` which wraps this in a tinted
+/// dismiss layer.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn view_body<'a>(
+    nav: PrefNav,
+    draft_theme: ThemeId,
+    saved_theme: ThemeId,
+    draft_font: &'a str,
+    draft_power_port_style: PowerPortStyle,
+    draft_label_style: LabelStyle,
+    draft_multisheet_style: MultisheetStyle,
+    draft_grid_style: GridStyle,
+    custom_name: Option<&'a str>,
+    dirty: bool,
+    erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
+    distributor_settings: &'a crate::library::state::DistributorSettings,
+    panel_tokens: &'a signex_types::theme::ThemeTokens,
+    draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
+    theme_id: ThemeId,
+) -> Element<'a, PrefMsg> {
+    build_dialog(
+        nav,
+        draft_theme,
+        saved_theme,
+        draft_font,
+        draft_power_port_style,
+        draft_label_style,
+        draft_multisheet_style,
+        draft_grid_style,
+        custom_name,
+        dirty,
+        erc_overrides,
+        distributor_settings,
+        panel_tokens,
+        draft_component_classes,
+        theme_id,
+    )
+}
+
 #[allow(clippy::too_many_arguments)]
 fn build_dialog<'a>(
     nav: PrefNav,
@@ -260,6 +302,9 @@ fn build_dialog<'a>(
         background: Some(Background::Color(HDR_BG)),
         border: Border {
             width: 0.0,
+            radius: iced::border::Radius::default()
+                .top_left(MODAL_CORNER_RADIUS)
+                .top_right(MODAL_CORNER_RADIUS),
             ..Border::default()
         },
         ..container::Style::default()
@@ -295,51 +340,46 @@ fn build_dialog<'a>(
     .width(Length::Fill)
     .height(Length::Fill);
 
-    // ── Footer ──
-    let footer = build_footer(dirty);
+    // ── Footer (only when dirty) ──
+    let footer_opt = build_footer(dirty);
 
     // ── Assemble ──
-    container(
-        column![
-            header,
-            // Horizontal divider under header
-            container(Space::new())
-                .width(Length::Fill)
-                .height(1)
-                .style(move |_: &Theme| container::Style {
-                    background: Some(Background::Color(SEP)),
-                    ..container::Style::default()
-                }),
-            body,
-            // Horizontal divider above footer
-            container(Space::new())
-                .width(Length::Fill)
-                .height(1)
-                .style(move |_: &Theme| container::Style {
-                    background: Some(Background::Color(SEP)),
-                    ..container::Style::default()
-                }),
-            footer,
-        ]
-        .spacing(0),
-    )
-    .width(DLG_W)
-    .height(DLG_H)
-    .style(move |_: &Theme| container::Style {
-        background: Some(Background::Color(DLG_BG)),
-        border: Border {
-            width: 1.0,
-            radius: 6.0.into(),
-            color: SEP,
-        },
-        shadow: iced::Shadow {
-            color: Color::from_rgba(0.0, 0.0, 0.0, 0.7),
-            offset: iced::Vector::new(0.0, 8.0),
-            blur_radius: 24.0,
-        },
-        ..container::Style::default()
-    })
-    .into()
+    let h_divider = || -> Element<'a, PrefMsg> {
+        container(Space::new())
+            .width(Length::Fill)
+            .height(1)
+            .style(move |_: &Theme| container::Style {
+                background: Some(Background::Color(SEP)),
+                ..container::Style::default()
+            })
+            .into()
+    };
+
+    let mut col_items: Vec<Element<'a, PrefMsg>> = vec![header.into(), h_divider(), body.into()];
+    if let Some(footer) = footer_opt {
+        col_items.push(h_divider());
+        col_items.push(footer);
+    }
+
+    container(Column::with_children(col_items).spacing(0))
+        .width(DLG_W)
+        .height(DLG_H)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(DLG_BG)),
+            border: Border {
+                width: 1.0,
+                radius: MODAL_CORNER_RADIUS.into(),
+                color: SEP,
+            },
+            shadow: iced::Shadow {
+                color: Color::from_rgba(0.0, 0.0, 0.0, 0.7),
+                offset: iced::Vector::new(0.0, 8.0),
+                blur_radius: 24.0,
+            },
+            ..container::Style::default()
+        })
+        .clip(true)
+        .into()
 }
 
 // ─── Left navigation ──────────────────────────────────────────
@@ -826,10 +866,7 @@ fn close_btn<'a>(theme_id: ThemeId) -> Element<'a, PrefMsg> {
     .padding(0)
     .on_press(PrefMsg::Close)
     .style(move |_: &Theme, status: button::Status| {
-        let hovered = matches!(
-            status,
-            button::Status::Hovered | button::Status::Pressed
-        );
+        let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
         button::Style {
             background: if hovered {
                 Some(Background::Color(MODAL_CLOSE_X_HOVER))
@@ -853,37 +890,41 @@ fn close_btn<'a>(theme_id: ThemeId) -> Element<'a, PrefMsg> {
 }
 
 /// Dynamic footer: Save + Close (clean) or ⚠ + Discard + Save (dirty).
-fn build_footer<'a>(dirty: bool) -> Element<'a, PrefMsg> {
-    let footer_row: Element<'a, PrefMsg> = if dirty {
-        row![
-            text("● Unsaved changes").size(11).color(WARN_YELLOW),
-            Space::new().width(Length::Fill),
-            discard_btn(),
-            Space::new().width(8),
-            save_btn(),
-        ]
-        .align_y(iced::Alignment::Center)
-        .into()
-    } else {
-        row![Space::new().width(Length::Fill), close_footer_btn(),]
-            .align_y(iced::Alignment::Center)
-            .into()
-    };
+/// Footer is rendered only when dirty — the X button in the header is the
+/// canonical close action; a redundant "Close" button at the bottom is
+/// noise. Save / Discard appear when there are unsaved changes.
+fn build_footer<'a>(dirty: bool) -> Option<Element<'a, PrefMsg>> {
+    if !dirty {
+        return None;
+    }
+    let footer_row: Element<'a, PrefMsg> = row![
+        text("● Unsaved changes").size(11).color(WARN_YELLOW),
+        Space::new().width(Length::Fill),
+        discard_btn(),
+        Space::new().width(8),
+        save_btn(),
+    ]
+    .align_y(iced::Alignment::Center)
+    .into();
 
-    container(footer_row)
-        .width(Length::Fill)
-        .height(FOOTER_H)
-        .padding([0, 16])
-        .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(HDR_BG)),
-            border: Border {
-                width: 1.0,
-                color: SEP,
-                radius: 0.0.into(),
-            },
-            ..container::Style::default()
-        })
-        .into()
+    Some(
+        container(footer_row)
+            .width(Length::Fill)
+            .height(FOOTER_H)
+            .padding([0, 16])
+            .style(move |_: &Theme| container::Style {
+                background: Some(Background::Color(HDR_BG)),
+                border: Border {
+                    width: 1.0,
+                    color: SEP,
+                    radius: iced::border::Radius::default()
+                        .bottom_left(MODAL_CORNER_RADIUS)
+                        .bottom_right(MODAL_CORNER_RADIUS),
+                },
+                ..container::Style::default()
+            })
+            .into(),
+    )
 }
 
 fn save_btn<'a>() -> Element<'a, PrefMsg> {
@@ -1154,20 +1195,20 @@ fn content_component_classes<'a>(
 ) -> Element<'a, PrefMsg> {
     let header = column![
         text("Default Component Classes").size(15).color(TEXT_PRI),
-        text("Seeds the class registry of newly-created libraries. \
+        text(
+            "Seeds the class registry of newly-created libraries. \
               Per-library edits live inside each .snxlib's manifest \
               (forthcoming Library Properties pane); this list \
-              controls only what new libraries inherit.")
-            .size(11)
-            .color(TEXT_MUT),
+              controls only what new libraries inherit."
+        )
+        .size(11)
+        .color(TEXT_MUT),
     ]
     .spacing(6);
 
     let column_header = row![
-        container(text("Key").size(11).color(TEXT_MUT))
-            .width(Length::FillPortion(2)),
-        container(text("Label").size(11).color(TEXT_MUT))
-            .width(Length::FillPortion(3)),
+        container(text("Key").size(11).color(TEXT_MUT)).width(Length::FillPortion(2)),
+        container(text("Label").size(11).color(TEXT_MUT)).width(Length::FillPortion(3)),
         container(Space::new()).width(80),
     ]
     .spacing(8)
@@ -1228,46 +1269,46 @@ fn content_component_classes<'a>(
         Column::with_children(rows).spacing(6).into()
     };
 
-    let add_btn = button(
-        container(text("+ Add Class").size(11).color(Color::WHITE)).padding([5, 12]),
-    )
-    .on_press(PrefMsg::ComponentClassAdd)
-    .style(move |_: &Theme, status: button::Status| {
-        let bg = match status {
-            button::Status::Hovered | button::Status::Pressed => BTN_IMPORT_HOV,
-            _ => BTN_IMPORT,
-        };
-        button::Style {
-            background: Some(Background::Color(bg)),
-            text_color: Color::WHITE,
-            border: Border {
-                radius: 3.0.into(),
-                ..Border::default()
-            },
-            ..button::Style::default()
-        }
-    });
+    let add_btn =
+        button(container(text("+ Add Class").size(11).color(Color::WHITE)).padding([5, 12]))
+            .on_press(PrefMsg::ComponentClassAdd)
+            .style(move |_: &Theme, status: button::Status| {
+                let bg = match status {
+                    button::Status::Hovered | button::Status::Pressed => BTN_IMPORT_HOV,
+                    _ => BTN_IMPORT,
+                };
+                button::Style {
+                    background: Some(Background::Color(bg)),
+                    text_color: Color::WHITE,
+                    border: Border {
+                        radius: 3.0.into(),
+                        ..Border::default()
+                    },
+                    ..button::Style::default()
+                }
+            });
 
-    let reset_btn = button(
-        container(text("Reset to Defaults").size(11).color(TEXT_PRI)).padding([5, 12]),
-    )
-    .on_press(PrefMsg::ComponentClassResetDefaults)
-    .style(move |_: &Theme, status: button::Status| {
-        let bg = match status {
-            button::Status::Hovered | button::Status::Pressed => Color::from_rgb(0.22, 0.22, 0.26),
-            _ => Color::from_rgb(0.18, 0.18, 0.21),
-        };
-        button::Style {
-            background: Some(Background::Color(bg)),
-            text_color: TEXT_PRI,
-            border: Border {
-                width: 1.0,
-                color: SEP,
-                radius: 3.0.into(),
-            },
-            ..button::Style::default()
-        }
-    });
+    let reset_btn =
+        button(container(text("Reset to Defaults").size(11).color(TEXT_PRI)).padding([5, 12]))
+            .on_press(PrefMsg::ComponentClassResetDefaults)
+            .style(move |_: &Theme, status: button::Status| {
+                let bg = match status {
+                    button::Status::Hovered | button::Status::Pressed => {
+                        Color::from_rgb(0.22, 0.22, 0.26)
+                    }
+                    _ => Color::from_rgb(0.18, 0.18, 0.21),
+                };
+                button::Style {
+                    background: Some(Background::Color(bg)),
+                    text_color: TEXT_PRI,
+                    border: Border {
+                        width: 1.0,
+                        color: SEP,
+                        radius: 3.0.into(),
+                    },
+                    ..button::Style::default()
+                }
+            });
 
     let toolbar = row![
         add_btn,

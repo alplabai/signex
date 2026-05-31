@@ -20,14 +20,14 @@ pub mod sim;
 pub mod symbol;
 
 pub use footprint::{
-    Body3D, BodyShape, Drill, Footprint, FpGraphic, FpGraphicKind, LayerId, Pad, PadKind, PadShape,
-    Polygon, StepAttachment,
+    Body3D, BodyShape, Drill, Footprint, FootprintFile, FootprintFileError, FpGraphic,
+    FpGraphicKind, LayerId, Pad, PadKind, PadShape, Polygon, StepAttachment,
 };
 pub use ref_::PrimitiveRef;
-pub use sim::{SimKind, SimModel};
+pub use sim::{SimFile, SimFileError, SimKind, SimModel};
 pub use symbol::{
     ComponentType, PinDirection, PinOrientation, PinSymbolKind, Symbol, SymbolFile,
-    SymbolGraphic, SymbolGraphicKind, SymbolPin,
+    SymbolFileError, SymbolGraphic, SymbolGraphicKind, SymbolPin,
 };
 
 /// Discriminator surfaced on `PrimitiveSummary` so a single `list_*` API can

@@ -165,7 +165,10 @@ fn refresh_token_grant_calls_token_endpoint() {
 fn no_refresh_token_yields_auth_error() {
     // Construct an adapter whose KeyringStore points at a guaranteed-absent
     // username; access_token() must surface NoRefreshToken → Auth error.
-    let store = KeyringStore::for_provider("digikey", "ws-c-test-absent-refresh");
+    // MD-17: skip on platforms where the OS keychain is unavailable.
+    let Ok(store) = KeyringStore::for_provider("digikey", "ws-c-test-absent-refresh") else {
+        return;
+    };
     let _ = store.delete();
 
     let auth = DigiKeyAuth::with_endpoints(

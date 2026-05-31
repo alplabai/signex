@@ -82,10 +82,8 @@ pub fn view<'a>(
     let filter_row = container(filter).padding([4, 6]);
 
     // ── Three collapsible source sections ────────────────────────
-    let mut col: Column<'a, LibraryMessage> = column![]
-        .spacing(0)
-        .width(Length::Fill)
-        .push(filter_row);
+    let mut col: Column<'a, LibraryMessage> =
+        column![].spacing(0).width(Length::Fill).push(filter_row);
 
     // Derive Project library paths from the panel context. Each
     // `ProjectPanelInfo.libraries[].root` is the absolute, resolved
@@ -195,14 +193,10 @@ fn view_section<'a>(
         src,
         ComponentsMountSource::Installed | ComponentsMountSource::Global
     ) {
-        let add_btn = button(
-            text("+ Add Library…")
-                .size(ROW_TEXT_SIZE)
-                .color(text_c),
-        )
-        .padding([2, 8])
-        .on_press(LibraryMessage::ComponentsPanelAddLibrary(src))
-        .style(crate::styles::menu_item(tokens));
+        let add_btn = button(text("+ Add Library…").size(ROW_TEXT_SIZE).color(text_c))
+            .padding([2, 8])
+            .on_press(LibraryMessage::ComponentsPanelAddLibrary(src))
+            .style(crate::styles::menu_item(tokens));
         header_row = header_row.push(container(add_btn).padding([0, 6]));
     }
 
@@ -222,14 +216,8 @@ fn view_section<'a>(
                     "No global libraries. Click \"+ Add Library…\" or promote an installed library."
                 }
             };
-            section_col = section_col.push(
-                container(
-                    text(empty_msg)
-                        .size(ROW_TEXT_SIZE)
-                        .color(muted),
-                )
-                .padding([6, 16]),
-            );
+            section_col = section_col
+                .push(container(text(empty_msg).size(ROW_TEXT_SIZE).color(muted)).padding([6, 16]));
         } else {
             let needle = state.components_panel.filter.trim().to_lowercase();
             for lib in libs_for_source.iter().copied() {
@@ -469,7 +457,10 @@ mod tests {
     #[test]
     fn mount_source_order_is_three_sections() {
         assert_eq!(ComponentsMountSource::ORDER.len(), 3);
-        assert_eq!(ComponentsMountSource::ORDER[0], ComponentsMountSource::Project);
+        assert_eq!(
+            ComponentsMountSource::ORDER[0],
+            ComponentsMountSource::Project
+        );
         assert_eq!(
             ComponentsMountSource::ORDER[2],
             ComponentsMountSource::Global

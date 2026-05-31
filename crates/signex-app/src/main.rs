@@ -1,31 +1,11 @@
 //! Signex EDA — AI-first electronics design automation.
 //!
-//! Entry point for the Iced 0.14 + wgpu application.
+//! Thin binary entrypoint. The real implementation lives in the
+//! library face (`lib.rs`) so integration tests can drive
+//! dispatchers without spinning up the iced runtime.
 
-mod active_bar;
-mod app;
-mod canvas;
-mod chrome;
-mod diagnostics;
-mod dock;
-mod find_replace;
-mod first_run_tour;
-mod fonts;
-mod icons;
-mod keyboard_shortcuts_modal;
-mod library;
-mod menu_bar;
-mod panels;
-mod pcb_canvas;
-mod preferences;
-mod shortcuts;
-mod status_bar;
-mod styles;
-mod tab_bar;
-mod toolbar;
-mod undo;
-
-use app::Signex;
+use signex_app::app::Signex;
+use signex_app::{diagnostics, fonts};
 
 const IOSEVKA_REGULAR: &[u8] = include_bytes!("../assets/fonts/Iosevka-Regular.ttf");
 const IOSEVKA_BOLD: &[u8] = include_bytes!("../assets/fonts/Iosevka-Bold.ttf");

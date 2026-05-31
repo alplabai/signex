@@ -39,6 +39,7 @@ use super::state::{LibraryBrowserState, LibraryState, LifecycleFilter, OpenLibra
 
 const BROWSER_TEXT_SIZE: f32 = 11.0;
 const BROWSER_HEADER_SIZE: f32 = 10.0;
+#[allow(dead_code)] // F15 (final): preview pane removed; constant retained for the moment in case the Properties panel needs the same width hint.
 const PREVIEW_PANE_WIDTH: f32 = 380.0;
 const MAX_PARAM_COLUMNS: usize = 4;
 /// Width reserved at the start of every grid row for the per-row
@@ -120,13 +121,16 @@ pub fn view<'a>(
     let mut visible: Vec<&ComponentRow> = rows
         .iter()
         .filter(|r| lifecycle_filter.allows(r.state))
-        .filter(|r| {
-            class_filter.map_or(true, |cls| r.class.as_str() == cls)
-        })
+        .filter(|r| class_filter.map_or(true, |cls| r.class.as_str() == cls))
         .filter(|r| needle.is_empty() || row_matches_filter(r, &needle))
         .collect();
 
-    let columns = derive_columns(rows);
+    let columns = derive_columns(
+        rows,
+        lib.library_id,
+        &library_state.template_registry,
+        active_table,
+    );
 
     // Stage 8: apply the user's sort selection to the visible rows
     // before grid rendering. The grid view is a pure projection of
@@ -162,16 +166,23 @@ pub fn view<'a>(
     .width(Length::Fill)
     .height(Length::Fill);
 
-    let preview_pane = view_preview_pane(library_state, &visible, browser.selected_row, tokens);
-
-    let body = row![
-        left,
-        Space::new().width(8),
-        container(preview_pane)
-            .width(Length::Fixed(PREVIEW_PANE_WIDTH))
-            .height(Length::Fill),
-    ]
-    .height(Length::Fill);
+    // F15 (final pass) — the inline preview pane is gone. Row detail
+    // and Pick Symbol / Pick Footprint live in the right-edge
+    // Properties panel now (`view_library_row_properties`), so the
+    // Library Browser tab body keeps the full width for the grid.
+    // `library_state` and `view_preview_pane` retained but unused
+    // here; remove in a follow-up cleanup pass once the Properties-
+    // panel approach is locked.
+    //
+    // The Row needs explicit `Length::Fill` width — the
+    // `feedback_iced_layout.md` anti-pattern: a Fill child inside a
+    // Shrink Row collapses the Row to the child's intrinsic min,
+    // which for the Fill grid means the body silently renders empty
+    // (visible regression: "double-clicking the .snxlib opens
+    // nothing"). The original three-child Row hid this because two
+    // of the children were fixed-width.
+    let _ = library_state;
+    let body = row![left].width(Length::Fill).height(Length::Fill);
 
     let right = column![
         header,
@@ -193,9 +204,9 @@ pub fn view<'a>(
             ..iced::widget::container::Style::default()
         });
     row![table_sidebar, separator, right]
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .into()
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
 }
 
 // ─── Header (tab strip + search) ────────────────────────────────────
@@ -229,12 +240,7 @@ fn view_table_sidebar<'a>(
         .width(Length::Fill);
 
     col = col.push(
-        container(
-            text("Tables")
-                .size(11)
-                .color(muted),
-        )
-        .padding(iced::Padding {
+        container(text("Classes").size(11).color(muted)).padding(iced::Padding {
             top: 0.0,
             right: 8.0,
             bottom: 4.0,
@@ -351,8 +357,14 @@ fn view_table_sidebar<'a>(
                     ..iced::widget::button::Style::default()
                 });
             let mut form = column![
-                row![name_input, Space::new().width(4), cancel, Space::new().width(2), confirm,]
-                    .align_y(iced::Alignment::Center),
+                row![
+                    name_input,
+                    Space::new().width(4),
+                    cancel,
+                    Space::new().width(2),
+                    confirm,
+                ]
+                .align_y(iced::Alignment::Center),
             ]
             .spacing(2)
             .padding([4, 8]);
@@ -419,231 +431,11 @@ fn view_table_sidebar<'a>(
         // resulting Conflict error surfaces in the banner above.
         let library_for_del = lib_pb.clone();
         let table_for_del = (*name).clone();
-        let delete_btn = button(
-            text("×")
-                .size(BROWSER_TEXT_SIZE + 1.0)
-                .color(muted),
-        )
-        .padding([3, 8])
-        .on_press(LibraryMessage::BrowserDeleteTable {
-            library_path: library_for_del,
-            table: table_for_del,
-        })
-        .style(move |_: &Theme, status: iced::widget::button::Status| {
-            let (bg, fg) = match status {
-                iced::widget::button::Status::Hovered
-                | iced::widget::button::Status::Pressed => (
-                    Some(iced::Background::Color(iced::Color::from_rgba(
-                        0.78, 0.22, 0.22, 1.0,
-                    ))),
-                    iced::Color::WHITE,
-                ),
-                _ => (None, muted),
-            };
-            iced::widget::button::Style {
-                background: bg,
-                text_color: fg,
-                border: Border {
-                    width: 0.0,
-                    radius: 2.0.into(),
-                    color: iced::Color::TRANSPARENT,
-                },
-                ..iced::widget::button::Style::default()
-            }
-        });
-
-        // ✎ rename trigger — sibling to × so click routing stays
-        // unambiguous. Switches the row into the inline rename
-        // form above.
-        let library_for_rename = lib_pb.clone();
-        let table_for_rename = (*name).clone();
-        let rename_btn = button(
-            text("\u{270E}")
-                .size(BROWSER_TEXT_SIZE)
-                .color(muted),
-        )
-        .padding([3, 6])
-        .on_press(LibraryMessage::BrowserBeginRenameTable {
-            library_path: library_for_rename,
-            table: table_for_rename,
-        })
-        .style(move |_: &Theme, status: iced::widget::button::Status| {
-            let (bg, fg) = match status {
-                iced::widget::button::Status::Hovered
-                | iced::widget::button::Status::Pressed => (
-                    Some(iced::Background::Color(iced::Color::from_rgba(
-                        1.0, 1.0, 1.0, 0.10,
-                    ))),
-                    iced::Color::WHITE,
-                ),
-                _ => (None, muted),
-            };
-            iced::widget::button::Style {
-                background: bg,
-                text_color: fg,
-                border: Border {
-                    width: 0.0,
-                    radius: 2.0.into(),
-                    color: iced::Color::TRANSPARENT,
-                },
-                ..iced::widget::button::Style::default()
-            }
-        });
-
-        let row_with_actions = row![row_btn, rename_btn, delete_btn,]
-            .align_y(iced::Alignment::Center)
-            .width(Length::Fill);
-        col = col.push(row_with_actions);
-    }
-
-    // ─── Classes section ───────────────────────────────────────────
-    // Classes are the per-library taxonomy backing the New Component
-    // class dropdown. Listed below tables so the sidebar reads as
-    // "library inventory: tables (data) + classes (taxonomy)".
-    col = col.push(Space::new().height(12));
-    col = col.push(
-        container(text("Classes").size(11).color(muted)).padding(iced::Padding {
-            top: 0.0,
-            right: 8.0,
-            bottom: 4.0,
-            left: 12.0,
-        }),
-    );
-
-    if let Some(err) = browser.class_error.as_ref() {
-        col = col.push(
-            container(
-                text(err.clone())
-                    .size(BROWSER_TEXT_SIZE)
-                    .color(iced::Color::from_rgb(0.85, 0.3, 0.3)),
-            )
-            .padding([2, 12]),
-        );
-    }
-
-    let classes_list = library_state
-        .set
-        .get(lib.library_id)
-        .map(|adapter| adapter.library_classes())
-        .unwrap_or_default();
-
-    for entry in &classes_list {
-        // `if let` guards both branches in one shot — the rename
-        // form draws when this row is the renaming target;
-        // otherwise the static row + ✎/× buttons render below.
-        // Using a bare `.unwrap()` after a separate `is_some_and`
-        // check is a reliability footgun if the surrounding
-        // control flow ever changes.
-        if let Some((_, key_buf, label_buf)) = browser
-            .renaming_class
-            .as_ref()
-            .filter(|(orig, _, _)| orig.as_str() == entry.key.as_str())
-        {
-            let library_for_key = lib_pb.clone();
-            let library_for_label = lib_pb.clone();
-            let library_for_confirm = lib_pb.clone();
-            let library_for_cancel = lib_pb.clone();
-            let key_input = text_input("key", key_buf)
-                .on_input(move |s| LibraryMessage::BrowserSetRenameClassKey {
-                    library_path: library_for_key.clone(),
-                    value: s,
-                })
-                .padding(3)
-                .size(BROWSER_TEXT_SIZE);
-            let label_input = text_input("label", label_buf)
-                .on_input(move |s| LibraryMessage::BrowserSetRenameClassLabel {
-                    library_path: library_for_label.clone(),
-                    value: s,
-                })
-                .on_submit(LibraryMessage::BrowserConfirmRenameClass {
-                    library_path: library_for_confirm.clone(),
-                })
-                .padding(3)
-                .size(BROWSER_TEXT_SIZE);
-            let confirm = button(text("✓").size(BROWSER_TEXT_SIZE).color(iced::Color::WHITE))
-                .padding([3, 6])
-                .on_press(LibraryMessage::BrowserConfirmRenameClass {
-                    library_path: library_for_confirm,
-                })
-                .style(|_: &Theme, _| iced::widget::button::Style {
-                    background: Some(iced::Background::Color(iced::Color::from_rgb(
-                        0.18, 0.36, 0.58,
-                    ))),
-                    text_color: iced::Color::WHITE,
-                    border: Border {
-                        width: 0.0,
-                        radius: 2.0.into(),
-                        ..Border::default()
-                    },
-                    ..iced::widget::button::Style::default()
-                });
-            let cancel = button(text("×").size(BROWSER_TEXT_SIZE).color(text_c))
-                .padding([3, 6])
-                .on_press(LibraryMessage::BrowserCancelRenameClass {
-                    library_path: library_for_cancel,
-                })
-                .style(|_: &Theme, _| iced::widget::button::Style {
-                    background: None,
-                    text_color: iced::Color::WHITE,
-                    border: Border::default(),
-                    ..iced::widget::button::Style::default()
-                });
-            let form = column![
-                key_input,
-                label_input,
-                row![cancel, Space::new().width(2), confirm,]
-                    .align_y(iced::Alignment::Center),
-            ]
-            .spacing(2)
-            .padding([4, 8]);
-            col = col.push(form);
-            continue;
-        }
-
-        let label_text = if entry.label == entry.key {
-            entry.key.clone()
-        } else {
-            format!("{}  ·  {}", entry.label, entry.key)
-        };
-        let is_active_class = browser.class_filter.as_deref() == Some(entry.key.as_str());
-        let library_for_filter = lib_pb.clone();
-        let key_for_filter = entry.key.clone();
-        let library_for_rename = lib_pb.clone();
-        let library_for_delete = lib_pb.clone();
-        let key_for_rename = entry.key.clone();
-        let key_for_delete = entry.key.clone();
-        let rename_btn = button(text("\u{270E}").size(BROWSER_TEXT_SIZE).color(muted))
-            .padding([3, 6])
-            .on_press(LibraryMessage::BrowserBeginRenameClass {
-                library_path: library_for_rename,
-                key: key_for_rename,
-            })
-            .style(move |_: &Theme, status: iced::widget::button::Status| {
-                let (bg, fg) = match status {
-                    iced::widget::button::Status::Hovered
-                    | iced::widget::button::Status::Pressed => (
-                        Some(iced::Background::Color(iced::Color::from_rgba(
-                            1.0, 1.0, 1.0, 0.10,
-                        ))),
-                        iced::Color::WHITE,
-                    ),
-                    _ => (None, muted),
-                };
-                iced::widget::button::Style {
-                    background: bg,
-                    text_color: fg,
-                    border: Border {
-                        radius: 2.0.into(),
-                        ..Border::default()
-                    },
-                    ..iced::widget::button::Style::default()
-                }
-            });
         let delete_btn = button(text("×").size(BROWSER_TEXT_SIZE + 1.0).color(muted))
             .padding([3, 8])
-            .on_press(LibraryMessage::BrowserDeleteClass {
-                library_path: library_for_delete,
-                key: key_for_delete,
+            .on_press(LibraryMessage::BrowserDeleteTable {
+                library_path: library_for_del,
+                table: table_for_del,
             })
             .style(move |_: &Theme, status: iced::widget::button::Status| {
                 let (bg, fg) = match status {
@@ -660,83 +452,306 @@ fn view_table_sidebar<'a>(
                     background: bg,
                     text_color: fg,
                     border: Border {
+                        width: 0.0,
                         radius: 2.0.into(),
-                        ..Border::default()
+                        color: iced::Color::TRANSPARENT,
                     },
                     ..iced::widget::button::Style::default()
                 }
             });
-        let class_active_bg = active_bg;
-        let class_btn = button(
-            text(label_text)
-                .size(BROWSER_TEXT_SIZE)
-                .color(text_c)
-                .width(Length::Fill),
-        )
-        .padding(iced::Padding {
-            top: 4.0,
-            right: 6.0,
-            bottom: 4.0,
-            left: 12.0,
-        })
-        .width(Length::Fill)
-        .on_press(LibraryMessage::BrowserClassFilterClicked {
-            library_path: library_for_filter,
-            key: key_for_filter,
-        })
-        .style(move |_: &Theme, status: iced::widget::button::Status| {
-            let bg = if is_active_class {
-                Some(class_active_bg)
-            } else {
-                match status {
-                    iced::widget::button::Status::Hovered => {
-                        Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04))
-                    }
-                    _ => None,
+
+        // ✎ rename trigger — sibling to × so click routing stays
+        // unambiguous. Switches the row into the inline rename
+        // form above.
+        let library_for_rename = lib_pb.clone();
+        let table_for_rename = (*name).clone();
+        let rename_btn = button(text("\u{270E}").size(BROWSER_TEXT_SIZE).color(muted))
+            .padding([3, 6])
+            .on_press(LibraryMessage::BrowserBeginRenameTable {
+                library_path: library_for_rename,
+                table: table_for_rename,
+            })
+            .style(move |_: &Theme, status: iced::widget::button::Status| {
+                let (bg, fg) = match status {
+                    iced::widget::button::Status::Hovered
+                    | iced::widget::button::Status::Pressed => (
+                        Some(iced::Background::Color(iced::Color::from_rgba(
+                            1.0, 1.0, 1.0, 0.10,
+                        ))),
+                        iced::Color::WHITE,
+                    ),
+                    _ => (None, muted),
+                };
+                iced::widget::button::Style {
+                    background: bg,
+                    text_color: fg,
+                    border: Border {
+                        width: 0.0,
+                        radius: 2.0.into(),
+                        color: iced::Color::TRANSPARENT,
+                    },
+                    ..iced::widget::button::Style::default()
                 }
-            };
-            iced::widget::button::Style {
-                background: bg.map(iced::Background::Color),
-                text_color: text_c,
-                border: Border {
-                    width: 0.0,
-                    radius: 0.0.into(),
-                    color: iced::Color::TRANSPARENT,
-                },
-                ..iced::widget::button::Style::default()
-            }
-        });
-        let class_row = row![class_btn, rename_btn, delete_btn,]
+            });
+
+        let row_with_actions = row![row_btn, rename_btn, delete_btn,]
             .align_y(iced::Alignment::Center)
             .width(Length::Fill);
-        col = col.push(class_row);
+        col = col.push(row_with_actions);
     }
 
-    // + Class form / button.
-    match browser.adding_class.as_ref() {
-        Some(draft) => {
-            let library_for_key = lib_pb.clone();
-            let library_for_label = lib_pb.clone();
-            let library_for_confirm = lib_pb.clone();
-            let library_for_cancel = lib_pb.clone();
-            let key_input = text_input("class_key", &draft.key)
-                .on_input(move |s| LibraryMessage::BrowserSetNewClassKey {
-                    library_path: library_for_key.clone(),
-                    value: s,
+    // ─── Classes section — F20 (2026-05-03) hidden ─────────────────
+    // The Tables-only model collapses Class into Table. Class is
+    // still stored on each `ComponentRow` (it backs the
+    // `TemplateRegistry` lookup that surfaces basic-param columns),
+    // but it's derived from the table name now and never edited
+    // directly. The full Classes sidebar (per-library taxonomy +
+    // rename/delete/add) lives behind a `false` gate so the supporting
+    // message handlers in `dispatch/library.rs` stay live as dead
+    // code — a follow-up cleanup pass can prune them once we're sure
+    // the Tables-only model sticks.
+    #[allow(clippy::overly_complex_bool_expr)]
+    if false {
+        col = col.push(Space::new().height(12));
+        col = col.push(
+            container(text("Classes").size(11).color(muted)).padding(iced::Padding {
+                top: 0.0,
+                right: 8.0,
+                bottom: 4.0,
+                left: 12.0,
+            }),
+        );
+
+        if let Some(err) = browser.class_error.as_ref() {
+            col = col.push(
+                container(
+                    text(err.clone())
+                        .size(BROWSER_TEXT_SIZE)
+                        .color(iced::Color::from_rgb(0.85, 0.3, 0.3)),
+                )
+                .padding([2, 12]),
+            );
+        }
+
+        let classes_list = library_state
+            .set
+            .get(lib.library_id)
+            .map(|adapter| adapter.library_classes())
+            .unwrap_or_default();
+
+        for entry in &classes_list {
+            // `if let` guards both branches in one shot — the rename
+            // form draws when this row is the renaming target;
+            // otherwise the static row + ✎/× buttons render below.
+            // Using a bare `.unwrap()` after a separate `is_some_and`
+            // check is a reliability footgun if the surrounding
+            // control flow ever changes.
+            if let Some((_, key_buf, label_buf)) = browser
+                .renaming_class
+                .as_ref()
+                .filter(|(orig, _, _)| orig.as_str() == entry.key.as_str())
+            {
+                let library_for_key = lib_pb.clone();
+                let library_for_label = lib_pb.clone();
+                let library_for_confirm = lib_pb.clone();
+                let library_for_cancel = lib_pb.clone();
+                let key_input = text_input("key", key_buf)
+                    .on_input(move |s| LibraryMessage::BrowserSetRenameClassKey {
+                        library_path: library_for_key.clone(),
+                        value: s,
+                    })
+                    .padding(3)
+                    .size(BROWSER_TEXT_SIZE);
+                let label_input = text_input("label", label_buf)
+                    .on_input(move |s| LibraryMessage::BrowserSetRenameClassLabel {
+                        library_path: library_for_label.clone(),
+                        value: s,
+                    })
+                    .on_submit(LibraryMessage::BrowserConfirmRenameClass {
+                        library_path: library_for_confirm.clone(),
+                    })
+                    .padding(3)
+                    .size(BROWSER_TEXT_SIZE);
+                let confirm = button(text("✓").size(BROWSER_TEXT_SIZE).color(iced::Color::WHITE))
+                    .padding([3, 6])
+                    .on_press(LibraryMessage::BrowserConfirmRenameClass {
+                        library_path: library_for_confirm,
+                    })
+                    .style(|_: &Theme, _| iced::widget::button::Style {
+                        background: Some(iced::Background::Color(iced::Color::from_rgb(
+                            0.18, 0.36, 0.58,
+                        ))),
+                        text_color: iced::Color::WHITE,
+                        border: Border {
+                            width: 0.0,
+                            radius: 2.0.into(),
+                            ..Border::default()
+                        },
+                        ..iced::widget::button::Style::default()
+                    });
+                let cancel = button(text("×").size(BROWSER_TEXT_SIZE).color(text_c))
+                    .padding([3, 6])
+                    .on_press(LibraryMessage::BrowserCancelRenameClass {
+                        library_path: library_for_cancel,
+                    })
+                    .style(|_: &Theme, _| iced::widget::button::Style {
+                        background: None,
+                        text_color: iced::Color::WHITE,
+                        border: Border::default(),
+                        ..iced::widget::button::Style::default()
+                    });
+                let form = column![
+                    key_input,
+                    label_input,
+                    row![cancel, Space::new().width(2), confirm,].align_y(iced::Alignment::Center),
+                ]
+                .spacing(2)
+                .padding([4, 8]);
+                col = col.push(form);
+                continue;
+            }
+
+            let label_text = if entry.label == entry.key {
+                entry.key.clone()
+            } else {
+                format!("{}  ·  {}", entry.label, entry.key)
+            };
+            let is_active_class = browser.class_filter.as_deref() == Some(entry.key.as_str());
+            let library_for_filter = lib_pb.clone();
+            let key_for_filter = entry.key.clone();
+            let library_for_rename = lib_pb.clone();
+            let library_for_delete = lib_pb.clone();
+            let key_for_rename = entry.key.clone();
+            let key_for_delete = entry.key.clone();
+            let rename_btn = button(text("\u{270E}").size(BROWSER_TEXT_SIZE).color(muted))
+                .padding([3, 6])
+                .on_press(LibraryMessage::BrowserBeginRenameClass {
+                    library_path: library_for_rename,
+                    key: key_for_rename,
                 })
-                .padding(3)
-                .size(BROWSER_TEXT_SIZE);
-            let label_input = text_input("Label", &draft.label)
-                .on_input(move |s| LibraryMessage::BrowserSetNewClassLabel {
-                    library_path: library_for_label.clone(),
-                    value: s,
+                .style(move |_: &Theme, status: iced::widget::button::Status| {
+                    let (bg, fg) = match status {
+                        iced::widget::button::Status::Hovered
+                        | iced::widget::button::Status::Pressed => (
+                            Some(iced::Background::Color(iced::Color::from_rgba(
+                                1.0, 1.0, 1.0, 0.10,
+                            ))),
+                            iced::Color::WHITE,
+                        ),
+                        _ => (None, muted),
+                    };
+                    iced::widget::button::Style {
+                        background: bg,
+                        text_color: fg,
+                        border: Border {
+                            radius: 2.0.into(),
+                            ..Border::default()
+                        },
+                        ..iced::widget::button::Style::default()
+                    }
+                });
+            let delete_btn = button(text("×").size(BROWSER_TEXT_SIZE + 1.0).color(muted))
+                .padding([3, 8])
+                .on_press(LibraryMessage::BrowserDeleteClass {
+                    library_path: library_for_delete,
+                    key: key_for_delete,
                 })
-                .on_submit(LibraryMessage::BrowserConfirmAddClass {
-                    library_path: library_for_confirm.clone(),
-                })
-                .padding(3)
-                .size(BROWSER_TEXT_SIZE);
-            let confirm = button(text("Create").size(BROWSER_TEXT_SIZE).color(iced::Color::WHITE))
+                .style(move |_: &Theme, status: iced::widget::button::Status| {
+                    let (bg, fg) = match status {
+                        iced::widget::button::Status::Hovered
+                        | iced::widget::button::Status::Pressed => (
+                            Some(iced::Background::Color(iced::Color::from_rgba(
+                                0.78, 0.22, 0.22, 1.0,
+                            ))),
+                            iced::Color::WHITE,
+                        ),
+                        _ => (None, muted),
+                    };
+                    iced::widget::button::Style {
+                        background: bg,
+                        text_color: fg,
+                        border: Border {
+                            radius: 2.0.into(),
+                            ..Border::default()
+                        },
+                        ..iced::widget::button::Style::default()
+                    }
+                });
+            let class_active_bg = active_bg;
+            let class_btn = button(
+                text(label_text)
+                    .size(BROWSER_TEXT_SIZE)
+                    .color(text_c)
+                    .width(Length::Fill),
+            )
+            .padding(iced::Padding {
+                top: 4.0,
+                right: 6.0,
+                bottom: 4.0,
+                left: 12.0,
+            })
+            .width(Length::Fill)
+            .on_press(LibraryMessage::BrowserClassFilterClicked {
+                library_path: library_for_filter,
+                key: key_for_filter,
+            })
+            .style(move |_: &Theme, status: iced::widget::button::Status| {
+                let bg = if is_active_class {
+                    Some(class_active_bg)
+                } else {
+                    match status {
+                        iced::widget::button::Status::Hovered => {
+                            Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04))
+                        }
+                        _ => None,
+                    }
+                };
+                iced::widget::button::Style {
+                    background: bg.map(iced::Background::Color),
+                    text_color: text_c,
+                    border: Border {
+                        width: 0.0,
+                        radius: 0.0.into(),
+                        color: iced::Color::TRANSPARENT,
+                    },
+                    ..iced::widget::button::Style::default()
+                }
+            });
+            let class_row = row![class_btn, rename_btn, delete_btn,]
+                .align_y(iced::Alignment::Center)
+                .width(Length::Fill);
+            col = col.push(class_row);
+        }
+
+        // + Class form / button.
+        match browser.adding_class.as_ref() {
+            Some(draft) => {
+                let library_for_key = lib_pb.clone();
+                let library_for_label = lib_pb.clone();
+                let library_for_confirm = lib_pb.clone();
+                let library_for_cancel = lib_pb.clone();
+                let key_input = text_input("class_key", &draft.key)
+                    .on_input(move |s| LibraryMessage::BrowserSetNewClassKey {
+                        library_path: library_for_key.clone(),
+                        value: s,
+                    })
+                    .padding(3)
+                    .size(BROWSER_TEXT_SIZE);
+                let label_input = text_input("Label", &draft.label)
+                    .on_input(move |s| LibraryMessage::BrowserSetNewClassLabel {
+                        library_path: library_for_label.clone(),
+                        value: s,
+                    })
+                    .on_submit(LibraryMessage::BrowserConfirmAddClass {
+                        library_path: library_for_confirm.clone(),
+                    })
+                    .padding(3)
+                    .size(BROWSER_TEXT_SIZE);
+                let confirm = button(
+                    text("Create")
+                        .size(BROWSER_TEXT_SIZE)
+                        .color(iced::Color::WHITE),
+                )
                 .padding([3, 8])
                 .on_press(LibraryMessage::BrowserConfirmAddClass {
                     library_path: library_for_confirm,
@@ -752,70 +767,70 @@ fn view_table_sidebar<'a>(
                     },
                     ..iced::widget::button::Style::default()
                 });
-            let cancel = button(text("Cancel").size(BROWSER_TEXT_SIZE).color(text_c))
-                .padding([3, 8])
-                .on_press(LibraryMessage::BrowserCancelAddClass {
-                    library_path: library_for_cancel,
-                })
-                .style(|_: &Theme, _| iced::widget::button::Style {
-                    background: Some(iced::Background::Color(iced::Color::from_rgba(
-                        1.0, 1.0, 1.0, 0.04,
-                    ))),
-                    text_color: iced::Color::WHITE,
-                    border: Border {
-                        radius: 2.0.into(),
-                        ..Border::default()
-                    },
-                    ..iced::widget::button::Style::default()
-                });
-            let mut form = column![
-                key_input,
-                label_input,
-                row![cancel, Space::new().width(4), confirm,]
-                    .align_y(iced::Alignment::Center),
-            ]
-            .spacing(2)
-            .padding([4, 8]);
-            if let Some(err) = draft.error.as_ref() {
-                form = form.push(
-                    text(err.clone())
-                        .size(BROWSER_TEXT_SIZE)
-                        .color(iced::Color::from_rgb(0.85, 0.3, 0.3)),
+                let cancel = button(text("Cancel").size(BROWSER_TEXT_SIZE).color(text_c))
+                    .padding([3, 8])
+                    .on_press(LibraryMessage::BrowserCancelAddClass {
+                        library_path: library_for_cancel,
+                    })
+                    .style(|_: &Theme, _| iced::widget::button::Style {
+                        background: Some(iced::Background::Color(iced::Color::from_rgba(
+                            1.0, 1.0, 1.0, 0.04,
+                        ))),
+                        text_color: iced::Color::WHITE,
+                        border: Border {
+                            radius: 2.0.into(),
+                            ..Border::default()
+                        },
+                        ..iced::widget::button::Style::default()
+                    });
+                let mut form = column![
+                    key_input,
+                    label_input,
+                    row![cancel, Space::new().width(4), confirm,].align_y(iced::Alignment::Center),
+                ]
+                .spacing(2)
+                .padding([4, 8]);
+                if let Some(err) = draft.error.as_ref() {
+                    form = form.push(
+                        text(err.clone())
+                            .size(BROWSER_TEXT_SIZE)
+                            .color(iced::Color::from_rgb(0.85, 0.3, 0.3)),
+                    );
+                }
+                col = col.push(form);
+            }
+            None => {
+                let library_for_begin = lib_pb.clone();
+                col = col.push(
+                    container(
+                        button(text("+ Class").size(BROWSER_TEXT_SIZE).color(text_c))
+                            .padding([4, 10])
+                            .width(Length::Fill)
+                            .on_press(LibraryMessage::BrowserBeginAddClass {
+                                library_path: library_for_begin,
+                            })
+                            .style(|_: &Theme, _| iced::widget::button::Style {
+                                background: Some(iced::Background::Color(iced::Color::from_rgba(
+                                    1.0, 1.0, 1.0, 0.04,
+                                ))),
+                                text_color: iced::Color::WHITE,
+                                border: Border {
+                                    radius: 3.0.into(),
+                                    ..Border::default()
+                                },
+                                ..iced::widget::button::Style::default()
+                            }),
+                    )
+                    .padding(iced::Padding {
+                        top: 4.0,
+                        right: 8.0,
+                        bottom: 6.0,
+                        left: 8.0,
+                    }),
                 );
             }
-            col = col.push(form);
         }
-        None => {
-            let library_for_begin = lib_pb.clone();
-            col = col.push(
-                container(
-                    button(text("+ Class").size(BROWSER_TEXT_SIZE).color(text_c))
-                        .padding([4, 10])
-                        .width(Length::Fill)
-                        .on_press(LibraryMessage::BrowserBeginAddClass {
-                            library_path: library_for_begin,
-                        })
-                        .style(|_: &Theme, _| iced::widget::button::Style {
-                            background: Some(iced::Background::Color(iced::Color::from_rgba(
-                                1.0, 1.0, 1.0, 0.04,
-                            ))),
-                            text_color: iced::Color::WHITE,
-                            border: Border {
-                                radius: 3.0.into(),
-                                ..Border::default()
-                            },
-                            ..iced::widget::button::Style::default()
-                        }),
-                )
-                .padding(iced::Padding {
-                    top: 4.0,
-                    right: 8.0,
-                    bottom: 6.0,
-                    left: 8.0,
-                }),
-            );
-        }
-    }
+    } // end `if false` — Classes section gate (F20)
 
     // Inline `+ Table` form / button — same lifecycle as before, now
     // anchored at the bottom of the sidebar.
@@ -834,23 +849,27 @@ fn view_table_sidebar<'a>(
                 })
                 .padding(4)
                 .size(BROWSER_TEXT_SIZE);
-            let confirm = button(text("Create").size(BROWSER_TEXT_SIZE).color(iced::Color::WHITE))
-                .padding([4, 10])
-                .on_press(LibraryMessage::BrowserConfirmAddTable {
-                    library_path: library_for_confirm,
-                })
-                .style(|_: &Theme, _| iced::widget::button::Style {
-                    background: Some(iced::Background::Color(iced::Color::from_rgb(
-                        0.18, 0.36, 0.58,
-                    ))),
-                    text_color: iced::Color::WHITE,
-                    border: Border {
-                        width: 0.0,
-                        radius: 3.0.into(),
-                        color: iced::Color::TRANSPARENT,
-                    },
-                    ..iced::widget::button::Style::default()
-                });
+            let confirm = button(
+                text("Create")
+                    .size(BROWSER_TEXT_SIZE)
+                    .color(iced::Color::WHITE),
+            )
+            .padding([4, 10])
+            .on_press(LibraryMessage::BrowserConfirmAddTable {
+                library_path: library_for_confirm,
+            })
+            .style(|_: &Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(iced::Color::from_rgb(
+                    0.18, 0.36, 0.58,
+                ))),
+                text_color: iced::Color::WHITE,
+                border: Border {
+                    width: 0.0,
+                    radius: 3.0.into(),
+                    color: iced::Color::TRANSPARENT,
+                },
+                ..iced::widget::button::Style::default()
+            });
             let cancel = button(text("Cancel").size(BROWSER_TEXT_SIZE).color(text_c))
                 .padding([4, 10])
                 .on_press(LibraryMessage::BrowserCancelAddTable {
@@ -870,8 +889,7 @@ fn view_table_sidebar<'a>(
                 });
             let mut form = column![
                 name_input,
-                row![cancel, Space::new().width(4), confirm,]
-                    .align_y(iced::Alignment::Center),
+                row![cancel, Space::new().width(4), confirm,].align_y(iced::Alignment::Center),
             ]
             .spacing(4)
             .padding([6, 12]);
@@ -887,7 +905,7 @@ fn view_table_sidebar<'a>(
         None => {
             let library_for_begin = lib_pb.clone();
             container(
-                button(text("+ Table").size(BROWSER_TEXT_SIZE).color(text_c))
+                button(text("+ Class").size(BROWSER_TEXT_SIZE).color(text_c))
                     .padding([4, 10])
                     .width(Length::Fill)
                     .on_press(LibraryMessage::BrowserBeginAddTable {
@@ -1021,6 +1039,18 @@ enum ColumnKind {
     /// pure-number case; mixed `1.0.2` strings fall back to lexical
     /// which still works for short major.minor.patch strings).
     Rev,
+    /// Read-only column showing the row's bound symbol primitive.
+    /// Empty cell (`—`) when the row's `symbol_ref` is `Uuid::nil()`
+    /// (the sentinel for an unbound row). The actual binding edit
+    /// surface is the Properties panel's "Pick Symbol…" button — the
+    /// column gives an at-a-glance status across the whole table.
+    /// F16 of the 2026-05-03 library polish ("the relevant columns
+    /// must be there by default").
+    Symbol,
+    /// Read-only column showing the row's bound footprint primitive.
+    /// Empty cell (`—`) when `footprint_ref` is `None` or its UUID is
+    /// `Uuid::nil()`. Edited via Properties panel "Pick Footprint…".
+    Footprint,
     /// Stage 18 — read-only column reading from `parameters["tags"]`.
     /// Inline-editable through the leftmost cell-edit buffer pattern
     /// is deferred to a polish pass; for now the canonical edit point
@@ -1039,6 +1069,8 @@ impl ColumnKind {
             ColumnKind::Manufacturer => "manufacturer".to_string(),
             ColumnKind::Mpn => "mpn".to_string(),
             ColumnKind::Rev => "version".to_string(),
+            ColumnKind::Symbol => "symbol_ref".to_string(),
+            ColumnKind::Footprint => "footprint_ref".to_string(),
             ColumnKind::Tags => "parameters.tags".to_string(),
             ColumnKind::Parameter(key) => format!("parameters.{key}"),
         }
@@ -1055,6 +1087,22 @@ impl ColumnKind {
             ColumnKind::Manufacturer => r.primary_mpn.manufacturer.clone(),
             ColumnKind::Mpn => r.primary_mpn.mpn.clone(),
             ColumnKind::Rev => r.version.clone(),
+            ColumnKind::Symbol => {
+                if r.symbol_ref.uuid == uuid::Uuid::nil() {
+                    "—".to_string()
+                } else {
+                    // Surface the short uuid prefix so the user has an
+                    // at-a-glance signal without bloating the column
+                    // width. Full path/name is in the Properties panel.
+                    format!("• {:.8}", r.symbol_ref.uuid)
+                }
+            }
+            ColumnKind::Footprint => match &r.footprint_ref {
+                Some(fp) if fp.uuid != uuid::Uuid::nil() => {
+                    format!("• {:.8}", fp.uuid)
+                }
+                _ => "—".to_string(),
+            },
             ColumnKind::Tags => match r.parameters.get("tags") {
                 Some(v) => v.display(),
                 None => String::new(),
@@ -1081,13 +1129,30 @@ fn compare_cells(a: &str, b: &str) -> std::cmp::Ordering {
     a.to_lowercase().cmp(&b.to_lowercase())
 }
 
-/// Resolve the column list. Always: Internal PN / Manufacturer / MPN.
+/// Resolve the column list. Always: Internal PN / Manufacturer / MPN /
+/// Rev / Symbol / Footprint. Then template-derived columns from the
+/// `TemplateRegistry`: every `required_param` slot from the templates
+/// resolved for the table's classes (de-duplicated across classes).
 /// Then a Tags column (Stage 18) when *any* row carries a non-empty
 /// `parameters["tags"]`. Finally up to [`MAX_PARAM_COLUMNS`] of the
-/// most-common other parametric keys across `rows` — `tags` is excluded
-/// from that auto-derived set so the dedicated column doesn't render
+/// most-common other parametric keys across `rows` — `tags` and any
+/// already-shown template params are excluded so columns don't render
 /// twice.
-fn derive_columns(rows: &[ComponentRow]) -> Vec<GridColumn> {
+///
+/// Template resolution sources `class` from the rows when present;
+/// for an empty table it strips a trailing "s" off `table_name` and
+/// uses that as the implicit class (works for the default
+/// pluralisation `resistor` → `resistors` etc.). F19 / F20 of the
+/// 2026-05-03 library polish: the user wanted basic params per table
+/// to appear by default, AND they want Tables to be the only
+/// user-facing concept (Classes are now derived purely from the
+/// table name, never edited directly).
+fn derive_columns(
+    rows: &[ComponentRow],
+    library_id: uuid::Uuid,
+    registry: &signex_library::TemplateRegistry,
+    table_name: &str,
+) -> Vec<GridColumn> {
     let mut columns: Vec<GridColumn> = Vec::with_capacity(4 + MAX_PARAM_COLUMNS);
     columns.push(GridColumn {
         label: "Internal PN".to_string(),
@@ -1114,6 +1179,69 @@ fn derive_columns(rows: &[ComponentRow]) -> Vec<GridColumn> {
         kind: ColumnKind::Rev,
         width: 80.0,
     });
+
+    // F16 (2026-05-03 library polish) — Symbol + Footprint binding
+    // status is shown by default. `—` means unbound; short uuid
+    // prefix means bound. Full primitive path/name + the Pick…
+    // affordance live in the Properties panel for the selected row.
+    columns.push(GridColumn {
+        label: "Symbol".to_string(),
+        kind: ColumnKind::Symbol,
+        width: 120.0,
+    });
+    columns.push(GridColumn {
+        label: "Footprint".to_string(),
+        kind: ColumnKind::Footprint,
+        width: 120.0,
+    });
+
+    // F19 — template-derived basic-parameter columns. Resolve unique
+    // classes from the rows; for empty tables, strip a trailing "s"
+    // off the table name to derive an implicit class (works for the
+    // default pluralisation, falls through harmlessly otherwise).
+    // Each template's `required_params` becomes a column with
+    // "<name> (<unit>)" label so users see the canonical units up
+    // front. Already-added param keys are skipped to dedupe across
+    // classes.
+    let mut classes: std::collections::BTreeSet<String> =
+        rows.iter().map(|r| r.class.as_str().to_string()).collect();
+    if classes.is_empty() {
+        if let Some(stem) = table_name.strip_suffix('s') {
+            classes.insert(stem.to_string());
+        }
+    }
+    for class in &classes {
+        if let Some(tmpl) = registry.resolve(library_id, class) {
+            for slot in &tmpl.required_params {
+                let already = columns
+                    .iter()
+                    .any(|c| matches!(&c.kind, ColumnKind::Parameter(k) if k == &slot.name));
+                if already {
+                    continue;
+                }
+                // Label is the slot name only — no `(unit)` suffix.
+                // Units vary per row (a "value" column holds 10kΩ in
+                // resistors, 4.7µF in capacitors), so the column
+                // header must be unit-agnostic; the cell renders the
+                // unit inline via `ParamValue::Measurement.display()`.
+                // Capitalises the first letter so "value" → "Value" /
+                // "tolerance" → "Tolerance" without bringing a
+                // heavy-weight casing crate in.
+                let label = {
+                    let mut chars = slot.name.chars();
+                    match chars.next() {
+                        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+                        None => String::new(),
+                    }
+                };
+                columns.push(GridColumn {
+                    label,
+                    kind: ColumnKind::Parameter(slot.name.clone()),
+                    width: 110.0,
+                });
+            }
+        }
+    }
 
     // Surface tags as a first-class column whenever the table has at
     // least one tagged row. Saves the user from having to scroll
@@ -1280,10 +1408,8 @@ fn view_grid<'a>(
             // amber wash so the user spots them at a glance even when
             // they're shown alongside released rows under the
             // `IncludeDeprecated` filter (plan §6).
-            let lifecycle_tint =
-                matches!(r.state, LifecycleState::Deprecated).then(|| {
-                    iced::Background::Color(iced::Color::from_rgba(0.96, 0.80, 0.10, 0.10))
-                });
+            let lifecycle_tint = matches!(r.state, LifecycleState::Deprecated)
+                .then(|| iced::Background::Color(iced::Color::from_rgba(0.96, 0.80, 0.10, 0.10)));
             let bg_color = if is_selected {
                 Some(iced::Background::Color(iced::Color::from_rgba(
                     0.30, 0.55, 0.85, 0.25,
@@ -1360,6 +1486,24 @@ fn view_grid<'a>(
                     continue;
                 }
 
+                // Symbol + Footprint cells are read-only status
+                // markers (`—` unbound, `• <uuid8>` bound). Binding
+                // edit happens in the Properties panel via Pick
+                // Symbol / Pick Footprint — typing into the cell
+                // would have no defined semantics.
+                if matches!(c.kind, ColumnKind::Symbol | ColumnKind::Footprint) {
+                    data_row = data_row.push(
+                        container(
+                            text(row_value)
+                                .size(BROWSER_TEXT_SIZE)
+                                .color(theme_ext::text_secondary(tokens)),
+                        )
+                        .padding([4, 6])
+                        .width(Length::Fixed(c.width)),
+                    );
+                    continue;
+                }
+
                 // Buffer wins over row when active.
                 let buf_key = (row_id, column_key.clone());
                 let cell_value = browser
@@ -1424,15 +1568,21 @@ fn view_grid<'a>(
             // Right-press fires the Stage 18 distributor refresh stub
             // — tonight's wiring just emits a tracing log; the real
             // adapter call lands when the row-binding loop is built.
+            // F25 (2026-05-03) — double-click no longer opens an Edit
+            // Component modal. Single-click selects the row and the
+            // Properties panel surfaces the row detail; per-component
+            // custom parameters are gone (every value lives in a
+            // table column). The modal renderer + state field stay
+            // dead-coded for one release in case a regression test
+            // shows the row-edit ergonomics still need a richer
+            // surface; the on_press wiring here is the only user-
+            // facing trigger and removing it removes the feature.
+            let _ = library_for_open;
+            let _ = table_for_open;
             let row_widget = mouse_area(row_container)
                 .on_press(LibraryMessage::BrowserSelectRow {
                     library_path: library_for_msg,
                     table: table_for_msg,
-                    row_id,
-                })
-                .on_double_click(LibraryMessage::BrowserOpenEditModal {
-                    library_path: library_for_open,
-                    table: table_for_open,
                     row_id,
                 })
                 .on_right_press(LibraryMessage::BrowserRefreshPricing {
@@ -1546,9 +1696,18 @@ fn view_action_row<'a>(
     .into()
 }
 
-// ─── Preview pane ───────────────────────────────────────────────────
+// ─── Preview pane (DEAD: F15 final pass moved this to Properties) ──
+//
+// view_preview_pane / preview_panel / preview_panel_with_pick /
+// symbol_summary / footprint_summary / short_row_id are kept as
+// dead code so the prune is reviewable in one commit. The Properties
+// panel reads `PanelContext.library_row_detail` and renders the
+// equivalent. Pruning this block in the next cleanup pass.
 
+#[allow(dead_code)]
 fn view_preview_pane<'a>(
+    library_path: &'a std::path::Path,
+    table: &str,
     library_state: &'a LibraryState,
     visible: &[&'a ComponentRow],
     selected: Option<RowId>,
@@ -1604,9 +1763,38 @@ fn view_preview_pane<'a>(
                 .as_ref()
                 .and_then(|fp| library_state.set.resolve_footprint(fp));
 
-            let symbol_panel = preview_panel("Symbol", symbol_summary(symbol.as_ref()), tokens);
-            let footprint_panel =
-                preview_panel("Footprint", footprint_summary(footprint.as_ref()), tokens);
+            // F15 — bind primitives directly from the inline preview.
+            // BrowserRow target applies + saves through the adapter
+            // without needing a Component Preview tab open.
+            let row_id = RowId::from_uuid(r.row_id);
+            let address = crate::library::state::EditorAddress::new(
+                library_path.to_path_buf(),
+                table.to_string(),
+                row_id,
+            );
+
+            let symbol_panel = preview_panel_with_pick(
+                "Symbol",
+                symbol_summary(symbol.as_ref()),
+                "Pick Symbol…",
+                LibraryMessage::OpenPrimitivePicker {
+                    kind: signex_library::PrimitiveKind::Symbol,
+                    target: crate::library::state::PrimitivePickerTarget::BrowserRow(
+                        address.clone(),
+                    ),
+                },
+                tokens,
+            );
+            let footprint_panel = preview_panel_with_pick(
+                "Footprint",
+                footprint_summary(footprint.as_ref()),
+                "Pick Footprint…",
+                LibraryMessage::OpenPrimitivePicker {
+                    kind: signex_library::PrimitiveKind::Footprint,
+                    target: crate::library::state::PrimitivePickerTarget::BrowserRow(address),
+                },
+                tokens,
+            );
 
             container(
                 scrollable(
@@ -1640,6 +1828,7 @@ fn view_preview_pane<'a>(
     body
 }
 
+#[allow(dead_code)]
 fn short_row_id(uuid: uuid::Uuid) -> String {
     let s = uuid.simple().to_string();
     if s.len() >= 8 {
@@ -1649,6 +1838,7 @@ fn short_row_id(uuid: uuid::Uuid) -> String {
     }
 }
 
+#[allow(dead_code)]
 fn preview_panel<'a>(
     label: &'a str,
     summary: String,
@@ -1679,6 +1869,66 @@ fn preview_panel<'a>(
         .into()
 }
 
+/// Same as [`preview_panel`] but adds a Pick… button on the right
+/// of the header row. F15 — primitive binding lives next to the row
+/// status so the user has the Pick button visible whenever they see
+/// "unbound" or "unresolved".
+#[allow(dead_code)]
+fn preview_panel_with_pick<'a>(
+    label: &'a str,
+    summary: String,
+    pick_label: &'a str,
+    pick_msg: LibraryMessage,
+    tokens: &'a ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    let text_c = theme_ext::text_primary(tokens);
+    let muted = theme_ext::text_secondary(tokens);
+    let border = theme_ext::border_color(tokens);
+
+    let pick_btn = button(text(pick_label).size(10).color(text_c))
+        .padding([3, 8])
+        .on_press(pick_msg)
+        .style(move |_: &Theme, _| iced::widget::button::Style {
+            background: Some(iced::Background::Color(iced::Color::from_rgba(
+                1.0, 1.0, 1.0, 0.04,
+            ))),
+            text_color: text_c,
+            border: Border {
+                width: 1.0,
+                radius: 3.0.into(),
+                color: border,
+            },
+            ..iced::widget::button::Style::default()
+        });
+
+    let header = row![
+        text(label).size(11).color(muted),
+        Space::new().width(Length::Fill),
+        pick_btn,
+    ]
+    .align_y(iced::Alignment::Center);
+
+    let body = container(text(summary).size(11).color(text_c))
+        .padding(10)
+        .width(Length::Fill)
+        .style(move |_: &Theme| iced::widget::container::Style {
+            background: Some(iced::Background::Color(iced::Color::from_rgba(
+                1.0, 1.0, 1.0, 0.02,
+            ))),
+            border: Border {
+                width: 1.0,
+                radius: 3.0.into(),
+                color: border,
+            },
+            ..Default::default()
+        });
+    column![header, Space::new().height(4), body]
+        .spacing(0)
+        .padding([0, 10])
+        .into()
+}
+
+#[allow(dead_code)]
 fn symbol_summary(sym: Option<&signex_library::Symbol>) -> String {
     match sym {
         None => {
@@ -1709,6 +1959,7 @@ fn symbol_summary(sym: Option<&signex_library::Symbol>) -> String {
     }
 }
 
+#[allow(dead_code)]
 fn footprint_summary(fp: Option<&signex_library::Footprint>) -> String {
     match fp {
         None => "No footprint bound.".to_string(),

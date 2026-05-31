@@ -50,8 +50,7 @@ pub(crate) const MODAL_CLOSE_X_HIT_H: f32 = MODAL_HEADER_HEIGHT;
 /// SVG glyph size for the close-X. Same value the chrome close uses.
 pub(crate) const MODAL_CLOSE_X_ICON: f32 = 14.0;
 /// Hover background for the close-X (Windows-native destructive red).
-pub(crate) const MODAL_CLOSE_X_HOVER: Color =
-    Color::from_rgba(0.78, 0.22, 0.22, 1.0);
+pub(crate) const MODAL_CLOSE_X_HOVER: Color = Color::from_rgba(0.78, 0.22, 0.22, 1.0);
 
 impl Signex {
     pub(super) fn view_annotate_dialog(&self) -> Element<'_, Message> {
@@ -101,9 +100,7 @@ impl Signex {
         let theme_id = self.ui_state.theme_id;
         let header_content: Element<'_, Message> = container(
             row![
-                text("Annotate")
-                    .size(MODAL_HEADER_TITLE_SIZE)
-                    .color(text_c),
+                text("Annotate").size(MODAL_HEADER_TITLE_SIZE).color(text_c),
                 Space::new().width(Length::Fill),
                 close_x_button(Message::CloseAnnotateDialog, theme_id, text_muted),
             ]
@@ -1019,9 +1016,7 @@ impl Signex {
             row_field("Directory", st.directory.clone()),
             row_field(
                 "Schematic root",
-                st.schematic_root
-                    .clone()
-                    .unwrap_or_else(|| "—".to_string())
+                st.schematic_root.clone().unwrap_or_else(|| "—".to_string())
             ),
             row_field(
                 "PCB",
@@ -1110,11 +1105,8 @@ impl Signex {
         let items_text_muted = text_muted;
         let mut items_col = column![].spacing(4);
         if !st.items.is_empty() {
-            items_col = items_col.push(
-                text("Track in repository")
-                    .size(11)
-                    .color(items_text_muted),
-            );
+            items_col =
+                items_col.push(text("Track in repository").size(11).color(items_text_muted));
             for (idx, item) in st.items.iter().enumerate() {
                 let cb: Element<'_, Message> = checkbox(item.tracked)
                     .size(13)
@@ -1208,6 +1200,341 @@ impl Signex {
         wrap_modal(dialog, offset, self.ui_state.window_size, (560.0, 260.0))
     }
 
+    /// v0.18.11 — Cartesian Grid Editor modal (Ctrl+G in a footprint
+    /// editor). Mirrors Altium's "Cartesian Grid Editor [mm]" with a
+    /// stripped-down field set: Step X / Step Y + link toggle, plus
+    /// OK / Cancel. Display style + multiplier + per-grid-color land
+    /// in v0.18.11.x as the underlying canvas/grid system grows them.
+    pub(super) fn view_grid_properties_dialog(&self) -> Element<'_, Message> {
+        let dialog = self.view_grid_properties_dialog_body();
+        let offset = self
+            .ui_state
+            .modal_offsets
+            .get(&super::super::state::ModalId::GridProperties)
+            .copied()
+            .unwrap_or((0.0, 0.0));
+        wrap_modal(dialog, offset, self.ui_state.window_size, (480.0, 280.0))
+    }
+
+    fn view_grid_properties_dialog_body(&self) -> Element<'_, Message> {
+        use iced::widget::text_input;
+
+        let Some(ref st) = self.ui_state.grid_properties else {
+            return container(Space::new()).into();
+        };
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let theme_id = self.ui_state.theme_id;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border_c = crate::styles::ti(tokens.border);
+
+        let header_content: Element<'_, Message> = container(
+            row![
+                text("Cartesian Grid Editor [mm]")
+                    .size(MODAL_HEADER_TITLE_SIZE)
+                    .color(text_c),
+                Space::new().width(Length::Fill),
+                close_x_button(Message::GridPropertiesClose, theme_id, text_muted),
+            ]
+            .align_y(iced::Alignment::Center),
+        )
+        .padding(MODAL_HEADER_PADDING)
+        .height(MODAL_HEADER_HEIGHT)
+        .style(crate::styles::modal_header_strip(tokens))
+        .into();
+        let header = draggable_header(
+            header_content,
+            super::super::state::ModalId::GridProperties,
+            self.interaction_state.last_mouse_pos,
+        );
+
+        let mk_input = |placeholder: &'static str,
+                        value: &str,
+                        on_input: fn(String) -> Message,
+                        enabled: bool|
+         -> Element<'_, Message> {
+            let mut input = text_input(placeholder, value)
+                .size(12)
+                .padding(6)
+                .width(Length::Fixed(140.0));
+            if enabled {
+                input = input
+                    .on_input(on_input)
+                    .on_submit(Message::GridPropertiesApply);
+            }
+            input.into()
+        };
+
+        let link_label = if st.link_xy {
+            "🔗 Linked"
+        } else {
+            "🔓 Unlinked"
+        };
+
+        // v0.18.12.1 — when linked (the default), the Step Y input
+        // is disabled to make the "Y mirrors X" semantics visible
+        // instead of accepting input that Apply would silently
+        // discard. Toggle the chain icon to enable it.
+        // v0.18.19 — display style + multiplier rows.
+        use crate::library::editor::footprint::state::GridDisplay as Gd;
+        let mk_display_row =
+            |label: &'static str, current: Gd, setter: fn(Gd) -> Message| -> Element<'_, Message> {
+                let seg =
+                    move |label: &'static str, target: Gd, active: bool| -> Element<'_, Message> {
+                        let bg = if active {
+                            iced::Color::from_rgba(0.40, 0.70, 1.00, 0.20)
+                        } else {
+                            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04)
+                        };
+                        iced::widget::button(text(label).size(10).color(text_c))
+                            .padding([3, 10])
+                            .on_press(setter(target))
+                            .style(move |_: &iced::Theme, _| iced::widget::button::Style {
+                                background: Some(iced::Background::Color(bg)),
+                                border: iced::Border {
+                                    width: 1.0,
+                                    radius: 3.0.into(),
+                                    color: border_c,
+                                },
+                                ..iced::widget::button::Style::default()
+                            })
+                            .into()
+                    };
+                row![
+                    container(text(label).size(11).color(text_muted)).width(Length::Fixed(80.0)),
+                    seg("Lines", Gd::Lines, current == Gd::Lines),
+                    seg("Dots", Gd::Dots, current == Gd::Dots),
+                    seg("Hidden", Gd::Hidden, current == Gd::Hidden),
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center)
+                .into()
+            };
+        let mk_mult_row = |current: u32| -> Element<'_, Message> {
+            let seg =
+                move |label: &'static str, target: u32, active: bool| -> Element<'_, Message> {
+                    let bg = if active {
+                        iced::Color::from_rgba(0.40, 0.70, 1.00, 0.20)
+                    } else {
+                        iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04)
+                    };
+                    iced::widget::button(text(label).size(10).color(text_c))
+                        .padding([3, 10])
+                        .on_press(Message::GridPropertiesSetMultiplier(target))
+                        .style(move |_: &iced::Theme, _| iced::widget::button::Style {
+                            background: Some(iced::Background::Color(bg)),
+                            border: iced::Border {
+                                width: 1.0,
+                                radius: 3.0.into(),
+                                color: border_c,
+                            },
+                            ..iced::widget::button::Style::default()
+                        })
+                        .into()
+                };
+            row![
+                container(text("Multiplier").size(11).color(text_muted)).width(Length::Fixed(80.0)),
+                seg("1×", 1, current == 1),
+                seg("2×", 2, current == 2),
+                seg("5×", 5, current == 5),
+                seg("10×", 10, current == 10),
+            ]
+            .spacing(4)
+            .align_y(iced::Alignment::Center)
+            .into()
+        };
+
+        let body = column![
+            row![
+                container(text("Step X").size(11).color(text_muted))
+                    .width(Length::Fixed(80.0)),
+                mk_input("0.127", &st.step_x_mm, Message::GridPropertiesSetStepX, true),
+                Space::new().width(8),
+                iced::widget::button(text(link_label).size(11).color(text_c))
+                    .padding([4, 10])
+                    .on_press(Message::GridPropertiesToggleLink),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center),
+            row![
+                container(text("Step Y").size(11).color(text_muted))
+                    .width(Length::Fixed(80.0)),
+                mk_input(
+                    "0.127",
+                    &st.step_y_mm,
+                    Message::GridPropertiesSetStepY,
+                    !st.link_xy,
+                ),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center),
+            mk_display_row("Fine", st.fine_display, Message::GridPropertiesSetFineDisplay),
+            mk_display_row(
+                "Coarse",
+                st.coarse_display,
+                Message::GridPropertiesSetCoarseDisplay,
+            ),
+            mk_mult_row(st.multiplier),
+            text(
+                "Step Y mirrors Step X (single-axis storage). Toggle the chain to edit Y independently. \
+                 Display: Lines / Dots / Hidden — Lines is the v0.18.16 behaviour; Dots and Hidden land here. \
+                 Multiplier sets the coarse-grid stride (5× / 10× are typical Altium defaults)."
+            )
+            .size(10)
+            .color(text_muted),
+        ]
+        .spacing(10);
+
+        let dialog = container(
+            column![
+                header,
+                container(body).padding([14, 16]),
+                container(
+                    row![
+                        Space::new().width(Length::Fill),
+                        secondary_button("Cancel", Message::GridPropertiesClose, text_c, border_c,),
+                        Space::new().width(8),
+                        primary_button("Apply", Some(Message::GridPropertiesApply), border_c,),
+                    ]
+                    .align_y(iced::Alignment::Center),
+                )
+                .padding([10, 14]),
+            ]
+            .width(480),
+        )
+        .style(crate::styles::modal_card(tokens))
+        .clip(true);
+        dialog.into()
+    }
+
+    /// v0.18.14.1 — Custom Selection Filter modal. 8 rows of
+    /// per-kind checkboxes (Pads / Tracks / Arcs / Pours / 3D Bodies
+    /// / Keepouts / Cutouts / Texts) + Apply / Cancel. Apply writes
+    /// the draft into `editor.state.selection_filter`.
+    pub(super) fn view_selection_filter_custom_dialog(&self) -> Element<'_, Message> {
+        let dialog = self.view_selection_filter_custom_body();
+        let offset = self
+            .ui_state
+            .modal_offsets
+            .get(&super::super::state::ModalId::SelectionFilterCustom)
+            .copied()
+            .unwrap_or((0.0, 0.0));
+        wrap_modal(dialog, offset, self.ui_state.window_size, (440.0, 380.0))
+    }
+
+    fn view_selection_filter_custom_body(&self) -> Element<'_, Message> {
+        use crate::library::editor::footprint::state::SelectionFilterKind as K;
+
+        let Some(ref st) = self.ui_state.selection_filter_custom else {
+            return container(Space::new()).into();
+        };
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let theme_id = self.ui_state.theme_id;
+        let text_c = crate::styles::ti(tokens.text);
+        let text_muted = crate::styles::ti(tokens.text_secondary);
+        let border_c = crate::styles::ti(tokens.border);
+
+        let header_content: Element<'_, Message> = container(
+            row![
+                text("Selection Filter — Customize")
+                    .size(MODAL_HEADER_TITLE_SIZE)
+                    .color(text_c),
+                Space::new().width(Length::Fill),
+                close_x_button(Message::CloseSelectionFilterCustom, theme_id, text_muted),
+            ]
+            .align_y(iced::Alignment::Center),
+        )
+        .padding(MODAL_HEADER_PADDING)
+        .height(MODAL_HEADER_HEIGHT)
+        .style(crate::styles::modal_header_strip(tokens))
+        .into();
+        let header = draggable_header(
+            header_content,
+            super::super::state::ModalId::SelectionFilterCustom,
+            self.interaction_state.last_mouse_pos,
+        );
+
+        let mk_row = |label: &'static str, kind: K, on: bool| -> Element<'_, Message> {
+            let glyph = if on { "[x]" } else { "[ ]" };
+            iced::widget::button(
+                row![
+                    text(format!("{glyph}  {label}"))
+                        .size(11)
+                        .color(text_c)
+                        .width(Length::Fill),
+                ]
+                .align_y(iced::Alignment::Center),
+            )
+            .padding([4, 8])
+            .width(Length::Fill)
+            .on_press(Message::ToggleSelectionFilterCustomKind(kind))
+            .style(move |_: &iced::Theme, status| iced::widget::button::Style {
+                background: match status {
+                    iced::widget::button::Status::Hovered => Some(iced::Background::Color(
+                        iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04),
+                    )),
+                    _ => Some(iced::Background::Color(iced::Color::TRANSPARENT)),
+                },
+                border: iced::Border {
+                    width: 0.0,
+                    radius: 0.0.into(),
+                    color: iced::Color::TRANSPARENT,
+                },
+                ..iced::widget::button::Style::default()
+            })
+            .into()
+        };
+
+        let body = column![
+            text(
+                "Toggle which kinds the canvas hit-test will accept. \
+                 Pads is the only kind functionally wired today; the \
+                 rest store flags for forward compatibility."
+            )
+            .size(10)
+            .color(text_muted),
+            mk_row("Pads", K::Pads, st.pads),
+            mk_row("Tracks", K::Tracks, st.tracks),
+            mk_row("Arcs", K::Arcs, st.arcs),
+            mk_row("Pours", K::Pours, st.pours),
+            mk_row("3D Bodies", K::Bodies3d, st.bodies_3d),
+            mk_row("Keepouts", K::Keepouts, st.keepouts),
+            mk_row("Cutouts", K::Cutouts, st.cutouts),
+            mk_row("Texts", K::Texts, st.texts),
+        ]
+        .spacing(4);
+
+        let dialog = container(
+            column![
+                header,
+                container(body).padding([12, 14]),
+                container(
+                    row![
+                        Space::new().width(Length::Fill),
+                        secondary_button(
+                            "Cancel",
+                            Message::CloseSelectionFilterCustom,
+                            text_c,
+                            border_c,
+                        ),
+                        Space::new().width(8),
+                        primary_button(
+                            "Apply",
+                            Some(Message::ApplySelectionFilterCustom),
+                            border_c,
+                        ),
+                    ]
+                    .align_y(iced::Alignment::Center),
+                )
+                .padding([10, 14]),
+            ]
+            .width(440),
+        )
+        .style(crate::styles::modal_card(tokens))
+        .clip(true);
+        dialog.into()
+    }
+
     fn view_remove_dialog_body(&self) -> Element<'_, Message> {
         let Some(ref st) = self.ui_state.remove_dialog else {
             return container(Space::new()).into();
@@ -1240,43 +1567,43 @@ impl Signex {
             self.interaction_state.last_mouse_pos,
         );
 
-        let option_card = |title: &'static str,
-                           subtitle: &'static str,
-                           msg: Message|
-         -> Element<'_, Message> {
-            let title_owned = title.to_string();
-            let subtitle_owned = subtitle.to_string();
-            button(
-                column![
-                    text(format!("\u{2192} {}", title_owned)).size(12).color(text_c),
-                    text(subtitle_owned).size(10).color(text_muted),
-                ]
-                .spacing(4)
-                .padding([2, 0]),
-            )
-            .on_press(msg)
-            .padding([10, 14])
-            .width(Length::Fill)
-            .style(move |_: &Theme, status: button::Status| {
-                let bg = match status {
-                    button::Status::Hovered | button::Status::Pressed => {
-                        Color::from_rgba(1.0, 1.0, 1.0, 0.06)
+        let option_card =
+            |title: &'static str, subtitle: &'static str, msg: Message| -> Element<'_, Message> {
+                let title_owned = title.to_string();
+                let subtitle_owned = subtitle.to_string();
+                button(
+                    column![
+                        text(format!("\u{2192} {}", title_owned))
+                            .size(12)
+                            .color(text_c),
+                        text(subtitle_owned).size(10).color(text_muted),
+                    ]
+                    .spacing(4)
+                    .padding([2, 0]),
+                )
+                .on_press(msg)
+                .padding([10, 14])
+                .width(Length::Fill)
+                .style(move |_: &Theme, status: button::Status| {
+                    let bg = match status {
+                        button::Status::Hovered | button::Status::Pressed => {
+                            Color::from_rgba(1.0, 1.0, 1.0, 0.06)
+                        }
+                        _ => Color::from_rgba(1.0, 1.0, 1.0, 0.02),
+                    };
+                    button::Style {
+                        background: Some(Background::Color(bg)),
+                        border: Border {
+                            width: 1.0,
+                            radius: 4.0.into(),
+                            color: border_c,
+                        },
+                        text_color: text_c,
+                        ..button::Style::default()
                     }
-                    _ => Color::from_rgba(1.0, 1.0, 1.0, 0.02),
-                };
-                button::Style {
-                    background: Some(Background::Color(bg)),
-                    border: Border {
-                        width: 1.0,
-                        radius: 4.0.into(),
-                        color: border_c,
-                    },
-                    text_color: text_c,
-                    ..button::Style::default()
-                }
-            })
-            .into()
-        };
+                })
+                .into()
+            };
 
         let dialog = container(
             column![
@@ -1331,7 +1658,12 @@ impl Signex {
             .get(&super::super::state::ModalId::BomPreview)
             .copied()
             .unwrap_or((0.0, 0.0));
-        wrap_modal(dialog, offset, self.ui_state.window_size, (modal_w, modal_h))
+        wrap_modal(
+            dialog,
+            offset,
+            self.ui_state.window_size,
+            (modal_w, modal_h),
+        )
     }
 
     pub(super) fn view_bom_preview_body(&self) -> Element<'_, Message> {
@@ -1381,16 +1713,16 @@ impl Signex {
         // the pill reads as "selected" without being a hard solid
         // fill that fights the theme.
         let accent_c = crate::styles::ti(tokens.accent);
-        let row_pill = |label: String,
-                        on: bool,
-                        msg: Message|
-         -> Element<'_, Message> {
+        let row_pill = |label: String, on: bool, msg: Message| -> Element<'_, Message> {
             button(text(label).size(11).color(text_c))
                 .padding([4, 10])
                 .on_press(msg)
                 .style(move |_: &Theme, status: button::Status| {
                     let bg = match (on, status) {
-                        (true, _) => Color { a: 0.15, ..accent_c },
+                        (true, _) => Color {
+                            a: 0.15,
+                            ..accent_c
+                        },
                         (false, button::Status::Hovered | button::Status::Pressed) => {
                             Color::from_rgba(1.0, 1.0, 1.0, 0.10)
                         }
@@ -1511,8 +1843,7 @@ impl Signex {
         // custom-field column discovered in the rolled-up rows. The
         // pill state mirrors `preview.options.columns`; clicking
         // adds/removes from that Vec via `handle_bom_preview_toggle_column`.
-        let mut custom_keys: std::collections::BTreeSet<String> =
-            std::collections::BTreeSet::new();
+        let mut custom_keys: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
         for r in &preview.table.rows {
             for k in r.custom.keys() {
                 custom_keys.insert(k.clone());
@@ -1527,8 +1858,11 @@ impl Signex {
             (BomColumn::LibRef, "LibRef"),
             (BomColumn::Qty, "Qty"),
         ];
-        let mut column_row = row![text("Columns:").size(11).color(text_muted), Space::new().width(8)]
-            .align_y(iced::Alignment::Center);
+        let mut column_row = row![
+            text("Columns:").size(11).color(text_muted),
+            Space::new().width(8)
+        ]
+        .align_y(iced::Alignment::Center);
         for (col, label) in &column_options {
             let on = preview.options.columns.iter().any(|c| c == col);
             column_row = column_row.push(row_pill(
@@ -1606,8 +1940,8 @@ impl Signex {
         let n_data = preview.options.columns.len();
         let dividers_width = n_data.saturating_sub(1) as f32;
         let resize_slots_width = n_data.saturating_sub(1) as f32 * 4.0;
-        let table_width: f32 = 36.0 + 1.0 + data_columns_width
-            + dividers_width + resize_slots_width;
+        let table_width: f32 =
+            36.0 + 1.0 + data_columns_width + dividers_width + resize_slots_width;
         // Headers: clickable + draggable. Click cycles sort; press
         // arms a drag, release on another header drops the source
         // column at that index. Sort indicator (▲/▼) appears next to
@@ -1632,19 +1966,18 @@ impl Signex {
             .height(HEADER_ROW_H)
             .into();
 
-        let mut header_row: Row<'_, Message> =
-            Row::new().spacing(0).align_y(iced::Alignment::Center).push(num_header);
+        let mut header_row: Row<'_, Message> = Row::new()
+            .spacing(0)
+            .align_y(iced::Alignment::Center)
+            .push(num_header);
         // Vertical divider between row-number column and the data
         // columns so the gutter is visibly its own zone.
-        header_row = header_row.push(
-            container(Space::new())
-                .width(1)
-                .height(HEADER_ROW_H)
-                .style(move |_: &Theme| container::Style {
-                    background: Some(Background::Color(border_c)),
-                    ..container::Style::default()
-                }),
-        );
+        header_row = header_row.push(container(Space::new()).width(1).height(HEADER_ROW_H).style(
+            move |_: &Theme| container::Style {
+                background: Some(Background::Color(border_c)),
+                ..container::Style::default()
+            },
+        ));
         // Index of the last data column — the one that uses
         // Length::Fill so the table eats any leftover horizontal
         // space when the modal is wider than the sum of fixed
@@ -1658,11 +1991,7 @@ impl Signex {
         const COL_DRAG_THRESHOLD_PX: f32 = 6.0;
         let cursor_x = self.interaction_state.last_mouse_pos.0;
         let active_drag = match (preview.column_drag, preview.column_drag_press_x) {
-            (Some(idx), Some(ox))
-                if (cursor_x - ox).abs() > COL_DRAG_THRESHOLD_PX =>
-            {
-                Some(idx)
-            }
+            (Some(idx), Some(ox)) if (cursor_x - ox).abs() > COL_DRAG_THRESHOLD_PX => Some(idx),
             _ => None,
         };
         let _ = preview.column_hover;
@@ -1729,22 +2058,18 @@ impl Signex {
                 // transparent resize handle. No accent bg in
                 // either — they sit between columns and shouldn't
                 // bleed sort highlights into neighbouring cells.
-                header_row = header_row.push(
-                    container(Space::new())
-                        .width(1)
-                        .height(24)
-                        .style(move |_: &Theme| container::Style {
-                            background: Some(Background::Color(border_c)),
-                            ..container::Style::default()
-                        }),
-                );
-                let resize_handle: Element<'_, Message> = iced::widget::mouse_area(
-                    container(Space::new()).width(4).height(HEADER_ROW_H),
-                )
-                .on_press(Message::BomPreviewColumnResizeStart(idx))
-                .on_release(Message::BomPreviewColumnResizeEnd)
-                .interaction(iced::mouse::Interaction::ResizingHorizontally)
-                .into();
+                header_row = header_row.push(container(Space::new()).width(1).height(24).style(
+                    move |_: &Theme| container::Style {
+                        background: Some(Background::Color(border_c)),
+                        ..container::Style::default()
+                    },
+                ));
+                let resize_handle: Element<'_, Message> =
+                    iced::widget::mouse_area(container(Space::new()).width(4).height(HEADER_ROW_H))
+                        .on_press(Message::BomPreviewColumnResizeStart(idx))
+                        .on_release(Message::BomPreviewColumnResizeEnd)
+                        .interaction(iced::mouse::Interaction::ResizingHorizontally)
+                        .into();
                 header_row = header_row.push(resize_handle);
             }
         }
@@ -1825,10 +2150,7 @@ impl Signex {
             // groove lines without competing with the header
             // dividers above. Same ordering as the header so
             // columns line up pixel-for-pixel.
-            let subtle_divider_color = Color {
-                a: 0.3,
-                ..border_c
-            };
+            let subtle_divider_color = Color { a: 0.3, ..border_c };
             let body_divider = move || -> Element<'_, Message> {
                 container(Space::new())
                     .width(1)
@@ -1899,10 +2221,7 @@ impl Signex {
             .unwrap_or_else(|| "Base".to_string());
         let row_count = preview.table.rows.len();
         let total_count = preview.table.rows.len();
-        let status_label = format!(
-            "{} of {} lines visible",
-            row_count, total_count
-        );
+        let status_label = format!("{} of {} lines visible", row_count, total_count);
         let variant_label = format!("Current variant: {}", active_variant_label);
 
         // Variant dropdown for the top toolbar — placeholder in the
@@ -1927,7 +2246,9 @@ impl Signex {
             .height(24)
             .padding([0, 10])
             .style(move |_: &iced::Theme| iced::widget::container::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.04))),
+                background: Some(iced::Background::Color(iced::Color::from_rgba(
+                    1.0, 1.0, 1.0, 0.04,
+                ))),
                 border: iced::Border {
                     width: 1.0,
                     radius: 3.0.into(),
@@ -1937,26 +2258,25 @@ impl Signex {
             })
             .into()
         };
-        let info_badge: Element<'_, Message> = container(
-            text("i").size(11).color(iced::Color::WHITE),
-        )
-        .width(20)
-        .height(20)
-        .align_x(iced::alignment::Horizontal::Center)
-        .align_y(iced::alignment::Vertical::Center)
-        .style(move |_: &iced::Theme| iced::widget::container::Style {
-            background: Some(iced::Background::Color(iced::Color {
-                a: 0.7,
-                ..crate::styles::ti(tokens.accent)
-            })),
-            border: iced::Border {
-                width: 0.0,
-                radius: 10.0.into(),
-                color: iced::Color::TRANSPARENT,
-            },
-            ..iced::widget::container::Style::default()
-        })
-        .into();
+        let info_badge: Element<'_, Message> =
+            container(text("i").size(11).color(iced::Color::WHITE))
+                .width(20)
+                .height(20)
+                .align_x(iced::alignment::Horizontal::Center)
+                .align_y(iced::alignment::Vertical::Center)
+                .style(move |_: &iced::Theme| iced::widget::container::Style {
+                    background: Some(iced::Background::Color(iced::Color {
+                        a: 0.7,
+                        ..crate::styles::ti(tokens.accent)
+                    })),
+                    border: iced::Border {
+                        width: 0.0,
+                        radius: 10.0.into(),
+                        color: iced::Color::TRANSPARENT,
+                    },
+                    ..iced::widget::container::Style::default()
+                })
+                .into();
         let toolbar_strip = container(
             row![
                 variant_dropdown,
@@ -1980,7 +2300,10 @@ impl Signex {
                 .on_press(Message::BomPreviewSetSidebarTab(target))
                 .style(move |_: &iced::Theme, status: button::Status| {
                     let bg = match (on, status) {
-                        (true, _) => iced::Color { a: 0.15, ..accent_c },
+                        (true, _) => iced::Color {
+                            a: 0.15,
+                            ..accent_c
+                        },
                         (false, button::Status::Hovered) => {
                             iced::Color::from_rgba(1.0, 1.0, 1.0, 0.06)
                         }
@@ -2016,11 +2339,7 @@ impl Signex {
             .padding([8, 12]),
             Space::new().height(8),
             section_header("Export Options", text_muted),
-            container(
-                column![format_row]
-                .spacing(0),
-            )
-            .padding([8, 12]),
+            container(column![format_row].spacing(0),).padding([8, 12]),
         ]
         .spacing(0)
         .into();
@@ -2035,10 +2354,7 @@ impl Signex {
         let mut col_list: Column<'_, Message> = Column::new().spacing(0);
         col_list = col_list.push(section_header("Columns", text_muted));
         let mut list_items: Column<'_, Message> = Column::new().spacing(0);
-        let render_col_row = |col: BomColumn,
-                              label: String,
-                              on: bool|
-         -> Element<'_, Message> {
+        let render_col_row = |col: BomColumn, label: String, on: bool| -> Element<'_, Message> {
             let pip_bg = if on {
                 Color::from_rgb(0.00, 0.47, 0.84)
             } else {
@@ -2181,12 +2497,10 @@ impl Signex {
         // (`crate::styles::chrome_separator`). The inner Space is
         // sized Fill on both axes so iced doesn't shrink the
         // container to zero height in some layout scenarios.
-        let title_separator = container(
-            Space::new().width(Length::Fill).height(Length::Fill),
-        )
-        .width(Length::Fill)
-        .height(1)
-        .style(crate::styles::chrome_separator(tokens));
+        let title_separator = container(Space::new().width(Length::Fill).height(Length::Fill))
+            .width(Length::Fill)
+            .height(1)
+            .style(crate::styles::chrome_separator(tokens));
 
         let dialog = container(
             column![header, title_separator, toolbar_strip, main_row, footer]
@@ -2492,7 +2806,7 @@ pub(in crate::app::view) fn draggable_header<'a>(
 /// Borderless-window header — pressing anywhere on the header region
 /// asks iced to start an OS-level window drag. Replaces the OS title
 /// bar for detached modals opened with `decorations: false`.
-pub(in crate::app::view) fn detached_header<'a>(
+pub(crate) fn detached_header<'a>(
     header_content: Element<'a, Message>,
     modal: super::super::state::ModalId,
 ) -> Element<'a, Message> {
@@ -2507,7 +2821,7 @@ pub(in crate::app::view) fn detached_header<'a>(
 /// no border, fully transparent at rest, Windows-native red bg + white
 /// icon on hover. The `_border` argument is kept for API compatibility
 /// with existing call sites — it is intentionally ignored.
-pub(in crate::app::view) fn close_x_button(
+pub(crate) fn close_x_button(
     message: Message,
     theme_id: signex_types::theme::ThemeId,
     text_color: Color,
@@ -2543,8 +2857,7 @@ pub(in crate::app::view) fn close_x_button(
         // Top-right radius matches the modal card's outer corner so
         // the red hover background fills the rounded corner cleanly
         // — same trick the OS chrome close uses on Windows 11.
-        let radius = iced::border::Radius::default()
-            .top_right(crate::styles::MODAL_CORNER_RADIUS);
+        let radius = iced::border::Radius::default().top_right(crate::styles::MODAL_CORNER_RADIUS);
         button::Style {
             background: if hovered {
                 Some(Background::Color(MODAL_CLOSE_X_HOVER))
@@ -2930,7 +3243,7 @@ impl super::super::Signex {
 
 #[allow(dead_code)]
 fn preview_annotations(
-    snapshot: &signex_render::schematic::SchematicRenderSnapshot,
+    snapshot: &crate::schematic_runtime::SchematicRenderSnapshot,
     _order: AnnotateOrder,
 ) -> Vec<(String, String)> {
     // Power ports (#PWR, #FLG, `is_power`) aren't designators — they're

@@ -461,7 +461,18 @@ impl DockArea {
                 // corners flip to the bottom. Inverse of doc tabs.
                 accent_position: signex_widgets::tab_pill::AccentPosition::Top,
             };
-            let inner = container(text(label).size(11).color(text_c)).padding([4, 10]);
+            // F27 — pin the panel-tab label to a single line. Without
+            // `Wrapping::None` iced word-wraps "SCH Library" onto two
+            // lines whenever the dock area squeezes the tab — which
+            // happens any time the panel column is in its default
+            // ~240 px width with several panels in the strip.
+            let inner = container(
+                text(label)
+                    .size(11)
+                    .color(text_c)
+                    .wrapping(iced::widget::text::Wrapping::None),
+            )
+            .padding([4, 10]);
             let tab = mouse_area(signex_widgets::tab_pill::TabPill::new(inner, pill_style))
                 .on_enter(DockMessage::TabHoverEnter(position, i))
                 .on_exit(DockMessage::TabHoverExit(position, i))
@@ -539,8 +550,7 @@ impl DockArea {
                         // library subsystem, not in `panels::view_panel`.
                         // Wrap the LibraryMessage in DockMessage::Library
                         // so the dispatcher can route it back out.
-                        crate::library::panel::view(library, &ctx.tokens)
-                            .map(DockMessage::Library)
+                        crate::library::panel::view(library, &ctx.tokens).map(DockMessage::Library)
                     }
                     PanelKind::Components => {
                         // v0.9 Stage 9 Components Panel — three mount
@@ -570,9 +580,15 @@ impl DockArea {
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .padding(0),
+            // F32 — `clip(true)` so tab labels can't bleed past the
+            // panel boundary into the adjacent canvas / dock region.
+            // Combined with F27's `Wrapping::None` on the inner text:
+            // labels stay one line and get hard-cut at the panel
+            // edge instead of either wrapping or spilling.
             container(tab_strip)
                 .width(Length::Fill)
                 .padding([0, 4])
+                .clip(true)
                 .style(styles::tab_bar_strip(&ctx.tokens)),
         ]
         .into()
@@ -705,8 +721,7 @@ impl DockArea {
                 crate::library::panel::view(library, &ctx.tokens).map(DockMessage::Library)
             }
             PanelKind::Components => {
-                panels::components_panel::view(library, ctx, &ctx.tokens)
-                    .map(DockMessage::Library)
+                panels::components_panel::view(library, ctx, &ctx.tokens).map(DockMessage::Library)
             }
             _ => panels::view_panel(kind, ctx).map(DockMessage::Panel),
         };

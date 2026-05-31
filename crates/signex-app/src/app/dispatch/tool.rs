@@ -118,6 +118,7 @@ impl Signex {
                     ref_text: None,
                     val_text: None,
                     fields_autoplaced: false,
+                    fields_user_placed: false,
                     dnp: false,
                     in_bom: true,
                     on_board: true,
@@ -153,6 +154,28 @@ impl Signex {
     pub(super) fn dispatch_tool_message(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::PrePlacementTab => {
+                // v0.16.1 — footprint-pad placement pause/resume.
+                // When the active tab is a footprint editor and the
+                // user has armed Pads-mode PlacePad, route TAB to a
+                // dedicated toggle that gates the canvas's empty-
+                // canvas click. This sits BEFORE the schematic flow
+                // so it doesn't fight with `current_tool` (which
+                // tracks schematic tools, not footprint pads).
+                if let Some(active_tab) =
+                    self.document_state.tabs.get(self.document_state.active_tab)
+                {
+                    if let Some(path) = active_tab.kind.as_footprint_editor() {
+                        let path = path.clone();
+                        let _ = self.update(crate::app::contracts::Message::Library(
+                            crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                                path,
+                                msg:
+                                    crate::library::messages::PrimitiveEditorMsg::FootprintTogglePlacementPause,
+                            },
+                        ));
+                        return Task::none();
+                    }
+                }
                 if self.interaction_state.current_tool != Tool::Select {
                     use crate::panels::PrePlacementKind;
                     use signex_types::schematic::LabelType;
@@ -380,6 +403,20 @@ impl Signex {
                 self.interaction_state.active_canvas_mut().placement_paused = false;
                 self.interaction_state.active_canvas_mut().selected.clear();
                 self.update_selection_info();
+                // v0.13 — also resume the footprint editor's placement
+                // pause when the active tab is a footprint editor.
+                if let Some(active_tab) =
+                    self.document_state.tabs.get(self.document_state.active_tab)
+                    && let Some(path) = active_tab.kind.as_footprint_editor()
+                {
+                    let path = path.clone();
+                    let _ = self.update(crate::app::contracts::Message::Library(
+                        crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                            path,
+                            msg: crate::library::messages::PrimitiveEditorMsg::FootprintTogglePlacementPause,
+                        },
+                    ));
+                }
                 self.finish_update()
             }
             Message::CycleDrawMode => {

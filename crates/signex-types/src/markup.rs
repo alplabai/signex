@@ -210,7 +210,10 @@ pub fn parse_signex_markup(input: &str) -> Vec<RichSegment> {
         // Escape sequence: \X produces a literal X for any sigil character.
         if bytes[i] == b'\\' && i + 1 < len {
             let next = bytes[i + 1];
-            if matches!(next, b'*' | b'~' | b'^' | b'_' | b'\\' | b'[' | b']' | b'(' | b')') {
+            if matches!(
+                next,
+                b'*' | b'~' | b'^' | b'_' | b'\\' | b'[' | b']' | b'(' | b')'
+            ) {
                 normal_buf.push(next as char);
                 i += 2;
                 continue;
@@ -222,77 +225,82 @@ pub fn parse_signex_markup(input: &str) -> Vec<RichSegment> {
 
         // Overbar: _~text~_ (Signex extension). Check before subscript ~text~
         // because the underscore disambiguates the longer form.
-        if bytes[i] == b'_' && i + 1 < len && bytes[i + 1] == b'~' {
-            if let Some((content, next_index)) = read_overbar(input, i + 2) {
-                flush_normal(&mut segments, &mut normal_buf);
-                segments.push(RichSegment::Overbar(content));
-                i = next_index;
-                continue;
-            }
+        if bytes[i] == b'_'
+            && i + 1 < len
+            && bytes[i + 1] == b'~'
+            && let Some((content, next_index)) = read_overbar(input, i + 2)
+        {
+            flush_normal(&mut segments, &mut normal_buf);
+            segments.push(RichSegment::Overbar(content));
+            i = next_index;
+            continue;
         }
 
         // Bold: **text**
-        if bytes[i] == b'*' && i + 1 < len && bytes[i + 1] == b'*' {
-            if let Some((content, next_index)) = read_paired_double(input, i + 2, b'*') {
-                flush_normal(&mut segments, &mut normal_buf);
-                segments.push(RichSegment::Bold(content));
-                i = next_index;
-                continue;
-            }
+        if bytes[i] == b'*'
+            && i + 1 < len
+            && bytes[i + 1] == b'*'
+            && let Some((content, next_index)) = read_paired_double(input, i + 2, b'*')
+        {
+            flush_normal(&mut segments, &mut normal_buf);
+            segments.push(RichSegment::Bold(content));
+            i = next_index;
+            continue;
         }
 
         // Italic: *text*
-        if bytes[i] == b'*' {
-            if let Some((content, next_index)) = read_paired_single(input, i + 1, b'*') {
-                flush_normal(&mut segments, &mut normal_buf);
-                segments.push(RichSegment::Italic(content));
-                i = next_index;
-                continue;
-            }
+        if bytes[i] == b'*'
+            && let Some((content, next_index)) = read_paired_single(input, i + 1, b'*')
+        {
+            flush_normal(&mut segments, &mut normal_buf);
+            segments.push(RichSegment::Italic(content));
+            i = next_index;
+            continue;
         }
 
         // Strikethrough: ~~text~~
-        if bytes[i] == b'~' && i + 1 < len && bytes[i + 1] == b'~' {
-            if let Some((content, next_index)) = read_paired_double(input, i + 2, b'~') {
-                flush_normal(&mut segments, &mut normal_buf);
-                segments.push(RichSegment::Strike(content));
-                i = next_index;
-                continue;
-            }
+        if bytes[i] == b'~'
+            && i + 1 < len
+            && bytes[i + 1] == b'~'
+            && let Some((content, next_index)) = read_paired_double(input, i + 2, b'~')
+        {
+            flush_normal(&mut segments, &mut normal_buf);
+            segments.push(RichSegment::Strike(content));
+            i = next_index;
+            continue;
         }
 
         // Subscript: ~text~
-        if bytes[i] == b'~' {
-            if let Some((content, next_index)) = read_paired_single(input, i + 1, b'~') {
-                flush_normal(&mut segments, &mut normal_buf);
-                segments.push(RichSegment::Subscript(content));
-                i = next_index;
-                continue;
-            }
+        if bytes[i] == b'~'
+            && let Some((content, next_index)) = read_paired_single(input, i + 1, b'~')
+        {
+            flush_normal(&mut segments, &mut normal_buf);
+            segments.push(RichSegment::Subscript(content));
+            i = next_index;
+            continue;
         }
 
         // Superscript: ^text^
-        if bytes[i] == b'^' {
-            if let Some((content, next_index)) = read_paired_single(input, i + 1, b'^') {
-                flush_normal(&mut segments, &mut normal_buf);
-                segments.push(RichSegment::Superscript(content));
-                i = next_index;
-                continue;
-            }
+        if bytes[i] == b'^'
+            && let Some((content, next_index)) = read_paired_single(input, i + 1, b'^')
+        {
+            flush_normal(&mut segments, &mut normal_buf);
+            segments.push(RichSegment::Superscript(content));
+            i = next_index;
+            continue;
         }
 
         // Link: [label](url)
-        if bytes[i] == b'[' {
-            if let Some((label, after_label)) = read_paired_bracket(input, i + 1) {
-                if after_label < len && bytes[after_label] == b'(' {
-                    if let Some((url, next_index)) = read_paired_paren(input, after_label + 1) {
-                        flush_normal(&mut segments, &mut normal_buf);
-                        segments.push(RichSegment::Link { label, url });
-                        i = next_index;
-                        continue;
-                    }
-                }
-            }
+        if bytes[i] == b'['
+            && let Some((label, after_label)) = read_paired_bracket(input, i + 1)
+            && after_label < len
+            && bytes[after_label] == b'('
+            && let Some((url, next_index)) = read_paired_paren(input, after_label + 1)
+        {
+            flush_normal(&mut segments, &mut normal_buf);
+            segments.push(RichSegment::Link { label, url });
+            i = next_index;
+            continue;
         }
 
         // Plain character — multi-byte UTF-8 safe.

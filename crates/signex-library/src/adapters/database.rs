@@ -68,16 +68,22 @@ impl DatabaseAdapter {
             .timeout(HTTP_REQUEST_TIMEOUT)
             .build()
             .map_err(|e| LibraryError::Backend(format!("reqwest client: {e}")))?;
-        let token = if auth.is_empty() {
-            None
-        } else {
-            Some(auth.clone())
-        };
+        let token = if auth.is_empty() { None } else { Some(auth) };
+        // CRIT-3: never use the bearer token as `holder`. The `holder` is
+        // sent in the `x-signex-holder` request header AND echoed in
+        // server error bodies (`"lock held by {holder}"`), so identifying
+        // the caller via the credential leaks it through both surfaces.
+        // Derive a non-secret label from the library identity instead.
+        let holder = format!(
+            "{}@{}",
+            manifest.library.name,
+            manifest.library.library_id.simple()
+        );
         Ok(Self {
             manifest,
             base_url,
             token,
-            holder: auth,
+            holder,
             client,
         })
     }

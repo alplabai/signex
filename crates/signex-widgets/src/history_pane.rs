@@ -23,7 +23,7 @@
 //! from any "real" tab type.
 
 use chrono::{DateTime, Duration, Utc};
-use iced::widget::{column, container, text, Column, Space};
+use iced::widget::{Column, Space, column, container, text};
 use iced::{Border, Element, Length};
 use signex_types::theme::ThemeTokens;
 
@@ -92,9 +92,7 @@ where
         let header = iced::widget::row![
             text(entry.author_name.clone()).size(12).color(primary),
             Space::new().width(Length::Fill),
-            text(format_relative(entry.time, now))
-                .size(11)
-                .color(muted),
+            text(format_relative(entry.time, now)).size(11).color(muted),
         ]
         .spacing(8);
 
@@ -150,7 +148,10 @@ where
 
 /// Trim a SHA to the seven-char shorthand `git log --oneline` uses.
 /// Anything shorter than 7 chars (e.g. a test stub) is returned
-/// untouched.
+/// untouched. LO-4 considered: returning `&str` here would force the
+/// iced `text()` widget to capture the entry's lifetime, which doesn't
+/// compose with the row-builder iterator's per-item ownership. The
+/// allocation is paid anyway when the widget materialises the string.
 fn short_sha(sha: &str) -> String {
     if sha.len() >= 7 {
         sha[..7].to_string()
@@ -194,18 +195,15 @@ mod tests {
     fn relative_time_buckets() {
         let now = Utc::now();
         assert_eq!(format_relative(now, now), "just now");
-        assert_eq!(format_relative(now - Duration::seconds(45), now), "just now");
+        assert_eq!(
+            format_relative(now - Duration::seconds(45), now),
+            "just now"
+        );
         assert_eq!(format_relative(now - Duration::minutes(12), now), "12m ago");
         assert_eq!(format_relative(now - Duration::hours(3), now), "3h ago");
         assert_eq!(format_relative(now - Duration::days(5), now), "5d ago");
-        assert_eq!(
-            format_relative(now - Duration::days(60), now),
-            "2mo ago"
-        );
-        assert_eq!(
-            format_relative(now - Duration::days(800), now),
-            "2y ago"
-        );
+        assert_eq!(format_relative(now - Duration::days(60), now), "2mo ago");
+        assert_eq!(format_relative(now - Duration::days(800), now), "2y ago");
     }
 
     #[test]

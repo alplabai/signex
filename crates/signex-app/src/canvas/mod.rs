@@ -16,6 +16,9 @@ use iced::{Color, Rectangle, Renderer, Theme};
 pub use camera::Camera;
 pub use grid::GridState;
 
+#[allow(deprecated)]
+use crate::schematic_runtime::SchematicSheetExt as _;
+
 use crate::app::Message;
 
 // ─── Canvas State (per-canvas mutable state) ──────────────────
@@ -77,7 +80,7 @@ pub struct SchematicCanvas {
     pub canvas_colors: signex_types::theme::CanvasColors,
     /// Render-facing cache of the currently visible schematic.
     /// The app updates this from the active engine or active tab cache.
-    pub render_cache: Option<signex_render::schematic::SchematicRenderCache>,
+    pub render_cache: Option<crate::schematic_runtime::SchematicRenderCache>,
     /// Currently selected items — drives selection overlay rendering.
     pub selected: Vec<signex_types::schematic::SelectedItem>,
     /// Pending fit target to transfer to CanvasState.
@@ -178,11 +181,11 @@ pub enum ErcMarkerSeverity {
 }
 
 impl SchematicCanvas {
-    pub fn active_render_cache(&self) -> Option<&signex_render::schematic::SchematicRenderCache> {
+    pub fn active_render_cache(&self) -> Option<&crate::schematic_runtime::SchematicRenderCache> {
         self.render_cache.as_ref()
     }
 
-    pub fn active_snapshot(&self) -> Option<&signex_render::schematic::SchematicRenderSnapshot> {
+    pub fn active_snapshot(&self) -> Option<&crate::schematic_runtime::SchematicRenderSnapshot> {
         self.render_cache.as_ref().map(|cache| cache.snapshot())
     }
 
@@ -266,7 +269,7 @@ impl SchematicCanvas {
 
     pub fn set_render_cache(
         &mut self,
-        render_cache: Option<signex_render::schematic::SchematicRenderCache>,
+        render_cache: Option<crate::schematic_runtime::SchematicRenderCache>,
     ) {
         self.render_cache = render_cache;
     }
@@ -377,7 +380,7 @@ impl canvas::Program<Message> for SchematicCanvas {
                     let (on_selected, on_unselected_item) = if !self.drawing_mode {
                         if let Some(snapshot) = self.active_snapshot() {
                             if let Some(hit) =
-                                signex_render::schematic::hit_test::hit_test(snapshot, wx, wy)
+                                crate::schematic_runtime::hit_test::hit_test(snapshot, wx, wy)
                             {
                                 let sel = self.selected.iter().any(|s| s.uuid == hit.uuid);
                                 (sel, !sel)
@@ -627,8 +630,7 @@ impl canvas::Program<Message> for SchematicCanvas {
                         // normally.
                         if pan_just_started {
                             return Some(
-                                canvas::Action::publish(Message::CloseContextMenu)
-                                    .and_capture(),
+                                canvas::Action::publish(Message::CloseContextMenu).and_capture(),
                             );
                         }
                         return Some(
@@ -752,7 +754,7 @@ impl canvas::Program<Message> for SchematicCanvas {
         layers.push(bg);
 
         // Layer 2: content (schematic elements)
-        let live_transform = signex_render::schematic::ScreenTransform {
+        let live_transform = crate::schematic_runtime::ScreenTransform {
             offset_x: state.camera.offset.x,
             offset_y: state.camera.offset.y,
             scale: state.camera.scale,
@@ -792,7 +794,7 @@ impl canvas::Program<Message> for SchematicCanvas {
             } else {
                 None
             };
-        let effective_snapshot: Option<&signex_render::schematic::SchematicRenderSnapshot> =
+        let effective_snapshot: Option<&crate::schematic_runtime::SchematicRenderSnapshot> =
             shifted_snapshot.as_ref().or_else(|| self.active_snapshot());
 
         let focus_set = self.auto_focus_set();
@@ -800,7 +802,7 @@ impl canvas::Program<Message> for SchematicCanvas {
         let content = if state.panning || drag_offset.is_some() {
             let mut frame = canvas::Frame::new(renderer, bounds.size());
             if let Some(snapshot) = effective_snapshot {
-                signex_render::schematic::render_schematic(
+                crate::schematic_runtime::render_schematic(
                     &mut frame,
                     snapshot,
                     &live_transform,
@@ -822,7 +824,7 @@ impl canvas::Program<Message> for SchematicCanvas {
                     state.camera.scale,
                 ));
                 if let Some(snapshot) = effective_snapshot {
-                    signex_render::schematic::render_schematic(
+                    crate::schematic_runtime::render_schematic(
                         frame,
                         snapshot,
                         &live_transform,
@@ -1013,12 +1015,12 @@ impl canvas::Program<Message> for SchematicCanvas {
             // During a drag we can't rely on overlay_cache — it must redraw
             // with the shifted positions every frame.
             let draw_overlay = |frame: &mut canvas::Frame| {
-                let transform = signex_render::schematic::ScreenTransform {
+                let transform = crate::schematic_runtime::ScreenTransform {
                     offset_x: state.camera.offset.x,
                     offset_y: state.camera.offset.y,
                     scale: state.camera.scale,
                 };
-                signex_render::schematic::selection::draw_selection_overlay(
+                crate::schematic_runtime::selection::draw_selection_overlay(
                     frame,
                     snapshot,
                     &self.selected,
@@ -1030,7 +1032,8 @@ impl canvas::Program<Message> for SchematicCanvas {
                 // top of wires and symbols but under the selection
                 // highlight.
                 for m in &self.erc_markers {
-                    let (sx, sy) = transform.world_to_screen(m.x, m.y);
+                    let _wp = transform.world_to_screen((m.x as f64, m.y as f64));
+                    let (sx, sy) = (_wp.x, _wp.y);
                     let (fill, stroke) = match m.severity {
                         ErcMarkerSeverity::Error => (
                             Color::from_rgba(0.95, 0.25, 0.25, 0.6),
@@ -1388,7 +1391,7 @@ impl canvas::Program<Message> for SchematicCanvas {
                 // Wire-in-progress rubber-band preview
                 if self.drawing_mode && !self.wire_preview.is_empty() {
                     let wire_color = self.canvas_colors.wire;
-                    let wire_color_iced = signex_render::colors::to_iced(&wire_color);
+                    let wire_color_iced = crate::render_config::to_iced(&wire_color);
                     // Match the placed-wire stroke width (0.15 mm in world),
                     // scaled by camera. Previously fixed 1.5 px which looked
                     // thin at higher zooms.
@@ -1526,13 +1529,13 @@ impl canvas::Program<Message> for SchematicCanvas {
                     };
                     let mut preview = ghost_sym.clone();
                     preview.position = signex_types::schematic::Point::new(sx, sy);
-                    let ghost_transform = signex_render::schematic::ScreenTransform {
+                    let ghost_transform = crate::schematic_runtime::ScreenTransform {
                         offset_x: state.camera.offset.x,
                         offset_y: state.camera.offset.y,
                         scale: state.camera.scale,
                     };
                     let ghost_color = Color::from_rgba(0.3, 0.8, 1.0, 0.7);
-                    signex_render::schematic::draw_power_port_preview(
+                    crate::schematic_runtime::draw_power_port_preview(
                         &mut frame,
                         &preview,
                         &ghost_transform,
@@ -1556,13 +1559,13 @@ impl canvas::Program<Message> for SchematicCanvas {
                     };
                     let mut preview = ghost_tn.clone();
                     preview.position = signex_types::schematic::Point::new(sx, sy);
-                    let ghost_transform = signex_render::schematic::ScreenTransform {
+                    let ghost_transform = crate::schematic_runtime::ScreenTransform {
                         offset_x: state.camera.offset.x,
                         offset_y: state.camera.offset.y,
                         scale: state.camera.scale,
                     };
                     let ghost_color = Color::from_rgba(0.3, 0.8, 1.0, 0.7);
-                    signex_render::schematic::text::draw_text_note(
+                    crate::schematic_runtime::text::draw_text_note_preview(
                         &mut frame,
                         &preview,
                         &ghost_transform,
@@ -1587,14 +1590,14 @@ impl canvas::Program<Message> for SchematicCanvas {
                     let mut preview_label = ghost.clone();
                     preview_label.position =
                         signex_types::schematic::Point::new(snap_world.0, snap_world.1);
-                    let ghost_transform = signex_render::schematic::ScreenTransform {
+                    let ghost_transform = crate::schematic_runtime::ScreenTransform {
                         offset_x: state.camera.offset.x,
                         offset_y: state.camera.offset.y,
                         scale: state.camera.scale,
                     };
                     let ghost_color = Color::from_rgba(0.3, 0.8, 1.0, 0.7);
                     let ghost_fill = Color::from_rgba(0.3, 0.8, 1.0, 0.15);
-                    signex_render::schematic::label::draw_label(
+                    crate::schematic_runtime::label::draw_label_preview(
                         &mut frame,
                         &preview_label,
                         &ghost_transform,
@@ -1649,7 +1652,7 @@ impl canvas::Program<Message> for SchematicCanvas {
                         position: iced::Point::new(tag_x + 3.0, tag_y + 1.0),
                         color: Color::from_rgba(1.0, 1.0, 1.0, 0.95),
                         size: iced::Pixels(11.0),
-                        font: signex_render::IOSEVKA,
+                        font: crate::render_config::IOSEVKA,
                         ..canvas::Text::default()
                     });
                 }
@@ -1664,8 +1667,9 @@ impl canvas::Program<Message> for SchematicCanvas {
             {
                 let dx = (current.0 - origin.0) as f32;
                 let dy = (current.1 - origin.1) as f32;
-                if let Some(render_cache) = self.active_render_cache() {
-                    let preview = render_cache.prepared_preview();
+                if let Some(render_cache) = self.active_render_cache()
+                    && let Some(preview) = render_cache.prepared_preview()
+                {
                     for sel in &self.selected {
                         if matches!(
                             sel.kind,
@@ -1686,11 +1690,12 @@ impl canvas::Program<Message> for SchematicCanvas {
                             if let (Some((anchor_x, anchor_y)), Some((field_x, field_y))) =
                                 (anchor_pos, moved_pos)
                             {
-                                let anchor = state
-                                    .camera
-                                    .world_to_screen(iced::Point::new(anchor_x, anchor_y), bounds);
+                                let anchor = state.camera.world_to_screen(
+                                    iced::Point::new(anchor_x as f32, anchor_y as f32),
+                                    bounds,
+                                );
                                 let moved = state.camera.world_to_screen(
-                                    iced::Point::new(field_x + dx, field_y + dy),
+                                    iced::Point::new(field_x as f32 + dx, field_y as f32 + dy),
                                     bounds,
                                 );
 
@@ -1836,7 +1841,7 @@ impl canvas::Program<Message> for SchematicCanvas {
                                             continue;
                                         }
                                         let p = &lp.pin;
-                                        let (wx, wy) = signex_render::schematic::instance_transform(
+                                        let (wx, wy) = crate::schematic_runtime::instance_transform(
                                             &shifted,
                                             &p.position,
                                         );
@@ -1923,11 +1928,11 @@ impl canvas::Program<Message> for SchematicCanvas {
 /// render shows selected objects at the cursor position while the originals
 /// are not drawn at their pre-drag location.
 fn shift_snapshot_for_selection(
-    snap: &signex_render::schematic::SchematicRenderSnapshot,
+    snap: &crate::schematic_runtime::SchematicRenderSnapshot,
     selection: &[signex_types::schematic::SelectedItem],
     dx: f64,
     dy: f64,
-) -> signex_render::schematic::SchematicRenderSnapshot {
+) -> crate::schematic_runtime::SchematicRenderSnapshot {
     use signex_types::schematic::{Point, SelectedKind};
 
     let is_selected = |uuid: uuid::Uuid, kind: SelectedKind| -> bool {

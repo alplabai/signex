@@ -10,18 +10,20 @@ impl Signex {
         self.ui_state.preferences_draft_power_port_style = self.ui_state.power_port_style;
         self.ui_state.preferences_draft_label_style = self.ui_state.label_style;
         self.ui_state.preferences_draft_multisheet_style = self.ui_state.multisheet_style;
-        self.ui_state.preferences_draft_component_classes =
-            self.ui_state.component_classes.clone();
+        self.ui_state.preferences_draft_component_classes = self.ui_state.component_classes.clone();
         self.ui_state.preferences_dirty = false;
         self.ui_state.panel_list_open = false;
         self.interaction_state.context_menu = None;
-        Task::none()
+        // Open Preferences as a separate OS window so the user can move
+        // it around / drag it onto a second monitor. Same pattern as
+        // Print Preview, BOM Preview, Annotate, ERC.
+        self.handle_detach_modal(super::super::state::ModalId::Preferences)
     }
 
     pub(crate) fn handle_preferences_close_requested(&mut self) -> Task<Message> {
         self.ui_state.preferences_open = false;
         self.ui_state.preferences_dirty = false;
-        Task::none()
+        self.close_detached_modal(super::super::state::ModalId::Preferences)
     }
 
     pub(crate) fn handle_preferences_navigation_requested(
@@ -45,6 +47,7 @@ impl Signex {
             PrefMsg::Close => {
                 if !self.ui_state.preferences_dirty {
                     self.ui_state.preferences_open = false;
+                    return self.close_detached_modal(super::super::state::ModalId::Preferences);
                 }
             }
             PrefMsg::DiscardAndClose => {
@@ -68,12 +71,13 @@ impl Signex {
                 };
                 self.document_state.panel_ctx.tokens = tokens;
                 self.update_canvas_theme();
-                signex_render::set_power_port_style(self.ui_state.power_port_style);
-                signex_render::set_label_style(self.ui_state.label_style);
-                signex_render::set_multisheet_style(self.ui_state.multisheet_style);
+                crate::render_config::set_power_port_style(self.ui_state.power_port_style);
+                crate::render_config::set_label_style(self.ui_state.label_style);
+                crate::render_config::set_multisheet_style(self.ui_state.multisheet_style);
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_content_cache();
+                return self.close_detached_modal(super::super::state::ModalId::Preferences);
             }
             PrefMsg::Save => {
                 self.ui_state.theme_id = self.ui_state.preferences_draft_theme;
@@ -94,10 +98,10 @@ impl Signex {
                 };
                 self.document_state.panel_ctx.tokens = tokens;
                 self.document_state.panel_ctx.ui_font_name = self.ui_state.ui_font_name.clone();
-                signex_render::set_power_port_style(self.ui_state.power_port_style);
-                signex_render::set_label_style(self.ui_state.label_style);
-                signex_render::set_multisheet_style(self.ui_state.multisheet_style);
-                signex_render::set_grid_style(self.ui_state.grid_style);
+                crate::render_config::set_power_port_style(self.ui_state.power_port_style);
+                crate::render_config::set_label_style(self.ui_state.label_style);
+                crate::render_config::set_multisheet_style(self.ui_state.multisheet_style);
+                crate::render_config::set_grid_style(self.ui_state.grid_style);
                 crate::fonts::write_ui_font_pref(&self.ui_state.ui_font_name);
                 crate::fonts::write_power_port_style_pref(self.ui_state.power_port_style);
                 crate::fonts::write_label_style_pref(self.ui_state.label_style);
@@ -158,9 +162,9 @@ impl Signex {
                     signex_types::theme::canvas_colors(id)
                 };
                 self.interaction_state.active_canvas_mut().set_theme_colors(
-                    signex_render::colors::to_iced(&canvas_colors.background),
-                    signex_render::colors::to_iced(&canvas_colors.grid),
-                    signex_render::colors::to_iced(&canvas_colors.paper),
+                    crate::render_config::to_iced(&canvas_colors.background),
+                    crate::render_config::to_iced(&canvas_colors.grid),
+                    crate::render_config::to_iced(&canvas_colors.paper),
                 );
                 self.interaction_state.active_canvas_mut().canvas_colors = canvas_colors;
                 self.interaction_state
@@ -184,7 +188,7 @@ impl Signex {
             }
             PrefMsg::DraftPowerPortStyle(style) => {
                 self.ui_state.preferences_draft_power_port_style = style;
-                signex_render::set_power_port_style(style);
+                crate::render_config::set_power_port_style(style);
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_content_cache();
@@ -197,7 +201,7 @@ impl Signex {
             }
             PrefMsg::DraftLabelStyle(style) => {
                 self.ui_state.preferences_draft_label_style = style;
-                signex_render::set_label_style(style);
+                crate::render_config::set_label_style(style);
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_content_cache();
@@ -212,7 +216,7 @@ impl Signex {
             }
             PrefMsg::DraftMultisheetStyle(style) => {
                 self.ui_state.preferences_draft_multisheet_style = style;
-                signex_render::set_multisheet_style(style);
+                crate::render_config::set_multisheet_style(style);
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_content_cache();
@@ -227,7 +231,7 @@ impl Signex {
             }
             PrefMsg::DraftGridStyle(style) => {
                 self.ui_state.preferences_draft_grid_style = style;
-                signex_render::set_grid_style(style);
+                crate::render_config::set_grid_style(style);
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.ui_state.preferences_dirty = self.ui_state.preferences_draft_theme
                     != self.ui_state.theme_id
@@ -337,33 +341,39 @@ impl Signex {
                 );
             }
             PrefMsg::ComponentClassEditKey { index, key } => {
-                if let Some(entry) =
-                    self.ui_state.preferences_draft_component_classes.get_mut(index)
+                if let Some(entry) = self
+                    .ui_state
+                    .preferences_draft_component_classes
+                    .get_mut(index)
                 {
                     entry.key = key;
                     self.ui_state.preferences_dirty = true;
                 }
             }
             PrefMsg::ComponentClassEditLabel { index, label } => {
-                if let Some(entry) =
-                    self.ui_state.preferences_draft_component_classes.get_mut(index)
+                if let Some(entry) = self
+                    .ui_state
+                    .preferences_draft_component_classes
+                    .get_mut(index)
                 {
                     entry.label = label;
                     self.ui_state.preferences_dirty = true;
                 }
             }
             PrefMsg::ComponentClassAdd => {
-                self.ui_state
-                    .preferences_draft_component_classes
-                    .push(crate::fonts::ComponentClassEntry {
+                self.ui_state.preferences_draft_component_classes.push(
+                    crate::fonts::ComponentClassEntry {
                         key: String::new(),
                         label: String::new(),
-                    });
+                    },
+                );
                 self.ui_state.preferences_dirty = true;
             }
             PrefMsg::ComponentClassRemove { index } => {
                 if index < self.ui_state.preferences_draft_component_classes.len() {
-                    self.ui_state.preferences_draft_component_classes.remove(index);
+                    self.ui_state
+                        .preferences_draft_component_classes
+                        .remove(index);
                     self.ui_state.preferences_dirty = true;
                 }
             }

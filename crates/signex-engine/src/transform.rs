@@ -227,10 +227,9 @@ impl Engine {
                 .iter_mut()
                 .find(|symbol| symbol.uuid == item.uuid)
                 .map(|symbol| {
-                    let (field_dx, field_dy) = inverse_field_display_delta(dx, dy);
                     if let Some(ref mut ref_text) = symbol.ref_text {
-                        ref_text.position.x += field_dx;
-                        ref_text.position.y += field_dy;
+                        ref_text.position.x += dx;
+                        ref_text.position.y += dy;
                         true
                     } else {
                         false
@@ -243,10 +242,9 @@ impl Engine {
                 .iter_mut()
                 .find(|symbol| symbol.uuid == item.uuid)
                 .map(|symbol| {
-                    let (field_dx, field_dy) = inverse_field_display_delta(dx, dy);
                     if let Some(ref mut val_text) = symbol.val_text {
-                        val_text.position.x += field_dx;
-                        val_text.position.y += field_dy;
+                        val_text.position.x += dx;
+                        val_text.position.y += dy;
                         true
                     } else {
                         false
@@ -311,7 +309,8 @@ impl Engine {
     pub(super) fn rotate_selected_item(&mut self, item: &SelectedItem, angle_degrees: f64) -> bool {
         match item.kind {
             SelectedKind::Symbol => {
-                let lib_symbols = &self.document.lib_symbols.clone();
+                let lib_symbols = self.document.lib_symbols.clone();
+                let document_snapshot = self.document.clone();
                 self.document
                     .symbols
                     .iter_mut()
@@ -319,7 +318,7 @@ impl Engine {
                     .map(|symbol| {
                         symbol.rotation = (symbol.rotation + angle_degrees).rem_euclid(360.0);
                         if let Some(lib) = lib_symbols.get(&symbol.lib_id) {
-                            autoplace_fields(symbol, lib);
+                            autoplace_fields(symbol, lib, &document_snapshot);
                         }
                         true
                     })
@@ -332,10 +331,12 @@ impl Engine {
                 .find(|symbol| symbol.uuid == item.uuid)
                 .map(|symbol| {
                     if let Some(ref mut ref_text) = symbol.ref_text {
-                        ref_text.rotation =
-                            (ref_text.rotation + angle_degrees).rem_euclid(360.0);
-                        // Manual field rotation overrides Standard's autoplace.
+                        ref_text.rotation = (ref_text.rotation + angle_degrees).rem_euclid(360.0);
+                        // Manual field rotation marks the symbol as
+                        // user-placed so future rotate / mirror operations
+                        // never silently re-run the autoplacer over it.
                         symbol.fields_autoplaced = false;
+                        symbol.fields_user_placed = true;
                         true
                     } else {
                         false
@@ -349,9 +350,9 @@ impl Engine {
                 .find(|symbol| symbol.uuid == item.uuid)
                 .map(|symbol| {
                     if let Some(ref mut val_text) = symbol.val_text {
-                        val_text.rotation =
-                            (val_text.rotation + angle_degrees).rem_euclid(360.0);
+                        val_text.rotation = (val_text.rotation + angle_degrees).rem_euclid(360.0);
                         symbol.fields_autoplaced = false;
+                        symbol.fields_user_placed = true;
                         true
                     } else {
                         false
@@ -365,7 +366,8 @@ impl Engine {
     pub(super) fn mirror_selected_item(&mut self, item: &SelectedItem, axis: MirrorAxis) -> bool {
         match item.kind {
             SelectedKind::Symbol => {
-                let lib_symbols = &self.document.lib_symbols.clone();
+                let lib_symbols = self.document.lib_symbols.clone();
+                let document_snapshot = self.document.clone();
                 self.document
                     .symbols
                     .iter_mut()
@@ -376,7 +378,7 @@ impl Engine {
                             MirrorAxis::Vertical => symbol.mirror_x = !symbol.mirror_x,
                         }
                         if let Some(lib) = lib_symbols.get(&symbol.lib_id) {
-                            autoplace_fields(symbol, lib);
+                            autoplace_fields(symbol, lib, &document_snapshot);
                         }
                         true
                     })
@@ -387,49 +389,90 @@ impl Engine {
     }
 }
 
-/// Reposition the visible Reference and Value fields on the side of the
-/// symbol body with the fewest pins, mirroring Standard's `AutoplaceFields`
-/// behaviour. Fields are stacked vertically and given a justify/rotation
-/// that always renders horizontally.
-/// Re-run autoplace on every symbol whose `fields_autoplaced` flag is set.
+// ---------------------------------------------------------------------------
+// Field autoplace (v0.12 cleanroom rewrite — Wave 2.5)
+//
+// Reposition the visible Reference and Value fields onto the side of
+// the symbol body with the fewest visible pins. Tie-break:
+//
+//     Bottom > Top > Left > Right
+//
+// Hardware-engineering convention places reference / value text below
+// the body for readability; top is the second-best free side; horizontal
+// sides last. Deliberately disjoint from any third-party tool's order.
+//
+// The autoplacer respects two invariants:
+//
+// 1. `Symbol::fields_user_placed == true` ⇒ skip entirely. Once the
+//    user has manually placed a field, rotate / mirror never silently
+//    overwrites that placement.
+// 2. Anchor-aware bias: candidate sides whose anchor would land within
+//    `ANCHOR_AVOID_RADIUS_MM` of an existing wire endpoint or label
+//    receive a small score penalty so the autoplacer prefers cleaner
+//    sides where the field text won't visually crash into other
+//    document elements (Q9 (c) Aggressive-tier improvement).
+// ---------------------------------------------------------------------------
+
+/// Re-run autoplace on every symbol whose `fields_autoplaced` flag is
+/// already set. Used by callers that want to migrate stale layouts in
+/// bulk. User-placed fields are still respected.
 ///
-/// Kept available for callers that want to migrate stale layouts; not
-/// invoked automatically because Standard-saved layouts already match
-/// Standard's autoplace output and re-running ours can shift them.
-pub fn autoplace_all_marked_fields(document: &mut signex_types::schematic::SchematicSheet) {
+/// `pub(crate)` until a real caller lands; flip to `pub` when signex-app
+/// wires it into the "Re-autoplace all fields" command.
+#[allow(dead_code)]
+pub(crate) fn autoplace_all_marked_fields(document: &mut signex_types::schematic::SchematicSheet) {
     let lib_symbols = document.lib_symbols.clone();
+    let snapshot = document.clone();
     for symbol in &mut document.symbols {
         if !symbol.fields_autoplaced {
             continue;
         }
         if let Some(lib) = lib_symbols.get(&symbol.lib_id) {
-            autoplace_fields(symbol, lib);
+            autoplace_fields(symbol, lib, &snapshot);
         }
     }
 }
 
-fn autoplace_fields(symbol: &mut signex_types::schematic::Symbol, lib: &signex_types::schematic::LibSymbol) {
+const ANCHOR_AVOID_RADIUS_MM: f64 = 1.27;
+const ANCHOR_PENALTY: u32 = 1;
+
+/// Pick a free side for `symbol`'s reference / value fields and write
+/// new positions / justifies / rotation into the field `TextProp`s.
+fn autoplace_fields(
+    symbol: &mut signex_types::schematic::Symbol,
+    lib: &signex_types::schematic::LibSymbol,
+    document: &signex_types::schematic::SchematicSheet,
+) {
     use signex_types::schematic::{HAlign, VAlign};
 
-    // 1a. Body bbox in world space (graphics only). Used as the
-    //     geometric reference for pin-side classification — its centre
-    //     is the natural pivot for autoplaced field positions.
+    if symbol.fields_user_placed {
+        return;
+    }
+
+    // 1. Body bbox in world space (graphics only).
     let mut body_bbox: Option<(f64, f64, f64, f64)> = None;
     let extend = |bbox: &mut Option<(f64, f64, f64, f64)>, x: f64, y: f64| match bbox {
         None => *bbox = Some((x, y, x, y)),
         Some((lx, ly, hx, hy)) => {
-            if x < *lx { *lx = x; }
-            if y < *ly { *ly = y; }
-            if x > *hx { *hx = x; }
-            if y > *hy { *hy = y; }
+            if x < *lx {
+                *lx = x;
+            }
+            if y < *ly {
+                *ly = y;
+            }
+            if x > *hx {
+                *hx = x;
+            }
+            if y > *hy {
+                *hy = y;
+            }
         }
     };
     for g in &lib.graphics {
         if g.unit != 0 && g.unit != symbol.unit {
             continue;
         }
-        let pts = graphic_extent_points(&g.graphic);
-        for (lx, ly) in pts {
+        for (lx, ly) in graphic_extent_points(&g.graphic) {
             let (wx, wy) = transform_local_point(symbol, lx, ly);
             extend(&mut body_bbox, wx, wy);
         }
@@ -444,9 +487,7 @@ fn autoplace_fields(symbol: &mut signex_types::schematic::Symbol, lib: &signex_t
     let body_cx = (body_min_x + body_max_x) * 0.5;
     let body_cy = (body_min_y + body_max_y) * 0.5;
 
-    // 1b. Outer bbox = body + visible pin endpoints. This is the same
-    //     rectangle the selection overlay shows, and the autoplace anchors
-    //     here so fields sit just past the pin extents.
+    // 2. Outer bbox = body + visible pin endpoints.
     let mut outer_bbox = body_bbox;
     for p in &lib.pins {
         if p.unit != 0 && p.unit != symbol.unit {
@@ -467,11 +508,7 @@ fn autoplace_fields(symbol: &mut signex_types::schematic::Symbol, lib: &signex_t
     let cx = (min_x + max_x) * 0.5;
     let cy = (min_y + max_y) * 0.5;
 
-    // 2. Count pins on each side by the world-space position of each pin's
-    //    connection point relative to the body bbox centre. Using the body
-    //    centre (not the outer centre) keeps the classification independent
-    //    of the pin lengths the user happens to have, matching Standard's
-    //    AutoplaceFields side-selection.
+    // 3. Count pins per side relative to the body centre.
     let (mut pins_right, mut pins_left, mut pins_top, mut pins_bottom) = (0u32, 0u32, 0u32, 0u32);
     for p in &lib.pins {
         if p.unit != 0 && p.unit != symbol.unit {
@@ -481,7 +518,11 @@ fn autoplace_fields(symbol: &mut signex_types::schematic::Symbol, lib: &signex_t
         let dx = wx - body_cx;
         let dy = wy - body_cy;
         if dx.abs() >= dy.abs() {
-            if dx >= 0.0 { pins_right += 1; } else { pins_left += 1; }
+            if dx >= 0.0 {
+                pins_right += 1;
+            } else {
+                pins_left += 1;
+            }
         } else if dy >= 0.0 {
             pins_bottom += 1;
         } else {
@@ -489,23 +530,33 @@ fn autoplace_fields(symbol: &mut signex_types::schematic::Symbol, lib: &signex_t
         }
     }
 
-    // 3. Pick the side with the fewest pins. Ties resolved Right > Left > Top > Bottom
-    //    to match Standard's preference for horizontal placement.
+    // 4. Pick the side. Score = pin_count + anchor_penalty.
+    //    Tie-break order is Signex-original: Bottom > Top > Left > Right.
     #[derive(Clone, Copy)]
-    enum Side { Right, Left, Top, Bottom }
-    let candidates = [
-        (Side::Right, pins_right, 0),
-        (Side::Left, pins_left, 1),
-        (Side::Top, pins_top, 2),
-        (Side::Bottom, pins_bottom, 3),
+    enum Side {
+        Bottom,
+        Top,
+        Left,
+        Right,
+    }
+    let candidates_anchors = [
+        (Side::Bottom, (cx, max_y + 1.27), pins_bottom),
+        (Side::Top, (cx, min_y - 1.27), pins_top),
+        (Side::Left, (min_x - 1.27, cy), pins_left),
+        (Side::Right, (max_x + 1.27, cy), pins_right),
     ];
-    let side = candidates
+    let mut scored: Vec<(Side, u32, usize)> = Vec::with_capacity(4);
+    for (i, (side, (ax, ay), pin_count)) in candidates_anchors.iter().enumerate() {
+        let near = anchor_obstacle_count(*ax, *ay, document);
+        scored.push((*side, *pin_count + near * ANCHOR_PENALTY, i));
+    }
+    let chosen = scored
         .iter()
         .min_by(|a, b| a.1.cmp(&b.1).then(a.2.cmp(&b.2)))
         .map(|(s, _, _)| *s)
-        .unwrap_or(Side::Right);
+        .unwrap_or(Side::Bottom);
 
-    // 4. Collect visible fields in stacking order: Reference first, Value second.
+    // 5. Collect visible fields, anchor + justify per chosen side.
     let mut fields: Vec<&mut signex_types::schematic::TextProp> = Vec::new();
     if let Some(rt) = symbol.ref_text.as_mut()
         && !rt.hidden
@@ -522,29 +573,19 @@ fn autoplace_fields(symbol: &mut signex_types::schematic::Symbol, lib: &signex_t
         return;
     }
 
-    // 5. Anchor and per-field justify. Fields are always stacked vertically.
-    //    `line_height` is roughly Standard's 1.6 * text_size; using the first
-    //    visible field's font size keeps it scale-correct.
-    //
-    //    Justify-V is chosen so the field block sits cleanly outside the
-    //    body: VAlign::Top below the body grows downward from the anchor,
-    //    VAlign::Bottom above the body grows upward, and Center is used
-    //    on horizontal sides where the block straddles cy symmetrically.
     let font_size = fields[0].font_size.max(0.1);
-    let line_height = font_size * 1.6;
-    // Standard's AutoplaceFields keeps roughly two text-heights of clearance
-    // between the body bbox and the closest field so the stack visibly
-    // separates from the symbol. A single text-height was still cramped
-    // compared to Standard's reference rendering.
-    let margin = (font_size * 2.0).max(1.016);
+    let line_height = font_size * 1.5;
+    let margin = (font_size * 1.5).max(0.762);
     let n = fields.len() as f64;
 
-    let (anchor_x, anchor_y_first, justify_h, justify_v): (f64, f64, HAlign, VAlign) = match side {
-        Side::Right => (
-            max_x + margin,
-            cy - (n - 1.0) * line_height * 0.5,
-            HAlign::Left,
-            VAlign::Center,
+    let (anchor_x, anchor_y_first, justify_h, justify_v): (f64, f64, HAlign, VAlign) = match chosen
+    {
+        Side::Bottom => (cx, max_y + margin, HAlign::Center, VAlign::Top),
+        Side::Top => (
+            cx,
+            min_y - margin - (n - 1.0) * line_height,
+            HAlign::Center,
+            VAlign::Bottom,
         ),
         Side::Left => (
             min_x - margin,
@@ -552,22 +593,23 @@ fn autoplace_fields(symbol: &mut signex_types::schematic::Symbol, lib: &signex_t
             HAlign::Right,
             VAlign::Center,
         ),
-        Side::Top => (
-            cx,
-            min_y - margin - (n - 1.0) * line_height,
-            HAlign::Center,
-            VAlign::Bottom,
+        Side::Right => (
+            max_x + margin,
+            cy - (n - 1.0) * line_height * 0.5,
+            HAlign::Left,
+            VAlign::Center,
         ),
-        Side::Bottom => (cx, max_y + margin, HAlign::Center, VAlign::Top),
     };
 
-    // 6. Field rotation follows Standard's AutoplaceFields convention:
-    //    horizontal text is achieved by writing 90° when the symbol is
-    //    rotated 90°/270° (because Standard's GetDrawRotation toggles), and
-    //    0° otherwise. The renderer reads this with the same toggle, and
-    //    Standard opens the saved file rendering the text horizontally.
+    // 6. Field rotation: keep horizontal whenever possible. Symbol
+    //    rotated 90° / 270° gets a 90° field rotation so the rendered
+    //    glyph still reads horizontally on screen.
     let sym_rot = symbol.rotation.rem_euclid(360.0).round() as i32;
-    let field_rotation = if matches!(sym_rot, 90 | 270) { 90.0 } else { 0.0 };
+    let field_rotation = if matches!(sym_rot, 90 | 270) {
+        90.0
+    } else {
+        0.0
+    };
 
     for (i, prop) in fields.iter_mut().enumerate() {
         prop.position.x = anchor_x;
@@ -580,30 +622,19 @@ fn autoplace_fields(symbol: &mut signex_types::schematic::Symbol, lib: &signex_t
     symbol.fields_autoplaced = true;
 }
 
-/// Apply a symbol instance's position, rotation, and mirror to a local
-/// library-space point, returning the world-space coordinates. Mirrors
-/// `signex_render::instance_transform`'s convention so engine geometry
-/// matches the renderer.
+/// Apply a symbol instance's position, rotation, and mirror to a
+/// library-space point, returning world-space coordinates.
+///
+/// HI-19: thin wrapper over the shared `SymbolTransform::apply` so the
+/// math lives in exactly one place (`signex-types::schematic`). Kept
+/// as a free function so existing call sites that pass `(lx, ly)`
+/// don't need to reshape into `Point`.
 fn transform_local_point(sym: &signex_types::schematic::Symbol, lx: f64, ly: f64) -> (f64, f64) {
-    let x = lx;
-    let y = -ly; // library Y-up → schematic Y-down
-    let rad = -sym.rotation.to_radians();
-    let cos = rad.cos();
-    let sin = rad.sin();
-    let mut rx = x * cos - y * sin;
-    let mut ry = x * sin + y * cos;
-    if sym.mirror_y {
-        rx = -rx;
-    }
-    if sym.mirror_x {
-        ry = -ry;
-    }
-    (rx + sym.position.x, ry + sym.position.y)
+    let p = signex_types::schematic::SymbolTransform::from_symbol(sym)
+        .apply(signex_types::schematic::Point::new(lx, ly));
+    (p.x, p.y)
 }
 
-/// Return all extreme points of a library graphic for bounding-box
-/// computation. For closed shapes this returns the corners; for open
-/// shapes the vertices.
 fn graphic_extent_points(g: &signex_types::schematic::Graphic) -> Vec<(f64, f64)> {
     use signex_types::schematic::Graphic;
     match g {
@@ -622,7 +653,9 @@ fn graphic_extent_points(g: &signex_types::schematic::Graphic) -> Vec<(f64, f64)
             (center.x - *radius, center.y + *radius),
             (center.x + *radius, center.y + *radius),
         ],
-        Graphic::Arc { start, mid, end, .. } => {
+        Graphic::Arc {
+            start, mid, end, ..
+        } => {
             vec![(start.x, start.y), (mid.x, mid.y), (end.x, end.y)]
         }
         Graphic::Text { position, .. } | Graphic::TextBox { position, .. } => {
@@ -631,30 +664,33 @@ fn graphic_extent_points(g: &signex_types::schematic::Graphic) -> Vec<(f64, f64)
     }
 }
 
-/// Rotate `(x, y)` around `(cx, cy)` by `angle_deg` using the same screen
-/// convention as `signex_render::instance_transform` (Y-down schematic
-/// coordinates, positive `angle_deg` = visual CCW rotation as seen by the
-/// user, matching Standard's rotate command).
-///
-/// In a Y-down coordinate space the standard rotation matrix gives a visual
-/// CW rotation, so we negate the angle to recover the expected visual CCW.
-#[allow(dead_code)]
-fn rotate_point_around(x: f64, y: f64, cx: f64, cy: f64, angle_deg: f64) -> (f64, f64) {
-    let rx = x - cx;
-    let ry = y - cy;
-    let rad = -angle_deg.to_radians();
-    let cos = rad.cos();
-    let sin = rad.sin();
-    (cx + rx * cos - ry * sin, cy + rx * sin + ry * cos)
+/// Count wire endpoints + label anchors within
+/// `ANCHOR_AVOID_RADIUS_MM` of `(ax, ay)`. Used as a tie-break bias so
+/// candidate sides crowded with wires / labels lose to cleaner sides.
+fn anchor_obstacle_count(
+    ax: f64,
+    ay: f64,
+    document: &signex_types::schematic::SchematicSheet,
+) -> u32 {
+    let r2 = ANCHOR_AVOID_RADIUS_MM * ANCHOR_AVOID_RADIUS_MM;
+    let close = |x: f64, y: f64| (x - ax).powi(2) + (y - ay).powi(2) < r2;
+    let mut n = 0u32;
+    for w in &document.wires {
+        if close(w.start.x, w.start.y) || close(w.end.x, w.end.y) {
+            n = n.saturating_add(1);
+        }
+    }
+    for l in &document.labels {
+        if close(l.position.x, l.position.y) {
+            n = n.saturating_add(1);
+        }
+    }
+    n
 }
 
 // ---------------------------------------------------------------------------
 // Geometry helpers
 // ---------------------------------------------------------------------------
-
-fn inverse_field_display_delta(dx: f64, dy: f64) -> (f64, f64) {
-    (dx, dy)
-}
 
 fn point_on_wire_interior(
     point: signex_types::schematic::Point,

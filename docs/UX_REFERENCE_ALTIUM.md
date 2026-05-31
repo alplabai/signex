@@ -64,7 +64,7 @@ Each panel has a name, a default dock position, and a context filter.
 | Panel          | Default Dock | Context    | Notes                                    |
 |----------------|:------------:|:----------:|------------------------------------------|
 | Projects       | Left         | Both       | Sheet hierarchy tree                     |
-| Components     | Left         | Both       | Library browser (KiCad symbol libraries)  |
+| Components     | Left         | Both       | Library browser (`.snxlib` + `.snxsym`)   |
 | Navigator      | Left         | Both       | Design object navigator                  |
 | Libraries      | Left         | Both       | Installed library management             |
 | SCH Library    | Left         | Schematic  | Schematic symbol editor library          |
@@ -232,7 +232,7 @@ during zoom. This is the single most important detail for zoom to feel natural.
 | Key                | Action                              | Context    |
 |--------------------|-------------------------------------|------------|
 | Shift+S            | Cycle single-layer mode             | PCB        |
-| + or =             | Toggle active layer (F.Cu ↔ B.Cu)  | PCB        |
+| + or =             | Toggle active layer (Top ↔ Bottom Copper) | PCB |
 | F                  | Flip component (Top ↔ Bottom)      | PCB        |
 
 ### 4.8. Shortcut Customization
@@ -261,9 +261,9 @@ Single layer mode cycles through four display states:
 Each press of `Shift+S` advances to the next mode in the cycle.
 
 **Layer pair toggling:** The `+` or `=` key toggles the active layer between
-`F.Cu` and `B.Cu`. Flipping a component with `F` moves it between paired
-layers. Paired technical layers (Top Overlay ↔ Bottom Overlay, Top Solder ↔
-Bottom Solder) follow automatically.
+`SignexLayer::TopCopper` and `SignexLayer::BottomCopper`. Flipping a component
+with `F` moves it between paired layers. Paired technical layers (Top Overlay
+↔ Bottom Overlay, Top Solder ↔ Bottom Solder) follow automatically.
 
 ---
 
@@ -293,9 +293,8 @@ The `G` key cycles grid size forward through this sequence:
 
 `0.635mm → 1.27mm → 2.54mm → 5.08mm → 10.16mm → (wrap)`
 
-`Shift+G` cycles backward. These values match KiCad's standard grid sequence
-and are based on the 100 mil (2.54mm) base grid that PCB design universally
-uses.
+`Shift+G` cycles backward. The sequence is based on the 100 mil (2.54mm) base
+grid that PCB design universally uses.
 
 ### 6.3. Coordinate Display
 
@@ -313,55 +312,58 @@ These are the default layer colors used by Signex's PCB editor. They match
 Altium Designer's defaults for familiarity. Users may customize per-project
 (post-v2.0).
 
+Layer identifiers reference the canonical `signex_types::layer::SignexLayer`
+enum (see `PCB_LAYERS_PLAN.md`).
+
 #### Copper Layers (32 maximum)
 
-| Layer                | KiCad Name   | Default Color | Hex       |
-|----------------------|-------------|---------------|-----------|
-| Top Layer            | F.Cu        | Red           | `#FF0000` |
-| Mid Layer 1          | In1.Cu      | Yellow        | `#FFFF00` |
-| Mid Layer 2          | In2.Cu      | Green         | `#00FF00` |
-| Mid Layer 3          | In3.Cu      | Cyan          | `#00FFFF` |
-| Mid Layer 4          | In4.Cu      | Magenta       | `#FF00FF` |
-| Mid Layer 5          | In5.Cu      | Olive         | `#808000` |
-| Mid Layer 6          | In6.Cu      | Teal          | `#008080` |
-| Mid Layer 7          | In7.Cu      | Purple        | `#800080` |
-| Mid Layer 8          | In8.Cu      | Orange        | `#FF8000` |
-| Mid Layer 9          | In9.Cu      | Azure         | `#0080FF` |
-| Mid Layer 10         | In10.Cu     | Chartreuse    | `#80FF00` |
-| Mid Layer 11         | In11.Cu     | Rose          | `#FF0080` |
-| Mid Layer 12         | In12.Cu     | Spring        | `#00FF80` |
-| Mid Layer 13         | In13.Cu     | Violet        | `#8000FF` |
-| Mid Layer 14         | In14.Cu     | Salmon        | `#FF8080` |
-| Mid Layer 15         | In15.Cu     | Light Green   | `#80FF80` |
-| Mid Layer 16         | In16.Cu     | Light Blue    | `#8080FF` |
-| Mid Layers 17–30     |             | Cycling from palette | — |
-| Bottom Layer         | B.Cu        | Blue          | `#0000FF` |
+| Layer                | `SignexLayer` Variant | Default Color | Hex       |
+|----------------------|-----------------------|---------------|-----------|
+| Top Layer            | `TopCopper`           | Red           | `#FF0000` |
+| Mid Layer 1          | `MidCopper(1)`        | Yellow        | `#FFFF00` |
+| Mid Layer 2          | `MidCopper(2)`        | Green         | `#00FF00` |
+| Mid Layer 3          | `MidCopper(3)`        | Cyan          | `#00FFFF` |
+| Mid Layer 4          | `MidCopper(4)`        | Magenta       | `#FF00FF` |
+| Mid Layer 5          | `MidCopper(5)`        | Olive         | `#808000` |
+| Mid Layer 6          | `MidCopper(6)`        | Teal          | `#008080` |
+| Mid Layer 7          | `MidCopper(7)`        | Purple        | `#800080` |
+| Mid Layer 8          | `MidCopper(8)`        | Orange        | `#FF8000` |
+| Mid Layer 9          | `MidCopper(9)`        | Azure         | `#0080FF` |
+| Mid Layer 10         | `MidCopper(10)`       | Chartreuse    | `#80FF00` |
+| Mid Layer 11         | `MidCopper(11)`       | Rose          | `#FF0080` |
+| Mid Layer 12         | `MidCopper(12)`       | Spring        | `#00FF80` |
+| Mid Layer 13         | `MidCopper(13)`       | Violet        | `#8000FF` |
+| Mid Layer 14         | `MidCopper(14)`       | Salmon        | `#FF8080` |
+| Mid Layer 15         | `MidCopper(15)`       | Light Green   | `#80FF80` |
+| Mid Layer 16         | `MidCopper(16)`       | Light Blue    | `#8080FF` |
+| Mid Layers 17–30     | `MidCopper(N)`        | Cycling from palette | — |
+| Bottom Layer         | `BottomCopper`        | Blue          | `#0000FF` |
 
 #### Technical Layers
 
-| Layer                | KiCad Name   | Default Color     | Hex       | Alpha |
-|----------------------|-------------|-------------------|-----------|:-----:|
-| Top Overlay          | F.SilkS     | Yellow            | `#FFFF00` | 100%  |
-| Bottom Overlay       | B.SilkS     | Dark Blue-Gray    | `#404080` | 100%  |
-| Top Solder           | F.Mask       | Purple            | `#800080` | 40%   |
-| Bottom Solder        | B.Mask       | Teal              | `#008080` | 40%   |
-| Top Paste            | F.Paste      | Gray              | `#808080` | 90%   |
-| Bottom Paste         | B.Paste      | Dark Teal         | `#004040` | 90%   |
-| Top Assembly         | F.Fab        | Light Gray        | `#AFAFAF` | 100%  |
-| Bottom Assembly      | B.Fab        | Slate             | `#585D84` | 100%  |
-| Top Courtyard        | F.CrtYd      | Pink              | `#FF26E2` | 100%  |
-| Bottom Courtyard     | B.CrtYd      | Cyan              | `#26E9FF` | 100%  |
-| Keep-Out             | Edge.Cuts    | Magenta           | `#FF00FF` | 100%  |
-| Board Outline        | Margin       | Yellow            | `#FFFF00` | 100%  |
+| Layer                | `SignexLayer` Variant | Default Color     | Hex       | Alpha |
+|----------------------|-----------------------|-------------------|-----------|:-----:|
+| Top Overlay          | `TopSilk`             | Yellow            | `#FFFF00` | 100%  |
+| Bottom Overlay       | `BottomSilk`          | Dark Blue-Gray    | `#404080` | 100%  |
+| Top Solder           | `TopSolderMask`       | Purple            | `#800080` | 40%   |
+| Bottom Solder        | `BottomSolderMask`    | Teal              | `#008080` | 40%   |
+| Top Paste            | `TopPaste`            | Gray              | `#808080` | 90%   |
+| Bottom Paste         | `BottomPaste`         | Dark Teal         | `#004040` | 90%   |
+| Top Assembly         | `TopAssembly`         | Light Gray        | `#AFAFAF` | 100%  |
+| Bottom Assembly      | `BottomAssembly`      | Slate             | `#585D84` | 100%  |
+| Top Courtyard        | `TopCourtyard`        | Pink              | `#FF26E2` | 100%  |
+| Bottom Courtyard     | `BottomCourtyard`     | Cyan              | `#26E9FF` | 100%  |
+| Keep-Out             | `BoardOutline`        | Magenta           | `#FF00FF` | 100%  |
+| Board Outline        | `BoardMargin`         | Yellow            | `#FFFF00` | 100%  |
 
 #### Mechanical Layers
 
-| Layer                | KiCad Name   | Default Color     | Hex       |
-|----------------------|-------------|-------------------|-----------|
-| Mechanical 1         | Dwgs.User   | Orange            | `#FF8000` |
-| Mechanical 2         | Cmts.User   | Steel Blue        | `#5994DC` |
-| Mechanical 3         | Eco1.User   | Mint              | `#B4DBD2` |
-| Mechanical 4         | Eco2.User   | Gold              | `#D8C852` |
+| Layer                | `SignexLayer` Variant | Default Color     | Hex       |
+|----------------------|-----------------------|-------------------|-----------|
+| Mechanical 1         | `User(1)`             | Orange            | `#FF8000` |
+| Mechanical 2         | `User(2)`             | Steel Blue        | `#5994DC` |
+| Mechanical 3         | `User(3)`             | Mint              | `#B4DBD2` |
+| Mechanical 4         | `User(4)`             | Gold              | `#D8C852` |
 
 #### Virtual / System Layers
 

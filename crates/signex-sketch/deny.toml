@@ -1,0 +1,31 @@
+[graph]
+all-features = true
+
+[licenses]
+# v0.13 sketch crate — cleanroom; we use the same allow-list shape as
+# the workspace `deny.toml` but list it locally so cargo-deny can be
+# run against this crate in isolation if needed.
+allow = [
+    "Apache-2.0",
+    "MIT",
+    "MIT-0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "Unicode-3.0",
+    "ISC",
+    "Zlib",
+    "CC0-1.0",
+]
+confidence-threshold = 0.95
+
+[bans]
+# Specific GPL/LGPL/AGPL crates whose presence in the dep tree would
+# break the Apache-clean invariant for the sketch solver.
+deny = []
+
+[advisories]
+yanked = "warn"
+
+[sources]
+unknown-registry = "warn"
+unknown-git = "warn"

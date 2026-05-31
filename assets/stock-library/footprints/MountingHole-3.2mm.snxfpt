@@ -1,0 +1,85 @@
+format = "snxfpt/1"
+file_uuid = "019df45d-af65-71a1-b568-29e703608649"
+display_name = "MountingHole-3.2mm"
+created = "2026-05-04T19:01:13.701775100Z"
+updated = "2026-05-04T19:01:13.701775100Z"
+
+[[footprints]]
+uuid = "019df45d-af65-71a1-b568-29d0a5242184"
+name = "MountingHole-3.2mm"
+anchor = [
+    0.0,
+    0.0,
+]
+pads_tsv = '''
+number	kind	shape	size_x	size_y	pos_x	pos_y	rotation	layers	drill_diameter	drill_slot_length	solder_mask_margin	paste_margin
+'''
+silk_f = []
+silk_b = []
+fab_f = []
+fab_b = []
+version = "0.0.1"
+released = false
+created = "2026-05-04T19:01:13.701732500Z"
+updated = "2026-05-04T19:01:13.701732500Z"
+schema_version = 3
+
+[footprints.courtyard]
+points = []
+
+[footprints.body_3d]
+shape = "Extrude"
+height_mm = 1.0
+offset_z_mm = 0.0
+top_color = [
+    0.20000000298023224,
+    0.20000000298023224,
+    0.20000000298023224,
+    1.0,
+]
+side_color = [
+    0.30000001192092896,
+    0.30000001192092896,
+    0.30000001192092896,
+    1.0,
+]
+
+[footprints.pcb_params]
+
+[footprints.sketch]
+constraints = []
+arrays = []
+
+[[footprints.sketch.planes]]
+id = "6287d9cd-d2d8-4190-bd2e-46de49a389ac"
+kind = "BoardTop"
+
+[[footprints.sketch.entities]]
+id = "a2de0bf0-adc5-448c-adf8-3b190a702392"
+plane = "6287d9cd-d2d8-4190-bd2e-46de49a389ac"
+construction = false
+kind = "Point"
+x = 0.0
+y = 0.0
+
+[footprints.sketch.entities.pad]
+number = "MH1"
+kind = "NptHole"
+side = "All"
+size_x_expr = "clearance_dia"
+size_y_expr = "clearance_dia"
+mask_margin_expr = "0.05mm"
+
+[footprints.sketch.entities.pad.shape]
+shape = "Round"
+
+[footprints.sketch.entities.pad.drill]
+diameter_expr = "drill_dia"
+plated = false
+
+[footprints.sketch.entities.pad.paste_apertures]
+kind = "Single"
+
+[footprints.sketch.parameters]
+clearance_dia = "6.0mm"
+drill_dia = "3.2mm"

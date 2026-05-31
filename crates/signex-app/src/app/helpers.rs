@@ -38,7 +38,9 @@ pub(super) fn find_standard_symbols_dir() -> Option<PathBuf> {
     #[cfg(target_os = "windows")]
     {
         for ver in &["9.0", "8.0", "7.0"] {
-            let p = PathBuf::from(format!("C:/Program Files/Standard/{ver}/share/standard/symbols"));
+            let p = PathBuf::from(format!(
+                "C:/Program Files/Standard/{ver}/share/standard/symbols"
+            ));
             if p.exists() {
                 return Some(p);
             }
@@ -54,7 +56,11 @@ pub(super) fn list_standard_libraries(dir: &std::path::Path) -> Vec<String> {
         .map(|entries| {
             let mut names: Vec<String> = entries
                 .filter_map(|e| e.ok())
-                .filter(|e| e.path().extension().is_some_and(|ext| ext == "standard_sym"))
+                .filter(|e| {
+                    e.path()
+                        .extension()
+                        .is_some_and(|ext| ext == "standard_sym")
+                })
                 .map(|e| {
                     e.path()
                         .file_stem()

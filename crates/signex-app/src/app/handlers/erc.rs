@@ -42,11 +42,11 @@ impl Signex {
         // which is often just the basename (e.g. "power.standard_sch").
         let mut snapshots_by_path: std::collections::HashMap<
             std::path::PathBuf,
-            signex_render::schematic::SchematicRenderSnapshot,
+            crate::schematic_runtime::SchematicRenderSnapshot,
         > = std::collections::HashMap::new();
         let mut children: std::collections::HashMap<
             String,
-            signex_render::schematic::SchematicRenderSnapshot,
+            crate::schematic_runtime::SchematicRenderSnapshot,
         > = std::collections::HashMap::new();
 
         let open_paths: std::collections::HashSet<std::path::PathBuf> = self
@@ -61,14 +61,14 @@ impl Signex {
             .and_then(|p| p.path.parent().map(std::path::PathBuf::from));
 
         let push_snap = |path: std::path::PathBuf,
-                         snap: signex_render::schematic::SchematicRenderSnapshot,
+                         snap: crate::schematic_runtime::SchematicRenderSnapshot,
                          by_path_out: &mut std::collections::HashMap<
             std::path::PathBuf,
-            signex_render::schematic::SchematicRenderSnapshot,
+            crate::schematic_runtime::SchematicRenderSnapshot,
         >,
                          children_out: &mut std::collections::HashMap<
             String,
-            signex_render::schematic::SchematicRenderSnapshot,
+            crate::schematic_runtime::SchematicRenderSnapshot,
         >| {
             if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
                 children_out.insert(name.to_string(), snap.clone());
@@ -95,9 +95,7 @@ impl Signex {
                 continue;
             }
             if let Some(engine) = self.document_state.engines.get(&tab.path) {
-                let snapshot = signex_render::schematic::SchematicRenderSnapshot::from_sheet(
-                    engine.document(),
-                );
+                let snapshot = engine.document().clone();
                 push_snap(
                     tab.path.clone(),
                     snapshot,
@@ -124,8 +122,7 @@ impl Signex {
                 else {
                     continue;
                 };
-                let snapshot =
-                    signex_render::schematic::SchematicRenderSnapshot::from_sheet(&parsed);
+                let snapshot = parsed.clone();
                 push_snap(path, snapshot, &mut snapshots_by_path, &mut children);
             }
         }
@@ -319,10 +316,7 @@ impl Signex {
             signex_erc::RuleKind::UnusedPin => {
                 let nc = signex_types::schematic::NoConnect {
                     uuid: uuid::Uuid::new_v4(),
-                    position: signex_types::schematic::Point::new(
-                        target.world_x,
-                        target.world_y,
-                    ),
+                    position: signex_types::schematic::Point::new(target.world_x, target.world_y),
                 };
                 self.apply_engine_command(
                     signex_engine::Command::PlaceNoConnect { no_connect: nc },
@@ -565,8 +559,7 @@ impl Signex {
                 ));
                 continue;
             };
-            let Ok(sheet) =
-                signex_types::format::SnxSchematic::parse(&text).map(|snx| snx.sheet)
+            let Ok(sheet) = signex_types::format::SnxSchematic::parse(&text).map(|snx| snx.sheet)
             else {
                 crate::diagnostics::log_info(format!(
                     "Annotate: failed to parse unopened sheet {}",
@@ -609,7 +602,7 @@ impl Signex {
         self.interaction_state
             .active_canvas_mut()
             .clear_content_cache();
-        self.sync_canvas_from_visible_schematic(signex_render::schematic::RenderInvalidation::FULL);
+        self.sync_canvas_from_visible_schematic(crate::schematic_runtime::RenderInvalidation::FULL);
         self.update_selection_info();
         if any_cached_changed || self.document_state.has_active_engine() {
             self.refresh_panel_ctx();
@@ -851,7 +844,7 @@ impl Signex {
                 .active_canvas_mut()
                 .clear_content_cache();
             self.sync_canvas_from_visible_schematic(
-                signex_render::schematic::RenderInvalidation::FULL,
+                crate::schematic_runtime::RenderInvalidation::FULL,
             );
             self.refresh_panel_ctx();
         }
@@ -1094,6 +1087,8 @@ impl Signex {
             ModalId::BomPreview => iced::Size::new(1180.0, 760.0),
             ModalId::ProjectOptions => iced::Size::new(520.0, 360.0),
             ModalId::EnableVersionControl => iced::Size::new(560.0, 480.0),
+            ModalId::GridProperties => iced::Size::new(480.0, 280.0),
+            ModalId::SelectionFilterCustom => iced::Size::new(440.0, 380.0),
         };
 
         let (id, open_task) = iced::window::open(iced::window::Settings {
@@ -1166,7 +1161,7 @@ impl Signex {
         self.interaction_state
             .active_canvas_mut()
             .clear_overlay_cache();
-        self.sync_canvas_from_visible_schematic(signex_render::schematic::RenderInvalidation::FULL);
+        self.sync_canvas_from_visible_schematic(crate::schematic_runtime::RenderInvalidation::FULL);
         self.update_selection_info();
         Task::none()
     }
@@ -1187,7 +1182,7 @@ impl Signex {
                 .active_canvas_mut()
                 .clear_content_cache();
             self.sync_canvas_from_visible_schematic(
-                signex_render::schematic::RenderInvalidation::FULL,
+                crate::schematic_runtime::RenderInvalidation::FULL,
             );
             self.refresh_panel_ctx();
         }

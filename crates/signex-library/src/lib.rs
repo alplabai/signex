@@ -39,8 +39,8 @@ pub use adapters::library_set::LibrarySet;
 #[cfg(feature = "ai-stub")]
 pub use ai_stub::{PinGuess, PinoutGuess, extract_pinout};
 pub use cascade::{
-    CascadeReport, cascade_after_footprint_save, cascade_after_sim_save,
-    cascade_after_symbol_save, patch_bump,
+    CascadeReport, cascade_after_footprint_save, cascade_after_sim_save, cascade_after_symbol_save,
+    patch_bump,
 };
 pub use component::{ComponentRow, DatasheetRef, PinPadOverride, PlmReserved};
 pub use diff::{
@@ -66,10 +66,10 @@ pub use manifest::{
 pub use manufacturer::{AlternateStatus, DistributorListing, ManufacturerPart};
 pub use param::{ParamMap, ParamValue};
 pub use primitive::{
-    Body3D, BodyShape, ComponentType, Drill, Footprint, FpGraphic, FpGraphicKind, LayerId, Pad,
-    PadKind, PadShape, PinDirection, PinOrientation, PinSymbolKind, Polygon, PrimitiveKind,
-    PrimitiveRef, SimKind, SimModel, StepAttachment, Symbol, SymbolFile, SymbolGraphic,
-    SymbolGraphicKind, SymbolPin,
+    Body3D, BodyShape, ComponentType, Drill, Footprint, FootprintFile, FootprintFileError,
+    FpGraphic, FpGraphicKind, LayerId, Pad, PadKind, PadShape, PinDirection, PinOrientation,
+    PinSymbolKind, Polygon, PrimitiveKind, PrimitiveRef, SimKind, SimModel, StepAttachment, Symbol,
+    SymbolFile, SymbolGraphic, SymbolGraphicKind, SymbolPin,
 };
 pub use search::{Facet, FacetOp, SearchIndex, SearchQuery};
 #[cfg(feature = "search-tantivy")]
@@ -120,9 +120,8 @@ pub fn enable_project_version_control(
 *.stp filter=lfs diff=lfs merge=lfs -text\n\
 *.wrl filter=lfs diff=lfs merge=lfs -text\n\
 *.iges filter=lfs diff=lfs merge=lfs -text\n";
-        std::fs::write(project_dir.join(".gitattributes"), attributes).map_err(|e| {
-            LibraryError::Backend(format!("write .gitattributes: {e}"))
-        })?;
+        std::fs::write(project_dir.join(".gitattributes"), attributes)
+            .map_err(|e| LibraryError::Backend(format!("write .gitattributes: {e}")))?;
         wrote_lfs_attributes = true;
     }
 
@@ -163,17 +162,11 @@ pub fn enable_project_version_control(
     let cfg = repo.config().ok();
     let sig_name = std::env::var("GIT_AUTHOR_NAME")
         .ok()
-        .or_else(|| {
-            cfg.as_ref()
-                .and_then(|c| c.get_string("user.name").ok())
-        })
+        .or_else(|| cfg.as_ref().and_then(|c| c.get_string("user.name").ok()))
         .unwrap_or_else(|| "signex".to_string());
     let sig_email = std::env::var("GIT_AUTHOR_EMAIL")
         .ok()
-        .or_else(|| {
-            cfg.as_ref()
-                .and_then(|c| c.get_string("user.email").ok())
-        })
+        .or_else(|| cfg.as_ref().and_then(|c| c.get_string("user.email").ok()))
         .unwrap_or_else(|| "signex@localhost".to_string());
     let sig = git2::Signature::now(&sig_name, &sig_email)
         .map_err(|e| LibraryError::Backend(format!("git signature: {e}")))?;
@@ -306,8 +299,7 @@ pub fn project_file_history(
         if entries.len() >= MAX_ENTRIES {
             break;
         }
-        let oid =
-            oid_res.map_err(|e| LibraryError::Backend(format!("git revwalk oid: {e}")))?;
+        let oid = oid_res.map_err(|e| LibraryError::Backend(format!("git revwalk oid: {e}")))?;
         let commit = repo
             .find_commit(oid)
             .map_err(|e| LibraryError::Backend(format!("git find commit: {e}")))?;

@@ -112,6 +112,19 @@ pub struct ProjectData {
     /// about Signex libraries) load with an empty list.
     #[serde(default)]
     pub libraries: Vec<LibraryEntry>,
+    /// v0.22 — opt-in local Git versioning for this project's design
+    /// files (`.snxsch`, `.snxpcb`, `.snxprj`, `.snxmat`,
+    /// `.snxnet`, `.snxbom`, `.snxout`). Defaults to `false`; users
+    /// flip it via Project Properties → "Enable Version Control",
+    /// which triggers `git init` + an initial commit (and writes the
+    /// project's `.gitattributes`) before subsequent saves auto-
+    /// commit through `LocalGitProjectAdapter::commit_path`.
+    ///
+    /// Backwards-compat: `#[serde(default)]` so pre-v0.22 `.snxprj`
+    /// files load with the field unset = no version control. Same
+    /// pattern as `LibrarySpec.enable_git` for `.snxlib` files.
+    #[serde(default)]
+    pub enable_git: bool,
 }
 
 impl ProjectData {
@@ -186,6 +199,7 @@ mod tests {
             variant_definitions: vec![],
             active_variant: None,
             libraries: vec![],
+            enable_git: false,
         };
         let local = LibraryEntry {
             path: PathBuf::from("foo-lib.snxlib"),
@@ -209,6 +223,7 @@ mod tests {
             variant_definitions: vec![],
             active_variant: None,
             libraries: vec![],
+            enable_git: false,
         };
         let shared = LibraryEntry {
             path: PathBuf::from("/var/signex/Power.snxlib"),
@@ -236,7 +251,9 @@ pub enum ProjectError {
         #[source]
         source: std::io::Error,
     },
-    #[error("unsupported project file extension: .{0} (Signex Community only opens .snxprj; convert Standard projects with the signex-standard-import companion)")]
+    #[error(
+        "unsupported project file extension: .{0} (Signex Community only opens .snxprj; convert Standard projects with the signex-standard-import companion)"
+    )]
     UnsupportedExtension(String),
 }
 
@@ -283,18 +300,19 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
     let trimmed = std::str::from_utf8(&bytes)
         .map(|s| s.trim_start())
         .unwrap_or("");
-    if trimmed.starts_with('{') {
-        if let Ok(mut data) = serde_json::from_slice::<ProjectData>(&bytes) {
-            data.dir = dir.to_string_lossy().to_string();
-            // Project name in the file is informational; the on-disk
-            // filename is authoritative so renaming the .snxprj outside
-            // the app doesn't desync the displayed name.
-            data.name = project_name;
-            return Ok(data);
-        }
-        // Falls through to directory probe if JSON parse fails; the
-        // user's project is still recoverable from disk layout.
+    if trimmed.starts_with('{')
+        && let Ok(mut data) = serde_json::from_slice::<ProjectData>(&bytes)
+    {
+        data.dir = dir.to_string_lossy().to_string();
+        // Project name in the file is informational; the on-disk
+        // filename is authoritative so renaming the .snxprj outside
+        // the app doesn't desync the displayed name.
+        data.name = project_name;
+        return Ok(data);
     }
+    // Falls through to directory probe if JSON parse fails or the file
+    // doesn't start with '{'; the user's project is still recoverable
+    // from disk layout.
 
     // Legacy/empty marker — directory-driven probe (the original
     // pre-JSON behaviour).
@@ -332,6 +350,7 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
         variant_definitions: Vec::new(),
         active_variant: None,
         libraries: Vec::new(),
+        enable_git: false,
     })
 }
 

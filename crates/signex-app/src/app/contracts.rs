@@ -53,6 +53,56 @@ pub enum Message {
     UnitCycled,
     GridToggle,
     GridCycle,
+    /// v0.18.10 — open the Altium-style grid picker popup at the
+    /// current `last_mouse_pos`. Footprint editor only (today);
+    /// other contexts fall through to no-op.
+    GridPickerOpen,
+    /// v0.18.10 — dismiss the grid picker without picking.
+    GridPickerClose,
+    /// v0.18.10 — user picked a grid step from the picker. The
+    /// payload is the step in mm; the dispatcher writes it to the
+    /// active footprint editor's `state.snap_options.grid_step_mm`.
+    GridPickerSelect(f64),
+    /// v0.18.11 — open the Cartesian Grid Editor modal (Ctrl+G).
+    /// Footprint editor only; other contexts no-op.
+    GridPropertiesOpen,
+    /// v0.18.11 — close the Grid Properties modal (Cancel button or
+    /// Esc). Discards in-flight edits.
+    GridPropertiesClose,
+    /// v0.18.11 — Grid Properties modal: text input bound to the
+    /// Step X field. Strings are validated on Apply, not per
+    /// keystroke, so partial input doesn't fight the user.
+    GridPropertiesSetStepX(String),
+    /// v0.18.11 — Grid Properties modal: text input bound to the
+    /// Step Y field.
+    GridPropertiesSetStepY(String),
+    /// v0.18.11 — Grid Properties modal: toggle the X/Y link.
+    /// When linked, editing Step X mirrors into Step Y.
+    GridPropertiesToggleLink,
+    /// v0.18.11 — Grid Properties modal: Apply button. Validates +
+    /// writes the active footprint editor's `snap_options.grid_step_mm`
+    /// (and Y if/when separate axes ship). v0.18.19: also commits
+    /// fine/coarse display + multiplier.
+    GridPropertiesApply,
+    /// v0.18.19 — Grid Properties modal: Fine grid display style.
+    GridPropertiesSetFineDisplay(crate::library::editor::footprint::state::GridDisplay),
+    /// v0.18.19 — Grid Properties modal: Coarse grid display style.
+    GridPropertiesSetCoarseDisplay(crate::library::editor::footprint::state::GridDisplay),
+    /// v0.18.19 — Grid Properties modal: Multiplier (5x / 10x / 2x / 1x).
+    GridPropertiesSetMultiplier(u32),
+    /// v0.18.14.1 — Custom Selection Filter modal launcher. Opens
+    /// the 8-row checkbox table over the active footprint editor.
+    OpenSelectionFilterCustom,
+    /// v0.18.14.1 — Custom Selection Filter modal: Cancel / Esc.
+    /// Discards the in-flight draft.
+    CloseSelectionFilterCustom,
+    /// v0.18.14.1 — Custom Selection Filter modal: per-row checkbox
+    /// toggle.
+    ToggleSelectionFilterCustomKind(crate::library::editor::footprint::state::SelectionFilterKind),
+    /// v0.18.14.1 — Custom Selection Filter modal: Apply button.
+    /// Writes the draft into the active footprint editor's
+    /// `state.selection_filter` then closes.
+    ApplySelectionFilterCustom,
     DragStart(DragTarget),
     DragMove(f32, f32),
     DragEnd,
@@ -550,6 +600,31 @@ pub enum Message {
         path: std::path::PathBuf,
         result: Result<Vec<signex_widgets::HistoryEntry>, String>,
     },
+    /// v0.23 — Async project-git commit completed. The dispatcher
+    /// removes the `(project_root, rel_path)` entry from
+    /// `inflight_git_commits` and logs success/failure. `result.Ok`
+    /// carries the formatted commit OID; `result.Err` carries the
+    /// error string. Best-effort — a failure here doesn't roll back
+    /// the on-disk save (data is already on disk; this just means git
+    /// didn't capture it).
+    ProjectGitCommitDone {
+        project_root: std::path::PathBuf,
+        rel_path: std::path::PathBuf,
+        result: Result<String, String>,
+    },
+    /// v0.14.2 — keyboard shortcut for footprint editor mode switch.
+    /// Routed from the global `1` / `2` / `3` key handler in
+    /// `bootstrap.rs::subscription`. The dispatcher checks whether
+    /// the active tab is a footprint editor; if yes, sets the mode;
+    /// otherwise no-op so the keys don't steal text input on other
+    /// tabs.
+    FootprintModeShortcut(crate::library::editor::footprint::state::EditorMode),
+    /// v0.15 — Esc-key tool cancel routed through the dispatcher.
+    /// If the active tab is a footprint editor, fires
+    /// `FootprintToolEscape` (resets PadsTool + SketchTool +
+    /// tool_pending); otherwise falls back to the schematic
+    /// `Tool::Select` reset.
+    EscapePressed,
     Noop,
 }
 
@@ -639,6 +714,49 @@ pub struct TextEditState {
 pub struct ContextMenuState {
     pub x: f32,
     pub y: f32,
+}
+
+/// v0.18.10 — Altium-style grid picker popup state. Anchors the
+/// floating menu at the cursor position when `G` is pressed.
+#[derive(Debug, Clone)]
+pub struct GridPickerState {
+    pub x: f32,
+    pub y: f32,
+}
+
+/// v0.18.11 — Cartesian Grid Editor modal state. Carries the
+/// in-flight Step X / Step Y string buffers + the X/Y link toggle.
+/// Writes happen on `GridPropertiesApply`; close discards.
+///
+/// v0.18.19 added Fine / Coarse display + Multiplier draft fields.
+#[derive(Debug, Clone)]
+pub struct GridPropertiesState {
+    pub step_x_mm: String,
+    pub step_y_mm: String,
+    pub link_xy: bool,
+    pub fine_display: crate::library::editor::footprint::state::GridDisplay,
+    pub coarse_display: crate::library::editor::footprint::state::GridDisplay,
+    pub multiplier: u32,
+}
+
+/// v0.18.14.1 — Custom Selection Filter modal draft state. Mirrors
+/// `SelectionFilter` from `library::editor::footprint::state` so
+/// the user can flip flags without touching the live editor until
+/// they hit Apply.
+#[derive(Debug, Clone)]
+pub struct SelectionFilterCustomState {
+    pub pads: bool,
+    pub tracks: bool,
+    pub arcs: bool,
+    pub pours: bool,
+    pub bodies_3d: bool,
+    pub keepouts: bool,
+    pub cutouts: bool,
+    pub texts: bool,
+    pub vias: bool,
+    pub regions: bool,
+    pub fills: bool,
+    pub other: bool,
 }
 
 /// State for the Projects-panel tree-view right-click menu. The menu's
@@ -774,6 +892,15 @@ pub enum ProjectTreeAction {
     /// blank `.snxsch`, registers it as a SheetEntry, marks the
     /// project dirty, and refreshes the tree (no tab opens).
     AddNewSchematic(Vec<usize>),
+    /// project-root → Add New ▸ Symbol Library. Save-As dialog
+    /// scoped to the project dir, writes an empty `.snxsym`, opens
+    /// the file as a primitive editor tab. Altium parity: Schematic
+    /// Library is a top-level project document.
+    AddProjectSymbolLibrary(Vec<usize>),
+    /// project-root → Add New ▸ PCB Library. Save-As dialog
+    /// scoped to the project dir, writes an empty `.snxfpt`, opens
+    /// the file as a primitive editor tab.
+    AddProjectFootprintLibrary(Vec<usize>),
     /// v0.11 project-root: open the Enable Version Control confirm
     /// modal. Runs `git init` at the project dir, optionally seeds
     /// `.gitattributes` for binary-model LFS, and creates the
