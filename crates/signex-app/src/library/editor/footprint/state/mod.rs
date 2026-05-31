@@ -387,6 +387,27 @@ impl FootprintEditorState {
         }
     }
 
+    /// v0.14 — translate every pad in `indices` by `(dx, dy)` mm.
+    /// Backs the active-bar "Move Selection by X, Y…" nudge. Out-of-
+    /// range indices are skipped; the courtyard is recomputed once at
+    /// the end. Returns the moved pad indices (in the order given,
+    /// minus any out-of-range entries) so the caller can mirror exactly
+    /// those pads into the backing sketch.
+    pub fn nudge_pads(&mut self, indices: &[usize], dx: f64, dy: f64) -> Vec<usize> {
+        let mut moved = Vec::with_capacity(indices.len());
+        for &i in indices {
+            if let Some(pad) = self.pads.get_mut(i) {
+                let (x, y) = pad.position_mm;
+                pad.position_mm = (x + dx, y + dy);
+                moved.push(i);
+            }
+        }
+        if !moved.is_empty() {
+            self.recompute_courtyard();
+        }
+        moved
+    }
+
     /// Delete the pad at `idx`.
     pub fn delete_pad(&mut self, idx: usize) {
         if idx >= self.pads.len() {

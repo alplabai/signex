@@ -60,3 +60,46 @@ fn layer_visibility_default_only_front_on() {
     assert!(v.get(FpLayer::FFab));
     assert!(!v.get(FpLayer::BFab));
 }
+
+// v0.14 — "Move Selection by X, Y…" nudges the whole selection by one
+// grid step. `nudge_pads` is the geometry the dispatcher calls; assert
+// it translates exactly the selected pads and leaves the rest put.
+#[test]
+fn nudge_pads_translates_selection_by_delta() {
+    let mut s = FootprintEditorState::empty();
+    s.add_pad_at(0.0, 0.0); // idx 0 — selected
+    s.add_pad_at(2.0, 1.0); // idx 1 — selected
+    s.add_pad_at(5.0, 5.0); // idx 2 — NOT selected, must stay put
+
+    // Default grid step is 1.0 mm; nudge the first two pads by +1 / +1.
+    let step = s.snap_options.grid_step_mm;
+    let moved = s.nudge_pads(&[0, 1], step, step);
+
+    assert_eq!(moved, vec![0, 1]);
+    assert_eq!(s.pads[0].position_mm, (1.0, 1.0));
+    assert_eq!(s.pads[1].position_mm, (3.0, 2.0));
+    // Unselected pad is untouched.
+    assert_eq!(s.pads[2].position_mm, (5.0, 5.0));
+}
+
+// Out-of-range indices are skipped (no panic) and excluded from the
+// returned moved-list — the dispatcher relies on this to mirror only
+// the pads that actually moved into the sketch.
+#[test]
+fn nudge_pads_skips_out_of_range_indices() {
+    let mut s = FootprintEditorState::empty();
+    s.add_pad_at(0.0, 0.0); // idx 0
+    let moved = s.nudge_pads(&[0, 99], 0.5, -0.5);
+    assert_eq!(moved, vec![0]);
+    assert_eq!(s.pads[0].position_mm, (0.5, -0.5));
+}
+
+// Empty selection is a clean no-op: nothing moves, nothing returned.
+#[test]
+fn nudge_pads_empty_selection_is_noop() {
+    let mut s = FootprintEditorState::empty();
+    s.add_pad_at(0.0, 0.0);
+    let moved = s.nudge_pads(&[], 1.0, 1.0);
+    assert!(moved.is_empty());
+    assert_eq!(s.pads[0].position_mm, (0.0, 0.0));
+}

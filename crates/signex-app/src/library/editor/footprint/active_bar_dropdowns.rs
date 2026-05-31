@@ -308,22 +308,51 @@ fn snap_entries(
 }
 
 fn place_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessage>> {
+    // v0.14 — Move / Drag / Move Selection all activate the Select
+    // tool. In a footprint there is no separate "move tool": pad
+    // movement IS drag-under-Select (the canvas hit-tests a pad under
+    // the Select tool and emits `FootprintMovePad` while dragging — see
+    // `canvas/mod.rs`). Altium's Move and Drag differ only by whether
+    // ratlines are preserved; a footprint has no ratlines, so both map
+    // to the same "grab and drag the selection" behaviour. Picking any
+    // of these arms `PadsTool::Select` (and closes the menu in the
+    // dispatcher) so the user can immediately grab a pad.
+    let activate_select = |p: PathBuf| -> LibraryMessage {
+        fp(p, PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::Select))
+    };
     vec![
-        DropdownEntry::Item(stub_with_icon("Move", path.clone(), ic::icon_dd_move(tid))),
-        DropdownEntry::Item(stub_with_icon("Drag", path.clone(), ic::icon_dd_drag(tid))),
+        DropdownEntry::Item(
+            DropdownItem::new("Move", activate_select(path.clone())).icon(ic::icon_dd_move(tid)),
+        ),
+        DropdownEntry::Item(
+            DropdownItem::new("Drag", activate_select(path.clone())).icon(ic::icon_dd_drag(tid)),
+        ),
+        // Break Track / Drag Track End stay stubbed — they need
+        // track-segment split + endpoint-drag infrastructure that the
+        // footprint editor does not have yet.
+        // v0.15: needs track-segment split infra
         DropdownEntry::Item(stub("Break Track", path.clone())),
+        // v0.15: needs track-segment split infra
         DropdownEntry::Item(stub("Drag Track End", path.clone())),
         DropdownEntry::Separator,
-        DropdownEntry::Item(stub_with_icon(
-            "Move Selection",
-            path.clone(),
-            ic::icon_dd_move_sel(tid),
-        )),
-        DropdownEntry::Item(stub_with_icon(
-            "Move Selection by X, Y…",
-            path.clone(),
-            ic::icon_dd_move_xy(tid),
-        )),
+        DropdownEntry::Item(
+            DropdownItem::new("Move Selection", activate_select(path.clone()))
+                .icon(ic::icon_dd_move_sel(tid)),
+        ),
+        // v0.14 — "by X, Y…" nudges the whole selection by one grid
+        // step. A typed-delta dialog is deferred (no numeric-delta
+        // modal exists yet); the one-step nudge is the useful default
+        // and derives its step from the active grid (no magic size).
+        DropdownEntry::Item(
+            DropdownItem::new(
+                "Move Selection by X, Y…",
+                fp(
+                    path.clone(),
+                    PrimitiveEditorMsg::FootprintActiveBarNudgeSelection,
+                ),
+            )
+            .icon(ic::icon_dd_move_xy(tid)),
+        ),
         DropdownEntry::Item(
             DropdownItem::new(
                 "Rotate Selection",

@@ -1621,6 +1621,14 @@ pub enum PrimitiveEditorMsg {
     /// Active-bar Place → Flip Selection. Swap Top ↔ Bottom layer
     /// (and the paste/mask siblings) on the currently-selected pad.
     FootprintActiveBarFlipSelection,
+    /// Active-bar Place → "Move Selection by X, Y…". Nudges the whole
+    /// selection (`selected_pad` + `selected_pads_extra`) by one active
+    /// grid step in +X and +Y. The step derives from
+    /// `snap_options.grid_step_mm` — no hardcoded size. A typed-delta
+    /// dialog is deferred until a numeric-delta modal exists; this
+    /// one-step nudge is the v0.14 stand-in. No-op when nothing is
+    /// selected.
+    FootprintActiveBarNudgeSelection,
     /// Active-bar Align → Align Selection To Grid. Snap the currently-
     /// selected pad's centre to the nearest active-grid step.
     FootprintActiveBarAlignSelectionToGrid,

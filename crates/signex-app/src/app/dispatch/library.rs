@@ -4134,6 +4134,7 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintActiveBarAlignSelectionToGrid
         | PrimitiveEditorMsg::FootprintActiveBarMoveOriginToGrid
         | PrimitiveEditorMsg::FootprintAlignPads(_)
+        | PrimitiveEditorMsg::FootprintActiveBarNudgeSelection
         | PrimitiveEditorMsg::FootprintActiveBarSelectAll
         | PrimitiveEditorMsg::FootprintActiveBarClearSelection
         | PrimitiveEditorMsg::FootprintActiveBarSetSketchTool(_)
@@ -5407,6 +5408,13 @@ pub(crate) fn apply_footprint_primitive_edit(
                     editor.dirty = true;
                 }
             }
+            // v0.14 — close any open active-bar dropdown after a tool
+            // pick. The Place dropdown's Move / Drag / Move-Selection
+            // rows route through here (footprint pad-move is drag-under-
+            // Select); the dropdown widget leaves menu-closing to the
+            // owner. Harmless for the top-level Pads-bar tool buttons —
+            // no menu is open when those fire.
+            editor.state.active_bar_menu = None;
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintToolEscape => {
@@ -5534,6 +5542,45 @@ pub(crate) fn apply_footprint_primitive_edit(
             editor.state.active_bar_menu = None;
             editor.canvas_cache.clear();
             editor.dirty = true;
+        }
+        PrimitiveEditorMsg::FootprintActiveBarNudgeSelection => {
+            // v0.14 — "Move Selection by X, Y…". Nudge the combined
+            // selection by one active grid step in +X and +Y. Same
+            // selection set + sketch-mirror + history pattern as
+            // `FootprintAlignPads`; the typed-delta dialog is deferred.
+            let mut indices: Vec<usize> = Vec::new();
+            if let Some(p) = editor.state.selected_pad {
+                indices.push(p);
+            }
+            indices.extend(editor.state.selected_pads_extra.iter().copied());
+            indices.sort_unstable();
+            indices.dedup();
+            indices.retain(|&i| i < editor.state.pads.len());
+
+            if !indices.is_empty() {
+                editor.push_history();
+                editor.with_parts(|state, primitive| {
+                    // Delta = one grid step (no hardcoded magic size).
+                    let step = state.snap_options.grid_step_mm.max(0.001);
+                    // Translate the selection via the tested state
+                    // helper, then mirror exactly the moved pads into
+                    // the backing sketch and re-sync the literal `Pad`
+                    // list.
+                    let moved = state.nudge_pads(&indices, step, step);
+                    let snapshots: Vec<crate::library::editor::footprint::state::EditorPad> =
+                        moved
+                            .iter()
+                            .filter_map(|&i| state.pads.get(i).cloned())
+                            .collect();
+                    for snapshot in &snapshots {
+                        pad_to_sketch::mirror_move_pad_in_sketch(snapshot, primitive);
+                    }
+                    CanvasState::sync_pads_to_primitive(state, primitive);
+                });
+                editor.canvas_cache.clear();
+                editor.dirty = true;
+            }
+            editor.state.active_bar_menu = None;
         }
         PrimitiveEditorMsg::FootprintActiveBarAlignSelectionToGrid => {
             editor.with_parts(|state, primitive| {
@@ -9951,6 +9998,11 @@ fn mutates_footprint_state(msg: &PrimitiveEditorMsg) -> bool {
         // blanket pre-push here must NOT fire (it would double-stack the
         // history and snapshot even on a sub-2-pad no-op).
         | FootprintAlignPads(_)
+        // v0.14 — "Move Selection by X, Y…" (nudge) likewise pushes its
+        // own snapshot inside the handler, gated on a non-empty
+        // selection. Keep it out of the blanket pre-push to avoid
+        // double-stacking the history on an empty-selection no-op.
+        | FootprintActiveBarNudgeSelection
         | Save => false,
         // All other variants either add/remove/move geometry,
         // mutate pad attributes, or rebuild the sketch — they all
