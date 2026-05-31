@@ -152,4 +152,41 @@ impl SelectionFilter {
             SelectionFilterKind::Other => self.other = !self.other,
         }
     }
+
+    /// v0.14 — set every kind on or off at once. Backs the Filter
+    /// dropdown's "All - On / All - Off" toggle.
+    pub fn set_all(&mut self, on: bool) {
+        *self = Self {
+            pads: on,
+            tracks: on,
+            arcs: on,
+            pours: on,
+            bodies_3d: on,
+            keepouts: on,
+            cutouts: on,
+            texts: on,
+            vias: on,
+            regions: on,
+            fills: on,
+            other: on,
+        };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn set_all_off_then_on() {
+        let mut f = SelectionFilter::default();
+        f.set_all(false);
+        for k in SelectionFilterKind::ALTIUM_PILLS {
+            assert!(!f.get(*k), "{:?} should be off", k);
+        }
+        f.set_all(true);
+        for k in SelectionFilterKind::ALTIUM_PILLS {
+            assert!(f.get(*k), "{:?} should be on", k);
+        }
+    }
 }
