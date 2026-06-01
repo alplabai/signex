@@ -5948,7 +5948,7 @@ fn placement_input_tab_swaps_line_length_and_angle() {
             buffer: "10".into(),
             kind: PlacementInputKind::LineLength,
         });
-        editor.state.placement_input_other = None;
+        editor.state.placement_input_others.clear();
     }
 
     // First Tab — focus moves to a fresh empty angle field; length
@@ -5970,11 +5970,12 @@ fn placement_input_tab_swaps_line_length_and_angle() {
             "Tab focuses the angle field"
         );
         assert_eq!(focused.buffer, "", "fresh angle field starts empty");
-        let stashed = editor
-            .state
-            .placement_input_other
-            .as_ref()
-            .expect("length stashed after Tab");
+        assert_eq!(
+            editor.state.placement_input_others.len(),
+            1,
+            "exactly one field parked while editing the other"
+        );
+        let stashed = &editor.state.placement_input_others[0];
         assert_eq!(stashed.kind, PlacementInputKind::LineLength);
         assert_eq!(stashed.buffer, "10", "stashed length keeps its digits");
     }
@@ -6006,11 +6007,12 @@ fn placement_input_tab_swaps_line_length_and_angle() {
             focused.buffer, "10",
             "length digits survived the length→angle→length round-trip"
         );
-        let stashed = editor
-            .state
-            .placement_input_other
-            .as_ref()
-            .expect("angle stashed after second Tab");
+        assert_eq!(
+            editor.state.placement_input_others.len(),
+            1,
+            "exactly one field parked after the round-trip"
+        );
+        let stashed = &editor.state.placement_input_others[0];
         assert_eq!(stashed.kind, PlacementInputKind::LineAngle);
         assert_eq!(
             stashed.buffer, "90",
@@ -6070,10 +6072,10 @@ fn placement_input_line_length_and_angle_commit_at_polar_offset() {
             buffer: "10".into(),
             kind: PlacementInputKind::LineLength,
         });
-        editor.state.placement_input_other = Some(PlacementInput {
+        editor.state.placement_input_others = vec![PlacementInput {
             buffer: "90".into(),
             kind: PlacementInputKind::LineAngle,
-        });
+        }];
     }
 
     // Second click — cursor at (20, 0): azimuth 0°, distance 20. Both
@@ -6124,5 +6126,390 @@ fn placement_input_line_length_and_angle_commit_at_polar_offset() {
         (end_pt.1 - 10.0).abs() < 1e-9,
         "endpoint y should be 10 mm (10 @ 90°); got {}",
         end_pt.1
+    );
+}
+
+/// v0.14-footprint re-verify — Circle still honours a typed radius:
+/// click the centre, type "4", then a click at the cursor's 10 mm
+/// must commit a circle of radius 4 (the typed value), not 10.
+#[test]
+fn placement_input_circle_radius_pins_typed_radius() {
+    use signex_app::app::FootprintEditorState;
+    use signex_app::library::editor::footprint::state::{
+        EditorMode, PlacementInput, PlacementInputKind, SketchTool,
+    };
+    use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
+    use signex_library::{Footprint, FootprintFile};
+    use signex_sketch::entity::EntityKind;
+
+    let tmp = TempDir::new().expect("tempdir");
+    let path = tmp.path().join("circle-r.snxfpt");
+    fs::write(&path, b"{}").expect("write .snxfpt placeholder");
+
+    let (mut app, _initial_task) = Signex::new();
+    let fp = Footprint::empty("circle-r-fixture");
+    let file = FootprintFile::from_footprint(fp);
+    let mut editor = FootprintEditorState::new(path.clone(), file);
+    editor.state.mode = EditorMode::Sketch;
+    editor.state.active_tool = SketchTool::Circle;
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), editor);
+
+    // Click 1 → centre at the origin.
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchToolClick {
+            x_mm: 0.0,
+            y_mm: 0.0,
+            snap_id: None,
+        },
+    }));
+    // Pin radius = 4.
+    {
+        let editor = app
+            .document_state
+            .footprint_editors
+            .get_mut(&path)
+            .unwrap();
+        editor.state.placement_input = Some(PlacementInput {
+            buffer: "4".into(),
+            kind: PlacementInputKind::CircleRadius,
+        });
+    }
+    // Click 2 — cursor at (10, 0); radius pinned to 4.
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchToolClick {
+            x_mm: 10.0,
+            y_mm: 0.0,
+            snap_id: None,
+        },
+    }));
+
+    let editor = app.document_state.footprint_editors.get(&path).unwrap();
+    let sketch = editor.primitive().sketch.as_ref().expect("sketch present");
+    let circle = sketch
+        .entities
+        .iter()
+        .find(|e| matches!(e.kind, EntityKind::Circle { .. }))
+        .expect("circle minted by the second click");
+    if let EntityKind::Circle { radius, .. } = circle.kind {
+        assert!(
+            (radius - 4.0).abs() < 1e-9,
+            "circle radius should be the typed 4 mm, not the cursor's 10; got {radius}"
+        );
+    } else {
+        unreachable!()
+    }
+}
+
+/// v0.14-footprint — Rectangle accepts typed width/height during
+/// placement. With width 6 and height 4 pinned (one in each slot), the
+/// second click commits a 6×4 box anchored at the first corner,
+/// ignoring the cursor's 10×10 position.
+#[test]
+fn placement_input_rectangle_commits_typed_width_height() {
+    use signex_app::app::FootprintEditorState;
+    use signex_app::library::editor::footprint::state::{
+        EditorMode, PlacementInput, PlacementInputKind, SketchTool,
+    };
+    use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
+    use signex_library::{Footprint, FootprintFile};
+    use signex_sketch::entity::EntityKind;
+
+    let tmp = TempDir::new().expect("tempdir");
+    let path = tmp.path().join("rect-wh.snxfpt");
+    fs::write(&path, b"{}").expect("write .snxfpt placeholder");
+
+    let (mut app, _initial_task) = Signex::new();
+    let fp = Footprint::empty("rect-wh-fixture");
+    let file = FootprintFile::from_footprint(fp);
+    let mut editor = FootprintEditorState::new(path.clone(), file);
+    editor.state.mode = EditorMode::Sketch;
+    editor.state.active_tool = SketchTool::Rectangle;
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), editor);
+
+    // Click 1 → first corner at the origin.
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchToolClick {
+            x_mm: 0.0,
+            y_mm: 0.0,
+            snap_id: None,
+        },
+    }));
+    // Pin width = 6 (focused) and height = 4 (parked).
+    {
+        let editor = app
+            .document_state
+            .footprint_editors
+            .get_mut(&path)
+            .unwrap();
+        editor.state.placement_input = Some(PlacementInput {
+            buffer: "6".into(),
+            kind: PlacementInputKind::RectWidth,
+        });
+        editor.state.placement_input_others = vec![PlacementInput {
+            buffer: "4".into(),
+            kind: PlacementInputKind::RectHeight,
+        }];
+    }
+    // Click 2 — cursor at (10, 10): quadrant +x/+y, so the box grows
+    // to (6, 4), not (10, 10).
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchToolClick {
+            x_mm: 10.0,
+            y_mm: 10.0,
+            snap_id: None,
+        },
+    }));
+
+    let editor = app.document_state.footprint_editors.get(&path).unwrap();
+    let sketch = editor.primitive().sketch.as_ref().expect("sketch present");
+    let pts: Vec<(f64, f64)> = sketch
+        .entities
+        .iter()
+        .filter_map(|e| match e.kind {
+            EntityKind::Point { x, y } => Some((x, y)),
+            _ => None,
+        })
+        .collect();
+    assert!(!pts.is_empty(), "rectangle minted corner points");
+    let min_x = pts.iter().map(|p| p.0).fold(f64::INFINITY, f64::min);
+    let max_x = pts.iter().map(|p| p.0).fold(f64::NEG_INFINITY, f64::max);
+    let min_y = pts.iter().map(|p| p.1).fold(f64::INFINITY, f64::min);
+    let max_y = pts.iter().map(|p| p.1).fold(f64::NEG_INFINITY, f64::max);
+    assert!(
+        (min_x - 0.0).abs() < 1e-9 && (max_x - 6.0).abs() < 1e-9,
+        "box width should be the typed 6 mm; x span = [{min_x}, {max_x}]"
+    );
+    assert!(
+        (min_y - 0.0).abs() < 1e-9 && (max_y - 4.0).abs() < 1e-9,
+        "box height should be the typed 4 mm; y span = [{min_y}, {max_y}]"
+    );
+}
+
+/// v0.14-footprint — Tab cycles the Rounded-Rectangle's THREE dimension
+/// fields (width → height → radius → width…), parking the inactive
+/// ones in `placement_input_others` and preserving each field's digits
+/// across a full round-trip.
+#[test]
+fn placement_input_tab_cycles_rounded_rect_three_fields() {
+    use signex_app::app::FootprintEditorState;
+    use signex_app::library::editor::footprint::state::{
+        EditorMode, PlacementInput, PlacementInputKind, SketchTool, ToolPending,
+    };
+    use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
+    use signex_library::{Footprint, FootprintFile};
+
+    let tmp = TempDir::new().expect("tempdir");
+    let path = tmp.path().join("rrect-tab.snxfpt");
+    fs::write(&path, b"{}").expect("write .snxfpt placeholder");
+
+    let (mut app, _initial_task) = Signex::new();
+    let fp = Footprint::empty("rrect-tab-fixture");
+    let file = FootprintFile::from_footprint(fp);
+    let mut editor = FootprintEditorState::new(path.clone(), file);
+    editor.state.mode = EditorMode::Sketch;
+    editor.state.active_tool = SketchTool::RoundedRectangle;
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), editor);
+
+    // Anchor the first corner → tool_pending = RoundedRectangleFirst.
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchToolClick {
+            x_mm: 0.0,
+            y_mm: 0.0,
+            snap_id: None,
+        },
+    }));
+    {
+        let editor = app
+            .document_state
+            .footprint_editors
+            .get_mut(&path)
+            .unwrap();
+        assert!(
+            matches!(
+                editor.state.tool_pending,
+                ToolPending::RoundedRectangleFirst { .. }
+            ),
+            "sanity: first click arms RoundedRectangleFirst"
+        );
+        // Focus = width "5", nothing parked yet (as if the user typed
+        // a width before any Tab).
+        editor.state.placement_input = Some(PlacementInput {
+            buffer: "5".into(),
+            kind: PlacementInputKind::RectWidth,
+        });
+        editor.state.placement_input_others.clear();
+    }
+
+    let tab = |app: &mut Signex| {
+        let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+            path: path.clone(),
+            msg: PrimitiveEditorMsg::FootprintSketchPlacementInputTab,
+        }));
+    };
+    let focused_kind = |app: &Signex| {
+        app.document_state.footprint_editors[&path]
+            .state
+            .placement_input
+            .as_ref()
+            .map(|p| p.kind)
+    };
+
+    tab(&mut app);
+    assert_eq!(
+        focused_kind(&app),
+        Some(PlacementInputKind::RectHeight),
+        "first Tab → height"
+    );
+    tab(&mut app);
+    assert_eq!(
+        focused_kind(&app),
+        Some(PlacementInputKind::RRectRadius),
+        "second Tab → radius"
+    );
+    tab(&mut app);
+    let editor = app.document_state.footprint_editors.get(&path).unwrap();
+    let focused = editor.state.placement_input.as_ref().unwrap();
+    assert_eq!(
+        focused.kind,
+        PlacementInputKind::RectWidth,
+        "third Tab wraps back to width"
+    );
+    assert_eq!(
+        focused.buffer, "5",
+        "width digits survived the w→h→r→w round-trip"
+    );
+    assert_eq!(
+        editor.state.placement_input_others.len(),
+        2,
+        "the other two fields stay parked"
+    );
+}
+
+/// v0.14-footprint — Rounded-Rectangle commit honours typed width,
+/// height AND corner radius. Width 8 / height 5 / radius 1.5 pinned
+/// across the slots; the committed box spans 8×5 and each corner arc
+/// has radius 1.5, regardless of the cursor's position.
+#[test]
+fn placement_input_rounded_rect_commits_typed_size_and_radius() {
+    use signex_app::app::FootprintEditorState;
+    use signex_app::library::editor::footprint::state::{
+        EditorMode, PlacementInput, PlacementInputKind, SketchTool,
+    };
+    use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
+    use signex_library::{Footprint, FootprintFile};
+    use signex_sketch::entity::EntityKind;
+
+    let tmp = TempDir::new().expect("tempdir");
+    let path = tmp.path().join("rrect-commit.snxfpt");
+    fs::write(&path, b"{}").expect("write .snxfpt placeholder");
+
+    let (mut app, _initial_task) = Signex::new();
+    let fp = Footprint::empty("rrect-commit-fixture");
+    let file = FootprintFile::from_footprint(fp);
+    let mut editor = FootprintEditorState::new(path.clone(), file);
+    editor.state.mode = EditorMode::Sketch;
+    editor.state.active_tool = SketchTool::RoundedRectangle;
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), editor);
+
+    // Click 1 → first corner at the origin.
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchToolClick {
+            x_mm: 0.0,
+            y_mm: 0.0,
+            snap_id: None,
+        },
+    }));
+    // Pin width=8 (focused), height=5 + radius=1.5 (parked).
+    {
+        let editor = app
+            .document_state
+            .footprint_editors
+            .get_mut(&path)
+            .unwrap();
+        editor.state.placement_input = Some(PlacementInput {
+            buffer: "8".into(),
+            kind: PlacementInputKind::RectWidth,
+        });
+        editor.state.placement_input_others = vec![
+            PlacementInput {
+                buffer: "5".into(),
+                kind: PlacementInputKind::RectHeight,
+            },
+            PlacementInput {
+                buffer: "1.5".into(),
+                kind: PlacementInputKind::RRectRadius,
+            },
+        ];
+    }
+    // Click 2 — cursor far away at (20, 20); typed dims win.
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintSketchToolClick {
+            x_mm: 20.0,
+            y_mm: 20.0,
+            snap_id: None,
+        },
+    }));
+
+    let editor = app.document_state.footprint_editors.get(&path).unwrap();
+    let sketch = editor.primitive().sketch.as_ref().expect("sketch present");
+    let resolve = |id| {
+        sketch.entities.iter().find(|e| e.id == id).and_then(|e| match e.kind {
+            EntityKind::Point { x, y } => Some((x, y)),
+            _ => None,
+        })
+    };
+    // Outer bounding box of all corner points = width × height.
+    let pts: Vec<(f64, f64)> = sketch
+        .entities
+        .iter()
+        .filter_map(|e| match e.kind {
+            EntityKind::Point { x, y } => Some((x, y)),
+            _ => None,
+        })
+        .collect();
+    let max_x = pts.iter().map(|p| p.0).fold(f64::NEG_INFINITY, f64::max);
+    let max_y = pts.iter().map(|p| p.1).fold(f64::NEG_INFINITY, f64::max);
+    let min_x = pts.iter().map(|p| p.0).fold(f64::INFINITY, f64::min);
+    let min_y = pts.iter().map(|p| p.1).fold(f64::INFINITY, f64::min);
+    assert!(
+        (max_x - min_x - 8.0).abs() < 1e-9,
+        "rounded-rect width should be the typed 8 mm; got {}",
+        max_x - min_x
+    );
+    assert!(
+        (max_y - min_y - 5.0).abs() < 1e-9,
+        "rounded-rect height should be the typed 5 mm; got {}",
+        max_y - min_y
+    );
+    // Each corner arc has radius = |centre, start| = typed 1.5 mm.
+    let arc = sketch
+        .entities
+        .iter()
+        .find_map(|e| match e.kind {
+            EntityKind::Arc { center, start, .. } => Some((center, start)),
+            _ => None,
+        })
+        .expect("rounded-rect mints corner arcs");
+    let (cx, cy) = resolve(arc.0).expect("arc centre resolves");
+    let (sx, sy) = resolve(arc.1).expect("arc start resolves");
+    let arc_r = ((sx - cx).powi(2) + (sy - cy).powi(2)).sqrt();
+    assert!(
+        (arc_r - 1.5).abs() < 1e-9,
+        "corner radius should be the typed 1.5 mm; got {arc_r}"
     );
 }

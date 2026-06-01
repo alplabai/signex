@@ -1826,28 +1826,28 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         }
                     }
                     keyboard::Key::Named(keyboard::key::Named::Tab) => {
-                        // v0.14-footprint — while a Line placement is
-                        // in flight, Tab toggles the active dimension
-                        // field between length and angle (Fusion
-                        // convention) instead of pausing placement.
-                        // The toggle applies when the open buffer is a
-                        // Line field OR the Line tool is mid-gesture
-                        // (LineFirst) so the user can Tab to the angle
-                        // field before typing a single digit. For
-                        // every other tool Tab falls through to the
-                        // bootstrap placement-pause handler (Item 1).
-                        let line_field_active = self
+                        // v0.14-footprint — Tab cycles dimension fields
+                        // ONLY while a buffer is open on a multi-field
+                        // tool (Line len/angle, Rectangle w/h,
+                        // Rounded-Rect w/h/radius). Matches the #24 spec
+                        // ("switch while a dimension buffer is active;
+                        // otherwise Tab keeps its placement-pause role")
+                        // and reconciles with #23: with nothing typed
+                        // yet Tab still pauses the placement — even on
+                        // Rectangle / Rounded-Rect. Single-field tools
+                        // (radius / sweep / distance) have nothing to
+                        // switch, so Tab pauses there too.
+                        let switch_fields = self
                             .state
                             .placement_input
                             .as_ref()
-                            .map(|p| p.kind.is_line_field())
-                            .unwrap_or(false)
-                            || kind_for_active == Some(PlacementInputKind::LineLength);
-                        if line_field_active {
+                            .map(|p| p.kind.is_tab_switchable())
+                            .unwrap_or(false);
+                        if switch_fields {
                             return publish(EditorMsg::FootprintSketchPlacementInputTab);
                         }
-                        // Not a Line dimension context — let Tab reach
-                        // the global pre-placement-pause subscription.
+                        // No active dimension buffer — let Tab reach the
+                        // global pre-placement-pause subscription.
                         return None;
                     }
                     _ => {

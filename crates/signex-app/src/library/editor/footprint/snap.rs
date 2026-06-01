@@ -417,17 +417,37 @@ pub fn snap_cursor(
                 // Horizontal: angle near 0 or ±π → |sin(angle)| small.
                 // Vertical:   angle near ±π/2  → |cos(angle)| small.
                 let axis_thresh = AXIS_THRESHOLD_DEG.to_radians().sin();
+                // v0.14-footprint — fold the active grid step into the
+                // snapped point. Previously H/V and angle snap returned
+                // a position built from the raw cursor distance and
+                // `return`ed before the grid block below, so a snapped
+                // point kept the anchor's coordinate on the locked axis
+                // but an arbitrary OFF-GRID value on the free axis /
+                // along the ray ("snapped to angle but not to grid").
+                // Grid-snapping the free axis (H/V) and the ray distance
+                // (diagonal) keeps both true at once. No-op when grid
+                // snap is disabled.
+                let grid_snap = |v: f64| -> f64 {
+                    if opts.grid && opts.grid_step_mm > 1e-9 {
+                        (v / opts.grid_step_mm).round() * opts.grid_step_mm
+                    } else {
+                        v
+                    }
+                };
                 if opts.horizontal_vertical && angle.sin().abs() < axis_thresh {
-                    let dir = if angle.cos() >= 0.0 { 1.0 } else { -1.0 };
-                    let pos = (anchor.0 + dir * dist, anchor.1);
+                    // Horizontal: lock Y to the anchor, snap the free X
+                    // axis to grid. Using the cursor's own X (not
+                    // anchor + hypotenuse) avoids the perpendicular
+                    // component leaking into the length.
+                    let pos = (grid_snap(raw.0), anchor.1);
                     return SnapResult {
                         pos,
                         kind: SnapKind::Horizontal,
                     };
                 }
                 if opts.horizontal_vertical && angle.cos().abs() < axis_thresh {
-                    let dir = if angle.sin() >= 0.0 { 1.0 } else { -1.0 };
-                    let pos = (anchor.0, anchor.1 + dir * dist);
+                    // Vertical: lock X to the anchor, snap the free Y.
+                    let pos = (anchor.0, grid_snap(raw.1));
                     return SnapResult {
                         pos,
                         kind: SnapKind::Vertical,
@@ -441,9 +461,15 @@ pub fn snap_cursor(
                     let angle_diff = ((angle - snapped_angle).abs())
                         .min((std::f64::consts::TAU - (angle - snapped_angle).abs()).abs());
                     if angle_diff < ANGLE_THRESHOLD_DEG.to_radians() {
+                        // Hold the snapped azimuth exactly; step the
+                        // distance along the ray in grid increments so
+                        // the endpoint lands on a grid-multiple radius
+                        // (a true diagonal can't sit on both the ray
+                        // and an XY grid node, so grid the distance).
+                        let snapped_dist = grid_snap(dist);
                         let pos = (
-                            anchor.0 + dist * snapped_angle.cos(),
-                            anchor.1 + dist * snapped_angle.sin(),
+                            anchor.0 + snapped_dist * snapped_angle.cos(),
+                            anchor.1 + snapped_dist * snapped_angle.sin(),
                         );
                         return SnapResult {
                             pos,
@@ -534,6 +560,31 @@ mod tests {
         let r = snap_cursor(raw, Some(&sketch), &state, None);
         assert_eq!(r.kind, SnapKind::Vertical);
         assert!((r.pos.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn axis_snap_also_grid_snaps_free_axis() {
+        // v0.14-footprint — a near-horizontal cursor whose X sits off
+        // the 1 mm grid must snap to BOTH the anchor's Y (axis lock)
+        // AND the nearest grid X. Regression for "snapped to an angle
+        // but not to grid".
+        let (sketch, anchor_id) = sketch_with_anchor();
+        let mut state = empty_state();
+        state.tool_pending = ToolPending::LineFirst { first: anchor_id };
+        // ~1° off horizontal; cursor X = 5.4 (off the 1 mm grid).
+        let raw = (5.4, 5.4 * 1.0_f64.to_radians().tan());
+        let r = snap_cursor(raw, Some(&sketch), &state, None);
+        assert_eq!(r.kind, SnapKind::Horizontal);
+        assert!(
+            (r.pos.0 - 5.0).abs() < 1e-9,
+            "free X axis must grid-snap to 5.0; got {}",
+            r.pos.0
+        );
+        assert!(
+            r.pos.1.abs() < 1e-9,
+            "locked Y stays on the anchor; got {}",
+            r.pos.1
+        );
     }
 
     #[test]

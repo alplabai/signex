@@ -186,14 +186,15 @@ pub struct FootprintEditorState {
     /// v0.24 Phase 1 (Track D) — live numeric input during sketch-tool
     /// placement.
     pub placement_input: Option<PlacementInput>,
-    /// v0.14-footprint — the *inactive* Line placement-input field
-    /// while the user Tab-switches between length and angle. The
+    /// v0.14-footprint — the *inactive* (stashed) placement-input
+    /// fields while the user Tab-cycles a multi-dimension tool. The
     /// focused field always lives in `placement_input` (so the
     /// existing char-append / consume logic needs no rework); Tab
-    /// swaps the two slots. Holds the stashed length when the angle
-    /// field is focused, or vice-versa. `None` when no second Line
-    /// field has been started.
-    pub placement_input_other: Option<PlacementInput>,
+    /// rotates the focused field out to here and pulls the next one
+    /// in. Holds 0..N entries: empty for single-field tools, one for
+    /// Line (len/angle) & Rectangle (w/h), two for Rounded-Rect
+    /// (w/h/radius).
+    pub placement_input_others: Vec<PlacementInput>,
     /// v0.25 polish — per-input verbatim buffers for Properties-panel
     /// numeric fields.
     pub numeric_buffers: std::collections::HashMap<String, String>,
@@ -273,7 +274,7 @@ impl FootprintEditorState {
             active_bar_menu: None,
             pad_stack_tab: PadStackTab::default(),
             placement_input: None,
-            placement_input_other: None,
+            placement_input_others: Vec::new(),
             numeric_buffers: std::collections::HashMap::new(),
             context_menu: None,
             fit_pending: false,

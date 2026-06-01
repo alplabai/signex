@@ -1383,6 +1383,21 @@ fn draw_dim_pill_styled(frame: &mut canvas::Frame, centre: Point, label: &str, f
     });
 }
 
+/// v0.14-footprint — a placement-input field's raw buffer by kind,
+/// searched across the focused slot then the parked fields. The live
+/// dimension pills use it so each shows the user's typed digits
+/// verbatim (never reformatted mid-type).
+fn placement_field_buf(
+    state: &FootprintEditorState,
+    kind: super::super::state::PlacementInputKind,
+) -> Option<&str> {
+    std::iter::once(state.placement_input.as_ref())
+        .chain(state.placement_input_others.iter().map(Some))
+        .flatten()
+        .find(|p| p.kind == kind)
+        .map(|p| p.buffer.as_str())
+}
+
 pub(super) fn draw_sketch_tool_preview(
     frame: &mut canvas::Frame,
     cstate: &FootprintCanvasState,
@@ -1468,26 +1483,12 @@ pub(super) fn draw_sketch_tool_preview(
             };
             let p0 = cstate.world_to_screen(first_world);
             // v0.14-footprint — the Line tool carries TWO live
-            // dimension fields (length + angle). The focused field
-            // lives in `placement_input`, the stashed one in
-            // `placement_input_other`; collect each typed buffer from
-            // whichever slot holds it so the preview reflects exactly
-            // what the second click will commit.
-            let mut len_buf: Option<&str> = None;
-            let mut ang_buf: Option<&str> = None;
-            for slot in [
-                state.placement_input.as_ref(),
-                state.placement_input_other.as_ref(),
-            ]
-            .into_iter()
-            .flatten()
-            {
-                match slot.kind {
-                    PlacementInputKind::LineLength => len_buf = Some(slot.buffer.as_str()),
-                    PlacementInputKind::LineAngle => ang_buf = Some(slot.buffer.as_str()),
-                    _ => {}
-                }
-            }
+            // dimension fields (length + angle); collect each typed
+            // buffer from whichever slot holds it (focused or parked)
+            // so the preview reflects exactly what the second click
+            // will commit.
+            let len_buf = placement_field_buf(state, PlacementInputKind::LineLength);
+            let ang_buf = placement_field_buf(state, PlacementInputKind::LineAngle);
             let typed_len = len_buf.and_then(|b| b.parse::<f64>().ok()).filter(|v| *v > 0.0);
             let typed_ang = ang_buf.and_then(|b| b.parse::<f64>().ok());
             // Cursor-relative azimuth + distance (world space) — the
@@ -1546,27 +1547,57 @@ pub(super) fn draw_sketch_tool_preview(
             );
         }
         ToolPending::RectangleFirst { first } => {
-            // v0.15 — preview the axis-aligned rectangle from the
-            // first corner to the cursor.
+            // v0.15 — preview the axis-aligned rectangle from the first
+            // corner. v0.14-footprint: typed width/height (the Tab
+            // fields) override the cursor on each axis so the ghost box
+            // and pills match what the second click commits.
             let Some(first_world) = resolve_point(first) else {
                 return;
             };
+            let w_buf = placement_field_buf(state, PlacementInputKind::RectWidth);
+            let h_buf = placement_field_buf(state, PlacementInputKind::RectHeight);
+            let typed_w = w_buf.and_then(|b| b.parse::<f64>().ok()).filter(|v| *v > 0.0);
+            let typed_h = h_buf.and_then(|b| b.parse::<f64>().ok()).filter(|v| *v > 0.0);
+            let sx = if cursor.0 < first_world.0 { -1.0 } else { 1.0 };
+            let sy = if cursor.1 < first_world.1 { -1.0 } else { 1.0 };
+            let ex = typed_w.map(|w| first_world.0 + sx * w).unwrap_or(cursor.0);
+            let ey = typed_h.map(|h| first_world.1 + sy * h).unwrap_or(cursor.1);
             let p0 = cstate.world_to_screen(first_world);
-            let p2 = cursor_screen;
+            let p2 = cstate.world_to_screen((ex, ey));
             let p1 = Point::new(p2.x, p0.y);
             let p3 = Point::new(p0.x, p2.y);
             dashed(frame, p0, p1);
             dashed(frame, p1, p2);
             dashed(frame, p2, p3);
             dashed(frame, p3, p0);
-            // v0.27 — Fusion-style width + height dimension pills.
-            // Width along the top edge; height along the left edge.
-            let width_mm = (cursor.0 - first_world.0).abs();
-            let height_mm = (cursor.1 - first_world.1).abs();
+            // Width pill on the top edge, height pill on the left edge.
+            // Each echoes the raw typed buffer while editing, else the
+            // live size; the Tab-focused field is highlighted.
+            let focused = state.placement_input.as_ref().map(|p| p.kind);
+            let width_eff = (ex - first_world.0).abs();
+            let height_eff = (ey - first_world.1).abs();
             let top_mid = Point::new((p0.x + p1.x) / 2.0, p0.y - 18.0);
             let left_mid = Point::new(p0.x - 18.0, (p0.y + p3.y) / 2.0);
-            draw_dim_pill(frame, top_mid, &format!("{:.3} mm", width_mm));
-            draw_dim_pill(frame, left_mid, &format!("{:.3} mm", height_mm));
+            let w_text = match w_buf {
+                Some(b) if !b.is_empty() => format!("{b} mm"),
+                _ => format!("{width_eff:.3} mm"),
+            };
+            let h_text = match h_buf {
+                Some(b) if !b.is_empty() => format!("{b} mm"),
+                _ => format!("{height_eff:.3} mm"),
+            };
+            draw_dim_pill_styled(
+                frame,
+                top_mid,
+                &w_text,
+                focused == Some(PlacementInputKind::RectWidth),
+            );
+            draw_dim_pill_styled(
+                frame,
+                left_mid,
+                &h_text,
+                focused == Some(PlacementInputKind::RectHeight),
+            );
         }
         ToolPending::RoundedRectangleFirst { first } => {
             // v0.16 — preview the rounded rectangle. Compute the bbox
@@ -1577,17 +1608,28 @@ pub(super) fn draw_sketch_tool_preview(
             let Some(first_world) = resolve_point(first) else {
                 return;
             };
-            let x0 = first_world.0.min(cursor.0);
-            let y0 = first_world.1.min(cursor.1);
-            let x1 = first_world.0.max(cursor.0);
-            let y1 = first_world.1.max(cursor.1);
+            // v0.14-footprint — typed width/height override the cursor
+            // on each axis; the box grows into the cursor's quadrant.
+            let w_buf = placement_field_buf(state, PlacementInputKind::RectWidth);
+            let h_buf = placement_field_buf(state, PlacementInputKind::RectHeight);
+            let rr_buf = placement_field_buf(state, PlacementInputKind::RRectRadius);
+            let typed_w = w_buf.and_then(|b| b.parse::<f64>().ok()).filter(|v| *v > 0.0);
+            let typed_h = h_buf.and_then(|b| b.parse::<f64>().ok()).filter(|v| *v > 0.0);
+            let sgnx = if cursor.0 < first_world.0 { -1.0 } else { 1.0 };
+            let sgny = if cursor.1 < first_world.1 { -1.0 } else { 1.0 };
+            let cx_corner = typed_w.map(|w| first_world.0 + sgnx * w).unwrap_or(cursor.0);
+            let cy_corner = typed_h.map(|h| first_world.1 + sgny * h).unwrap_or(cursor.1);
+            let x0 = first_world.0.min(cx_corner);
+            let y0 = first_world.1.min(cy_corner);
+            let x1 = first_world.0.max(cx_corner);
+            let y1 = first_world.1.max(cy_corner);
             let half_w = (x1 - x0) / 2.0;
             let half_h = (y1 - y0) / 2.0;
-            let r_input = state
-                .dimension_input
-                .trim()
-                .parse::<f64>()
-                .ok()
+            // Corner radius: typed RRectRadius wins, then the legacy
+            // dimension_input text, else 0.5 mm (matches the commit).
+            let r_input = rr_buf
+                .and_then(|b| b.parse::<f64>().ok())
+                .or_else(|| state.dimension_input.trim().parse::<f64>().ok())
                 .unwrap_or(0.5);
             let r_max = half_w.min(half_h).max(0.05);
             let r = r_input.clamp(0.05, r_max);
@@ -1641,19 +1683,47 @@ pub(super) fn draw_sketch_tool_preview(
                     }
                 }
             }
-            // v0.27 — width / height / radius dim pills.
+            // v0.14-footprint — width / height / radius pills echo the
+            // raw typed buffer while editing, else the live value; the
+            // Tab-focused field is highlighted.
+            let focused = state.placement_input.as_ref().map(|p| p.kind);
             let p0_screen = cstate.world_to_screen(first_world);
-            let cur_screen = cstate.world_to_screen(cursor);
-            let width_mm = (cursor.0 - first_world.0).abs();
-            let height_mm = (cursor.1 - first_world.1).abs();
-            let top_mid = Point::new((p0_screen.x + cur_screen.x) / 2.0, p0_screen.y - 18.0);
-            let left_mid = Point::new(p0_screen.x - 18.0, (p0_screen.y + cur_screen.y) / 2.0);
-            draw_dim_pill(frame, top_mid, &format!("{:.3} mm", width_mm));
-            draw_dim_pill(frame, left_mid, &format!("{:.3} mm", height_mm));
-            // Radius pill near the cursor so the user sees the
-            // clamped corner radius (driven by `dimension_input`).
-            let r_label = Point::new(cur_screen.x + 24.0, cur_screen.y + 24.0);
-            draw_dim_pill(frame, r_label, &format!("r {:.3} mm", r));
+            let corner_screen = cstate.world_to_screen((cx_corner, cy_corner));
+            let width_eff = (cx_corner - first_world.0).abs();
+            let height_eff = (cy_corner - first_world.1).abs();
+            let top_mid = Point::new((p0_screen.x + corner_screen.x) / 2.0, p0_screen.y - 18.0);
+            let left_mid = Point::new(p0_screen.x - 18.0, (p0_screen.y + corner_screen.y) / 2.0);
+            let w_text = match w_buf {
+                Some(b) if !b.is_empty() => format!("{b} mm"),
+                _ => format!("{width_eff:.3} mm"),
+            };
+            let h_text = match h_buf {
+                Some(b) if !b.is_empty() => format!("{b} mm"),
+                _ => format!("{height_eff:.3} mm"),
+            };
+            let r_text = match rr_buf {
+                Some(b) if !b.is_empty() => format!("r {b} mm"),
+                _ => format!("r {r:.3} mm"),
+            };
+            draw_dim_pill_styled(
+                frame,
+                top_mid,
+                &w_text,
+                focused == Some(PlacementInputKind::RectWidth),
+            );
+            draw_dim_pill_styled(
+                frame,
+                left_mid,
+                &h_text,
+                focused == Some(PlacementInputKind::RectHeight),
+            );
+            let r_label = Point::new(corner_screen.x + 24.0, corner_screen.y + 24.0);
+            draw_dim_pill_styled(
+                frame,
+                r_label,
+                &r_text,
+                focused == Some(PlacementInputKind::RRectRadius),
+            );
         }
         ToolPending::CircleCenter { center } => {
             let Some(c_world) = resolve_point(center) else {
@@ -1892,15 +1962,16 @@ pub(super) fn draw_sketch_tool_preview(
     // cursor, with a translucent rounded background so the buffer
     // reads against any canvas content.
     //
-    // v0.14-footprint — the Line length/angle fields are rendered by
-    // the highlighted dimension pills above (focused vs stashed), so
-    // skip the generic overlay for them to avoid a double readout.
-    // Every other tool (radius / sweep / offset / fillet) still uses
-    // this overlay as its sole typed-value display.
+    // v0.14-footprint — multi-field tools (Line len/angle, Rectangle
+    // w/h, Rounded-Rect w/h/radius) render their typed values via the
+    // highlighted dimension pills above, so skip the generic overlay
+    // for them to avoid a double readout. Single-field tools (radius /
+    // sweep / offset / fillet) still use this overlay as their sole
+    // typed-value display.
     if let Some(input) = state
         .placement_input
         .as_ref()
-        .filter(|p| !p.kind.is_line_field())
+        .filter(|p| !p.kind.is_tab_switchable())
     {
         let label = input.kind.label();
         let body = if input.buffer.is_empty() {

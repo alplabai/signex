@@ -5747,8 +5747,8 @@ pub(crate) fn apply_footprint_primitive_edit(
             // half-typed length would leak across to a freshly-started
             // tool gesture.
             editor.state.placement_input = None;
-            // v0.14-footprint — clear the stashed Line angle/length too.
-            editor.state.placement_input_other = None;
+            // v0.14-footprint — clear every stashed dimension field too.
+            editor.state.placement_input_others.clear();
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintSketchPlacementInputChar(ch) => {
@@ -5830,69 +5830,64 @@ pub(crate) fn apply_footprint_primitive_edit(
             // override. Tool pending state is left intact so the
             // gesture itself isn't cancelled (use right-click / tool
             // Esc for that).
-            if editor.state.placement_input.is_some() || editor.state.placement_input_other.is_some()
+            if editor.state.placement_input.is_some()
+                || !editor.state.placement_input_others.is_empty()
             {
                 editor.state.placement_input = None;
-                // v0.14-footprint — Esc also clears the stashed Line
-                // length/angle field so neither leaks into the next
-                // gesture.
-                editor.state.placement_input_other = None;
+                // v0.14-footprint — Esc also clears every stashed
+                // dimension field so none leaks into the next gesture.
+                editor.state.placement_input_others.clear();
                 editor.canvas_cache.clear();
             }
         }
         PrimitiveEditorMsg::FootprintSketchPlacementInputTab => {
-            // v0.14-footprint — toggle the focused Line dimension
-            // field between length and angle. The focused field always
-            // lives in `placement_input`; the stashed (inactive) field
-            // lives in `placement_input_other`. Tab swaps them so the
-            // user can type a length, Tab, type an angle, and have
-            // BOTH consumed by the second click. Each field keeps its
-            // own typed digits across the swap.
-            use crate::library::editor::footprint::state::{
-                PlacementInput, PlacementInputKind, SketchTool, ToolPending,
-            };
-            // Determine the kind the focused field should become.
-            let current_kind = editor
-                .state
-                .placement_input
-                .as_ref()
-                .map(|p| p.kind)
-                // No buffer yet — only meaningful when the Line tool is
-                // mid-gesture; the implicit focused field is length, so
-                // Tab targets angle.
-                .or_else(|| {
-                    PlacementInputKind::from_active_tool(
-                        editor.state.active_tool,
-                        &editor.state.tool_pending,
-                    )
-                });
-            // Guard: only the Line length/angle pair toggles. Anything
-            // else leaves both slots untouched (defensive — the canvas
-            // only emits this for the Line context, but the dispatcher
-            // shouldn't assume that).
-            let is_line_ctx = matches!(editor.state.active_tool, SketchTool::Line)
-                && matches!(editor.state.tool_pending, ToolPending::LineFirst { .. });
-            if is_line_ctx
-                && let Some(kind) = current_kind
-                && kind.is_line_field()
-                && let Some(next_kind) = kind.line_toggle()
-            {
-                // Swap focused ↔ stashed. The focused field (if any)
-                // becomes the stash; the previously-stashed field (or a
-                // fresh empty one matched to `next_kind`) becomes
-                // focused.
+            // v0.14-footprint — cycle the focused dimension field to the
+            // next one in the active tool's Tab order (Line len→angle,
+            // Rectangle w→h, Rounded-Rect w→h→radius→w…). The focused
+            // field lives in `placement_input`; the rest park in
+            // `placement_input_others`, each keeping its own typed
+            // digits. The canvas only emits this while a buffer is open
+            // on a multi-field tool, but the dispatcher stays defensive
+            // and no-ops unless the active tool exposes ≥2 fields.
+            use crate::library::editor::footprint::state::{PlacementInput, PlacementInputKind};
+            let fields = PlacementInputKind::placement_fields(
+                editor.state.active_tool,
+                &editor.state.tool_pending,
+            );
+            if fields.len() >= 2 {
+                let current = editor
+                    .state
+                    .placement_input
+                    .as_ref()
+                    .map(|p| p.kind)
+                    .unwrap_or(fields[0]);
+                let idx = fields.iter().position(|k| *k == current).unwrap_or(0);
+                let next_kind = fields[(idx + 1) % fields.len()];
+                // Park the focused field (preserving its digits),
+                // replacing any stale same-kind entry; then pull the
+                // next field out of the parked set, or mint it empty so
+                // the next keypress appends to it.
                 let prev_focused = editor.state.placement_input.take();
-                let new_focused = match editor.state.placement_input_other.take() {
-                    Some(stashed) if stashed.kind == next_kind => stashed,
-                    // No stash for the target field yet (or a stale kind)
-                    // — start it empty so the next digit appends here.
-                    _ => PlacementInput {
+                let next_focused = match editor
+                    .state
+                    .placement_input_others
+                    .iter()
+                    .position(|p| p.kind == next_kind)
+                {
+                    Some(pos) => editor.state.placement_input_others.remove(pos),
+                    None => PlacementInput {
                         buffer: String::new(),
                         kind: next_kind,
                     },
                 };
-                editor.state.placement_input = Some(new_focused);
-                editor.state.placement_input_other = prev_focused;
+                if let Some(prev) = prev_focused {
+                    editor
+                        .state
+                        .placement_input_others
+                        .retain(|p| p.kind != prev.kind);
+                    editor.state.placement_input_others.push(prev);
+                }
+                editor.state.placement_input = Some(next_focused);
                 editor.canvas_cache.clear();
             }
         }
@@ -7702,25 +7697,23 @@ pub(crate) fn apply_footprint_primitive_edit(
                 .placement_input
                 .as_ref()
                 .and_then(|p| p.buffer.parse::<f64>().ok());
-            // v0.14-footprint — the Line tool now carries TWO dimension
-            // fields (length + angle); the focused one lives in
-            // `placement_input`, the stashed one in
-            // `placement_input_other`. Pull each field's parsed value
-            // out of whichever slot currently holds it so the Line
-            // second-click arm can honour length, angle, or both
-            // regardless of which field has focus.
-            let line_dim_value = |kind: PlacementInputKind| -> Option<f64> {
-                [
-                    editor.state.placement_input.as_ref(),
-                    editor.state.placement_input_other.as_ref(),
-                ]
-                .into_iter()
-                .flatten()
-                .find(|p| p.kind == kind)
-                .and_then(|p| p.buffer.parse::<f64>().ok())
+            // v0.14-footprint — multi-dimension tools (Line len/angle,
+            // Rectangle w/h, Rounded-Rect w/h/radius) keep the focused
+            // field in `placement_input` and the rest in
+            // `placement_input_others`. Pull a field's parsed value out
+            // of whichever slot holds it so the commit arms can honour
+            // any combination regardless of which field has focus.
+            let field_value = |kind: PlacementInputKind| -> Option<f64> {
+                std::iter::once(editor.state.placement_input.as_ref())
+                    .chain(editor.state.placement_input_others.iter().map(Some))
+                    .flatten()
+                    .find(|p| p.kind == kind)
+                    .and_then(|p| p.buffer.parse::<f64>().ok())
             };
-            let line_len_typed = line_dim_value(PlacementInputKind::LineLength);
-            let line_ang_typed = line_dim_value(PlacementInputKind::LineAngle);
+            let line_len_typed = field_value(PlacementInputKind::LineLength);
+            let line_ang_typed = field_value(PlacementInputKind::LineAngle);
+            let rect_w_typed = field_value(PlacementInputKind::RectWidth);
+            let rect_h_typed = field_value(PlacementInputKind::RectHeight);
             let resolve_point_xy =
                 |id: SketchEntityId, primitive: &signex_library::primitive::footprint::Footprint| -> Option<(f64, f64)> {
                     primitive
@@ -7864,6 +7857,40 @@ pub(crate) fn apply_footprint_primitive_edit(
                         } else {
                             (x_mm, y_mm, false)
                         }
+                    } else {
+                        (x_mm, y_mm, false)
+                    }
+                }
+                // Rectangle / Rounded-Rectangle second click — pin the
+                // opposite corner from typed width/height. Each axis is
+                // independent: typed width fixes |Δx| (sign from the
+                // cursor's quadrant), typed height fixes |Δy|; an
+                // untyped axis follows the cursor. The per-tool commit
+                // arm builds the box from `first` + this corner (and,
+                // for Rounded-Rect, reads the corner radius itself).
+                (_, _, SketchTool::Rectangle, ToolPending::RectangleFirst { first })
+                | (
+                    _,
+                    _,
+                    SketchTool::RoundedRectangle,
+                    ToolPending::RoundedRectangleFirst { first },
+                ) if rect_w_typed.is_some() || rect_h_typed.is_some() => {
+                    let primitive = editor.primitive();
+                    if let Some((fx, fy)) = resolve_point_xy(first, primitive) {
+                        // Sign of the cursor offset picks the quadrant
+                        // the box grows into; default +1 when the cursor
+                        // sits exactly on a corner axis.
+                        let sx = if x_mm < fx { -1.0 } else { 1.0 };
+                        let sy = if y_mm < fy { -1.0 } else { 1.0 };
+                        let ex = match rect_w_typed {
+                            Some(w) if w > 0.0 => fx + sx * w,
+                            _ => x_mm,
+                        };
+                        let ey = match rect_h_typed {
+                            Some(h) if h > 0.0 => fy + sy * h,
+                            _ => y_mm,
+                        };
+                        (ex, ey, true)
                     } else {
                         (x_mm, y_mm, false)
                     }
@@ -8158,14 +8185,16 @@ pub(crate) fn apply_footprint_primitive_edit(
                             let y1 = fy.max(oy);
                             let half_w = (x1 - x0) / 2.0;
                             let half_h = (y1 - y0) / 2.0;
-                            // Read corner radius from dimension input;
-                            // default 0.5 mm, clamp to [0.05, half_min].
-                            let r_input = editor
-                                .state
-                                .dimension_input
-                                .trim()
-                                .parse::<f64>()
-                                .ok()
+                            // v0.14-footprint — corner radius source:
+                            // prefer a typed RRectRadius (the third Tab
+                            // field), then the legacy `dimension_input`
+                            // text, else 0.5 mm. Clamp to [0.05, half_min].
+                            let r_input = std::iter::once(editor.state.placement_input.as_ref())
+                                .chain(editor.state.placement_input_others.iter().map(Some))
+                                .flatten()
+                                .find(|p| p.kind == PlacementInputKind::RRectRadius)
+                                .and_then(|p| p.buffer.parse::<f64>().ok())
+                                .or_else(|| editor.state.dimension_input.trim().parse::<f64>().ok())
                                 .unwrap_or(0.5);
                             let r_max = half_w.min(half_h).max(0.05);
                             let r = r_input.clamp(0.05, r_max);
@@ -10023,6 +10052,9 @@ pub(crate) fn apply_footprint_primitive_edit(
             // either commits or Esc-clears.
             if used_placement_input {
                 editor.state.placement_input = None;
+                // v0.14-footprint — drop every parked dimension field
+                // too so the next gesture starts with a clean buffer.
+                editor.state.placement_input_others.clear();
             }
             editor.canvas_cache.clear();
             editor.dirty = true;
