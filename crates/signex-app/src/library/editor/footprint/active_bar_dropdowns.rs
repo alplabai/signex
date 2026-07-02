@@ -614,21 +614,20 @@ fn text_entries(
             .icon(ic::icon_dd_text_string(tid))
             .checked(active == PadsTool::PlaceString),
         ),
-        // v0.14 — "Text Frame" approximates bounded-box text by reusing
-        // the working silk-text place tool (`PlaceString`), exactly like
-        // the "String" row above. A true auto-wrapping bounding-box text
-        // primitive is deferred (none exists yet); for now this drops the
-        // same silk string at the cursor.
+        // v0.14 — "Text Frame" drags a bounding-box rectangle and
+        // appends a framed silk `Text` (item ③). Unlike "String"
+        // above, this is a press-drag-release gesture, not a
+        // 1-click drop.
         DropdownEntry::Item(
             DropdownItem::new(
                 "Text Frame",
                 fp(
                     path,
-                    PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlaceString),
+                    PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlaceTextFrame),
                 ),
             )
             .icon(ic::icon_dd_text_frame(tid))
-            .checked(active == PadsTool::PlaceString),
+            .checked(active == PadsTool::PlaceTextFrame),
         ),
     ]
 }

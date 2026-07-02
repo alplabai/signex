@@ -937,6 +937,46 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     }
                     if drag.pad_idx == usize::MAX {
                         if drag.moved {
+                            // v0.14 — Place Text Frame press-drag-
+                            // release (item ③). `grab_offset_mm` is
+                            // the press-time world anchor (set when
+                            // the DragState was created above);
+                            // resolve the release-time world position
+                            // from the live cursor and commit the
+                            // min-corner + abs-delta box as a single
+                            // message. A drag that collapses to ~0 in
+                            // either axis is a cancelled gesture, not
+                            // a degenerate frame.
+                            if self.state.pads_tool
+                                == super::state::PadsTool::PlaceTextFrame
+                            {
+                                let anchor = drag.grab_offset_mm;
+                                let release_world = cursor
+                                    .position_in(bounds)
+                                    .map(|p| cstate.screen_to_world(p))
+                                    .unwrap_or(anchor);
+                                let x_mm = anchor.0.min(release_world.0);
+                                let y_mm = anchor.1.min(release_world.1);
+                                let w_mm = (release_world.0 - anchor.0).abs();
+                                let h_mm = (release_world.1 - anchor.1).abs();
+                                self.cache.clear();
+                                if w_mm > 1e-3 && h_mm > 1e-3 {
+                                    return Some(canvas::Action::publish(
+                                        LibraryMessage::EditorEvent {
+                                            library_path: self.address.library_path.clone(),
+                                            table: self.address.table.clone(),
+                                            row_id: self.address.row_id,
+                                            msg: EditorMsg::FootprintAddTextFrame {
+                                                x_mm,
+                                                y_mm,
+                                                w_mm,
+                                                h_mm,
+                                            },
+                                        },
+                                    ));
+                                }
+                                return None;
+                            }
                             // v0.26-I — empty-canvas drag with motion.
                             // If the press armed a rubber-band (Select
                             // tool + Pads mode), commit it now: walk
@@ -1637,6 +1677,13 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         self.state.pads_tool,
                         PadsTool::PlacePad | PadsTool::PlaceVia
                     );
+                // v0.14 — Place Text Frame redraws on every cursor
+                // tick while armed so the drag-rect ghost (drawn by
+                // `draw_pads_tool_preview` from `cstate.drag` +
+                // `cursor_mm`) tracks the live cursor, mirroring
+                // `in_pads_place` above.
+                let in_text_frame_place = matches!(self.state.mode, EditorMode::Normal)
+                    && self.state.pads_tool == PadsTool::PlaceTextFrame;
                 // v0.27 — re-render lasso ghost as the cursor moves
                 // so the open polygon edge tracks live to the cursor.
                 let in_lasso = self.state.lasso_mode_active
@@ -1650,6 +1697,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 let in_sketch_mode_for_cursor = matches!(self.state.mode, EditorMode::Sketch);
                 if in_sketch_with_anchor
                     || in_pads_place
+                    || in_text_frame_place
                     || in_lasso
                     || in_touching_line
                     || in_sketch_mode_for_cursor

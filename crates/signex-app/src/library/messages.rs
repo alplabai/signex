@@ -699,6 +699,15 @@ pub enum EditorMsg {
         x_mm: f64,
         y_mm: f64,
     },
+    /// v0.14 — commit a dragged text frame (anchor + size, mm).
+    /// Fires once, on release, from the `PadsTool::PlaceTextFrame`
+    /// press-drag-release gesture.
+    FootprintAddTextFrame {
+        x_mm: f64,
+        y_mm: f64,
+        w_mm: f64,
+        h_mm: f64,
+    },
     /// v0.18.15.1 — click during a Place Track gesture. The
     /// dispatcher decides whether this is the first or second
     /// click based on `editor.state.track_first`.
@@ -1462,6 +1471,8 @@ pub enum PrimitiveEditorMsg {
     /// with placeholder content "TEXT" + 1mm size. The user edits
     /// the content via the Properties panel later.
     FootprintAddText { x_mm: f64, y_mm: f64 },
+    /// v0.14 — commit a dragged text frame (anchor + size, mm).
+    FootprintAddTextFrame { x_mm: f64, y_mm: f64, w_mm: f64, h_mm: f64 },
     /// v0.18.15.1 — click during a Place Track 2-click gesture.
     FootprintTrackClick { x_mm: f64, y_mm: f64 },
     /// v0.18.15.1 — Esc / right-click during Place Track.

@@ -141,3 +141,16 @@ fn move_by_modal_nudges_by_typed_delta() {
     assert_eq!(moved, vec![0]);
     assert_eq!(s.pads[0].position_mm, (2.5, -1.0));
 }
+
+// v0.14 — Placing a text frame appends a silk Text carrying a
+// Some(frame) box (item ③ bounding-box Text Frame place tool).
+#[test]
+fn place_text_frame_sets_frame_box() {
+    use signex_library::primitive::footprint::FpGraphicKind;
+    let mut fp = signex_library::primitive::footprint::Footprint::empty("FrameTool");
+    crate::library::editor::footprint::text_frame::add_text_frame(&mut fp, 0.0, 0.0, 4.0, 2.0);
+    match &fp.silk_f.last().unwrap().kind {
+        FpGraphicKind::Text { frame, .. } => assert_eq!(*frame, Some((4.0, 2.0))),
+        _ => panic!("expected Text"),
+    }
+}

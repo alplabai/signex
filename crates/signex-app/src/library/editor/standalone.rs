@@ -990,6 +990,17 @@ fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEditorMsg {
         EditorMsg::FootprintAddText { x_mm, y_mm } => {
             PrimitiveEditorMsg::FootprintAddText { x_mm, y_mm }
         }
+        EditorMsg::FootprintAddTextFrame {
+            x_mm,
+            y_mm,
+            w_mm,
+            h_mm,
+        } => PrimitiveEditorMsg::FootprintAddTextFrame {
+            x_mm,
+            y_mm,
+            w_mm,
+            h_mm,
+        },
         EditorMsg::FootprintTrackClick { x_mm, y_mm } => {
             PrimitiveEditorMsg::FootprintTrackClick { x_mm, y_mm }
         }

@@ -258,6 +258,25 @@ pub(super) fn draw_pads_tool_preview(
                 frame.fill(&Path::circle(c, 3.0), ghost_colour);
             }
         },
+        // v0.14 — Place Text Frame press-drag-release ghost (item
+        // ③). Reads the live `cstate.drag` anchor (set on press for
+        // any empty-canvas click) rather than a `state` pending
+        // field, since the gesture commits in one message on
+        // release — there's no cross-click state to persist.
+        PadsTool::PlaceTextFrame => {
+            if let Some(drag) = cstate.drag
+                && drag.pad_idx == usize::MAX
+            {
+                let p0 = cstate.world_to_screen(drag.grab_offset_mm);
+                let p1 = cstate.world_to_screen(cursor);
+                let rect = Path::rectangle(
+                    Point::new(p0.x.min(p1.x), p0.y.min(p1.y)),
+                    iced::Size::new((p1.x - p0.x).abs(), (p1.y - p0.y).abs()),
+                );
+                frame.stroke(&rect, stroke());
+                frame.fill(&Path::circle(p0, 3.0), ghost_colour);
+            }
+        }
         PadsTool::PlacePolygon | PadsTool::PlaceRegion => {
             let verts = &state.place_polygon_vertices;
             if verts.is_empty() {

@@ -100,19 +100,57 @@ pub(super) fn draw_silk_graphics(
                 position,
                 content,
                 size,
-                ..
+                frame: text_frame,
             } => {
                 let p = cstate.world_to_screen((position[0], position[1]));
-                let size_px = ((*size as f32) * cstate.scale).max(8.0);
-                frame.fill_text(canvas::Text {
-                    content: content.clone(),
-                    position: Point::new(p.x, p.y),
-                    size: size_px.into(),
-                    color: colour,
-                    align_x: iced::alignment::Horizontal::Left.into(),
-                    align_y: iced::alignment::Vertical::Top,
-                    ..canvas::Text::default()
-                });
+                match text_frame {
+                    // v0.14 — bounding-box Text Frame (item ③). Top-
+                    // left anchored at `position`, same as the
+                    // point-text branch below; the only difference is
+                    // a guide-rectangle stroke and a size clamp so
+                    // the string doesn't overflow the box's height.
+                    // No auto-wrap/reflow — a string wider than the
+                    // frame simply overruns it horizontally, exactly
+                    // like Altium's non-autosize text frames.
+                    Some((w, h)) => {
+                        let p1 = cstate.world_to_screen((
+                            position[0] + *w as f64,
+                            position[1] + *h as f64,
+                        ));
+                        let rect = Path::rectangle(
+                            Point::new(p.x.min(p1.x), p.y.min(p1.y)),
+                            iced::Size::new((p1.x - p.x).abs(), (p1.y - p.y).abs()),
+                        );
+                        frame.stroke(
+                            &rect,
+                            Stroke::default().with_width(stroke_px).with_color(colour),
+                        );
+                        let size_px = ((*size as f32) * cstate.scale)
+                            .min((p1.y - p.y).abs())
+                            .max(4.0);
+                        frame.fill_text(canvas::Text {
+                            content: content.clone(),
+                            position: Point::new(p.x, p.y),
+                            size: size_px.into(),
+                            color: colour,
+                            align_x: iced::alignment::Horizontal::Left.into(),
+                            align_y: iced::alignment::Vertical::Top,
+                            ..canvas::Text::default()
+                        });
+                    }
+                    None => {
+                        let size_px = ((*size as f32) * cstate.scale).max(8.0);
+                        frame.fill_text(canvas::Text {
+                            content: content.clone(),
+                            position: Point::new(p.x, p.y),
+                            size: size_px.into(),
+                            color: colour,
+                            align_x: iced::alignment::Horizontal::Left.into(),
+                            align_y: iced::alignment::Vertical::Top,
+                            ..canvas::Text::default()
+                        });
+                    }
+                }
             }
             FpGraphicKind::Polygon { vertices } => {
                 if vertices.len() < 2 {

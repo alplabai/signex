@@ -4103,6 +4103,7 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintAddPad { .. }
         | PrimitiveEditorMsg::FootprintAddHole { .. }
         | PrimitiveEditorMsg::FootprintAddText { .. }
+        | PrimitiveEditorMsg::FootprintAddTextFrame { .. }
         | PrimitiveEditorMsg::FootprintTrackClick { .. }
         | PrimitiveEditorMsg::FootprintTrackCancel
         | PrimitiveEditorMsg::FootprintArcClick { .. }
@@ -4971,6 +4972,29 @@ pub(crate) fn apply_footprint_primitive_edit(
                     stroke_width: 0.0,
                     filled: false,
                 });
+            editor.canvas_cache.clear();
+            editor.dirty = true;
+        }
+        // v0.14 — Place Text Frame press-drag-release commit (item
+        // ③). Fires once, on release, with the anchor (min corner)
+        // and drag size already resolved by the canvas. Pushes its
+        // own history snapshot — see `mutates_footprint_state`,
+        // classified alongside the 3D Body mint variants — because
+        // the intermediate press/drag ticks never reach the
+        // dispatcher (unlike Track's 2-click gesture), so there's
+        // no risk of double-stacking.
+        PrimitiveEditorMsg::FootprintAddTextFrame {
+            x_mm,
+            y_mm,
+            w_mm,
+            h_mm,
+        } => {
+            editor.push_history();
+            editor.with_parts(|_state, primitive| {
+                crate::library::editor::footprint::text_frame::add_text_frame(
+                    primitive, x_mm, y_mm, w_mm, h_mm,
+                );
+            });
             editor.canvas_cache.clear();
             editor.dirty = true;
         }
@@ -10245,6 +10269,12 @@ fn mutates_footprint_state(msg: &PrimitiveEditorMsg) -> bool {
         // blanket pre-push to avoid double-stacking the history.
         | FootprintMintBody3d
         | FootprintMintExtrudedBody3d
+        // v0.14 — Place Text Frame commits once, on release, with
+        // the drag already resolved (no intermediate anchor-click
+        // message reaches the dispatcher like Track's 2-click
+        // gesture does). It pushes its own snapshot inside the
+        // handler, so keep it out of the blanket pre-push.
+        | FootprintAddTextFrame { .. }
         | Save => false,
         // All other variants either add/remove/move geometry,
         // mutate pad attributes, or rebuild the sketch — they all
@@ -10637,6 +10667,7 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::FootprintAddPad { .. }
         | EditorMsg::FootprintAddHole { .. }
         | EditorMsg::FootprintAddText { .. }
+        | EditorMsg::FootprintAddTextFrame { .. }
         | EditorMsg::FootprintTrackClick { .. }
         | EditorMsg::FootprintTrackCancel
         | EditorMsg::FootprintArcClick { .. }
