@@ -9,6 +9,7 @@
 
 pub mod active_bar_dropdowns;
 pub mod body3d;
+pub mod body3d_mint;
 pub mod canvas;
 pub mod context_menu;
 pub mod layers;

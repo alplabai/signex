@@ -4135,6 +4135,8 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintActiveBarMoveOriginToGrid
         | PrimitiveEditorMsg::FootprintAlignPads(_)
         | PrimitiveEditorMsg::FootprintActiveBarNudgeSelection
+        | PrimitiveEditorMsg::FootprintMintBody3d
+        | PrimitiveEditorMsg::FootprintMintExtrudedBody3d
         | PrimitiveEditorMsg::FootprintActiveBarSelectAll
         | PrimitiveEditorMsg::FootprintActiveBarClearSelection
         | PrimitiveEditorMsg::FootprintActiveBarSetSketchTool(_)
@@ -5584,6 +5586,24 @@ pub(crate) fn apply_footprint_primitive_edit(
                 editor.dirty = true;
             }
             editor.state.active_bar_menu = None;
+        }
+        PrimitiveEditorMsg::FootprintMintBody3d => {
+            editor.push_history();
+            editor.with_parts(|_state, primitive| {
+                crate::library::editor::footprint::body3d_mint::mint_box_from_courtyard(primitive);
+            });
+            editor.state.active_bar_menu = None;
+            editor.canvas_cache.clear();
+            editor.dirty = true;
+        }
+        PrimitiveEditorMsg::FootprintMintExtrudedBody3d => {
+            editor.push_history();
+            editor.with_parts(|_state, primitive| {
+                crate::library::editor::footprint::body3d_mint::mint_extruded_from_fab(primitive);
+            });
+            editor.state.active_bar_menu = None;
+            editor.canvas_cache.clear();
+            editor.dirty = true;
         }
         PrimitiveEditorMsg::FootprintActiveBarAlignSelectionToGrid => {
             editor.with_parts(|state, primitive| {
@@ -10165,6 +10185,11 @@ fn mutates_footprint_state(msg: &PrimitiveEditorMsg) -> bool {
         // selection. Keep it out of the blanket pre-push to avoid
         // double-stacking the history on an empty-selection no-op.
         | FootprintActiveBarNudgeSelection
+        // v0.14 — 3D Body mint pushes its own snapshot inside the
+        // handler (unconditionally, unlike nudge). Keep it out of the
+        // blanket pre-push to avoid double-stacking the history.
+        | FootprintMintBody3d
+        | FootprintMintExtrudedBody3d
         | Save => false,
         // All other variants either add/remove/move geometry,
         // mutate pad attributes, or rebuild the sketch — they all

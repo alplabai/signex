@@ -1633,6 +1633,10 @@ pub enum PrimitiveEditorMsg {
     /// one-step nudge is the v0.14 stand-in. No-op when nothing is
     /// selected.
     FootprintActiveBarNudgeSelection,
+    /// Active-bar Body → "3D Body". Extrude the courtyard into a solid.
+    FootprintMintBody3d,
+    /// Active-bar Body → "Extruded 3D Body". Extrude the fab outline.
+    FootprintMintExtrudedBody3d,
     /// Active-bar Align → Align Selection To Grid. Snap the currently-
     /// selected pad's centre to the nearest active-grid step.
     FootprintActiveBarAlignSelectionToGrid,

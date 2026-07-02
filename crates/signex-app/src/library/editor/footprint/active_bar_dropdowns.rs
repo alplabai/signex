@@ -587,8 +587,14 @@ fn body3d_entries(
     path: PathBuf,
 ) -> Vec<DropdownEntry<LibraryMessage>> {
     vec![
-        DropdownEntry::Item(stub("3D Body", path.clone())),
-        DropdownEntry::Item(stub("Extruded 3D Body", path)),
+        DropdownEntry::Item(DropdownItem::new(
+            "3D Body",
+            fp(path.clone(), PrimitiveEditorMsg::FootprintMintBody3d),
+        )),
+        DropdownEntry::Item(DropdownItem::new(
+            "Extruded 3D Body",
+            fp(path, PrimitiveEditorMsg::FootprintMintExtrudedBody3d),
+        )),
     ]
 }
 

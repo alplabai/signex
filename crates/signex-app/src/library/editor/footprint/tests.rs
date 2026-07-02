@@ -82,6 +82,27 @@ fn nudge_pads_translates_selection_by_delta() {
     assert_eq!(s.pads[2].position_mm, (5.0, 5.0));
 }
 
+// 3D Body mint populates body_3d as an Extrude body whose outline is the
+// courtyard, so the CPU preview shows a solid immediately.
+#[test]
+fn mint_body3d_extrudes_courtyard() {
+    use signex_library::primitive::footprint::BodyShape;
+    let mut fp = signex_library::primitive::footprint::Footprint::empty("TestFp");
+    // give the footprint a non-empty courtyard (2x2mm square) so the box
+    // has an outline to copy.
+    fp.courtyard = signex_library::primitive::footprint::Polygon::new(vec![
+        [-1.0, -1.0],
+        [1.0, -1.0],
+        [1.0, 1.0],
+        [-1.0, 1.0],
+    ]);
+    assert!(fp.body_3d.outline.is_none());
+    crate::library::editor::footprint::body3d_mint::mint_box_from_courtyard(&mut fp);
+    assert_eq!(fp.body_3d.shape, BodyShape::Extrude);
+    assert!(fp.body_3d.outline.is_some(), "outline should be the courtyard");
+    assert!(fp.body_3d.height_mm > 0.0);
+}
+
 // Out-of-range indices are skipped (no panic) and excluded from the
 // returned moved-list — the dispatcher relies on this to mirror only
 // the pads that actually moved into the sketch.
