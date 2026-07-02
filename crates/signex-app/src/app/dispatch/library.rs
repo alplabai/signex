@@ -4966,6 +4966,7 @@ pub(crate) fn apply_footprint_primitive_edit(
                         position: [x_mm, y_mm],
                         content: "TEXT".to_string(),
                         size: 1.0,
+                        frame: None,
                     },
                     stroke_width: 0.0,
                     filled: false,

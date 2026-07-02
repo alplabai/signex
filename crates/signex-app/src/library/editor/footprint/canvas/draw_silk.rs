@@ -100,6 +100,7 @@ pub(super) fn draw_silk_graphics(
                 position,
                 content,
                 size,
+                ..
             } => {
                 let p = cstate.world_to_screen((position[0], position[1]));
                 let size_px = ((*size as f32) * cstate.scale).max(8.0);

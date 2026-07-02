@@ -1597,6 +1597,7 @@ fn build_footprint_editor_panel_ctx(
                 position,
                 content,
                 size,
+                ..
             } => (
                 "Text",
                 SilkKindGeometry::Text {

@@ -103,6 +103,54 @@ fn v3_cutout_v_score_mask_paste_round_trip() {
 }
 
 #[test]
+fn text_frame_round_trips_and_defaults_none() {
+    use signex_library::primitive::footprint::{FpGraphic, FpGraphicKind};
+
+    let mut fp = Footprint::empty("FrameTest");
+    fp.silk_f.push(FpGraphic {
+        kind: FpGraphicKind::Text {
+            position: [1.0, 2.0],
+            content: "R1".into(),
+            size: 1.0,
+            frame: Some((5.0, 2.0)),
+        },
+        stroke_width: 0.15,
+        filled: false,
+    });
+
+    let serialised = toml::to_string(&fp).unwrap();
+    let back: Footprint = toml::from_str(&serialised).unwrap();
+    assert_eq!(back, fp);
+    match &back.silk_f[0].kind {
+        FpGraphicKind::Text { frame, .. } => assert_eq!(*frame, Some((5.0, 2.0))),
+        _ => panic!("expected Text"),
+    }
+}
+
+#[test]
+fn text_without_frame_defaults_to_none_on_legacy_load() {
+    use signex_library::primitive::footprint::FpGraphicKind;
+
+    // Legacy TOML (pre-frame field) omits the `frame` key entirely —
+    // must still deserialise via `#[serde(default)]`.
+    let legacy_toml = r#"
+kind = "text"
+position = [0.0, 0.0]
+content = "LEGACY"
+size = 1.0
+"#;
+    let kind: FpGraphicKind =
+        toml::from_str(legacy_toml).expect("legacy text without frame must load");
+    match kind {
+        FpGraphicKind::Text { frame, content, .. } => {
+            assert_eq!(frame, None);
+            assert_eq!(content, "LEGACY");
+        }
+        _ => panic!("expected Text"),
+    }
+}
+
+#[test]
 fn v3_castellated_pad_kind_round_trips() {
     let json = r#"{"number":"1","kind":"Castellated","shape":{"kind":"rect"},"size":[1.0,1.0],"position":[0.0,0.0],"rotation":0.0,"layers":["Top Layer"],"drill":{"diameter":0.5,"slot_length":null},"solder_mask_margin":null,"paste_margin":null}"#;
     let pad: signex_library::primitive::footprint::Pad = serde_json::from_str(json).unwrap();

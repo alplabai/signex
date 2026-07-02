@@ -2994,6 +2994,7 @@ pub(super) fn silk_f_hit_at(
                 position,
                 content,
                 size,
+                ..
             } => {
                 // Text stays AABB — the bake step doesn't expose
                 // per-glyph metrics; the placeholder width estimate
