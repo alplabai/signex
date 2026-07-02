@@ -339,17 +339,15 @@ fn place_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessag
             DropdownItem::new("Move Selection", activate_select(path.clone()))
                 .icon(ic::icon_dd_move_sel(tid)),
         ),
-        // v0.14 — "by X, Y…" nudges the whole selection by one grid
-        // step. A typed-delta dialog is deferred (no numeric-delta
-        // modal exists yet); the one-step nudge is the useful default
-        // and derives its step from the active grid (no magic size).
+        // v0.14 — "by X, Y…" opens the typed-delta Move-By modal so the
+        // user can enter an exact mm offset instead of nudging by one
+        // grid step (the one-step nudge stays reachable via
+        // `FootprintActiveBarNudgeSelection`, which the modal's Confirm
+        // shares geometry with through `footprint_nudge_selection`).
         DropdownEntry::Item(
             DropdownItem::new(
                 "Move Selection by X, Y…",
-                fp(
-                    path.clone(),
-                    PrimitiveEditorMsg::FootprintActiveBarNudgeSelection,
-                ),
+                fp(path.clone(), PrimitiveEditorMsg::FootprintMoveByOpen),
             )
             .icon(ic::icon_dd_move_xy(tid)),
         ),

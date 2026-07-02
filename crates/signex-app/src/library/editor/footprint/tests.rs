@@ -5,7 +5,7 @@
 //! `sync_pads_to_primitive` flow is covered in `state.rs` itself.
 
 use super::layers::{FpLayer, LayerVisibility};
-use super::state::FootprintEditorState;
+use super::state::{FootprintEditorState, MoveByModal};
 
 #[test]
 fn empty_state_has_no_pads_or_courtyard() {
@@ -123,4 +123,21 @@ fn nudge_pads_empty_selection_is_noop() {
     let moved = s.nudge_pads(&[], 1.0, 1.0);
     assert!(moved.is_empty());
     assert_eq!(s.pads[0].position_mm, (0.0, 0.0));
+}
+
+// Confirming the Move-By modal nudges the selection by the typed mm delta
+// (not one grid step) and closes the modal.
+#[test]
+fn move_by_modal_nudges_by_typed_delta() {
+    let mut s = FootprintEditorState::empty();
+    s.add_pad_at(0.0, 0.0); // idx 0
+    s.selected_pad = Some(0);
+    s.move_by_modal = Some(MoveByModal {
+        dx_buf: "2.5".into(),
+        dy_buf: "-1.0".into(),
+    });
+    let (dx, dy) = s.move_by_modal.as_ref().unwrap().parsed().unwrap();
+    let moved = s.nudge_pads(&[0], dx, dy);
+    assert_eq!(moved, vec![0]);
+    assert_eq!(s.pads[0].position_mm, (2.5, -1.0));
 }

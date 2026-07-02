@@ -1625,14 +1625,29 @@ pub enum PrimitiveEditorMsg {
     /// Active-bar Place → Flip Selection. Swap Top ↔ Bottom layer
     /// (and the paste/mask siblings) on the currently-selected pad.
     FootprintActiveBarFlipSelection,
-    /// Active-bar Place → "Move Selection by X, Y…". Nudges the whole
-    /// selection (`selected_pad` + `selected_pads_extra`) by one active
-    /// grid step in +X and +Y. The step derives from
-    /// `snap_options.grid_step_mm` — no hardcoded size. A typed-delta
-    /// dialog is deferred until a numeric-delta modal exists; this
-    /// one-step nudge is the v0.14 stand-in. No-op when nothing is
-    /// selected.
+    /// Active-bar Place → one-step nudge. Nudges the whole selection
+    /// (`selected_pad` + `selected_pads_extra`) by one active grid step
+    /// in +X and +Y. The step derives from `snap_options.grid_step_mm`
+    /// — no hardcoded size. No-op when nothing is selected. Superseded
+    /// as the active-bar's primary "Move Selection by X, Y…" item by
+    /// the typed-delta Move-By modal (`FootprintMoveByOpen` and its
+    /// siblings below); this one-step nudge is still reachable and
+    /// shares its geometry with the modal via the
+    /// `footprint_nudge_selection` dispatcher helper.
     FootprintActiveBarNudgeSelection,
+    /// Active-bar Place → "Move Selection by X, Y…". Opens the typed-
+    /// delta modal (`FootprintEditorState::move_by_modal`).
+    FootprintMoveByOpen,
+    /// Move-By modal X buffer edit (erasable string, mm).
+    FootprintMoveBySetX(String),
+    /// Move-By modal Y buffer edit (erasable string, mm).
+    FootprintMoveBySetY(String),
+    /// Confirm the Move-By modal: nudge the selection by the parsed
+    /// (dx, dy) mm delta, then close the modal. No-op (but still
+    /// closes) if either buffer fails to parse.
+    FootprintMoveByConfirm,
+    /// Cancel the Move-By modal without moving anything.
+    FootprintMoveByCancel,
     /// Active-bar Body → "3D Body". Extrude the courtyard into a solid.
     FootprintMintBody3d,
     /// Active-bar Body → "Extruded 3D Body". Extrude the fab outline.

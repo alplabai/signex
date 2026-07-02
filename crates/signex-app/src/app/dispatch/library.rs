@@ -4135,6 +4135,11 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintActiveBarMoveOriginToGrid
         | PrimitiveEditorMsg::FootprintAlignPads(_)
         | PrimitiveEditorMsg::FootprintActiveBarNudgeSelection
+        | PrimitiveEditorMsg::FootprintMoveByOpen
+        | PrimitiveEditorMsg::FootprintMoveBySetX(_)
+        | PrimitiveEditorMsg::FootprintMoveBySetY(_)
+        | PrimitiveEditorMsg::FootprintMoveByConfirm
+        | PrimitiveEditorMsg::FootprintMoveByCancel
         | PrimitiveEditorMsg::FootprintMintBody3d
         | PrimitiveEditorMsg::FootprintMintExtrudedBody3d
         | PrimitiveEditorMsg::FootprintActiveBarSelectAll
@@ -5549,43 +5554,41 @@ pub(crate) fn apply_footprint_primitive_edit(
             editor.dirty = true;
         }
         PrimitiveEditorMsg::FootprintActiveBarNudgeSelection => {
-            // v0.14 — "Move Selection by X, Y…". Nudge the combined
-            // selection by one active grid step in +X and +Y. Same
-            // selection set + sketch-mirror + history pattern as
-            // `FootprintAlignPads`; the typed-delta dialog is deferred.
-            let mut indices: Vec<usize> = Vec::new();
-            if let Some(p) = editor.state.selected_pad {
-                indices.push(p);
-            }
-            indices.extend(editor.state.selected_pads_extra.iter().copied());
-            indices.sort_unstable();
-            indices.dedup();
-            indices.retain(|&i| i < editor.state.pads.len());
-
-            if !indices.is_empty() {
-                editor.push_history();
-                editor.with_parts(|state, primitive| {
-                    // Delta = one grid step (no hardcoded magic size).
-                    let step = state.snap_options.grid_step_mm.max(0.001);
-                    // Translate the selection via the tested state
-                    // helper, then mirror exactly the moved pads into
-                    // the backing sketch and re-sync the literal `Pad`
-                    // list.
-                    let moved = state.nudge_pads(&indices, step, step);
-                    let snapshots: Vec<crate::library::editor::footprint::state::EditorPad> =
-                        moved
-                            .iter()
-                            .filter_map(|&i| state.pads.get(i).cloned())
-                            .collect();
-                    for snapshot in &snapshots {
-                        pad_to_sketch::mirror_move_pad_in_sketch(snapshot, primitive);
-                    }
-                    CanvasState::sync_pads_to_primitive(state, primitive);
-                });
-                editor.canvas_cache.clear();
-                editor.dirty = true;
-            }
+            // v0.14 — "Move Selection by X, Y…" one-step nudge: the
+            // combined selection by one active grid step in +X and +Y.
+            // Shares geometry + sketch-mirror + history with the
+            // typed-delta Move-By modal via `footprint_nudge_selection`.
+            let step = editor.state.snap_options.grid_step_mm.max(0.001);
+            footprint_nudge_selection(editor, step, step);
             editor.state.active_bar_menu = None;
+        }
+        PrimitiveEditorMsg::FootprintMoveByOpen => {
+            editor.state.move_by_modal = Some(Default::default());
+            editor.state.active_bar_menu = None;
+        }
+        PrimitiveEditorMsg::FootprintMoveBySetX(v) => {
+            if let Some(m) = editor.state.move_by_modal.as_mut() {
+                m.dx_buf = v;
+            }
+        }
+        PrimitiveEditorMsg::FootprintMoveBySetY(v) => {
+            if let Some(m) = editor.state.move_by_modal.as_mut() {
+                m.dy_buf = v;
+            }
+        }
+        PrimitiveEditorMsg::FootprintMoveByConfirm => {
+            if let Some((dx, dy)) = editor
+                .state
+                .move_by_modal
+                .as_ref()
+                .and_then(|m| m.parsed())
+            {
+                footprint_nudge_selection(editor, dx, dy);
+            }
+            editor.state.move_by_modal = None;
+        }
+        PrimitiveEditorMsg::FootprintMoveByCancel => {
+            editor.state.move_by_modal = None;
         }
         PrimitiveEditorMsg::FootprintMintBody3d => {
             editor.push_history();
@@ -10114,6 +10117,47 @@ pub(crate) fn apply_footprint_primitive_edit(
     }
 }
 
+/// Translate the current pad selection by (dx, dy) mm: history
+/// snapshot, tested `nudge_pads`, sketch mirror, primitive re-sync.
+/// No-op on an empty selection. Shared by the one-step
+/// `FootprintActiveBarNudgeSelection` nudge and the typed-delta
+/// Move-By modal (`FootprintMoveByConfirm`) so both paths share the
+/// exact same proven geometry + sketch-mirror + history behaviour.
+fn footprint_nudge_selection(editor: &mut crate::app::FootprintEditorState, dx: f64, dy: f64) {
+    use crate::library::editor::footprint::pad_to_sketch;
+    use crate::library::editor::footprint::state::FootprintEditorState as CanvasState;
+
+    let mut indices: Vec<usize> = Vec::new();
+    if let Some(p) = editor.state.selected_pad {
+        indices.push(p);
+    }
+    indices.extend(editor.state.selected_pads_extra.iter().copied());
+    indices.sort_unstable();
+    indices.dedup();
+    indices.retain(|&i| i < editor.state.pads.len());
+    if indices.is_empty() {
+        return;
+    }
+
+    editor.push_history();
+    editor.with_parts(|state, primitive| {
+        // Translate the selection via the tested state helper, then
+        // mirror exactly the moved pads into the backing sketch and
+        // re-sync the literal `Pad` list.
+        let moved = state.nudge_pads(&indices, dx, dy);
+        let snapshots: Vec<crate::library::editor::footprint::state::EditorPad> = moved
+            .iter()
+            .filter_map(|&i| state.pads.get(i).cloned())
+            .collect();
+        for snapshot in &snapshots {
+            pad_to_sketch::mirror_move_pad_in_sketch(snapshot, primitive);
+        }
+        CanvasState::sync_pads_to_primitive(state, primitive);
+    });
+    editor.canvas_cache.clear();
+    editor.dirty = true;
+}
+
 /// v0.24 Phase 1 (Track B) — message-kind classifier driving the
 /// `push_history` decision in [`apply_footprint_primitive_edit`].
 /// Returns `true` for messages that mutate persisted footprint /
@@ -10185,6 +10229,16 @@ fn mutates_footprint_state(msg: &PrimitiveEditorMsg) -> bool {
         // selection. Keep it out of the blanket pre-push to avoid
         // double-stacking the history on an empty-selection no-op.
         | FootprintActiveBarNudgeSelection
+        // v0.14 — Move-By modal open/edit/cancel are pure UI state (the
+        // typed buffers live on `move_by_modal`, not persisted
+        // geometry); Confirm pushes its own snapshot inside the shared
+        // `footprint_nudge_selection` helper, same as the one-step
+        // nudge above, so it's classified alongside it here too.
+        | FootprintMoveByOpen
+        | FootprintMoveBySetX(_)
+        | FootprintMoveBySetY(_)
+        | FootprintMoveByConfirm
+        | FootprintMoveByCancel
         // v0.14 — 3D Body mint pushes its own snapshot inside the
         // handler (unconditionally, unlike nudge). Keep it out of the
         // blanket pre-push to avoid double-stacking the history.

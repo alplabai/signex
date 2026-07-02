@@ -51,6 +51,26 @@ use pad::NEW_PAD_SIZE_MM;
 /// courtyard polygon.
 const COURTYARD_SLACK_MM: f64 = 0.25;
 
+/// v0.14 — typed-delta "Move Selection By X, Y" modal. `None` on
+/// `FootprintEditorState::move_by_modal` means the modal is closed.
+/// Two erasable string buffers (same pattern as `dimension_input`) so
+/// typing "-" / "." mid-entry doesn't fight an f64 binding.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct MoveByModal {
+    pub dx_buf: String,
+    pub dy_buf: String,
+}
+
+impl MoveByModal {
+    /// Parse both buffers as mm. `None` if either fails to parse.
+    pub fn parsed(&self) -> Option<(f64, f64)> {
+        Some((
+            self.dx_buf.trim().parse().ok()?,
+            self.dy_buf.trim().parse().ok()?,
+        ))
+    }
+}
+
 /// Live, in-memory state of the Footprint canvas — drives interaction
 /// and rendering. The authoritative pad list lives on
 /// `ComponentEditorState.footprint.pads`; this struct mirrors it for
@@ -139,6 +159,10 @@ pub struct FootprintEditorState {
     pub selected_sketch_extra: Vec<signex_sketch::id::SketchEntityId>,
     /// v0.13.3 — Dimension tool's pending value (text input).
     pub dimension_input: String,
+    /// v0.14 — typed-delta "Move Selection By" modal. `None` = closed.
+    /// Two erasable string buffers (same pattern as `dimension_input`)
+    /// so typing "-" / "." mid-entry doesn't fight an f64 binding.
+    pub move_by_modal: Option<MoveByModal>,
     /// v0.15 — Pads-mode tool.
     pub pads_tool: PadsTool,
     /// v0.16.1 — sticky construction-mode toggle.
@@ -253,6 +277,7 @@ impl FootprintEditorState {
             selected_sketch_secondary: None,
             selected_sketch_extra: Vec::new(),
             dimension_input: String::new(),
+            move_by_modal: None,
             pads_tool: PadsTool::default(),
             construction_mode: false,
             centerline_mode: false,

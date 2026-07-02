@@ -3881,7 +3881,11 @@ impl Signex {
                 .get(self.document_state.active_tab)
                 .and_then(|tab| tab.kind.as_footprint_editor())
                 .and_then(|path| self.document_state.footprint_editors.get(path))
-                .map(|ed| ed.state.placement_paused || ed.state.active_bar_menu.is_some())
+                .map(|ed| {
+                    ed.state.placement_paused
+                        || ed.state.active_bar_menu.is_some()
+                        || ed.state.move_by_modal.is_some()
+                })
                 .unwrap_or(false)
             || ui.panel_list_open
             || ui.find_replace.open
@@ -4861,6 +4865,32 @@ impl Signex {
                     menu_state.y
                 };
                 layers.push(super::view::translate::Translate::new(card_msg, (x, y)).into());
+            }
+
+            // v0.14 — typed-delta "Move Selection By X, Y…" modal.
+            // Sits above everything else in this block (bar, dropdown,
+            // context menu) — it's a blocking dialog once open. Gated
+            // into `needs_overlay` above via `move_by_modal.is_some()`.
+            if let Some(card) =
+                crate::library::editor::footprint::move_by_modal::view_move_by_modal(
+                    editor, tokens,
+                )
+            {
+                let close_msg = Message::Library(
+                    crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                        path: path.to_path_buf(),
+                        msg: crate::library::messages::PrimitiveEditorMsg::FootprintMoveByCancel,
+                    },
+                );
+                layers.push(Self::dismiss_layer(close_msg));
+                layers.push(
+                    container(card.map(Message::Library))
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .center_x(Length::Fill)
+                        .center_y(Length::Fill)
+                        .into(),
+                );
             }
         }
 
