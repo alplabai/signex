@@ -6,11 +6,12 @@
 //! handled by the caller (`unified_active_bar`).
 //!
 //! Wiring philosophy: items that map to existing primitives (Selection
-//! Filter pills, Snap toggles, snap-mode picks, Place tools) emit the
-//! real `PrimitiveEditorMsg`; items that need new primitives
-//! (Move/Drag/Selection-mode picks / Body3D / TextFrame) emit
-//! `FootprintActiveBarStub` so the action logs a "coming soon" warn
-//! and dismisses the menu cleanly.
+//! Filter pills, Snap toggles, snap-mode picks, Place tools, Body3D,
+//! Extruded 3D Body, Move Selection by X,Y, Text Frame) emit the real
+//! `PrimitiveEditorMsg`; the few items that still need new primitives
+//! (Break Track, Drag Track End, the generic Align… dialog launcher)
+//! emit `FootprintActiveBarStub` so the action logs a "coming soon"
+//! warn and dismisses the menu cleanly.
 
 use std::path::PathBuf;
 
@@ -127,8 +128,12 @@ fn filter_entries(
         )
     };
 
-    // All-On / All-Off toggle: click flips every kind.
-    let all_on = K::ALTIUM_PILLS.iter().all(|k| f.get(*k));
+    // All-On / All-Off toggle: click flips every kind. Domain must
+    // match `FootprintToggleAllFilters`'s handler (SelectionFilterKind::ALL,
+    // 12 kinds — set_all's full domain), not the 10-kind ALTIUM_PILLS
+    // chip-row subset, or the label can lie (e.g. "All - On" while
+    // Pours/Cutouts are off) and a click flips the wrong direction.
+    let all_on = K::ALL.iter().all(|k| f.get(*k));
     let all_btn = chip_btn(
         if all_on { "All - On" } else { "All - Off" },
         LibraryMessage::PrimitiveEditorEvent {
