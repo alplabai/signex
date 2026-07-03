@@ -4780,7 +4780,9 @@ impl Signex {
                 + if document.tabs.is_empty() { 0.0 } else { 28.0 };
             let theme_id = self.ui_state.theme_id;
             let tokens = &document.panel_ctx.tokens;
-            let custom_presets = &interaction.custom_filter_presets;
+            // Task 6 — footprint-native presets (`SelectionFilterKind`),
+            // not the schematic `custom_filter_presets`.
+            let footprint_presets = &interaction.footprint_filter_presets;
             // Mount BYTE-FOR-BYTE same as the schematic: build items,
             // call `signex_widgets::active_bar::view` directly, then
             // `.map(...)` then wrap in container().width(Fill).align_x(
@@ -4813,7 +4815,7 @@ impl Signex {
                     editor,
                     theme_id,
                     tokens,
-                    custom_presets,
+                    footprint_presets,
                     dropdown_top,
                     self.ui_state.window_size.0,
                 )

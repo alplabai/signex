@@ -12,6 +12,7 @@ pub mod body3d;
 pub mod body3d_mint;
 pub mod canvas;
 pub mod context_menu;
+pub mod filter_presets;
 pub mod layers;
 pub mod move_by_modal;
 pub mod pad_to_sketch;

@@ -595,6 +595,7 @@ impl Signex {
             selection_filters: self.interaction_state.selection_filters.clone(),
             custom_filter_presets: self.interaction_state.custom_filter_presets.clone(),
             active_custom_filter_tab: self.interaction_state.active_custom_filter_tab,
+            footprint_filter_presets: self.interaction_state.footprint_filter_presets.clone(),
             page_format_mode,
             margin_vertical,
             margin_horizontal,

@@ -3533,7 +3533,20 @@ impl Signex {
 
         // Footprint-only mutations.
         if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
+            // Task 6 — capturing a preset writes straight to disk from
+            // inside `apply_footprint_primitive_edit` (which only
+            // borrows `editor`, not `self`). Re-read it into
+            // `interaction_state` here so the very next
+            // `refresh_panel_ctx()` call — a few lines down — shows
+            // the new chip immediately instead of waiting for a
+            // restart.
+            let is_capture_preset =
+                matches!(&msg, PrimitiveEditorMsg::FootprintCaptureFilterPreset);
             apply_footprint_primitive_edit(editor, msg);
+            if is_capture_preset {
+                self.interaction_state.footprint_filter_presets =
+                    crate::fonts::read_footprint_filter_presets();
+            }
             self.refresh_panel_ctx();
             return Task::none();
         }
@@ -4193,6 +4206,9 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintCopyPad
         | PrimitiveEditorMsg::FootprintCutPad
         | PrimitiveEditorMsg::FootprintPastePad
+        | PrimitiveEditorMsg::FootprintApplyFilterPreset(_)
+        | PrimitiveEditorMsg::FootprintToggleAllFilters
+        | PrimitiveEditorMsg::FootprintCaptureFilterPreset
         | PrimitiveEditorMsg::Save => {}
     }
 }
@@ -5493,6 +5509,47 @@ pub(crate) fn apply_footprint_primitive_edit(
             crate::diagnostics::log_info(format!(
                 "Active bar: {label} — coming soon (footprint Altium parity)"
             ));
+            editor.state.active_bar_menu = None;
+        }
+        // Task 6 — apply footprint filter preset `idx` from the
+        // persisted list. Re-read from disk on every apply so a
+        // preset captured in a different tab/session is picked up
+        // without needing an in-memory refresh.
+        PrimitiveEditorMsg::FootprintApplyFilterPreset(idx) => {
+            let presets = crate::fonts::read_footprint_filter_presets();
+            if let Some(preset) = presets.get(idx) {
+                crate::library::editor::footprint::filter_presets::apply_preset(
+                    &mut editor.state,
+                    preset,
+                );
+            }
+            editor.state.active_bar_menu = None;
+            editor.canvas_cache.clear();
+        }
+        // Task 6 — Filter dropdown's "All - On / All - Off" chip.
+        PrimitiveEditorMsg::FootprintToggleAllFilters => {
+            let all_on = crate::library::editor::footprint::state::SelectionFilterKind::ALL
+                .iter()
+                .all(|&k| editor.state.selection_filter.get(k));
+            editor.state.selection_filter.set_all(!all_on);
+            editor.canvas_cache.clear();
+        }
+        // Task 6 — minimal capture affordance: snapshot the current
+        // filter as a new default-named preset and persist it. No
+        // rename UI yet (deferred — see filter_presets.rs). Silently
+        // ignores the capture once `CUSTOM_FILTER_PRESET_LIMIT` slots
+        // are full rather than evicting an existing preset.
+        PrimitiveEditorMsg::FootprintCaptureFilterPreset => {
+            let mut presets = crate::fonts::read_footprint_filter_presets();
+            if presets.len() < crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT {
+                let name = format!("Filter {}", presets.len() + 1);
+                let preset = crate::library::editor::footprint::filter_presets::capture_preset(
+                    &editor.state,
+                    name,
+                );
+                presets.push(preset);
+                crate::fonts::write_footprint_filter_presets(&presets);
+            }
             editor.state.active_bar_menu = None;
         }
         PrimitiveEditorMsg::FootprintActiveBarToggleSnap(flag) => {
@@ -10231,6 +10288,14 @@ fn mutates_footprint_state(msg: &PrimitiveEditorMsg) -> bool {
         | FootprintSketchSelect { .. }
         | FootprintSketchDimensionInput(_)
         | FootprintToggleSelectionFilter(_)
+        // Task 6 — filter preset apply/toggle/capture are UI-only
+        // (they mutate `selection_filter` or the on-disk preset
+        // list, never persisted footprint geometry), so they must
+        // not enter the undo history like the other filter toggles
+        // above.
+        | FootprintApplyFilterPreset(_)
+        | FootprintToggleAllFilters
+        | FootprintCaptureFilterPreset
         | FootprintToggleAutoFit
         | FootprintSelectActiveIdx(_)
         | FootprintShowContextMenu { .. }

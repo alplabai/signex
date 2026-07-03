@@ -499,6 +499,10 @@ pub struct PanelContext {
     /// Index of the active preset tab in the Properties-panel editor
     /// (mirrored from `InteractionState`). Clamped on every sync.
     pub active_custom_filter_tab: usize,
+    /// User-defined footprint-editor filter presets, mirrored from
+    /// `InteractionState::footprint_filter_presets` (Task 6). Parallel
+    /// to `custom_filter_presets` but keyed on `SelectionFilterKind`.
+    pub footprint_filter_presets: Vec<crate::active_bar::FootprintFilterPreset>,
     /// Page formatting mode (Template / Standard / Custom).
     pub page_format_mode: PageFormatMode,
     /// Vertical page margin zones.

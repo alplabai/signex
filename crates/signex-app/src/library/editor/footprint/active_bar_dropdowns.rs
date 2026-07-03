@@ -76,17 +76,19 @@ fn align_item_with_icon(
 /// Build the entries for the dropdown matching `menu`. `tid` resolves
 /// the per-theme accent tint on each SVG icon (icons are reused from
 /// the schematic active bar's icon set for visual consistency).
-/// `custom_presets` are the named multi-preset shortcuts shown on
-/// row 1 of the Filter dropdown (parity with the schematic).
+/// `footprint_presets` are the named multi-preset shortcuts shown on
+/// row 1 of the Filter dropdown — footprint-native presets keyed on
+/// `SelectionFilterKind` (Task 6), not the schematic
+/// `CustomFilterPreset`.
 pub fn entries(
     menu: FpActiveBarMenu,
     state: &FootprintEditorState,
     path: PathBuf,
     tid: ThemeId,
-    custom_presets: &[crate::active_bar::CustomFilterPreset],
+    footprint_presets: &[crate::active_bar::FootprintFilterPreset],
 ) -> Vec<DropdownEntry<LibraryMessage>> {
     match menu {
-        FpActiveBarMenu::Filter => filter_entries(state, path, custom_presets),
+        FpActiveBarMenu::Filter => filter_entries(state, path, footprint_presets),
         FpActiveBarMenu::Snap => snap_entries(state, path),
         FpActiveBarMenu::Place => place_entries(path, tid),
         FpActiveBarMenu::Select => select_entries(path, tid),
@@ -100,7 +102,7 @@ pub fn entries(
 fn filter_entries(
     state: &FootprintEditorState,
     path: PathBuf,
-    custom_presets: &[crate::active_bar::CustomFilterPreset],
+    footprint_presets: &[crate::active_bar::FootprintFilterPreset],
 ) -> Vec<DropdownEntry<LibraryMessage>> {
     use iced::widget::{column, container, row};
     use iced::{Color, Length};
@@ -125,25 +127,26 @@ fn filter_entries(
         )
     };
 
-    // All-On / All-Off toggle: click flips every kind. Stub message
-    // until a footprint-side ToggleAllFilters dispatcher lands.
+    // All-On / All-Off toggle: click flips every kind.
     let all_on = K::ALTIUM_PILLS.iter().all(|k| f.get(*k));
     let all_btn = chip_btn(
         if all_on { "All - On" } else { "All - Off" },
         LibraryMessage::PrimitiveEditorEvent {
             path: path.clone(),
-            msg: PrimitiveEditorMsg::FootprintActiveBarStub("All filters"),
+            msg: PrimitiveEditorMsg::FootprintToggleAllFilters,
         },
         all_on,
         chip_border,
     );
 
-    // Top row: All toggle + custom-preset shortcut chips.
+    // Top row: All toggle + footprint-preset shortcut chips + a
+    // minimal capture affordance. Task 6 — no rename UI yet; captured
+    // presets get a default `Filter {n}` name (see filter_presets.rs).
     let mut top_row = iced::widget::Row::new()
         .spacing(4)
         .align_y(iced::Alignment::Center)
         .push(all_btn);
-    for (idx, preset) in custom_presets.iter().enumerate() {
+    for (idx, preset) in footprint_presets.iter().enumerate() {
         let label = if preset.name.trim().is_empty() {
             format!("Filter {}", idx + 1)
         } else {
@@ -153,7 +156,18 @@ fn filter_entries(
             label,
             LibraryMessage::PrimitiveEditorEvent {
                 path: path.clone(),
-                msg: PrimitiveEditorMsg::FootprintActiveBarStub("Apply Custom Filter preset"),
+                msg: PrimitiveEditorMsg::FootprintApplyFilterPreset(idx),
+            },
+            false,
+            chip_border,
+        ));
+    }
+    if footprint_presets.len() < crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT {
+        top_row = top_row.push(chip_btn(
+            "+ Save Preset",
+            LibraryMessage::PrimitiveEditorEvent {
+                path: path.clone(),
+                msg: PrimitiveEditorMsg::FootprintCaptureFilterPreset,
             },
             false,
             chip_border,

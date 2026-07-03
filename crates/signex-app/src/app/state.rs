@@ -836,6 +836,13 @@ pub struct InteractionState {
     /// Clamped to `0..custom_filter_presets.len()` whenever the list
     /// changes; ignored entirely when the list is empty.
     pub active_custom_filter_tab: usize,
+    /// User-defined footprint-editor filter presets (capped at
+    /// `crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT`). Loaded from
+    /// `~/.config/signex/prefs.json` on launch; parallel to
+    /// `custom_filter_presets` but keyed on `SelectionFilterKind`
+    /// (footprint categories) instead of the schematic
+    /// `SelectionFilter` (Task 6).
+    pub footprint_filter_presets: Vec<crate::active_bar::FootprintFilterPreset>,
     pub selection_slots: [Vec<signex_types::schematic::SelectedItem>; 8],
     pub last_tool: std::collections::HashMap<String, crate::active_bar::ActiveBarAction>,
     pub pending_power: Option<(String, String)>,

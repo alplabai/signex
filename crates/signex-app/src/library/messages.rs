@@ -1615,6 +1615,18 @@ pub enum PrimitiveEditorMsg {
     /// dispatcher can log a single warn() per click without minting
     /// a separate variant per item.
     FootprintActiveBarStub(&'static str),
+    /// v0.14 (Task 6) — apply footprint filter preset `idx` from the
+    /// persisted `footprint_filter_presets` list. No-op if `idx` is
+    /// out of range.
+    FootprintApplyFilterPreset(usize),
+    /// v0.14 (Task 6) — flip every footprint selection filter on/off
+    /// (the Filter dropdown's "All - On / All - Off" chip).
+    FootprintToggleAllFilters,
+    /// v0.14 (Task 6) — snapshot the current selection filter as a
+    /// new named preset (default name `Filter {n}`) and persist it,
+    /// capped at `CUSTOM_FILTER_PRESET_LIMIT`. Source: the Filter
+    /// dropdown's "Save current filter as preset…" button.
+    FootprintCaptureFilterPreset,
     /// Snap-options toggle from the active-bar Snap dropdown.
     /// Equivalent to `PanelMsg::FpEditorToggleSnapOption` but flows
     /// through the editor-event path so the dropdown overlay stays

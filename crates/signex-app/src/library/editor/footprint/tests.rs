@@ -154,3 +154,19 @@ fn place_text_frame_sets_frame_box() {
         _ => panic!("expected Text"),
     }
 }
+
+// Task 6 — applying a footprint filter preset replaces the active
+// selection-filter set with exactly the preset's kinds.
+#[test]
+fn apply_filter_preset_sets_state_filter() {
+    use crate::library::editor::footprint::state::selection_filter::SelectionFilterKind as K;
+    let mut s = FootprintEditorState::empty();
+    s.selection_filter.set_all(true);
+    let preset = crate::active_bar::FootprintFilterPreset {
+        name: "pads".into(),
+        kinds: vec![K::Pads],
+    };
+    crate::library::editor::footprint::filter_presets::apply_preset(&mut s, &preset);
+    assert!(s.selection_filter.get(K::Pads));
+    assert!(!s.selection_filter.get(K::Tracks));
+}

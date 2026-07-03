@@ -131,7 +131,7 @@ pub fn dropdown_overlay<'a>(
     editor: &'a FootprintEditorState,
     theme_id: ThemeId,
     tokens: &'a ThemeTokens,
-    custom_filter_presets: &[crate::active_bar::CustomFilterPreset],
+    footprint_filter_presets: &[crate::active_bar::FootprintFilterPreset],
     top_padding_px: u16,
     window_width: f32,
 ) -> Option<iced::Element<'a, LibraryMessage>> {
@@ -145,7 +145,7 @@ pub fn dropdown_overlay<'a>(
         &editor.state,
         editor.path.clone(),
         theme_id,
-        custom_filter_presets,
+        footprint_filter_presets,
     );
     let width_hint = match menu {
         FpActiveBarMenu::Filter => None,
