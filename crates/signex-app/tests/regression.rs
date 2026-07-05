@@ -4488,3 +4488,25 @@ fn app_exit_save_all_never_loses_an_unsaveable_file() {
         "an unsaveable dirty file must be kept, never silently dropped"
     );
 }
+
+// ─────────────────────────────────────────────────────────────────
+// New Project must not truncate an existing .snxprj (issue #104)
+// ─────────────────────────────────────────────────────────────────
+
+#[test]
+fn new_project_over_existing_non_empty_snxprj_is_refused() {
+    // File ▸ New Project pointing at an existing, non-empty .snxprj used
+    // to write an empty marker over it, destroying the project. The
+    // create guard must leave the existing file byte-for-byte intact.
+    let (mut app, _tmp, prj_path) = fixture_project_with_companions("Board");
+    let before = std::fs::read(&prj_path).expect("read .snxprj");
+    assert!(!before.is_empty(), "fixture .snxprj should be non-empty");
+
+    let _ = app.update(Message::NewProjectFile(Some(prj_path.clone())));
+
+    let after = std::fs::read(&prj_path).expect("read .snxprj after");
+    assert_eq!(
+        after, before,
+        "New Project must not overwrite an existing .snxprj"
+    );
+}
