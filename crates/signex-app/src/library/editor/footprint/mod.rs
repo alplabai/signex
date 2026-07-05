@@ -8,6 +8,7 @@
 //! eventual standalone Body 3D / STEP attach editor side-pane.
 
 pub mod active_bar_dropdowns;
+pub mod apply;
 pub mod body3d;
 pub mod canvas;
 pub mod context_menu;

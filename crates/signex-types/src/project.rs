@@ -161,6 +161,47 @@ mod tests {
         assert!(parsed.libraries.is_empty());
     }
 
+    // ── Persistence robustness (issue #104) ──────────────────────────
+
+    #[test]
+    fn write_project_round_trips_atomically_leaving_no_tmp() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Proj.snxprj");
+        let data: ProjectData = serde_json::from_str(
+            r#"{"name":"Proj","dir":"","schematic_root":"Proj.snxsch","pcb_file":null}"#,
+        )
+        .unwrap();
+        write_project(&path, &data).unwrap();
+        // The atomic writer must not leave its temp file behind.
+        assert!(!dir.path().join("Proj.snxprj.tmp").exists());
+        let back = parse_project(&path).unwrap();
+        assert_eq!(back.schematic_root.as_deref(), Some("Proj.snxsch"));
+    }
+
+    #[test]
+    fn parse_project_errors_on_corrupt_json_instead_of_degrading() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Bad.snxprj");
+        // Starts with '{' (meant to be JSON) but is truncated — must NOT
+        // silently fall back to the directory probe (which would drop
+        // libraries/variants and let the next save overwrite the file).
+        std::fs::write(&path, b"{ \"name\": \"Bad\", \"libraries\": [ ").unwrap();
+        let err = parse_project(&path).unwrap_err();
+        assert!(matches!(err, ProjectError::Corrupt { .. }), "got {err:?}");
+    }
+
+    #[test]
+    fn parse_project_probes_directory_for_non_json_marker() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Legacy.snxprj");
+        // Empty (non-JSON) legacy marker → directory-driven probe still
+        // recovers the schematic from disk layout.
+        std::fs::write(&path, b"").unwrap();
+        std::fs::write(dir.path().join("Legacy.snxsch"), b"sch").unwrap();
+        let data = parse_project(&path).unwrap();
+        assert_eq!(data.schematic_root.as_deref(), Some("Legacy.snxsch"));
+    }
+
     #[test]
     fn library_entry_round_trips_through_serde() {
         let entry = LibraryEntry {
@@ -255,6 +296,11 @@ pub enum ProjectError {
         "unsupported project file extension: .{0} (Signex Community only opens .snxprj; convert Standard projects with the signex-standard-import companion)"
     )]
     UnsupportedExtension(String),
+    #[error(
+        "project file {path} looks like JSON but could not be parsed ({reason}); \
+         it was not opened so a save cannot overwrite recoverable data"
+    )]
+    Corrupt { path: String, reason: String },
 }
 
 /// Parse a `.snxprj` project file. Two paths:
@@ -300,9 +346,17 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
     let trimmed = std::str::from_utf8(&bytes)
         .map(|s| s.trim_start())
         .unwrap_or("");
-    if trimmed.starts_with('{')
-        && let Ok(mut data) = serde_json::from_slice::<ProjectData>(&bytes)
-    {
+    if trimmed.starts_with('{') {
+        // The file is meant to be JSON. If it parses, use it. If it does
+        // NOT, return an error instead of falling through to the
+        // directory probe: the probe returns empty libraries / variants /
+        // sheets, and the next save would then persist that loss over the
+        // file that still holds the recoverable data.
+        let mut data =
+            serde_json::from_slice::<ProjectData>(&bytes).map_err(|err| ProjectError::Corrupt {
+                path: path.display().to_string(),
+                reason: err.to_string(),
+            })?;
         data.dir = dir.to_string_lossy().to_string();
         // Project name in the file is informational; the on-disk
         // filename is authoritative so renaming the .snxprj outside
@@ -310,12 +364,9 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
         data.name = project_name;
         return Ok(data);
     }
-    // Falls through to directory probe if JSON parse fails or the file
-    // doesn't start with '{'; the user's project is still recoverable
-    // from disk layout.
 
-    // Legacy/empty marker — directory-driven probe (the original
-    // pre-JSON behaviour).
+    // Non-JSON legacy/empty marker — directory-driven probe (the
+    // original pre-JSON behaviour).
     let snx_sch_name = format!("{}.snxsch", project_name);
     let schematic_root = if dir.join(&snx_sch_name).exists() {
         Some(snx_sch_name)
@@ -357,12 +408,17 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
 /// Serialize `data` to `path` as pretty JSON. Companion of
 /// [`parse_project`] for the JSON-backed branch — newly-added sheets,
 /// PCB, and libraries persist through this writer.
+///
+/// Written atomically (temp file + fsync + rename): the `.snxprj` is
+/// the workspace's index of sheets/PCB/libraries/variants, so a crash
+/// mid-write must never truncate it to a partial file — that would
+/// silently drop the project's contents on the next open.
 pub fn write_project(path: &Path, data: &ProjectData) -> Result<(), ProjectError> {
     let json = serde_json::to_vec_pretty(data).map_err(|err| ProjectError::Io {
         path: path.display().to_string(),
         source: std::io::Error::other(err.to_string()),
     })?;
-    std::fs::write(path, json).map_err(|source| ProjectError::Io {
+    crate::atomic_io::atomic_write(path, &json).map_err(|source| ProjectError::Io {
         path: path.display().to_string(),
         source,
     })

@@ -393,6 +393,21 @@ fn pt_key(p: &Point) -> (i64, i64) {
     ((p.x * 1000.0).round() as i64, (p.y * 1000.0).round() as i64)
 }
 
+/// True when point `p` lies on the segment `a`–`b` (endpoints included),
+/// in the integer key space used by the union-find. Collinearity is a
+/// zero cross-product (computed in `i128` so large micron coordinates
+/// can't overflow), then `p` must sit inside the segment's bounding box.
+fn point_on_segment(p: (i64, i64), a: (i64, i64), b: (i64, i64)) -> bool {
+    let cross = (b.0 - a.0) as i128 * (p.1 - a.1) as i128
+        - (b.1 - a.1) as i128 * (p.0 - a.0) as i128;
+    if cross != 0 {
+        return false;
+    }
+    let within_x = p.0 >= a.0.min(b.0) && p.0 <= a.0.max(b.0);
+    let within_y = p.1 >= a.1.min(b.1) && p.1 <= a.1.max(b.1);
+    within_x && within_y
+}
+
 /// Returns `true` if any wire/bus endpoint, label, or no-connect sits at `pos`.
 fn point_is_connected(
     pos: &Point,
@@ -430,9 +445,23 @@ fn derive_nets(
     for w in wires {
         uf_union(&mut parent, pt_key(&w.start), pt_key(&w.end));
     }
-    // Junctions anchor crossing wire endpoints into the same net.
+    // Junctions connect every wire that touches the junction point —
+    // including a wire that *ends on the interior* of another (a
+    // T-junction). Union-find over endpoints alone never merges that
+    // case: the through-wire only carries its own two endpoints, so the
+    // point where a second wire lands sits inside a segment the union
+    // never visited. A bare `uf_find` here inserted a singleton and
+    // unioned nothing, splitting every mid-wire connection into its own
+    // net. Union the junction key with each wire whose segment contains
+    // it (endpoint or interior); a shared root propagates through the
+    // wire's own start~end union.
     for j in junctions {
-        uf_find(&mut parent, pt_key(&j.position));
+        let jk = pt_key(&j.position);
+        for w in wires {
+            if point_on_segment(jk, pt_key(&w.start), pt_key(&w.end)) {
+                uf_union(&mut parent, jk, pt_key(&w.start));
+            }
+        }
     }
 
     // Group labels by net root.
@@ -509,4 +538,93 @@ fn derive_nets(
             }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn pt(x: f64, y: f64) -> Point {
+        Point { x, y }
+    }
+
+    fn wire(a: Point, b: Point) -> ErcWire {
+        ErcWire {
+            uuid: Uuid::nil(),
+            start: a,
+            end: b,
+        }
+    }
+
+    fn pin(pos: Point, dir: PinDirection) -> ErcPin {
+        ErcPin {
+            world_pos: pos,
+            electrical_type: dir,
+            required: true,
+            connected: true,
+        }
+    }
+
+    fn symbol(pins: Vec<ErcPin>) -> ErcSymbol {
+        ErcSymbol {
+            uuid: Uuid::nil(),
+            reference: "U1".into(),
+            value: String::new(),
+            position: pt(0.0, 0.0),
+            is_power: false,
+            pins,
+            attrs: HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn point_on_segment_detects_interior_and_rejects_off_segment() {
+        let a = (0, 0);
+        let b = (10_000, 0);
+        assert!(point_on_segment((5_000, 0), a, b), "interior point");
+        assert!(point_on_segment((0, 0), a, b), "endpoint");
+        assert!(!point_on_segment((5_000, 1_000), a, b), "off the line");
+        assert!(!point_on_segment((11_000, 0), a, b), "collinear but past the end");
+    }
+
+    #[test]
+    fn t_junction_merges_wire_ending_on_another_wires_interior() {
+        // Horizontal wire (0,0)-(10,0); a vertical wire (5,0)-(5,5)
+        // ends on its interior; a junction dot sits at (5,0). A pin at
+        // each far end must land on ONE net once the junction connects
+        // the two wires. Regression for issue #107.
+        let wires = vec![
+            wire(pt(0.0, 0.0), pt(10.0, 0.0)),
+            wire(pt(5.0, 0.0), pt(5.0, 5.0)),
+        ];
+        let junctions = vec![ErcJunction {
+            position: pt(5.0, 0.0),
+        }];
+        let syms = vec![symbol(vec![
+            pin(pt(0.0, 0.0), PinDirection::Output),
+            pin(pt(5.0, 5.0), PinDirection::Input),
+        ])];
+
+        let nets = derive_nets(&wires, &[], &junctions, &syms);
+        assert_eq!(nets.len(), 1, "a T-junction must merge both wires into one net");
+        assert_eq!(nets[0].pin_types.len(), 2, "both pins belong to the merged net");
+    }
+
+    #[test]
+    fn t_intersection_without_junction_stays_two_nets() {
+        // Same geometry, no junction dot: the connection is not
+        // asserted, so the wires remain two separate nets. Documents
+        // that the junction is what drives a T-connection.
+        let wires = vec![
+            wire(pt(0.0, 0.0), pt(10.0, 0.0)),
+            wire(pt(5.0, 0.0), pt(5.0, 5.0)),
+        ];
+        let syms = vec![symbol(vec![
+            pin(pt(0.0, 0.0), PinDirection::Output),
+            pin(pt(5.0, 5.0), PinDirection::Input),
+        ])];
+
+        let nets = derive_nets(&wires, &[], &[], &syms);
+        assert_eq!(nets.len(), 2, "without a junction the T is two separate nets");
+    }
 }
