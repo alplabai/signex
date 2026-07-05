@@ -618,6 +618,119 @@ pub fn move_graphic_handle(sym: &mut Symbol, idx: usize, handle: GraphicHandle, 
     }
 }
 
+/// Rotate the currently-selected element by 90°.
+///
+/// * **Pins** rotate around their body-end (the symbol-body attachment
+///   point) so the tip swings like a clock hand and the orientation
+///   advances one quarter-turn — the pin stays joined to the body.
+/// * **Graphics** rotate around the **world origin**, preserving the
+///   symbol-body rotate convention where `(0, 0)` is the symbol's
+///   reference point.
+/// * **Fields** and the empty selection are no-ops.
+///
+/// `clockwise = true` rotates CW (Space), `false` CCW. Salvaged from
+/// `feature/v0.13-symbol` and ported onto dev's selection model
+/// without the `Rotatable2d` / `Pose2d` util layer (a 90° turn is
+/// exact integer arithmetic on axis-aligned geometry). The
+/// geometry-centre pivot variant (v0.13's Alt-modifier) is deferred
+/// with box/multi-select.
+pub fn rotate_selected(sym: &mut Symbol, sel: Option<SymbolSelection>, clockwise: bool) {
+    match sel {
+        Some(SymbolSelection::Pin(idx)) => {
+            if let Some(pin) = sym.pins.get_mut(idx) {
+                let (dx, dy) = pin_body_delta(pin);
+                let body_end = [pin.position[0] + dx, pin.position[1] + dy];
+                let tip = rotate_point_90(pin.position, body_end, clockwise);
+                pin.position = [snap_axis_value(tip[0]), snap_axis_value(tip[1])];
+                pin.orientation = rotate_pin_orientation_90(pin.orientation, clockwise);
+            }
+        }
+        Some(SymbolSelection::Graphic(idx)) => rotate_graphic_90(sym, idx, clockwise),
+        Some(SymbolSelection::Field(_)) | None => {}
+    }
+}
+
+/// Rotate the graphic at `idx` by 90° around the world origin. No-op
+/// when `idx` is out of range.
+fn rotate_graphic_90(sym: &mut Symbol, idx: usize, clockwise: bool) {
+    let Some(g) = sym.graphics.get_mut(idx) else {
+        return;
+    };
+    let pivot = [0.0, 0.0];
+    match &mut g.kind {
+        SymbolGraphicKind::Rectangle { from, to } | SymbolGraphicKind::Line { from, to } => {
+            *from = rotate_point_90(*from, pivot, clockwise);
+            *to = rotate_point_90(*to, pivot, clockwise);
+        }
+        SymbolGraphicKind::Circle { center, .. } => {
+            *center = rotate_point_90(*center, pivot, clockwise);
+        }
+        SymbolGraphicKind::Arc {
+            center,
+            start_deg,
+            end_deg,
+            ..
+        } => {
+            *center = rotate_point_90(*center, pivot, clockwise);
+            let delta = if clockwise { -90.0 } else { 90.0 };
+            *start_deg = (*start_deg + delta).rem_euclid(360.0);
+            *end_deg = (*end_deg + delta).rem_euclid(360.0);
+        }
+        SymbolGraphicKind::Text { position, .. } => {
+            *position = rotate_point_90(*position, pivot, clockwise);
+        }
+    }
+}
+
+/// Rotate `p` by ±90° around `pivot` (world mm). A quarter turn maps
+/// the pivot-relative delta `(dx, dy)` to `(dy, -dx)` (CW) or
+/// `(-dy, dx)` (CCW) — exact for axis-aligned geometry.
+fn rotate_point_90(p: [f64; 2], pivot: [f64; 2], clockwise: bool) -> [f64; 2] {
+    let dx = p[0] - pivot[0];
+    let dy = p[1] - pivot[1];
+    let (rx, ry) = if clockwise { (dy, -dx) } else { (-dy, dx) };
+    [pivot[0] + rx, pivot[1] + ry]
+}
+
+/// `(dx, dy)` from a pin's connection tip to its body-end attachment
+/// point, from orientation + length. The body-end is the pivot for pin
+/// rotation so the symbol-body join is invariant.
+fn pin_body_delta(pin: &SymbolPin) -> (f64, f64) {
+    match pin.orientation {
+        PinOrientation::Right => (pin.length, 0.0),
+        PinOrientation::Up => (0.0, pin.length),
+        PinOrientation::Left => (-pin.length, 0.0),
+        PinOrientation::Down => (0.0, -pin.length),
+        // `PinOrientation` is #[non_exhaustive]; treat any future
+        // orientation like Left (body extends toward -x).
+        _ => (-pin.length, 0.0),
+    }
+}
+
+/// Advance a pin orientation one 90° step. Salvaged from
+/// `feature/v0.13-symbol`.
+fn rotate_pin_orientation_90(o: PinOrientation, clockwise: bool) -> PinOrientation {
+    match (o, clockwise) {
+        (PinOrientation::Up, true) => PinOrientation::Right,
+        (PinOrientation::Right, true) => PinOrientation::Down,
+        (PinOrientation::Down, true) => PinOrientation::Left,
+        (PinOrientation::Left, true) => PinOrientation::Up,
+        (PinOrientation::Up, false) => PinOrientation::Left,
+        (PinOrientation::Left, false) => PinOrientation::Down,
+        (PinOrientation::Down, false) => PinOrientation::Right,
+        (PinOrientation::Right, false) => PinOrientation::Up,
+        // Non-exhaustive enum — leave unrecognised orientations as-is.
+        _ => o,
+    }
+}
+
+/// Snap a coordinate within 1e-9 mm of an integer back onto the grid,
+/// so repeated quarter-turns don't accrete floating-point error.
+fn snap_axis_value(v: f64) -> f64 {
+    let r = v.round();
+    if (v - r).abs() < 1e-9 { r } else { v }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -831,6 +944,99 @@ mod tests {
                 assert_eq!(*to, [5.0, 0.0]);
             }
             _ => panic!("expected Line"),
+        }
+    }
+
+    // ── rotate_selected (salvaged from feature/v0.13-symbol) ──────────
+
+    #[test]
+    fn rotate_selected_rotates_rectangle_clockwise_around_origin() {
+        let mut s = Symbol::empty("test");
+        s.graphics.push(signex_library::SymbolGraphic {
+            kind: SymbolGraphicKind::Rectangle {
+                from: [1.0, 2.0],
+                to: [3.0, 4.0],
+            },
+            stroke_width: 0.15,
+        });
+
+        rotate_selected(&mut s, Some(SymbolSelection::Graphic(0)), true);
+
+        match &s.graphics[0].kind {
+            SymbolGraphicKind::Rectangle { from, to } => {
+                assert_eq!(*from, [2.0, -1.0]);
+                assert_eq!(*to, [4.0, -3.0]);
+            }
+            _ => panic!("expected Rectangle"),
+        }
+    }
+
+    #[test]
+    fn rotate_selected_rotates_pin_orientation_in_place() {
+        let mut s = Symbol::empty("test");
+        let idx = add_pin(&mut s, 2.0, 1.0, 1);
+        s.pins[idx].orientation = PinOrientation::Right;
+
+        rotate_selected(&mut s, Some(SymbolSelection::Pin(idx)), false);
+
+        // Body-end (pivot) was at (2.0 + 2.54, 1.0) = (4.54, 1.0).
+        // The tip orbits it CCW by 90°: new tip = (4.54, -1.54).
+        assert_eq!(s.pins[idx].position, [4.54, -1.54]);
+        assert_eq!(s.pins[idx].orientation, PinOrientation::Up);
+    }
+
+    #[test]
+    fn rotate_selected_arc_advances_sweep_angles() {
+        let mut s = Symbol::empty("test");
+        s.graphics.push(signex_library::SymbolGraphic {
+            kind: SymbolGraphicKind::Arc {
+                center: [0.0, 0.0],
+                radius: 2.0,
+                start_deg: 0.0,
+                end_deg: 90.0,
+            },
+            stroke_width: 0.15,
+        });
+
+        // CCW quarter-turn advances both sweep angles by +90°; the
+        // centre is on the pivot so it stays fixed.
+        rotate_selected(&mut s, Some(SymbolSelection::Graphic(0)), false);
+
+        match &s.graphics[0].kind {
+            SymbolGraphicKind::Arc {
+                center,
+                start_deg,
+                end_deg,
+                ..
+            } => {
+                assert_eq!(*center, [0.0, 0.0]);
+                assert_eq!(*start_deg, 90.0);
+                assert_eq!(*end_deg, 180.0);
+            }
+            _ => panic!("expected Arc"),
+        }
+    }
+
+    #[test]
+    fn rotate_selected_field_and_empty_are_noops() {
+        let mut s = Symbol::empty("test");
+        s.graphics.push(signex_library::SymbolGraphic {
+            kind: SymbolGraphicKind::Rectangle {
+                from: [1.0, 2.0],
+                to: [3.0, 4.0],
+            },
+            stroke_width: 0.15,
+        });
+
+        rotate_selected(&mut s, Some(SymbolSelection::Field(FieldKey::Reference)), true);
+        rotate_selected(&mut s, None, true);
+
+        match &s.graphics[0].kind {
+            SymbolGraphicKind::Rectangle { from, to } => {
+                assert_eq!(*from, [1.0, 2.0]);
+                assert_eq!(*to, [3.0, 4.0]);
+            }
+            _ => panic!("expected Rectangle"),
         }
     }
 }

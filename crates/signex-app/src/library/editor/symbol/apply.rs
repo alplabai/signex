@@ -212,6 +212,16 @@ pub(crate) fn apply_symbol_primitive_edit(
                 editor.canvas_cache.clear();
             }
         }
+        PrimitiveEditorMsg::SymbolRotateSelected { clockwise } => {
+            let selected = editor.selected;
+            crate::library::editor::symbol::state::rotate_selected(
+                editor.primitive_mut(),
+                selected,
+                clockwise,
+            );
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+        }
         PrimitiveEditorMsg::SymbolSetPinNumber { idx, number } => {
             if let Some(pin) = editor.primitive_mut().pins.get_mut(idx) {
                 pin.number = number;
@@ -504,6 +514,7 @@ fn mutates_symbol_state(msg: &PrimitiveEditorMsg) -> bool {
             | SymbolMoveSelected { .. }
             | SymbolMoveGraphicHandle { .. }
             | SymbolDeleteSelected
+            | SymbolRotateSelected { .. }
             | SymbolSetPinNumber { .. }
             | SymbolSetPinName { .. }
             | SymbolNewPart

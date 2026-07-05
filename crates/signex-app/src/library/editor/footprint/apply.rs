@@ -1411,6 +1411,7 @@ pub(crate) fn apply_footprint_primitive_edit(
         | PrimitiveEditorMsg::SymbolMoveSelected { .. }
         | PrimitiveEditorMsg::SymbolMoveGraphicHandle { .. }
         | PrimitiveEditorMsg::SymbolDeleteSelected
+        | PrimitiveEditorMsg::SymbolRotateSelected { .. }
         | PrimitiveEditorMsg::SymbolSetPinNumber { .. }
         | PrimitiveEditorMsg::SymbolSetPinName { .. }
         | PrimitiveEditorMsg::SymbolPrevPart

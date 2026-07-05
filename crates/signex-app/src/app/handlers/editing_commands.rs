@@ -99,6 +99,21 @@ impl Signex {
 
 
     pub(crate) fn handle_selection_rotate_requested(&mut self) {
+        // Symbol editor rotate (Space) — salvaged from
+        // feature/v0.13-symbol. Route through the reducer so undo
+        // snapshots and refresh_panel_ctx run at the dispatch site.
+        if let Some(path) = self.active_symbol_editor_path() {
+            let _ = self.update(Message::Library(
+                crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                    path,
+                    msg: crate::library::messages::PrimitiveEditorMsg::SymbolRotateSelected {
+                        clockwise: true,
+                    },
+                },
+            ));
+            return;
+        }
+
         if let Some(engine) = self.document_state.active_engine()
             && engine.selection_is_single_symbol(&self.interaction_state.active_canvas().selected)
         {
