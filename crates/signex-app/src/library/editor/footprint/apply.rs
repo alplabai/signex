@@ -537,79 +537,7 @@ pub(crate) fn apply_footprint_primitive_edit(
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintDeleteSelected => {
-            // v0.27 — Delete walks the full multi-select set, not
-            // just the primary `selected_pad`. Rubber-band + Ctrl-
-            // click extras get the same treatment as the primary so
-            // pressing Delete after a rubber-band sweep clears the
-            // whole region. Sketch-mode entities use the sketch
-            // dispatcher so the solver re-converges without dangling
-            // constraints.
-            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
-            use crate::library::editor::footprint::sketch_mode::SketchEdit;
-            use crate::library::editor::footprint::state::EditorMode;
-
-            let did_delete = editor.with_parts(|state, primitive| {
-                let mut any = false;
-
-                // Sketch-mode deletion — primary + secondary + extras.
-                if state.mode == EditorMode::Sketch {
-                    use std::collections::HashSet;
-                    let mut seen: HashSet<signex_sketch::id::SketchEntityId> = HashSet::new();
-                    let mut victims: Vec<signex_sketch::id::SketchEntityId> = Vec::new();
-                    let mut push_unique =
-                        |id: signex_sketch::id::SketchEntityId,
-                         vs: &mut Vec<signex_sketch::id::SketchEntityId>,
-                         seen: &mut HashSet<_>| {
-                            if seen.insert(id) {
-                                vs.push(id);
-                            }
-                        };
-                    if let Some(id) = state.selected_sketch.take() {
-                        push_unique(id, &mut victims, &mut seen);
-                    }
-                    if let Some(id) = state.selected_sketch_secondary.take() {
-                        push_unique(id, &mut victims, &mut seen);
-                    }
-                    let extras: Vec<_> = state.selected_sketch_extra.drain(..).collect();
-                    for id in extras {
-                        push_unique(id, &mut victims, &mut seen);
-                    }
-                    for id in victims {
-                        apply_sketch_edit_with_warnings(
-                            state,
-                            primitive,
-                            SketchEdit::DeleteEntity(id),
-                        );
-                        any = true;
-                    }
-                }
-
-                // Pads (always — rubber-band can also select pads).
-                let mut pad_victims: Vec<usize> = Vec::new();
-                if let Some(idx) = state.selected_pad {
-                    pad_victims.push(idx);
-                }
-                pad_victims.extend(state.selected_pads_extra.iter().copied());
-                pad_victims.sort_unstable();
-                pad_victims.dedup();
-                // Remove highest-index first so earlier indices stay
-                // valid through the loop.
-                pad_victims.sort_unstable_by(|a, b| b.cmp(a));
-                for idx in pad_victims {
-                    if let Some(pad) = state.pads.get(idx) {
-                        pad_to_sketch::mirror_delete_pad_from_sketch(pad, primitive);
-                    }
-                    state.delete_pad(idx);
-                    any = true;
-                }
-                state.selected_pads_extra.clear();
-                CanvasState::sync_pads_to_primitive(state, primitive);
-                any
-            });
-            if did_delete {
-                editor.canvas_cache.clear();
-                editor.dirty = true;
-            }
+            apply_footprint_delete_selected(editor);
         }
         PrimitiveEditorMsg::FootprintToggleLayer(name) => {
             if let Some(layer) = FpLayer::from_standard_name(&name) {
@@ -828,66 +756,7 @@ pub(crate) fn apply_footprint_primitive_edit(
             }
         }
         PrimitiveEditorMsg::FootprintSetPadsTool(tool) => {
-            editor.state.pads_tool = tool;
-            // v0.18.15.1 — leaving the PlaceTrack tool clears the
-            // in-flight gesture so re-entering doesn't start
-            // mid-segment from a stale anchor.
-            if !matches!(
-                tool,
-                crate::library::editor::footprint::state::PadsTool::PlaceTrack
-            ) {
-                editor.state.track_first = None;
-            }
-            // v0.18.15.3 — same cleanup for Place Arc.
-            if !matches!(
-                tool,
-                crate::library::editor::footprint::state::PadsTool::PlaceArc
-            ) {
-                editor.state.place_arc_pending =
-                    crate::library::editor::footprint::state::PlaceArcPending::Idle;
-            }
-            // v0.18.15.4/v0.18.17 — leaving Place Polygon /
-            // Place Region commits the in-flight vertex stash if
-            // it has ≥ 3 vertices, then clears. The `filled` flag
-            // follows the OUTGOING tool (we just set
-            // editor.state.pads_tool = tool above; check the
-            // OLD tool's identity by recording before the swap is
-            // unnecessary because PadsTool::PlaceRegion is the
-            // only tool that flips filled).
-            let was_polygon_or_region = !editor.state.place_polygon_vertices.is_empty();
-            if was_polygon_or_region
-                && !matches!(
-                    tool,
-                    crate::library::editor::footprint::state::PadsTool::PlacePolygon
-                        | crate::library::editor::footprint::state::PadsTool::PlaceRegion
-                )
-            {
-                let verts = std::mem::take(&mut editor.state.place_polygon_vertices);
-                if verts.len() >= 3 {
-                    // The dispatcher arm uses
-                    // `editor.state.pads_tool` (now equal to the
-                    // NEW tool), so `filled` would be wrong. We
-                    // can't distinguish whether the user was on
-                    // PlacePolygon vs PlaceRegion now — fall back
-                    // to `filled: false` and let the user re-fire
-                    // PlaceRegion if they wanted fill. Future:
-                    // store filled-ness on the in-flight stash
-                    // alongside vertices.
-                    let vertices: Vec<[f64; 2]> = verts.iter().map(|(x, y)| [*x, *y]).collect();
-                    let primitive = editor.primitive_mut();
-                    primitive
-                        .silk_f
-                        .push(signex_library::primitive::footprint::FpGraphic {
-                            kind: signex_library::primitive::footprint::FpGraphicKind::Polygon {
-                                vertices,
-                            },
-                            stroke_width: 0.15,
-                            filled: false,
-                        });
-                    editor.dirty = true;
-                }
-            }
-            editor.canvas_cache.clear();
+            apply_footprint_set_pads_tool(editor, tool);
         }
         PrimitiveEditorMsg::FootprintToolEscape => {
             // v0.15 — global Esc tool cancel. Resets both Pads and
@@ -1417,79 +1286,7 @@ pub(crate) fn apply_footprint_primitive_edit(
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintTouchingLineCommit { x_mm, y_mm } => {
-            // v0.27 — Touching Line: every pad whose bbox is
-            // intersected by the segment from `touching_line_first`
-            // → (x_mm, y_mm) becomes selected. Liang-Barsky-style
-            // segment-vs-AABB clip.
-            let Some((sx, sy)) = editor.state.touching_line_first.take() else {
-                editor.state.touching_line_active = false;
-                editor.canvas_cache.clear();
-                return;
-            };
-            editor.state.touching_line_active = false;
-            let dx = x_mm - sx;
-            let dy = y_mm - sy;
-            let segment_hits_aabb = |xmin: f64, ymin: f64, xmax: f64, ymax: f64| -> bool {
-                // Both endpoints inside?
-                let inside = |x: f64, y: f64| -> bool {
-                    x >= xmin && x <= xmax && y >= ymin && y <= ymax
-                };
-                if inside(sx, sy) || inside(x_mm, y_mm) {
-                    return true;
-                }
-                // Liang-Barsky parametric clip in [0, 1].
-                let mut t_enter = 0.0_f64;
-                let mut t_exit = 1.0_f64;
-                let p = [-dx, dx, -dy, dy];
-                let q = [sx - xmin, xmax - sx, sy - ymin, ymax - sy];
-                for i in 0..4 {
-                    if p[i].abs() < 1e-12 {
-                        if q[i] < 0.0 {
-                            return false;
-                        }
-                    } else {
-                        let t = q[i] / p[i];
-                        if p[i] < 0.0 {
-                            if t > t_exit {
-                                return false;
-                            }
-                            if t > t_enter {
-                                t_enter = t;
-                            }
-                        } else {
-                            if t < t_enter {
-                                return false;
-                            }
-                            if t < t_exit {
-                                t_exit = t;
-                            }
-                        }
-                    }
-                }
-                t_enter <= t_exit
-            };
-            let mut hits: Vec<usize> = editor
-                .state
-                .pads
-                .iter()
-                .enumerate()
-                .filter_map(|(idx, p)| {
-                    let (x0, y0, x1, y1) = p.bbox_mm();
-                    if segment_hits_aabb(x0, y0, x1, y1) {
-                        Some(idx)
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            if hits.is_empty() {
-                editor.state.selected_pad = None;
-                editor.state.selected_pads_extra.clear();
-            } else {
-                editor.state.selected_pad = Some(hits.remove(0));
-                editor.state.selected_pads_extra = hits;
-            }
-            editor.canvas_cache.clear();
+            apply_footprint_touching_line_commit(editor, x_mm, y_mm);
         }
         PrimitiveEditorMsg::FootprintSelectOverlapped
         | PrimitiveEditorMsg::FootprintSelectNextOverlapped => {
@@ -5315,4 +5112,231 @@ fn apply_footprint_sketch_set_role(
             }
             editor.canvas_cache.clear();
             editor.dirty = true;
+}
+
+/// Commit the Touching-Line selection gesture (extracted arm — #98).
+fn apply_footprint_touching_line_commit(
+    editor: &mut crate::app::FootprintEditorState,
+    x_mm: f64,
+    y_mm: f64,
+) {
+            // v0.27 — Touching Line: every pad whose bbox is
+            // intersected by the segment from `touching_line_first`
+            // → (x_mm, y_mm) becomes selected. Liang-Barsky-style
+            // segment-vs-AABB clip.
+            let Some((sx, sy)) = editor.state.touching_line_first.take() else {
+                editor.state.touching_line_active = false;
+                editor.canvas_cache.clear();
+                return;
+            };
+            editor.state.touching_line_active = false;
+            let dx = x_mm - sx;
+            let dy = y_mm - sy;
+            let segment_hits_aabb = |xmin: f64, ymin: f64, xmax: f64, ymax: f64| -> bool {
+                // Both endpoints inside?
+                let inside = |x: f64, y: f64| -> bool {
+                    x >= xmin && x <= xmax && y >= ymin && y <= ymax
+                };
+                if inside(sx, sy) || inside(x_mm, y_mm) {
+                    return true;
+                }
+                // Liang-Barsky parametric clip in [0, 1].
+                let mut t_enter = 0.0_f64;
+                let mut t_exit = 1.0_f64;
+                let p = [-dx, dx, -dy, dy];
+                let q = [sx - xmin, xmax - sx, sy - ymin, ymax - sy];
+                for i in 0..4 {
+                    if p[i].abs() < 1e-12 {
+                        if q[i] < 0.0 {
+                            return false;
+                        }
+                    } else {
+                        let t = q[i] / p[i];
+                        if p[i] < 0.0 {
+                            if t > t_exit {
+                                return false;
+                            }
+                            if t > t_enter {
+                                t_enter = t;
+                            }
+                        } else {
+                            if t < t_enter {
+                                return false;
+                            }
+                            if t < t_exit {
+                                t_exit = t;
+                            }
+                        }
+                    }
+                }
+                t_enter <= t_exit
+            };
+            let mut hits: Vec<usize> = editor
+                .state
+                .pads
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, p)| {
+                    let (x0, y0, x1, y1) = p.bbox_mm();
+                    if segment_hits_aabb(x0, y0, x1, y1) {
+                        Some(idx)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            if hits.is_empty() {
+                editor.state.selected_pad = None;
+                editor.state.selected_pads_extra.clear();
+            } else {
+                editor.state.selected_pad = Some(hits.remove(0));
+                editor.state.selected_pads_extra = hits;
+            }
+            editor.canvas_cache.clear();
+}
+
+/// Switch the active Pads-mode tool (extracted arm — #98).
+fn apply_footprint_set_pads_tool(
+    editor: &mut crate::app::FootprintEditorState,
+    tool: crate::library::editor::footprint::state::PadsTool,
+) {
+            editor.state.pads_tool = tool;
+            // v0.18.15.1 — leaving the PlaceTrack tool clears the
+            // in-flight gesture so re-entering doesn't start
+            // mid-segment from a stale anchor.
+            if !matches!(
+                tool,
+                crate::library::editor::footprint::state::PadsTool::PlaceTrack
+            ) {
+                editor.state.track_first = None;
+            }
+            // v0.18.15.3 — same cleanup for Place Arc.
+            if !matches!(
+                tool,
+                crate::library::editor::footprint::state::PadsTool::PlaceArc
+            ) {
+                editor.state.place_arc_pending =
+                    crate::library::editor::footprint::state::PlaceArcPending::Idle;
+            }
+            // v0.18.15.4/v0.18.17 — leaving Place Polygon /
+            // Place Region commits the in-flight vertex stash if
+            // it has ≥ 3 vertices, then clears. The `filled` flag
+            // follows the OUTGOING tool (we just set
+            // editor.state.pads_tool = tool above; check the
+            // OLD tool's identity by recording before the swap is
+            // unnecessary because PadsTool::PlaceRegion is the
+            // only tool that flips filled).
+            let was_polygon_or_region = !editor.state.place_polygon_vertices.is_empty();
+            if was_polygon_or_region
+                && !matches!(
+                    tool,
+                    crate::library::editor::footprint::state::PadsTool::PlacePolygon
+                        | crate::library::editor::footprint::state::PadsTool::PlaceRegion
+                )
+            {
+                let verts = std::mem::take(&mut editor.state.place_polygon_vertices);
+                if verts.len() >= 3 {
+                    // The dispatcher arm uses
+                    // `editor.state.pads_tool` (now equal to the
+                    // NEW tool), so `filled` would be wrong. We
+                    // can't distinguish whether the user was on
+                    // PlacePolygon vs PlaceRegion now — fall back
+                    // to `filled: false` and let the user re-fire
+                    // PlaceRegion if they wanted fill. Future:
+                    // store filled-ness on the in-flight stash
+                    // alongside vertices.
+                    let vertices: Vec<[f64; 2]> = verts.iter().map(|(x, y)| [*x, *y]).collect();
+                    let primitive = editor.primitive_mut();
+                    primitive
+                        .silk_f
+                        .push(signex_library::primitive::footprint::FpGraphic {
+                            kind: signex_library::primitive::footprint::FpGraphicKind::Polygon {
+                                vertices,
+                            },
+                            stroke_width: 0.15,
+                            filled: false,
+                        });
+                    editor.dirty = true;
+                }
+            }
+            editor.canvas_cache.clear();
+}
+
+/// Delete the current footprint selection (extracted arm — #98).
+fn apply_footprint_delete_selected(editor: &mut crate::app::FootprintEditorState) {
+            use crate::library::editor::footprint::pad_to_sketch;
+            use crate::library::editor::footprint::state::FootprintEditorState as CanvasState;
+            // v0.27 — Delete walks the full multi-select set, not
+            // just the primary `selected_pad`. Rubber-band + Ctrl-
+            // click extras get the same treatment as the primary so
+            // pressing Delete after a rubber-band sweep clears the
+            // whole region. Sketch-mode entities use the sketch
+            // dispatcher so the solver re-converges without dangling
+            // constraints.
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
+            use crate::library::editor::footprint::sketch_mode::SketchEdit;
+            use crate::library::editor::footprint::state::EditorMode;
+
+            let did_delete = editor.with_parts(|state, primitive| {
+                let mut any = false;
+
+                // Sketch-mode deletion — primary + secondary + extras.
+                if state.mode == EditorMode::Sketch {
+                    use std::collections::HashSet;
+                    let mut seen: HashSet<signex_sketch::id::SketchEntityId> = HashSet::new();
+                    let mut victims: Vec<signex_sketch::id::SketchEntityId> = Vec::new();
+                    let mut push_unique =
+                        |id: signex_sketch::id::SketchEntityId,
+                         vs: &mut Vec<signex_sketch::id::SketchEntityId>,
+                         seen: &mut HashSet<_>| {
+                            if seen.insert(id) {
+                                vs.push(id);
+                            }
+                        };
+                    if let Some(id) = state.selected_sketch.take() {
+                        push_unique(id, &mut victims, &mut seen);
+                    }
+                    if let Some(id) = state.selected_sketch_secondary.take() {
+                        push_unique(id, &mut victims, &mut seen);
+                    }
+                    let extras: Vec<_> = state.selected_sketch_extra.drain(..).collect();
+                    for id in extras {
+                        push_unique(id, &mut victims, &mut seen);
+                    }
+                    for id in victims {
+                        apply_sketch_edit_with_warnings(
+                            state,
+                            primitive,
+                            SketchEdit::DeleteEntity(id),
+                        );
+                        any = true;
+                    }
+                }
+
+                // Pads (always — rubber-band can also select pads).
+                let mut pad_victims: Vec<usize> = Vec::new();
+                if let Some(idx) = state.selected_pad {
+                    pad_victims.push(idx);
+                }
+                pad_victims.extend(state.selected_pads_extra.iter().copied());
+                pad_victims.sort_unstable();
+                pad_victims.dedup();
+                // Remove highest-index first so earlier indices stay
+                // valid through the loop.
+                pad_victims.sort_unstable_by(|a, b| b.cmp(a));
+                for idx in pad_victims {
+                    if let Some(pad) = state.pads.get(idx) {
+                        pad_to_sketch::mirror_delete_pad_from_sketch(pad, primitive);
+                    }
+                    state.delete_pad(idx);
+                    any = true;
+                }
+                state.selected_pads_extra.clear();
+                CanvasState::sync_pads_to_primitive(state, primitive);
+                any
+            });
+            if did_delete {
+                editor.canvas_cache.clear();
+                editor.dirty = true;
+            }
 }
