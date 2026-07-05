@@ -66,7 +66,13 @@ fn later_unbind_suppresses_earlier_command_binding() {
     let keymap = CompiledKeymap::compile(&profile);
     let stroke = KeyStroke::from_str("Ctrl+S").unwrap();
     let lookup = keymap.lookup(&[stroke], &[ShortcutContext::Global]);
+    assert!(lookup.matched);
     assert!(lookup.command.is_none());
+    assert!(
+        keymap
+            .shortcut_label(&AppCommandId::new("save_document").unwrap())
+            .is_none()
+    );
 }
 
 #[test]

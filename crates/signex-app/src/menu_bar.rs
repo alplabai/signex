@@ -563,7 +563,7 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
             ),
             leaf_if(
                 "AutoFocus (dim unselected)",
-                static_shortcut("F9"),
+                shortcut_for(&ctx, "toggle_auto_focus", "F9"),
                 MenuMessage::ToggleAutoFocus,
                 ctx.has_schematic,
             ),
@@ -643,13 +643,13 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
             separator(mc),
             leaf_if(
                 "Annotate Schematics Quietly",
-                shortcut_for(&ctx, "annotate_schematic", "Alt+A"),
+                shortcut_for(&ctx, "annotate_schematic_quietly", "Alt+A"),
                 MenuMessage::AnnotateQuietly,
                 ctx.has_schematic,
             ),
             leaf_if(
                 "Force Annotate All Schematics",
-                static_shortcut("Shift+Alt+A"),
+                shortcut_for(&ctx, "force_annotate_all_schematics", "Shift+Alt+A"),
                 MenuMessage::AnnotateForceAll,
                 ctx.has_schematic,
             ),
@@ -666,7 +666,7 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
             separator(mc),
             leaf_if(
                 "Electrical Rules Check",
-                shortcut_for(&ctx, "update_pcb_from_schematic", "F8"),
+                shortcut_for(&ctx, "run_erc", "F8"),
                 MenuMessage::Erc,
                 ctx.has_schematic,
             ),
@@ -703,7 +703,7 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
             separator(mc),
             leaf(
                 "Preferences...",
-                static_shortcut("Ctrl+,"),
+                shortcut_for(&ctx, "open_preferences", "Ctrl+,"),
                 MenuMessage::OpenPreferences,
                 mc,
             ),
@@ -816,10 +816,6 @@ fn shortcut_for(ctx: &MenuContext, command_id: &str, fallback: &str) -> Option<S
             .and_then(|keymap| keymap.shortcut_label(&command))
             .unwrap_or_else(|| fallback.to_string()),
     )
-}
-
-fn static_shortcut(label: &str) -> Option<String> {
-    Some(label.to_string())
 }
 
 /// Wrap a menu element in the toolbar-strip styled container used on

@@ -69,6 +69,9 @@ fn clear_keymap_pending_sequence() {
 fn message_for_keymap_command(command: &AppCommandId) -> Option<Message> {
     match command.as_str() {
         "annotate_schematic" => Some(Message::OpenAnnotateDialog),
+        "annotate_schematic_quietly" => {
+            Some(Message::Annotate(signex_engine::AnnotateMode::Incremental))
+        }
         "cancel_current_tool" => Some(Message::EscapePressed),
         "center_view_at_cursor" | "show_all_design_objects" | "zoom_to_fit" => {
             Some(Message::CanvasEvent(CanvasEvent::FitAll))
@@ -76,11 +79,25 @@ fn message_for_keymap_command(command: &AppCommandId) -> Option<Message> {
         "copy" => Some(Message::Copy),
         "cycle_selection_mode" => Some(Message::CycleSelectionMode),
         "cycle_snap_grid_forward" | "open_grid_picker" => Some(Message::GridPickerOpen),
+        "cycle_unit" => Some(Message::UnitCycled),
+        "cycle_wire_bus_graphic_mode" => Some(Message::CycleDrawMode),
         "cut" => Some(Message::Cut),
         "delete_selection" | "remove_last_vertex" => Some(Message::DeleteSelected),
         "duplicate" => Some(Message::Duplicate),
         "find" | "find_text" => Some(Message::OpenFind),
         "find_and_replace" => Some(Message::OpenReplace),
+        "footprint_mode_pads" => Some(Message::FootprintModeShortcut(
+            crate::library::editor::footprint::state::EditorMode::Normal,
+        )),
+        "footprint_mode_sketch" => Some(Message::FootprintModeShortcut(
+            crate::library::editor::footprint::state::EditorMode::Sketch,
+        )),
+        "footprint_mode_view_3d" => Some(Message::FootprintModeShortcut(
+            crate::library::editor::footprint::state::EditorMode::View3d,
+        )),
+        "force_annotate_all_schematics" => Some(Message::Annotate(
+            signex_engine::AnnotateMode::ResetAndRenumber,
+        )),
         "mirror_x" => Some(Message::MirrorSelectedX),
         "mirror_y" => Some(Message::MirrorSelectedY),
         "open_components_panel" | "place_symbol" => {
@@ -106,7 +123,7 @@ fn message_for_keymap_command(command: &AppCommandId) -> Option<Message> {
         "redo" => Some(Message::Redo),
         "reset_schematic_designators" => Some(Message::OpenAnnotateResetConfirm),
         "rotate_clockwise" | "rotate_counterclockwise" => Some(Message::RotateSelected),
-        "run_erc" => Some(Message::RunErc),
+        "run_erc" | "update_pcb_from_schematic" => Some(Message::RunErc),
         "save_document" => Some(Message::SaveFile),
         "save_document_as" => Some(Message::Menu(MenuMessage::SaveAs)),
         "select_all" => Some(Message::Selection(
@@ -116,6 +133,8 @@ fn message_for_keymap_command(command: &AppCommandId) -> Option<Message> {
             Some(Message::Menu(MenuMessage::OpenKeyboardShortcuts))
         }
         "toggle_visible_grid" => Some(Message::GridToggle),
+        "toggle_auto_focus" => Some(Message::ToggleAutoFocus),
+        "toggle_electrical_grid" => Some(Message::ToggleSnapHotspots),
         "undo" => Some(Message::Undo),
         _ => None,
     }
@@ -136,6 +155,10 @@ fn lookup_keymap_message(
         pending_sequence.clear();
         return Some(message);
     }
+    if lookup.matched {
+        pending_sequence.clear();
+        return Some(Message::Noop);
+    }
     if lookup.pending {
         return Some(Message::Noop);
     }
@@ -147,6 +170,10 @@ fn lookup_keymap_message(
         if let Some(message) = lookup.command.as_ref().and_then(message_for_keymap_command) {
             pending_sequence.clear();
             return Some(message);
+        }
+        if lookup.matched {
+            pending_sequence.clear();
+            return Some(Message::Noop);
         }
         if lookup.pending {
             return Some(Message::Noop);
@@ -326,6 +353,7 @@ impl Signex {
                     lib_symbol_count: 0,
                     lib_symbol_names: vec![],
                     placed_symbols: vec![],
+                    active_keymap: keymap_profiles.compile_active(),
                     tokens: signex_types::theme::theme_tokens(ThemeId::Signex),
                     theme_id: ThemeId::Signex,
                     unit: Unit::Mm,
@@ -720,242 +748,9 @@ impl Signex {
                             return message;
                         }
                         match (key.as_ref(), m) {
-                            (keyboard::Key::Character(c), m) if c == "q" && m.command() => {
-                                Message::UnitCycled
-                            }
-                            (keyboard::Key::Character(c), m)
-                                if c == "g" && !m.command() && !m.shift() =>
-                            {
-                                // v0.18.10 — Altium parity: G opens the
-                                // grid picker popup. Footprint editor
-                                // wires it to set the snap step;
-                                // schematic / PCB tabs ignore (the
-                                // dispatcher's context check no-ops).
-                                Message::GridPickerOpen
-                            }
-                            (keyboard::Key::Character(c), m)
-                                if c == "g" && m.command() && !m.shift() =>
-                            {
-                                // v0.18.11 — Ctrl+G opens the Cartesian
-                                // Grid Editor modal (Step X / Y, link
-                                // toggle, Apply / Cancel). Matched
-                                // before the Shift+Ctrl+G `GridToggle`
-                                // arm — guards don't overlap (`!m.shift()`
-                                // vs `m.shift()`).
-                                Message::GridPropertiesOpen
-                            }
-                            (keyboard::Key::Character(c), m) if c == "w" && !m.command() => {
-                                Message::Tool(ToolMessage::SelectTool(Tool::Wire))
-                            }
-                            (keyboard::Key::Character(c), m) if c == "b" && !m.command() => {
-                                Message::Tool(ToolMessage::SelectTool(Tool::Bus))
-                            }
-                            (keyboard::Key::Character(c), m) if c == "l" && !m.command() => {
-                                Message::Tool(ToolMessage::SelectTool(Tool::Label))
-                            }
-                            (keyboard::Key::Character(c), m) if c == "p" && !m.command() => {
-                                Message::Tool(ToolMessage::SelectTool(Tool::Component))
-                            }
-                            // Ctrl+P: Print Preview
-                            (keyboard::Key::Character(c), m)
-                                if c == "p" && m.command() && !m.shift() =>
-                            {
-                                Message::PrintPreviewRequested
-                            }
-                            // Ctrl+Shift+P: open command palette (VS Code parity).
-                            // Export PDF stays reachable via File ▸ Export ▸ PDF…
-                            // Accept both "p" and "P" — iced/winit delivers
-                            // either depending on platform when Ctrl+Shift
-                            // suppress the shift-uppercase transform.
-                            (keyboard::Key::Character(c), m)
-                                if c.eq_ignore_ascii_case("p") && m.command() && m.shift() =>
-                            {
-                                Message::CommandPaletteOpen
-                            }
-                            // Ctrl+, open Preferences
-                            (keyboard::Key::Character(c), m) if c == "," && m.command() => {
-                                Message::OpenPreferences
-                            }
-                            (keyboard::Key::Character(c), m) if c == "f" && m.command() => {
-                                Message::OpenFind
-                            }
-                            (keyboard::Key::Character(c), m) if c == "h" && m.command() => {
-                                Message::OpenReplace
-                            }
-                            (keyboard::Key::Named(keyboard::key::Named::Escape), _)
-                                if keyboard_state.find_replace_open =>
-                            {
-                                Message::FindReplaceMsg(crate::find_replace::FindReplaceMsg::Close)
-                            }
-                            (keyboard::Key::Named(keyboard::key::Named::Escape), _)
-                                if keyboard_state.kbd_shortcuts_open =>
-                            {
-                                Message::CloseKeyboardShortcuts
-                            }
-                            (keyboard::Key::Named(keyboard::key::Named::Escape), _)
-                                if keyboard_state.first_run_tour_open =>
-                            {
-                                Message::DismissFirstRunTour
-                            }
-                            // Esc closes the deepest open modal first (UX §1.3).
-                            // The order here goes "user-facing top → bottom":
-                            // ERC, then Annotate, then Preferences. Once those
-                            // are closed, Esc falls through to the tool reset.
-                            (keyboard::Key::Named(keyboard::key::Named::Escape), _) if keyboard_state.erc_open => {
-                                Message::CloseErcDialog
-                            }
-                            (keyboard::Key::Named(keyboard::key::Named::Escape), _)
-                                if keyboard_state.annotate_open =>
-                            {
-                                Message::CloseAnnotateDialog
-                            }
-                            (keyboard::Key::Named(keyboard::key::Named::Escape), _)
-                                if keyboard_state.prefs_open =>
-                            {
-                                Message::ClosePreferences
-                            }
-                            (keyboard::Key::Named(keyboard::key::Named::Escape), _)
-                                if keyboard_state.rename_open =>
-                            {
-                                Message::CloseRenameDialog
-                            }
-                            (keyboard::Key::Named(keyboard::key::Named::Escape), _)
-                                if keyboard_state.remove_open =>
-                            {
-                                Message::CloseRemoveDialog
-                            }
-                            (keyboard::Key::Named(keyboard::key::Named::Escape), _)
-                                if keyboard_state.enable_vc_open =>
-                            {
-                                Message::CloseEnableVersionControl
-                            }
-                            // F12 — Library Options modal Esc gap. Without
-                            // this, Esc fell through to `Tool::Select`
-                            // reset; users hit Create Library out of
-                            // frustration thinking that was the only way
-                            // out, which actually wrote the .snxlib to disk
-                            // (violating the "no disk writes without user
-                            // save" invariant when the user hadn't intended
-                            // to confirm).
-                            (keyboard::Key::Named(keyboard::key::Named::Escape), _)
-                                if keyboard_state.library_create_options_open =>
-                            {
-                                Message::Library(
-                                    crate::library::messages::LibraryMessage::LibraryCreateOptionsCancel,
-                                )
-                            }
-                            (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
-                                // v0.15 — route through the
-                                // dispatcher so Esc resets the
-                                // footprint editor's tool state when
-                                // a `.snxfpt` tab is active, and
-                                // falls back to the schematic
-                                // Tool::Select reset otherwise.
-                                Message::EscapePressed
-                            }
-                            (keyboard::Key::Named(keyboard::key::Named::Home), _) => {
-                                Message::CanvasEvent(CanvasEvent::FitAll)
-                            }
-                            (keyboard::Key::Named(keyboard::key::Named::F1), _) => {
-                                // F1 toggles: open if closed, close if open.
-                                if keyboard_state.kbd_shortcuts_open {
-                                    Message::CloseKeyboardShortcuts
-                                } else {
-                                    Message::Menu(MenuMessage::OpenKeyboardShortcuts)
-                                }
-                            }
-                            (keyboard::Key::Named(keyboard::key::Named::F8), _) => Message::RunErc,
-                            (keyboard::Key::Named(keyboard::key::Named::F9), _) => {
-                                Message::ToggleAutoFocus
-                            }
-                            // F5: Net color palette (Altium convention).
-                            (keyboard::Key::Named(keyboard::key::Named::F5), _) => {
-                                Message::OpenNetColorPalette
-                            }
-                            // Shift+S: cycle rubber-band selection mode
-                            // (Inside → Outside → TouchingLine).
-                            (keyboard::Key::Character(c), m)
-                                if c == "S" && m.shift() && !m.command() =>
-                            {
-                                Message::CycleSelectionMode
-                            }
-                            // Enter also closes the in-flight lasso (in
-                            // addition to a second canvas click). Useful
-                            // when the user's cursor is somewhere they'd
-                            // rather not drop a final vertex.
-                            (keyboard::Key::Named(keyboard::key::Named::Enter), _) => {
-                                Message::LassoCommit
-                            }
-                            // Alt+A: annotate (Altium convention, incremental)
-                            (keyboard::Key::Character(c), m) if c == "a" && m.alt() => {
-                                Message::Annotate(signex_engine::AnnotateMode::Incremental)
-                            }
-                            // Shift+Alt+A: reset and renumber
-                            (keyboard::Key::Character(c), m)
-                                if c == "a" && m.alt() && m.shift() =>
-                            {
-                                Message::Annotate(signex_engine::AnnotateMode::ResetAndRenumber)
-                            }
-                            // Delete selected
-                            (keyboard::Key::Named(keyboard::key::Named::Delete), _) => {
-                                Message::DeleteSelected
-                            }
-                            // Undo/Redo
-                            (keyboard::Key::Character(c), m)
-                                if c == "z" && m.command() && !m.shift() =>
-                            {
-                                Message::Undo
-                            }
-                            (keyboard::Key::Character(c), m) if c == "y" && m.command() => {
-                                Message::Redo
-                            }
-                            (keyboard::Key::Character(c), m)
-                                if c == "z" && m.command() && m.shift() =>
-                            {
-                                Message::Redo
-                            }
-                            // Shift+Space: cycle draw mode (90-degree -> 45-degree -> Free)
-                            (keyboard::Key::Named(keyboard::key::Named::Space), m) if m.shift() => {
-                                Message::CycleDrawMode
-                            }
-                            // Space: rotate selected symbol (Altium convention)
-                            (keyboard::Key::Named(keyboard::key::Named::Space), _) => {
-                                Message::RotateSelected
-                            }
-                            // Mirror: X key = horizontal flip (left-right) = Standard mirror_y
-                            //         Y key = vertical flip (top-bottom) = Standard mirror_x
-                            (keyboard::Key::Character(c), m) if c == "x" && !m.command() => {
-                                Message::MirrorSelectedY // X key = horizontal flip = toggle mirror_y
-                            }
-                            (keyboard::Key::Character(c), m) if c == "y" && !m.command() => {
-                                Message::MirrorSelectedX // Y key = vertical flip = toggle mirror_x
-                            }
-                            // Ctrl+S save
-                            (keyboard::Key::Character(c), m) if c == "s" && m.command() => {
-                                Message::SaveFile
-                            }
-                            // v0.14.2 — footprint editor mode shortcuts.
-                            // 1 = Sketch, 2 = Pads, 3 = 3D View. The
-                            // dispatcher gates on "active tab is a
-                            // footprint editor" so the bare digits
-                            // don't steal text input on other tabs.
-                            (keyboard::Key::Character(c), m) if c == "1" && !m.command() && !m.alt() => {
-                                use crate::library::editor::footprint::state::EditorMode;
-                                Message::FootprintModeShortcut(EditorMode::Sketch)
-                            }
-                            (keyboard::Key::Character(c), m) if c == "2" && !m.command() && !m.alt() => {
-                                use crate::library::editor::footprint::state::EditorMode;
-                                Message::FootprintModeShortcut(EditorMode::Normal)
-                            }
-                            (keyboard::Key::Character(c), m) if c == "3" && !m.command() && !m.alt() => {
-                                use crate::library::editor::footprint::state::EditorMode;
-                                Message::FootprintModeShortcut(EditorMode::View3d)
-                            }
-                            // Ctrl+A select all
-                            (keyboard::Key::Character(c), m) if c == "a" && m.command() => {
-                                Message::Selection(selection_request::SelectionRequest::SelectAll)
-                            }
-                            // Ctrl+1-8 store selection memory, Alt+1-8 recall selection memory
+                            // Selection memory uses the numeric key as command data. The
+                            // current keymap file format only supports plain command ids,
+                            // so these remain intentionally non-configurable for now.
                             (keyboard::Key::Character(c), m) if m.command() && !m.alt() => {
                                 match selection_slot_from_key(c) {
                                     Some(slot) => Message::Selection(
@@ -971,37 +766,6 @@ impl Signex {
                                     ),
                                     _ => Message::Noop,
                                 }
-                            }
-                            // Ctrl+C copy, Ctrl+X cut
-                            (keyboard::Key::Character(c), m) if c == "c" && m.command() => {
-                                Message::Copy
-                            }
-                            (keyboard::Key::Character(c), m) if c == "x" && m.command() => {
-                                Message::Cut
-                            }
-                            // Shift+Ctrl+V smart paste
-                            (keyboard::Key::Character(c), m)
-                                if c == "v" && m.command() && m.shift() =>
-                            {
-                                Message::SmartPaste
-                            }
-                            // Ctrl+V paste
-                            (keyboard::Key::Character(c), m) if c == "v" && m.command() => {
-                                Message::Paste
-                            }
-                            // Ctrl+D duplicate
-                            (keyboard::Key::Character(c), m) if c == "d" && m.command() => {
-                                Message::Duplicate
-                            }
-                            // Shift+Ctrl+G -- toggle grid visibility
-                            (keyboard::Key::Character(c), m)
-                                if c == "g" && m.command() && m.shift() =>
-                            {
-                                Message::GridToggle
-                            }
-                            // Tab -- pre-placement properties (only during active tool)
-                            (keyboard::Key::Named(keyboard::key::Named::Tab), _) => {
-                                Message::PrePlacementTab
                             }
                             _ => Message::Noop,
                         }

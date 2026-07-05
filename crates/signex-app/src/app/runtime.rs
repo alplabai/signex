@@ -546,6 +546,7 @@ impl Signex {
                     })
                     .unwrap_or_default()
             },
+            active_keymap: self.ui_state.active_keymap.clone(),
             tokens: signex_types::theme::theme_tokens(self.ui_state.theme_id),
             theme_id: self.ui_state.theme_id,
             unit: self.ui_state.unit,

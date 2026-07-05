@@ -48,6 +48,11 @@ context = "global"
 "Ctrl+V" = "paste"
 "Ctrl+R" = "rubber_stamp_copy"
 "Ctrl+Shift+V" = "smart_paste"
+"Ctrl+Q" = "cycle_unit"
+"Alt+A" = "annotate_schematic_quietly"
+"Shift+Alt+A" = "force_annotate_all_schematics"
+"F8" = "run_erc"
+"F9" = "toggle_auto_focus"
 
 [[keyboard_shortcuts.sections]]
 context = "global"
@@ -86,3 +91,11 @@ context = "global"
 "Ctrl+Tab" = "next_document_tab"
 "Ctrl+Shift+Tab" = "previous_document_tab"
 "F4" = "toggle_floating_panels"
+
+[[keyboard_shortcuts.sections]]
+context = "footprint"
+
+[keyboard_shortcuts.sections.bindings]
+"1" = "footprint_mode_sketch"
+"2" = "footprint_mode_pads"
+"3" = "footprint_mode_view_3d"

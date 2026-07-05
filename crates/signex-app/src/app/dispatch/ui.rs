@@ -300,6 +300,11 @@ impl Signex {
                 }
                 self.finish_update()
             }
+            Message::ToggleSnapHotspots => {
+                self.ui_state.snap_hotspots = !self.ui_state.snap_hotspots;
+                self.document_state.panel_ctx.snap_hotspots = self.ui_state.snap_hotspots;
+                self.finish_update()
+            }
             Message::StatusBar(StatusBarRequest::TogglePanelList) => {
                 self.dispatch_overlay_message(Message::TogglePanelList)
             }

@@ -255,7 +255,7 @@ pub enum Message {
     /// `ui_state.window_size`.
     WindowResizedFor(iced::window::Id, f32, f32),
     /// Run the ERC engine against the active schematic snapshot and populate
-    /// `ui_state.erc_violations`. Bound to F8.
+    /// `ui_state.erc_violations`. Default profiles bind this to F8.
     RunErc,
     /// Auto-annotate every unannotated symbol (reference ends in `?`).
     /// Three modes: incremental, reset+renumber, reset-only.
@@ -295,6 +295,8 @@ pub enum Message {
     },
     /// Toggle AutoFocus — dim everything not in the current selection.
     ToggleAutoFocus,
+    /// Toggle snap-to-hotspots from keyboard shortcuts.
+    ToggleSnapHotspots,
     /// Fired once `iced::window::open` completes for the initial main
     /// window — lets us stash the id so `view(id)` knows which window is
     /// the primary app shell versus a detached modal / undocked tab.

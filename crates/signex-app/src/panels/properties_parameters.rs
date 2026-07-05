@@ -183,6 +183,7 @@ pub fn view_properties_general<'a>(
         let canvas_font_italic = ctx.canvas_font_italic;
         let canvas_font_popup_open = ctx.canvas_font_popup_open;
         let sheet_color = ctx.sheet_color;
+        let snap_hotspots_shortcut = super::shortcut_label(ctx, "toggle_electrical_grid", "Shift+E");
         col = col.push(collapsible_section(
             "prop_general",
             "General",
@@ -246,7 +247,7 @@ pub fn view_properties_general<'a>(
                     "Snap to Hotspots",
                     snap_hotspots,
                     PanelMsg::ToggleSnapHotspots,
-                    "Shift+E",
+                    snap_hotspots_shortcut.clone(),
                     muted,
                 ));
                 c = c.push(form_font_link_row(
@@ -953,10 +954,10 @@ pub fn form_check_row_shortcut<'a>(
     label: &'a str,
     value: bool,
     on_toggle: PanelMsg,
-    shortcut: &'a str,
+    shortcut: impl Into<String>,
     label_c: Color,
 ) -> Element<'a, PanelMsg> {
-    let shortcut_owned = shortcut.to_string();
+    let shortcut_owned = shortcut.into();
     container(
         row![
             text(label.to_string())

@@ -14,6 +14,11 @@ pub const COMMAND_METADATA: &[CommandMetadata] = &[
         label: "Annotate schematic",
     },
     CommandMetadata {
+        id: "annotate_schematic_quietly",
+        category: "design",
+        label: "Annotate schematic quietly",
+    },
+    CommandMetadata {
         id: "autoplace_fields",
         category: "edit",
         label: "Autoplace fields",
@@ -67,6 +72,11 @@ pub const COMMAND_METADATA: &[CommandMetadata] = &[
         id: "cycle_fast_grid",
         category: "view",
         label: "Cycle fast grid",
+    },
+    CommandMetadata {
+        id: "cycle_unit",
+        category: "view",
+        label: "Cycle display unit",
     },
     CommandMetadata {
         id: "cycle_snap_grid_backward",
@@ -197,6 +207,26 @@ pub const COMMAND_METADATA: &[CommandMetadata] = &[
         id: "find_text",
         category: "search",
         label: "Find text",
+    },
+    CommandMetadata {
+        id: "footprint_mode_pads",
+        category: "library",
+        label: "Switch footprint editor to Pads mode",
+    },
+    CommandMetadata {
+        id: "footprint_mode_sketch",
+        category: "library",
+        label: "Switch footprint editor to Sketch mode",
+    },
+    CommandMetadata {
+        id: "footprint_mode_view_3d",
+        category: "library",
+        label: "Switch footprint editor to 3D View mode",
+    },
+    CommandMetadata {
+        id: "force_annotate_all_schematics",
+        category: "design",
+        label: "Force annotate all schematics",
     },
     CommandMetadata {
         id: "highlight_net_under_cursor",
@@ -592,6 +622,11 @@ pub const COMMAND_METADATA: &[CommandMetadata] = &[
         id: "toggle_selection",
         category: "select",
         label: "Add/remove object from selection",
+    },
+    CommandMetadata {
+        id: "toggle_auto_focus",
+        category: "view",
+        label: "Toggle AutoFocus",
     },
     CommandMetadata {
         id: "toggle_visible_grid",

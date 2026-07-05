@@ -114,7 +114,7 @@ pub struct SchematicCanvas {
     pub paper_width_mm: f32,
     /// Active paper height in mm (world units).
     pub paper_height_mm: f32,
-    /// When true, non-selected items dim on the canvas (F9). Synced
+    /// When true, non-selected items dim on the canvas. Synced
     /// from `ui_state.auto_focus` so the renderer can compute a focus
     /// uuid set without reaching back into app state.
     pub auto_focus: bool,

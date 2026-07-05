@@ -45,6 +45,7 @@ impl Signex {
             | Message::CloseSelectionFilterCustom
             | Message::ToggleSelectionFilterCustomKind(_)
             | Message::ApplySelectionFilterCustom
+            | Message::ToggleSnapHotspots
             | Message::StatusBar(_) => self.dispatch_ui_message(message),
             Message::TextEditChanged(_) | Message::TextEditSubmit => {
                 self.dispatch_text_edit_message(message)

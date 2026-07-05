@@ -23,12 +23,13 @@ impl Signex {
             MenuMessage::Replace => Some(self.update(Message::OpenReplace)),
             MenuMessage::Annotate => Some(self.update(Message::OpenAnnotateDialog)),
             MenuMessage::AnnotateReset => Some(self.update(Message::OpenAnnotateResetConfirm)),
-            // Alt+A shortcut-style: run incremental annotate without opening
-            // the dialog. Matches Altium "Annotate Schematics Quietly".
+            // Quiet annotation runs incremental annotate without opening the
+            // dialog. Default profiles bind this to Alt+A.
             MenuMessage::AnnotateQuietly => {
                 Some(self.update(Message::Annotate(signex_engine::AnnotateMode::Incremental)))
             }
-            // Shift+Alt+A: force reset + renumber without confirm dialog.
+            // Default profiles bind this to Shift+Alt+A: force reset + renumber
+            // without confirm dialog.
             MenuMessage::AnnotateForceAll => Some(self.update(Message::Annotate(
                 signex_engine::AnnotateMode::ResetAndRenumber,
             ))),

@@ -217,28 +217,39 @@ impl CompiledKeymap {
 
         let pending = matches.iter().any(|(pending, ..)| *pending);
         matches.retain(|(pending, ..)| !*pending);
+        let matched = !matches.is_empty();
         matches.sort_by(|(_, depth_a, index_a, _), (_, depth_b, index_b, _)| {
             depth_b.cmp(depth_a).then(index_b.cmp(index_a))
         });
 
         let command = resolve_matched_command(matches);
-        KeyLookup { command, pending }
+        KeyLookup {
+            command,
+            pending,
+            matched,
+        }
     }
 
     pub fn shortcut_label(&self, command: &AppCommandId) -> Option<String> {
-        self.bindings
+        for binding in self
+            .bindings
             .iter()
             .rev()
             .filter(|binding| binding.action.command() == Some(command))
-            .find(|binding| !matches!(binding.action, ShortcutBindingAction::Unbind(_)))
-            .map(|binding| {
-                binding
-                    .sequence
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join(" ")
-            })
+        {
+            return match &binding.action {
+                ShortcutBindingAction::Command(_) => Some(
+                    binding
+                        .sequence
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(" "),
+                ),
+                ShortcutBindingAction::Unbind(_) | ShortcutBindingAction::NoAction => None,
+            };
+        }
+        None
     }
 
     pub fn conflicts(&self) -> Vec<BindingConflict> {
@@ -330,6 +341,7 @@ fn context_depth(context: ShortcutContext, contexts: &[ShortcutContext]) -> Opti
 pub struct KeyLookup {
     pub command: Option<AppCommandId>,
     pub pending: bool,
+    pub matched: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

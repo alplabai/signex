@@ -8,6 +8,7 @@ use iced::widget::{
 };
 use iced::{Background, Border, Color, Element, Length, Point, Rectangle, Renderer, Theme};
 use iced_aw::{NumberInput, Wrap};
+use crate::keymap::{AppCommandId, CompiledKeymap};
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
@@ -378,6 +379,8 @@ pub struct PanelContext {
     pub lib_symbol_names: Vec<String>,
     /// Placed symbols: (reference, value, footprint, lib_id).
     pub placed_symbols: Vec<(String, String, String, String)>,
+    /// Active committed keyboard shortcut profile for panel shortcut labels.
+    pub active_keymap: CompiledKeymap,
     pub tokens: ThemeTokens,
     /// Active theme id. Feeds the icon registry so dock/panel SVGs tint
     /// to the theme's accent (see `crate::icons`).
@@ -531,6 +534,13 @@ pub struct PanelContext {
     /// each refresh; the panel reads it directly without holding a
     /// borrow into the document state.
     pub history: history::HistoryPanelState,
+}
+
+pub(super) fn shortcut_label(ctx: &PanelContext, command_id: &str, fallback: &str) -> String {
+    AppCommandId::new(command_id)
+        .ok()
+        .and_then(|command| ctx.active_keymap.shortcut_label(&command))
+        .unwrap_or_else(|| fallback.to_string())
 }
 
 /// Context handed to the Properties panel when a `.snxfpt` editor
@@ -4267,12 +4277,13 @@ fn shape_fill_row<'a>(
 
 fn view_erc<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let mut col: Column<'a, PanelMsg> = Column::new().spacing(2).padding(6).width(Length::Fill);
+    let run_erc_label = format!("Run ERC ({})", shortcut_label(ctx, "run_erc", "F8"));
     col = col.push(
         row![
             section_title("ERC", &ctx.tokens),
             Space::new().width(Length::Fill).height(Length::Shrink),
             iced::widget::button(
-                text("Run ERC (F8)")
+                text(run_erc_label)
                     .size(11)
                     .color(theme_ext::text_primary(&ctx.tokens)),
             )
