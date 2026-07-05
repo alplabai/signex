@@ -960,6 +960,10 @@ fn build_symbol_editor_panel_ctx(
                 })
             })
             .unwrap_or(SymbolEditorSelection::None),
+        // Box / whole-symbol selections have no single-item Properties
+        // form; the panel shows nothing until one item is picked.
+        Some(sym_state::SymbolSelection::All)
+        | Some(sym_state::SymbolSelection::Multiple { .. }) => SymbolEditorSelection::None,
         None => SymbolEditorSelection::None,
     };
 

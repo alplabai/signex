@@ -35,7 +35,10 @@ use signex_library::{Symbol, SymbolGraphicKind, SymbolPin};
 use super::state::{self, GraphicHandle, SymbolSelection};
 
 /// The actions a [`SymbolCanvas`] can emit upward.
-#[derive(Debug, Clone, Copy)]
+///
+/// No longer `Copy`: `Select` now carries a `SymbolSelection`, which
+/// owns index vectors for box selections.
+#[derive(Debug, Clone)]
 pub enum CanvasAction {
     AddPin {
         x: f64,

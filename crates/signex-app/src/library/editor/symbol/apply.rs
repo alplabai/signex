@@ -179,7 +179,7 @@ pub(crate) fn apply_symbol_primitive_edit(
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::SymbolMoveSelected { x, y } => {
-            let selected = editor.selected;
+            let selected = editor.selected.clone();
             crate::library::editor::symbol::state::move_selected(
                 editor.primitive_mut(),
                 selected,
@@ -202,7 +202,7 @@ pub(crate) fn apply_symbol_primitive_edit(
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::SymbolDeleteSelected => {
-            let selected = editor.selected;
+            let selected = editor.selected.clone();
             if let Some(new_sel) = crate::library::editor::symbol::state::delete_selected(
                 editor.primitive_mut(),
                 selected,
@@ -213,7 +213,7 @@ pub(crate) fn apply_symbol_primitive_edit(
             }
         }
         PrimitiveEditorMsg::SymbolRotateSelected { clockwise } => {
-            let selected = editor.selected;
+            let selected = editor.selected.clone();
             crate::library::editor::symbol::state::rotate_selected(
                 editor.primitive_mut(),
                 selected,

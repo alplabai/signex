@@ -249,7 +249,7 @@ fn view_symbol_canvas<'a>(
     let tokens = &panel_ctx.tokens;
     let program = SymbolCanvas::new(
         editor.primitive(),
-        editor.selected,
+        editor.selected.clone(),
         editor.tool,
         editor.active_part,
         &editor.camera,
@@ -284,7 +284,12 @@ fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> Primitive
         CanvasAction::AddCircle { x, y } => PrimitiveEditorMsg::SymbolAddCircle { x, y },
         CanvasAction::AddArc { x, y } => PrimitiveEditorMsg::SymbolAddArc { x, y },
         CanvasAction::AddText { x, y } => PrimitiveEditorMsg::SymbolAddText { x, y },
-        CanvasAction::Select(sel) => PrimitiveEditorMsg::SymbolSelect(symbol_selection_to_msg(sel)),
+        CanvasAction::Select(sel) => match symbol_selection_to_msg(sel) {
+            Some(m) => PrimitiveEditorMsg::SymbolSelect(m),
+            // Group selections don't round-trip through the single-item
+            // Select message; they arrive via the box-select path.
+            None => PrimitiveEditorMsg::SymbolDeselect,
+        },
         CanvasAction::Deselect => PrimitiveEditorMsg::SymbolDeselect,
         CanvasAction::Move { x, y } => PrimitiveEditorMsg::SymbolMoveSelected { x, y },
         CanvasAction::MoveGraphicHandle { idx, handle, x, y } => {
@@ -315,14 +320,19 @@ fn graphic_handle_to_msg(handle: sym_state::GraphicHandle) -> GraphicHandleMsg {
     }
 }
 
-fn symbol_selection_to_msg(sel: sym_state::SymbolSelection) -> SymbolSelectionMsg {
+/// Convert a single-item canvas selection into its Properties-panel
+/// message. Returns `None` for group selections (`All` / `Multiple`),
+/// which are delivered through the dedicated box-select path rather
+/// than the single-item `Select` action.
+fn symbol_selection_to_msg(sel: sym_state::SymbolSelection) -> Option<SymbolSelectionMsg> {
     use sym_state::{FieldKey, SymbolSelection};
-    match sel {
+    Some(match sel {
         SymbolSelection::Pin(idx) => SymbolSelectionMsg::Pin(idx),
         SymbolSelection::Field(FieldKey::Reference) => SymbolSelectionMsg::FieldReference,
         SymbolSelection::Field(FieldKey::Value) => SymbolSelectionMsg::FieldValue,
         SymbolSelection::Graphic(idx) => SymbolSelectionMsg::Graphic(idx),
-    }
+        SymbolSelection::All | SymbolSelection::Multiple { .. } => return None,
+    })
 }
 
 // ── Footprint ───────────────────────────────────────────────────────

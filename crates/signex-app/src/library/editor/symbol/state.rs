@@ -44,7 +44,11 @@ pub enum FieldKey {
 
 /// Selected element on the Symbol canvas — drives delete + drag and
 /// the right-dock Properties panel.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+///
+/// No longer `Copy`: the `Multiple` variant carries owned index
+/// vectors from a rubber-band box selection. Callers that used to copy
+/// `editor.selected` now `.clone()` it.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SymbolSelection {
     Pin(usize),
     Field(FieldKey),
@@ -53,6 +57,33 @@ pub enum SymbolSelection {
     /// canvas hit-test on Select-tool clicks that miss every pin and
     /// every graphic resize handle but land inside a graphic body.
     Graphic(usize),
+    /// Every pin and graphic selected together (box that encloses the
+    /// whole symbol). Drag moves the whole body as a unit; rotate and
+    /// delete are no-ops so a stray key press can't wipe the symbol.
+    /// Salvaged from `feature/v0.13-symbol`.
+    All,
+    /// A specific subset of pins and graphics from a rubber-band box
+    /// selection. Drag moves the group; delete removes only the
+    /// selected items; rotate is a no-op (matches `All`). Salvaged
+    /// from `feature/v0.13-symbol`.
+    Multiple {
+        pin_indices: Vec<usize>,
+        graphic_indices: Vec<usize>,
+    },
+}
+
+/// Box-selection mode, chosen by the caller from the drag direction.
+///
+/// * `Window` — select items **fully contained** in the box
+///   (left-to-right drag; conventionally a solid/blue outline).
+/// * `Crossing` — select items that **touch or cross** the box
+///   (right-to-left drag; conventionally a dashed/green outline).
+///
+/// Salvaged from `feature/v0.13-symbol`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BoxSelectKind {
+    Window,
+    Crossing,
 }
 
 /// Resize-handle identity for a placed [`SymbolGraphic`]. Each
@@ -260,7 +291,12 @@ pub fn move_selected(sym: &mut Symbol, sel: Option<SymbolSelection>, x: f64, y: 
         // SymbolSelection::Field — no-op; the on-canvas designator /
         // value drag re-binds against `ComponentRow` once that pipeline
         // ships.
-        Some(SymbolSelection::Field(_)) | None => {}
+        // All / Multiple — group drag is delta-based (move_all /
+        // move_multiple), not absolute, so no-op here.
+        Some(SymbolSelection::Field(_))
+        | Some(SymbolSelection::All)
+        | Some(SymbolSelection::Multiple { .. })
+        | None => {}
     }
 }
 
@@ -301,6 +337,63 @@ fn translate_graphic_to(sym: &mut Symbol, idx: usize, x: f64, y: f64) {
     }
 }
 
+/// Translate a graphic by `(dx, dy)` mm (delta, not absolute). Used by
+/// the group-move paths (`move_all` / `move_multiple`). Salvaged from
+/// `feature/v0.13-symbol`.
+pub fn translate_graphic_by(kind: &mut SymbolGraphicKind, dx: f64, dy: f64) {
+    match kind {
+        SymbolGraphicKind::Rectangle { from, to } | SymbolGraphicKind::Line { from, to } => {
+            from[0] += dx;
+            from[1] += dy;
+            to[0] += dx;
+            to[1] += dy;
+        }
+        SymbolGraphicKind::Circle { center, .. } | SymbolGraphicKind::Arc { center, .. } => {
+            center[0] += dx;
+            center[1] += dy;
+        }
+        SymbolGraphicKind::Text { position, .. } => {
+            position[0] += dx;
+            position[1] += dy;
+        }
+    }
+}
+
+/// Shift every pin and graphic by `(dx, dy)` mm — the drag path for
+/// `SymbolSelection::All`. Salvaged from `feature/v0.13-symbol`.
+pub fn move_all(sym: &mut Symbol, dx: f64, dy: f64) {
+    for pin in &mut sym.pins {
+        pin.position[0] += dx;
+        pin.position[1] += dy;
+    }
+    for g in &mut sym.graphics {
+        translate_graphic_by(&mut g.kind, dx, dy);
+    }
+}
+
+/// Shift only the listed pins and graphics by `(dx, dy)` mm — the drag
+/// path for `SymbolSelection::Multiple`. Out-of-range indices are
+/// silently skipped. Salvaged from `feature/v0.13-symbol`.
+pub fn move_multiple(
+    sym: &mut Symbol,
+    pin_indices: &[usize],
+    graphic_indices: &[usize],
+    dx: f64,
+    dy: f64,
+) {
+    for &i in pin_indices {
+        if let Some(pin) = sym.pins.get_mut(i) {
+            pin.position[0] += dx;
+            pin.position[1] += dy;
+        }
+    }
+    for &i in graphic_indices {
+        if let Some(g) = sym.graphics.get_mut(i) {
+            translate_graphic_by(&mut g.kind, dx, dy);
+        }
+    }
+}
+
 /// Delete whatever is currently selected. Returns `Some(new_sel)` if
 /// the caller should update its selection (typically `None` after a
 /// pin removal), or `None` if no selection change is needed.
@@ -326,6 +419,31 @@ pub fn delete_selected(
             }
         }
         Some(SymbolSelection::Field(_)) => None,
+        // Guard the whole-symbol selection: a stray Delete must not
+        // wipe every primitive.
+        Some(SymbolSelection::All) => None,
+        Some(SymbolSelection::Multiple {
+            pin_indices,
+            graphic_indices,
+        }) => {
+            // Remove in descending index order so earlier removals
+            // don't shift the indices of the ones still to delete.
+            let mut pins_desc = pin_indices;
+            pins_desc.sort_unstable_by(|a, b| b.cmp(a));
+            for idx in pins_desc {
+                if idx < sym.pins.len() {
+                    sym.pins.remove(idx);
+                }
+            }
+            let mut gfx_desc = graphic_indices;
+            gfx_desc.sort_unstable_by(|a, b| b.cmp(a));
+            for idx in gfx_desc {
+                if idx < sym.graphics.len() {
+                    sym.graphics.remove(idx);
+                }
+            }
+            Some(None)
+        }
         None => None,
     }
 }
@@ -646,7 +764,13 @@ pub fn rotate_selected(sym: &mut Symbol, sel: Option<SymbolSelection>, clockwise
             }
         }
         Some(SymbolSelection::Graphic(idx)) => rotate_graphic_90(sym, idx, clockwise),
-        Some(SymbolSelection::Field(_)) | None => {}
+        // Rotating a group would need a shared pivot + per-item
+        // re-place; v0.13 treats All / Multiple rotate as a no-op, and
+        // so do we until group-rotate is designed.
+        Some(SymbolSelection::Field(_))
+        | Some(SymbolSelection::All)
+        | Some(SymbolSelection::Multiple { .. })
+        | None => {}
     }
 }
 
@@ -729,6 +853,184 @@ fn rotate_pin_orientation_90(o: PinOrientation, clockwise: bool) -> PinOrientati
 fn snap_axis_value(v: f64) -> f64 {
     let r = v.round();
     if (v - r).abs() < 1e-9 { r } else { v }
+}
+
+// ── Rubber-band box selection (salvaged from feature/v0.13-symbol) ────
+
+/// Rubber-band box selection over all symbol primitives. The caller
+/// picks `kind` from the drag direction. Returns:
+/// * `None` — nothing inside the box,
+/// * `Some(All)` — every pin and graphic fell in,
+/// * `Some(Multiple { .. })` — a proper subset.
+///
+/// `Window` matches pins by tip position and graphics fully contained;
+/// `Crossing` matches pins whose body segment touches the box and
+/// graphics whose bounding extent overlaps it.
+pub fn select_in_box(
+    sym: &Symbol,
+    x0: f64,
+    y0: f64,
+    x1: f64,
+    y1: f64,
+    kind: BoxSelectKind,
+) -> Option<SymbolSelection> {
+    let xmin = x0.min(x1);
+    let xmax = x0.max(x1);
+    let ymin = y0.min(y1);
+    let ymax = y0.max(y1);
+
+    let mut pin_indices = Vec::new();
+    for (i, pin) in sym.pins.iter().enumerate() {
+        let hit = match kind {
+            BoxSelectKind::Window => {
+                point_in_box(pin.position[0], pin.position[1], xmin, xmax, ymin, ymax)
+            }
+            BoxSelectKind::Crossing => {
+                let (bdx, bdy) = pin_body_delta(pin);
+                let bx = pin.position[0] + bdx;
+                let by = pin.position[1] + bdy;
+                point_in_box(pin.position[0], pin.position[1], xmin, xmax, ymin, ymax)
+                    || point_in_box(bx, by, xmin, xmax, ymin, ymax)
+                    || segment_crosses_box(
+                        [pin.position[0], pin.position[1]],
+                        [bx, by],
+                        xmin,
+                        xmax,
+                        ymin,
+                        ymax,
+                    )
+            }
+        };
+        if hit {
+            pin_indices.push(i);
+        }
+    }
+
+    let mut graphic_indices = Vec::new();
+    for (i, g) in sym.graphics.iter().enumerate() {
+        let hit = match kind {
+            BoxSelectKind::Window => graphic_fully_inside_box(&g.kind, xmin, xmax, ymin, ymax),
+            BoxSelectKind::Crossing => graphic_intersects_box(&g.kind, xmin, xmax, ymin, ymax),
+        };
+        if hit {
+            graphic_indices.push(i);
+        }
+    }
+
+    if pin_indices.is_empty() && graphic_indices.is_empty() {
+        return None;
+    }
+    if pin_indices.len() == sym.pins.len() && graphic_indices.len() == sym.graphics.len() {
+        return Some(SymbolSelection::All);
+    }
+    Some(SymbolSelection::Multiple {
+        pin_indices,
+        graphic_indices,
+    })
+}
+
+fn point_in_box(x: f64, y: f64, xmin: f64, xmax: f64, ymin: f64, ymax: f64) -> bool {
+    x >= xmin && x <= xmax && y >= ymin && y <= ymax
+}
+
+/// True when the graphic's full extent lies inside the box (Window).
+fn graphic_fully_inside_box(
+    kind: &SymbolGraphicKind,
+    xmin: f64,
+    xmax: f64,
+    ymin: f64,
+    ymax: f64,
+) -> bool {
+    match kind {
+        SymbolGraphicKind::Rectangle { from, to } | SymbolGraphicKind::Line { from, to } => {
+            let (gx0, gx1) = (from[0].min(to[0]), from[0].max(to[0]));
+            let (gy0, gy1) = (from[1].min(to[1]), from[1].max(to[1]));
+            gx0 >= xmin && gx1 <= xmax && gy0 >= ymin && gy1 <= ymax
+        }
+        SymbolGraphicKind::Circle { center, radius }
+        | SymbolGraphicKind::Arc { center, radius, .. } => {
+            center[0] - radius >= xmin
+                && center[0] + radius <= xmax
+                && center[1] - radius >= ymin
+                && center[1] + radius <= ymax
+        }
+        SymbolGraphicKind::Text { position, size, .. } => {
+            let h = size * 0.5;
+            position[0] - h >= xmin
+                && position[0] + h <= xmax
+                && position[1] - h >= ymin
+                && position[1] + h <= ymax
+        }
+    }
+}
+
+/// True when the graphic's bounding extent overlaps the box (Crossing).
+fn graphic_intersects_box(
+    kind: &SymbolGraphicKind,
+    xmin: f64,
+    xmax: f64,
+    ymin: f64,
+    ymax: f64,
+) -> bool {
+    match kind {
+        SymbolGraphicKind::Rectangle { from, to } | SymbolGraphicKind::Line { from, to } => {
+            let (gx0, gx1) = (from[0].min(to[0]), from[0].max(to[0]));
+            let (gy0, gy1) = (from[1].min(to[1]), from[1].max(to[1]));
+            gx0 <= xmax && gx1 >= xmin && gy0 <= ymax && gy1 >= ymin
+        }
+        SymbolGraphicKind::Circle { center, radius }
+        | SymbolGraphicKind::Arc { center, radius, .. } => {
+            let (cx, cy, r) = (center[0], center[1], *radius);
+            cx - r <= xmax && cx + r >= xmin && cy - r <= ymax && cy + r >= ymin
+        }
+        SymbolGraphicKind::Text { position, size, .. } => {
+            let h = size * 0.5;
+            position[0] - h <= xmax
+                && position[0] + h >= xmin
+                && position[1] - h <= ymax
+                && position[1] + h >= ymin
+        }
+    }
+}
+
+/// True when segment `a-b` has any point inside the box or crosses one
+/// of its four edges.
+fn segment_crosses_box(
+    a: [f64; 2],
+    b: [f64; 2],
+    xmin: f64,
+    xmax: f64,
+    ymin: f64,
+    ymax: f64,
+) -> bool {
+    if point_in_box(a[0], a[1], xmin, xmax, ymin, ymax)
+        || point_in_box(b[0], b[1], xmin, xmax, ymin, ymax)
+    {
+        return true;
+    }
+    let box_edges: [([f64; 2], [f64; 2]); 4] = [
+        ([xmin, ymin], [xmax, ymin]),
+        ([xmax, ymin], [xmax, ymax]),
+        ([xmax, ymax], [xmin, ymax]),
+        ([xmin, ymax], [xmin, ymin]),
+    ];
+    box_edges
+        .iter()
+        .any(|(p, q)| segments_intersect(a, b, *p, *q))
+}
+
+/// Proper-crossing test for segments `a-b` and `c-d` (endpoints on a
+/// segment don't count — good enough for rubber-band hit-testing).
+fn segments_intersect(a: [f64; 2], b: [f64; 2], c: [f64; 2], d: [f64; 2]) -> bool {
+    let cross2d = |o: [f64; 2], p: [f64; 2], q: [f64; 2]| -> f64 {
+        (p[0] - o[0]) * (q[1] - o[1]) - (p[1] - o[1]) * (q[0] - o[0])
+    };
+    let d1 = cross2d(c, d, a);
+    let d2 = cross2d(c, d, b);
+    let d3 = cross2d(a, b, c);
+    let d4 = cross2d(a, b, d);
+    ((d1 > 0.0 && d2 < 0.0) || (d1 < 0.0 && d2 > 0.0))
+        && ((d3 > 0.0 && d4 < 0.0) || (d3 < 0.0 && d4 > 0.0))
 }
 
 #[cfg(test)]
@@ -1038,5 +1340,186 @@ mod tests {
             }
             _ => panic!("expected Rectangle"),
         }
+    }
+
+    // ── box selection + group move (salvaged from v0.13-symbol) ───────
+
+    /// Empty symbol with the default pin/graphics cleared, so box tests
+    /// see only the geometry they add.
+    fn box_test_symbol() -> Symbol {
+        let mut s = Symbol::empty("test");
+        s.pins.clear();
+        s.graphics.clear();
+        s
+    }
+
+    fn rect(from: [f64; 2], to: [f64; 2]) -> signex_library::SymbolGraphic {
+        signex_library::SymbolGraphic {
+            kind: SymbolGraphicKind::Rectangle { from, to },
+            stroke_width: 0.15,
+        }
+    }
+
+    #[test]
+    fn point_in_box_boundaries_are_inclusive() {
+        assert!(point_in_box(0.0, 0.0, 0.0, 10.0, 0.0, 10.0));
+        assert!(point_in_box(10.0, 10.0, 0.0, 10.0, 0.0, 10.0));
+        assert!(!point_in_box(10.1, 5.0, 0.0, 10.0, 0.0, 10.0));
+    }
+
+    #[test]
+    fn window_select_takes_only_fully_contained_graphics() {
+        let mut s = box_test_symbol();
+        s.graphics.push(rect([2.0, 2.0], [4.0, 4.0])); // idx 0 — fully inside
+        s.graphics.push(rect([8.0, 8.0], [12.0, 12.0])); // idx 1 — straddles edge
+        match select_in_box(&s, 0.0, 0.0, 10.0, 10.0, BoxSelectKind::Window) {
+            Some(SymbolSelection::Multiple {
+                pin_indices,
+                graphic_indices,
+            }) => {
+                assert!(pin_indices.is_empty());
+                assert_eq!(graphic_indices, vec![0]);
+            }
+            other => panic!("expected Multiple, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn crossing_select_takes_touching_graphics() {
+        let mut s = box_test_symbol();
+        s.graphics.push(rect([2.0, 2.0], [4.0, 4.0])); // inside
+        s.graphics.push(rect([8.0, 8.0], [12.0, 12.0])); // straddles
+        s.graphics.push(rect([20.0, 20.0], [22.0, 22.0])); // outside
+        match select_in_box(&s, 0.0, 0.0, 10.0, 10.0, BoxSelectKind::Crossing) {
+            Some(SymbolSelection::Multiple {
+                graphic_indices, ..
+            }) => {
+                assert_eq!(graphic_indices, vec![0, 1]);
+            }
+            other => panic!("expected Multiple, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn select_in_box_returns_all_when_everything_enclosed() {
+        let mut s = box_test_symbol();
+        s.graphics.push(rect([1.0, 1.0], [2.0, 2.0]));
+        add_pin(&mut s, 3.0, 3.0, 1); // tip inside the box
+        assert_eq!(
+            select_in_box(&s, 0.0, 0.0, 10.0, 10.0, BoxSelectKind::Window),
+            Some(SymbolSelection::All)
+        );
+    }
+
+    #[test]
+    fn select_in_box_returns_none_when_nothing_hit() {
+        let mut s = box_test_symbol();
+        s.graphics.push(rect([20.0, 20.0], [22.0, 22.0]));
+        assert_eq!(
+            select_in_box(&s, 0.0, 0.0, 10.0, 10.0, BoxSelectKind::Window),
+            None
+        );
+    }
+
+    #[test]
+    fn crossing_select_catches_pin_whose_body_reaches_in() {
+        let mut s = box_test_symbol();
+        // Tip at (12,5) is outside the (0,0)-(10,10) box, but the pin
+        // points Left with length 4, so its body-end (8,5) is inside.
+        let idx = add_pin(&mut s, 12.0, 5.0, 1);
+        s.pins[idx].orientation = PinOrientation::Left;
+        s.pins[idx].length = 4.0;
+        // A far-away graphic keeps this a proper subset (→ Multiple,
+        // not All) and stays unselected in both modes.
+        s.graphics.push(rect([50.0, 50.0], [52.0, 52.0]));
+        // Window keys off the tip only → the pin misses; nothing hit.
+        assert_eq!(
+            select_in_box(&s, 0.0, 0.0, 10.0, 10.0, BoxSelectKind::Window),
+            None
+        );
+        // Crossing follows the body segment → the pin (only) is hit.
+        match select_in_box(&s, 0.0, 0.0, 10.0, 10.0, BoxSelectKind::Crossing) {
+            Some(SymbolSelection::Multiple {
+                pin_indices,
+                graphic_indices,
+            }) => {
+                assert_eq!(pin_indices, vec![0]);
+                assert!(graphic_indices.is_empty());
+            }
+            other => panic!("expected Multiple, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn move_all_shifts_every_primitive() {
+        let mut s = box_test_symbol();
+        s.graphics.push(rect([0.0, 0.0], [2.0, 2.0]));
+        let idx = add_pin(&mut s, 5.0, 5.0, 1);
+        move_all(&mut s, 1.0, -2.0);
+        assert_eq!(s.pins[idx].position, [6.0, 3.0]);
+        match &s.graphics[0].kind {
+            SymbolGraphicKind::Rectangle { from, to } => {
+                assert_eq!(*from, [1.0, -2.0]);
+                assert_eq!(*to, [3.0, 0.0]);
+            }
+            _ => panic!("expected Rectangle"),
+        }
+    }
+
+    #[test]
+    fn move_multiple_shifts_only_listed_items() {
+        let mut s = box_test_symbol();
+        s.graphics.push(rect([0.0, 0.0], [2.0, 2.0])); // idx 0 — moved
+        s.graphics.push(rect([10.0, 10.0], [12.0, 12.0])); // idx 1 — untouched
+        let p0 = add_pin(&mut s, 5.0, 5.0, 1);
+        let p1 = add_pin(&mut s, 8.0, 8.0, 1);
+        move_multiple(&mut s, &[p0], &[0], 1.0, 1.0);
+        assert_eq!(s.pins[p0].position, [6.0, 6.0]);
+        assert_eq!(s.pins[p1].position, [8.0, 8.0]);
+        match &s.graphics[0].kind {
+            SymbolGraphicKind::Rectangle { from, .. } => assert_eq!(*from, [1.0, 1.0]),
+            _ => panic!("expected Rectangle"),
+        }
+        match &s.graphics[1].kind {
+            SymbolGraphicKind::Rectangle { from, .. } => assert_eq!(*from, [10.0, 10.0]),
+            _ => panic!("expected Rectangle"),
+        }
+    }
+
+    #[test]
+    fn delete_multiple_removes_in_reverse_safely() {
+        let mut s = box_test_symbol();
+        for i in 0..4 {
+            s.graphics.push(rect([i as f64, 0.0], [i as f64 + 0.5, 1.0]));
+        }
+        let new = delete_selected(
+            &mut s,
+            Some(SymbolSelection::Multiple {
+                pin_indices: vec![],
+                graphic_indices: vec![1, 3],
+            }),
+        );
+        assert_eq!(new, Some(None));
+        assert_eq!(s.graphics.len(), 2);
+        // The survivors are the original graphics 0 and 2.
+        let xs: Vec<f64> = s
+            .graphics
+            .iter()
+            .map(|g| match &g.kind {
+                SymbolGraphicKind::Rectangle { from, .. } => from[0],
+                _ => panic!("expected Rectangle"),
+            })
+            .collect();
+        assert_eq!(xs, vec![0.0, 2.0]);
+    }
+
+    #[test]
+    fn delete_all_selection_is_a_noop() {
+        let mut s = box_test_symbol();
+        s.graphics.push(rect([0.0, 0.0], [1.0, 1.0]));
+        add_pin(&mut s, 5.0, 5.0, 1);
+        assert_eq!(delete_selected(&mut s, Some(SymbolSelection::All)), None);
+        assert_eq!(s.graphics.len(), 1);
+        assert_eq!(s.pins.len(), 1);
     }
 }
