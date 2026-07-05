@@ -44,6 +44,13 @@ pub struct UiState {
     /// semantics — mutated as the user edits, copied back into
     /// `component_classes` + persisted on Save.
     pub preferences_draft_component_classes: Vec<crate::fonts::ComponentClassEntry>,
+    /// Draft keyboard shortcut profile editor shown in Preferences.
+    /// Profile edits stay local here until the keymap persistence worker
+    /// owns import/export/save integration.
+    pub keymap_profiles: crate::keymap::ShortcutProfileSet,
+    pub active_keymap: crate::keymap::CompiledKeymap,
+    pub preferences_keymap_editor: crate::keymap::KeymapEditorModel,
+    pub preferences_keymap_status: String,
     pub canvas_font_name: String,
     pub canvas_font_size: f32,
     pub canvas_font_bold: bool,

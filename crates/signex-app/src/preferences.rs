@@ -4,11 +4,11 @@
 //! Left side: tree of settings categories.
 //! Right side: settings panel for the selected category.
 
+use crate::render_config::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
 use iced::widget::{
     Column, Space, button, column, container, row, scrollable, svg, text, text_input,
 };
 use iced::{Background, Border, Color, Element, Length, Theme};
-use crate::render_config::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
 use signex_types::theme::ThemeId;
 
 use crate::app::view::dialogs::{
@@ -27,6 +27,7 @@ pub enum PrefNav {
     Erc,
     /// v0.9 Library settings — Distributor APIs, lifecycle defaults.
     LibraryDistributors,
+    KeyboardShortcuts,
     /// User-editable component-class registry — surfaces in the New
     /// Component / Edit Component class dropdowns. Backed by
     /// `prefs.json::component_classes`; defaults seed from
@@ -40,6 +41,7 @@ impl PrefNav {
         PrefNav::Appearance,
         PrefNav::Erc,
         PrefNav::LibraryDistributors,
+        PrefNav::KeyboardShortcuts,
         PrefNav::ComponentClasses,
     ];
 
@@ -48,6 +50,7 @@ impl PrefNav {
             PrefNav::Appearance => "Appearance",
             PrefNav::Erc => "Electrical Rules",
             PrefNav::LibraryDistributors => "Distributor APIs",
+            PrefNav::KeyboardShortcuts => "Keyboard Shortcuts",
             // Now a *seed* pane — the actual class registry is
             // per-library inside each `.snxlib`'s manifest. This
             // list is what every newly-created library gets seeded
@@ -60,6 +63,7 @@ impl PrefNav {
     pub fn group(self) -> &'static str {
         match self {
             PrefNav::Appearance => "System",
+            PrefNav::KeyboardShortcuts => "System",
             PrefNav::Erc => "Validation",
             PrefNav::LibraryDistributors => "Library",
             PrefNav::ComponentClasses => "Library",
@@ -127,6 +131,12 @@ pub enum PrefMsg {
     },
     /// Reset the draft list to the seed defaults (`DEFAULT_COMPONENT_CLASSES`).
     ComponentClassResetDefaults,
+    KeymapProfileSelected(String),
+    KeymapCreateCustomProfile,
+    KeymapDeleteActiveProfile,
+    KeymapImportProfile,
+    KeymapProfileLoaded(String),
+    KeymapExportProfile,
 }
 
 // ─── Dialog sizes ─────────────────────────────────────────────
@@ -179,6 +189,8 @@ pub fn view<'a>(
     distributor_settings: &'a crate::library::state::DistributorSettings,
     panel_tokens: &'a signex_types::theme::ThemeTokens,
     draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
+    keymap_editor: &'a crate::keymap::KeymapEditorModel,
+    keymap_status: &'a str,
     theme_id: ThemeId,
 ) -> Element<'a, PrefMsg> {
     let dialog = build_dialog(
@@ -196,6 +208,8 @@ pub fn view<'a>(
         distributor_settings,
         panel_tokens,
         draft_component_classes,
+        keymap_editor,
+        keymap_status,
         theme_id,
     );
 
@@ -243,6 +257,8 @@ pub(crate) fn view_body<'a>(
     distributor_settings: &'a crate::library::state::DistributorSettings,
     panel_tokens: &'a signex_types::theme::ThemeTokens,
     draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
+    keymap_editor: &'a crate::keymap::KeymapEditorModel,
+    keymap_status: &'a str,
     theme_id: ThemeId,
 ) -> Element<'a, PrefMsg> {
     build_dialog(
@@ -260,6 +276,8 @@ pub(crate) fn view_body<'a>(
         distributor_settings,
         panel_tokens,
         draft_component_classes,
+        keymap_editor,
+        keymap_status,
         theme_id,
     )
 }
@@ -280,6 +298,8 @@ fn build_dialog<'a>(
     distributor_settings: &'a crate::library::state::DistributorSettings,
     panel_tokens: &'a signex_types::theme::ThemeTokens,
     draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
+    keymap_editor: &'a crate::keymap::KeymapEditorModel,
+    keymap_status: &'a str,
     theme_id: ThemeId,
 ) -> Element<'a, PrefMsg> {
     // ── Header ── canonical modal chrome (28px, asymmetric padding,
@@ -335,6 +355,8 @@ fn build_dialog<'a>(
             distributor_settings,
             panel_tokens,
             draft_component_classes,
+            keymap_editor,
+            keymap_status,
         ),
     ]
     .width(Length::Fill)
@@ -461,12 +483,14 @@ fn build_content<'a>(
     draft_power_port_style: PowerPortStyle,
     draft_label_style: LabelStyle,
     draft_multisheet_style: MultisheetStyle,
-    draft_grid_style: GridStyle,
+    _draft_grid_style: GridStyle,
     custom_name: Option<&'a str>,
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
     distributor_settings: &'a crate::library::state::DistributorSettings,
     panel_tokens: &'a signex_types::theme::ThemeTokens,
     draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
+    keymap_editor: &'a crate::keymap::KeymapEditorModel,
+    keymap_status: &'a str,
 ) -> Element<'a, PrefMsg> {
     let inner = match nav {
         PrefNav::Appearance => content_appearance(
@@ -491,6 +515,7 @@ fn build_content<'a>(
         PrefNav::LibraryDistributors => {
             content_library_distributors(distributor_settings, panel_tokens)
         }
+        PrefNav::KeyboardShortcuts => content_keyboard_shortcuts(keymap_editor, keymap_status),
         PrefNav::ComponentClasses => content_component_classes(draft_component_classes),
     };
 
@@ -1185,6 +1210,267 @@ fn severity_bg(sev: signex_erc::Severity) -> Color {
         signex_erc::Severity::Warning => Color::from_rgb(0.55, 0.45, 0.12),
         signex_erc::Severity::Info => Color::from_rgb(0.20, 0.36, 0.58),
         signex_erc::Severity::Off => Color::from_rgb(0.28, 0.28, 0.32),
+    }
+}
+
+// ─── Keyboard Shortcuts editor ────────────────────────────────
+
+fn content_keyboard_shortcuts<'a>(
+    editor: &'a crate::keymap::KeymapEditorModel,
+    status: &'a str,
+) -> Element<'a, PrefMsg> {
+    let profiles = editor.profiles();
+    let active = profiles.iter().find(|profile| profile.active);
+    let active_option = active.map(KeymapProfileOption::from);
+    let active_is_custom = active
+        .map(|profile| profile.kind == crate::keymap::ShortcutProfileKind::Custom)
+        .unwrap_or(false);
+    let active_summary = active
+        .map(|profile| format!("{} bindings", profile.binding_count))
+        .unwrap_or_else(|| "No active profile".to_string());
+
+    let profile_options: Vec<KeymapProfileOption> =
+        profiles.iter().map(KeymapProfileOption::from).collect();
+
+    let delete_button = {
+        let base = button(container(text("Delete").size(11).color(Color::WHITE)).padding([5, 12]))
+            .style(move |_: &Theme, status: button::Status| {
+                let bg = match status {
+                    button::Status::Hovered | button::Status::Pressed => BTN_DANGER_HOV,
+                    _ => BTN_DANGER,
+                };
+                button::Style {
+                    background: Some(Background::Color(bg)),
+                    text_color: Color::WHITE,
+                    border: Border {
+                        radius: 3.0.into(),
+                        ..Border::default()
+                    },
+                    ..button::Style::default()
+                }
+            });
+        if active_is_custom {
+            base.on_press(PrefMsg::KeymapDeleteActiveProfile)
+        } else {
+            base
+        }
+    };
+
+    let header = column![
+        text("Keyboard Shortcuts").size(15).color(TEXT_PRI),
+        text("Configure keyboard shortcut profiles. Command names and categories come from Signex command metadata.")
+            .size(11)
+            .color(TEXT_MUT),
+    ]
+    .spacing(6);
+
+    let profile_row = row![
+        column![
+            text("Profile").size(12).color(TEXT_PRI),
+            text(active_summary).size(10).color(TEXT_MUT),
+        ]
+        .spacing(3)
+        .width(160),
+        iced::widget::pick_list(profile_options, active_option, |profile| {
+            PrefMsg::KeymapProfileSelected(profile.id)
+        })
+        .text_size(12)
+        .width(180),
+        button(container(text("Create").size(11).color(Color::WHITE)).padding([5, 12]))
+            .on_press(PrefMsg::KeymapCreateCustomProfile)
+            .style(move |_: &Theme, status: button::Status| {
+                let bg = match status {
+                    button::Status::Hovered | button::Status::Pressed => BTN_IMPORT_HOV,
+                    _ => BTN_IMPORT,
+                };
+                button::Style {
+                    background: Some(Background::Color(bg)),
+                    text_color: Color::WHITE,
+                    border: Border {
+                        radius: 3.0.into(),
+                        ..Border::default()
+                    },
+                    ..button::Style::default()
+                }
+            }),
+        delete_button,
+        button(container(text("Import").size(11).color(TEXT_PRI)).padding([5, 12]))
+            .on_press(PrefMsg::KeymapImportProfile)
+            .style(secondary_button_style),
+        button(container(text("Export").size(11).color(TEXT_PRI)).padding([5, 12]))
+            .on_press(PrefMsg::KeymapExportProfile)
+            .style(secondary_button_style),
+        Space::new().width(Length::Fill),
+    ]
+    .spacing(8)
+    .align_y(iced::Alignment::Center);
+
+    let conflicts = editor.active_conflicts();
+    let conflict_count = conflicts.len();
+    let status_line = if !status.is_empty() {
+        status.to_string()
+    } else if conflict_count == 1 {
+        "1 conflict in active profile".to_string()
+    } else if conflict_count > 1 {
+        format!("{conflict_count} conflicts in active profile")
+    } else {
+        "No conflicts detected in active keyboard shortcuts.".to_string()
+    };
+
+    let table_header = row![
+        container(text("Category").size(11).color(TEXT_MUT)).width(Length::FillPortion(2)),
+        container(text("Command").size(11).color(TEXT_MUT)).width(Length::FillPortion(4)),
+        container(text("Context").size(11).color(TEXT_MUT)).width(Length::FillPortion(2)),
+        container(text("Shortcut").size(11).color(TEXT_MUT)).width(Length::FillPortion(2)),
+        container(text("State").size(11).color(TEXT_MUT)).width(Length::FillPortion(2)),
+    ]
+    .spacing(8)
+    .padding([4, 0]);
+
+    let rows = editor.rows();
+    let mut table_rows: Vec<Element<'a, PrefMsg>> = Vec::with_capacity(rows.len());
+    for row_model in rows {
+        let has_conflict = conflicts.iter().any(|conflict| {
+            conflict.context == row_model.context
+                && conflict.trigger == row_model.trigger
+                && row_model.command.as_ref().is_some_and(|command| {
+                    command == &conflict.first_command || command == &conflict.second_command
+                })
+        });
+        let state = if has_conflict {
+            "Conflict"
+        } else if row_model.trigger.trim().is_empty() {
+            "Unbound"
+        } else if row_model.keyboard_editable {
+            "Editable"
+        } else {
+            "Gesture"
+        };
+        let state_color = if has_conflict {
+            WARN_YELLOW
+        } else if row_model.trigger.trim().is_empty() {
+            TEXT_MUT
+        } else {
+            TEXT_PRI
+        };
+
+        table_rows.push(
+            row![
+                container(
+                    text(title_case(&row_model.category))
+                        .size(11)
+                        .color(TEXT_MUT)
+                )
+                .width(Length::FillPortion(2)),
+                container(text(row_model.label).size(11).color(TEXT_PRI))
+                    .width(Length::FillPortion(4)),
+                container(
+                    text(context_label(row_model.context))
+                        .size(11)
+                        .color(TEXT_MUT)
+                )
+                .width(Length::FillPortion(2)),
+                container(text(row_model.trigger).size(11).color(TEXT_PRI))
+                    .width(Length::FillPortion(2)),
+                container(text(state).size(11).color(state_color)).width(Length::FillPortion(2)),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center)
+            .padding([5, 0])
+            .into(),
+        );
+    }
+
+    let table: Element<'a, PrefMsg> = if table_rows.is_empty() {
+        text("No shortcuts are defined in the active profile.")
+            .size(11)
+            .color(TEXT_MUT)
+            .into()
+    } else {
+        Column::with_children(table_rows).spacing(2).into()
+    };
+
+    column![
+        header,
+        profile_row,
+        text(status_line).size(10).color(TEXT_MUT),
+        h_sep(),
+        table_header,
+        table,
+    ]
+    .spacing(10)
+    .padding(20)
+    .into()
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct KeymapProfileOption {
+    id: String,
+    label: String,
+}
+
+impl From<&crate::keymap::KeymapEditorProfile> for KeymapProfileOption {
+    fn from(profile: &crate::keymap::KeymapEditorProfile) -> Self {
+        let kind = match profile.kind {
+            crate::keymap::ShortcutProfileKind::BuiltIn => "built-in",
+            crate::keymap::ShortcutProfileKind::Custom => "custom",
+        };
+        Self {
+            id: profile.id.clone(),
+            label: format!("{} ({kind})", profile.name),
+        }
+    }
+}
+
+impl std::fmt::Display for KeymapProfileOption {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.label)
+    }
+}
+
+fn context_label(context: crate::keymap::ShortcutContext) -> &'static str {
+    match context {
+        crate::keymap::ShortcutContext::Global => "Global",
+        crate::keymap::ShortcutContext::Schematic => "Schematic",
+        crate::keymap::ShortcutContext::Footprint => "Footprint",
+        crate::keymap::ShortcutContext::Pcb => "PCB",
+        crate::keymap::ShortcutContext::Library => "Library",
+        crate::keymap::ShortcutContext::Modal => "Modal",
+        crate::keymap::ShortcutContext::TextInput => "Text Input",
+        crate::keymap::ShortcutContext::CommandPalette => "Command Palette",
+        crate::keymap::ShortcutContext::Placement => "Placement",
+    }
+}
+
+fn title_case(value: &str) -> String {
+    value
+        .split(['_', '-', ' '])
+        .filter(|part| !part.is_empty())
+        .map(|part| {
+            let mut chars = part.chars();
+            match chars.next() {
+                Some(first) => format!("{}{}", first.to_uppercase(), chars.as_str()),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn secondary_button_style(_: &Theme, status: button::Status) -> button::Style {
+    let bg = match status {
+        button::Status::Hovered | button::Status::Pressed => Color::from_rgb(0.22, 0.22, 0.26),
+        _ => Color::from_rgb(0.18, 0.18, 0.21),
+    };
+    button::Style {
+        background: Some(Background::Color(bg)),
+        text_color: TEXT_PRI,
+        border: Border {
+            width: 1.0,
+            color: SEP,
+            radius: 3.0.into(),
+        },
+        ..button::Style::default()
     }
 }
 

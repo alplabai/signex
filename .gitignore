@@ -127,3 +127,4 @@ xcuserdata/
 .github/copilot-instructions.md
 status.txt
 .git_commit_msg.txt
+.temp/

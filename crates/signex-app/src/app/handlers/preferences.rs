@@ -11,6 +11,9 @@ impl Signex {
         self.ui_state.preferences_draft_label_style = self.ui_state.label_style;
         self.ui_state.preferences_draft_multisheet_style = self.ui_state.multisheet_style;
         self.ui_state.preferences_draft_component_classes = self.ui_state.component_classes.clone();
+        self.ui_state.preferences_keymap_editor =
+            crate::keymap::KeymapEditorModel::new(self.ui_state.keymap_profiles.clone());
+        self.ui_state.preferences_keymap_status.clear();
         self.ui_state.preferences_dirty = false;
         self.ui_state.panel_list_open = false;
         self.interaction_state.context_menu = None;
@@ -58,6 +61,9 @@ impl Signex {
                 self.ui_state.preferences_draft_multisheet_style = self.ui_state.multisheet_style;
                 self.ui_state.preferences_draft_component_classes =
                     self.ui_state.component_classes.clone();
+                self.ui_state.preferences_keymap_editor =
+                    crate::keymap::KeymapEditorModel::new(self.ui_state.keymap_profiles.clone());
+                self.ui_state.preferences_keymap_status.clear();
                 self.ui_state.preferences_dirty = false;
                 self.ui_state.preferences_open = false;
                 let tokens = if self.ui_state.theme_id == ThemeId::Custom {
@@ -138,6 +144,26 @@ impl Signex {
                     self.ui_state.component_classes.clone();
                 self.document_state.panel_ctx.component_classes =
                     self.ui_state.component_classes.clone();
+                let keymap_profiles = self
+                    .ui_state
+                    .preferences_keymap_editor
+                    .clone()
+                    .into_profiles();
+                match crate::keymap::save_profile_set(&keymap_profiles) {
+                    Ok(()) => {
+                        self.ui_state.keymap_profiles = keymap_profiles;
+                        self.ui_state.active_keymap =
+                            self.ui_state.keymap_profiles.compile_active();
+                        self.ui_state.preferences_keymap_status =
+                            "Keyboard shortcuts saved.".to_string();
+                    }
+                    Err(error) => {
+                        self.ui_state.preferences_keymap_status =
+                            format!("Could not save keyboard shortcuts: {error}");
+                        self.ui_state.preferences_dirty = true;
+                        return Task::none();
+                    }
+                }
                 self.ui_state.preferences_dirty = false;
             }
             PrefMsg::DraftTheme(id) => {
@@ -381,6 +407,141 @@ impl Signex {
                 self.ui_state.preferences_draft_component_classes =
                     crate::fonts::default_component_classes();
                 self.ui_state.preferences_dirty = true;
+            }
+            PrefMsg::KeymapProfileSelected(id) => {
+                match self
+                    .ui_state
+                    .preferences_keymap_editor
+                    .set_active_profile(id)
+                {
+                    Ok(()) => {
+                        self.ui_state.preferences_keymap_status.clear();
+                        self.ui_state.preferences_dirty = true;
+                    }
+                    Err(error) => {
+                        self.ui_state.preferences_keymap_status =
+                            format!("Could not switch profile: {error}");
+                    }
+                }
+            }
+            PrefMsg::KeymapCreateCustomProfile => {
+                let profiles = self.ui_state.preferences_keymap_editor.profiles();
+                let next_index = profiles
+                    .iter()
+                    .filter(|profile| profile.kind == crate::keymap::ShortcutProfileKind::Custom)
+                    .count()
+                    + 1;
+                let mut candidate = next_index;
+                loop {
+                    let id = format!("custom-{candidate}");
+                    if profiles.iter().all(|profile| profile.id != id) {
+                        let name = format!("Custom {candidate}");
+                        match self
+                            .ui_state
+                            .preferences_keymap_editor
+                            .create_custom_from_active(id, name)
+                        {
+                            Ok(()) => {
+                                self.ui_state.preferences_keymap_status =
+                                    "Created a custom profile draft.".to_string();
+                                self.ui_state.preferences_dirty = true;
+                            }
+                            Err(error) => {
+                                self.ui_state.preferences_keymap_status =
+                                    format!("Could not create profile: {error}");
+                            }
+                        }
+                        break;
+                    }
+                    candidate += 1;
+                }
+            }
+            PrefMsg::KeymapDeleteActiveProfile => {
+                let active_id = self
+                    .ui_state
+                    .preferences_keymap_editor
+                    .profiles()
+                    .into_iter()
+                    .find(|profile| profile.active)
+                    .map(|profile| profile.id);
+                if let Some(id) = active_id {
+                    match self
+                        .ui_state
+                        .preferences_keymap_editor
+                        .delete_custom_profile(&id)
+                    {
+                        Ok(()) => {
+                            self.ui_state.preferences_keymap_status =
+                                "Deleted the custom profile draft.".to_string();
+                            self.ui_state.preferences_dirty = true;
+                        }
+                        Err(error) => {
+                            self.ui_state.preferences_keymap_status =
+                                format!("Could not delete profile: {error}");
+                        }
+                    }
+                }
+            }
+            PrefMsg::KeymapImportProfile => {
+                return Task::future(async {
+                    let picked = rfd::AsyncFileDialog::new()
+                        .set_title("Import Signex Keyboard Shortcuts")
+                        .add_filter("Signex Keyboard Shortcuts", &["toml"])
+                        .pick_file()
+                        .await;
+                    if let Some(f) = picked {
+                        let bytes = f.read().await;
+                        let source = String::from_utf8_lossy(&bytes).to_string();
+                        Message::PreferencesMsg(PrefMsg::KeymapProfileLoaded(source))
+                    } else {
+                        Message::Noop
+                    }
+                });
+            }
+            PrefMsg::KeymapProfileLoaded(source) => {
+                match crate::keymap::import_custom_profile(&source).and_then(|profile| {
+                    self.ui_state
+                        .preferences_keymap_editor
+                        .insert_custom_profile(profile)
+                }) {
+                    Ok(()) => {
+                        self.ui_state.preferences_keymap_status =
+                            "Imported a custom keyboard shortcut profile.".to_string();
+                        self.ui_state.preferences_dirty = true;
+                    }
+                    Err(error) => {
+                        self.ui_state.preferences_keymap_status =
+                            format!("Could not import keyboard shortcuts: {error}");
+                    }
+                }
+            }
+            PrefMsg::KeymapExportProfile => {
+                let profile = self
+                    .ui_state
+                    .preferences_keymap_editor
+                    .active_profile()
+                    .clone();
+                match crate::keymap::export_custom_profile(&profile) {
+                    Ok(source) => {
+                        let filename = format!("{}.toml", profile.id);
+                        return Task::future(async move {
+                            let picked = rfd::AsyncFileDialog::new()
+                                .set_title("Export Signex Keyboard Shortcuts")
+                                .add_filter("Signex Keyboard Shortcuts", &["toml"])
+                                .set_file_name(&filename)
+                                .save_file()
+                                .await;
+                            if let Some(f) = picked {
+                                let _ = f.write(source.as_bytes()).await;
+                            }
+                            Message::Noop
+                        });
+                    }
+                    Err(error) => {
+                        self.ui_state.preferences_keymap_status =
+                            format!("Could not export keyboard shortcuts: {error}");
+                    }
+                }
             }
         }
 

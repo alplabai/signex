@@ -2,6 +2,7 @@ use iced::Subscription;
 
 use crate::canvas::SchematicCanvas;
 use crate::dock::{DockArea, PanelPosition};
+use crate::keymap::{AppCommandId, CompiledKeymap, KeyStroke, ShortcutContext};
 use crate::panels::PanelKind;
 
 use super::*;
@@ -36,6 +37,57 @@ fn selection_slot_from_key(key: &str) -> Option<usize> {
         "8" => Some(7),
         _ => None,
     }
+}
+
+fn message_for_keymap_command(command: &AppCommandId) -> Option<Message> {
+    match command.as_str() {
+        "cancel_current_tool" => Some(Message::EscapePressed),
+        "center_view_at_cursor" | "zoom_to_fit" => Some(Message::CanvasEvent(CanvasEvent::FitAll)),
+        "copy" => Some(Message::Copy),
+        "cut" => Some(Message::Cut),
+        "delete_selection" | "remove_last_vertex" => Some(Message::DeleteSelected),
+        "duplicate" => Some(Message::Duplicate),
+        "find" | "find_text" => Some(Message::OpenFind),
+        "find_and_replace" => Some(Message::OpenReplace),
+        "mirror_x" => Some(Message::MirrorSelectedX),
+        "mirror_y" => Some(Message::MirrorSelectedY),
+        "open_components_panel" | "place_symbol" => {
+            Some(Message::Tool(ToolMessage::SelectTool(Tool::Component)))
+        }
+        "paste" => Some(Message::Paste),
+        "paste_special" | "smart_paste" => Some(Message::SmartPaste),
+        "place_bus" => Some(Message::Tool(ToolMessage::SelectTool(Tool::Bus))),
+        "place_local_net_label" | "place_net_label" => {
+            Some(Message::Tool(ToolMessage::SelectTool(Tool::Label)))
+        }
+        "place_text" => Some(Message::Tool(ToolMessage::SelectTool(Tool::Text))),
+        "place_wire" => Some(Message::Tool(ToolMessage::SelectTool(Tool::Wire))),
+        "placement_accept" => Some(Message::LassoCommit),
+        "placement_properties" => Some(Message::PrePlacementTab),
+        "print" => Some(Message::PrintPreviewRequested),
+        "redo" => Some(Message::Redo),
+        "rotate_clockwise" | "rotate_counterclockwise" => Some(Message::RotateSelected),
+        "save_document" => Some(Message::SaveFile),
+        "select_all" => Some(Message::Selection(
+            selection_request::SelectionRequest::SelectAll,
+        )),
+        "show_current_command_hotkeys" | "show_current_command_shortcuts" => {
+            Some(Message::Menu(MenuMessage::OpenKeyboardShortcuts))
+        }
+        "toggle_visible_grid" => Some(Message::GridToggle),
+        "undo" => Some(Message::Undo),
+        _ => None,
+    }
+}
+
+fn lookup_keymap_message(
+    keymap: &CompiledKeymap,
+    key: &iced::keyboard::Key,
+    modifiers: iced::keyboard::Modifiers,
+) -> Option<Message> {
+    let stroke = KeyStroke::from_iced(key, modifiers)?;
+    let lookup = keymap.lookup(&[stroke], &[ShortcutContext::Global]);
+    lookup.command.as_ref().and_then(message_for_keymap_command)
 }
 
 impl Signex {
@@ -84,6 +136,15 @@ impl Signex {
         if !standard_libraries.is_empty() {
             standard_libraries.insert(0, helpers::ALL_LIBRARIES.to_string());
         }
+        let (keymap_profiles, keymap_status) = match crate::keymap::load_profile_set() {
+            Ok(profiles) => (profiles, String::new()),
+            Err(error) => (
+                crate::keymap::ShortcutProfileSet::built_ins()
+                    .expect("bundled keyboard shortcut profiles must parse"),
+                format!("Could not load keyboard shortcuts: {error}"),
+            ),
+        };
+        let active_keymap = keymap_profiles.compile_active();
 
         let mut app = Self {
             ui_state: UiState {
@@ -103,6 +164,12 @@ impl Signex {
                 ui_font_name: crate::fonts::read_ui_font_pref(),
                 component_classes: crate::fonts::read_component_classes_pref(),
                 preferences_draft_component_classes: crate::fonts::read_component_classes_pref(),
+                keymap_profiles: keymap_profiles.clone(),
+                active_keymap,
+                preferences_keymap_editor: crate::keymap::KeymapEditorModel::new(
+                    keymap_profiles.clone(),
+                ),
+                preferences_keymap_status: keymap_status,
                 canvas_font_name: crate::fonts::DEFAULT_CANVAS_FONT.to_string(),
                 canvas_font_size: 11.0,
                 canvas_font_bold: false,
@@ -473,6 +540,7 @@ impl Signex {
                 self.ui_state.remove_dialog.is_some(),
                 self.ui_state.enable_version_control.is_some(),
                 self.library.create_options.is_some(),
+                self.ui_state.active_keymap.clone(),
             ))
             .map(
                 |(
@@ -488,6 +556,7 @@ impl Signex {
                         remove_open,
                         enable_vc_open,
                         library_create_options_open,
+                        active_keymap,
                     ),
                     event,
                 )| match event {
@@ -517,6 +586,50 @@ impl Signex {
                                 }
                                 _ => Message::Noop,
                             };
+                        }
+                        if let keyboard::Key::Named(keyboard::key::Named::Escape) = key.as_ref() {
+                            if find_replace_open {
+                                return Message::FindReplaceMsg(
+                                    crate::find_replace::FindReplaceMsg::Close,
+                                );
+                            }
+                            if kbd_shortcuts_open {
+                                return Message::CloseKeyboardShortcuts;
+                            }
+                            if first_run_tour_open {
+                                return Message::DismissFirstRunTour;
+                            }
+                            if erc_open {
+                                return Message::CloseErcDialog;
+                            }
+                            if annotate_open {
+                                return Message::CloseAnnotateDialog;
+                            }
+                            if prefs_open {
+                                return Message::ClosePreferences;
+                            }
+                            if rename_open {
+                                return Message::CloseRenameDialog;
+                            }
+                            if remove_open {
+                                return Message::CloseRemoveDialog;
+                            }
+                            if enable_vc_open {
+                                return Message::CloseEnableVersionControl;
+                            }
+                            if library_create_options_open {
+                                return Message::Library(
+                                    crate::library::messages::LibraryMessage::LibraryCreateOptionsCancel,
+                                );
+                            }
+                        }
+                        if let keyboard::Key::Named(keyboard::key::Named::F1) = key.as_ref() {
+                            if kbd_shortcuts_open {
+                                return Message::CloseKeyboardShortcuts;
+                            }
+                        }
+                        if let Some(message) = lookup_keymap_message(&active_keymap, &key, m) {
+                            return message;
                         }
                         match (key.as_ref(), m) {
                             (keyboard::Key::Character(c), m) if c == "q" && m.command() => {

@@ -102,7 +102,17 @@ signex-sketch = { path = "crates/signex-sketch" }
 # Internal — bake pipeline (v0.13 Phase 7)
 signex-bake = { path = "crates/signex-bake" }
 
+[profile.dev]
+opt-level = 0
+incremental = true
+codegen-units = 256
+lto = false
+debug = 1
+
 [profile.release]
-lto = "thin"
+opt-level = "z"
+lto = "fat"
 codegen-units = 1
+panic = "abort"
 strip = "symbols"
+debug = false

@@ -22,6 +22,7 @@ pub mod first_run_tour;
 pub mod fonts;
 pub mod icons;
 pub mod keyboard_shortcuts_modal;
+pub mod keymap;
 pub mod library;
 pub mod menu_bar;
 pub mod panels;
