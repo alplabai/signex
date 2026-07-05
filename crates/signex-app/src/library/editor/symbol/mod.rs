@@ -7,6 +7,7 @@
 pub mod active_bar;
 pub mod active_bar_dropdowns;
 pub mod ai_stub;
+pub mod apply;
 pub mod canvas;
 pub mod state;
 
