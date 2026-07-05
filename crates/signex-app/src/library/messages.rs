@@ -1336,6 +1336,18 @@ pub enum PrimitiveEditorMsg {
     SymbolSelect(SymbolSelectionMsg),
     /// Click landed on empty canvas — drop the current selection.
     SymbolDeselect,
+    /// Commit a rubber-band box selection. `(x0, y0)`–`(x1, y1)` is the
+    /// world-mm box; `crossing = true` for a right-to-left touch
+    /// select, `false` for a left-to-right window select. The reducer
+    /// runs `select_in_box` and updates `editor.selected`. Salvaged
+    /// from `feature/v0.13-symbol`.
+    SymbolBoxSelect {
+        x0: f64,
+        y0: f64,
+        x1: f64,
+        y1: f64,
+        crossing: bool,
+    },
     /// Drag the currently-selected element to a new grid-snapped
     /// world position.
     SymbolMoveSelected { x: f64, y: f64 },

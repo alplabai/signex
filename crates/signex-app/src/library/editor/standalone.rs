@@ -291,6 +291,19 @@ fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> Primitive
             None => PrimitiveEditorMsg::SymbolDeselect,
         },
         CanvasAction::Deselect => PrimitiveEditorMsg::SymbolDeselect,
+        CanvasAction::BoxSelect {
+            x0,
+            y0,
+            x1,
+            y1,
+            crossing,
+        } => PrimitiveEditorMsg::SymbolBoxSelect {
+            x0,
+            y0,
+            x1,
+            y1,
+            crossing,
+        },
         CanvasAction::Move { x, y } => PrimitiveEditorMsg::SymbolMoveSelected { x, y },
         CanvasAction::MoveGraphicHandle { idx, handle, x, y } => {
             PrimitiveEditorMsg::SymbolMoveGraphicHandle {

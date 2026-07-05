@@ -178,6 +178,30 @@ pub(crate) fn apply_symbol_primitive_edit(
             editor.selected = None;
             editor.canvas_cache.clear();
         }
+        PrimitiveEditorMsg::SymbolBoxSelect {
+            x0,
+            y0,
+            x1,
+            y1,
+            crossing,
+        } => {
+            use crate::library::editor::symbol::state::BoxSelectKind;
+            let kind = if crossing {
+                BoxSelectKind::Crossing
+            } else {
+                BoxSelectKind::Window
+            };
+            editor.selected =
+                crate::library::editor::symbol::state::select_in_box(
+                    editor.primitive(),
+                    x0,
+                    y0,
+                    x1,
+                    y1,
+                    kind,
+                );
+            editor.canvas_cache.clear();
+        }
         PrimitiveEditorMsg::SymbolMoveSelected { x, y } => {
             let selected = editor.selected.clone();
             crate::library::editor::symbol::state::move_selected(

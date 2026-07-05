@@ -77,6 +77,18 @@ pub enum CanvasAction {
     },
     Select(SymbolSelection),
     Deselect,
+    /// Commit a rubber-band box selection. `(x0, y0)`–`(x1, y1)` is the
+    /// world-mm box (already normalised); `crossing = true` when the
+    /// drag went right-to-left (touch-select), `false` for a
+    /// left-to-right window (fully-contained) select. Salvaged from
+    /// feature/v0.13-symbol.
+    BoxSelect {
+        x0: f64,
+        y0: f64,
+        x1: f64,
+        y1: f64,
+        crossing: bool,
+    },
     Move {
         x: f64,
         y: f64,
@@ -160,6 +172,15 @@ pub struct CanvasState {
     /// Last cursor screen position during a pan, used to compute
     /// per-frame deltas.
     pub last_pan_pos: Option<iced::Point>,
+    /// Anchor (press) screen point of an in-progress rubber-band box
+    /// selection. `Some` while the user left-drags on empty canvas
+    /// with the Select tool. Mirrors the footprint canvas's
+    /// `box_select_anchor_screen`. Salvaged from feature/v0.13-symbol.
+    pub box_anchor_screen: Option<iced::Point>,
+    /// Live cursor screen point during a box-select drag, updated each
+    /// CursorMoved tick so `draw` can render the rubber-band to the
+    /// current cursor. Cleared on release alongside the anchor.
+    pub box_current_screen: Option<iced::Point>,
 }
 
 /// Builder for the per-render [`SymbolCanvas`] — all the inputs the
@@ -412,7 +433,14 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                             state.dragging = true;
                             Some(canvas::Action::publish(CanvasAction::Select(sel)).and_capture())
                         } else {
-                            Some(canvas::Action::publish(CanvasAction::Deselect).and_capture())
+                            // Empty space: arm a rubber-band box select.
+                            // We don't Deselect yet — a plain click (no
+                            // drag) deselects on release; a drag commits
+                            // a box select instead. Salvaged from
+                            // feature/v0.13-symbol.
+                            state.box_anchor_screen = Some(pos);
+                            state.box_current_screen = Some(pos);
+                            Some(canvas::Action::capture())
                         }
                     }
                     SymbolTool::AddPin => Some(
@@ -482,6 +510,12 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                 if state.dragging {
                     return Some(canvas::Action::publish(CanvasAction::Move { x: wx, y: wy }));
                 }
+                // Box-select drag: track the live corner so `draw`
+                // renders the rubber-band. Publishing CursorAt below
+                // also drives the redraw (the canvas isn't cached).
+                if state.box_anchor_screen.is_some() {
+                    state.box_current_screen = Some(pos);
+                }
                 // Idle cursor — publish the unsnapped world position
                 // for the status footer X/Y readout.
                 let (ux, uy) = world_unsnapped(self, pos.x, pos.y, bounds);
@@ -519,6 +553,35 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
                 state.dragging = false;
                 state.dragging_handle = None;
+                // Finish a rubber-band box select, if one was armed.
+                if let (Some(a), Some(c)) =
+                    (state.box_anchor_screen.take(), state.box_current_screen.take())
+                {
+                    // A negligible drag is a plain click on empty space
+                    // → deselect. Threshold in screen pixels.
+                    const CLICK_SLOP_PX: f32 = 3.0;
+                    if (a.x - c.x).abs() < CLICK_SLOP_PX && (a.y - c.y).abs() < CLICK_SLOP_PX {
+                        return Some(canvas::Action::publish(CanvasAction::Deselect));
+                    }
+                    // Unsnapped so the box matches exactly where the
+                    // user dragged (grid-snapping the corners could pull
+                    // boundary items in or out unexpectedly).
+                    let (ax, ay) = world_unsnapped(self, a.x, a.y, bounds);
+                    let (cx, cy) = world_unsnapped(self, c.x, c.y, bounds);
+                    // Drag direction picks the mode: left-to-right (the
+                    // release is to the right of the press) is a Window
+                    // / fully-contained select; right-to-left is a
+                    // Crossing / touch select. Screen x increases
+                    // rightward, same as world x, so compare screen x.
+                    let crossing = c.x < a.x;
+                    return Some(canvas::Action::publish(CanvasAction::BoxSelect {
+                        x0: ax,
+                        y0: ay,
+                        x1: cx,
+                        y1: cy,
+                        crossing,
+                    }));
+                }
                 None
             }
             Event::Keyboard(iced::keyboard::Event::KeyPressed { key, .. }) => match key {
@@ -537,7 +600,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
 
     fn draw(
         &self,
-        _state: &Self::State,
+        state: &Self::State,
         renderer: &Renderer,
         _theme: &Theme,
         bounds: Rectangle,
@@ -637,13 +700,9 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         // lines, circles, arcs) render as outlines only. Selection
         // halo: the currently-selected graphic gets the accent stroke
         // colour with extra width so it stands out against the body.
-        let selected_graphic_idx = match self.selected {
-            Some(SymbolSelection::Graphic(i)) => Some(i),
-            _ => None,
-        };
         let mut body_drawn = false;
         for (i, g) in self.symbol.graphics.iter().enumerate() {
-            let is_selected = selected_graphic_idx == Some(i);
+            let is_selected = self.is_graphic_selected(i);
             let stroke_color = if is_selected {
                 self.selected_color
             } else {
@@ -837,11 +896,58 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
             ..canvas::Text::default()
         });
 
+        // Rubber-band box (screen space, no camera transform). Solid
+        // accent outline for a left-to-right window select; a lighter
+        // fill hints at the touch (crossing) select on right-to-left.
+        if let (Some(a), Some(c)) = (state.box_anchor_screen, state.box_current_screen) {
+            let top_left = iced::Point::new(a.x.min(c.x), a.y.min(c.y));
+            let size = Size::new((c.x - a.x).abs(), (c.y - a.y).abs());
+            let path = canvas::Path::rectangle(top_left, size);
+            let crossing = c.x < a.x;
+            frame.fill(
+                &path,
+                Color {
+                    a: if crossing { 0.10 } else { 0.06 },
+                    ..self.selected_color
+                },
+            );
+            frame.stroke(
+                &path,
+                canvas::Stroke::default()
+                    .with_color(self.selected_color)
+                    .with_width(1.0),
+            );
+        }
+
         vec![frame.into_geometry()]
     }
 }
 
 impl<'a> SymbolCanvas<'a> {
+    /// True when pin `idx` is part of the current selection — as the
+    /// single `Pin`, or within an `All` / `Multiple` group select.
+    fn is_pin_selected(&self, idx: usize) -> bool {
+        match &self.selected {
+            Some(SymbolSelection::Pin(i)) => *i == idx,
+            Some(SymbolSelection::All) => true,
+            Some(SymbolSelection::Multiple { pin_indices, .. }) => pin_indices.contains(&idx),
+            _ => false,
+        }
+    }
+
+    /// True when graphic `idx` is part of the current selection — as
+    /// the single `Graphic`, or within an `All` / `Multiple` group.
+    fn is_graphic_selected(&self, idx: usize) -> bool {
+        match &self.selected {
+            Some(SymbolSelection::Graphic(i)) => *i == idx,
+            Some(SymbolSelection::All) => true,
+            Some(SymbolSelection::Multiple {
+                graphic_indices, ..
+            }) => graphic_indices.contains(&idx),
+            _ => false,
+        }
+    }
+
     fn draw_pin<F>(
         &self,
         frame: &mut canvas::Frame,
@@ -864,7 +970,7 @@ impl<'a> SymbolCanvas<'a> {
         };
         let tip = w2s(pin.position[0], pin.position[1]);
         let body_end = w2s(pin.position[0] + dx, pin.position[1] + dy);
-        let selected = matches!(self.selected, Some(SymbolSelection::Pin(i)) if i == idx);
+        let selected = self.is_pin_selected(idx);
         let stroke_color = if selected {
             self.selected_color
         } else {

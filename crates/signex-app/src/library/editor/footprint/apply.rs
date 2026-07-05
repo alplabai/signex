@@ -1408,6 +1408,7 @@ pub(crate) fn apply_footprint_primitive_edit(
         | PrimitiveEditorMsg::SymbolAddText { .. }
         | PrimitiveEditorMsg::SymbolSelect(_)
         | PrimitiveEditorMsg::SymbolDeselect
+        | PrimitiveEditorMsg::SymbolBoxSelect { .. }
         | PrimitiveEditorMsg::SymbolMoveSelected { .. }
         | PrimitiveEditorMsg::SymbolMoveGraphicHandle { .. }
         | PrimitiveEditorMsg::SymbolDeleteSelected
