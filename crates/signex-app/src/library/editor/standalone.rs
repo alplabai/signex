@@ -305,6 +305,7 @@ fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> Primitive
             crossing,
         },
         CanvasAction::Move { x, y } => PrimitiveEditorMsg::SymbolMoveSelected { x, y },
+        CanvasAction::MoveGroup { dx, dy } => PrimitiveEditorMsg::SymbolMoveGroup { dx, dy },
         CanvasAction::MoveGraphicHandle { idx, handle, x, y } => {
             PrimitiveEditorMsg::SymbolMoveGraphicHandle {
                 idx,

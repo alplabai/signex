@@ -213,6 +213,31 @@ pub(crate) fn apply_symbol_primitive_edit(
             editor.dirty = true;
             editor.canvas_cache.clear();
         }
+        PrimitiveEditorMsg::SymbolMoveGroup { dx, dy } => {
+            use crate::library::editor::symbol::state;
+            match editor.selected.clone() {
+                Some(SymbolSelection::All) => {
+                    state::move_all(editor.primitive_mut(), dx, dy);
+                    editor.dirty = true;
+                    editor.canvas_cache.clear();
+                }
+                Some(SymbolSelection::Multiple {
+                    pin_indices,
+                    graphic_indices,
+                }) => {
+                    state::move_multiple(
+                        editor.primitive_mut(),
+                        &pin_indices,
+                        &graphic_indices,
+                        dx,
+                        dy,
+                    );
+                    editor.dirty = true;
+                    editor.canvas_cache.clear();
+                }
+                _ => {}
+            }
+        }
         PrimitiveEditorMsg::SymbolMoveGraphicHandle { idx, handle, x, y } => {
             let h = graphic_handle_msg_to_state(handle);
             crate::library::editor::symbol::state::move_graphic_handle(
@@ -536,6 +561,7 @@ fn mutates_symbol_state(msg: &PrimitiveEditorMsg) -> bool {
             | SymbolAddArc { .. }
             | SymbolAddText { .. }
             | SymbolMoveSelected { .. }
+            | SymbolMoveGroup { .. }
             | SymbolMoveGraphicHandle { .. }
             | SymbolDeleteSelected
             | SymbolRotateSelected { .. }

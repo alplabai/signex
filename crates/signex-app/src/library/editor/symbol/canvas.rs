@@ -93,6 +93,14 @@ pub enum CanvasAction {
         x: f64,
         y: f64,
     },
+    /// Move the current group selection (`All` / `Multiple`) by a
+    /// per-tick world-mm delta. The reducer reads `editor.selected` to
+    /// dispatch to `move_all` vs `move_multiple`. Salvaged from
+    /// feature/v0.13-symbol.
+    MoveGroup {
+        dx: f64,
+        dy: f64,
+    },
     /// Drag-to-resize a graphic handle. Fired continuously while the
     /// user drags the handle of a placed graphic in the Select tool.
     MoveGraphicHandle {
@@ -181,6 +189,11 @@ pub struct CanvasState {
     /// CursorMoved tick so `draw` can render the rubber-band to the
     /// current cursor. Cleared on release alongside the anchor.
     pub box_current_screen: Option<iced::Point>,
+    /// `Some(last_world)` while dragging a whole-group selection
+    /// (`All` / `Multiple`) — the previous cursor world point, so each
+    /// CursorMoved tick emits the delta since the last. `None` outside
+    /// a group drag. Mutually exclusive with `dragging` (single item).
+    pub group_drag_last: Option<(f64, f64)>,
 }
 
 /// Builder for the per-render [`SymbolCanvas`] — all the inputs the
@@ -430,6 +443,13 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                             return Some(canvas::Action::capture());
                         }
                         if let Some(sel) = state::hit_test(self.symbol, wx, wy) {
+                            // Pressing on a member of the current group
+                            // selection drags the whole group instead of
+                            // collapsing to that one item.
+                            if self.hit_is_in_group(&sel) {
+                                state.group_drag_last = Some((wx, wy));
+                                return Some(canvas::Action::capture());
+                            }
                             state.dragging = true;
                             Some(canvas::Action::publish(CanvasAction::Select(sel)).and_capture())
                         } else {
@@ -507,6 +527,15 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                         y: wy,
                     }));
                 }
+                if let Some((lx, ly)) = state.group_drag_last {
+                    let dx = wx - lx;
+                    let dy = wy - ly;
+                    if dx != 0.0 || dy != 0.0 {
+                        state.group_drag_last = Some((wx, wy));
+                        return Some(canvas::Action::publish(CanvasAction::MoveGroup { dx, dy }));
+                    }
+                    return None;
+                }
                 if state.dragging {
                     return Some(canvas::Action::publish(CanvasAction::Move { x: wx, y: wy }));
                 }
@@ -553,6 +582,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
                 state.dragging = false;
                 state.dragging_handle = None;
+                state.group_drag_last = None;
                 // Finish a rubber-band box select, if one was armed.
                 if let (Some(a), Some(c)) =
                     (state.box_anchor_screen.take(), state.box_current_screen.take())
@@ -931,6 +961,27 @@ impl<'a> SymbolCanvas<'a> {
             Some(SymbolSelection::Pin(i)) => *i == idx,
             Some(SymbolSelection::All) => true,
             Some(SymbolSelection::Multiple { pin_indices, .. }) => pin_indices.contains(&idx),
+            _ => false,
+        }
+    }
+
+    /// True when a freshly hit-tested single item (`sel`) belongs to
+    /// the current group selection — i.e. pressing it should drag the
+    /// whole group rather than reselect just that item. Only `All` and
+    /// `Multiple` are groups; a single Pin/Graphic selection is not.
+    fn hit_is_in_group(&self, sel: &SymbolSelection) -> bool {
+        match &self.selected {
+            Some(SymbolSelection::All) => {
+                matches!(sel, SymbolSelection::Pin(_) | SymbolSelection::Graphic(_))
+            }
+            Some(SymbolSelection::Multiple {
+                pin_indices,
+                graphic_indices,
+            }) => match sel {
+                SymbolSelection::Pin(i) => pin_indices.contains(i),
+                SymbolSelection::Graphic(i) => graphic_indices.contains(i),
+                _ => false,
+            },
             _ => false,
         }
     }

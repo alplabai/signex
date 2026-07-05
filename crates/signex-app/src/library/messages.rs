@@ -1351,6 +1351,11 @@ pub enum PrimitiveEditorMsg {
     /// Drag the currently-selected element to a new grid-snapped
     /// world position.
     SymbolMoveSelected { x: f64, y: f64 },
+    /// Drag the whole group selection (`All` / `Multiple`) by a
+    /// per-tick world-mm delta. The reducer dispatches to `move_all`
+    /// or `move_multiple` based on `editor.selected`. Salvaged from
+    /// `feature/v0.13-symbol`.
+    SymbolMoveGroup { dx: f64, dy: f64 },
     /// Drag-to-resize: move one resize handle of the graphic at
     /// `idx` to grid-snapped world coordinates `(x, y)`. Fires
     /// continuously while the user holds and drags a graphic handle
