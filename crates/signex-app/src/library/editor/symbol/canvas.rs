@@ -712,8 +712,16 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                 } => {
                     let p = w2s(center[0], center[1]);
                     let r = (*radius as f32) * scale;
-                    let s = (*start_deg as f32).to_radians();
-                    let e = (*end_deg as f32).to_radians();
+                    // `start_deg` / `end_deg` are world-space angles
+                    // (Y-up, CCW) — the same convention as the arc
+                    // handles (`graphic_handles`) and hit-test. The
+                    // canvas frame is screen-space (Y-down), so negate
+                    // to map the sweep into screen space; otherwise the
+                    // drawn arc mirrors across the X axis and lands in
+                    // the wrong quadrant relative to its own endpoints.
+                    // (Salvaged from feature/v0.13-symbol.)
+                    let s = -(*start_deg as f32).to_radians();
+                    let e = -(*end_deg as f32).to_radians();
                     let mut builder = canvas::path::Builder::new();
                     builder.arc(canvas::path::Arc {
                         center: p,
