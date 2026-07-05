@@ -21,6 +21,17 @@ impl Signex {
         active_tab.kind.as_footprint_editor().cloned()
     }
 
+    /// Symbol-editor analogue of `active_footprint_editor_path`. Used
+    /// by the Undo/Redo fork so Ctrl+Z routes to the active symbol
+    /// tab's per-instance history stack instead of the engine.
+    pub(crate) fn active_symbol_editor_path(&self) -> Option<std::path::PathBuf> {
+        let active_tab = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)?;
+        active_tab.kind.as_symbol_editor().cloned()
+    }
+
     pub(super) fn handle_dock_sch_library_message(
         &mut self,
         panel_msg: &crate::panels::PanelMsg,

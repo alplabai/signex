@@ -31,6 +31,21 @@ impl Signex {
             }
         }
 
+        // Symbol editor undo — salvaged from feature/v0.13-symbol.
+        // Route through the SymbolUndo message so the reducer owns
+        // undo semantics and `refresh_panel_ctx` runs at the dispatch
+        // site. Mutually exclusive with the footprint fork above (a
+        // tab is one editor kind or the other).
+        if let Some(path) = self.active_symbol_editor_path() {
+            let _ = self.update(Message::Library(
+                crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                    path,
+                    msg: crate::library::messages::PrimitiveEditorMsg::SymbolUndo,
+                },
+            ));
+            return;
+        }
+
         // Net-colour floods aren't persisted to the Standard document so
         // they don't enter the engine's history. Check the app-level
         // net_color_undo stack first; only fall through to the engine
@@ -62,6 +77,19 @@ impl Signex {
                 return;
             }
         }
+
+        // Symbol editor redo — see the mirror fork in
+        // `handle_undo_requested`.
+        if let Some(path) = self.active_symbol_editor_path() {
+            let _ = self.update(Message::Library(
+                crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                    path,
+                    msg: crate::library::messages::PrimitiveEditorMsg::SymbolRedo,
+                },
+            ));
+            return;
+        }
+
         let redone = self.apply_engine_redo(true);
 
         if redone {
