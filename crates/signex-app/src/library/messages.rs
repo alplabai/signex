@@ -1413,6 +1413,13 @@ pub enum PrimitiveEditorMsg {
     /// the data, lose only the partition); the active part falls
     /// back to `1`. No-op when only one part exists.
     SymbolRemovePart,
+    /// Undo the most recent symbol-editor mutation (Ctrl+Z). Salvaged
+    /// from feature/v0.13-symbol; mirrors the footprint editor's
+    /// snapshot-based history.
+    SymbolUndo,
+    /// Redo the most recently undone symbol-editor mutation
+    /// (Ctrl+Shift+Z / Ctrl+Y).
+    SymbolRedo,
 
     // ── Footprint ──────────────────────────────────────────
     /// v0.18.7 — switch which footprint inside the multi-footprint

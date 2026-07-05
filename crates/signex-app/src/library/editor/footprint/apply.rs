@@ -1417,6 +1417,8 @@ pub(crate) fn apply_footprint_primitive_edit(
         | PrimitiveEditorMsg::SymbolNextPart
         | PrimitiveEditorMsg::SymbolNewPart
         | PrimitiveEditorMsg::SymbolRemovePart
+        | PrimitiveEditorMsg::SymbolUndo
+        | PrimitiveEditorMsg::SymbolRedo
         | PrimitiveEditorMsg::SymbolPan { .. }
         | PrimitiveEditorMsg::SymbolZoom { .. }
         | PrimitiveEditorMsg::SymbolFit

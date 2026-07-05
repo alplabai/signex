@@ -21,7 +21,21 @@ pub(crate) fn apply_symbol_primitive_edit(
     use crate::library::editor::symbol::canvas::SymbolTool;
     use crate::library::editor::symbol::state::{FieldKey, SymbolSelection};
 
+    // Capture an undo snapshot ahead of any mutating message — mirrors
+    // the footprint reducer. Undo/Redo and pure-UI messages (tool /
+    // selection / pan / cursor) are excluded so they don't pollute the
+    // history timeline.
+    if mutates_symbol_state(&msg) {
+        editor.push_history();
+    }
+
     match msg {
+        PrimitiveEditorMsg::SymbolUndo => {
+            editor.undo();
+        }
+        PrimitiveEditorMsg::SymbolRedo => {
+            editor.redo();
+        }
         PrimitiveEditorMsg::SymbolSetTool(tool) => {
             editor.tool = match tool {
                 SymbolToolMsg::Select => SymbolTool::Select,
@@ -469,5 +483,93 @@ fn graphic_handle_msg_to_state(
         GraphicHandleMsg::ArcStart => GraphicHandle::ArcStart,
         GraphicHandleMsg::ArcEnd => GraphicHandle::ArcEnd,
         GraphicHandleMsg::TextAnchor => GraphicHandle::TextAnchor,
+    }
+}
+
+/// True when a symbol-editor message mutates the document (the symbol
+/// geometry / parts), so the reducer should snapshot for undo before
+/// applying it. Pure-UI messages (tool, selection, pan/zoom, cursor,
+/// grid, active bar) and Undo/Redo themselves return false. Mirrors
+/// `mutates_footprint_state`.
+fn mutates_symbol_state(msg: &PrimitiveEditorMsg) -> bool {
+    use PrimitiveEditorMsg::*;
+    matches!(
+        msg,
+        SymbolAddPin { .. }
+            | SymbolAddRectangle { .. }
+            | SymbolAddLine { .. }
+            | SymbolAddCircle { .. }
+            | SymbolAddArc { .. }
+            | SymbolAddText { .. }
+            | SymbolMoveSelected { .. }
+            | SymbolMoveGraphicHandle { .. }
+            | SymbolDeleteSelected
+            | SymbolSetPinNumber { .. }
+            | SymbolSetPinName { .. }
+            | SymbolNewPart
+            | SymbolRemovePart
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn editor_with_one_symbol() -> crate::app::SymbolEditorState {
+        let sym = signex_library::Symbol::empty("U1");
+        let file = signex_library::SymbolFile::from_symbol(sym);
+        crate::app::SymbolEditorState::new(std::path::PathBuf::from("test.snxsym"), file)
+    }
+
+    #[test]
+    fn undo_and_redo_a_symbol_mutation() {
+        let mut ed = editor_with_one_symbol();
+        let before = ed.primitive().pins.len();
+
+        // A mutating message snapshots first, then adds a pin.
+        apply_symbol_primitive_edit(&mut ed, PrimitiveEditorMsg::SymbolAddPin { x: 1.0, y: 2.0 });
+        let after_add = ed.primitive().pins.len();
+        assert_eq!(after_add, before + 1, "add-pin should add one pin");
+        assert_eq!(ed.history.len(), 1, "a mutation pushes one history entry");
+
+        // Undo restores the pre-mutation state.
+        apply_symbol_primitive_edit(&mut ed, PrimitiveEditorMsg::SymbolUndo);
+        assert_eq!(ed.primitive().pins.len(), before, "undo removes the pin");
+        assert_eq!(ed.redo.len(), 1, "undo pushes a redo entry");
+        assert!(ed.history.is_empty(), "history is empty after the single undo");
+
+        // Redo re-applies it.
+        apply_symbol_primitive_edit(&mut ed, PrimitiveEditorMsg::SymbolRedo);
+        assert_eq!(ed.primitive().pins.len(), after_add, "redo re-adds the pin");
+    }
+
+    #[test]
+    fn undo_on_empty_history_is_a_noop() {
+        let mut ed = editor_with_one_symbol();
+        let before = ed.primitive().pins.len();
+        apply_symbol_primitive_edit(&mut ed, PrimitiveEditorMsg::SymbolUndo);
+        assert_eq!(ed.primitive().pins.len(), before);
+    }
+
+    #[test]
+    fn a_new_mutation_clears_the_redo_stack() {
+        let mut ed = editor_with_one_symbol();
+        apply_symbol_primitive_edit(&mut ed, PrimitiveEditorMsg::SymbolAddPin { x: 1.0, y: 2.0 });
+        apply_symbol_primitive_edit(&mut ed, PrimitiveEditorMsg::SymbolUndo);
+        assert_eq!(ed.redo.len(), 1);
+        // A fresh mutation must invalidate the redo lineage.
+        apply_symbol_primitive_edit(&mut ed, PrimitiveEditorMsg::SymbolAddCircle { x: 0.0, y: 0.0 });
+        assert!(ed.redo.is_empty(), "a new mutation clears redo");
+    }
+
+    #[test]
+    fn pure_ui_messages_do_not_push_history() {
+        let mut ed = editor_with_one_symbol();
+        apply_symbol_primitive_edit(&mut ed, PrimitiveEditorMsg::SymbolDeselect);
+        apply_symbol_primitive_edit(
+            &mut ed,
+            PrimitiveEditorMsg::SymbolSetTool(SymbolToolMsg::AddPin),
+        );
+        assert!(ed.history.is_empty(), "pure-UI messages must not snapshot");
     }
 }

@@ -243,6 +243,24 @@ pub struct SymbolEditorState {
         Option<crate::library::editor::symbol::state::SymActiveBarMenu>,
     /// v0.13 — Pause flag for placement (TAB during Place Pin / etc.).
     pub placement_paused: bool,
+    /// Undo history — pre-mutation snapshots pushed by `push_history`
+    /// ahead of each dispatcher mutation. Mirrors the footprint
+    /// editor's history mechanism (salvaged from feature/v0.13-symbol).
+    pub history: Vec<SymbolHistorySnapshot>,
+    /// Redo lineage — snapshots popped by `undo` and replayed by
+    /// `redo`. Cleared by any new mutation that calls `push_history`.
+    pub redo: Vec<SymbolHistorySnapshot>,
+}
+
+/// By-value snapshot of the canonical symbol-editor document state,
+/// used for undo/redo. Stored by-value (not by-Arc) so undo/redo never
+/// aliases the live state. Mirrors `FootprintHistorySnapshot`.
+#[derive(Debug, Clone)]
+pub struct SymbolHistorySnapshot {
+    pub file: signex_library::SymbolFile,
+    pub active_idx: usize,
+    pub active_part: u8,
+    pub selected: Option<crate::library::editor::symbol::state::SymbolSelection>,
 }
 
 impl SymbolEditorState {
@@ -265,7 +283,75 @@ impl SymbolEditorState {
             selection_filter: Default::default(),
             active_bar_menu: None,
             placement_paused: false,
+            history: Vec::new(),
+            redo: Vec::new(),
         }
+    }
+
+    /// Depth cap for the `history` / `redo` stacks (mirrors the
+    /// footprint editor's `HISTORY_DEPTH`).
+    pub const HISTORY_DEPTH: usize = 100;
+
+    /// Capture a snapshot of the canonical state ahead of a mutation.
+    /// Callers invoke this BEFORE the mutation runs; `undo` swaps the
+    /// snapshot back in. New mutations clear the redo stack so the
+    /// history stays a single timeline.
+    pub fn push_history(&mut self) {
+        let snap = self.snapshot();
+        self.history.push(snap);
+        if self.history.len() > Self::HISTORY_DEPTH {
+            self.history.remove(0);
+        }
+        self.redo.clear();
+    }
+
+    /// Undo the most recent edit. Returns `true` if a snapshot was
+    /// popped + applied, `false` when there was nothing to undo. The
+    /// current state is pushed onto the redo stack.
+    pub fn undo(&mut self) -> bool {
+        let Some(snap) = self.history.pop() else {
+            return false;
+        };
+        let current = self.snapshot();
+        self.redo.push(current);
+        if self.redo.len() > Self::HISTORY_DEPTH {
+            self.redo.remove(0);
+        }
+        self.restore(snap);
+        true
+    }
+
+    /// Redo the most recently undone edit. Returns `true` if a redo
+    /// snapshot was popped + applied, `false` when the redo stack is
+    /// empty.
+    pub fn redo(&mut self) -> bool {
+        let Some(snap) = self.redo.pop() else {
+            return false;
+        };
+        let current = self.snapshot();
+        self.history.push(current);
+        if self.history.len() > Self::HISTORY_DEPTH {
+            self.history.remove(0);
+        }
+        self.restore(snap);
+        true
+    }
+
+    fn snapshot(&self) -> SymbolHistorySnapshot {
+        SymbolHistorySnapshot {
+            file: self.file.clone(),
+            active_idx: self.active_idx,
+            active_part: self.active_part,
+            selected: self.selected.clone(),
+        }
+    }
+
+    fn restore(&mut self, snap: SymbolHistorySnapshot) {
+        self.file = snap.file;
+        self.active_idx = snap.active_idx;
+        self.active_part = snap.active_part;
+        self.selected = snap.selected;
+        self.canvas_cache.clear();
     }
 
     /// Borrow the symbol currently being edited. Falls back to the
