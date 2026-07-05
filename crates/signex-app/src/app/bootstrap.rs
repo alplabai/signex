@@ -43,6 +43,23 @@ fn selection_slot_from_key(key: &str) -> Option<usize> {
 static KEYMAP_PENDING_SEQUENCE: LazyLock<Mutex<Vec<KeyStroke>>> =
     LazyLock::new(|| Mutex::new(Vec::new()));
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct KeyboardSubscriptionState {
+    find_replace_open: bool,
+    palette_open: bool,
+    kbd_shortcuts_open: bool,
+    first_run_tour_open: bool,
+    prefs_open: bool,
+    annotate_open: bool,
+    erc_open: bool,
+    rename_open: bool,
+    remove_open: bool,
+    enable_vc_open: bool,
+    library_create_options_open: bool,
+    active_keymap: CompiledKeymap,
+    shortcut_contexts: Vec<ShortcutContext>,
+}
+
 fn clear_keymap_pending_sequence() {
     if let Ok(mut pending_sequence) = KEYMAP_PENDING_SEQUENCE.lock() {
         pending_sequence.clear();
@@ -51,9 +68,14 @@ fn clear_keymap_pending_sequence() {
 
 fn message_for_keymap_command(command: &AppCommandId) -> Option<Message> {
     match command.as_str() {
+        "annotate_schematic" => Some(Message::OpenAnnotateDialog),
         "cancel_current_tool" => Some(Message::EscapePressed),
-        "center_view_at_cursor" | "zoom_to_fit" => Some(Message::CanvasEvent(CanvasEvent::FitAll)),
+        "center_view_at_cursor" | "show_all_design_objects" | "zoom_to_fit" => {
+            Some(Message::CanvasEvent(CanvasEvent::FitAll))
+        }
         "copy" => Some(Message::Copy),
+        "cycle_selection_mode" => Some(Message::CycleSelectionMode),
+        "cycle_snap_grid_forward" | "open_grid_picker" => Some(Message::GridPickerOpen),
         "cut" => Some(Message::Cut),
         "delete_selection" | "remove_last_vertex" => Some(Message::DeleteSelected),
         "duplicate" => Some(Message::Duplicate),
@@ -64,6 +86,12 @@ fn message_for_keymap_command(command: &AppCommandId) -> Option<Message> {
         "open_components_panel" | "place_symbol" => {
             Some(Message::Tool(ToolMessage::SelectTool(Tool::Component)))
         }
+        "new_document" => Some(Message::Menu(MenuMessage::NewProject)),
+        "open_command_palette" => Some(Message::CommandPaletteOpen),
+        "open_document" => Some(Message::Menu(MenuMessage::OpenProject)),
+        "open_grid_properties" => Some(Message::GridPropertiesOpen),
+        "open_net_color_palette" => Some(Message::OpenNetColorPalette),
+        "open_preferences" => Some(Message::OpenPreferences),
         "paste" => Some(Message::Paste),
         "paste_special" | "smart_paste" => Some(Message::SmartPaste),
         "place_bus" => Some(Message::Tool(ToolMessage::SelectTool(Tool::Bus))),
@@ -76,8 +104,11 @@ fn message_for_keymap_command(command: &AppCommandId) -> Option<Message> {
         "placement_properties" => Some(Message::PrePlacementTab),
         "print" => Some(Message::PrintPreviewRequested),
         "redo" => Some(Message::Redo),
+        "reset_schematic_designators" => Some(Message::OpenAnnotateResetConfirm),
         "rotate_clockwise" | "rotate_counterclockwise" => Some(Message::RotateSelected),
+        "run_erc" => Some(Message::RunErc),
         "save_document" => Some(Message::SaveFile),
+        "save_document_as" => Some(Message::Menu(MenuMessage::SaveAs)),
         "select_all" => Some(Message::Selection(
             selection_request::SelectionRequest::SelectAll,
         )),
@@ -94,12 +125,13 @@ fn lookup_keymap_message(
     keymap: &CompiledKeymap,
     key: &iced::keyboard::Key,
     modifiers: iced::keyboard::Modifiers,
+    contexts: &[ShortcutContext],
 ) -> Option<Message> {
     let stroke = KeyStroke::from_iced(key, modifiers)?;
     let mut pending_sequence = KEYMAP_PENDING_SEQUENCE.lock().ok()?;
     pending_sequence.push(stroke.clone());
 
-    let lookup = keymap.lookup(&pending_sequence, &[ShortcutContext::Global]);
+    let lookup = keymap.lookup(&pending_sequence, contexts);
     if let Some(message) = lookup.command.as_ref().and_then(message_for_keymap_command) {
         pending_sequence.clear();
         return Some(message);
@@ -111,7 +143,7 @@ fn lookup_keymap_message(
     if pending_sequence.len() > 1 {
         pending_sequence.clear();
         pending_sequence.push(stroke);
-        let lookup = keymap.lookup(&pending_sequence, &[ShortcutContext::Global]);
+        let lookup = keymap.lookup(&pending_sequence, contexts);
         if let Some(message) = lookup.command.as_ref().and_then(message_for_keymap_command) {
             pending_sequence.clear();
             return Some(message);
@@ -562,39 +594,51 @@ impl Signex {
     pub fn subscription(&self) -> Subscription<Message> {
         use iced::keyboard;
 
+        let active_tab_kind = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .map(|tab| &tab.kind);
+        let mut shortcut_contexts = vec![ShortcutContext::Global];
+        if self.has_active_schematic() {
+            shortcut_contexts.push(ShortcutContext::Schematic);
+        }
+        if self.has_active_pcb() {
+            shortcut_contexts.push(ShortcutContext::Pcb);
+        }
+        match active_tab_kind {
+            Some(crate::app::TabKind::FootprintEditor(_)) => {
+                shortcut_contexts.push(ShortcutContext::Footprint);
+                shortcut_contexts.push(ShortcutContext::Library);
+            }
+            Some(crate::app::TabKind::SymbolEditor(_)) => {
+                shortcut_contexts.push(ShortcutContext::Library);
+            }
+            Some(crate::app::TabKind::LibraryBrowser(_)) => {
+                shortcut_contexts.push(ShortcutContext::Library);
+            }
+            _ => {}
+        }
+
+        let keyboard_state = KeyboardSubscriptionState {
+            find_replace_open: self.ui_state.find_replace.open,
+            palette_open: self.ui_state.command_palette.open,
+            kbd_shortcuts_open: self.ui_state.keyboard_shortcuts_open,
+            first_run_tour_open: self.ui_state.first_run_tour_open,
+            prefs_open: self.ui_state.preferences_open,
+            annotate_open: self.ui_state.annotate_dialog_open,
+            erc_open: self.ui_state.erc_dialog_open,
+            rename_open: self.ui_state.rename_dialog.is_some(),
+            remove_open: self.ui_state.remove_dialog.is_some(),
+            enable_vc_open: self.ui_state.enable_version_control.is_some(),
+            library_create_options_open: self.library.create_options.is_some(),
+            active_keymap: self.ui_state.active_keymap.clone(),
+            shortcut_contexts,
+        };
+
         let kbd = keyboard::listen()
-            .with((
-                self.ui_state.find_replace.open,
-                self.ui_state.command_palette.open,
-                self.ui_state.keyboard_shortcuts_open,
-                self.ui_state.first_run_tour_open,
-                self.ui_state.preferences_open,
-                self.ui_state.annotate_dialog_open,
-                self.ui_state.erc_dialog_open,
-                self.ui_state.rename_dialog.is_some(),
-                self.ui_state.remove_dialog.is_some(),
-                self.ui_state.enable_version_control.is_some(),
-                self.library.create_options.is_some(),
-                self.ui_state.active_keymap.clone(),
-            ))
-            .map(
-                |(
-                    (
-                        find_replace_open,
-                        palette_open,
-                        kbd_shortcuts_open,
-                        first_run_tour_open,
-                        prefs_open,
-                        annotate_open,
-                        erc_open,
-                        rename_open,
-                        remove_open,
-                        enable_vc_open,
-                        library_create_options_open,
-                        active_keymap,
-                    ),
-                    event,
-                )| match event {
+            .with(keyboard_state)
+            .map(|(keyboard_state, event)| match event {
                     keyboard::Event::KeyPressed {
                         key, modifiers: m, ..
                     } => {
@@ -602,7 +646,7 @@ impl Signex {
                         // typing into the search field doesn't fire tool
                         // shortcuts (`p`, `w`, `l`, …). Only navigation
                         // and dismiss keys leak through.
-                        if palette_open {
+                        if keyboard_state.palette_open {
                             clear_keymap_pending_sequence();
                             return match (key.as_ref(), m) {
                                 (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
@@ -625,47 +669,54 @@ impl Signex {
                         }
                         if let keyboard::Key::Named(keyboard::key::Named::Escape) = key.as_ref() {
                             clear_keymap_pending_sequence();
-                            if find_replace_open {
+                            if keyboard_state.find_replace_open {
                                 return Message::FindReplaceMsg(
                                     crate::find_replace::FindReplaceMsg::Close,
                                 );
                             }
-                            if kbd_shortcuts_open {
+                            if keyboard_state.kbd_shortcuts_open {
                                 return Message::CloseKeyboardShortcuts;
                             }
-                            if first_run_tour_open {
+                            if keyboard_state.first_run_tour_open {
                                 return Message::DismissFirstRunTour;
                             }
-                            if erc_open {
+                            if keyboard_state.erc_open {
                                 return Message::CloseErcDialog;
                             }
-                            if annotate_open {
+                            if keyboard_state.annotate_open {
                                 return Message::CloseAnnotateDialog;
                             }
-                            if prefs_open {
+                            if keyboard_state.prefs_open {
                                 return Message::ClosePreferences;
                             }
-                            if rename_open {
+                            if keyboard_state.rename_open {
                                 return Message::CloseRenameDialog;
                             }
-                            if remove_open {
+                            if keyboard_state.remove_open {
                                 return Message::CloseRemoveDialog;
                             }
-                            if enable_vc_open {
+                            if keyboard_state.enable_vc_open {
                                 return Message::CloseEnableVersionControl;
                             }
-                            if library_create_options_open {
+                            if keyboard_state.library_create_options_open {
                                 return Message::Library(
                                     crate::library::messages::LibraryMessage::LibraryCreateOptionsCancel,
                                 );
                             }
                         }
                         if let keyboard::Key::Named(keyboard::key::Named::F1) = key.as_ref() {
-                            if kbd_shortcuts_open {
+                            if keyboard_state.kbd_shortcuts_open {
                                 return Message::CloseKeyboardShortcuts;
                             }
                         }
-                        if let Some(message) = lookup_keymap_message(&active_keymap, &key, m) {
+                        if let Some(message) =
+                            lookup_keymap_message(
+                                &keyboard_state.active_keymap,
+                                &key,
+                                m,
+                                &keyboard_state.shortcut_contexts,
+                            )
+                        {
                             return message;
                         }
                         match (key.as_ref(), m) {
@@ -732,17 +783,17 @@ impl Signex {
                                 Message::OpenReplace
                             }
                             (keyboard::Key::Named(keyboard::key::Named::Escape), _)
-                                if find_replace_open =>
+                                if keyboard_state.find_replace_open =>
                             {
                                 Message::FindReplaceMsg(crate::find_replace::FindReplaceMsg::Close)
                             }
                             (keyboard::Key::Named(keyboard::key::Named::Escape), _)
-                                if kbd_shortcuts_open =>
+                                if keyboard_state.kbd_shortcuts_open =>
                             {
                                 Message::CloseKeyboardShortcuts
                             }
                             (keyboard::Key::Named(keyboard::key::Named::Escape), _)
-                                if first_run_tour_open =>
+                                if keyboard_state.first_run_tour_open =>
                             {
                                 Message::DismissFirstRunTour
                             }
@@ -750,31 +801,31 @@ impl Signex {
                             // The order here goes "user-facing top → bottom":
                             // ERC, then Annotate, then Preferences. Once those
                             // are closed, Esc falls through to the tool reset.
-                            (keyboard::Key::Named(keyboard::key::Named::Escape), _) if erc_open => {
+                            (keyboard::Key::Named(keyboard::key::Named::Escape), _) if keyboard_state.erc_open => {
                                 Message::CloseErcDialog
                             }
                             (keyboard::Key::Named(keyboard::key::Named::Escape), _)
-                                if annotate_open =>
+                                if keyboard_state.annotate_open =>
                             {
                                 Message::CloseAnnotateDialog
                             }
                             (keyboard::Key::Named(keyboard::key::Named::Escape), _)
-                                if prefs_open =>
+                                if keyboard_state.prefs_open =>
                             {
                                 Message::ClosePreferences
                             }
                             (keyboard::Key::Named(keyboard::key::Named::Escape), _)
-                                if rename_open =>
+                                if keyboard_state.rename_open =>
                             {
                                 Message::CloseRenameDialog
                             }
                             (keyboard::Key::Named(keyboard::key::Named::Escape), _)
-                                if remove_open =>
+                                if keyboard_state.remove_open =>
                             {
                                 Message::CloseRemoveDialog
                             }
                             (keyboard::Key::Named(keyboard::key::Named::Escape), _)
-                                if enable_vc_open =>
+                                if keyboard_state.enable_vc_open =>
                             {
                                 Message::CloseEnableVersionControl
                             }
@@ -787,7 +838,7 @@ impl Signex {
                             // save" invariant when the user hadn't intended
                             // to confirm).
                             (keyboard::Key::Named(keyboard::key::Named::Escape), _)
-                                if library_create_options_open =>
+                                if keyboard_state.library_create_options_open =>
                             {
                                 Message::Library(
                                     crate::library::messages::LibraryMessage::LibraryCreateOptionsCancel,
@@ -807,7 +858,7 @@ impl Signex {
                             }
                             (keyboard::Key::Named(keyboard::key::Named::F1), _) => {
                                 // F1 toggles: open if closed, close if open.
-                                if kbd_shortcuts_open {
+                                if keyboard_state.kbd_shortcuts_open {
                                     Message::CloseKeyboardShortcuts
                                 } else {
                                     Message::Menu(MenuMessage::OpenKeyboardShortcuts)
@@ -956,8 +1007,7 @@ impl Signex {
                         }
                     }
                     _ => Message::Noop,
-                },
-            );
+                });
 
         // Mouse events for drag-to-resize/floating-drag.
         // Subscribing to cursor move only while dragging avoids per-frame

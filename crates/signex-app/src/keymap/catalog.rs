@@ -74,6 +74,11 @@ pub const COMMAND_METADATA: &[CommandMetadata] = &[
         label: "Cycle backward through snap grids",
     },
     CommandMetadata {
+        id: "cycle_selection_mode",
+        category: "select",
+        label: "Cycle selection mode",
+    },
+    CommandMetadata {
         id: "cycle_snap_grid_forward",
         category: "view",
         label: "Cycle forward through snap grids",
@@ -274,6 +279,11 @@ pub const COMMAND_METADATA: &[CommandMetadata] = &[
         label: "Open Components panel / place components",
     },
     CommandMetadata {
+        id: "open_command_palette",
+        category: "commands",
+        label: "Open command palette",
+    },
+    CommandMetadata {
         id: "open_datasheet",
         category: "edit",
         label: "Open datasheet",
@@ -282,6 +292,26 @@ pub const COMMAND_METADATA: &[CommandMetadata] = &[
         id: "open_document",
         category: "file",
         label: "Open document",
+    },
+    CommandMetadata {
+        id: "open_grid_picker",
+        category: "view",
+        label: "Open grid picker",
+    },
+    CommandMetadata {
+        id: "open_grid_properties",
+        category: "view",
+        label: "Open grid properties",
+    },
+    CommandMetadata {
+        id: "open_net_color_palette",
+        category: "view",
+        label: "Open net color palette",
+    },
+    CommandMetadata {
+        id: "open_preferences",
+        category: "preferences",
+        label: "Open preferences",
     },
     CommandMetadata {
         id: "open_schematic_preferences",
@@ -432,6 +462,11 @@ pub const COMMAND_METADATA: &[CommandMetadata] = &[
         id: "report_manager_bom",
         category: "reports",
         label: "Report Manager / BOM",
+    },
+    CommandMetadata {
+        id: "run_erc",
+        category: "validation",
+        label: "Run electrical rules check",
     },
     CommandMetadata {
         id: "reset_local_coordinates",
