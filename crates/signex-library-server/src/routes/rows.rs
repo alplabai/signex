@@ -48,7 +48,15 @@ async fn create_row(
     Query(q): Query<LibraryQuery>,
     Json(row): Json<ComponentRow>,
 ) -> Result<impl IntoResponse, ApiError> {
-    state.insert_row(q.library_id, &name, &row).await?;
+    let inserted = state.insert_row(q.library_id, &name, &row).await?;
+    if !inserted {
+        // POST is create-only; an existing row must not be silently
+        // overwritten. Clients replace via PUT.
+        return Err(ApiError::conflict(format!(
+            "row {} already exists in table {name}",
+            row.row_id
+        )));
+    }
     Ok((StatusCode::CREATED, Json(row)))
 }
 
