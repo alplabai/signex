@@ -1085,28 +1085,52 @@ impl<'a> SymbolCanvas<'a> {
         // Marker dot at the electrical end.
         frame.fill(&canvas::Path::circle(tip, 2.5), stroke_color);
 
-        // Pin number — between body_end and tip.
-        let num_pos =
-            iced::Point::new((tip.x + body_end.x) * 0.5, (tip.y + body_end.y) * 0.5 - 8.0);
-        frame.fill_text(canvas::Text {
-            content: pin.number.clone(),
-            position: num_pos,
-            size: 10.0.into(),
-            color: self.text_color,
-            ..canvas::Text::default()
+        // Pin number + name — rotate to run along the pin (Y-flip
+        // corrected) and put the name on the side that extends away
+        // from the tip. Salvaged from feature/v0.13-symbol's
+        // PinRenderGeometry text logic. (Pixel offsets are tunable.)
+        let tg = state::PinTextGeometry::compute(pin.orientation);
+
+        // Number — centred over the pin line, nudged just above it in
+        // the pin's own rotated frame so it stays above for vertical
+        // pins too.
+        let mid = iced::Point::new((tip.x + body_end.x) * 0.5, (tip.y + body_end.y) * 0.5);
+        frame.with_save(|inner| {
+            inner.translate(iced::Vector::new(mid.x, mid.y));
+            inner.rotate(iced::Radians(tg.text_rotation));
+            inner.fill_text(canvas::Text {
+                content: pin.number.clone(),
+                position: iced::Point::new(0.0, -10.0),
+                size: 10.0.into(),
+                color: self.text_color,
+                ..canvas::Text::default()
+            });
         });
 
-        // Pin name — past the body_end so the body looks tidy.
-        let name_pos = iced::Point::new(body_end.x + 4.0, body_end.y - 6.0);
-        frame.fill_text(canvas::Text {
-            content: pin.name.clone(),
-            position: name_pos,
-            size: 10.0.into(),
-            color: Color {
-                a: 0.85,
-                ..self.text_color
-            },
-            ..canvas::Text::default()
+        // Name — anchored past the body_end (away from the tip in world
+        // space, so it lands correctly for every orientation), rotated
+        // to match. `name_flipped` (Left pins) reverses the local x so
+        // the name still runs outward.
+        const NAME_GAP_MM: f64 = 0.8;
+        let len = (dx * dx + dy * dy).sqrt().max(1e-9);
+        let (ux, uy) = (dx / len, dy / len);
+        let name_anchor = w2s(
+            pin.position[0] + dx + ux * NAME_GAP_MM,
+            pin.position[1] + dy + uy * NAME_GAP_MM,
+        );
+        frame.with_save(|inner| {
+            inner.translate(iced::Vector::new(name_anchor.x, name_anchor.y));
+            inner.rotate(iced::Radians(tg.text_rotation));
+            inner.fill_text(canvas::Text {
+                content: pin.name.clone(),
+                position: iced::Point::new(if tg.name_flipped { -4.0 } else { 4.0 }, -6.0),
+                size: 10.0.into(),
+                color: Color {
+                    a: 0.85,
+                    ..self.text_color
+                },
+                ..canvas::Text::default()
+            });
         });
     }
 }

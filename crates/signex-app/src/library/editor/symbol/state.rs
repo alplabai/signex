@@ -870,6 +870,49 @@ fn pin_body_delta(pin: &SymbolPin) -> (f64, f64) {
     }
 }
 
+/// Screen-space text layout for a pin's number/name labels.
+///
+/// Reimplements `feature/v0.13-symbol`'s `PinRenderGeometry` text logic
+/// with plain trig (no `anchor2d`). World coordinates are Y-up but the
+/// canvas is Y-down, so the screen angle negates the world y-component;
+/// the result is normalised to `(-π/2, π/2]` so glyphs never render
+/// upside down. `name_flipped` is `true` for Left-facing pins (the text
+/// x-axis is reversed) so callers can right-align the name to keep it
+/// extending away from the tip.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PinTextGeometry {
+    pub text_rotation: f32,
+    pub name_flipped: bool,
+}
+
+impl PinTextGeometry {
+    pub fn compute(orientation: PinOrientation) -> Self {
+        // Unit vector from tip toward body-end, per orientation.
+        let (ux, uy): (f32, f32) = match orientation {
+            PinOrientation::Right => (1.0, 0.0),
+            PinOrientation::Up => (0.0, 1.0),
+            PinOrientation::Left => (-1.0, 0.0),
+            PinOrientation::Down => (0.0, -1.0),
+            // Non-exhaustive enum — treat unknowns like Left.
+            _ => (-1.0, 0.0),
+        };
+        // Y-flip: screen y grows downward, so negate uy.
+        let mut text_rotation = (-uy).atan2(ux);
+        let mut name_flipped = false;
+        if text_rotation > std::f32::consts::FRAC_PI_2 {
+            text_rotation -= std::f32::consts::PI;
+            name_flipped = true;
+        } else if text_rotation < -std::f32::consts::FRAC_PI_2 {
+            text_rotation += std::f32::consts::PI;
+            name_flipped = true;
+        }
+        Self {
+            text_rotation,
+            name_flipped,
+        }
+    }
+}
+
 /// Advance a pin orientation one 90° step. Salvaged from
 /// `feature/v0.13-symbol`.
 fn rotate_pin_orientation_90(o: PinOrientation, clockwise: bool) -> PinOrientation {
@@ -1606,5 +1649,39 @@ mod tests {
         assert_eq!(delete_selected(&mut s, Some(SymbolSelection::All)), None);
         assert_eq!(s.graphics.len(), 1);
         assert_eq!(s.pins.len(), 1);
+    }
+
+    // ── pin text geometry (salvaged from v0.13-symbol) ────────────────
+
+    #[test]
+    fn pin_text_geometry_right_is_upright() {
+        let g = PinTextGeometry::compute(PinOrientation::Right);
+        assert_eq!(g.text_rotation, 0.0);
+        assert!(!g.name_flipped);
+    }
+
+    #[test]
+    fn pin_text_geometry_left_is_flipped_but_upright() {
+        // Left faces +π (upside down); normalised back to 0 with the
+        // name side reversed so it still reads away from the tip.
+        let g = PinTextGeometry::compute(PinOrientation::Left);
+        assert_eq!(g.text_rotation, 0.0);
+        assert!(g.name_flipped);
+    }
+
+    #[test]
+    fn pin_text_geometry_up_flows_upward_on_screen() {
+        // Up pin: world +y = screen up, so text rotates to -π/2 (reads
+        // upward). Kept as-is (not flipped) — the readable direction.
+        let g = PinTextGeometry::compute(PinOrientation::Up);
+        assert!((g.text_rotation - (-std::f32::consts::FRAC_PI_2)).abs() < 1e-6);
+        assert!(!g.name_flipped);
+    }
+
+    #[test]
+    fn pin_text_geometry_down_flows_downward_on_screen() {
+        let g = PinTextGeometry::compute(PinOrientation::Down);
+        assert!((g.text_rotation - std::f32::consts::FRAC_PI_2).abs() < 1e-6);
+        assert!(!g.name_flipped);
     }
 }
