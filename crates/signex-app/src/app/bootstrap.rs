@@ -5,6 +5,7 @@ use crate::canvas::SchematicCanvas;
 use crate::dock::{DockArea, PanelPosition};
 use crate::keymap::{AppCommandId, CompiledKeymap, KeyStroke, ShortcutContext};
 use crate::panels::PanelKind;
+use crate::preferences::PrefMsg;
 
 use super::*;
 
@@ -56,6 +57,7 @@ struct KeyboardSubscriptionState {
     remove_open: bool,
     enable_vc_open: bool,
     library_create_options_open: bool,
+    keymap_recorder_open: bool,
     active_keymap: CompiledKeymap,
     shortcut_contexts: Vec<ShortcutContext>,
 }
@@ -264,6 +266,7 @@ impl Signex {
                     keymap_profiles.clone(),
                 ),
                 preferences_keymap_status: keymap_status,
+                preferences_keymap_recorder: None,
                 canvas_font_name: crate::fonts::DEFAULT_CANVAS_FONT.to_string(),
                 canvas_font_size: 11.0,
                 canvas_font_bold: false,
@@ -660,6 +663,7 @@ impl Signex {
             remove_open: self.ui_state.remove_dialog.is_some(),
             enable_vc_open: self.ui_state.enable_version_control.is_some(),
             library_create_options_open: self.library.create_options.is_some(),
+            keymap_recorder_open: self.ui_state.preferences_keymap_recorder.is_some(),
             active_keymap: self.ui_state.active_keymap.clone(),
             shortcut_contexts,
         };
@@ -667,9 +671,24 @@ impl Signex {
         let kbd = keyboard::listen()
             .with(keyboard_state)
             .map(|(keyboard_state, event)| match event {
-                    keyboard::Event::KeyPressed {
-                        key, modifiers: m, ..
-                    } => {
+                keyboard::Event::ModifiersChanged(modifiers)
+                    if keyboard_state.keymap_recorder_open =>
+                {
+                    Message::PreferencesMsg(PrefMsg::KeymapRecorderModifiersChanged(
+                        crate::keymap::Modifiers::from_iced(modifiers),
+                    ))
+                }
+                keyboard::Event::KeyPressed {
+                    key, modifiers: m, ..
+                } => {
+                    if keyboard_state.keymap_recorder_open {
+                        clear_keymap_pending_sequence();
+                        return KeyStroke::from_iced(&key, m)
+                            .map(|stroke| {
+                                Message::PreferencesMsg(PrefMsg::KeymapRecorderKeyPressed(stroke))
+                            })
+                            .unwrap_or(Message::Noop);
+                    }
                         // Command palette captures most input while open so
                         // typing into the search field doesn't fire tool
                         // shortcuts (`p`, `w`, `l`, …). Only navigation

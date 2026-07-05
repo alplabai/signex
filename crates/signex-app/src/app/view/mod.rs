@@ -3493,6 +3493,7 @@ impl Signex {
             &ui.preferences_draft_component_classes,
             &ui.preferences_keymap_editor,
             &ui.preferences_keymap_status,
+            ui.preferences_keymap_recorder.as_ref(),
             ui.theme_id,
         )
         .map(Message::PreferencesMsg);
@@ -5444,6 +5445,7 @@ impl Signex {
                 &ui.preferences_draft_component_classes,
                 &ui.preferences_keymap_editor,
                 &ui.preferences_keymap_status,
+                ui.preferences_keymap_recorder.as_ref(),
                 ui.theme_id,
             )
             .map(Message::PreferencesMsg);

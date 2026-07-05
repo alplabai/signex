@@ -51,6 +51,7 @@ pub struct UiState {
     pub active_keymap: crate::keymap::CompiledKeymap,
     pub preferences_keymap_editor: crate::keymap::KeymapEditorModel,
     pub preferences_keymap_status: String,
+    pub preferences_keymap_recorder: Option<KeymapRecorderState>,
     pub canvas_font_name: String,
     pub canvas_font_size: f32,
     pub canvas_font_bold: bool,
@@ -227,6 +228,49 @@ pub struct UiState {
     /// row. The chrome-strip search bar is the always-rendered input;
     /// `open` gates the dropdown overlay only.
     pub command_palette: super::command_palette::CommandPaletteState,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeymapRecorderState {
+    pub command: crate::keymap::AppCommandId,
+    pub command_label: String,
+    pub context: crate::keymap::ShortcutContext,
+    pub original_trigger: String,
+    pub strokes: Vec<crate::keymap::KeyStroke>,
+    pub modifiers: crate::keymap::Modifiers,
+    pub recording: bool,
+}
+
+impl KeymapRecorderState {
+    pub const MAX_STROKES: usize = 3;
+
+    pub fn new(
+        command: crate::keymap::AppCommandId,
+        command_label: String,
+        context: crate::keymap::ShortcutContext,
+        trigger: String,
+    ) -> Self {
+        let strokes = crate::keymap::ShortcutTrigger::parse(&trigger)
+            .ok()
+            .and_then(|trigger| match trigger {
+                crate::keymap::ShortcutTrigger::KeySequence(strokes) => Some(strokes),
+                crate::keymap::ShortcutTrigger::PointerGesture(_) => None,
+            })
+            .unwrap_or_default();
+        Self {
+            command,
+            command_label,
+            context,
+            original_trigger: trigger,
+            strokes,
+            modifiers: crate::keymap::Modifiers::default(),
+            recording: true,
+        }
+    }
+
+    pub fn trigger_text(&self) -> String {
+        crate::keymap::ShortcutTrigger::KeySequence(self.strokes.clone()).display_text()
+    }
 }
 
 /// Role of a non-main window opened by Signex. Phase 2 adds detached

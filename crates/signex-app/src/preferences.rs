@@ -142,6 +142,19 @@ pub enum PrefMsg {
         context: crate::keymap::ShortcutContext,
         trigger: String,
     },
+    KeymapRecorderOpen {
+        command: crate::keymap::AppCommandId,
+        label: String,
+        context: crate::keymap::ShortcutContext,
+        trigger: String,
+    },
+    KeymapRecorderCancel,
+    KeymapRecorderStart,
+    KeymapRecorderStop,
+    KeymapRecorderClear,
+    KeymapRecorderModifiersChanged(crate::keymap::Modifiers),
+    KeymapRecorderKeyPressed(crate::keymap::KeyStroke),
+    KeymapRecorderApply,
 }
 
 // ─── Dialog sizes ─────────────────────────────────────────────
@@ -196,6 +209,7 @@ pub fn view<'a>(
     draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
     keymap_editor: &'a crate::keymap::KeymapEditorModel,
     keymap_status: &'a str,
+    keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
     theme_id: ThemeId,
 ) -> Element<'a, PrefMsg> {
     let dialog = build_dialog(
@@ -215,6 +229,7 @@ pub fn view<'a>(
         draft_component_classes,
         keymap_editor,
         keymap_status,
+        keymap_recorder,
         theme_id,
     );
 
@@ -264,6 +279,7 @@ pub(crate) fn view_body<'a>(
     draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
     keymap_editor: &'a crate::keymap::KeymapEditorModel,
     keymap_status: &'a str,
+    keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
     theme_id: ThemeId,
 ) -> Element<'a, PrefMsg> {
     build_dialog(
@@ -283,6 +299,7 @@ pub(crate) fn view_body<'a>(
         draft_component_classes,
         keymap_editor,
         keymap_status,
+        keymap_recorder,
         theme_id,
     )
 }
@@ -305,6 +322,7 @@ fn build_dialog<'a>(
     draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
     keymap_editor: &'a crate::keymap::KeymapEditorModel,
     keymap_status: &'a str,
+    keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
     theme_id: ThemeId,
 ) -> Element<'a, PrefMsg> {
     // ── Header ── canonical modal chrome (28px, asymmetric padding,
@@ -362,6 +380,7 @@ fn build_dialog<'a>(
             draft_component_classes,
             keymap_editor,
             keymap_status,
+            keymap_recorder,
         ),
     ]
     .width(Length::Fill)
@@ -496,6 +515,7 @@ fn build_content<'a>(
     draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
     keymap_editor: &'a crate::keymap::KeymapEditorModel,
     keymap_status: &'a str,
+    keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
 ) -> Element<'a, PrefMsg> {
     let inner = match nav {
         PrefNav::Appearance => content_appearance(
@@ -520,7 +540,9 @@ fn build_content<'a>(
         PrefNav::LibraryDistributors => {
             content_library_distributors(distributor_settings, panel_tokens)
         }
-        PrefNav::KeyboardShortcuts => content_keyboard_shortcuts(keymap_editor, keymap_status),
+        PrefNav::KeyboardShortcuts => {
+            content_keyboard_shortcuts(keymap_editor, keymap_status, keymap_recorder)
+        }
         PrefNav::ComponentClasses => content_component_classes(draft_component_classes),
     };
 
@@ -894,7 +916,7 @@ fn close_btn<'a>(theme_id: ThemeId) -> Element<'a, PrefMsg> {
         .align_y(iced::alignment::Vertical::Center),
     )
     .padding(0)
-    .on_press(PrefMsg::Close)
+    .on_press(PrefMsg::DiscardAndClose)
     .style(move |_: &Theme, status: button::Status| {
         let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
         button::Style {
@@ -1223,6 +1245,7 @@ fn severity_bg(sev: signex_erc::Severity) -> Color {
 fn content_keyboard_shortcuts<'a>(
     editor: &'a crate::keymap::KeymapEditorModel,
     status: &'a str,
+    recorder: Option<&'a crate::app::KeymapRecorderState>,
 ) -> Element<'a, PrefMsg> {
     let profiles = editor.profiles();
     let active = profiles.iter().find(|profile| profile.active);
@@ -1369,21 +1392,27 @@ fn content_keyboard_shortcuts<'a>(
         {
             if let Some(command) = row_model.command.clone() {
                 let context = row_model.context;
-                text_input("", &row_model.trigger)
-                    .on_input(move |trigger| PrefMsg::KeymapBindingChanged {
-                        command: command.clone(),
-                        context,
-                        trigger,
-                    })
-                    .padding(4)
-                    .size(11)
-                    .width(Length::Fill)
-                    .into()
+                let label = row_model.label.clone();
+                let trigger = row_model.trigger.clone();
+                row![
+                    shortcut_chip(&row_model.trigger, state_color),
+                    button(container(text("Edit").size(10).color(TEXT_PRI)).padding([3, 8]))
+                        .on_press(PrefMsg::KeymapRecorderOpen {
+                            command,
+                            label,
+                            context,
+                            trigger,
+                        })
+                        .style(secondary_button_style),
+                ]
+                .spacing(6)
+                .align_y(iced::Alignment::Center)
+                .into()
             } else {
                 text(row_model.trigger).size(11).color(TEXT_MUT).into()
             }
         } else {
-            text(row_model.trigger).size(11).color(TEXT_PRI).into()
+            shortcut_chip(&row_model.trigger, TEXT_PRI)
         };
 
         table_rows.push(
@@ -1421,17 +1450,232 @@ fn content_keyboard_shortcuts<'a>(
         Column::with_children(table_rows).spacing(2).into()
     };
 
-    column![
+    let mut content = column![
         header,
         profile_row,
         text(status_line).size(10).color(TEXT_MUT),
-        h_sep(),
-        table_header,
-        table,
     ]
     .spacing(10)
-    .padding(20)
+    .padding(20);
+
+    if let Some(recorder) = recorder {
+        content = content.push(keymap_recorder_control(recorder));
+    }
+
+    content.push(h_sep()).push(table_header).push(table).into()
+}
+
+fn shortcut_chip<'a>(label: &str, color: Color) -> Element<'a, PrefMsg> {
+    let label = if label.trim().is_empty() {
+        "Unbound".to_string()
+    } else {
+        label.to_string()
+    };
+    container(text(label).size(11).color(color))
+        .padding([3, 8])
+        .width(Length::Shrink)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(Color::from_rgb(0.10, 0.10, 0.12))),
+            border: Border {
+                width: 1.0,
+                color: SEP,
+                radius: 3.0.into(),
+            },
+            ..container::Style::default()
+        })
+        .into()
+}
+
+fn keymap_recorder_control<'a>(
+    recorder: &'a crate::app::KeymapRecorderState,
+) -> Element<'a, PrefMsg> {
+    let recorded: Element<'a, PrefMsg> = if recorder.strokes.is_empty() {
+        text("Press Record, then type a shortcut").size(12).color(TEXT_MUT).into()
+    } else {
+        row(recorded_shortcut_chips(recorder))
+            .spacing(6)
+            .align_y(iced::Alignment::Center)
+            .into()
+    };
+
+    let transient_modifiers = if recorder.recording
+        && recorder.modifiers != crate::keymap::Modifiers::default()
+        && recorder.strokes.len() < crate::app::KeymapRecorderState::MAX_STROKES
+    {
+        Some(shortcut_chip(
+            &format!("{}...", modifiers_label(recorder.modifiers)),
+            WARN_YELLOW,
+        ))
+    } else {
+        None
+    };
+    let mut capture_row = row![
+        text(if recorder.recording {
+            "Recording"
+        } else {
+            "Recorded"
+        })
+        .size(11)
+        .color(if recorder.recording {
+            WARN_YELLOW
+        } else {
+            TEXT_MUT
+        }),
+        recorded,
+    ]
+    .spacing(8)
+    .align_y(iced::Alignment::Center);
+    if let Some(transient_modifiers) = transient_modifiers {
+        capture_row = capture_row.push(transient_modifiers);
+    }
+
+    let record_button = if recorder.recording {
+        button(container(text("Stop").size(11).color(Color::WHITE)).padding([5, 12]))
+            .on_press(PrefMsg::KeymapRecorderStop)
+            .style(move |_: &Theme, status: button::Status| {
+                let bg = match status {
+                    button::Status::Hovered | button::Status::Pressed => BTN_DANGER_HOV,
+                    _ => BTN_DANGER,
+                };
+                button::Style {
+                    background: Some(Background::Color(bg)),
+                    text_color: Color::WHITE,
+                    border: Border {
+                        radius: 3.0.into(),
+                        ..Border::default()
+                    },
+                    ..button::Style::default()
+                }
+            })
+    } else {
+        button(container(text("Record").size(11).color(Color::WHITE)).padding([5, 12]))
+            .on_press(PrefMsg::KeymapRecorderStart)
+            .style(move |_: &Theme, status: button::Status| {
+                let bg = match status {
+                    button::Status::Hovered | button::Status::Pressed => BTN_IMPORT_HOV,
+                    _ => BTN_IMPORT,
+                };
+                button::Style {
+                    background: Some(Background::Color(bg)),
+                    text_color: Color::WHITE,
+                    border: Border {
+                        radius: 3.0.into(),
+                        ..Border::default()
+                    },
+                    ..button::Style::default()
+                }
+            })
+    };
+
+    container(
+        column![
+            row![
+                column![
+                    text("Edit Shortcut").size(15).color(TEXT_PRI),
+                    text(recorder.command_label.clone()).size(11).color(TEXT_MUT),
+                ]
+                .spacing(3),
+                Space::new().width(Length::Fill),
+                button(container(text("Cancel").size(11).color(TEXT_PRI)).padding([5, 12]))
+                    .on_press(PrefMsg::KeymapRecorderCancel)
+                    .style(secondary_button_style),
+            ]
+            .align_y(iced::Alignment::Center),
+            container(
+                column![
+                    row![
+                        text(context_label(recorder.context)).size(11).color(TEXT_MUT),
+                        text("Current").size(11).color(TEXT_MUT),
+                        shortcut_chip(&recorder.original_trigger, TEXT_PRI),
+                    ]
+                    .spacing(8)
+                    .align_y(iced::Alignment::Center),
+                    capture_row,
+                ]
+                .spacing(10),
+            )
+            .padding(12)
+            .width(Length::Fill)
+            .style(move |_: &Theme| container::Style {
+                background: Some(Background::Color(Color::from_rgb(0.10, 0.10, 0.12))),
+                border: Border {
+                    width: 1.0,
+                    color: SEP,
+                    radius: 4.0.into(),
+                },
+                ..container::Style::default()
+            }),
+            text("Press the exact keystroke to record it. ESC is recorded as a key; use Cancel to close.")
+                .size(10)
+                .color(TEXT_MUT),
+            row![
+                record_button,
+                button(container(text("Clear").size(11).color(TEXT_PRI)).padding([5, 12]))
+                    .on_press(PrefMsg::KeymapRecorderClear)
+                    .style(secondary_button_style),
+                Space::new().width(Length::Fill),
+                button(container(text("OK").size(11).color(Color::WHITE)).padding([5, 12]))
+                    .on_press(PrefMsg::KeymapRecorderApply)
+                    .style(move |_: &Theme, status: button::Status| {
+                        let bg = match status {
+                            button::Status::Hovered | button::Status::Pressed => BTN_IMPORT_HOV,
+                            _ => BTN_IMPORT,
+                        };
+                        button::Style {
+                            background: Some(Background::Color(bg)),
+                            text_color: Color::WHITE,
+                            border: Border {
+                                radius: 3.0.into(),
+                                ..Border::default()
+                            },
+                            ..button::Style::default()
+                        }
+                    }),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center),
+        ]
+        .spacing(12),
+    )
+    .padding(16)
+    .width(Length::Fill)
+    .style(move |_: &Theme| container::Style {
+        background: Some(Background::Color(Color::from_rgb(0.085, 0.09, 0.105))),
+        border: Border {
+            width: 1.0,
+            color: BTN_IMPORT,
+            radius: 6.0.into(),
+        },
+        ..container::Style::default()
+    })
     .into()
+}
+
+fn recorded_shortcut_chips<'a>(
+    recorder: &'a crate::app::KeymapRecorderState,
+) -> Vec<Element<'a, PrefMsg>> {
+    recorder
+        .strokes
+        .iter()
+        .map(|stroke| shortcut_chip(&stroke.to_string(), TEXT_PRI))
+        .collect()
+}
+
+fn modifiers_label(modifiers: crate::keymap::Modifiers) -> String {
+    let mut parts = Vec::new();
+    if modifiers.ctrl {
+        parts.push("Ctrl");
+    }
+    if modifiers.command && !modifiers.ctrl {
+        parts.push("Cmd");
+    }
+    if modifiers.alt {
+        parts.push("Alt");
+    }
+    if modifiers.shift {
+        parts.push("Shift");
+    }
+    parts.join("+")
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

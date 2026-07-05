@@ -14,6 +14,7 @@ impl Signex {
         self.ui_state.preferences_keymap_editor =
             crate::keymap::KeymapEditorModel::new(self.ui_state.keymap_profiles.clone());
         self.ui_state.preferences_keymap_status.clear();
+        self.ui_state.preferences_keymap_recorder = None;
         self.ui_state.preferences_dirty = false;
         self.ui_state.panel_list_open = false;
         self.interaction_state.context_menu = None;
@@ -26,6 +27,7 @@ impl Signex {
     pub(crate) fn handle_preferences_close_requested(&mut self) -> Task<Message> {
         self.ui_state.preferences_open = false;
         self.ui_state.preferences_dirty = false;
+        self.ui_state.preferences_keymap_recorder = None;
         self.close_detached_modal(super::super::state::ModalId::Preferences)
     }
 
@@ -50,6 +52,7 @@ impl Signex {
             PrefMsg::Close => {
                 if !self.ui_state.preferences_dirty {
                     self.ui_state.preferences_open = false;
+                    self.ui_state.preferences_keymap_recorder = None;
                     return self.close_detached_modal(super::super::state::ModalId::Preferences);
                 }
             }
@@ -64,6 +67,7 @@ impl Signex {
                 self.ui_state.preferences_keymap_editor =
                     crate::keymap::KeymapEditorModel::new(self.ui_state.keymap_profiles.clone());
                 self.ui_state.preferences_keymap_status.clear();
+                self.ui_state.preferences_keymap_recorder = None;
                 self.ui_state.preferences_dirty = false;
                 self.ui_state.preferences_open = false;
                 let tokens = if self.ui_state.theme_id == ThemeId::Custom {
@@ -164,6 +168,7 @@ impl Signex {
                         self.ui_state.keymap_profiles = keymap_profiles;
                         self.ui_state.active_keymap =
                             self.ui_state.keymap_profiles.compile_active();
+                        self.ui_state.preferences_keymap_recorder = None;
                         self.ui_state.preferences_keymap_status =
                             "Keyboard shortcuts saved.".to_string();
                     }
@@ -566,6 +571,85 @@ impl Signex {
                     Ok(()) => {
                         self.ui_state.preferences_keymap_status.clear();
                         self.ui_state.preferences_dirty = true;
+                    }
+                    Err(error) => {
+                        self.ui_state.preferences_keymap_status =
+                            format!("Invalid shortcut: {error}");
+                        self.ui_state.preferences_dirty = true;
+                    }
+                }
+            }
+            PrefMsg::KeymapRecorderOpen {
+                command,
+                label,
+                context,
+                trigger,
+            } => {
+                self.ui_state.preferences_keymap_recorder = Some(
+                    crate::app::KeymapRecorderState::new(command, label, context, trigger),
+                );
+                self.ui_state.preferences_keymap_status.clear();
+            }
+            PrefMsg::KeymapRecorderCancel => {
+                self.ui_state.preferences_keymap_recorder = None;
+            }
+            PrefMsg::KeymapRecorderStart => {
+                if let Some(recorder) = &mut self.ui_state.preferences_keymap_recorder {
+                    recorder.recording = true;
+                    recorder.strokes.clear();
+                    recorder.modifiers = crate::keymap::Modifiers::default();
+                }
+            }
+            PrefMsg::KeymapRecorderStop => {
+                if let Some(recorder) = &mut self.ui_state.preferences_keymap_recorder {
+                    recorder.recording = false;
+                    recorder.modifiers = crate::keymap::Modifiers::default();
+                }
+            }
+            PrefMsg::KeymapRecorderClear => {
+                if let Some(recorder) = &mut self.ui_state.preferences_keymap_recorder {
+                    recorder.strokes.clear();
+                    recorder.modifiers = crate::keymap::Modifiers::default();
+                    recorder.recording = true;
+                }
+            }
+            PrefMsg::KeymapRecorderModifiersChanged(modifiers) => {
+                if let Some(recorder) = &mut self.ui_state.preferences_keymap_recorder {
+                    if recorder.recording {
+                        recorder.modifiers = modifiers;
+                    }
+                }
+            }
+            PrefMsg::KeymapRecorderKeyPressed(stroke) => {
+                if let Some(recorder) = &mut self.ui_state.preferences_keymap_recorder {
+                    if recorder.recording {
+                        if recorder.strokes.len() >= crate::app::KeymapRecorderState::MAX_STROKES {
+                            recorder.strokes.clear();
+                        }
+                        recorder.strokes.push(stroke);
+                        recorder.modifiers = crate::keymap::Modifiers::default();
+                    }
+                }
+            }
+            PrefMsg::KeymapRecorderApply => {
+                let Some(recorder) = self.ui_state.preferences_keymap_recorder.clone() else {
+                    return Task::none();
+                };
+                if recorder.strokes.is_empty() {
+                    self.ui_state.preferences_keymap_status =
+                        "Record at least one keystroke before applying.".to_string();
+                    return Task::none();
+                }
+                let trigger = recorder.trigger_text();
+                match self.ui_state.preferences_keymap_editor.edit_active_trigger(
+                    recorder.command,
+                    recorder.context,
+                    trigger,
+                ) {
+                    Ok(()) => {
+                        self.ui_state.preferences_keymap_status.clear();
+                        self.ui_state.preferences_dirty = true;
+                        self.ui_state.preferences_keymap_recorder = None;
                     }
                     Err(error) => {
                         self.ui_state.preferences_keymap_status =

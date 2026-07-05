@@ -20,6 +20,45 @@ fn parses_modified_named_key() {
 }
 
 #[test]
+fn displays_localization_free_named_keys() {
+    let cases = [
+        ("Escape", "ESC"),
+        ("Ctrl+Escape", "Ctrl+ESC"),
+        ("Delete", "DEL"),
+        ("Insert", "INS"),
+        ("PageUp", "PGUP"),
+        ("PageDown", "PGDN"),
+        ("ArrowUp", "UP"),
+        ("ArrowDown", "DOWN"),
+        ("ArrowLeft", "LEFT"),
+        ("ArrowRight", "RIGHT"),
+    ];
+
+    for (input, expected) in cases {
+        assert_eq!(KeyStroke::from_str(input).unwrap().to_string(), expected);
+    }
+}
+
+#[test]
+fn accepts_ascii_named_key_aliases() {
+    let cases = [
+        ("ESC", KeyToken::Escape),
+        ("DEL", KeyToken::Delete),
+        ("INS", KeyToken::Insert),
+        ("PGUP", KeyToken::PageUp),
+        ("PGDN", KeyToken::PageDown),
+        ("UP", KeyToken::ArrowUp),
+        ("DOWN", KeyToken::ArrowDown),
+        ("LEFT", KeyToken::ArrowLeft),
+        ("RIGHT", KeyToken::ArrowRight),
+    ];
+
+    for (input, expected) in cases {
+        assert_eq!(KeyStroke::from_str(input).unwrap().key, expected);
+    }
+}
+
+#[test]
 fn preserves_pointer_gestures_as_non_keyboard_triggers() {
     assert!(matches!(
         ShortcutTrigger::parse("Shift+Click").unwrap(),
