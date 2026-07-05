@@ -628,6 +628,45 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         }
     }
 
+    /// Cursor feedback — salvaged from feature/v0.13-symbol, adapted to
+    /// dev's canvas state. Active gestures win; otherwise the Select
+    /// tool shows a grab hand over anything draggable (a resize handle,
+    /// a pin, or a graphic body) and the placement tools show a
+    /// crosshair for precise click placement.
+    fn mouse_interaction(
+        &self,
+        state: &CanvasState,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
+    ) -> mouse::Interaction {
+        if state.panning
+            || state.dragging
+            || state.dragging_handle.is_some()
+            || state.group_drag_last.is_some()
+        {
+            return mouse::Interaction::Grabbing;
+        }
+        let Some(pos) = cursor.position_in(bounds) else {
+            return mouse::Interaction::default();
+        };
+        match self.tool {
+            SymbolTool::Select => {
+                let (wx, wy) = world_unsnapped(self, pos.x, pos.y, bounds);
+                if state::hit_test_graphic_handle(self.symbol, wx, wy).is_some()
+                    || state::hit_test(self.symbol, wx, wy).is_some()
+                {
+                    // Draggable / resizable target under the cursor.
+                    mouse::Interaction::Grab
+                } else {
+                    // Empty canvas — a drag here starts a box select.
+                    mouse::Interaction::Crosshair
+                }
+            }
+            // Placement tools: precise click point.
+            _ => mouse::Interaction::Crosshair,
+        }
+    }
+
     fn draw(
         &self,
         state: &Self::State,
