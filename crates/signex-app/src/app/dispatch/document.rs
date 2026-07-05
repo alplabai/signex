@@ -47,7 +47,11 @@ impl Signex {
                 self.finish_update()
             }
             Message::RotateSelected => {
-                self.handle_selection_rotate_requested();
+                self.handle_selection_rotate_requested(false);
+                self.finish_update()
+            }
+            Message::RotateSelectedAroundCenter => {
+                self.handle_selection_rotate_requested(true);
                 self.finish_update()
             }
             Message::MirrorSelectedX => {

@@ -98,22 +98,27 @@ impl Signex {
     }
 
 
-    pub(crate) fn handle_selection_rotate_requested(&mut self) {
-        // Symbol editor rotate (Space) — salvaged from
-        // feature/v0.13-symbol. Route through the reducer so undo
-        // snapshots and refresh_panel_ctx run at the dispatch site.
+    pub(crate) fn handle_selection_rotate_requested(&mut self, around_center: bool) {
+        // Symbol editor rotate — salvaged from feature/v0.13-symbol.
+        // Space rotates graphics around the world origin; Alt+Space
+        // (`around_center`) rotates each around its own centre. Route
+        // through the reducer so undo snapshots and refresh_panel_ctx
+        // run at the dispatch site.
         if let Some(path) = self.active_symbol_editor_path() {
             let _ = self.update(Message::Library(
                 crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                     path,
                     msg: crate::library::messages::PrimitiveEditorMsg::SymbolRotateSelected {
                         clockwise: true,
+                        around_center,
                     },
                 },
             ));
             return;
         }
 
+        // The schematic engine rotates its selection about the group's
+        // own centre already, so the pivot flag doesn't apply here.
         if let Some(engine) = self.document_state.active_engine()
             && engine.selection_is_single_symbol(&self.interaction_state.active_canvas().selected)
         {

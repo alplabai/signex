@@ -261,12 +261,16 @@ pub(crate) fn apply_symbol_primitive_edit(
                 editor.canvas_cache.clear();
             }
         }
-        PrimitiveEditorMsg::SymbolRotateSelected { clockwise } => {
+        PrimitiveEditorMsg::SymbolRotateSelected {
+            clockwise,
+            around_center,
+        } => {
             let selected = editor.selected.clone();
-            crate::library::editor::symbol::state::rotate_selected(
+            crate::library::editor::symbol::state::rotate_selected_with_pivot(
                 editor.primitive_mut(),
                 selected,
                 clockwise,
+                around_center,
             );
             editor.dirty = true;
             editor.canvas_cache.clear();

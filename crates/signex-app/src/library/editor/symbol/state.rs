@@ -736,7 +736,9 @@ pub fn move_graphic_handle(sym: &mut Symbol, idx: usize, handle: GraphicHandle, 
     }
 }
 
-/// Rotate the currently-selected element by 90°.
+/// Rotate the currently-selected element by 90° around the world
+/// origin (Space). See [`rotate_selected_with_pivot`] for the
+/// geometry-centre (Alt+Space) variant.
 ///
 /// * **Pins** rotate around their body-end (the symbol-body attachment
 ///   point) so the tip swings like a clock hand and the orientation
@@ -749,10 +751,25 @@ pub fn move_graphic_handle(sym: &mut Symbol, idx: usize, handle: GraphicHandle, 
 /// `clockwise = true` rotates CW (Space), `false` CCW. Salvaged from
 /// `feature/v0.13-symbol` and ported onto dev's selection model
 /// without the `Rotatable2d` / `Pose2d` util layer (a 90° turn is
-/// exact integer arithmetic on axis-aligned geometry). The
-/// geometry-centre pivot variant (v0.13's Alt-modifier) is deferred
-/// with box/multi-select.
+/// exact integer arithmetic on axis-aligned geometry).
 pub fn rotate_selected(sym: &mut Symbol, sel: Option<SymbolSelection>, clockwise: bool) {
+    rotate_selected_with_pivot(sym, sel, clockwise, false);
+}
+
+/// Rotate the selection by 90° with an explicit graphic pivot.
+///
+/// `around_center = false` rotates graphics around the world origin
+/// (the default Space behaviour, symbol-body convention);
+/// `around_center = true` rotates each graphic around its own geometry
+/// centre (rotate-in-place — Alt+Space). Pins always rotate around
+/// their body-end regardless. Salvaged from `feature/v0.13-symbol`
+/// (its `GraphicRotationPivotMode`).
+pub fn rotate_selected_with_pivot(
+    sym: &mut Symbol,
+    sel: Option<SymbolSelection>,
+    clockwise: bool,
+    around_center: bool,
+) {
     match sel {
         Some(SymbolSelection::Pin(idx)) => {
             if let Some(pin) = sym.pins.get_mut(idx) {
@@ -763,7 +780,9 @@ pub fn rotate_selected(sym: &mut Symbol, sel: Option<SymbolSelection>, clockwise
                 pin.orientation = rotate_pin_orientation_90(pin.orientation, clockwise);
             }
         }
-        Some(SymbolSelection::Graphic(idx)) => rotate_graphic_90(sym, idx, clockwise),
+        Some(SymbolSelection::Graphic(idx)) => {
+            rotate_graphic_90(sym, idx, clockwise, around_center)
+        }
         // Rotating a group would need a shared pivot + per-item
         // re-place; v0.13 treats All / Multiple rotate as a no-op, and
         // so do we until group-rotate is designed.
@@ -774,13 +793,18 @@ pub fn rotate_selected(sym: &mut Symbol, sel: Option<SymbolSelection>, clockwise
     }
 }
 
-/// Rotate the graphic at `idx` by 90° around the world origin. No-op
-/// when `idx` is out of range.
-fn rotate_graphic_90(sym: &mut Symbol, idx: usize, clockwise: bool) {
+/// Rotate the graphic at `idx` by 90°. Pivot is the world origin, or
+/// the graphic's own geometry centre when `around_center`. No-op when
+/// `idx` is out of range.
+fn rotate_graphic_90(sym: &mut Symbol, idx: usize, clockwise: bool, around_center: bool) {
     let Some(g) = sym.graphics.get_mut(idx) else {
         return;
     };
-    let pivot = [0.0, 0.0];
+    let pivot = if around_center {
+        graphic_geometry_center(&g.kind)
+    } else {
+        [0.0, 0.0]
+    };
     match &mut g.kind {
         SymbolGraphicKind::Rectangle { from, to } | SymbolGraphicKind::Line { from, to } => {
             *from = rotate_point_90(*from, pivot, clockwise);
@@ -803,6 +827,21 @@ fn rotate_graphic_90(sym: &mut Symbol, idx: usize, clockwise: bool) {
         SymbolGraphicKind::Text { position, .. } => {
             *position = rotate_point_90(*position, pivot, clockwise);
         }
+    }
+}
+
+/// Geometry centre of a graphic in world mm — the pivot for in-place
+/// (Alt+Space) rotation. Rectangles/lines use the midpoint of their
+/// two defining points; circles/arcs use their centre (so an arc's
+/// centre is invariant and only its sweep angles turn); text uses its
+/// anchor.
+fn graphic_geometry_center(kind: &SymbolGraphicKind) -> [f64; 2] {
+    match kind {
+        SymbolGraphicKind::Rectangle { from, to } | SymbolGraphicKind::Line { from, to } => {
+            [(from[0] + to[0]) * 0.5, (from[1] + to[1]) * 0.5]
+        }
+        SymbolGraphicKind::Circle { center, .. } | SymbolGraphicKind::Arc { center, .. } => *center,
+        SymbolGraphicKind::Text { position, .. } => *position,
     }
 }
 
@@ -1339,6 +1378,52 @@ mod tests {
                 assert_eq!(*to, [3.0, 4.0]);
             }
             _ => panic!("expected Rectangle"),
+        }
+    }
+
+    #[test]
+    fn rotate_around_center_keeps_rectangle_center_fixed() {
+        let mut s = Symbol::empty("test");
+        s.graphics.push(signex_library::SymbolGraphic {
+            kind: SymbolGraphicKind::Rectangle {
+                from: [1.0, 2.0],
+                to: [3.0, 4.0],
+            },
+            stroke_width: 0.15,
+        });
+
+        // Alt+Space equivalent: CW around the graphic's own centre
+        // [2, 3]. The corners swap but the centre is invariant.
+        rotate_selected_with_pivot(&mut s, Some(SymbolSelection::Graphic(0)), true, true);
+
+        match &s.graphics[0].kind {
+            SymbolGraphicKind::Rectangle { from, to } => {
+                assert_eq!(*from, [1.0, 4.0]);
+                assert_eq!(*to, [3.0, 2.0]);
+            }
+            _ => panic!("expected Rectangle"),
+        }
+    }
+
+    #[test]
+    fn rotate_around_center_keeps_text_anchor_fixed() {
+        let mut s = Symbol::empty("test");
+        s.graphics.push(signex_library::SymbolGraphic {
+            kind: SymbolGraphicKind::Text {
+                position: [5.0, -7.0],
+                content: "R".into(),
+                size: 1.0,
+            },
+            stroke_width: 0.0,
+        });
+
+        // Text's geometry centre is its anchor, so an in-place rotate
+        // leaves the anchor exactly where it was.
+        rotate_selected_with_pivot(&mut s, Some(SymbolSelection::Graphic(0)), false, true);
+
+        match &s.graphics[0].kind {
+            SymbolGraphicKind::Text { position, .. } => assert_eq!(*position, [5.0, -7.0]),
+            _ => panic!("expected Text"),
         }
     }
 

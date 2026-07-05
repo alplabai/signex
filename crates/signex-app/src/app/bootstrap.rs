@@ -723,6 +723,11 @@ impl Signex {
                             (keyboard::Key::Named(keyboard::key::Named::Space), m) if m.shift() => {
                                 Message::CycleDrawMode
                             }
+                            // Alt+Space: rotate the symbol selection in
+                            // place (around each item's own centre).
+                            (keyboard::Key::Named(keyboard::key::Named::Space), m) if m.alt() => {
+                                Message::RotateSelectedAroundCenter
+                            }
                             // Space: rotate selected symbol (Altium convention)
                             (keyboard::Key::Named(keyboard::key::Named::Space), _) => {
                                 Message::RotateSelected

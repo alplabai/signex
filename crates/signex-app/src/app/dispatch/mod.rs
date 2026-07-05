@@ -60,6 +60,7 @@ impl Signex {
             | Message::Undo
             | Message::Redo
             | Message::RotateSelected
+            | Message::RotateSelectedAroundCenter
             | Message::MirrorSelectedX
             | Message::MirrorSelectedY
             | Message::Cut

@@ -1371,11 +1371,13 @@ pub enum PrimitiveEditorMsg {
     /// Delete-key — drop the currently-selected element.
     SymbolDeleteSelected,
     /// Space — rotate the current selection by 90°. Pins rotate around
-    /// their body-end (in place); graphics rotate around the world
-    /// origin (symbol-body convention). `clockwise=true` is the Space
-    /// binding; the field carries direction for a future CCW trigger /
-    /// canvas action. Salvaged from `feature/v0.13-symbol`.
-    SymbolRotateSelected { clockwise: bool },
+    /// their body-end (in place). Graphics rotate around the world
+    /// origin (`around_center=false`, Space, symbol-body convention) or
+    /// their own geometry centre (`around_center=true`, Alt+Space,
+    /// rotate-in-place). `clockwise=true` is the Space binding; the
+    /// field carries direction for a future CCW trigger / canvas
+    /// action. Salvaged from `feature/v0.13-symbol`.
+    SymbolRotateSelected { clockwise: bool, around_center: bool },
     /// Properties pane — overwrite the pin number string at index.
     SymbolSetPinNumber { idx: usize, number: String },
     /// Properties pane — overwrite the pin name string at index.

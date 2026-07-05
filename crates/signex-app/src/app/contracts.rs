@@ -119,6 +119,9 @@ pub enum Message {
     Undo,
     Redo,
     RotateSelected,
+    /// Rotate the selection 90° around each item's own geometry centre
+    /// (Alt+Space) — the symbol editor's rotate-in-place variant.
+    RotateSelectedAroundCenter,
     MirrorSelectedX,
     MirrorSelectedY,
     Selection(SelectionRequest),
