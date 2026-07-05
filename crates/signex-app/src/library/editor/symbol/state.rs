@@ -857,8 +857,9 @@ fn rotate_point_90(p: [f64; 2], pivot: [f64; 2], clockwise: bool) -> [f64; 2] {
 
 /// `(dx, dy)` from a pin's connection tip to its body-end attachment
 /// point, from orientation + length. The body-end is the pivot for pin
-/// rotation so the symbol-body join is invariant.
-fn pin_body_delta(pin: &SymbolPin) -> (f64, f64) {
+/// rotation so the symbol-body join is invariant. `pub(crate)` so the
+/// scene-snapshot builder can reuse it.
+pub(crate) fn pin_body_delta(pin: &SymbolPin) -> (f64, f64) {
     match pin.orientation {
         PinOrientation::Right => (pin.length, 0.0),
         PinOrientation::Up => (0.0, pin.length),
