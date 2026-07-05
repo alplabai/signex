@@ -133,6 +133,7 @@ impl Signex {
                 rename_dialog: None,
                 remove_dialog: None,
                 project_close_confirm: None,
+                app_quit_confirm: None,
                 project_options: None,
                 enable_version_control: None,
                 grid_properties: None,
@@ -881,6 +882,14 @@ impl Signex {
         // Window-close events from winit: routed so Phase 2/3 can drop
         // detached-modal / undocked-tab entries from ui_state.windows.
         let window_close = iced::window::close_events().map(Message::SecondaryWindowClosed);
+        // OS close requests (native close button, Alt+F4, taskbar close).
+        // In daemon mode iced does NOT auto-close on these, so we route
+        // them explicitly: the main window goes through the unsaved-
+        // changes guard, any other window closes. Without this, an
+        // Alt+F4 on a dirty main window would otherwise be silently
+        // dropped (or, if iced ever auto-closed, lose unsaved edits).
+        let window_close_request =
+            iced::window::close_requests().map(Message::WindowCloseRequested);
         // Window-resize subscription. `iced::event::listen()`'s
         // Window::Resized event doesn't fire on the very first frame —
         // subscribing to `window::resize_events()` directly gets the
@@ -932,6 +941,7 @@ impl Signex {
             kbd,
             mouse_sub,
             window_close,
+            window_close_request,
             window_resize,
             hover_tick,
             hover_tooltip_tick,
