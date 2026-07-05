@@ -22,17 +22,31 @@ A cherry-pick of the v0.13 symbol commits would conflict against dev's
 clean-room symbol editor on nearly every line. **Use `v0.13-symbol` as a
 functional reference and port each capability onto dev's structure.**
 
-## 2. Missing capabilities (precise — from `PrimitiveEditorMsg::Symbol*` diff)
+## 2. Missing capabilities
 
 dev's symbol message surface (30 variants) is a strict **subset** of
-`v0.13-symbol`'s (35). The five variants dev lacks, each a concrete
-capability:
+`v0.13-symbol`'s (35). But the message diff is only the *skeleton* — each
+capability sits on a body of supporting functions. A function-level diff of
+`symbol/{canvas,state}.rs` shows **~40 functions** present in `v0.13-symbol`
+and absent in dev, and even that is a floor (behavioural fixes *inside*
+shared functions — the 1763-line `canvas.rs` divergence — are not captured
+by a name diff). **"Salvage all of it" is not a one-shot guarantee; the
+reliable path is capability-by-capability port + test + you running each
+slice to confirm.**
 
-| Capability | Missing variant(s) | Reference in `v0.13-symbol` | Method | Effort |
-|-----------|--------------------|-----------------------------|--------|--------|
-| **Undo / Redo** | `SymbolUndo`, `SymbolRedo` | handler `dispatch/library.rs:4022,4032`; snapshot stack on editor state `documents.rs:251` | reimplement (mirror footprint pattern) | **M** |
-| **Rotate selection** | `SymbolRotateSelected` | reducer | reimplement | **S** |
-| **Box / rubber-band select + drag** | `SymbolDragCommit`, `SymbolMoveAll` | gesture in `symbol/canvas.rs` | reimplement | **M–L** |
+| Capability | Missing variant(s) | Supporting fns in `v0.13-symbol` | Method | Effort |
+|-----------|--------------------|----------------------------------|--------|--------|
+| **Undo / Redo** | `SymbolUndo`, `SymbolRedo` | handler `dispatch/library.rs:4022`; snapshot stack `documents.rs:251` | reimplement (mirror footprint pattern) | **M** |
+| **Rotate selection** | `SymbolRotateSelected` | ~10: `rotate_selected*`, `rotate_selected_with_pivot`, `rotate_graphic_point_`, `rotate_pin_orientation_`, `geometry_center_local`, `pose`/`set_pose`, `pin_body_delta` (+ tests) | reimplement | **M** |
+| **Box / rubber-band select** | `SymbolDragCommit` | ~7: `select_in_box`, `graphic_fully_inside_box`, `graphic_intersects_box`, `segment_crosses_box`, `segments_intersect`, `point_in_box`, `world_point`; canvas `mouse_interaction`, `is_graphic_selected`, `item_in_selection`, `selection_anchor` | reimplement | **M–L** |
+| **Multi-select move / drag whole symbol** | `SymbolMoveAll` | `move_all`, `move_multiple`, `translate_graphic_by`, `snap_axis_value` | reimplement | **M** |
+| **Renderer/geometry helpers** | — | `draw_symbol_with_renderer`, `build_symbol_renderer_snapshot`, `stroke_px_at_zoom`, `stroke_world_mm`, `text_size_px_from_mm`, `screen_px_to_world_mm`, `unwrap_angle`, `circle_vertices`, `to_rgba` | port only what the above need | **varies** |
+
+> **Honesty note:** the ~40-function catalog is a better floor than the
+> 5-variant one, but a *complete* behavioural parity check requires diffing
+> the bodies of the shared `canvas.rs`/`state.rs` functions too. Treat this
+> plan as "known-missing capabilities"; run each ported slice against the
+> real app to catch what a static diff can't.
 
 ## 3. Symbol fix commits to review (bugs dev's rewrite may share)
 
