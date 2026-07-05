@@ -17,11 +17,12 @@
 //! positions the card at exactly those pixels.
 
 use iced::widget::{button, column, container, row, text};
-use iced::{Background, Border, Color, Element, Length, Padding};
+use iced::{Background, Border, Element, Length, Padding};
 
 use signex_types::theme::ThemeTokens;
 
 use crate::app::FootprintEditorState;
+use crate::keymap::{AppCommandId, CompiledKeymap};
 use crate::library::editor::footprint::state::{
     FootprintContextAction, FootprintContextSubmenu, FootprintContextTarget,
 };
@@ -55,6 +56,7 @@ pub fn view_context_menu<'a>(
     tokens: &'a ThemeTokens,
     path: &'a std::path::Path,
     has_clipboard: bool,
+    keymap: &'a CompiledKeymap,
 ) -> Option<Element<'a, LibraryMessage>> {
     let menu_state = editor.state.context_menu.as_ref()?;
 
@@ -65,6 +67,11 @@ pub fn view_context_menu<'a>(
     };
 
     let mut items: Vec<Element<'a, LibraryMessage>> = Vec::new();
+    let select_all_shortcut = shortcut_label(keymap, "select_all", "Ctrl+A");
+    let unselect_all_shortcut = shortcut_label(keymap, "unselect_all", "Ctrl+Shift+A");
+    let cut_shortcut = shortcut_label(keymap, "cut", "Ctrl+X");
+    let copy_shortcut = shortcut_label(keymap, "copy", "Ctrl+C");
+    let paste_shortcut = shortcut_label(keymap, "paste", "Ctrl+V");
 
     match menu_state.target {
         FootprintContextTarget::Empty => {
@@ -132,7 +139,7 @@ pub fn view_context_menu<'a>(
                 items.push(item_indented(
                     tokens,
                     "Select All",
-                    "Ctrl+A",
+                    &select_all_shortcut,
                     make_msg(PrimitiveEditorMsg::FootprintContextMenuAction(
                         FootprintContextAction::SelectAllPads,
                     )),
@@ -140,7 +147,7 @@ pub fn view_context_menu<'a>(
                 items.push(item_indented(
                     tokens,
                     "Deselect All",
-                    "Ctrl+Shift+A",
+                    &unselect_all_shortcut,
                     make_msg(PrimitiveEditorMsg::FootprintContextMenuAction(
                         FootprintContextAction::DeselectAll,
                     )),
@@ -177,7 +184,7 @@ pub fn view_context_menu<'a>(
                 items.push(item_msg(
                     tokens,
                     "Paste",
-                    "Ctrl+V",
+                    &paste_shortcut,
                     make_msg(PrimitiveEditorMsg::FootprintPastePad),
                 ));
                 items.push(separator(tokens));
@@ -258,20 +265,20 @@ pub fn view_context_menu<'a>(
             items.push(item_msg(
                 tokens,
                 "Cut",
-                "Ctrl+X",
+                &cut_shortcut,
                 make_msg(PrimitiveEditorMsg::FootprintCutPad),
             ));
             items.push(item_msg(
                 tokens,
                 "Copy",
-                "Ctrl+C",
+                &copy_shortcut,
                 make_msg(PrimitiveEditorMsg::FootprintCopyPad),
             ));
             if has_clipboard {
                 items.push(item_msg(
                     tokens,
                     "Paste",
-                    "Ctrl+V",
+                    &paste_shortcut,
                     make_msg(PrimitiveEditorMsg::FootprintPastePad),
                 ));
             }
@@ -333,6 +340,13 @@ pub fn view_context_menu<'a>(
         .width(MENU_WIDTH);
 
     Some(card.into())
+}
+
+fn shortcut_label(keymap: &CompiledKeymap, command_id: &str, fallback: &str) -> String {
+    AppCommandId::new(command_id)
+        .ok()
+        .and_then(|command| keymap.shortcut_label(&command))
+        .unwrap_or_else(|| fallback.to_string())
 }
 
 // ── helpers ─────────────────────────────────────────────────────────

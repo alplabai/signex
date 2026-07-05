@@ -1,4 +1,5 @@
 use iced::Subscription;
+use std::sync::{LazyLock, Mutex};
 
 use crate::canvas::SchematicCanvas;
 use crate::dock::{DockArea, PanelPosition};
@@ -36,6 +37,15 @@ fn selection_slot_from_key(key: &str) -> Option<usize> {
         "7" => Some(6),
         "8" => Some(7),
         _ => None,
+    }
+}
+
+static KEYMAP_PENDING_SEQUENCE: LazyLock<Mutex<Vec<KeyStroke>>> =
+    LazyLock::new(|| Mutex::new(Vec::new()));
+
+fn clear_keymap_pending_sequence() {
+    if let Ok(mut pending_sequence) = KEYMAP_PENDING_SEQUENCE.lock() {
+        pending_sequence.clear();
     }
 }
 
@@ -86,8 +96,33 @@ fn lookup_keymap_message(
     modifiers: iced::keyboard::Modifiers,
 ) -> Option<Message> {
     let stroke = KeyStroke::from_iced(key, modifiers)?;
-    let lookup = keymap.lookup(&[stroke], &[ShortcutContext::Global]);
-    lookup.command.as_ref().and_then(message_for_keymap_command)
+    let mut pending_sequence = KEYMAP_PENDING_SEQUENCE.lock().ok()?;
+    pending_sequence.push(stroke.clone());
+
+    let lookup = keymap.lookup(&pending_sequence, &[ShortcutContext::Global]);
+    if let Some(message) = lookup.command.as_ref().and_then(message_for_keymap_command) {
+        pending_sequence.clear();
+        return Some(message);
+    }
+    if lookup.pending {
+        return Some(Message::Noop);
+    }
+
+    if pending_sequence.len() > 1 {
+        pending_sequence.clear();
+        pending_sequence.push(stroke);
+        let lookup = keymap.lookup(&pending_sequence, &[ShortcutContext::Global]);
+        if let Some(message) = lookup.command.as_ref().and_then(message_for_keymap_command) {
+            pending_sequence.clear();
+            return Some(message);
+        }
+        if lookup.pending {
+            return Some(Message::Noop);
+        }
+    }
+
+    pending_sequence.clear();
+    None
 }
 
 impl Signex {
@@ -568,6 +603,7 @@ impl Signex {
                         // shortcuts (`p`, `w`, `l`, …). Only navigation
                         // and dismiss keys leak through.
                         if palette_open {
+                            clear_keymap_pending_sequence();
                             return match (key.as_ref(), m) {
                                 (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
                                     Message::CommandPaletteClose
@@ -588,6 +624,7 @@ impl Signex {
                             };
                         }
                         if let keyboard::Key::Named(keyboard::key::Named::Escape) = key.as_ref() {
+                            clear_keymap_pending_sequence();
                             if find_replace_open {
                                 return Message::FindReplaceMsg(
                                     crate::find_replace::FindReplaceMsg::Close,

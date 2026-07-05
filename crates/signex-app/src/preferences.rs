@@ -137,6 +137,11 @@ pub enum PrefMsg {
     KeymapImportProfile,
     KeymapProfileLoaded(String),
     KeymapExportProfile,
+    KeymapBindingChanged {
+        command: crate::keymap::AppCommandId,
+        context: crate::keymap::ShortcutContext,
+        trigger: String,
+    },
 }
 
 // ─── Dialog sizes ─────────────────────────────────────────────
@@ -1328,6 +1333,7 @@ fn content_keyboard_shortcuts<'a>(
     .padding([4, 0]);
 
     let rows = editor.rows();
+    let active_profile_is_custom = editor.active_profile_is_custom();
     let mut table_rows: Vec<Element<'a, PrefMsg>> = Vec::with_capacity(rows.len());
     for row_model in rows {
         let has_conflict = conflicts.iter().any(|conflict| {
@@ -1337,21 +1343,47 @@ fn content_keyboard_shortcuts<'a>(
                     command == &conflict.first_command || command == &conflict.second_command
                 })
         });
-        let state = if has_conflict {
+        let state = if !row_model.trigger_valid {
+            "Invalid"
+        } else if has_conflict {
             "Conflict"
         } else if row_model.trigger.trim().is_empty() {
             "Unbound"
-        } else if row_model.keyboard_editable {
+        } else if row_model.keyboard_editable && active_profile_is_custom {
             "Editable"
+        } else if row_model.keyboard_editable {
+            "Create custom"
         } else {
             "Gesture"
         };
-        let state_color = if has_conflict {
+        let state_color = if !row_model.trigger_valid || has_conflict {
             WARN_YELLOW
         } else if row_model.trigger.trim().is_empty() {
             TEXT_MUT
         } else {
             TEXT_PRI
+        };
+
+        let trigger_cell: Element<'a, PrefMsg> = if active_profile_is_custom
+            && row_model.keyboard_editable
+        {
+            if let Some(command) = row_model.command.clone() {
+                let context = row_model.context;
+                text_input("", &row_model.trigger)
+                    .on_input(move |trigger| PrefMsg::KeymapBindingChanged {
+                        command: command.clone(),
+                        context,
+                        trigger,
+                    })
+                    .padding(4)
+                    .size(11)
+                    .width(Length::Fill)
+                    .into()
+            } else {
+                text(row_model.trigger).size(11).color(TEXT_MUT).into()
+            }
+        } else {
+            text(row_model.trigger).size(11).color(TEXT_PRI).into()
         };
 
         table_rows.push(
@@ -1370,8 +1402,7 @@ fn content_keyboard_shortcuts<'a>(
                         .color(TEXT_MUT)
                 )
                 .width(Length::FillPortion(2)),
-                container(text(row_model.trigger).size(11).color(TEXT_PRI))
-                    .width(Length::FillPortion(2)),
+                container(trigger_cell).width(Length::FillPortion(2)),
                 container(text(state).size(11).color(state_color)).width(Length::FillPortion(2)),
             ]
             .spacing(8)

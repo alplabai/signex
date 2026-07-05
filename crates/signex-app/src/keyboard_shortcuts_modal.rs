@@ -12,7 +12,7 @@ use crate::app::Message;
 use crate::app::view::dialogs::{
     MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE, close_x_button,
 };
-use crate::shortcuts::{SHORTCUTS, ShortcutCategory};
+use crate::keymap::{KeymapEditorModel, KeymapEditorRow, ShortcutProfileSet};
 use crate::styles::{self, MODAL_CORNER_RADIUS};
 
 const MODAL_W: f32 = 520.0;
@@ -20,7 +20,11 @@ const MODAL_H: f32 = 600.0;
 const KEY_COL_W: f32 = 140.0;
 const SECTION_HEADER_GAP_TOP: f32 = 14.0;
 
-pub fn view<'a>(tokens: &'a ThemeTokens, theme_id: ThemeId) -> Element<'a, Message> {
+pub fn view<'a>(
+    tokens: &'a ThemeTokens,
+    theme_id: ThemeId,
+    profiles: &ShortcutProfileSet,
+) -> Element<'a, Message> {
     let text_primary = styles::ti(tokens.text);
     let text_secondary = styles::ti(tokens.text_secondary);
     let border = styles::ti(tokens.border);
@@ -67,13 +71,24 @@ pub fn view<'a>(tokens: &'a ThemeTokens, theme_id: ThemeId) -> Element<'a, Messa
     )
     .padding([6, 0]);
 
+    let editor = KeymapEditorModel::new(profiles.clone());
+    let rows = editor.rows();
+    let mut categories = Vec::<String>::new();
+    for row in &rows {
+        if !categories.iter().any(|category| category == &row.category) {
+            categories.push(row.category.clone());
+        }
+    }
+
     let mut body = Column::new().spacing(0).push(column_header);
     body = body.push(thin_divider(border));
 
     let mut first_section = true;
-    for &cat in ShortcutCategory::order() {
-        let section_shortcuts: Vec<&crate::shortcuts::Shortcut> =
-            SHORTCUTS.iter().filter(|s| s.category == cat).collect();
+    for category in categories {
+        let section_shortcuts: Vec<&KeymapEditorRow> = rows
+            .iter()
+            .filter(|row| row.category == category && !row.trigger.trim().is_empty())
+            .collect();
 
         if section_shortcuts.is_empty() {
             continue;
@@ -87,7 +102,7 @@ pub fn view<'a>(tokens: &'a ThemeTokens, theme_id: ThemeId) -> Element<'a, Messa
 
         body = body.push(
             container(
-                text(cat.label().to_uppercase())
+                text(title_case(&category).to_uppercase())
                     .size(9)
                     .color(text_secondary),
             )
@@ -102,15 +117,10 @@ pub fn view<'a>(tokens: &'a ThemeTokens, theme_id: ThemeId) -> Element<'a, Messa
         let last_idx = section_shortcuts.len().saturating_sub(1);
         let mut section_col = Column::new().spacing(0);
         for (idx, s) in section_shortcuts.iter().enumerate() {
-            let key_label = if s.modifiers.is_empty() {
-                s.key.to_string()
-            } else {
-                format!("{}+{}", s.modifiers, s.key)
-            };
             let row_el: Element<'a, Message> = row![
-                text(s.description).size(11).color(text_primary),
+                text(s.label.clone()).size(11).color(text_primary),
                 Space::new().width(Length::Fill),
-                text(key_label)
+                text(s.trigger.clone())
                     .size(11)
                     .color(text_primary)
                     .width(Length::Fixed(KEY_COL_W)),
@@ -145,6 +155,21 @@ pub fn view<'a>(tokens: &'a ThemeTokens, theme_id: ThemeId) -> Element<'a, Messa
         .center_x(Length::Fill)
         .center_y(Length::Fill)
         .into()
+}
+
+fn title_case(value: &str) -> String {
+    value
+        .split(['_', '-', ' '])
+        .filter(|part| !part.is_empty())
+        .map(|part| {
+            let mut chars = part.chars();
+            match chars.next() {
+                Some(first) => format!("{}{}", first.to_uppercase(), chars.as_str()),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn thin_divider<'a, M: 'a>(color: iced::Color) -> Element<'a, M> {

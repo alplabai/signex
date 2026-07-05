@@ -110,6 +110,12 @@ impl ShortcutProfileSet {
             .expect("active profile is validated when profile set is constructed")
     }
 
+    pub fn active_profile_mut(&mut self) -> &mut ShortcutProfile {
+        self.profiles
+            .get_mut(&self.active_profile_id)
+            .expect("active profile is validated when profile set is constructed")
+    }
+
     pub fn active_profile_id(&self) -> &str {
         &self.active_profile_id
     }

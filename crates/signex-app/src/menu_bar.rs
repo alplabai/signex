@@ -15,6 +15,7 @@ use iced_aw::menu::{DrawPath, Item, Menu, MenuBar};
 use iced_aw::style::menu_bar as menu_style;
 use signex_types::theme::ThemeTokens;
 
+use crate::keymap::{AppCommandId, CompiledKeymap};
 use crate::styles;
 
 /// Wordmark PNGs pre-rasterised from `signex-logo-{white,black}.svg` at
@@ -201,7 +202,7 @@ pub enum MenuMessage {
 /// render as an active link or a disabled item. Keeps the menu
 /// context-aware — e.g. Annotate / ERC / Save are unclickable when no
 /// schematic is open.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct MenuContext {
     pub has_schematic: bool,
     pub has_pcb: bool,
@@ -228,6 +229,8 @@ pub struct MenuContext {
     /// window opens and for detached-modal / undocked-tab windows until
     /// per-window scale tracking lands.
     pub scale_factor: f32,
+    /// Active committed shortcut profile for menu shortcut labels.
+    pub active_keymap: Option<CompiledKeymap>,
 }
 
 impl Default for MenuContext {
@@ -242,6 +245,7 @@ impl Default for MenuContext {
             has_symbol_editor: false,
             has_footprint_editor: false,
             scale_factor: 1.0,
+            active_keymap: None,
         }
     }
 }
@@ -329,7 +333,7 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
     // the stub entries so Annotate / ERC / Save can't fire when no
     // schematic is loaded.
     let leaf_if = |label: &str,
-                   shortcut: Option<&str>,
+                   shortcut: Option<String>,
                    msg: MenuMessage,
                    enabled: bool|
      -> Item<'static, MenuMessage, Theme, iced::Renderer> {
@@ -368,7 +372,7 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
         menu_template(vec![
             leaf_if(
                 "PDF…",
-                Some("Ctrl+Shift+P"),
+                shortcut_for(&ctx, "print", "Ctrl+P"),
                 MenuMessage::ExportPdf,
                 ctx.has_schematic,
             ),
@@ -409,8 +413,18 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
     let file_menu = Item::with_menu(
         root_btn("File", mc),
         menu_template(vec![
-            leaf("New Project", Some("Ctrl+N"), MenuMessage::NewProject, mc),
-            leaf("Open...", Some("Ctrl+O"), MenuMessage::OpenProject, mc),
+            leaf(
+                "New Project",
+                shortcut_for(&ctx, "new_document", "Ctrl+N"),
+                MenuMessage::NewProject,
+                mc,
+            ),
+            leaf(
+                "Open...",
+                shortcut_for(&ctx, "open_document", "Ctrl+O"),
+                MenuMessage::OpenProject,
+                mc,
+            ),
             separator(mc),
             // v0.14.2: Save / Save As also enabled for any standalone
             // primitive editor tab (`.snxsym` / `.snxfpt`). The
@@ -419,13 +433,13 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
             // because the gate only checked for an active schematic.
             leaf_if(
                 "Save",
-                Some("Ctrl+S"),
+                shortcut_for(&ctx, "save_document", "Ctrl+S"),
                 MenuMessage::Save,
                 ctx.has_schematic || ctx.has_symbol_editor || ctx.has_footprint_editor,
             ),
             leaf_if(
                 "Save As...",
-                Some("Ctrl+Shift+S"),
+                shortcut_for(&ctx, "save_document_as", "Ctrl+Shift+S"),
                 MenuMessage::SaveAs,
                 ctx.has_schematic || ctx.has_symbol_editor || ctx.has_footprint_editor,
             ),
@@ -447,47 +461,72 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
     let edit_menu = Item::with_menu(
         root_btn("Edit", mc),
         menu_template(vec![
-            leaf_if("Undo", Some("Ctrl+Z"), MenuMessage::Undo, ctx.can_undo),
-            leaf_if("Redo", Some("Ctrl+Y"), MenuMessage::Redo, ctx.can_redo),
+            leaf_if(
+                "Undo",
+                shortcut_for(&ctx, "undo", "Ctrl+Z"),
+                MenuMessage::Undo,
+                ctx.can_undo,
+            ),
+            leaf_if(
+                "Redo",
+                shortcut_for(&ctx, "redo", "Ctrl+Y"),
+                MenuMessage::Redo,
+                ctx.can_redo,
+            ),
             separator(mc),
-            leaf_if("Cut", Some("Ctrl+X"), MenuMessage::Cut, ctx.has_selection),
-            leaf_if("Copy", Some("Ctrl+C"), MenuMessage::Copy, ctx.has_selection),
+            leaf_if(
+                "Cut",
+                shortcut_for(&ctx, "cut", "Ctrl+X"),
+                MenuMessage::Cut,
+                ctx.has_selection,
+            ),
+            leaf_if(
+                "Copy",
+                shortcut_for(&ctx, "copy", "Ctrl+C"),
+                MenuMessage::Copy,
+                ctx.has_selection,
+            ),
             leaf_if(
                 "Paste",
-                Some("Ctrl+V"),
+                shortcut_for(&ctx, "paste", "Ctrl+V"),
                 MenuMessage::Paste,
                 ctx.has_schematic,
             ),
             leaf_if(
                 "Paste Special",
-                Some("Shift+Ctrl+V"),
+                shortcut_for(&ctx, "smart_paste", "Shift+Ctrl+V"),
                 MenuMessage::SmartPaste,
                 ctx.has_schematic,
             ),
             leaf_if(
                 "Duplicate",
-                Some("Ctrl+D"),
+                shortcut_for(&ctx, "duplicate", "Ctrl+D"),
                 MenuMessage::Duplicate,
                 ctx.has_selection,
             ),
             leaf_if(
                 "Delete",
-                Some("Del"),
+                shortcut_for(&ctx, "delete_selection", "Del"),
                 MenuMessage::Delete,
                 ctx.has_selection,
             ),
             separator(mc),
             leaf_if(
                 "Select All",
-                Some("Ctrl+A"),
+                shortcut_for(&ctx, "select_all", "Ctrl+A"),
                 MenuMessage::SelectAll,
                 ctx.has_schematic,
             ),
             separator(mc),
-            leaf_if("Find", Some("Ctrl+F"), MenuMessage::Find, ctx.has_schematic),
+            leaf_if(
+                "Find",
+                shortcut_for(&ctx, "find", "Ctrl+F"),
+                MenuMessage::Find,
+                ctx.has_schematic,
+            ),
             leaf_if(
                 "Find and Replace",
-                Some("Ctrl+H"),
+                shortcut_for(&ctx, "find_and_replace", "Ctrl+H"),
                 MenuMessage::Replace,
                 ctx.has_schematic,
             ),
@@ -497,30 +536,34 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
     let view_menu = Item::with_menu(
         root_btn("View", mc),
         menu_template(vec![
-            leaf_stub("Zoom In", Some("Ctrl+="), mc),
-            leaf_stub("Zoom Out", Some("Ctrl+-"), mc),
+            leaf_stub("Zoom In", shortcut_for(&ctx, "zoom_in_at_cursor", "Ctrl+="), mc),
+            leaf_stub(
+                "Zoom Out",
+                shortcut_for(&ctx, "zoom_out_at_cursor", "Ctrl+-"),
+                mc,
+            ),
             leaf_if(
                 "Fit All",
-                Some("Home"),
+                shortcut_for(&ctx, "zoom_to_fit", "Home"),
                 MenuMessage::ZoomFit,
                 ctx.has_schematic || ctx.has_pcb,
             ),
             separator(mc),
             leaf_if(
                 "Toggle Grid",
-                Some("Shift+Ctrl+G"),
+                shortcut_for(&ctx, "toggle_visible_grid", "Shift+Ctrl+G"),
                 MenuMessage::ToggleGrid,
                 ctx.has_schematic || ctx.has_pcb,
             ),
             leaf_if(
                 "Cycle Grid Size",
-                Some("G"),
+                shortcut_for(&ctx, "cycle_snap_grid_forward", "G"),
                 MenuMessage::CycleGrid,
                 ctx.has_schematic || ctx.has_pcb,
             ),
             leaf_if(
                 "AutoFocus (dim unselected)",
-                Some("F9"),
+                static_shortcut("F9"),
                 MenuMessage::ToggleAutoFocus,
                 ctx.has_schematic,
             ),
@@ -540,18 +583,28 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
     let place_menu = Item::with_menu(
         root_btn("Place", mc),
         menu_template(vec![
-            leaf_if("Wire", Some("W"), MenuMessage::PlaceWire, ctx.has_schematic),
-            leaf_if("Bus", Some("B"), MenuMessage::PlaceBus, ctx.has_schematic),
+            leaf_if(
+                "Wire",
+                shortcut_for(&ctx, "place_wire", "W"),
+                MenuMessage::PlaceWire,
+                ctx.has_schematic,
+            ),
+            leaf_if(
+                "Bus",
+                shortcut_for(&ctx, "place_bus", "B"),
+                MenuMessage::PlaceBus,
+                ctx.has_schematic,
+            ),
             leaf_if(
                 "Net Label",
-                Some("L"),
+                shortcut_for(&ctx, "place_net_label", "L"),
                 MenuMessage::PlaceLabel,
                 ctx.has_schematic,
             ),
             separator(mc),
             leaf_if(
                 "Component...",
-                Some("P"),
+                shortcut_for(&ctx, "open_components_panel", "P"),
                 MenuMessage::PlaceComponent,
                 ctx.has_schematic,
             ),
@@ -590,13 +643,13 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
             separator(mc),
             leaf_if(
                 "Annotate Schematics Quietly",
-                Some("Alt+A"),
+                shortcut_for(&ctx, "annotate_schematic", "Alt+A"),
                 MenuMessage::AnnotateQuietly,
                 ctx.has_schematic,
             ),
             leaf_if(
                 "Force Annotate All Schematics",
-                Some("Shift+Alt+A"),
+                static_shortcut("Shift+Alt+A"),
                 MenuMessage::AnnotateForceAll,
                 ctx.has_schematic,
             ),
@@ -613,7 +666,7 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
             separator(mc),
             leaf_if(
                 "Electrical Rules Check",
-                Some("F8"),
+                shortcut_for(&ctx, "update_pcb_from_schematic", "F8"),
                 MenuMessage::Erc,
                 ctx.has_schematic,
             ),
@@ -650,7 +703,7 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
             separator(mc),
             leaf(
                 "Preferences...",
-                Some("Ctrl+,"),
+                static_shortcut("Ctrl+,"),
                 MenuMessage::OpenPreferences,
                 mc,
             ),
@@ -674,7 +727,7 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
             separator(mc),
             leaf(
                 "Keyboard Shortcuts",
-                Some("F1"),
+                shortcut_for(&ctx, "show_current_command_hotkeys", "F1"),
                 MenuMessage::OpenKeyboardShortcuts,
                 mc,
             ),
@@ -755,6 +808,20 @@ pub fn view(tokens: &ThemeTokens, ctx: MenuContext) -> Element<'static, MenuMess
         .into()
 }
 
+fn shortcut_for(ctx: &MenuContext, command_id: &str, fallback: &str) -> Option<String> {
+    let command = AppCommandId::new(command_id).ok()?;
+    Some(
+        ctx.active_keymap
+            .as_ref()
+            .and_then(|keymap| keymap.shortcut_label(&command))
+            .unwrap_or_else(|| fallback.to_string()),
+    )
+}
+
+fn static_shortcut(label: &str) -> Option<String> {
+    Some(label.to_string())
+}
+
 /// Wrap a menu element in the toolbar-strip styled container used on
 /// secondary (undocked-tab) windows that keep their OS title bar.
 pub fn wrap_plain<'a, M: 'a>(menu: Element<'a, M>, tokens: &ThemeTokens) -> Element<'a, M> {
@@ -820,7 +887,7 @@ fn root_btn(label: &str, mc: MenuColors) -> Element<'static, MenuMessage> {
 /// Leaf menu item with an action.
 fn leaf(
     label: &str,
-    shortcut: Option<&str>,
+    shortcut: Option<String>,
     msg: MenuMessage,
     mc: MenuColors,
 ) -> Item<'static, MenuMessage, Theme, iced::Renderer> {
@@ -830,7 +897,7 @@ fn leaf(
 /// Leaf menu item — disabled/stub (no action yet).
 fn leaf_stub(
     label: &str,
-    shortcut: Option<&str>,
+    shortcut: Option<String>,
     mc: MenuColors,
 ) -> Item<'static, MenuMessage, Theme, iced::Renderer> {
     Item::new(menu_item_btn(label, shortcut, None, mc))
@@ -890,7 +957,7 @@ fn separator(mc: MenuColors) -> Item<'static, MenuMessage, Theme, iced::Renderer
 /// Build a single menu item button with label + shortcut text.
 fn menu_item_btn(
     label: &str,
-    shortcut: Option<&str>,
+    shortcut: Option<String>,
     msg: Option<MenuMessage>,
     mc: MenuColors,
 ) -> Element<'static, MenuMessage> {
@@ -909,7 +976,6 @@ fn menu_item_btn(
     .width(Length::Fill);
 
     if let Some(sc) = shortcut {
-        let sc = sc.to_owned();
         r = r.push(iced::widget::Space::new().width(Length::Fill));
         r = r.push(
             text(sc)

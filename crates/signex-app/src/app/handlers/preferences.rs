@@ -86,6 +86,16 @@ impl Signex {
                 return self.close_detached_modal(super::super::state::ModalId::Preferences);
             }
             PrefMsg::Save => {
+                if self
+                    .ui_state
+                    .preferences_keymap_editor
+                    .has_invalid_trigger_drafts()
+                {
+                    self.ui_state.preferences_keymap_status =
+                        "Fix invalid keyboard shortcuts before saving.".to_string();
+                    self.ui_state.preferences_dirty = true;
+                    return Task::none();
+                }
                 self.ui_state.theme_id = self.ui_state.preferences_draft_theme;
                 self.ui_state.ui_font_name = self.ui_state.preferences_draft_font.clone();
                 self.ui_state.power_port_style = self.ui_state.preferences_draft_power_port_style;
@@ -540,6 +550,27 @@ impl Signex {
                     Err(error) => {
                         self.ui_state.preferences_keymap_status =
                             format!("Could not export keyboard shortcuts: {error}");
+                    }
+                }
+            }
+            PrefMsg::KeymapBindingChanged {
+                command,
+                context,
+                trigger,
+            } => {
+                match self.ui_state.preferences_keymap_editor.edit_active_trigger(
+                    command,
+                    context,
+                    trigger,
+                ) {
+                    Ok(()) => {
+                        self.ui_state.preferences_keymap_status.clear();
+                        self.ui_state.preferences_dirty = true;
+                    }
+                    Err(error) => {
+                        self.ui_state.preferences_keymap_status =
+                            format!("Invalid shortcut: {error}");
+                        self.ui_state.preferences_dirty = true;
                     }
                 }
             }

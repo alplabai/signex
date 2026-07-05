@@ -30,7 +30,6 @@ pub mod pcb_canvas;
 pub mod preferences;
 pub mod render_config;
 pub mod schematic_runtime;
-pub mod shortcuts;
 pub mod status_bar;
 pub mod styles;
 pub mod tab_bar;

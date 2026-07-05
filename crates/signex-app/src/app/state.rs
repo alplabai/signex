@@ -68,9 +68,9 @@ pub struct UiState {
     pub main_window_scale: f32,
     pub panel_list_open: bool,
     pub preferences_open: bool,
-    /// Help ▸ Keyboard Shortcuts modal — flat reference table over
-    /// every binding registered in `crate::shortcuts::SHORTCUTS`.
-    /// Toggled from the Help menu and from F1.
+    /// Help ▸ Keyboard Shortcuts modal — flat reference table over the
+    /// active keyboard shortcut profile. Toggled from the Help menu
+    /// and from F1.
     pub keyboard_shortcuts_open: bool,
     /// First-run tour overlay — a single dismissible card shown only
     /// before the user has dismissed it once. Initial value is read

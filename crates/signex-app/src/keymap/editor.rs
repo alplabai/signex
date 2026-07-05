@@ -1,17 +1,26 @@
 use crate::keymap::{
     AppCommandId, BindingConflict, CompiledKeymap, ProfileLoadError, ShortcutContext,
-    ShortcutProfile, ShortcutProfileKind, ShortcutProfileSet, ShortcutTrigger, fallback_label,
-    metadata_for,
+    ShortcutBinding, ShortcutBindingAction, ShortcutProfile, ShortcutProfileKind,
+    ShortcutProfileSet, ShortcutTrigger, fallback_label, metadata_for,
 };
+use std::collections::{BTreeMap, BTreeSet};
+
+type TriggerEditKey = (AppCommandId, ShortcutContext);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeymapEditorModel {
     profiles: ShortcutProfileSet,
+    trigger_drafts: BTreeMap<TriggerEditKey, String>,
+    invalid_trigger_drafts: BTreeSet<TriggerEditKey>,
 }
 
 impl KeymapEditorModel {
     pub fn new(profiles: ShortcutProfileSet) -> Self {
-        Self { profiles }
+        Self {
+            profiles,
+            trigger_drafts: BTreeMap::new(),
+            invalid_trigger_drafts: BTreeSet::new(),
+        }
     }
 
     pub fn built_ins() -> Result<Self, ProfileLoadError> {
@@ -46,6 +55,17 @@ impl KeymapEditorModel {
                 binding.triggers.iter().map(move |trigger| {
                     let command = binding.action.command().cloned();
                     let metadata = command.as_ref().and_then(metadata_for);
+                    let draft_key = command
+                        .as_ref()
+                        .map(|command| (command.clone(), binding.context));
+                    let trigger_text = draft_key
+                        .as_ref()
+                        .and_then(|key| self.trigger_drafts.get(key))
+                        .cloned()
+                        .unwrap_or_else(|| trigger.display_text());
+                    let trigger_valid = draft_key
+                        .as_ref()
+                        .is_none_or(|key| !self.invalid_trigger_drafts.contains(key));
                     KeymapEditorRow {
                         command,
                         category: metadata
@@ -56,7 +76,8 @@ impl KeymapEditorModel {
                             .or_else(|| binding.action.command().map(fallback_label))
                             .unwrap_or_else(|| "No action".to_string()),
                         context: binding.context,
-                        trigger: trigger.display_text(),
+                        trigger: trigger_text,
+                        trigger_valid,
                         keyboard_editable: matches!(trigger, ShortcutTrigger::KeySequence(_)),
                         source: source.clone(),
                     }
@@ -73,22 +94,30 @@ impl KeymapEditorModel {
         let profile = self.profiles.active_profile().copy_as_custom(id, name)?;
         let id = profile.id.clone();
         self.profiles.insert_custom_profile(profile)?;
-        self.profiles.set_active_profile(id)
+        self.profiles.set_active_profile(id)?;
+        self.clear_trigger_drafts();
+        Ok(())
     }
 
     pub fn delete_custom_profile(&mut self, id: &str) -> Result<(), ProfileLoadError> {
-        self.profiles.delete_custom_profile(id)
+        self.profiles.delete_custom_profile(id)?;
+        self.clear_trigger_drafts();
+        Ok(())
     }
 
     pub fn set_active_profile(&mut self, id: impl Into<String>) -> Result<(), ProfileLoadError> {
-        self.profiles.set_active_profile(id)
+        self.profiles.set_active_profile(id)?;
+        self.clear_trigger_drafts();
+        Ok(())
     }
 
     pub fn insert_custom_profile(
         &mut self,
         profile: ShortcutProfile,
     ) -> Result<(), ProfileLoadError> {
-        self.profiles.insert_custom_profile(profile)
+        self.profiles.insert_custom_profile(profile)?;
+        self.clear_trigger_drafts();
+        Ok(())
     }
 
     pub fn active_profile(&self) -> &ShortcutProfile {
@@ -103,12 +132,75 @@ impl KeymapEditorModel {
         self.profiles.compile_active()
     }
 
+    pub fn active_profile_is_custom(&self) -> bool {
+        self.profiles.active_profile().kind == ShortcutProfileKind::Custom
+    }
+
+    pub fn edit_active_trigger(
+        &mut self,
+        command: AppCommandId,
+        context: ShortcutContext,
+        trigger_text: String,
+    ) -> Result<(), ProfileLoadError> {
+        let key = (command.clone(), context);
+        self.trigger_drafts.insert(key.clone(), trigger_text.clone());
+
+        if !self.active_profile_is_custom() {
+            self.invalid_trigger_drafts.insert(key);
+            return Err(ProfileLoadError::BuiltInMutation(
+                self.profiles.active_profile().id.clone(),
+            ));
+        }
+
+        let trigger = match ShortcutTrigger::parse(&trigger_text) {
+            Ok(trigger) => trigger,
+            Err(error) => {
+                self.invalid_trigger_drafts.insert(key);
+                return Err(ProfileLoadError::KeyParse(error));
+            }
+        };
+
+        self.apply_active_trigger(command, context, trigger);
+        self.invalid_trigger_drafts.remove(&key);
+        Ok(())
+    }
+
+    pub fn has_invalid_trigger_drafts(&self) -> bool {
+        !self.invalid_trigger_drafts.is_empty()
+    }
+
     pub fn active_conflicts(&self) -> Vec<BindingConflict> {
         self.active_keymap().conflicts()
     }
 
     pub fn into_profiles(self) -> ShortcutProfileSet {
         self.profiles
+    }
+
+    fn apply_active_trigger(
+        &mut self,
+        command: AppCommandId,
+        context: ShortcutContext,
+        trigger: ShortcutTrigger,
+    ) {
+        let profile = self.profiles.active_profile_mut();
+        if let Some(binding) = profile.bindings.iter_mut().rev().find(|binding| {
+            binding.context == context && binding.action.command() == Some(&command)
+        }) {
+            binding.triggers = vec![trigger];
+            return;
+        }
+
+        profile.bindings.push(ShortcutBinding {
+            action: ShortcutBindingAction::Command(command),
+            context,
+            triggers: vec![trigger],
+        });
+    }
+
+    fn clear_trigger_drafts(&mut self) {
+        self.trigger_drafts.clear();
+        self.invalid_trigger_drafts.clear();
     }
 }
 
@@ -128,6 +220,7 @@ pub struct KeymapEditorRow {
     pub label: String,
     pub context: ShortcutContext,
     pub trigger: String,
+    pub trigger_valid: bool,
     pub keyboard_editable: bool,
     pub source: KeymapEditorSource,
 }

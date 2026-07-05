@@ -128,6 +128,11 @@ impl Signex {
         let canvas = self.interaction_state.active_canvas();
         let panel_ctx = &self.document_state.panel_ctx;
         let tid = self.ui_state.theme_id;
+        let find_shortcut = self.keymap_shortcut_label("find", "Ctrl+F");
+        let cut_shortcut = self.keymap_shortcut_label("cut", "Ctrl+X");
+        let copy_shortcut = self.keymap_shortcut_label("copy", "Ctrl+C");
+        let paste_shortcut = self.keymap_shortcut_label("paste", "Ctrl+V");
+        let smart_paste_shortcut = self.keymap_shortcut_label("smart_paste", "Shift+Ctrl+V");
 
         items.push(self.ctx_menu_item_disabled(
             Some(ic::icon_dd_find_similar(tid)),
@@ -137,7 +142,7 @@ impl Signex {
         items.push(self.ctx_menu_item_msg(
             Some(ic::icon_chrome_search(tid)),
             "Find Text...",
-            "Ctrl+F",
+            &find_shortcut,
             Message::OpenFind,
         ));
         items.push(self.ctx_menu_item_disabled(
@@ -211,25 +216,25 @@ impl Signex {
         items.push(self.ctx_menu_item_kb(
             Some(ic::icon_dd_cut(tid)),
             "Cut",
-            "Ctrl+X",
+            &cut_shortcut,
             ContextAction::Cut,
         ));
         items.push(self.ctx_menu_item_kb(
             Some(ic::icon_dd_copy(tid)),
             "Copy",
-            "Ctrl+C",
+            &copy_shortcut,
             ContextAction::Copy,
         ));
         items.push(self.ctx_menu_item_kb(
             Some(ic::icon_dd_paste(tid)),
             "Paste",
-            "Ctrl+V",
+            &paste_shortcut,
             ContextAction::Paste,
         ));
         items.push(self.ctx_menu_item_kb(
             Some(ic::icon_dd_smart_paste(tid)),
             "Paste Special",
-            "Shift+Ctrl+V",
+            &smart_paste_shortcut,
             ContextAction::SmartPaste,
         ));
         items.push(self.ctx_menu_sep());
@@ -833,6 +838,13 @@ impl Signex {
             }
             None => iced::widget::Space::new().width(26).height(20).into(),
         }
+    }
+
+    fn keymap_shortcut_label(&self, command_id: &str, fallback: &str) -> String {
+        crate::keymap::AppCommandId::new(command_id)
+            .ok()
+            .and_then(|command| self.ui_state.active_keymap.shortcut_label(&command))
+            .unwrap_or_else(|| fallback.to_string())
     }
 
     fn ctx_menu_item_kb<'a>(
@@ -3683,6 +3695,7 @@ impl Signex {
             // scale tracking lands — it's only wrong if the user drags
             // a secondary window onto a monitor with a different DPI.
             scale_factor: ui.main_window_scale,
+            active_keymap: Some(ui.active_keymap.clone()),
         };
         let menu_row = menu_bar::view(&document.panel_ctx.tokens, menu_ctx).map(Message::Menu);
 
@@ -4286,12 +4299,13 @@ impl Signex {
             let (title, hint) = if self.document_state.active_project.is_some() {
                 (
                     "No document selected",
-                    "Choose a schematic or PCB from the project tree",
+                    "Choose a schematic or PCB from the project tree".to_string(),
                 )
             } else {
+                let open_shortcut = self.keymap_shortcut_label("open_document", "Ctrl+O");
                 (
                     "No document open",
-                    "Open a project with File > Open or Ctrl+O",
+                    format!("Open a project with File > Open or {open_shortcut}"),
                 )
             };
             container(
@@ -4831,6 +4845,7 @@ impl Signex {
                         tokens,
                         path,
                         document.pad_clipboard.is_some(),
+                        &self.ui_state.active_keymap,
                     )
             {
                 // Dismiss layer — left-click anywhere outside closes
@@ -5445,6 +5460,7 @@ impl Signex {
             layers.push(crate::keyboard_shortcuts_modal::view(
                 &document.panel_ctx.tokens,
                 ui.theme_id,
+                &ui.keymap_profiles,
             ));
         }
 
