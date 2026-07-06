@@ -161,15 +161,21 @@ the `area:` labels are applied for you; add a `type:` and, if warranted, a
 
 ## Merge rules for `trunk`
 
-`trunk` is protected (see [`.github/rulesets/`](.github/rulesets/)):
+`trunk` is protected. The full policy — PR preconditions, required checks,
+merge methods, and the server-side branch-protection settings — lives in
+[`docs/branching-and-merge-policy.md`](docs/branching-and-merge-policy.md);
+the importable ruleset is in [`.github/rulesets/`](.github/rulesets/). In short:
 
-- Changes land via **pull request** — no direct pushes.
-- **1 approving review** is required; you can't approve your own PR.
-- CI hard gates must be green before merge: **Test**, **Check (ubuntu-latest)**,
-  **License audit (cargo-deny)**, **PR-description self-declaration**, and the
-  **KiCad-name guard**. `Format`, `clippy`, and advisory `cargo-deny` runs are
-  informational and don't block.
-- No force-push, no branch deletion. Merge with a merge commit or squash.
+- Changes land via **pull request** — no direct pushes, no force-push, no
+  branch deletion (admins included).
+- **1 Code-Owner approving review** is required; you can't approve your own PR.
+  Conversations must be resolved and the branch up to date with `trunk`.
+- CI hard gates must be green before merge: `check · ubuntu-latest`,
+  `test · workspace`, `deny · licenses + deps`, `PR-description self-declaration`,
+  and `No KiCad-shaped names anywhere in crates/`. `fmt · rustfmt`, `clippy`, and
+  the advisory `cargo-deny` steps are informational and don't block.
+- Merge with a **merge commit** (to preserve a contributor's per-commit history)
+  or **squash** (one logical change → one commit).
 
 ## Good First Issues
 

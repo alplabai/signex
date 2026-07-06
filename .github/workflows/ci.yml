@@ -1,17 +1,29 @@
-name: CI
+# SPDX-License-Identifier: Apache-2.0
+#
+# Primary PR gate for the signex workspace: compile, test, format, and
+# the license/dependency audit. Runs on every PR + push to main / trunk.
+# Job names use the org's `<check> · <detail>` convention so they read
+# cleanly as required status-check contexts under branch protection.
+
+name: ci
 
 on:
   push:
-    branches: [main, dev, trunk]
+    branches: [main, trunk]
   pull_request:
-    branches: [main, dev, trunk]
+    branches: [main, trunk]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   check:
-    name: Check (${{ matrix.os }})
+    name: check · ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -41,7 +53,7 @@ jobs:
         run: cargo clippy --workspace -- -W clippy::all
 
   test:
-    name: Test
+    name: test · workspace
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -68,7 +80,7 @@ jobs:
         run: cargo test --workspace
 
   fmt:
-    name: Format
+    name: fmt · rustfmt
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -82,7 +94,7 @@ jobs:
         continue-on-error: true
 
   deny:
-    name: License + dependency audit (cargo-deny)
+    name: deny · licenses + deps
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
