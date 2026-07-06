@@ -1044,7 +1044,7 @@ impl Signex {
                 return;
             }
         };
-        if let Err(e) = std::fs::write(&path, serialised.as_bytes()) {
+        if let Err(e) = signex_types::atomic_io::atomic_write(&path, serialised.as_bytes()) {
             crate::diagnostics::log_error(
                 "Add New Schematic: write blank sheet",
                 &anyhow::anyhow!("{}", e),

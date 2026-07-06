@@ -3096,7 +3096,7 @@ impl Signex {
             );
             return Task::none();
         }
-        if let Err(e) = std::fs::write(&path, text.as_bytes()) {
+        if let Err(e) = signex_types::atomic_io::atomic_write(&path, text.as_bytes()) {
             tracing::warn!(
                 target: "signex::library",
                 path = %path.display(),
@@ -3149,7 +3149,7 @@ impl Signex {
             );
             return Task::none();
         }
-        if let Err(e) = std::fs::write(&path, text.as_bytes()) {
+        if let Err(e) = signex_types::atomic_io::atomic_write(&path, text.as_bytes()) {
             tracing::warn!(
                 target: "signex::library",
                 path = %path.display(),
