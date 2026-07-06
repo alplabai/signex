@@ -9,8 +9,12 @@
 
 pub mod active_bar_dropdowns;
 pub mod body3d;
+pub mod body3d_mint;
 pub mod canvas;
+pub mod context_menu;
+pub mod filter_presets;
 pub mod layers;
+pub mod move_by_modal;
 pub mod pad_to_sketch;
 pub mod pads_active_bar;
 pub mod preview3d;
@@ -21,6 +25,7 @@ pub mod sketch_mode;
 pub mod snap;
 pub mod state;
 pub mod step_attach;
+pub mod text_frame;
 pub mod unified_active_bar;
 
 #[cfg(test)]

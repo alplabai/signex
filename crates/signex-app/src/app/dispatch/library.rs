@@ -16,8 +16,7 @@ use crate::library::commands;
 use crate::library::messages::{
     BrowserEditMsg, CloseLibraryChoice, EditorMsg, GraphicHandleMsg, LibraryMessage, ParamKindMsg,
     PickerMsg, PrimitiveEditorMsg, PrimitivePickerMsg, SettingsMsg, SymbolRotatePivotMsg,
-    SymbolSelectionMsg,
-    SymbolToolMsg,
+    SymbolSelectionMsg, SymbolToolMsg,
 };
 use crate::library::state::{
     CloseLibraryConfirmState, ComponentPreviewState, DeleteConfirmState, DocumentOptionsModalState,
@@ -3324,6 +3323,20 @@ impl Signex {
                 Task::none()
             }
             "snxfpt" => {
+                // v0.13.0 — footprint editor gated off for release.
+                // A `.snxfpt` opened from the tree / file dialog must
+                // not push an editable FootprintEditor tab. Read-only
+                // preview + Pick-Footprint binding of existing files
+                // stay available elsewhere. Flip
+                // `feature_flags::FOOTPRINT_EDITOR_ENABLED` to re-enable.
+                if !crate::feature_flags::FOOTPRINT_EDITOR_ENABLED {
+                    tracing::info!(
+                        target: "signex::library",
+                        path = %path.display(),
+                        "open primitive: footprint editor disabled (v0.13.0) — ignoring .snxfpt open",
+                    );
+                    return Task::none();
+                }
                 let bytes = match std::fs::read_to_string(&path) {
                     Ok(s) => s,
                     Err(e) => {
@@ -3486,40 +3499,54 @@ impl Signex {
 
         // Symbol-only mutations.
         if let Some(editor) = self.document_state.symbol_editors.get_mut(&path) {
-            // Classify the message before mutating so we can decide
-            // whether the Properties panel needs a full context rebuild.
-            let needs_panel_refresh = matches!(
-                msg,
-                PrimitiveEditorMsg::SymbolSelect(_)
-                    | PrimitiveEditorMsg::SymbolDeselect
-                    | PrimitiveEditorMsg::SymbolAddPin { .. }
-                    | PrimitiveEditorMsg::SymbolAddRectangle { .. }
-                    | PrimitiveEditorMsg::SymbolAddLine { .. }
-                    | PrimitiveEditorMsg::SymbolAddCircle { .. }
-                    | PrimitiveEditorMsg::SymbolAddArc { .. }
-                    | PrimitiveEditorMsg::SymbolAddText { .. }
-                    | PrimitiveEditorMsg::SymbolDeleteSelected
-                    | PrimitiveEditorMsg::SymbolMoveSelected { .. }
-                    | PrimitiveEditorMsg::SymbolMoveGraphicHandle { .. }
-                    | PrimitiveEditorMsg::SymbolSetPinNumber { .. }
-                    | PrimitiveEditorMsg::SymbolSetPinName { .. }
-                    | PrimitiveEditorMsg::SymbolPrevPart
-                    | PrimitiveEditorMsg::SymbolNextPart
-                    | PrimitiveEditorMsg::SymbolNewPart
-                    | PrimitiveEditorMsg::SymbolRemovePart
-                    | PrimitiveEditorMsg::SymbolUndo
-                    | PrimitiveEditorMsg::SymbolRedo
-            );
             apply_symbol_primitive_edit(editor, msg);
-            if needs_panel_refresh {
-                self.refresh_panel_ctx();
-            }
+            // v0.20 — primitive editor edits (designator/size/etc, and
+            // critically `placement_paused`) need the panel context
+            // rebuilt so the right-dock view reads the new value next
+            // frame. Without this the panel renders against stale
+            // `FootprintEditorPanelContext` and TAB-pause-driven UI
+            // changes (Pad form vs no Pad form) silently miss.
+            self.refresh_panel_ctx();
             return Task::none();
+        }
+
+        // v0.26-E — clipboard ops need both `pad_clipboard` and the
+        // editor mutable simultaneously, so split-borrow at the call
+        // site instead of routing through `apply_footprint_primitive_edit`.
+        match &msg {
+            PrimitiveEditorMsg::FootprintCopyPad
+            | PrimitiveEditorMsg::FootprintCutPad
+            | PrimitiveEditorMsg::FootprintPastePad => {
+                let crate::app::DocumentState {
+                    footprint_editors,
+                    pad_clipboard,
+                    ..
+                } = &mut self.document_state;
+                if let Some(editor) = footprint_editors.get_mut(&path) {
+                    apply_footprint_clipboard_op(editor, pad_clipboard, &msg);
+                }
+                self.refresh_panel_ctx();
+                return Task::none();
+            }
+            _ => {}
         }
 
         // Footprint-only mutations.
         if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
+            // Task 6 — capturing a preset writes straight to disk from
+            // inside `apply_footprint_primitive_edit` (which only
+            // borrows `editor`, not `self`). Re-read it into
+            // `interaction_state` here so the very next
+            // `refresh_panel_ctx()` call — a few lines down — shows
+            // the new chip immediately instead of waiting for a
+            // restart.
+            let is_capture_preset =
+                matches!(&msg, PrimitiveEditorMsg::FootprintCaptureFilterPreset);
             apply_footprint_primitive_edit(editor, msg);
+            if is_capture_preset {
+                self.interaction_state.footprint_filter_presets =
+                    crate::fonts::read_footprint_filter_presets();
+            }
             self.refresh_panel_ctx();
             return Task::none();
         }
@@ -4217,6 +4244,47 @@ pub(crate) fn apply_symbol_primitive_edit(
         | PrimitiveEditorMsg::FootprintSketchSetRole { .. }
         | PrimitiveEditorMsg::FootprintSketchMakePadFromProfile
         | PrimitiveEditorMsg::FootprintSketchUnlinkCornerRadius { .. }
+        | PrimitiveEditorMsg::FootprintAddTextFrame { .. }
+        | PrimitiveEditorMsg::FootprintSelectPads(..)
+        | PrimitiveEditorMsg::FootprintSketchSelectMany(..)
+        | PrimitiveEditorMsg::FootprintShowContextMenu { .. }
+        | PrimitiveEditorMsg::FootprintCloseContextMenu
+        | PrimitiveEditorMsg::FootprintContextMenuOpenSubmenu(..)
+        | PrimitiveEditorMsg::FootprintContextMenuAction(..)
+        | PrimitiveEditorMsg::FootprintFitConsumed
+        | PrimitiveEditorMsg::FootprintCopyPad
+        | PrimitiveEditorMsg::FootprintCutPad
+        | PrimitiveEditorMsg::FootprintPastePad
+        | PrimitiveEditorMsg::FootprintApplyFilterPreset(..)
+        | PrimitiveEditorMsg::FootprintToggleAllFilters
+        | PrimitiveEditorMsg::FootprintCaptureFilterPreset
+        | PrimitiveEditorMsg::FootprintActiveBarNudgeSelection
+        | PrimitiveEditorMsg::FootprintMoveByOpen
+        | PrimitiveEditorMsg::FootprintMoveBySetX(..)
+        | PrimitiveEditorMsg::FootprintMoveBySetY(..)
+        | PrimitiveEditorMsg::FootprintMoveByConfirm
+        | PrimitiveEditorMsg::FootprintMoveByCancel
+        | PrimitiveEditorMsg::FootprintMintBody3d
+        | PrimitiveEditorMsg::FootprintMintExtrudedBody3d
+        | PrimitiveEditorMsg::FootprintAlignPads(..)
+        | PrimitiveEditorMsg::FootprintSketchPlacementInputTab
+        | PrimitiveEditorMsg::FootprintSketchMoveLine { .. }
+        | PrimitiveEditorMsg::FootprintSketchResizeRoundPad { .. }
+        | PrimitiveEditorMsg::FootprintSetSelectionMode2d(..)
+        | PrimitiveEditorMsg::FootprintSelectAllOnLayer
+        | PrimitiveEditorMsg::FootprintAddVia { .. }
+        | PrimitiveEditorMsg::FootprintRecomputeCourtyardOutline
+        | PrimitiveEditorMsg::FootprintSelectOffGridPads
+        | PrimitiveEditorMsg::FootprintLassoArm
+        | PrimitiveEditorMsg::FootprintLassoAddVertex { .. }
+        | PrimitiveEditorMsg::FootprintLassoCommit
+        | PrimitiveEditorMsg::FootprintLassoCancel
+        | PrimitiveEditorMsg::FootprintTouchingLineArm
+        | PrimitiveEditorMsg::FootprintTouchingLineFirst { .. }
+        | PrimitiveEditorMsg::FootprintTouchingLineCommit { .. }
+        | PrimitiveEditorMsg::FootprintTouchingLineCancel
+        | PrimitiveEditorMsg::FootprintSelectOverlapped
+        | PrimitiveEditorMsg::FootprintSelectNextOverlapped
         | PrimitiveEditorMsg::Save => {}
     }
 }
@@ -4335,6 +4403,367 @@ fn rotate_pivot_msg_to_state(
     }
 }
 
+/// v0.14 — apply an [`AlignOp`] to the pads at `indices` in `state`,
+/// in place. `step` is the spacing increment (mm) for the
+/// Increase/Decrease ops — pass the active grid step. Centre-based
+/// throughout: a pad's "position" is its centre, so aligning edges and
+/// aligning centres coincide once sizes are equal; for mixed sizes we
+/// follow Altium's pad-centre convention (the Properties X/Y is the
+/// centre). Callers guarantee `indices` is deduped, in range, and long
+/// enough (≥2 for align, ≥3 for distribute).
+///
+/// [`AlignOp`]: crate::library::editor::footprint::state::AlignOp
+fn align_pads(
+    state: &mut crate::library::editor::footprint::state::FootprintEditorState,
+    indices: &[usize],
+    op: crate::library::editor::footprint::state::AlignOp,
+    step: f64,
+) {
+    // Snapshot centres in selection order, run the pure geometry, then
+    // write the results back to the same pads. Indexing is safe — the
+    // caller guarantees every index is in range.
+    let centres: Vec<(f64, f64)> = indices
+        .iter()
+        .map(|&i| state.pads[i].position_mm)
+        .collect();
+    let out = apply_align(&centres, op, step);
+    for (&i, &new_centre) in indices.iter().zip(out.iter()) {
+        state.pads[i].position_mm = new_centre;
+    }
+}
+
+/// Pure geometry for [`align_pads`]: take pad CENTRES (in selection
+/// order), apply `op`, and return the new centres in the SAME order.
+/// `step` is the spacing increment (mm) used only by the
+/// Increase/Decrease ops. Factored out as a free function so the
+/// geometry is unit-testable without a `FootprintEditorState`.
+///
+/// Conventions (Altium pad-centre parity):
+/// - Left/Right/Top/Bottom move every centre to the extreme centre on
+///   that axis (min/max). The cross axis is untouched, which is why the
+///   plain and "maintain spacing" variants share an op.
+/// - CenterH/CenterV move centres to the selection mean on that axis.
+/// - DistributeH/V keep the two extreme pads fixed and re-space the
+///   middles at equal centre-to-centre gaps, preserving left→right /
+///   top→bottom order.
+/// - Increase/Decrease grow/shrink every gap by `step` (span changes by
+///   `step*(n-1)`), pivoting about the mean so the centroid is fixed.
+fn apply_align(
+    centres: &[(f64, f64)],
+    op: crate::library::editor::footprint::state::AlignOp,
+    step: f64,
+) -> Vec<(f64, f64)> {
+    use crate::library::editor::footprint::state::AlignOp;
+
+    let mut out = centres.to_vec();
+    let n = centres.len();
+    if n == 0 {
+        return out;
+    }
+
+    let min_x = centres.iter().map(|c| c.0).fold(f64::INFINITY, f64::min);
+    let max_x = centres.iter().map(|c| c.0).fold(f64::NEG_INFINITY, f64::max);
+    let min_y = centres.iter().map(|c| c.1).fold(f64::INFINITY, f64::min);
+    let max_y = centres.iter().map(|c| c.1).fold(f64::NEG_INFINITY, f64::max);
+    let mean_x = centres.iter().map(|c| c.0).sum::<f64>() / n as f64;
+    let mean_y = centres.iter().map(|c| c.1).sum::<f64>() / n as f64;
+
+    match op {
+        AlignOp::Left => out.iter_mut().for_each(|c| c.0 = min_x),
+        AlignOp::Right => out.iter_mut().for_each(|c| c.0 = max_x),
+        AlignOp::Top => out.iter_mut().for_each(|c| c.1 = min_y),
+        AlignOp::Bottom => out.iter_mut().for_each(|c| c.1 = max_y),
+        AlignOp::CenterH => out.iter_mut().for_each(|c| c.0 = mean_x),
+        AlignOp::CenterV => out.iter_mut().for_each(|c| c.1 = mean_y),
+        AlignOp::DistributeH => {
+            // Rank the selection by X, then place each at an equal gap
+            // between the fixed extremes.
+            let mut order: Vec<usize> = (0..n).collect();
+            order.sort_by(|&a, &b| {
+                centres[a]
+                    .0
+                    .partial_cmp(&centres[b].0)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+            let gap = (max_x - min_x) / (n as f64 - 1.0);
+            for (rank, &idx) in order.iter().enumerate() {
+                out[idx].0 = min_x + gap * rank as f64;
+            }
+        }
+        AlignOp::DistributeV => {
+            let mut order: Vec<usize> = (0..n).collect();
+            order.sort_by(|&a, &b| {
+                centres[a]
+                    .1
+                    .partial_cmp(&centres[b].1)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+            let gap = (max_y - min_y) / (n as f64 - 1.0);
+            for (rank, &idx) in order.iter().enumerate() {
+                out[idx].1 = min_y + gap * rank as f64;
+            }
+        }
+        AlignOp::IncreaseHSpacing => scale_axis(&mut out, SpacingAxis::X, mean_x, step, true),
+        AlignOp::DecreaseHSpacing => scale_axis(&mut out, SpacingAxis::X, mean_x, step, false),
+        AlignOp::IncreaseVSpacing => scale_axis(&mut out, SpacingAxis::Y, mean_y, step, true),
+        AlignOp::DecreaseVSpacing => scale_axis(&mut out, SpacingAxis::Y, mean_y, step, false),
+    }
+    out
+}
+
+/// Axis selector for [`scale_axis`].
+#[derive(Clone, Copy)]
+enum SpacingAxis {
+    X,
+    Y,
+}
+
+/// Expand (`expand=true`) or contract the centre-to-centre gaps of
+/// `centres` along `axis`, pivoting about `pivot`. Every gap changes by
+/// `step`, so the outermost span changes by `step*(n-1)`; relative
+/// spacing is preserved by scaling each offset from the pivot by
+/// `new_span / old_span`. Contract is clamped so the span never goes
+/// negative. No-op when all centres are coincident on that axis.
+fn scale_axis(centres: &mut [(f64, f64)], axis: SpacingAxis, pivot: f64, step: f64, expand: bool) {
+    let get = |c: &(f64, f64)| match axis {
+        SpacingAxis::X => c.0,
+        SpacingAxis::Y => c.1,
+    };
+    let lo = centres.iter().map(get).fold(f64::INFINITY, f64::min);
+    let hi = centres.iter().map(get).fold(f64::NEG_INFINITY, f64::max);
+    let old_span = hi - lo;
+    if old_span <= f64::EPSILON {
+        return;
+    }
+    let n = centres.len();
+    let delta = step * (n as f64 - 1.0);
+    let new_span = if expand {
+        old_span + delta
+    } else {
+        (old_span - delta).max(0.0)
+    };
+    let factor = new_span / old_span;
+    for c in centres.iter_mut() {
+        let scaled = pivot + (get(c) - pivot) * factor;
+        match axis {
+            SpacingAxis::X => c.0 = scaled,
+            SpacingAxis::Y => c.1 = scaled,
+        }
+    }
+}
+
+#[cfg(test)]
+mod align_geometry_tests {
+    use super::apply_align;
+    use crate::library::editor::footprint::state::AlignOp;
+
+    /// Compare two centre lists with an absolute tolerance.
+    fn approx_eq(a: &[(f64, f64)], b: &[(f64, f64)]) {
+        assert_eq!(a.len(), b.len(), "length mismatch");
+        for (i, (p, q)) in a.iter().zip(b.iter()).enumerate() {
+            assert!(
+                (p.0 - q.0).abs() < 1e-9 && (p.1 - q.1).abs() < 1e-9,
+                "centre {i} mismatch: got {p:?}, want {q:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn align_left_moves_all_x_to_min() {
+        let pads = vec![(2.0, 0.0), (5.0, 1.0), (-1.0, 3.0)];
+        let out = apply_align(&pads, AlignOp::Left, 1.0);
+        // Every centre X → min (-1.0); Y untouched.
+        approx_eq(&out, &[(-1.0, 0.0), (-1.0, 1.0), (-1.0, 3.0)]);
+    }
+
+    #[test]
+    fn align_right_moves_all_x_to_max() {
+        let pads = vec![(2.0, 0.0), (5.0, 1.0), (-1.0, 3.0)];
+        let out = apply_align(&pads, AlignOp::Right, 1.0);
+        approx_eq(&out, &[(5.0, 0.0), (5.0, 1.0), (5.0, 3.0)]);
+    }
+
+    #[test]
+    fn align_top_bottom_move_y_only() {
+        let pads = vec![(0.0, 2.0), (1.0, 8.0), (2.0, -4.0)];
+        let top = apply_align(&pads, AlignOp::Top, 1.0);
+        approx_eq(&top, &[(0.0, -4.0), (1.0, -4.0), (2.0, -4.0)]);
+        let bottom = apply_align(&pads, AlignOp::Bottom, 1.0);
+        approx_eq(&bottom, &[(0.0, 8.0), (1.0, 8.0), (2.0, 8.0)]);
+    }
+
+    #[test]
+    fn center_h_v_align_to_mean() {
+        let pads = vec![(0.0, 0.0), (4.0, 10.0)];
+        let ch = apply_align(&pads, AlignOp::CenterH, 1.0);
+        // mean X = 2.0
+        approx_eq(&ch, &[(2.0, 0.0), (2.0, 10.0)]);
+        let cv = apply_align(&pads, AlignOp::CenterV, 1.0);
+        // mean Y = 5.0
+        approx_eq(&cv, &[(0.0, 5.0), (4.0, 5.0)]);
+    }
+
+    #[test]
+    fn distribute_h_equalises_gaps_and_keeps_extremes() {
+        // Unevenly spaced: 0, 1, 9 → after distribute: 0, 4.5, 9.
+        let pads = vec![(0.0, 0.0), (1.0, 0.0), (9.0, 0.0)];
+        let out = apply_align(&pads, AlignOp::DistributeH, 1.0);
+        approx_eq(&out, &[(0.0, 0.0), (4.5, 0.0), (9.0, 0.0)]);
+        // Gaps are now equal.
+        let g1 = out[1].0 - out[0].0;
+        let g2 = out[2].0 - out[1].0;
+        assert!((g1 - g2).abs() < 1e-9);
+    }
+
+    #[test]
+    fn distribute_h_preserves_input_order_when_unsorted() {
+        // Input not sorted by X; extremes (0 and 8) stay, middle (idx 0,
+        // X=6) gets re-placed at the equal-gap slot for its rank.
+        let pads = vec![(6.0, 0.0), (0.0, 0.0), (8.0, 0.0)];
+        let out = apply_align(&pads, AlignOp::DistributeH, 1.0);
+        // Ranks by X: idx1(0) → 0, idx0(6) → 4, idx2(8) → 8.
+        approx_eq(&out, &[(4.0, 0.0), (0.0, 0.0), (8.0, 0.0)]);
+    }
+
+    #[test]
+    fn distribute_v_equalises_gaps() {
+        let pads = vec![(0.0, 0.0), (0.0, 2.0), (0.0, 10.0)];
+        let out = apply_align(&pads, AlignOp::DistributeV, 1.0);
+        approx_eq(&out, &[(0.0, 0.0), (0.0, 5.0), (0.0, 10.0)]);
+    }
+
+    #[test]
+    fn increase_h_spacing_grows_span_by_step_times_gaps() {
+        // 3 pads at x = 0, 5, 10; mean = 5; step = 1 → each of 2 gaps
+        // grows by 1 → new span 12, centred on 5 → x = -1, 5, 11.
+        let pads = vec![(0.0, 0.0), (5.0, 0.0), (10.0, 0.0)];
+        let out = apply_align(&pads, AlignOp::IncreaseHSpacing, 1.0);
+        approx_eq(&out, &[(-1.0, 0.0), (5.0, 0.0), (11.0, 0.0)]);
+    }
+
+    #[test]
+    fn decrease_h_spacing_shrinks_span() {
+        // Inverse of the increase case: span 10 → 8, centred on 5.
+        let pads = vec![(0.0, 0.0), (5.0, 0.0), (10.0, 0.0)];
+        let out = apply_align(&pads, AlignOp::DecreaseHSpacing, 1.0);
+        approx_eq(&out, &[(1.0, 0.0), (5.0, 0.0), (9.0, 0.0)]);
+    }
+
+    #[test]
+    fn decrease_spacing_clamps_at_zero_span() {
+        // Over-contracting must not invert the order or go negative.
+        let pads = vec![(0.0, 0.0), (1.0, 0.0)];
+        // One gap, step huge → new span clamped to 0 → both at mean 0.5.
+        let out = apply_align(&pads, AlignOp::DecreaseHSpacing, 100.0);
+        approx_eq(&out, &[(0.5, 0.0), (0.5, 0.0)]);
+    }
+
+    #[test]
+    fn increase_v_spacing_grows_vertical_span() {
+        let pads = vec![(0.0, 0.0), (0.0, 5.0), (0.0, 10.0)];
+        let out = apply_align(&pads, AlignOp::IncreaseVSpacing, 1.0);
+        approx_eq(&out, &[(0.0, -1.0), (0.0, 5.0), (0.0, 11.0)]);
+    }
+}
+
+/// v0.26-E — apply Cut / Copy / Paste against the document-level
+/// `pad_clipboard`. Split-borrowed at the call site so both the
+/// editor and the clipboard slot are mutable.
+///
+/// Behaviour:
+///  - **Copy**: clones the selected pad into the clipboard. No-op
+///    when nothing is selected.
+///  - **Cut**: Copy + delete; mirrors into the sketch + invalidates
+///    the canvas cache.
+///  - **Paste**: places a clone of the clipboard pad at the cursor
+///    (or `original.position + (1mm, 1mm)` if cursor is unknown),
+///    picks a free designator (max + 1), pre-computes a fresh
+///    `sketch_entity_id` so the new pad mirrors into the sketch on
+///    its first edit, and selects the new pad post-paste.
+pub(crate) fn apply_footprint_clipboard_op(
+    editor: &mut crate::app::FootprintEditorState,
+    clipboard: &mut Option<crate::library::editor::footprint::state::EditorPad>,
+    msg: &PrimitiveEditorMsg,
+) {
+    use crate::library::editor::footprint::pad_to_sketch;
+    use crate::library::editor::footprint::state::FootprintEditorState as CanvasState;
+
+    match msg {
+        PrimitiveEditorMsg::FootprintCopyPad => {
+            let Some(idx) = editor.state.selected_pad else {
+                return;
+            };
+            let Some(pad) = editor.state.pads.get(idx) else {
+                return;
+            };
+            *clipboard = Some(pad.clone());
+        }
+        PrimitiveEditorMsg::FootprintCutPad => {
+            let Some(idx) = editor.state.selected_pad else {
+                return;
+            };
+            // Snapshot history BEFORE the mutation so undo restores
+            // the pad. Mirrors the v0.24 push_history pattern.
+            editor.push_history();
+            let did_delete = editor.with_parts(|state, primitive| {
+                let Some(pad) = state.pads.get(idx).cloned() else {
+                    return false;
+                };
+                *clipboard = Some(pad.clone());
+                pad_to_sketch::mirror_delete_pad_from_sketch(&pad, primitive);
+                state.delete_pad(idx);
+                CanvasState::sync_pads_to_primitive(state, primitive);
+                true
+            });
+            if did_delete {
+                editor.canvas_cache.clear();
+                editor.dirty = true;
+            }
+        }
+        PrimitiveEditorMsg::FootprintPastePad => {
+            let Some(template) = clipboard.clone() else {
+                return;
+            };
+            // Paste position: prefer the cursor; fall back to the
+            // template''s original + a tiny diagonal offset so the
+            // user sees the new pad rather than overlap.
+            let (px, py) = match editor.state.cursor_mm {
+                Some((cx, cy)) => (cx, cy),
+                None => (template.position_mm.0 + 1.0, template.position_mm.1 + 1.0),
+            };
+            // Pick a designator: max-existing + 1, falling back to
+            // the template''s number when nothing parses.
+            let next_num = editor
+                .state
+                .pads
+                .iter()
+                .filter_map(|p| p.number.parse::<u64>().ok())
+                .max()
+                .map(|n| (n + 1).to_string())
+                .unwrap_or_else(|| template.number.clone());
+            editor.push_history();
+            editor.with_parts(|state, primitive| {
+                let mut new_pad = template.clone();
+                new_pad.position_mm = (px, py);
+                new_pad.number = next_num.clone();
+                // Reset sketch links so the pad mirrors freshly into
+                // the sketch on the next mode switch (avoids two
+                // pads sharing an entity id).
+                new_pad.sketch_entity_id = None;
+                new_pad.corner_entity_ids = None;
+                state.pads.push(new_pad);
+                let new_idx = state.pads.len() - 1;
+                state.selected_pad = Some(new_idx);
+                state.recompute_courtyard();
+                CanvasState::sync_pads_to_primitive(state, primitive);
+            });
+            editor.canvas_cache.clear();
+            editor.dirty = true;
+        }
+        _ => {}
+    }
+}
+
 /// Apply a primitive-editor event to a standalone Footprint editor
 /// state. Mirrors the footprint-tab arms of `apply_inline_edit` but
 /// against the path-keyed standalone state.
@@ -4346,6 +4775,33 @@ pub(crate) fn apply_footprint_primitive_edit(
     use crate::library::editor::footprint::state::FootprintEditorState as CanvasState;
 
     use crate::library::editor::footprint::pad_to_sketch;
+
+    // v0.27 — Role=Pad on a Line is shorthand for "make this loop a
+    // pad." Rewrite the message here so the SetRole arm only ever
+    // sees Point-targeted Pad role assignments (where it makes
+    // sense). Without this, Role=Pad on a Line was a silent no-op
+    // — the Properties dropdown read as broken.
+    let msg = if let PrimitiveEditorMsg::FootprintSketchSetRole {
+        id,
+        role: crate::library::messages::RoleTag::Pad,
+    } = &msg
+    {
+        let is_line = editor
+            .primitive()
+            .sketch
+            .as_ref()
+            .and_then(|s| s.entities.iter().find(|e| e.id == *id))
+            .map(|e| matches!(e.kind, signex_sketch::entity::EntityKind::Line { .. }))
+            .unwrap_or(false);
+        if is_line {
+            editor.state.selected_sketch = Some(*id);
+            PrimitiveEditorMsg::FootprintSketchMakePadFromProfile
+        } else {
+            msg
+        }
+    } else {
+        msg
+    };
 
     /// v0.15 — gate the Pads → Sketch mirror on whether the
     /// footprint already has a sketch (i.e. the user has visited
@@ -4422,6 +4878,43 @@ pub(crate) fn apply_footprint_primitive_edit(
                 if let Some(pad) = state.pads.get_mut(idx) {
                     if footprint_sketch_is_active(primitive) {
                         pad_to_sketch::mirror_add_pad_to_sketch(pad, primitive);
+                    }
+                }
+                CanvasState::sync_pads_to_primitive(state, primitive);
+            });
+            editor.canvas_cache.clear();
+            editor.dirty = true;
+        }
+        PrimitiveEditorMsg::FootprintAddVia { x_mm, y_mm } => {
+            // v0.27 — vias are a small Round plated-through pad. The
+            // canonical via geometry is fixed (0.6 mm copper / 0.3 mm
+            // drill / Multi-Layer F.Cu+B.Cu+masks) so the user gets a
+            // proper via regardless of what `next_pad_defaults` looks
+            // like. Bypasses `add_pad_at` (which inherits Pads-mode
+            // defaults) and constructs the EditorPad directly.
+            use crate::library::editor::footprint::state::EditorPad;
+            use signex_library::{LayerId, PadKind, PadShape};
+            const VIA_DIAMETER_MM: f64 = 0.6;
+            const VIA_DRILL_MM: f64 = 0.3;
+            editor.with_parts(|state, primitive| {
+                let number = state.next_pad_number();
+                let mut pad = EditorPad::new_default(number, (x_mm, y_mm));
+                pad.size_mm = (VIA_DIAMETER_MM, VIA_DIAMETER_MM);
+                pad.shape = PadShape::Round;
+                pad.kind = PadKind::Tht;
+                pad.drill_diameter_mm = Some(VIA_DRILL_MM);
+                pad.layers = vec![
+                    LayerId::new("F.Cu"),
+                    LayerId::new("F.Mask"),
+                    LayerId::new("B.Cu"),
+                    LayerId::new("B.Mask"),
+                ];
+                state.pads.push(pad);
+                let idx = state.pads.len() - 1;
+                state.selected_pad = Some(idx);
+                if let Some(p) = state.pads.get_mut(idx) {
+                    if footprint_sketch_is_active(primitive) {
+                        pad_to_sketch::mirror_add_pad_to_sketch(p, primitive);
                     }
                 }
                 CanvasState::sync_pads_to_primitive(state, primitive);
@@ -4602,10 +5095,34 @@ pub(crate) fn apply_footprint_primitive_edit(
                         position: [x_mm, y_mm],
                         content: "TEXT".to_string(),
                         size: 1.0,
+                        frame: None,
                     },
                     stroke_width: 0.0,
                     filled: false,
                 });
+            editor.canvas_cache.clear();
+            editor.dirty = true;
+        }
+        // v0.14 — Place Text Frame press-drag-release commit (item
+        // ③). Fires once, on release, with the anchor (min corner)
+        // and drag size already resolved by the canvas. Pushes its
+        // own history snapshot — see `mutates_footprint_state`,
+        // classified alongside the 3D Body mint variants — because
+        // the intermediate press/drag ticks never reach the
+        // dispatcher (unlike Track's 2-click gesture), so there's
+        // no risk of double-stacking.
+        PrimitiveEditorMsg::FootprintAddTextFrame {
+            x_mm,
+            y_mm,
+            w_mm,
+            h_mm,
+        } => {
+            editor.push_history();
+            editor.with_parts(|_state, primitive| {
+                crate::library::editor::footprint::text_frame::add_text_frame(
+                    primitive, x_mm, y_mm, w_mm, h_mm,
+                );
+            });
             editor.canvas_cache.clear();
             editor.dirty = true;
         }
@@ -4641,28 +5158,135 @@ pub(crate) fn apply_footprint_primitive_edit(
         }
         PrimitiveEditorMsg::FootprintSelectPad(sel) => {
             editor.state.selected_pad = sel;
+            // v0.27 — single-pad select replaces the multi-select
+            // extras too. Multi-select uses FootprintSelectPads.
+            editor.state.selected_pads_extra.clear();
+            // v0.27 — record the click position for Select
+            // overlapped / Select next so the dropdown can find
+            // the stack at the last-clicked location.
+            if sel.is_some() {
+                editor.state.last_click_world_mm = editor.state.cursor_mm;
+            }
             // v0.18.18 — pad and silk selection are mutually
             // exclusive in the Properties panel; clear the silk
             // selection when a pad is picked.
             if sel.is_some() {
                 editor.state.selected_silk_f = None;
             }
+            // v0.25 polish — clear verbatim numeric buffers on
+            // selection change so a stale "0.1." buffer from one
+            // pad doesn't follow the user to the next pad's input.
+            editor.state.numeric_buffers.clear();
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintSelectPads(mut pads) => {
+            // v0.27 — Altium-parity multi-select. Empty list = clear.
+            // First entry becomes the primary (drives Properties);
+            // rest land in `selected_pads_extra` for highlight only.
+            // Dedupe so a sloppy caller passing [3, 3, 7] still gets
+            // [3, 7] selected.
+            pads.sort_unstable();
+            pads.dedup();
+            if pads.is_empty() {
+                editor.state.selected_pad = None;
+                editor.state.selected_pads_extra.clear();
+            } else {
+                editor.state.selected_pad = Some(pads[0]);
+                editor.state.selected_pads_extra = pads[1..].to_vec();
+                editor.state.selected_silk_f = None;
+                editor.state.last_click_world_mm = editor.state.cursor_mm;
+            }
+            editor.state.numeric_buffers.clear();
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintSketchSelectMany(ids) => {
+            // v0.27 — Sketch-mode multi-select replacement. First
+            // entity is primary (drives the inspector + DOF
+            // overlay focus); the second slots into the secondary
+            // (used by the constraint submenu's "two entities"
+            // pairing); the rest land in extras. Empty list
+            // deselects everything.
+            if ids.is_empty() {
+                editor.state.selected_sketch = None;
+                editor.state.selected_sketch_secondary = None;
+                editor.state.selected_sketch_extra.clear();
+            } else {
+                editor.state.selected_sketch = Some(ids[0]);
+                editor.state.selected_sketch_secondary = ids.get(1).copied();
+                editor.state.selected_sketch_extra =
+                    ids.iter().skip(2).copied().collect();
+            }
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintDeleteSelected => {
+            // v0.27 — Delete walks the full multi-select set, not
+            // just the primary `selected_pad`. Rubber-band + Ctrl-
+            // click extras get the same treatment as the primary so
+            // pressing Delete after a rubber-band sweep clears the
+            // whole region. Sketch-mode entities use the sketch
+            // dispatcher so the solver re-converges without dangling
+            // constraints.
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
+            use crate::library::editor::footprint::sketch_mode::SketchEdit;
+            use crate::library::editor::footprint::state::EditorMode;
+
             let did_delete = editor.with_parts(|state, primitive| {
-                let Some(idx) = state.selected_pad else {
-                    return false;
-                };
-                // v0.15 — mirror the deletion into the sketch
-                // BEFORE removing from state.pads (we still need
-                // the pad's sketch_entity_id).
-                if let Some(pad) = state.pads.get(idx) {
-                    pad_to_sketch::mirror_delete_pad_from_sketch(pad, primitive);
+                let mut any = false;
+
+                // Sketch-mode deletion — primary + secondary + extras.
+                if state.mode == EditorMode::Sketch {
+                    use std::collections::HashSet;
+                    let mut seen: HashSet<signex_sketch::id::SketchEntityId> = HashSet::new();
+                    let mut victims: Vec<signex_sketch::id::SketchEntityId> = Vec::new();
+                    let mut push_unique =
+                        |id: signex_sketch::id::SketchEntityId,
+                         vs: &mut Vec<signex_sketch::id::SketchEntityId>,
+                         seen: &mut HashSet<_>| {
+                            if seen.insert(id) {
+                                vs.push(id);
+                            }
+                        };
+                    if let Some(id) = state.selected_sketch.take() {
+                        push_unique(id, &mut victims, &mut seen);
+                    }
+                    if let Some(id) = state.selected_sketch_secondary.take() {
+                        push_unique(id, &mut victims, &mut seen);
+                    }
+                    let extras: Vec<_> = state.selected_sketch_extra.drain(..).collect();
+                    for id in extras {
+                        push_unique(id, &mut victims, &mut seen);
+                    }
+                    for id in victims {
+                        apply_sketch_edit_with_warnings(
+                            state,
+                            primitive,
+                            SketchEdit::DeleteEntity(id),
+                        );
+                        any = true;
+                    }
                 }
-                state.delete_pad(idx);
+
+                // Pads (always — rubber-band can also select pads).
+                let mut pad_victims: Vec<usize> = Vec::new();
+                if let Some(idx) = state.selected_pad {
+                    pad_victims.push(idx);
+                }
+                pad_victims.extend(state.selected_pads_extra.iter().copied());
+                pad_victims.sort_unstable();
+                pad_victims.dedup();
+                // Remove highest-index first so earlier indices stay
+                // valid through the loop.
+                pad_victims.sort_unstable_by(|a, b| b.cmp(a));
+                for idx in pad_victims {
+                    if let Some(pad) = state.pads.get(idx) {
+                        pad_to_sketch::mirror_delete_pad_from_sketch(pad, primitive);
+                    }
+                    state.delete_pad(idx);
+                    any = true;
+                }
+                state.selected_pads_extra.clear();
                 CanvasState::sync_pads_to_primitive(state, primitive);
-                true
+                any
             });
             if did_delete {
                 editor.canvas_cache.clear();
@@ -4790,6 +5414,103 @@ pub(crate) fn apply_footprint_primitive_edit(
             editor.state.placement_paused = !editor.state.placement_paused;
             editor.canvas_cache.clear();
         }
+        // v0.26 — right-click context menu plumbing. State-only
+        // mutations; canvas cache is cleared when target adjusts the
+        // selection (right-click on a pad selects it Altium-style).
+        PrimitiveEditorMsg::FootprintShowContextMenu { x, y, target } => {
+            use crate::library::editor::footprint::state::FootprintContextTarget;
+            // Close any active dropdown before opening the context
+            // menu so two popups never coexist (Altium parity).
+            editor.state.active_bar_menu = None;
+            // v0.26-B Altium parity — right-click on a pad selects
+            // it (so subsequent menu actions like Delete / Properties
+            // act on the right-clicked pad) without losing prior
+            // selection on bare-canvas right-click.
+            match target {
+                FootprintContextTarget::Pad(idx) => {
+                    if editor.state.selected_pad != Some(idx) {
+                        editor.state.selected_pad = Some(idx);
+                        editor.state.selected_silk_f = None;
+                        editor.canvas_cache.clear();
+                    }
+                }
+                FootprintContextTarget::SilkF(idx) => {
+                    if editor.state.selected_silk_f != Some(idx) {
+                        editor.state.selected_silk_f = Some(idx);
+                        editor.state.selected_pad = None;
+                        editor.canvas_cache.clear();
+                    }
+                }
+                FootprintContextTarget::Empty => {}
+            }
+            editor.state.context_menu = Some(
+                crate::library::editor::footprint::state::FootprintContextMenuState {
+                    x,
+                    y,
+                    target,
+                    submenu: None,
+                },
+            );
+        }
+        PrimitiveEditorMsg::FootprintCloseContextMenu => {
+            editor.state.context_menu = None;
+        }
+        PrimitiveEditorMsg::FootprintContextMenuOpenSubmenu(sm) => {
+            if let Some(ref mut menu) = editor.state.context_menu {
+                menu.submenu = sm;
+            }
+        }
+        PrimitiveEditorMsg::FootprintFitConsumed => {
+            editor.state.fit_pending = false;
+        }
+        // v0.26-E — clipboard ops intercepted at the call site
+        // (apply_footprint_clipboard_op needs split-borrow with
+        // document_state.pad_clipboard). The match arm here is
+        // unreachable in practice but required for exhaustiveness.
+        PrimitiveEditorMsg::FootprintCopyPad
+        | PrimitiveEditorMsg::FootprintCutPad
+        | PrimitiveEditorMsg::FootprintPastePad => {}
+        PrimitiveEditorMsg::FootprintContextMenuAction(action) => {
+            use crate::library::editor::footprint::state::FootprintContextAction as Act;
+            match action {
+                Act::SelectAllPads => {
+                    // Existing semantics: SelectAll only meaningful
+                    // when there's at least one pad. With multi-
+                    // select not yet implemented, "Select All" maps
+                    // to selecting the first pad as a stand-in until
+                    // the v0.26 multi-pad selection lands. The dock
+                    // SelectAll path on the active bar already does
+                    // the right thing — defer to it once it grows.
+                    if !editor.state.pads.is_empty() {
+                        editor.state.selected_pad = Some(0);
+                    }
+                    editor.state.context_menu = None;
+                    editor.canvas_cache.clear();
+                }
+                Act::DeselectAll => {
+                    editor.state.selected_pad = None;
+                    editor.state.selected_pads_extra.clear();
+                    editor.state.selected_silk_f = None;
+                    editor.state.selected_sketch = None;
+                    editor.state.selected_sketch_secondary = None;
+                    editor.state.selected_sketch_extra.clear();
+                    editor.state.context_menu = None;
+                    editor.canvas_cache.clear();
+                }
+                Act::FitToWindow => {
+                    // v0.26-C — arm the one-shot fit signal. The
+                    // canvas Program''s next `update` tick has &mut
+                    // access to its own State (where `scale` /
+                    // `offset` / `did_initial_fit` live) and can
+                    // consume the flag; it publishes
+                    // `EditorMsg::FootprintFitConsumed` to clear the
+                    // request so it doesn''t re-trigger every event.
+                    editor.state.fit_pending = true;
+                    editor.state.context_menu = None;
+                    editor.canvas_cache.clear();
+                }
+            }
+        }
         PrimitiveEditorMsg::FootprintSetPadsTool(tool) => {
             editor.state.pads_tool = tool;
             // v0.18.15.1 — leaving the PlaceTrack tool clears the
@@ -4850,6 +5571,13 @@ pub(crate) fn apply_footprint_primitive_edit(
                     editor.dirty = true;
                 }
             }
+            // v0.14 — close any open active-bar dropdown after a tool
+            // pick. The Place dropdown's Move / Drag / Move-Selection
+            // rows route through here (footprint pad-move is drag-under-
+            // Select); the dropdown widget leaves menu-closing to the
+            // owner. Harmless for the top-level Pads-bar tool buttons —
+            // no menu is open when those fire.
+            editor.state.active_bar_menu = None;
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintToolEscape => {
@@ -4893,6 +5621,47 @@ pub(crate) fn apply_footprint_primitive_edit(
             crate::diagnostics::log_info(format!(
                 "Active bar: {label} — coming soon (footprint Altium parity)"
             ));
+            editor.state.active_bar_menu = None;
+        }
+        // Task 6 — apply footprint filter preset `idx` from the
+        // persisted list. Re-read from disk on every apply so a
+        // preset captured in a different tab/session is picked up
+        // without needing an in-memory refresh.
+        PrimitiveEditorMsg::FootprintApplyFilterPreset(idx) => {
+            let presets = crate::fonts::read_footprint_filter_presets();
+            if let Some(preset) = presets.get(idx) {
+                crate::library::editor::footprint::filter_presets::apply_preset(
+                    &mut editor.state,
+                    preset,
+                );
+            }
+            editor.state.active_bar_menu = None;
+            editor.canvas_cache.clear();
+        }
+        // Task 6 — Filter dropdown's "All - On / All - Off" chip.
+        PrimitiveEditorMsg::FootprintToggleAllFilters => {
+            let all_on = crate::library::editor::footprint::state::SelectionFilterKind::ALL
+                .iter()
+                .all(|&k| editor.state.selection_filter.get(k));
+            editor.state.selection_filter.set_all(!all_on);
+            editor.canvas_cache.clear();
+        }
+        // Task 6 — minimal capture affordance: snapshot the current
+        // filter as a new default-named preset and persist it. No
+        // rename UI yet (deferred — see filter_presets.rs). Silently
+        // ignores the capture once `CUSTOM_FILTER_PRESET_LIMIT` slots
+        // are full rather than evicting an existing preset.
+        PrimitiveEditorMsg::FootprintCaptureFilterPreset => {
+            let mut presets = crate::fonts::read_footprint_filter_presets();
+            if presets.len() < crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT {
+                let name = format!("Filter {}", presets.len() + 1);
+                let preset = crate::library::editor::footprint::filter_presets::capture_preset(
+                    &editor.state,
+                    name,
+                );
+                presets.push(preset);
+                crate::fonts::write_footprint_filter_presets(&presets);
+            }
             editor.state.active_bar_menu = None;
         }
         PrimitiveEditorMsg::FootprintActiveBarToggleSnap(flag) => {
@@ -4978,6 +5747,61 @@ pub(crate) fn apply_footprint_primitive_edit(
             editor.canvas_cache.clear();
             editor.dirty = true;
         }
+        PrimitiveEditorMsg::FootprintActiveBarNudgeSelection => {
+            // v0.14 — "Move Selection by X, Y…" one-step nudge: the
+            // combined selection by one active grid step in +X and +Y.
+            // Shares geometry + sketch-mirror + history with the
+            // typed-delta Move-By modal via `footprint_nudge_selection`.
+            let step = editor.state.snap_options.grid_step_mm.max(0.001);
+            footprint_nudge_selection(editor, step, step);
+            editor.state.active_bar_menu = None;
+        }
+        PrimitiveEditorMsg::FootprintMoveByOpen => {
+            editor.state.move_by_modal = Some(Default::default());
+            editor.state.active_bar_menu = None;
+        }
+        PrimitiveEditorMsg::FootprintMoveBySetX(v) => {
+            if let Some(m) = editor.state.move_by_modal.as_mut() {
+                m.dx_buf = v;
+            }
+        }
+        PrimitiveEditorMsg::FootprintMoveBySetY(v) => {
+            if let Some(m) = editor.state.move_by_modal.as_mut() {
+                m.dy_buf = v;
+            }
+        }
+        PrimitiveEditorMsg::FootprintMoveByConfirm => {
+            if let Some((dx, dy)) = editor
+                .state
+                .move_by_modal
+                .as_ref()
+                .and_then(|m| m.parsed())
+            {
+                footprint_nudge_selection(editor, dx, dy);
+            }
+            editor.state.move_by_modal = None;
+        }
+        PrimitiveEditorMsg::FootprintMoveByCancel => {
+            editor.state.move_by_modal = None;
+        }
+        PrimitiveEditorMsg::FootprintMintBody3d => {
+            editor.push_history();
+            editor.with_parts(|_state, primitive| {
+                crate::library::editor::footprint::body3d_mint::mint_box_from_courtyard(primitive);
+            });
+            editor.state.active_bar_menu = None;
+            editor.canvas_cache.clear();
+            editor.dirty = true;
+        }
+        PrimitiveEditorMsg::FootprintMintExtrudedBody3d => {
+            editor.push_history();
+            editor.with_parts(|_state, primitive| {
+                crate::library::editor::footprint::body3d_mint::mint_extruded_from_fab(primitive);
+            });
+            editor.state.active_bar_menu = None;
+            editor.canvas_cache.clear();
+            editor.dirty = true;
+        }
         PrimitiveEditorMsg::FootprintActiveBarAlignSelectionToGrid => {
             editor.with_parts(|state, primitive| {
                 let step = state.snap_options.grid_step_mm.max(0.001);
@@ -5020,10 +5844,65 @@ pub(crate) fn apply_footprint_primitive_edit(
             editor.canvas_cache.clear();
             editor.dirty = true;
         }
+        PrimitiveEditorMsg::FootprintAlignPads(op) => {
+            // v0.14 — active-bar Align/Distribute/Spacing. Operates on
+            // the combined selection (`selected_pad` + the ctrl-click
+            // extras). Mirrors every moved pad into the backing sketch
+            // and pushes one history snapshot, exactly like the
+            // group-drag path in `FootprintMovePad`.
+            use crate::library::editor::footprint::state::AlignOp;
+
+            // Collect + dedup the selection indices up front so we can
+            // bail before touching history if there isn't enough to act
+            // on. Align ops need ≥2 pads; distribute needs ≥3.
+            let mut indices: Vec<usize> = Vec::new();
+            if let Some(p) = editor.state.selected_pad {
+                indices.push(p);
+            }
+            indices.extend(editor.state.selected_pads_extra.iter().copied());
+            indices.sort_unstable();
+            indices.dedup();
+            indices.retain(|&i| i < editor.state.pads.len());
+
+            let min_needed = match op {
+                AlignOp::DistributeH | AlignOp::DistributeV => 3,
+                _ => 2,
+            };
+            // Only act when the selection is large enough — align needs
+            // ≥2 pads, distribute ≥3. Smaller selections fall through as
+            // a clean no-op (menu still dismisses below).
+            if indices.len() >= min_needed {
+                editor.push_history();
+                editor.with_parts(|state, primitive| {
+                    // Spacing step: reuse the active grid step so the
+                    // expand/contract increment matches what the user
+                    // already snaps to (no hardcoded magic size).
+                    let step = state.snap_options.grid_step_mm.max(0.001);
+                    align_pads(state, &indices, op, step);
+                    // Mirror every selected pad's (possibly) new centre
+                    // into the sketch, then re-sync the literal `Pad`
+                    // list.
+                    let mut moved: Vec<crate::library::editor::footprint::state::EditorPad> =
+                        Vec::with_capacity(indices.len());
+                    for &i in &indices {
+                        if let Some(pad) = state.pads.get(i) {
+                            moved.push(pad.clone());
+                        }
+                    }
+                    for snapshot in &moved {
+                        pad_to_sketch::mirror_move_pad_in_sketch(snapshot, primitive);
+                    }
+                    CanvasState::sync_pads_to_primitive(state, primitive);
+                });
+                editor.canvas_cache.clear();
+                editor.dirty = true;
+            }
+            editor.state.active_bar_menu = None;
+        }
         PrimitiveEditorMsg::FootprintActiveBarSelectAll => {
-            // Single-pad-selection limitation: pick the first pad in
-            // Pads mode; pick the first sketch entity in Sketch mode.
-            // Multi-select is a follow-up state refactor.
+            // v0.27 — Altium-parity: Select All multi-selects every
+            // pad in Pads mode; Sketch mode still picks the first
+            // entity (sketch-side multi-select is a v0.28 follow-up).
             use crate::library::editor::footprint::state::EditorMode;
             match editor.state.mode {
                 EditorMode::Sketch => {
@@ -5036,8 +5915,10 @@ pub(crate) fn apply_footprint_primitive_edit(
                     }
                 }
                 EditorMode::Normal => {
-                    if !editor.state.pads.is_empty() && editor.state.selected_pad.is_none() {
+                    if !editor.state.pads.is_empty() {
                         editor.state.selected_pad = Some(0);
+                        editor.state.selected_pads_extra =
+                            (1..editor.state.pads.len()).collect();
                     }
                 }
                 EditorMode::View3d => {}
@@ -5047,8 +5928,10 @@ pub(crate) fn apply_footprint_primitive_edit(
         }
         PrimitiveEditorMsg::FootprintActiveBarClearSelection => {
             editor.state.selected_pad = None;
+            editor.state.selected_pads_extra.clear();
             editor.state.selected_sketch = None;
             editor.state.selected_sketch_secondary = None;
+            editor.state.selected_sketch_extra.clear();
             editor.state.selected_silk_f = None;
             editor.canvas_cache.clear();
             editor.state.active_bar_menu = None;
@@ -5081,6 +5964,8 @@ pub(crate) fn apply_footprint_primitive_edit(
             // half-typed length would leak across to a freshly-started
             // tool gesture.
             editor.state.placement_input = None;
+            // v0.14-footprint — clear every stashed dimension field too.
+            editor.state.placement_input_others.clear();
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::FootprintSketchPlacementInputChar(ch) => {
@@ -5162,15 +6047,81 @@ pub(crate) fn apply_footprint_primitive_edit(
             // override. Tool pending state is left intact so the
             // gesture itself isn't cancelled (use right-click / tool
             // Esc for that).
-            if editor.state.placement_input.is_some() {
+            if editor.state.placement_input.is_some()
+                || !editor.state.placement_input_others.is_empty()
+            {
                 editor.state.placement_input = None;
+                // v0.14-footprint — Esc also clears every stashed
+                // dimension field so none leaks into the next gesture.
+                editor.state.placement_input_others.clear();
+                editor.canvas_cache.clear();
+            }
+        }
+        PrimitiveEditorMsg::FootprintSketchPlacementInputTab => {
+            // v0.14-footprint — cycle the focused dimension field to the
+            // next one in the active tool's Tab order (Line len→angle,
+            // Rectangle w→h, Rounded-Rect w→h→radius→w…). The focused
+            // field lives in `placement_input`; the rest park in
+            // `placement_input_others`, each keeping its own typed
+            // digits. The canvas only emits this while a buffer is open
+            // on a multi-field tool, but the dispatcher stays defensive
+            // and no-ops unless the active tool exposes ≥2 fields.
+            use crate::library::editor::footprint::state::{PlacementInput, PlacementInputKind};
+            let fields = PlacementInputKind::placement_fields(
+                editor.state.active_tool,
+                &editor.state.tool_pending,
+            );
+            if fields.len() >= 2 {
+                let current = editor
+                    .state
+                    .placement_input
+                    .as_ref()
+                    .map(|p| p.kind)
+                    .unwrap_or(fields[0]);
+                let idx = fields.iter().position(|k| *k == current).unwrap_or(0);
+                let next_kind = fields[(idx + 1) % fields.len()];
+                // Park the focused field (preserving its digits),
+                // replacing any stale same-kind entry; then pull the
+                // next field out of the parked set, or mint it empty so
+                // the next keypress appends to it.
+                let prev_focused = editor.state.placement_input.take();
+                let next_focused = match editor
+                    .state
+                    .placement_input_others
+                    .iter()
+                    .position(|p| p.kind == next_kind)
+                {
+                    Some(pos) => editor.state.placement_input_others.remove(pos),
+                    None => PlacementInput {
+                        buffer: String::new(),
+                        kind: next_kind,
+                    },
+                };
+                if let Some(prev) = prev_focused {
+                    editor
+                        .state
+                        .placement_input_others
+                        .retain(|p| p.kind != prev.kind);
+                    editor.state.placement_input_others.push(prev);
+                }
+                editor.state.placement_input = Some(next_focused);
                 editor.canvas_cache.clear();
             }
         }
         PrimitiveEditorMsg::FootprintSketchSelect { id, shift } => {
-            // None clears both selection slots. Some(id) without
+            // None clears every selection slot. Some(id) without
             // shift replaces primary; with shift adds to secondary
             // (or replaces secondary with the new id).
+            //
+            // v0.14 — clear `selected_sketch_extra` (the rubber-band
+            // multi-select set) on every single-click select. Without
+            // this, clicking empty space (or a single entity) after a
+            // rubber-band left the box-selected extras flagged
+            // selected, so they kept rendering in the orange selection
+            // colour instead of the blue idle DOF colour — the
+            // "unselected shape stays orange" bug. A single click is
+            // always a fresh selection, so the extras never carry over.
+            editor.state.selected_sketch_extra.clear();
             match (id, shift) {
                 (None, _) => {
                     editor.state.selected_sketch = None;
@@ -5383,6 +6334,749 @@ pub(crate) fn apply_footprint_primitive_edit(
             editor.canvas_cache.clear();
             editor.dirty = true;
         }
+        PrimitiveEditorMsg::FootprintSketchMoveLine { id, dx, dy } => {
+            // v0.27 — drag a Line edge by translating both its
+            // endpoints in one solver pass. The dispatcher reads
+            // the Line's start/end IDs, then emits MovePoint for
+            // each. The solver re-runs once after both moves so
+            // H/V/Distance constraints converge correctly without
+            // the brief mid-tick "one corner moved, the other
+            // didn't" state a two-message split would produce.
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
+            use crate::library::editor::footprint::sketch_mode::SketchEdit;
+            use signex_sketch::entity::EntityKind;
+            let endpoints = editor
+                .primitive()
+                .sketch
+                .as_ref()
+                .and_then(|s| s.entities.iter().find(|e| e.id == id))
+                .and_then(|e| match e.kind {
+                    EntityKind::Line { start, end } => Some((start, end)),
+                    _ => None,
+                });
+            let Some((start, end)) = endpoints else {
+                return;
+            };
+            // v0.27 — snapshot the line's pre-drag endpoint positions.
+            // Used after the translate step to detect which bbox edge
+            // the line lay on (so the matching pad can resize). Read
+            // BEFORE the MovePoint passes shift these Points.
+            let pre_drag_endpoints: Option<((f64, f64), (f64, f64))> = editor
+                .primitive()
+                .sketch
+                .as_ref()
+                .and_then(|s| {
+                    let pos_of = |pid: signex_sketch::id::SketchEntityId| -> Option<(f64, f64)> {
+                        s.entities.iter().find(|e| e.id == pid).and_then(|e| {
+                            if let EntityKind::Point { x, y } = e.kind {
+                                Some((x, y))
+                            } else {
+                                None
+                            }
+                        })
+                    };
+                    pos_of(start).zip(pos_of(end))
+                });
+            // v0.27 — gather the arc victim set BEFORE running any
+            // moves so adjacency lookups read pre-drag positions.
+            // Arc centres + the "other" tangent endpoint of any Arc
+            // tangent to a moving line endpoint translate by the
+            // same `(dx, dy)` as the rigid edge so rounded-rectangle
+            // corners stay rigid (constant radius). The line's own
+            // endpoints are handled separately below — they may
+            // slide along an adjacent edge rather than translating
+            // rigidly (Fusion-style "expand toward dragging").
+            let mut arc_victims: std::collections::HashSet<signex_sketch::id::SketchEntityId> =
+                std::collections::HashSet::new();
+            if let Some(s) = editor.primitive().sketch.as_ref() {
+                for e in &s.entities {
+                    if let EntityKind::Arc {
+                        start: a_s,
+                        end: a_e,
+                        center: a_c,
+                        ..
+                    } = e.kind
+                    {
+                        let touches = a_s == start
+                            || a_s == end
+                            || a_e == start
+                            || a_e == end;
+                        if touches {
+                            arc_victims.insert(a_c);
+                            if a_s != start && a_s != end {
+                                arc_victims.insert(a_s);
+                            }
+                            if a_e != start && a_e != end {
+                                arc_victims.insert(a_e);
+                            }
+                        }
+                    }
+                }
+            }
+            // v0.27 — per-endpoint slide. If the endpoint connects
+            // to exactly one OTHER line (closed polygon vertex),
+            // slide the endpoint along that adjacent line so the
+            // dragged edge only stretches/shrinks perpendicular and
+            // the adjacent edges retain their direction. The pad
+            // bbox case still produces the right answer here because
+            // a rect pad's edge endpoints connect to perpendicular
+            // edges — sliding along a perpendicular line by the
+            // perpendicular drag delta is equivalent to translating.
+            // When the endpoint has zero or ≥2 other lines (free
+            // vertex, arc tangent, T-junction), fall back to rigid
+            // translate so the existing pad / arc-corner flows keep
+            // working.
+            let read_pos = |pid: signex_sketch::id::SketchEntityId| -> Option<(f64, f64)> {
+                editor
+                    .primitive()
+                    .sketch
+                    .as_ref()
+                    .and_then(|s| s.entities.iter().find(|e| e.id == pid))
+                    .and_then(|e| match e.kind {
+                        EntityKind::Point { x, y } => Some((x, y)),
+                        _ => None,
+                    })
+            };
+            // Find the unique other line connected to `endpoint`
+            // (excluding the dragged line itself). Returns the far
+            // endpoint of that line — the one we treat as the
+            // slide pivot. Returns `None` when 0 or ≥2 other lines
+            // meet at this endpoint.
+            let find_far = |endpoint: signex_sketch::id::SketchEntityId|
+                -> Option<signex_sketch::id::SketchEntityId> {
+                let sketch = editor.primitive().sketch.as_ref()?;
+                let mut found: Option<signex_sketch::id::SketchEntityId> = None;
+                for e in &sketch.entities {
+                    if e.id == id {
+                        continue;
+                    }
+                    if let EntityKind::Line { start: ls, end: le } = e.kind {
+                        let far = if ls == endpoint {
+                            Some(le)
+                        } else if le == endpoint {
+                            Some(ls)
+                        } else {
+                            None
+                        };
+                        if let Some(f) = far {
+                            if found.is_some() {
+                                return None;
+                            }
+                            found = Some(f);
+                        }
+                    }
+                }
+                found
+            };
+            // 2D line-line intersection. `p1 + t*d1 = p2 + s*d2`.
+            // Returns `None` for parallel / coincident lines.
+            let intersect = |p1: (f64, f64),
+                             d1: (f64, f64),
+                             p2: (f64, f64),
+                             d2: (f64, f64)|
+             -> Option<(f64, f64)> {
+                let det = d2.0 * d1.1 - d1.0 * d2.1;
+                if det.abs() < 1e-9 {
+                    return None;
+                }
+                let t = (d2.0 * (p2.1 - p1.1) - d2.1 * (p2.0 - p1.0)) / det;
+                Some((p1.0 + t * d1.0, p1.1 + t * d1.1))
+            };
+            let target_for =
+                |endpoint: signex_sketch::id::SketchEntityId, pos: (f64, f64)| -> (f64, f64) {
+                    let rigid = (pos.0 + dx, pos.1 + dy);
+                    let Some(far_id) = find_far(endpoint) else {
+                        return rigid;
+                    };
+                    let Some(far_pos) = read_pos(far_id) else {
+                        return rigid;
+                    };
+                    let Some((sx_pre, sy_pre)) = read_pos(start) else {
+                        return rigid;
+                    };
+                    let Some((ex_pre, ey_pre)) = read_pos(end) else {
+                        return rigid;
+                    };
+                    let line_d = (ex_pre - sx_pre, ey_pre - sy_pre);
+                    let other_d = (pos.0 - far_pos.0, pos.1 - far_pos.1);
+                    intersect(rigid, line_d, far_pos, other_d).unwrap_or(rigid)
+                };
+            let start_pos_opt = read_pos(start);
+            let end_pos_opt = read_pos(end);
+            if let (Some(start_pos), Some(end_pos)) = (start_pos_opt, end_pos_opt) {
+                let start_target = target_for(start, start_pos);
+                let end_target = target_for(end, end_pos);
+                let start_delta = (start_target.0 - start_pos.0, start_target.1 - start_pos.1);
+                let end_delta = (end_target.0 - end_pos.0, end_target.1 - end_pos.1);
+                if start_delta.0.abs() > 1e-9 || start_delta.1.abs() > 1e-9 {
+                    editor.with_parts(|state, primitive| {
+                        apply_sketch_edit_with_warnings(
+                            state,
+                            primitive,
+                            SketchEdit::MovePoint {
+                                id: start,
+                                dx: start_delta.0,
+                                dy: start_delta.1,
+                            },
+                        );
+                    });
+                }
+                if end_delta.0.abs() > 1e-9 || end_delta.1.abs() > 1e-9 {
+                    editor.with_parts(|state, primitive| {
+                        apply_sketch_edit_with_warnings(
+                            state,
+                            primitive,
+                            SketchEdit::MovePoint {
+                                id: end,
+                                dx: end_delta.0,
+                                dy: end_delta.1,
+                            },
+                        );
+                    });
+                }
+            }
+            for pid in arc_victims {
+                editor.with_parts(|state, primitive| {
+                    apply_sketch_edit_with_warnings(
+                        state,
+                        primitive,
+                        SketchEdit::MovePoint { id: pid, dx, dy },
+                    );
+                });
+            }
+            // v0.27 — propagate the edge drag to the literal pad
+            // bbox. Without this the sketch outline visibly resizes
+            // but `pad.size_mm` / `pad.position_mm` (and the baked
+            // pad rendering) stay frozen — the user sees the line
+            // move while the pad copper underneath does nothing.
+            //
+            // Strategy: classify the line's pre-drag pose against
+            // each pad's bbox to identify which side it lies on
+            // (top / bottom / left / right). Only axis-aligned lines
+            // qualify — diagonal sketch lines are never pad edges
+            // for Rect / RoundRect / Oval / Chamfered shapes.
+            const EDGE_EPS: f64 = 1e-4;
+            if let Some(((sx, sy), (ex, ey))) = pre_drag_endpoints {
+                let is_horizontal = (sy - ey).abs() < EDGE_EPS;
+                let is_vertical = (sx - ex).abs() < EDGE_EPS;
+                let pad_count = editor.state.pads.len();
+                for pad_idx in 0..pad_count {
+                    let bbox_data = {
+                        let pad = &editor.state.pads[pad_idx];
+                        if pad.corner_entity_ids.is_none() {
+                            continue;
+                        }
+                        let (xmin, ymin, xmax, ymax) = pad.bbox_mm();
+                        // Both endpoints must lie on the same bbox
+                        // side; partial overlap (line extends past a
+                        // corner) means it's not a pad edge.
+                        let in_x = sx >= xmin - EDGE_EPS
+                            && sx <= xmax + EDGE_EPS
+                            && ex >= xmin - EDGE_EPS
+                            && ex <= xmax + EDGE_EPS;
+                        let in_y = sy >= ymin - EDGE_EPS
+                            && sy <= ymax + EDGE_EPS
+                            && ey >= ymin - EDGE_EPS
+                            && ey <= ymax + EDGE_EPS;
+                        if !in_x || !in_y {
+                            continue;
+                        }
+                        let edge: Option<&str> = if is_horizontal
+                            && (sy - ymin).abs() < EDGE_EPS
+                        {
+                            Some("top")
+                        } else if is_horizontal && (sy - ymax).abs() < EDGE_EPS {
+                            Some("bottom")
+                        } else if is_vertical && (sx - xmin).abs() < EDGE_EPS {
+                            Some("left")
+                        } else if is_vertical && (sx - xmax).abs() < EDGE_EPS {
+                            Some("right")
+                        } else {
+                            None
+                        };
+                        let Some(edge) = edge else {
+                            continue;
+                        };
+                        let (new_xmin, new_ymin, new_xmax, new_ymax) = match edge {
+                            "top" => (xmin, ymin + dy, xmax, ymax),
+                            "bottom" => (xmin, ymin, xmax, ymax + dy),
+                            "left" => (xmin + dx, ymin, xmax, ymax),
+                            "right" => (xmin, ymin, xmax + dx, ymax),
+                            _ => unreachable!(),
+                        };
+                        // Reject degenerate drags that would collapse
+                        // or invert the bbox. The user has to release
+                        // and re-grab if they want sub-50µm pads.
+                        if new_xmax - new_xmin < 0.05 || new_ymax - new_ymin < 0.05 {
+                            continue;
+                        }
+                        Some((new_xmin, new_ymin, new_xmax, new_ymax))
+                    };
+                    let Some((new_xmin, new_ymin, new_xmax, new_ymax)) = bbox_data else {
+                        continue;
+                    };
+                    let new_w = new_xmax - new_xmin;
+                    let new_h = new_ymax - new_ymin;
+                    let new_cx = (new_xmin + new_xmax) / 2.0;
+                    let new_cy = (new_ymin + new_ymax) / 2.0;
+                    let (corners_arr, centre_id) = {
+                        let pad = &editor.state.pads[pad_idx];
+                        (
+                            pad.corner_entity_ids
+                                .expect("checked is_some above"),
+                            pad.sketch_entity_id,
+                        )
+                    };
+                    // Rewrite the centre Point's PadAttr size exprs
+                    // FIRST so the next solve+bake reads the new
+                    // size. solve_and_bake → refresh_pads_from_primitive
+                    // overwrites state.pads.size_mm from the bake
+                    // output, so any earlier write here gets wiped.
+                    // Updating PadAttr ahead of the solve makes the
+                    // bake produce the resized pad on its own.
+                    if let Some(centre_id) = centre_id
+                        && let Some(sketch) = editor.primitive_mut().sketch.as_mut()
+                        && let Some(centre) =
+                            sketch.entities.iter_mut().find(|e| e.id == centre_id)
+                        && let Some(attr) = centre.pad.as_mut()
+                    {
+                        attr.size_x_expr = format!("{:.4}mm", new_w);
+                        attr.size_y_expr = format!("{:.4}mm", new_h);
+                    }
+                    // Move the centre Point to the new bbox centre.
+                    // Each apply_sketch_edit_with_warnings runs the
+                    // solver + bake; refresh_pads_from_primitive then
+                    // pulls state.pads from `footprint.pads`, so
+                    // reading the centre's pre-edit position needs to
+                    // happen RIGHT BEFORE this MovePoint emission.
+                    if let Some(centre_id) = centre_id {
+                        let cur_centre = editor
+                            .primitive()
+                            .sketch
+                            .as_ref()
+                            .and_then(|s| s.entities.iter().find(|e| e.id == centre_id))
+                            .and_then(|e| {
+                                if let EntityKind::Point { x, y } = e.kind {
+                                    Some((x, y))
+                                } else {
+                                    None
+                                }
+                            });
+                        if let Some((cur_cx, cur_cy)) = cur_centre {
+                            let cdx = new_cx - cur_cx;
+                            let cdy = new_cy - cur_cy;
+                            if cdx.abs() > 1e-9 || cdy.abs() > 1e-9 {
+                                editor.with_parts(|state, primitive| {
+                                    apply_sketch_edit_with_warnings(
+                                        state,
+                                        primitive,
+                                        SketchEdit::MovePoint {
+                                            id: centre_id,
+                                            dx: cdx,
+                                            dy: cdy,
+                                        },
+                                    );
+                                });
+                            }
+                        }
+                    }
+                    // Realign the 4 bbox corner Points to match the
+                    // resized bbox. For Rect pads the line drag's
+                    // victim loop already shifted the affected
+                    // corners; for RoundRect / Oval / Chamfered the
+                    // bbox corners aren't in `victims` so they need
+                    // explicit catch-up here. Order: [ne, se, sw, nw]
+                    // — see mint_pad_corner_outline.
+                    let target_positions: [(f64, f64); 4] = [
+                        (new_xmax, new_ymin), // ne
+                        (new_xmax, new_ymax), // se
+                        (new_xmin, new_ymax), // sw
+                        (new_xmin, new_ymin), // nw
+                    ];
+                    for (corner_id, (target_x, target_y)) in
+                        corners_arr.iter().zip(target_positions.iter())
+                    {
+                        let cur = editor
+                            .primitive()
+                            .sketch
+                            .as_ref()
+                            .and_then(|s| s.entities.iter().find(|e| e.id == *corner_id))
+                            .and_then(|e| {
+                                if let EntityKind::Point { x, y } = e.kind {
+                                    Some((x, y))
+                                } else {
+                                    None
+                                }
+                            });
+                        if let Some((cx, cy)) = cur {
+                            let cdx = *target_x - cx;
+                            let cdy = *target_y - cy;
+                            if cdx.abs() > 1e-9 || cdy.abs() > 1e-9 {
+                                editor.with_parts(|state, primitive| {
+                                    apply_sketch_edit_with_warnings(
+                                        state,
+                                        primitive,
+                                        SketchEdit::MovePoint {
+                                            id: *corner_id,
+                                            dx: cdx,
+                                            dy: cdy,
+                                        },
+                                    );
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            editor.with_parts(|state, primitive| {
+                CanvasState::sync_pads_to_primitive(state, primitive);
+            });
+            editor.canvas_cache.clear();
+            editor.dirty = true;
+        }
+        PrimitiveEditorMsg::FootprintSketchResizeRoundPad {
+            pad_idx,
+            diameter_mm,
+        } => {
+            // v0.27 — round-pad diameter handle drag. Update three
+            // sources of truth in lockstep so the on-canvas handle
+            // motion, the bake output, and the parameter table stay
+            // consistent:
+            //   1. `pad.size_mm = (d, d)` — Editor mirror of the bbox.
+            //   2. Circle entity radius — sketch-side geometry the
+            //      Sketch overlay renders.
+            //   3. `diameter_<slug>` parameter expression + the
+            //      centre Point's PadAttr size_x_expr / size_y_expr —
+            //      the bake reads these to emit the baked pad.
+            let d = diameter_mm.max(0.05);
+            let centre_id = editor.state.pads.get(pad_idx).and_then(|p| p.sketch_entity_id);
+            let diameter_param =
+                editor.state.pads.get(pad_idx).and_then(|p| {
+                    p.shape_params.get("diameter").cloned()
+                });
+            if let Some(pad) = editor.state.pads.get_mut(pad_idx) {
+                pad.size_mm = (d, d);
+            }
+            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
+                use signex_sketch::entity::EntityKind;
+                if let Some(cid) = centre_id {
+                    for entity in sketch.entities.iter_mut() {
+                        if let EntityKind::Circle { center, radius } = &mut entity.kind {
+                            if *center == cid {
+                                *radius = d / 2.0;
+                            }
+                        }
+                        if entity.id == cid {
+                            if let Some(attr) = entity.pad.as_mut() {
+                                attr.size_x_expr = format!("{:.4}mm", d);
+                                attr.size_y_expr = format!("{:.4}mm", d);
+                            }
+                        }
+                    }
+                }
+                if let Some(name) = diameter_param.as_deref() {
+                    sketch
+                        .parameters
+                        .insert(name.to_string(), format!("{:.4}mm", d));
+                }
+            }
+            editor.with_parts(|state, primitive| {
+                CanvasState::sync_pads_to_primitive(state, primitive);
+            });
+            editor.canvas_cache.clear();
+            editor.dirty = true;
+        }
+        PrimitiveEditorMsg::FootprintSetSelectionMode2d(mode) => {
+            // v0.27 — active-bar Selection picker rows. The rubber-
+            // band release picker reads this on commit so Inside /
+            // Touching / Outside semantics apply.
+            editor.state.selection_mode_2d = mode;
+            editor.state.active_bar_menu = None;
+        }
+        PrimitiveEditorMsg::FootprintSelectAllOnLayer => {
+            // v0.27 — multi-select every pad on the active layer.
+            // Active layer = layer of the currently-selected pad,
+            // or F.Cu when nothing is selected.
+            let layer = editor
+                .state
+                .selected_pad
+                .and_then(|idx| editor.state.pads.get(idx))
+                .map(|p| p.primary_layer())
+                .unwrap_or(crate::library::editor::footprint::layers::FpLayer::FCu);
+            let mut matches: Vec<usize> = editor
+                .state
+                .pads
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, p)| {
+                    if p.primary_layer() == layer {
+                        Some(idx)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            if matches.is_empty() {
+                editor.state.selected_pad = None;
+                editor.state.selected_pads_extra.clear();
+            } else {
+                editor.state.selected_pad = Some(matches.remove(0));
+                editor.state.selected_pads_extra = matches;
+            }
+            editor.state.active_bar_menu = None;
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintLassoArm => {
+            editor.state.lasso_mode_active = true;
+            editor.state.lasso_vertices.clear();
+            editor.state.active_bar_menu = None;
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintLassoAddVertex { x_mm, y_mm } => {
+            if editor.state.lasso_mode_active {
+                editor.state.lasso_vertices.push((x_mm, y_mm));
+                editor.canvas_cache.clear();
+            }
+        }
+        PrimitiveEditorMsg::FootprintLassoCancel => {
+            editor.state.lasso_mode_active = false;
+            editor.state.lasso_vertices.clear();
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintLassoCommit => {
+            // v0.27 — close the polygon, multi-select every pad whose
+            // centre lies inside (even-odd ray casting). Anything
+            // less than three vertices is a degenerate polygon and
+            // commits as deselect-all so a stray click doesn't leave
+            // the user stuck in lasso mode with no feedback.
+            let verts: Vec<(f64, f64)> = std::mem::take(&mut editor.state.lasso_vertices);
+            editor.state.lasso_mode_active = false;
+            let in_poly = |px: f64, py: f64| -> bool {
+                if verts.len() < 3 {
+                    return false;
+                }
+                let mut inside = false;
+                let n = verts.len();
+                let mut j = n - 1;
+                for i in 0..n {
+                    let (xi, yi) = verts[i];
+                    let (xj, yj) = verts[j];
+                    let denom = yj - yi;
+                    if denom.abs() < 1e-10 {
+                        j = i;
+                        continue;
+                    }
+                    let intersect = ((yi > py) != (yj > py))
+                        && (px < (xj - xi) * (py - yi) / denom + xi);
+                    if intersect {
+                        inside = !inside;
+                    }
+                    j = i;
+                }
+                inside
+            };
+            let mut hits: Vec<usize> = editor
+                .state
+                .pads
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, p)| {
+                    if in_poly(p.position_mm.0, p.position_mm.1) {
+                        Some(idx)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            if hits.is_empty() {
+                editor.state.selected_pad = None;
+                editor.state.selected_pads_extra.clear();
+            } else {
+                editor.state.selected_pad = Some(hits.remove(0));
+                editor.state.selected_pads_extra = hits;
+            }
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintTouchingLineArm => {
+            editor.state.touching_line_active = true;
+            editor.state.touching_line_first = None;
+            editor.state.active_bar_menu = None;
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintTouchingLineFirst { x_mm, y_mm } => {
+            if editor.state.touching_line_active {
+                editor.state.touching_line_first = Some((x_mm, y_mm));
+                editor.canvas_cache.clear();
+            }
+        }
+        PrimitiveEditorMsg::FootprintTouchingLineCancel => {
+            editor.state.touching_line_active = false;
+            editor.state.touching_line_first = None;
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintTouchingLineCommit { x_mm, y_mm } => {
+            // v0.27 — Touching Line: every pad whose bbox is
+            // intersected by the segment from `touching_line_first`
+            // → (x_mm, y_mm) becomes selected. Liang-Barsky-style
+            // segment-vs-AABB clip.
+            let Some((sx, sy)) = editor.state.touching_line_first.take() else {
+                editor.state.touching_line_active = false;
+                editor.canvas_cache.clear();
+                return;
+            };
+            editor.state.touching_line_active = false;
+            let dx = x_mm - sx;
+            let dy = y_mm - sy;
+            let segment_hits_aabb = |xmin: f64, ymin: f64, xmax: f64, ymax: f64| -> bool {
+                // Both endpoints inside?
+                let inside = |x: f64, y: f64| -> bool {
+                    x >= xmin && x <= xmax && y >= ymin && y <= ymax
+                };
+                if inside(sx, sy) || inside(x_mm, y_mm) {
+                    return true;
+                }
+                // Liang-Barsky parametric clip in [0, 1].
+                let mut t_enter = 0.0_f64;
+                let mut t_exit = 1.0_f64;
+                let p = [-dx, dx, -dy, dy];
+                let q = [sx - xmin, xmax - sx, sy - ymin, ymax - sy];
+                for i in 0..4 {
+                    if p[i].abs() < 1e-12 {
+                        if q[i] < 0.0 {
+                            return false;
+                        }
+                    } else {
+                        let t = q[i] / p[i];
+                        if p[i] < 0.0 {
+                            if t > t_exit {
+                                return false;
+                            }
+                            if t > t_enter {
+                                t_enter = t;
+                            }
+                        } else {
+                            if t < t_enter {
+                                return false;
+                            }
+                            if t < t_exit {
+                                t_exit = t;
+                            }
+                        }
+                    }
+                }
+                t_enter <= t_exit
+            };
+            let mut hits: Vec<usize> = editor
+                .state
+                .pads
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, p)| {
+                    let (x0, y0, x1, y1) = p.bbox_mm();
+                    if segment_hits_aabb(x0, y0, x1, y1) {
+                        Some(idx)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            if hits.is_empty() {
+                editor.state.selected_pad = None;
+                editor.state.selected_pads_extra.clear();
+            } else {
+                editor.state.selected_pad = Some(hits.remove(0));
+                editor.state.selected_pads_extra = hits;
+            }
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintSelectOverlapped
+        | PrimitiveEditorMsg::FootprintSelectNextOverlapped => {
+            // v0.27 — Cycle through pads stacked at the most recent
+            // click world position. SelectOverlapped goes to the
+            // previous pad in z-order; SelectNextOverlapped advances.
+            // Without a recorded click position there's no stack to
+            // cycle, so the action is a silent no-op.
+            let forward = matches!(msg, PrimitiveEditorMsg::FootprintSelectNextOverlapped);
+            let Some((wx, wy)) = editor.state.last_click_world_mm else {
+                editor.state.active_bar_menu = None;
+                return;
+            };
+            let stack: Vec<usize> = editor
+                .state
+                .pads
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, p)| if p.contains_mm(wx, wy) { Some(idx) } else { None })
+                .collect();
+            if stack.is_empty() {
+                editor.state.active_bar_menu = None;
+                return;
+            }
+            // Pick next/prev relative to the current primary selection.
+            let cur_pos = editor
+                .state
+                .selected_pad
+                .and_then(|s| stack.iter().position(|&i| i == s));
+            let next_idx = match cur_pos {
+                Some(p) => {
+                    if forward {
+                        (p + 1) % stack.len()
+                    } else {
+                        (p + stack.len() - 1) % stack.len()
+                    }
+                }
+                None => 0,
+            };
+            editor.state.selected_pad = Some(stack[next_idx]);
+            editor.state.selected_pads_extra.clear();
+            editor.state.active_bar_menu = None;
+            editor.canvas_cache.clear();
+        }
+        PrimitiveEditorMsg::FootprintRecomputeCourtyardOutline => {
+            // v0.27 — outline-following courtyard. Pure read-write
+            // on the editor state; the new polygon lands on
+            // `state.courtyard_outline_mm` and the canvas draws it
+            // in preference to the bbox.
+            editor.state.recompute_courtyard_outline();
+            editor.canvas_cache.clear();
+            editor.dirty = true;
+        }
+        PrimitiveEditorMsg::FootprintSelectOffGridPads => {
+            // v0.27 — pads whose centre falls between grid steps.
+            // The active grid step lives on snap_options; defaults
+            // to 1 mm. Tolerance is 1% of the step so pads exactly
+            // on the grid (with floating-point noise) don't
+            // false-positive.
+            let step = editor.state.snap_options.grid_step_mm.max(1e-6);
+            let tol = step * 0.01;
+            let on_grid = |v: f64| -> bool {
+                let r = (v / step).round() * step;
+                (v - r).abs() <= tol
+            };
+            let mut matches: Vec<usize> = editor
+                .state
+                .pads
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, p)| {
+                    let (x, y) = p.position_mm;
+                    if !on_grid(x) || !on_grid(y) {
+                        Some(idx)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            if matches.is_empty() {
+                editor.state.selected_pad = None;
+                editor.state.selected_pads_extra.clear();
+            } else {
+                editor.state.selected_pad = Some(matches.remove(0));
+                editor.state.selected_pads_extra = matches;
+            }
+            editor.state.active_bar_menu = None;
+            editor.canvas_cache.clear();
+        }
         PrimitiveEditorMsg::FootprintSketchDimensionInput(s) => {
             editor.state.dimension_input = s;
         }
@@ -5393,6 +7087,13 @@ pub(crate) fn apply_footprint_primitive_edit(
                 LayerId, PadKind as LibPadKind, PadShape as LibPadShape,
             };
 
+            // v0.27 — the Role=Pad-on-a-Line case is rewritten to
+            // MakePadFromProfile at the top of
+            // `apply_footprint_primitive_edit`, so this arm only
+            // sees Point-targeted Pad assignments + every other
+            // role. PadAttr is Point-only on the schema side, so
+            // dispatching to `apply_sketch_role_with_warnings` is
+            // always meaningful from here on.
             editor.with_parts(|state, primitive| {
                 apply_sketch_role_with_warnings(state, primitive, id, role);
             });
@@ -5511,34 +7212,71 @@ pub(crate) fn apply_footprint_primitive_edit(
             use signex_sketch::id::SketchEntityId;
             use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
 
-            let line_id = match editor.state.selected_sketch {
-                Some(id) => id,
-                None => {
-                    editor
-                        .state
-                        .solve_warnings
-                        .push("Make Pad from Profile: select a Line first".into());
-                    editor.canvas_cache.clear();
-                    return;
+            // v0.27 — walk the full sketch selection (primary +
+            // secondary + extras) for the first Line. The
+            // closed-loop walker doesn't care which seed edge it
+            // gets — any Line on the loop seeds the trace. Falls
+            // back to scanning every sketch Line when nothing
+            // suitable is selected, so the action also works on a
+            // bare "select-nothing-and-click-Make-Pad" workflow.
+            let line_id: SketchEntityId = {
+                let sketch_lookup = editor.primitive().sketch.as_ref();
+                let kind_of = |id: SketchEntityId| -> Option<EntityKind> {
+                    sketch_lookup
+                        .and_then(|s| s.entities.iter().find(|e| e.id == id))
+                        .map(|e| e.kind.clone())
+                };
+                let selection: Vec<SketchEntityId> = editor
+                    .state
+                    .selected_sketch
+                    .into_iter()
+                    .chain(editor.state.selected_sketch_secondary.into_iter())
+                    .chain(editor.state.selected_sketch_extra.iter().copied())
+                    .collect();
+
+                // First pass — Line directly in the selection.
+                let direct_line = selection
+                    .iter()
+                    .find(|id| matches!(kind_of(**id), Some(EntityKind::Line { .. })))
+                    .copied();
+                // Second pass — a selected Point's incident Line.
+                let incident_line = selection.iter().find_map(|id| {
+                    if matches!(kind_of(*id), Some(EntityKind::Point { .. })) {
+                        sketch_lookup.and_then(|s| {
+                            s.entities
+                                .iter()
+                                .find(|e| match e.kind {
+                                    EntityKind::Line { start, end } => {
+                                        start == *id || end == *id
+                                    }
+                                    _ => false,
+                                })
+                                .map(|e| e.id)
+                        })
+                    } else {
+                        None
+                    }
+                });
+                // Third pass — any sketch Line at all.
+                let any_line = sketch_lookup.and_then(|s| {
+                    s.entities
+                        .iter()
+                        .find(|e| matches!(e.kind, EntityKind::Line { .. }))
+                        .map(|e| e.id)
+                });
+
+                match direct_line.or(incident_line).or(any_line) {
+                    Some(id) => id,
+                    None => {
+                        editor.state.solve_warnings.push(
+                            "Make Pad from Profile: no Lines in the sketch — draw a closed shape first"
+                                .into(),
+                        );
+                        editor.canvas_cache.clear();
+                        return;
+                    }
                 }
             };
-
-            // Verify the selection is a Line.
-            let is_line = editor
-                .primitive()
-                .sketch
-                .as_ref()
-                .and_then(|s| s.entities.iter().find(|e| e.id == line_id))
-                .map(|e| matches!(e.kind, EntityKind::Line { .. }))
-                .unwrap_or(false);
-            if !is_line {
-                editor.state.solve_warnings.push(
-                    "Make Pad from Profile: selection is not a Line — pick a Line entity first"
-                        .into(),
-                );
-                editor.canvas_cache.clear();
-                return;
-            }
 
             // Walk the loop to compute the centroid; needs a fresh
             // solve so vertex positions are accurate.
@@ -5577,9 +7315,67 @@ pub(crate) fn apply_footprint_primitive_edit(
                     return;
                 }
             };
-            let n = vertices.len() as f64;
-            let cx = vertices.iter().map(|p| p[0]).sum::<f64>() / n;
-            let cy = vertices.iter().map(|p| p[1]).sum::<f64>() / n;
+            // v0.27 — area-weighted centroid + axis-aligned bbox of
+            // the closed-loop polygon. The arithmetic mean of vertex
+            // positions only matches the geometric centroid for
+            // regular polygons; for an arbitrary triangle / outline
+            // it lands biased toward whichever side has the most
+            // densely-spaced vertices (which is why the user saw
+            // the pad mint near a corner instead of inside the
+            // shape). The shoelace centroid is the proper EDA
+            // answer — pad sits at the geometric middle of its own
+            // copper outline.
+            let n_v = vertices.len();
+            let mut signed_area = 0.0_f64;
+            let mut cx_acc = 0.0_f64;
+            let mut cy_acc = 0.0_f64;
+            for i in 0..n_v {
+                let (x0, y0) = (vertices[i][0], vertices[i][1]);
+                let (x1, y1) = (
+                    vertices[(i + 1) % n_v][0],
+                    vertices[(i + 1) % n_v][1],
+                );
+                let cross = x0 * y1 - x1 * y0;
+                signed_area += cross;
+                cx_acc += (x0 + x1) * cross;
+                cy_acc += (y0 + y1) * cross;
+            }
+            let area = signed_area * 0.5;
+            let (cx, cy) = if area.abs() > 1e-12 {
+                let s = 1.0 / (6.0 * area);
+                (cx_acc * s, cy_acc * s)
+            } else {
+                // Degenerate polygon — fall back to mean.
+                let n = n_v as f64;
+                (
+                    vertices.iter().map(|p| p[0]).sum::<f64>() / n,
+                    vertices.iter().map(|p| p[1]).sum::<f64>() / n,
+                )
+            };
+            // Axis-aligned bbox — drives `size_x_expr` / `size_y_expr`
+            // so the synced `state.pads` row is at least bbox-sized
+            // (instead of the default 1mm × 1mm). Polygon-shape
+            // rendering on the editor canvas is a follow-up.
+            let mut min_x = f64::INFINITY;
+            let mut min_y = f64::INFINITY;
+            let mut max_x = f64::NEG_INFINITY;
+            let mut max_y = f64::NEG_INFINITY;
+            for p in &vertices {
+                if p[0] < min_x {
+                    min_x = p[0];
+                }
+                if p[1] < min_y {
+                    min_y = p[1];
+                }
+                if p[0] > max_x {
+                    max_x = p[0];
+                }
+                if p[1] > max_y {
+                    max_y = p[1];
+                }
+            }
+            let bbox_w = (max_x - min_x).max(0.05);
+            let bbox_h = (max_y - min_y).max(0.05);
 
             // Plane: reuse the seed Line's plane so the new pad
             // entity ends up on the same one.
@@ -5625,8 +7421,8 @@ pub(crate) fn apply_footprint_primitive_edit(
                 shape: PadShape::Custom(CustomPadShape::SketchProfile {
                     source: vec![line_id],
                 }),
-                size_x_expr: "1mm".into(),
-                size_y_expr: "1mm".into(),
+                size_x_expr: format!("{:.3}mm", bbox_w),
+                size_y_expr: format!("{:.3}mm", bbox_h),
                 rotation_expr: None,
                 offset_x_expr: None,
                 offset_y_expr: None,
@@ -5643,6 +7439,16 @@ pub(crate) fn apply_footprint_primitive_edit(
                     SketchEdit::AddEntity(centre),
                 );
             });
+            // v0.27 — pivot the selection onto the new pad's centre
+            // Point. Without this, the Role dropdown still reads
+            // "Unassigned" because the user's prior selection (the
+            // Line we walked) has no PadAttr — the new PadAttr lives
+            // on the freshly-minted centre. Clearing extras avoids
+            // a confusing "primary is the centre but extras still
+            // point at the loop's lines" state right after Make Pad.
+            editor.state.selected_sketch = Some(centre_id);
+            editor.state.selected_sketch_secondary = None;
+            editor.state.selected_sketch_extra.clear();
             editor.dirty = true;
             editor.canvas_cache.clear();
         }
@@ -5804,6 +7610,19 @@ pub(crate) fn apply_footprint_primitive_edit(
             };
             let p_kind = primary.and_then(kind_of);
             let s_kind = secondary.and_then(kind_of);
+            // v0.15 — third entity for the 3-entity Symmetric
+            // constraints comes from the rubber-band extra slot.
+            let extra = editor.state.selected_sketch_extra.first().copied();
+            let extra_kind = extra.and_then(kind_of);
+            // Angle's DimTarget is stored in radians (canonical unit);
+            // the dim-input field is degrees, so convert here.
+            let angle_target = editor
+                .state
+                .dimension_input
+                .trim()
+                .parse::<f64>()
+                .ok()
+                .map(|deg| DimTarget::Literal(deg.to_radians()));
 
             let new_kind: Option<ConstraintKind> = match (tag, p_kind, s_kind, primary, secondary) {
                 (SketchConstraintTag::Fixed, Some("Point"), _, Some(p), _) => {
@@ -5866,6 +7685,122 @@ pub(crate) fn apply_footprint_primitive_edit(
                 (SketchConstraintTag::Midpoint, Some("Line"), Some("Point"), Some(l), Some(p)) => {
                     Some(ConstraintKind::Midpoint { point: p, line: l })
                 }
+                // --- v0.15: 9 additional constraint kinds ---
+                (
+                    SketchConstraintTag::TangentLineArc,
+                    Some("Line"),
+                    Some("Arc"),
+                    Some(line),
+                    Some(arc),
+                ) => Some(ConstraintKind::TangentLineArc { line, arc }),
+                (
+                    SketchConstraintTag::TangentLineArc,
+                    Some("Arc"),
+                    Some("Line"),
+                    Some(arc),
+                    Some(line),
+                ) => Some(ConstraintKind::TangentLineArc { line, arc }),
+                (
+                    SketchConstraintTag::TangentArcArc,
+                    Some("Arc"),
+                    Some("Arc"),
+                    Some(a1),
+                    Some(a2),
+                ) => Some(ConstraintKind::TangentArcArc {
+                    a1,
+                    a2,
+                    internal: false,
+                }),
+                (SketchConstraintTag::Angle, Some("Line"), Some("Line"), Some(l1), Some(l2)) => {
+                    angle_target.map(|t| ConstraintKind::Angle { l1, l2, target: t })
+                }
+                // EqualRadius spans any two of Circle / Arc.
+                (
+                    SketchConstraintTag::EqualRadius,
+                    Some("Circle") | Some("Arc"),
+                    Some("Circle") | Some("Arc"),
+                    Some(e1),
+                    Some(e2),
+                ) => Some(ConstraintKind::EqualRadius { e1, e2 }),
+                (
+                    SketchConstraintTag::PointOnArc,
+                    Some("Point"),
+                    Some("Arc"),
+                    Some(point),
+                    Some(arc),
+                ) => Some(ConstraintKind::PointOnArc { point, arc }),
+                (
+                    SketchConstraintTag::PointOnArc,
+                    Some("Arc"),
+                    Some("Point"),
+                    Some(arc),
+                    Some(point),
+                ) => Some(ConstraintKind::PointOnArc { point, arc }),
+                (
+                    SketchConstraintTag::DistancePtLine,
+                    Some("Point"),
+                    Some("Line"),
+                    Some(point),
+                    Some(line),
+                ) => dim_target.map(|t| ConstraintKind::DistancePtLine {
+                    point,
+                    line,
+                    target: t,
+                }),
+                (
+                    SketchConstraintTag::DistancePtLine,
+                    Some("Line"),
+                    Some("Point"),
+                    Some(line),
+                    Some(point),
+                ) => dim_target.map(|t| ConstraintKind::DistancePtLine {
+                    point,
+                    line,
+                    target: t,
+                }),
+                // DistancePtCircle: the `circle` field accepts a Circle
+                // or an Arc (radius read from live state in both cases).
+                (
+                    SketchConstraintTag::DistancePtCircle,
+                    Some("Point"),
+                    Some("Circle") | Some("Arc"),
+                    Some(point),
+                    Some(circle),
+                ) => dim_target.map(|t| ConstraintKind::DistancePtCircle {
+                    point,
+                    circle,
+                    target: t,
+                }),
+                (
+                    SketchConstraintTag::DistancePtCircle,
+                    Some("Circle") | Some("Arc"),
+                    Some("Point"),
+                    Some(circle),
+                    Some(point),
+                ) => dim_target.map(|t| ConstraintKind::DistancePtCircle {
+                    point,
+                    circle,
+                    target: t,
+                }),
+                // 3-entity Symmetric constraints: primary + secondary
+                // are the two governed Points; the third entity (mirror
+                // Line / centre Point) comes from the extra slot.
+                (
+                    SketchConstraintTag::SymmetricAboutLine,
+                    Some("Point"),
+                    Some("Point"),
+                    Some(p1),
+                    Some(p2),
+                ) if extra_kind == Some("Line") => extra
+                    .map(|line| ConstraintKind::SymmetricAboutLine { p1, p2, line }),
+                (
+                    SketchConstraintTag::SymmetricAboutPoint,
+                    Some("Point"),
+                    Some("Point"),
+                    Some(p1),
+                    Some(p2),
+                ) if extra_kind == Some("Point") => extra
+                    .map(|center| ConstraintKind::SymmetricAboutPoint { p1, p2, center }),
                 _ => None,
             };
 
@@ -5898,6 +7833,19 @@ pub(crate) fn apply_footprint_primitive_edit(
             use signex_sketch::entity::{Entity, EntityKind};
             use signex_sketch::id::SketchEntityId;
             use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
+
+            // v0.14-footprint — TAB-pause is the single source of truth
+            // for "suppress click-commit". The canvas layer also gates
+            // on `placement_paused` before publishing this message, but
+            // multi-click tools (Line / RoundedRectangle / Arc / …)
+            // route BOTH their anchor click and their commit click
+            // through this one handler, so the authoritative gate lives
+            // here too: while paused, drop the click before it can
+            // advance `tool_pending` or mint geometry. The Select tool
+            // never reaches this arm, so re-anchoring stays possible.
+            if editor.state.placement_paused {
+                return;
+            }
 
             // v0.16.1 — sticky construction flag captured once so each
             // newly-minted entity can be flagged in one place. Pads
@@ -5966,6 +7914,23 @@ pub(crate) fn apply_footprint_primitive_edit(
                 .placement_input
                 .as_ref()
                 .and_then(|p| p.buffer.parse::<f64>().ok());
+            // v0.14-footprint — multi-dimension tools (Line len/angle,
+            // Rectangle w/h, Rounded-Rect w/h/radius) keep the focused
+            // field in `placement_input` and the rest in
+            // `placement_input_others`. Pull a field's parsed value out
+            // of whichever slot holds it so the commit arms can honour
+            // any combination regardless of which field has focus.
+            let field_value = |kind: PlacementInputKind| -> Option<f64> {
+                std::iter::once(editor.state.placement_input.as_ref())
+                    .chain(editor.state.placement_input_others.iter().map(Some))
+                    .flatten()
+                    .find(|p| p.kind == kind)
+                    .and_then(|p| p.buffer.parse::<f64>().ok())
+            };
+            let line_len_typed = field_value(PlacementInputKind::LineLength);
+            let line_ang_typed = field_value(PlacementInputKind::LineAngle);
+            let rect_w_typed = field_value(PlacementInputKind::RectWidth);
+            let rect_h_typed = field_value(PlacementInputKind::RectHeight);
             let resolve_point_xy =
                 |id: SketchEntityId, primitive: &signex_library::primitive::footprint::Footprint| -> Option<(f64, f64)> {
                     primitive
@@ -5983,28 +7948,49 @@ pub(crate) fn apply_footprint_primitive_edit(
                 editor.state.active_tool,
                 editor.state.tool_pending.clone(),
             ) {
-                // Line second click — pin distance from `first` along
-                // the cursor azimuth.
-                (
-                    Some(PlacementInputKind::LineLength),
-                    Some(len),
-                    SketchTool::Line,
-                    ToolPending::LineFirst { first },
-                ) if len > 0.0 => {
+                // Line second click — honour any typed length / angle.
+                // v0.14-footprint:
+                //   • length + angle → endpoint = first + (len @ angle°)
+                //   • length only    → len along the cursor azimuth (legacy)
+                //   • angle only     → azimuth pinned to angle°, length
+                //                      taken from the cursor distance
+                // The angle is degrees CCW from +X in world space, the
+                // same convention the live ghost-preview pill displays
+                // (draw_sketch.rs), so the committed segment matches the
+                // number the user saw while placing.
+                (_, _, SketchTool::Line, ToolPending::LineFirst { first })
+                    if line_len_typed.is_some() || line_ang_typed.is_some() =>
+                {
                     let primitive = editor.primitive();
                     if let Some((fx, fy)) = resolve_point_xy(first, primitive) {
                         let dx = x_mm - fx;
                         let dy = y_mm - fy;
                         let cursor_len = (dx * dx + dy * dy).sqrt();
-                        if cursor_len > 1e-9 {
-                            let ux = dx / cursor_len;
-                            let uy = dy / cursor_len;
-                            (fx + len * ux, fy + len * uy, true)
+                        // World azimuth of the cursor relative to the
+                        // first endpoint; 0 when the cursor sits exactly
+                        // on `first` (no direction to read).
+                        let cursor_ang = if cursor_len > 1e-9 {
+                            dy.atan2(dx)
                         } else {
-                            // Cursor coincides with the first
-                            // endpoint — no azimuth to pin to. Fall
-                            // back to the raw click so the user gets
-                            // visible feedback that nothing happened.
+                            0.0
+                        };
+                        // Typed angle wins; else follow the cursor.
+                        let ang_rad = match line_ang_typed {
+                            Some(a) => a.to_radians(),
+                            None => cursor_ang,
+                        };
+                        // Typed (positive) length wins; else use the
+                        // cursor distance so an angle-only entry still
+                        // commits a sensibly-sized segment.
+                        let len = match line_len_typed {
+                            Some(l) if l > 0.0 => l,
+                            _ => cursor_len,
+                        };
+                        if len > 1e-9 {
+                            (fx + len * ang_rad.cos(), fy + len * ang_rad.sin(), true)
+                        } else {
+                            // Neither a typed length nor a usable cursor
+                            // distance — fall back to the raw click.
                             (x_mm, y_mm, false)
                         }
                     } else {
@@ -6088,6 +8074,40 @@ pub(crate) fn apply_footprint_primitive_edit(
                         } else {
                             (x_mm, y_mm, false)
                         }
+                    } else {
+                        (x_mm, y_mm, false)
+                    }
+                }
+                // Rectangle / Rounded-Rectangle second click — pin the
+                // opposite corner from typed width/height. Each axis is
+                // independent: typed width fixes |Δx| (sign from the
+                // cursor's quadrant), typed height fixes |Δy|; an
+                // untyped axis follows the cursor. The per-tool commit
+                // arm builds the box from `first` + this corner (and,
+                // for Rounded-Rect, reads the corner radius itself).
+                (_, _, SketchTool::Rectangle, ToolPending::RectangleFirst { first })
+                | (
+                    _,
+                    _,
+                    SketchTool::RoundedRectangle,
+                    ToolPending::RoundedRectangleFirst { first },
+                ) if rect_w_typed.is_some() || rect_h_typed.is_some() => {
+                    let primitive = editor.primitive();
+                    if let Some((fx, fy)) = resolve_point_xy(first, primitive) {
+                        // Sign of the cursor offset picks the quadrant
+                        // the box grows into; default +1 when the cursor
+                        // sits exactly on a corner axis.
+                        let sx = if x_mm < fx { -1.0 } else { 1.0 };
+                        let sy = if y_mm < fy { -1.0 } else { 1.0 };
+                        let ex = match rect_w_typed {
+                            Some(w) if w > 0.0 => fx + sx * w,
+                            _ => x_mm,
+                        };
+                        let ey = match rect_h_typed {
+                            Some(h) if h > 0.0 => fy + sy * h,
+                            _ => y_mm,
+                        };
+                        (ex, ey, true)
                     } else {
                         (x_mm, y_mm, false)
                     }
@@ -6382,14 +8402,16 @@ pub(crate) fn apply_footprint_primitive_edit(
                             let y1 = fy.max(oy);
                             let half_w = (x1 - x0) / 2.0;
                             let half_h = (y1 - y0) / 2.0;
-                            // Read corner radius from dimension input;
-                            // default 0.5 mm, clamp to [0.05, half_min].
-                            let r_input = editor
-                                .state
-                                .dimension_input
-                                .trim()
-                                .parse::<f64>()
-                                .ok()
+                            // v0.14-footprint — corner radius source:
+                            // prefer a typed RRectRadius (the third Tab
+                            // field), then the legacy `dimension_input`
+                            // text, else 0.5 mm. Clamp to [0.05, half_min].
+                            let r_input = std::iter::once(editor.state.placement_input.as_ref())
+                                .chain(editor.state.placement_input_others.iter().map(Some))
+                                .flatten()
+                                .find(|p| p.kind == PlacementInputKind::RRectRadius)
+                                .and_then(|p| p.buffer.parse::<f64>().ok())
+                                .or_else(|| editor.state.dimension_input.trim().parse::<f64>().ok())
                                 .unwrap_or(0.5);
                             let r_max = half_w.min(half_h).max(0.05);
                             let r = r_input.clamp(0.05, r_max);
@@ -6909,14 +8931,34 @@ pub(crate) fn apply_footprint_primitive_edit(
                             return;
                         }
                     };
-                    let dist = editor
+                    // v0.25 polish — prefer placement_input over the
+                    // legacy `dimension_input` text field. The
+                    // keypress-driven cursor overlay is the
+                    // discoverable path; `dimension_input` stays as
+                    // the Properties-panel fallback for users who
+                    // already have a value there.
+                    let dist_from_placement = editor
                         .state
-                        .dimension_input
-                        .trim()
-                        .parse::<f64>()
-                        .ok()
-                        .filter(|d| d.is_finite() && *d > 1e-9)
-                        .unwrap_or(0.5);
+                        .placement_input
+                        .as_ref()
+                        .filter(|p| p.kind == PlacementInputKind::OffsetDistance)
+                        .and_then(|p| p.buffer.parse::<f64>().ok())
+                        .filter(|d| d.is_finite() && *d > 1e-9);
+                    let dist = dist_from_placement.unwrap_or_else(|| {
+                        editor
+                            .state
+                            .dimension_input
+                            .trim()
+                            .parse::<f64>()
+                            .ok()
+                            .filter(|d| d.is_finite() && *d > 1e-9)
+                            .unwrap_or(0.5)
+                    });
+                    // Clear the buffer so the next Offset click
+                    // doesn''t accidentally reuse the old value.
+                    if dist_from_placement.is_some() {
+                        editor.state.placement_input = None;
+                    }
 
                     let sketch_ref = match editor.primitive().sketch.as_ref() {
                         Some(s) => s,
@@ -7612,6 +9654,612 @@ pub(crate) fn apply_footprint_primitive_edit(
                     });
                     editor.state.tool_pending = ToolPending::Idle;
                 }
+                SketchTool::Fillet => {
+                    // v0.27 — EDA Fillet. Two-click gesture:
+                    //   click 1: pick the first Line (we hit-test for
+                    //     a Line near the click — fall back to a
+                    //     warning if none).
+                    //   click 2: pick the second Line that shares an
+                    //     endpoint with the first. Compute tangent
+                    //     points at radius `r` from the shared corner
+                    //     along each line, splice in an Arc connecting
+                    //     them centred on the angle bisector, and
+                    //     shorten both lines to end at the tangent
+                    //     points.
+                    //
+                    // Radius source — `state.placement_input` (kind
+                    // FilletRadius) when the user typed one; else
+                    // `state.dimension_input`; else 0.5 mm.
+                    fn pick_line_at(
+                        sketch: &signex_sketch::SketchData,
+                        x: f64,
+                        y: f64,
+                    ) -> Option<SketchEntityId> {
+                        const TOL_MM: f64 = 0.30;
+                        let pos_of = |id: SketchEntityId| -> Option<(f64, f64)> {
+                            sketch.entities.iter().find(|e| e.id == id).and_then(|e| match e.kind {
+                                EntityKind::Point { x, y } => Some((x, y)),
+                                _ => None,
+                            })
+                        };
+                        let mut best: Option<(f64, SketchEntityId)> = None;
+                        for e in &sketch.entities {
+                            if let EntityKind::Line { start, end } = e.kind {
+                                let (Some(a), Some(b)) = (pos_of(start), pos_of(end)) else {
+                                    continue;
+                                };
+                                let dx = b.0 - a.0;
+                                let dy = b.1 - a.1;
+                                let llen2 = dx * dx + dy * dy;
+                                if llen2 <= 1e-12 {
+                                    continue;
+                                }
+                                let t = ((x - a.0) * dx + (y - a.1) * dy) / llen2;
+                                let tc = t.clamp(0.0, 1.0);
+                                let px = a.0 + tc * dx;
+                                let py = a.1 + tc * dy;
+                                let d2 = (px - x).powi(2) + (py - y).powi(2);
+                                if d2 <= TOL_MM * TOL_MM
+                                    && best.as_ref().is_none_or(|(b2, _)| d2 < *b2)
+                                {
+                                    best = Some((d2, e.id));
+                                }
+                            }
+                        }
+                        best.map(|(_, id)| id)
+                    }
+
+                    let click_xy = (x_mm, y_mm);
+                    let radius_mm = editor
+                        .state
+                        .placement_input
+                        .as_ref()
+                        .filter(|p| p.kind == PlacementInputKind::FilletRadius)
+                        .and_then(|p| p.buffer.parse::<f64>().ok())
+                        .filter(|r| r.is_finite() && *r > 1e-9)
+                        .unwrap_or_else(|| {
+                            editor
+                                .state
+                                .dimension_input
+                                .trim()
+                                .parse::<f64>()
+                                .ok()
+                                .filter(|r| r.is_finite() && *r > 1e-9)
+                                .unwrap_or(0.5)
+                        });
+
+                    match editor.state.tool_pending {
+                        ToolPending::FilletFirst { line: first_line } => {
+                            let sketch_ref = match editor.primitive().sketch.as_ref() {
+                                Some(s) => s,
+                                None => {
+                                    editor.state.tool_pending = ToolPending::Idle;
+                                    return;
+                                }
+                            };
+                            let second_line = match pick_line_at(sketch_ref, click_xy.0, click_xy.1)
+                            {
+                                Some(id) if id != first_line => id,
+                                _ => {
+                                    editor.state.solve_warnings.push(
+                                        "Fillet: second click missed a different Line — pick the adjacent line".into(),
+                                    );
+                                    editor.state.tool_pending = ToolPending::Idle;
+                                    return;
+                                }
+                            };
+                            // Resolve the two Lines' endpoints.
+                            let line_endpoints = |id: SketchEntityId| -> Option<(SketchEntityId, SketchEntityId)> {
+                                sketch_ref.entities.iter().find(|e| e.id == id).and_then(
+                                    |e| match e.kind {
+                                        EntityKind::Line { start, end } => Some((start, end)),
+                                        _ => None,
+                                    },
+                                )
+                            };
+                            let pos_of = |id: SketchEntityId| -> Option<(f64, f64)> {
+                                sketch_ref
+                                    .entities
+                                    .iter()
+                                    .find(|e| e.id == id)
+                                    .and_then(|e| match e.kind {
+                                        EntityKind::Point { x, y } => Some((x, y)),
+                                        _ => None,
+                                    })
+                            };
+                            let (a_s, a_e) = match line_endpoints(first_line) {
+                                Some(p) => p,
+                                None => {
+                                    editor.state.tool_pending = ToolPending::Idle;
+                                    return;
+                                }
+                            };
+                            let (b_s, b_e) = match line_endpoints(second_line) {
+                                Some(p) => p,
+                                None => {
+                                    editor.state.tool_pending = ToolPending::Idle;
+                                    return;
+                                }
+                            };
+                            // Find the shared corner Point.
+                            let corner_id = if a_s == b_s || a_s == b_e {
+                                a_s
+                            } else if a_e == b_s || a_e == b_e {
+                                a_e
+                            } else {
+                                editor.state.solve_warnings.push(
+                                    "Fillet: the two Lines do not share an endpoint — bridge them with a Coincident constraint first".into(),
+                                );
+                                editor.state.tool_pending = ToolPending::Idle;
+                                return;
+                            };
+                            // Identify the "outer" endpoint of each line.
+                            let a_other = if a_s == corner_id { a_e } else { a_s };
+                            let b_other = if b_s == corner_id { b_e } else { b_s };
+                            let (cx, cy) = match pos_of(corner_id) {
+                                Some(p) => p,
+                                None => {
+                                    editor.state.tool_pending = ToolPending::Idle;
+                                    return;
+                                }
+                            };
+                            let (ax, ay) = match pos_of(a_other) {
+                                Some(p) => p,
+                                None => {
+                                    editor.state.tool_pending = ToolPending::Idle;
+                                    return;
+                                }
+                            };
+                            let (bx, by) = match pos_of(b_other) {
+                                Some(p) => p,
+                                None => {
+                                    editor.state.tool_pending = ToolPending::Idle;
+                                    return;
+                                }
+                            };
+                            // Direction unit vectors away from corner.
+                            let dax = ax - cx;
+                            let day = ay - cy;
+                            let dbx = bx - cx;
+                            let dby = by - cy;
+                            let alen = (dax * dax + day * day).sqrt();
+                            let blen = (dbx * dbx + dby * dby).sqrt();
+                            if alen <= 1e-9 || blen <= 1e-9 {
+                                editor.state.tool_pending = ToolPending::Idle;
+                                return;
+                            }
+                            let aux = dax / alen;
+                            let auy = day / alen;
+                            let bux = dbx / blen;
+                            let buy = dby / blen;
+                            // Half-angle between the two lines via dot product.
+                            let cos_theta = (aux * bux + auy * buy).clamp(-1.0, 1.0);
+                            let theta = cos_theta.acos();
+                            if theta < 1e-3 || (std::f64::consts::PI - theta) < 1e-3 {
+                                editor.state.solve_warnings.push(
+                                    "Fillet: lines are colinear — nothing to round".into(),
+                                );
+                                editor.state.tool_pending = ToolPending::Idle;
+                                return;
+                            }
+                            let half = theta * 0.5;
+                            // Distance from corner to tangent point along each line.
+                            let trim = radius_mm / half.tan();
+                            let cap = trim.min(alen * 0.999).min(blen * 0.999);
+                            if cap < radius_mm * 0.05 {
+                                editor.state.solve_warnings.push(
+                                    "Fillet: radius too large for these lines — pick a smaller r".into(),
+                                );
+                                editor.state.tool_pending = ToolPending::Idle;
+                                return;
+                            }
+                            let r_used = cap * half.tan();
+                            let ta_x = cx + aux * cap;
+                            let ta_y = cy + auy * cap;
+                            let tb_x = cx + bux * cap;
+                            let tb_y = cy + buy * cap;
+                            // Arc centre — on the angle bisector at
+                            // distance r / sin(half) from the corner.
+                            let bis_x = (aux + bux).abs() + (auy + buy).abs();
+                            let _ = bis_x; // appease borrow checker, no-op
+                            let mid_x = aux + bux;
+                            let mid_y = auy + buy;
+                            let mid_len = (mid_x * mid_x + mid_y * mid_y).sqrt().max(1e-9);
+                            let bx_unit = mid_x / mid_len;
+                            let by_unit = mid_y / mid_len;
+                            let centre_off = r_used / half.sin();
+                            let centre_x = cx + bx_unit * centre_off;
+                            let centre_y = cy + by_unit * centre_off;
+                            // Determine sweep direction — the arc opens
+                            // away from the corner; pick CCW if the
+                            // cross product (a -> b) is positive.
+                            let cross = aux * buy - auy * bux;
+                            let sweep_ccw = cross > 0.0;
+                            // Mint two new tangent Points + an Arc; replace
+                            // the corner endpoint references on the source
+                            // Lines with the new tangent Points so the
+                            // arc bridges them. We do this by updating the
+                            // existing Line entities in-place via the
+                            // sketch (no SketchEdit::EditLine variant
+                            // exists yet — fall back to delete + re-add).
+                            let ta_id = SketchEntityId::new();
+                            let tb_id = SketchEntityId::new();
+                            let centre_id = SketchEntityId::new();
+                            let arc_id = SketchEntityId::new();
+                            let entities = vec![
+                                flag(Entity::new(
+                                    ta_id,
+                                    plane_id,
+                                    EntityKind::Point { x: ta_x, y: ta_y },
+                                )),
+                                flag(Entity::new(
+                                    tb_id,
+                                    plane_id,
+                                    EntityKind::Point { x: tb_x, y: tb_y },
+                                )),
+                                flag(Entity::new(
+                                    centre_id,
+                                    plane_id,
+                                    EntityKind::Point {
+                                        x: centre_x,
+                                        y: centre_y,
+                                    },
+                                )),
+                                flag(Entity::new(
+                                    arc_id,
+                                    plane_id,
+                                    EntityKind::Arc {
+                                        center: centre_id,
+                                        start: ta_id,
+                                        end: tb_id,
+                                        sweep_ccw,
+                                    },
+                                )),
+                            ];
+                            for ent in entities {
+                                editor.with_parts(|state, primitive| {
+                                    apply_sketch_edit_with_warnings(
+                                        state,
+                                        primitive,
+                                        SketchEdit::AddEntity(ent),
+                                    );
+                                });
+                            }
+                            // Rewrite the two source Lines so the corner
+                            // endpoint becomes the new tangent point.
+                            // No public SketchEdit variant rewrites a
+                            // Line's endpoints, so we mutate the schema
+                            // directly and trigger a force-rebuild.
+                            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
+                                for e in sketch.entities.iter_mut() {
+                                    if e.id == first_line {
+                                        if let EntityKind::Line { start, end } = &mut e.kind {
+                                            if *start == corner_id {
+                                                *start = ta_id;
+                                            } else if *end == corner_id {
+                                                *end = ta_id;
+                                            }
+                                        }
+                                    }
+                                    if e.id == second_line {
+                                        if let EntityKind::Line { start, end } = &mut e.kind {
+                                            if *start == corner_id {
+                                                *start = tb_id;
+                                            } else if *end == corner_id {
+                                                *end = tb_id;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            editor.with_parts(|state, primitive| {
+                                apply_sketch_edit_with_warnings(
+                                    state,
+                                    primitive,
+                                    SketchEdit::ForceRebuild,
+                                );
+                            });
+                            editor.state.tool_pending = ToolPending::Idle;
+                        }
+                        _ => {
+                            // First click — pick the first Line.
+                            let sketch_ref = match editor.primitive().sketch.as_ref() {
+                                Some(s) => s,
+                                None => {
+                                    editor.state.tool_pending = ToolPending::Idle;
+                                    return;
+                                }
+                            };
+                            match pick_line_at(sketch_ref, click_xy.0, click_xy.1) {
+                                Some(id) => {
+                                    editor.state.tool_pending = ToolPending::FilletFirst { line: id };
+                                }
+                                None => {
+                                    editor.state.solve_warnings.push(
+                                        "Fillet: click missed any Line — try clicking closer to a line stroke".into(),
+                                    );
+                                    editor.state.tool_pending = ToolPending::Idle;
+                                }
+                            }
+                        }
+                    }
+                }
+                SketchTool::Trim => {
+                    // v0.27 — EDA Trim. Single click on a Line: find
+                    // its self-intersections with all other Lines,
+                    // pick the two intersections that bracket the
+                    // click point on the line, split the line into
+                    // up-to-three segments, and remove the middle
+                    // segment containing the click. If only one
+                    // intersection exists, remove the side containing
+                    // the click. If no intersection exists, remove
+                    // the whole Line (Fusion-style "trim to nothing"
+                    // is a useful EDA fallback for stripping a stray
+                    // overlap).
+                    fn line_xy(
+                        sketch: &signex_sketch::SketchData,
+                        id: SketchEntityId,
+                    ) -> Option<((f64, f64), (f64, f64))> {
+                        let pos_of = |pid: SketchEntityId| -> Option<(f64, f64)> {
+                            sketch.entities.iter().find(|e| e.id == pid).and_then(|e| match e.kind {
+                                EntityKind::Point { x, y } => Some((x, y)),
+                                _ => None,
+                            })
+                        };
+                        sketch.entities.iter().find(|e| e.id == id).and_then(|e| match e.kind {
+                            EntityKind::Line { start, end } => {
+                                Some((pos_of(start)?, pos_of(end)?))
+                            }
+                            _ => None,
+                        })
+                    }
+                    fn pick_line_at_for_trim(
+                        sketch: &signex_sketch::SketchData,
+                        x: f64,
+                        y: f64,
+                    ) -> Option<SketchEntityId> {
+                        const TOL_MM: f64 = 0.30;
+                        let mut best: Option<(f64, SketchEntityId)> = None;
+                        for e in &sketch.entities {
+                            if let EntityKind::Line { .. } = e.kind
+                                && let Some(((ax, ay), (bx, by))) = line_xy(sketch, e.id)
+                            {
+                                let dx = bx - ax;
+                                let dy = by - ay;
+                                let llen2 = dx * dx + dy * dy;
+                                if llen2 <= 1e-12 {
+                                    continue;
+                                }
+                                let t = ((x - ax) * dx + (y - ay) * dy) / llen2;
+                                let tc = t.clamp(0.0, 1.0);
+                                let px = ax + tc * dx;
+                                let py = ay + tc * dy;
+                                let d2 = (px - x).powi(2) + (py - y).powi(2);
+                                if d2 <= TOL_MM * TOL_MM
+                                    && best.as_ref().is_none_or(|(b2, _)| d2 < *b2)
+                                {
+                                    best = Some((d2, e.id));
+                                }
+                            }
+                        }
+                        best.map(|(_, id)| id)
+                    }
+
+                    let target_line = match editor.primitive().sketch.as_ref() {
+                        Some(s) => pick_line_at_for_trim(s, x_mm, y_mm),
+                        None => None,
+                    };
+                    let Some(target_line) = target_line else {
+                        editor.state.solve_warnings.push(
+                            "Trim: click missed any Line — try clicking closer to a line stroke".into(),
+                        );
+                        editor.state.tool_pending = ToolPending::Idle;
+                        return;
+                    };
+                    // Compute intersections of `target_line` with every
+                    // other Line; collect parametric `t` values.
+                    let mut hits: Vec<f64> = Vec::new();
+                    if let Some(s) = editor.primitive().sketch.as_ref()
+                        && let Some(((ax, ay), (bx, by))) = line_xy(s, target_line)
+                    {
+                        let dx = bx - ax;
+                        let dy = by - ay;
+                        let llen2 = dx * dx + dy * dy;
+                        if llen2 > 1e-12 {
+                            for e in &s.entities {
+                                if e.id == target_line {
+                                    continue;
+                                }
+                                if let EntityKind::Line { .. } = e.kind
+                                    && let Some(((cx, cy), (ex, ey))) = line_xy(s, e.id)
+                                {
+                                    let r_x = dx;
+                                    let r_y = dy;
+                                    let s_x = ex - cx;
+                                    let s_y = ey - cy;
+                                    let denom = r_x * s_y - r_y * s_x;
+                                    if denom.abs() <= 1e-12 {
+                                        continue;
+                                    }
+                                    let qx = cx - ax;
+                                    let qy = cy - ay;
+                                    let t = (qx * s_y - qy * s_x) / denom;
+                                    let u = (qx * r_y - qy * r_x) / denom;
+                                    if (1e-6..=1.0 - 1e-6).contains(&t)
+                                        && (-1e-6..=1.0 + 1e-6).contains(&u)
+                                    {
+                                        hits.push(t);
+                                    }
+                                }
+                            }
+                        }
+                        // Click t-value on target_line.
+                        let click_t = if llen2 > 1e-12 {
+                            ((x_mm - ax) * dx + (y_mm - ay) * dy) / llen2
+                        } else {
+                            0.5
+                        };
+                        // Bracketing the click between the nearest
+                        // intersection below and above.
+                        let lo = hits.iter().copied().filter(|t| *t < click_t).fold(0.0_f64, f64::max);
+                        let hi = hits
+                            .iter()
+                            .copied()
+                            .filter(|t| *t > click_t)
+                            .fold(1.0_f64, f64::min);
+                        // Three cases: full line (hits empty), half line
+                        // (one hit), middle slice (two hits).
+                        let trim_full = hits.is_empty();
+                        let trim_lo = (lo - 0.0).abs() < 1e-9;
+                        let trim_hi = (hi - 1.0).abs() < 1e-9;
+
+                        if trim_full {
+                            editor.with_parts(|state, primitive| {
+                                apply_sketch_edit_with_warnings(
+                                    state,
+                                    primitive,
+                                    SketchEdit::DeleteEntity(target_line),
+                                );
+                            });
+                        } else if trim_lo && !trim_hi {
+                            // Click is before the first intersection —
+                            // shorten the line to start at `hi`.
+                            let new_start = (ax + dx * hi, ay + dy * hi);
+                            // Replace the line's start endpoint with a
+                            // new Point at `new_start`.
+                            let new_pid = SketchEntityId::new();
+                            editor.with_parts(|state, primitive| {
+                                apply_sketch_edit_with_warnings(
+                                    state,
+                                    primitive,
+                                    SketchEdit::AddEntity(flag(Entity::new(
+                                        new_pid,
+                                        plane_id,
+                                        EntityKind::Point {
+                                            x: new_start.0,
+                                            y: new_start.1,
+                                        },
+                                    ))),
+                                );
+                            });
+                            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
+                                for e in sketch.entities.iter_mut() {
+                                    if e.id == target_line
+                                        && let EntityKind::Line { start, .. } = &mut e.kind
+                                    {
+                                        *start = new_pid;
+                                    }
+                                }
+                            }
+                        } else if trim_hi && !trim_lo {
+                            // Click is after the last intersection —
+                            // shorten the line to end at `lo`.
+                            let new_end = (ax + dx * lo, ay + dy * lo);
+                            let new_pid = SketchEntityId::new();
+                            editor.with_parts(|state, primitive| {
+                                apply_sketch_edit_with_warnings(
+                                    state,
+                                    primitive,
+                                    SketchEdit::AddEntity(flag(Entity::new(
+                                        new_pid,
+                                        plane_id,
+                                        EntityKind::Point {
+                                            x: new_end.0,
+                                            y: new_end.1,
+                                        },
+                                    ))),
+                                );
+                            });
+                            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
+                                for e in sketch.entities.iter_mut() {
+                                    if e.id == target_line
+                                        && let EntityKind::Line { end, .. } = &mut e.kind
+                                    {
+                                        *end = new_pid;
+                                    }
+                                }
+                            }
+                        } else {
+                            // Click bracketed by two intersections —
+                            // split the line into two: [start..lo] and
+                            // [hi..end]. We keep the original entity as
+                            // the [start..lo] piece (rewriting its end)
+                            // and mint a new Line for [hi..end].
+                            let lo_pt = (ax + dx * lo, ay + dy * lo);
+                            let hi_pt = (ax + dx * hi, ay + dy * hi);
+                            let lo_pid = SketchEntityId::new();
+                            let hi_pid = SketchEntityId::new();
+                            let new_line_id = SketchEntityId::new();
+                            // Capture the original end-point id so the
+                            // mint of the second segment is correct.
+                            let orig_end = if let Some(sk) = editor.primitive().sketch.as_ref() {
+                                sk.entities.iter().find(|e| e.id == target_line).and_then(
+                                    |e| match e.kind {
+                                        EntityKind::Line { end, .. } => Some(end),
+                                        _ => None,
+                                    },
+                                )
+                            } else {
+                                None
+                            };
+                            let Some(orig_end) = orig_end else {
+                                editor.state.tool_pending = ToolPending::Idle;
+                                return;
+                            };
+                            for ent in [
+                                flag(Entity::new(
+                                    lo_pid,
+                                    plane_id,
+                                    EntityKind::Point {
+                                        x: lo_pt.0,
+                                        y: lo_pt.1,
+                                    },
+                                )),
+                                flag(Entity::new(
+                                    hi_pid,
+                                    plane_id,
+                                    EntityKind::Point {
+                                        x: hi_pt.0,
+                                        y: hi_pt.1,
+                                    },
+                                )),
+                                flag(Entity::new(
+                                    new_line_id,
+                                    plane_id,
+                                    EntityKind::Line {
+                                        start: hi_pid,
+                                        end: orig_end,
+                                    },
+                                )),
+                            ] {
+                                editor.with_parts(|state, primitive| {
+                                    apply_sketch_edit_with_warnings(
+                                        state,
+                                        primitive,
+                                        SketchEdit::AddEntity(ent),
+                                    );
+                                });
+                            }
+                            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
+                                for e in sketch.entities.iter_mut() {
+                                    if e.id == target_line
+                                        && let EntityKind::Line { end, .. } = &mut e.kind
+                                    {
+                                        *end = lo_pid;
+                                    }
+                                }
+                            }
+                        }
+                        editor.with_parts(|state, primitive| {
+                            apply_sketch_edit_with_warnings(
+                                state,
+                                primitive,
+                                SketchEdit::ForceRebuild,
+                            );
+                        });
+                    }
+                    editor.state.tool_pending = ToolPending::Idle;
+                }
             }
             // v0.24 Track D — buffer is consumed once per click. The
             // user has to type again before the next gesture step,
@@ -7621,6 +10269,9 @@ pub(crate) fn apply_footprint_primitive_edit(
             // either commits or Esc-clears.
             if used_placement_input {
                 editor.state.placement_input = None;
+                // v0.14-footprint — drop every parked dimension field
+                // too so the next gesture starts with a clean buffer.
+                editor.state.placement_input_others.clear();
             }
             editor.canvas_cache.clear();
             editor.dirty = true;
@@ -7636,9 +10287,7 @@ pub(crate) fn apply_footprint_primitive_edit(
         | PrimitiveEditorMsg::SymbolSelect(_)
         | PrimitiveEditorMsg::SymbolDeselect
         | PrimitiveEditorMsg::SymbolMoveSelected { .. }
-        | PrimitiveEditorMsg::SymbolMoveAll { .. }
         | PrimitiveEditorMsg::SymbolMoveGraphicHandle { .. }
-        | PrimitiveEditorMsg::SymbolRotateSelected { .. }
         | PrimitiveEditorMsg::SymbolDeleteSelected
         | PrimitiveEditorMsg::SymbolSetPinNumber { .. }
         | PrimitiveEditorMsg::SymbolSetPinName { .. }
@@ -7658,11 +10307,54 @@ pub(crate) fn apply_footprint_primitive_edit(
         | PrimitiveEditorMsg::SymbolCloseActiveBarMenu
         | PrimitiveEditorMsg::SymbolActiveBarStub(_)
         | PrimitiveEditorMsg::SymbolToggleSelectionFilter(_)
+        | PrimitiveEditorMsg::SymbolMoveAll { .. }
+        | PrimitiveEditorMsg::SymbolRotateSelected { .. }
         | PrimitiveEditorMsg::SymbolUndo
         | PrimitiveEditorMsg::SymbolRedo
         | PrimitiveEditorMsg::SymbolDragCommit
         | PrimitiveEditorMsg::Save => {}
     }
+}
+
+/// Translate the current pad selection by (dx, dy) mm: history
+/// snapshot, tested `nudge_pads`, sketch mirror, primitive re-sync.
+/// No-op on an empty selection. Shared by the one-step
+/// `FootprintActiveBarNudgeSelection` nudge and the typed-delta
+/// Move-By modal (`FootprintMoveByConfirm`) so both paths share the
+/// exact same proven geometry + sketch-mirror + history behaviour.
+fn footprint_nudge_selection(editor: &mut crate::app::FootprintEditorState, dx: f64, dy: f64) {
+    use crate::library::editor::footprint::pad_to_sketch;
+    use crate::library::editor::footprint::state::FootprintEditorState as CanvasState;
+
+    let mut indices: Vec<usize> = Vec::new();
+    if let Some(p) = editor.state.selected_pad {
+        indices.push(p);
+    }
+    indices.extend(editor.state.selected_pads_extra.iter().copied());
+    indices.sort_unstable();
+    indices.dedup();
+    indices.retain(|&i| i < editor.state.pads.len());
+    if indices.is_empty() {
+        return;
+    }
+
+    editor.push_history();
+    editor.with_parts(|state, primitive| {
+        // Translate the selection via the tested state helper, then
+        // mirror exactly the moved pads into the backing sketch and
+        // re-sync the literal `Pad` list.
+        let moved = state.nudge_pads(&indices, dx, dy);
+        let snapshots: Vec<crate::library::editor::footprint::state::EditorPad> = moved
+            .iter()
+            .filter_map(|&i| state.pads.get(i).cloned())
+            .collect();
+        for snapshot in &snapshots {
+            pad_to_sketch::mirror_move_pad_in_sketch(snapshot, primitive);
+        }
+        CanvasState::sync_pads_to_primitive(state, primitive);
+    });
+    editor.canvas_cache.clear();
+    editor.dirty = true;
 }
 
 /// v0.24 Phase 1 (Track B) — message-kind classifier driving the
@@ -7713,8 +10405,58 @@ fn mutates_footprint_state(msg: &PrimitiveEditorMsg) -> bool {
         | FootprintSketchSelect { .. }
         | FootprintSketchDimensionInput(_)
         | FootprintToggleSelectionFilter(_)
+        // Task 6 — filter preset apply/toggle/capture are UI-only
+        // (they mutate `selection_filter` or the on-disk preset
+        // list, never persisted footprint geometry), so they must
+        // not enter the undo history like the other filter toggles
+        // above.
+        | FootprintApplyFilterPreset(_)
+        | FootprintToggleAllFilters
+        | FootprintCaptureFilterPreset
         | FootprintToggleAutoFit
         | FootprintSelectActiveIdx(_)
+        | FootprintShowContextMenu { .. }
+        | FootprintCloseContextMenu
+        | FootprintContextMenuOpenSubmenu(_)
+        | FootprintContextMenuAction(_)
+        | FootprintFitConsumed
+        // v0.26-E — clipboard ops handle their own push_history at
+        // call site, so the snapshot-classifier here returns false
+        // (Copy mutates nothing; Cut + Paste already snapshotted).
+        | FootprintCopyPad
+        | FootprintCutPad
+        | FootprintPastePad
+        // v0.14 — Align/Distribute/Spacing pushes its own snapshot
+        // inside the handler, gated on a large-enough selection, so the
+        // blanket pre-push here must NOT fire (it would double-stack the
+        // history and snapshot even on a sub-2-pad no-op).
+        | FootprintAlignPads(_)
+        // v0.14 — "Move Selection by X, Y…" (nudge) likewise pushes its
+        // own snapshot inside the handler, gated on a non-empty
+        // selection. Keep it out of the blanket pre-push to avoid
+        // double-stacking the history on an empty-selection no-op.
+        | FootprintActiveBarNudgeSelection
+        // v0.14 — Move-By modal open/edit/cancel are pure UI state (the
+        // typed buffers live on `move_by_modal`, not persisted
+        // geometry); Confirm pushes its own snapshot inside the shared
+        // `footprint_nudge_selection` helper, same as the one-step
+        // nudge above, so it's classified alongside it here too.
+        | FootprintMoveByOpen
+        | FootprintMoveBySetX(_)
+        | FootprintMoveBySetY(_)
+        | FootprintMoveByConfirm
+        | FootprintMoveByCancel
+        // v0.14 — 3D Body mint pushes its own snapshot inside the
+        // handler (unconditionally, unlike nudge). Keep it out of the
+        // blanket pre-push to avoid double-stacking the history.
+        | FootprintMintBody3d
+        | FootprintMintExtrudedBody3d
+        // v0.14 — Place Text Frame commits once, on release, with
+        // the drag already resolved (no intermediate anchor-click
+        // message reaches the dispatcher like Track's 2-click
+        // gesture does). It pushes its own snapshot inside the
+        // handler, so keep it out of the blanket pre-push.
+        | FootprintAddTextFrame { .. }
         | Save => false,
         // All other variants either add/remove/move geometry,
         // mutate pad attributes, or rebuild the sketch — they all
@@ -8108,6 +10850,7 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::FootprintAddPad { .. }
         | EditorMsg::FootprintAddHole { .. }
         | EditorMsg::FootprintAddText { .. }
+        | EditorMsg::FootprintAddTextFrame { .. }
         | EditorMsg::FootprintTrackClick { .. }
         | EditorMsg::FootprintTrackCancel
         | EditorMsg::FootprintArcClick { .. }
@@ -8124,11 +10867,31 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::FootprintSketchPlacementInputBackspace
         | EditorMsg::FootprintSketchPlacementInputEnter
         | EditorMsg::FootprintSketchPlacementInputEscape
+        | EditorMsg::FootprintSketchPlacementInputTab
         | EditorMsg::FootprintSketchSelect { .. }
         | EditorMsg::FootprintSketchMovePoint { .. }
+        | EditorMsg::FootprintSketchMoveLine { .. }
+        | EditorMsg::FootprintSketchResizeRoundPad { .. }
+        | EditorMsg::FootprintSetSelectionMode2d(_)
+        | EditorMsg::FootprintSelectAllOnLayer
+        | EditorMsg::FootprintAddVia { .. }
+        | EditorMsg::FootprintSelectOffGridPads
+        | EditorMsg::FootprintRecomputeCourtyardOutline
+        | EditorMsg::FootprintLassoArm
+        | EditorMsg::FootprintLassoAddVertex { .. }
+        | EditorMsg::FootprintLassoCommit
+        | EditorMsg::FootprintLassoCancel
+        | EditorMsg::FootprintTouchingLineArm
+        | EditorMsg::FootprintTouchingLineFirst { .. }
+        | EditorMsg::FootprintTouchingLineCommit { .. }
+        | EditorMsg::FootprintTouchingLineCancel
+        | EditorMsg::FootprintSelectOverlapped
+        | EditorMsg::FootprintSelectNextOverlapped
         | EditorMsg::FootprintMovePad { .. }
         | EditorMsg::FootprintCursorAt { .. }
         | EditorMsg::FootprintSelectPad(_)
+        | EditorMsg::FootprintSelectPads(_)
+        | EditorMsg::FootprintSketchSelectMany(_)
         | EditorMsg::FootprintDeleteSelected
         | EditorMsg::FootprintToggleLayer(_)
         | EditorMsg::FootprintToggleAutoFit
@@ -8137,6 +10900,16 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::FootprintSketchToggleConstruction
         | EditorMsg::FootprintSketchToggleCenterline
         | EditorMsg::FootprintTogglePlacementPause
+        | EditorMsg::FootprintShowContextMenu { .. }
+        | EditorMsg::FootprintCloseContextMenu
+        | EditorMsg::FootprintContextMenuOpenSubmenu(_)
+        | EditorMsg::FootprintContextMenuAction(_)
+        | EditorMsg::FootprintFitConsumed
+        | EditorMsg::FootprintCopyPad
+        | EditorMsg::FootprintCutPad
+        | EditorMsg::FootprintPastePad
+        | EditorMsg::FootprintActiveBarRotateSelection
+        | EditorMsg::FootprintActiveBarFlipSelection
         | EditorMsg::FootprintSketchSetRole { .. }
         | EditorMsg::SaveFootprint(_, _)
         | EditorMsg::SetBodyHeight(_)

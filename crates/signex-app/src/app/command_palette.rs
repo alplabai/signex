@@ -80,6 +80,13 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
 
     // 1. Commands — menu actions.
     for (label, msg) in menu_command_table() {
+        // v0.13.0 — footprint editor gated off; keep its create
+        // command out of the palette so there's no dead entry.
+        if !crate::feature_flags::FOOTPRINT_EDITOR_ENABLED
+            && matches!(msg, MenuMessage::AddLibraryFootprint)
+        {
+            continue;
+        }
         out.push(CommandEntry {
             source: CommandSource::Command,
             label: label.to_string(),

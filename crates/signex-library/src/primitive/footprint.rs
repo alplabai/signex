@@ -278,6 +278,10 @@ pub enum FpGraphicKind {
         position: [f64; 2],
         content: String,
         size: f64,
+        /// Optional bounding-box (width, height) in mm. `None` = point
+        /// text (legacy). Rendering aligns/clips the string inside it.
+        #[serde(default)]
+        frame: Option<(f32, f32)>,
     },
     /// v0.18.17 — closed-loop polygon outlined or filled. The
     /// vertex list is closed implicitly (`vertices[N-1]` connects

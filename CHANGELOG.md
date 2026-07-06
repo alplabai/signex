@@ -6,12 +6,168 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
-> The v0.12 milestone is queued — a clean-room reimplementation of
-> `crates/signex-render/src/schematic/` and the field-autoplace
-> heuristic in `crates/signex-engine/src/transform.rs`, executed
-> against Signex-only specifications (`docs/RENDERING_RULES.md`,
-> Altium parity goals, IEEE-Std-91). The plan lives at
-> `docs/internal/CLEANROOM_REWRITE_PLAN.md`.
+## [0.14.0] — 2026-05-31
+
+The **v0.14 "Footprint Editor"** milestone. v0.13.0 shipped the
+footprint / sketch editor compiled but hidden behind a feature flag
+while it was finished; v0.14 completes the remaining active-bar tooling
+and **enables the editor** — opening a `.snxfpt` now opens an editable
+tab, and the New Footprint / PCB Library create flow is live again.
+
+### Added — sketch constraints
+
+- **Nine more sketch constraints exposed** in the sketch-mode active
+  bar: Tangent (line-arc + arc-arc), Angle, Equal-Radius, Point-on-Arc,
+  Distance-point-to-line, Distance-point-to-circle, and Symmetric
+  (about a line + about a point). The Newton-LM solver and serialization
+  already supported all 19 constraint kinds; this surfaces the 9 that
+  had no button. Selection-first UX: select the entities, the valid
+  constraint buttons light up. The two 3-entity Symmetric constraints
+  take their third entity from the multi-select extra slot.
+
+### Added — active-bar tools wired
+
+- **Align / Distribute / Spacing** (12 ops) — Align Left/Right/Top/
+  Bottom + center H/V, Distribute Horizontally/Vertically (equal centre
+  gaps, extremes fixed), and Increase/Decrease H/V spacing (one grid
+  step, pivoting about the selection centroid). Operate on the combined
+  pad selection; no-op under 2 pads (3 for distribute). Sketch-backed
+  pads mirror their move into the sketch; undo-snapshotted.
+- **Move / Drag / Move Selection** — activate the Select tool (footprint
+  pad-move is drag-under-select). Adds a `nudge_pads` helper +
+  `FootprintActiveBarNudgeSelection` foundation for the typed-delta
+  "Move Selection by X, Y…" dialog (dialog itself deferred to v0.15).
+- **Fill / Solid Region / Text Frame** — wired to the existing
+  filled-polygon (`PlaceRegion`) and silk-text (`PlaceString`) place
+  tools.
+- **Selection-filter "All - On / All - Off"** toggle wired to a new
+  `SelectionFilter::set_all`.
+
+### Added — deferred cleanup
+
+- **Move Selection by X, Y…** now opens a typed-delta modal (two mm
+  inputs) that nudges the pad selection by the entered amount, reusing
+  the same sketch-mirror + undo path as the one-step grid nudge.
+- **3D Body / Extruded 3D Body** active-bar items mint the footprint's
+  `body_3d` (extrude the courtyard, or the fab outline) — visible
+  immediately in the CPU 3D preview. The interactive wgpu pipeline stays
+  deferred (v2.x).
+- **Text Frame** is now a real bounding-box place tool: drag a rectangle
+  to set the frame; the silk string aligns/clips inside it. (No
+  auto-wrap yet.)
+- **Footprint-native selection-filter presets** — the filter dropdown's
+  All-On/All-Off toggle and preset chips are wired to real footprint
+  `SelectionFilterKind` presets, persisted under `footprint_filter_presets`
+  in prefs, with a "Save current filter as preset" capture. (Replaces the
+  schematic-typed presets that could not apply to footprints.)
+
+### Fixed
+
+- **Pad shape-param leak** — `mint_shape_geometry_for` now clears a
+  pad's `shape_params` before regenerating geometry, so changing a pad's
+  shape (e.g. RoundRect → Round) no longer strands stale parameter keys
+  for the solver / next bake.
+
+### Changed
+
+- `FOOTPRINT_EDITOR_ENABLED` flipped `false` → `true`
+  (`crates/signex-app/src/feature_flags.rs`). The
+  `opening_snxfpt_does_not_create_editable_tab_when_gated` regression
+  test branches on the flag and now asserts the enabled behaviour.
+
+### Deferred to v0.15
+
+- Break Track / Drag Track End (need track-segment split infra).
+
+### Constraints — Apache-clean invariants (carry forward)
+
+- Zero `kicad` substrings under `crates/`; no third-party
+  constraint-solver substrings under `signex-sketch` / `signex-bake`;
+  `cargo-deny` advisories + licenses green; full `cargo test --workspace`
+  green (GPU smoke tests skip headlessly).
+
+## [0.13.0] — 2026-05-31
+
+The **v0.13 Symbol & Library** milestone. This release pairs the
+cleanroom schematic renderer (the work planned as v0.12) with a wave of
+symbol-editor and library polish. There is no separate v0.12.0 tag — the
+cleanroom rewrite ships here. The workspace version had already advanced
+to `0.13.0`, so this release adopts that number rather than bumping
+backward.
+
+### Headline — cleanroom schematic renderer
+
+- **Clean-room reimplementation** of `crates/signex-renderer/src/schematic.rs`
+  (label / symbol / field-style rendering) and the field-autoplace
+  heuristic, executed against Signex-only specifications
+  (`docs/RENDERING_RULES.md`, Altium parity goals, IEEE-Std-91) rather
+  than any third-party EDA source. Schematic rendering output changes
+  subtly versus v0.11 — label placement, field rotation/justification,
+  and IEEE-Std-91 pin decorators are now driven by the documented rules.
+  This is the milestone tracked as "v0.12" in prior READMEs.
+
+### Added — symbol editor
+
+- **Unified active-bar widget.** The `.snxsym` editor adopts the generic
+  `signex_widgets::active_bar` in a single-call form, so the symbol
+  editor's floating toolbar matches the schematic editor byte-for-byte
+  (root highlight, dropdown panels, right-click, chevron). New
+  `active_bar_dropdowns` module backs the per-tool dropdown overlays;
+  dropdown panels position relative to the bar's `y_offset` so they open
+  directly under their trigger button.
+- **`.snxsym` TOML+TSV envelope.** Standalone symbol files serialise to
+  the same TOML-header + TSV-bulk envelope as the rest of the Signex
+  format family (`SymbolFile::to_toml_string` / `from_bytes`), so pin
+  tables are line-diffable in git. Legacy JSON `.snxsym` files still load
+  (auto-detected on open).
+
+### Added — library
+
+- Library-subsystem polish across the Library Browser, Component
+  Preview, and standalone primitive tabs: inline Pick Symbol / Pick
+  Footprint binding with read-only cells, project-tree listing of
+  `.snxsym` / `.snxfpt` files (rather than individual primitives),
+  Save-As flow for standalone primitive libraries, and assorted binding
+  / refresh fixes.
+
+### Added — per-file history
+
+- **Per-file Git history right-dock panel** refinements — the History
+  panel follows the active tab and renders the file's recent commits via
+  `signex_widgets::history_pane`, async-loaded with a generation counter
+  to drop stale results on tab switch.
+
+### Changed — footprint editor hidden for this release
+
+- **The footprint / sketch editor is gated off in v0.13.0.** It is
+  feature-incomplete and was under heavy daily iteration; rather than
+  ship an unfinished editor, its user-facing entry points are disabled
+  behind a compile-time flag (`signex_app::feature_flags::FOOTPRINT_EDITOR_ENABLED`).
+  Opening a `.snxfpt` no longer pushes an editable Footprint Editor tab,
+  and the "New Footprint / PCB Library" create flow is removed from the
+  command palette and project-tree menus.
+- **Footprints remain first-class data.** Read-only footprint preview in
+  the Component Preview tab, Pick Footprint binding of existing `.snxfpt`
+  files into component rows, the footprint column in the Library Browser,
+  and the bake / library backend are all unchanged. Only the *editor*
+  surface is hidden. The full editor returns in a later release by
+  flipping the flag.
+
+### Tests
+
+- New regression coverage pinning the footprint gate
+  (`opening_snxfpt_does_not_create_editable_tab_when_gated`) plus a
+  positive control proving the symbol editor still opens
+  (`opening_snxsym_still_creates_editable_tab`). Full `cargo test
+  --workspace` green.
+
+### Constraints — Apache-clean invariants (carry forward from v0.9.0)
+
+- Zero `kicad`/`KiCad`/`KICAD` substrings under `crates/`; no
+  `kicad-parser` / `kicad-writer` deps or imports; no removed-API
+  surface re-introduced; `cargo-deny check licenses` green. The
+  cleanroom renderer was authored against Signex-only specs with no
+  third-party EDA source in context.
 
 ## [0.11.0] — 2026-05-01
 
