@@ -82,24 +82,24 @@ Both must pass before opening a PR.
 ### Branches
 
 ```
-main   ← stable releases only (protected, requires PR + approval)
-└─ dev ← integration branch (default, all PRs target here)
+main     ← stable releases only (protected, requires PR + approval)
+└─ trunk ← integration branch (default, all PRs target here)
    ├─ feature/...   new features
    └─ fix/...       bug fixes
 ```
 
-- **Always branch from `dev`**, not `main`
-- **Always PR to `dev`**, not `main`
+- **Always branch from `trunk`**, not `main`
+- **Always PR to `trunk`**, not `main`
 - Branch naming: `feature/<description>` or `fix/<description>`
 
 ### Making a PR
 
 1. Fork the repo
-2. Create a branch from `dev`: `git checkout -b feature/my-feature dev`
+2. Create a branch from `trunk`: `git checkout -b feature/my-feature trunk`
 3. Make your changes
 4. Ensure `cargo test` and `cargo clippy` pass
 5. Commit with a descriptive message: `feat: add measure tool (Ctrl+M)`
-6. Push and open a PR against `dev`
+6. Push and open a PR against `trunk`
 
 ### Commit Messages
 
