@@ -1,7 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+
 name: License Guard
 
 # Enforces the issue-62 Apache-clean invariants on every push and PR
-# to dev / main. Targets the actual derivation surface (imports, deps,
+# to main / trunk. Targets the actual derivation surface (imports, deps,
 # removed API surface) rather than every substring containing "kicad" —
 # the latter catches doc comments, migration messages, and stable
 # render-style enum variants that serialise to disk.
@@ -12,9 +14,13 @@ name: License Guard
 
 on:
   push:
-    branches: [dev, main, trunk]
+    branches: [main, trunk]
   pull_request:
-    branches: [dev, main, trunk]
+    branches: [main, trunk]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   no-kicad-imports:
