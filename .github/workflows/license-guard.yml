@@ -12,9 +12,9 @@ name: License Guard
 
 on:
   push:
-    branches: [dev, main]
+    branches: [dev, main, trunk]
   pull_request:
-    branches: [dev, main]
+    branches: [dev, main, trunk]
 
 jobs:
   no-kicad-imports:
