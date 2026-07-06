@@ -111,32 +111,114 @@ pub trait SnxTable: Sized {
 
 /// Encode a single TSV cell. Empty strings emit `""` so column
 /// boundaries stay legible when split on whitespace.
+///
+/// A cell is quoted when it contains whitespace, a `"`, a `\`, or is
+/// the literal `-` (which `decode_cell` maps to empty per the format
+/// spec — without quoting, a real `-` value round-trips to `""`).
+/// Inside a quoted cell, backslash and the control characters that
+/// would otherwise break TSV row / whitespace splitting are escaped
+/// with backslash sequences, and inner quotes are doubled (CSV style,
+/// preserved for backward compatibility with existing files).
 fn encode_cell(cell: &str) -> String {
     if cell.is_empty() {
-        "\"\"".to_string()
-    } else if cell.contains(char::is_whitespace) || cell.contains('"') {
-        // Quote anything containing whitespace or a quote so the
-        // whitespace-flexible parser can still recover the original
-        // value. Inner quotes are doubled, matching CSV convention.
-        let escaped = cell.replace('"', "\"\"");
-        format!("\"{escaped}\"")
-    } else {
-        cell.to_string()
+        return "\"\"".to_string();
     }
+    let needs_quote = cell == "-"
+        || cell.contains(char::is_whitespace)
+        || cell.contains('"')
+        || cell.contains('\\');
+    if !needs_quote {
+        return cell.to_string();
+    }
+    let mut escaped = String::with_capacity(cell.len() + 2);
+    for ch in cell.chars() {
+        match ch {
+            '\\' => escaped.push_str("\\\\"),
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            '\t' => escaped.push_str("\\t"),
+            '"' => escaped.push_str("\"\""),
+            _ => escaped.push(ch),
+        }
+    }
+    format!("\"{escaped}\"")
 }
 
-/// Decode a single TSV cell. `""` returns empty, surrounding double
-/// quotes strip with inner `""` collapsing back to `"`. Bare `-` is
-/// also treated as empty per the format spec.
+/// Decode a single TSV cell. `""` and a bare `-` return empty (the
+/// latter per the format spec); surrounding double quotes strip, with
+/// inner `""` collapsing back to `"` and `\\` / `\n` / `\r` / `\t`
+/// reversing the escapes `encode_cell` writes.
 fn decode_cell(cell: &str) -> String {
     if cell == "\"\"" || cell == "-" {
         return String::new();
     }
     if cell.starts_with('"') && cell.ends_with('"') && cell.len() >= 2 {
-        let inner = &cell[1..cell.len() - 1];
-        return inner.replace("\"\"", "\"");
+        let inner: Vec<char> = cell[1..cell.len() - 1].chars().collect();
+        let mut out = String::with_capacity(inner.len());
+        let mut i = 0;
+        while i < inner.len() {
+            let c = inner[i];
+            if c == '"' && i + 1 < inner.len() && inner[i + 1] == '"' {
+                // Doubled quote (legacy CSV-style escape).
+                out.push('"');
+                i += 2;
+            } else if c == '\\' && i + 1 < inner.len() {
+                match inner[i + 1] {
+                    'n' => out.push('\n'),
+                    'r' => out.push('\r'),
+                    't' => out.push('\t'),
+                    '\\' => out.push('\\'),
+                    other => {
+                        // Unknown escape — keep both chars verbatim so
+                        // nothing is silently dropped.
+                        out.push('\\');
+                        out.push(other);
+                    }
+                }
+                i += 2;
+            } else {
+                out.push(c);
+                i += 1;
+            }
+        }
+        return out;
     }
     cell.to_string()
+}
+
+/// Escape a rendered TSV block so it can be embedded inside a TOML
+/// multi-line *basic* string (`"""..."""`). TOML treats `\` as an
+/// escape introducer and ends the string on `"""`, so a cell holding
+/// a Windows path (`C:\...`), a literal quote, or an inch value like
+/// `1/4"` would otherwise produce a file that can never be reopened.
+///
+/// Backslashes are doubled and any run of three or more quotes is
+/// broken with `\"` (still a literal quote to TOML) so it cannot be
+/// read as the closing delimiter. Interior newlines and tabs are
+/// valid literally in a multi-line basic string and are preserved so
+/// the block stays line-diffable.
+fn escape_tsv_body_for_toml(body: &str) -> String {
+    let mut out = String::with_capacity(body.len() + 8);
+    let mut quote_run = 0usize;
+    for ch in body.chars() {
+        if ch == '"' {
+            quote_run += 1;
+            if quote_run >= 3 {
+                out.push_str("\\\"");
+                quote_run = 0;
+            } else {
+                out.push('"');
+            }
+            continue;
+        }
+        quote_run = 0;
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '\r' => out.push_str("\\r"),
+            _ => out.push(ch),
+        }
+    }
+    out
 }
 
 /// Split a TSV row on whitespace, honouring `"` quoting so cells
@@ -1150,7 +1232,7 @@ fn write_tsv_section<R: SnxTable>(out: &mut String, name: &str, rows: &[R]) {
     let body = write_tsv_block(rows);
     out.push_str(&format!("\n[{name}]\n"));
     out.push_str("content = \"\"\"\n");
-    out.push_str(&body);
+    out.push_str(&escape_tsv_body_for_toml(&body));
     out.push_str("\"\"\"\n");
 }
 
@@ -2172,6 +2254,88 @@ mod tests {
         let back = SnxSchematic::parse(&s).expect("round-trip");
         assert_eq!(back.format, SNXSCH_FORMAT_V1);
         assert!(back.sheet.symbols.is_empty());
+    }
+
+    // ── Save-corruption regressions (issue #96) ──────────────────────
+
+    #[test]
+    fn encode_decode_cell_round_trips_dangerous_characters() {
+        // Each of these previously either corrupted the TOML envelope
+        // (backslash, quote) or silently dropped data (bare '-').
+        for original in [
+            "",
+            "-",
+            "C:\\Users\\x",          // Windows path — backslash
+            "1/4\"",                 // inch mark — trailing quote
+            "he said \"hi\"",        // embedded quotes
+            "a\tb",                  // tab
+            "line1\nline2",          // embedded newline
+            "back\\slash \"q\" -",   // mixed
+            "plain",
+            "with space",
+        ] {
+            let round = decode_cell(&encode_cell(original));
+            assert_eq!(round, original, "cell round-trip failed for {original:?}");
+        }
+    }
+
+    #[test]
+    fn escape_tsv_body_for_toml_never_leaves_a_triple_quote_run() {
+        // A cell containing a single quote encodes to a 4-quote run
+        // (`""""`), which would otherwise terminate the `"""` block.
+        let escaped = escape_tsv_body_for_toml("x  \"\"\"\"  y\n");
+        assert!(
+            !escaped.contains("\"\"\""),
+            "escaped body must not contain a raw ''' run: {escaped:?}"
+        );
+    }
+
+    fn label_with_text(text: &str) -> Label {
+        Label {
+            uuid: Uuid::nil(),
+            text: text.to_string(),
+            position: SchPoint { x: 0.0, y: 0.0 },
+            rotation: 0.0,
+            label_type: LType::Net,
+            shape: String::new(),
+            font_size: 1.27,
+            justify: Default::default(),
+            justify_v: Default::default(),
+        }
+    }
+
+    #[test]
+    fn snxsch_survives_backslash_and_quote_in_label_text() {
+        // Backslash + trailing quote in a label used to produce a file
+        // that `SnxSchematic::parse` could never reopen.
+        let mut sheet = empty_sheet();
+        sheet.labels.push(label_with_text("NET_C:\\x \"1/4\""));
+        let s = SnxSchematic::new(sheet).write_string().expect("serialise");
+        let back =
+            SnxSchematic::parse(&s).expect("dangerous label text must not corrupt the file");
+        assert_eq!(back.sheet.labels.len(), 1);
+        assert_eq!(back.sheet.labels[0].text, "NET_C:\\x \"1/4\"");
+    }
+
+    #[test]
+    fn snxsch_does_not_drop_a_literal_dash_label() {
+        let mut sheet = empty_sheet();
+        sheet.labels.push(label_with_text("-"));
+        let s = SnxSchematic::new(sheet).write_string().unwrap();
+        let back = SnxSchematic::parse(&s).unwrap();
+        assert_eq!(
+            back.sheet.labels[0].text, "-",
+            "a literal '-' must survive round-trip, not become empty"
+        );
+    }
+
+    #[test]
+    fn snxsch_survives_embedded_newline_in_label_text() {
+        let mut sheet = empty_sheet();
+        sheet.labels.push(label_with_text("line1\nline2"));
+        let s = SnxSchematic::new(sheet).write_string().unwrap();
+        let back = SnxSchematic::parse(&s).unwrap();
+        assert_eq!(back.sheet.labels[0].text, "line1\nline2");
     }
 
     #[test]
