@@ -631,103 +631,6 @@ impl Signex {
         }
     }
 
-    /// Entry point for every app-exit request — chrome ✕, File ▸ Exit,
-    /// and OS close (Alt+F4) all funnel here. If any document in the
-    /// workspace has unsaved edits (`dirty_paths` non-empty), opens the
-    /// app-quit confirmation modal instead of exiting; otherwise closes
-    /// the main window, which the daemon turns into process exit via
-    /// `SecondaryWindowClosed`.
-    pub(crate) fn handle_app_quit_requested(&mut self) -> Task<Message> {
-        // Guard against a second close request stacking a duplicate
-        // modal while the first is still up.
-        if self.ui_state.app_quit_confirm.is_some() {
-            return Task::none();
-        }
-        if self.document_state.dirty_paths.is_empty() {
-            return self.close_main_window_now();
-        }
-        let mut dirty: Vec<std::path::PathBuf> =
-            self.document_state.dirty_paths.iter().cloned().collect();
-        dirty.sort();
-        self.ui_state.app_quit_confirm = Some(crate::app::AppQuitConfirmState { dirty_paths: dirty });
-        Task::none()
-    }
-
-    /// Actually close the main window. In `iced::daemon` this fires a
-    /// `Closed` event → `SecondaryWindowClosed(main)` → `iced::exit()`,
-    /// so all shutdown bookkeeping stays on the existing path.
-    fn close_main_window_now(&self) -> Task<Message> {
-        match self.ui_state.main_window_id {
-            Some(id) => iced::window::close(id),
-            None => iced::exit(),
-        }
-    }
-
-    /// Resolve the user's Save All / Discard All / Cancel choice on the
-    /// app-quit confirmation modal.
-    pub(crate) fn handle_app_quit_confirm(
-        &mut self,
-        choice: crate::app::ProjectCloseChoice,
-    ) -> Task<Message> {
-        use crate::app::ProjectCloseChoice;
-        let Some(state) = self.ui_state.app_quit_confirm.take() else {
-            return Task::none();
-        };
-        match choice {
-            ProjectCloseChoice::Cancel => Task::none(),
-            ProjectCloseChoice::DiscardAll => self.close_main_window_now(),
-            ProjectCloseChoice::SaveAll => {
-                // Save every dirty file that has a live engine. A dirty
-                // `.snxprj` or a symbol/footprint editor draft has no
-                // engine and cannot be saved through this path yet
-                // (tracked in #104). Rather than exit and lose them, we
-                // keep Signex open and tell the user which files still
-                // need a manual save.
-                let mut failed: Vec<std::path::PathBuf> = Vec::new();
-                for path in &state.dirty_paths {
-                    if let Some(engine) = self.document_state.engines.get_mut(path) {
-                        match engine.save() {
-                            Ok(_) => {
-                                self.document_state.dirty_paths.remove(path);
-                                if let Some(tab) =
-                                    self.document_state.tabs.iter_mut().find(|t| &t.path == path)
-                                {
-                                    tab.dirty = false;
-                                }
-                            }
-                            Err(err) => {
-                                crate::diagnostics::log_error(
-                                    "Failed to save during app exit",
-                                    &anyhow::anyhow!("{err}"),
-                                );
-                                failed.push(path.clone());
-                            }
-                        }
-                    } else {
-                        failed.push(path.clone());
-                    }
-                }
-                if failed.is_empty() {
-                    self.close_main_window_now()
-                } else {
-                    let listing: Vec<String> = failed
-                        .iter()
-                        .filter_map(|p| {
-                            p.file_name().and_then(|s| s.to_str()).map(|s| s.to_string())
-                        })
-                        .collect();
-                    self.document_state.export_error = Some(format!(
-                        "Could not save {} file(s) — Signex stayed open so nothing is lost. \
-                         Save them manually, or choose Discard All to exit anyway:\n  {}",
-                        failed.len(),
-                        listing.join("\n  ")
-                    ));
-                    Task::none()
-                }
-            }
-        }
-    }
-
     fn open_rename_dialog(&mut self, tree_path: Vec<usize>) {
         let Some(target_path) = self.tree_path_to_file_path(&tree_path) else {
             return;
@@ -1052,7 +955,7 @@ impl Signex {
                 return;
             }
         };
-        if let Err(e) = signex_types::atomic_io::atomic_write(&path, serialised.as_bytes()) {
+        if let Err(e) = std::fs::write(&path, serialised.as_bytes()) {
             crate::diagnostics::log_error(
                 "Add New Schematic: write blank sheet",
                 &anyhow::anyhow!("{}", e),

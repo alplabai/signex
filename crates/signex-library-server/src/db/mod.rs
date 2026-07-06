@@ -146,28 +146,26 @@ impl AppState {
     // so adding fields later (e.g. when v3.0 lifts `PlmReserved` into wire
     // format) doesn't require a schema migration.
 
-    /// Insert a brand-new row. Returns `Ok(false)` when a row with the
-    /// same `(library_id, table, row_id)` already exists so the caller
-    /// can answer `409` — POST must never silently overwrite an
-    /// existing row (an upsert would let one client clobber another's
-    /// component with no warning). Replacement goes through
-    /// [`update_row`] (PUT).
     pub async fn insert_row(
         &self,
         library_id: Uuid,
         table_name: &str,
         row: &ComponentRow,
-    ) -> sqlx::Result<bool> {
+    ) -> sqlx::Result<()> {
         let payload = serde_json::to_string(row).map_err(decode_err)?;
         let now = Utc::now().to_rfc3339();
         let row_id = row.row_id.to_string();
         let internal_pn = row.internal_pn.as_str().to_string();
-        let result = match &self.pool {
+        match &self.pool {
             DbPool::Sqlite(pool) => {
                 sqlx::query(
                     "INSERT INTO component_rows \
                        (library_id, table_name, row_id, internal_pn, payload, created_at, updated_at) \
-                     VALUES (?, ?, ?, ?, ?, ?, ?)",
+                     VALUES (?, ?, ?, ?, ?, ?, ?) \
+                     ON CONFLICT(library_id, table_name, row_id) DO UPDATE SET \
+                         internal_pn = excluded.internal_pn, \
+                         payload = excluded.payload, \
+                         updated_at = excluded.updated_at",
                 )
                 .bind(library_id.to_string())
                 .bind(table_name)
@@ -177,14 +175,17 @@ impl AppState {
                 .bind(&now)
                 .bind(&now)
                 .execute(pool)
-                .await
-                .map(|_| ())
+                .await?;
             }
             DbPool::Postgres(pool) => {
                 sqlx::query(
                     "INSERT INTO component_rows \
                        (library_id, table_name, row_id, internal_pn, payload, created_at, updated_at) \
-                     VALUES ($1, $2, $3, $4, $5, $6, $7)",
+                     VALUES ($1, $2, $3, $4, $5, $6, $7) \
+                     ON CONFLICT (library_id, table_name, row_id) DO UPDATE SET \
+                         internal_pn = EXCLUDED.internal_pn, \
+                         payload = EXCLUDED.payload, \
+                         updated_at = EXCLUDED.updated_at",
                 )
                 .bind(library_id.to_string())
                 .bind(table_name)
@@ -194,15 +195,10 @@ impl AppState {
                 .bind(&now)
                 .bind(&now)
                 .execute(pool)
-                .await
-                .map(|_| ())
+                .await?;
             }
-        };
-        match result {
-            Ok(_) => Ok(true),
-            Err(e) if is_unique_violation(&e) => Ok(false),
-            Err(e) => Err(e),
         }
+        Ok(())
     }
 
     /// Update an existing row. Returns `Ok(false)` if no row with the
@@ -636,16 +632,6 @@ pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
 /// Wrap `serde_json::Error` into the `sqlx::Error::Decode(Box<dyn StdError>)` form.
 fn decode_err(e: serde_json::Error) -> sqlx::Error {
     sqlx::Error::Decode(Box::new(e))
-}
-
-/// True when a sqlx error is a primary-key / unique-constraint
-/// violation — the signal that a plain `INSERT` hit an existing row.
-/// Backend-agnostic via `DatabaseError::kind()` (SQLite + Postgres).
-fn is_unique_violation(err: &sqlx::Error) -> bool {
-    matches!(
-        err,
-        sqlx::Error::Database(db) if db.kind() == sqlx::error::ErrorKind::UniqueViolation
-    )
 }
 
 /// HI-9: surface UUID parse failures as `sqlx::Error::Decode` instead of

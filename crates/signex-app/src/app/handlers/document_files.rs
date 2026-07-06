@@ -57,19 +57,6 @@ impl Signex {
         std::fs::create_dir_all(dir)
             .with_context(|| format!("create project directory {}", dir.display()))?;
 
-        // Refuse to create a new project over an existing, non-empty
-        // `.snxprj` — writing the empty marker below would truncate it
-        // and destroy the user's project. A zero-byte file is a legacy
-        // marker and safe to (re)write.
-        if let Ok(meta) = std::fs::metadata(project_path)
-            && meta.len() > 0
-        {
-            anyhow::bail!(
-                "a project already exists at {} — open it instead of creating a new one over it",
-                project_path.display()
-            );
-        }
-
         std::fs::write(project_path, b"")
             .with_context(|| format!("write project file {}", project_path.display()))?;
 
@@ -79,7 +66,7 @@ impl Signex {
             let serialised = signex_types::format::SnxSchematic::new(sheet)
                 .write_string()
                 .context("serialise blank schematic")?;
-            signex_types::atomic_io::atomic_write(&sch_path, serialised.as_bytes())
+            std::fs::write(&sch_path, serialised.as_bytes())
                 .with_context(|| format!("write blank schematic {}", sch_path.display()))?;
         }
 

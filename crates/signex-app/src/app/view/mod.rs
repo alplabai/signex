@@ -3891,7 +3891,6 @@ impl Signex {
             || ui.rename_dialog.is_some()
             || ui.remove_dialog.is_some()
             || ui.project_close_confirm.is_some()
-            || ui.app_quit_confirm.is_some()
             || ui.project_options.is_some()
             || ui.enable_version_control.is_some()
             || ui.grid_properties.is_some()
@@ -5457,9 +5456,6 @@ impl Signex {
         }
         if ui.project_close_confirm.is_some() {
             layers.push(self.view_project_close_confirm());
-        }
-        if ui.app_quit_confirm.is_some() {
-            layers.push(self.view_app_quit_confirm());
         }
         if ui.project_options.is_some() {
             layers.push(self.view_project_options_dialog());

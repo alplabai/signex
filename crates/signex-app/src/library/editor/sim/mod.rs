@@ -363,7 +363,7 @@ mod tests {
         // `apply_inline_edit` is `pub(crate)` so the unit tests in this
         // module can exercise the SimSet*/SimBodyAction handlers
         // without standing up the full Signex update tree.
-        crate::library::inline_edit::apply_inline_edit(editor, msg);
+        crate::app::dispatch::library::apply_inline_edit(editor, msg);
     }
 
     /// Enable → disable round-trip clears every Sim-side field.

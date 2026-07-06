@@ -18,25 +18,6 @@ members = [
     "crates/signex-bake",
     "crates/signex-3d-model-importer",
 ]
-# A bare `cargo build` / `cargo test` at the root only builds the daily-
-# driver crates. The library server and the chrome-catalog dev sandbox are
-# still built explicitly with `-p signex-library-server` / `-p chrome-catalog`.
-default-members = [
-    "crates/signex-app",
-    "crates/signex-engine",
-    "crates/signex-types",
-    "crates/signex-erc",
-    "crates/signex-erc-dsl",
-    "crates/signex-output",
-    "crates/signex-library",
-    "crates/signex-sketch",
-    "crates/signex-bake",
-    "crates/signex-3d-model-importer",
-    "crates/signex-bom",
-    "crates/signex-gfx",
-    "crates/signex-renderer",
-    "crates/signex-widgets",
-]
 
 [workspace.package]
 version = "0.13.0"
@@ -98,11 +79,7 @@ sha2 = "0.10"
 git2 = { version = "0.19", default-features = false, features = ["vendored-libgit2"] }
 keyring = "3"
 tantivy = "0.22"
-# NOTE: oauth2 is declared directly in signex-library (it needs
-# default-features = false + the reqwest-blocking feature set, which cannot
-# be expressed by inheriting a workspace entry). No crate inherits an
-# `oauth2.workspace = true`, so a root entry here would be dead weight that
-# could silently drift from the real one — intentionally omitted.
+oauth2 = "5"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 axum = { version = "0.7", features = ["ws"] }
 tokio = { version = "1", features = ["full"] }

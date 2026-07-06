@@ -133,7 +133,6 @@ impl Signex {
                 rename_dialog: None,
                 remove_dialog: None,
                 project_close_confirm: None,
-                app_quit_confirm: None,
                 project_options: None,
                 enable_version_control: None,
                 grid_properties: None,
@@ -686,20 +685,15 @@ impl Signex {
                             (keyboard::Key::Named(keyboard::key::Named::Enter), _) => {
                                 Message::LassoCommit
                             }
-                            // Shift+Alt+A: reset and renumber. Must come
-                            // before the plain Alt+A arm — with Shift held
-                            // iced delivers the uppercase character, so the
-                            // comparison is case-insensitive.
+                            // Alt+A: annotate (Altium convention, incremental)
+                            (keyboard::Key::Character(c), m) if c == "a" && m.alt() => {
+                                Message::Annotate(signex_engine::AnnotateMode::Incremental)
+                            }
+                            // Shift+Alt+A: reset and renumber
                             (keyboard::Key::Character(c), m)
-                                if c.eq_ignore_ascii_case("a") && m.alt() && m.shift() =>
+                                if c == "a" && m.alt() && m.shift() =>
                             {
                                 Message::Annotate(signex_engine::AnnotateMode::ResetAndRenumber)
-                            }
-                            // Alt+A: annotate (Altium convention, incremental)
-                            (keyboard::Key::Character(c), m)
-                                if c.eq_ignore_ascii_case("a") && m.alt() && !m.shift() =>
-                            {
-                                Message::Annotate(signex_engine::AnnotateMode::Incremental)
                             }
                             // Delete selected
                             (keyboard::Key::Named(keyboard::key::Named::Delete), _) => {
@@ -715,7 +709,7 @@ impl Signex {
                                 Message::Redo
                             }
                             (keyboard::Key::Character(c), m)
-                                if c.eq_ignore_ascii_case("z") && m.command() && m.shift() =>
+                                if c == "z" && m.command() && m.shift() =>
                             {
                                 Message::Redo
                             }
@@ -760,14 +754,8 @@ impl Signex {
                             (keyboard::Key::Character(c), m) if c == "a" && m.command() => {
                                 Message::Selection(selection_request::SelectionRequest::SelectAll)
                             }
-                            // Ctrl+1-8 store selection memory, Alt+1-8 recall
-                            // selection memory. The `is_some` guard is load-
-                            // bearing: without it this arm matched EVERY
-                            // Ctrl/Alt chord and returned Noop, shadowing the
-                            // Ctrl+C/X/V/D and Shift+Ctrl+V/G arms below.
-                            (keyboard::Key::Character(c), m)
-                                if m.command() && !m.alt() && selection_slot_from_key(c).is_some() =>
-                            {
+                            // Ctrl+1-8 store selection memory, Alt+1-8 recall selection memory
+                            (keyboard::Key::Character(c), m) if m.command() && !m.alt() => {
                                 match selection_slot_from_key(c) {
                                     Some(slot) => Message::Selection(
                                         selection_request::SelectionRequest::StoreSlot { slot },
@@ -775,9 +763,7 @@ impl Signex {
                                     _ => Message::Noop,
                                 }
                             }
-                            (keyboard::Key::Character(c), m)
-                                if m.alt() && !m.command() && selection_slot_from_key(c).is_some() =>
-                            {
+                            (keyboard::Key::Character(c), m) if m.alt() && !m.command() => {
                                 match selection_slot_from_key(c) {
                                     Some(slot) => Message::Selection(
                                         selection_request::SelectionRequest::RecallSlot { slot },
@@ -794,7 +780,7 @@ impl Signex {
                             }
                             // Shift+Ctrl+V smart paste
                             (keyboard::Key::Character(c), m)
-                                if c.eq_ignore_ascii_case("v") && m.command() && m.shift() =>
+                                if c == "v" && m.command() && m.shift() =>
                             {
                                 Message::SmartPaste
                             }
@@ -808,7 +794,7 @@ impl Signex {
                             }
                             // Shift+Ctrl+G -- toggle grid visibility
                             (keyboard::Key::Character(c), m)
-                                if c.eq_ignore_ascii_case("g") && m.command() && m.shift() =>
+                                if c == "g" && m.command() && m.shift() =>
                             {
                                 Message::GridToggle
                             }
@@ -895,14 +881,6 @@ impl Signex {
         // Window-close events from winit: routed so Phase 2/3 can drop
         // detached-modal / undocked-tab entries from ui_state.windows.
         let window_close = iced::window::close_events().map(Message::SecondaryWindowClosed);
-        // OS close requests (native close button, Alt+F4, taskbar close).
-        // In daemon mode iced does NOT auto-close on these, so we route
-        // them explicitly: the main window goes through the unsaved-
-        // changes guard, any other window closes. Without this, an
-        // Alt+F4 on a dirty main window would otherwise be silently
-        // dropped (or, if iced ever auto-closed, lose unsaved edits).
-        let window_close_request =
-            iced::window::close_requests().map(Message::WindowCloseRequested);
         // Window-resize subscription. `iced::event::listen()`'s
         // Window::Resized event doesn't fire on the very first frame —
         // subscribing to `window::resize_events()` directly gets the
@@ -954,35 +932,9 @@ impl Signex {
             kbd,
             mouse_sub,
             window_close,
-            window_close_request,
             window_resize,
             hover_tick,
             hover_tooltip_tick,
         ])
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::selection_slot_from_key;
-
-    #[test]
-    fn selection_slot_only_matches_digits_one_through_eight() {
-        // Digits 1-8 map to selection-memory slots 0-7.
-        for (i, key) in ["1", "2", "3", "4", "5", "6", "7", "8"].iter().enumerate() {
-            assert_eq!(selection_slot_from_key(key), Some(i));
-        }
-        // Regression guard for issue #103: the Ctrl+1-8 / Alt+1-8
-        // catch-all arms are gated on `selection_slot_from_key(c).is_some()`.
-        // These letters returning None is exactly what lets the
-        // Ctrl+C/X/V/D and Shift+Ctrl+V/G arms below fire instead of
-        // being shadowed into a no-op.
-        for key in ["c", "x", "v", "d", "g", "s", "a", "z", "0", "9"] {
-            assert_eq!(
-                selection_slot_from_key(key),
-                None,
-                "{key} must not resolve to a selection slot"
-            );
-        }
     }
 }

@@ -171,10 +171,6 @@ pub enum Message {
     /// (Save All / Discard All / Cancel) shown when closing a
     /// project that still has entries in `dirty_paths`.
     ProjectCloseConfirm(ProjectCloseChoice),
-    /// User choice (Save All / Discard All / Cancel) on the app-quit
-    /// confirmation modal, shown when the user tries to exit Signex
-    /// while `dirty_paths` is non-empty. Reuses `ProjectCloseChoice`.
-    AppQuitConfirm(ProjectCloseChoice),
     /// Text input in the rename modal — updates the live buffer.
     RenameBufferChanged(String),
     /// Commit the rename: fs::rename + update in-memory sheet / tab
@@ -313,12 +309,6 @@ pub enum Message {
     /// corresponding entry in `ui_state.windows` so the app can re-attach
     /// the modal or tab to the main window's overlay stack.
     SecondaryWindowClosed(iced::window::Id),
-    /// OS-level close request (native close button, Alt+F4, taskbar
-    /// close) for a window. In `iced::daemon` mode windows do NOT
-    /// auto-close on this event, so the app decides what to do: the
-    /// main window routes through the unsaved-changes guard
-    /// (`CloseMainWindow`); every other window closes directly.
-    WindowCloseRequested(iced::window::Id),
     /// Pop a modal out of the main window into its own OS window. Altium
     /// triggers this when the user drags the modal's title bar past the
     /// main window edge, or clicks the pop-out icon in the title bar.
@@ -801,19 +791,6 @@ pub struct ProjectCloseConfirmState {
     /// Absolute paths of dirty files inside the project's directory.
     /// The view layer renders the file basenames; the handler uses
     /// the absolute paths to locate the engines for save / discard.
-    pub dirty_paths: Vec<std::path::PathBuf>,
-}
-
-/// State for the "Exit Signex — Unsaved Edits" confirmation modal.
-/// Opens when the user requests app exit (chrome ✕, File ▸ Exit,
-/// Alt+F4) while `DocumentState.dirty_paths` is non-empty. Lists
-/// every dirty file across the whole workspace so the user sees what
-/// they are about to lose before choosing Save All / Discard All /
-/// Cancel. Reuses `ProjectCloseChoice` for the three outcomes.
-#[derive(Debug, Clone)]
-pub struct AppQuitConfirmState {
-    /// Absolute paths of every dirty file in the workspace, sorted
-    /// for a stable display order. The view renders the basenames.
     pub dirty_paths: Vec<std::path::PathBuf>,
 }
 

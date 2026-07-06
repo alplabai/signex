@@ -684,10 +684,7 @@ impl LocalGitAdapter {
                 let text = file
                     .to_toml_string()
                     .map_err(|e| LibraryError::Backend(format!("write symbol container: {e}")))?;
-                // HI-6: atomic write — the symbol container is a TOML+TSV
-                // envelope holding every symbol; an in-place truncate by
-                // `fs::write` would destroy them all on a crash mid-save.
-                signex_types::atomic_io::atomic_write(&path, text.as_bytes())?;
+                fs::write(&path, text.as_bytes())?;
                 path
             }
             None => {
@@ -697,10 +694,7 @@ impl LocalGitAdapter {
                 let text = file
                     .to_toml_string()
                     .map_err(|e| LibraryError::Backend(format!("write symbol container: {e}")))?;
-                // HI-6: atomic write — the symbol container is a TOML+TSV
-                // envelope holding every symbol; an in-place truncate by
-                // `fs::write` would destroy them all on a crash mid-save.
-                signex_types::atomic_io::atomic_write(&path, text.as_bytes())?;
+                fs::write(&path, text.as_bytes())?;
                 path
             }
         };

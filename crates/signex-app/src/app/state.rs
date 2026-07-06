@@ -95,11 +95,6 @@ pub struct UiState {
     /// close request that intersects `dirty_paths`. Cleared on any
     /// of the three button choices.
     pub project_close_confirm: Option<crate::app::ProjectCloseConfirmState>,
-    /// "Exit Signex — Unsaved Edits" confirmation modal. `Some` while
-    /// the user is being asked to save / discard / cancel an app-exit
-    /// request that intersects `dirty_paths`. Cleared on any of the
-    /// three button choices.
-    pub app_quit_confirm: Option<crate::app::AppQuitConfirmState>,
     /// v0.9 read-only Project Options metadata modal — `Some` while
     /// the user has the right-click → Project Options… popup open.
     pub project_options: Option<crate::app::ProjectOptionsState>,

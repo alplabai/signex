@@ -48,12 +48,6 @@ pub use db::AppState;
 /// Unset → unauthenticated mode (with a startup warning).
 pub const API_TOKEN_ENV: &str = "SIGNEX_API_TOKEN";
 
-/// Env var holding the persistent database URL (`postgres://…` or
-/// `sqlite://<file>`). Unset → an ephemeral in-memory SQLite that
-/// loses every row on restart; the binary only allows that on a
-/// loopback bind and logs a prominent warning.
-pub const DATABASE_URL_ENV: &str = "SIGNEX_DATABASE_URL";
-
 /// Maximum request body in bytes accepted on protected mutation routes.
 /// 1 MiB is generous for component / primitive payloads (typical row JSON
 /// is ~5 KiB, primitives ~50 KiB) and bounded enough to stop unbounded

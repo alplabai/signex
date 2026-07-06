@@ -163,7 +163,6 @@ impl Signex {
             }
             Message::TabContextAction(action) => self.handle_tab_context_action(action),
             Message::ProjectCloseConfirm(choice) => self.handle_project_close_confirm(choice),
-            Message::AppQuitConfirm(choice) => self.handle_app_quit_confirm(choice),
             Message::RenameBufferChanged(s) => {
                 if let Some(d) = self.ui_state.rename_dialog.as_mut() {
                     d.buffer = s;
