@@ -154,6 +154,12 @@ fn view_tool_palette<'a>(
                 "click an entity to mint a 4-instance circular array (360°; centre 5 mm right of source)".into()
             }
             SketchTool::TangentArc => "click first endpoint of tangent arc".into(),
+            SketchTool::Fillet => {
+                "click the first Line — radius from input (default 0.5 mm)".into()
+            }
+            SketchTool::Trim => {
+                "click a Line segment to remove it (cuts to nearest intersections)".into()
+            }
         },
         ToolPending::LineFirst { .. } => "click second endpoint (Esc to cancel)".into(),
         ToolPending::RectangleFirst { .. } => "click opposite corner (Esc to cancel)".into(),
@@ -165,6 +171,9 @@ fn view_tool_palette<'a>(
             "click a Point to set polar centre (Esc to cancel)".into()
         }
         ToolPending::TangentArcFirst { .. } => "click second endpoint (Esc to cancel)".into(),
+        ToolPending::FilletFirst { .. } => {
+            "click the second Line that shares a corner (Esc to cancel)".into()
+        }
     };
 
     row![

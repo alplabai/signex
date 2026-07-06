@@ -702,6 +702,15 @@ pub enum EditorMsg {
         x_mm: f64,
         y_mm: f64,
     },
+    /// v0.14 — commit a dragged text frame (anchor + size, mm).
+    /// Fires once, on release, from the `PadsTool::PlaceTextFrame`
+    /// press-drag-release gesture.
+    FootprintAddTextFrame {
+        x_mm: f64,
+        y_mm: f64,
+        w_mm: f64,
+        h_mm: f64,
+    },
     /// v0.18.15.1 — click during a Place Track gesture. The
     /// dispatcher decides whether this is the first or second
     /// click based on `editor.state.track_first`.
@@ -791,6 +800,10 @@ pub enum EditorMsg {
     /// open. Clears `state.placement_input = None`; the next click
     /// commits at the cursor position as if no buffer had been typed.
     FootprintSketchPlacementInputEscape,
+    /// v0.14-footprint — Tab toggles the active Line placement-input
+    /// field between length and angle (Fusion convention). No-op for
+    /// any other tool's placement input.
+    FootprintSketchPlacementInputTab,
     /// v0.13.3 — Sketch entity selection from canvas. `None` = clear.
     FootprintSketchSelect {
         id: Option<signex_sketch::id::SketchEntityId>,
@@ -802,8 +815,87 @@ pub enum EditorMsg {
         dx: f64,
         dy: f64,
     },
+    /// v0.27 — Drag a Line entity by translating both its endpoints
+    /// by `(dx, dy)` mm in a single solver pass. Used by the
+    /// canvas's Line-drag gesture so edges of closed shapes can be
+    /// grabbed and pushed; the constraint solver re-converges the
+    /// shape (H/V/Distance constraints stay valid).
+    FootprintSketchMoveLine {
+        id: signex_sketch::id::SketchEntityId,
+        dx: f64,
+        dy: f64,
+    },
+    /// v0.27 — Drag the diameter handle of a Round pad in Sketch
+    /// mode. The dispatcher updates pad.size_mm = (d, d), the
+    /// matching Circle entity's radius, and the bound
+    /// `diameter_<slug>` parameter expression so all three stay in
+    /// sync. Triggered by the canvas's east-edge handle drag.
+    FootprintSketchResizeRoundPad {
+        pad_idx: usize,
+        diameter_mm: f64,
+    },
+    /// v0.27 — pick the rubber-band selection mode from the active
+    /// bar Selection picker (Inside / Touching / Outside).
+    FootprintSetSelectionMode2d(crate::library::editor::footprint::state::FpSelectionMode),
+    /// v0.27 — select every pad on the same primary layer as the
+    /// currently-active layer (or `F.Cu` when nothing is selected).
+    FootprintSelectAllOnLayer,
+    /// v0.27 — drop a via at the cursor. Vias are a small Round
+    /// plated-through pad with a tight drill; the dispatcher mints a
+    /// pad with via-canonical defaults (0.6 mm copper, 0.3 mm drill,
+    /// Multi-Layer F.Cu + B.Cu + masks) regardless of the user's
+    /// Pads-mode `next_pad_defaults`.
+    FootprintAddVia {
+        x_mm: f64,
+        y_mm: f64,
+    },
+    /// v0.27 — Altium parity: multi-select every pad whose centre
+    /// is NOT on the active snap grid step. Useful for catching
+    /// pads accidentally dropped between grid points.
+    FootprintSelectOffGridPads,
+    /// v0.27 — Rebuild the outline-following courtyard polygon
+    /// from the current pad layout. Stores the result on
+    /// `state.courtyard_outline_mm`.
+    FootprintRecomputeCourtyardOutline,
+    /// v0.27 — arm the Lasso Select tool. Subsequent canvas left-
+    /// clicks append a world-mm vertex to `state.lasso_vertices`;
+    /// Esc / right-click commits via `FootprintLassoCommit` /
+    /// `FootprintLassoCancel`.
+    FootprintLassoArm,
+    /// v0.27 — append a vertex to the in-flight lasso polygon.
+    FootprintLassoAddVertex { x_mm: f64, y_mm: f64 },
+    /// v0.27 — commit the lasso polygon: walk pads, multi-select
+    /// every pad whose centre is inside the polygon. Disarms.
+    FootprintLassoCommit,
+    /// v0.27 — drop the lasso vertex list and disarm without
+    /// touching the existing selection.
+    FootprintLassoCancel,
+    /// v0.27 — arm the Touching Line tool (2-click line gesture).
+    FootprintTouchingLineArm,
+    /// v0.27 — first endpoint click for the Touching Line tool.
+    FootprintTouchingLineFirst { x_mm: f64, y_mm: f64 },
+    /// v0.27 — second endpoint click; runs line-vs-pad-bbox
+    /// intersection and multi-selects every hit.
+    FootprintTouchingLineCommit { x_mm: f64, y_mm: f64 },
+    /// v0.27 — disarm the Touching Line tool without selecting.
+    FootprintTouchingLineCancel,
+    /// v0.27 — Select overlapped: cycle to the previous pad in
+    /// z-order at the most recent click location.
+    FootprintSelectOverlapped,
+    /// v0.27 — Select next: cycle to the next pad in z-order at
+    /// the most recent click location.
+    FootprintSelectNextOverlapped,
     /// Select / deselect a pad. `None` deselects everything.
     FootprintSelectPad(Option<usize>),
+    /// v0.27 — Multi-select replacement. Replaces the entire
+    /// selection with `pads`. First entry becomes primary (drives
+    /// the Properties form); rest go to `selected_pads_extra`.
+    /// Empty Vec deselects all.
+    FootprintSelectPads(Vec<usize>),
+    /// v0.27 — Multi-select for sketch entities. Replaces the
+    /// sketch selection. First → primary, second → secondary,
+    /// rest → `selected_sketch_extra`. Empty = clear.
+    FootprintSketchSelectMany(Vec<signex_sketch::id::SketchEntityId>),
     /// Delete-key — remove the currently-selected pad.
     FootprintDeleteSelected,
     /// Toolbar — toggle a layer's visibility. Carries the Standard layer
@@ -832,6 +924,51 @@ pub enum EditorMsg {
     /// `state.placement_paused`; while `true` the canvas ignores
     /// empty-canvas clicks so the user can adjust defaults.
     FootprintTogglePlacementPause,
+    /// v0.26 — open the canvas right-click context menu at the given
+    /// **window-absolute** screen position. `target` carries the
+    /// hit-tested object (or `Empty`) so the renderer can pick the
+    /// right items. Closes any other dropdowns / submenus first.
+    FootprintShowContextMenu {
+        x: f32,
+        y: f32,
+        target: crate::library::editor::footprint::state::FootprintContextTarget,
+    },
+    /// v0.26 — dismiss the context menu (Esc, click outside, action
+    /// pick, pan-drag start). No-op if no menu is open.
+    FootprintCloseContextMenu,
+    /// v0.26 — hover-expand a submenu. `None` collapses any open
+    /// submenu without closing the parent menu.
+    FootprintContextMenuOpenSubmenu(
+        Option<crate::library::editor::footprint::state::FootprintContextSubmenu>,
+    ),
+    /// v0.26 — execute one of the lightweight context-menu actions
+    /// that don''t already have a dedicated handler (Select All /
+    /// Deselect All / Fit to Window). Items that overlap with
+    /// existing handlers (Delete, PadsTool switch, Properties focus)
+    /// reuse those messages directly.
+    FootprintContextMenuAction(
+        crate::library::editor::footprint::state::FootprintContextAction,
+    ),
+    /// v0.26-C — canvas Program signals that the pending Fit-to-Window
+    /// request has been honoured. Dispatcher clears
+    /// `editor.state.fit_pending` so the next event tick sees false.
+    FootprintFitConsumed,
+    /// v0.26-E — copy the currently-selected pad to the document-state
+    /// `pad_clipboard`. No-op when nothing is selected.
+    FootprintCopyPad,
+    /// v0.26-E — copy the selected pad to the clipboard then delete it.
+    /// Combines Copy + Delete in one history snapshot so undo restores
+    /// the pad in one step.
+    FootprintCutPad,
+    /// v0.26-E — paste the clipboard pad at the cursor position (or
+    /// the original pad position offset by 1 mm if cursor is unknown).
+    /// Picks a free designator. Selects the new pad post-paste so the
+    /// user can immediately drag / nudge.
+    FootprintPastePad,
+    /// v0.26-G — Space (rotate 90° CCW) on the selected pad.
+    FootprintActiveBarRotateSelection,
+    /// v0.26-G — X (flip Top ↔ Bottom layers) on the selected pad.
+    FootprintActiveBarFlipSelection,
     /// v0.16.2 — assign / clear a role attr (PadAttr / SilkAttr /
     /// CourtyardAttr / etc.) on the entity at `id`. The dispatcher
     /// clears every `*Attr` slot first, then writes the matching one
@@ -1045,6 +1182,27 @@ pub enum SketchConstraintTag {
     PointOnLine,
     /// 1 Point + 1 Line selected → midpoint.
     Midpoint,
+    /// 1 Line + 1 Arc selected → line tangent to arc.
+    TangentLineArc,
+    /// 2 Arcs selected → arcs tangent to each other (external).
+    TangentArcArc,
+    /// 2 Lines selected + dimension input → Angle(target_deg).
+    Angle,
+    /// 2 Circles/Arcs selected → equal radius.
+    EqualRadius,
+    /// 1 Point + 1 Arc selected → point on arc.
+    PointOnArc,
+    /// 1 Point + 1 Line selected + dimension input →
+    /// DistancePtLine(target_mm).
+    DistancePtLine,
+    /// 1 Point + 1 Circle/Arc selected + dimension input →
+    /// DistancePtCircle(target_mm).
+    DistancePtCircle,
+    /// 2 Points + 1 Line (in the extra slot) → symmetric about line.
+    SymmetricAboutLine,
+    /// 3 Points (third in the extra slot) → symmetric about the
+    /// third (centre) point.
+    SymmetricAboutPoint,
 }
 
 /// v0.16.2 — role tag attached to a sketch entity. The Sketch-mode
@@ -1361,6 +1519,8 @@ pub enum PrimitiveEditorMsg {
     /// with placeholder content "TEXT" + 1mm size. The user edits
     /// the content via the Properties panel later.
     FootprintAddText { x_mm: f64, y_mm: f64 },
+    /// v0.14 — commit a dragged text frame (anchor + size, mm).
+    FootprintAddTextFrame { x_mm: f64, y_mm: f64, w_mm: f64, h_mm: f64 },
     /// v0.18.15.1 — click during a Place Track 2-click gesture.
     FootprintTrackClick { x_mm: f64, y_mm: f64 },
     /// v0.18.15.1 — Esc / right-click during Place Track.
@@ -1391,6 +1551,15 @@ pub enum PrimitiveEditorMsg {
     FootprintCursorAt { x_mm: f64, y_mm: f64 },
     /// Select / deselect a pad. `None` deselects everything.
     FootprintSelectPad(Option<usize>),
+    /// v0.27 — Multi-select replacement. Replaces the entire
+    /// selection with `pads`. First entry becomes primary (drives
+    /// the Properties form); rest go to `selected_pads_extra`.
+    /// Empty Vec deselects all.
+    FootprintSelectPads(Vec<usize>),
+    /// v0.27 — Multi-select for sketch entities. Replaces the
+    /// sketch selection. First → primary, second → secondary,
+    /// rest → `selected_sketch_extra`. Empty = clear.
+    FootprintSketchSelectMany(Vec<signex_sketch::id::SketchEntityId>),
     /// Delete-key — remove the currently-selected pad.
     FootprintDeleteSelected,
     /// Toolbar — toggle a layer's visibility. Carries the Standard layer
@@ -1421,6 +1590,30 @@ pub enum PrimitiveEditorMsg {
     FootprintSketchToggleCenterline,
     /// v0.16.1 — TAB pause/resume during pad placement.
     FootprintTogglePlacementPause,
+    /// v0.26 — open the canvas right-click context menu at the given
+    /// **window-absolute** screen position.
+    FootprintShowContextMenu {
+        x: f32,
+        y: f32,
+        target: crate::library::editor::footprint::state::FootprintContextTarget,
+    },
+    /// v0.26 — dismiss the context menu.
+    FootprintCloseContextMenu,
+    /// v0.26 — hover-expand a context-menu submenu. `None` collapses.
+    FootprintContextMenuOpenSubmenu(
+        Option<crate::library::editor::footprint::state::FootprintContextSubmenu>,
+    ),
+    /// v0.26 — execute one of the context-menu lightweight actions.
+    FootprintContextMenuAction(
+        crate::library::editor::footprint::state::FootprintContextAction,
+    ),
+    /// v0.26-C — canvas signals that the pending Fit-to-Window
+    /// request has been honoured. See EditorMsg::FootprintFitConsumed.
+    FootprintFitConsumed,
+    /// v0.26-E — clipboard ops on the selected pad.
+    FootprintCopyPad,
+    FootprintCutPad,
+    FootprintPastePad,
     /// v0.16.2 — set the role attr on a sketch entity. Inspector
     /// emits this when the user picks a value from the Role dropdown;
     /// dispatcher routes through
@@ -1470,6 +1663,18 @@ pub enum PrimitiveEditorMsg {
     /// dispatcher can log a single warn() per click without minting
     /// a separate variant per item.
     FootprintActiveBarStub(&'static str),
+    /// v0.14 (Task 6) — apply footprint filter preset `idx` from the
+    /// persisted `footprint_filter_presets` list. No-op if `idx` is
+    /// out of range.
+    FootprintApplyFilterPreset(usize),
+    /// v0.14 (Task 6) — flip every footprint selection filter on/off
+    /// (the Filter dropdown's "All - On / All - Off" chip).
+    FootprintToggleAllFilters,
+    /// v0.14 (Task 6) — snapshot the current selection filter as a
+    /// new named preset (default name `Filter {n}`) and persist it,
+    /// capped at `CUSTOM_FILTER_PRESET_LIMIT`. Source: the Filter
+    /// dropdown's "Save current filter as preset…" button.
+    FootprintCaptureFilterPreset,
     /// Snap-options toggle from the active-bar Snap dropdown.
     /// Equivalent to `PanelMsg::FpEditorToggleSnapOption` but flows
     /// through the editor-event path so the dropdown overlay stays
@@ -1491,12 +1696,46 @@ pub enum PrimitiveEditorMsg {
     /// Active-bar Place → Flip Selection. Swap Top ↔ Bottom layer
     /// (and the paste/mask siblings) on the currently-selected pad.
     FootprintActiveBarFlipSelection,
+    /// Active-bar Place → one-step nudge. Nudges the whole selection
+    /// (`selected_pad` + `selected_pads_extra`) by one active grid step
+    /// in +X and +Y. The step derives from `snap_options.grid_step_mm`
+    /// — no hardcoded size. No-op when nothing is selected. Superseded
+    /// as the active-bar's primary "Move Selection by X, Y…" item by
+    /// the typed-delta Move-By modal (`FootprintMoveByOpen` and its
+    /// siblings below); this one-step nudge is still reachable and
+    /// shares its geometry with the modal via the
+    /// `footprint_nudge_selection` dispatcher helper.
+    FootprintActiveBarNudgeSelection,
+    /// Active-bar Place → "Move Selection by X, Y…". Opens the typed-
+    /// delta modal (`FootprintEditorState::move_by_modal`).
+    FootprintMoveByOpen,
+    /// Move-By modal X buffer edit (erasable string, mm).
+    FootprintMoveBySetX(String),
+    /// Move-By modal Y buffer edit (erasable string, mm).
+    FootprintMoveBySetY(String),
+    /// Confirm the Move-By modal: nudge the selection by the parsed
+    /// (dx, dy) mm delta, then close the modal. No-op (but still
+    /// closes) if either buffer fails to parse.
+    FootprintMoveByConfirm,
+    /// Cancel the Move-By modal without moving anything.
+    FootprintMoveByCancel,
+    /// Active-bar Body → "3D Body". Extrude the courtyard into a solid.
+    FootprintMintBody3d,
+    /// Active-bar Body → "Extruded 3D Body". Extrude the fab outline.
+    FootprintMintExtrudedBody3d,
     /// Active-bar Align → Align Selection To Grid. Snap the currently-
     /// selected pad's centre to the nearest active-grid step.
     FootprintActiveBarAlignSelectionToGrid,
     /// Active-bar Align → Move All Components Origin To Grid. Snap
     /// every pad's centre to the nearest active-grid step.
     FootprintActiveBarMoveOriginToGrid,
+    /// Active-bar Align → align / distribute / re-space the current
+    /// pad selection. Operates on `selected_pad` + `selected_pads_extra`
+    /// (the combined set); a no-op when fewer than two pads are
+    /// selected (fewer than three for the distribute ops). See
+    /// [`AlignOp`](crate::library::editor::footprint::state::AlignOp)
+    /// for the per-operation geometry.
+    FootprintAlignPads(crate::library::editor::footprint::state::AlignOp),
     /// Active-bar Selection → Select All. Pads mode picks the first
     /// pad; Sketch mode picks the first sketch entity.
     FootprintActiveBarSelectAll,
@@ -1559,6 +1798,10 @@ pub enum PrimitiveEditorMsg {
     /// open. Clears `state.placement_input = None`; the next click
     /// commits at the cursor position as if no buffer had been typed.
     FootprintSketchPlacementInputEscape,
+    /// v0.14-footprint — Tab toggles the active Line placement-input
+    /// field between length and angle (Fusion convention). No-op for
+    /// any other tool's placement input.
+    FootprintSketchPlacementInputTab,
 
     // ── v0.13.3 — selection / constraint submenu / dimension ──
     /// v0.13.3 — Select a sketch entity. `None` clears the selection;
@@ -1576,6 +1819,48 @@ pub enum PrimitiveEditorMsg {
         dx: f64,
         dy: f64,
     },
+    /// v0.27 — Drag-move a Line entity by translating both its
+    /// endpoints. Per-tick `(dx, dy)` delta in mm.
+    FootprintSketchMoveLine {
+        id: signex_sketch::id::SketchEntityId,
+        dx: f64,
+        dy: f64,
+    },
+    /// v0.27 — Resize a Round pad's diameter via the east-edge
+    /// handle drag in Sketch mode. The dispatcher updates pad.size_mm
+    /// and the matching Circle entity + diameter parameter.
+    FootprintSketchResizeRoundPad {
+        pad_idx: usize,
+        diameter_mm: f64,
+    },
+    /// v0.27 — pick the rubber-band selection mode (Inside /
+    /// Touching / Outside) from the active-bar Selection picker.
+    FootprintSetSelectionMode2d(crate::library::editor::footprint::state::FpSelectionMode),
+    /// v0.27 — select every pad on the active primary layer.
+    FootprintSelectAllOnLayer,
+    /// v0.27 — drop a via at the cursor (Round, 0.6 mm copper,
+    /// 0.3 mm drill, Multi-Layer plated). Bypasses Pads-mode
+    /// `next_pad_defaults` so the via geometry is canonical.
+    FootprintAddVia { x_mm: f64, y_mm: f64 },
+    /// v0.27 — Rebuild the outline-following courtyard polygon
+    /// from the current pad layout (union + offset). Stores the
+    /// result on `state.courtyard_outline_mm`.
+    FootprintRecomputeCourtyardOutline,
+    /// v0.27 — multi-select every pad off the current snap grid.
+    FootprintSelectOffGridPads,
+    /// v0.27 — Lasso tool lifecycle.
+    FootprintLassoArm,
+    FootprintLassoAddVertex { x_mm: f64, y_mm: f64 },
+    FootprintLassoCommit,
+    FootprintLassoCancel,
+    /// v0.27 — Touching Line tool lifecycle.
+    FootprintTouchingLineArm,
+    FootprintTouchingLineFirst { x_mm: f64, y_mm: f64 },
+    FootprintTouchingLineCommit { x_mm: f64, y_mm: f64 },
+    FootprintTouchingLineCancel,
+    /// v0.27 — Z-order cycle on the last-clicked stacked pads.
+    FootprintSelectOverlapped,
+    FootprintSelectNextOverlapped,
     /// v0.13.3 — Add a constraint based on the current selection.
     /// The inspector's selection-aware submenu emits a `Tag` that
     /// the dispatcher maps into the appropriate `ConstraintKind`

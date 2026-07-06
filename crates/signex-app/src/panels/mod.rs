@@ -499,6 +499,10 @@ pub struct PanelContext {
     /// Index of the active preset tab in the Properties-panel editor
     /// (mirrored from `InteractionState`). Clamped on every sync.
     pub active_custom_filter_tab: usize,
+    /// User-defined footprint-editor filter presets, mirrored from
+    /// `InteractionState::footprint_filter_presets` (Task 6). Parallel
+    /// to `custom_filter_presets` but keyed on `SelectionFilterKind`.
+    pub footprint_filter_presets: Vec<crate::active_bar::FootprintFilterPreset>,
     /// Page formatting mode (Template / Standard / Custom).
     pub page_format_mode: PageFormatMode,
     /// Vertical page margin zones.
@@ -561,6 +565,12 @@ pub struct FootprintEditorPanelContext {
     /// Read-only summary of the selected pad — populated when in
     /// Pads mode and a pad is selected.
     pub selected_pad: Option<FootprintPadSummary>,
+    /// v0.27 — total number of selected pads (primary + extras).
+    /// Drives the multi-select "(N selected)" indicator in the
+    /// Properties panel header. `1` for a single-select; `> 1` when
+    /// the rubber band picked multiple pads or All-on-Layer / All
+    /// fired.
+    pub selected_pad_count: usize,
     /// Read-only summary of the primary selected sketch entity —
     /// populated when in Sketch mode and an entity is selected.
     pub selected_sketch_entity: Option<FootprintSketchEntitySummary>,
@@ -716,6 +726,13 @@ pub struct FootprintEditorPanelContext {
     /// no silk graphic is selected; the Properties panel only renders
     /// the silk-selection branch when this is `Some`.
     pub selected_silk_summary: Option<FootprintSelectedSilkSummary>,
+    /// v0.25 polish — verbatim per-input buffers for Properties-panel
+    /// numeric fields. Renderer reads `numeric_buffers.get(key)` and
+    /// uses the literal buffer if present; falls back to formatting
+    /// the canonical f64 otherwise. See
+    /// [`crate::library::editor::footprint::state::FootprintEditorState::numeric_buffers`]
+    /// for the buffer contract.
+    pub numeric_buffers: std::collections::HashMap<String, String>,
     /// v0.23 — Array (Pattern) summary surfaced when the selected
     /// sketch entity is the `source` of an array. Drives the
     /// Properties panel "Pattern" sub-section.
@@ -790,6 +807,25 @@ pub struct ArraySummary {
     /// `true` when the polar centre re-pick is active — the next
     /// sketch click on a Point sets `array.center`.
     pub repicking_polar_center: bool,
+    /// v0.25 polish — when `numbering == BgaRowCol`, this carries the
+    /// BGA-specific config (skip_letters / start_row / start_col) so
+    /// the Properties panel can surface editable rows for each. `None`
+    /// for Linear / Explicit numbering schemes.
+    pub bga_config: Option<BgaConfigSummary>,
+}
+
+/// v0.25 polish — surface for BGA numbering scheme parameters.
+/// Mirror of [`signex_sketch::array::NumberingScheme::BgaRowCol`].
+#[derive(Debug, Clone)]
+pub struct BgaConfigSummary {
+    /// IPC-7351 letter-skip convention (omits I/O/Q/S/X/Z to avoid
+    /// confusion with numerals). Default `true` matches Altium.
+    pub skip_letters: bool,
+    /// First row letter (e.g. `'A'`). Drives the row labels in the
+    /// baked replicas.
+    pub start_row: char,
+    /// First column number (e.g. `1`).
+    pub start_col: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -1901,6 +1937,25 @@ pub enum PanelMsg {
     FpEditorSetArrayNumberingScheme {
         array_id: signex_sketch::array::ArrayId,
         scheme: NumberingSchemeKindUi,
+    },
+    /// v0.25 polish — toggle BGA `skip_letters`. Active only when the
+    /// array's numbering is BgaRowCol; ignored for Linear / Explicit.
+    FpEditorSetBgaSkipLetters {
+        array_id: signex_sketch::array::ArrayId,
+        value: bool,
+    },
+    /// v0.25 polish — set BGA `start_row` letter. Empty input no-ops;
+    /// non-letter input no-ops; multi-char input takes the first
+    /// letter. Uppercased before storage.
+    FpEditorSetBgaStartRow {
+        array_id: signex_sketch::array::ArrayId,
+        value: String,
+    },
+    /// v0.25 polish — set BGA `start_col` integer. Empty input no-ops;
+    /// non-numeric input no-ops; bounds are otherwise unconstrained.
+    FpEditorSetBgaStartCol {
+        array_id: signex_sketch::array::ArrayId,
+        value: String,
     },
     /// v0.23 — Delete the array entirely. The source entity stays put.
     FpEditorDeleteArray {

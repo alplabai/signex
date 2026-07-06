@@ -13,9 +13,10 @@
 //! 1. **Select** — sketch entity selection tool.
 //! 2. **Create** — Point / Line / Circle / Arc multi-click drawing
 //!    tools.
-//! 3. **Constrain** — 10 selection-aware constraint authoring
+//! 3. **Constrain** — 19 selection-aware constraint authoring
 //!    buttons. Enabled state derives from the kinds of the primary
-//!    + secondary selection slots.
+//!    + secondary selection slots (+ the extra slot for the two
+//!    3-entity Symmetric constraints).
 //! 4. **Dimension input** — `Custom` slot with a `text_input` for
 //!    the `DistancePtPt` numeric value.
 //! 5. **Solve toggle** — pause / resume the live solver.
@@ -147,14 +148,49 @@ pub fn items<'a>(
     // Enabled only when a Line is selected; the dispatcher itself
     // verifies the loop closes and pushes a warning otherwise.
     let make_pad_path = path.clone();
-    let make_pad_enabled = matches!(
-        editor
+    // v0.27 — accept any selection (primary, secondary, or extras)
+    // that touches a Line directly OR a Point that's incident to a
+    // Line. The dispatcher itself walks the closed loop and warns
+    // if the seed isn't on one. Always-enabled when the sketch has
+    // ≥1 Line so a "no selection — just convert the only loop"
+    // workflow also works.
+    let make_pad_enabled = {
+        let sketch_ref = editor.primitive().sketch.as_ref();
+        let any_line_in_sketch = sketch_ref
+            .map(|s| {
+                s.entities
+                    .iter()
+                    .any(|e| matches!(e.kind, signex_sketch::entity::EntityKind::Line { .. }))
+            })
+            .unwrap_or(false);
+        let mut selection_iter = editor
             .state
             .selected_sketch
-            .and_then(|id| editor.primitive().sketch.as_ref()?.entities.iter().find(|e| e.id == id))
-            .map(|e| &e.kind),
-        Some(signex_sketch::entity::EntityKind::Line { .. })
-    );
+            .into_iter()
+            .chain(editor.state.selected_sketch_secondary)
+            .chain(editor.state.selected_sketch_extra.iter().copied());
+        let selection_has_line_or_pointed_line = selection_iter.any(|id| {
+            let Some(s) = sketch_ref else { return false };
+            let Some(ent) = s.entities.iter().find(|e| e.id == id) else {
+                return false;
+            };
+            match ent.kind {
+                signex_sketch::entity::EntityKind::Line { .. } => true,
+                signex_sketch::entity::EntityKind::Point { .. } => s.entities.iter().any(|other| {
+                    matches!(
+                        other.kind,
+                        signex_sketch::entity::EntityKind::Line { start, end }
+                            if start == id || end == id
+                    )
+                }),
+                _ => false,
+            }
+        });
+        any_line_in_sketch && (selection_has_line_or_pointed_line
+            || editor.state.selected_sketch.is_none()
+                && editor.state.selected_sketch_secondary.is_none()
+                && editor.state.selected_sketch_extra.is_empty())
+    };
     let make_pad_button = ActiveBarItem::Button(ActiveBarButton {
         icon: ActiveBarIcon::Glyph("\u{2B22}"), // ⬢ black hexagon (custom polygon → pad)
         tooltip: if make_pad_enabled {
@@ -197,11 +233,13 @@ pub fn items<'a>(
     items.push(ActiveBarItem::Separator);
 
     // Section 2: Create — primitive geometry tools.
-    items.push(mk_tool(
-        "Place Point",
-        SketchTool::Point,
-        ActiveBarIcon::Glyph("\u{2022}"), // •
-    ));
+    // v0.14 — Place Point removed from the palette. Intersections snap
+    // automatically (Line×Line / Line×Arc / Arc×Arc, see snap.rs
+    // SnapKind::Intersection) and the Line/Rect/Circle/Arc tools
+    // auto-create their own endpoint Points, so a manual free-point tool
+    // was clutter in the footprint context. The SketchTool::Point
+    // variant + dispatch stay (constraints + pad auto-mint reference
+    // Points internally).
     items.push(mk_tool(
         "Place Line (2 clicks)",
         SketchTool::Line,
@@ -238,12 +276,37 @@ pub fn items<'a>(
         ActiveBarIcon::Svg(icons::icon_shape_arc(theme_id)),
     ));
 
+    // v0.27 — Fillet + Trim. Always available (no pre-selection
+    // required). Fillet picks two adjacent Lines via two clicks
+    // and rounds the corner with a tangent arc; Trim removes the
+    // segment of a Line/Arc bounded by its nearest intersections
+    // with other sketch entities. These are EDA-shaped — typical
+    // use is rounding silk / courtyard corners + cleaning up
+    // overlapping outline geometry.
+    items.push(ActiveBarItem::Separator);
+    items.push(mk_tool(
+        "Fillet — click two adjacent Lines to round the corner with a tangent arc",
+        SketchTool::Fillet,
+        ActiveBarIcon::Glyph("\u{231C}"), // ⌜
+    ));
+    items.push(mk_tool(
+        "Trim — click a segment to remove it up to its nearest intersections",
+        SketchTool::Trim,
+        ActiveBarIcon::Glyph("\u{2702}"), // ✂
+    ));
+
     // Section 3: Modify — only visible when an entity is selected
     // (these tools all consume `editor.state.selected_sketch`). With
     // nothing selected they would all be silent no-ops with warnings,
     // so hiding them removes 5 buttons of width from the most-common
     // bar state and surfaces them right when they're useful.
-    let any_selection = editor.state.selected_sketch.is_some();
+    // v0.27 — also count rubber-band extras / secondary as a
+    // selection. The Modify section was hiding when the user
+    // rubber-banded a closed shape because the primary
+    // `selected_sketch` could be empty even with 4 extras present.
+    let any_selection = editor.state.selected_sketch.is_some()
+        || editor.state.selected_sketch_secondary.is_some()
+        || !editor.state.selected_sketch_extra.is_empty();
     if any_selection {
         items.push(ActiveBarItem::Separator);
         items.push(mk_tool(
@@ -324,6 +387,55 @@ pub fn items<'a>(
             "Midpoint (needs 1 Point + 1 Line)",
             "\u{25C7}",
         ),
+        mk_constraint(
+            SketchConstraintTag::TangentLineArc,
+            "Tangent (needs 1 Line + 1 Arc)",
+            "T",
+        ),
+        mk_constraint(
+            SketchConstraintTag::TangentArcArc,
+            "Tangent (needs 2 Arcs)",
+            "T",
+        ),
+        mk_constraint(
+            SketchConstraintTag::Angle,
+            "Angle between Lines (needs 2 Lines + dim input, degrees)",
+            "\u{2220}", // ∠
+        ),
+        mk_constraint(
+            SketchConstraintTag::EqualRadius,
+            "Equal radius (needs 2 Circles/Arcs)",
+            "\u{2261}R", // ≡R
+        ),
+        mk_constraint(
+            SketchConstraintTag::PointOnArc,
+            "Point on arc (needs 1 Point + 1 Arc)",
+            "\u{2312}", // ⌒
+        ),
+        mk_constraint(
+            SketchConstraintTag::DistancePtLine,
+            "Distance Point↔Line (needs 1 Point + 1 Line + dim input)",
+            "\u{27F7}", // ⟷
+        ),
+        mk_constraint(
+            SketchConstraintTag::DistancePtCircle,
+            "Distance Point↔Circle (needs 1 Point + 1 Circle/Arc + dim input)",
+            "\u{27F7}", // ⟷
+        ),
+        // v0.15 — 3-entity Symmetric constraints. Primary + secondary
+        // hold the two Points; the third entity (mirror Line / centre
+        // Point) comes from the extra slot, so these light up only
+        // when a third entity is rubber-band-selected into it.
+        mk_constraint(
+            SketchConstraintTag::SymmetricAboutLine,
+            "Symmetric about line (needs 2 Points + 1 Line in selection)",
+            "\u{25C3}\u{25B9}", // ◃▹
+        ),
+        mk_constraint(
+            SketchConstraintTag::SymmetricAboutPoint,
+            "Symmetric about point (needs 3 Points: 2 + a centre)",
+            "\u{25C3}\u{25B9}", // ◃▹
+        ),
     ]
     .into_iter()
     .flatten()
@@ -355,7 +467,7 @@ pub fn view<'a>(
 
 /// Compute the per-tag enable state from the current selection slots.
 /// Returns a fixed-length array indexed by [`tag_index`].
-fn constraint_enable_matrix(editor: &FootprintEditorState) -> [bool; 10] {
+fn constraint_enable_matrix(editor: &FootprintEditorState) -> [bool; 19] {
     use signex_sketch::entity::EntityKind;
     let primary = editor.state.selected_sketch;
     let secondary = editor.state.selected_sketch_secondary;
@@ -376,7 +488,15 @@ fn constraint_enable_matrix(editor: &FootprintEditorState) -> [bool; 10] {
     };
     let p = primary.and_then(kind_of);
     let s = secondary.and_then(kind_of);
-    let mut m = [false; 10];
+    // v0.15 — kind of the first extra-slot entity, used as the third
+    // entity for the 3-entity Symmetric constraints.
+    let extra = editor
+        .state
+        .selected_sketch_extra
+        .first()
+        .copied()
+        .and_then(kind_of);
+    let mut m = [false; 19];
     match (p, s) {
         (Some("Point"), None) => {
             m[tag_index(SketchConstraintTag::Fixed)] = true;
@@ -388,15 +508,45 @@ fn constraint_enable_matrix(editor: &FootprintEditorState) -> [bool; 10] {
         (Some("Point"), Some("Point")) => {
             m[tag_index(SketchConstraintTag::Coincident)] = true;
             m[tag_index(SketchConstraintTag::DistancePtPt)] = true;
+            // 3-entity Symmetric constraints need a third entity in
+            // the extra slot — gate the button on the extra kind.
+            if extra == Some("Line") {
+                m[tag_index(SketchConstraintTag::SymmetricAboutLine)] = true;
+            }
+            if extra == Some("Point") {
+                m[tag_index(SketchConstraintTag::SymmetricAboutPoint)] = true;
+            }
         }
         (Some("Line"), Some("Line")) => {
             m[tag_index(SketchConstraintTag::Parallel)] = true;
             m[tag_index(SketchConstraintTag::Perpendicular)] = true;
             m[tag_index(SketchConstraintTag::EqualLength)] = true;
+            m[tag_index(SketchConstraintTag::Angle)] = true;
         }
         (Some("Point"), Some("Line")) | (Some("Line"), Some("Point")) => {
             m[tag_index(SketchConstraintTag::PointOnLine)] = true;
             m[tag_index(SketchConstraintTag::Midpoint)] = true;
+            m[tag_index(SketchConstraintTag::DistancePtLine)] = true;
+        }
+        (Some("Line"), Some("Arc")) | (Some("Arc"), Some("Line")) => {
+            m[tag_index(SketchConstraintTag::TangentLineArc)] = true;
+        }
+        (Some("Arc"), Some("Arc")) => {
+            m[tag_index(SketchConstraintTag::TangentArcArc)] = true;
+            m[tag_index(SketchConstraintTag::EqualRadius)] = true;
+        }
+        (Some("Point"), Some("Arc")) | (Some("Arc"), Some("Point")) => {
+            m[tag_index(SketchConstraintTag::PointOnArc)] = true;
+            m[tag_index(SketchConstraintTag::DistancePtCircle)] = true;
+        }
+        (Some("Point"), Some("Circle")) | (Some("Circle"), Some("Point")) => {
+            m[tag_index(SketchConstraintTag::DistancePtCircle)] = true;
+        }
+        // EqualRadius spans any two of Circle / Arc.
+        (Some("Circle"), Some("Circle"))
+        | (Some("Circle"), Some("Arc"))
+        | (Some("Arc"), Some("Circle")) => {
+            m[tag_index(SketchConstraintTag::EqualRadius)] = true;
         }
         _ => {}
     }
@@ -415,6 +565,15 @@ const fn tag_index(tag: SketchConstraintTag) -> usize {
         SketchConstraintTag::EqualLength => 7,
         SketchConstraintTag::PointOnLine => 8,
         SketchConstraintTag::Midpoint => 9,
+        SketchConstraintTag::TangentLineArc => 10,
+        SketchConstraintTag::TangentArcArc => 11,
+        SketchConstraintTag::Angle => 12,
+        SketchConstraintTag::EqualRadius => 13,
+        SketchConstraintTag::PointOnArc => 14,
+        SketchConstraintTag::DistancePtLine => 15,
+        SketchConstraintTag::DistancePtCircle => 16,
+        SketchConstraintTag::SymmetricAboutLine => 17,
+        SketchConstraintTag::SymmetricAboutPoint => 18,
     }
 }
 

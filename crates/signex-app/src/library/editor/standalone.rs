@@ -1009,6 +1009,17 @@ fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEditorMsg {
         EditorMsg::FootprintAddText { x_mm, y_mm } => {
             PrimitiveEditorMsg::FootprintAddText { x_mm, y_mm }
         }
+        EditorMsg::FootprintAddTextFrame {
+            x_mm,
+            y_mm,
+            w_mm,
+            h_mm,
+        } => PrimitiveEditorMsg::FootprintAddTextFrame {
+            x_mm,
+            y_mm,
+            w_mm,
+            h_mm,
+        },
         EditorMsg::FootprintTrackClick { x_mm, y_mm } => {
             PrimitiveEditorMsg::FootprintTrackClick { x_mm, y_mm }
         }
@@ -1055,6 +1066,43 @@ fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEditorMsg {
         EditorMsg::FootprintSketchMovePoint { id, dx, dy } => {
             PrimitiveEditorMsg::FootprintSketchMovePoint { id, dx, dy }
         }
+        EditorMsg::FootprintSketchMoveLine { id, dx, dy } => {
+            PrimitiveEditorMsg::FootprintSketchMoveLine { id, dx, dy }
+        }
+        EditorMsg::FootprintSketchResizeRoundPad { pad_idx, diameter_mm } => {
+            PrimitiveEditorMsg::FootprintSketchResizeRoundPad { pad_idx, diameter_mm }
+        }
+        EditorMsg::FootprintSetSelectionMode2d(mode) => {
+            PrimitiveEditorMsg::FootprintSetSelectionMode2d(mode)
+        }
+        EditorMsg::FootprintSelectAllOnLayer => PrimitiveEditorMsg::FootprintSelectAllOnLayer,
+        EditorMsg::FootprintAddVia { x_mm, y_mm } => {
+            PrimitiveEditorMsg::FootprintAddVia { x_mm, y_mm }
+        }
+        EditorMsg::FootprintSelectOffGridPads => PrimitiveEditorMsg::FootprintSelectOffGridPads,
+        EditorMsg::FootprintRecomputeCourtyardOutline => {
+            PrimitiveEditorMsg::FootprintRecomputeCourtyardOutline
+        }
+        EditorMsg::FootprintLassoArm => PrimitiveEditorMsg::FootprintLassoArm,
+        EditorMsg::FootprintLassoAddVertex { x_mm, y_mm } => {
+            PrimitiveEditorMsg::FootprintLassoAddVertex { x_mm, y_mm }
+        }
+        EditorMsg::FootprintLassoCommit => PrimitiveEditorMsg::FootprintLassoCommit,
+        EditorMsg::FootprintLassoCancel => PrimitiveEditorMsg::FootprintLassoCancel,
+        EditorMsg::FootprintTouchingLineArm => PrimitiveEditorMsg::FootprintTouchingLineArm,
+        EditorMsg::FootprintTouchingLineFirst { x_mm, y_mm } => {
+            PrimitiveEditorMsg::FootprintTouchingLineFirst { x_mm, y_mm }
+        }
+        EditorMsg::FootprintTouchingLineCommit { x_mm, y_mm } => {
+            PrimitiveEditorMsg::FootprintTouchingLineCommit { x_mm, y_mm }
+        }
+        EditorMsg::FootprintTouchingLineCancel => {
+            PrimitiveEditorMsg::FootprintTouchingLineCancel
+        }
+        EditorMsg::FootprintSelectOverlapped => PrimitiveEditorMsg::FootprintSelectOverlapped,
+        EditorMsg::FootprintSelectNextOverlapped => {
+            PrimitiveEditorMsg::FootprintSelectNextOverlapped
+        }
         EditorMsg::FootprintMovePad { idx, x_mm, y_mm } => {
             PrimitiveEditorMsg::FootprintMovePad { idx, x_mm, y_mm }
         }
@@ -1062,6 +1110,10 @@ fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEditorMsg {
             PrimitiveEditorMsg::FootprintCursorAt { x_mm, y_mm }
         }
         EditorMsg::FootprintSelectPad(sel) => PrimitiveEditorMsg::FootprintSelectPad(sel),
+        EditorMsg::FootprintSelectPads(pads) => PrimitiveEditorMsg::FootprintSelectPads(pads),
+        EditorMsg::FootprintSketchSelectMany(ids) => {
+            PrimitiveEditorMsg::FootprintSketchSelectMany(ids)
+        }
         EditorMsg::FootprintDeleteSelected => PrimitiveEditorMsg::FootprintDeleteSelected,
         EditorMsg::FootprintToggleLayer(name) => PrimitiveEditorMsg::FootprintToggleLayer(name),
         EditorMsg::FootprintToggleAutoFit => PrimitiveEditorMsg::FootprintToggleAutoFit,
@@ -1075,6 +1127,28 @@ fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEditorMsg {
         }
         EditorMsg::FootprintTogglePlacementPause => {
             PrimitiveEditorMsg::FootprintTogglePlacementPause
+        }
+        EditorMsg::FootprintShowContextMenu { x, y, target } => {
+            PrimitiveEditorMsg::FootprintShowContextMenu { x, y, target }
+        }
+        EditorMsg::FootprintCloseContextMenu => {
+            PrimitiveEditorMsg::FootprintCloseContextMenu
+        }
+        EditorMsg::FootprintContextMenuOpenSubmenu(sm) => {
+            PrimitiveEditorMsg::FootprintContextMenuOpenSubmenu(sm)
+        }
+        EditorMsg::FootprintContextMenuAction(act) => {
+            PrimitiveEditorMsg::FootprintContextMenuAction(act)
+        }
+        EditorMsg::FootprintFitConsumed => PrimitiveEditorMsg::FootprintFitConsumed,
+        EditorMsg::FootprintCopyPad => PrimitiveEditorMsg::FootprintCopyPad,
+        EditorMsg::FootprintCutPad => PrimitiveEditorMsg::FootprintCutPad,
+        EditorMsg::FootprintPastePad => PrimitiveEditorMsg::FootprintPastePad,
+        EditorMsg::FootprintActiveBarRotateSelection => {
+            PrimitiveEditorMsg::FootprintActiveBarRotateSelection
+        }
+        EditorMsg::FootprintActiveBarFlipSelection => {
+            PrimitiveEditorMsg::FootprintActiveBarFlipSelection
         }
         EditorMsg::FootprintSketchSetRole { id, role } => {
             PrimitiveEditorMsg::FootprintSketchSetRole { id, role }
