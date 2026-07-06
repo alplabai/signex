@@ -4934,7 +4934,6 @@ impl Signex {
                     theme_id,
                     tokens,
                     dropdown_top,
-                    self.ui_state.window_size.0,
                 )
             {
                 layers.push(overlay.map(Message::Library));

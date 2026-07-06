@@ -3696,90 +3696,6 @@ fn editing_corner_r_via_properties_updates_all_4_arcs() {
         "solve cleared cleanly; got {:?}",
         editor.state.solve_warnings
     );
-
-    // Phase 6 — `mirror_solve_to_round_rect_geometry` (post-solve hook)
-    // rewrites each corner Arc's centre + start + end Points from the
-    // resolved corner_r. With W=2 / H=1 / corner_r=0.5:
-    //   bbox: xmin=-1, ymin=-0.5, xmax=1, ymax=0.5
-    //   NE corner: centre = (xmax-r, ymin+r) = (0.5, 0.0)
-    //              start (top-edge anchor)  = (0.5, -0.5)
-    //              end   (right-edge anchor)= (1.0, 0.0)
-    //   SE corner: centre = (xmax-r, ymax-r) = (0.5, 0.0)  [coincides
-    //              vertically with NE because corner_r = h/2 in this
-    //              degenerate-but-legal case; the test still validates
-    //              the per-corner-position table by checking start/end]
-    //              start = (1.0, 0.0)
-    //              end   = (0.5, 0.5)
-    let ne_arc_id = pad_arc_id(editor, 0, "corner_r_ne_arc");
-    let (ne_centre_id, ne_start_id, ne_end_id) =
-        arc_endpoint_ids(sketch, ne_arc_id);
-    let ne_centre = point_pos(sketch, ne_centre_id);
-    let ne_start = point_pos(sketch, ne_start_id);
-    let ne_end = point_pos(sketch, ne_end_id);
-    assert!(approx_eq_pt(ne_centre, (0.5, 0.0)),
-        "NE arc centre at (0.5, 0.0) after corner_r=0.5 edit; got {ne_centre:?}");
-    assert!(approx_eq_pt(ne_start, (0.5, -0.5)),
-        "NE arc start (top anchor) at (0.5, -0.5); got {ne_start:?}");
-    assert!(approx_eq_pt(ne_end, (1.0, 0.0)),
-        "NE arc end (right anchor) at (1.0, 0.0); got {ne_end:?}");
-}
-
-/// Helpers used by the Phase 6 geometric-assertion tightening of
-/// the v0.24 deferred suite. Centralised to keep the assertion
-/// blocks above readable.
-fn pad_arc_id(
-    editor: &signex_app::app::FootprintEditorState,
-    pad_idx: usize,
-    sidecar_key: &str,
-) -> signex_sketch::id::SketchEntityId {
-    let pad = &editor.state.pads[pad_idx];
-    let slug = pad
-        .shape_params
-        .get(sidecar_key)
-        .unwrap_or_else(|| panic!("pad {pad_idx} sidecar {sidecar_key} missing"));
-    let uuid = uuid::Uuid::parse_str(slug)
-        .unwrap_or_else(|_| panic!("sidecar {sidecar_key} value {slug} not a UUID slug"));
-    signex_sketch::id::SketchEntityId(uuid)
-}
-
-fn arc_endpoint_ids(
-    sketch: &signex_sketch::SketchData,
-    arc_id: signex_sketch::id::SketchEntityId,
-) -> (
-    signex_sketch::id::SketchEntityId,
-    signex_sketch::id::SketchEntityId,
-    signex_sketch::id::SketchEntityId,
-) {
-    use signex_sketch::entity::EntityKind;
-    let arc = sketch
-        .entities
-        .iter()
-        .find(|e| e.id == arc_id)
-        .unwrap_or_else(|| panic!("arc {arc_id:?} not in sketch"));
-    match arc.kind {
-        EntityKind::Arc { center, start, end, .. } => (center, start, end),
-        ref other => panic!("entity {arc_id:?} not an Arc: {other:?}"),
-    }
-}
-
-fn point_pos(
-    sketch: &signex_sketch::SketchData,
-    id: signex_sketch::id::SketchEntityId,
-) -> (f64, f64) {
-    use signex_sketch::entity::EntityKind;
-    let pt = sketch
-        .entities
-        .iter()
-        .find(|e| e.id == id)
-        .unwrap_or_else(|| panic!("point {id:?} not in sketch"));
-    match pt.kind {
-        EntityKind::Point { x, y } => (x, y),
-        ref other => panic!("entity {id:?} not a Point: {other:?}"),
-    }
-}
-
-fn approx_eq_pt(a: (f64, f64), b: (f64, f64)) -> bool {
-    (a.0 - b.0).abs() < 1e-6 && (a.1 - b.1).abs() < 1e-6
 }
 
 /// Phase-5 #5 — Unlink one corner only (NE), then verify the data
@@ -3942,36 +3858,6 @@ fn unlink_one_corner_only_that_arc_reads_per_corner_param() {
         "0.4mm",
         "shared param stays at 0.4mm when per-corner is edited"
     );
-
-    // Step 4 (Phase 6) — `mirror_solve_to_round_rect_geometry`
-    // reads the per-corner override before falling back to shared.
-    // After Step 3, the NE corner's arc geometry must reflect
-    // r_ne = 0.15mm; the SE / SW / NW arcs must reflect r_shared
-    // = 0.4mm. With pad bbox W=2 / H=1 (xmin=-1, ymin=-0.5,
-    // xmax=1, ymax=0.5):
-    //   NE centre (per-corner r=0.15) = (xmax-r, ymin+r) = (0.85, -0.35)
-    //   SE centre (shared r=0.4)      = (xmax-r, ymax-r) = (0.6, 0.1)
-    //   SW centre (shared r=0.4)      = (xmin+r, ymax-r) = (-0.6, 0.1)
-    //   NW centre (shared r=0.4)      = (xmin+r, ymin+r) = (-0.6, -0.1)
-    let editor = app.document_state.footprint_editors.get(&path).unwrap();
-    let sketch = editor.file.footprints[0].sketch.as_ref().unwrap();
-    let centre_pos_for = |key: &str| -> (f64, f64) {
-        let arc_id = pad_arc_id(editor, 0, key);
-        let (centre_id, _, _) = arc_endpoint_ids(sketch, arc_id);
-        point_pos(sketch, centre_id)
-    };
-    let ne_centre = centre_pos_for("corner_r_ne_arc");
-    let se_centre = centre_pos_for("corner_r_se_arc");
-    let sw_centre = centre_pos_for("corner_r_sw_arc");
-    let nw_centre = centre_pos_for("corner_r_nw_arc");
-    assert!(approx_eq_pt(ne_centre, (0.85, -0.35)),
-        "NE centre uses per-corner r=0.15 → (0.85, -0.35); got {ne_centre:?}");
-    assert!(approx_eq_pt(se_centre, (0.6, 0.1)),
-        "SE centre uses shared r=0.4 → (0.6, 0.1); got {se_centre:?}");
-    assert!(approx_eq_pt(sw_centre, (-0.6, 0.1)),
-        "SW centre uses shared r=0.4 → (-0.6, 0.1); got {sw_centre:?}");
-    assert!(approx_eq_pt(nw_centre, (-0.6, -0.1)),
-        "NW centre uses shared r=0.4 → (-0.6, -0.1); got {nw_centre:?}");
 }
 
 /// Phase-5 #6 — Edit the `width_<slug>` parameter on an Oval pad.
@@ -4575,64 +4461,6 @@ fn app_exit_confirm_discard_all_clears_modal() {
     assert!(
         app.ui_state.app_quit_confirm.is_none(),
         "Discard All must resolve the modal"
-// v0.26-E — pad clipboard (Cut / Copy / Paste)
-//
-// Drives `apply_footprint_clipboard_op` via the public Message
-// surface so the split-borrow at dispatch/library.rs:3499 is
-// exercised end-to-end (DocumentState.pad_clipboard + the path-keyed
-// FootprintEditorState mutated together).
-// ─────────────────────────────────────────────────────────────────
-
-/// Helper — fresh standalone footprint editor with N pads parked at
-/// `path` inside `document_state.footprint_editors`. Returns the app
-/// and the path so the caller can dispatch and re-borrow.
-fn fixture_footprint_with_pads(stem: &str, count: usize) -> (Signex, PathBuf) {
-    use signex_app::app::FootprintEditorState;
-    use signex_app::library::editor::footprint::state::EditorPad;
-    use signex_library::{Footprint, FootprintFile};
-
-    let path = PathBuf::from(format!("{stem}.snxfpt"));
-    let fp = Footprint::empty(stem);
-    let file = FootprintFile::from_footprint(fp);
-    let mut editor = FootprintEditorState::new(path.clone(), file);
-    for i in 0..count {
-        editor.state.pads.push(EditorPad::new_default(
-            (i + 1).to_string(),
-            (i as f64 * 2.0, 0.0),
-        ));
-    }
-
-    let (mut app, _initial_task) = Signex::new();
-    app.document_state
-        .footprint_editors
-        .insert(path.clone(), editor);
-    (app, path)
-}
-
-#[test]
-fn v026e_copy_with_no_selection_is_noop() {
-    use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
-
-    let (mut app, path) = fixture_footprint_with_pads("v026e-copy-empty", 1);
-    // No pad selected.
-    assert!(
-        app.document_state
-            .footprint_editors
-            .get(&path)
-            .unwrap()
-            .state
-            .selected_pad
-            .is_none()
-    );
-
-    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
-        path: path.clone(),
-        msg: PrimitiveEditorMsg::FootprintCopyPad,
-    }));
-
-    assert!(
-        app.document_state.pad_clipboard.is_none(),
-        "Copy with no selection must leave clipboard untouched"
     );
 }
 
@@ -4680,9 +4508,155 @@ fn new_project_over_existing_non_empty_snxprj_is_refused() {
     assert_eq!(
         after, before,
         "New Project must not overwrite an existing .snxprj"
+    );
+}
+
+// ── v0.14 / v0.25 / v0.26 footprint-editor regression tests ──────────────
+
+
+
+
+
+
+
+
+
+
+
+
+
+/// Helpers used by the Phase 6 geometric-assertion tightening of
+/// the v0.24 deferred suite. Centralised to keep the assertion
+/// blocks above readable.
+fn pad_arc_id(
+    editor: &signex_app::app::FootprintEditorState,
+    pad_idx: usize,
+    sidecar_key: &str,
+) -> signex_sketch::id::SketchEntityId {
+    let pad = &editor.state.pads[pad_idx];
+    let slug = pad
+        .shape_params
+        .get(sidecar_key)
+        .unwrap_or_else(|| panic!("pad {pad_idx} sidecar {sidecar_key} missing"));
+    let uuid = uuid::Uuid::parse_str(slug)
+        .unwrap_or_else(|_| panic!("sidecar {sidecar_key} value {slug} not a UUID slug"));
+    signex_sketch::id::SketchEntityId(uuid)
+}
+
+fn arc_endpoint_ids(
+    sketch: &signex_sketch::SketchData,
+    arc_id: signex_sketch::id::SketchEntityId,
+) -> (
+    signex_sketch::id::SketchEntityId,
+    signex_sketch::id::SketchEntityId,
+    signex_sketch::id::SketchEntityId,
+) {
+    use signex_sketch::entity::EntityKind;
+    let arc = sketch
+        .entities
+        .iter()
+        .find(|e| e.id == arc_id)
+        .unwrap_or_else(|| panic!("arc {arc_id:?} not in sketch"));
+    match arc.kind {
+        EntityKind::Arc { center, start, end, .. } => (center, start, end),
+        ref other => panic!("entity {arc_id:?} not an Arc: {other:?}"),
+    }
+}
+
+fn point_pos(
+    sketch: &signex_sketch::SketchData,
+    id: signex_sketch::id::SketchEntityId,
+) -> (f64, f64) {
+    use signex_sketch::entity::EntityKind;
+    let pt = sketch
+        .entities
+        .iter()
+        .find(|e| e.id == id)
+        .unwrap_or_else(|| panic!("point {id:?} not in sketch"));
+    match pt.kind {
+        EntityKind::Point { x, y } => (x, y),
+        ref other => panic!("entity {id:?} not a Point: {other:?}"),
+    }
+}
+
+fn approx_eq_pt(a: (f64, f64), b: (f64, f64)) -> bool {
+    (a.0 - b.0).abs() < 1e-6 && (a.1 - b.1).abs() < 1e-6
+}
+
+
+
+
+
+
+
+
+
+
+// ─────────────────────────────────────────────────────────────────
+// v0.26-E — pad clipboard (Cut / Copy / Paste)
+//
+// Drives `apply_footprint_clipboard_op` via the public Message
+// surface so the split-borrow at dispatch/library.rs:3499 is
+// exercised end-to-end (DocumentState.pad_clipboard + the path-keyed
+// FootprintEditorState mutated together).
+// ─────────────────────────────────────────────────────────────────
+
+/// Helper — fresh standalone footprint editor with N pads parked at
+/// `path` inside `document_state.footprint_editors`. Returns the app
+/// and the path so the caller can dispatch and re-borrow.
+fn fixture_footprint_with_pads(stem: &str, count: usize) -> (Signex, PathBuf) {
+    use signex_app::app::FootprintEditorState;
+    use signex_app::library::editor::footprint::state::EditorPad;
+    use signex_library::{Footprint, FootprintFile};
+    let path = PathBuf::from(format!("{stem}.snxfpt"));
+    let fp = Footprint::empty(stem);
+    let file = FootprintFile::from_footprint(fp);
+    let mut editor = FootprintEditorState::new(path.clone(), file);
+    for i in 0..count {
+        editor.state.pads.push(EditorPad::new_default(
+            (i + 1).to_string(),
+            (i as f64 * 2.0, 0.0),
+        ));
+    }
+    let (mut app, _initial_task) = Signex::new();
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), editor);
+    (app, path)
+}
+
+
+
+#[test]
+fn v026e_copy_with_no_selection_is_noop() {
+    use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
+    let (mut app, path) = fixture_footprint_with_pads("v026e-copy-empty", 1);
+    // No pad selected.
+    assert!(
+        app.document_state
+            .footprint_editors
+            .get(&path)
+            .unwrap()
+            .state
+            .selected_pad
+            .is_none()
+    );
+    let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        path: path.clone(),
+        msg: PrimitiveEditorMsg::FootprintCopyPad,
+    }));
+    assert!(
+        app.document_state.pad_clipboard.is_none(),
+        "Copy with no selection must leave clipboard untouched"
+    );
+}
+
+
+
+
+#[test]
 fn v026e_copy_populates_clipboard_with_selected_pad() {
     use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
-
     let (mut app, path) = fixture_footprint_with_pads("v026e-copy", 2);
     app.document_state
         .footprint_editors
@@ -4690,12 +4664,10 @@ fn v026e_copy_populates_clipboard_with_selected_pad() {
         .unwrap()
         .state
         .selected_pad = Some(1);
-
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
         path: path.clone(),
         msg: PrimitiveEditorMsg::FootprintCopyPad,
     }));
-
     let clip = app
         .document_state
         .pad_clipboard
@@ -4716,10 +4688,12 @@ fn v026e_copy_populates_clipboard_with_selected_pad() {
     );
 }
 
+
+
+
 #[test]
 fn v026e_cut_removes_pad_populates_clipboard_and_pushes_history() {
     use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
-
     let (mut app, path) = fixture_footprint_with_pads("v026e-cut", 2);
     app.document_state
         .footprint_editors
@@ -4727,12 +4701,10 @@ fn v026e_cut_removes_pad_populates_clipboard_and_pushes_history() {
         .unwrap()
         .state
         .selected_pad = Some(0);
-
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
         path: path.clone(),
         msg: PrimitiveEditorMsg::FootprintCutPad,
     }));
-
     // Clipboard now holds the cut pad.
     let clip = app
         .document_state
@@ -4740,7 +4712,6 @@ fn v026e_cut_removes_pad_populates_clipboard_and_pushes_history() {
         .as_ref()
         .expect("Cut must populate the clipboard");
     assert_eq!(clip.number, "1");
-
     // Pad list shrunk and history grew so Ctrl+Z restores it.
     let editor = app.document_state.footprint_editors.get(&path).unwrap();
     assert_eq!(
@@ -4756,11 +4727,14 @@ fn v026e_cut_removes_pad_populates_clipboard_and_pushes_history() {
     assert!(editor.dirty, "Cut marks the editor dirty");
 }
 
+
+
+
+
 #[test]
 fn v026e_paste_at_cursor_with_bumped_designator() {
     use signex_app::library::editor::footprint::state::EditorPad;
     use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
-
     let (mut app, path) = fixture_footprint_with_pads("v026e-paste-cursor", 2);
     {
         let editor = app.document_state.footprint_editors.get_mut(&path).unwrap();
@@ -4769,12 +4743,10 @@ fn v026e_paste_at_cursor_with_bumped_designator() {
     // Stash a pad in the clipboard directly — Paste reads it, no
     // need to drive Copy first.
     app.document_state.pad_clipboard = Some(EditorPad::new_default("99".into(), (0.0, 0.0)));
-
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
         path: path.clone(),
         msg: PrimitiveEditorMsg::FootprintPastePad,
     }));
-
     let editor = app.document_state.footprint_editors.get(&path).unwrap();
     assert_eq!(
         editor.state.pads.len(),
@@ -4800,12 +4772,14 @@ fn v026e_paste_at_cursor_with_bumped_designator() {
     );
 }
 
+
+
+
 #[test]
 fn v026e_paste_resets_sketch_entity_links() {
     use signex_app::library::editor::footprint::state::EditorPad;
     use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
     use signex_sketch::id::SketchEntityId;
-
     let (mut app, path) = fixture_footprint_with_pads("v026e-paste-fresh-ids", 1);
     // Clipboard holds a pad with sketch links populated — the paste
     // path must reset both fields so the new pad re-mirrors freshly.
@@ -4818,12 +4792,10 @@ fn v026e_paste_resets_sketch_entity_links() {
         SketchEntityId::new(),
     ]);
     app.document_state.pad_clipboard = Some(template);
-
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
         path: path.clone(),
         msg: PrimitiveEditorMsg::FootprintPastePad,
     }));
-
     let editor = app.document_state.footprint_editors.get(&path).unwrap();
     let pasted = editor.state.pads.last().unwrap();
     assert!(
@@ -4836,10 +4808,12 @@ fn v026e_paste_resets_sketch_entity_links() {
     );
 }
 
+
+
+
 #[test]
 fn v026e_paste_with_empty_clipboard_is_noop() {
     use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
-
     let (mut app, path) = fixture_footprint_with_pads("v026e-paste-empty", 1);
     assert!(app.document_state.pad_clipboard.is_none());
     let pad_count_before = app
@@ -4850,12 +4824,10 @@ fn v026e_paste_with_empty_clipboard_is_noop() {
         .state
         .pads
         .len();
-
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
         path: path.clone(),
         msg: PrimitiveEditorMsg::FootprintPastePad,
     }));
-
     assert_eq!(
         app.document_state
             .footprint_editors
@@ -4869,6 +4841,9 @@ fn v026e_paste_with_empty_clipboard_is_noop() {
     );
 }
 
+
+
+
 // ─────────────────────────────────────────────────────────────────
 // v0.26-G — Pad Actions submenu (Rotate 90° / Flip Layer)
 //
@@ -4879,19 +4854,16 @@ fn v026e_paste_with_empty_clipboard_is_noop() {
 #[test]
 fn v026g_rotate_selection_increments_rotation_by_90_degrees() {
     use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
-
     let (mut app, path) = fixture_footprint_with_pads("v026g-rotate", 1);
     {
         let editor = app.document_state.footprint_editors.get_mut(&path).unwrap();
         editor.state.selected_pad = Some(0);
         editor.state.pads[0].rotation_deg = 0.0;
     }
-
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
         path: path.clone(),
         msg: PrimitiveEditorMsg::FootprintActiveBarRotateSelection,
     }));
-
     let editor = app.document_state.footprint_editors.get(&path).unwrap();
     assert_eq!(
         editor.state.pads[0].rotation_deg, 90.0,
@@ -4900,22 +4872,22 @@ fn v026g_rotate_selection_increments_rotation_by_90_degrees() {
     assert!(editor.dirty, "Rotate marks the editor dirty");
 }
 
+
+
+
 #[test]
 fn v026g_rotate_selection_wraps_at_360() {
     use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
-
     let (mut app, path) = fixture_footprint_with_pads("v026g-rotate-wrap", 1);
     {
         let editor = app.document_state.footprint_editors.get_mut(&path).unwrap();
         editor.state.selected_pad = Some(0);
         editor.state.pads[0].rotation_deg = 270.0;
     }
-
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
         path: path.clone(),
         msg: PrimitiveEditorMsg::FootprintActiveBarRotateSelection,
     }));
-
     let editor = app.document_state.footprint_editors.get(&path).unwrap();
     assert_eq!(
         editor.state.pads[0].rotation_deg, 0.0,
@@ -4923,11 +4895,13 @@ fn v026g_rotate_selection_wraps_at_360() {
     );
 }
 
+
+
+
 #[test]
 fn v026g_flip_selection_swaps_top_to_bottom_layers() {
     use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
     use signex_library::LayerId;
-
     let (mut app, path) = fixture_footprint_with_pads("v026g-flip", 1);
     {
         let editor = app.document_state.footprint_editors.get_mut(&path).unwrap();
@@ -4941,12 +4915,10 @@ fn v026g_flip_selection_swaps_top_to_bottom_layers() {
             .collect();
         assert_eq!(before, vec!["F.Cu", "F.Mask", "F.Paste"]);
     }
-
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
         path: path.clone(),
         msg: PrimitiveEditorMsg::FootprintActiveBarFlipSelection,
     }));
-
     let editor = app.document_state.footprint_editors.get(&path).unwrap();
     let after: Vec<String> = editor.state.pads[0]
         .layers
@@ -4962,7 +4934,6 @@ fn v026g_flip_selection_swaps_top_to_bottom_layers() {
         ],
         "Flip must swap the F. prefix to B. on every layer"
     );
-
     // Flipping again must round-trip back to the original.
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
         path: path.clone(),
@@ -4983,28 +4954,32 @@ fn v026g_flip_selection_swaps_top_to_bottom_layers() {
     let _: LayerId = LayerId::new("F.Cu");
 }
 
+
+
+
+
 #[test]
 fn v026g_rotate_with_no_selection_is_noop() {
     use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
-
     let (mut app, path) = fixture_footprint_with_pads("v026g-rotate-noop", 1);
     {
         let editor = app.document_state.footprint_editors.get_mut(&path).unwrap();
         editor.state.selected_pad = None;
         editor.state.pads[0].rotation_deg = 45.0;
     }
-
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
         path: path.clone(),
         msg: PrimitiveEditorMsg::FootprintActiveBarRotateSelection,
     }));
-
     let editor = app.document_state.footprint_editors.get(&path).unwrap();
     assert_eq!(
         editor.state.pads[0].rotation_deg, 45.0,
         "Rotate with no selection must not touch any pad"
     );
 }
+
+
+
 
 // ─────────────────────────────────────────────────────────────────
 // v0.26-C — Fit-to-Window one-shot signal
@@ -5020,7 +4995,6 @@ fn v026c_fit_to_window_action_arms_fit_pending_and_closes_menu() {
         FootprintContextAction, FootprintContextMenuState, FootprintContextTarget,
     };
     use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
-
     let (mut app, path) = fixture_footprint_with_pads("v026c-fit-arm", 1);
     // Open a context menu so the action's "close menu" side effect
     // has something visible to clear.
@@ -5034,12 +5008,10 @@ fn v026c_fit_to_window_action_arms_fit_pending_and_closes_menu() {
         });
         assert!(!editor.state.fit_pending, "fresh editor: fit_pending=false");
     }
-
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
         path: path.clone(),
         msg: PrimitiveEditorMsg::FootprintContextMenuAction(FootprintContextAction::FitToWindow),
     }));
-
     let editor = app.document_state.footprint_editors.get(&path).unwrap();
     assert!(
         editor.state.fit_pending,
@@ -5051,10 +5023,12 @@ fn v026c_fit_to_window_action_arms_fit_pending_and_closes_menu() {
     );
 }
 
+
+
+
 #[test]
 fn v026c_fit_consumed_clears_fit_pending() {
     use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
-
     let (mut app, path) = fixture_footprint_with_pads("v026c-fit-consume", 1);
     app.document_state
         .footprint_editors
@@ -5062,12 +5036,10 @@ fn v026c_fit_consumed_clears_fit_pending() {
         .unwrap()
         .state
         .fit_pending = true;
-
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
         path: path.clone(),
         msg: PrimitiveEditorMsg::FootprintFitConsumed,
     }));
-
     assert!(
         !app.document_state
             .footprint_editors
@@ -5078,6 +5050,9 @@ fn v026c_fit_consumed_clears_fit_pending() {
         "FitConsumed must clear fit_pending so the next event tick doesn't re-fit"
     );
 }
+
+
+
 
 // ─────────────────────────────────────────────────────────────────
 // v0.26-I — auto-courtyard removed (default flipped to false)
@@ -5103,14 +5078,14 @@ fn v026i_recompute_courtyard_with_auto_fit_off_does_not_overwrite_courtyard() {
     let editor = app.document_state.footprint_editors.get_mut(&path).unwrap();
     editor.state.auto_fit_courtyard = false;
     editor.state.courtyard_mm = None;
-
     editor.state.recompute_courtyard();
-
     assert!(
         editor.state.courtyard_mm.is_none(),
         "recompute_courtyard must early-return when auto_fit_courtyard is off"
     );
 }
+
+
 
 #[test]
 fn v026i_recompute_courtyard_with_auto_fit_on_still_computes_pad_bbox() {
@@ -5120,14 +5095,14 @@ fn v026i_recompute_courtyard_with_auto_fit_on_still_computes_pad_bbox() {
     // opt-in must still compute a non-empty bbox.
     editor.state.auto_fit_courtyard = true;
     editor.state.courtyard_mm = None;
-
     editor.state.recompute_courtyard();
-
     assert!(
         editor.state.courtyard_mm.is_some(),
         "with auto_fit_courtyard explicitly on, recompute must populate courtyard_mm"
     );
 }
+
+
 
 // ─────────────────────────────────────────────────────────────────
 // v0.26-B / v0.26-D — right-click context menu target dispatch
@@ -5141,7 +5116,6 @@ fn v026i_recompute_courtyard_with_auto_fit_on_still_computes_pad_bbox() {
 fn v026b_show_context_menu_pad_target_selects_pad_and_clears_silk() {
     use signex_app::library::editor::footprint::state::FootprintContextTarget;
     use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
-
     let (mut app, path) = fixture_footprint_with_pads("v026b-pad-target", 3);
     {
         let editor = app.document_state.footprint_editors.get_mut(&path).unwrap();
@@ -5149,7 +5123,6 @@ fn v026b_show_context_menu_pad_target_selects_pad_and_clears_silk() {
         editor.state.selected_pad = None;
         editor.state.selected_silk_f = Some(7);
     }
-
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
         path: path.clone(),
         msg: PrimitiveEditorMsg::FootprintShowContextMenu {
@@ -5158,7 +5131,6 @@ fn v026b_show_context_menu_pad_target_selects_pad_and_clears_silk() {
             target: FootprintContextTarget::Pad(2),
         },
     }));
-
     let editor = app.document_state.footprint_editors.get(&path).unwrap();
     assert_eq!(
         editor.state.selected_pad,
@@ -5180,18 +5152,19 @@ fn v026b_show_context_menu_pad_target_selects_pad_and_clears_silk() {
     );
 }
 
+
+
+
 #[test]
 fn v026d_show_context_menu_silk_target_selects_silk_and_clears_pad() {
     use signex_app::library::editor::footprint::state::FootprintContextTarget;
     use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
-
     let (mut app, path) = fixture_footprint_with_pads("v026d-silk-target", 1);
     {
         let editor = app.document_state.footprint_editors.get_mut(&path).unwrap();
         editor.state.selected_pad = Some(0);
         editor.state.selected_silk_f = None;
     }
-
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
         path: path.clone(),
         msg: PrimitiveEditorMsg::FootprintShowContextMenu {
@@ -5200,7 +5173,6 @@ fn v026d_show_context_menu_silk_target_selects_silk_and_clears_pad() {
             target: FootprintContextTarget::SilkF(5),
         },
     }));
-
     let editor = app.document_state.footprint_editors.get(&path).unwrap();
     assert_eq!(
         editor.state.selected_silk_f,
@@ -5219,17 +5191,18 @@ fn v026d_show_context_menu_silk_target_selects_silk_and_clears_pad() {
     assert!(matches!(menu.target, FootprintContextTarget::SilkF(5)));
 }
 
+
+
+
 #[test]
 fn v026b_show_context_menu_empty_target_preserves_selection_and_opens_menu() {
     use signex_app::library::editor::footprint::state::FootprintContextTarget;
     use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
-
     let (mut app, path) = fixture_footprint_with_pads("v026b-empty-target", 2);
     {
         let editor = app.document_state.footprint_editors.get_mut(&path).unwrap();
         editor.state.selected_pad = Some(1);
     }
-
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
         path: path.clone(),
         msg: PrimitiveEditorMsg::FootprintShowContextMenu {
@@ -5238,7 +5211,6 @@ fn v026b_show_context_menu_empty_target_preserves_selection_and_opens_menu() {
             target: FootprintContextTarget::Empty,
         },
     }));
-
     let editor = app.document_state.footprint_editors.get(&path).unwrap();
     assert_eq!(
         editor.state.selected_pad,
@@ -5250,6 +5222,9 @@ fn v026b_show_context_menu_empty_target_preserves_selection_and_opens_menu() {
         "Empty target still opens the menu"
     );
 }
+
+
+
 
 // ─────────────────────────────────────────────────────────────────
 // v0.25 polish — BGA numbering config (PanelMsg path)
@@ -5274,11 +5249,9 @@ fn fixture_footprint_with_bga_array(stem: &str) -> (Signex, signex_sketch::array
     use signex_sketch::id::SketchEntityId;
     use signex_sketch::parameter::ParameterTable;
     use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
-
     let plane_id = PlaneId::new();
     let pt_id = SketchEntityId::new();
     let pt = Entity::new(pt_id, plane_id, EntityKind::Point { x: 0.0, y: 0.0 });
-
     let array_id = ArrayId::new();
     let array = Array {
         id: array_id,
@@ -5294,7 +5267,6 @@ fn fixture_footprint_with_bga_array(stem: &str) -> (Signex, signex_sketch::array
             start_col: 1,
         },
     };
-
     let mut fp = Footprint::empty(stem);
     fp.sketch = Some(SketchData {
         planes: vec![Plane {
@@ -5306,11 +5278,9 @@ fn fixture_footprint_with_bga_array(stem: &str) -> (Signex, signex_sketch::array
         arrays: vec![array],
         parameters: ParameterTable::default(),
     });
-
     let path = PathBuf::from(format!("{stem}.snxfpt"));
     let file = FootprintFile::from_footprint(fp);
     let editor = FootprintEditorState::new(path.clone(), file);
-
     let (mut app, _initial_task) = Signex::new();
     app.document_state
         .footprint_editors
@@ -5324,9 +5294,14 @@ fn fixture_footprint_with_bga_array(stem: &str) -> (Signex, signex_sketch::array
         kind: TabKind::FootprintEditor(path.clone()),
     });
     app.document_state.active_tab = 0;
-
     (app, array_id)
 }
+
+
+
+
+
+
 
 /// Read back the current BgaRowCol triple from the active footprint
 /// editor's first array. Panics if the array isn't BgaRowCol — that
@@ -5365,17 +5340,14 @@ fn read_bga_config(app: &Signex) -> (bool, char, u32) {
 fn v025_bga_set_skip_letters_round_trips_bool() {
     use signex_app::dock::DockMessage;
     use signex_app::panels::PanelMsg;
-
     let (mut app, array_id) = fixture_footprint_with_bga_array("v025-bga-skip");
     assert_eq!(read_bga_config(&app).0, true, "fixture seeds skip_letters=true");
-
     let _ = app.update(Message::Dock(DockMessage::Panel(
         PanelMsg::FpEditorSetBgaSkipLetters {
             array_id,
             value: false,
         },
     )));
-
     assert_eq!(
         read_bga_config(&app).0,
         false,
@@ -5383,20 +5355,20 @@ fn v025_bga_set_skip_letters_round_trips_bool() {
     );
 }
 
+
+
+
 #[test]
 fn v025_bga_set_start_row_uppercases_lowercase_input() {
     use signex_app::dock::DockMessage;
     use signex_app::panels::PanelMsg;
-
     let (mut app, array_id) = fixture_footprint_with_bga_array("v025-bga-row-lower");
-
     let _ = app.update(Message::Dock(DockMessage::Panel(
         PanelMsg::FpEditorSetBgaStartRow {
             array_id,
             value: "h".to_string(),
         },
     )));
-
     assert_eq!(
         read_bga_config(&app).1,
         'H',
@@ -5404,14 +5376,15 @@ fn v025_bga_set_start_row_uppercases_lowercase_input() {
     );
 }
 
+
+
+
 #[test]
 fn v025_bga_set_start_row_rejects_non_alphabetic_input() {
     use signex_app::dock::DockMessage;
     use signex_app::panels::PanelMsg;
-
     let (mut app, array_id) = fixture_footprint_with_bga_array("v025-bga-row-digit");
     let before = read_bga_config(&app).1;
-
     let _ = app.update(Message::Dock(DockMessage::Panel(
         PanelMsg::FpEditorSetBgaStartRow {
             array_id,
@@ -5424,7 +5397,6 @@ fn v025_bga_set_start_row_rejects_non_alphabetic_input() {
             value: "".to_string(),
         },
     )));
-
     assert_eq!(
         read_bga_config(&app).1,
         before,
@@ -5432,20 +5404,20 @@ fn v025_bga_set_start_row_rejects_non_alphabetic_input() {
     );
 }
 
+
+
+
 #[test]
 fn v025_bga_set_start_col_parses_valid_integer() {
     use signex_app::dock::DockMessage;
     use signex_app::panels::PanelMsg;
-
     let (mut app, array_id) = fixture_footprint_with_bga_array("v025-bga-col-ok");
-
     let _ = app.update(Message::Dock(DockMessage::Panel(
         PanelMsg::FpEditorSetBgaStartCol {
             array_id,
             value: "  17  ".to_string(),
         },
     )));
-
     assert_eq!(
         read_bga_config(&app).2,
         17,
@@ -5453,14 +5425,15 @@ fn v025_bga_set_start_col_parses_valid_integer() {
     );
 }
 
+
+
+
 #[test]
 fn v025_bga_set_start_col_rejects_non_numeric_input() {
     use signex_app::dock::DockMessage;
     use signex_app::panels::PanelMsg;
-
     let (mut app, array_id) = fixture_footprint_with_bga_array("v025-bga-col-bad");
     let before = read_bga_config(&app).2;
-
     for v in ["", "abc", "-5", "1.5"] {
         let _ = app.update(Message::Dock(DockMessage::Panel(
             PanelMsg::FpEditorSetBgaStartCol {
@@ -5469,13 +5442,15 @@ fn v025_bga_set_start_col_rejects_non_numeric_input() {
             },
         )));
     }
-
     assert_eq!(
         read_bga_config(&app).2,
         before,
         "non-numeric / negative / decimal inputs must leave start_col unchanged"
     );
 }
+
+
+
 
 // ─────────────────────────────────────────────────────────────────
 // v0.25 polish #2 — Offset placement-input
@@ -5498,10 +5473,8 @@ fn v025_offset_placement_input_pins_typed_distance_over_cursor() {
     use signex_sketch::entity::{Entity, EntityKind};
     use signex_sketch::id::SketchEntityId;
     use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
-
     let path = PathBuf::from("v025-offset-placement.snxfpt");
     let plane_id = PlaneId::new();
-
     // Pre-seed: source Line from (0, 0) to (10, 0). Offset tool will
     // emit a parallel Line at the typed perpendicular distance.
     let start_id = SketchEntityId::new();
@@ -5517,7 +5490,6 @@ fn v025_offset_placement_input_pins_typed_distance_over_cursor() {
             end: end_id,
         },
     );
-
     let mut fp = Footprint::empty("v025-offset");
     fp.sketch = Some(SketchData {
         planes: vec![Plane {
@@ -5527,7 +5499,6 @@ fn v025_offset_placement_input_pins_typed_distance_over_cursor() {
         entities: vec![pt_start, pt_end, line],
         ..SketchData::default()
     });
-
     let file = FootprintFile::from_footprint(fp);
     let mut editor = FootprintEditorState::new(path.clone(), file);
     editor.state.mode = EditorMode::Sketch;
@@ -5538,12 +5509,10 @@ fn v025_offset_placement_input_pins_typed_distance_over_cursor() {
         buffer: "2".into(),
         kind: PlacementInputKind::OffsetDistance,
     });
-
     let (mut app, _initial_task) = Signex::new();
     app.document_state
         .footprint_editors
         .insert(path.clone(), editor);
-
     // Click on the +y side of the source Line at a wildly large y so
     // the cursor distance (100mm) clearly differs from the typed one
     // (2mm). The Offset dispatcher picks the side from the cross
@@ -5557,14 +5526,12 @@ fn v025_offset_placement_input_pins_typed_distance_over_cursor() {
             snap_id: None,
         },
     }));
-
     let editor = app
         .document_state
         .footprint_editors
         .get(&path)
         .expect("editor still registered after offset click");
     let sketch = editor.primitive().sketch.as_ref().expect("sketch present");
-
     // Find the new Line — there are now two Line entities; the offset
     // Line is the one whose endpoints differ from (start_id, end_id).
     let new_line = sketch
@@ -5585,7 +5552,6 @@ fn v025_offset_placement_input_pins_typed_distance_over_cursor() {
             _ => None,
         })
         .expect("offset Line start resolves to a Point");
-
     // Source Line is on y=0, click at (5, 100) is on the +y side, so
     // perpendicular sign is +1 → new_start.y = 0 + 2 = 2.0. The cursor
     // y of 100 must NOT have leaked through.
@@ -5599,13 +5565,22 @@ fn v025_offset_placement_input_pins_typed_distance_over_cursor() {
         "offset distance = typed 2mm, NOT cursor's 100mm; got start.y = {}",
         new_start.1
     );
-
     // Buffer must clear so the next Offset click doesn't reuse 2mm.
     assert!(
         editor.state.placement_input.is_none(),
         "placement_input must clear after the commit click consumes it"
     );
 }
+
+
+
+
+
+
+
+
+
+
 
 // ─────────────────────────────────────────────────────────────────
 // v0.25 polish #3 — Oval reverse-mirror to pad.size_mm
@@ -5624,19 +5599,16 @@ fn v025_oval_width_edit_mirrors_back_to_pad_size_mm() {
     use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
     use signex_app::library::editor::footprint::state::EditorPad;
     use signex_library::{Footprint, FootprintFile, PadShape};
-
     let path = PathBuf::from("v025-oval-mirror-size.snxfpt");
     let mut fp = Footprint::empty("v025-oval");
     let mut pad = EditorPad::new_default("1".into(), (0.0, 0.0));
     pad.shape = PadShape::Oval;
     pad.size_mm = (2.0, 1.0);
     mirror_add_pad_to_sketch(&mut pad, &mut fp);
-
     let file = FootprintFile::from_footprint(fp);
     let mut editor = FootprintEditorState::new(path.clone(), file);
     editor.state.pads = vec![pad];
     editor.state.selected_pad = Some(0);
-
     let (mut app, _initial_task) = Signex::new();
     app.document_state
         .footprint_editors
@@ -5650,7 +5622,6 @@ fn v025_oval_width_edit_mirrors_back_to_pad_size_mm() {
         kind: TabKind::FootprintEditor(path.clone()),
     });
     app.document_state.active_tab = 0;
-
     // Edit width via the Properties dispatch (same path the panel's
     // "Width" row drives).
     let _ = app.update(Message::Dock(signex_app::dock::DockMessage::Panel(
@@ -5660,13 +5631,11 @@ fn v025_oval_width_edit_mirrors_back_to_pad_size_mm() {
             value: "3mm".into(),
         },
     )));
-
     let editor = app
         .document_state
         .footprint_editors
         .get(&path)
         .expect("editor still registered");
-
     // The v0.25 polish: post-solve mirror pushes the resolved width
     // back into the editor-side pad's `size_mm.0`. Pre-v0.25 this
     // stayed at the mint value of 2.0.
@@ -5688,6 +5657,12 @@ fn v025_oval_width_edit_mirrors_back_to_pad_size_mm() {
     );
 }
 
+
+
+
+
+
+
 /// v0.27 — dragging a pad-outline edge in Sketch mode must propagate
 /// through to `pad.size_mm` / `pad.position_mm`. Pre-fix: the sketch
 /// outline visibly resized but the literal pad bbox never updated,
@@ -5700,14 +5675,12 @@ fn v027_sketch_line_drag_resizes_rect_pad_bbox() {
     use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
     use signex_library::{Footprint, FootprintFile, PadShape};
     use signex_sketch::entity::EntityKind;
-
     let path = PathBuf::from("v027-sketch-line-drag-resize.snxfpt");
     let mut fp = Footprint::empty("v027-line-drag");
     let mut pad = EditorPad::new_default("1".into(), (0.0, 0.0));
     pad.shape = PadShape::Rect;
     pad.size_mm = (2.0, 1.0); // bbox: (-1, -0.5, 1, 0.5)
     mirror_add_pad_to_sketch(&mut pad, &mut fp);
-
     // Locate the top construction line. Rect mints 4 corner Points
     // + 4 connecting lines; the top one runs along y = ymin.
     let sketch = fp.sketch.as_ref().expect("mirror minted a sketch");
@@ -5736,12 +5709,10 @@ fn v027_sketch_line_drag_resizes_rect_pad_bbox() {
             _ => None,
         })
         .expect("Rect pad mints a top construction line at y=ymin");
-
     let file = FootprintFile::from_footprint(fp);
     let mut editor = FootprintEditorState::new(path.clone(), file);
     editor.state.pads = vec![pad];
     editor.state.selected_pad = Some(0);
-
     let (mut app, _initial_task) = Signex::new();
     app.document_state
         .footprint_editors
@@ -5755,7 +5726,6 @@ fn v027_sketch_line_drag_resizes_rect_pad_bbox() {
         kind: TabKind::FootprintEditor(path.clone()),
     });
     app.document_state.active_tab = 0;
-
     // Drag the top edge DOWN by 0.2 mm. New bbox y range:
     // [-0.5 + 0.2, 0.5] = [-0.3, 0.5]. Height 1.0 → 0.8, centre y
     // 0.0 → +0.1. Width and centre x must stay unchanged.
@@ -5767,7 +5737,6 @@ fn v027_sketch_line_drag_resizes_rect_pad_bbox() {
             dy: 0.2,
         },
     }));
-
     let editor = app
         .document_state
         .footprint_editors
@@ -5795,6 +5764,12 @@ fn v027_sketch_line_drag_resizes_rect_pad_bbox() {
         pad_after.position_mm.0
     );
 }
+
+
+
+
+
+
 
 // ─────────────────────────────────────────────────────────────────
 // v0.13.0 — footprint editor gated off for release
@@ -5838,20 +5813,16 @@ fn write_valid_snxsym(path: &Path, name: &str) {
 #[test]
 fn opening_snxfpt_does_not_create_editable_tab_when_gated() {
     use signex_app::app::TabKind;
-
     let tmp = TempDir::new().expect("tempdir");
     let fpt = tmp.path().join("gated.snxfpt");
     write_valid_snxfpt(&fpt, "GATED");
-
     let (mut app, _t) = Signex::new();
     let _ = app.update(Message::FileOpened(Some(fpt.clone())));
-
     let opened_footprint_tab = app
         .document_state
         .tabs
         .iter()
         .any(|t| matches!(t.kind, TabKind::FootprintEditor(_)));
-
     if signex_app::feature_flags::FOOTPRINT_EDITOR_ENABLED {
         assert!(
             opened_footprint_tab,
@@ -5869,17 +5840,18 @@ fn opening_snxfpt_does_not_create_editable_tab_when_gated() {
     }
 }
 
+
+
+
+
 #[test]
 fn opening_snxsym_still_creates_editable_tab() {
     use signex_app::app::TabKind;
-
     let tmp = TempDir::new().expect("tempdir");
     let sym = tmp.path().join("control.snxsym");
     write_valid_snxsym(&sym, "CONTROL");
-
     let (mut app, _t) = Signex::new();
     let _ = app.update(Message::FileOpened(Some(sym.clone())));
-
     // Positive control: the symbol editor is the headline feature of
     // v0.13.0 and must open regardless of the footprint gate.
     assert!(
@@ -5894,6 +5866,9 @@ fn opening_snxsym_still_creates_editable_tab() {
         "a SymbolEditorState should be registered for the opened .snxsym path"
     );
 }
+
+
+
 
 // ─────────────────────────────────────────────────────────────────
 // v0.14-footprint — #23 TAB-pause click suppression + #24 Line
@@ -5915,11 +5890,9 @@ fn placement_paused_suppresses_rounded_rect_commit_click() {
     use signex_app::library::editor::footprint::state::{EditorMode, SketchTool, ToolPending};
     use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
     use signex_library::{Footprint, FootprintFile};
-
     let tmp = TempDir::new().expect("tempdir");
     let path = tmp.path().join("pause-rrect.snxfpt");
     fs::write(&path, b"{}").expect("write .snxfpt placeholder");
-
     let (mut app, _initial_task) = Signex::new();
     let fp = Footprint::empty("pause-rrect-fixture");
     let file = FootprintFile::from_footprint(fp);
@@ -5929,7 +5902,6 @@ fn placement_paused_suppresses_rounded_rect_commit_click() {
     app.document_state
         .footprint_editors
         .insert(path.clone(), editor);
-
     // First click (NOT paused) → anchors the first corner.
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
         path: path.clone(),
@@ -5939,7 +5911,6 @@ fn placement_paused_suppresses_rounded_rect_commit_click() {
             snap_id: None,
         },
     }));
-
     // Snapshot the post-first-click state: pending = RoundedRectangleFirst
     // with exactly the one anchor Point minted.
     let (count_before, pending_was_first) = {
@@ -5970,7 +5941,6 @@ fn placement_paused_suppresses_rounded_rect_commit_click() {
         count_before, 1,
         "sanity: first click mints exactly one anchor Point"
     );
-
     // TAB-pause, then the commit click. With the fix the click is
     // dropped: no opposite corner, no rounded-rect geometry, gesture
     // stays armed at RoundedRectangleFirst.
@@ -5990,7 +5960,6 @@ fn placement_paused_suppresses_rounded_rect_commit_click() {
             snap_id: None,
         },
     }));
-
     let editor = app
         .document_state
         .footprint_editors
@@ -6016,6 +5985,12 @@ fn placement_paused_suppresses_rounded_rect_commit_click() {
     );
 }
 
+
+
+
+
+
+
 /// v0.14-footprint #24 — Tab toggles the focused Line dimension field
 /// between length and angle, stashing the inactive field in
 /// `placement_input_other`. Each field keeps its own typed digits
@@ -6028,11 +6003,9 @@ fn placement_input_tab_swaps_line_length_and_angle() {
     };
     use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
     use signex_library::{Footprint, FootprintFile};
-
     let tmp = TempDir::new().expect("tempdir");
     let path = tmp.path().join("line-tab.snxfpt");
     fs::write(&path, b"{}").expect("write .snxfpt placeholder");
-
     let (mut app, _initial_task) = Signex::new();
     let fp = Footprint::empty("line-tab-fixture");
     let file = FootprintFile::from_footprint(fp);
@@ -6042,7 +6015,6 @@ fn placement_input_tab_swaps_line_length_and_angle() {
     app.document_state
         .footprint_editors
         .insert(path.clone(), editor);
-
     // Anchor the first endpoint → tool_pending = LineFirst.
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
         path: path.clone(),
@@ -6052,7 +6024,6 @@ fn placement_input_tab_swaps_line_length_and_angle() {
             snap_id: None,
         },
     }));
-
     // Focus = length "10", nothing stashed yet.
     {
         let editor = app
@@ -6070,7 +6041,6 @@ fn placement_input_tab_swaps_line_length_and_angle() {
         });
         editor.state.placement_input_others.clear();
     }
-
     // First Tab — focus moves to a fresh empty angle field; length
     // "10" is stashed.
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
@@ -6099,7 +6069,6 @@ fn placement_input_tab_swaps_line_length_and_angle() {
         assert_eq!(stashed.kind, PlacementInputKind::LineLength);
         assert_eq!(stashed.buffer, "10", "stashed length keeps its digits");
     }
-
     // Type "90" into the angle field, then Tab back to length.
     for ch in ['9', '0'] {
         let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
@@ -6141,6 +6110,12 @@ fn placement_input_tab_swaps_line_length_and_angle() {
     }
 }
 
+
+
+
+
+
+
 /// v0.14-footprint #24 — with BOTH a typed length and a typed angle
 /// pinned (in either placement slot), the Line second click commits
 /// the endpoint at `first + (len @ angle°)`, ignoring the cursor's own
@@ -6155,11 +6130,9 @@ fn placement_input_line_length_and_angle_commit_at_polar_offset() {
     use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
     use signex_library::{Footprint, FootprintFile};
     use signex_sketch::entity::EntityKind;
-
     let tmp = TempDir::new().expect("tempdir");
     let path = tmp.path().join("line-polar.snxfpt");
     fs::write(&path, b"{}").expect("write .snxfpt placeholder");
-
     let (mut app, _initial_task) = Signex::new();
     let fp = Footprint::empty("line-polar-fixture");
     let file = FootprintFile::from_footprint(fp);
@@ -6169,7 +6142,6 @@ fn placement_input_line_length_and_angle_commit_at_polar_offset() {
     app.document_state
         .footprint_editors
         .insert(path.clone(), editor);
-
     // First click → first endpoint at the origin.
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
         path: path.clone(),
@@ -6179,7 +6151,6 @@ fn placement_input_line_length_and_angle_commit_at_polar_offset() {
             snap_id: None,
         },
     }));
-
     // Pin length = 10 (focused) and angle = 90 (stashed). The commit
     // reads each field from whichever slot holds it.
     {
@@ -6197,7 +6168,6 @@ fn placement_input_line_length_and_angle_commit_at_polar_offset() {
             kind: PlacementInputKind::LineAngle,
         }];
     }
-
     // Second click — cursor at (20, 0): azimuth 0°, distance 20. Both
     // are overridden by the typed 10 mm @ 90°.
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
@@ -6208,7 +6178,6 @@ fn placement_input_line_length_and_angle_commit_at_polar_offset() {
             snap_id: None,
         },
     }));
-
     let editor = app
         .document_state
         .footprint_editors
@@ -6249,6 +6218,12 @@ fn placement_input_line_length_and_angle_commit_at_polar_offset() {
     );
 }
 
+
+
+
+
+
+
 /// v0.14-footprint re-verify — Circle still honours a typed radius:
 /// click the centre, type "4", then a click at the cursor's 10 mm
 /// must commit a circle of radius 4 (the typed value), not 10.
@@ -6261,11 +6236,9 @@ fn placement_input_circle_radius_pins_typed_radius() {
     use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
     use signex_library::{Footprint, FootprintFile};
     use signex_sketch::entity::EntityKind;
-
     let tmp = TempDir::new().expect("tempdir");
     let path = tmp.path().join("circle-r.snxfpt");
     fs::write(&path, b"{}").expect("write .snxfpt placeholder");
-
     let (mut app, _initial_task) = Signex::new();
     let fp = Footprint::empty("circle-r-fixture");
     let file = FootprintFile::from_footprint(fp);
@@ -6275,7 +6248,6 @@ fn placement_input_circle_radius_pins_typed_radius() {
     app.document_state
         .footprint_editors
         .insert(path.clone(), editor);
-
     // Click 1 → centre at the origin.
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
         path: path.clone(),
@@ -6306,7 +6278,6 @@ fn placement_input_circle_radius_pins_typed_radius() {
             snap_id: None,
         },
     }));
-
     let editor = app.document_state.footprint_editors.get(&path).unwrap();
     let sketch = editor.primitive().sketch.as_ref().expect("sketch present");
     let circle = sketch
@@ -6324,6 +6295,10 @@ fn placement_input_circle_radius_pins_typed_radius() {
     }
 }
 
+
+
+
+
 /// v0.14-footprint — Rectangle accepts typed width/height during
 /// placement. With width 6 and height 4 pinned (one in each slot), the
 /// second click commits a 6×4 box anchored at the first corner,
@@ -6337,11 +6312,9 @@ fn placement_input_rectangle_commits_typed_width_height() {
     use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
     use signex_library::{Footprint, FootprintFile};
     use signex_sketch::entity::EntityKind;
-
     let tmp = TempDir::new().expect("tempdir");
     let path = tmp.path().join("rect-wh.snxfpt");
     fs::write(&path, b"{}").expect("write .snxfpt placeholder");
-
     let (mut app, _initial_task) = Signex::new();
     let fp = Footprint::empty("rect-wh-fixture");
     let file = FootprintFile::from_footprint(fp);
@@ -6351,7 +6324,6 @@ fn placement_input_rectangle_commits_typed_width_height() {
     app.document_state
         .footprint_editors
         .insert(path.clone(), editor);
-
     // Click 1 → first corner at the origin.
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
         path: path.clone(),
@@ -6387,7 +6359,6 @@ fn placement_input_rectangle_commits_typed_width_height() {
             snap_id: None,
         },
     }));
-
     let editor = app.document_state.footprint_editors.get(&path).unwrap();
     let sketch = editor.primitive().sketch.as_ref().expect("sketch present");
     let pts: Vec<(f64, f64)> = sketch
@@ -6413,6 +6384,10 @@ fn placement_input_rectangle_commits_typed_width_height() {
     );
 }
 
+
+
+
+
 /// v0.14-footprint — Tab cycles the Rounded-Rectangle's THREE dimension
 /// fields (width → height → radius → width…), parking the inactive
 /// ones in `placement_input_others` and preserving each field's digits
@@ -6425,11 +6400,9 @@ fn placement_input_tab_cycles_rounded_rect_three_fields() {
     };
     use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
     use signex_library::{Footprint, FootprintFile};
-
     let tmp = TempDir::new().expect("tempdir");
     let path = tmp.path().join("rrect-tab.snxfpt");
     fs::write(&path, b"{}").expect("write .snxfpt placeholder");
-
     let (mut app, _initial_task) = Signex::new();
     let fp = Footprint::empty("rrect-tab-fixture");
     let file = FootprintFile::from_footprint(fp);
@@ -6439,7 +6412,6 @@ fn placement_input_tab_cycles_rounded_rect_three_fields() {
     app.document_state
         .footprint_editors
         .insert(path.clone(), editor);
-
     // Anchor the first corner → tool_pending = RoundedRectangleFirst.
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
         path: path.clone(),
@@ -6470,7 +6442,6 @@ fn placement_input_tab_cycles_rounded_rect_three_fields() {
         });
         editor.state.placement_input_others.clear();
     }
-
     let tab = |app: &mut Signex| {
         let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
             path: path.clone(),
@@ -6484,7 +6455,6 @@ fn placement_input_tab_cycles_rounded_rect_three_fields() {
             .as_ref()
             .map(|p| p.kind)
     };
-
     tab(&mut app);
     assert_eq!(
         focused_kind(&app),
@@ -6516,6 +6486,11 @@ fn placement_input_tab_cycles_rounded_rect_three_fields() {
     );
 }
 
+
+
+
+
+
 /// v0.14-footprint — Rounded-Rectangle commit honours typed width,
 /// height AND corner radius. Width 8 / height 5 / radius 1.5 pinned
 /// across the slots; the committed box spans 8×5 and each corner arc
@@ -6529,11 +6504,9 @@ fn placement_input_rounded_rect_commits_typed_size_and_radius() {
     use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
     use signex_library::{Footprint, FootprintFile};
     use signex_sketch::entity::EntityKind;
-
     let tmp = TempDir::new().expect("tempdir");
     let path = tmp.path().join("rrect-commit.snxfpt");
     fs::write(&path, b"{}").expect("write .snxfpt placeholder");
-
     let (mut app, _initial_task) = Signex::new();
     let fp = Footprint::empty("rrect-commit-fixture");
     let file = FootprintFile::from_footprint(fp);
@@ -6543,7 +6516,6 @@ fn placement_input_rounded_rect_commits_typed_size_and_radius() {
     app.document_state
         .footprint_editors
         .insert(path.clone(), editor);
-
     // Click 1 → first corner at the origin.
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
         path: path.clone(),
@@ -6584,7 +6556,6 @@ fn placement_input_rounded_rect_commits_typed_size_and_radius() {
             snap_id: None,
         },
     }));
-
     let editor = app.document_state.footprint_editors.get(&path).unwrap();
     let sketch = editor.primitive().sketch.as_ref().expect("sketch present");
     let resolve = |id| {

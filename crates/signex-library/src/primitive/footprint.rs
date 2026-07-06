@@ -289,12 +289,6 @@ pub enum FpGraphicKind {
     Polygon {
         vertices: Vec<[f64; 2]>,
     },
-    /// v0.18.17 — closed-loop polygon outlined or filled. The
-    /// vertex list is closed implicitly (`vertices[N-1]` connects
-    /// back to `vertices[0]` at render / bake time).
-    Polygon {
-        vertices: Vec<[f64; 2]>,
-    },
 }
 
 /// One footprint silkscreen / fab graphic.
