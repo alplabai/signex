@@ -53,8 +53,14 @@ deny = []
 
 [advisories]
 # Surface RUSTSEC advisories at "warn" — security advisories are
-# informational in CI (the workflow's continue-on-error: true).
-# Critical advisories should still be addressed.
+# informational in CI (the workflow's `check advisories` step is
+# continue-on-error: true). Critical advisories should still be
+# addressed by a human. Currently carried, all transitive GUI-stack
+# deps with no clean lockfile remedy (pinned by iced/winit):
+#   RUSTSEC-2026-0194 / -0195  quick-xml 0.39 (DoS) — needs >=0.41,
+#     but wayland-scanner pins 0.39; revisit on an iced/winit bump.
+#   RUSTSEC-2026-0192          ttf-parser 0.25 unmaintained — no
+#     safe upgrade; comes via cosmic-text / fontdb.
 yanked = "warn"
 ignore = []
 

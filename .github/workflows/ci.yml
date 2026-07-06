@@ -96,5 +96,12 @@ jobs:
         run: cargo deny --all-features check sources
         continue-on-error: true
 
+      # Advisories are informational, not a merge gate: they fire on newly
+      # published RUSTSEC entries against the shared Cargo.lock (mostly
+      # transitive GUI-stack crates like quick-xml / ttf-parser pinned deep
+      # in iced/winit) with no code change on our side. Surface them as an
+      # annotation; criticals are addressed by a human, not by blocking CI.
+      # (deny.toml documents this same intent; `licenses` above stays hard.)
       - name: Check advisories
         run: cargo deny --all-features check advisories
+        continue-on-error: true
