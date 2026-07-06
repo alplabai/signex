@@ -57,8 +57,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libxkbcommon-dev libwayland-dev libvulkan-dev \
-            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
+            mesa-vulkan-drivers
 
+      # signex-gfx's debug_pass smoke tests request a real wgpu adapter and
+      # panic if none is found. GitHub's headless runners have no GPU, so we
+      # provide lavapipe (mesa-vulkan-drivers, a software Vulkan ICD) above;
+      # wgpu picks it up automatically and the tests run on the CPU rasterizer.
       - name: Test
         run: cargo test --workspace
 
