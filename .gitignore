@@ -127,3 +127,6 @@ xcuserdata/
 .github/copilot-instructions.md
 status.txt
 .git_commit_msg.txt
+
+# Runtime debug logs (e.g. iced_debug.log)
+*.log
