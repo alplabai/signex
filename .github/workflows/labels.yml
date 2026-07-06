@@ -1,0 +1,33 @@
+name: Sync labels
+
+# Keeps the repo's labels in lockstep with .github/labels.yml.
+# Runs when the taxonomy (or this workflow) changes on trunk, and can be
+# triggered by hand. Labels are managed as code — edit labels.yml in a PR.
+
+on:
+  push:
+    branches: [trunk]
+    paths:
+      - ".github/labels.yml"
+      - ".github/workflows/labels.yml"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  sync:
+    name: Apply labels.yml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Sync labels
+        uses: EndBug/label-sync@v2
+        with:
+          config-file: .github/labels.yml
+          # Keep labels not listed in labels.yml (e.g. one-off manual labels).
+          # Flip to `true` once the taxonomy is authoritative and you want
+          # stray labels pruned automatically.
+          delete-other-labels: false
+          token: ${{ secrets.GITHUB_TOKEN }}

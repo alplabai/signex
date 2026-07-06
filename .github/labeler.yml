@@ -1,0 +1,119 @@
+# Path → area label rules for actions/labeler@v5.
+# A PR gets every `area:` label whose globs match its changed files.
+# Keep the label names in sync with the `area:` family in labels.yml.
+
+"area: footprint-editor":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "crates/signex-app/src/library/editor/footprint/**"
+          - "crates/signex-app/src/panels/footprint_editor_properties/**"
+
+"area: symbol-editor":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "crates/signex-app/src/library/editor/symbol/**"
+
+"area: library":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "crates/signex-library/**"
+          - "crates/signex-library-server/**"
+          - "crates/signex-app/src/library/*.rs"
+
+"area: schematic":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "crates/signex-app/src/schematic_runtime.rs"
+          - "crates/signex-app/src/find_replace.rs"
+          - "crates/signex-app/src/canvas/**"
+
+"area: pcb":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "crates/signex-app/src/pcb_canvas.rs"
+
+"area: sketch":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "crates/signex-sketch/**"
+
+"area: bake":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "crates/signex-bake/**"
+
+"area: erc":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "crates/signex-erc/**"
+          - "crates/signex-erc-dsl/**"
+
+"area: bom":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "crates/signex-bom/**"
+
+"area: output":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "crates/signex-output/**"
+
+"area: rendering":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "crates/signex-renderer/**"
+          - "crates/signex-gfx/**"
+          - "crates/signex-app/src/renderer_scene_canvas.rs"
+          - "crates/signex-app/src/render_config.rs"
+
+"area: 3d":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "crates/signex-3d-model-importer/**"
+
+"area: types":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "crates/signex-types/**"
+
+"area: engine":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "crates/signex-engine/**"
+
+"area: widgets":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "crates/signex-widgets/**"
+          - "crates/chrome-catalog/**"
+
+"area: app":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "crates/signex-app/src/app/**"
+          - "crates/signex-app/src/app.rs"
+          - "crates/signex-app/src/main.rs"
+          - "crates/signex-app/src/menu_bar.rs"
+          - "crates/signex-app/src/toolbar.rs"
+          - "crates/signex-app/src/active_bar.rs"
+          - "crates/signex-app/src/tab_bar.rs"
+          - "crates/signex-app/src/status_bar.rs"
+          - "crates/signex-app/src/dock/**"
+          - "crates/signex-app/src/chrome.rs"
+          - "crates/signex-app/src/preferences.rs"
+          - "crates/signex-app/src/undo.rs"
+
+"area: infra":
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/**"
+          - "deny.toml"
+          - "Cargo.toml"
+          - "Cargo.lock"
+          - "rustfmt.toml"
+
+"area: docs":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "docs/**"
+          - "**/*.md"

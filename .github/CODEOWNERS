@@ -1,0 +1,18 @@
+# Code owners — auto-requested as reviewers when matching paths change.
+# Order matters: the LAST matching pattern wins for a given file.
+# Both maintainers own the repo by default; the overrides below route
+# domain-specific changes to whoever knows that area best.
+
+# Default: either maintainer can review anything.
+*                                               @hkngln @alpCaner
+
+# Footprint editor, sketch geometry, and pad baking — Caner's domain.
+/crates/signex-sketch/                          @alpCaner
+/crates/signex-bake/                            @alpCaner
+/crates/signex-app/src/library/editor/footprint/ @alpCaner
+
+# CI, licensing, and repo governance — Hakan's domain.
+/.github/                                        @hkngln
+/deny.toml                                       @hkngln
+/docs/LICENSING.md                               @hkngln
+/CONTRIBUTING.md                                 @hkngln

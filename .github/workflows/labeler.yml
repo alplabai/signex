@@ -1,0 +1,24 @@
+name: PR labeler
+
+# Applies `area:` labels to a PR based on the paths it changes
+# (rules in .github/labeler.yml). Contributors still add type: /
+# priority: / status: labels by hand — those aren't inferable from paths.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  label:
+    name: Apply area labels
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/labeler@v5
+        with:
+          configuration-path: .github/labeler.yml
+          # Add labels as files change; don't strip labels a human set.
+          sync-labels: false

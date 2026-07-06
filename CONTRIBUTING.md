@@ -56,8 +56,8 @@ the project's design rules) help identify rendering discrepancies.
 
 ### Prerequisites
 
-- **Rust 1.80+** (edition 2024)
-- A GPU supporting Vulkan, Metal, or DX12 (for wgpu)
+- **Rust 1.85+** (edition 2024)
+- A GPU supporting Vulkan, Metal, or DX12 (for wgpu) — CI runs headless via lavapipe
 
 ### Build and Run
 
@@ -71,11 +71,14 @@ cargo run -p signex-app
 ### Verify Your Changes
 
 ```bash
-cargo test --workspace        # All tests pass
-cargo clippy --workspace -- -D warnings   # Zero warnings
+cargo test --workspace        # hard gate — must pass
+cargo check --workspace       # hard gate — must compile
+cargo fmt --all               # advisory in CI, but keep it clean
+cargo clippy --workspace      # advisory in CI, but review the warnings
 ```
 
-Both must pass before opening a PR.
+`cargo test` and `cargo check` are the CI hard gates. `fmt` and `clippy`
+are surfaced but don't block a merge — see "Merge rules for `trunk`" below.
 
 ## Git Workflow
 
@@ -115,19 +118,58 @@ docs: add KiCad 9 fixture for multi-sheet test
 
 ## Crate Map
 
-| Crate | What goes here | Dependencies |
+Each crate maps to an `area:` label (auto-applied to PRs by path — see
+[`.github/labeler.yml`](.github/labeler.yml)).
+
+| Crate | What goes here | `area:` label |
 |---|---|---|
-| `signex-types` | Domain types (schematic, PCB, net, layer, theme) + native `.snxsch`/`.snxpcb` format codec. **No rendering deps.** | serde, toml, uuid |
-| `signex-engine` | Edit engine. Open/save through `SnxSchematic` / `SnxPcb`. Multi-window history. | signex-types |
-| `signex-render` | Canvas draw routines, hit-testing. Bridges types to Iced Canvas calls. | signex-types |
-| `signex-widgets` | Custom Iced widgets (TreeView, symbol preview, theme extensions) | iced, iced_aw |
-| `signex-erc` / `signex-erc-dsl` | ERC rule engine + DSL compiler | signex-types |
-| `signex-output` | PDF, BOM, netlist exporters (non-KiCad formats) | signex-types |
-| `signex-app` | Main binary. Iced Application, panels, dock, menus, canvas, Active Bar. | everything above |
+| `signex-types` | Domain types (schematic, PCB, net, layer, theme) + native `.snxsch`/`.snxpcb` format codec. **No rendering deps.** | `types` |
+| `signex-engine` | Edit engine + multi-window history. | `engine` |
+| `signex-sketch` | 2D geometry, constraints, and the sketch solver. | `sketch` |
+| `signex-bake` | Pad baking, arrays, pad/via numbering. | `bake` |
+| `signex-library` / `signex-library-server` | Component library model + the library server. | `library` |
+| `signex-erc` / `signex-erc-dsl` | ERC rule engine + DSL compiler. | `erc` |
+| `signex-bom` | Bill-of-materials generation. | `bom` |
+| `signex-output` | PDF / netlist exporters (non-KiCad formats). | `output` |
+| `signex-renderer` / `signex-gfx` | Canvas draw routines + GPU rendering. | `rendering` |
+| `signex-3d-model-importer` | 3D model (glTF/STEP) import. | `3d` |
+| `signex-widgets` / `chrome-catalog` | Custom Iced widgets + chrome catalog. | `widgets` |
+| `signex-app` | Main binary — Iced app, panels, dock, menus, canvas, Active Bar, and the footprint/symbol/library editors. | `app`, `footprint-editor`, `symbol-editor`, `schematic`, `pcb` |
 
 **Rule:** `signex-types` has zero rendering dependencies. If you need to draw
-something, that code goes in `signex-render`. If you need a UI widget, that goes
-in `signex-widgets` or `signex-app`.
+something, that code goes in `signex-renderer` / `signex-gfx`. If you need a UI
+widget, that goes in `signex-widgets` or `signex-app`.
+
+## Labels
+
+Labels are managed as code in [`.github/labels.yml`](.github/labels.yml) and
+synced automatically on merge to `trunk`. Four families plus a few signal labels:
+
+| Family | Meaning | Who sets it |
+|---|---|---|
+| `type:` | Kind of change — `feature`, `bug`, `refactor`, `docs`, `ci`, `chore`, `test`, `performance` | Author / triager |
+| `area:` | Subsystem touched — `sketch`, `footprint-editor`, `library`, … | **Auto** (path labeler) |
+| `priority:` | `critical` / `high` / `medium` / `low` | Triager |
+| `status:` | `needs-triage`, `in-progress`, `blocked`, `needs-review`, `on-hold` | Whoever moves it |
+
+Signal labels: `data-loss`, `regression`, `security`, `breaking-change`,
+`license-review`, `good first issue`, `help wanted`.
+
+New issues open as `status: needs-triage` (+ `type:` from the template). On a PR,
+the `area:` labels are applied for you; add a `type:` and, if warranted, a
+`priority:` / `data-loss` / `regression` / `breaking-change` label.
+
+## Merge rules for `trunk`
+
+`trunk` is protected (see [`.github/rulesets/`](.github/rulesets/)):
+
+- Changes land via **pull request** — no direct pushes.
+- **1 approving review** is required; you can't approve your own PR.
+- CI hard gates must be green before merge: **Test**, **Check (ubuntu-latest)**,
+  **License audit (cargo-deny)**, **PR-description self-declaration**, and the
+  **KiCad-name guard**. `Format`, `clippy`, and advisory `cargo-deny` runs are
+  informational and don't block.
+- No force-push, no branch deletion. Merge with a merge commit or squash.
 
 ## Good First Issues
 
