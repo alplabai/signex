@@ -2,7 +2,7 @@ use iced::widget::{canvas, column, container, row, text_input};
 use iced::{Element, Length};
 
 pub(crate) mod dialogs;
-mod translate;
+pub(crate) mod translate;
 
 use super::*;
 
@@ -510,12 +510,16 @@ impl Signex {
                 "",
                 Message::Menu(crate::menu_bar::MenuMessage::AddLibrarySymbol),
             ));
-            items.push(self.ctx_menu_item_msg(
-                None,
-                "Add New ▸ Footprint Library",
-                "",
-                Message::Menu(crate::menu_bar::MenuMessage::AddLibraryFootprint),
-            ));
+            // v0.13.0 — footprint editor gated off; hide the create
+            // entry so the user never reaches a dead flow.
+            if crate::feature_flags::FOOTPRINT_EDITOR_ENABLED {
+                items.push(self.ctx_menu_item_msg(
+                    None,
+                    "Add New ▸ Footprint Library",
+                    "",
+                    Message::Menu(crate::menu_bar::MenuMessage::AddLibraryFootprint),
+                ));
+            }
             items.push(self.ctx_menu_sep());
             // Stage 18 distributor refresh stub — fires
             // `LibraryRefreshAllPricing` so the wiring is observable
@@ -1329,16 +1333,20 @@ impl Signex {
                     "PCB",
                     Some("v2.0"),
                 ));
-                items.push(self.ctx_menu_item_msg(
-                    Some(ic::icon_component(tid)),
-                    "PCB Library",
-                    "",
-                    Message::ProjectTreeAction(
-                        crate::app::ProjectTreeAction::AddProjectFootprintLibrary(
-                            target_path.clone(),
+                // v0.13.0 — footprint editor gated off; hide the
+                // "PCB Library" create entry on the project-root menu.
+                if crate::feature_flags::FOOTPRINT_EDITOR_ENABLED {
+                    items.push(self.ctx_menu_item_msg(
+                        Some(ic::icon_component(tid)),
+                        "PCB Library",
+                        "",
+                        Message::ProjectTreeAction(
+                            crate::app::ProjectTreeAction::AddProjectFootprintLibrary(
+                                target_path.clone(),
+                            ),
                         ),
-                    ),
-                ));
+                    ));
+                }
                 items.push(self.ctx_menu_sep());
                 items.push(self.ctx_menu_item_disabled(
                     Some(ic::icon_dd_text_string(tid)),
@@ -3875,7 +3883,11 @@ impl Signex {
                 .get(self.document_state.active_tab)
                 .and_then(|tab| tab.kind.as_footprint_editor())
                 .and_then(|path| self.document_state.footprint_editors.get(path))
-                .map(|ed| ed.state.placement_paused || ed.state.active_bar_menu.is_some())
+                .map(|ed| {
+                    ed.state.placement_paused
+                        || ed.state.active_bar_menu.is_some()
+                        || ed.state.move_by_modal.is_some()
+                })
                 .unwrap_or(false)
             || ui.panel_list_open
             || ui.find_replace.open
@@ -4771,7 +4783,9 @@ impl Signex {
                 + if document.tabs.is_empty() { 0.0 } else { 28.0 };
             let theme_id = self.ui_state.theme_id;
             let tokens = &document.panel_ctx.tokens;
-            let custom_presets = &interaction.custom_filter_presets;
+            // Task 6 — footprint-native presets (`SelectionFilterKind`),
+            // not the schematic `custom_filter_presets`.
+            let footprint_presets = &interaction.footprint_filter_presets;
             // Mount BYTE-FOR-BYTE same as the schematic: build items,
             // call `signex_widgets::active_bar::view` directly, then
             // `.map(...)` then wrap in container().width(Fill).align_x(
@@ -4804,11 +4818,84 @@ impl Signex {
                     editor,
                     theme_id,
                     tokens,
-                    custom_presets,
+                    footprint_presets,
                     dropdown_top,
+                    self.ui_state.window_size.0,
                 )
             {
                 layers.push(overlay.map(Message::Library));
+            }
+
+            // v0.26 — right-click context menu overlay for the
+            // footprint canvas. Sits above the active-bar dropdown so
+            // a long-press menu is occluded by — never under — its
+            // own dismiss layer. Window-absolute (x, y) come from the
+            // canvas''s ButtonReleased(Right) handler.
+            if let Some(menu_state) = editor.state.context_menu.as_ref()
+                && let Some(card) =
+                    crate::library::editor::footprint::context_menu::view_context_menu(
+                        editor,
+                        tokens,
+                        path,
+                        document.pad_clipboard.is_some(),
+                    )
+            {
+                // Dismiss layer — left-click anywhere outside closes
+                // the menu. Right-press passes through to the canvas
+                // (so a right-drag-to-pan gesture starts pan motion +
+                // closes the menu via the CursorMoved threshold).
+                let close_msg = Message::Library(
+                    crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                        path: path.to_path_buf(),
+                        msg: crate::library::messages::PrimitiveEditorMsg
+                            ::FootprintCloseContextMenu,
+                    },
+                );
+                layers.push(Self::dismiss_layer(close_msg));
+                let card_msg = card.map(Message::Library);
+                let (ww, wh) = self.ui_state.window_size;
+                // Conservative footprint estimate so the card stays on
+                // screen near right / bottom edges.
+                let est_menu_w: f32 = 220.0;
+                let est_menu_h: f32 = 320.0;
+                let edge_margin: f32 = 4.0;
+                let x = if menu_state.x + est_menu_w + edge_margin > ww {
+                    (ww - est_menu_w - edge_margin).max(0.0)
+                } else {
+                    menu_state.x
+                };
+                let y = if menu_state.y + est_menu_h + edge_margin > wh {
+                    (menu_state.y - est_menu_h).max(0.0)
+                } else {
+                    menu_state.y
+                };
+                layers.push(super::view::translate::Translate::new(card_msg, (x, y)).into());
+            }
+
+            // v0.14 — typed-delta "Move Selection By X, Y…" modal.
+            // Sits above everything else in this block (bar, dropdown,
+            // context menu) — it's a blocking dialog once open. Gated
+            // into `needs_overlay` above via `move_by_modal.is_some()`.
+            if let Some(card) =
+                crate::library::editor::footprint::move_by_modal::view_move_by_modal(
+                    editor, tokens,
+                )
+            {
+                let close_msg = Message::Library(
+                    crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                        path: path.to_path_buf(),
+                        msg: crate::library::messages::PrimitiveEditorMsg::FootprintMoveByCancel,
+                    },
+                );
+                layers.push(Self::dismiss_layer(close_msg));
+                layers.push(
+                    container(card.map(Message::Library))
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .center_x(Length::Fill)
+                        .center_y(Length::Fill)
+                        .into(),
+                );
             }
         }
 
@@ -4843,7 +4930,11 @@ impl Signex {
             let dropdown_top: u16 = (y_offset as u16).saturating_add(42);
             if let Some(overlay) =
                 crate::library::editor::symbol::active_bar::dropdown_overlay(
-                    editor, theme_id, tokens, dropdown_top,
+                    editor,
+                    theme_id,
+                    tokens,
+                    dropdown_top,
+                    self.ui_state.window_size.0,
                 )
             {
                 layers.push(overlay.map(Message::Library));

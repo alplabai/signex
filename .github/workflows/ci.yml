@@ -109,4 +109,3 @@ jobs:
       # (deny.toml documents this same intent; `licenses` above stays hard.)
       - name: Check advisories
         run: cargo deny --all-features check advisories
-        continue-on-error: true

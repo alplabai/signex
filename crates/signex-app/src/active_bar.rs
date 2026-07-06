@@ -229,6 +229,16 @@ impl CustomFilterPreset {
     }
 }
 
+/// A footprint-editor selection-filter preset. Parallel to
+/// `CustomFilterPreset` but keyed on `SelectionFilterKind` (footprint
+/// categories) instead of the schematic `SelectionFilter`. Persisted to
+/// `prefs.json` under `footprint_filter_presets` (Task 6).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct FootprintFilterPreset {
+    pub name: String,
+    pub kinds: Vec<crate::library::editor::footprint::state::selection_filter::SelectionFilterKind>,
+}
+
 /// Selection filter categories — each can be independently toggled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum SelectionFilter {

@@ -595,6 +595,7 @@ impl Signex {
             selection_filters: self.interaction_state.selection_filters.clone(),
             custom_filter_presets: self.interaction_state.custom_filter_presets.clone(),
             active_custom_filter_tab: self.interaction_state.active_custom_filter_tab,
+            footprint_filter_presets: self.interaction_state.footprint_filter_presets.clone(),
             page_format_mode,
             margin_vertical,
             margin_horizontal,
@@ -1558,6 +1559,21 @@ fn build_footprint_editor_panel_ctx(
             }
             NumberingScheme::Explicit { .. } => crate::panels::NumberingSchemeKindUi::Explicit,
         };
+        // v0.25 polish — surface BGA-specific config when the
+        // numbering scheme is BgaRowCol so the Properties panel can
+        // render skip_letters / start_row / start_col rows.
+        let bga_config = match &array.numbering {
+            NumberingScheme::BgaRowCol {
+                skip_letters,
+                start_row,
+                start_col,
+            } => Some(crate::panels::BgaConfigSummary {
+                skip_letters: *skip_letters,
+                start_row: *start_row,
+                start_col: *start_col,
+            }),
+            _ => None,
+        };
         let repicking_polar_center = matches!(
             editor.state.tool_pending,
             ToolPending::RepickPolarCenter { array_id } if array_id == array.id
@@ -1567,6 +1583,7 @@ fn build_footprint_editor_panel_ctx(
             kind,
             numbering,
             repicking_polar_center,
+            bga_config,
         })
     });
 
@@ -1583,6 +1600,7 @@ fn build_footprint_editor_panel_ctx(
                 position,
                 content,
                 size,
+                ..
             } => (
                 "Text",
                 SilkKindGeometry::Text {
@@ -1615,6 +1633,11 @@ fn build_footprint_editor_panel_ctx(
         sketch_constraint_count,
         last_solve,
         selected_pad,
+        selected_pad_count: editor
+            .state
+            .selected_pad
+            .map(|_| 1 + editor.state.selected_pads_extra.len())
+            .unwrap_or(0),
         selected_sketch_entity,
         auto_fit_courtyard: editor.state.auto_fit_courtyard,
         library_siblings,
@@ -1670,6 +1693,7 @@ fn build_footprint_editor_panel_ctx(
         selected_silk_summary,
         selected_array,
         selected_pad_shape_params,
+        numeric_buffers: editor.state.numeric_buffers.clone(),
     })
 }
 
