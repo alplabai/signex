@@ -77,7 +77,7 @@ pub fn bake_pads(
     }
 
     for entity in &sketch.entities {
-        if entity.construction {
+        if entity.bake_skipped() {
             continue;
         }
         let pad_attr = match entity.pad.as_ref() {
@@ -227,6 +227,11 @@ pub(crate) fn bake_one_pad(
         derive_layers(pad_attr.kind, pad_attr.side)
     };
 
+    let mask_top = opt_eval_mm(&pad_attr.stack.mask_top_expr, &ctx)?;
+    let mask_bottom = opt_eval_mm(&pad_attr.stack.mask_bottom_expr, &ctx)?;
+    let paste_top = opt_eval_mm(&pad_attr.stack.paste_top_expr, &ctx)?;
+    let paste_bottom = opt_eval_mm(&pad_attr.stack.paste_bottom_expr, &ctx)?;
+
     Ok(LibPad {
         number: pad_number,
         kind: lib_kind(pad_attr.kind, warnings, &pad_attr.number),
@@ -238,6 +243,29 @@ pub(crate) fn bake_one_pad(
         drill: if is_fiducial { None } else { drill },
         solder_mask_margin: mask_margin,
         paste_margin,
+        template: pad_attr.template.clone(),
+        template_library: pad_attr.library.clone(),
+        paste_margin_top: paste_top,
+        paste_margin_bottom: paste_bottom,
+        paste_enabled_top: pad_attr.stack.paste_top_enabled,
+        paste_enabled_bottom: pad_attr.stack.paste_bottom_enabled,
+        mask_margin_top: mask_top,
+        mask_margin_bottom: mask_bottom,
+        mask_tented_top: pad_attr.stack.mask_top_tented,
+        mask_tented_bottom: pad_attr.stack.mask_bottom_tented,
+        thermal_relief: pad_attr.stack.thermal_relief,
+        corner_radius_pct: pad_attr.stack.corner_radius_pct,
+        feature_top: pad_attr.feature_top,
+        feature_bottom: pad_attr.feature_bottom,
+        testpoint: pad_attr.testpoint,
+        electrical_type: pad_attr.electrical_type,
+        net: pad_attr.net.clone(),
+        locked: pad_attr.locked,
+        hole_tolerance_plus_mm: pad_attr.hole_tolerance_plus_mm,
+        hole_tolerance_minus_mm: pad_attr.hole_tolerance_minus_mm,
+        hole_rotation_deg: pad_attr.hole_rotation_deg,
+        copper_offset_x_mm: pad_attr.copper_offset_x_mm,
+        copper_offset_y_mm: pad_attr.copper_offset_y_mm,
     })
 }
 

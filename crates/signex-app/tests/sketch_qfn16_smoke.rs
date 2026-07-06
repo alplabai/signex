@@ -66,6 +66,7 @@ fn build_qfn_row(pad_pitch_expr: &str) -> (Footprint, Vec<SketchEntityId>) {
                 mask_margin_expr: None,
                 paste_margin_expr: None,
                 paste_apertures: PasteAperturePattern::Single,
+                ..PadAttr::default()
             });
             e
         };

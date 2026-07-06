@@ -61,6 +61,22 @@ pub enum ConstraintKind {
         line: SketchEntityId,
         target: DimTarget,
     },
+    /// v0.23 — Parametric distance from a Point to a Circle / Arc's
+    /// boundary. Residual is `|p - centre| - radius - target` where
+    /// radius is read from the live state (Circle: `radius` field;
+    /// Arc: distance from `center` to `start`). Equivalent to
+    /// `target = 0` placing the point ON the curve; positive target
+    /// offsets outward, negative offsets inward.
+    ///
+    /// Used by the Offset tool's Circle/Arc paths to keep a fresh
+    /// parallel curve linked to the source — the user can then edit
+    /// the offset distance from the Properties panel without
+    /// re-running the tool.
+    DistancePtCircle {
+        point: SketchEntityId,
+        circle: SketchEntityId,
+        target: DimTarget,
+    },
     Angle {
         l1: SketchEntityId,
         l2: SketchEntityId,
@@ -116,6 +132,7 @@ impl ConstraintKind {
             Perpendicular { .. } => 1,
             DistancePtPt { .. } => 1,
             DistancePtLine { .. } => 1,
+            DistancePtCircle { .. } => 1,
             Angle { .. } => 1,
             EqualLength { .. } => 1,
             EqualRadius { .. } => 1,

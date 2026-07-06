@@ -36,7 +36,7 @@ pub fn bake_keepouts(
     warnings: &mut Vec<String>,
 ) -> Result<(), SketchError> {
     for entity in &sketch.entities {
-        if entity.construction {
+        if entity.bake_skipped() {
             continue;
         }
         let attr = match entity.keepout.as_ref() {

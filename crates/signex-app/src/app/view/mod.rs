@@ -3733,6 +3733,7 @@ impl Signex {
             ui.grid_size_mm,
             &interaction.canvas_for_window(window_id).selected,
             &document.panel_ctx.tokens,
+            document.inflight_git_commits.len(),
         )
         .map(Message::StatusBar);
 
@@ -3840,7 +3841,26 @@ impl Signex {
         // correct.
         let main: Element<'_, Message> = main.into();
 
-        let has_active_bar = self.has_active_schematic();
+        // v0.13 — `has_active_bar` is now true for ANY editor tab
+        // that mounts an active bar (schematic / footprint /
+        // symbol library) so the layers Stack mounts and the bar
+        // layer fires from `view_main_for` regardless of editor
+        // kind.
+        let active_tab_kind_any = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .map(|t| &t.kind);
+        let has_footprint_bar = matches!(
+            active_tab_kind_any,
+            Some(crate::app::TabKind::FootprintEditor(_))
+        );
+        let has_symbol_bar = matches!(
+            active_tab_kind_any,
+            Some(crate::app::TabKind::SymbolEditor(_))
+        );
+        let has_active_bar =
+            self.has_active_schematic() || has_footprint_bar || has_symbol_bar;
         let dragging_tab = ui.tab_dragging.is_some();
         let needs_overlay = has_active_bar
             || interaction.editing_text.is_some()
@@ -4732,6 +4752,101 @@ impl Signex {
                 ]
                 .into(),
             );
+        }
+
+        // v0.13 — footprint editor active bar mounted at the SAME
+        // app-view layer as the schematic's. Earlier the bar lived
+        // inside the standalone editor body's canvas Stack, which
+        // gave it canvas-relative coordinates that drifted from the
+        // schematic's window-absolute coordinates. Mounting both at
+        // the layers Stack with identical `Space::height(y_offset +
+        // 4.0)` math guarantees pixel-identical screen y.
+        if let Some(active_tab) =
+            self.document_state.tabs.get(self.document_state.active_tab)
+            && let Some(path) = active_tab.kind.as_footprint_editor()
+            && let Some(editor) = self.document_state.footprint_editors.get(path)
+        {
+            let y_offset: f32 = crate::menu_bar::MENU_BAR_HEIGHT
+                + if document.tabs.is_empty() { 0.0 } else { 28.0 };
+            let theme_id = self.ui_state.theme_id;
+            let tokens = &document.panel_ctx.tokens;
+            let custom_presets = &interaction.custom_filter_presets;
+            // Mount BYTE-FOR-BYTE same as the schematic: build items,
+            // call `signex_widgets::active_bar::view` directly, then
+            // `.map(...)` then wrap in container().width(Fill).align_x(
+            // Center). Dropdown overlay is a separate layer pushed
+            // after the bar.
+            let bar_items =
+                crate::library::editor::footprint::unified_active_bar::bar_items(
+                    editor, theme_id, tokens,
+                );
+            let bar = signex_widgets::active_bar::view(bar_items, tokens)
+                .map(Message::Library);
+            layers.push(
+                column![
+                    iced::widget::Space::new().height(y_offset + 4.0),
+                    container(bar)
+                        .width(Length::Fill)
+                        .align_x(iced::alignment::Horizontal::Center),
+                ]
+                .into(),
+            );
+            // Position the dropdown panel directly below the bar's
+            // bottom edge. Bar-height = 28 button + 6 padding + 2
+            // border = 36; plus the 4 px top margin from the column
+            // above = 40 px tall block. `y_offset + 40` is the bar's
+            // bottom; add a 2 px gap so the dropdown visually
+            // touches without overlapping the border.
+            let dropdown_top: u16 = (y_offset as u16).saturating_add(42);
+            if let Some(overlay) =
+                crate::library::editor::footprint::unified_active_bar::dropdown_overlay(
+                    editor,
+                    theme_id,
+                    tokens,
+                    custom_presets,
+                    dropdown_top,
+                )
+            {
+                layers.push(overlay.map(Message::Library));
+            }
+        }
+
+        // v0.13 — symbol library editor active bar mounted at the
+        // SAME app-view layer as the schematic / footprint bars.
+        if let Some(active_tab) =
+            self.document_state.tabs.get(self.document_state.active_tab)
+            && let Some(path) = active_tab.kind.as_symbol_editor()
+            && let Some(editor) = self.document_state.symbol_editors.get(path)
+        {
+            let y_offset: f32 = crate::menu_bar::MENU_BAR_HEIGHT
+                + if document.tabs.is_empty() { 0.0 } else { 28.0 };
+            let theme_id = self.ui_state.theme_id;
+            let tokens = &document.panel_ctx.tokens;
+            // Same byte-for-byte structure as the footprint + schematic
+            // mounts. Direct call to `signex_widgets::active_bar::view`
+            // — the unified widget's view_with_overlay path is
+            // bypassed at this site so the chain matches schematic.
+            let bar_items =
+                crate::library::editor::symbol::active_bar::bar_items(editor, theme_id);
+            let bar = signex_widgets::active_bar::view(bar_items, tokens)
+                .map(Message::Library);
+            layers.push(
+                column![
+                    iced::widget::Space::new().height(y_offset + 4.0),
+                    container(bar)
+                        .width(Length::Fill)
+                        .align_x(iced::alignment::Horizontal::Center),
+                ]
+                .into(),
+            );
+            let dropdown_top: u16 = (y_offset as u16).saturating_add(42);
+            if let Some(overlay) =
+                crate::library::editor::symbol::active_bar::dropdown_overlay(
+                    editor, theme_id, tokens, dropdown_top,
+                )
+            {
+                layers.push(overlay.map(Message::Library));
+            }
         }
 
         if self.has_active_schematic()

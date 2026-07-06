@@ -126,7 +126,7 @@ fn find_seed_on_plane(sketch: &SketchData, plane_id: PlaneId) -> Option<SketchEn
         .iter()
         .find(|e| {
             e.plane == plane_id
-                && !e.construction
+                && !e.bake_skipped()
                 && matches!(e.kind, EntityKind::Line { .. } | EntityKind::Arc { .. })
         })
         .map(|e| e.id)

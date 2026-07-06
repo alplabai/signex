@@ -62,6 +62,7 @@ pub fn view<'a>(
     grid_size_mm: f32,
     selected: &[SelectedItem],
     tokens: &ThemeTokens,
+    pending_git_commits: usize,
 ) -> Element<'a, StatusBarRequest> {
     let coord_text = match unit {
         Unit::Mm => format!("X:{x:.2} Y:{y:.2}"),
@@ -111,6 +112,18 @@ pub fn view<'a>(
                 .style(button::text)
                 .on_press(StatusBarRequest::OpenPropertiesForSelection),
         );
+    }
+    // v0.23 — async git commit "Saving…" pill. Renders only when at
+    // least one commit is in flight so it doesn't shout for users
+    // with enable_git off.
+    if pending_git_commits > 0 {
+        let label = if pending_git_commits == 1 {
+            "Saving…".to_string()
+        } else {
+            format!("Saving {pending_git_commits}…")
+        };
+        bar = bar.push(sep());
+        bar = bar.push(text(label).size(11).color(muted_c));
     }
     let bar = bar
         .push(space::horizontal())

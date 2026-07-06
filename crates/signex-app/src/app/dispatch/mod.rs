@@ -723,6 +723,14 @@ impl Signex {
                 self.document_state.panel_ctx.history = self.document_state.history.clone();
                 Task::none()
             }
+            Message::ProjectGitCommitDone {
+                project_root,
+                rel_path,
+                result,
+            } => {
+                self.handle_project_git_commit_done(project_root, rel_path, result);
+                Task::none()
+            }
             Message::EscapePressed => {
                 // v0.15 — if active tab is a footprint editor, reset
                 // its tool state via `FootprintToolEscape`; otherwise

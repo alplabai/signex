@@ -355,6 +355,38 @@ pub struct FootprintEditorState {
     pub state: crate::library::editor::footprint::state::FootprintEditorState,
     pub canvas_cache: iced::widget::canvas::Cache,
     pub dirty: bool,
+    /// v0.24 Phase 1 (Track B) — Undo history. Pre-mutation snapshots
+    /// pushed by `push_history` ahead of each dispatcher mutation;
+    /// `undo()` pops the most recent and swaps it in. Capped at
+    /// [`Self::HISTORY_DEPTH`] to keep memory bounded.
+    pub history: Vec<FootprintHistorySnapshot>,
+    /// v0.24 Phase 1 (Track B) — Redo stack. Populated by `undo()`
+    /// with the snapshot it just rolled back; cleared by any new
+    /// mutation that calls `push_history` so the redo lineage stays
+    /// consistent with single-history-tree semantics.
+    pub redo: Vec<FootprintHistorySnapshot>,
+}
+
+/// v0.24 Phase 1 (Track B) — coarse-grained undo snapshot. Captures
+/// the canonical state needed to roll back any footprint edit:
+/// - the full multi-footprint `FootprintFile` (typically <50 KB of
+///   in-memory representation),
+/// - the active footprint index,
+/// - the canvas-side `EditorPad` cache and its selection state,
+/// - sketch selection state.
+///
+/// Stored by-value (not by-Arc) so undo/redo never aliases the live
+/// state. Memory cost: ~5 KB × `HISTORY_DEPTH` = ~500 KB per editor.
+/// Acceptable for v0.24; fine-grained inverse ops can replace this
+/// later if memory becomes load-bearing.
+#[derive(Debug, Clone)]
+pub struct FootprintHistorySnapshot {
+    pub file: signex_library::FootprintFile,
+    pub active_idx: usize,
+    pub pads: Vec<crate::library::editor::footprint::state::EditorPad>,
+    pub selected_pad: Option<usize>,
+    pub selected_sketch: Option<signex_sketch::id::SketchEntityId>,
+    pub selected_sketch_secondary: Option<signex_sketch::id::SketchEntityId>,
 }
 
 impl FootprintEditorState {
@@ -376,7 +408,95 @@ impl FootprintEditorState {
             state,
             canvas_cache: iced::widget::canvas::Cache::default(),
             dirty: false,
+            history: Vec::new(),
+            redo: Vec::new(),
         }
+    }
+
+    /// v0.24 Phase 1 (Track B) — depth cap for `history` / `redo`
+    /// stacks. 100 entries × ~5 KB = ~500 KB per editor; raise if
+    /// users start losing far-back undos and we've moved to
+    /// fine-grained inverse ops.
+    pub const HISTORY_DEPTH: usize = 100;
+
+    /// v0.24 Phase 1 (Track B) — capture a snapshot of the
+    /// canonical state ahead of a mutation. Caller invokes this
+    /// BEFORE the mutation runs; on `undo()` we swap the snapshot
+    /// back in. New mutations clear the redo stack so the history
+    /// stays a single timeline.
+    ///
+    /// Phase 2 wiring: every `dispatch::library` arm that mutates
+    /// state should `push_history()` first, then run the mutation.
+    /// The dispatcher's existing `with_parts` closure is the
+    /// natural integration site.
+    pub fn push_history(&mut self) {
+        let snap = self.snapshot();
+        self.history.push(snap);
+        if self.history.len() > Self::HISTORY_DEPTH {
+            self.history.remove(0);
+        }
+        self.redo.clear();
+    }
+
+    /// v0.24 Phase 1 — undo the most recent edit. Returns `true` if
+    /// a snapshot was popped + applied, `false` if the history was
+    /// empty (i.e. nothing to undo). The current state is pushed
+    /// onto the redo stack so `redo()` can walk forward again.
+    pub fn undo(&mut self) -> bool {
+        let Some(snap) = self.history.pop() else {
+            return false;
+        };
+        let current = self.snapshot();
+        self.redo.push(current);
+        if self.redo.len() > Self::HISTORY_DEPTH {
+            self.redo.remove(0);
+        }
+        self.restore(snap);
+        true
+    }
+
+    /// v0.24 Phase 1 — redo the most recently undone edit. Returns
+    /// `true` if a redo snapshot was popped + applied, `false` when
+    /// the redo stack is empty.
+    pub fn redo(&mut self) -> bool {
+        let Some(snap) = self.redo.pop() else {
+            return false;
+        };
+        let current = self.snapshot();
+        self.history.push(current);
+        if self.history.len() > Self::HISTORY_DEPTH {
+            self.history.remove(0);
+        }
+        self.restore(snap);
+        true
+    }
+
+    /// v0.24 Phase 1 — capture the current state into a snapshot
+    /// without altering the history stack. Used by `push_history`
+    /// + `undo`/`redo` to read the canonical state by-value.
+    fn snapshot(&self) -> FootprintHistorySnapshot {
+        FootprintHistorySnapshot {
+            file: self.file.clone(),
+            active_idx: self.active_idx,
+            pads: self.state.pads.clone(),
+            selected_pad: self.state.selected_pad,
+            selected_sketch: self.state.selected_sketch,
+            selected_sketch_secondary: self.state.selected_sketch_secondary,
+        }
+    }
+
+    /// v0.24 Phase 1 — write a snapshot back into the live editor
+    /// state. Resets the canvas cache so the next render reflects
+    /// the rolled-back geometry.
+    fn restore(&mut self, snap: FootprintHistorySnapshot) {
+        self.file = snap.file;
+        self.active_idx = snap.active_idx;
+        self.state.pads = snap.pads;
+        self.state.selected_pad = snap.selected_pad;
+        self.state.selected_sketch = snap.selected_sketch;
+        self.state.selected_sketch_secondary = snap.selected_sketch_secondary;
+        self.canvas_cache.clear();
+        self.dirty = true;
     }
 
     /// HI-23: builder that seeds `global_snap_disabled` from

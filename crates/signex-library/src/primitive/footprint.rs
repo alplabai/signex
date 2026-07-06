@@ -48,10 +48,11 @@ impl std::fmt::Display for LayerId {
 /// Variant names persist in PascalCase to preserve v1 / v2 fixture
 /// compatibility — adding `rename_all = "snake_case"` would break
 /// every existing footprint TOML.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum PadKind {
     /// Surface-mount.
+    #[default]
     Smd,
     /// Through-hole, plated.
     Tht,
@@ -94,9 +95,10 @@ impl ChamferedCorners {
 }
 
 /// Pad geometry shape.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum PadShape {
+    #[default]
     Round,
     Rect,
     RoundRect {
@@ -138,7 +140,13 @@ pub struct Drill {
 }
 
 /// One PCB pad.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+///
+/// `Default` exists so existing literal constructors can omit the
+/// pad-stack / feature / testpoint fields via `..Pad::default()`.
+/// Default values place a 0×0 mm round SMD pad at the origin with
+/// no overrides — the canonical "blank" pad. Real callers always
+/// override the geometry fields explicitly.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Pad {
     /// Pad number — pin-map binding key ("1", "EP", "MOUNT1").
     pub number: String,
@@ -156,10 +164,92 @@ pub struct Pad {
     /// Drill (None for SMD).
     #[serde(default)]
     pub drill: Option<Drill>,
+    /// Global mask margin fallback (mm). Per-side overrides live in
+    /// `mask_margin_top` / `mask_margin_bottom`.
     #[serde(default)]
     pub solder_mask_margin: Option<f64>,
+    /// Global paste margin fallback. Per-side overrides live in
+    /// `paste_margin_top` / `paste_margin_bottom`.
     #[serde(default)]
     pub paste_margin: Option<f64>,
+    /// Optional pad-template name. Empty = no template.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub template: String,
+    /// Optional library-of-record reference for the pad template.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub template_library: String,
+    /// Per-side paste-margin overrides (mm). `None` = use the global
+    /// `paste_margin`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub paste_margin_top: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub paste_margin_bottom: Option<f64>,
+    /// Per-side paste-stencil enable. Default `true`.
+    #[serde(default = "default_true_bool")]
+    pub paste_enabled_top: bool,
+    #[serde(default = "default_true_bool")]
+    pub paste_enabled_bottom: bool,
+    /// Per-side mask-margin overrides (mm).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mask_margin_top: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mask_margin_bottom: Option<f64>,
+    /// Per-side tented flag — `true` skips the mask opening entirely.
+    #[serde(default)]
+    pub mask_tented_top: bool,
+    #[serde(default)]
+    pub mask_tented_bottom: bool,
+    /// Thermal-relief style on copper. `false` = direct connect.
+    #[serde(default = "default_true_bool")]
+    pub thermal_relief: bool,
+    /// Corner-radius percentage (0..50) for `PadShape::RoundRect`.
+    /// Mirror of `PadShape::RoundRect.radius_ratio` but persisted
+    /// independently so the Altium "Round Rectangle" UI value
+    /// survives a shape switch and back.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub corner_radius_pct: Option<f64>,
+    /// Top-side surface feature (Altium "Pad Features → Top Side").
+    #[serde(default, skip_serializing_if = "signex_sketch::attr::PadFeature::is_none")]
+    pub feature_top: signex_sketch::attr::PadFeature,
+    /// Bottom-side surface feature.
+    #[serde(default, skip_serializing_if = "signex_sketch::attr::PadFeature::is_none")]
+    pub feature_bottom: signex_sketch::attr::PadFeature,
+    /// Test-point participation (top/bottom × assembly/fab).
+    #[serde(default, skip_serializing_if = "signex_sketch::attr::TestpointFlags::is_default")]
+    pub testpoint: signex_sketch::attr::TestpointFlags,
+    /// Altium-parity electrical-type flag (Load/Source/Terminator).
+    #[serde(default, skip_serializing_if = "signex_sketch::attr::ElectricalType::is_default")]
+    pub electrical_type: signex_sketch::attr::ElectricalType,
+    /// Net assignment. Empty = unassigned.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub net: String,
+    /// Lock flag — resists accidental drag/move/delete.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub locked: bool,
+    /// Pad Hole tolerance ± in mm (reporting only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hole_tolerance_plus_mm: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hole_tolerance_minus_mm: Option<f64>,
+    /// Pad Hole rotation (Slot/Rectangular orientation).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hole_rotation_deg: Option<f64>,
+    /// Copper offset relative to hole centre.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub copper_offset_x_mm: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub copper_offset_y_mm: Option<f64>,
+}
+
+fn is_false(v: &bool) -> bool {
+    !v
+}
+
+/// Helper for `#[serde(default = "...")]` on bool fields that should
+/// default to `true`. `bool::default()` is `false`, so this is needed
+/// for fields where omission means "yes / enabled".
+fn default_true_bool() -> bool {
+    true
 }
 
 /// Footprint graphic kinds — silkscreen / fab outline primitives.
@@ -510,6 +600,68 @@ pub struct Footprint {
     /// Standalone paste apertures (separate from pad paste). v0.14+.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub paste_apertures: Vec<FpPasteAperture>,
+    /// v0.21 — Altium-parity component-level fields surfaced when
+    /// nothing is selected in the editor. `description` is the
+    /// human-readable summary; `default_designator` is the auto-
+    /// numbering template (`R?`, `U?`, …); `component_type` drives
+    /// BOM / Net-Tie / Jumper semantics; `height_mm` is the
+    /// component's overall height for collision checking.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub description: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub default_designator: String,
+    #[serde(default, skip_serializing_if = "ComponentType::is_default")]
+    pub component_type: ComponentType,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub height_mm: Option<f64>,
+}
+
+/// v0.21 — Altium-parity component type. Drives whether the part
+/// appears in the BOM and whether its pads can short different nets
+/// (Net Tie / Jumper).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub enum ComponentType {
+    #[default]
+    Standard,
+    StandardNoBom,
+    Mechanical,
+    Graphical,
+    NetTie,
+    NetTieInBom,
+    Jumper,
+}
+
+impl ComponentType {
+    pub const ALL: &'static [ComponentType] = &[
+        ComponentType::Standard,
+        ComponentType::StandardNoBom,
+        ComponentType::Mechanical,
+        ComponentType::Graphical,
+        ComponentType::NetTie,
+        ComponentType::NetTieInBom,
+        ComponentType::Jumper,
+    ];
+    pub fn label(self) -> &'static str {
+        match self {
+            ComponentType::Standard => "Standard",
+            ComponentType::StandardNoBom => "Standard (No BOM)",
+            ComponentType::Mechanical => "Mechanical",
+            ComponentType::Graphical => "Graphical",
+            ComponentType::NetTie => "Net Tie (No BOM)",
+            ComponentType::NetTieInBom => "Net Tie (in BOM)",
+            ComponentType::Jumper => "Jumper",
+        }
+    }
+    pub fn is_default(&self) -> bool {
+        matches!(self, ComponentType::Standard)
+    }
+}
+
+impl std::fmt::Display for ComponentType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label())
+    }
 }
 
 fn default_footprint_version() -> String {
@@ -651,7 +803,20 @@ struct FootprintWire {
     mask_excludes: Vec<FpMaskExclude>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     paste_apertures: Vec<FpPasteAperture>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    description: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    default_designator: String,
+    #[serde(default, skip_serializing_if = "ComponentType::is_default")]
+    component_type: ComponentType,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    height_mm: Option<f64>,
+    // FootprintWire (per-footprint) wire fields below; the
+    // FootprintFile (file-level) wire ends here.
 }
+
+// ── FootprintWire mirrors Footprint for the multi-footprint TOML
+//    wire format. Adding the four v0.21 fields here too.
 
 impl FootprintFile {
     /// Build a new container holding a single footprint — what the
@@ -714,6 +879,10 @@ impl FootprintFile {
                 mask_openings: fw.mask_openings,
                 mask_excludes: fw.mask_excludes,
                 paste_apertures: fw.paste_apertures,
+                description: fw.description,
+                default_designator: fw.default_designator,
+                component_type: fw.component_type,
+                height_mm: fw.height_mm,
             });
         }
         Ok(FootprintFile {
@@ -760,6 +929,10 @@ impl FootprintFile {
                 mask_openings: fp.mask_openings.clone(),
                 mask_excludes: fp.mask_excludes.clone(),
                 paste_apertures: fp.paste_apertures.clone(),
+                description: fp.description.clone(),
+                default_designator: fp.default_designator.clone(),
+                component_type: fp.component_type,
+                height_mm: fp.height_mm,
             });
         }
         let wire = FootprintFileWire {
@@ -1092,6 +1265,7 @@ fn pad_from_tsv_row(cells: &[&str]) -> Result<Pad, FootprintFileError> {
         drill,
         solder_mask_margin: parse_opt_f64_cell_fp("solder_mask_margin", cells[11])?,
         paste_margin: parse_opt_f64_cell_fp("paste_margin", cells[12])?,
+        ..Pad::default()
     })
 }
 
@@ -1161,6 +1335,10 @@ impl Footprint {
             mask_openings: Vec::new(),
             mask_excludes: Vec::new(),
             paste_apertures: Vec::new(),
+            description: String::new(),
+            default_designator: String::new(),
+            component_type: ComponentType::Standard,
+            height_mm: None,
         }
     }
 }
@@ -1181,6 +1359,7 @@ mod tests {
             drill: None,
             solder_mask_margin: None,
             paste_margin: None,
+            ..Pad::default()
         }
     }
 
@@ -1231,6 +1410,10 @@ mod tests {
             mask_openings: Vec::new(),
             mask_excludes: Vec::new(),
             paste_apertures: Vec::new(),
+            description: String::new(),
+            default_designator: String::new(),
+            component_type: ComponentType::Standard,
+            height_mm: None,
         };
         let json = serde_json::to_string(&fp).unwrap();
         let back: Footprint = serde_json::from_str(&json).unwrap();
@@ -1487,6 +1670,7 @@ mod tests {
             }),
             solder_mask_margin: Some(0.05),
             paste_margin: Some(-0.025),
+            ..Pad::default()
         };
         let mut fp = Footprint::empty("CUSTOM");
         fp.pads = vec![pad.clone()];
@@ -1516,6 +1700,7 @@ mod tests {
             drill: None,
             solder_mask_margin: None,
             paste_margin: None,
+            ..Pad::default()
         };
         let mut fp = Footprint::empty("CUSTOM");
         fp.pads = vec![pad.clone()];

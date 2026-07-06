@@ -169,21 +169,16 @@ where
     M: 'static + Clone,
     K: 'static + Copy,
 {
-    // The bar centred at the top of its parent (a canvas Stack).
-    // Matches the schematic / footprint mount pattern: 5 px Space
-    // pushes the bar down to the canvas's effective top + 5 px,
-    // staying pixel-aligned with the schematic active bar.
-    let bar = view(items, tokens);
-    let bar_layer = iced::widget::column![
-        iced::widget::Space::new().height(Length::Fixed(5.0)),
-        container(bar)
-            .width(Length::Fill)
-            .align_x(iced::alignment::Horizontal::Center),
-    ]
-    .width(Length::Fill);
+    // The bar centred horizontally at the top of its parent layer.
+    // CALLER owns the centring container + vertical offset so the
+    // structure matches the schematic's `container(view_bar(...).
+    // map(Msg)).width(Fill).align_x(Center)` chain byte-for-byte
+    // (preventing a 2 px layout-pass shift from `Element::map`
+    // wrapping a container vs being wrapped by a container).
+    let bar: Element<'a, M> = view(items, tokens);
 
     let Some(menu) = open_menu else {
-        return bar_layer.into();
+        return bar;
     };
 
     // Build the dropdown panel + backstop layer.
@@ -205,9 +200,17 @@ where
     )
     .on_press(close_msg);
 
+    // When a menu is open, wrap the centred bar in a Stack with the
+    // backstop + panel. The bar gets a centring container HERE only;
+    // when no menu is open, the caller owns the centring (see early
+    // return above) so the no-menu path matches the schematic chain
+    // exactly.
+    let centred_bar = container(bar)
+        .width(Length::Fill)
+        .align_x(iced::alignment::Horizontal::Center);
     iced::widget::Stack::new()
         .push(backstop)
-        .push(bar_layer)
+        .push(centred_bar)
         .push(panel_anchor)
         .into()
 }

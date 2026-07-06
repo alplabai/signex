@@ -13,7 +13,7 @@ impl Signex {
     /// v0.18.8 — convenience: resolve the active tab's `.snxfpt`
     /// path, if any. The Footprint Library panel handlers below all
     /// need this; centralising it keeps the dispatch arms tight.
-    fn active_footprint_editor_path(&self) -> Option<std::path::PathBuf> {
+    pub(crate) fn active_footprint_editor_path(&self) -> Option<std::path::PathBuf> {
         let active_tab = self
             .document_state
             .tabs
@@ -211,6 +211,687 @@ impl Signex {
                 self.fp_editor_set_selected_pad_rotation(*idx, value.clone());
                 true
             }
+            // v0.20 — Altium-parity Pad Properties / Pad Stack / Pad
+            // Features form for the next placed pad. Each handler
+            // mutates the matching slice of `editor.state.next_pad_defaults`
+            // (and its `stack` sub-struct) so the next placement
+            // click picks up the new value.
+            crate::panels::PanelMsg::FpEditorSetNextPadShape(shape) => {
+                self.fp_editor_set_next_pad_shape(shape.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadKind(kind) => {
+                self.fp_editor_set_next_pad_kind(*kind);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadDrillDiameter(v) => {
+                self.fp_editor_set_next_pad_drill_diameter(v.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadDrillSlotLength(v) => {
+                self.fp_editor_set_next_pad_drill_slot_length(v.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadCornerRadiusPct(v) => {
+                self.fp_editor_set_next_pad_corner_radius_pct(v.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadTemplate(v) => {
+                self.fp_editor_set_next_pad_template(v.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadTemplateLibrary(v) => {
+                self.fp_editor_set_next_pad_template_library(v.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadPasteMarginTop(v) => {
+                self.fp_editor_set_next_pad_paste_margin_top(v.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadPasteMarginBottom(v) => {
+                self.fp_editor_set_next_pad_paste_margin_bottom(v.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleNextPadPasteEnabledTop(on) => {
+                self.fp_editor_toggle_next_pad_paste_enabled_top(*on);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleNextPadPasteEnabledBottom(on) => {
+                self.fp_editor_toggle_next_pad_paste_enabled_bottom(*on);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadMaskMarginTop(v) => {
+                self.fp_editor_set_next_pad_mask_margin_top(v.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadMaskMarginBottom(v) => {
+                self.fp_editor_set_next_pad_mask_margin_bottom(v.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleNextPadMaskTentedTop(on) => {
+                self.fp_editor_toggle_next_pad_mask_tented_top(*on);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleNextPadMaskTentedBottom(on) => {
+                self.fp_editor_toggle_next_pad_mask_tented_bottom(*on);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleNextPadThermalRelief(on) => {
+                self.fp_editor_toggle_next_pad_thermal_relief(*on);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadFeatureTop(f) => {
+                self.fp_editor_set_next_pad_feature_top(*f);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadFeatureBottom(f) => {
+                self.fp_editor_set_next_pad_feature_bottom(*f);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleNextPadTestpointTopAssembly(on) => {
+                self.fp_editor_toggle_next_pad_testpoint_top_assembly(*on);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleNextPadTestpointTopFab(on) => {
+                self.fp_editor_toggle_next_pad_testpoint_top_fab(*on);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleNextPadTestpointBottomAssembly(on) => {
+                self.fp_editor_toggle_next_pad_testpoint_bottom_assembly(*on);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleNextPadTestpointBottomFab(on) => {
+                self.fp_editor_toggle_next_pad_testpoint_bottom_fab(*on);
+                true
+            }
+            // v0.20 — selected-pad editing routes. Each handler mutates
+            // `state.pads[idx]` and triggers a dirty + canvas-cache
+            // invalidate so the panel re-renders with the new value.
+            crate::panels::PanelMsg::FpEditorSetSelectedPadDesignator { idx, value } => {
+                self.fp_editor_set_selected_pad_designator(*idx, value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadSide { idx, side } => {
+                self.fp_editor_set_selected_pad_side(*idx, *side);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadShape { idx, shape } => {
+                self.fp_editor_set_selected_pad_shape(*idx, shape.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadKind { idx, kind } => {
+                self.fp_editor_set_selected_pad_kind(*idx, *kind);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadSizeX { idx, value } => {
+                self.fp_editor_set_selected_pad_size_x(*idx, value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadSizeY { idx, value } => {
+                self.fp_editor_set_selected_pad_size_y(*idx, value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadDrillDiameter { idx, value } => {
+                self.fp_editor_set_selected_pad_drill_diameter(*idx, value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadDrillSlotLength { idx, value } => {
+                self.fp_editor_set_selected_pad_drill_slot_length(*idx, value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadCornerRadiusPct { idx, value } => {
+                self.fp_editor_set_selected_pad_corner_radius_pct(*idx, value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadTemplate { idx, value } => {
+                self.fp_editor_set_selected_pad_template(*idx, value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadTemplateLibrary { idx, value } => {
+                self.fp_editor_set_selected_pad_template_library(*idx, value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadPasteMarginTop { idx, value } => {
+                self.fp_editor_set_selected_pad_paste_margin_top(*idx, value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadPasteMarginBottom { idx, value } => {
+                self.fp_editor_set_selected_pad_paste_margin_bottom(*idx, value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSelectedPadPasteEnabledTop { idx, value } => {
+                self.fp_editor_toggle_selected_pad_paste_enabled_top(*idx, *value);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSelectedPadPasteEnabledBottom { idx, value } => {
+                self.fp_editor_toggle_selected_pad_paste_enabled_bottom(*idx, *value);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadMaskMarginTop { idx, value } => {
+                self.fp_editor_set_selected_pad_mask_margin_top(*idx, value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadMaskMarginBottom { idx, value } => {
+                self.fp_editor_set_selected_pad_mask_margin_bottom(*idx, value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSelectedPadMaskTentedTop { idx, value } => {
+                self.fp_editor_toggle_selected_pad_mask_tented_top(*idx, *value);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSelectedPadMaskTentedBottom { idx, value } => {
+                self.fp_editor_toggle_selected_pad_mask_tented_bottom(*idx, *value);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSelectedPadThermalRelief { idx, value } => {
+                self.fp_editor_toggle_selected_pad_thermal_relief(*idx, *value);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadFeatureTop { idx, value } => {
+                self.fp_editor_set_selected_pad_feature_top(*idx, *value);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadFeatureBottom { idx, value } => {
+                self.fp_editor_set_selected_pad_feature_bottom(*idx, *value);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSelectedPadTestpointTopAssembly { idx, value } => {
+                self.fp_editor_toggle_selected_pad_testpoint_top_assembly(*idx, *value);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSelectedPadTestpointTopFab { idx, value } => {
+                self.fp_editor_toggle_selected_pad_testpoint_top_fab(*idx, *value);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSelectedPadTestpointBottomAssembly { idx, value } => {
+                self.fp_editor_toggle_selected_pad_testpoint_bottom_assembly(*idx, *value);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSelectedPadTestpointBottomFab { idx, value } => {
+                self.fp_editor_toggle_selected_pad_testpoint_bottom_fab(*idx, *value);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetPadStackTab(tab) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.state.pad_stack_tab = *tab;
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadElectricalType(v) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.state.next_pad_defaults.electrical_type = *v;
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadNet(v) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.state.next_pad_defaults.net = v.clone();
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleNextPadLocked(on) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.state.next_pad_defaults.locked = *on;
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadElectricalType { idx, value } => {
+                let v = *value;
+                self.with_selected_pad(*idx, |pad| pad.electrical_type = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadNet { idx, value } => {
+                let v = value.clone();
+                self.with_selected_pad(*idx, |pad| pad.net = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSelectedPadLocked { idx, value } => {
+                let v = *value;
+                self.with_selected_pad(*idx, |pad| pad.locked = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetFootprintDescription(v) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.primitive_mut().description = v.clone();
+                    editor.dirty = true;
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetFootprintDefaultDesignator(v) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.primitive_mut().default_designator = v.clone();
+                    editor.dirty = true;
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetFootprintComponentType(t) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.primitive_mut().component_type = *t;
+                    editor.dirty = true;
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetFootprintHeight(v) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.primitive_mut().height_mm = fp_parse_optional_mm(v);
+                    editor.dirty = true;
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSilkLineFromX(v) => {
+                self.fp_editor_set_silk_line_endpoint(SilkLineEndpoint::FromX, v.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSilkLineFromY(v) => {
+                self.fp_editor_set_silk_line_endpoint(SilkLineEndpoint::FromY, v.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSilkLineToX(v) => {
+                self.fp_editor_set_silk_line_endpoint(SilkLineEndpoint::ToX, v.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSilkLineToY(v) => {
+                self.fp_editor_set_silk_line_endpoint(SilkLineEndpoint::ToY, v.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSilkTextPositionX(v) => {
+                self.fp_editor_set_silk_text_field(SilkTextField::PositionX, v.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSilkTextPositionY(v) => {
+                self.fp_editor_set_silk_text_field(SilkTextField::PositionY, v.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSilkTextSize(v) => {
+                self.fp_editor_set_silk_text_field(SilkTextField::Size, v.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSilkStrokeWidth(v) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    let parsed = v.trim().parse::<f64>().ok();
+                    if let Some(idx) = editor.state.selected_silk_f {
+                        if let Some(g) = editor.primitive_mut().silk_f.get_mut(idx) {
+                            if let Some(w) = parsed {
+                                if w >= 0.0 {
+                                    g.stroke_width = w;
+                                    editor.dirty = true;
+                                    editor.canvas_cache.clear();
+                                }
+                            }
+                        }
+                    }
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadHoleTolerancePlus(v) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.state.next_pad_defaults.hole_tolerance_plus_mm =
+                        fp_parse_optional_mm(v);
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadHoleToleranceMinus(v) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.state.next_pad_defaults.hole_tolerance_minus_mm =
+                        fp_parse_optional_mm(v);
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadHoleRotation(v) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.state.next_pad_defaults.hole_rotation_deg =
+                        v.trim().parse::<f64>().ok();
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadCopperOffsetX(v) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.state.next_pad_defaults.copper_offset_x_mm =
+                        fp_parse_optional_mm(v);
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetNextPadCopperOffsetY(v) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.state.next_pad_defaults.copper_offset_y_mm =
+                        fp_parse_optional_mm(v);
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleNextPadPlated(plated) => {
+                use signex_library::PadKind as Pk;
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.state.next_pad_defaults.kind = if *plated { Pk::Tht } else { Pk::NptHole };
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadHoleTolerancePlus { idx, value } => {
+                let v = fp_parse_optional_mm(value);
+                self.with_selected_pad(*idx, |pad| pad.hole_tolerance_plus_mm = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadHoleToleranceMinus { idx, value } => {
+                let v = fp_parse_optional_mm(value);
+                self.with_selected_pad(*idx, |pad| pad.hole_tolerance_minus_mm = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadHoleRotation { idx, value } => {
+                let v = value.trim().parse::<f64>().ok();
+                self.with_selected_pad(*idx, |pad| pad.hole_rotation_deg = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadCopperOffsetX { idx, value } => {
+                let v = fp_parse_optional_mm(value);
+                self.with_selected_pad(*idx, |pad| pad.copper_offset_x_mm = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSelectedPadCopperOffsetY { idx, value } => {
+                let v = fp_parse_optional_mm(value);
+                self.with_selected_pad(*idx, |pad| pad.copper_offset_y_mm = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSelectedPadPlated { idx, value } => {
+                use signex_library::PadKind as Pk;
+                let plated = *value;
+                self.with_selected_pad(*idx, |pad| {
+                    pad.kind = if plated { Pk::Tht } else { Pk::NptHole };
+                });
+                true
+            }
+            // v0.21 — sketch-pad attribute mutations. Each routes
+            // through `with_selected_sketch_pad` which mutates the
+            // entity's `PadAttr` then triggers solve+bake so geometry
+            // re-derives if the change affected dependent expressions.
+            crate::panels::PanelMsg::FpEditorSetSketchPadElectricalType { id, value } => {
+                let v = *value;
+                self.with_selected_sketch_pad(*id, |attr| attr.electrical_type = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSketchPadNet { id, value } => {
+                let v = value.clone();
+                self.with_selected_sketch_pad(*id, |attr| attr.net = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSketchPadLocked { id, value } => {
+                let v = *value;
+                self.with_selected_sketch_pad(*id, |attr| attr.locked = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSketchPadTemplate { id, value } => {
+                let v = value.clone();
+                self.with_selected_sketch_pad(*id, |attr| attr.template = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSketchPadTemplateLibrary { id, value } => {
+                let v = value.clone();
+                self.with_selected_sketch_pad(*id, |attr| attr.library = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSketchPadFeatureTop { id, value } => {
+                let v = *value;
+                self.with_selected_sketch_pad(*id, |attr| attr.feature_top = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSketchPadFeatureBottom { id, value } => {
+                let v = *value;
+                self.with_selected_sketch_pad(*id, |attr| attr.feature_bottom = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSketchPadTestpointTopAssembly { id, value } => {
+                let v = *value;
+                self.with_selected_sketch_pad(*id, |attr| attr.testpoint.top_assembly = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSketchPadTestpointTopFab { id, value } => {
+                let v = *value;
+                self.with_selected_sketch_pad(*id, |attr| attr.testpoint.top_fab = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSketchPadTestpointBottomAssembly { id, value } => {
+                let v = *value;
+                self.with_selected_sketch_pad(*id, |attr| attr.testpoint.bottom_assembly = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSketchPadTestpointBottomFab { id, value } => {
+                let v = *value;
+                self.with_selected_sketch_pad(*id, |attr| attr.testpoint.bottom_fab = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSketchPadThermalRelief { id, value } => {
+                let v = *value;
+                self.with_selected_sketch_pad(*id, |attr| attr.stack.thermal_relief = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSketchPadMaskTentedTop { id, value } => {
+                let v = *value;
+                self.with_selected_sketch_pad(*id, |attr| attr.stack.mask_top_tented = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSketchPadMaskTentedBottom { id, value } => {
+                let v = *value;
+                self.with_selected_sketch_pad(*id, |attr| attr.stack.mask_bottom_tented = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSketchPadPasteEnabledTop { id, value } => {
+                let v = *value;
+                self.with_selected_sketch_pad(*id, |attr| attr.stack.paste_top_enabled = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSketchPadPasteEnabledBottom { id, value } => {
+                let v = *value;
+                self.with_selected_sketch_pad(*id, |attr| attr.stack.paste_bottom_enabled = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSketchPadHoleTolerancePlus { id, value } => {
+                let v = fp_parse_optional_mm(value);
+                self.with_selected_sketch_pad(*id, |attr| attr.hole_tolerance_plus_mm = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSketchPadHoleToleranceMinus { id, value } => {
+                let v = fp_parse_optional_mm(value);
+                self.with_selected_sketch_pad(*id, |attr| attr.hole_tolerance_minus_mm = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSketchPadHoleRotation { id, value } => {
+                let v = value.trim().parse::<f64>().ok();
+                self.with_selected_sketch_pad(*id, |attr| attr.hole_rotation_deg = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSketchPadCopperOffsetX { id, value } => {
+                let v = fp_parse_optional_mm(value);
+                self.with_selected_sketch_pad(*id, |attr| attr.copper_offset_x_mm = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSketchPadCopperOffsetY { id, value } => {
+                let v = fp_parse_optional_mm(value);
+                self.with_selected_sketch_pad(*id, |attr| attr.copper_offset_y_mm = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetSketchPadCornerRadiusPct { id, value } => {
+                let v = value
+                    .trim()
+                    .parse::<f64>()
+                    .ok()
+                    .filter(|v| (0.0..=50.0).contains(v));
+                self.with_selected_sketch_pad(*id, |attr| attr.stack.corner_radius_pct = v);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorEditPadInSketch { pad_idx } => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    let entity_id = editor
+                        .state
+                        .pads
+                        .get(*pad_idx)
+                        .and_then(|p| p.sketch_entity_id);
+                    editor.state.mode =
+                        crate::library::editor::footprint::state::EditorMode::Sketch;
+                    editor.state.selected_pad = None;
+                    editor.state.selected_sketch = entity_id;
+                    editor.canvas_cache.clear();
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorEditPadShapeParam {
+                pad_idx,
+                key,
+                value,
+            } => {
+                // v0.24 Phase 3 (Track A2) — Properties-panel
+                // parametric-handle edit. Resolve the bound sketch
+                // parameter via `pad.shape_params[key]`, then forward
+                // to `FootprintSketchEditParameter` which upserts the
+                // expression and triggers a solve+rebake. Undo
+                // snapshot is captured at the dispatcher level via
+                // `mutates_footprint_state` (defaults to true for any
+                // unrecognised PrimitiveEditorMsg variant — verified
+                // for `FootprintSketchEditParameter` already).
+                let parameter_name = self
+                    .active_footprint_editor_mut()
+                    .and_then(|editor| {
+                        editor
+                            .state
+                            .pads
+                            .get(*pad_idx)
+                            .and_then(|pad| pad.shape_params.get(key).cloned())
+                    });
+                if let Some(name) = parameter_name {
+                    if let Some(active_tab) =
+                        self.document_state.tabs.get(self.document_state.active_tab)
+                    {
+                        if let Some(path) = active_tab.kind.as_footprint_editor() {
+                            let path = path.clone();
+                            let _ = self.update(Message::Library(
+                                crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                                    path,
+                                    msg: crate::library::messages::PrimitiveEditorMsg::FootprintSketchEditParameter {
+                                        name,
+                                        expr: value.clone(),
+                                    },
+                                },
+                            ));
+                            self.refresh_panel_ctx();
+                        }
+                    }
+                } else {
+                    tracing::warn!(
+                        target: "signex::v024",
+                        "FpEditorEditPadShapeParam: pad {pad_idx} has no shape_params[{key}] \
+                         binding; ignoring edit"
+                    );
+                }
+                true
+            }
+            crate::panels::PanelMsg::FpEditorUnlinkCornerRadius { arc_entity_id } => {
+                // v0.24 Phase 3 (Track A3) — forward to the
+                // `FootprintSketchUnlinkCornerRadius` PrimitiveEditorMsg.
+                // The dispatcher walks pads for the matching arc,
+                // mints the per-corner parameter, and triggers a
+                // solve+rebake. Undo snapshot captured at dispatcher
+                // level via mutates_footprint_state.
+                if let Some(active_tab) =
+                    self.document_state.tabs.get(self.document_state.active_tab)
+                {
+                    if let Some(path) = active_tab.kind.as_footprint_editor() {
+                        let path = path.clone();
+                        let _ = self.update(Message::Library(
+                            crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                                path,
+                                msg: crate::library::messages::PrimitiveEditorMsg::FootprintSketchUnlinkCornerRadius {
+                                    arc_entity_id: *arc_entity_id,
+                                },
+                            },
+                        ));
+                        self.refresh_panel_ctx();
+                    }
+                }
+                true
+            }
+            crate::panels::PanelMsg::FpEditorEditSketchPadInPads { id } => {
+                // v0.22 Phase D6 — mirror of FpEditorEditPadInSketch:
+                // resolve the EditorPad whose `sketch_entity_id` ==
+                // `id`, switch to Pads mode, and select that pad.
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    let pad_idx = editor
+                        .state
+                        .pads
+                        .iter()
+                        .position(|p| p.sketch_entity_id == Some(*id));
+                    editor.state.mode =
+                        crate::library::editor::footprint::state::EditorMode::Normal;
+                    editor.state.selected_sketch = None;
+                    editor.state.selected_sketch_secondary = None;
+                    editor.state.selected_pad = pad_idx;
+                    editor.canvas_cache.clear();
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSelectSketchEntity { id } => {
+                // v0.22 Phase E3+E4 — Properties-panel "Conflicts"
+                // row click → set the sketch entity as the primary
+                // selection so the canvas re-renders with that
+                // entity's constraint icons highlighted in red.
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    editor.state.selected_sketch = Some(*id);
+                    editor.state.selected_sketch_secondary = None;
+                    editor.canvas_cache.clear();
+                }
+                self.refresh_panel_ctx();
+                true
+            }
+            crate::panels::PanelMsg::HistoryRestoreClicked { sha } => {
+                // v0.22 Phase 8.5 — History panel "Restore this
+                // version" button. Resolve the active tab's owning
+                // project, open `LocalGitProjectAdapter`, and run
+                // `restore_at(rel_path, oid)` to overwrite the
+                // working-tree file with the historical blob. Mark
+                // the file dirty so the next save commits the
+                // restored content.
+                self.handle_history_restore_clicked(sha);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorHoverOverConstraint { constraint } => {
+                // v0.23 — per-row precision. `Some(id)` isolates a
+                // single constraint at full red while every other
+                // glyph (including other over-constraints) dims.
+                // `None` clears back to the default rendering.
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    if editor.state.conflicts_row_hovered != *constraint {
+                        editor.state.conflicts_row_hovered = *constraint;
+                        editor.canvas_cache.clear();
+                    }
+                }
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleSilkFilled(on) => {
+                if let Some(editor) = self.active_footprint_editor_mut() {
+                    if let Some(idx) = editor.state.selected_silk_f {
+                        if let Some(g) = editor.primitive_mut().silk_f.get_mut(idx) {
+                            g.filled = *on;
+                            editor.dirty = true;
+                            editor.canvas_cache.clear();
+                        }
+                    }
+                }
+                self.refresh_panel_ctx();
+                true
+            }
             crate::panels::PanelMsg::FpEditorSetPourNet { id, value } => {
                 self.fp_editor_set_pour_net(*id, value.clone());
                 true
@@ -233,6 +914,35 @@ impl Signex {
             }
             crate::panels::PanelMsg::FpEditorSetCutoutThrough { id, value } => {
                 self.fp_editor_set_cutout_through(*id, *value);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorEditArrayParam {
+                array_id,
+                field,
+                value,
+            } => {
+                self.fp_editor_edit_array_param(*array_id, *field, value.clone());
+                true
+            }
+            crate::panels::PanelMsg::FpEditorSetArrayNumberingScheme { array_id, scheme } => {
+                self.fp_editor_set_array_numbering_scheme(*array_id, *scheme);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorDeleteArray { array_id } => {
+                self.fp_editor_delete_array(*array_id);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorBeginRepickPolarCenter { array_id } => {
+                self.fp_editor_begin_repick_polar_center(*array_id);
+                true
+            }
+            crate::panels::PanelMsg::FpEditorToggleArrayInstance {
+                array_id,
+                i,
+                j,
+                value,
+            } => {
+                self.fp_editor_toggle_array_instance(*array_id, *i, *j, *value);
                 true
             }
             crate::panels::PanelMsg::FpEditorToggleSnapOption(flag) => {
@@ -1250,6 +1960,371 @@ impl Signex {
         self.refresh_panel_ctx();
     }
 
+    // v0.20 — Altium-parity Pad Properties / Pad Stack / Pad Features
+    // form handlers. Each method mutates a slice of
+    // `editor.state.next_pad_defaults` so the next `add_pad_at` mints
+    // a pad with the user-selected stack / feature / testpoint
+    // configuration. None of these are dirty-marking on their own —
+    // they're "pre-placement defaults" — but the panel `refresh` runs
+    // so the form re-reads the new value.
+    pub(crate) fn fp_editor_set_next_pad_shape(
+        &mut self,
+        shape: signex_library::PadShape,
+    ) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.shape = shape;
+            editor.canvas_cache.clear();
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_set_next_pad_kind(
+        &mut self,
+        kind: signex_library::PadKind,
+    ) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.kind = kind;
+            editor.canvas_cache.clear();
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_set_next_pad_drill_diameter(&mut self, value: String) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.drill_diameter_mm = fp_parse_optional_mm(&value);
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_set_next_pad_drill_slot_length(&mut self, value: String) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.drill_slot_length_mm =
+                fp_parse_optional_mm(&value);
+        }
+        self.refresh_panel_ctx();
+    }
+    /// v0.20 — Hole shape pick_list. Round / Slot. The picker is a
+    /// shortcut: Round clears slot_length; Slot defaults it to
+    /// 1.5× drill diameter (or 1mm if no drill yet).
+    pub(crate) fn fp_editor_set_next_pad_hole_shape_round(&mut self) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.drill_slot_length_mm = None;
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_set_next_pad_hole_shape_slot(&mut self) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            let default_slot = editor
+                .state
+                .next_pad_defaults
+                .drill_diameter_mm
+                .map(|d| d * 1.5)
+                .unwrap_or(1.0);
+            editor.state.next_pad_defaults.drill_slot_length_mm = Some(default_slot);
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_set_next_pad_corner_radius_pct(&mut self, value: String) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            let parsed = value.trim().parse::<f64>().ok();
+            editor.state.next_pad_defaults.stack.corner_radius_pct =
+                parsed.filter(|v| (0.0..=50.0).contains(v));
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_set_next_pad_template(&mut self, value: String) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.template = value;
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_set_next_pad_template_library(&mut self, value: String) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.template_library = value;
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_set_next_pad_paste_margin_top(&mut self, value: String) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.stack.paste_margin_top =
+                fp_parse_optional_mm(&value);
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_set_next_pad_paste_margin_bottom(&mut self, value: String) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.stack.paste_margin_bottom =
+                fp_parse_optional_mm(&value);
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_toggle_next_pad_paste_enabled_top(&mut self, on: bool) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.stack.paste_enabled_top = on;
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_toggle_next_pad_paste_enabled_bottom(&mut self, on: bool) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.stack.paste_enabled_bottom = on;
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_set_next_pad_mask_margin_top(&mut self, value: String) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.stack.mask_margin_top =
+                fp_parse_optional_mm(&value);
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_set_next_pad_mask_margin_bottom(&mut self, value: String) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.stack.mask_margin_bottom =
+                fp_parse_optional_mm(&value);
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_toggle_next_pad_mask_tented_top(&mut self, on: bool) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.stack.mask_tented_top = on;
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_toggle_next_pad_mask_tented_bottom(&mut self, on: bool) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.stack.mask_tented_bottom = on;
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_toggle_next_pad_thermal_relief(&mut self, on: bool) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.stack.thermal_relief = on;
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_set_next_pad_feature_top(
+        &mut self,
+        f: signex_sketch::attr::PadFeature,
+    ) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.feature_top = f;
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_set_next_pad_feature_bottom(
+        &mut self,
+        f: signex_sketch::attr::PadFeature,
+    ) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.feature_bottom = f;
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_toggle_next_pad_testpoint_top_assembly(&mut self, on: bool) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.testpoint.top_assembly = on;
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_toggle_next_pad_testpoint_top_fab(&mut self, on: bool) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.testpoint.top_fab = on;
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_toggle_next_pad_testpoint_bottom_assembly(&mut self, on: bool) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.testpoint.bottom_assembly = on;
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_toggle_next_pad_testpoint_bottom_fab(&mut self, on: bool) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.testpoint.bottom_fab = on;
+        }
+        self.refresh_panel_ctx();
+    }
+
+    // v0.20 — Selected-pad editing handlers. Each one mutates a slice
+    // of `state.pads[idx]` and dirty-marks the editor + clears the
+    // canvas cache so the new value renders. The `with_parts` block
+    // syncs the pad list back onto the underlying primitive so the
+    // saved file picks up the change.
+    fn with_selected_pad<F>(&mut self, idx: usize, f: F)
+    where
+        F: FnOnce(&mut crate::library::editor::footprint::state::EditorPad),
+    {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            if let Some(pad) = editor.state.pads.get_mut(idx) {
+                f(pad);
+                editor.with_parts(|state, primitive| {
+                    crate::library::editor::footprint::state::FootprintEditorState::sync_pads_to_primitive(state, primitive);
+                });
+                editor.dirty = true;
+                editor.canvas_cache.clear();
+            }
+        }
+        self.refresh_panel_ctx();
+    }
+
+    /// v0.21 — sketch-mode counterpart of `with_selected_pad`. Looks
+    /// up the sketch entity by id, runs the closure on its `PadAttr`
+    /// (creating one only if it already exists; non-pad entities are
+    /// silently skipped), then dirty-marks the editor + clears the
+    /// canvas cache. Solve+bake is queued on the next mutation cycle.
+    fn with_selected_sketch_pad<F>(
+        &mut self,
+        id: signex_sketch::id::SketchEntityId,
+        f: F,
+    ) where
+        F: FnOnce(&mut signex_sketch::attr::PadAttr),
+    {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            let sketch = editor.primitive_mut().sketch.as_mut();
+            if let Some(sketch) = sketch {
+                if let Some(entity) = sketch.entities.iter_mut().find(|e| e.id == id) {
+                    if let Some(attr) = entity.pad.as_mut() {
+                        f(attr);
+                        editor.dirty = true;
+                        editor.canvas_cache.clear();
+                    }
+                }
+            }
+        }
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_set_selected_pad_designator(&mut self, idx: usize, value: String) {
+        self.with_selected_pad(idx, |pad| pad.number = value);
+    }
+    pub(crate) fn fp_editor_set_selected_pad_side(
+        &mut self,
+        idx: usize,
+        side: crate::library::editor::footprint::state::PadSide,
+    ) {
+        use crate::library::editor::footprint::state::PadSide;
+        use signex_library::LayerId;
+        let layers = match side {
+            PadSide::Top => vec![
+                LayerId::new("F.Cu"),
+                LayerId::new("F.Mask"),
+                LayerId::new("F.Paste"),
+            ],
+            PadSide::Bottom => vec![
+                LayerId::new("B.Cu"),
+                LayerId::new("B.Mask"),
+                LayerId::new("B.Paste"),
+            ],
+            PadSide::All => vec![
+                LayerId::new("*.Cu"),
+                LayerId::new("F.Mask"),
+                LayerId::new("B.Mask"),
+            ],
+        };
+        self.with_selected_pad(idx, |pad| pad.layers = layers);
+    }
+    pub(crate) fn fp_editor_set_selected_pad_shape(
+        &mut self,
+        idx: usize,
+        shape: signex_library::PadShape,
+    ) {
+        self.with_selected_pad(idx, |pad| pad.shape = shape);
+    }
+    pub(crate) fn fp_editor_set_selected_pad_kind(
+        &mut self,
+        idx: usize,
+        kind: signex_library::PadKind,
+    ) {
+        self.with_selected_pad(idx, |pad| pad.kind = kind);
+    }
+    pub(crate) fn fp_editor_set_selected_pad_size_x(&mut self, idx: usize, value: String) {
+        if let Ok(parsed) = value.trim().parse::<f64>() {
+            if parsed > 0.0 {
+                self.with_selected_pad(idx, |pad| pad.size_mm.0 = parsed);
+            }
+        }
+    }
+    pub(crate) fn fp_editor_set_selected_pad_size_y(&mut self, idx: usize, value: String) {
+        if let Ok(parsed) = value.trim().parse::<f64>() {
+            if parsed > 0.0 {
+                self.with_selected_pad(idx, |pad| pad.size_mm.1 = parsed);
+            }
+        }
+    }
+    pub(crate) fn fp_editor_set_selected_pad_drill_diameter(&mut self, idx: usize, value: String) {
+        let parsed = fp_parse_optional_mm(&value);
+        self.with_selected_pad(idx, |pad| pad.drill_diameter_mm = parsed);
+    }
+    pub(crate) fn fp_editor_set_selected_pad_drill_slot_length(&mut self, idx: usize, _value: String) {
+        // v0.20 placeholder — slot length not yet on EditorPad. Wired
+        // when `EditorPad` gains a separate `drill_slot_length_mm`.
+        let _ = idx;
+        self.refresh_panel_ctx();
+    }
+    pub(crate) fn fp_editor_set_selected_pad_corner_radius_pct(&mut self, idx: usize, value: String) {
+        let parsed = value.trim().parse::<f64>().ok().filter(|v| (0.0..=50.0).contains(v));
+        self.with_selected_pad(idx, |pad| pad.stack.corner_radius_pct = parsed);
+    }
+    pub(crate) fn fp_editor_set_selected_pad_template(&mut self, idx: usize, value: String) {
+        self.with_selected_pad(idx, |pad| pad.template = value);
+    }
+    pub(crate) fn fp_editor_set_selected_pad_template_library(&mut self, idx: usize, value: String) {
+        self.with_selected_pad(idx, |pad| pad.template_library = value);
+    }
+    pub(crate) fn fp_editor_set_selected_pad_paste_margin_top(&mut self, idx: usize, value: String) {
+        let parsed = fp_parse_optional_mm(&value);
+        self.with_selected_pad(idx, |pad| pad.stack.paste_margin_top = parsed);
+    }
+    pub(crate) fn fp_editor_set_selected_pad_paste_margin_bottom(&mut self, idx: usize, value: String) {
+        let parsed = fp_parse_optional_mm(&value);
+        self.with_selected_pad(idx, |pad| pad.stack.paste_margin_bottom = parsed);
+    }
+    pub(crate) fn fp_editor_toggle_selected_pad_paste_enabled_top(&mut self, idx: usize, on: bool) {
+        self.with_selected_pad(idx, |pad| pad.stack.paste_enabled_top = on);
+    }
+    pub(crate) fn fp_editor_toggle_selected_pad_paste_enabled_bottom(&mut self, idx: usize, on: bool) {
+        self.with_selected_pad(idx, |pad| pad.stack.paste_enabled_bottom = on);
+    }
+    pub(crate) fn fp_editor_set_selected_pad_mask_margin_top(&mut self, idx: usize, value: String) {
+        let parsed = fp_parse_optional_mm(&value);
+        self.with_selected_pad(idx, |pad| pad.stack.mask_margin_top = parsed);
+    }
+    pub(crate) fn fp_editor_set_selected_pad_mask_margin_bottom(&mut self, idx: usize, value: String) {
+        let parsed = fp_parse_optional_mm(&value);
+        self.with_selected_pad(idx, |pad| pad.stack.mask_margin_bottom = parsed);
+    }
+    pub(crate) fn fp_editor_toggle_selected_pad_mask_tented_top(&mut self, idx: usize, on: bool) {
+        self.with_selected_pad(idx, |pad| pad.stack.mask_tented_top = on);
+    }
+    pub(crate) fn fp_editor_toggle_selected_pad_mask_tented_bottom(&mut self, idx: usize, on: bool) {
+        self.with_selected_pad(idx, |pad| pad.stack.mask_tented_bottom = on);
+    }
+    pub(crate) fn fp_editor_toggle_selected_pad_thermal_relief(&mut self, idx: usize, on: bool) {
+        self.with_selected_pad(idx, |pad| pad.stack.thermal_relief = on);
+    }
+    pub(crate) fn fp_editor_set_selected_pad_feature_top(
+        &mut self,
+        idx: usize,
+        value: signex_sketch::attr::PadFeature,
+    ) {
+        self.with_selected_pad(idx, |pad| pad.feature_top = value);
+    }
+    pub(crate) fn fp_editor_set_selected_pad_feature_bottom(
+        &mut self,
+        idx: usize,
+        value: signex_sketch::attr::PadFeature,
+    ) {
+        self.with_selected_pad(idx, |pad| pad.feature_bottom = value);
+    }
+    pub(crate) fn fp_editor_toggle_selected_pad_testpoint_top_assembly(&mut self, idx: usize, on: bool) {
+        self.with_selected_pad(idx, |pad| pad.testpoint.top_assembly = on);
+    }
+    pub(crate) fn fp_editor_toggle_selected_pad_testpoint_top_fab(&mut self, idx: usize, on: bool) {
+        self.with_selected_pad(idx, |pad| pad.testpoint.top_fab = on);
+    }
+    pub(crate) fn fp_editor_toggle_selected_pad_testpoint_bottom_assembly(&mut self, idx: usize, on: bool) {
+        self.with_selected_pad(idx, |pad| pad.testpoint.bottom_assembly = on);
+    }
+    pub(crate) fn fp_editor_toggle_selected_pad_testpoint_bottom_fab(&mut self, idx: usize, on: bool) {
+        self.with_selected_pad(idx, |pad| pad.testpoint.bottom_fab = on);
+    }
+
     /// v0.16.4 — mutate the selected entity's pour `net` and re-bake.
     pub(crate) fn fp_editor_set_pour_net(
         &mut self,
@@ -1503,6 +2578,234 @@ impl Signex {
         }
         self.refresh_panel_ctx();
     }
+
+    /// v0.23 — Pattern sub-form text-input edit. Walks `sketch.arrays`
+    /// to find the array, mutates the field identified by
+    /// `ArrayParamField`, then runs `SketchEdit::ForceRebuild` so the
+    /// bake re-expands. `MaskExpr` with an empty value clears the
+    /// depopulation entirely (to avoid leaving a `mask_expr=""` orphan
+    /// that blocks re-enabling instances later).
+    pub(crate) fn fp_editor_edit_array_param(
+        &mut self,
+        array_id: signex_sketch::array::ArrayId,
+        field: crate::panels::ArrayParamField,
+        value: String,
+    ) {
+        use crate::panels::ArrayParamField;
+        use signex_sketch::array::{ArrayKind, GridDepopulation};
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
+                if let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id) {
+                    let trimmed = value.trim();
+                    match (&mut array.kind, field) {
+                        (ArrayKind::Linear { count_expr, .. }, ArrayParamField::LinearCountExpr) => {
+                            *count_expr = value;
+                        }
+                        (ArrayKind::Linear { dx_expr, .. }, ArrayParamField::LinearDxExpr) => {
+                            *dx_expr = value;
+                        }
+                        (ArrayKind::Linear { dy_expr, .. }, ArrayParamField::LinearDyExpr) => {
+                            *dy_expr = value;
+                        }
+                        (ArrayKind::Grid { nx_expr, .. }, ArrayParamField::GridNxExpr) => {
+                            *nx_expr = value;
+                        }
+                        (ArrayKind::Grid { ny_expr, .. }, ArrayParamField::GridNyExpr) => {
+                            *ny_expr = value;
+                        }
+                        (ArrayKind::Grid { dx_expr, .. }, ArrayParamField::GridDxExpr) => {
+                            *dx_expr = value;
+                        }
+                        (ArrayKind::Grid { dy_expr, .. }, ArrayParamField::GridDyExpr) => {
+                            *dy_expr = value;
+                        }
+                        (ArrayKind::Polar { count_expr, .. }, ArrayParamField::PolarCountExpr) => {
+                            *count_expr = value;
+                        }
+                        (
+                            ArrayKind::Polar {
+                                sweep_angle_expr, ..
+                            },
+                            ArrayParamField::PolarSweepAngleExpr,
+                        ) => {
+                            *sweep_angle_expr = value;
+                        }
+                        (
+                            ArrayKind::Grid { depopulation, .. }
+                            | ArrayKind::Polar { depopulation, .. },
+                            ArrayParamField::MaskExpr,
+                        ) => {
+                            // Preserve any existing per-instance
+                            // suppression list when editing the mask
+                            // expression — the user might be tweaking
+                            // both at once via the Properties panel.
+                            let prior = depopulation
+                                .as_ref()
+                                .map(|d| d.suppressed_instances.clone())
+                                .unwrap_or_default();
+                            if trimmed.is_empty() && prior.is_empty() {
+                                *depopulation = None;
+                            } else {
+                                *depopulation = Some(GridDepopulation {
+                                    mask_expr: value,
+                                    suppressed_instances: prior,
+                                });
+                            }
+                        }
+                        // Mismatched (kind, field) pairs no-op so a
+                        // stale panel can't corrupt the array.
+                        _ => {}
+                    }
+                }
+            }
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
+            use crate::library::editor::footprint::sketch_mode::SketchEdit;
+            editor.with_parts(|state, primitive| {
+                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+            });
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+        }
+        self.refresh_panel_ctx();
+    }
+
+    /// v0.23 — Switch numbering scheme. Maps the panel's enum onto
+    /// [`signex_sketch::array::NumberingScheme`] using sensible
+    /// defaults (1-step LinearIncrement, BGA `A1`-rooted, empty
+    /// Explicit list). Existing inner state isn't preserved across
+    /// kind flips — switching numbering schemes is a discrete edit.
+    pub(crate) fn fp_editor_set_array_numbering_scheme(
+        &mut self,
+        array_id: signex_sketch::array::ArrayId,
+        scheme: crate::panels::NumberingSchemeKindUi,
+    ) {
+        use crate::panels::NumberingSchemeKindUi;
+        use signex_sketch::array::NumberingScheme;
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
+                if let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id) {
+                    array.numbering = match scheme {
+                        NumberingSchemeKindUi::LinearIncrement => NumberingScheme::LinearIncrement {
+                            start_expr: "1".into(),
+                            step_expr: "1".into(),
+                        },
+                        NumberingSchemeKindUi::BgaRowCol => NumberingScheme::BgaRowCol {
+                            skip_letters: true,
+                            start_row: 'A',
+                            start_col: 1,
+                        },
+                        NumberingSchemeKindUi::Explicit => NumberingScheme::Explicit {
+                            names: Vec::new(),
+                        },
+                    };
+                }
+            }
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
+            use crate::library::editor::footprint::sketch_mode::SketchEdit;
+            editor.with_parts(|state, primitive| {
+                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+            });
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+        }
+        self.refresh_panel_ctx();
+    }
+
+    /// v0.23 — Delete an array. The source entity stays in the sketch
+    /// — only the array record is removed, so existing constraints on
+    /// the source survive intact.
+    pub(crate) fn fp_editor_delete_array(&mut self, array_id: signex_sketch::array::ArrayId) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
+                sketch.arrays.retain(|a| a.id != array_id);
+            }
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
+            use crate::library::editor::footprint::sketch_mode::SketchEdit;
+            editor.with_parts(|state, primitive| {
+                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+            });
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+        }
+        self.refresh_panel_ctx();
+    }
+
+    /// v0.23 — Begin re-picking a polar centre. Sets
+    /// `ToolPending::RepickPolarCenter` so the next sketch click on a
+    /// Point overwrites the array's `center`. The dispatcher in
+    /// [`crate::app::dispatch::library`] consumes the pending state and
+    /// resets to `Idle`.
+    pub(crate) fn fp_editor_begin_repick_polar_center(
+        &mut self,
+        array_id: signex_sketch::array::ArrayId,
+    ) {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            use crate::library::editor::footprint::state::ToolPending;
+            editor.state.tool_pending = ToolPending::RepickPolarCenter { array_id };
+            editor.canvas_cache.clear();
+        }
+        self.refresh_panel_ctx();
+    }
+
+    /// v0.23 — Toggle a single `(i, j)` instance in an array's
+    /// per-instance suppression list. `value=true` enables the
+    /// instance (removes the entry); `value=false` suppresses it
+    /// (adds the entry, deduplicated). Polar arrays set `j = 0`.
+    ///
+    /// When the suppression list grows from empty, the array gains a
+    /// fresh `GridDepopulation { mask_expr: "", suppressed_instances }`.
+    /// When the list returns to empty AND the existing `mask_expr` is
+    /// blank, the depopulation is removed entirely so the array
+    /// returns to its parametric-only state.
+    pub(crate) fn fp_editor_toggle_array_instance(
+        &mut self,
+        array_id: signex_sketch::array::ArrayId,
+        i: u32,
+        j: u32,
+        value: bool,
+    ) {
+        use signex_sketch::array::{ArrayKind, GridDepopulation};
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
+                if let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id) {
+                    let depop_slot: &mut Option<GridDepopulation> = match &mut array.kind {
+                        ArrayKind::Grid { depopulation, .. } => depopulation,
+                        ArrayKind::Polar { depopulation, .. } => depopulation,
+                        ArrayKind::Linear { .. } => return,
+                    };
+                    if value {
+                        // Re-enable the instance — drop matching entries.
+                        if let Some(d) = depop_slot.as_mut() {
+                            d.suppressed_instances
+                                .retain(|(si, sj)| !(*si == i && *sj == j));
+                            if d.mask_expr.trim().is_empty()
+                                && d.suppressed_instances.is_empty()
+                            {
+                                *depop_slot = None;
+                            }
+                        }
+                    } else {
+                        // Suppress the instance — append if absent.
+                        let d = depop_slot.get_or_insert_with(|| GridDepopulation {
+                            mask_expr: String::new(),
+                            suppressed_instances: Vec::new(),
+                        });
+                        if !d.suppressed_instances.iter().any(|(si, sj)| *si == i && *sj == j) {
+                            d.suppressed_instances.push((i, j));
+                        }
+                    }
+                }
+            }
+            use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
+            use crate::library::editor::footprint::sketch_mode::SketchEdit;
+            editor.with_parts(|state, primitive| {
+                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
+            });
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+        }
+        self.refresh_panel_ctx();
+    }
 }
 
 /// Apply one numeric Properties-pane edit to a graphic. (idx, field)
@@ -1511,6 +2814,103 @@ impl Signex {
 /// Click-to-cycle the symbol's local color override through a small
 /// preset palette and back to `None` (= inherit). 5 steps total:
 /// None → red → green → blue → yellow → back to None.
+/// v0.21 — Silk Line endpoint to mutate.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum SilkLineEndpoint {
+    FromX,
+    FromY,
+    ToX,
+    ToY,
+}
+
+/// v0.21 — Silk Text field to mutate.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum SilkTextField {
+    PositionX,
+    PositionY,
+    Size,
+}
+
+impl Signex {
+    pub(crate) fn fp_editor_set_silk_line_endpoint(
+        &mut self,
+        endpoint: SilkLineEndpoint,
+        value: String,
+    ) {
+        let parsed = value.trim().parse::<f64>().ok();
+        if let Some(parsed) = parsed {
+            if let Some(editor) = self.active_footprint_editor_mut() {
+                if let Some(idx) = editor.state.selected_silk_f {
+                    if let Some(g) = editor.primitive_mut().silk_f.get_mut(idx) {
+                        if let signex_library::primitive::footprint::FpGraphicKind::Line {
+                            from,
+                            to,
+                        } = &mut g.kind
+                        {
+                            match endpoint {
+                                SilkLineEndpoint::FromX => from[0] = parsed,
+                                SilkLineEndpoint::FromY => from[1] = parsed,
+                                SilkLineEndpoint::ToX => to[0] = parsed,
+                                SilkLineEndpoint::ToY => to[1] = parsed,
+                            }
+                            editor.dirty = true;
+                            editor.canvas_cache.clear();
+                        }
+                    }
+                }
+            }
+        }
+        self.refresh_panel_ctx();
+    }
+
+    pub(crate) fn fp_editor_set_silk_text_field(
+        &mut self,
+        field: SilkTextField,
+        value: String,
+    ) {
+        let parsed = value.trim().parse::<f64>().ok();
+        if let Some(parsed) = parsed {
+            if let Some(editor) = self.active_footprint_editor_mut() {
+                if let Some(idx) = editor.state.selected_silk_f {
+                    if let Some(g) = editor.primitive_mut().silk_f.get_mut(idx) {
+                        if let signex_library::primitive::footprint::FpGraphicKind::Text {
+                            position,
+                            size,
+                            ..
+                        } = &mut g.kind
+                        {
+                            match field {
+                                SilkTextField::PositionX => position[0] = parsed,
+                                SilkTextField::PositionY => position[1] = parsed,
+                                SilkTextField::Size => {
+                                    if parsed > 0.0 {
+                                        *size = parsed;
+                                    }
+                                }
+                            }
+                            editor.dirty = true;
+                            editor.canvas_cache.clear();
+                        }
+                    }
+                }
+            }
+        }
+        self.refresh_panel_ctx();
+    }
+}
+
+/// v0.20 — parse a Properties-panel mm input as `Option<f64>`.
+/// Empty / whitespace = `None` (means "use rule"); non-numeric =
+/// `None` (the form re-displays the previous value, so the user
+/// can keep typing). Used by every per-side mask / paste row.
+fn fp_parse_optional_mm(value: &str) -> Option<f64> {
+    let s = value.trim();
+    if s.is_empty() {
+        return None;
+    }
+    s.parse::<f64>().ok()
+}
+
 fn cycle_local_color(current: Option<[u8; 4]>) -> Option<[u8; 4]> {
     const PALETTE: &[[u8; 4]] = &[
         [220, 60, 60, 255],  // red

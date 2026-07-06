@@ -112,6 +112,19 @@ pub struct ProjectData {
     /// about Signex libraries) load with an empty list.
     #[serde(default)]
     pub libraries: Vec<LibraryEntry>,
+    /// v0.22 — opt-in local Git versioning for this project's design
+    /// files (`.snxsch`, `.snxpcb`, `.snxprj`, `.snxmat`,
+    /// `.snxnet`, `.snxbom`, `.snxout`). Defaults to `false`; users
+    /// flip it via Project Properties → "Enable Version Control",
+    /// which triggers `git init` + an initial commit (and writes the
+    /// project's `.gitattributes`) before subsequent saves auto-
+    /// commit through `LocalGitProjectAdapter::commit_path`.
+    ///
+    /// Backwards-compat: `#[serde(default)]` so pre-v0.22 `.snxprj`
+    /// files load with the field unset = no version control. Same
+    /// pattern as `LibrarySpec.enable_git` for `.snxlib` files.
+    #[serde(default)]
+    pub enable_git: bool,
 }
 
 impl ProjectData {
@@ -186,6 +199,7 @@ mod tests {
             variant_definitions: vec![],
             active_variant: None,
             libraries: vec![],
+            enable_git: false,
         };
         let local = LibraryEntry {
             path: PathBuf::from("foo-lib.snxlib"),
@@ -209,6 +223,7 @@ mod tests {
             variant_definitions: vec![],
             active_variant: None,
             libraries: vec![],
+            enable_git: false,
         };
         let shared = LibraryEntry {
             path: PathBuf::from("/var/signex/Power.snxlib"),
@@ -335,6 +350,7 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
         variant_definitions: Vec::new(),
         active_variant: None,
         libraries: Vec::new(),
+        enable_git: false,
     })
 }
 

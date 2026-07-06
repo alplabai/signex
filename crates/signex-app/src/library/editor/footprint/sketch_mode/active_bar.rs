@@ -66,48 +66,113 @@ pub fn items<'a>(
     // Compute which constraint tags apply to the current selection.
     let enabled = constraint_enable_matrix(editor);
 
+    // v0.22 — `mk_constraint` now returns `Option<...>`: only emits a
+    // button when the tag's slot is enabled by the current selection.
+    // Inert constraint buttons used to occupy real width even when
+    // they did nothing; the bar reads as a dynamic context-sensitive
+    // strip now. Combined with the modify-section gating below, this
+    // removes ~10 buttons from the no-selection state.
     let mk_constraint = |tag: SketchConstraintTag,
                          tooltip: &str,
                          glyph: &'static str|
-     -> ActiveBarItem<LibraryMessage> {
+     -> Option<ActiveBarItem<LibraryMessage>> {
+        if !enabled[tag_index(tag)] {
+            return None;
+        }
         let p = path.clone();
-        let on = enabled[tag_index(tag)];
-        ActiveBarItem::Button(ActiveBarButton {
+        Some(ActiveBarItem::Button(ActiveBarButton {
             icon: ActiveBarIcon::Glyph(glyph),
             tooltip: tooltip.to_string(),
-            enabled: on,
+            enabled: true,
             selected: false,
-            on_press: if on {
-                Some(LibraryMessage::PrimitiveEditorEvent {
-                    path: p,
-                    msg: PrimitiveEditorMsg::FootprintSketchAddConstraintForSelection(tag),
-                })
-            } else {
-                None
-            },
+            on_press: Some(LibraryMessage::PrimitiveEditorEvent {
+                path: p,
+                msg: PrimitiveEditorMsg::FootprintSketchAddConstraintForSelection(tag),
+            }),
             ..ActiveBarButton::default()
-        })
+        }))
     };
 
-    // v0.16.1 — Construction-mode toggle. Sticky pill: while on, every
-    // newly-minted entity gets `construction = true` (rendered dashed-
-    // grey, skipped by bake). Useful for guides + symmetry without
-    // affecting the baked silk / pad / courtyard output.
+    // v0.22 — Linetype tri-state pill. Combines the v0.16.1
+    // Construction toggle and v0.22 Phase A5 Centerline toggle into a
+    // single button that cycles Normal → Construction → Centerline →
+    // Normal on left-click. The icon + tooltip update to reflect the
+    // current state; the bar saves a button slot vs. two separate
+    // pills with mutual-exclusion logic in the dispatcher.
+    //
+    // Cycle mapping:
+    // - Normal      → ToggleConstruction (turns Construction on)
+    // - Construction → ToggleCenterline   (turns Centerline on; the
+    //                                      handler clears Construction
+    //                                      because of the existing
+    //                                      mutual-exclusivity rule)
+    // - Centerline  → ToggleCenterline   (turns Centerline off → Normal)
     let construction_on = editor.state.construction_mode;
-    let construction_path = path.clone();
-    let construction_button = ActiveBarItem::Button(ActiveBarButton {
-        icon: ActiveBarIcon::Glyph("\u{2504}"), // ┄ dashed line glyph
-        tooltip: if construction_on {
-            "Construction mode: ON (new geometry won't bake)".into()
-        } else {
-            "Construction mode: OFF".into()
-        },
+    let centerline_on = editor.state.centerline_mode;
+    let linetype_path = path.clone();
+    let (linetype_glyph, linetype_tooltip, linetype_msg) = if centerline_on {
+        (
+            "\u{2501}",
+            "Linetype: Centerline (click → Normal)".to_string(),
+            PrimitiveEditorMsg::FootprintSketchToggleCenterline,
+        )
+    } else if construction_on {
+        (
+            "\u{2504}",
+            "Linetype: Construction (click → Centerline)".to_string(),
+            PrimitiveEditorMsg::FootprintSketchToggleCenterline,
+        )
+    } else {
+        (
+            "\u{2501}\u{0307}", // ━̇ — solid line with overdot hint
+            "Linetype: Normal (click → Construction)".to_string(),
+            PrimitiveEditorMsg::FootprintSketchToggleConstruction,
+        )
+    };
+    let linetype_button = ActiveBarItem::Button(ActiveBarButton {
+        icon: ActiveBarIcon::Glyph(linetype_glyph),
+        tooltip: linetype_tooltip,
         enabled: true,
-        selected: construction_on,
+        selected: construction_on || centerline_on,
         on_press: Some(LibraryMessage::PrimitiveEditorEvent {
-            path: construction_path,
-            msg: PrimitiveEditorMsg::FootprintSketchToggleConstruction,
+            path: linetype_path,
+            msg: linetype_msg,
         }),
+        ..ActiveBarButton::default()
+    });
+
+    // v0.22 Phase D4 — Make Pad from Profile button. One-shot action
+    // (not a tool mode): converts the closed-loop profile that
+    // includes the currently-selected Line into a Custom-shape pad.
+    // Enabled only when a Line is selected; the dispatcher itself
+    // verifies the loop closes and pushes a warning otherwise.
+    let make_pad_path = path.clone();
+    let make_pad_enabled = matches!(
+        editor
+            .state
+            .selected_sketch
+            .and_then(|id| editor.primitive().sketch.as_ref()?.entities.iter().find(|e| e.id == id))
+            .map(|e| &e.kind),
+        Some(signex_sketch::entity::EntityKind::Line { .. })
+    );
+    let make_pad_button = ActiveBarItem::Button(ActiveBarButton {
+        icon: ActiveBarIcon::Glyph("\u{2B22}"), // ⬢ black hexagon (custom polygon → pad)
+        tooltip: if make_pad_enabled {
+            "Make Pad from Profile — walk the closed loop containing the selected Line and convert it into a Custom-shape pad"
+                .into()
+        } else {
+            "Make Pad from Profile (select a Line that's part of a closed loop)".into()
+        },
+        enabled: make_pad_enabled,
+        selected: false,
+        on_press: if make_pad_enabled {
+            Some(LibraryMessage::PrimitiveEditorEvent {
+                path: make_pad_path,
+                msg: PrimitiveEditorMsg::FootprintSketchMakePadFromProfile,
+            })
+        } else {
+            None
+        },
         ..ActiveBarButton::default()
     });
 
@@ -116,107 +181,166 @@ pub fn items<'a>(
     let dim_input = build_dimension_input(editor, tokens);
 
     let _ = tokens;
-    vec![
-        // Section 1: Select
-        mk_tool(
-            "Select",
-            SketchTool::Select,
-            ActiveBarIcon::Svg(icons::icon_select(theme_id)),
-        ),
-        ActiveBarItem::Separator,
-        // Section 2: Create
-        mk_tool(
-            "Place Point",
-            SketchTool::Point,
-            ActiveBarIcon::Glyph("\u{2022}"), // •
-        ),
-        mk_tool(
-            "Place Line (2 clicks)",
-            SketchTool::Line,
-            ActiveBarIcon::Svg(icons::icon_shape_line(theme_id)),
-        ),
-        mk_tool(
-            "Place Rectangle (corner + opposite corner)",
-            SketchTool::Rectangle,
-            ActiveBarIcon::Svg(icons::icon_shape_rect(theme_id)),
-        ),
-        mk_tool(
-            "Place Rounded Rectangle (corner + opposite corner; radius from dim input)",
-            SketchTool::RoundedRectangle,
-            // No bespoke icon yet — show a glyph that hints at the
-            // shape until the per-theme registry gains a rrect entry.
-            ActiveBarIcon::Glyph("\u{25A2}"), // ▢
-        ),
-        mk_tool(
-            "Place Circle (centre + radius)",
-            SketchTool::Circle,
-            ActiveBarIcon::Svg(icons::icon_shape_circle(theme_id)),
-        ),
-        mk_tool(
-            "Place Arc (centre + start + end)",
-            SketchTool::Arc,
-            ActiveBarIcon::Svg(icons::icon_shape_arc(theme_id)),
-        ),
-        ActiveBarItem::Separator,
-        // Section 3: Constrain (selection-aware)
+
+    // v0.22 — Build the bar in three groups: always-visible Create,
+    // selection-gated Modify, and selection-driven Constrain. Empty
+    // groups collapse cleanly so the no-selection bar reads compact:
+    // Select | Point Line Rect RRect Circle Arc | DimInput | Linetype.
+    let mut items: Vec<ActiveBarItem<LibraryMessage>> = Vec::new();
+
+    // Section 1: Select
+    items.push(mk_tool(
+        "Select",
+        SketchTool::Select,
+        ActiveBarIcon::Svg(icons::icon_select(theme_id)),
+    ));
+    items.push(ActiveBarItem::Separator);
+
+    // Section 2: Create — primitive geometry tools.
+    items.push(mk_tool(
+        "Place Point",
+        SketchTool::Point,
+        ActiveBarIcon::Glyph("\u{2022}"), // •
+    ));
+    items.push(mk_tool(
+        "Place Line (2 clicks)",
+        SketchTool::Line,
+        ActiveBarIcon::Svg(icons::icon_shape_line(theme_id)),
+    ));
+    items.push(mk_tool(
+        "Place Rectangle (corner + opposite corner)",
+        SketchTool::Rectangle,
+        ActiveBarIcon::Svg(icons::icon_shape_rect(theme_id)),
+    ));
+    items.push(mk_tool(
+        "Place Rounded Rectangle (corner + opposite corner; radius from dim input)",
+        SketchTool::RoundedRectangle,
+        ActiveBarIcon::Glyph("\u{25A2}"), // ▢
+    ));
+    items.push(mk_tool(
+        "Place Circle (centre + radius)",
+        SketchTool::Circle,
+        ActiveBarIcon::Svg(icons::icon_shape_circle(theme_id)),
+    ));
+    items.push(mk_tool(
+        "Place Arc (centre + start + end)",
+        SketchTool::Arc,
+        ActiveBarIcon::Svg(icons::icon_shape_arc(theme_id)),
+    ));
+    // v0.24 Track C — Tangent Arc. Two-click chained arc segment that
+    // mints an Arc tangent to whatever Line ends at the first click.
+    // Mirrors the Arc entry visually (same arc SVG glyph) but emits a
+    // distinct SketchTool variant + adds a TangentLineArc constraint
+    // when committed so the tangency survives further edits.
+    items.push(mk_tool(
+        "Place Tangent Arc (chains tangent to previous Line)",
+        SketchTool::TangentArc,
+        ActiveBarIcon::Svg(icons::icon_shape_arc(theme_id)),
+    ));
+
+    // Section 3: Modify — only visible when an entity is selected
+    // (these tools all consume `editor.state.selected_sketch`). With
+    // nothing selected they would all be silent no-ops with warnings,
+    // so hiding them removes 5 buttons of width from the most-common
+    // bar state and surfaces them right when they're useful.
+    let any_selection = editor.state.selected_sketch.is_some();
+    if any_selection {
+        items.push(ActiveBarItem::Separator);
+        items.push(mk_tool(
+            "Mirror — pre-select a Line, then click a Point/Line/Arc/Circle to mirror",
+            SketchTool::Mirror,
+            ActiveBarIcon::Glyph("\u{29B5}"), // ⦵
+        ));
+        items.push(mk_tool(
+            "Offset — pre-select a Line / Arc / Circle, then click on the side to offset (distance from dim input)",
+            SketchTool::Offset,
+            ActiveBarIcon::Glyph("\u{29C8}"), // ⧈
+        ));
+        items.push(mk_tool(
+            "Rectangular Pattern — click an entity to mint a 2×2 grid array (5 mm × 5 mm)",
+            SketchTool::RectPattern,
+            ActiveBarIcon::Glyph("\u{229E}"), // ⊞
+        ));
+        items.push(mk_tool(
+            "Circular Pattern — click an entity to mint a 4-instance polar array (360°)",
+            SketchTool::CircularPattern,
+            ActiveBarIcon::Glyph("\u{233E}"), // ⌾
+        ));
+        items.push(make_pad_button);
+    }
+
+    // Section 4: Constrain — only the buttons whose precondition is
+    // met by the current selection are rendered (mk_constraint
+    // returns Option). Section disappears entirely when no
+    // selection is active.
+    let constraint_buttons: Vec<ActiveBarItem<LibraryMessage>> = [
         mk_constraint(
             SketchConstraintTag::Fixed,
             "Fix point in place (needs 1 Point)",
-            "\u{2693}", // ⚓
+            "\u{2693}",
         ),
         mk_constraint(
             SketchConstraintTag::Coincident,
             "Coincident (needs 2 Points)",
-            "\u{2299}", // ⊙
+            "\u{2299}",
         ),
         mk_constraint(
             SketchConstraintTag::DistancePtPt,
             "Distance between Points (needs 2 Points + dim input)",
-            "\u{27F7}", // ⟷
+            "\u{27F7}",
         ),
         mk_constraint(
             SketchConstraintTag::Horizontal,
             "Horizontal (needs 1 Line)",
-            "\u{2500}", // ─
+            "\u{2500}",
         ),
         mk_constraint(
             SketchConstraintTag::Vertical,
             "Vertical (needs 1 Line)",
-            "\u{2502}", // │
+            "\u{2502}",
         ),
         mk_constraint(
             SketchConstraintTag::Parallel,
             "Parallel (needs 2 Lines)",
-            "\u{2225}", // ∥
+            "\u{2225}",
         ),
         mk_constraint(
             SketchConstraintTag::Perpendicular,
             "Perpendicular (needs 2 Lines)",
-            "\u{27C2}", // ⟂
+            "\u{27C2}",
         ),
         mk_constraint(
             SketchConstraintTag::EqualLength,
             "Equal length (needs 2 Lines)",
-            "\u{2261}", // ≡
+            "\u{2261}",
         ),
         mk_constraint(
             SketchConstraintTag::PointOnLine,
             "Point on line (needs 1 Point + 1 Line)",
-            "\u{22A2}", // ⊢
+            "\u{22A2}",
         ),
         mk_constraint(
             SketchConstraintTag::Midpoint,
             "Midpoint (needs 1 Point + 1 Line)",
-            "\u{25C7}", // ◇
+            "\u{25C7}",
         ),
-        ActiveBarItem::Separator,
-        // Section 4: Dimension input
-        ActiveBarItem::Custom(dim_input),
-        ActiveBarItem::Separator,
-        // Section 5: Construction toggle. Solver is always live in
-        // v0.16.1 — the pause toggle was retired.
-        construction_button,
     ]
+    .into_iter()
+    .flatten()
+    .collect();
+    if !constraint_buttons.is_empty() {
+        items.push(ActiveBarItem::Separator);
+        items.extend(constraint_buttons);
+    }
+
+    // Section 5: Dimension input + Linetype tri-state pill — always
+    // visible.
+    items.push(ActiveBarItem::Separator);
+    items.push(ActiveBarItem::Custom(dim_input));
+    items.push(ActiveBarItem::Separator);
+    items.push(linetype_button);
+
+    items
 }
 
 /// Convenience wrapper — build items + render via

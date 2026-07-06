@@ -11,8 +11,8 @@
 //! token, so a tab switch in flight discards any pending result).
 
 use chrono::Utc;
-use iced::widget::{Column, column, container, scrollable, text};
-use iced::{Border, Element, Length};
+use iced::widget::{Column, button, column, container, scrollable, text};
+use iced::{Border, Color, Element, Length, Theme};
 use signex_widgets::theme_ext;
 
 use super::{PanelContext, PanelMsg};
@@ -99,17 +99,24 @@ pub fn view_history<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                 col = col.push(working_tree_card(primary, muted, border, panel_bg));
             }
 
-            // Delegate the actual list rendering to
-            // `signex_widgets::history_pane`. It already renders a
-            // muted "No history yet." card when the slice is empty,
-            // so we don't special-case zero-entry repos here — the
-            // working-tree pseudo-card above takes care of the
-            // dirty-only state.
-            col = col.push(signex_widgets::history_pane::<PanelMsg>(
-                &state.entries,
-                Utc::now(),
-                &ctx.tokens,
-            ));
+            // v0.22 Phase 8.5 — render rows inline so each card can
+            // carry a "Restore this version" button. Bypasses the
+            // signex_widgets::history_pane (which is render-only) so
+            // the panel can dispatch PanelMsg::HistoryRestoreClicked
+            // on click. Empty list still falls back to the widget's
+            // "No history yet." card via the helper below.
+            if state.entries.is_empty() {
+                col = col.push(signex_widgets::history_pane::<PanelMsg>(
+                    &state.entries,
+                    Utc::now(),
+                    &ctx.tokens,
+                ));
+            } else {
+                let now = Utc::now();
+                for entry in &state.entries {
+                    col = col.push(commit_card(entry, now, primary, muted, border, panel_bg));
+                }
+            }
 
             col.into()
         }
@@ -143,6 +150,110 @@ fn message_card<'a, M: 'a>(
             ..container::Style::default()
         })
         .into()
+}
+
+/// v0.22 Phase 8.5 — Commit-row card with a "Restore this version"
+/// button. Same visual shape as `signex_widgets::history_pane`'s
+/// cards (author + relative time + subject + short SHA) plus a
+/// muted button on the bottom that fires
+/// `PanelMsg::HistoryRestoreClicked { sha }` on press. The handler
+/// runs `LocalGitProjectAdapter::restore_at` against the active
+/// tab's owning project.
+fn commit_card<'a>(
+    entry: &'a signex_widgets::HistoryEntry,
+    now: chrono::DateTime<Utc>,
+    primary: Color,
+    muted: Color,
+    border_c: Color,
+    bg: Option<iced::Background>,
+) -> Element<'a, PanelMsg> {
+    let header = iced::widget::row![
+        text(entry.author_name.clone()).size(12).color(primary),
+        iced::widget::Space::new().width(Length::Fill),
+        text(format_relative_simple(entry.time, now))
+            .size(11)
+            .color(muted),
+    ]
+    .spacing(8);
+
+    let restore_btn = button(text("Restore this version").size(10).color(muted))
+        .padding([2, 6])
+        .on_press(PanelMsg::HistoryRestoreClicked {
+            sha: entry.sha.clone(),
+        })
+        .style(move |_t: &Theme, _| iced::widget::button::Style {
+            background: None,
+            border: Border {
+                width: 1.0,
+                radius: 2.0.into(),
+                color: border_c,
+            },
+            text_color: muted,
+            ..iced::widget::button::Style::default()
+        });
+
+    let footer = iced::widget::row![
+        text(short_sha(&entry.sha)).size(11).color(muted),
+        iced::widget::Space::new().width(Length::Fill),
+        restore_btn,
+    ]
+    .align_y(iced::Alignment::Center)
+    .spacing(8);
+
+    let card_inner = column![
+        header,
+        text(entry.subject.clone()).size(13).color(primary),
+        footer,
+    ]
+    .spacing(2);
+
+    container(card_inner)
+        .padding([6, 8])
+        .width(Length::Fill)
+        .style(move |_theme: &Theme| container::Style {
+            background: bg,
+            text_color: Some(primary),
+            border: Border {
+                width: 1.0,
+                radius: 3.0.into(),
+                color: border_c,
+            },
+            ..container::Style::default()
+        })
+        .into()
+}
+
+fn short_sha(full: &str) -> String {
+    full.chars().take(7).collect()
+}
+
+/// Coarse relative-time helper. Mirrors what
+/// `signex_widgets::history_pane::format_relative` does but is
+/// inlined here so the panel doesn't need to expose the widget's
+/// internal helper.
+fn format_relative_simple(time: chrono::DateTime<Utc>, now: chrono::DateTime<Utc>) -> String {
+    let delta = now.signed_duration_since(time);
+    let secs = delta.num_seconds().max(0);
+    if secs < 60 {
+        return format!("{secs}s ago");
+    }
+    let mins = secs / 60;
+    if mins < 60 {
+        return format!("{mins}m ago");
+    }
+    let hours = mins / 60;
+    if hours < 24 {
+        return format!("{hours}h ago");
+    }
+    let days = hours / 24;
+    if days < 30 {
+        return format!("{days}d ago");
+    }
+    let months = days / 30;
+    if months < 12 {
+        return format!("{months}mo ago");
+    }
+    format!("{}y ago", months / 12)
 }
 
 /// "Working tree (uncommitted changes)" pseudo-card pinned above the

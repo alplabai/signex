@@ -130,6 +130,7 @@ fn smd_rect_pad(num: &str) -> PadAttr {
         mask_margin_expr: None,
         paste_margin_expr: None,
         paste_apertures: PasteAperturePattern::Single,
+        ..PadAttr::default()
     }
 }
 
@@ -210,6 +211,7 @@ fn pad_attr_tht_with_drill_round_trip() {
         mask_margin_expr: None,
         paste_margin_expr: None,
         paste_apertures: PasteAperturePattern::Single,
+        ..PadAttr::default()
     };
     let s = toml::to_string(&a).unwrap();
     let back: PadAttr = toml::from_str(&s).unwrap();
@@ -236,6 +238,7 @@ fn pad_attr_npt_mounting_hole_round_trip() {
         mask_margin_expr: None,
         paste_margin_expr: None,
         paste_apertures: PasteAperturePattern::Single,
+        ..PadAttr::default()
     };
     let s = toml::to_string(&a).unwrap();
     let back: PadAttr = toml::from_str(&s).unwrap();
@@ -304,6 +307,7 @@ fn fiducial_pad_round_trip() {
         mask_margin_expr: Some("1.0mm".into()),
         paste_margin_expr: None,
         paste_apertures: PasteAperturePattern::Single,
+        ..PadAttr::default()
     };
     let s = toml::to_string(&a).unwrap();
     let back: PadAttr = toml::from_str(&s).unwrap();
@@ -424,6 +428,7 @@ fn castellated_pad_round_trip() {
         mask_margin_expr: None,
         paste_margin_expr: None,
         paste_apertures: PasteAperturePattern::Single,
+        ..PadAttr::default()
     };
     let s = toml::to_string(&a).unwrap();
     let back: PadAttr = toml::from_str(&s).unwrap();
@@ -508,6 +513,32 @@ fn polar_array_round_trip() {
             center: SketchEntityId::new(),
             count_expr: "8".into(),
             sweep_angle_expr: "360deg".into(),
+            depopulation: None,
+        },
+        numbering: NumberingScheme::LinearIncrement {
+            start_expr: "1".into(),
+            step_expr: "1".into(),
+        },
+    };
+    let s = toml::to_string(&a).unwrap();
+    let back: Array = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
+}
+
+#[test]
+fn polar_array_with_depopulation_round_trip() {
+    // v0.22 Phase B5 — Polar gains depopulation parity with Grid.
+    let a = Array {
+        id: ArrayId::new(),
+        kind: ArrayKind::Polar {
+            source: SketchEntityId::new(),
+            center: SketchEntityId::new(),
+            count_expr: "8".into(),
+            sweep_angle_expr: "360deg".into(),
+            depopulation: Some(GridDepopulation {
+                mask_expr: "i != 3".into(),
+                suppressed_instances: Vec::new(),
+            }),
         },
         numbering: NumberingScheme::LinearIncrement {
             start_expr: "1".into(),
@@ -533,6 +564,7 @@ fn grid_array_with_corner_depopulation_round_trip() {
                 mask_expr: "!(i == 0 && j == 0) && !(i == nx-1 && j == 0) \
                             && !(i == 0 && j == ny-1) && !(i == nx-1 && j == ny-1)"
                     .into(),
+                suppressed_instances: Vec::new(),
             }),
         },
         numbering: NumberingScheme::BgaRowCol {
@@ -544,6 +576,86 @@ fn grid_array_with_corner_depopulation_round_trip() {
     let s = toml::to_string(&a).unwrap();
     let back: Array = toml::from_str(&s).unwrap();
     assert_eq!(a, back);
+}
+
+#[test]
+fn grid_array_with_suppressed_instances_round_trip() {
+    // v0.23 — explicit per-instance suppression list survives the
+    // round trip alongside any mask expression. Empty mask + non-empty
+    // suppression list is a valid combination (Properties-panel
+    // checkbox-only authoring path).
+    let a = Array {
+        id: ArrayId::new(),
+        kind: ArrayKind::Grid {
+            source: SketchEntityId::new(),
+            nx_expr: "4".into(),
+            ny_expr: "4".into(),
+            dx_expr: "5mm".into(),
+            dy_expr: "5mm".into(),
+            depopulation: Some(GridDepopulation {
+                mask_expr: String::new(),
+                suppressed_instances: vec![(0, 0), (3, 3), (1, 2)],
+            }),
+        },
+        numbering: NumberingScheme::default(),
+    };
+    let s = toml::to_string(&a).unwrap();
+    let back: Array = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
+}
+
+#[test]
+fn polar_array_with_suppressed_instances_round_trip() {
+    // v0.23 — Polar mirrors Grid's suppression list; entries use
+    // `j = 0` since Polar is a 1-D array.
+    let a = Array {
+        id: ArrayId::new(),
+        kind: ArrayKind::Polar {
+            source: SketchEntityId::new(),
+            center: SketchEntityId::new(),
+            count_expr: "8".into(),
+            sweep_angle_expr: "360deg".into(),
+            depopulation: Some(GridDepopulation {
+                mask_expr: String::new(),
+                suppressed_instances: vec![(2, 0), (5, 0)],
+            }),
+        },
+        numbering: NumberingScheme::default(),
+    };
+    let s = toml::to_string(&a).unwrap();
+    let back: Array = toml::from_str(&s).unwrap();
+    assert_eq!(a, back);
+}
+
+#[test]
+fn grid_depopulation_default_suppressed_instances_back_compat() {
+    // v0.23 — round-trip an old-format depopulation TOML (mask_expr
+    // only) to ensure `#[serde(default)]` keeps existing on-disk
+    // arrays loadable.
+    let toml_str = r#"
+        [[entries]]
+        kind = "Grid"
+        source = "00000000-0000-0000-0000-000000000001"
+        nx_expr = "2"
+        ny_expr = "2"
+        dx_expr = "1mm"
+        dy_expr = "1mm"
+        [entries.depopulation]
+        mask_expr = "i != 0"
+    "#;
+    #[derive(serde::Deserialize)]
+    struct Wrapper {
+        entries: Vec<ArrayKind>,
+    }
+    let w: Wrapper = toml::from_str(toml_str).unwrap();
+    let kind = &w.entries[0];
+    if let ArrayKind::Grid { depopulation, .. } = kind {
+        let d = depopulation.as_ref().expect("depop present");
+        assert_eq!(d.mask_expr, "i != 0");
+        assert!(d.suppressed_instances.is_empty());
+    } else {
+        panic!("expected Grid kind");
+    }
 }
 
 #[test]
@@ -625,6 +737,67 @@ fn populated_sketch_round_trip() {
         EntityKind::Line { start: p1, end: p2 },
     ));
     data.parameters.0.insert("pad_pitch".into(), "0.5mm".into());
+    let s = toml::to_string(&data).unwrap();
+    let back: SketchData = toml::from_str(&s).unwrap();
+    assert_eq!(data, back);
+}
+
+#[test]
+fn distance_pt_circle_constraint_round_trip() {
+    // v0.23 — the new parametric DistancePtCircle constraint must
+    // round-trip through TOML cleanly, including its DimTarget. Both
+    // literal and Expr targets are exercised.
+    use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
+
+    let mut data = SketchData::default();
+    let plane_id = PlaneId::new();
+    data.planes.push(Plane {
+        id: plane_id,
+        kind: PlaneKind::BoardTop,
+    });
+    let centre_id = SketchEntityId::new();
+    let circle_id = SketchEntityId::new();
+    let anchor_id = SketchEntityId::new();
+    data.entities.push(Entity::new(
+        centre_id,
+        plane_id,
+        EntityKind::Point { x: 0.0, y: 0.0 },
+    ));
+    data.entities.push(Entity::new(
+        circle_id,
+        plane_id,
+        EntityKind::Circle {
+            center: centre_id,
+            radius: 5.0,
+        },
+    ));
+    data.entities.push(Entity::new(
+        anchor_id,
+        plane_id,
+        EntityKind::Point { x: 7.0, y: 0.0 },
+    ));
+    // Literal-target constraint
+    data.constraints.push(Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::DistancePtCircle {
+            point: anchor_id,
+            circle: circle_id,
+            target: DimTarget::Literal(2.0),
+        },
+    });
+    // Expr-target constraint (parametric)
+    data.constraints.push(Constraint {
+        id: ConstraintId::new(),
+        kind: ConstraintKind::DistancePtCircle {
+            point: anchor_id,
+            circle: circle_id,
+            target: DimTarget::Expr("offset_dist".into()),
+        },
+    });
+    data.parameters
+        .0
+        .insert("offset_dist".into(), "0.5mm".into());
+
     let s = toml::to_string(&data).unwrap();
     let back: SketchData = toml::from_str(&s).unwrap();
     assert_eq!(data, back);

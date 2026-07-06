@@ -11,6 +11,7 @@
 //! since Canvas doesn't surface keyboard events.
 
 use iced::event::Event;
+use iced::keyboard;
 use iced::mouse;
 use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point, Rectangle, Renderer, Theme};
@@ -335,36 +336,49 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                             .and_capture(),
                         );
                     }
-                    if let Some(pad_idx) = self.state.pad_at(world.0, world.1) {
-                        let pad = &self.state.pads[pad_idx];
-                        cstate.drag = Some(DragState {
-                            pad_idx,
-                            sketch_point: None,
-                            grab_offset_mm: (
-                                world.0 - pad.position_mm.0,
-                                world.1 - pad.position_mm.1,
-                            ),
-                            last_world: world,
-                            press_screen: cursor_pos,
-                            moved: false,
-                        });
-                        // Emit a select message so the model
-                        // highlights the pad on press.
-                        return Some(
-                            canvas::Action::publish(LibraryMessage::EditorEvent {
-                                library_path: self.address.library_path.clone(),
-                                table: self.address.table.clone(),
-                                row_id: self.address.row_id,
-                                msg: EditorMsg::FootprintSelectPad(Some(pad_idx)),
-                            })
-                            .and_capture(),
-                        );
+                    // v0.21 — Pad hit is gated on the Selection Filter
+                    // pad bit. When `pads` is off, pads stay
+                    // unselectable and clicks fall through to the
+                    // silk-hit / empty-canvas branches below.
+                    //
+                    // v0.23 — also gate on Pads-mode (Normal). In
+                    // Sketch mode the pad's bbox is just construction
+                    // chrome; clicks inside it must fall through to
+                    // the sketch-tool click handler so Line / Circle /
+                    // etc. can snap to the pad's corner Points. The
+                    // Select tool's pad-grab path (v0.16) lived
+                    // strictly in Pads mode and that contract is
+                    // preserved.
+                    if matches!(self.state.mode, _EM::Normal) && self.state.selection_filter.pads {
+                        if let Some(pad_idx) = self.state.pad_at(world.0, world.1) {
+                            let pad = &self.state.pads[pad_idx];
+                            cstate.drag = Some(DragState {
+                                pad_idx,
+                                sketch_point: None,
+                                grab_offset_mm: (
+                                    world.0 - pad.position_mm.0,
+                                    world.1 - pad.position_mm.1,
+                                ),
+                                last_world: world,
+                                press_screen: cursor_pos,
+                                moved: false,
+                            });
+                            return Some(
+                                canvas::Action::publish(LibraryMessage::EditorEvent {
+                                    library_path: self.address.library_path.clone(),
+                                    table: self.address.table.clone(),
+                                    row_id: self.address.row_id,
+                                    msg: EditorMsg::FootprintSelectPad(Some(pad_idx)),
+                                })
+                                .and_capture(),
+                            );
+                        }
                     }
-                    // v0.18.18 — Pads-mode Select tool also tries
-                    // a silk-front graphic hit before falling
-                    // through to the empty-area click-add path.
-                    // The dispatcher's `FootprintSelectSilkF` arm
-                    // clears `selected_pad` symmetrically.
+                    // v0.18.18 — Silk-front graphic hit, filter-gated
+                    // per kind. v0.21 maps each FpGraphicKind to its
+                    // matching `selection_filter.*` bit so the user
+                    // can disable Tracks / Arcs / Texts / Regions /
+                    // Fills independently.
                     {
                         use crate::library::editor::footprint::state::{
                             EditorMode as Em2, PadsTool as Pt2,
@@ -376,15 +390,45 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                             if let Some(silk_idx) =
                                 silk_f_hit_at(self.silk_f, world.0, world.1, tolerance)
                             {
-                                return Some(
-                                    canvas::Action::publish(LibraryMessage::EditorEvent {
-                                        library_path: self.address.library_path.clone(),
-                                        table: self.address.table.clone(),
-                                        row_id: self.address.row_id,
-                                        msg: EditorMsg::FootprintSelectSilkF(Some(silk_idx)),
-                                    })
-                                    .and_capture(),
-                                );
+                                use signex_library::primitive::footprint::FpGraphicKind;
+                                let g = &self.silk_f[silk_idx];
+                                let allowed = match &g.kind {
+                                    FpGraphicKind::Line { .. } => {
+                                        self.state.selection_filter.tracks
+                                    }
+                                    FpGraphicKind::Arc { .. }
+                                    | FpGraphicKind::Circle { .. } => {
+                                        self.state.selection_filter.arcs
+                                    }
+                                    FpGraphicKind::Rectangle { .. } => {
+                                        if g.filled {
+                                            self.state.selection_filter.fills
+                                        } else {
+                                            self.state.selection_filter.tracks
+                                        }
+                                    }
+                                    FpGraphicKind::Polygon { .. } => {
+                                        if g.filled {
+                                            self.state.selection_filter.regions
+                                        } else {
+                                            self.state.selection_filter.tracks
+                                        }
+                                    }
+                                    FpGraphicKind::Text { .. } => {
+                                        self.state.selection_filter.texts
+                                    }
+                                };
+                                if allowed {
+                                    return Some(
+                                        canvas::Action::publish(LibraryMessage::EditorEvent {
+                                            library_path: self.address.library_path.clone(),
+                                            table: self.address.table.clone(),
+                                            row_id: self.address.row_id,
+                                            msg: EditorMsg::FootprintSelectSilkF(Some(silk_idx)),
+                                        })
+                                        .and_capture(),
+                                    );
+                                }
                             }
                         }
                     }
@@ -469,7 +513,12 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 | SketchTool::Rectangle
                                 | SketchTool::RoundedRectangle
                                 | SketchTool::Circle
-                                | SketchTool::Arc => EditorMsg::FootprintSketchToolClick {
+                                | SketchTool::Arc
+                                | SketchTool::Mirror
+                                | SketchTool::Offset
+                                | SketchTool::RectPattern
+                                | SketchTool::CircularPattern
+                                | SketchTool::TangentArc => EditorMsg::FootprintSketchToolClick {
                                     x_mm: click_world.0,
                                     y_mm: click_world.1,
                                     snap_id,
@@ -591,11 +640,22 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 },
                             }));
                         }
-                        // Select tool: empty click does nothing
-                        // (selection-clear is handled by the model
-                        // via the existing FootprintSelectPad(None)
-                        // path on actual canvas-click events that
-                        // miss every pad).
+                        // v0.20 — Select tool: empty-area left-click
+                        // clears the current selection. Mirrors Altium
+                        // and the schematic canvas; the previous
+                        // behaviour silently no-op'd, leaving the user
+                        // unable to deselect a pad without picking
+                        // another. Only fires for the Select tool —
+                        // every other pads_tool handles the click
+                        // above (place / drop / etc.).
+                        if self.state.pads_tool == PadsTool::Select {
+                            return Some(canvas::Action::publish(LibraryMessage::EditorEvent {
+                                library_path: self.address.library_path.clone(),
+                                table: self.address.table.clone(),
+                                row_id: self.address.row_id,
+                                msg: EditorMsg::FootprintSelectPad(None),
+                            }));
+                        }
                         return None;
                     }
                     if drag.moved {
@@ -727,6 +787,99 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         y_mm: world.1,
                     },
                 }));
+            }
+            // v0.24 Track D — keyboard intercept for the live numeric
+            // placement input. Active only while a multi-click sketch
+            // tool (Line / Circle / Arc) has its first click pending,
+            // so digit keys outside Sketch mode never get swallowed.
+            // Modifiers must be empty so global shortcuts (Ctrl+Z,
+            // Ctrl+S, …) still reach the app dispatcher.
+            Event::Keyboard(keyboard::Event::KeyPressed {
+                key,
+                modifiers,
+                text,
+                ..
+            }) => {
+                use crate::library::editor::footprint::state::{
+                    EditorMode, PlacementInputKind, ToolPending,
+                };
+                if !matches!(self.state.mode, EditorMode::Sketch) {
+                    return None;
+                }
+                // Only intercept when there's either an open buffer or
+                // an in-progress gesture that could accept one — both
+                // are required so a stray digit press at idle (no
+                // first click yet) doesn't open an overlay against an
+                // empty tool state.
+                let has_open_buffer = self.state.placement_input.is_some();
+                let kind_for_active = PlacementInputKind::from_active_tool(
+                    self.state.active_tool,
+                    &self.state.tool_pending,
+                );
+                if !has_open_buffer && kind_for_active.is_none() {
+                    return None;
+                }
+                if matches!(self.state.tool_pending, ToolPending::Idle) && !has_open_buffer {
+                    return None;
+                }
+                if modifiers.command() || modifiers.alt() || modifiers.logo() {
+                    return None;
+                }
+                let publish = |msg: EditorMsg| -> Option<canvas::Action<LibraryMessage>> {
+                    Some(
+                        canvas::Action::publish(LibraryMessage::EditorEvent {
+                            library_path: self.address.library_path.clone(),
+                            table: self.address.table.clone(),
+                            row_id: self.address.row_id,
+                            msg,
+                        })
+                        .and_capture(),
+                    )
+                };
+                match key {
+                    keyboard::Key::Named(keyboard::key::Named::Backspace) => {
+                        if has_open_buffer {
+                            return publish(EditorMsg::FootprintSketchPlacementInputBackspace);
+                        }
+                    }
+                    keyboard::Key::Named(keyboard::key::Named::Enter) => {
+                        if has_open_buffer {
+                            return publish(EditorMsg::FootprintSketchPlacementInputEnter);
+                        }
+                    }
+                    keyboard::Key::Named(keyboard::key::Named::Escape) => {
+                        if has_open_buffer {
+                            return publish(EditorMsg::FootprintSketchPlacementInputEscape);
+                        }
+                    }
+                    _ => {
+                        // Use the platform-supplied `text` so we get
+                        // exactly the codepoint the user typed
+                        // (handles Numpad digits, decimal-point
+                        // localisation pre-conversion, etc.). Only
+                        // forward digits / `.` / `-`; everything else
+                        // falls through to the generic catch-all.
+                        if let Some(s) = text.as_ref() {
+                            if let Some(ch) = s.chars().next() {
+                                let useful = ch.is_ascii_digit()
+                                    || ch == '.'
+                                    || (ch == '-'
+                                        && kind_for_active
+                                            .or_else(|| {
+                                                self.state.placement_input.as_ref().map(|p| p.kind)
+                                            })
+                                            .map(|k| k.allows_negative())
+                                            .unwrap_or(false));
+                                if useful {
+                                    return publish(EditorMsg::FootprintSketchPlacementInputChar(
+                                        ch,
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+                return None;
             }
             _ => {}
         }
@@ -913,45 +1066,120 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 && !self.state.placement_paused
                 && let Some((cx, cy)) = self.state.cursor_mm
             {
-                let half = 0.5_f32 * cstate.scale; // 1 mm pad
+                use signex_library::PadShape as PS;
+                // v0.20 — ghost reflects `next_pad_defaults`: actual
+                // size_x / size_y / shape from the Properties panel
+                // form, so the cursor preview shows what the click
+                // will mint. Round/Oval/RoundRect/Chamfered render
+                // their proper outline; everything else falls back
+                // to a rectangle.
+                let defaults = &self.state.next_pad_defaults;
+                let half_w = (defaults.size_x_mm.max(0.05) / 2.0) as f32 * cstate.scale;
+                let half_h = (defaults.size_y_mm.max(0.05) / 2.0) as f32 * cstate.scale;
                 let centre = cstate.world_to_screen((cx, cy));
-                let p0 = Point::new(centre.x - half, centre.y - half);
-                let size = iced::Size::new(half * 2.0, half * 2.0);
                 let paused = self.state.placement_paused;
                 let ghost_fill = if paused {
-                    Color {
-                        r: 0.55,
-                        g: 0.55,
-                        b: 0.55,
-                        a: 1.0,
-                    }
+                    Color { r: 0.55, g: 0.55, b: 0.55, a: 1.0 }
                 } else {
-                    Color {
-                        r: 0.85,
-                        g: 0.20,
-                        b: 0.20,
-                        a: 1.0,
-                    }
+                    Color { r: 0.85, g: 0.20, b: 0.20, a: 1.0 }
                 };
                 let ghost_stroke = if paused {
-                    Color {
-                        r: 0.40,
-                        g: 0.40,
-                        b: 0.40,
-                        a: 1.0,
-                    }
+                    Color { r: 0.40, g: 0.40, b: 0.40, a: 1.0 }
                 } else {
-                    Color {
-                        r: 1.0,
-                        g: 1.0,
-                        b: 1.0,
-                        a: 1.0,
+                    Color { r: 1.0, g: 1.0, b: 1.0, a: 1.0 }
+                };
+
+                let path = match &defaults.shape {
+                    PS::Round | PS::Oval => Path::new(|b| {
+                        let segments = 36;
+                        for i in 0..=segments {
+                            let t = i as f32 / segments as f32 * std::f32::consts::TAU;
+                            let x = centre.x + half_w * t.cos();
+                            let y = centre.y + half_h * t.sin();
+                            if i == 0 {
+                                b.move_to(Point::new(x, y));
+                            } else {
+                                b.line_to(Point::new(x, y));
+                            }
+                        }
+                        b.close();
+                    }),
+                    PS::RoundRect { radius_ratio } => {
+                        let r = (half_w.min(half_h) * (*radius_ratio as f32 * 2.0)).max(0.5);
+                        Path::new(|b| {
+                            b.move_to(Point::new(centre.x - half_w + r, centre.y - half_h));
+                            b.line_to(Point::new(centre.x + half_w - r, centre.y - half_h));
+                            b.arc_to(
+                                Point::new(centre.x + half_w, centre.y - half_h),
+                                Point::new(centre.x + half_w, centre.y - half_h + r),
+                                r,
+                            );
+                            b.line_to(Point::new(centre.x + half_w, centre.y + half_h - r));
+                            b.arc_to(
+                                Point::new(centre.x + half_w, centre.y + half_h),
+                                Point::new(centre.x + half_w - r, centre.y + half_h),
+                                r,
+                            );
+                            b.line_to(Point::new(centre.x - half_w + r, centre.y + half_h));
+                            b.arc_to(
+                                Point::new(centre.x - half_w, centre.y + half_h),
+                                Point::new(centre.x - half_w, centre.y + half_h - r),
+                                r,
+                            );
+                            b.line_to(Point::new(centre.x - half_w, centre.y - half_h + r));
+                            b.arc_to(
+                                Point::new(centre.x - half_w, centre.y - half_h),
+                                Point::new(centre.x - half_w + r, centre.y - half_h),
+                                r,
+                            );
+                            b.close();
+                        })
+                    }
+                    PS::Chamfered { chamfer_ratio, corners } => {
+                        let c = (half_w.min(half_h) * (*chamfer_ratio as f32 * 2.0)).max(0.5);
+                        Path::new(|b| {
+                            let tl = Point::new(centre.x - half_w, centre.y - half_h);
+                            let tr = Point::new(centre.x + half_w, centre.y - half_h);
+                            let br = Point::new(centre.x + half_w, centre.y + half_h);
+                            let bl = Point::new(centre.x - half_w, centre.y + half_h);
+                            b.move_to(Point::new(tl.x + c, tl.y));
+                            if corners.top_right {
+                                b.line_to(Point::new(tr.x - c, tr.y));
+                                b.line_to(Point::new(tr.x, tr.y + c));
+                            } else {
+                                b.line_to(tr);
+                            }
+                            if corners.bottom_right {
+                                b.line_to(Point::new(br.x, br.y - c));
+                                b.line_to(Point::new(br.x - c, br.y));
+                            } else {
+                                b.line_to(br);
+                            }
+                            if corners.bottom_left {
+                                b.line_to(Point::new(bl.x + c, bl.y));
+                                b.line_to(Point::new(bl.x, bl.y - c));
+                            } else {
+                                b.line_to(bl);
+                            }
+                            if corners.top_left {
+                                b.line_to(Point::new(tl.x, tl.y + c));
+                                b.line_to(Point::new(tl.x + c, tl.y));
+                            } else {
+                                b.line_to(tl);
+                                b.line_to(Point::new(tl.x + c, tl.y));
+                            }
+                            b.close();
+                        })
+                    }
+                    _ => {
+                        let p0 = Point::new(centre.x - half_w, centre.y - half_h);
+                        let size = iced::Size::new(half_w * 2.0, half_h * 2.0);
+                        Path::rectangle(p0, size)
                     }
                 };
-                let rect = Path::rectangle(p0, size);
-                frame.fill(&rect, ghost_fill);
+                frame.fill(&path, ghost_fill);
                 frame.stroke(
-                    &rect,
+                    &path,
                     Stroke::default().with_width(1.0).with_color(ghost_stroke),
                 );
             }
@@ -973,7 +1201,17 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 && let Some(sketch) = self.sketch
             {
                 draw_sketch_overlay(frame, cstate, sketch, self.state);
+                // v0.22 Phase E2 — DOF direction-arrow overlay for
+                // under-constrained Points. Sits on top of the entity
+                // layer so the cyan arrow is visible against any
+                // backing colour.
+                draw_dof_direction_arrows(frame, cstate, sketch, self.state);
                 draw_sketch_tool_preview(frame, cstate, sketch, self.state);
+                // v0.22 Phase A6 — Inferred-constraint snap glyph
+                // sits on top of the entity layer so the badge
+                // doesn't get hidden under filled regions or
+                // dashed-line ghosts.
+                draw_sketch_snap_glyph(frame, cstate, self.state);
             }
         });
 
@@ -1204,6 +1442,15 @@ fn draw_constraint_icons(
                 }
                 ("d", v)
             }
+            ConstraintKind::DistancePtCircle { point, circle, .. } => {
+                let mut v = vec![*point];
+                if let Some(c) = circle_center_local(sketch, *circle) {
+                    v.push(c);
+                } else if let Some((c, _, _, _)) = arc_refs_local(sketch, *circle) {
+                    v.push(c);
+                }
+                ("\u{29bf}", v) // ⦿ "DistancePtCircle"
+            }
             ConstraintKind::Fixed { point } => ("\u{1F512}", vec![*point]),
             // v0.13.3 — remaining constraint glyphs.
             ConstraintKind::PointOnArc { point, arc } => {
@@ -1307,10 +1554,25 @@ fn draw_constraint_icons(
         }
         let centroid = (sum_x / n as f64, sum_y / n as f64);
         let p = cstate.world_to_screen(centroid);
-        let colour = if over_set.contains(&c.id) {
-            Color::from_rgba(1.0, 0.20, 0.20, 1.00)
-        } else {
-            Color::from_rgba(0.85, 0.85, 0.85, 0.85)
+        // v0.23 — per-row precision in the Conflicts list. When the
+        // user hovers a specific row, only that constraint renders
+        // at full red; every other glyph (including other
+        // over-constraints) dims so the offender stands out alone.
+        // When no row is hovered, fall back to the v0.22 set-wide
+        // isolation (the whole over-constraint set lights up).
+        let hover = state.conflicts_row_hovered;
+        let is_over = over_set.contains(&c.id);
+        let colour = match (hover, is_over) {
+            // Specific row hovered + this is the row → full red.
+            (Some(h), _) if h == c.id => Color::from_rgba(1.0, 0.20, 0.20, 1.00),
+            // Specific row hovered + this is NOT the row → dimmed
+            // (other over-constraints get the same dim as
+            // non-over-constraints so the focus stays singular).
+            (Some(_), _) => Color::from_rgba(0.85, 0.85, 0.85, 0.15),
+            // No row hover + over-constrained → red (set-wide focus).
+            (None, true) => Color::from_rgba(1.0, 0.20, 0.20, 1.00),
+            // Default — non-over-constrained, no hover.
+            (None, false) => Color::from_rgba(0.85, 0.85, 0.85, 0.85),
         };
         frame.fill_text(canvas::Text {
             content: glyph.to_string(),
@@ -1532,13 +1794,18 @@ fn draw_sketch_overlay(
                     None => continue,
                 };
                 let p = cstate.world_to_screen(world);
-                let r = if entity.construction { 2.5 } else { 4.0 };
+                // v0.23 — Bumped Point handle sizes so corner/edge
+                // grab targets read from a normal viewing distance.
+                // Construction (bake-skipped) Points stay smaller
+                // than authored Points so they read as secondary
+                // chrome, but both are now grab-friendly.
+                let r = if entity.bake_skipped() { 4.0 } else { 5.5 };
                 let path = Path::circle(Point::new(p.x, p.y), r);
                 let col = dof_colour(entity.id);
                 frame.fill(&path, col);
                 frame.stroke(
                     &path,
-                    Stroke::default().with_width(1.0).with_color(Color {
+                    Stroke::default().with_width(1.5).with_color(Color {
                         a: 1.0,
                         r: col.r * 0.6,
                         g: col.g * 0.6,
@@ -1557,7 +1824,15 @@ fn draw_sketch_overlay(
                 };
                 let p0 = cstate.world_to_screen(s);
                 let p1 = cstate.world_to_screen(e);
-                let col = dof_colour(start);
+                // v0.22 Phase A5 — Centerline lines render in Altium /
+                // Fusion gold (#c9a04b) regardless of DOF colour, so
+                // axis / mirror lines stay visually distinct from
+                // construction scaffolding.
+                let col = if entity.centerline {
+                    Color::from_rgba(0.79, 0.63, 0.30, 1.00)
+                } else {
+                    dof_colour(start)
+                };
                 let stroke = Stroke::default().with_width(1.5).with_color(col);
                 if entity.construction {
                     // Dashed line via short segments.
@@ -1573,6 +1848,42 @@ fn draw_sketch_overlay(
                             let q0 = Point::new(p0.x + dx * t0, p0.y + dy * t0);
                             let q1 = Point::new(p0.x + dx * t1, p0.y + dy * t1);
                             frame.stroke(&Path::line(q0, q1), stroke);
+                        }
+                    }
+                } else if entity.centerline {
+                    // v0.22 Phase A5 — long-dash + dot pattern.
+                    // Walk the line in screen-space cycles of
+                    // [long-dash 12 px][gap 4][dot 1.5][gap 4]; ~21 px
+                    // per cycle. Matches Altium's centerline glyph.
+                    let dx = p1.x - p0.x;
+                    let dy = p1.y - p0.y;
+                    let len = (dx * dx + dy * dy).sqrt();
+                    if len > 0.5 {
+                        let cycle = 21.5_f32;
+                        let mut t = 0.0_f32;
+                        while t < len {
+                            let long_end = (t + 12.0).min(len);
+                            let q0 =
+                                Point::new(p0.x + dx * (t / len), p0.y + dy * (t / len));
+                            let q1 = Point::new(
+                                p0.x + dx * (long_end / len),
+                                p0.y + dy * (long_end / len),
+                            );
+                            frame.stroke(&Path::line(q0, q1), stroke);
+                            let dot_start = t + 16.0;
+                            let dot_end = (dot_start + 1.5).min(len);
+                            if dot_start < len {
+                                let q2 = Point::new(
+                                    p0.x + dx * (dot_start / len),
+                                    p0.y + dy * (dot_start / len),
+                                );
+                                let q3 = Point::new(
+                                    p0.x + dx * (dot_end / len),
+                                    p0.y + dy * (dot_end / len),
+                                );
+                                frame.stroke(&Path::line(q2, q3), stroke);
+                            }
+                            t += cycle;
                         }
                     }
                 } else {
@@ -1645,6 +1956,234 @@ fn draw_sketch_overlay(
                 }
             }
         }
+    }
+}
+
+/// v0.22 Phase E2 — DOF direction-arrow overlay for under-constrained
+/// Points. For every Point with `DofColor::Under`, draws a 10-px-long
+/// 1-px-wide cyan arrow pointing in the direction of least constraint
+/// sensitivity — i.e. the direction in which moving the Point
+/// increases the constraint residual the least. Visually answers the
+/// "if I drag this blue Point, which way will it go freely?"
+/// question Fusion users expect.
+///
+/// Math: for a Point with Jacobian columns `c_x`, `c_y` (each column
+/// is the partial derivative of every residual w.r.t. that state
+/// var), the direction of greatest constraint sensitivity is the
+/// eigenvector of
+///   `M = [[||c_x||², c_x·c_y], [c_x·c_y, ||c_y||²]]`
+/// associated with the LARGEST eigenvalue. The free-DoF direction is
+/// the perpendicular (smallest-eigenvalue eigenvector).
+///
+/// Closed-form for a 2×2 symmetric matrix:
+/// - λ_min = (a+d)/2 − √(((a-d)/2)² + b²)
+/// - eigenvector for λ_min:
+///     - if |b| > ε: (b, λ_min − a), normalized
+///     - else (already diagonal): pick whichever column is smaller
+/// - if all of a, b, d ≈ 0 (Point isn't touched by any constraint):
+///   default to (1, 0) so the arrow still gives visual feedback.
+///
+/// Hides itself entirely when `state.last_solve` is `None` or the
+/// jacobian is empty.
+fn draw_dof_direction_arrows(
+    frame: &mut canvas::Frame,
+    cstate: &FootprintCanvasState,
+    sketch: &signex_sketch::SketchData,
+    state: &FootprintEditorState,
+) {
+    use signex_sketch::entity::EntityKind;
+    use signex_sketch::solver::dof::DofColor;
+
+    let solve = match state.last_solve.as_ref() {
+        Some(s) => s,
+        None => return,
+    };
+    if solve.jacobian.is_empty() {
+        // No constraints yet — would draw an arrow on every Point.
+        // Silent skip; the user reads "no constraints" from the DOF
+        // counter in the inspector.
+        return;
+    }
+
+    const ARROW_LEN_PX: f32 = 10.0;
+    const HEAD_LEN_PX: f32 = 3.0;
+    const HEAD_SPREAD_RAD: f64 = 0.5; // ~28°
+    let cyan = Color::from_rgba(0.30, 0.85, 0.95, 0.85);
+    let stroke = Stroke::default().with_width(1.0).with_color(cyan);
+
+    let m_rows = solve.jacobian.len();
+
+    for entity in &sketch.entities {
+        let pt_id = match entity.kind {
+            EntityKind::Point { .. } => entity.id,
+            _ => continue,
+        };
+        if !matches!(solve.colours.get(&pt_id), Some(DofColor::Under)) {
+            continue;
+        }
+        let (xi, yi) = match solve.result.index.points.get(&pt_id) {
+            Some(t) => *t,
+            None => continue, // Fixed Point — has no state column.
+        };
+        // Compute a, d, b from columns xi, yi.
+        let mut a = 0.0_f64;
+        let mut d = 0.0_f64;
+        let mut b = 0.0_f64;
+        for r in 0..m_rows {
+            let row = &solve.jacobian[r];
+            if xi >= row.len() || yi >= row.len() {
+                continue;
+            }
+            let cx = row[xi];
+            let cy = row[yi];
+            a += cx * cx;
+            d += cy * cy;
+            b += cx * cy;
+        }
+        let (mut dirx, mut diry) = if a.abs() < 1e-12 && d.abs() < 1e-12 && b.abs() < 1e-12
+        {
+            (1.0, 0.0)
+        } else {
+            let half = (a + d) * 0.5;
+            let radicand = ((a - d) * 0.5).powi(2) + b * b;
+            let lam_min = half - radicand.sqrt();
+            if b.abs() > 1e-12 {
+                (b, lam_min - a)
+            } else if a <= d {
+                (1.0, 0.0)
+            } else {
+                (0.0, 1.0)
+            }
+        };
+        let mag = (dirx * dirx + diry * diry).sqrt();
+        if mag < 1e-12 {
+            dirx = 1.0;
+            diry = 0.0;
+        } else {
+            dirx /= mag;
+            diry /= mag;
+        }
+
+        // Resolve world position via the solved state (preferring) or
+        // the authored entity coords.
+        let world = if let Some(p) = signex_sketch::solver::state::point_xy(
+            pt_id,
+            &solve.result.state,
+            &solve.result.index,
+            sketch,
+        ) {
+            p
+        } else {
+            match entity.kind {
+                EntityKind::Point { x, y } => (x, y),
+                _ => continue,
+            }
+        };
+        let p_screen = cstate.world_to_screen(world);
+
+        // Screen-space arrow. Y is flipped on screen so we negate
+        // diry to match the world convention (positive y is up in
+        // world but down in screen).
+        let dx_s = dirx as f32 * ARROW_LEN_PX;
+        let dy_s = -(diry as f32) * ARROW_LEN_PX;
+        let tip = Point::new(p_screen.x + dx_s, p_screen.y + dy_s);
+        let shaft = Path::line(p_screen, tip);
+        frame.stroke(&shaft, stroke);
+
+        // Arrow head: two short strokes at ±HEAD_SPREAD_RAD from the
+        // shaft direction.
+        let dir_angle = (dy_s as f64).atan2(dx_s as f64);
+        for sign in [-1.0_f64, 1.0_f64] {
+            let a = dir_angle + std::f64::consts::PI - sign * HEAD_SPREAD_RAD;
+            let head_end = Point::new(
+                tip.x + (a.cos() as f32) * HEAD_LEN_PX,
+                tip.y + (a.sin() as f32) * HEAD_LEN_PX,
+            );
+            frame.stroke(&Path::line(tip, head_end), stroke);
+        }
+    }
+}
+
+/// v0.22 Phase A6 — Inferred-constraint snap glyph at the cursor.
+/// Rendered AFTER the entity overlay so the badge sits on top of the
+/// underlying geometry. Drives off `cstate.last_snap` which the
+/// cursor-moved handler refreshes via `snap::snap_cursor`. Visible
+/// only while a placement tool is active — Select doesn't draw a
+/// hint because no entity is about to land. Glyphs:
+/// - `●` (filled circle in cyan) — `SnapKind::Point` — auto-Coincident
+///   target; clicking lands a new Point coincident with this one.
+/// - `─` (horizontal cyan bar) — `SnapKind::Horizontal` — auto-H
+///   constraint will land on the new Line.
+/// - `│` (vertical cyan bar) — `SnapKind::Vertical` — auto-V
+///   constraint will land on the new Line.
+/// - `◇` (cyan diamond) — `SnapKind::Angle` — angle-snapped to the
+///   nearest 15° increment.
+/// - Guide / Grid / Raw — silent (Guide already paints its line;
+///   Grid + Raw aren't actionable hints).
+fn draw_sketch_snap_glyph(
+    frame: &mut canvas::Frame,
+    cstate: &FootprintCanvasState,
+    state: &FootprintEditorState,
+) {
+    use super::snap::SnapKind;
+    use super::state::SketchTool;
+
+    if matches!(state.active_tool, SketchTool::Select) {
+        return;
+    }
+    let snap = match cstate.last_snap {
+        Some(s) => s,
+        None => return,
+    };
+    let p = cstate.world_to_screen(snap.pos);
+    let c = Color::from_rgba(0.30, 0.90, 1.00, 0.95);
+    let fill = Color { a: 0.30, ..c };
+    let stroke = Stroke::default().with_width(1.5).with_color(c);
+
+    match snap.kind {
+        SnapKind::Point(_) => {
+            let path = Path::circle(Point::new(p.x, p.y), 7.0);
+            frame.fill(&path, fill);
+            frame.stroke(&path, stroke);
+        }
+        SnapKind::Horizontal => {
+            frame.stroke(
+                &Path::line(
+                    Point::new(p.x - 10.0, p.y),
+                    Point::new(p.x + 10.0, p.y),
+                ),
+                stroke,
+            );
+        }
+        SnapKind::Vertical => {
+            frame.stroke(
+                &Path::line(
+                    Point::new(p.x, p.y - 10.0),
+                    Point::new(p.x, p.y + 10.0),
+                ),
+                stroke,
+            );
+        }
+        SnapKind::Angle(_) => {
+            let r = 6.0;
+            frame.stroke(
+                &Path::line(Point::new(p.x, p.y - r), Point::new(p.x + r, p.y)),
+                stroke,
+            );
+            frame.stroke(
+                &Path::line(Point::new(p.x + r, p.y), Point::new(p.x, p.y + r)),
+                stroke,
+            );
+            frame.stroke(
+                &Path::line(Point::new(p.x, p.y + r), Point::new(p.x - r, p.y)),
+                stroke,
+            );
+            frame.stroke(
+                &Path::line(Point::new(p.x - r, p.y), Point::new(p.x, p.y - r)),
+                stroke,
+            );
+        }
+        SnapKind::Guide | SnapKind::Grid | SnapKind::Raw => {}
     }
 }
 
@@ -1756,10 +2295,14 @@ fn draw_filled_closed_loops(
         if let EntityKind::Line { start, end } = e.kind {
             adj.entry(start)
                 .or_default()
-                .push((end, e.id, e.construction));
+                // v0.22 Phase A5 — Treat centerline lines the same
+                // as construction for closed-loop fill detection: a
+                // loop made entirely of skipped lines must not paint
+                // a profile fill (Altium / Fusion convention).
+                .push((end, e.id, e.bake_skipped()));
             adj.entry(end)
                 .or_default()
-                .push((start, e.id, e.construction));
+                .push((start, e.id, e.bake_skipped()));
         }
     }
 
@@ -1776,7 +2319,7 @@ fn draw_filled_closed_loops(
         // ... until we return to seed_start or fail.
         let mut points: Vec<SketchEntityId> = vec![seed_start];
         let mut lines: Vec<SketchEntityId> = vec![seed.id];
-        let mut all_construction = seed.construction;
+        let mut all_construction = seed.bake_skipped();
         let mut current = seed_end;
         let mut prev_line = seed.id;
         let mut closed = false;
@@ -2171,6 +2714,166 @@ fn draw_sketch_tool_preview(
             dashed(frame, c_screen, s_screen);
             dashed(frame, c_screen, cursor_screen);
         }
+        // v0.23 — Polar centre re-pick has no preview shape; the
+        // cursor PIP at the top of this match is the only visual cue.
+        ToolPending::RepickPolarCenter { .. } => {}
+        // v0.24 Track C — Tangent Arc, first endpoint placed.
+        // Mirror the dispatcher's geometry: locate a Line ending at
+        // `first`, compute the tangent-circle centre on the line's
+        // perpendicular through `first` that passes through the
+        // cursor, and stroke a dashed ghost arc from `first` to the
+        // cursor along that circle.
+        //
+        // Without an incident line, fall back to a dashed straight
+        // segment (matches the LineFirst preview) so the user still
+        // gets visual feedback while the dispatcher will publish a
+        // placeholder warning on commit.
+        ToolPending::TangentArcFirst { first } => {
+            let Some(first_world) = resolve_point(first) else {
+                return;
+            };
+            // Find a Line ending at `first` (most recent first, same
+            // priority the dispatcher uses).
+            let incident_line: Option<(f64, f64)> =
+                sketch.entities.iter().rev().find_map(|e| match e.kind {
+                    EntityKind::Line { start, end } if end == first => resolve_point(start),
+                    EntityKind::Line { start, end } if start == first => resolve_point(end),
+                    _ => None,
+                });
+            let p0 = cstate.world_to_screen(first_world);
+            match incident_line {
+                Some(line_other) => {
+                    // Line direction (line_other -> first).
+                    let lx = first_world.0 - line_other.0;
+                    let ly = first_world.1 - line_other.1;
+                    let llen_sq = lx * lx + ly * ly;
+                    if llen_sq <= 1e-12 {
+                        dashed(frame, p0, cursor_screen);
+                        return;
+                    }
+                    let llen = llen_sq.sqrt();
+                    // Perpendicular to the line at `first`.
+                    let nx = -ly / llen;
+                    let ny = lx / llen;
+                    // Solve for the centre (see dispatcher comment).
+                    let dx = first_world.0 - cursor.0;
+                    let dy = first_world.1 - cursor.1;
+                    let denom = 2.0 * (dx * nx + dy * ny);
+                    let chord_sq = dx * dx + dy * dy;
+                    if denom.abs() <= 1e-9 || chord_sq <= 1e-9 {
+                        // Cursor on the tangent line — preview the
+                        // straight segment until the cursor pulls off
+                        // axis.
+                        dashed(frame, p0, cursor_screen);
+                        return;
+                    }
+                    let t = -chord_sq / denom;
+                    let cx = first_world.0 + t * nx;
+                    let cy = first_world.1 + t * ny;
+                    // Radius (use the start-side distance — both
+                    // sides should match within solver tolerance).
+                    let rx = first_world.0 - cx;
+                    let ry = first_world.1 - cy;
+                    let r_world = (rx * rx + ry * ry).sqrt();
+                    if r_world <= 1e-9 {
+                        dashed(frame, p0, cursor_screen);
+                        return;
+                    }
+                    // Sweep direction — match the dispatcher's logic.
+                    let ex = cursor.0 - first_world.0;
+                    let ey = cursor.1 - first_world.1;
+                    let sweep_ccw = lx * ey - ly * ex >= 0.0;
+                    // Stroke the dashed arc.
+                    let c_screen =
+                        cstate.world_to_screen((cx, cy));
+                    let r_screen = (r_world as f32) * cstate.scale;
+                    let start_angle =
+                        (first_world.1 - cy).atan2(first_world.0 - cx) as f32;
+                    let end_angle = (cursor.1 - cy).atan2(cursor.0 - cx) as f32;
+                    let mut delta = end_angle - start_angle;
+                    if sweep_ccw {
+                        while delta < 0.0 {
+                            delta += std::f32::consts::TAU;
+                        }
+                    } else {
+                        while delta > 0.0 {
+                            delta -= std::f32::consts::TAU;
+                        }
+                    }
+                    let segments = 32;
+                    for i in (0..segments).step_by(2) {
+                        let t0 = i as f32 / segments as f32;
+                        let t1 = (i + 1) as f32 / segments as f32;
+                        let a0 = start_angle + delta * t0;
+                        let a1 = start_angle + delta * t1;
+                        let q0 = Point::new(
+                            c_screen.x + r_screen * a0.cos(),
+                            c_screen.y + r_screen * a0.sin(),
+                        );
+                        let q1 = Point::new(
+                            c_screen.x + r_screen * a1.cos(),
+                            c_screen.y + r_screen * a1.sin(),
+                        );
+                        frame.stroke(&Path::line(q0, q1), stroke);
+                    }
+                }
+                None => {
+                    // No incident line — show a dashed chord so the
+                    // user gets a visual cue. Dispatcher publishes
+                    // the "no incident line" warning on commit.
+                    dashed(frame, p0, cursor_screen);
+                }
+            }
+        }
+    }
+
+    // v0.24 Track D — modeless live numeric placement-input overlay.
+    // Renders the user-typed buffer at the cursor whenever
+    // `placement_input` is `Some`, regardless of which `ToolPending`
+    // is current (the kind picker decided which tool's gesture mints
+    // it; the dispatcher tolerates unrelated tool changes by clearing
+    // on commit + on Esc). Position: 4 px right and 8 px below the
+    // cursor, with a translucent rounded background so the buffer
+    // reads against any canvas content.
+    if let Some(input) = state.placement_input.as_ref() {
+        let label = input.kind.label();
+        let body = if input.buffer.is_empty() {
+            format!("{label}: _")
+        } else {
+            format!("{label}: {}", input.buffer)
+        };
+        let origin = Point::new(cursor_screen.x + 4.0, cursor_screen.y + 8.0);
+        // Approximate a one-line text bbox so the background plate
+        // sits behind the glyphs. Iosevka 11px averages ~6 px per
+        // character at the canvas's default rendering; a 4 px pad
+        // around the label keeps the chrome readable.
+        let glyph_w = 6.5_f32;
+        let pad_x = 5.0_f32;
+        let pad_y = 3.0_f32;
+        let body_w = glyph_w * (body.chars().count() as f32) + pad_x * 2.0;
+        let body_h = 16.0_f32 + pad_y * 2.0;
+        let plate_origin = Point::new(origin.x - pad_x, origin.y - pad_y);
+        // Background plate.
+        frame.fill_rectangle(
+            plate_origin,
+            iced::Size::new(body_w, body_h),
+            Color::from_rgba(0.05, 0.07, 0.10, 0.85),
+        );
+        // Accent border.
+        frame.stroke(
+            &Path::rectangle(plate_origin, iced::Size::new(body_w, body_h)),
+            Stroke::default()
+                .with_width(1.0)
+                .with_color(Color::from_rgba(0.40, 0.70, 1.00, 0.95)),
+        );
+        // Buffer text.
+        frame.fill_text(canvas::Text {
+            content: body,
+            position: origin,
+            color: Color::from_rgba(0.95, 0.95, 0.97, 1.00),
+            size: iced::Pixels(13.0),
+            ..canvas::Text::default()
+        });
     }
 }
 
@@ -2180,25 +2883,192 @@ fn draw_pad(
     pad: &EditorPad,
     is_selected: bool,
 ) {
+    use signex_library::PadShape as PS;
     let layer = pad.primary_layer();
     let color = layer.color();
     let (x0, y0, x1, y1) = pad.bbox_mm();
     let p0 = cstate.world_to_screen((x0, y0));
     let p1 = cstate.world_to_screen((x1, y1));
     let size = iced::Size::new(p1.x - p0.x, p1.y - p0.y);
-    let rect = Path::rectangle(p0, size);
-    frame.fill(&rect, Color { a: 0.85, ..color });
+    let centre = cstate.world_to_screen(pad.position_mm);
+    let half_w = size.width / 2.0;
+    let half_h = size.height / 2.0;
+
+    // v0.20 — branch on pad.shape to render the actual copper
+    // outline. Previously every pad rendered as a rectangle, so the
+    // Properties-panel Shape pick_list change wasn't visible on the
+    // canvas. Round/Oval use a stretched circle; RoundRect uses
+    // rect with arc corners; Chamfered uses a 6/8-vertex polygon;
+    // Custom falls back to its provided polygon points.
+    let shape_path = match &pad.shape {
+        PS::Round | PS::Oval => Path::new(|b| {
+            // Approximate ellipse with quadratic bezier arcs.
+            // For a circle (size_x == size_y) this is exact.
+            let segments = 36;
+            for i in 0..=segments {
+                let t = i as f32 / segments as f32 * std::f32::consts::TAU;
+                let x = centre.x + half_w * t.cos();
+                let y = centre.y + half_h * t.sin();
+                if i == 0 {
+                    b.move_to(Point::new(x, y));
+                } else {
+                    b.line_to(Point::new(x, y));
+                }
+            }
+            b.close();
+        }),
+        PS::RoundRect { radius_ratio } => {
+            let r = (half_w.min(half_h) * (*radius_ratio as f32 * 2.0)).max(0.5);
+            Path::new(|b| {
+                // Rounded-rect via 4 line segments + 4 quarter arcs.
+                b.move_to(Point::new(centre.x - half_w + r, centre.y - half_h));
+                b.line_to(Point::new(centre.x + half_w - r, centre.y - half_h));
+                b.arc_to(
+                    Point::new(centre.x + half_w, centre.y - half_h),
+                    Point::new(centre.x + half_w, centre.y - half_h + r),
+                    r,
+                );
+                b.line_to(Point::new(centre.x + half_w, centre.y + half_h - r));
+                b.arc_to(
+                    Point::new(centre.x + half_w, centre.y + half_h),
+                    Point::new(centre.x + half_w - r, centre.y + half_h),
+                    r,
+                );
+                b.line_to(Point::new(centre.x - half_w + r, centre.y + half_h));
+                b.arc_to(
+                    Point::new(centre.x - half_w, centre.y + half_h),
+                    Point::new(centre.x - half_w, centre.y + half_h - r),
+                    r,
+                );
+                b.line_to(Point::new(centre.x - half_w, centre.y - half_h + r));
+                b.arc_to(
+                    Point::new(centre.x - half_w, centre.y - half_h),
+                    Point::new(centre.x - half_w + r, centre.y - half_h),
+                    r,
+                );
+                b.close();
+            })
+        }
+        PS::Chamfered { chamfer_ratio, corners } => {
+            let c = (half_w.min(half_h) * (*chamfer_ratio as f32 * 2.0)).max(0.5);
+            Path::new(|b| {
+                // Polygon: 4 corners with optional chamfers.
+                // Order: TL → TR → BR → BL.
+                let tl = Point::new(centre.x - half_w, centre.y - half_h);
+                let tr = Point::new(centre.x + half_w, centre.y - half_h);
+                let br = Point::new(centre.x + half_w, centre.y + half_h);
+                let bl = Point::new(centre.x - half_w, centre.y + half_h);
+
+                let chamfer_corner = |b: &mut canvas::path::Builder,
+                                      p: Point,
+                                      _flag: bool,
+                                      _enter: Point,
+                                      _exit: Point| {
+                    b.line_to(p);
+                };
+                let _ = chamfer_corner; // silence unused warning when no flag is set
+                // Start at TL+c-x.
+                b.move_to(Point::new(tl.x + c, tl.y));
+                if corners.top_right {
+                    b.line_to(Point::new(tr.x - c, tr.y));
+                    b.line_to(Point::new(tr.x, tr.y + c));
+                } else {
+                    b.line_to(tr);
+                }
+                if corners.bottom_right {
+                    b.line_to(Point::new(br.x, br.y - c));
+                    b.line_to(Point::new(br.x - c, br.y));
+                } else {
+                    b.line_to(br);
+                }
+                if corners.bottom_left {
+                    b.line_to(Point::new(bl.x + c, bl.y));
+                    b.line_to(Point::new(bl.x, bl.y - c));
+                } else {
+                    b.line_to(bl);
+                }
+                if corners.top_left {
+                    b.line_to(Point::new(tl.x, tl.y + c));
+                    b.line_to(Point::new(tl.x + c, tl.y));
+                } else {
+                    b.line_to(tl);
+                    b.line_to(Point::new(tl.x + c, tl.y));
+                }
+                b.close();
+            })
+        }
+        PS::Custom(poly) => Path::new(|b| {
+            if let Some((first, rest)) = poly.points.split_first() {
+                let p0 = cstate.world_to_screen((
+                    pad.position_mm.0 + first[0],
+                    pad.position_mm.1 + first[1],
+                ));
+                b.move_to(p0);
+                for pt in rest {
+                    let p = cstate.world_to_screen((
+                        pad.position_mm.0 + pt[0],
+                        pad.position_mm.1 + pt[1],
+                    ));
+                    b.line_to(p);
+                }
+                b.close();
+            }
+        }),
+        _ => Path::rectangle(p0, size),
+    };
+
+    frame.fill(&shape_path, Color { a: 0.85, ..color });
     let outline_color = if is_selected {
         Color::from_rgb(1.0, 1.0, 1.0)
     } else {
         Color { a: 1.0, ..color }
     };
     frame.stroke(
-        &rect,
+        &shape_path,
         Stroke::default()
             .with_width(if is_selected { 1.6 } else { 0.8 })
             .with_color(outline_color),
     );
+
+    // v0.23 — Pad hole. Through-hole / NPT pads carry a positive
+    // `drill_diameter_mm`; render it as a black "punched" disc on
+    // top of the copper. Slot drills aren't yet propagated through
+    // EditorPad (the field only lives on `NextPadDefaults` today);
+    // when EditorPad gains its own slot field, swap in a stadium
+    // rendering rotated by `hole_rotation_deg`. A diameter of zero
+    // (or `None`) renders nothing so SMD pads and the "Size = 0"
+    // placeholder state stay clean.
+    if let Some(d_mm) = pad.drill_diameter_mm.filter(|d| *d > 1e-6) {
+        let drill_r = (d_mm * 0.5) as f32 * cstate.scale;
+        let hole_path = Path::new(|b| {
+            let segments = 24;
+            for i in 0..=segments {
+                let t = i as f32 / segments as f32 * std::f32::consts::TAU;
+                let x = centre.x + drill_r * t.cos();
+                let y = centre.y + drill_r * t.sin();
+                if i == 0 {
+                    b.move_to(Point::new(x, y));
+                } else {
+                    b.line_to(Point::new(x, y));
+                }
+            }
+            b.close();
+        });
+        // Black fill = "punched" through copper. White outline when
+        // selected so the hole's edge stays visible against the
+        // pad's selection ring.
+        frame.fill(&hole_path, Color::BLACK);
+        frame.stroke(
+            &hole_path,
+            Stroke::default()
+                .with_width(0.8)
+                .with_color(if is_selected {
+                    Color::WHITE
+                } else {
+                    Color::from_rgba(0.0, 0.0, 0.0, 0.85)
+                }),
+        );
+    }
 
     // Pad number — only when zoomed in enough to read.
     if cstate.scale >= 25.0 && !pad.number.is_empty() {

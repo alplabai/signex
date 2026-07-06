@@ -50,22 +50,14 @@ pub fn view_symbol<'a>(
 ) -> Element<'a, LibraryMessage> {
     let tokens = &panel_ctx.tokens;
     let toolbar = view_symbol_toolbar(editor, panel_ctx);
-    // v0.13 — unified bar + dropdown overlay come from one widget
-    // call now. No outer padding — the widget centres the bar
-    // itself and mounts the dropdown panel inside its own Stack.
-    let active_bar = crate::library::editor::symbol::active_bar::view(
-        editor, theme_id, tokens,
-    );
+    // Active bar moved to the app-view layer (view_main_for) so it
+    // shares the schematic's window-absolute coordinate system — see
+    // symbol::active_bar::{bar_items, dropdown_overlay}. The body here
+    // renders just toolbar + canvas; the bar is layered on top there.
+    let _ = theme_id;
     let canvas_widget = view_symbol_canvas(editor, panel_ctx, display);
 
-    // Overlay the active_bar on top of the canvas so that when the
-    // active-bar dropdown opens (view_with_overlay returns a Fill Stack)
-    // it does not push the canvas widget out of the column layout.
-    let canvas_with_bar = iced::widget::Stack::new()
-        .push(canvas_widget)
-        .push(active_bar);
-
-    let body = column![toolbar, canvas_with_bar]
+    let body = column![toolbar, canvas_widget]
         .spacing(6)
         .width(Length::Fill)
         .height(Length::Fill);
@@ -408,32 +400,17 @@ pub fn view_footprint<'a>(
     // half) regardless of mode. Replaces the per-mode
     // pads_active_bar::view / sketch_mode::active_bar::view
     // mounting that lived here through v0.18.13.
-    // Wrap directly without extra padding — `unified_active_bar::view`
-    // returns a Column with its own Space + centered bar, mirroring
-    // the schematic active bar's mount pattern. Adding padding here
-    // double-pads the bar and shifts it off centre.
-    let unified_bar = crate::library::editor::footprint::unified_active_bar::view(
-        editor,
-        theme_id,
-        tokens,
-        custom_filter_presets,
-    );
+    // v0.13 — Active bar moved to the app-view layer so it shares
+    // the schematic's window-absolute coordinate system. The body
+    // here renders just canvas + layers strip + footer; the bar
+    // (and its dropdown overlay) is layered on top in
+    // `view_main_for`. `custom_filter_presets` is unused here now
+    // but kept on the signature for backwards compat with callers.
+    let _ = custom_filter_presets;
     let body: Element<'a, LibraryMessage> = match editor.state.mode {
-        EditorMode::Sketch => {
+        EditorMode::Sketch | EditorMode::Normal => {
             let canvas_with_bar = iced::widget::Stack::new()
                 .push(canvas_area)
-                .push(unified_bar)
-                .push(mode_switcher);
-            column![canvas_with_bar, layers_strip, footer]
-                .spacing(0)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .into()
-        }
-        EditorMode::Normal => {
-            let canvas_with_bar = iced::widget::Stack::new()
-                .push(canvas_area)
-                .push(unified_bar)
                 .push(mode_switcher);
             column![canvas_with_bar, layers_strip, footer]
                 .spacing(0)
@@ -1060,6 +1037,18 @@ fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEditorMsg {
             snap_id,
         },
         EditorMsg::FootprintSketchToolEscape => PrimitiveEditorMsg::FootprintSketchToolEscape,
+        EditorMsg::FootprintSketchPlacementInputChar(c) => {
+            PrimitiveEditorMsg::FootprintSketchPlacementInputChar(c)
+        }
+        EditorMsg::FootprintSketchPlacementInputBackspace => {
+            PrimitiveEditorMsg::FootprintSketchPlacementInputBackspace
+        }
+        EditorMsg::FootprintSketchPlacementInputEnter => {
+            PrimitiveEditorMsg::FootprintSketchPlacementInputEnter
+        }
+        EditorMsg::FootprintSketchPlacementInputEscape => {
+            PrimitiveEditorMsg::FootprintSketchPlacementInputEscape
+        }
         EditorMsg::FootprintSketchSelect { id, shift } => {
             PrimitiveEditorMsg::FootprintSketchSelect { id, shift }
         }
@@ -1080,6 +1069,9 @@ fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEditorMsg {
         EditorMsg::FootprintSketchSetTool(t) => PrimitiveEditorMsg::FootprintSketchSetTool(t),
         EditorMsg::FootprintSketchToggleConstruction => {
             PrimitiveEditorMsg::FootprintSketchToggleConstruction
+        }
+        EditorMsg::FootprintSketchToggleCenterline => {
+            PrimitiveEditorMsg::FootprintSketchToggleCenterline
         }
         EditorMsg::FootprintTogglePlacementPause => {
             PrimitiveEditorMsg::FootprintTogglePlacementPause

@@ -52,12 +52,7 @@ pub enum SketchEdit {
     SetMode(EditorMode),
 
     /// Force a solve + bake even if the sketch hasn't changed.
-    /// Useful after un-pausing the auto-pause state machine.
     ForceRebuild,
-
-    /// Toggle [`signex_sketch::solver::timeout::AutoPauseState`].
-    /// `true` stops live-solve until the next `ForceRebuild`.
-    ToggleAutoPause,
 }
 
 /// The active drawing tool inside Sketch mode. The Phase 6 UI's

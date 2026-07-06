@@ -35,7 +35,7 @@ pub fn bake_cutouts(
 ) -> Result<(), SketchError> {
     let ctx = build_ctx(params_canonical);
     for entity in &sketch.entities {
-        if entity.construction {
+        if entity.bake_skipped() {
             continue;
         }
         let attr = match entity.board_cutout.as_ref() {

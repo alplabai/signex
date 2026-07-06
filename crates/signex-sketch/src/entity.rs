@@ -13,6 +13,18 @@ pub struct Entity {
     pub plane: PlaneId,
     #[serde(default)]
     pub construction: bool,
+    /// v0.22 Phase A5 — Centerline linetype. When `true`, the entity
+    /// behaves like a Construction entity for bake purposes (skipped
+    /// silently — same exclusion rule everywhere) but renders as a
+    /// long-dash dotted gold line in the canvas (Altium / Fusion
+    /// centerline convention). Mutually exclusive with `construction`
+    /// at the UI level; both off = Normal solid. Both flags are
+    /// preserved in the data model so tooling can distinguish a
+    /// "centerline" from a "construction line" for downstream
+    /// consumers (mirror axis detection, revolve axis, dimension
+    /// targets that prefer diameter over radius).
+    #[serde(default)]
+    pub centerline: bool,
     #[serde(flatten)]
     pub kind: EntityKind,
 
@@ -80,6 +92,7 @@ impl Entity {
             id,
             plane,
             construction: false,
+            centerline: false,
             kind,
             pad: None,
             silk: None,
@@ -92,6 +105,14 @@ impl Entity {
             board_cutout: None,
             v_score: None,
         }
+    }
+
+    /// v0.22 Phase A5 — `true` if the bake pipeline should skip this
+    /// entity. Construction and Centerline both qualify. Used by every
+    /// `bake_*` site in `signex-bake` to avoid lit-by-N copy of the
+    /// same `if entity.construction || entity.centerline` check.
+    pub fn bake_skipped(&self) -> bool {
+        self.construction || self.centerline
     }
 
     /// Point endpoints reachable from this entity. Used by the

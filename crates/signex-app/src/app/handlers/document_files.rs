@@ -249,6 +249,453 @@ impl Signex {
         Ok(())
     }
 
+    /// v0.22 Phase 8.4 — auto-commit a saved file into the owning
+    /// project's local Git repo when `enable_git` is on.
+    ///
+    /// Walks `document_state.projects` looking for the project whose
+    /// `data.dir` is a prefix of `file_path`. If found AND
+    /// `data.enable_git == true`, opens
+    /// [`LocalGitProjectAdapter`] and runs `commit_path`.
+    ///
+    /// Failure is best-effort: logged + surfaced as a non-modal
+    /// status warning, never blocks the save. The user's data is on
+    /// disk regardless of whether git captures it.
+    ///
+    /// v0.23 — Async pipeline. The save-handler synchronously
+    /// resolves the owning project + relative path (cheap — just
+    /// walks `DocumentState.projects`), then pushes a
+    /// [`crate::app::state::PendingGitCommit`] onto
+    /// `pending_git_commits` and adds the pair to
+    /// `inflight_git_commits` so the status bar's "Saving…" pill
+    /// shows immediately. The actual `git2` work runs in
+    /// `finish_update`'s [`Self::drain_pending_git_commits`] which
+    /// emits one `Task::perform` per queued commit. Result lands as
+    /// `Message::ProjectGitCommitDone`; the handler clears the
+    /// inflight entry.
+    pub fn commit_save_to_project_git(
+        &mut self,
+        file_path: &std::path::Path,
+        default_message: &str,
+    ) {
+        let owning = self
+            .document_state
+            .projects
+            .iter()
+            .find(|p| {
+                if !p.data.enable_git {
+                    return false;
+                }
+                let dir = std::path::Path::new(&p.data.dir);
+                file_path.starts_with(dir)
+            });
+        let Some(project) = owning else {
+            return;
+        };
+        let project_root = std::path::PathBuf::from(&project.data.dir);
+        let rel_path = match file_path.strip_prefix(&project_root) {
+            Ok(p) => p.to_path_buf(),
+            Err(_) => return,
+        };
+
+        // Idempotent: ignore duplicate enqueues for the same
+        // (project_root, rel_path) when the previous one is still
+        // inflight. The next save round adds it back if the user
+        // saves again after the prior commit completes.
+        let key = (project_root.clone(), rel_path.clone());
+        if !self.document_state.inflight_git_commits.insert(key) {
+            return;
+        }
+        self.document_state
+            .pending_git_commits
+            .push(crate::app::state::PendingGitCommit {
+                project_root,
+                rel_path,
+                message: default_message.to_string(),
+            });
+    }
+
+    /// v0.23 — Drain the pending-commit queue. Returns a
+    /// `Task::batch` of `Task::perform` calls that each open the
+    /// project's git adapter and run `commit_path` on a tokio
+    /// `spawn_blocking`. Each completion routes through
+    /// `Message::ProjectGitCommitDone` which clears the matching
+    /// `inflight_git_commits` entry. Returns `Task::none()` when the
+    /// queue is empty.
+    ///
+    /// **Ordering note:** Concurrent commits to the same project
+    /// repo are serialised by libgit2's `.git/index.lock` (and the
+    /// `LocalGitProjectAdapter::git_lock` mutex), but **not** by
+    /// this dispatcher. If the user types fast enough to fire two
+    /// saves before the first commit completes, the second
+    /// `Task::perform` may race the first; in practice both
+    /// commits land sequentially with the OS-level lock determining
+    /// order. The first commit's blob can therefore reflect
+    /// post-second-save content if the rapid sequence overlaps
+    /// `index.add_path` with the user's next save. Not data loss —
+    /// every save's content is captured by *some* commit — but the
+    /// commit-message vs blob-content correspondence is best-effort.
+    pub(crate) fn drain_pending_git_commits(&mut self) -> iced::Task<crate::app::Message> {
+        if self.document_state.pending_git_commits.is_empty() {
+            return iced::Task::none();
+        }
+        let drained: Vec<crate::app::state::PendingGitCommit> =
+            self.document_state.pending_git_commits.drain(..).collect();
+        let tasks: Vec<iced::Task<crate::app::Message>> = drained
+            .into_iter()
+            .map(|pending| {
+                let project_root = pending.project_root.clone();
+                let rel_path = pending.rel_path.clone();
+                let message = pending.message.clone();
+                let response_root = project_root.clone();
+                let response_rel = rel_path.clone();
+                iced::Task::perform(
+                    async move {
+                        tokio::task::spawn_blocking(move || {
+                            let adapter = signex_library::adapters::local_git_project::LocalGitProjectAdapter::open_or_init(
+                                project_root.clone(),
+                            )
+                            .map_err(|e| {
+                                format!("open_or_init({}) failed: {e}", project_root.display())
+                            })?;
+                            adapter
+                                .commit_path(&rel_path, &message)
+                                .map(|oid| oid.to_string())
+                                .map_err(|e| {
+                                    format!(
+                                        "commit_path({}) failed: {e}",
+                                        rel_path.display()
+                                    )
+                                })
+                        })
+                        .await
+                        .unwrap_or_else(|e| Err(format!("spawn_blocking: {e}")))
+                    },
+                    move |result| crate::app::Message::ProjectGitCommitDone {
+                        project_root: response_root.clone(),
+                        rel_path: response_rel.clone(),
+                        result,
+                    },
+                )
+            })
+            .collect();
+        iced::Task::batch(tasks)
+    }
+
+    /// v0.23 — Handler for [`Message::ProjectGitCommitDone`]. Clears
+    /// the matching `inflight_git_commits` entry and logs the result.
+    pub(crate) fn handle_project_git_commit_done(
+        &mut self,
+        project_root: std::path::PathBuf,
+        rel_path: std::path::PathBuf,
+        result: Result<String, String>,
+    ) {
+        self.document_state
+            .inflight_git_commits
+            .remove(&(project_root.clone(), rel_path.clone()));
+        match result {
+            Ok(oid) => crate::diagnostics::log_info(format!(
+                "[git] committed {} in {} ({})",
+                rel_path.display(),
+                project_root.display(),
+                oid
+            )),
+            Err(e) => crate::diagnostics::log_warning(format!("[git] {e}")),
+        }
+    }
+
+    /// v0.22 Phase 8.5 — Resolve the active tab's path and project,
+    /// then call `LocalGitProjectAdapter::restore_at` with the user-
+    /// picked SHA. Marks the file dirty so the next Ctrl+S captures
+    /// the restored content.
+    ///
+    /// Best-effort: failures log a warning and surface as a status
+    /// message; nothing destructive runs (the working tree changes
+    /// only on a successful blob read + atomic write).
+    pub(crate) fn handle_history_restore_clicked(&mut self, sha: &str) {
+        let active = match self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+        {
+            Some(t) => t,
+            None => return,
+        };
+        let full_path = active.path.clone();
+        if full_path.as_os_str().is_empty() {
+            return;
+        }
+
+        // Find the owning project by directory prefix.
+        let owning = self
+            .document_state
+            .projects
+            .iter()
+            .find(|p| {
+                let dir = std::path::Path::new(&p.data.dir);
+                full_path.starts_with(dir)
+            });
+        let Some(project) = owning else {
+            crate::diagnostics::log_warning(format!(
+                "[git] restore: no owning project for {}",
+                full_path.display()
+            ));
+            return;
+        };
+        let project_root = std::path::PathBuf::from(&project.data.dir);
+        let rel_path = match full_path.strip_prefix(&project_root) {
+            Ok(p) => p.to_path_buf(),
+            Err(_) => return,
+        };
+
+        let adapter = match signex_library::adapters::local_git_project::LocalGitProjectAdapter::open_or_init(
+            project_root.clone(),
+        ) {
+            Ok(a) => a,
+            Err(e) => {
+                crate::diagnostics::log_warning(format!(
+                    "[git] restore: open_or_init({}) failed: {e}",
+                    project_root.display()
+                ));
+                return;
+            }
+        };
+        match adapter.restore_at_from_sha(&rel_path, sha) {
+            Ok(()) => {
+                self.document_state.dirty_paths.insert(full_path.clone());
+                crate::diagnostics::log_info(format!(
+                    "[git] restored {} to {}",
+                    rel_path.display(),
+                    sha
+                ));
+                // v0.22 — live-reload the active tab from disk so the
+                // user sees the restored content immediately. Without
+                // this, the working tree changed but the in-memory
+                // engine still holds the pre-restore state until the
+                // user re-opens.
+                self.reload_active_tab_from_disk();
+                self.refresh_panel_ctx();
+            }
+            Err(e) => {
+                crate::diagnostics::log_warning(format!(
+                    "[git] restore_at({}, {}) failed: {e}",
+                    rel_path.display(),
+                    sha
+                ));
+            }
+        }
+    }
+
+    /// v0.22 — Re-parse the active tab's on-disk file and replace
+    /// the in-memory engine/editor state with the fresh content.
+    /// Used after a `restore_at` to make the rewind visible without
+    /// requiring the user to close and reopen the tab.
+    ///
+    /// Per-tab-kind dispatch:
+    /// - **Schematic**: re-parse `.snxsch` via `SnxSchematic::parse`,
+    ///   replace the engine via `sync_engine_from_schematic`, refresh
+    ///   the canvas.
+    /// - **PCB**: re-parse `.snxpcb` via `SnxPcb::parse`, replace
+    ///   the tab's cached_document, refresh the renderer snapshot.
+    /// - **FootprintEditor**: re-parse the `.snxfpt` JSON, replace
+    ///   the entry in `document_state.footprint_editors`, clear the
+    ///   canvas cache.
+    /// - **SymbolEditor**: re-parse the `.snxsym` JSON, replace the
+    ///   entry in `document_state.symbol_editors`, clear the canvas
+    ///   cache.
+    /// - **LibraryBrowser / ComponentEditor**: deferred — these tabs
+    ///   read from the library adapter which has its own refresh
+    ///   path; restore-to-historical-version on these would need a
+    ///   library-side reload.
+    pub(crate) fn reload_active_tab_from_disk(&mut self) {
+        let active_idx = self.document_state.active_tab;
+        let Some(tab) = self.document_state.tabs.get(active_idx) else {
+            return;
+        };
+        let path = tab.path.clone();
+        let kind = tab.kind.clone();
+
+        match kind {
+            crate::app::TabKind::Schematic => {
+                let text = match std::fs::read_to_string(&path) {
+                    Ok(t) => t,
+                    Err(e) => {
+                        crate::diagnostics::log_warning(format!(
+                            "[reload] read {} failed: {e}",
+                            path.display()
+                        ));
+                        return;
+                    }
+                };
+                let parsed = match signex_types::format::SnxSchematic::parse(&text) {
+                    Ok(p) => p.sheet,
+                    Err(e) => {
+                        crate::diagnostics::log_warning(format!(
+                            "[reload] parse {} failed: {e}",
+                            path.display()
+                        ));
+                        return;
+                    }
+                };
+                // Replace the engine's schematic without resetting
+                // the camera (don't fit-to-paper — the user's pan/zoom
+                // is preserved across a restore).
+                self.apply_loaded_schematic(Some(parsed), true, false, false, false);
+            }
+            crate::app::TabKind::Pcb => {
+                let text = match std::fs::read_to_string(&path) {
+                    Ok(t) => t,
+                    Err(e) => {
+                        crate::diagnostics::log_warning(format!(
+                            "[reload] read {} failed: {e}",
+                            path.display()
+                        ));
+                        return;
+                    }
+                };
+                let board = match signex_types::format::SnxPcb::parse(&text) {
+                    Ok(p) => p.board,
+                    Err(e) => {
+                        crate::diagnostics::log_warning(format!(
+                            "[reload] parse {} failed: {e}",
+                            path.display()
+                        ));
+                        return;
+                    }
+                };
+                if let Some(t) = self.document_state.tabs.get_mut(active_idx) {
+                    t.cached_document = Some(crate::app::TabDocument::Pcb(board));
+                }
+                // Refresh canvas; preserve camera (don't fit-to-board).
+                self.apply_loaded_pcb_document(false, false);
+            }
+            crate::app::TabKind::FootprintEditor(p) => {
+                let bytes = match std::fs::read_to_string(&p) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        crate::diagnostics::log_warning(format!(
+                            "[reload] read {} failed: {e}",
+                            p.display()
+                        ));
+                        return;
+                    }
+                };
+                match signex_library::FootprintFile::from_toml_str(&bytes) {
+                    Ok(file) if !file.footprints.is_empty() => {
+                        let snap_disabled = !self.ui_state.snap_enabled;
+                        let state =
+                            crate::app::FootprintEditorState::new(p.clone(), file)
+                                .with_global_snap_disabled(snap_disabled);
+                        self.document_state
+                            .footprint_editors
+                            .insert(p.clone(), state);
+                        if let Some(editor) =
+                            self.document_state.footprint_editors.get_mut(&p)
+                        {
+                            editor.canvas_cache.clear();
+                        }
+                    }
+                    Ok(_) => {
+                        crate::diagnostics::log_warning(format!(
+                            "[reload] {} contains zero footprints",
+                            p.display()
+                        ));
+                    }
+                    Err(e) => {
+                        crate::diagnostics::log_warning(format!(
+                            "[reload] parse {} failed: {e}",
+                            p.display()
+                        ));
+                    }
+                }
+            }
+            crate::app::TabKind::SymbolEditor(p) => {
+                let bytes = match std::fs::read(&p) {
+                    Ok(b) => b,
+                    Err(e) => {
+                        crate::diagnostics::log_warning(format!(
+                            "[reload] read {} failed: {e}",
+                            p.display()
+                        ));
+                        return;
+                    }
+                };
+                match signex_library::SymbolFile::from_bytes(&bytes) {
+                    Ok(file) if !file.symbols.is_empty() => {
+                        let state = crate::app::SymbolEditorState::new(p.clone(), file);
+                        self.document_state
+                            .symbol_editors
+                            .insert(p.clone(), state);
+                    }
+                    Ok(_) => {
+                        crate::diagnostics::log_warning(format!(
+                            "[reload] {} contains zero symbols",
+                            p.display()
+                        ));
+                    }
+                    Err(e) => {
+                        crate::diagnostics::log_warning(format!(
+                            "[reload] parse {} failed: {e}",
+                            p.display()
+                        ));
+                    }
+                }
+            }
+            crate::app::TabKind::LibraryBrowser(_)
+            | crate::app::TabKind::ComponentEditor(_) => {
+                let lib_path = match &kind {
+                    crate::app::TabKind::LibraryBrowser(p) => p.clone(),
+                    crate::app::TabKind::ComponentEditor(c) => c.library_path.clone(),
+                    _ => unreachable!(),
+                };
+                // v0.23 — reload-after-restore for `.snxlib` tabs.
+                // Re-opens a fresh `LocalGitAdapter` against the
+                // on-disk root (the mounted adapter's git2 caches
+                // are stale after `restore_at`) and re-runs
+                // `reload_tables` so the table view picks up the
+                // restored TSVs. Bails early if no library is
+                // currently open at this path; failures log + drop
+                // into an empty cache.
+                if self.library.library_at(&lib_path).is_none() {
+                    crate::diagnostics::log_warning(format!(
+                        "[reload] LibraryBrowser tab {} has no open library to refresh",
+                        lib_path.display()
+                    ));
+                    return;
+                }
+                if let Some(open_lib) = self.library.library_at_mut(&lib_path) {
+                    // Re-open the on-disk adapter rather than reusing
+                    // the mounted one — `restore_at` rewrote the
+                    // working tree, and the adapter's internal
+                    // caches (e.g. git2 index) are stale.
+                    match signex_library::LocalGitAdapter::open(&lib_path) {
+                        Ok(fresh_adapter) => {
+                            if let Err(e) = open_lib.reload_tables(&fresh_adapter) {
+                                crate::diagnostics::log_warning(format!(
+                                    "[reload] reload_tables({}) failed: {e}",
+                                    lib_path.display()
+                                ));
+                            } else {
+                                crate::diagnostics::log_info(format!(
+                                    "[reload] LibraryBrowser tab {} refreshed",
+                                    lib_path.display()
+                                ));
+                            }
+                        }
+                        Err(e) => {
+                            crate::diagnostics::log_warning(format!(
+                                "[reload] LocalGitAdapter::open({}) failed: {e}",
+                                lib_path.display()
+                            ));
+                        }
+                    }
+                }
+                // Refresh the panel so the Library Browser tab picks
+                // up the new table set on the next render.
+                self.refresh_panel_ctx();
+            }
+        }
+    }
+
     fn save_active_document(&mut self) -> Result<iced::Task<Message>> {
         // Standalone `.snxsym` / `.snxfpt` document tabs route Ctrl+S
         // through `save_primitive_tab_at` so JSON persistence happens
@@ -291,7 +738,35 @@ impl Signex {
             result.context("save active schematic session")?;
             let path = self.active_tab_path().unwrap_or_default();
             crate::diagnostics::log_info(format!("[save] Wrote {}", path.display()));
+            // v0.22 Phase 8.4 — auto-commit the saved schematic into
+            // the owning project's git repo when enable_git is on.
+            // Best-effort; failure logged + ignored (user data is on
+            // disk regardless).
+            if !path.as_os_str().is_empty() {
+                let label = path
+                    .file_name()
+                    .map(|f| f.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| path.display().to_string());
+                let msg = format!("Save {label}");
+                self.commit_save_to_project_git(&path, &msg);
+            }
         }
+        // v0.23 — PCB save-hook auto-commit. The PCB editor doesn't
+        // own a save-back-to-disk path yet (Pcb tabs render from
+        // `cached_document` and never mutate the parsed `.snxpcb`
+        // through this dispatcher). When the PCB save path lands as
+        // part of future PCB-editor work, wire the same
+        // `commit_save_to_project_git` call here so PCB edits get
+        // captured by the v0.22 project-git pipeline:
+        //
+        //     if let TabKind::Pcb = active_tab.kind {
+        //         pcb_session.save()?;
+        //         let label = path.file_name()…;
+        //         self.commit_save_to_project_git(&path, &format!("Save {label}"));
+        //     }
+        //
+        // Tracked in PROJECT_GIT_PLAN.md "Deferred to v0.23" → "PCB
+        // save-hook wiring".
         // Save the active project's `.snxprj` if it's dirty (right-
         // click → Add Existing flips the dirty bit). Best-effort: a
         // failure here is logged but doesn't block the schematic save.
@@ -416,6 +891,14 @@ impl Signex {
                     "[save] Wrote project {}",
                     project_path.display()
                 ));
+                // v0.22 Phase 8.4 — auto-commit the .snxprj file into
+                // its own project git repo when enable_git is on.
+                let label = project_path
+                    .file_name()
+                    .map(|f| f.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| project_path.display().to_string());
+                let msg = format!("Save {label}");
+                self.commit_save_to_project_git(&project_path, &msg);
                 // Rebuild the panel ctx so the project root row drops
                 // its dirty marker. Without this, the cached
                 // `ProjectPanelInfo.is_dirty` snapshot stays `true`

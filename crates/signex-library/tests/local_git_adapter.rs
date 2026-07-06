@@ -151,6 +151,7 @@ fn fixture_footprint(name: &str) -> Footprint {
             drill: None,
             solder_mask_margin: None,
             paste_margin: None,
+            ..Pad::default()
         }],
         courtyard: Polygon::default(),
         silk_f: Vec::new(),
@@ -180,6 +181,10 @@ fn fixture_footprint(name: &str) -> Footprint {
         mask_openings: Vec::new(),
         mask_excludes: Vec::new(),
         paste_apertures: Vec::new(),
+        description: String::new(),
+        default_designator: String::new(),
+        component_type: signex_library::primitive::footprint::ComponentType::Standard,
+        height_mm: None,
     }
 }
 

@@ -19,11 +19,12 @@
 //! from either side of the line; bake/UI layers take the absolute
 //! value when they need an unsigned distance.
 
+use crate::entity::EntityKind;
 use crate::error::SketchError;
 use crate::id::SketchEntityId;
 use crate::sketch::SketchData;
 use crate::solver::math::{Vec2, cross, distance, norm, sub};
-use crate::solver::state::{EntityIndex, arc_refs, line_endpoints, point_xy};
+use crate::solver::state::{EntityIndex, arc_refs, circle_radius, line_endpoints, point_xy};
 
 /// Tolerance below which a line's direction vector is treated as
 /// degenerate (zero-length). Anything smaller is a malformed line for
@@ -117,4 +118,47 @@ pub fn distance_pt_line(
     let (p, a, b) = point_and_line(point, line, state, index, sketch)?;
     let d = signed_perp_distance(p, a, b).ok_or(SketchError::EntityNotFound(line))?;
     Ok(vec![d - target_mm])
+}
+
+/// v0.23 — DistancePtCircle: signed offset from `point` to the
+/// boundary of `circle`. Residual is `|p - centre| - radius - target`.
+/// `target = 0` reduces to "point on the circle". Positive target
+/// offsets outward (further from centre); negative offsets inward.
+///
+/// Works on both `EntityKind::Circle { center, radius }` and
+/// `EntityKind::Arc` — for arcs, the radius is derived from the
+/// `start` point's distance to `center` (matching `point_on_arc`
+/// semantics).
+pub fn distance_pt_circle(
+    point: SketchEntityId,
+    circle: SketchEntityId,
+    target_mm: f64,
+    state: &[f64],
+    index: &EntityIndex,
+    sketch: &SketchData,
+) -> Result<Vec<f64>, SketchError> {
+    let p = point_xy(point, state, index, sketch).ok_or(SketchError::EntityNotFound(point))?;
+    let entity = sketch
+        .entities
+        .iter()
+        .find(|e| e.id == circle)
+        .ok_or(SketchError::EntityNotFound(circle))?;
+    let (centre_id, radius) = match entity.kind {
+        EntityKind::Circle { center, .. } => {
+            let r = circle_radius(circle, state, index)
+                .ok_or(SketchError::EntityNotFound(circle))?;
+            (center, r)
+        }
+        EntityKind::Arc { center, start, .. } => {
+            let c = point_xy(center, state, index, sketch)
+                .ok_or(SketchError::EntityNotFound(center))?;
+            let s = point_xy(start, state, index, sketch)
+                .ok_or(SketchError::EntityNotFound(start))?;
+            (center, distance(s, c))
+        }
+        _ => return Err(SketchError::EntityNotFound(circle)),
+    };
+    let c = point_xy(centre_id, state, index, sketch)
+        .ok_or(SketchError::EntityNotFound(centre_id))?;
+    Ok(vec![distance(p, c) - radius - target_mm])
 }

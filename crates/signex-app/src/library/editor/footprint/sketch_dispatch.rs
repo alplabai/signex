@@ -8,16 +8,17 @@
 //! Design:
 //! - The dispatcher is a free function so it can be unit-tested
 //!   without spinning up an iced runtime.
-//! - The auto-pause state lives on `FootprintEditorState`; the
-//!   dispatcher feeds it elapsed_ms after every solve and skips the
-//!   next solve if `paused()`.
-//! - Errors that aren't `SolveError::Timeout` propagate as
-//!   `SketchError::SolveFailed` so the caller can surface them in
-//!   the inspector. Timeout is consumed silently — the auto-pause
-//!   state machine handles user-visible feedback.
+//! - The solver is always live. v0.22 stripped the previous
+//!   auto-pause hysteresis: footprint sketches stay small enough
+//!   that every solve completes well under the per-frame budget,
+//!   and a "paused" state was confusing for both users and the
+//!   downstream Signal AI agent reading solver state.
+//! - All `SketchError` cases — including timeouts — propagate as
+//!   `SketchError::SolveFailed`. The `_with_warnings` wrappers
+//!   surface them in `state.solve_warnings`; nothing is silently
+//!   swallowed.
 
 use signex_library::primitive::footprint::Footprint;
-use signex_sketch::error::SolveError;
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::{SketchData, SketchError, parameter};
 
@@ -164,6 +165,7 @@ pub fn set_entity_role(footprint: &mut Footprint, id: SketchEntityId, role: Role
                     mask_margin_expr: None,
                     paste_margin_expr: None,
                     paste_apertures: PasteAperturePattern::Single,
+                    ..PadAttr::default()
                 });
             }
             // Non-Point: silent no-op (Pad attr requires a single point
@@ -340,25 +342,23 @@ fn apply_edit_inner(footprint: &mut Footprint, edit: SketchEdit) {
         SketchEdit::DeleteParameter { name } => {
             sketch.parameters.0.remove(&name);
         }
-        SketchEdit::SetMode(_) | SketchEdit::ForceRebuild | SketchEdit::ToggleAutoPause => {
-            // Mode / pause state machine lives in FootprintEditorState
-            // and is set by the iced update path before calling this
-            // function; nothing to apply at the SketchData level.
+        SketchEdit::SetMode(_) | SketchEdit::ForceRebuild => {
+            // Mode lives in FootprintEditorState and is set by the
+            // iced update path before calling this function; nothing
+            // to apply at the SketchData level.
         }
     }
 }
 
 /// Resolve parameters, run LM, capture DOF, bake pads.
 ///
-/// v0.16.1 — solver is always live. The previous auto-pause /
-/// hysteresis early-return was removed because footprint sketches
-/// stay small (tens-to-low-hundreds of entities) and the solver's
-/// per-frame cost is well below the per-frame budget. `AutoPauseState`
-/// still observes elapsed_ms for telemetry but never blocks.
-///
-/// On `SolveError::Timeout`: feeds the AutoPauseState and returns
-/// `Ok(())` (silent — UI handles the pause toast). Other errors
-/// propagate.
+/// v0.22 — solver is always live, no hysteresis, no pause state. All
+/// `SolveError` variants (including `Timeout`) propagate as
+/// `SketchError::SolveFailed` so the `_with_warnings` wrappers
+/// surface them to the user in `state.solve_warnings`. Footprint
+/// sketches stay small (tens-to-low-hundreds of entities); a
+/// timeout indicates a real solver problem worth showing, not a
+/// transient that can be silently swallowed.
 fn solve_and_bake(
     state: &mut FootprintEditorState,
     footprint: &mut Footprint,
@@ -374,10 +374,6 @@ fn solve_and_bake(
 
     match state.sketch_solver.solve(sketch, &resolved) {
         Ok(out) => {
-            state
-                .auto_pause
-                .observe(out.result.elapsed_ms, state.sketch_solver.timeout_ms);
-
             // Phase 7.3 — bake pads + arrays into the footprint, but
             // skip the overwrite on an empty sketch: a fresh
             // SetMode(Sketch) toggle on a footprint with literal pads
@@ -515,15 +511,39 @@ fn solve_and_bake(
                     &mut footprint.body_3d,
                     &mut state.solve_warnings,
                 )?;
+
+                // v0.22 Phase D2 — refresh editor-side pads cache so
+                // the canvas + Pads-mode Properties panel see what
+                // the bake just produced. Preserves sketch_entity_id
+                // / corner_entity_ids by matching pad.number across
+                // the old + new lists.
+                state.refresh_pads_from_primitive(footprint);
+
+                // v0.24 Phase 3 (Track A4) — reverse mirror. Walk
+                // each pad's shape_params (preserved across the
+                // refresh above) and re-derive
+                // EditorPad.stack.corner_radius_pct from the live
+                // resolved corner_r value. Keeps the Pads-mode
+                // "Corner radius %" input in sync when the sketch
+                // parameter is edited from elsewhere (Properties row,
+                // parameter table, drag handle).
+                super::pad_to_sketch::mirror_solve_to_pad_stack(state, &resolved);
+
+                // v0.24 Track A6 — chamfer anchor reposition. The
+                // shared `chamfer_len_<slug>` parameter doesn't drive
+                // the anchor Points via solver constraints (literal
+                // mint), so this post-solve pass rewrites the
+                // anchor coords from the resolved chamfer_len value.
+                // Only fires for pads with a `chamfer_len` binding;
+                // other pads get an early return inside the helper.
+                if let Some(sketch) = footprint.sketch.as_mut() {
+                    super::pad_to_sketch::mirror_solve_to_chamfer_anchors(
+                        state, sketch, &resolved,
+                    );
+                }
             }
 
             state.last_solve = Some(out);
-        }
-        Err(SolveError::Timeout {
-            elapsed_ms,
-            budget_ms,
-        }) => {
-            state.auto_pause.observe(elapsed_ms, budget_ms);
         }
         Err(e) => return Err(SketchError::SolveFailed(e)),
     }

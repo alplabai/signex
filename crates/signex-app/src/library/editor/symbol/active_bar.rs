@@ -29,24 +29,20 @@ use crate::library::editor::symbol::state::{
 };
 use crate::library::messages::{LibraryMessage, PrimitiveEditorMsg, SymbolToolMsg};
 
-/// Build the SchLib bar items + render via the unified widget.
-pub fn view<'a>(
-    editor: &'a SymbolEditorState,
+/// Build the SchLib bar items only — caller mounts via
+/// `signex_widgets::active_bar::view(items, tokens)` so the chain is
+/// identical to the schematic.
+pub fn bar_items(
+    editor: &SymbolEditorState,
     theme_id: ThemeId,
-    tokens: &'a ThemeTokens,
-) -> iced::Element<'a, LibraryMessage> {
+) -> Vec<ActiveBarItem<LibraryMessage>> {
     let path = editor.path.clone();
     let active_tool = editor.tool;
-    let selection_filter = editor.selection_filter;
 
-    // 1) Eight chevron-trigger buttons (Filter / Snap / Place /
-    // Select / Align / Pin / Text / Shapes) at the FRONT.
     let mut items: Vec<ActiveBarItem<LibraryMessage>> =
         dropdown_trigger_items(editor, theme_id);
     items.push(ActiveBarItem::Separator);
 
-    // 2) Tool slots — Select + Place Pin. Other shape tools live in
-    // the Shapes dropdown.
     items.push(ActiveBarItem::Button(ActiveBarButton {
         icon: ActiveBarIcon::Svg(ic::icon_select(theme_id)),
         tooltip: "Select".into(),
@@ -59,7 +55,6 @@ pub fn view<'a>(
         ..ActiveBarButton::default()
     }));
     items.push(ActiveBarItem::Button(ActiveBarButton {
-        // No dedicated pin SVG yet — use the arrow glyph.
         icon: ActiveBarIcon::Glyph("\u{2192}"),
         tooltip: "Place Pin".into(),
         enabled: true,
@@ -70,38 +65,56 @@ pub fn view<'a>(
         }),
         ..ActiveBarButton::default()
     }));
+    items
+}
 
-    let close_msg = LibraryMessage::PrimitiveEditorEvent {
-        path: path.clone(),
-        msg: PrimitiveEditorMsg::SymbolCloseActiveBarMenu,
+/// Build the dropdown overlay (panel + click-outside backstop) for
+/// the currently-open menu. `None` when no menu open.
+///
+/// `top_padding_px`: see [`crate::library::editor::footprint::unified_active_bar::dropdown_overlay`].
+pub fn dropdown_overlay<'a>(
+    editor: &'a SymbolEditorState,
+    theme_id: ThemeId,
+    tokens: &'a ThemeTokens,
+    top_padding_px: u16,
+) -> Option<iced::Element<'a, LibraryMessage>> {
+    use iced::widget::{Stack, container, mouse_area, Space};
+    use iced::Length;
+
+    let menu = editor.active_bar_menu?;
+    let entries = crate::library::editor::symbol::active_bar_dropdowns::entries(
+        menu,
+        editor.selection_filter,
+        editor.tool,
+        editor.path.clone(),
+        theme_id,
+    );
+    let width_hint = match menu {
+        SymActiveBarMenu::Filter => None,
+        SymActiveBarMenu::Snap => Some(240.0),
+        SymActiveBarMenu::Place => Some(240.0),
+        SymActiveBarMenu::Select => Some(220.0),
+        SymActiveBarMenu::Align => Some(320.0),
+        SymActiveBarMenu::Pin => Some(220.0),
+        SymActiveBarMenu::Text => Some(180.0),
+        SymActiveBarMenu::Shapes => Some(220.0),
     };
-    let path_for_entries = path.clone();
-
-    signex_widgets::active_bar::view_with_overlay::<LibraryMessage, SymActiveBarMenu>(
-        items,
-        editor.active_bar_menu,
-        close_msg,
-        move |menu| {
-            crate::library::editor::symbol::active_bar_dropdowns::entries(
-                menu,
-                selection_filter,
-                active_tool,
-                path_for_entries.clone(),
-                theme_id,
-            )
-        },
-        |menu| match menu {
-            SymActiveBarMenu::Filter => None,
-            SymActiveBarMenu::Snap => Some(240.0),
-            SymActiveBarMenu::Place => Some(240.0),
-            SymActiveBarMenu::Select => Some(220.0),
-            SymActiveBarMenu::Align => Some(320.0),
-            SymActiveBarMenu::Pin => Some(220.0),
-            SymActiveBarMenu::Text => Some(180.0),
-            SymActiveBarMenu::Shapes => Some(220.0),
-        },
-        tokens,
+    let panel = signex_widgets::active_bar_dropdown::view(entries, tokens, width_hint);
+    let panel_anchor = container(panel)
+        .padding([top_padding_px, 10])
+        .center_x(Length::Fill)
+        .align_y(iced::alignment::Vertical::Top);
+    let backstop = mouse_area(
+        container(Space::new())
+            .width(Length::Fill)
+            .height(Length::Fill),
     )
+    .on_press(LibraryMessage::PrimitiveEditorEvent {
+        path: editor.path.clone(),
+        msg: PrimitiveEditorMsg::SymbolCloseActiveBarMenu,
+    });
+
+    Some(Stack::new().push(backstop).push(panel_anchor).into())
 }
 
 /// Dropdown trigger items for the SchLib bar. Same dual-action

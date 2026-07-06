@@ -770,6 +770,27 @@ pub enum EditorMsg {
     /// v0.13.2 — Escape during a multi-click gesture; clears
     /// `tool_pending` without emitting a SketchEdit.
     FootprintSketchToolEscape,
+    /// v0.24 Track D — append a typed character to
+    /// `state.placement_input.buffer`. Mints a fresh `PlacementInput`
+    /// keyed off the active sketch tool when the field is `None`.
+    /// Validation (one decimal point, leading minus only for ArcSweep)
+    /// lives in the dispatcher.
+    FootprintSketchPlacementInputChar(char),
+    /// v0.24 Track D — pop the trailing character from
+    /// `state.placement_input.buffer`. Clears `placement_input` to
+    /// `None` once the buffer empties so the next keypress mints a
+    /// fresh entry.
+    FootprintSketchPlacementInputBackspace,
+    /// v0.24 Track D — Enter while the placement-input overlay is
+    /// open. No-op on state — the buffer waits for the next click to
+    /// consume it. Surfaced as a distinct message so the canvas can
+    /// stop forwarding the keypress to other handlers (find / replace
+    /// / etc.).
+    FootprintSketchPlacementInputEnter,
+    /// v0.24 Track D — Escape while the placement-input overlay is
+    /// open. Clears `state.placement_input = None`; the next click
+    /// commits at the cursor position as if no buffer had been typed.
+    FootprintSketchPlacementInputEscape,
     /// v0.13.3 — Sketch entity selection from canvas. `None` = clear.
     FootprintSketchSelect {
         id: Option<signex_sketch::id::SketchEntityId>,
@@ -802,6 +823,11 @@ pub enum EditorMsg {
     /// sketch active bar; when on, every newly-minted entity gets
     /// `construction = true`.
     FootprintSketchToggleConstruction,
+    /// v0.22 Phase A5 — toggle centerline-mode. Sister to
+    /// construction-mode; mutually exclusive (enabling clears
+    /// construction). Newly-minted entities get `centerline = true`,
+    /// rendered as long-dash gold and skipped by the bake.
+    FootprintSketchToggleCenterline,
     /// v0.16.1 — TAB pause/resume during pad placement. Toggles
     /// `state.placement_paused`; while `true` the canvas ignores
     /// empty-canvas clicks so the user can adjust defaults.
@@ -1384,16 +1410,15 @@ pub enum PrimitiveEditorMsg {
     /// Sketch inspector — edit / insert a parameter source string.
     /// Triggers a solve + bake.
     FootprintSketchEditParameter { name: String, expr: String },
-    /// Sketch inspector — toggle the auto-pause hysteresis state
-    /// machine. Used by the inspector's "Live solve paused (resume)"
-    /// button.
-    FootprintSketchToggleAutoPause,
     /// v0.13.2 — Tool palette: switch the active drawing tool.
     /// Clears any in-flight multi-click gesture (`tool_pending`) so
     /// switching tools mid-gesture doesn't leave dangling anchors.
     FootprintSketchSetTool(crate::library::editor::footprint::state::SketchTool),
     /// v0.16.1 — toggle construction-mode (sticky).
     FootprintSketchToggleConstruction,
+    /// v0.22 Phase A5 — toggle centerline-mode (sticky). Mutually
+    /// exclusive with construction-mode.
+    FootprintSketchToggleCenterline,
     /// v0.16.1 — TAB pause/resume during pad placement.
     FootprintTogglePlacementPause,
     /// v0.16.2 — set the role attr on a sketch entity. Inspector
@@ -1403,6 +1428,28 @@ pub enum PrimitiveEditorMsg {
     FootprintSketchSetRole {
         id: signex_sketch::id::SketchEntityId,
         role: RoleTag,
+    },
+    /// v0.22 Phase D4 — convert the closed-loop profile that includes
+    /// the currently-selected Line into a `PadShape::Custom(SketchProfile)`
+    /// pad. Mints a centre `Point` at the loop's centroid + a
+    /// `PadAttr` with a `SketchProfile` shape pointing at the seed
+    /// Line. Bake re-walks the loop on the next solve. No-op (with a
+    /// warning surfaced via `solve_warnings`) when the selection is
+    /// not a Line, the line is not part of a closed loop, or no
+    /// solve has run yet.
+    FootprintSketchMakePadFromProfile,
+    /// v0.24 Phase 3 (Track A3) — Right-click action on an Arc that
+    /// belongs to a RoundRect pad's corner outline. Mints a fresh
+    /// per-corner sketch parameter (`corner_r_<slug>_<corner>`),
+    /// copies the current shared parameter's value into it, and
+    /// records the per-corner override on the owning pad's
+    /// `shape_params` (e.g. `"corner_r_ne" -> "<new_param>"`). The
+    /// other three corners stay on the shared `corner_r` parameter
+    /// so the user can edit one corner independently while leaving
+    /// the rest in lockstep. No-op (with a `tracing::warn`) when the
+    /// arc doesn't belong to any pad's `shape_params` graph.
+    FootprintSketchUnlinkCornerRadius {
+        arc_entity_id: signex_sketch::id::SketchEntityId,
     },
     /// v0.15 — Pads-mode tool switch (Select / PlacePad). Right-
     /// click cancels back to Select via the same dispatch.
@@ -1490,6 +1537,28 @@ pub enum PrimitiveEditorMsg {
     /// v0.13.2 — Escape during a multi-click gesture: discard
     /// `tool_pending` without emitting a SketchEdit.
     FootprintSketchToolEscape,
+    /// v0.24 Track D — append a typed character to
+    /// `state.placement_input.buffer`. Mints a fresh `PlacementInput`
+    /// keyed off the active sketch tool when the field is `None`.
+    /// Validation (one decimal point, leading minus only for
+    /// `ArcSweep`) lives in the dispatcher; the canvas filters out
+    /// non-numeric characters before publishing.
+    FootprintSketchPlacementInputChar(char),
+    /// v0.24 Track D — pop the trailing character from
+    /// `state.placement_input.buffer`. Clears `placement_input` to
+    /// `None` once the buffer empties so the next keypress mints a
+    /// fresh entry.
+    FootprintSketchPlacementInputBackspace,
+    /// v0.24 Track D — Enter while the placement-input overlay is
+    /// open. No-op on state — the buffer waits for the next click to
+    /// consume it. Surfaced as a distinct message so the canvas can
+    /// capture the keypress and prevent it from triggering global
+    /// shortcuts (Search, Run, …).
+    FootprintSketchPlacementInputEnter,
+    /// v0.24 Track D — Escape while the placement-input overlay is
+    /// open. Clears `state.placement_input = None`; the next click
+    /// commits at the cursor position as if no buffer had been typed.
+    FootprintSketchPlacementInputEscape,
 
     // ── v0.13.3 — selection / constraint submenu / dimension ──
     /// v0.13.3 — Select a sketch entity. `None` clears the selection;

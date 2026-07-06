@@ -624,6 +624,61 @@ pub struct FootprintEditorPanelContext {
     /// placed pad. Persists through `EditorPad.rotation_deg` →
     /// `Pad::rotation` so the saved file carries the value.
     pub next_pad_rotation_deg: f64,
+    /// v0.20 — Altium-parity pad-stack defaults for the next placed
+    /// pad. Mirrors `editor.state.next_pad_defaults.stack` for the
+    /// Properties panel "Pad Stack" section. UI mutates these via
+    /// `FpEditorSetNextPad*` messages; the dispatcher writes the
+    /// value back so `add_pad_at` picks it up on the next click.
+    pub next_pad_stack: crate::library::editor::footprint::state::PadStackUi,
+    /// v0.20 — pad shape for the next placed pad (read out of
+    /// `EditorPad::shape` after mint). Defaults to `Rect`.
+    pub next_pad_shape: signex_library::PadShape,
+    /// v0.20 — drill diameter for the next placed pad in mm. `None`
+    /// = SMD pad (no hole). Drives the HOLE → Hole size row.
+    pub next_pad_drill_diameter_mm: Option<f64>,
+    /// v0.20 — drill slot length for the next placed pad in mm.
+    /// `None` = round drill; `Some(l)` = oval slot of length l.
+    /// Drives the HOLE → Shape pick_list (Round vs Slot) and the
+    /// Slot length input visibility.
+    pub next_pad_drill_slot_length_mm: Option<f64>,
+    /// v0.20 — pad-template name for the next placed pad. Empty =
+    /// no template.
+    pub next_pad_template: String,
+    /// v0.20 — pad-template library reference for the next placed
+    /// pad. Empty = local.
+    pub next_pad_template_library: String,
+    /// v0.20 — top-side surface feature for the next placed pad.
+    pub next_pad_feature_top: signex_sketch::attr::PadFeature,
+    /// v0.20 — bottom-side surface feature for the next placed pad.
+    pub next_pad_feature_bottom: signex_sketch::attr::PadFeature,
+    /// v0.20 — test-point participation flags for the next placed
+    /// pad. All `false` = not a test point.
+    pub next_pad_testpoint: signex_sketch::attr::TestpointFlags,
+    /// v0.20 — currently-active Pad Stack tab (Simple / Top-Middle-
+    /// Bottom / Full Stack). Drives which body the Pad Stack section
+    /// renders. UI-only state; not persisted to disk.
+    pub pad_stack_tab: crate::library::editor::footprint::state::PadStackTab,
+    /// v0.21 — Altium-parity electrical-type for the next placed pad.
+    pub next_pad_electrical_type: signex_sketch::attr::ElectricalType,
+    /// v0.21 — net assignment for the next placed pad.
+    pub next_pad_net: String,
+    /// v0.21 — locked flag for the next placed pad.
+    pub next_pad_locked: bool,
+    /// v0.21 — Pad mounting kind for the next placed pad.
+    pub next_pad_kind: signex_library::PadKind,
+    /// v0.21 — Altium-parity component-level fields. Surface in the
+    /// empty-canvas Footprint summary form.
+    pub footprint_description: String,
+    pub footprint_default_designator: String,
+    pub footprint_component_type: signex_library::primitive::footprint::ComponentType,
+    pub footprint_height_mm: Option<f64>,
+    /// v0.21 — Pad Hole detail fields surfaced for the Multi-Layer
+    /// pad placement form.
+    pub next_pad_hole_tolerance_plus_mm: Option<f64>,
+    pub next_pad_hole_tolerance_minus_mm: Option<f64>,
+    pub next_pad_hole_rotation_deg: Option<f64>,
+    pub next_pad_copper_offset_x_mm: Option<f64>,
+    pub next_pad_copper_offset_y_mm: Option<f64>,
     /// v0.16.4 — Pour-role sub-form values for the selected entity.
     /// `None` when the entity isn't a pour. Carries the net string,
     /// fill type, and a snapshot of thermal-relief defaults so the
@@ -635,6 +690,9 @@ pub struct FootprintEditorPanelContext {
     /// v0.16.4 — BoardCutout-role sub-form values for the selected
     /// entity. `None` when the entity isn't a board cutout.
     pub selected_cutout: Option<CutoutSummary>,
+    /// v0.21 — pad-role sub-form values for the selected sketch
+    /// entity. `Some` when the entity carries a `PadAttr`.
+    pub selected_sketch_pad: Option<SketchPadAttrSummary>,
     /// v0.17.0 — empty-canvas Snap Options. Surfaced on the
     /// Properties panel default branch (no selection) so the user
     /// can toggle each priority chain step.
@@ -658,6 +716,40 @@ pub struct FootprintEditorPanelContext {
     /// no silk graphic is selected; the Properties panel only renders
     /// the silk-selection branch when this is `Some`.
     pub selected_silk_summary: Option<FootprintSelectedSilkSummary>,
+    /// v0.23 — Array (Pattern) summary surfaced when the selected
+    /// sketch entity is the `source` of an array. Drives the
+    /// Properties panel "Pattern" sub-section.
+    pub selected_array: Option<ArraySummary>,
+    /// v0.24 Phase 3 (Track A2) — parametric handle summary for the
+    /// selected pad. Empty when the pad has no `shape_params` bindings
+    /// (e.g. legacy pads minted before v0.24, or pads whose shape has
+    /// no parametric handles like Rect / Oval). One entry per
+    /// (feature_key → parameter) binding; the Properties panel
+    /// renders one editable row per entry so the user can edit the
+    /// shared sketch parameter without entering Sketch mode.
+    pub selected_pad_shape_params: Vec<PadShapeParamSummary>,
+}
+
+/// v0.24 Phase 3 (Track A2) — surface entry for one parametric pad
+/// handle. Carries the feature key (e.g. `"corner_r"`, `"diameter"`),
+/// the resolved sketch parameter name, the current expression string
+/// (read out of `sketch.parameters`), and a UI label so the
+/// Properties panel can render a localised row label without each
+/// editor having to repeat the mapping.
+#[derive(Debug, Clone)]
+pub struct PadShapeParamSummary {
+    /// Feature key as stored on `EditorPad.shape_params`
+    /// (e.g. `"corner_r"`, `"diameter"`).
+    pub key: String,
+    /// Display label for the Properties panel row.
+    pub label: String,
+    /// Resolved parameter name in `sketch.parameters` (the value
+    /// stored under `key` in `pad.shape_params`).
+    pub parameter_name: String,
+    /// Current expression string (e.g. `"0.25mm"`). Empty when the
+    /// parameter is missing from `sketch.parameters` (defensive — the
+    /// row still renders so the user can re-bind via direct edit).
+    pub current_expr: String,
 }
 
 /// v0.16.4 — Pour role properties surfaced on the Properties panel.
@@ -684,6 +776,112 @@ pub struct KeepoutSummary {
 pub struct CutoutSummary {
     pub edge_radius_expr: Option<String>,
     pub through: bool,
+}
+
+/// v0.23 — Array (Pattern) properties surfaced on the Properties panel
+/// when the selected sketch entity is the source of an
+/// [`signex_sketch::array::Array`]. The handler resolves the array by
+/// `array_id`, mutates the matching field, then runs solve+bake.
+#[derive(Debug, Clone)]
+pub struct ArraySummary {
+    pub array_id: signex_sketch::array::ArrayId,
+    pub kind: ArrayKindSummary,
+    pub numbering: NumberingSchemeKindUi,
+    /// `true` when the polar centre re-pick is active — the next
+    /// sketch click on a Point sets `array.center`.
+    pub repicking_polar_center: bool,
+}
+
+#[derive(Debug, Clone)]
+pub enum ArrayKindSummary {
+    Linear {
+        count_expr: String,
+        dx_expr: String,
+        dy_expr: String,
+    },
+    Grid {
+        nx_expr: String,
+        ny_expr: String,
+        dx_expr: String,
+        dy_expr: String,
+        /// Empty string when the array has no `GridDepopulation`.
+        mask_expr: String,
+        /// Per-instance suppression carried alongside `mask_expr`. The
+        /// bake honours both — a (i, j) pair in this list skips the
+        /// instance regardless of the mask predicate. Stored as
+        /// `(i, j)` 0-based row/column indices. Drives the v0.23 B5
+        /// per-instance checkbox grid in the Properties panel.
+        suppressed_instances: Vec<(u32, u32)>,
+        /// Snapshot of `nx` after evaluation — drives the checkbox
+        /// grid's column count. `None` when the expression isn't
+        /// numeric (e.g. references a parameter that isn't bound).
+        nx_value: Option<u32>,
+        /// Snapshot of `ny` — checkbox grid's row count.
+        ny_value: Option<u32>,
+    },
+    Polar {
+        count_expr: String,
+        sweep_angle_expr: String,
+        center_position_mm: Option<[f64; 2]>,
+        mask_expr: String,
+        /// Per-instance suppression for Polar; the j coordinate is
+        /// always 0 (Polar arrays are 1-D).
+        suppressed_instances: Vec<u32>,
+        /// Snapshot of the evaluated `count` — drives the checkbox row
+        /// length. `None` when the expression isn't numeric.
+        count_value: Option<u32>,
+    },
+}
+
+/// v0.23 — Numbering scheme kind for the Properties panel pick_list.
+/// Mirrors [`signex_sketch::array::NumberingScheme`]'s tag. The handler
+/// preserves the inner expression fields when flipping kinds where
+/// possible (e.g. switching to LinearIncrement keeps any prior
+/// start/step expressions; switching to Explicit clears them).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NumberingSchemeKindUi {
+    LinearIncrement,
+    BgaRowCol,
+    Explicit,
+}
+
+impl NumberingSchemeKindUi {
+    pub const ALL: [Self; 3] = [
+        Self::LinearIncrement,
+        Self::BgaRowCol,
+        Self::Explicit,
+    ];
+}
+
+impl std::fmt::Display for NumberingSchemeKindUi {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::LinearIncrement => "Linear (1, 2, 3, …)",
+            Self::BgaRowCol => "BGA (A1, A2, …)",
+            Self::Explicit => "Explicit list",
+        })
+    }
+}
+
+/// v0.23 — Field discriminator for [`PanelMsg::FpEditorEditArrayParam`].
+/// Each variant maps to a single text-input on one [`ArrayKindSummary`]
+/// branch; the handler uses the variant to disambiguate the target
+/// field when mutating the array in place.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArrayParamField {
+    LinearCountExpr,
+    LinearDxExpr,
+    LinearDyExpr,
+    GridNxExpr,
+    GridNyExpr,
+    GridDxExpr,
+    GridDyExpr,
+    PolarCountExpr,
+    PolarSweepAngleExpr,
+    /// Maps to `GridDepopulation.mask_expr` for both Grid and Polar
+    /// arrays. Empty string clears the depopulation entirely (set
+    /// `Option::None` on the array).
+    MaskExpr,
 }
 
 /// v0.16.4 — discrete bit identifier for [`KeepoutSummary`] flags.
@@ -773,7 +971,34 @@ pub struct FootprintSolveSummary {
     pub elapsed_ms: u64,
     pub final_residual_norm: f64,
     pub over_constraint_count: usize,
-    pub auto_paused: bool,
+    /// v0.22 Phase E3+E4 — per-over-constraint summary so the
+    /// Properties panel can list the conflicts and the user can
+    /// click each to focus the canvas on the offending geometry.
+    /// Sorted descending by `residual_magnitude` so the worst
+    /// offender is first. Empty when `over_constraint_count == 0`.
+    pub over_constraints: Vec<OverConstraintSummary>,
+}
+
+#[derive(Debug, Clone)]
+pub struct OverConstraintSummary {
+    /// v0.23 — Constraint ID used by the canvas to render the
+    /// specific row at full red while everything else (including
+    /// other over-constraints) dims. Drives per-row hover precision
+    /// in the Properties panel "Conflicts" list.
+    pub constraint_id: signex_sketch::id::ConstraintId,
+    /// Kind label — "Coincident", "DistancePtPt", "Horizontal", etc.
+    /// Static string avoids allocating per-row.
+    pub kind_label: &'static str,
+    /// Post-solve residual magnitude. The LM iteration drives this
+    /// below `Solver::tolerance` for satisfiable constraints; values
+    /// above `RANK_TOL` indicate the constraint couldn't be met
+    /// alongside the others.
+    pub residual_magnitude: f64,
+    /// First Point entity the constraint touches. Click → select
+    /// this Point so the canvas pans and the constraint icon
+    /// rendered in red sits in view. `None` for constraints with
+    /// no Point endpoints (rare — Fixed pseudo-rows).
+    pub focus_entity_id: Option<signex_sketch::id::SketchEntityId>,
 }
 
 #[derive(Debug, Clone)]
@@ -787,19 +1012,97 @@ pub struct FootprintPadSummary {
     pub rotation_deg: f64,
     pub layer_count: usize,
     pub has_drill: bool,
+    /// v0.20 — full snapshot of editable pad state surfaced for the
+    /// selected-pad Properties panel. Mirrors the same fields the
+    /// next-pad form binds to so the selected-pad branch can render
+    /// the same Properties / Pad Stack / Pad Features sections.
+    pub side: crate::library::editor::footprint::state::PadSide,
+    pub shape: signex_library::PadShape,
+    pub kind: signex_library::PadKind,
+    pub drill_diameter_mm: Option<f64>,
+    pub stack: crate::library::editor::footprint::state::PadStackUi,
+    pub feature_top: signex_sketch::attr::PadFeature,
+    pub feature_bottom: signex_sketch::attr::PadFeature,
+    pub testpoint: signex_sketch::attr::TestpointFlags,
+    pub template: String,
+    pub template_library: String,
+    /// v0.21 — Altium-parity electrical-type.
+    pub electrical_type: signex_sketch::attr::ElectricalType,
+    /// v0.21 — net assignment.
+    pub net: String,
+    /// v0.21 — locked flag.
+    pub locked: bool,
+    /// v0.21 — Pad Hole detail fields for the selected pad.
+    pub hole_tolerance_plus_mm: Option<f64>,
+    pub hole_tolerance_minus_mm: Option<f64>,
+    pub hole_rotation_deg: Option<f64>,
+    pub copper_offset_x_mm: Option<f64>,
+    pub copper_offset_y_mm: Option<f64>,
 }
 
 /// v0.18.24 — Read-only summary of the currently-selected silk-front
+/// v0.21 — sketch-mode pad attribute snapshot. Mirrors the new
+/// fields we added to `PadAttr` so the sketch-entity Properties
+/// branch can render an editable Pad Attributes section.
+#[derive(Debug, Clone)]
+pub struct SketchPadAttrSummary {
+    pub id: signex_sketch::id::SketchEntityId,
+    pub electrical_type: signex_sketch::attr::ElectricalType,
+    pub net: String,
+    pub locked: bool,
+    pub template: String,
+    pub template_library: String,
+    pub feature_top: signex_sketch::attr::PadFeature,
+    pub feature_bottom: signex_sketch::attr::PadFeature,
+    pub testpoint: signex_sketch::attr::TestpointFlags,
+    pub thermal_relief: bool,
+    pub mask_top_tented: bool,
+    pub mask_bottom_tented: bool,
+    pub paste_top_enabled: bool,
+    pub paste_bottom_enabled: bool,
+    pub corner_radius_pct: Option<f64>,
+    pub hole_tolerance_plus_mm: Option<f64>,
+    pub hole_tolerance_minus_mm: Option<f64>,
+    pub hole_rotation_deg: Option<f64>,
+    pub copper_offset_x_mm: Option<f64>,
+    pub copper_offset_y_mm: Option<f64>,
+    /// `true` when the pad has a drill spec (i.e. THT / NPT). Used
+    /// to gate Hole-detail UI rows.
+    pub has_drill: bool,
+}
+
 /// graphic (`FpGraphic` in `silk_f`). Drives the Properties panel's
-/// silk-selection branch: kind label + Text content input + Delete.
+/// silk-selection branch with full per-kind editable fields.
 #[derive(Debug, Clone)]
 pub struct FootprintSelectedSilkSummary {
     pub idx: usize,
     pub kind_label: &'static str,
-    /// Content of a `FpGraphicKind::Text { content, .. }`. `None` for
-    /// non-Text kinds; the Properties panel only surfaces the Text
-    /// edit input when this is `Some`.
-    pub text_content: Option<String>,
+    /// Stroke width in mm.
+    pub stroke_width_mm: f64,
+    /// `true` = solid fill; `false` = outline only.
+    pub filled: bool,
+    /// Per-kind geometry — only the field set matching `kind_label`
+    /// is meaningful at any given time. `None` slots stay None.
+    pub kind: SilkKindGeometry,
+}
+
+/// v0.21 — per-`FpGraphicKind` editable geometry. We surface
+/// dedicated editable forms only for Line (Track) and Text (String);
+/// Arc / Rectangle / Circle / Polygon collapse to `Other` and get a
+/// minimal banner pointing the user at sketch mode for parametric
+/// editing.
+#[derive(Debug, Clone)]
+pub enum SilkKindGeometry {
+    Line { from_mm: [f64; 2], to_mm: [f64; 2] },
+    Text {
+        position_mm: [f64; 2],
+        content: String,
+        size_mm: f64,
+    },
+    /// Fallback for Arc / Rectangle / Circle / Polygon — the
+    /// Properties panel surfaces stroke width / filled / locked /
+    /// delete and a hint to switch to Sketch mode for full editing.
+    Other,
 }
 
 #[derive(Debug, Clone)]
@@ -814,6 +1117,11 @@ pub struct FootprintSketchEntitySummary {
     /// `true` if this is a construction entity (solver scaffolding
     /// only, no baked geometry).
     pub construction: bool,
+    /// v0.22 Phase A3 — solver-state colour for the entity. `Some` for
+    /// Points (looked up in `last_solve.colours`); `None` for other
+    /// entity kinds whose DOF state is implicitly the min of their
+    /// endpoints'. Drives the "DOF" row in the Properties panel.
+    pub dof_state: Option<signex_sketch::solver::dof::DofColor>,
 }
 
 /// Context handed to the right-dock Properties panel and the SCH-Library
@@ -1276,6 +1584,276 @@ pub enum PanelMsg {
         idx: usize,
         value: String,
     },
+    /// v0.20 — Altium-parity Pad Properties / Pad Stack / Pad Features
+    /// form for the next placed pad. Each variant maps to one row in
+    /// the right-dock Properties panel; the dispatcher writes the
+    /// parsed value into `editor.state.next_pad_defaults` (or the
+    /// matching sub-struct) so the next `add_pad_at` picks it up.
+    /// String-typed inputs preserve the per-field typing buffer
+    /// behaviour we use for size_x / size_y / rotation.
+    FpEditorSetNextPadShape(signex_library::PadShape),
+    FpEditorSetNextPadKind(signex_library::PadKind),
+    FpEditorSetNextPadDrillDiameter(String),
+    FpEditorSetNextPadDrillSlotLength(String),
+    FpEditorSetNextPadCornerRadiusPct(String),
+    FpEditorSetNextPadTemplate(String),
+    FpEditorSetNextPadTemplateLibrary(String),
+    FpEditorSetNextPadPasteMarginTop(String),
+    FpEditorSetNextPadPasteMarginBottom(String),
+    FpEditorToggleNextPadPasteEnabledTop(bool),
+    FpEditorToggleNextPadPasteEnabledBottom(bool),
+    FpEditorSetNextPadMaskMarginTop(String),
+    FpEditorSetNextPadMaskMarginBottom(String),
+    FpEditorToggleNextPadMaskTentedTop(bool),
+    FpEditorToggleNextPadMaskTentedBottom(bool),
+    FpEditorToggleNextPadThermalRelief(bool),
+    FpEditorSetNextPadFeatureTop(signex_sketch::attr::PadFeature),
+    FpEditorSetNextPadFeatureBottom(signex_sketch::attr::PadFeature),
+    FpEditorToggleNextPadTestpointTopAssembly(bool),
+    FpEditorToggleNextPadTestpointTopFab(bool),
+    FpEditorToggleNextPadTestpointBottomAssembly(bool),
+    FpEditorToggleNextPadTestpointBottomFab(bool),
+    /// v0.20 — Altium-parity Pad Properties / Pad Stack / Pad Features
+    /// editing for the SELECTED pad. Each handler mutates
+    /// `state.pads[idx]` (and dirty-marks the editor + syncs the
+    /// primitive). String-typed numeric inputs preserve the
+    /// per-field typing buffer behaviour.
+    FpEditorSetSelectedPadDesignator { idx: usize, value: String },
+    FpEditorSetSelectedPadSide { idx: usize, side: crate::library::editor::footprint::state::PadSide },
+    FpEditorSetSelectedPadShape { idx: usize, shape: signex_library::PadShape },
+    FpEditorSetSelectedPadKind { idx: usize, kind: signex_library::PadKind },
+    FpEditorSetSelectedPadSizeX { idx: usize, value: String },
+    FpEditorSetSelectedPadSizeY { idx: usize, value: String },
+    FpEditorSetSelectedPadDrillDiameter { idx: usize, value: String },
+    FpEditorSetSelectedPadDrillSlotLength { idx: usize, value: String },
+    FpEditorSetSelectedPadCornerRadiusPct { idx: usize, value: String },
+    FpEditorSetSelectedPadTemplate { idx: usize, value: String },
+    FpEditorSetSelectedPadTemplateLibrary { idx: usize, value: String },
+    FpEditorSetSelectedPadPasteMarginTop { idx: usize, value: String },
+    FpEditorSetSelectedPadPasteMarginBottom { idx: usize, value: String },
+    FpEditorToggleSelectedPadPasteEnabledTop { idx: usize, value: bool },
+    FpEditorToggleSelectedPadPasteEnabledBottom { idx: usize, value: bool },
+    FpEditorSetSelectedPadMaskMarginTop { idx: usize, value: String },
+    FpEditorSetSelectedPadMaskMarginBottom { idx: usize, value: String },
+    FpEditorToggleSelectedPadMaskTentedTop { idx: usize, value: bool },
+    FpEditorToggleSelectedPadMaskTentedBottom { idx: usize, value: bool },
+    FpEditorToggleSelectedPadThermalRelief { idx: usize, value: bool },
+    FpEditorSetSelectedPadFeatureTop { idx: usize, value: signex_sketch::attr::PadFeature },
+    FpEditorSetSelectedPadFeatureBottom { idx: usize, value: signex_sketch::attr::PadFeature },
+    FpEditorToggleSelectedPadTestpointTopAssembly { idx: usize, value: bool },
+    FpEditorToggleSelectedPadTestpointTopFab { idx: usize, value: bool },
+    FpEditorToggleSelectedPadTestpointBottomAssembly { idx: usize, value: bool },
+    FpEditorToggleSelectedPadTestpointBottomFab { idx: usize, value: bool },
+    /// v0.20 — switch the Pad Stack section's tab (Simple /
+    /// Top-Middle-Bottom / Full Stack). UI-only; mutates
+    /// `editor.state.pad_stack_tab`.
+    FpEditorSetPadStackTab(crate::library::editor::footprint::state::PadStackTab),
+    /// v0.21 — Altium-parity Net / Locked / Electrical Type fields
+    /// for both placement-defaults and selected-pad targets.
+    FpEditorSetNextPadElectricalType(signex_sketch::attr::ElectricalType),
+    FpEditorSetNextPadNet(String),
+    FpEditorToggleNextPadLocked(bool),
+    FpEditorSetSelectedPadElectricalType {
+        idx: usize,
+        value: signex_sketch::attr::ElectricalType,
+    },
+    FpEditorSetSelectedPadNet {
+        idx: usize,
+        value: String,
+    },
+    FpEditorToggleSelectedPadLocked {
+        idx: usize,
+        value: bool,
+    },
+    /// v0.21 — Footprint (component-level) edits.
+    FpEditorSetFootprintDescription(String),
+    FpEditorSetFootprintDefaultDesignator(String),
+    FpEditorSetFootprintComponentType(signex_library::primitive::footprint::ComponentType),
+    FpEditorSetFootprintHeight(String),
+    /// v0.21 — Selected silk graphic edits (Line + Text only;
+    /// Arc/Region/Fill/etc are sketch-mode-authored).
+    FpEditorSetSilkLineFromX(String),
+    FpEditorSetSilkLineFromY(String),
+    FpEditorSetSilkLineToX(String),
+    FpEditorSetSilkLineToY(String),
+    FpEditorSetSilkTextPositionX(String),
+    FpEditorSetSilkTextPositionY(String),
+    FpEditorSetSilkTextSize(String),
+    FpEditorSetSilkStrokeWidth(String),
+    FpEditorToggleSilkFilled(bool),
+    /// v0.21 — Pad Hole detail fields (Multi-Layer only).
+    FpEditorSetNextPadHoleTolerancePlus(String),
+    FpEditorSetNextPadHoleToleranceMinus(String),
+    FpEditorSetNextPadHoleRotation(String),
+    FpEditorSetNextPadCopperOffsetX(String),
+    FpEditorSetNextPadCopperOffsetY(String),
+    /// v0.21 — Plated toggle on the Pad Hole row. `true` = THT
+    /// (plated), `false` = NPT (non-plated).
+    FpEditorToggleNextPadPlated(bool),
+    /// v0.21 — Selected-pad hole-detail mirror.
+    FpEditorSetSelectedPadHoleTolerancePlus { idx: usize, value: String },
+    FpEditorSetSelectedPadHoleToleranceMinus { idx: usize, value: String },
+    FpEditorSetSelectedPadHoleRotation { idx: usize, value: String },
+    FpEditorSetSelectedPadCopperOffsetX { idx: usize, value: String },
+    FpEditorSetSelectedPadCopperOffsetY { idx: usize, value: String },
+    FpEditorToggleSelectedPadPlated { idx: usize, value: bool },
+    /// v0.21 — Sketch-mode pad attribute edits. Mutate the `PadAttr`
+    /// on the selected sketch entity (identified by SketchEntityId)
+    /// and re-run solve+bake. Mirrors the new pad fields surfaced in
+    /// Pads-mode but addressed by the sketch entity rather than the
+    /// flat-pad index.
+    FpEditorSetSketchPadElectricalType {
+        id: signex_sketch::id::SketchEntityId,
+        value: signex_sketch::attr::ElectricalType,
+    },
+    FpEditorSetSketchPadNet {
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    },
+    FpEditorToggleSketchPadLocked {
+        id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
+    FpEditorSetSketchPadTemplate {
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    },
+    FpEditorSetSketchPadTemplateLibrary {
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    },
+    FpEditorSetSketchPadFeatureTop {
+        id: signex_sketch::id::SketchEntityId,
+        value: signex_sketch::attr::PadFeature,
+    },
+    FpEditorSetSketchPadFeatureBottom {
+        id: signex_sketch::id::SketchEntityId,
+        value: signex_sketch::attr::PadFeature,
+    },
+    FpEditorToggleSketchPadTestpointTopAssembly {
+        id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
+    FpEditorToggleSketchPadTestpointTopFab {
+        id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
+    FpEditorToggleSketchPadTestpointBottomAssembly {
+        id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
+    FpEditorToggleSketchPadTestpointBottomFab {
+        id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
+    FpEditorToggleSketchPadThermalRelief {
+        id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
+    FpEditorToggleSketchPadMaskTentedTop {
+        id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
+    FpEditorToggleSketchPadMaskTentedBottom {
+        id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
+    FpEditorToggleSketchPadPasteEnabledTop {
+        id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
+    FpEditorToggleSketchPadPasteEnabledBottom {
+        id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
+    FpEditorSetSketchPadHoleTolerancePlus {
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    },
+    FpEditorSetSketchPadHoleToleranceMinus {
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    },
+    FpEditorSetSketchPadHoleRotation {
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    },
+    FpEditorSetSketchPadCopperOffsetX {
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    },
+    FpEditorSetSketchPadCopperOffsetY {
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    },
+    FpEditorSetSketchPadCornerRadiusPct {
+        id: signex_sketch::id::SketchEntityId,
+        value: String,
+    },
+    /// v0.21 — "Edit in Sketch" jump from a selected pad to its
+    /// backing sketch entity. Switches editor mode to Sketch and
+    /// selects the entity. No-op when the pad has no
+    /// `sketch_entity_id` (placed before sketch-mode auto-mint).
+    FpEditorEditPadInSketch { pad_idx: usize },
+    /// v0.24 Phase 3 (Track A2) — Properties-panel parametric handle
+    /// row edit. The handler looks up `pad.shape_params[key]` to
+    /// resolve the bound parameter name, writes `value` into
+    /// `sketch.parameters[parameter_name]`, then dispatches a sketch
+    /// `ForceRebuild` so the solver re-runs and every entity bound to
+    /// that parameter (e.g. all 4 corner Arcs of a RoundRect) updates
+    /// in lockstep.
+    FpEditorEditPadShapeParam {
+        pad_idx: usize,
+        key: String,
+        value: String,
+    },
+    /// v0.24 Phase 3 (Track A3) — sketch-canvas right-click action.
+    /// "Unlink corner radius" mints a fresh per-corner parameter and
+    /// rebinds the clicked Arc to it so the user can override that
+    /// one corner independently. The other three corners stay on the
+    /// shared `corner_r` parameter. No-op when the Arc isn't part of
+    /// any pad's `shape_params` graph.
+    FpEditorUnlinkCornerRadius {
+        arc_entity_id: signex_sketch::id::SketchEntityId,
+    },
+    /// v0.22 Phase D6 — Mirror of `FpEditorEditPadInSketch` going the
+    /// other direction. From a sketch entity carrying a `PadAttr`,
+    /// switch to Pads mode and select the EditorPad whose
+    /// `sketch_entity_id` matches this id. No-op when no pad has
+    /// this entity as its backing point.
+    FpEditorEditSketchPadInPads {
+        id: signex_sketch::id::SketchEntityId,
+    },
+    /// v0.22 Phase E3+E4 — Properties-panel "Conflicts (worst first)"
+    /// over-constrained constraint row. Click → select the row's
+    /// focus entity in the sketch so the canvas re-renders with the
+    /// constraint icon highlighted. The handler dispatches the
+    /// equivalent `FootprintSketchSelect` library message.
+    FpEditorSelectSketchEntity {
+        id: signex_sketch::id::SketchEntityId,
+    },
+    /// v0.22 Phase 8.5 — Right-dock History panel "Restore this
+    /// version" button. The handler resolves the active tab's
+    /// owning project, opens `LocalGitProjectAdapter`, and runs
+    /// `restore_at(rel_path, oid)` to overwrite the working-tree
+    /// file with the historical blob. Marks the file dirty so the
+    /// next save commits the restored content.
+    HistoryRestoreClicked {
+        sha: String,
+    },
+    /// v0.22 Phase E3+E4 polish — Hover state for the Properties
+    /// panel's "Conflicts (worst first)" list. `true` on row
+    /// `on_enter`, `false` on `on_exit`. The handler flips
+    /// `editor.state.hovered_over_constraint` between
+    /// v0.22 Phase E3+E4 → v0.23 — Per-row hover on a Properties
+    /// panel "Conflicts" list row. `Some(constraint_id)` highlights
+    /// the specific constraint at full red and dims everything else
+    /// (including other over-constraints) so the user can isolate a
+    /// single offender. `None` clears the isolation back to the
+    /// default rendering.
+    FpEditorHoverOverConstraint {
+        constraint: Option<signex_sketch::id::ConstraintId>,
+    },
     /// v0.16.4 — Pour-role sub-form. The handler mutates the
     /// selected entity's `pour` attr and runs solve+bake.
     FpEditorSetPourNet {
@@ -1305,6 +1883,42 @@ pub enum PanelMsg {
     /// v0.16.4 — BoardCutout-role through-vs-partial-depth toggle.
     FpEditorSetCutoutThrough {
         id: signex_sketch::id::SketchEntityId,
+        value: bool,
+    },
+    /// v0.23 — Pattern Properties sub-form text-input edit. The
+    /// handler walks `sketch.arrays`, finds the array with `array_id`,
+    /// mutates the field identified by `field`, then runs
+    /// `SketchEdit::ForceRebuild` so the bake re-expands.
+    FpEditorEditArrayParam {
+        array_id: signex_sketch::array::ArrayId,
+        field: ArrayParamField,
+        value: String,
+    },
+    /// v0.23 — Switch the numbering scheme on an array. The handler
+    /// preserves the existing inner fields when possible (LinearIncrement
+    /// keeps prior start/step exprs; flipping to Explicit clears the
+    /// names list).
+    FpEditorSetArrayNumberingScheme {
+        array_id: signex_sketch::array::ArrayId,
+        scheme: NumberingSchemeKindUi,
+    },
+    /// v0.23 — Delete the array entirely. The source entity stays put.
+    FpEditorDeleteArray {
+        array_id: signex_sketch::array::ArrayId,
+    },
+    /// v0.23 — Begin re-picking the polar centre. Sets
+    /// `ToolPending::RepickPolarCenter { array_id }` so the next sketch
+    /// click on a Point overwrites `array.center`. Cancels with Esc.
+    FpEditorBeginRepickPolarCenter {
+        array_id: signex_sketch::array::ArrayId,
+    },
+    /// v0.23 — Toggle a single (i, j) instance in a Grid array's
+    /// `GridDepopulation.suppressed_instances`. `value=true` re-enables
+    /// the instance; `value=false` suppresses it.
+    FpEditorToggleArrayInstance {
+        array_id: signex_sketch::array::ArrayId,
+        i: u32,
+        j: u32,
         value: bool,
     },
     /// v0.17.0 — empty-canvas Snap Options toggles. The handler

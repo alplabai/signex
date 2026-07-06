@@ -141,6 +141,19 @@ fn view_tool_palette<'a>(
             SketchTool::RoundedRectangle => "click first corner (radius from input)".into(),
             SketchTool::Circle => "click centre".into(),
             SketchTool::Arc => "click centre".into(),
+            SketchTool::Mirror => {
+                "select a Line first, then click a Point to mirror".into()
+            }
+            SketchTool::Offset => {
+                "select a Line / Arc / Circle first, then click on the side to offset (distance from input)".into()
+            }
+            SketchTool::RectPattern => {
+                "click an entity to mint a 2×2 grid array (5 mm × 5 mm; edit via JSON or Properties)".into()
+            }
+            SketchTool::CircularPattern => {
+                "click an entity to mint a 4-instance circular array (360°; centre 5 mm right of source)".into()
+            }
+            SketchTool::TangentArc => "click first endpoint of tangent arc".into(),
         },
         ToolPending::LineFirst { .. } => "click second endpoint (Esc to cancel)".into(),
         ToolPending::RectangleFirst { .. } => "click opposite corner (Esc to cancel)".into(),
@@ -148,6 +161,10 @@ fn view_tool_palette<'a>(
         ToolPending::CircleCenter { .. } => "click radius point (Esc to cancel)".into(),
         ToolPending::ArcCenter { .. } => "click start (Esc to cancel)".into(),
         ToolPending::ArcStart { .. } => "click end (Esc to cancel)".into(),
+        ToolPending::RepickPolarCenter { .. } => {
+            "click a Point to set polar centre (Esc to cancel)".into()
+        }
+        ToolPending::TangentArcFirst { .. } => "click second endpoint (Esc to cancel)".into(),
     };
 
     row![
@@ -358,21 +375,6 @@ fn view_dof<'a>(
     let elapsed = last.map(|o| o.result.elapsed_ms).unwrap_or(0);
     let iters = last.map(|o| o.result.iterations).unwrap_or(0);
 
-    let auto_paused = editor.state.auto_pause.paused();
-    let pause_path = editor.path.clone();
-
-    let pause_row: Element<'a, LibraryMessage> = if auto_paused {
-        button(text("Live solve PAUSED — resume").size(10).color(text_c))
-            .padding([2, 6])
-            .on_press(LibraryMessage::PrimitiveEditorEvent {
-                path: pause_path,
-                msg: PrimitiveEditorMsg::FootprintSketchToggleAutoPause,
-            })
-            .into()
-    } else {
-        text("Live solve: on").size(10).color(muted).into()
-    };
-
     column![
         text("DOF").size(11).color(text_c),
         text(format!(
@@ -383,7 +385,6 @@ fn view_dof<'a>(
         text(format!("iters={iters}  elapsed={elapsed}ms"))
             .size(10)
             .color(muted),
-        pause_row,
     ]
     .spacing(2)
     .into()

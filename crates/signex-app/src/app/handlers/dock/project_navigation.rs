@@ -317,6 +317,82 @@ impl Signex {
         };
         match try_init_project_repo(&state.project_dir, state.use_lfs, gitignore_arg) {
             Ok(()) => {
+                // v0.22 Phase 8.6 — for project scope, overwrite the
+                // `.gitattributes` with the richer spec
+                // (`text eol=lf` for every `.snx*`, `binary` for
+                // step/wrl/png/pdf, optional LFS for 3D models). The
+                // library helper above wrote LFS-only rules; this
+                // adds the cross-platform line-ending discipline +
+                // binary markers, then captures the updated file in
+                // a follow-up commit so the working tree stays
+                // clean.
+                //
+                // Project-scope only — `.snxlib` libraries already
+                // ship their own `.gitattributes` via the original
+                // LocalGitAdapter init path.
+                if matches!(state.scope, crate::app::VersionControlScope::Project) {
+                    // v0.23 — gate `enable_git=true` on the adapter
+                    // succeeding. v0.22's path silently swallowed
+                    // `open_or_init` failures and still flipped the
+                    // flag, leaving the project in a mismatch state.
+                    // Now any failure logs through diagnostics AND
+                    // skips the flag flip so the user re-runs Enable
+                    // VC after fixing the underlying issue.
+                    let mut adapter_ok = false;
+                    match signex_library::adapters::local_git_project::LocalGitProjectAdapter::open_or_init(
+                        state.project_dir.clone(),
+                    ) {
+                        Ok(adapter) => match adapter.write_gitattributes(state.use_lfs) {
+                            Ok(()) => {
+                                if let Err(e) = adapter.commit_path(
+                                    std::path::Path::new(".gitattributes"),
+                                    "Sync .gitattributes to Signex v0.22 spec",
+                                ) {
+                                    crate::diagnostics::log_warning(format!(
+                                        "[git] commit .gitattributes failed: {e}"
+                                    ));
+                                }
+                                adapter_ok = true;
+                            }
+                            Err(e) => {
+                                crate::diagnostics::log_warning(format!(
+                                    "[git] write_gitattributes failed: {e} — \
+                                     enable_git left off; re-run Enable VC after fix"
+                                ));
+                            }
+                        },
+                        Err(e) => {
+                            crate::diagnostics::log_warning(format!(
+                                "[git] open_or_init failed for {}: {e} — \
+                                 enable_git left off; re-run Enable VC after fix",
+                                state.project_dir.display()
+                            ));
+                        }
+                    }
+
+                    // Flip `enable_git = true` on the matching
+                    // project + mark it dirty so the .snxprj save
+                    // captures the flag. Match by `data.dir`. Only
+                    // flips when the adapter setup succeeded — see
+                    // comment above.
+                    if adapter_ok {
+                        let target_dir = state.project_dir.clone();
+                        let mut snxprj_path: Option<std::path::PathBuf> = None;
+                        if let Some(loaded) = self
+                            .document_state
+                            .projects
+                            .iter_mut()
+                            .find(|p| std::path::Path::new(&p.data.dir) == target_dir)
+                        {
+                            loaded.data.enable_git = true;
+                            snxprj_path = Some(loaded.path.clone());
+                        }
+                        if let Some(p) = snxprj_path {
+                            self.document_state.dirty_paths.insert(p);
+                        }
+                    }
+                }
+
                 self.ui_state.enable_version_control = None;
                 self.refresh_panel_ctx();
                 let scope_label = match state.scope {

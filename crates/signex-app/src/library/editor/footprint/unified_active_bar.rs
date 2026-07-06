@@ -2,15 +2,13 @@
 //! editor. Replaces the per-mode `pads_active_bar::view` /
 //! `sketch_mode::active_bar::view` mounting in `standalone.rs`.
 //!
-//! v0.13 — Eight Altium dropdown menus (Filter / Snap / Place /
-//! Select / Align / 3D Body / Text / Shapes) live at the FRONT of the
-//! bar; their bodies come from `active_bar_dropdowns::entries`. The
-//! bar's tool slot follows the active mode (`EditorMode::Sketch` →
-//! sketch tools; `EditorMode::Normal` → pads tools; `EditorMode::View3d`
-//! → no tools). The right-side per-kind Selection Filter pill row is
-//! gone — the Filter dropdown supersedes it.
+//! v0.13 — Public surface split into `bar_items()` + `dropdown_overlay()`
+//! so the layer-site mounting code at `view_main_for` calls
+//! `signex_widgets::active_bar::view(items, tokens).map(...)` directly,
+//! BYTE-FOR-BYTE matching the schematic active bar's chain. This
+//! prevents `Element::map` ordering drift (Map-wraps-container vs
+//! container-wraps-Map) that introduced a 2 px layout-pass shift.
 
-use iced::Element;
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 
@@ -19,17 +17,14 @@ use crate::icons as ic;
 use crate::library::editor::footprint::state::{EditorMode, FpActiveBarMenu};
 use crate::library::messages::{LibraryMessage, PrimitiveEditorMsg};
 
-/// Build the unified bar items and render the bar + open-dropdown
-/// overlay (when one is open) — single-call API via
-/// `signex_widgets::active_bar::view_with_overlay`. The widget
-/// handles the bar centring, dropdown panel anchoring, and the
-/// click-outside backstop layer.
-pub fn view<'a>(
-    editor: &'a FootprintEditorState,
-    theme_id: signex_types::theme::ThemeId,
-    tokens: &'a ThemeTokens,
-    custom_filter_presets: &[crate::active_bar::CustomFilterPreset],
-) -> Element<'a, LibraryMessage> {
+/// Build the bar items only — caller mounts via
+/// `signex_widgets::active_bar::view(items, tokens)` so the chain is
+/// identical to the schematic.
+pub fn bar_items(
+    editor: &FootprintEditorState,
+    theme_id: ThemeId,
+    tokens: &ThemeTokens,
+) -> Vec<ActiveBarItem<LibraryMessage>> {
     let mut items: Vec<ActiveBarItem<LibraryMessage>> = Vec::new();
 
     // 1) Eight active-bar dropdown trigger buttons at the FRONT.
@@ -47,48 +42,65 @@ pub fn view<'a>(
         EditorMode::View3d => Vec::new(),
     };
     items.extend(mode_items);
+    items
+}
 
-    // Capture context for the closures used by the unified widget.
-    let path_for_entries = editor.path.clone();
-    let presets_for_entries = custom_filter_presets.to_vec();
-    let state_snapshot_path = editor.path.clone();
-    // Unsafe-free workaround: clone the snapshot needed by entries()
-    // closure. FootprintEditorState is large but we only read
-    // selection_filter / snap_options / pads_tool / snapping_mode /
-    // snap_subtab / active_bar_menu through it. Cloning the inner
-    // state struct keeps the closure 'static-friendly.
-    let state_clone = editor.state.clone();
-    let close_msg = LibraryMessage::PrimitiveEditorEvent {
+/// Build the dropdown overlay (panel + click-outside backstop) for
+/// the currently-open menu. Returns `None` when no menu is open.
+/// Caller pushes the result as a separate layer above the bar.
+///
+/// `top_padding_px` is the y-offset (from the overlay's top edge,
+/// which sits at window y=0) where the dropdown panel should land —
+/// callers compute it as `y_offset + 4 + bar_height + small_gap` so
+/// the panel touches the bar's bottom edge regardless of whether the
+/// tab strip is showing. Hard-coded values drift when the menu bar
+/// or tab-strip heights shift, so the caller owns the formula.
+pub fn dropdown_overlay<'a>(
+    editor: &'a FootprintEditorState,
+    theme_id: ThemeId,
+    tokens: &'a ThemeTokens,
+    custom_filter_presets: &[crate::active_bar::CustomFilterPreset],
+    top_padding_px: u16,
+) -> Option<iced::Element<'a, LibraryMessage>> {
+    use iced::widget::{Stack, container, mouse_area, Space};
+    use iced::Length;
+
+    let menu = editor.state.active_bar_menu?;
+
+    let entries = crate::library::editor::footprint::active_bar_dropdowns::entries(
+        menu,
+        &editor.state,
+        editor.path.clone(),
+        theme_id,
+        custom_filter_presets,
+    );
+    let width_hint = match menu {
+        FpActiveBarMenu::Filter => None,
+        FpActiveBarMenu::Snap => Some(260.0),
+        FpActiveBarMenu::Place => Some(240.0),
+        FpActiveBarMenu::Select => Some(220.0),
+        FpActiveBarMenu::Align => Some(320.0),
+        FpActiveBarMenu::Body3d => Some(200.0),
+        FpActiveBarMenu::Text => Some(180.0),
+        FpActiveBarMenu::Shapes => Some(220.0),
+    };
+    let panel = signex_widgets::active_bar_dropdown::view(entries, tokens, width_hint);
+    let panel_anchor = container(panel)
+        .padding([top_padding_px, 10])
+        .center_x(Length::Fill)
+        .align_y(iced::alignment::Vertical::Top);
+
+    let backstop = mouse_area(
+        container(Space::new())
+            .width(Length::Fill)
+            .height(Length::Fill),
+    )
+    .on_press(LibraryMessage::PrimitiveEditorEvent {
         path: editor.path.clone(),
         msg: PrimitiveEditorMsg::FootprintCloseActiveBarMenu,
-    };
-    let _ = state_snapshot_path;
+    });
 
-    signex_widgets::active_bar::view_with_overlay::<LibraryMessage, FpActiveBarMenu>(
-        items,
-        editor.state.active_bar_menu,
-        close_msg,
-        move |menu| {
-            crate::library::editor::footprint::active_bar_dropdowns::entries(
-                menu,
-                &state_clone,
-                path_for_entries.clone(),
-                theme_id,
-                &presets_for_entries,
-            )
-        },
-        |menu| match menu {
-            FpActiveBarMenu::Filter => None,
-            FpActiveBarMenu::Snap => Some(260.0),
-            FpActiveBarMenu::Place => Some(240.0),
-            FpActiveBarMenu::Select => Some(220.0),
-            FpActiveBarMenu::Align => Some(320.0),
-            FpActiveBarMenu::Body3d => Some(200.0),
-            FpActiveBarMenu::Text => Some(180.0),
-            FpActiveBarMenu::Shapes => Some(220.0),
-        },
-        tokens,
-    )
+    Some(Stack::new().push(backstop).push(panel_anchor).into())
 }
 
 /// Build the 8 dropdown trigger buttons matching the schematic's
@@ -96,11 +108,6 @@ pub fn view<'a>(
 /// menu when there's no obvious default — Filter / Snap), right-click
 /// opens the dropdown. Chevron indicator advertises the right-click
 /// secondary action.
-///
-/// Icons reuse the schematic active bar's existing SVG set (themed,
-/// accent-tinted) so the visual rhythm matches across editors. 3D
-/// Body uses `icon_dd_graphic` until a dedicated 3D icon lands in
-/// `assets/icons/`.
 fn dropdown_trigger_items(
     editor: &FootprintEditorState,
     tid: ThemeId,
@@ -108,10 +115,6 @@ fn dropdown_trigger_items(
     let path = editor.path.clone();
     let active = editor.state.active_bar_menu;
 
-    // Build a button with BOTH left-action and right-click dropdown.
-    // Mirrors the schematic active bar's `btn` helper. When `left` is
-    // None the left-click also toggles the menu — used for surfaces
-    // (Filter / Snap) that have no obvious "default action".
     let dual = |label: &str,
                 icon: ActiveBarIcon,
                 menu: FpActiveBarMenu,
@@ -137,8 +140,6 @@ fn dropdown_trigger_items(
     };
 
     vec![
-        // Filter / Snap — no clear default action; both left and right
-        // toggle the dropdown. Same as the schematic's Filter button.
         dual(
             "Selection Filter (left or right click for menu)",
             ActiveBarIcon::Svg(ic::icon_filter(tid)),
@@ -151,16 +152,12 @@ fn dropdown_trigger_items(
             FpActiveBarMenu::Snap,
             None,
         ),
-        // Place / Move — left-click runs the last-used Place command
-        // (defaults to Move Selection); right-click opens the menu.
         dual(
             "Place / Move (right-click for menu)",
             ActiveBarIcon::Svg(ic::icon_move(tid)),
             FpActiveBarMenu::Place,
             Some(PrimitiveEditorMsg::FootprintActiveBarStub("Move")),
         ),
-        // Selection — left-click switches to Select tool; right-click
-        // opens the Selection-mode menu (Inside Area / Lasso / etc.).
         dual(
             "Select (right-click for selection-mode menu)",
             ActiveBarIcon::Svg(ic::icon_select(tid)),
@@ -169,16 +166,12 @@ fn dropdown_trigger_items(
                 crate::library::editor::footprint::state::PadsTool::Select,
             )),
         ),
-        // Align — left-click runs Align To Grid; right-click opens the
-        // Align/Distribute menu.
         dual(
             "Align / Distribute (right-click for menu)",
             ActiveBarIcon::Svg(ic::icon_align(tid)),
             FpActiveBarMenu::Align,
             Some(PrimitiveEditorMsg::FootprintActiveBarAlignSelectionToGrid),
         ),
-        // 3D Body / Text / Shapes — left-click opens the menu since
-        // there's no single "default" placement action.
         dual(
             "3D Body (left or right click for menu)",
             ActiveBarIcon::Svg(ic::icon_dd_graphic(tid)),

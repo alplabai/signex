@@ -11,6 +11,7 @@
 //! to write the new pad list back onto the primitive.
 
 use signex_library::{Footprint, LayerId, Pad, PadKind, PadShape};
+use signex_sketch::attr::{ElectricalType, PadFeature, TestpointFlags};
 
 use super::layers::{FpLayer, LayerVisibility};
 
@@ -57,6 +58,94 @@ pub struct EditorPad {
     /// `None` for SMD pads. Round-trips via `Pad::drill`. Mints as
     /// `Some(default_drill_mm)` for `Place Hole` clicks.
     pub drill_diameter_mm: Option<f64>,
+    /// v0.20 — Altium-parity pad-stack overrides. Per-side paste +
+    /// mask + tented + thermal-relief + corner radius. Each value
+    /// surfaces in the right-dock Properties panel "Pad Stack"
+    /// section and round-trips through `Pad`'s matching fields.
+    pub stack: PadStackUi,
+    /// v0.20 — top-side surface treatment (Solder Bumps / Glue Dots
+    /// / Adhesive Beads). `PadFeature::None` = bare copper.
+    pub feature_top: PadFeature,
+    /// v0.20 — bottom-side surface treatment.
+    pub feature_bottom: PadFeature,
+    /// v0.20 — test-point participation flags (top/bottom × assembly
+    /// /fab). All `false` = not a test point.
+    pub testpoint: TestpointFlags,
+    /// v0.20 — pad-template name. Empty = no template.
+    pub template: String,
+    /// v0.20 — pad-template library reference. Empty = local.
+    pub template_library: String,
+    /// v0.20 — Altium-parity electrical-type (Load/Source/Terminator).
+    pub electrical_type: ElectricalType,
+    /// v0.20 — net assignment. Empty = unassigned.
+    pub net: String,
+    /// v0.20 — locked flag. `true` resists drag/delete/move-by-arrow.
+    pub locked: bool,
+    /// v0.20 — Pad Hole tolerance ± (mm). Reporting only — drives
+    /// IPC-356 / drill-table export, not DRC.
+    pub hole_tolerance_plus_mm: Option<f64>,
+    pub hole_tolerance_minus_mm: Option<f64>,
+    /// v0.20 — Pad Hole rotation (Slot/Rectangular orientation).
+    pub hole_rotation_deg: Option<f64>,
+    /// v0.20 — Copper offset relative to hole centre.
+    pub copper_offset_x_mm: Option<f64>,
+    pub copper_offset_y_mm: Option<f64>,
+    /// v0.24 Phase 1 (Track A stub) — Per-pad parametric handles for
+    /// shape-driven attributes. Maps a feature key (e.g.
+    /// `"corner_r"`, `"chamfer_len"`, `"diameter"`) to a sketch-
+    /// parameter name. Phase 2 (Agent A) populates this on
+    /// `mirror_add_pad_to_sketch` and writes the corresponding
+    /// parameter into `sketch.parameters`. The `LinkedRadius` enum
+    /// in `signex-sketch::attr` controls "shared by default,
+    /// splittable on right-click" semantics. Empty (= no parametric
+    /// handles bound) on existing footprints — the Phase 2 mirror
+    /// builds it lazily on first sketch-mode visit.
+    pub shape_params: ShapeParamMap,
+}
+
+/// v0.24 Phase 1 (Track A stub) — per-pad parametric handle map.
+/// Type alias keeps the field flexible for Phase 2 to swap in a
+/// dedicated struct if the linked/unlinked semantics get richer
+/// (e.g. per-corner overrides for Chamfered).
+pub type ShapeParamMap = std::collections::HashMap<String, String>;
+
+/// v0.20 — UI-side mirror of `Pad`'s pad-stack override fields. All
+/// values in mm (already evaluated). `None` on a margin override
+/// means "use the rule-driven / global value"; `true` on a tented
+/// flag means "skip the mask opening on that side".
+///
+/// `Default` matches Altium's "out-of-the-box" pad: paste enabled on
+/// both sides, mask not tented, thermal relief on, no margin
+/// overrides, no explicit corner-radius percentage.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PadStackUi {
+    pub paste_margin_top: Option<f64>,
+    pub paste_margin_bottom: Option<f64>,
+    pub paste_enabled_top: bool,
+    pub paste_enabled_bottom: bool,
+    pub mask_margin_top: Option<f64>,
+    pub mask_margin_bottom: Option<f64>,
+    pub mask_tented_top: bool,
+    pub mask_tented_bottom: bool,
+    pub thermal_relief: bool,
+    pub corner_radius_pct: Option<f64>,
+}
+
+impl Default for PadStackUi {
+    fn default() -> Self {
+        Self {
+            paste_margin_top: None,
+            paste_margin_bottom: None,
+            paste_enabled_top: true,
+            paste_enabled_bottom: true,
+            mask_margin_top: None,
+            mask_margin_bottom: None,
+            mask_tented_top: false,
+            mask_tented_bottom: false,
+            thermal_relief: true,
+            corner_radius_pct: None,
+        }
+    }
 }
 
 impl EditorPad {
@@ -76,6 +165,21 @@ impl EditorPad {
             corner_entity_ids: None,
             rotation_deg: 0.0,
             drill_diameter_mm: None,
+            stack: PadStackUi::default(),
+            feature_top: PadFeature::None,
+            feature_bottom: PadFeature::None,
+            testpoint: TestpointFlags::default(),
+            template: String::new(),
+            template_library: String::new(),
+            electrical_type: ElectricalType::Load,
+            net: String::new(),
+            locked: false,
+            hole_tolerance_plus_mm: None,
+            hole_tolerance_minus_mm: None,
+            hole_rotation_deg: None,
+            copper_offset_x_mm: None,
+            copper_offset_y_mm: None,
+            shape_params: ShapeParamMap::new(),
         }
     }
 
@@ -97,6 +201,21 @@ impl EditorPad {
             corner_entity_ids: None,
             rotation_deg: 0.0,
             drill_diameter_mm: Some(d),
+            stack: PadStackUi::default(),
+            feature_top: PadFeature::None,
+            feature_bottom: PadFeature::None,
+            testpoint: TestpointFlags::default(),
+            template: String::new(),
+            template_library: String::new(),
+            electrical_type: ElectricalType::Load,
+            net: String::new(),
+            locked: false,
+            hole_tolerance_plus_mm: None,
+            hole_tolerance_minus_mm: None,
+            hole_rotation_deg: None,
+            copper_offset_x_mm: None,
+            copper_offset_y_mm: None,
+            shape_params: ShapeParamMap::new(),
         }
     }
 
@@ -133,6 +252,32 @@ impl EditorPad {
             corner_entity_ids: None,
             rotation_deg: p.rotation,
             drill_diameter_mm: p.drill.as_ref().map(|d| d.diameter),
+            stack: PadStackUi {
+                paste_margin_top: p.paste_margin_top,
+                paste_margin_bottom: p.paste_margin_bottom,
+                paste_enabled_top: p.paste_enabled_top,
+                paste_enabled_bottom: p.paste_enabled_bottom,
+                mask_margin_top: p.mask_margin_top,
+                mask_margin_bottom: p.mask_margin_bottom,
+                mask_tented_top: p.mask_tented_top,
+                mask_tented_bottom: p.mask_tented_bottom,
+                thermal_relief: p.thermal_relief,
+                corner_radius_pct: p.corner_radius_pct,
+            },
+            feature_top: p.feature_top,
+            feature_bottom: p.feature_bottom,
+            testpoint: p.testpoint,
+            template: p.template.clone(),
+            template_library: p.template_library.clone(),
+            electrical_type: p.electrical_type,
+            net: p.net.clone(),
+            locked: p.locked,
+            hole_tolerance_plus_mm: p.hole_tolerance_plus_mm,
+            hole_tolerance_minus_mm: p.hole_tolerance_minus_mm,
+            hole_rotation_deg: p.hole_rotation_deg,
+            copper_offset_x_mm: p.copper_offset_x_mm,
+            copper_offset_y_mm: p.copper_offset_y_mm,
+            shape_params: ShapeParamMap::new(),
         }
     }
 
@@ -152,6 +297,29 @@ impl EditorPad {
             drill,
             solder_mask_margin: None,
             paste_margin: None,
+            template: self.template.clone(),
+            template_library: self.template_library.clone(),
+            paste_margin_top: self.stack.paste_margin_top,
+            paste_margin_bottom: self.stack.paste_margin_bottom,
+            paste_enabled_top: self.stack.paste_enabled_top,
+            paste_enabled_bottom: self.stack.paste_enabled_bottom,
+            mask_margin_top: self.stack.mask_margin_top,
+            mask_margin_bottom: self.stack.mask_margin_bottom,
+            mask_tented_top: self.stack.mask_tented_top,
+            mask_tented_bottom: self.stack.mask_tented_bottom,
+            thermal_relief: self.stack.thermal_relief,
+            corner_radius_pct: self.stack.corner_radius_pct,
+            feature_top: self.feature_top,
+            feature_bottom: self.feature_bottom,
+            testpoint: self.testpoint,
+            electrical_type: self.electrical_type,
+            net: self.net.clone(),
+            locked: self.locked,
+            hole_tolerance_plus_mm: self.hole_tolerance_plus_mm,
+            hole_tolerance_minus_mm: self.hole_tolerance_minus_mm,
+            hole_rotation_deg: self.hole_rotation_deg,
+            copper_offset_x_mm: self.copper_offset_x_mm,
+            copper_offset_y_mm: self.copper_offset_y_mm,
         }
     }
 }
@@ -176,7 +344,7 @@ pub enum EditorMode {
 /// the canvas's hit-test + draw layer.
 ///
 /// `PartialEq` is intentionally NOT derived: Phase 5.3 added
-/// `sketch_solver` / `last_solve` / `auto_pause` whose underlying
+/// `sketch_solver` / `last_solve` whose underlying
 /// types in `signex-sketch` don't implement `PartialEq`. The editor
 /// uses pointer-equality / dirty-flag patterns elsewhere; no test or
 /// production call site compared two `FootprintEditorState` values
@@ -205,13 +373,24 @@ pub struct FootprintEditorState {
     /// Carried so the canvas DOF overlay + render layer can read the
     /// solved entity coordinates without rerunning the LM iteration.
     pub last_solve: Option<signex_sketch::solver::FullSolveOutput>,
-    /// Hysteresis state for live-solve auto-pause. Phase 3.6 ships
-    /// `AutoPauseState`; the dispatcher feeds elapsed_ms into it on
-    /// every solve.
-    pub auto_pause: signex_sketch::solver::timeout::AutoPauseState,
     /// Last solve's audit / over-constraint warnings. Cleared per
-    /// solve. Surfaced by the inspector panel in Phase 6.
+    /// solve. Surfaced by the inspector panel. v0.22 — solver
+    /// timeouts are also surfaced here as a hard warning instead of
+    /// being silently swallowed by the old auto-pause hysteresis.
     pub solve_warnings: Vec<String>,
+    /// v0.22 Phase E3+E4 polish — `true` while the cursor is over
+    /// any row in the Properties-panel "Conflicts (worst first)"
+    /// list. The canvas's `draw_constraint_icons` reads this and
+    /// dims every constraint icon EXCEPT the over-constrained ones,
+    /// visually isolating the redundant set so the user can see at
+    /// a glance which glyphs are conflicting. `false` = default
+    /// rendering (over-constrained red, others muted at 0.85).
+    /// v0.22 Phase E3+E4 → v0.23 per-row precision: `Some(id)` when
+    /// the user is hovering a specific row in the Conflicts list;
+    /// the canvas renders that row's constraint at full red and dims
+    /// every other constraint glyph. `None` = no hover; default
+    /// rendering applies.
+    pub conflicts_row_hovered: Option<signex_sketch::id::ConstraintId>,
     /// v0.13.2 — currently-active sketch tool. The inspector tool
     /// palette emits `FootprintSketchSetTool(...)`; the canvas
     /// Program reads this to interpret pointer events. `Select`
@@ -250,6 +429,12 @@ pub struct FootprintEditorState {
     /// useful for guides + symmetry without affecting the baked
     /// pad / silk / courtyard output.
     pub construction_mode: bool,
+    /// v0.22 Phase A5 — Centerline-mode mint flag. Sister to
+    /// `construction_mode`: while on, every newly-minted entity gets
+    /// `centerline = true`, rendered as long-dash gold and skipped
+    /// by the bake. Mutually exclusive with `construction_mode` —
+    /// enabling one disables the other (Fusion convention).
+    pub centerline_mode: bool,
     /// v0.16.1 — TAB pause-during-placement. When `true`, the canvas
     /// ignores empty-canvas clicks during PadsTool::PlacePad so the
     /// user can adjust pad-stack defaults before resuming. TAB
@@ -322,6 +507,117 @@ pub struct FootprintEditorState {
     /// Set by right-clicking (or clicking the chevron on) a tool button
     /// in the active bar; cleared on item-pick or click-outside.
     pub active_bar_menu: Option<FpActiveBarMenu>,
+    /// v0.20 — Pad Stack panel tab (Simple / Top-Middle-Bottom /
+    /// Full Stack). UI-only state; not persisted. Drives which Pad
+    /// Stack body the right-dock Properties panel renders. Mirrors
+    /// the Altium PCB Library tab strip on the same section.
+    pub pad_stack_tab: PadStackTab,
+    /// v0.24 Phase 1 (Track D) — live numeric input during sketch-tool
+    /// placement. Set when the user types a digit while a tool is
+    /// pending; the next click commits at the typed length / radius
+    /// instead of the cursor position. `None` (default) preserves the
+    /// v0.22 click-only flow.
+    pub placement_input: Option<PlacementInput>,
+}
+
+/// v0.24 Phase 1 (Track D stub) — numeric-input overlay state for
+/// sketch-tool placement. Phase 2 (Agent D) wires the keypress
+/// handler + the cursor overlay; Phase 1 just declares the field
+/// so other agents don't compete for the insertion point on
+/// `FootprintEditorState`.
+#[derive(Debug, Clone)]
+pub struct PlacementInput {
+    /// User-typed digits (and optional decimal point / minus).
+    pub buffer: String,
+    /// Which dimension the buffer represents. Drives unit interpretation
+    /// + commit math at click time.
+    pub kind: PlacementInputKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlacementInputKind {
+    /// Line tool — second click commits at exactly `buffer` mm from
+    /// the first endpoint, along the cursor's azimuth.
+    LineLength,
+    /// Circle tool — radius commit; second click ignores cursor delta.
+    CircleRadius,
+    /// Arc tool radius — second click ignores cursor delta from centre.
+    ArcRadius,
+    /// Arc tool sweep angle (degrees) — third click commits at the
+    /// typed sweep relative to start.
+    ArcSweep,
+}
+
+impl PlacementInputKind {
+    /// v0.24 Track D — pick the matching numeric-input kind for the
+    /// active sketch tool + pending state. Returns `None` for tools
+    /// that don't accept a numeric input on the next click (Select /
+    /// Point / Rectangle / Mirror / Offset / Pattern). Caller checks
+    /// `tool_pending` so a digit press during the FIRST click of a
+    /// Line tool is silently ignored — there's no first-click length
+    /// to honour.
+    pub fn from_active_tool(tool: SketchTool, pending: &ToolPending) -> Option<Self> {
+        match (tool, pending) {
+            // Line second click → length.
+            (SketchTool::Line, ToolPending::LineFirst { .. }) => Some(Self::LineLength),
+            // Circle second click → radius.
+            (SketchTool::Circle, ToolPending::CircleCenter { .. }) => Some(Self::CircleRadius),
+            // Arc — second click is the start endpoint (radius = |centre, start|),
+            // third click is the end endpoint (sweep angle).
+            (SketchTool::Arc, ToolPending::ArcCenter { .. }) => Some(Self::ArcRadius),
+            (SketchTool::Arc, ToolPending::ArcStart { .. }) => Some(Self::ArcSweep),
+            _ => None,
+        }
+    }
+
+    /// v0.24 Track D — `true` when the buffer accepts a leading minus
+    /// sign. Only `ArcSweep` is signed; lengths and radii are always
+    /// non-negative so a stray `-` press is ignored.
+    pub fn allows_negative(self) -> bool {
+        matches!(self, Self::ArcSweep)
+    }
+
+    /// v0.24 Track D — short label rendered in the cursor overlay so
+    /// the user can tell at a glance what unit they're typing in.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::LineLength => "len",
+            Self::CircleRadius | Self::ArcRadius => "r",
+            Self::ArcSweep => "deg",
+        }
+    }
+}
+
+/// v0.20 — Pad Stack section's tab strip. Matches Altium's three
+/// tabs verbatim:
+/// - `Simple`: one row per stack family (COPPER / HOLE / PASTE /
+///   SOLDER). Default.
+/// - `TopMiddleBottom`: COPPER splits into Top / Middle / Bottom
+///   rows. Middle is a placeholder for inner-copper pad-stack
+///   overrides; surfaces in v0.21+ once the schema lands.
+/// - `FullStack`: enumerates the pad's `layers` list verbatim, one
+///   row per layer with the matching margin/expansion field.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PadStackTab {
+    #[default]
+    Simple,
+    TopMiddleBottom,
+    FullStack,
+}
+
+impl PadStackTab {
+    pub const ALL: &'static [PadStackTab] = &[
+        PadStackTab::Simple,
+        PadStackTab::TopMiddleBottom,
+        PadStackTab::FullStack,
+    ];
+    pub fn label(self) -> &'static str {
+        match self {
+            PadStackTab::Simple => "Simple",
+            PadStackTab::TopMiddleBottom => "Top-Middle-Bottom",
+            PadStackTab::FullStack => "Full Stack",
+        }
+    }
 }
 
 /// v0.13 — Altium-style footprint active bar dropdown menus. One per
@@ -359,6 +655,11 @@ pub enum FpActiveBarMenu {
 /// always in mm. Side controls which copper layer the pad lands on.
 /// v0.16.6 — `rotation_deg` controls the orientation of the next
 /// pad in degrees (CCW positive).
+/// v0.20 — also carries the Altium-parity Pad Stack (per-side mask /
+/// paste / tented / thermal / corner-radius), Pad Features (top /
+/// bottom surface treatment), Testpoint flags, and Template /
+/// Library reference fields. Mirrors `EditorPad` so the Properties
+/// panel renders the same form before-placement and after-selection.
 #[derive(Debug, Clone, PartialEq)]
 pub struct NextPadDefaults {
     pub designator_override: Option<String>,
@@ -366,6 +667,47 @@ pub struct NextPadDefaults {
     pub size_y_mm: f64,
     pub side: PadSide,
     pub rotation_deg: f64,
+    /// Per-side pad-stack overrides. Mirror of `EditorPad.stack`.
+    pub stack: PadStackUi,
+    /// Top-side surface feature.
+    pub feature_top: PadFeature,
+    /// Bottom-side surface feature.
+    pub feature_bottom: PadFeature,
+    /// Test-point participation flags.
+    pub testpoint: TestpointFlags,
+    /// Pad-template name. Empty = no template.
+    pub template: String,
+    /// Pad-template library reference. Empty = local.
+    pub template_library: String,
+    /// v0.20 — Drill diameter (mm) for the next placed pad. `None`
+    /// = SMD pad (no hole). `Some(d)` = THT/NPT pad with the given
+    /// diameter. Surfaced in the Pad Stack → HOLE → Hole size row.
+    pub drill_diameter_mm: Option<f64>,
+    /// v0.20 — Drill slot length (mm). `None` = round drill;
+    /// `Some(l)` = oval slot of length l along the slot's long axis.
+    /// Drives the HOLE → Shape pick_list (Round vs Slot) and the
+    /// "Slot length" input visibility.
+    pub drill_slot_length_mm: Option<f64>,
+    /// v0.20 — Copper shape for the next placed pad. Mirror of
+    /// `EditorPad.shape`. Drives the Pad Stack → COPPER → Shape
+    /// pick_list and the 3D preview.
+    pub shape: signex_library::PadShape,
+    /// v0.20 — Pad mounting kind (SMD / THT / NptHole / etc) for
+    /// the next placed pad. Mirror of `EditorPad.kind`. Persisted
+    /// to `Pad::kind` at bake time.
+    pub kind: signex_library::PadKind,
+    /// v0.20 — Altium-parity electrical-type (Load/Source/Terminator).
+    pub electrical_type: ElectricalType,
+    /// v0.20 — net assignment.
+    pub net: String,
+    /// v0.20 — locked flag.
+    pub locked: bool,
+    /// v0.20 — Pad Hole tolerance ±.
+    pub hole_tolerance_plus_mm: Option<f64>,
+    pub hole_tolerance_minus_mm: Option<f64>,
+    pub hole_rotation_deg: Option<f64>,
+    pub copper_offset_x_mm: Option<f64>,
+    pub copper_offset_y_mm: Option<f64>,
 }
 
 /// HI-25 helper: when an item is removed at `removed_idx` from a Vec,
@@ -413,9 +755,9 @@ impl PadSide {
     pub const ALL_OPTIONS: &'static [PadSide] = &[PadSide::Top, PadSide::Bottom, PadSide::All];
     pub fn label(self) -> &'static str {
         match self {
-            PadSide::Top => "Top",
-            PadSide::Bottom => "Bottom",
-            PadSide::All => "All (THT)",
+            PadSide::Top => "Top Layer",
+            PadSide::Bottom => "Bottom Layer",
+            PadSide::All => "Multi-Layer",
         }
     }
 }
@@ -623,6 +965,24 @@ impl Default for NextPadDefaults {
             size_y_mm: NEW_PAD_SIZE_MM,
             side: PadSide::Top,
             rotation_deg: 0.0,
+            stack: PadStackUi::default(),
+            feature_top: PadFeature::None,
+            feature_bottom: PadFeature::None,
+            testpoint: TestpointFlags::default(),
+            template: String::new(),
+            template_library: String::new(),
+            drill_diameter_mm: None,
+            drill_slot_length_mm: None,
+            shape: signex_library::PadShape::Rect,
+            kind: signex_library::PadKind::Smd,
+            electrical_type: ElectricalType::Load,
+            net: String::new(),
+            locked: false,
+            hole_tolerance_plus_mm: None,
+            hole_tolerance_minus_mm: None,
+            hole_rotation_deg: None,
+            copper_offset_x_mm: None,
+            copper_offset_y_mm: None,
         }
     }
 }
@@ -858,6 +1218,48 @@ pub enum SketchTool {
     RoundedRectangle,
     Circle,
     Arc,
+    /// v0.22 Phase B1 — Mirror tool. Click 1 picks the mirror line
+    /// (a `Line` entity), click 2 picks any entity to mirror. The
+    /// dispatcher generates a symmetric copy and adds the
+    /// `SymmetricAboutLine` constraint linking each Point of the
+    /// original to its mirror counterpart. Esc / right-click cancels.
+    Mirror,
+    /// v0.22 Phase B2 — Offset tool. Pre-condition: a Line / Arc /
+    /// Circle is selected via Select tool. Click determines which
+    /// side of the source curve the offset is generated on. Offset
+    /// distance comes from `state.dimension_input` (default 0.5 mm).
+    /// Lines: emits a parallel Line at perpendicular distance + a
+    /// `Parallel` and `DistancePtLine` constraint pair so the
+    /// distance survives source edits. Circles / Arcs: emits a
+    /// concentric copy sharing the source's centre Point so the
+    /// centres stay locked; the radius literal is set to source ±
+    /// dist. Esc / right-click cancels.
+    Offset,
+    /// v0.22 Phase B3 — Rectangular Pattern tool. Click 1 picks the
+    /// source entity; the dispatcher mints a default `ArrayKind::Grid`
+    /// with `nx=2`, `ny=2`, `dx=5mm`, `dy=5mm`. The user edits
+    /// per-instance parameters via the sketch JSON until a Properties
+    /// sub-form lands.
+    RectPattern,
+    /// v0.22 Phase B4 — Circular (Polar) Pattern tool. Click 1 picks
+    /// the source entity; the dispatcher mints a default
+    /// `ArrayKind::Polar` with `count=4`, `sweep_angle=360°`, and a
+    /// fresh centre Point offset 5 mm from the source position.
+    /// User adjusts the centre + parameters via JSON or the (future)
+    /// Pattern Properties sub-form.
+    CircularPattern,
+    /// v0.24 Track C — Tangent Arc tool. Two-click chained arc
+    /// segment: click 1 stashes the first endpoint; click 2 mints an
+    /// `Arc` entity tangent to the most recently committed `Line`
+    /// whose end Point matches the first click. The dispatcher also
+    /// emits a `TangentLineArc` constraint so the tangency survives
+    /// further edits. If no incident Line is found at the first
+    /// click, a placeholder centre is computed (perpendicular to the
+    /// chord midpoint) and a warning is published. Esc / right-click
+    /// cancels back to Select. Per the project's no-canvas-gestures
+    /// rule, this tool is invoked explicitly via the active-bar
+    /// button — it's not an implicit drag-mode of the Line tool.
+    TangentArc,
 }
 
 /// Transient per-tool gesture state. The canvas Program reads + writes
@@ -900,6 +1302,20 @@ pub enum ToolPending {
         center: signex_sketch::id::SketchEntityId,
         start: signex_sketch::id::SketchEntityId,
     },
+    /// v0.23 — "Re-pick centre" affordance from the Pattern
+    /// Properties sub-form. The next sketch click on a Point
+    /// overwrites `array.center` for the array identified by
+    /// `array_id`. Cancels with Esc.
+    RepickPolarCenter {
+        array_id: signex_sketch::array::ArrayId,
+    },
+    /// v0.24 Track C — Tangent Arc, first endpoint placed; awaiting
+    /// the second endpoint click. The dispatcher mints an `Arc`
+    /// tangent to whatever `Line` ends at `first` (or a placeholder
+    /// arc with a warning when no incident Line exists).
+    TangentArcFirst {
+        first: signex_sketch::id::SketchEntityId,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -924,8 +1340,8 @@ impl FootprintEditorState {
             mode: EditorMode::Normal,
             sketch_solver: signex_sketch::solver::Solver::default(),
             last_solve: None,
-            auto_pause: signex_sketch::solver::timeout::AutoPauseState::default(),
             solve_warnings: Vec::new(),
+            conflicts_row_hovered: None,
             active_tool: SketchTool::default(),
             tool_pending: ToolPending::default(),
             selected_sketch: None,
@@ -933,6 +1349,7 @@ impl FootprintEditorState {
             dimension_input: String::new(),
             pads_tool: PadsTool::default(),
             construction_mode: false,
+            centerline_mode: false,
             placement_paused: false,
             next_pad_defaults: NextPadDefaults::default(),
             snap_options: SnapOptions::default(),
@@ -948,6 +1365,8 @@ impl FootprintEditorState {
             snap_subtab: SnapSubTab::default(),
             snapping_mode: SnappingMode::default(),
             active_bar_menu: None,
+            pad_stack_tab: PadStackTab::default(),
+            placement_input: None,
         };
         s.recompute_courtyard();
         s
@@ -967,8 +1386,8 @@ impl FootprintEditorState {
             mode: EditorMode::Normal,
             sketch_solver: signex_sketch::solver::Solver::default(),
             last_solve: None,
-            auto_pause: signex_sketch::solver::timeout::AutoPauseState::default(),
             solve_warnings: Vec::new(),
+            conflicts_row_hovered: None,
             active_tool: SketchTool::default(),
             tool_pending: ToolPending::default(),
             selected_sketch: None,
@@ -976,6 +1395,7 @@ impl FootprintEditorState {
             dimension_input: String::new(),
             pads_tool: PadsTool::default(),
             construction_mode: false,
+            centerline_mode: false,
             placement_paused: false,
             next_pad_defaults: NextPadDefaults::default(),
             snap_options: SnapOptions::default(),
@@ -991,6 +1411,8 @@ impl FootprintEditorState {
             snap_subtab: SnapSubTab::default(),
             snapping_mode: SnappingMode::default(),
             active_bar_menu: None,
+            pad_stack_tab: PadStackTab::default(),
+            placement_input: None,
         };
         s.recompute_courtyard();
         s
@@ -1057,8 +1479,32 @@ impl FootprintEditorState {
         };
         let mut pad = EditorPad::new_default(number, (x_mm, y_mm));
         pad.size_mm = (defaults.size_x_mm.max(0.05), defaults.size_y_mm.max(0.05));
+        pad.shape = defaults.shape.clone();
+        pad.kind = defaults.kind;
         pad.layers = layers;
         pad.rotation_deg = defaults.rotation_deg;
+        // v0.20 — apply Altium-parity Pad Stack / Pad Features /
+        // Testpoint / Template defaults so the placed pad inherits
+        // the user-edited values from the Properties panel.
+        pad.stack = defaults.stack.clone();
+        pad.feature_top = defaults.feature_top;
+        pad.feature_bottom = defaults.feature_bottom;
+        pad.testpoint = defaults.testpoint;
+        pad.template = defaults.template.clone();
+        pad.template_library = defaults.template_library.clone();
+        // For Multi-Layer pads, propagate drill diameter from the
+        // defaults. Single-layer pads stay SMD (no drill).
+        if matches!(defaults.side, PadSide::All) {
+            pad.drill_diameter_mm = defaults.drill_diameter_mm;
+        }
+        pad.electrical_type = defaults.electrical_type;
+        pad.net = defaults.net.clone();
+        pad.locked = defaults.locked;
+        pad.hole_tolerance_plus_mm = defaults.hole_tolerance_plus_mm;
+        pad.hole_tolerance_minus_mm = defaults.hole_tolerance_minus_mm;
+        pad.hole_rotation_deg = defaults.hole_rotation_deg;
+        pad.copper_offset_x_mm = defaults.copper_offset_x_mm;
+        pad.copper_offset_y_mm = defaults.copper_offset_y_mm;
         self.pads.push(pad);
         let idx = self.pads.len() - 1;
         self.selected_pad = Some(idx);
@@ -1077,7 +1523,15 @@ impl FootprintEditorState {
             .clone()
             .unwrap_or_else(|| self.next_pad_number());
         let drill_mm = defaults.size_x_mm.max(0.05);
-        let pad = EditorPad::new_npt_hole(number, (x_mm, y_mm), drill_mm);
+        let mut pad = EditorPad::new_npt_hole(number, (x_mm, y_mm), drill_mm);
+        // v0.20 — propagate the Pad Properties defaults onto the hole
+        // so testpoint / template / feature flags survive placement.
+        pad.stack = defaults.stack.clone();
+        pad.feature_top = defaults.feature_top;
+        pad.feature_bottom = defaults.feature_bottom;
+        pad.testpoint = defaults.testpoint;
+        pad.template = defaults.template.clone();
+        pad.template_library = defaults.template_library.clone();
         self.pads.push(pad);
         let idx = self.pads.len() - 1;
         self.selected_pad = Some(idx);
@@ -1159,6 +1613,67 @@ impl FootprintEditorState {
         self.recompute_courtyard();
     }
 
+    /// v0.22 Phase D2 — Inverse of `sync_pads_to_primitive`. After a
+    /// Sketch-mode solve+bake regenerates `Footprint::pads` from the
+    /// sketch source-of-truth, refresh the editor-side `pads` cache so
+    /// the canvas / Pads-mode Properties panel reads the same values
+    /// that just got baked.
+    ///
+    /// `sketch_entity_id` and `corner_entity_ids` don't round-trip
+    /// through `Pad`, so we re-attach them by matching `pad.number`.
+    /// Brand-new pads (e.g., array expansions) keep `None` for these
+    /// fields; the next Sketch-mode entry's auto-mint can populate.
+    ///
+    /// v0.24 Phase 3 (Track A4) — `shape_params` (parametric handle
+    /// bindings — `corner_r` / `diameter` / etc.) likewise don't
+    /// round-trip through `Pad`, so we preserve them by matching
+    /// `pad.number` too. Without this, every solve+rebake cycle
+    /// would reset the bindings and the Properties-panel rows would
+    /// disappear.
+    ///
+    /// v0.24 Track A6 — Chamfered pads' `chamfer_len` shared
+    /// parameter and the per-corner `chamfer_<corner>_anchor1` /
+    /// `..._anchor2` sidecar keys are carried by the same
+    /// `shape_params.clone()` step, so they survive solve+rebake
+    /// without any chamfer-specific bookkeeping here.
+    pub fn refresh_pads_from_primitive(&mut self, fp: &Footprint) {
+        use std::collections::HashMap;
+        type Link = (
+            Option<signex_sketch::id::SketchEntityId>,
+            Option<[signex_sketch::id::SketchEntityId; 4]>,
+            ShapeParamMap,
+        );
+        let old_links: HashMap<String, Link> = self
+            .pads
+            .iter()
+            .map(|p| {
+                (
+                    p.number.clone(),
+                    (
+                        p.sketch_entity_id,
+                        p.corner_entity_ids,
+                        p.shape_params.clone(),
+                    ),
+                )
+            })
+            .collect();
+        let mut new_pads: Vec<EditorPad> = fp.pads.iter().map(EditorPad::from_pad).collect();
+        for p in &mut new_pads {
+            if let Some((sid, cids, params)) = old_links.get(&p.number) {
+                p.sketch_entity_id = *sid;
+                p.corner_entity_ids = *cids;
+                p.shape_params = params.clone();
+            }
+        }
+        self.pads = new_pads;
+        // selected_pad index might now point past the new vec — clamp.
+        if let Some(idx) = self.selected_pad {
+            if idx >= self.pads.len() {
+                self.selected_pad = None;
+            }
+        }
+    }
+
     /// Write the canvas-side pad list back onto the primitive. Called
     /// after every mutation so the saved row sees the current pad
     /// layout. Other Footprint fields (graphics, body_3d, etc.) are
@@ -1174,6 +1689,43 @@ impl FootprintEditorState {
                 [c.max_x, c.max_y],
                 [c.min_x, c.max_y],
             ]);
+        }
+        // v0.22 Phase D1 — Pads-mode → Sketch attribute mirror. For
+        // every editor-side pad backed by a sketch entity, copy the
+        // enum/bool/Option<f64> attribute fields onto the entity's
+        // PadAttr so a subsequent Sketch-mode session reads the same
+        // Net / Locked / ElectricalType / Template / Library /
+        // Feature / Testpoint / Hole-Details state. Geometry-shaping
+        // expressions (size_x_expr / mask_margin_expr / paste_*_expr
+        // / drill spec) intentionally stay sketch-parameterised — only
+        // attribute fields cross. Designator (number) also mirrors
+        // so a Pads-mode rename propagates to the entity.
+        if let Some(sketch) = fp.sketch.as_mut() {
+            for pad in &canvas.pads {
+                let Some(id) = pad.sketch_entity_id else {
+                    continue;
+                };
+                let Some(entity) = sketch.entities.iter_mut().find(|e| e.id == id) else {
+                    continue;
+                };
+                let Some(attr) = entity.pad.as_mut() else {
+                    continue;
+                };
+                attr.number = pad.number.clone();
+                attr.net = pad.net.clone();
+                attr.locked = pad.locked;
+                attr.electrical_type = pad.electrical_type;
+                attr.template = pad.template.clone();
+                attr.library = pad.template_library.clone();
+                attr.feature_top = pad.feature_top;
+                attr.feature_bottom = pad.feature_bottom;
+                attr.testpoint = pad.testpoint;
+                attr.hole_tolerance_plus_mm = pad.hole_tolerance_plus_mm;
+                attr.hole_tolerance_minus_mm = pad.hole_tolerance_minus_mm;
+                attr.hole_rotation_deg = pad.hole_rotation_deg;
+                attr.copper_offset_x_mm = pad.copper_offset_x_mm;
+                attr.copper_offset_y_mm = pad.copper_offset_y_mm;
+            }
         }
     }
 }
@@ -1197,6 +1749,7 @@ mod tests {
             drill: None,
             solder_mask_margin: None,
             paste_margin: None,
+            ..Pad::default()
         });
         let s = FootprintEditorState::from_footprint(&fp);
         assert_eq!(s.pads.len(), 1);

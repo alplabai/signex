@@ -124,6 +124,7 @@ fn smd_pad(
         mask_margin_expr: mask_margin_expr.map(str::to_string),
         paste_margin_expr: paste_margin_expr.map(str::to_string),
         paste_apertures: PasteAperturePattern::Single,
+        ..PadAttr::default()
     });
     e
 }
@@ -399,6 +400,7 @@ fn build_mounting_hole_3p2() -> Footprint {
         mask_margin_expr: Some("0.05mm".into()),
         paste_margin_expr: None,
         paste_apertures: PasteAperturePattern::Single,
+        ..PadAttr::default()
     });
     sketch.entities.push(e);
 
@@ -446,6 +448,7 @@ fn build_fiducial_1mm() -> Footprint {
         mask_margin_expr: Some("0.5mm".into()),
         paste_margin_expr: None,
         paste_apertures: PasteAperturePattern::Single,
+        ..PadAttr::default()
     });
     sketch.entities.push(e);
 

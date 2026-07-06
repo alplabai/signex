@@ -102,6 +102,7 @@ fn smd_rect_pad(number: &str, w: &str, h: &str) -> PadAttr {
         mask_margin_expr: None,
         paste_margin_expr: None,
         paste_apertures: PasteAperturePattern::Single,
+        ..PadAttr::default()
     }
 }
 
@@ -528,6 +529,86 @@ fn bake_linear_array_3_pads_along_x() {
     assert_eq!(out[0].number, "1");
     assert_eq!(out[1].number, "2");
     assert_eq!(out[2].number, "3");
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Test 10b — v0.23 per-instance suppression skips selected (i, j).
+// ─────────────────────────────────────────────────────────────────────
+
+#[test]
+fn bake_grid_array_with_suppressed_instances_skips_selected_cells() {
+    use signex_sketch::array::GridDepopulation;
+
+    let mut s = Sketch::new();
+    let p = s.add_point(0.0, 0.0);
+    s.attach_pad(p, smd_rect_pad("0", "1.0mm", "0.5mm"));
+
+    // 3x3 grid (9 cells), suppress (0,0), (1,1), (2,2) → 6 pads remain.
+    s.data.arrays.push(Array {
+        id: ArrayId::new(),
+        kind: ArrayKind::Grid {
+            source: p,
+            nx_expr: "3".into(),
+            ny_expr: "3".into(),
+            dx_expr: "1mm".into(),
+            dy_expr: "1mm".into(),
+            depopulation: Some(GridDepopulation {
+                mask_expr: String::new(),
+                suppressed_instances: vec![(0, 0), (1, 1), (2, 2)],
+            }),
+        },
+        numbering: NumberingScheme::default(),
+    });
+
+    let solve = solve(&s.data);
+    let mut out = Vec::new();
+    let mut warnings = Vec::new();
+    bake_arrays(&s.data, &solve, &HashMap::new(), &mut out, &mut warnings).expect("bake ok");
+
+    // 9 - 3 = 6 pads.
+    assert_eq!(out.len(), 6);
+    // Diagonal positions must not appear.
+    for pad in &out {
+        let x = pad.position[0];
+        let y = pad.position[1];
+        let on_diagonal = (approx_eq(x, 0.0, 1e-9) && approx_eq(y, 0.0, 1e-9))
+            || (approx_eq(x, 1.0, 1e-9) && approx_eq(y, 1.0, 1e-9))
+            || (approx_eq(x, 2.0, 1e-9) && approx_eq(y, 2.0, 1e-9));
+        assert!(!on_diagonal, "diagonal cell {x},{y} should be suppressed");
+    }
+}
+
+#[test]
+fn bake_polar_array_with_suppressed_instances_skips_selected_indices() {
+    use signex_sketch::array::GridDepopulation;
+
+    let mut s = Sketch::new();
+    let centre = s.add_point(0.0, 0.0);
+    let src = s.add_point(1.0, 0.0);
+    s.attach_pad(src, smd_rect_pad("0", "0.5mm", "0.5mm"));
+
+    // 4-instance polar, suppress index 2 → 3 pads remain.
+    s.data.arrays.push(Array {
+        id: ArrayId::new(),
+        kind: ArrayKind::Polar {
+            source: src,
+            center: centre,
+            count_expr: "4".into(),
+            sweep_angle_expr: "360deg".into(),
+            depopulation: Some(GridDepopulation {
+                mask_expr: String::new(),
+                suppressed_instances: vec![(2, 0)],
+            }),
+        },
+        numbering: NumberingScheme::default(),
+    });
+
+    let solve = solve(&s.data);
+    let mut out = Vec::new();
+    let mut warnings = Vec::new();
+    bake_arrays(&s.data, &solve, &HashMap::new(), &mut out, &mut warnings).expect("bake ok");
+
+    assert_eq!(out.len(), 3);
 }
 
 // ─────────────────────────────────────────────────────────────────────
