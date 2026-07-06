@@ -12,8 +12,8 @@
 //! still need a human eye.
 
 use signex_app::app::{
-    LoadedProject, Message, ProjectTreeAction, RemoveChoice, RemoveDialogState, RenameDialogState,
-    Signex,
+    LoadedProject, Message, ProjectCloseChoice, ProjectTreeAction, RemoveChoice, RemoveDialogState,
+    RenameDialogState, Signex,
 };
 use signex_types::project::SheetEntry;
 
@@ -4380,5 +4380,111 @@ fn chamfered_pad_with_2_enabled_corners_has_2_chamfer_cuts() {
     assert_eq!(
         nw_count, 0,
         "NW bbox corner (enabled) is not on the outline path (replaced by chamfer anchors); got {nw_count}"
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────
+// App-exit unsaved-changes guard (issue #95)
+//
+// Chrome ✕, File ▸ Exit and OS close (Alt+F4) all funnel through
+// Message::CloseMainWindow / Message::WindowCloseRequested. With
+// unsaved edits present the app must open the confirm modal instead
+// of exiting; without them it may close. Save All must never lose a
+// file it cannot save — it keeps the app open and reports it.
+// ─────────────────────────────────────────────────────────────────
+
+#[test]
+fn app_exit_with_no_dirty_paths_does_not_open_confirm_modal() {
+    let (mut app, _t) = Signex::new();
+    assert!(app.document_state.dirty_paths.is_empty());
+
+    // Clean workspace: exit request must not raise the guard modal.
+    let _ = app.update(Message::CloseMainWindow);
+    assert!(
+        app.ui_state.app_quit_confirm.is_none(),
+        "a clean workspace must exit without the unsaved-changes modal"
+    );
+}
+
+#[test]
+fn app_exit_with_dirty_paths_opens_confirm_modal_instead_of_exiting() {
+    let (mut app, _t) = Signex::new();
+    let dirty = PathBuf::from("/tmp/does-not-matter/board.snxsch");
+    app.document_state.dirty_paths.insert(dirty.clone());
+
+    let _ = app.update(Message::CloseMainWindow);
+
+    let modal = app
+        .ui_state
+        .app_quit_confirm
+        .as_ref()
+        .expect("dirty workspace must open the app-quit confirm modal");
+    assert!(
+        modal.dirty_paths.contains(&dirty),
+        "the modal must list the dirty file the user is about to lose"
+    );
+    // Data-loss guard: the dirty entry must still be present — nothing
+    // was discarded by merely asking to exit.
+    assert!(app.document_state.dirty_paths.contains(&dirty));
+}
+
+#[test]
+fn app_exit_confirm_cancel_dismisses_modal_and_keeps_dirty_state() {
+    let (mut app, _t) = Signex::new();
+    let dirty = PathBuf::from("/tmp/does-not-matter/board.snxsch");
+    app.document_state.dirty_paths.insert(dirty.clone());
+    let _ = app.update(Message::CloseMainWindow);
+    assert!(app.ui_state.app_quit_confirm.is_some());
+
+    let _ = app.update(Message::AppQuitConfirm(ProjectCloseChoice::Cancel));
+    assert!(
+        app.ui_state.app_quit_confirm.is_none(),
+        "Cancel must dismiss the modal"
+    );
+    assert!(
+        app.document_state.dirty_paths.contains(&dirty),
+        "Cancel must not touch the dirty state"
+    );
+}
+
+#[test]
+fn app_exit_confirm_discard_all_clears_modal() {
+    let (mut app, _t) = Signex::new();
+    app.document_state
+        .dirty_paths
+        .insert(PathBuf::from("/tmp/does-not-matter/board.snxsch"));
+    let _ = app.update(Message::CloseMainWindow);
+    assert!(app.ui_state.app_quit_confirm.is_some());
+
+    // Discard All resolves the modal (and returns the exit task).
+    let _ = app.update(Message::AppQuitConfirm(ProjectCloseChoice::DiscardAll));
+    assert!(
+        app.ui_state.app_quit_confirm.is_none(),
+        "Discard All must resolve the modal"
+    );
+}
+
+#[test]
+fn app_exit_save_all_never_loses_an_unsaveable_file() {
+    // A dirty path with no live engine (e.g. a .snxprj or primitive
+    // draft) cannot be saved through the engine path. Save All must
+    // NOT exit and lose it — it keeps the app open and surfaces it.
+    let (mut app, _t) = Signex::new();
+    let dirty = PathBuf::from("/tmp/does-not-matter/proj.snxprj");
+    app.document_state.dirty_paths.insert(dirty.clone());
+    let _ = app.update(Message::CloseMainWindow);
+    assert!(app.ui_state.app_quit_confirm.is_some());
+
+    let _ = app.update(Message::AppQuitConfirm(ProjectCloseChoice::SaveAll));
+
+    // Modal resolved, but the unsaveable file is reported and retained.
+    assert!(app.ui_state.app_quit_confirm.is_none());
+    assert!(
+        app.document_state.export_error.is_some(),
+        "Save All must report files it could not save"
+    );
+    assert!(
+        app.document_state.dirty_paths.contains(&dirty),
+        "an unsaveable dirty file must be kept, never silently dropped"
     );
 }

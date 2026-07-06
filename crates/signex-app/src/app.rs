@@ -28,8 +28,9 @@ mod state;
 pub(crate) mod view;
 
 pub use contracts::{
-    ContextAction, ContextMenuState, ContextSubmenu, DragTarget, EnableVersionControlState,
-    GridPickerState, GridPropertiesState, Message, ProjectCloseChoice, ProjectCloseConfirmState,
+    AppQuitConfirmState, ContextAction, ContextMenuState, ContextSubmenu, DragTarget,
+    EnableVersionControlState, GridPickerState, GridPropertiesState, Message, ProjectCloseChoice,
+    ProjectCloseConfirmState,
     ProjectOptionsState, ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice,
     RemoveDialogState, RenameDialogState, SelectionFilterCustomState, StatusBarRequest,
     TabContextAction, TabContextMenuState, TextEditState, TrackItem, VersionControlScope,

@@ -154,6 +154,7 @@ impl Signex {
             | Message::CloseTabContextMenu
             | Message::TabContextAction(_)
             | Message::ProjectCloseConfirm(_)
+            | Message::AppQuitConfirm(_)
             | Message::RenameBufferChanged(_)
             | Message::RenameSubmit
             | Message::CloseRenameDialog
@@ -436,10 +437,18 @@ impl Signex {
                 Some(id) => iced::window::toggle_maximize(id),
                 None => Task::none(),
             },
-            Message::CloseMainWindow => match self.ui_state.main_window_id {
-                Some(id) => iced::window::close(id),
-                None => Task::none(),
-            },
+            Message::CloseMainWindow => self.handle_app_quit_requested(),
+            Message::WindowCloseRequested(id) => {
+                // OS close request (Alt+F4 / native close). Daemon mode
+                // does not auto-close, so route the main window through
+                // the unsaved-changes guard and close any other window
+                // directly.
+                if self.ui_state.main_window_id == Some(id) {
+                    self.handle_app_quit_requested()
+                } else {
+                    iced::window::close(id)
+                }
+            }
             Message::OpenMoveSelectionDialog => self.handle_open_move_selection_dialog(),
             Message::CloseMoveSelectionDialog => {
                 let _ = self.handle_close_move_selection_dialog();
