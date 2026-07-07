@@ -1,11 +1,9 @@
 [package]
-name = "signex-erc"
+name = "signex-net"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
 signex-types.workspace = true
-signex-net.workspace = true
 uuid.workspace = true
-serde.workspace = true

@@ -1,11 +1,9 @@
 //! Iterative path-compression union-find over `(i64, i64)` keys.
 //!
-//! Used by `rules` (DanglingWire / NetLabelConflict / BusBitWidthMismatch)
-//! and `context` (`derive_nets`). Both call sites used to keep their own
-//! recursive copy of the algorithm — the recursive form was a real
-//! stack-overflow vector on degenerate wire chains > 10K segments
-//! (HI-17 in the project-wide review). This module is the single
-//! canonical implementation; the call sites import from here.
+//! Shared by `signex-net`'s netlist builder and `signex-erc`'s rules /
+//! context. Both used to keep their own recursive copy — the recursive
+//! form was a real stack-overflow vector on degenerate wire chains >10K
+//! segments (HI-17). This is the single canonical implementation.
 
 use std::collections::HashMap;
 
