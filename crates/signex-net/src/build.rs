@@ -411,7 +411,9 @@ pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
                 .unwrap_or_default();
             let selected = best_net_name(labels, &power_vals);
             let class = class_from_name(selected.as_ref().map(|(_, t)| t.as_str()));
-            let name = selected.map(|(_, t)| t).unwrap_or_else(|| format!("N${}", id.0));
+            let name = selected
+                .map(|(_, t)| t)
+                .unwrap_or_else(|| format!("N${}", id.0));
 
             let mut terminals = net_terms.remove(&root).unwrap_or_default();
             terminals.sort_by(|a, b| a.reference.cmp(&b.reference).then(a.pin.cmp(&b.pin)));
