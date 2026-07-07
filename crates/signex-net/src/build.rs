@@ -207,37 +207,24 @@ pub fn flood_net_elements(sheet: &SchematicSheet, target_wire: Uuid) -> Option<F
     Some(FloodElements { wires, junctions })
 }
 
-/// Build the authoritative [`Netlist`] for a single schematic sheet.
-///
-/// Physical connectivity is [`SheetConnectivity`] — union-find over wire
-/// endpoints, with junctions merging wires that meet (including a wire
-/// terminating on another's interior, a T-junction, issue #107). On top of
-/// that, same-name labels join nets **within this sheet**: same-name `Global`,
-/// `Power` (power nets like `GND` / `VCC`), or local `Net` labels each merge
-/// every group *on this sheet* carrying that name into one net. `Global` and
-/// `Power` labels also connect by name *across* sheets, but that whole-design
-/// stitching is the cross-sheet increment's job — `build_netlist` sees a single
-/// sheet, so it realises only the on-sheet part. `Hierarchical` labels connect
-/// to a parent sheet's pins rather than to same-name peers, so they too are
-/// left to cross-sheet stitching.
-///
-/// Component pins are projected to world space and attached as [`Terminal`]s to
-/// the net their tip lands on. Output is deterministic: nets are numbered
-/// `1..=N` in sorted-root order and each net's terminals are sorted by
-/// `(reference, pin)`.
-pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
+/// The per-sheet union-find after physical connectivity ([`SheetConnectivity`])
+/// plus same-name label anchoring and on-sheet merging — the "level 1" analysis
+/// shared by [`build_netlist`] and the cross-sheet project stitcher. Every union
+/// (wire, junction, and label anchoring) completes here, before any root is
+/// sampled: sampling a root and then mutating the map again is a correctness
+/// hazard the two-level stitcher relies on this to avoid.
+pub(crate) fn merged_sheet_parent(sheet: &SchematicSheet) -> HashMap<Key, Key> {
     // Start from the physical connectivity core (wires + junction T-merges),
-    // taking an owned copy so the label-merge below never disturbs what the
-    // net-flood reads through `SheetConnectivity`.
+    // owned so the label-merge below never disturbs what the net-flood reads
+    // through `SheetConnectivity`.
     let mut parent = SheetConnectivity::build(sheet).parent;
 
     // Anchor each label to the wire it sits on (endpoint or interior), then
     // merge net roots that share a same-name label whose kind joins by name,
     // within this sheet: Global, Power (power nets), and local Net. (Global and
-    // Power also join across sheets by name — deferred to cross-sheet
-    // stitching; here we only see one sheet.) Hierarchical labels join to a
-    // parent sheet's pins, not to same-name peers, so they are left to
-    // cross-sheet stitching.
+    // Power also join across sheets by name — the cross-sheet stitcher's job;
+    // here we only see one sheet.) Hierarchical labels join to a parent sheet's
+    // pins, not to same-name peers, so they are left to cross-sheet stitching.
     let mut name_root: HashMap<&str, Key> = HashMap::new();
     for lbl in &sheet.labels {
         let lk = pt_key(&lbl.position);
@@ -265,16 +252,32 @@ pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
             }
         }
     }
+    parent
+}
 
-    // Group labels by (merged) net root — the highest-priority one names it.
+/// Group each sheet label under its merged net root, so the highest-priority
+/// label can name the net. `parent` must already be fully merged
+/// ([`merged_sheet_parent`]).
+pub(crate) fn collect_net_labels<'a>(
+    sheet: &'a SchematicSheet,
+    parent: &mut HashMap<Key, Key>,
+) -> HashMap<Key, Vec<&'a Label>> {
     let mut net_labels: HashMap<Key, Vec<&Label>> = HashMap::new();
     for lbl in &sheet.labels {
-        let root = uf_find(&mut parent, pt_key(&lbl.position));
+        let root = uf_find(parent, pt_key(&lbl.position));
         net_labels.entry(root).or_default().push(lbl);
     }
+    net_labels
+}
 
-    // Group connected pins into terminals by net root. A pin only counts if
-    // something actually lands on its tip (wire/bus/label/no-connect).
+/// Project every connected component pin to world space and group it as a
+/// [`Terminal`] under its net root. A pin counts only if something lands on its
+/// tip (wire/bus/label/no-connect) — see [`point_is_connected`]. `parent` must
+/// already be fully merged ([`merged_sheet_parent`]).
+pub(crate) fn collect_terminals(
+    sheet: &SchematicSheet,
+    parent: &mut HashMap<Key, Key>,
+) -> HashMap<Key, Vec<Terminal>> {
     let mut net_terms: HashMap<Key, Vec<Terminal>> = HashMap::new();
     for sym in &sheet.symbols {
         let Some(lib_sym) = sheet.lib_symbols.get(&sym.lib_id) else {
@@ -296,13 +299,38 @@ pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
             } else {
                 lp.pin.name.clone()
             };
-            let root = uf_find(&mut parent, pt_key(&world_pos));
+            let root = uf_find(parent, pt_key(&world_pos));
             net_terms.entry(root).or_default().push(Terminal {
                 reference: sym.reference.clone(),
                 pin,
             });
         }
     }
+    net_terms
+}
+
+/// Build the authoritative [`Netlist`] for a single schematic sheet.
+///
+/// Physical connectivity is [`SheetConnectivity`] — union-find over wire
+/// endpoints, with junctions merging wires that meet (including a wire
+/// terminating on another's interior, a T-junction, issue #107). On top of
+/// that, same-name labels join nets **within this sheet**: same-name `Global`,
+/// `Power` (power nets like `GND` / `VCC`), or local `Net` labels each merge
+/// every group *on this sheet* carrying that name into one net. `Global` and
+/// `Power` labels also connect by name *across* sheets, but that whole-design
+/// stitching is the cross-sheet increment's job — `build_netlist` sees a single
+/// sheet, so it realises only the on-sheet part. `Hierarchical` labels connect
+/// to a parent sheet's pins rather than to same-name peers, so they too are
+/// left to cross-sheet stitching.
+///
+/// Component pins are projected to world space and attached as [`Terminal`]s to
+/// the net their tip lands on. Output is deterministic: nets are numbered
+/// `1..=N` in sorted-root order and each net's terminals are sorted by
+/// `(reference, pin)`.
+pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
+    let mut parent = merged_sheet_parent(sheet);
+    let net_labels = collect_net_labels(sheet, &mut parent);
+    let mut net_terms = collect_terminals(sheet, &mut parent);
 
     // A net exists wherever at least one terminal lands. A label with no pins
     // is a dangling label — it carries no connectivity, so it forms no net.
