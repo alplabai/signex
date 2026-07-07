@@ -60,14 +60,8 @@ impl SymbolTransform {
     }
 }
 
-const EPS: f64 = 1e-4;
-
-fn pt_same(a: &Point, b: &Point) -> bool {
-    (a.x - b.x).abs() < EPS && (a.y - b.y).abs() < EPS
-}
-
-/// 1 µm integer bucket — the union-find key space. Matches ERC's `pt_key`
-/// so both derivations agree on which points are "the same".
+/// 1 µm integer bucket — the union-find key space and the single definition of
+/// "same point" for the whole derivation (D5.5). Matches ERC's `pt_key`.
 pub(crate) fn pt_key(p: &Point) -> Key {
     ((p.x * 1000.0).round() as i64, (p.y * 1000.0).round() as i64)
 }
@@ -86,23 +80,26 @@ pub(crate) fn point_on_segment(p: Key, a: Key, b: Key) -> bool {
     within_x && within_y
 }
 
-/// True when a wire/bus endpoint, label, or no-connect marker sits at `pos`.
-/// Mirrors ERC's `point_is_connected`; a pin is only a terminal of a net if
-/// something actually lands on its world-space tip.
+/// True when a wire endpoint, junction, label, or no-connect marker sits at
+/// `pos`, compared in the 1 µm key space — the *same* "same point" definition
+/// the union-find uses, so the connectivity gate and the net partition can
+/// never disagree (D5.5). A pin is a terminal only if something lands on its
+/// world-space tip.
+///
+/// Junctions count: a pin may tap a wire mid-span where a junction sits (D5.3).
+/// Buses do **not**: a bus is a member bundle, not a single net, and the
+/// union-find never merges buses, so gating on a bus endpoint used to mint a
+/// one-terminal phantom net (D5.4). Direct bus-pin connectivity (through bus
+/// entries) is deliberately out of scope here.
 fn point_is_connected(pos: &Point, sheet: &SchematicSheet) -> bool {
+    let k = pt_key(pos);
     sheet
         .wires
         .iter()
-        .any(|w| pt_same(&w.start, pos) || pt_same(&w.end, pos))
-        || sheet
-            .buses
-            .iter()
-            .any(|b| pt_same(&b.start, pos) || pt_same(&b.end, pos))
-        || sheet.labels.iter().any(|l| pt_same(&l.position, pos))
-        || sheet
-            .no_connects
-            .iter()
-            .any(|nc| pt_same(&nc.position, pos))
+        .any(|w| pt_key(&w.start) == k || pt_key(&w.end) == k)
+        || sheet.junctions.iter().any(|j| pt_key(&j.position) == k)
+        || sheet.labels.iter().any(|l| pt_key(&l.position) == k)
+        || sheet.no_connects.iter().any(|nc| pt_key(&nc.position) == k)
 }
 
 /// Selection priority of a label kind for naming a net: `Global > Power >
@@ -591,6 +588,55 @@ mod tests {
         let sym = sheet.symbols.last_mut().unwrap();
         sym.is_power = true;
         sym.value = value.to_string();
+    }
+
+    #[test]
+    fn pin_on_a_junction_mid_wire_is_a_terminal() {
+        // A pin tapping a wire mid-span where a junction sits is a terminal
+        // (D5.3). The gate used to check only wire endpoints, so this pin was
+        // silently dropped (and ERC flagged it unconnected).
+        let mut sheet = empty_sheet();
+        sheet.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+        sheet.junctions.push(junction(pt(5.0, 0.0)));
+        add_lib(
+            &mut sheet,
+            "R",
+            vec![lib_pin("1", pt(0.0, 0.0), PinDirection::Passive)],
+        );
+        place(&mut sheet, "R1", "R", pt(0.0, 0.0));
+        place(&mut sheet, "R2", "R", pt(5.0, 0.0));
+
+        let netlist = build_netlist(&sheet);
+        assert_eq!(netlist.nets.len(), 1);
+        assert_eq!(
+            netlist.nets[0].terminals.len(),
+            2,
+            "the mid-wire junction pin is a terminal"
+        );
+    }
+
+    #[test]
+    fn pin_on_a_bare_bus_endpoint_forms_no_phantom_net() {
+        // A bus is a bundle, never unioned; gating on a bus endpoint used to
+        // mint a one-terminal phantom net (D5.4). Now it does not connect.
+        let mut sheet = empty_sheet();
+        sheet.buses.push(signex_types::schematic::Bus {
+            uuid: Uuid::nil(),
+            start: pt(0.0, 0.0),
+            end: pt(10.0, 0.0),
+        });
+        add_lib(
+            &mut sheet,
+            "R",
+            vec![lib_pin("1", pt(0.0, 0.0), PinDirection::Passive)],
+        );
+        place(&mut sheet, "R1", "R", pt(0.0, 0.0));
+
+        let netlist = build_netlist(&sheet);
+        assert!(
+            netlist.nets.is_empty(),
+            "a bus-only pin forms no phantom net"
+        );
     }
 
     #[test]
