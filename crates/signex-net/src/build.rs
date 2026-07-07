@@ -25,7 +25,7 @@ use crate::uf::{Key, find as uf_find, union as uf_union};
 /// applying the placed instance's rotation and mirror. Kept in step with
 /// the ERC context's `SymbolTransform` so net membership is identical.
 #[derive(Debug, Clone, Copy)]
-struct SymbolTransform {
+pub(crate) struct SymbolTransform {
     origin: Point,
     rotation_deg: f64,
     mirror_x: bool,
@@ -33,7 +33,7 @@ struct SymbolTransform {
 }
 
 impl SymbolTransform {
-    fn from_symbol(symbol: &Symbol) -> Self {
+    pub(crate) fn from_symbol(symbol: &Symbol) -> Self {
         Self {
             origin: symbol.position,
             rotation_deg: symbol.rotation,
@@ -42,7 +42,7 @@ impl SymbolTransform {
         }
     }
 
-    fn apply(&self, local: Point) -> Point {
+    pub(crate) fn apply(&self, local: Point) -> Point {
         let x = local.x;
         let y = -local.y;
         let rad = -self.rotation_deg.to_radians();
@@ -68,14 +68,14 @@ fn pt_same(a: &Point, b: &Point) -> bool {
 
 /// 1 µm integer bucket — the union-find key space. Matches ERC's `pt_key`
 /// so both derivations agree on which points are "the same".
-fn pt_key(p: &Point) -> Key {
+pub(crate) fn pt_key(p: &Point) -> Key {
     ((p.x * 1000.0).round() as i64, (p.y * 1000.0).round() as i64)
 }
 
 /// True when `p` lies on segment `a`–`b` (endpoints included) in the integer
 /// key space. A zero cross-product (computed in `i128` so large micron
 /// coordinates can't overflow) plus a bounding-box containment check.
-fn point_on_segment(p: Key, a: Key, b: Key) -> bool {
+pub(crate) fn point_on_segment(p: Key, a: Key, b: Key) -> bool {
     let cross =
         (b.0 - a.0) as i128 * (p.1 - a.1) as i128 - (b.1 - a.1) as i128 * (p.0 - a.0) as i128;
     if cross != 0 {
@@ -105,25 +105,80 @@ fn point_is_connected(pos: &Point, sheet: &SchematicSheet) -> bool {
             .any(|nc| pt_same(&nc.position, pos))
 }
 
-/// Highest-priority label name for a net: `Global > Power > Hierarchical >
-/// Net`, ignoring empty text. `None` when the net carries no named label.
-fn best_label_name(labels: &[&Label]) -> Option<String> {
-    labels
-        .iter()
-        .filter(|l| !l.text.is_empty())
-        .max_by_key(|l| match l.label_type {
-            LabelType::Global => 3u8,
-            LabelType::Power => 2,
-            LabelType::Hierarchical => 1,
-            LabelType::Net => 0,
-        })
-        .map(|l| l.text.clone())
+/// Selection priority of a label kind for naming a net: `Global > Power >
+/// Hierarchical > Net`.
+pub(crate) fn label_priority(kind: LabelType) -> u8 {
+    match kind {
+        LabelType::Global => 3,
+        LabelType::Power => 2,
+        LabelType::Hierarchical => 1,
+        LabelType::Net => 0,
+    }
+}
+
+/// The highest-priority name for a net from its labels plus any power-port
+/// carrier values (which rank as `Power`, priority 2). Returns
+/// `(priority, text)`, or `None` when nothing names the net. Ties resolve to
+/// the last candidate in (label-document order, then power-carrier order),
+/// matching the previous `max_by_key` tie-break — so label-only nets keep their
+/// exact names and the single-sheet equivalence gate holds.
+pub(crate) fn best_net_name(labels: &[&Label], power_values: &[&str]) -> Option<(u8, String)> {
+    let mut best: Option<(u8, String)> = None;
+    for l in labels {
+        if l.text.is_empty() {
+            continue;
+        }
+        let p = label_priority(l.label_type);
+        if best.as_ref().is_none_or(|(bp, _)| p >= *bp) {
+            best = Some((p, l.text.clone()));
+        }
+    }
+    for v in power_values {
+        if v.is_empty() {
+            continue;
+        }
+        if best.as_ref().is_none_or(|(bp, _)| 2 >= *bp) {
+            best = Some((2, (*v).to_string()));
+        }
+    }
+    best
+}
+
+/// For each power-port symbol (`is_power && !value.is_empty()`) on the sheet,
+/// the net root each connected pin lands on, tagged with the port's `value`
+/// (its global net name). Power ports are implicit global name carriers — ERC
+/// already reads them so, while `build_netlist` used to ignore them; cross-sheet
+/// supply rails and same-sheet power-only nets both depend on this. `parent`
+/// must already be fully merged ([`merged_sheet_parent`]).
+pub(crate) fn power_name_carriers(
+    sheet: &SchematicSheet,
+    parent: &mut HashMap<Key, Key>,
+) -> Vec<(Key, String)> {
+    let mut carriers = Vec::new();
+    for sym in &sheet.symbols {
+        if !sym.is_power || sym.value.is_empty() {
+            continue;
+        }
+        let Some(lib_sym) = sheet.lib_symbols.get(&sym.lib_id) else {
+            continue;
+        };
+        let xform = SymbolTransform::from_symbol(sym);
+        for lp in &lib_sym.pins {
+            if lp.unit != 0 && lp.unit != sym.unit {
+                continue;
+            }
+            let world_pos = xform.apply(lp.pin.position);
+            let root = uf_find(parent, pt_key(&world_pos));
+            carriers.push((root, sym.value.clone()));
+        }
+    }
+    carriers
 }
 
 /// Net class = the first word of the name before `_`, lowercased (`"i2c"`
 /// from `"I2C_SDA"`); the whole lowercased name when there is no `_`. Empty
 /// for auto-named nets, which carry no class intent.
-fn class_from_name(name: Option<&str>) -> String {
+pub(crate) fn class_from_name(name: Option<&str>) -> String {
     match name {
         Some(n) => n
             .find('_')
@@ -331,6 +386,12 @@ pub(crate) fn collect_terminals(
 pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
     let mut parent = merged_sheet_parent(sheet);
     let net_labels = collect_net_labels(sheet, &mut parent);
+    // Power-port symbols carry their net's global name like a `Power` label, so
+    // a `GND` port names its net even without a `GND` label. Group by root.
+    let mut power_by_root: HashMap<Key, Vec<String>> = HashMap::new();
+    for (root, value) in power_name_carriers(sheet, &mut parent) {
+        power_by_root.entry(root).or_default().push(value);
+    }
     let mut net_terms = collect_terminals(sheet, &mut parent);
 
     // A net exists wherever at least one terminal lands. A label with no pins
@@ -343,9 +404,14 @@ pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
         .enumerate()
         .map(|(idx, root)| {
             let id = NetId(idx as u32 + 1);
-            let label_name = net_labels.get(&root).and_then(|lbls| best_label_name(lbls));
-            let class = class_from_name(label_name.as_deref());
-            let name = label_name.unwrap_or_else(|| format!("N${}", id.0));
+            let labels = net_labels.get(&root).map(Vec::as_slice).unwrap_or(&[]);
+            let power_vals: Vec<&str> = power_by_root
+                .get(&root)
+                .map(|v| v.iter().map(String::as_str).collect())
+                .unwrap_or_default();
+            let selected = best_net_name(labels, &power_vals);
+            let class = class_from_name(selected.as_ref().map(|(_, t)| t.as_str()));
+            let name = selected.map(|(_, t)| t).unwrap_or_else(|| format!("N${}", id.0));
 
             let mut terminals = net_terms.remove(&root).unwrap_or_default();
             terminals.sort_by(|a, b| a.reference.cmp(&b.reference).then(a.pin.cmp(&b.pin)));
@@ -510,6 +576,45 @@ mod tests {
             row_id: None,
             library_version: String::new(),
         });
+    }
+
+    fn place_power(
+        sheet: &mut SchematicSheet,
+        reference: &str,
+        lib_id: &str,
+        value: &str,
+        origin: Point,
+    ) {
+        place(sheet, reference, lib_id, origin);
+        let sym = sheet.symbols.last_mut().unwrap();
+        sym.is_power = true;
+        sym.value = value.to_string();
+    }
+
+    #[test]
+    fn power_port_symbol_names_its_net() {
+        // A power-port symbol (is_power, value "GND") names its net GND with no
+        // GND label — new in #156; build_netlist used to ignore power ports for
+        // naming.
+        let mut sheet = empty_sheet();
+        sheet.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+        add_lib(
+            &mut sheet,
+            "R",
+            vec![lib_pin("1", pt(0.0, 0.0), PinDirection::Passive)],
+        );
+        add_lib(
+            &mut sheet,
+            "PWR",
+            vec![lib_pin("1", pt(0.0, 0.0), PinDirection::Passive)],
+        );
+        place(&mut sheet, "R1", "R", pt(10.0, 0.0));
+        place_power(&mut sheet, "#PWR01", "PWR", "GND", pt(0.0, 0.0));
+
+        let netlist = build_netlist(&sheet);
+        assert_eq!(netlist.nets.len(), 1);
+        assert_eq!(netlist.nets[0].name, "GND");
+        assert_eq!(netlist.nets[0].terminals.len(), 2);
     }
 
     #[test]
