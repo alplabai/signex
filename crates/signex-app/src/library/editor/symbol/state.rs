@@ -12,8 +12,7 @@ use iced::mouse;
 use signex_library::{PinOrientation, Symbol, SymbolGraphicKind, SymbolPin};
 use signex_types::anchor2d::rotate_vec;
 use signex_types::rotation2d::{
-    normalize_angle_rad, rotate_object, Pose2d, Rotatable2d, RotationPivot, RotationSpace,
-    Vec2d,
+    Pose2d, Rotatable2d, RotationPivot, RotationSpace, Vec2d, normalize_angle_rad, rotate_object,
 };
 
 /// Coarse pin classification — kept independent of the canonical
@@ -68,7 +67,7 @@ pub enum SymbolSelection {
     /// selection. Drag moves the group; delete removes only the
     /// selected items; rotate is a no-op to match `All`.
     Multiple {
-        pin_indices:     Vec<usize>,
+        pin_indices: Vec<usize>,
         graphic_indices: Vec<usize>,
     },
 }
@@ -144,9 +143,9 @@ pub fn handle_interaction(handle: GraphicHandle) -> mouse::Interaction {
             mouse::Interaction::ResizingHorizontally
         }
         GraphicHandle::LineEndpoint(_) | GraphicHandle::TextAnchor => mouse::Interaction::Grab,
-        GraphicHandle::CircleRadius
-        | GraphicHandle::ArcStart
-        | GraphicHandle::ArcEnd => mouse::Interaction::Crosshair,
+        GraphicHandle::CircleRadius | GraphicHandle::ArcStart | GraphicHandle::ArcEnd => {
+            mouse::Interaction::Crosshair
+        }
         _ => mouse::Interaction::Grab,
     }
 }
@@ -413,7 +412,10 @@ pub fn select_in_box(
                     || segment_crosses_box(
                         [pin.position[0], pin.position[1]],
                         [bx, by],
-                        xmin, xmax, ymin, ymax,
+                        xmin,
+                        xmax,
+                        ymin,
+                        ymax,
                     )
             }
         };
@@ -425,12 +427,8 @@ pub fn select_in_box(
     let mut graphic_indices = Vec::new();
     for (i, g) in sym.graphics.iter().enumerate() {
         let hit = match kind {
-            BoxSelectKind::Window => {
-                graphic_fully_inside_box(&g.kind, xmin, xmax, ymin, ymax)
-            }
-            BoxSelectKind::Crossing => {
-                graphic_intersects_box(&g.kind, xmin, xmax, ymin, ymax)
-            }
+            BoxSelectKind::Window => graphic_fully_inside_box(&g.kind, xmin, xmax, ymin, ymax),
+            BoxSelectKind::Crossing => graphic_intersects_box(&g.kind, xmin, xmax, ymin, ymax),
         };
         if hit {
             graphic_indices.push(i);
@@ -443,7 +441,10 @@ pub fn select_in_box(
     if pin_indices.len() == sym.pins.len() && graphic_indices.len() == sym.graphics.len() {
         return Some(SymbolSelection::All);
     }
-    Some(SymbolSelection::Multiple { pin_indices, graphic_indices })
+    Some(SymbolSelection::Multiple {
+        pin_indices,
+        graphic_indices,
+    })
 }
 
 fn point_in_box(x: f64, y: f64, xmin: f64, xmax: f64, ymin: f64, ymax: f64) -> bool {
@@ -527,7 +528,9 @@ fn segment_crosses_box(
         ([xmax, ymax], [xmin, ymax]),
         ([xmin, ymax], [xmin, ymin]),
     ];
-    box_edges.iter().any(|(p, q)| segments_intersect(a, b, *p, *q))
+    box_edges
+        .iter()
+        .any(|(p, q)| segments_intersect(a, b, *p, *q))
 }
 
 fn segments_intersect(a: [f64; 2], b: [f64; 2], c: [f64; 2], d: [f64; 2]) -> bool {
@@ -594,7 +597,12 @@ pub fn rotate_selected_about_geometry_center(
     sel: Option<SymbolSelection>,
     clockwise: bool,
 ) {
-    rotate_selected_with_pivot(sym, sel, clockwise, GraphicRotationPivotMode::GeometryCenter);
+    rotate_selected_with_pivot(
+        sym,
+        sel,
+        clockwise,
+        GraphicRotationPivotMode::GeometryCenter,
+    );
 }
 
 fn rotate_graphic_90(
@@ -681,9 +689,7 @@ fn graphic_geometry_center(kind: &SymbolGraphicKind) -> [f64; 2] {
         SymbolGraphicKind::Rectangle { from, to } | SymbolGraphicKind::Line { from, to } => {
             [(from[0] + to[0]) * 0.5, (from[1] + to[1]) * 0.5]
         }
-        SymbolGraphicKind::Circle { center, .. } | SymbolGraphicKind::Arc { center, .. } => {
-            *center
-        }
+        SymbolGraphicKind::Circle { center, .. } | SymbolGraphicKind::Arc { center, .. } => *center,
         SymbolGraphicKind::Text { position, .. } => *position,
     }
 }
@@ -827,12 +833,16 @@ fn translate_graphic_to(sym: &mut Symbol, idx: usize, x: f64, y: f64) {
 pub fn translate_graphic_by(kind: &mut SymbolGraphicKind, dx: f64, dy: f64) {
     match kind {
         SymbolGraphicKind::Rectangle { from, to } => {
-            from[0] += dx; from[1] += dy;
-            to[0]   += dx; to[1]   += dy;
+            from[0] += dx;
+            from[1] += dy;
+            to[0] += dx;
+            to[1] += dy;
         }
         SymbolGraphicKind::Line { from, to } => {
-            from[0] += dx; from[1] += dy;
-            to[0]   += dx; to[1]   += dy;
+            from[0] += dx;
+            from[1] += dy;
+            to[0] += dx;
+            to[1] += dy;
         }
         SymbolGraphicKind::Circle { center, .. } | SymbolGraphicKind::Arc { center, .. } => {
             center[0] += dx;
@@ -871,7 +881,10 @@ pub fn delete_selected(
         }
         Some(SymbolSelection::Field(_)) => None,
         Some(SymbolSelection::All) => None,
-        Some(SymbolSelection::Multiple { pin_indices, graphic_indices }) => {
+        Some(SymbolSelection::Multiple {
+            pin_indices,
+            graphic_indices,
+        }) => {
             // Delete in reverse index order so removing an item doesn't
             // invalidate the indices of the remaining ones.
             let mut pins_desc = pin_indices.clone();
@@ -1058,8 +1071,14 @@ pub fn graphic_handles(sym: &Symbol, idx: usize) -> Vec<(GraphicHandle, [f64; 2]
             // Four edge midpoints.
             (GraphicHandle::RectEdge(0), [(from[0] + to[0]) * 0.5, to[1]]),
             (GraphicHandle::RectEdge(1), [to[0], (from[1] + to[1]) * 0.5]),
-            (GraphicHandle::RectEdge(2), [(from[0] + to[0]) * 0.5, from[1]]),
-            (GraphicHandle::RectEdge(3), [from[0], (from[1] + to[1]) * 0.5]),
+            (
+                GraphicHandle::RectEdge(2),
+                [(from[0] + to[0]) * 0.5, from[1]],
+            ),
+            (
+                GraphicHandle::RectEdge(3),
+                [from[0], (from[1] + to[1]) * 0.5],
+            ),
         ],
         SymbolGraphicKind::Line { from, to } => vec![
             (GraphicHandle::LineEndpoint(0), *from),

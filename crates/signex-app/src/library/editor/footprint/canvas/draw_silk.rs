@@ -113,10 +113,8 @@ pub(super) fn draw_silk_graphics(
                     // frame simply overruns it horizontally, exactly
                     // like Altium's non-autosize text frames.
                     Some((w, h)) => {
-                        let p1 = cstate.world_to_screen((
-                            position[0] + *w as f64,
-                            position[1] + *h as f64,
-                        ));
+                        let p1 = cstate
+                            .world_to_screen((position[0] + *w as f64, position[1] + *h as f64));
                         let rect = Path::rectangle(
                             Point::new(p.x.min(p1.x), p.y.min(p1.y)),
                             iced::Size::new((p1.x - p.x).abs(), (p1.y - p.y).abs()),

@@ -4,11 +4,11 @@
 //! Left side: tree of settings categories.
 //! Right side: settings panel for the selected category.
 
+use crate::render_config::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
 use iced::widget::{
     Column, Space, button, column, container, row, scrollable, svg, text, text_input,
 };
 use iced::{Background, Border, Color, Element, Length, Theme};
-use crate::render_config::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
 use signex_types::theme::ThemeId;
 
 use crate::app::view::dialogs::{
@@ -815,10 +815,12 @@ fn content_appearance<'a>(
         row![
             column![
                 text("Default Grid Size").size(12).color(TEXT_PRI),
-                text("Applied when a symbol library is first opened. \
-                      Can be changed per-library from the canvas status bar.")
-                    .size(10)
-                    .color(TEXT_MUT),
+                text(
+                    "Applied when a symbol library is first opened. \
+                      Can be changed per-library from the canvas status bar."
+                )
+                .size(10)
+                .color(TEXT_MUT),
             ]
             .spacing(3)
             .width(200),

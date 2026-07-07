@@ -37,23 +37,22 @@ mod subforms;
 
 use managers::{grid_manager_btn, render_grid_manager, render_guide_manager, render_other_section};
 use pad_form::{
-    PadEditTarget, PadFormValues, pad_check_row, pad_copper_offset_x_msg,
-    pad_copper_offset_y_msg, pad_corner_radius_msg, pad_designator_msg, pad_drill_diameter_msg,
-    pad_drill_slot_length_msg, pad_electrical_type_msg, pad_feature_bottom_msg,
-    pad_feature_top_msg, pad_hole_rotation_msg, pad_hole_tolerance_minus_msg,
-    pad_hole_tolerance_plus_msg, pad_input_row, pad_locked_msg, pad_mask_bottom_msg,
-    pad_mask_tented_bottom_msg, pad_mask_tented_top_msg, pad_mask_top_msg, pad_net_msg,
-    pad_paste_bottom_msg, pad_paste_enabled_bottom_msg, pad_paste_enabled_top_msg,
-    pad_paste_top_msg, pad_pick_row, pad_plated_msg, pad_rotation_msg, pad_shape_msg,
-    pad_side_msg, pad_size_x_msg, pad_size_y_msg, pad_template_library_msg, pad_template_msg,
+    PadEditTarget, PadFormValues, pad_check_row, pad_copper_offset_x_msg, pad_copper_offset_y_msg,
+    pad_corner_radius_msg, pad_designator_msg, pad_drill_diameter_msg, pad_drill_slot_length_msg,
+    pad_electrical_type_msg, pad_feature_bottom_msg, pad_feature_top_msg, pad_hole_rotation_msg,
+    pad_hole_tolerance_minus_msg, pad_hole_tolerance_plus_msg, pad_input_row, pad_locked_msg,
+    pad_mask_bottom_msg, pad_mask_tented_bottom_msg, pad_mask_tented_top_msg, pad_mask_top_msg,
+    pad_net_msg, pad_paste_bottom_msg, pad_paste_enabled_bottom_msg, pad_paste_enabled_top_msg,
+    pad_paste_top_msg, pad_pick_row, pad_plated_msg, pad_rotation_msg, pad_shape_msg, pad_side_msg,
+    pad_size_x_msg, pad_size_y_msg, pad_template_library_msg, pad_template_msg,
     pad_testpoint_bottom_assembly_msg, pad_testpoint_bottom_fab_msg,
     pad_testpoint_top_assembly_msg, pad_testpoint_top_fab_msg, pad_thermal_relief_msg,
     render_pad_form_pad_features, render_pad_form_pad_stack, render_pad_form_properties,
 };
 use snap_options::{render_snap_subtab_row, render_snapping_mode_row};
 use subforms::{
-    render_cutout_subform, render_keepout_subform, render_pattern_subform,
-    render_pour_subform, render_sketch_pad_subform,
+    render_cutout_subform, render_keepout_subform, render_pattern_subform, render_pour_subform,
+    render_sketch_pad_subform,
 };
 
 /// v0.14.2 — Properties panel body for the Footprint editor. Switches
@@ -111,11 +110,7 @@ pub(super) fn view_footprint_editor_properties<'a>(
         header_row = header_row.push(text(tag).size(11).color(accent_c));
     }
 
-    col = col.push(
-        container(header_row)
-            .padding([6, 8])
-            .width(Length::Fill),
-    );
+    col = col.push(container(header_row).padding([6, 8]).width(Length::Fill));
     col = col.push(super::thin_sep(border_c));
 
     // v0.20 — Altium-parity context-aware Properties panel for the
@@ -136,7 +131,14 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 let values = PadFormValues::from_selected_pad(pad, fp);
                 let target = PadEditTarget::Selected(pad.idx);
                 col = render_pad_form_properties(
-                    col, &values, target, false, muted, primary, border_c, collapsed_sections,
+                    col,
+                    &values,
+                    target,
+                    false,
+                    muted,
+                    primary,
+                    border_c,
+                    collapsed_sections,
                 );
                 col = props_kv_row(
                     col,
@@ -144,17 +146,26 @@ pub(super) fn view_footprint_editor_properties<'a>(
                     input_bg,
                     input_bdr,
                     "Position",
-                    format!(
-                        "({:.3}, {:.3}) mm",
-                        pad.position_mm[0], pad.position_mm[1]
-                    ),
+                    format!("({:.3}, {:.3}) mm", pad.position_mm[0], pad.position_mm[1]),
                 );
                 col = render_pad_form_pad_stack(
-                    col, &values, target, muted, primary, border_c, collapsed_sections,
+                    col,
+                    &values,
+                    target,
+                    muted,
+                    primary,
+                    border_c,
+                    collapsed_sections,
                     &fp.selected_pad_shape_params,
                 );
                 col = render_pad_form_pad_features(
-                    col, &values, target, muted, primary, border_c, collapsed_sections,
+                    col,
+                    &values,
+                    target,
+                    muted,
+                    primary,
+                    border_c,
+                    collapsed_sections,
                 );
                 // v0.21 — "Edit in Sketch" jump button. Visible only
                 // when the pad has a backing sketch entity (auto-
@@ -165,12 +176,10 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 let pad_idx = pad.idx;
                 col = col.push(
                     container(
-                        iced::widget::button(
-                            text("Edit in Sketch ▸").size(10).color(primary),
-                        )
-                        .padding([4, 10])
-                        .on_press(PanelMsg::FpEditorEditPadInSketch { pad_idx })
-                        .style(iced::widget::button::primary),
+                        iced::widget::button(text("Edit in Sketch ▸").size(10).color(primary))
+                            .padding([4, 10])
+                            .on_press(PanelMsg::FpEditorEditPadInSketch { pad_idx })
+                            .style(iced::widget::button::primary),
                     )
                     .padding([6, 8])
                     .width(Length::Fill),
@@ -180,14 +189,12 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 // this, picklists and text_inputs that extend to
                 // Length::Fill end exactly under the scrollbar's
                 // track and the user can't reach the right edge.
-                return scrollable(
-                    container(col).padding(iced::Padding {
-                        top: 0.0,
-                        right: 12.0,
-                        bottom: 0.0,
-                        left: 0.0,
-                    }),
-                )
+                return scrollable(container(col).padding(iced::Padding {
+                    top: 0.0,
+                    right: 12.0,
+                    bottom: 0.0,
+                    left: 0.0,
+                }))
                 .width(Length::Fill)
                 .into();
             }
@@ -206,11 +213,23 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 collapsed_sections,
             );
             col = render_pad_form_pad_stack(
-                col, &values, target, muted, primary, border_c, collapsed_sections,
+                col,
+                &values,
+                target,
+                muted,
+                primary,
+                border_c,
+                collapsed_sections,
                 &[],
             );
             col = render_pad_form_pad_features(
-                col, &values, target, muted, primary, border_c, collapsed_sections,
+                col,
+                &values,
+                target,
+                muted,
+                primary,
+                border_c,
+                collapsed_sections,
             );
             return scrollable(container(col).padding(iced::Padding {
                 top: 0.0,
@@ -242,7 +261,16 @@ pub(super) fn view_footprint_editor_properties<'a>(
             // it); everything else writes back through the dispatcher.
             let values = PadFormValues::from_selected_pad(pad, fp);
             let target = PadEditTarget::Selected(pad.idx);
-            col = render_pad_form_properties(col, &values, target, false, muted, primary, border_c, collapsed_sections);
+            col = render_pad_form_properties(
+                col,
+                &values,
+                target,
+                false,
+                muted,
+                primary,
+                border_c,
+                collapsed_sections,
+            );
             // Position is the one read-only field (use drag to move).
             col = props_kv_row(
                 col,
@@ -252,78 +280,107 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 "Position",
                 format!("({:.3}, {:.3}) mm", pad.position_mm[0], pad.position_mm[1]),
             );
-            col = render_pad_form_pad_stack(col, &values, target, muted, primary, border_c, collapsed_sections, &fp.selected_pad_shape_params);
-            col = render_pad_form_pad_features(col, &values, target, muted, primary, border_c, collapsed_sections);
+            col = render_pad_form_pad_stack(
+                col,
+                &values,
+                target,
+                muted,
+                primary,
+                border_c,
+                collapsed_sections,
+                &fp.selected_pad_shape_params,
+            );
+            col = render_pad_form_pad_features(
+                col,
+                &values,
+                target,
+                muted,
+                primary,
+                border_c,
+                collapsed_sections,
+            );
         }
         (FootprintModeKind::Sketch, _, Some(ent)) => {
-            col = col.push(props_section_header("Sketch entity", "fp_sketch_entity", collapsed_sections, primary, border_c));
+            col = col.push(props_section_header(
+                "Sketch entity",
+                "fp_sketch_entity",
+                collapsed_sections,
+                primary,
+                border_c,
+            ));
             if !fp_is_collapsed("fp_sketch_entity", collapsed_sections) {
-            col = props_kv_row(col, muted, input_bg, input_bdr, "Kind", ent.kind_label.into());
-            if let Some([x, y]) = ent.position_mm {
                 col = props_kv_row(
                     col,
                     muted,
                     input_bg,
                     input_bdr,
-                    "Position",
-                    format!("({x:.3}, {y:.3}) mm"),
+                    "Kind",
+                    ent.kind_label.into(),
                 );
-            }
-            col = props_kv_row(
-                col,
-                muted,
-                input_bg,
-                input_bdr,
-                "Construction",
-                if ent.construction {
-                    "yes".into()
-                } else {
-                    "no".into()
-                },
-            );
-            col = props_kv_row(
-                col,
-                muted,
-                input_bg,
-                input_bdr,
-                "Attached constraints",
-                ent.attached_constraint_count.to_string(),
-            );
-            // v0.22 Phase A3+A4 — DOF state row. Surfaces the solver's
-            // per-Point colour code (blue under / green fully / red
-            // over) so the user can see the constraint state without
-            // hunting for the canvas tint. Hidden when the entity has
-            // no DOF colour (non-Point entities or pre-solve state).
-            if let Some(dof) = ent.dof_state {
-                use signex_sketch::solver::dof::DofColor;
-                let (label, c) = match dof {
-                    DofColor::Under => (
-                        "Under-constrained",
-                        Color::from_rgba(0.20, 0.40, 1.00, 1.00),
-                    ),
-                    DofColor::Full => (
-                        "Fully constrained",
-                        Color::from_rgba(0.20, 0.85, 0.30, 1.00),
-                    ),
-                    DofColor::Over => (
-                        "Over-constrained",
-                        Color::from_rgba(1.00, 0.20, 0.20, 1.00),
-                    ),
-                };
-                col = col.push(
-                    container(
-                        row![
-                            container(text("DOF").size(10).color(muted))
-                                .width(Length::FillPortion(1)),
-                            container(text(label).size(10).color(c))
-                                .width(Length::FillPortion(2)),
-                        ]
-                        .align_y(iced::Alignment::Center),
-                    )
-                    .padding([3, 8])
-                    .width(Length::Fill),
+                if let Some([x, y]) = ent.position_mm {
+                    col = props_kv_row(
+                        col,
+                        muted,
+                        input_bg,
+                        input_bdr,
+                        "Position",
+                        format!("({x:.3}, {y:.3}) mm"),
+                    );
+                }
+                col = props_kv_row(
+                    col,
+                    muted,
+                    input_bg,
+                    input_bdr,
+                    "Construction",
+                    if ent.construction {
+                        "yes".into()
+                    } else {
+                        "no".into()
+                    },
                 );
-            }
+                col = props_kv_row(
+                    col,
+                    muted,
+                    input_bg,
+                    input_bdr,
+                    "Attached constraints",
+                    ent.attached_constraint_count.to_string(),
+                );
+                // v0.22 Phase A3+A4 — DOF state row. Surfaces the solver's
+                // per-Point colour code (blue under / green fully / red
+                // over) so the user can see the constraint state without
+                // hunting for the canvas tint. Hidden when the entity has
+                // no DOF colour (non-Point entities or pre-solve state).
+                if let Some(dof) = ent.dof_state {
+                    use signex_sketch::solver::dof::DofColor;
+                    let (label, c) = match dof {
+                        DofColor::Under => (
+                            "Under-constrained",
+                            Color::from_rgba(0.20, 0.40, 1.00, 1.00),
+                        ),
+                        DofColor::Full => (
+                            "Fully constrained",
+                            Color::from_rgba(0.20, 0.85, 0.30, 1.00),
+                        ),
+                        DofColor::Over => {
+                            ("Over-constrained", Color::from_rgba(1.00, 0.20, 0.20, 1.00))
+                        }
+                    };
+                    col = col.push(
+                        container(
+                            row![
+                                container(text("DOF").size(10).color(muted))
+                                    .width(Length::FillPortion(1)),
+                                container(text(label).size(10).color(c))
+                                    .width(Length::FillPortion(2)),
+                            ]
+                            .align_y(iced::Alignment::Center),
+                        )
+                        .padding([3, 8])
+                        .width(Length::Fill),
+                    );
+                }
             } // end if !fp_sketch_entity collapsed
 
             // v0.24 Phase 3 (Track A3) — Unlink corner radius button.
@@ -343,9 +400,7 @@ pub(super) fn view_footprint_editor_properties<'a>(
                                 text("Unlink corner radius").size(10).color(primary),
                             )
                             .padding([4, 10])
-                            .on_press(PanelMsg::FpEditorUnlinkCornerRadius {
-                                arc_entity_id: id,
-                            })
+                            .on_press(PanelMsg::FpEditorUnlinkCornerRadius { arc_entity_id: id })
                             .style(iced::widget::button::secondary),
                         )
                         .padding([6, 8])
@@ -357,7 +412,13 @@ pub(super) fn view_footprint_editor_properties<'a>(
             // v0.16.2 — Role pick_list. Visible when an entity is
             // selected; pick_list value mirrors the entity's
             // currently-attached `*Attr` slot (or `Unassigned`).
-            col = col.push(props_section_header("Role", "fp_role", collapsed_sections, primary, border_c));
+            col = col.push(props_section_header(
+                "Role",
+                "fp_role",
+                collapsed_sections,
+                primary,
+                border_c,
+            ));
             if !fp_is_collapsed("fp_role", collapsed_sections) {
                 if let Some(id) = fp.selected_sketch_entity_id {
                     use crate::library::messages::RoleTag;
@@ -392,8 +453,14 @@ pub(super) fn view_footprint_editor_properties<'a>(
                     );
                     // v0.23 — Pattern sub-form. Renders when the
                     // selected entity is the source of an Array.
-                    col =
-                        render_pattern_subform(col, fp, muted, primary, border_c, collapsed_sections);
+                    col = render_pattern_subform(
+                        col,
+                        fp,
+                        muted,
+                        primary,
+                        border_c,
+                        collapsed_sections,
+                    );
                 }
             }
         }
@@ -404,117 +471,160 @@ pub(super) fn view_footprint_editor_properties<'a>(
             // content + delete the entry without leaving the
             // Properties panel.
             if let Some(silk) = fp.selected_silk_summary.as_ref() {
-                col = col.push(props_section_header("Silk graphic", "fp_silk_graphic", collapsed_sections, primary, border_c));
+                col = col.push(props_section_header(
+                    "Silk graphic",
+                    "fp_silk_graphic",
+                    collapsed_sections,
+                    primary,
+                    border_c,
+                ));
                 if !fp_is_collapsed("fp_silk_graphic", collapsed_sections) {
-                col = props_kv_row(col, muted, input_bg, input_bdr, "Kind", silk.kind_label.into());
-                col = props_kv_row(col, muted, input_bg, input_bdr, "Index", silk.idx.to_string());
+                    col = props_kv_row(
+                        col,
+                        muted,
+                        input_bg,
+                        input_bdr,
+                        "Kind",
+                        silk.kind_label.into(),
+                    );
+                    col = props_kv_row(
+                        col,
+                        muted,
+                        input_bg,
+                        input_bdr,
+                        "Index",
+                        silk.idx.to_string(),
+                    );
 
-                use crate::panels::SilkKindGeometry;
-                match &silk.kind {
-                    SilkKindGeometry::Line { from_mm, to_mm } => {
-                        col = col.push(pad_input_row(
-                            "From X (mm)",
-                            "0",
-                            format!("{:.3}", from_mm[0]),
-                            PanelMsg::FpEditorSetSilkLineFromX,
-                            muted, primary, border_c,
-                        ));
-                        col = col.push(pad_input_row(
-                            "From Y (mm)",
-                            "0",
-                            format!("{:.3}", from_mm[1]),
-                            PanelMsg::FpEditorSetSilkLineFromY,
-                            muted, primary, border_c,
-                        ));
-                        col = col.push(pad_input_row(
-                            "To X (mm)",
-                            "0",
-                            format!("{:.3}", to_mm[0]),
-                            PanelMsg::FpEditorSetSilkLineToX,
-                            muted, primary, border_c,
-                        ));
-                        col = col.push(pad_input_row(
-                            "To Y (mm)",
-                            "0",
-                            format!("{:.3}", to_mm[1]),
-                            PanelMsg::FpEditorSetSilkLineToY,
-                            muted, primary, border_c,
-                        ));
+                    use crate::panels::SilkKindGeometry;
+                    match &silk.kind {
+                        SilkKindGeometry::Line { from_mm, to_mm } => {
+                            col = col.push(pad_input_row(
+                                "From X (mm)",
+                                "0",
+                                format!("{:.3}", from_mm[0]),
+                                PanelMsg::FpEditorSetSilkLineFromX,
+                                muted,
+                                primary,
+                                border_c,
+                            ));
+                            col = col.push(pad_input_row(
+                                "From Y (mm)",
+                                "0",
+                                format!("{:.3}", from_mm[1]),
+                                PanelMsg::FpEditorSetSilkLineFromY,
+                                muted,
+                                primary,
+                                border_c,
+                            ));
+                            col = col.push(pad_input_row(
+                                "To X (mm)",
+                                "0",
+                                format!("{:.3}", to_mm[0]),
+                                PanelMsg::FpEditorSetSilkLineToX,
+                                muted,
+                                primary,
+                                border_c,
+                            ));
+                            col = col.push(pad_input_row(
+                                "To Y (mm)",
+                                "0",
+                                format!("{:.3}", to_mm[1]),
+                                PanelMsg::FpEditorSetSilkLineToY,
+                                muted,
+                                primary,
+                                border_c,
+                            ));
+                        }
+                        SilkKindGeometry::Text {
+                            position_mm,
+                            content,
+                            size_mm,
+                        } => {
+                            col = col.push(pad_input_row(
+                                "Content",
+                                "TEXT",
+                                content.clone(),
+                                PanelMsg::FpEditorSetSilkText,
+                                muted,
+                                primary,
+                                border_c,
+                            ));
+                            col = col.push(pad_input_row(
+                                "Position X (mm)",
+                                "0",
+                                format!("{:.3}", position_mm[0]),
+                                PanelMsg::FpEditorSetSilkTextPositionX,
+                                muted,
+                                primary,
+                                border_c,
+                            ));
+                            col = col.push(pad_input_row(
+                                "Position Y (mm)",
+                                "0",
+                                format!("{:.3}", position_mm[1]),
+                                PanelMsg::FpEditorSetSilkTextPositionY,
+                                muted,
+                                primary,
+                                border_c,
+                            ));
+                            col = col.push(pad_input_row(
+                                "Size (mm)",
+                                "1.0",
+                                format!("{:.3}", size_mm),
+                                PanelMsg::FpEditorSetSilkTextSize,
+                                muted,
+                                primary,
+                                border_c,
+                            ));
+                        }
+                        SilkKindGeometry::Other => {
+                            col = col.push(
+                                container(
+                                    text("Use Sketch mode for parametric editing")
+                                        .size(9)
+                                        .color(muted),
+                                )
+                                .padding([4, 8])
+                                .width(Length::Fill),
+                            );
+                        }
                     }
-                    SilkKindGeometry::Text { position_mm, content, size_mm } => {
-                        col = col.push(pad_input_row(
-                            "Content",
-                            "TEXT",
-                            content.clone(),
-                            PanelMsg::FpEditorSetSilkText,
-                            muted, primary, border_c,
-                        ));
-                        col = col.push(pad_input_row(
-                            "Position X (mm)",
-                            "0",
-                            format!("{:.3}", position_mm[0]),
-                            PanelMsg::FpEditorSetSilkTextPositionX,
-                            muted, primary, border_c,
-                        ));
-                        col = col.push(pad_input_row(
-                            "Position Y (mm)",
-                            "0",
-                            format!("{:.3}", position_mm[1]),
-                            PanelMsg::FpEditorSetSilkTextPositionY,
-                            muted, primary, border_c,
-                        ));
-                        col = col.push(pad_input_row(
-                            "Size (mm)",
-                            "1.0",
-                            format!("{:.3}", size_mm),
-                            PanelMsg::FpEditorSetSilkTextSize,
-                            muted, primary, border_c,
-                        ));
-                    }
-                    SilkKindGeometry::Other => {
-                        col = col.push(
-                            container(
-                                text("Use Sketch mode for parametric editing")
-                                    .size(9)
-                                    .color(muted),
-                            )
-                            .padding([4, 8])
-                            .width(Length::Fill),
-                        );
-                    }
-                }
 
-                // Stroke width (all kinds).
-                col = col.push(pad_input_row(
-                    "Stroke width (mm)",
-                    "0.15",
-                    format!("{:.3}", silk.stroke_width_mm),
-                    PanelMsg::FpEditorSetSilkStrokeWidth,
-                    muted, primary, border_c,
-                ));
-                // Filled flag (only meaningful for closed shapes;
-                // surfacing for all so the user can flip it without
-                // hunting for the right tool).
-                col = col.push(pad_check_row(
-                    "Filled",
-                    silk.filled,
-                    PanelMsg::FpEditorToggleSilkFilled,
-                    muted, primary,
-                ));
-                col = col.push(
-                    container(
-                        row![grid_manager_btn(
-                            "Delete",
-                            Some(PanelMsg::FpEditorDeleteSelectedSilk),
-                            primary,
-                            border_c,
-                        )]
-                        .spacing(4)
-                        .align_y(iced::Alignment::Center),
-                    )
-                    .padding([4, 8])
-                    .width(Length::Fill),
-                );
+                    // Stroke width (all kinds).
+                    col = col.push(pad_input_row(
+                        "Stroke width (mm)",
+                        "0.15",
+                        format!("{:.3}", silk.stroke_width_mm),
+                        PanelMsg::FpEditorSetSilkStrokeWidth,
+                        muted,
+                        primary,
+                        border_c,
+                    ));
+                    // Filled flag (only meaningful for closed shapes;
+                    // surfacing for all so the user can flip it without
+                    // hunting for the right tool).
+                    col = col.push(pad_check_row(
+                        "Filled",
+                        silk.filled,
+                        PanelMsg::FpEditorToggleSilkFilled,
+                        muted,
+                        primary,
+                    ));
+                    col = col.push(
+                        container(
+                            row![grid_manager_btn(
+                                "Delete",
+                                Some(PanelMsg::FpEditorDeleteSelectedSilk),
+                                primary,
+                                border_c,
+                            )]
+                            .spacing(4)
+                            .align_y(iced::Alignment::Center),
+                        )
+                        .padding([4, 8])
+                        .width(Length::Fill),
+                    );
                 } // end if !fp_silk_graphic collapsed
             } else {
                 // Selection Filter — Altium-style flat pill grid for
@@ -538,7 +648,13 @@ pub(super) fn view_footprint_editor_properties<'a>(
                     accent_c,
                     tag_hover,
                 ));
-                col = col.push(props_section_header("Footprint", "fp_footprint", collapsed_sections, primary, border_c));
+                col = col.push(props_section_header(
+                    "Footprint",
+                    "fp_footprint",
+                    collapsed_sections,
+                    primary,
+                    border_c,
+                ));
                 if !fp_is_collapsed("fp_footprint", collapsed_sections) {
                     // Editable Name — text_input bound to the active
                     // internal footprint's `name` field via
@@ -590,9 +706,23 @@ pub(super) fn view_footprint_editor_properties<'a>(
                         muted,
                         PanelMsg::FpEditorSetFootprintHeight,
                     ));
-                    col = props_kv_row(col, muted, input_bg, input_bdr, "Version", fp.version.clone());
+                    col = props_kv_row(
+                        col,
+                        muted,
+                        input_bg,
+                        input_bdr,
+                        "Version",
+                        fp.version.clone(),
+                    );
                     col = props_kv_row(col, muted, input_bg, input_bdr, "Mode", mode_label.into());
-                    col = props_kv_row(col, muted, input_bg, input_bdr, "Pads", fp.pad_count.to_string());
+                    col = props_kv_row(
+                        col,
+                        muted,
+                        input_bg,
+                        input_bdr,
+                        "Pads",
+                        fp.pad_count.to_string(),
+                    );
                     if fp.sketch_entity_count > 0 || fp.sketch_constraint_count > 0 {
                         col = props_kv_row(
                             col,
@@ -629,7 +759,13 @@ pub(super) fn view_footprint_editor_properties<'a>(
     // Earlier (v0.17.0) the section was tucked inside the empty-
     // canvas summary which made the controls disappear the moment
     // the user clicked a pad.
-    col = col.push(props_section_header("Snap Options", "fp_snap_options", collapsed_sections, primary, border_c));
+    col = col.push(props_section_header(
+        "Snap Options",
+        "fp_snap_options",
+        collapsed_sections,
+        primary,
+        border_c,
+    ));
     let snap_open = !fp_is_collapsed("fp_snap_options", collapsed_sections);
     let opts = fp.snap_options;
     if snap_open {
@@ -641,36 +777,39 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 .padding([4, 8])
                 .width(Length::Fill),
         );
-        let snap_pill = |label: &'static str, flag: SnapOptionFlag, on: bool| -> Element<'static, PanelMsg> {
-            iced::widget::button(
-                text(label)
-                    .size(10)
-                    .color(if on { primary } else { muted })
-                    .align_x(iced::alignment::Horizontal::Center),
-            )
-            .padding([3, 12])
-            .on_press(PanelMsg::FpEditorToggleSnapOption(flag))
-            .style(move |_: &Theme, status: iced::widget::button::Status| {
-                let bg = match status {
-                    iced::widget::button::Status::Hovered => Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.06))),
-                    _ => Some(Background::Color(if on {
-                        Color::from_rgba8(0x2E, 0x33, 0x45, 1.0)
-                    } else {
-                        Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0)
-                    })),
-                };
-                iced::widget::button::Style {
-                    background: bg,
-                    border: Border {
-                        width: 1.0,
-                        radius: 2.0.into(),
-                        color: input_bdr,
-                    },
-                    ..iced::widget::button::Style::default()
-                }
-            })
-            .into()
-        };
+        let snap_pill =
+            |label: &'static str, flag: SnapOptionFlag, on: bool| -> Element<'static, PanelMsg> {
+                iced::widget::button(
+                    text(label)
+                        .size(10)
+                        .color(if on { primary } else { muted })
+                        .align_x(iced::alignment::Horizontal::Center),
+                )
+                .padding([3, 12])
+                .on_press(PanelMsg::FpEditorToggleSnapOption(flag))
+                .style(move |_: &Theme, status: iced::widget::button::Status| {
+                    let bg = match status {
+                        iced::widget::button::Status::Hovered => {
+                            Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.06)))
+                        }
+                        _ => Some(Background::Color(if on {
+                            Color::from_rgba8(0x2E, 0x33, 0x45, 1.0)
+                        } else {
+                            Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0)
+                        })),
+                    };
+                    iced::widget::button::Style {
+                        background: bg,
+                        border: Border {
+                            width: 1.0,
+                            radius: 2.0.into(),
+                            color: input_bdr,
+                        },
+                        ..iced::widget::button::Style::default()
+                    }
+                })
+                .into()
+            };
         col = col.push(
             container(
                 row![
@@ -699,7 +838,10 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 .width(Length::Fill),
         );
         let header = row![
-            text("On/Off").size(10).color(muted).width(Length::Fixed(60.0)),
+            text("On/Off")
+                .size(10)
+                .color(muted)
+                .width(Length::Fixed(60.0)),
             text("Objects").size(10).color(muted).width(Length::Fill),
         ]
         .spacing(4)
@@ -707,18 +849,54 @@ pub(super) fn view_footprint_editor_properties<'a>(
         col = col.push(container(header).padding([2, 8]).width(Length::Fill));
         col = col.push(super::thin_sep(border_c));
         let snap_rows: &[(&str, SnapOptionFlag, bool)] = &[
-            ("Track Vertices", SnapOptionFlag::TrackVertices, opts.snap_track_vertices),
-            ("Track Lines", SnapOptionFlag::TrackLines, opts.snap_track_lines),
-            ("Arc Centers", SnapOptionFlag::ArcCenters, opts.snap_arc_centers),
-            ("Intersections", SnapOptionFlag::Intersections, opts.snap_intersections),
-            ("Pad Centers", SnapOptionFlag::PadCenters, opts.snap_pad_centers),
-            ("Pad Vertices", SnapOptionFlag::PadVertices, opts.snap_pad_vertices),
+            (
+                "Track Vertices",
+                SnapOptionFlag::TrackVertices,
+                opts.snap_track_vertices,
+            ),
+            (
+                "Track Lines",
+                SnapOptionFlag::TrackLines,
+                opts.snap_track_lines,
+            ),
+            (
+                "Arc Centers",
+                SnapOptionFlag::ArcCenters,
+                opts.snap_arc_centers,
+            ),
+            (
+                "Intersections",
+                SnapOptionFlag::Intersections,
+                opts.snap_intersections,
+            ),
+            (
+                "Pad Centers",
+                SnapOptionFlag::PadCenters,
+                opts.snap_pad_centers,
+            ),
+            (
+                "Pad Vertices",
+                SnapOptionFlag::PadVertices,
+                opts.snap_pad_vertices,
+            ),
             ("Pad Edges", SnapOptionFlag::PadEdges, opts.snap_pad_edges),
-            ("Via Centers", SnapOptionFlag::ViaCenters, opts.snap_via_centers),
+            (
+                "Via Centers",
+                SnapOptionFlag::ViaCenters,
+                opts.snap_via_centers,
+            ),
             ("Texts", SnapOptionFlag::Texts, opts.snap_texts),
             ("Regions", SnapOptionFlag::Regions, opts.snap_regions),
-            ("Footprint Origins", SnapOptionFlag::FootprintOrigins, opts.snap_footprint_origins),
-            ("3D Body Snap Points", SnapOptionFlag::Body3dPoints, opts.snap_3d_body_points),
+            (
+                "Footprint Origins",
+                SnapOptionFlag::FootprintOrigins,
+                opts.snap_footprint_origins,
+            ),
+            (
+                "3D Body Snap Points",
+                SnapOptionFlag::Body3dPoints,
+                opts.snap_3d_body_points,
+            ),
         ];
         for &(label, flag, on) in snap_rows {
             let label_owned: String = label.to_string();
@@ -731,7 +909,10 @@ pub(super) fn view_footprint_editor_properties<'a>(
                 )
                 .width(Length::Fixed(60.0))
                 .padding([0, 0]),
-                text(label_owned).size(10).color(primary).width(Length::Fill),
+                text(label_owned)
+                    .size(10)
+                    .color(primary)
+                    .width(Length::Fill),
             ]
             .spacing(4)
             .align_y(iced::Alignment::Center);
@@ -739,7 +920,10 @@ pub(super) fn view_footprint_editor_properties<'a>(
         }
 
         // Snap Distance + Axis Snap Range numeric rows.
-        let mk_num_row = |label: &str, value: f64, on_input: fn(String) -> PanelMsg| -> Element<'static, PanelMsg> {
+        let mk_num_row = |label: &str,
+                          value: f64,
+                          on_input: fn(String) -> PanelMsg|
+         -> Element<'static, PanelMsg> {
             container(
                 row![
                     text(label.to_string())
@@ -772,27 +956,53 @@ pub(super) fn view_footprint_editor_properties<'a>(
             .width(Length::Fill)
             .into()
         };
-        col = col.push(mk_num_row("Snap Distance", opts.snap_distance_mm, PanelMsg::FpEditorSetSnapDistance));
-        col = col.push(mk_num_row("Axis Snap Range", opts.axis_snap_range_mm, PanelMsg::FpEditorSetAxisSnapRange));
+        col = col.push(mk_num_row(
+            "Snap Distance",
+            opts.snap_distance_mm,
+            PanelMsg::FpEditorSetSnapDistance,
+        ));
+        col = col.push(mk_num_row(
+            "Axis Snap Range",
+            opts.axis_snap_range_mm,
+            PanelMsg::FpEditorSetAxisSnapRange,
+        ));
 
         // Grid step retained for parity with v0.18.x flow.
-        col = col.push(mk_num_row("Grid step (mm)", opts.grid_step_mm, PanelMsg::FpEditorSetSnapGridStep));
+        col = col.push(mk_num_row(
+            "Grid step (mm)",
+            opts.grid_step_mm,
+            PanelMsg::FpEditorSetSnapGridStep,
+        ));
     } // end if snap_open
 
     // v0.18.13 — Library Options layout (Grid Manager / Guide
     // Manager / Other) below Snap Options, only on the no-selection
     // body to mirror Altium's per-state Properties surface.
     if no_selection {
-        col = col.push(props_section_header("Grid Manager", "fp_grid_manager", collapsed_sections, primary, border_c));
+        col = col.push(props_section_header(
+            "Grid Manager",
+            "fp_grid_manager",
+            collapsed_sections,
+            primary,
+            border_c,
+        ));
         if !fp_is_collapsed("fp_grid_manager", collapsed_sections) {
             col = render_grid_manager(col, fp, primary, muted, border_c);
         }
         // Guide Manager removed in v0.13 — sketch-mode owns guides /
         // construction geometry; the standalone Guide Manager was
         // redundant.
-        col = col.push(props_section_header("Other", "fp_other", collapsed_sections, primary, border_c));
+        col = col.push(props_section_header(
+            "Other",
+            "fp_other",
+            collapsed_sections,
+            primary,
+            border_c,
+        ));
         if !fp_is_collapsed("fp_other", collapsed_sections) {
-            col = render_other_section(col, fp, primary, muted, border_c, input_bg, input_bdr, unit, seg_hover);
+            col = render_other_section(
+                col, fp, primary, muted, border_c, input_bg, input_bdr, unit, seg_hover,
+            );
         }
     }
 
@@ -803,159 +1013,220 @@ pub(super) fn view_footprint_editor_properties<'a>(
     // inspector strip that shipped in v0.13.1.
     if fp.mode_kind == FootprintModeKind::Sketch {
         // Parameters
-        col = col.push(props_section_header("Parameters", "fp_parameters", collapsed_sections, primary, border_c));
+        col = col.push(props_section_header(
+            "Parameters",
+            "fp_parameters",
+            collapsed_sections,
+            primary,
+            border_c,
+        ));
         if !fp_is_collapsed("fp_parameters", collapsed_sections) {
-        if fp.sketch_parameters.is_empty() {
-            col = col.push(
-                container(text("(none — add via expression)").size(10).color(muted))
-                    .padding([2, 8])
-                    .width(Length::Fill),
-            );
-        } else {
-            for (name, expr) in &fp.sketch_parameters {
-                let name_clone = name.clone();
-                let row = row![
-                    text(name)
-                        .size(10)
-                        .color(primary)
-                        .width(Length::Fixed(110.0)),
-                    text_input("expression…", expr)
-                        .size(10)
-                        .padding(2)
-                        .style(move |_: &Theme, _| iced::widget::text_input::Style {
-                            background: iced::Background::Color(iced::Color::from_rgba(
-                                1.0, 1.0, 1.0, 0.04,
-                            )),
-                            border: iced::Border {
-                                width: 1.0,
-                                radius: 2.0.into(),
-                                color: border_c,
-                            },
-                            icon: iced::Color::TRANSPARENT,
-                            placeholder: muted,
-                            value: primary,
-                            selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
-                        })
-                        .on_input(move |new_expr| PanelMsg::FpEditorEditParameter {
-                            name: name_clone.clone(),
-                            expr: new_expr,
-                        }),
-                ]
-                .spacing(6)
-                .align_y(iced::Alignment::Center);
-                col = col.push(container(row).padding([2, 8]).width(Length::Fill));
+            if fp.sketch_parameters.is_empty() {
+                col = col.push(
+                    container(text("(none — add via expression)").size(10).color(muted))
+                        .padding([2, 8])
+                        .width(Length::Fill),
+                );
+            } else {
+                for (name, expr) in &fp.sketch_parameters {
+                    let name_clone = name.clone();
+                    let row = row![
+                        text(name)
+                            .size(10)
+                            .color(primary)
+                            .width(Length::Fixed(110.0)),
+                        text_input("expression…", expr)
+                            .size(10)
+                            .padding(2)
+                            .style(move |_: &Theme, _| iced::widget::text_input::Style {
+                                background: iced::Background::Color(iced::Color::from_rgba(
+                                    1.0, 1.0, 1.0, 0.04,
+                                )),
+                                border: iced::Border {
+                                    width: 1.0,
+                                    radius: 2.0.into(),
+                                    color: border_c,
+                                },
+                                icon: iced::Color::TRANSPARENT,
+                                placeholder: muted,
+                                value: primary,
+                                selection: iced::Color::from_rgba(0.4, 0.6, 1.0, 0.4),
+                            })
+                            .on_input(move |new_expr| PanelMsg::FpEditorEditParameter {
+                                name: name_clone.clone(),
+                                expr: new_expr,
+                            }),
+                    ]
+                    .spacing(6)
+                    .align_y(iced::Alignment::Center);
+                    col = col.push(container(row).padding([2, 8]).width(Length::Fill));
+                }
             }
-        }
         } // end if !fp_parameters collapsed
 
         // DOF / Last solve
-        col = col.push(props_section_header("DOF / Last solve", "fp_dof", collapsed_sections, primary, border_c));
+        col = col.push(props_section_header(
+            "DOF / Last solve",
+            "fp_dof",
+            collapsed_sections,
+            primary,
+            border_c,
+        ));
         if !fp_is_collapsed("fp_dof", collapsed_sections) {
-        col = props_kv_row(
-            col,
-            muted,
-            input_bg,
-            input_bdr,
-            "Sketch entities",
-            fp.sketch_entity_count.to_string(),
-        );
-        col = props_kv_row(
-            col,
-            muted,
-            input_bg,
-            input_bdr,
-            "Constraints",
-            fp.sketch_constraint_count.to_string(),
-        );
-        if let Some(s) = fp.last_solve.as_ref() {
-            col = props_kv_row(col, muted, input_bg, input_bdr, "Iterations", s.iterations.to_string());
             col = props_kv_row(
                 col,
                 muted,
                 input_bg,
                 input_bdr,
-                "Elapsed",
-                format!("{} ms", s.elapsed_ms),
+                "Sketch entities",
+                fp.sketch_entity_count.to_string(),
             );
             col = props_kv_row(
                 col,
                 muted,
                 input_bg,
                 input_bdr,
-                "Residual norm",
-                format!("{:.3e}", s.final_residual_norm),
+                "Constraints",
+                fp.sketch_constraint_count.to_string(),
             );
-            col = props_kv_row(
-                col,
-                muted,
-                input_bg,
-                input_bdr,
-                "Over-constrained",
-                s.over_constraint_count.to_string(),
-            );
+            if let Some(s) = fp.last_solve.as_ref() {
+                col = props_kv_row(
+                    col,
+                    muted,
+                    input_bg,
+                    input_bdr,
+                    "Iterations",
+                    s.iterations.to_string(),
+                );
+                col = props_kv_row(
+                    col,
+                    muted,
+                    input_bg,
+                    input_bdr,
+                    "Elapsed",
+                    format!("{} ms", s.elapsed_ms),
+                );
+                col = props_kv_row(
+                    col,
+                    muted,
+                    input_bg,
+                    input_bdr,
+                    "Residual norm",
+                    format!("{:.3e}", s.final_residual_norm),
+                );
+                col = props_kv_row(
+                    col,
+                    muted,
+                    input_bg,
+                    input_bdr,
+                    "Over-constrained",
+                    s.over_constraint_count.to_string(),
+                );
 
-            // v0.22 Phase E3+E4 — list of over-constrained
-            // constraints. Each row shows the kind label + residual
-            // magnitude, sorted descending so the worst offender is
-            // first. Click → select the focus entity (first Point /
-            // Line referenced by the constraint) so the canvas pans
-            // and the red constraint icon sits in view. Hidden when
-            // count == 0; the user reads "Over-constrained: 0" and
-            // moves on.
-            if !s.over_constraints.is_empty() {
+                // v0.22 Phase E3+E4 — list of over-constrained
+                // constraints. Each row shows the kind label + residual
+                // magnitude, sorted descending so the worst offender is
+                // first. Click → select the focus entity (first Point /
+                // Line referenced by the constraint) so the canvas pans
+                // and the red constraint icon sits in view. Hidden when
+                // count == 0; the user reads "Over-constrained: 0" and
+                // moves on.
+                if !s.over_constraints.is_empty() {
+                    col = col.push(
+                        container(text("Conflicts (worst first)").size(10).color(muted))
+                            .padding([4, 8])
+                            .width(Length::Fill),
+                    );
+                    for oc in s.over_constraints.iter().take(8) {
+                        let label =
+                            format!("{} — residual {:.3e}", oc.kind_label, oc.residual_magnitude);
+                        let inner: Element<'_, _> = if let Some(focus_id) = oc.focus_entity_id {
+                            button(
+                                text(label)
+                                    .size(10)
+                                    .color(Color::from_rgba(1.00, 0.55, 0.55, 1.00)),
+                            )
+                            .padding([2, 8])
+                            .width(Length::Fill)
+                            .on_press(PanelMsg::FpEditorSelectSketchEntity { id: focus_id })
+                            .style(move |_t: &Theme, _| iced::widget::button::Style {
+                                background: Some(iced::Background::Color(iced::Color::from_rgba(
+                                    1.0, 0.30, 0.30, 0.06,
+                                ))),
+                                ..iced::widget::button::Style::default()
+                            })
+                            .into()
+                        } else {
+                            container(
+                                text(label)
+                                    .size(10)
+                                    .color(Color::from_rgba(1.00, 0.55, 0.55, 1.00)),
+                            )
+                            .padding([2, 8])
+                            .width(Length::Fill)
+                            .into()
+                        };
+                        // v0.23 — per-row precision. Each row passes its
+                        // own ConstraintId so the canvas isolates that
+                        // single constraint at full red and dims the
+                        // rest (including other over-constraints).
+                        let cid = oc.constraint_id;
+                        let oc_row: Element<'_, _> = iced::widget::mouse_area(inner)
+                            .on_enter(PanelMsg::FpEditorHoverOverConstraint {
+                                constraint: Some(cid),
+                            })
+                            .on_exit(PanelMsg::FpEditorHoverOverConstraint { constraint: None })
+                            .into();
+                        col = col.push(oc_row);
+                    }
+                    if s.over_constraints.len() > 8 {
+                        col = col.push(
+                            container(
+                                text(format!("… +{} more", s.over_constraints.len() - 8))
+                                    .size(9)
+                                    .color(muted),
+                            )
+                            .padding([2, 8])
+                            .width(Length::Fill),
+                        );
+                    }
+                }
+            } else {
                 col = col.push(
-                    container(text("Conflicts (worst first)").size(10).color(muted))
-                        .padding([4, 8])
+                    container(text("(no solve yet)").size(10).color(muted))
+                        .padding([2, 8])
                         .width(Length::Fill),
                 );
-                for oc in s.over_constraints.iter().take(8) {
-                    let label = format!(
-                        "{} — residual {:.3e}",
-                        oc.kind_label, oc.residual_magnitude
+            }
+        } // end if !fp_dof collapsed
+
+        // Solve warnings
+        col = col.push(props_section_header(
+            "Solve warnings",
+            "fp_solve_warnings",
+            collapsed_sections,
+            primary,
+            border_c,
+        ));
+        if !fp_is_collapsed("fp_solve_warnings", collapsed_sections) {
+            if fp.solve_warnings.is_empty() {
+                col = col.push(
+                    container(text("(none)").size(10).color(muted))
+                        .padding([2, 8])
+                        .width(Length::Fill),
+                );
+            } else {
+                for w in fp.solve_warnings.iter().take(8) {
+                    col = col.push(
+                        container(text(w).size(9).color(muted))
+                            .padding([2, 8])
+                            .width(Length::Fill),
                     );
-                    let inner: Element<'_, _> = if let Some(focus_id) = oc.focus_entity_id {
-                        button(
-                            text(label)
-                                .size(10)
-                                .color(Color::from_rgba(1.00, 0.55, 0.55, 1.00)),
-                        )
-                        .padding([2, 8])
-                        .width(Length::Fill)
-                        .on_press(PanelMsg::FpEditorSelectSketchEntity { id: focus_id })
-                        .style(move |_t: &Theme, _| iced::widget::button::Style {
-                            background: Some(iced::Background::Color(
-                                iced::Color::from_rgba(1.0, 0.30, 0.30, 0.06),
-                            )),
-                            ..iced::widget::button::Style::default()
-                        })
-                        .into()
-                    } else {
-                        container(
-                            text(label)
-                                .size(10)
-                                .color(Color::from_rgba(1.00, 0.55, 0.55, 1.00)),
-                        )
-                        .padding([2, 8])
-                        .width(Length::Fill)
-                        .into()
-                    };
-                    // v0.23 — per-row precision. Each row passes its
-                    // own ConstraintId so the canvas isolates that
-                    // single constraint at full red and dims the
-                    // rest (including other over-constraints).
-                    let cid = oc.constraint_id;
-                    let oc_row: Element<'_, _> = iced::widget::mouse_area(inner)
-                        .on_enter(PanelMsg::FpEditorHoverOverConstraint {
-                            constraint: Some(cid),
-                        })
-                        .on_exit(PanelMsg::FpEditorHoverOverConstraint { constraint: None })
-                        .into();
-                    col = col.push(oc_row);
                 }
-                if s.over_constraints.len() > 8 {
+                if fp.solve_warnings.len() > 8 {
                     col = col.push(
                         container(
-                            text(format!("… +{} more", s.over_constraints.len() - 8))
+                            text(format!("… +{} more", fp.solve_warnings.len() - 8))
                                 .size(9)
                                 .color(muted),
                         )
@@ -964,44 +1235,6 @@ pub(super) fn view_footprint_editor_properties<'a>(
                     );
                 }
             }
-        } else {
-            col = col.push(
-                container(text("(no solve yet)").size(10).color(muted))
-                    .padding([2, 8])
-                    .width(Length::Fill),
-            );
-        }
-        } // end if !fp_dof collapsed
-
-        // Solve warnings
-        col = col.push(props_section_header("Solve warnings", "fp_solve_warnings", collapsed_sections, primary, border_c));
-        if !fp_is_collapsed("fp_solve_warnings", collapsed_sections) {
-        if fp.solve_warnings.is_empty() {
-            col = col.push(
-                container(text("(none)").size(10).color(muted))
-                    .padding([2, 8])
-                    .width(Length::Fill),
-            );
-        } else {
-            for w in fp.solve_warnings.iter().take(8) {
-                col = col.push(
-                    container(text(w).size(9).color(muted))
-                        .padding([2, 8])
-                        .width(Length::Fill),
-                );
-            }
-            if fp.solve_warnings.len() > 8 {
-                col = col.push(
-                    container(
-                        text(format!("… +{} more", fp.solve_warnings.len() - 8))
-                            .size(9)
-                            .color(muted),
-                    )
-                    .padding([2, 8])
-                    .width(Length::Fill),
-                );
-            }
-        }
         } // end if !fp_solve_warnings collapsed
     }
 
@@ -1108,5 +1341,7 @@ fn props_kv_row<'a>(
     key: &str,
     value: String,
 ) -> Column<'a, PanelMsg> {
-    col.push(super::form_input_row(key, &value, label_c, input_bg, input_bdr))
+    col.push(super::form_input_row(
+        key, &value, label_c, input_bg, input_bdr,
+    ))
 }

@@ -290,17 +290,13 @@ impl Signex {
         file_path: &std::path::Path,
         default_message: &str,
     ) {
-        let owning = self
-            .document_state
-            .projects
-            .iter()
-            .find(|p| {
-                if !p.data.enable_git {
-                    return false;
-                }
-                let dir = std::path::Path::new(&p.data.dir);
-                file_path.starts_with(dir)
-            });
+        let owning = self.document_state.projects.iter().find(|p| {
+            if !p.data.enable_git {
+                return false;
+            }
+            let dir = std::path::Path::new(&p.data.dir);
+            file_path.starts_with(dir)
+        });
         let Some(project) = owning else {
             return;
         };
@@ -425,11 +421,7 @@ impl Signex {
     /// message; nothing destructive runs (the working tree changes
     /// only on a successful blob read + atomic write).
     pub(crate) fn handle_history_restore_clicked(&mut self, sha: &str) {
-        let active = match self
-            .document_state
-            .tabs
-            .get(self.document_state.active_tab)
-        {
+        let active = match self.document_state.tabs.get(self.document_state.active_tab) {
             Some(t) => t,
             None => return,
         };
@@ -439,14 +431,10 @@ impl Signex {
         }
 
         // Find the owning project by directory prefix.
-        let owning = self
-            .document_state
-            .projects
-            .iter()
-            .find(|p| {
-                let dir = std::path::Path::new(&p.data.dir);
-                full_path.starts_with(dir)
-            });
+        let owning = self.document_state.projects.iter().find(|p| {
+            let dir = std::path::Path::new(&p.data.dir);
+            full_path.starts_with(dir)
+        });
         let Some(project) = owning else {
             crate::diagnostics::log_warning(format!(
                 "[git] restore: no owning project for {}",
@@ -460,18 +448,19 @@ impl Signex {
             Err(_) => return,
         };
 
-        let adapter = match signex_library::adapters::local_git_project::LocalGitProjectAdapter::open_or_init(
-            project_root.clone(),
-        ) {
-            Ok(a) => a,
-            Err(e) => {
-                crate::diagnostics::log_warning(format!(
-                    "[git] restore: open_or_init({}) failed: {e}",
-                    project_root.display()
-                ));
-                return;
-            }
-        };
+        let adapter =
+            match signex_library::adapters::local_git_project::LocalGitProjectAdapter::open_or_init(
+                project_root.clone(),
+            ) {
+                Ok(a) => a,
+                Err(e) => {
+                    crate::diagnostics::log_warning(format!(
+                        "[git] restore: open_or_init({}) failed: {e}",
+                        project_root.display()
+                    ));
+                    return;
+                }
+            };
         match adapter.restore_at_from_sha(&rel_path, sha) {
             Ok(()) => {
                 self.document_state.dirty_paths.insert(full_path.clone());
@@ -595,15 +584,12 @@ impl Signex {
                 match signex_library::FootprintFile::from_toml_str(&bytes) {
                     Ok(file) if !file.footprints.is_empty() => {
                         let snap_disabled = !self.ui_state.snap_enabled;
-                        let state =
-                            crate::app::FootprintEditorState::new(p.clone(), file)
-                                .with_global_snap_disabled(snap_disabled);
+                        let state = crate::app::FootprintEditorState::new(p.clone(), file)
+                            .with_global_snap_disabled(snap_disabled);
                         self.document_state
                             .footprint_editors
                             .insert(p.clone(), state);
-                        if let Some(editor) =
-                            self.document_state.footprint_editors.get_mut(&p)
-                        {
+                        if let Some(editor) = self.document_state.footprint_editors.get_mut(&p) {
                             editor.canvas_cache.clear();
                         }
                     }
@@ -635,9 +621,7 @@ impl Signex {
                 match signex_library::SymbolFile::from_bytes(&bytes) {
                     Ok(file) if !file.symbols.is_empty() => {
                         let state = crate::app::SymbolEditorState::new(p.clone(), file);
-                        self.document_state
-                            .symbol_editors
-                            .insert(p.clone(), state);
+                        self.document_state.symbol_editors.insert(p.clone(), state);
                     }
                     Ok(_) => {
                         crate::diagnostics::log_warning(format!(
@@ -653,8 +637,7 @@ impl Signex {
                     }
                 }
             }
-            crate::app::TabKind::LibraryBrowser(_)
-            | crate::app::TabKind::ComponentEditor(_) => {
+            crate::app::TabKind::LibraryBrowser(_) | crate::app::TabKind::ComponentEditor(_) => {
                 let lib_path = match &kind {
                     crate::app::TabKind::LibraryBrowser(p) => p.clone(),
                     crate::app::TabKind::ComponentEditor(c) => c.library_path.clone(),

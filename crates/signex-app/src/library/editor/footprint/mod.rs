@@ -24,10 +24,10 @@ mod sketch_dispatch_tests;
 pub mod sketch_mode;
 pub mod snap;
 pub mod state;
-pub(crate) mod updates;
 pub mod step_attach;
 pub mod text_frame;
 pub mod unified_active_bar;
+pub(crate) mod updates;
 
 #[cfg(test)]
 mod tests;

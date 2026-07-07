@@ -99,7 +99,10 @@ fn mint_body3d_extrudes_courtyard() {
     assert!(fp.body_3d.outline.is_none());
     crate::library::editor::footprint::body3d_mint::mint_box_from_courtyard(&mut fp);
     assert_eq!(fp.body_3d.shape, BodyShape::Extrude);
-    assert!(fp.body_3d.outline.is_some(), "outline should be the courtyard");
+    assert!(
+        fp.body_3d.outline.is_some(),
+        "outline should be the courtyard"
+    );
     assert!(fp.body_3d.height_mm > 0.0);
 }
 

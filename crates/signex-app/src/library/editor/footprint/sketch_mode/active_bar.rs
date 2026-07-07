@@ -186,10 +186,11 @@ pub fn items<'a>(
                 _ => false,
             }
         });
-        any_line_in_sketch && (selection_has_line_or_pointed_line
-            || editor.state.selected_sketch.is_none()
-                && editor.state.selected_sketch_secondary.is_none()
-                && editor.state.selected_sketch_extra.is_empty())
+        any_line_in_sketch
+            && (selection_has_line_or_pointed_line
+                || editor.state.selected_sketch.is_none()
+                    && editor.state.selected_sketch_secondary.is_none()
+                    && editor.state.selected_sketch_extra.is_empty())
     };
     let make_pad_button = ActiveBarItem::Button(ActiveBarButton {
         icon: ActiveBarIcon::Glyph("\u{2B22}"), // ⬢ black hexagon (custom polygon → pad)

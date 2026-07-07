@@ -4,10 +4,10 @@
 //! The router delegates all active_bar `PrimitiveEditorMsg` variants here;
 //! bodies are verbatim, so each arm keeps its own inner `use`s.
 
+use super::footprint_nudge_selection;
 use crate::library::editor::footprint::pad_to_sketch;
 use crate::library::editor::footprint::state::FootprintEditorState as CanvasState;
 use crate::library::messages::PrimitiveEditorMsg;
-use super::footprint_nudge_selection;
 
 pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: PrimitiveEditorMsg) {
     match msg {
@@ -174,12 +174,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             }
         }
         PrimitiveEditorMsg::FootprintMoveByConfirm => {
-            if let Some((dx, dy)) = editor
-                .state
-                .move_by_modal
-                .as_ref()
-                .and_then(|m| m.parsed())
-            {
+            if let Some((dx, dy)) = editor.state.move_by_modal.as_ref().and_then(|m| m.parsed()) {
                 footprint_nudge_selection(editor, dx, dy);
             }
             editor.state.move_by_modal = None;
@@ -247,8 +242,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                 EditorMode::Normal => {
                     if !editor.state.pads.is_empty() {
                         editor.state.selected_pad = Some(0);
-                        editor.state.selected_pads_extra =
-                            (1..editor.state.pads.len()).collect();
+                        editor.state.selected_pads_extra = (1..editor.state.pads.len()).collect();
                     }
                 }
                 EditorMode::View3d => {}

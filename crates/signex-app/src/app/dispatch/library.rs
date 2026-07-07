@@ -18,9 +18,9 @@ use crate::library::editor::footprint::updates::{
     apply_footprint_clipboard_op, apply_footprint_primitive_edit,
 };
 use crate::library::messages::{
-    BrowserEditMsg, CloseLibraryChoice, EditorMsg, GraphicHandleMsg, LibraryMessage,
-    PickerMsg, PrimitiveEditorMsg, PrimitivePickerMsg, SettingsMsg, SymbolRotatePivotMsg,
-    SymbolSelectionMsg, SymbolToolMsg,
+    BrowserEditMsg, CloseLibraryChoice, EditorMsg, GraphicHandleMsg, LibraryMessage, PickerMsg,
+    PrimitiveEditorMsg, PrimitivePickerMsg, SettingsMsg, SymbolRotatePivotMsg, SymbolSelectionMsg,
+    SymbolToolMsg,
 };
 use crate::library::state::{
     CloseLibraryConfirmState, ComponentPreviewState, DeleteConfirmState, DocumentOptionsModalState,

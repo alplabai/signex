@@ -1,5 +1,5 @@
 use super::*;
-use signex_renderer::pcb::{dirty_flags_for_events, PcbAppEvent};
+use signex_renderer::pcb::{PcbAppEvent, dirty_flags_for_events};
 
 const PCB_EVENTS_NONE: &[PcbAppEvent] = &[];
 const PCB_EVENTS_THEME: &[PcbAppEvent] = &[PcbAppEvent::ThemeChanged];

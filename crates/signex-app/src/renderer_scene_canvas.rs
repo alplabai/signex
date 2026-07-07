@@ -58,7 +58,9 @@ fn draw_dashed_line(frame: &mut canvas::Frame, p0: Point, p1: Point, width: f32,
         let path = canvas::Path::line(sp, ep);
         frame.stroke(
             &path,
-            canvas::Stroke::default().with_width(width).with_color(color),
+            canvas::Stroke::default()
+                .with_width(width)
+                .with_color(color),
         );
         dist += dash + gap;
     }

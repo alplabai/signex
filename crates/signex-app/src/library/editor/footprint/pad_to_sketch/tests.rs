@@ -36,8 +36,7 @@ fn three_pads_mint_three_points_with_pad_attrs() {
     // v0.16 — per pad: 1 centre Point + 4 corner Points + 4 outline
     // Lines = 9 entities. 3 pads × 9 = 27.
     assert_eq!(sketch.entities.len(), 27);
-    let attr_carriers: Vec<&Entity> =
-        sketch.entities.iter().filter(|e| e.pad.is_some()).collect();
+    let attr_carriers: Vec<&Entity> = sketch.entities.iter().filter(|e| e.pad.is_some()).collect();
     assert_eq!(attr_carriers.len(), 3);
     for entity in attr_carriers {
         assert!(matches!(entity.kind, EntityKind::Point { .. }));
@@ -73,7 +72,10 @@ fn skip_when_sketch_already_has_entities() {
     let n = auto_mint_for_literal_pads(&mut pads, &mut fp);
     assert_eq!(n, 0, "auto-mint must skip when sketch is already populated");
     assert_eq!(fp.sketch.as_ref().unwrap().entities.len(), 1);
-    assert!(pads[0].sketch_entity_id.is_none(), "skip leaves the link unset");
+    assert!(
+        pads[0].sketch_entity_id.is_none(),
+        "skip leaves the link unset"
+    );
 }
 
 #[test]
@@ -113,7 +115,11 @@ fn mirror_add_pad_links_to_new_sketch_entity() {
     mirror_add_pad_to_sketch(&mut pad, &mut fp);
     let id = pad.sketch_entity_id.expect("mirror should mint id");
     let sketch = fp.sketch.as_ref().unwrap();
-    let entity = sketch.entities.iter().find(|e| e.id == id).expect("entity exists");
+    let entity = sketch
+        .entities
+        .iter()
+        .find(|e| e.id == id)
+        .expect("entity exists");
     match entity.kind {
         EntityKind::Point { x, y } => assert_eq!((x, y), (5.0, 5.0)),
         _ => panic!("minted entity must be a Point"),

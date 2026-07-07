@@ -27,14 +27,7 @@ pub(super) fn screen_dist_to_segment_sq(p: Point, a: Point, b: Point) -> f32 {
 
 /// Distance (world-mm) from a point to a line segment — a thin adapter
 /// over [`signex_sketch::geom::point_to_segment_distance`].
-pub(super) fn point_to_segment_dist(
-    px: f64,
-    py: f64,
-    ax: f64,
-    ay: f64,
-    bx: f64,
-    by: f64,
-) -> f64 {
+pub(super) fn point_to_segment_dist(px: f64, py: f64, ax: f64, ay: f64, bx: f64, by: f64) -> f64 {
     signex_sketch::geom::point_to_segment_distance([px, py], [ax, ay], [bx, by])
 }
 

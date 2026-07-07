@@ -2,7 +2,7 @@
 //! string is aligned/clipped inside it at render time
 //! (`canvas/draw_silk.rs`). No auto-wrap/reflow.
 
-use signex_library::primitive::footprint::{FpGraphic, FpGraphicKind, Footprint};
+use signex_library::primitive::footprint::{Footprint, FpGraphic, FpGraphicKind};
 
 /// Append a framed silk string. `content` starts empty; the user edits it
 /// via the existing text-edit flow after placement. `size` / `stroke_width`

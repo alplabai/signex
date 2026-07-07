@@ -13,9 +13,13 @@ pub(super) fn apply_symbol_selection(editor: &mut SymEditor, msg: PrimitiveEdito
                 SymbolSelectionMsg::FieldValue => SymbolSelection::Field(FieldKey::Value),
                 SymbolSelectionMsg::Graphic(idx) => SymbolSelection::Graphic(idx),
                 SymbolSelectionMsg::All => SymbolSelection::All,
-                SymbolSelectionMsg::Multiple { pin_indices, graphic_indices } => {
-                    SymbolSelection::Multiple { pin_indices, graphic_indices }
-                }
+                SymbolSelectionMsg::Multiple {
+                    pin_indices,
+                    graphic_indices,
+                } => SymbolSelection::Multiple {
+                    pin_indices,
+                    graphic_indices,
+                },
             });
             editor.canvas_cache.clear();
         }

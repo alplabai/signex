@@ -78,11 +78,7 @@ pub(super) fn apply_body_action(
 }
 
 /// Set (or clear, when blank) the default node mapping for one pin.
-pub(super) fn set_pin_node(
-    state: &mut ComponentPreviewState,
-    pin_number: String,
-    value: String,
-) {
+pub(super) fn set_pin_node(state: &mut ComponentPreviewState, pin_number: String, value: String) {
     if let Some(sim) = state.sim.as_mut() {
         let trimmed = value.trim();
         if trimmed.is_empty() {

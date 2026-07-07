@@ -1045,7 +1045,11 @@ impl canvas::Program<Message> for SchematicCanvas {
                         },
                     })
                     .collect();
-                crate::schematic_runtime::overlay::draw_erc_markers(frame, &erc_overlay, &transform);
+                crate::schematic_runtime::overlay::draw_erc_markers(
+                    frame,
+                    &erc_overlay,
+                    &transform,
+                );
             };
             if drag_offset.is_some() {
                 let mut frame = canvas::Frame::new(renderer, bounds.size());

@@ -8,13 +8,13 @@ use iced::{Color, Rectangle};
 use signex_gfx::scene::{DirtyFlags, Scene};
 use signex_renderer::schematic::{
     ArcInput, JunctionInput, OverlayCircleInput, OverlayInputs, OverlayLineInput,
-    OverlayPolygonInput, PolygonInput, SchematicRenderer,
-    SchematicSnapshot as RendererSnapshot, TextInput, ViewRenderer, WireInput,
+    OverlayPolygonInput, PolygonInput, SchematicRenderer, SchematicSnapshot as RendererSnapshot,
+    TextInput, ViewRenderer, WireInput,
 };
 use signex_renderer::theme::ResolvedTheme;
 use signex_types::schematic::{
     Aabb, FillType, HAlign, Label, LabelType, Point, SchDrawing, SchematicSheet, SelectedItem,
-    SelectedKind, Symbol, TextProp, TextNote, VAlign,
+    SelectedKind, Symbol, TextNote, TextProp, VAlign,
 };
 use signex_types::theme::{CanvasColors, Color as ThemeColor};
 use std::collections::{HashMap, HashSet};
@@ -335,7 +335,11 @@ fn build_renderer_snapshot(
             p0: [bus.start.x as f32, bus.start.y as f32],
             p1: [bus.end.x as f32, bus.end.y as f32],
             width_mm: signex_types::schematic::SCHEMATIC_RENDER_BUS_STROKE_MM as f32,
-            explicit_color: Some(to_rgba(focus_color(to_iced(&colors.bus), focus_set, bus.uuid))),
+            explicit_color: Some(to_rgba(focus_color(
+                to_iced(&colors.bus),
+                focus_set,
+                bus.uuid,
+            ))),
         });
     }
 
@@ -385,7 +389,11 @@ fn build_renderer_snapshot(
             radius_mm: (junction.diameter * 0.5)
                 .max(signex_types::schematic::SCHEMATIC_RENDER_JUNCTION_MIN_RADIUS_MM)
                 as f32,
-            color: to_rgba(focus_color(to_iced(&colors.junction), focus_set, junction.uuid)),
+            color: to_rgba(focus_color(
+                to_iced(&colors.junction),
+                focus_set,
+                junction.uuid,
+            )),
         });
     }
 
@@ -463,7 +471,12 @@ fn build_renderer_snapshot(
         let max_x = x0.max(x1) as f32;
         let max_y = y0.max(y1) as f32;
         polygons.push(PolygonInput {
-            vertices: vec![[min_x, min_y], [max_x, min_y], [max_x, max_y], [min_x, max_y]],
+            vertices: vec![
+                [min_x, min_y],
+                [max_x, min_y],
+                [max_x, max_y],
+                [min_x, max_y],
+            ],
             fill_color: [0.0, 0.0, 0.0, 0.0],
             stroke_color: Some(to_rgba(color)),
             stroke_width_mm: stroke_world_mm(
@@ -569,11 +582,10 @@ fn build_renderer_snapshot(
                 polygons.push(PolygonInput {
                     vertices: circle_vertices(
                         [center.x, center.y],
-                        radius
-                            .max(screen_px_to_world_mm(
-                                signex_types::schematic::SCHEMATIC_RENDER_DRAWING_MIN_CIRCLE_RADIUS_PX,
-                                transform.scale,
-                            )) as f32,
+                        radius.max(screen_px_to_world_mm(
+                            signex_types::schematic::SCHEMATIC_RENDER_DRAWING_MIN_CIRCLE_RADIUS_PX,
+                            transform.scale,
+                        )) as f32,
                         40,
                     ),
                     fill_color: fill_color_for(*fill, stroke_color, colors)
@@ -593,11 +605,9 @@ fn build_renderer_snapshot(
                 stroke_color,
                 ..
             } => {
-                if let Some((cx, cy, r)) = circumcircle(
-                    (start.x, start.y),
-                    (mid.x, mid.y),
-                    (end.x, end.y),
-                ) {
+                if let Some((cx, cy, r)) =
+                    circumcircle((start.x, start.y), (mid.x, mid.y), (end.x, end.y))
+                {
                     let a0 = (start.y - cy).atan2(start.x - cx);
                     let am = (mid.y - cy).atan2(mid.x - cx);
                     let a1 = (end.y - cy).atan2(end.x - cx);
@@ -608,15 +618,13 @@ fn build_renderer_snapshot(
                     };
                     arcs.push(ArcInput {
                         center: [cx as f32, cy as f32],
-                        radius_mm: r
-                            .max(screen_px_to_world_mm(
-                                signex_types::schematic::SCHEMATIC_RENDER_DRAWING_MIN_ARC_RADIUS_PX,
-                                transform.scale,
-                            )) as f32,
+                        radius_mm: r.max(screen_px_to_world_mm(
+                            signex_types::schematic::SCHEMATIC_RENDER_DRAWING_MIN_ARC_RADIUS_PX,
+                            transform.scale,
+                        )) as f32,
                         start_angle_rad: start_angle as f32,
                         end_angle_rad: end_angle as f32,
-                        width_mm: width
-                            .max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM)
+                        width_mm: width.max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM)
                             as f32,
                         color: to_rgba(resolve_stroke_color(stroke_color, base_color)),
                     });
@@ -690,7 +698,10 @@ fn build_renderer_snapshot(
         }
 
         let color = focus_color(label_color(label, colors), focus_set, label.uuid);
-        if matches!(label.label_type, LabelType::Global | LabelType::Hierarchical) {
+        if matches!(
+            label.label_type,
+            LabelType::Global | LabelType::Hierarchical
+        ) {
             polygons.push(label_marker_polygon(
                 label,
                 color,
@@ -700,7 +711,10 @@ fn build_renderer_snapshot(
             labels.push(TextInput {
                 content: label.text.clone(),
                 position: [label.position.x as f32, label.position.y as f32],
-                size_mm: label.font_size.max(signex_types::schematic::SCHEMATIC_TEXT_MM) as f32,
+                size_mm: label
+                    .font_size
+                    .max(signex_types::schematic::SCHEMATIC_TEXT_MM)
+                    as f32,
                 color: to_rgba(color),
                 bold: false,
                 italic: false,
@@ -712,7 +726,10 @@ fn build_renderer_snapshot(
             labels.push(TextInput {
                 content: label.text.clone(),
                 position: [label.position.x as f32, label.position.y as f32],
-                size_mm: label.font_size.max(signex_types::schematic::SCHEMATIC_TEXT_MM) as f32,
+                size_mm: label
+                    .font_size
+                    .max(signex_types::schematic::SCHEMATIC_TEXT_MM)
+                    as f32,
                 color: to_rgba(color),
                 bold: false,
                 italic: false,
@@ -732,7 +749,9 @@ fn build_renderer_snapshot(
         parameter_texts.push(TextInput {
             content: note.text.clone(),
             position: [note.position.x as f32, note.position.y as f32],
-            size_mm: note.font_size.max(signex_types::schematic::SCHEMATIC_TEXT_MM) as f32,
+            size_mm: note
+                .font_size
+                .max(signex_types::schematic::SCHEMATIC_TEXT_MM) as f32,
             color: to_rgba(focus_color(to_iced(&colors.value), focus_set, note.uuid)),
             bold: false,
             italic: false,
@@ -763,7 +782,9 @@ fn label_marker_polygon(
     fill_color: [f32; 4],
     transform: &ScreenTransform,
 ) -> PolygonInput {
-    let size_mm = label.font_size.max(signex_types::schematic::SCHEMATIC_TEXT_MM) as f32;
+    let size_mm = label
+        .font_size
+        .max(signex_types::schematic::SCHEMATIC_TEXT_MM) as f32;
     let em_mm = size_mm / 0.72;
     let glyph_w = (label.text.chars().count().max(1) as f32) * (em_mm * 0.58);
     let half_h = em_mm * 0.62;
@@ -880,7 +901,10 @@ pub mod text {
             parameter_texts: vec![TextInput {
                 content: note.text.clone(),
                 position: [note.position.x as f32, note.position.y as f32],
-                size_mm: note.font_size.max(signex_types::schematic::SCHEMATIC_TEXT_MM) as f32,
+                size_mm: note
+                    .font_size
+                    .max(signex_types::schematic::SCHEMATIC_TEXT_MM)
+                    as f32,
                 color: to_rgba(color),
                 bold: false,
                 italic: false,
@@ -918,7 +942,10 @@ pub mod label {
         let mut polygons = Vec::new();
         let mut labels = Vec::new();
 
-        if matches!(label.label_type, LabelType::Global | LabelType::Hierarchical) {
+        if matches!(
+            label.label_type,
+            LabelType::Global | LabelType::Hierarchical
+        ) {
             polygons.push(super::label_marker_polygon(
                 label,
                 stroke_color,
@@ -928,7 +955,10 @@ pub mod label {
             labels.push(TextInput {
                 content: label.text.clone(),
                 position: [label.position.x as f32, label.position.y as f32],
-                size_mm: label.font_size.max(signex_types::schematic::SCHEMATIC_TEXT_MM) as f32,
+                size_mm: label
+                    .font_size
+                    .max(signex_types::schematic::SCHEMATIC_TEXT_MM)
+                    as f32,
                 color: to_rgba(stroke_color),
                 bold: false,
                 italic: false,
@@ -940,7 +970,10 @@ pub mod label {
             labels.push(TextInput {
                 content: label.text.clone(),
                 position: [label.position.x as f32, label.position.y as f32],
-                size_mm: label.font_size.max(signex_types::schematic::SCHEMATIC_TEXT_MM) as f32,
+                size_mm: label
+                    .font_size
+                    .max(signex_types::schematic::SCHEMATIC_TEXT_MM)
+                    as f32,
                 color: to_rgba(stroke_color),
                 bold: false,
                 italic: false,
@@ -995,7 +1028,8 @@ pub mod selection {
                 let max = transform.world_to_screen((bbox.max_x, bbox.max_y));
                 let size = iced::Size::new((max.x - min.x).abs(), (max.y - min.y).abs());
 
-                if size.width <= signex_types::schematic::SCHEMATIC_RENDER_SELECTION_MARKER_THRESHOLD_PX
+                if size.width
+                    <= signex_types::schematic::SCHEMATIC_RENDER_SELECTION_MARKER_THRESHOLD_PX
                     && size.height
                         <= signex_types::schematic::SCHEMATIC_RENDER_SELECTION_MARKER_THRESHOLD_PX
                 {
@@ -1200,9 +1234,7 @@ pub mod hit_test {
         world_y: f64,
     ) -> Option<SelectedItem> {
         let point = Point::new(world_x, world_y);
-        hit_test_items(snapshot, point)
-            .into_iter()
-            .next()
+        hit_test_items(snapshot, point).into_iter().next()
     }
 
     pub fn hit_test_polygon(
@@ -1327,12 +1359,14 @@ fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
     for wire in &snapshot.wires {
         out.push(ItemBound {
             item: SelectedItem::new(wire.uuid, SelectedKind::Wire),
-            bbox: Aabb::new(wire.start.x, wire.start.y, wire.end.x, wire.end.y)
-                .expand(
-                    wire.stroke_width
-                        .max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM),
-                ),
-            anchor: Point::new((wire.start.x + wire.end.x) * 0.5, (wire.start.y + wire.end.y) * 0.5),
+            bbox: Aabb::new(wire.start.x, wire.start.y, wire.end.x, wire.end.y).expand(
+                wire.stroke_width
+                    .max(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_MM),
+            ),
+            anchor: Point::new(
+                (wire.start.x + wire.end.x) * 0.5,
+                (wire.start.y + wire.end.y) * 0.5,
+            ),
         });
     }
 
@@ -1341,7 +1375,10 @@ fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
             item: SelectedItem::new(bus.uuid, SelectedKind::Bus),
             bbox: Aabb::new(bus.start.x, bus.start.y, bus.end.x, bus.end.y)
                 .expand(signex_types::schematic::SCHEMATIC_RENDER_BUS_STROKE_MM),
-            anchor: Point::new((bus.start.x + bus.end.x) * 0.5, (bus.start.y + bus.end.y) * 0.5),
+            anchor: Point::new(
+                (bus.start.x + bus.end.x) * 0.5,
+                (bus.start.y + bus.end.y) * 0.5,
+            ),
         });
     }
 
@@ -1443,7 +1480,10 @@ fn collect_item_bounds(snapshot: &SchematicRenderSnapshot) -> Vec<ItemBound> {
         out.push(ItemBound {
             item: SelectedItem::new(uuid, SelectedKind::Drawing),
             bbox,
-            anchor: Point::new((bbox.min_x + bbox.max_x) * 0.5, (bbox.min_y + bbox.max_y) * 0.5),
+            anchor: Point::new(
+                (bbox.min_x + bbox.max_x) * 0.5,
+                (bbox.min_y + bbox.max_y) * 0.5,
+            ),
         });
     }
 
@@ -1479,14 +1519,18 @@ fn symbol_body_aabb(symbol: &Symbol) -> Aabb {
 
 fn text_prop_aabb(symbol: &Symbol, text: &str, prop: &TextProp) -> Aabb {
     let chars = text.chars().count().max(1) as f64;
-    let h = prop.font_size.max(signex_types::schematic::SCHEMATIC_TEXT_MM);
+    let h = prop
+        .font_size
+        .max(signex_types::schematic::SCHEMATIC_TEXT_MM);
     let w = h * 0.6 * chars;
     let (x, y) = instance_transform(symbol, &prop.position);
     Aabb::new(x - w * 0.5, y - h * 0.5, x + w * 0.5, y + h * 0.5)
 }
 
 fn note_aabb(note: &TextNote) -> Aabb {
-    let h = note.font_size.max(signex_types::schematic::SCHEMATIC_TEXT_MM);
+    let h = note
+        .font_size
+        .max(signex_types::schematic::SCHEMATIC_TEXT_MM);
     let w = h * 0.6 * note.text.chars().count().max(1) as f64;
     Aabb::new(
         note.position.x - w * 0.5,
@@ -1497,9 +1541,14 @@ fn note_aabb(note: &TextNote) -> Aabb {
 }
 
 fn label_aabb(label: &Label) -> Aabb {
-    let h = label.font_size.max(signex_types::schematic::SCHEMATIC_TEXT_MM);
+    let h = label
+        .font_size
+        .max(signex_types::schematic::SCHEMATIC_TEXT_MM);
     let mut w = h * 0.6 * label.text.chars().count().max(1) as f64;
-    if matches!(label.label_type, LabelType::Global | LabelType::Hierarchical) {
+    if matches!(
+        label.label_type,
+        LabelType::Global | LabelType::Hierarchical
+    ) {
         w += h * 1.2;
     }
     Aabb::new(
@@ -1521,11 +1570,16 @@ fn drawing_aabb(drawing: &SchDrawing) -> Aabb {
             center.x + radius,
             center.y + radius,
         ),
-        SchDrawing::Arc { start, mid, end, .. } => {
-            if let Some((cx, cy, r)) = circumcircle((start.x, start.y), (mid.x, mid.y), (end.x, end.y)) {
+        SchDrawing::Arc {
+            start, mid, end, ..
+        } => {
+            if let Some((cx, cy, r)) =
+                circumcircle((start.x, start.y), (mid.x, mid.y), (end.x, end.y))
+            {
                 Aabb::new(cx - r, cy - r, cx + r, cy + r)
             } else {
-                Aabb::new(start.x, start.y, end.x, end.y).union(&Aabb::new(mid.x, mid.y, mid.x, mid.y))
+                Aabb::new(start.x, start.y, end.x, end.y)
+                    .union(&Aabb::new(mid.x, mid.y, mid.x, mid.y))
             }
         }
         SchDrawing::Polyline { points, .. } => {
@@ -1554,9 +1608,12 @@ fn point_in_polygon(point: (f64, f64), polygon: &[(f64, f64)]) -> bool {
 fn stroke_px_at_zoom(base_width_px_at_100: f32, scale: f32) -> f32 {
     let zoom_factor = (scale / signex_types::schematic::SCHEMATIC_ZOOM_100_SCALE).max(0.0);
     let scaled = base_width_px_at_100 * zoom_factor;
-    let max_stroke =
-        base_width_px_at_100 * signex_types::schematic::SCHEMATIC_RENDER_STROKE_MAX_SCALE_MULTIPLIER;
-    scaled.clamp(signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX, max_stroke)
+    let max_stroke = base_width_px_at_100
+        * signex_types::schematic::SCHEMATIC_RENDER_STROKE_MAX_SCALE_MULTIPLIER;
+    scaled.clamp(
+        signex_types::schematic::SCHEMATIC_RENDER_MIN_STROKE_PX,
+        max_stroke,
+    )
 }
 
 fn to_iced(color: &ThemeColor) -> Color {
@@ -1584,10 +1641,7 @@ fn line_visible(p0: iced::Point, p1: iced::Point, bounds: Rectangle) -> bool {
     let max_x = p0.x.max(p1.x);
     let min_y = p0.y.min(p1.y);
     let max_y = p0.y.max(p1.y);
-    !(max_x < -8.0
-        || max_y < -8.0
-        || min_x > bounds.width + 8.0
-        || min_y > bounds.height + 8.0)
+    !(max_x < -8.0 || max_y < -8.0 || min_x > bounds.width + 8.0 || min_y > bounds.height + 8.0)
 }
 
 fn rect_visible(min: iced::Point, size: iced::Size, bounds: Rectangle) -> bool {
@@ -1601,7 +1655,10 @@ fn point_visible(p: iced::Point, bounds: Rectangle, pad: f32) -> bool {
     p.x >= -pad && p.y >= -pad && p.x <= bounds.width + pad && p.y <= bounds.height + pad
 }
 
-fn resolve_stroke_color(stroke_color: &Option<signex_types::schematic::StrokeColor>, fallback: Color) -> Color {
+fn resolve_stroke_color(
+    stroke_color: &Option<signex_types::schematic::StrokeColor>,
+    fallback: Color,
+) -> Color {
     stroke_color
         .map(|color| Color::from_rgba8(color.r, color.g, color.b, color.a as f32 / 255.0))
         .unwrap_or(fallback)
@@ -1700,7 +1757,8 @@ mod tests {
         });
 
         let rect = Aabb::new(0.0, -0.2, 2.0, 0.2);
-        let inside = hit_test::hit_test_rect_mode(&snapshot, &rect, hit_test::SelectionMode::Inside);
+        let inside =
+            hit_test::hit_test_rect_mode(&snapshot, &rect, hit_test::SelectionMode::Inside);
         let touching =
             hit_test::hit_test_rect_mode(&snapshot, &rect, hit_test::SelectionMode::Touching);
 

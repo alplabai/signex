@@ -395,7 +395,10 @@ impl Signex {
                 self.fp_editor_set_selected_pad_feature_bottom(*idx, *value);
                 true
             }
-            crate::panels::PanelMsg::FpEditorToggleSelectedPadTestpointTopAssembly { idx, value } => {
+            crate::panels::PanelMsg::FpEditorToggleSelectedPadTestpointTopAssembly {
+                idx,
+                value,
+            } => {
                 self.fp_editor_toggle_selected_pad_testpoint_top_assembly(*idx, *value);
                 true
             }
@@ -403,7 +406,10 @@ impl Signex {
                 self.fp_editor_toggle_selected_pad_testpoint_top_fab(*idx, *value);
                 true
             }
-            crate::panels::PanelMsg::FpEditorToggleSelectedPadTestpointBottomAssembly { idx, value } => {
+            crate::panels::PanelMsg::FpEditorToggleSelectedPadTestpointBottomAssembly {
+                idx,
+                value,
+            } => {
                 self.fp_editor_toggle_selected_pad_testpoint_bottom_assembly(*idx, *value);
                 true
             }
@@ -534,8 +540,7 @@ impl Signex {
             }
             crate::panels::PanelMsg::FpEditorSetNextPadHoleTolerancePlus(v) => {
                 if let Some(editor) = self.active_footprint_editor_mut() {
-                    editor.state.next_pad_defaults.hole_tolerance_plus_mm =
-                        fp_parse_optional_mm(v);
+                    editor.state.next_pad_defaults.hole_tolerance_plus_mm = fp_parse_optional_mm(v);
                 }
                 self.refresh_panel_ctx();
                 true
@@ -550,24 +555,21 @@ impl Signex {
             }
             crate::panels::PanelMsg::FpEditorSetNextPadHoleRotation(v) => {
                 if let Some(editor) = self.active_footprint_editor_mut() {
-                    editor.state.next_pad_defaults.hole_rotation_deg =
-                        v.trim().parse::<f64>().ok();
+                    editor.state.next_pad_defaults.hole_rotation_deg = v.trim().parse::<f64>().ok();
                 }
                 self.refresh_panel_ctx();
                 true
             }
             crate::panels::PanelMsg::FpEditorSetNextPadCopperOffsetX(v) => {
                 if let Some(editor) = self.active_footprint_editor_mut() {
-                    editor.state.next_pad_defaults.copper_offset_x_mm =
-                        fp_parse_optional_mm(v);
+                    editor.state.next_pad_defaults.copper_offset_x_mm = fp_parse_optional_mm(v);
                 }
                 self.refresh_panel_ctx();
                 true
             }
             crate::panels::PanelMsg::FpEditorSetNextPadCopperOffsetY(v) => {
                 if let Some(editor) = self.active_footprint_editor_mut() {
-                    editor.state.next_pad_defaults.copper_offset_y_mm =
-                        fp_parse_optional_mm(v);
+                    editor.state.next_pad_defaults.copper_offset_y_mm = fp_parse_optional_mm(v);
                 }
                 self.refresh_panel_ctx();
                 true
@@ -575,7 +577,8 @@ impl Signex {
             crate::panels::PanelMsg::FpEditorToggleNextPadPlated(plated) => {
                 use signex_library::PadKind as Pk;
                 if let Some(editor) = self.active_footprint_editor_mut() {
-                    editor.state.next_pad_defaults.kind = if *plated { Pk::Tht } else { Pk::NptHole };
+                    editor.state.next_pad_defaults.kind =
+                        if *plated { Pk::Tht } else { Pk::NptHole };
                 }
                 self.refresh_panel_ctx();
                 true
@@ -662,7 +665,10 @@ impl Signex {
                 self.with_selected_sketch_pad(*id, |attr| attr.testpoint.top_fab = v);
                 true
             }
-            crate::panels::PanelMsg::FpEditorToggleSketchPadTestpointBottomAssembly { id, value } => {
+            crate::panels::PanelMsg::FpEditorToggleSketchPadTestpointBottomAssembly {
+                id,
+                value,
+            } => {
                 let v = *value;
                 self.with_selected_sketch_pad(*id, |attr| attr.testpoint.bottom_assembly = v);
                 true
@@ -761,15 +767,13 @@ impl Signex {
                 // `mutates_footprint_state` (defaults to true for any
                 // unrecognised PrimitiveEditorMsg variant — verified
                 // for `FootprintSketchEditParameter` already).
-                let parameter_name = self
-                    .active_footprint_editor_mut()
-                    .and_then(|editor| {
-                        editor
-                            .state
-                            .pads
-                            .get(*pad_idx)
-                            .and_then(|pad| pad.shape_params.get(key).cloned())
-                    });
+                let parameter_name = self.active_footprint_editor_mut().and_then(|editor| {
+                    editor
+                        .state
+                        .pads
+                        .get(*pad_idx)
+                        .and_then(|pad| pad.shape_params.get(key).cloned())
+                });
                 if let Some(name) = parameter_name {
                     if let Some(active_tab) =
                         self.document_state.tabs.get(self.document_state.active_tab)
@@ -1979,20 +1983,14 @@ impl Signex {
     // configuration. None of these are dirty-marking on their own —
     // they're "pre-placement defaults" — but the panel `refresh` runs
     // so the form re-reads the new value.
-    pub(crate) fn fp_editor_set_next_pad_shape(
-        &mut self,
-        shape: signex_library::PadShape,
-    ) {
+    pub(crate) fn fp_editor_set_next_pad_shape(&mut self, shape: signex_library::PadShape) {
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.state.next_pad_defaults.shape = shape;
             editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
     }
-    pub(crate) fn fp_editor_set_next_pad_kind(
-        &mut self,
-        kind: signex_library::PadKind,
-    ) {
+    pub(crate) fn fp_editor_set_next_pad_kind(&mut self, kind: signex_library::PadKind) {
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.state.next_pad_defaults.kind = kind;
             editor.canvas_cache.clear();
@@ -2007,8 +2005,7 @@ impl Signex {
     }
     pub(crate) fn fp_editor_set_next_pad_drill_slot_length(&mut self, value: String) {
         if let Some(editor) = self.active_footprint_editor_mut() {
-            editor.state.next_pad_defaults.drill_slot_length_mm =
-                fp_parse_optional_mm(&value);
+            editor.state.next_pad_defaults.drill_slot_length_mm = fp_parse_optional_mm(&value);
         }
         self.refresh_panel_ctx();
     }
@@ -2055,15 +2052,13 @@ impl Signex {
     }
     pub(crate) fn fp_editor_set_next_pad_paste_margin_top(&mut self, value: String) {
         if let Some(editor) = self.active_footprint_editor_mut() {
-            editor.state.next_pad_defaults.stack.paste_margin_top =
-                fp_parse_optional_mm(&value);
+            editor.state.next_pad_defaults.stack.paste_margin_top = fp_parse_optional_mm(&value);
         }
         self.refresh_panel_ctx();
     }
     pub(crate) fn fp_editor_set_next_pad_paste_margin_bottom(&mut self, value: String) {
         if let Some(editor) = self.active_footprint_editor_mut() {
-            editor.state.next_pad_defaults.stack.paste_margin_bottom =
-                fp_parse_optional_mm(&value);
+            editor.state.next_pad_defaults.stack.paste_margin_bottom = fp_parse_optional_mm(&value);
         }
         self.refresh_panel_ctx();
     }
@@ -2081,15 +2076,13 @@ impl Signex {
     }
     pub(crate) fn fp_editor_set_next_pad_mask_margin_top(&mut self, value: String) {
         if let Some(editor) = self.active_footprint_editor_mut() {
-            editor.state.next_pad_defaults.stack.mask_margin_top =
-                fp_parse_optional_mm(&value);
+            editor.state.next_pad_defaults.stack.mask_margin_top = fp_parse_optional_mm(&value);
         }
         self.refresh_panel_ctx();
     }
     pub(crate) fn fp_editor_set_next_pad_mask_margin_bottom(&mut self, value: String) {
         if let Some(editor) = self.active_footprint_editor_mut() {
-            editor.state.next_pad_defaults.stack.mask_margin_bottom =
-                fp_parse_optional_mm(&value);
+            editor.state.next_pad_defaults.stack.mask_margin_bottom = fp_parse_optional_mm(&value);
         }
         self.refresh_panel_ctx();
     }
@@ -2181,11 +2174,8 @@ impl Signex {
     /// (creating one only if it already exists; non-pad entities are
     /// silently skipped), then dirty-marks the editor + clears the
     /// canvas cache. Solve+bake is queued on the next mutation cycle.
-    fn with_selected_sketch_pad<F>(
-        &mut self,
-        id: signex_sketch::id::SketchEntityId,
-        f: F,
-    ) where
+    fn with_selected_sketch_pad<F>(&mut self, id: signex_sketch::id::SketchEntityId, f: F)
+    where
         F: FnOnce(&mut signex_sketch::attr::PadAttr),
     {
         if let Some(editor) = self.active_footprint_editor_mut() {
@@ -2263,48 +2253,84 @@ impl Signex {
         let parsed = fp_parse_optional_mm(&value);
         self.with_selected_pad(idx, |pad| pad.drill_diameter_mm = parsed);
     }
-    pub(crate) fn fp_editor_set_selected_pad_drill_slot_length(&mut self, idx: usize, _value: String) {
+    pub(crate) fn fp_editor_set_selected_pad_drill_slot_length(
+        &mut self,
+        idx: usize,
+        _value: String,
+    ) {
         // v0.20 placeholder — slot length not yet on EditorPad. Wired
         // when `EditorPad` gains a separate `drill_slot_length_mm`.
         let _ = idx;
         self.refresh_panel_ctx();
     }
-    pub(crate) fn fp_editor_set_selected_pad_corner_radius_pct(&mut self, idx: usize, value: String) {
-        let parsed = value.trim().parse::<f64>().ok().filter(|v| (0.0..=50.0).contains(v));
+    pub(crate) fn fp_editor_set_selected_pad_corner_radius_pct(
+        &mut self,
+        idx: usize,
+        value: String,
+    ) {
+        let parsed = value
+            .trim()
+            .parse::<f64>()
+            .ok()
+            .filter(|v| (0.0..=50.0).contains(v));
         self.with_selected_pad(idx, |pad| pad.stack.corner_radius_pct = parsed);
     }
     pub(crate) fn fp_editor_set_selected_pad_template(&mut self, idx: usize, value: String) {
         self.with_selected_pad(idx, |pad| pad.template = value);
     }
-    pub(crate) fn fp_editor_set_selected_pad_template_library(&mut self, idx: usize, value: String) {
+    pub(crate) fn fp_editor_set_selected_pad_template_library(
+        &mut self,
+        idx: usize,
+        value: String,
+    ) {
         self.with_selected_pad(idx, |pad| pad.template_library = value);
     }
-    pub(crate) fn fp_editor_set_selected_pad_paste_margin_top(&mut self, idx: usize, value: String) {
+    pub(crate) fn fp_editor_set_selected_pad_paste_margin_top(
+        &mut self,
+        idx: usize,
+        value: String,
+    ) {
         let parsed = fp_parse_optional_mm(&value);
         self.with_selected_pad(idx, |pad| pad.stack.paste_margin_top = parsed);
     }
-    pub(crate) fn fp_editor_set_selected_pad_paste_margin_bottom(&mut self, idx: usize, value: String) {
+    pub(crate) fn fp_editor_set_selected_pad_paste_margin_bottom(
+        &mut self,
+        idx: usize,
+        value: String,
+    ) {
         let parsed = fp_parse_optional_mm(&value);
         self.with_selected_pad(idx, |pad| pad.stack.paste_margin_bottom = parsed);
     }
     pub(crate) fn fp_editor_toggle_selected_pad_paste_enabled_top(&mut self, idx: usize, on: bool) {
         self.with_selected_pad(idx, |pad| pad.stack.paste_enabled_top = on);
     }
-    pub(crate) fn fp_editor_toggle_selected_pad_paste_enabled_bottom(&mut self, idx: usize, on: bool) {
+    pub(crate) fn fp_editor_toggle_selected_pad_paste_enabled_bottom(
+        &mut self,
+        idx: usize,
+        on: bool,
+    ) {
         self.with_selected_pad(idx, |pad| pad.stack.paste_enabled_bottom = on);
     }
     pub(crate) fn fp_editor_set_selected_pad_mask_margin_top(&mut self, idx: usize, value: String) {
         let parsed = fp_parse_optional_mm(&value);
         self.with_selected_pad(idx, |pad| pad.stack.mask_margin_top = parsed);
     }
-    pub(crate) fn fp_editor_set_selected_pad_mask_margin_bottom(&mut self, idx: usize, value: String) {
+    pub(crate) fn fp_editor_set_selected_pad_mask_margin_bottom(
+        &mut self,
+        idx: usize,
+        value: String,
+    ) {
         let parsed = fp_parse_optional_mm(&value);
         self.with_selected_pad(idx, |pad| pad.stack.mask_margin_bottom = parsed);
     }
     pub(crate) fn fp_editor_toggle_selected_pad_mask_tented_top(&mut self, idx: usize, on: bool) {
         self.with_selected_pad(idx, |pad| pad.stack.mask_tented_top = on);
     }
-    pub(crate) fn fp_editor_toggle_selected_pad_mask_tented_bottom(&mut self, idx: usize, on: bool) {
+    pub(crate) fn fp_editor_toggle_selected_pad_mask_tented_bottom(
+        &mut self,
+        idx: usize,
+        on: bool,
+    ) {
         self.with_selected_pad(idx, |pad| pad.stack.mask_tented_bottom = on);
     }
     pub(crate) fn fp_editor_toggle_selected_pad_thermal_relief(&mut self, idx: usize, on: bool) {
@@ -2324,16 +2350,28 @@ impl Signex {
     ) {
         self.with_selected_pad(idx, |pad| pad.feature_bottom = value);
     }
-    pub(crate) fn fp_editor_toggle_selected_pad_testpoint_top_assembly(&mut self, idx: usize, on: bool) {
+    pub(crate) fn fp_editor_toggle_selected_pad_testpoint_top_assembly(
+        &mut self,
+        idx: usize,
+        on: bool,
+    ) {
         self.with_selected_pad(idx, |pad| pad.testpoint.top_assembly = on);
     }
     pub(crate) fn fp_editor_toggle_selected_pad_testpoint_top_fab(&mut self, idx: usize, on: bool) {
         self.with_selected_pad(idx, |pad| pad.testpoint.top_fab = on);
     }
-    pub(crate) fn fp_editor_toggle_selected_pad_testpoint_bottom_assembly(&mut self, idx: usize, on: bool) {
+    pub(crate) fn fp_editor_toggle_selected_pad_testpoint_bottom_assembly(
+        &mut self,
+        idx: usize,
+        on: bool,
+    ) {
         self.with_selected_pad(idx, |pad| pad.testpoint.bottom_assembly = on);
     }
-    pub(crate) fn fp_editor_toggle_selected_pad_testpoint_bottom_fab(&mut self, idx: usize, on: bool) {
+    pub(crate) fn fp_editor_toggle_selected_pad_testpoint_bottom_fab(
+        &mut self,
+        idx: usize,
+        on: bool,
+    ) {
         self.with_selected_pad(idx, |pad| pad.testpoint.bottom_fab = on);
     }
 
@@ -2496,9 +2534,7 @@ impl Signex {
                 }
                 SnapOptionFlag::TrackLines => opts.snap_track_lines = !opts.snap_track_lines,
                 SnapOptionFlag::ArcCenters => opts.snap_arc_centers = !opts.snap_arc_centers,
-                SnapOptionFlag::Intersections => {
-                    opts.snap_intersections = !opts.snap_intersections
-                }
+                SnapOptionFlag::Intersections => opts.snap_intersections = !opts.snap_intersections,
                 SnapOptionFlag::PadCenters => opts.snap_pad_centers = !opts.snap_pad_centers,
                 SnapOptionFlag::PadVertices => opts.snap_pad_vertices = !opts.snap_pad_vertices,
                 SnapOptionFlag::PadEdges => opts.snap_pad_edges = !opts.snap_pad_edges,
@@ -2508,7 +2544,9 @@ impl Signex {
                 SnapOptionFlag::FootprintOrigins => {
                     opts.snap_footprint_origins = !opts.snap_footprint_origins
                 }
-                SnapOptionFlag::Body3dPoints => opts.snap_3d_body_points = !opts.snap_3d_body_points,
+                SnapOptionFlag::Body3dPoints => {
+                    opts.snap_3d_body_points = !opts.snap_3d_body_points
+                }
                 SnapOptionFlag::SnapToGrids => opts.snap_to_grids = !opts.snap_to_grids,
                 SnapOptionFlag::SnapToGuides => opts.snap_to_guides = !opts.snap_to_guides,
                 SnapOptionFlag::SnapToAxes => opts.snap_to_axes = !opts.snap_to_axes,
@@ -2610,7 +2648,10 @@ impl Signex {
                 if let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id) {
                     let trimmed = value.trim();
                     match (&mut array.kind, field) {
-                        (ArrayKind::Linear { count_expr, .. }, ArrayParamField::LinearCountExpr) => {
+                        (
+                            ArrayKind::Linear { count_expr, .. },
+                            ArrayParamField::LinearCountExpr,
+                        ) => {
                             *count_expr = value;
                         }
                         (ArrayKind::Linear { dx_expr, .. }, ArrayParamField::LinearDxExpr) => {
@@ -2697,18 +2738,20 @@ impl Signex {
             if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
                 if let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id) {
                     array.numbering = match scheme {
-                        NumberingSchemeKindUi::LinearIncrement => NumberingScheme::LinearIncrement {
-                            start_expr: "1".into(),
-                            step_expr: "1".into(),
-                        },
+                        NumberingSchemeKindUi::LinearIncrement => {
+                            NumberingScheme::LinearIncrement {
+                                start_expr: "1".into(),
+                                step_expr: "1".into(),
+                            }
+                        }
                         NumberingSchemeKindUi::BgaRowCol => NumberingScheme::BgaRowCol {
                             skip_letters: true,
                             start_row: 'A',
                             start_col: 1,
                         },
-                        NumberingSchemeKindUi::Explicit => NumberingScheme::Explicit {
-                            names: Vec::new(),
-                        },
+                        NumberingSchemeKindUi::Explicit => {
+                            NumberingScheme::Explicit { names: Vec::new() }
+                        }
                     };
                 }
             }
@@ -2732,7 +2775,9 @@ impl Signex {
         if let Some(editor) = self.active_footprint_editor_mut() {
             if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
                 if let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id) {
-                    if let NumberingScheme::BgaRowCol { skip_letters: s, .. } = &mut array.numbering
+                    if let NumberingScheme::BgaRowCol {
+                        skip_letters: s, ..
+                    } = &mut array.numbering
                     {
                         *s = skip_letters;
                     }
@@ -2885,9 +2930,7 @@ impl Signex {
                         if let Some(d) = depop_slot.as_mut() {
                             d.suppressed_instances
                                 .retain(|(si, sj)| !(*si == i && *sj == j));
-                            if d.mask_expr.trim().is_empty()
-                                && d.suppressed_instances.is_empty()
-                            {
+                            if d.mask_expr.trim().is_empty() && d.suppressed_instances.is_empty() {
                                 *depop_slot = None;
                             }
                         }
@@ -2897,7 +2940,11 @@ impl Signex {
                             mask_expr: String::new(),
                             suppressed_instances: Vec::new(),
                         });
-                        if !d.suppressed_instances.iter().any(|(si, sj)| *si == i && *sj == j) {
+                        if !d
+                            .suppressed_instances
+                            .iter()
+                            .any(|(si, sj)| *si == i && *sj == j)
+                        {
                             d.suppressed_instances.push((i, j));
                         }
                     }
@@ -2970,11 +3017,7 @@ impl Signex {
         self.refresh_panel_ctx();
     }
 
-    pub(crate) fn fp_editor_set_silk_text_field(
-        &mut self,
-        field: SilkTextField,
-        value: String,
-    ) {
+    pub(crate) fn fp_editor_set_silk_text_field(&mut self, field: SilkTextField, value: String) {
         let parsed = value.trim().parse::<f64>().ok();
         if let Some(parsed) = parsed {
             if let Some(editor) = self.active_footprint_editor_mut() {

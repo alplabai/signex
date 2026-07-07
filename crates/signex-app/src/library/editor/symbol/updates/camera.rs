@@ -10,8 +10,16 @@ pub(super) fn apply_symbol_camera(editor: &mut SymEditor, msg: PrimitiveEditorMs
             editor.canvas_cache.clear();
         }
         PrimitiveEditorMsg::SymbolZoom { sx, sy, delta } => {
-            let viewport = iced::Rectangle { x: 0.0, y: 0.0, width: 1.0, height: 1.0 };
-            if editor.camera.zoom_at(iced::Point::new(sx, sy), delta, viewport) {
+            let viewport = iced::Rectangle {
+                x: 0.0,
+                y: 0.0,
+                width: 1.0,
+                height: 1.0,
+            };
+            if editor
+                .camera
+                .zoom_at(iced::Point::new(sx, sy), delta, viewport)
+            {
                 editor.canvas_cache.clear();
             }
         }
@@ -23,7 +31,12 @@ pub(super) fn apply_symbol_camera(editor: &mut SymEditor, msg: PrimitiveEditorMs
                 width: (max_x - min_x).max(1.0) as f32,
                 height: (max_y - min_y).max(1.0) as f32,
             };
-            let viewport = iced::Rectangle { x: 0.0, y: 0.0, width: 800.0, height: 500.0 };
+            let viewport = iced::Rectangle {
+                x: 0.0,
+                y: 0.0,
+                width: 800.0,
+                height: 500.0,
+            };
             editor.camera.fit_rect(world_rect, viewport);
             editor.canvas_cache.clear();
         }

@@ -105,10 +105,10 @@ fn filter_entries(
     path: PathBuf,
     footprint_presets: &[crate::active_bar::FootprintFilterPreset],
 ) -> Vec<DropdownEntry<LibraryMessage>> {
+    use SelectionFilterKind as K;
     use iced::widget::{column, container, row};
     use iced::{Color, Length};
     use signex_widgets::active_bar_dropdown::chip_btn;
-    use SelectionFilterKind as K;
 
     let f = state.selection_filter;
     // Theme accent — matches the schematic Filter dropdown chips.
@@ -216,10 +216,7 @@ fn filter_entries(
     vec![DropdownEntry::Custom(layout.into())]
 }
 
-fn snap_entries(
-    state: &FootprintEditorState,
-    path: PathBuf,
-) -> Vec<DropdownEntry<LibraryMessage>> {
+fn snap_entries(state: &FootprintEditorState, path: PathBuf) -> Vec<DropdownEntry<LibraryMessage>> {
     let _ = SnapSubTab::Grids; // silence unused-import lint when nothing references it
     let opts = state.snap_options;
     let mk_mode = |label: &'static str, mode: SnappingMode| -> DropdownItem<LibraryMessage> {
@@ -337,7 +334,10 @@ fn place_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessag
     // of these arms `PadsTool::Select` (and closes the menu in the
     // dispatcher) so the user can immediately grab a pad.
     let activate_select = |p: PathBuf| -> LibraryMessage {
-        fp(p, PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::Select))
+        fp(
+            p,
+            PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::Select),
+        )
     };
     vec![
         DropdownEntry::Item(
@@ -451,7 +451,10 @@ fn select_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessa
         DropdownEntry::Item(
             DropdownItem::new(
                 "All",
-                fp(path.clone(), PrimitiveEditorMsg::FootprintActiveBarSelectAll),
+                fp(
+                    path.clone(),
+                    PrimitiveEditorMsg::FootprintActiveBarSelectAll,
+                ),
             )
             .icon(ic::icon_dd_select_all(tid)),
         ),
@@ -463,10 +466,7 @@ fn select_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessa
         DropdownEntry::Item(
             DropdownItem::new(
                 "Toggle Selection",
-                fp(
-                    path,
-                    PrimitiveEditorMsg::FootprintActiveBarClearSelection,
-                ),
+                fp(path, PrimitiveEditorMsg::FootprintActiveBarClearSelection),
             )
             .icon(ic::icon_dd_select_toggle(tid)),
         ),
@@ -591,10 +591,7 @@ fn align_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessag
         ),
         DropdownEntry::Item(DropdownItem::new(
             "Move All Components Origin To Grid",
-            fp(
-                path,
-                PrimitiveEditorMsg::FootprintActiveBarMoveOriginToGrid,
-            ),
+            fp(path, PrimitiveEditorMsg::FootprintActiveBarMoveOriginToGrid),
         )),
     ]
 }
@@ -677,8 +674,7 @@ fn shapes_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessa
             DropdownItem::new("Arc (Any Angle)", arm(SketchTool::Arc)).icon(ic::icon_dd_arc(tid)),
         ),
         DropdownEntry::Item(
-            DropdownItem::new("Full Circle", arm(SketchTool::Circle))
-                .icon(ic::icon_dd_circle(tid)),
+            DropdownItem::new("Full Circle", arm(SketchTool::Circle)).icon(ic::icon_dd_circle(tid)),
         ),
         DropdownEntry::Separator,
         // v0.14 — "Fill" and "Solid Region" are synonyms for the same
@@ -708,8 +704,7 @@ fn shapes_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessa
             .icon(ic::icon_dd_polygon(tid)),
         ),
         DropdownEntry::Item(
-            DropdownItem::new("Rectangle", arm(SketchTool::Rectangle))
-                .icon(ic::icon_dd_rect(tid)),
+            DropdownItem::new("Rectangle", arm(SketchTool::Rectangle)).icon(ic::icon_dd_rect(tid)),
         ),
     ]
 }
