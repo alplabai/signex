@@ -18,6 +18,7 @@
 pub mod browser;
 pub mod close_prompt;
 pub mod commands;
+pub mod component_preview;
 pub mod create_options;
 pub mod document_options;
 pub mod edit_row_modal;
