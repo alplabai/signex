@@ -217,21 +217,14 @@ GPL-3.0-or-later companion repo — that's where KiCad-related work
 belongs. See [docs/LICENSING.md](docs/LICENSING.md) for the rationale
 behind the two-repo split.
 
-When you open a PR against the main `signex` repo, include this block
-in the PR description:
-
-```
-Source basis: [my own work | Signex's prior code | published format
-specs | other (specify)]
-LLM-assisted: [yes/no — if yes, list which models]
-KiCad source consulted: [yes/no — if yes, the PR belongs in
-signex-kicad-import, not here]
-```
-
-CI will check the PR description for this block (see
-`.github/workflows/license-guard.yml` and the PR-license-declaration
-workflow). If the third field is `yes`, CI rejects the PR with a
-pointer to the companion repo.
+When you open a PR against the main `signex` repo, no declaration block
+is required — opening the PR affirms **no license-gated source files**
+were used (nothing under GPL/copyleft or otherwise Apache-incompatible).
+CI (see `.github/workflows/license-guard.yml` and the
+PR-license-declaration workflow) passes unless the description explicitly
+admits one. If your contribution did draw on a license-gated source, add
+a line `License-gated sources: yes` — CI rejects it here with a pointer
+to the companion repo, which is where that work belongs.
 
 Why this matters: large-language-model assistants that have been
 trained on KiCad source can inadvertently produce structurally

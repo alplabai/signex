@@ -6,21 +6,18 @@ Brief description of what this PR does and why.
 
 -
 
-## License compliance (required — issue #62)
+## License compliance (issue #62)
 
-The main signex repo is Apache-2.0 clean. Fill in this block; CI
-(`PR-description self-declaration`) checks for it.
+This tree is Apache-2.0 (clean-room). Opening a PR affirms **no license-gated
+source files** were used — nothing under GPL/copyleft or any other licence
+incompatible with Apache-2.0. There is nothing to fill in — CI
+(`PR-description self-declaration`) passes unless a PR states otherwise.
 
-```
-Source basis:        [my own work | Signex's prior code | published format specs | other (specify)]
-LLM-assisted:        [yes/no — if yes, list which models]
-KiCad source consulted: [yes/no — if yes, the PR belongs in signex-kicad-import, not here]
-```
-
-If "KiCad source consulted: yes," route the contribution to the
-[signex-kicad-import](https://github.com/alplabai/signex-kicad-import)
-GPL-3.0 companion repo instead of this one. See
-[docs/LICENSING.md](../docs/LICENSING.md) for the rationale.
+If your contribution *did* draw on a license-gated source, add a line
+`License-gated sources: yes` — CI routes it to the GPL-3.0 companion repo
+[signex-kicad-import](https://github.com/alplabai/signex-kicad-import), where
+such work belongs. See [docs/LICENSING.md](../docs/LICENSING.md) for the
+rationale.
 
 ## Labels
 

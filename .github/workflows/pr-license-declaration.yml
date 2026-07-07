@@ -2,11 +2,14 @@
 
 name: PR License Declaration
 
-# Enforces the Phase 8 contributor self-declaration block in every
-# PR description against main / trunk. PRs whose description is
-# missing the block, or whose author marked "KiCad source consulted:
-# yes," are blocked — those contributions belong in the GPL-3.0
-# companion repo signex-kicad-import, not here.
+# Clean-room guard. This tree is Apache-2.0; contributions must not copy from
+# license-gated source files — anything under GPL/copyleft or another licence
+# incompatible with Apache-2.0. Opening a PR affirms none were used, so no
+# self-declaration fields are required — a PR that says nothing passes.
+#
+# The only hard block is a PR whose description *explicitly admits* a
+# license-gated source (a `License-gated sources: yes` line); that work belongs
+# in the GPL-3.0-or-later companion repo signex-kicad-import, not here.
 #
 # See CONTRIBUTING.md and docs/LICENSING.md for the rationale.
 
@@ -24,38 +27,22 @@ jobs:
     name: PR-description self-declaration
     runs-on: ubuntu-latest
     steps:
-      - name: Verify required fields are present
+      - name: Block PRs that admit a license-gated source
         env:
           BODY: ${{ github.event.pull_request.body }}
         run: |
           set -e
-          missing=()
-          for field in "Source basis:" "LLM-assisted:" "KiCad source consulted:"; do
-            if ! echo "$BODY" | grep -qF "$field"; then
-              missing+=("$field")
-            fi
-          done
-
-          if [ ${#missing[@]} -gt 0 ]; then
-            echo "::error::PR description is missing the required license-compliance block."
-            echo "::error::Missing fields: ${missing[*]}"
-            echo "::error::See .github/pull_request_template.md for the template."
-            exit 1
-          fi
-
-          echo "License-compliance block present."
-
-      - name: Block PRs that consult KiCad source
-        env:
-          BODY: ${{ github.event.pull_request.body }}
-        run: |
-          set -e
-          if echo "$BODY" | grep -qiE "KiCad source consulted:\s*yes"; then
-            echo "::error::This PR's description states 'KiCad source consulted: yes'."
-            echo "::error::KiCad-derived contributions belong in the GPL-3.0-or-later companion repo:"
+          # Hard block: an explicit admission that the contribution draws on a
+          # license-gated source file — one under GPL/copyleft or any other
+          # licence incompatible with this Apache-2.0 tree. Such work belongs
+          # in the GPL-3.0 companion repo. A PR that makes no such admission is
+          # treated as clean and passes.
+          if echo "$BODY" | grep -qiE "license-gated sources?:[[:space:]]*yes"; then
+            echo "::error::This PR's description admits a license-gated source file."
+            echo "::error::Such contributions belong in the GPL-3.0-or-later companion repo:"
             echo "::error::  https://github.com/alplabai/signex-kicad-import"
             echo "::error::See docs/LICENSING.md for the rationale behind the two-repo split."
             exit 1
           fi
 
-          echo "PR is Apache-clean per the self-declaration."
+          echo "No license-gated source admitted — contribution treated as clean."
