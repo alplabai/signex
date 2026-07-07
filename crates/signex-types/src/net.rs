@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 // ---------------------------------------------------------------------------
 // Net identity
@@ -46,10 +47,17 @@ pub struct DiffPair {
 // Netlist — the authoritative schematic-derived connectivity contract
 // ---------------------------------------------------------------------------
 
-/// One pin instance connected to a net: the component's reference
-/// designator (`R1`, `U3`) plus the pin identifier (number or name).
+/// One pin instance connected to a net: the placed symbol's `uuid`, its
+/// reference designator (`R1`, `U3`), and the pin identifier (number or name).
+///
+/// `symbol` disambiguates terminals a bare reference string collapses —
+/// unannotated `R?` and duplicate designators (the same refdes on two sheet
+/// occurrences) — and links the terminal back to the placed symbol. `reference`
+/// and `pin` stay for exporters and display.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Terminal {
+    #[serde(default)]
+    pub symbol: Uuid,
     pub reference: String,
     pub pin: String,
 }
