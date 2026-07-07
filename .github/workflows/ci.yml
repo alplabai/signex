@@ -41,6 +41,13 @@ jobs:
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: |
+          # Drop the pre-provisioned packages.microsoft.com apt sources. The
+          # build needs nothing from them, but when that repo serves an invalid
+          # InRelease (a recurring runner-image outage) `apt-get update` fails
+          # the whole step under `set -e`. Everything below is in the Ubuntu
+          # archive.
+          sudo grep -rlZ 'packages.microsoft.com' /etc/apt/sources.list.d/ 2>/dev/null \
+            | sudo xargs -0 -r rm -f || true
           sudo apt-get update
           sudo apt-get install -y \
             libxkbcommon-dev libwayland-dev libvulkan-dev \
@@ -66,6 +73,11 @@ jobs:
 
       - name: Install Linux dependencies
         run: |
+          # See the check job: drop the packages.microsoft.com apt sources so a
+          # broken InRelease there can't fail `apt-get update`. All packages
+          # below come from the Ubuntu archive.
+          sudo grep -rlZ 'packages.microsoft.com' /etc/apt/sources.list.d/ 2>/dev/null \
+            | sudo xargs -0 -r rm -f || true
           sudo apt-get update
           sudo apt-get install -y \
             libxkbcommon-dev libwayland-dev libvulkan-dev \
