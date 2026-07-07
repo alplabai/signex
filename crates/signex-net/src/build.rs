@@ -182,7 +182,7 @@ pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
             if !point_is_connected(&world_pos, sheet) {
                 continue;
             }
-            // Pin id: the number when present (KiCad convention), else name.
+            // Pin id: prefer the pin number when present, else fall back to its name.
             let pin = if !lp.pin.number.is_empty() {
                 lp.pin.number.clone()
             } else {
