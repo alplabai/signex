@@ -40,7 +40,7 @@ This *is* the vertical-slice pattern: each surface owns `{ state, message, view,
 
 So when this document says **"widget"** it means a **stateless, reusable view function or custom `Widget`** — a piece of `view` that takes `&state` and returns an `Element`, with all mutable state kept in the owning slice's Model. It never means a self-contained object with its own encapsulated state and update loop (the deprecated `Component`). That older meaning is the exact thing Iced removed, and we do not reintroduce it.
 
-**Side effects live in `Task`, not in `view` or the domain.** The app crate performs IO by returning `Task`s from `update` (file dialogs, exports, network). The domain crates stay pure and synchronous; they never touch Iced or async runtimes. Because an effect is simply the `Task` an `update` returns, there is no separate "handlers" layer between the update and its effects — a message's state change and its effect belong together (see D1).
+**Side effects live in `Task`, not in `view` or the domain.** The app crate performs IO by returning `Task`s from `update` (file dialogs, exports, network). The domain crates are Iced-free: the pure-computation crates (`signex-engine`, `signex-sketch`, `signex-bake`, `signex-erc`, `signex-bom`) are synchronous, while IO-adapter code (e.g. `signex-library`'s distributor/database adapters) is async but still UI-agnostic — the app drives it through `Task` (see D8). Because an effect is simply the `Task` an `update` returns, there is no separate "handlers" layer between the update and its effects — a message's state change and its effect belong together (see D1).
 
 ### A2. The domain model
 
@@ -138,6 +138,16 @@ Keep the acyclic `apps → modules → shared` flow (Cargo enforces acyclicity).
 - `signex-library → signex-sketch` and `signex-bake → {signex-sketch, signex-library}` are genuine domain-to-domain coupling. Per case: accept as legitimate lower-tier layering, or lift a shared contract/type into `signex-types` so the peer dependency disappears.
 - `signex-erc-dsl → signex-erc` and `signex-renderer → signex-gfx` are legitimate layering (parser on engine; renderer on a pure-GPU foundation) and are left as-is.
 
+### D8. Concurrency — `Task` for one-shot async, `Subscription` for streams; tokio stays behind them
+
+signex already runs on tokio (`iced` is built with the `tokio` feature; `tokio` is a workspace dependency). There are exactly two sanctioned ways to be async, and both funnel results back through `update` as `Message`s so the single source of truth (A1) is never bypassed.
+
+- **One-shot async** — network fetch, file read/write, export, DB/library query. `update` returns `Task::perform(domain_async_fn(...), Message::Result)`. The async work lives in a domain/adapter crate (Iced-free); the app only wires it into a `Task` and maps the result back to a `Message`. This is already the norm: ~33 `Task::perform`/`Task::*` call sites in `signex-app`, with the actual async IO in `signex-library` adapters (`distributors/{lcsc,mouser,digikey,jlcpcb}`, `adapters/database`, using `reqwest`), never in the UI.
+- **Ongoing / streaming inputs** — timers, file-watch, websockets, long-job progress. Model as a `Subscription<Message>`, Iced's native mechanism for turning an external stream into `Message`s. Already used (`app/bootstrap.rs:468` `subscription()`, composed with `Subscription::batch([...])`).
+- **Bridging a background worker into MVU** — if a spawned task must push events to the UI over time, it sends on an `mpsc` channel that a `Subscription` surfaces as `Message`s. The worker never mutates the Model; it emits Messages, and its join handle / cancel token is state in the Model. Prefer this over raw `tokio::spawn` — the app currently has **zero** raw spawns, and we keep it that way.
+
+**The event-bus question.** A bus is only ever justified as that **channel → `Subscription`** bridge, for an external async producer that must push into the loop. It is **not** for inter-slice communication: if slice A must notify slice B, A's `update` returns a `Message` the root delegates to B (A1 composition). A shared in-process bus between slices/crates hides the data flow, defeats the single `Message` enum, and breaks traceability — so we do not add one.
+
 ---
 
 ## Part C — Anti-patterns to avoid (scenarios we stay away from)
@@ -146,7 +156,7 @@ CRUD/microservice- or OO-shaped patterns that do **not** fit signex. Noted so th
 
 - **No stateful widgets (the deprecated `Component`).** No self-contained widget with its own private mutable state. It breaks the single source of truth (A1). Reusable pieces are stateless view functions; state lives in the slice Model.
 - **No domain logic in the app crate.** No connectivity/geometry/netlist/DRC/BOM algorithm implemented inline in `signex-app` (A2, D4). That is behavior drifting away from the model it belongs to.
-- **No cross-crate event bus.** Iced's `update` loop is already the message bus, centralized in one `Message` enum. A second in-memory/event bus between crates is redundant indirection for a single-process app.
+- **No ad-hoc event bus for inter-slice/cross-crate messaging.** Iced's `update` loop is already the message bus (one `Message` enum). Slice-to-slice notification goes through Message routing; the only sanctioned bus-like bridge is a channel surfaced as a `Subscription` for an external async producer (D8). A second in-memory bus between slices hides data flow and is redundant indirection for a single-process app.
 - **No per-layer crates** (`*_domain`, `*_application`, `*_infrastructure`). Layer *inside* a crate with folders; the command/engine pattern already gives us an application layer.
 - **No repository / DB-per-module ceremony.** signex is not CRUD; persistence is atomic file IO + git.
 - **No flat mega-enums.** A message enum with hundreds of sibling leaf variants is the message-shaped monolith (D3).
