@@ -209,19 +209,62 @@ pub fn flood_net_elements(sheet: &SchematicSheet, target_wire: Uuid) -> Option<F
 
 /// Build the authoritative [`Netlist`] for a single schematic sheet.
 ///
-/// Connectivity is [`SheetConnectivity`] — union-find over wire endpoints,
-/// with junctions merging wires that meet (including a wire terminating on
-/// another's interior, a T-junction, issue #107). Component pins are projected
-/// to world space and attached as [`Terminal`]s to the net their tip lands on.
-/// Output is deterministic: nets are numbered `1..=N` in sorted-root order and
-/// each net's terminals are sorted by `(reference, pin)`.
+/// Physical connectivity is [`SheetConnectivity`] — union-find over wire
+/// endpoints, with junctions merging wires that meet (including a wire
+/// terminating on another's interior, a T-junction, issue #107). On top of
+/// that, same-name labels join nets by name: a `Global` label (whole design),
+/// a `Power` label (power nets like `GND` / `VCC`), or a local `Net` label
+/// (same-sheet same-name) merges every group carrying that name into one net.
+/// `Hierarchical` labels connect to a parent sheet's pins rather than to
+/// same-name peers, so they are left to cross-sheet stitching.
+///
+/// Component pins are projected to world space and attached as [`Terminal`]s to
+/// the net their tip lands on. Output is deterministic: nets are numbered
+/// `1..=N` in sorted-root order and each net's terminals are sorted by
+/// `(reference, pin)`.
 pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
-    let mut conn = SheetConnectivity::build(sheet);
+    // Start from the physical connectivity core (wires + junction T-merges),
+    // taking an owned copy so the label-merge below never disturbs what the
+    // net-flood reads through `SheetConnectivity`.
+    let mut parent = SheetConnectivity::build(sheet).parent;
 
-    // Group labels by net root — the highest-priority one names the net.
+    // Anchor each label to the wire it sits on (endpoint or interior), then
+    // merge net roots that share a same-name label whose kind joins by name:
+    // Global (whole design), Power (power nets), and local Net (same-sheet
+    // same-name). Hierarchical labels join to a parent sheet's pins, not to
+    // same-name peers, so they are left to cross-sheet stitching.
+    let mut name_root: HashMap<&str, Key> = HashMap::new();
+    for lbl in &sheet.labels {
+        let lk = pt_key(&lbl.position);
+        for w in &sheet.wires {
+            if point_on_segment(lk, pt_key(&w.start), pt_key(&w.end)) {
+                uf_union(&mut parent, lk, pt_key(&w.start));
+                break;
+            }
+        }
+        if lbl.text.is_empty()
+            || !matches!(
+                lbl.label_type,
+                LabelType::Global | LabelType::Power | LabelType::Net
+            )
+        {
+            continue;
+        }
+        let root = uf_find(&mut parent, lk);
+        match name_root.get(lbl.text.as_str()) {
+            Some(&existing) => {
+                uf_union(&mut parent, root, existing);
+            }
+            None => {
+                name_root.insert(lbl.text.as_str(), root);
+            }
+        }
+    }
+
+    // Group labels by (merged) net root — the highest-priority one names it.
     let mut net_labels: HashMap<Key, Vec<&Label>> = HashMap::new();
     for lbl in &sheet.labels {
-        let root = conn.root_of(&lbl.position);
+        let root = uf_find(&mut parent, pt_key(&lbl.position));
         net_labels.entry(root).or_default().push(lbl);
     }
 
@@ -248,7 +291,7 @@ pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
             } else {
                 lp.pin.name.clone()
             };
-            let root = conn.root_of(&world_pos);
+            let root = uf_find(&mut parent, pt_key(&world_pos));
             net_terms.entry(root).or_default().push(Terminal {
                 reference: sym.reference.clone(),
                 pin,
@@ -585,6 +628,89 @@ mod tests {
 
         let netlist = build_netlist(&sheet);
         assert!(netlist.nets.is_empty());
+    }
+
+    /// Two physically separate one-wire groups, each with a pin and a same-name
+    /// label of `ty`. Returns the built netlist so a test can assert whether
+    /// they were merged by name.
+    fn two_labelled_groups(text: &str, ty: LabelType) -> Netlist {
+        let mut sheet = empty_sheet();
+        sheet.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+        sheet.wires.push(wire(pt(50.0, 0.0), pt(60.0, 0.0)));
+        sheet.labels.push(label(text, pt(0.0, 0.0), ty));
+        sheet.labels.push(label(text, pt(50.0, 0.0), ty));
+        add_lib(
+            &mut sheet,
+            "R",
+            vec![lib_pin("1", pt(0.0, 0.0), PinDirection::Passive)],
+        );
+        place(&mut sheet, "R1", "R", pt(0.0, 0.0));
+        place(&mut sheet, "R2", "R", pt(50.0, 0.0));
+        build_netlist(&sheet)
+    }
+
+    #[test]
+    fn global_labels_of_the_same_name_merge_separate_groups() {
+        // Same-name Global labels are one electrical net across the whole
+        // design, even with no wire between the two groups.
+        let netlist = two_labelled_groups("VBUS", LabelType::Global);
+        assert_eq!(netlist.nets.len(), 1, "same-name globals merge");
+        assert_eq!(netlist.nets[0].name, "VBUS");
+        assert_eq!(netlist.nets[0].terminals.len(), 2);
+    }
+
+    #[test]
+    fn power_labels_of_the_same_name_merge() {
+        // Every `GND` power port is the same net.
+        let netlist = two_labelled_groups("GND", LabelType::Power);
+        assert_eq!(netlist.nets.len(), 1, "same-name power nets merge");
+        assert_eq!(netlist.nets[0].name, "GND");
+        assert_eq!(netlist.nets[0].terminals.len(), 2);
+    }
+
+    #[test]
+    fn local_net_labels_of_the_same_name_merge_on_one_sheet() {
+        // Same-name local labels connect within a single sheet.
+        let netlist = two_labelled_groups("SDA", LabelType::Net);
+        assert_eq!(netlist.nets.len(), 1, "same-name local labels connect");
+        assert_eq!(netlist.nets[0].name, "SDA");
+        assert_eq!(netlist.nets[0].terminals.len(), 2);
+    }
+
+    #[test]
+    fn hierarchical_labels_of_the_same_name_do_not_merge_on_one_sheet() {
+        // Hierarchical labels connect to a parent sheet's pins, not to
+        // same-name peers — that stitching is the cross-sheet increment's job,
+        // so two same-name hierarchical groups stay separate here.
+        let netlist = two_labelled_groups("BUS", LabelType::Hierarchical);
+        assert_eq!(
+            netlist.nets.len(),
+            2,
+            "hierarchical same-name is not merged on one sheet"
+        );
+    }
+
+    #[test]
+    fn differently_named_labels_stay_separate() {
+        let mut sheet = empty_sheet();
+        sheet.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+        sheet.wires.push(wire(pt(50.0, 0.0), pt(60.0, 0.0)));
+        sheet
+            .labels
+            .push(label("NET_A", pt(0.0, 0.0), LabelType::Global));
+        sheet
+            .labels
+            .push(label("NET_B", pt(50.0, 0.0), LabelType::Global));
+        add_lib(
+            &mut sheet,
+            "R",
+            vec![lib_pin("1", pt(0.0, 0.0), PinDirection::Passive)],
+        );
+        place(&mut sheet, "R1", "R", pt(0.0, 0.0));
+        place(&mut sheet, "R2", "R", pt(50.0, 0.0));
+
+        let netlist = build_netlist(&sheet);
+        assert_eq!(netlist.nets.len(), 2, "different names are different nets");
     }
 
     fn wire_id(a: Point, b: Point, id: Uuid) -> Wire {
