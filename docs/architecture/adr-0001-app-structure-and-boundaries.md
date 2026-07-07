@@ -128,10 +128,9 @@ Direct application of A2's authoritative-model rule. `signex-app` wires UI state
 
 - **Rule:** pure computation over domain types belongs in a domain crate (`signex-engine`, `signex-sketch`, `signex-bake`, `signex-output`, `signex-erc`, `signex-bom`), not in a UI handler or draw file.
 - **Model to copy:** `library/editor/footprint/sketch_dispatch.rs` — solves via `signex_sketch`, delegates *all* geometry baking to `signex_bake::bake_*`, and only wires results into fields.
-- **Fix the two known leaks:**
-  - `app/handlers/canvas.rs` (~L500–565) hand-rolls a union-find net-connectivity algorithm in a click handler → move to `signex-engine` as the producer of the `Netlist` contract (A3.1), so net-flood, ratsnest, and netlist export all read one source of truth.
-  - `library/editor/footprint/canvas/draw_sketch.rs:949` `find_closed_loops` duplicates `signex-bake/src/profile.rs::trace_closed_profile` → reuse the domain function.
-  - (Minor) move `point_in_polygon` / `point_to_segment_dist` from `canvas/geometry.rs` into `signex_sketch::geom`.
+- **Geometry primitives — DONE.** `point_in_polygon` and point-to-segment distance were reimplemented three times with drifting signatures (`footprint/canvas/geometry.rs`, `schematic_runtime.rs`, `symbol/state.rs`). Consolidated into `signex_sketch::geom::{point_in_polygon, point_to_segment_distance, point_to_segment_distance_sq}` (one tested implementation on the crate's `Point2`); the three surfaces now call it through thin local adapters. Screen-space hit-testing (`screen_dist_to_segment_sq`, on `iced::Point`) stays in the app — it is presentation, not domain.
+- **Net connectivity leak:** `app/handlers/canvas.rs` (~L500–565) hand-rolls a union-find net-connectivity algorithm in a click handler → handled by A3.1 (it becomes the producer of the `Netlist` contract, so net-flood, ratsnest, and netlist export read one source of truth).
+- **`find_closed_loops` is NOT a duplicate (correction).** An earlier audit claimed `draw_sketch.rs::find_closed_loops` duplicates `signex-bake::trace_closed_profile`. It does not: they share the *adjacency-walk technique* but have different contracts — `find_closed_loops` enumerates *all* closed loops tolerantly for UI fill/selection (skips construction-only loops), while `trace_closed_profile` traces *one* profile from a seed strictly (errors on branching, tessellates arcs) for baking. Swapping one for the other would change behaviour. The genuine (optional, deferred) dedup is extracting a shared adjacency-walk primitive into `signex-sketch`; until then `find_closed_loops` stays as a legitimate presentation concern.
 
 ### D5. Enforce boundaries with visibility + CI guards, not just crate edges
 
@@ -206,7 +205,7 @@ CRUD/microservice- or OO-shaped patterns that do **not** fit signex. Noted so th
 
 **Messages:** root `Message` (`app/contracts.rs`) ~223 variants, ~20 namespaced + ~200 flat leaves. `EditorMsg` (`library/messages.rs`) ~140 variants, flat, prefix-namespaced only; parallel `PrimitiveEditorMsg` ~134 variants owns the real symbol/footprint editing while `EditorMsg::Symbol*/Footprint*` are inert.
 
-**Known domain leaks:** union-find connectivity in `app/handlers/canvas.rs` (~L500–565); `find_closed_loops` in `draw_sketch.rs:949` duplicating `signex-bake/src/profile.rs::trace_closed_profile`; world-space geometry primitives in `library/editor/footprint/canvas/geometry.rs`.
+**Domain leaks — status:** (1) union-find net-connectivity in `app/handlers/canvas.rs` (~L500–565) — still present, handled by A3.1. (2) World-space geometry primitives (`point_in_polygon` / point-to-segment) were triplicated across `footprint/canvas/geometry.rs`, `schematic_runtime.rs`, and `symbol/state.rs` — **consolidated** into `signex_sketch::geom` (D4). (3) `find_closed_loops` in `draw_sketch.rs` was mis-flagged as a `trace_closed_profile` duplicate — it is a distinct UI concern (see D4), left in place.
 
 **Schematic↔PCB seam (A3.1):** no authoritative `Netlist` contract today — `signex-output::NetlistExporter` → `NetlistOutput { bytes }` is a stub (`NotImplemented`; the Standard emitter moved to a GPL companion repo under #62); schematic connectivity is the ad-hoc union-find above; the PCB side carries only `NetDef { number, name }` (`signex-types/pcb.rs`). Terminology is otherwise correct: `Wire` (electrical) in `schematic.rs`, `Net`/`NetClass` in `net.rs`, `Line` reserved for geometry.
 

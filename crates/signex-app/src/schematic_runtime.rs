@@ -1543,33 +1543,12 @@ fn drawing_aabb(drawing: &SchDrawing) -> Aabb {
 }
 
 fn point_to_segment_distance(p: Point, a: Point, b: Point) -> f64 {
-    let dx = b.x - a.x;
-    let dy = b.y - a.y;
-    let len2 = dx * dx + dy * dy;
-    if len2 <= f64::EPSILON {
-        return ((p.x - a.x).powi(2) + (p.y - a.y).powi(2)).sqrt();
-    }
-    let t = (((p.x - a.x) * dx + (p.y - a.y) * dy) / len2).clamp(0.0, 1.0);
-    let px = a.x + t * dx;
-    let py = a.y + t * dy;
-    ((p.x - px).powi(2) + (p.y - py).powi(2)).sqrt()
+    signex_sketch::geom::point_to_segment_distance((p.x, p.y), (a.x, a.y), (b.x, b.y))
 }
 
 fn point_in_polygon(point: (f64, f64), polygon: &[(f64, f64)]) -> bool {
-    let (x, y) = point;
-    let mut inside = false;
-    let mut j = polygon.len() - 1;
-    for i in 0..polygon.len() {
-        let (xi, yi) = polygon[i];
-        let (xj, yj) = polygon[j];
-        let intersects = ((yi > y) != (yj > y))
-            && (x < (xj - xi) * (y - yi) / ((yj - yi).abs().max(1e-9) * (if yj >= yi { 1.0 } else { -1.0 })) + xi);
-        if intersects {
-            inside = !inside;
-        }
-        j = i;
-    }
-    inside
+    let polygon: Vec<signex_sketch::geom::Point2> = polygon.iter().map(|&p| p.into()).collect();
+    signex_sketch::geom::point_in_polygon(point, &polygon)
 }
 
 fn stroke_px_at_zoom(base_width_px_at_100: f32, scale: f32) -> f32 {
