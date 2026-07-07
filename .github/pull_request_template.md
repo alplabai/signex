@@ -8,15 +8,16 @@ Brief description of what this PR does and why.
 
 ## License compliance (issue #62)
 
-This tree is Apache-2.0 (clean-room). Opening a PR affirms it is **GPL-clean**:
-no code copied from GPL-licensed sources such as KiCad. There is nothing to
-fill in — CI (`PR-description self-declaration`) passes unless a PR explicitly
-admits a GPL / KiCad source.
+This tree is Apache-2.0 (clean-room). Opening a PR affirms **no license-gated
+source files** were used — nothing under GPL/copyleft or any other licence
+incompatible with Apache-2.0. There is nothing to fill in — CI
+(`PR-description self-declaration`) passes unless a PR states otherwise.
 
-Contributions that are **not** GPL-clean belong in the GPL-3.0 companion repo
-[signex-kicad-import](https://github.com/alplabai/signex-kicad-import), not here
-— in that case add a line `GPL-clean: no`. See
-[docs/LICENSING.md](../docs/LICENSING.md) for the rationale.
+If your contribution *did* draw on a license-gated source, add a line
+`License-gated sources: yes` — CI routes it to the GPL-3.0 companion repo
+[signex-kicad-import](https://github.com/alplabai/signex-kicad-import), where
+such work belongs. See [docs/LICENSING.md](../docs/LICENSING.md) for the
+rationale.
 
 ## Labels
 

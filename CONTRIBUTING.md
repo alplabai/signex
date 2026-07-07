@@ -218,13 +218,13 @@ belongs. See [docs/LICENSING.md](docs/LICENSING.md) for the rationale
 behind the two-repo split.
 
 When you open a PR against the main `signex` repo, no declaration block
-is required — opening the PR affirms the contribution is **GPL-clean**:
-no code copied from GPL-licensed sources such as KiCad. CI (see
-`.github/workflows/license-guard.yml` and the PR-license-declaration
-workflow) passes unless the description explicitly admits a GPL / KiCad
-source. If a contribution is **not** GPL-clean, add a line
-`GPL-clean: no` — CI rejects it here with a pointer to the companion
-repo, which is where that work belongs.
+is required — opening the PR affirms **no license-gated source files**
+were used (nothing under GPL/copyleft or otherwise Apache-incompatible).
+CI (see `.github/workflows/license-guard.yml` and the
+PR-license-declaration workflow) passes unless the description explicitly
+admits one. If your contribution did draw on a license-gated source, add
+a line `License-gated sources: yes` — CI rejects it here with a pointer
+to the companion repo, which is where that work belongs.
 
 Why this matters: large-language-model assistants that have been
 trained on KiCad source can inadvertently produce structurally

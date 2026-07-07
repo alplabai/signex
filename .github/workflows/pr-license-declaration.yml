@@ -3,12 +3,13 @@
 name: PR License Declaration
 
 # Clean-room guard. This tree is Apache-2.0; contributions must not copy from
-# GPL-licensed sources (e.g. KiCad). Opening a PR affirms it is GPL-clean, so
-# no self-declaration fields are required — a PR that says nothing passes.
+# license-gated source files — anything under GPL/copyleft or another licence
+# incompatible with Apache-2.0. Opening a PR affirms none were used, so no
+# self-declaration fields are required — a PR that says nothing passes.
 #
-# The only hard block is a PR whose description *explicitly admits* a GPL /
-# KiCad source (`GPL-clean: no` or `KiCad source consulted: yes`); that work
-# belongs in the GPL-3.0-or-later companion repo signex-kicad-import, not here.
+# The only hard block is a PR whose description *explicitly admits* a
+# license-gated source (a `License-gated sources: yes` line); that work belongs
+# in the GPL-3.0-or-later companion repo signex-kicad-import, not here.
 #
 # See CONTRIBUTING.md and docs/LICENSING.md for the rationale.
 
@@ -26,21 +27,22 @@ jobs:
     name: PR-description self-declaration
     runs-on: ubuntu-latest
     steps:
-      - name: Block PRs that admit a GPL / KiCad source
+      - name: Block PRs that admit a license-gated source
         env:
           BODY: ${{ github.event.pull_request.body }}
         run: |
           set -e
           # Hard block: an explicit admission that the contribution draws on a
-          # GPL-licensed / KiCad source. Such work belongs in the GPL-3.0
-          # companion repo, not this Apache-2.0 tree. A PR that makes no such
-          # admission is treated as GPL-clean and passes.
-          if echo "$BODY" | grep -qiE "GPL-clean:[[:space:]]*no|KiCad source consulted:[[:space:]]*yes"; then
-            echo "::error::This PR's description admits a GPL-licensed / KiCad source."
+          # license-gated source file — one under GPL/copyleft or any other
+          # licence incompatible with this Apache-2.0 tree. Such work belongs
+          # in the GPL-3.0 companion repo. A PR that makes no such admission is
+          # treated as clean and passes.
+          if echo "$BODY" | grep -qiE "license-gated sources?:[[:space:]]*yes"; then
+            echo "::error::This PR's description admits a license-gated source file."
             echo "::error::Such contributions belong in the GPL-3.0-or-later companion repo:"
             echo "::error::  https://github.com/alplabai/signex-kicad-import"
             echo "::error::See docs/LICENSING.md for the rationale behind the two-repo split."
             exit 1
           fi
 
-          echo "No GPL / KiCad source admitted — contribution treated as GPL-clean."
+          echo "No license-gated source admitted — contribution treated as clean."

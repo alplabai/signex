@@ -135,9 +135,9 @@ project relying on LLM-assisted development implicitly makes.
 
 The discipline is a process rule, not a marketing claim. It shapes
 agent prompts and retrieval scopes. Opening a PR against this repo
-affirms the contribution is GPL-clean; CI blocks only a description
-that explicitly admits a GPL / KiCad source (`GPL-clean: no` or
-`KiCad source consulted: yes`), routing it to the companion repo.
+affirms no license-gated source files were used; CI blocks only a
+description that explicitly admits one (a `License-gated sources: yes`
+line), routing it to the companion repo.
 
 If you are reviewing this codebase and have a specific file or specific
 lines you believe are derivative of KiCad source despite the above —
@@ -153,10 +153,11 @@ Patches to the main `signex` repo must not contain KiCad-derived code.
 The repository is Apache-2.0 clean; KiCad I/O lives in the GPL-3.0
 companion repo.
 
-In particular, opening a PR affirms the contribution is **GPL-clean** —
-no code copied from GPL-licensed sources such as KiCad. No declaration
-fields are required; a contribution that is not GPL-clean adds a line
-`GPL-clean: no` and belongs in signex-kicad-import instead.
+In particular, opening a PR affirms **no license-gated source files**
+were used — nothing under GPL/copyleft or otherwise Apache-incompatible.
+No declaration fields are required; a contribution that did use one adds
+a line `License-gated sources: yes` and belongs in signex-kicad-import
+instead.
 
 LLMs that have been trained on KiCad source CAN contribute to the GPL
 companion repo. They should NOT contribute to the Apache main repo. If
