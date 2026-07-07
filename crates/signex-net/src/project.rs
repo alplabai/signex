@@ -22,7 +22,7 @@ use signex_types::schematic::{Label, LabelType, SchematicSheet};
 use uuid::Uuid;
 
 use crate::build::{
-    class_from_name, collect_net_labels, collect_terminals, label_priority, merged_sheet_parent,
+    collect_membership, collect_net_labels, collect_terminals, label_priority, merged_sheet_parent,
     point_on_segment, power_name_carriers, pt_key,
 };
 use crate::uf::{Key, find as uf_find, union as uf_union};
@@ -92,6 +92,8 @@ struct Analysis<'a> {
     /// Hierarchical/Global label text → net roots carrying it (the child side
     /// of sheet-pin binding).
     port_labels: HashMap<String, Vec<Key>>,
+    /// Net root → (wire uuids, junction uuids) on this sheet.
+    membership: HashMap<Key, (Vec<Uuid>, Vec<Uuid>)>,
 }
 
 /// Build the whole-project [`Netlist`] by stitching the root sheet to its
@@ -223,7 +225,9 @@ pub fn build_project_netlist(
         nets.push(Net {
             id,
             name,
-            class: r.class,
+            class: None,
+            wires: r.wires,
+            junctions: r.junctions,
             terminals,
         });
     }
@@ -238,9 +242,11 @@ pub fn build_project_netlist(
 struct RawNet {
     sort_key: L2,
     terminals: Vec<Terminal>,
+    /// Wire / junction membership, aggregated across the net's occurrences.
+    wires: Vec<Uuid>,
+    junctions: Vec<Uuid>,
     /// Selected name (bare or already qualified), or `None` for an auto name.
     name: Option<String>,
-    class: String,
     /// Whether `name` was qualified off a non-root occurrence (drives dedup).
     qualified: bool,
 }
@@ -290,24 +296,34 @@ fn assemble_net(mut members: Vec<L2>, occs: &[Occ], analyses: &[Analysis]) -> Op
         }
     }
 
-    let (name, class, qualified) = match best {
-        None => (None, String::new(), false),
+    let (name, qualified) = match best {
+        None => (None, false),
         Some((_, qualifiable, text, occ)) => {
-            let class = class_from_name(Some(&text));
             let chain = &occs[occ].name_chain;
             if qualifiable && !chain.is_empty() {
-                (Some(format!("{}/{}", chain.join("/"), text)), class, true)
+                (Some(format!("{}/{}", chain.join("/"), text)), true)
             } else {
-                (Some(text), class, false)
+                (Some(text), false)
             }
         }
     };
 
+    // Wire / junction membership across every member occurrence.
+    let mut wires: Vec<Uuid> = Vec::new();
+    let mut junctions: Vec<Uuid> = Vec::new();
+    for &(oid, root) in &members {
+        if let Some((w, j)) = analyses[oid].membership.get(&root) {
+            wires.extend(w.iter().copied());
+            junctions.extend(j.iter().copied());
+        }
+    }
+
     Some(RawNet {
         sort_key: members[0],
         terminals,
+        wires,
+        junctions,
         name,
-        class,
         qualified,
     })
 }
@@ -333,6 +349,7 @@ fn analyze(sheet: &SchematicSheet) -> Analysis<'_> {
 
     let terminals = collect_terminals(sheet, &mut parent);
     let net_labels = collect_net_labels(sheet, &mut parent);
+    let membership = collect_membership(sheet, &mut parent);
 
     let mut power_by_root: HashMap<Key, Vec<String>> = HashMap::new();
     for (root, value) in power_name_carriers(sheet, &mut parent) {
@@ -368,6 +385,7 @@ fn analyze(sheet: &SchematicSheet) -> Analysis<'_> {
         power_by_root,
         pin_roots,
         port_labels,
+        membership,
     }
 }
 

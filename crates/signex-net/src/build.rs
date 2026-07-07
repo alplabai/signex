@@ -172,19 +172,6 @@ pub(crate) fn power_name_carriers(
     carriers
 }
 
-/// Net class = the first word of the name before `_`, lowercased (`"i2c"`
-/// from `"I2C_SDA"`); the whole lowercased name when there is no `_`. Empty
-/// for auto-named nets, which carry no class intent.
-pub(crate) fn class_from_name(name: Option<&str>) -> String {
-    match name {
-        Some(n) => n
-            .find('_')
-            .map(|i| n[..i].to_ascii_lowercase())
-            .unwrap_or_else(|| n.to_ascii_lowercase()),
-        None => String::new(),
-    }
-}
-
 /// The electrical connectivity of a single sheet: a union-find over wire
 /// endpoints with junction T-merges. This is the shared core both
 /// [`build_netlist`] and the net-colour flood ([`flood_net_elements`]) read,
@@ -362,6 +349,26 @@ pub(crate) fn collect_terminals(
     net_terms
 }
 
+/// Group each wire and junction uuid under its net root — the geometric
+/// membership of the net (what the net-flood highlights and the ratsnest read).
+/// Wires and junctions are kept in document order for determinism. `parent`
+/// must already be fully merged ([`merged_sheet_parent`]).
+pub(crate) fn collect_membership(
+    sheet: &SchematicSheet,
+    parent: &mut HashMap<Key, Key>,
+) -> HashMap<Key, (Vec<Uuid>, Vec<Uuid>)> {
+    let mut m: HashMap<Key, (Vec<Uuid>, Vec<Uuid>)> = HashMap::new();
+    for w in &sheet.wires {
+        let root = uf_find(parent, pt_key(&w.start));
+        m.entry(root).or_default().0.push(w.uuid);
+    }
+    for j in &sheet.junctions {
+        let root = uf_find(parent, pt_key(&j.position));
+        m.entry(root).or_default().1.push(j.uuid);
+    }
+    m
+}
+
 /// Build the authoritative [`Netlist`] for a single schematic sheet.
 ///
 /// Physical connectivity is [`SheetConnectivity`] — union-find over wire
@@ -389,6 +396,7 @@ pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
     for (root, value) in power_name_carriers(sheet, &mut parent) {
         power_by_root.entry(root).or_default().push(value);
     }
+    let mut membership = collect_membership(sheet, &mut parent);
     let mut net_terms = collect_terminals(sheet, &mut parent);
 
     // A net exists wherever at least one terminal lands. A label with no pins
@@ -407,18 +415,20 @@ pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
                 .map(|v| v.iter().map(String::as_str).collect())
                 .unwrap_or_default();
             let selected = best_net_name(labels, &power_vals);
-            let class = class_from_name(selected.as_ref().map(|(_, t)| t.as_str()));
             let name = selected
                 .map(|(_, t)| t)
                 .unwrap_or_else(|| format!("N${}", id.0));
 
+            let (wires, junctions) = membership.remove(&root).unwrap_or_default();
             let mut terminals = net_terms.remove(&root).unwrap_or_default();
             terminals.sort_by(|a, b| a.reference.cmp(&b.reference).then(a.pin.cmp(&b.pin)));
 
             Net {
                 id,
                 name,
-                class,
+                class: None,
+                wires,
+                junctions,
                 terminals,
             }
         })
@@ -784,7 +794,9 @@ mod tests {
     }
 
     #[test]
-    fn class_is_first_word_before_underscore() {
+    fn class_is_left_to_project_rules() {
+        // The builder no longer derives a class from the name prefix (D3.2):
+        // class resolution is a project-rules concern layered on connectivity.
         let mut sheet = empty_sheet();
         sheet.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
         sheet
@@ -798,7 +810,39 @@ mod tests {
         place(&mut sheet, "R1", "R", pt(0.0, 0.0));
 
         let netlist = build_netlist(&sheet);
-        assert_eq!(netlist.nets[0].class, "i2c");
+        assert_eq!(netlist.nets[0].name, "I2C_SDA");
+        assert!(netlist.nets[0].class.is_none());
+    }
+
+    #[test]
+    fn net_records_its_wire_and_junction_membership() {
+        // D3.1: a net carries the wire + junction uuids it occupies — the
+        // membership the net-flood highlights and the ratsnest reads.
+        let mut sheet = empty_sheet();
+        let w1 = Uuid::from_u128(1);
+        let w2 = Uuid::from_u128(2);
+        let jn = Uuid::from_u128(3);
+        sheet.wires.push(wire_id(pt(0.0, 0.0), pt(10.0, 0.0), w1));
+        sheet.wires.push(wire_id(pt(5.0, 0.0), pt(5.0, 5.0), w2));
+        sheet.junctions.push(Junction {
+            uuid: jn,
+            position: pt(5.0, 0.0),
+            diameter: 0.0,
+        });
+        add_lib(
+            &mut sheet,
+            "R",
+            vec![lib_pin("1", pt(0.0, 0.0), PinDirection::Passive)],
+        );
+        place(&mut sheet, "R1", "R", pt(0.0, 0.0));
+        place(&mut sheet, "R2", "R", pt(5.0, 5.0));
+
+        let netlist = build_netlist(&sheet);
+        assert_eq!(netlist.nets.len(), 1);
+        let net = &netlist.nets[0];
+        assert_eq!(net.wires.len(), 2, "both wires belong to the net");
+        assert!(net.wires.contains(&w1) && net.wires.contains(&w2));
+        assert_eq!(net.junctions, vec![jn]);
     }
 
     #[test]

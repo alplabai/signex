@@ -66,11 +66,21 @@ pub struct Terminal {
 /// schematic (wires + junctions + labels + pins). `id` is a build-time stable
 /// number (also usable as the PCB net number); `name` comes from the
 /// highest-priority label on the net, or is auto-assigned when unlabelled.
+///
+/// `wires` and `junctions` are the schematic elements the net occupies — the
+/// membership the net-flood highlights and the ratsnest reads. `class` is a
+/// *project-rules* concern layered on top of connectivity: the connectivity
+/// builder leaves it `None`, and a later pass assigns a [`NetClassId`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Net {
     pub id: NetId,
     pub name: String,
-    pub class: String,
+    #[serde(default)]
+    pub class: Option<NetClassId>,
+    #[serde(default)]
+    pub wires: Vec<Uuid>,
+    #[serde(default)]
+    pub junctions: Vec<Uuid>,
     pub terminals: Vec<Terminal>,
 }
 
