@@ -59,6 +59,20 @@ This is a considered trade-off, not laziness: plain-data models serialize cleanl
 
 **The authoritative-model rule (the one that governs the app crate).** The domain model is the single source of truth for *domain algorithms*. Any computation over domain types — connectivity, geometry topology, netlist building, DRC/ERC, BOM math, parsing — belongs with the model, in a domain crate. The presentation crate may *call* these; it must not *re-implement* them. Re-implementing domain logic in the UI is the anemic-model failure in reverse: behavior that drifts away from the model it belongs to (see the two known leaks in the appendix).
 
+### A3. Domain contracts at module seams
+
+Where two domains meet, the handoff is an **explicit, authoritative type in the shared kernel** (`signex-types`) — not data passed ad hoc, and not logic re-derived at the boundary. Two seams matter for an EDA tool.
+
+**A3.1 — The schematic → PCB seam: one authoritative `Netlist` contract.** The electrical connectivity drawn in the schematic must drive net assignment on the PCB. This is the single most important boundary in the tool, and today it is *not* a contract:
+
+- Schematic connectivity is computed **ad hoc** — the union-find over wire endpoints in `app/handlers/canvas.rs` (the D4 leak) is exactly this, hand-rolled in a UI handler.
+- The netlist "exporter" (`signex-output::NetlistExporter` → `NetlistOutput { bytes }`) is a **stub** returning `NotImplemented` (the Standard emitter moved to a GPL companion repo under #62); the output is an opaque byte blob, not a model.
+- The PCB side carries only a thin `NetDef { number, name }` (`signex-types/pcb.rs`).
+
+Decision: define **one** authoritative `Netlist` type in `signex-types` — the nets, each with its connected pins/terminals — that is (a) **produced** from schematic wire/label connectivity by a domain function in `signex-engine` (absorbing the union-find leak), (b) **consumed** by the PCB side to assign `NetDef`s and drive the ratsnest, and (c) the input any netlist *exporter* serializes. Connectivity is then computed **once, in the domain**, and every downstream reads the same contract. Naming: it is a domain type, so `Netlist` — not `NetlistDto` (enterprise jargon), and there is no separate `pcb_layout` crate (schematic and PCB already share `signex-types`).
+
+**A3.2 — External tools are ports with adapters.** When signex integrates an external engine, the boundary is a **trait (port) in a domain crate** plus a **concrete adapter** behind it, driven from the app through a `Task` (D8). The workspace already exposes its pluggable seams this way (`Exporter`, `LibraryAdapter`, `ViewRenderer`). Worked example for a future SPICE integration: `pub trait Simulator` in a `signex-sim` crate with an `NgSpiceSimulator` adapter running NGSPICE asynchronously; the app depends on the trait, never on NGSPICE directly. (Today's `Sim*` code is only component SPICE-model *metadata*, not a running simulator — this is guidance for when simulation lands.) No formal `infrastructure/` layer: the adapter is just a crate/module behind the port.
+
 ---
 
 ## Part B — Decisions (what we do)
@@ -115,7 +129,7 @@ Direct application of A2's authoritative-model rule. `signex-app` wires UI state
 - **Rule:** pure computation over domain types belongs in a domain crate (`signex-engine`, `signex-sketch`, `signex-bake`, `signex-output`, `signex-erc`, `signex-bom`), not in a UI handler or draw file.
 - **Model to copy:** `library/editor/footprint/sketch_dispatch.rs` — solves via `signex_sketch`, delegates *all* geometry baking to `signex_bake::bake_*`, and only wires results into fields.
 - **Fix the two known leaks:**
-  - `app/handlers/canvas.rs` (~L500–565) hand-rolls a union-find net-connectivity algorithm in a click handler → move to `signex-engine`/`signex-output` so net-flood and netlist export share one source of truth.
+  - `app/handlers/canvas.rs` (~L500–565) hand-rolls a union-find net-connectivity algorithm in a click handler → move to `signex-engine` as the producer of the `Netlist` contract (A3.1), so net-flood, ratsnest, and netlist export all read one source of truth.
   - `library/editor/footprint/canvas/draw_sketch.rs:949` `find_closed_loops` duplicates `signex-bake/src/profile.rs::trace_closed_profile` → reuse the domain function.
   - (Minor) move `point_in_polygon` / `point_to_segment_dist` from `canvas/geometry.rs` into `signex_sketch::geom`.
 
@@ -193,6 +207,8 @@ CRUD/microservice- or OO-shaped patterns that do **not** fit signex. Noted so th
 **Messages:** root `Message` (`app/contracts.rs`) ~223 variants, ~20 namespaced + ~200 flat leaves. `EditorMsg` (`library/messages.rs`) ~140 variants, flat, prefix-namespaced only; parallel `PrimitiveEditorMsg` ~134 variants owns the real symbol/footprint editing while `EditorMsg::Symbol*/Footprint*` are inert.
 
 **Known domain leaks:** union-find connectivity in `app/handlers/canvas.rs` (~L500–565); `find_closed_loops` in `draw_sketch.rs:949` duplicating `signex-bake/src/profile.rs::trace_closed_profile`; world-space geometry primitives in `library/editor/footprint/canvas/geometry.rs`.
+
+**Schematic↔PCB seam (A3.1):** no authoritative `Netlist` contract today — `signex-output::NetlistExporter` → `NetlistOutput { bytes }` is a stub (`NotImplemented`; the Standard emitter moved to a GPL companion repo under #62); schematic connectivity is the ad-hoc union-find above; the PCB side carries only `NetDef { number, name }` (`signex-types/pcb.rs`). Terminology is otherwise correct: `Wire` (electrical) in `schematic.rs`, `Net`/`NetClass` in `net.rs`, `Line` reserved for geometry.
 
 **Best-decomposed reference in-tree:** `library/editor/footprint/` (state in 8 files, canvas split by concern). Least: `library/editor/symbol/` (`state.rs` 1,522, `canvas.rs` 1,980 — still flat).
 
