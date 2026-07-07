@@ -40,7 +40,7 @@ This *is* the vertical-slice pattern: each surface owns `{ state, message, view,
 
 So when this document says **"widget"** it means a **stateless, reusable view function or custom `Widget`** — a piece of `view` that takes `&state` and returns an `Element`, with all mutable state kept in the owning slice's Model. It never means a self-contained object with its own encapsulated state and update loop (the deprecated `Component`). That older meaning is the exact thing Iced removed, and we do not reintroduce it.
 
-**Side effects live in `Task`, not in `view` or the domain.** The app crate performs IO by returning `Task`s from `update` (file dialogs, exports, network). The domain crates stay pure and synchronous; they never touch Iced or async runtimes.
+**Side effects live in `Task`, not in `view` or the domain.** The app crate performs IO by returning `Task`s from `update` (file dialogs, exports, network). The domain crates stay pure and synchronous; they never touch Iced or async runtimes. Because an effect is simply the `Task` an `update` returns, there is no separate "handlers" layer between the update and its effects — a message's state change and its effect belong together (see D1).
 
 ### A2. The domain model
 
@@ -69,6 +69,8 @@ A surface that owns its state and views owns its message-handling too. Handling 
 
 - **Target:** dissolve the central `app/dispatch/library.rs` (10,861 lines) by moving each surface's handling into that surface's slice.
 - **Model to copy:** `library/editor/footprint/` — the best-decomposed area in the tree.
+
+**Side effects, and the `handlers/` question.** A message's full response — mutating the slice Model *and* returning any `Task` for IO — lives together in `updates/<concern>.rs`. There is **no separate `handlers/` folder** inside a slice. The current horizontal `app/handlers/` (e.g. `dock/sch_library.rs` 3,088 lines, `dock/project_navigation.rs` 2,016 lines) dissolves in two directions: the domain work moves down into domain crates (D4), and the thin `Task`-returning orchestration folds into each slice's `updates/`. *Escape hatch:* a slice with genuinely heavy async orchestration may add a slice-local `effects/` module (named for effects, not "handlers") that `updates/` calls — kept thin, because the real work lives in the domain crates.
 
 ### D2. Canonical slice layout
 
@@ -149,6 +151,7 @@ CRUD/microservice- or OO-shaped patterns that do **not** fit signex. Noted so th
 - **No repository / DB-per-module ceremony.** signex is not CRUD; persistence is atomic file IO + git.
 - **No flat mega-enums.** A message enum with hundreds of sibling leaf variants is the message-shaped monolith (D3).
 - **No hoisting `update` out of its slice.** Centralizing a surface's handling is what produced the 10,861-line god-file (D1).
+- **No separate `handlers/` effect layer inside a slice.** Splitting state transitions from the `Task`s they return re-creates the horizontal dispatch-vs-handlers seam behind the `app/handlers/` god-files. A message's mutation and its effect belong together in `updates/` (D1).
 
 ---
 
