@@ -2,9 +2,9 @@
 //! row (datasheet, pin map, supply, parameters, simulation) without
 //! opening the standalone primitive editors.
 //!
-//! The reducer that applies these inline edits lives in [`reducer`], split
-//! by field-group concern.
+//! The update logic that applies these inline edits lives in [`updates`],
+//! split by field-group concern.
 
-mod reducer;
+mod updates;
 
-pub(crate) use reducer::apply_inline_edit;
+pub(crate) use updates::apply_inline_edit;

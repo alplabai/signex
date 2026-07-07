@@ -1,4 +1,4 @@
-//! Reducer for the Component Preview inline-edit surface.
+//! Update logic for the Component Preview inline-edit surface.
 //!
 //! [`apply_inline_edit`] is a thin routing table: each [`EditorMsg`] that
 //! mutates the previewed component row is dispatched to the concern
