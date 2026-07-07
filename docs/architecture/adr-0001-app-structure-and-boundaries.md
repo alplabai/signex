@@ -38,7 +38,7 @@ This *is* the vertical-slice pattern: each surface owns `{ state, message, view,
 - Iced **deprecated the `Component` trait in 0.13** with the stated reason that *"components introduce encapsulated state and hamper the use of a single source of truth."* The official replacement is: use the Elm Architecture directly, or implement a custom stateless `Widget`. ([Iced `Component` docs](https://docs.iced.rs/iced/widget/trait.Component.html), [Iced 0.14 notes](https://news.ycombinator.com/item?id=46185323))
 - Elm's own guidance is blunter: *"Actively trying to make components is a recipe for disaster."* Reuse is achieved with **composable view functions** that take state and message-constructors as arguments — not objects with private state. ([Reusable views in Elm](https://dev.to/dwayne/stateless-and-stateful-components-no-reusable-views-in-elm-2kg0))
 
-So when this document says **"component"** it means a **stateless, reusable view function or custom `Widget`** — a piece of `view` that takes `&state` and returns an `Element`, with all mutable state kept in the owning slice's Model. It never means a self-contained object with its own encapsulated state and update loop. That older meaning is the exact thing Iced removed, and we do not reintroduce it.
+So when this document says **"widget"** it means a **stateless, reusable view function or custom `Widget`** — a piece of `view` that takes `&state` and returns an `Element`, with all mutable state kept in the owning slice's Model. It never means a self-contained object with its own encapsulated state and update loop (the deprecated `Component`). That older meaning is the exact thing Iced removed, and we do not reintroduce it.
 
 **Side effects live in `Task`, not in `view` or the domain.** The app crate performs IO by returning `Task`s from `update` (file dialogs, exports, network). The domain crates stay pure and synchronous; they never touch Iced or async runtimes.
 
@@ -80,7 +80,7 @@ library/<surface>/            # one vertical slice = one MVU part
 ├── views/                    # view FUNCTIONS (plural) — the slice's screens/panels
 │   ├── mod.rs
 │   └── <screen>.rs           # pub(super) fn ...(&State, ...) -> Element<Msg>
-├── components/               # slice-local REUSABLE view functions / custom Widgets
+├── widgets/                  # slice-local REUSABLE view functions / custom Widgets
 │   └── <piece>.rs            #   stateless building blocks; state stays in state.rs (see A1)
 └── update/                   # message handling, split by concern
     ├── mod.rs                # thin router — an exhaustive match, NO `_` wildcard
@@ -90,9 +90,9 @@ library/<surface>/            # one vertical slice = one MVU part
 Naming rules:
 - **`views/` is plural** — a slice usually has more than one screen/panel; each is a view function.
 - **`update/`, not `reducer/`.** `update` is the MVU term the codebase already runs on; `reducer` is borrowed Redux/JS vocabulary used nowhere else here. The router is a thin exhaustive match (no `_`), so a new message variant is a compile error until deliberately routed. Concern files are named object → action.
-- **`components/` = stateless reusable views only.** Per A1, these are reusable view functions / custom `Widget`s, never stateful Iced `Component`s. If a "component" needs mutable state, that state lives in the slice's `state.rs` and is passed in — the component stays a pure function of it.
+- **`widgets/` = stateless reusable views only.** Per A1, these are reusable view functions / custom `Widget`s, never stateful Iced `Component`s. If a widget needs mutable state, that state lives in the slice's `state.rs` and is passed in — the widget stays a pure function of it.
 
-  > Naming note: Iced's own word for these is *widget*, and the workspace already has a `signex-widgets` crate (Tier 1 below). We use **`components/`** for the *slice-local* tier to avoid overloading "widgets" across tiers, but the two are the same kind of thing at different scopes. (If we later prefer `widgets/` everywhere for consistency, that is a one-word rename.)
+  > Naming note: we use **`widgets/`** consistently across all three tiers — slice-local `<slice>/widgets/`, domain-shared `library/shared/widgets/`, and the app-wide `signex-widgets` crate — matching Iced's own vocabulary. The tier is the scope; the name stays the same.
 
 ### D3. Namespace messages hierarchically — the root wraps per-surface sub-enums
 
@@ -117,16 +117,16 @@ Direct application of A2's authoritative-model rule. `signex-app` wires UI state
 
 Cargo blocks the big violations (a domain crate physically cannot import Iced — verified: zero `iced` imports in domain crates). Everything *inside* `signex-app` needs explicit discipline.
 
-- Slice internals are `pub(super)` / `pub(crate)`. A slice **never** imports a sibling slice's internals, `views`, or `components`.
+- Slice internals are `pub(super)` / `pub(crate)`. A slice **never** imports a sibling slice's internals, `views`, or `widgets`.
 - Add a CI arch-guard (same mechanism as the existing KiCad-surface guards) that grep-fails on (a) cross-slice imports between `library/<a>/` and `library/<b>/`, and (b) domain-shaped algorithms surfacing in the app crate. A boundary that is not machine-checked erodes.
 
-### D6. Reusable views/components use three tiers with promotion-by-need
+### D6. Reusable views/widgets use three tiers with promotion-by-need
 
 Reusable pieces are never copied into each slice's `views/`. They live at the lowest tier that covers their reuse:
 
 - **Tier 1 — `signex-widgets` crate:** app-wide, domain-agnostic custom widgets (`icon_button`, `tab_pill`, `tree_view`, …). Already consumed by `signex-app` and `chrome-catalog`.
-- **Tier 2 — `library/shared/components/`:** reused by ≥2 library slices (today scattered: `editor/datasheet_picker.rs`, `editor/preview.rs`, `editor/params.rs`). Collect here; never duplicate per slice.
-- **Tier 3 — slice-local `<slice>/components/`:** used by exactly one slice; stays private.
+- **Tier 2 — `library/shared/widgets/`:** reused by ≥2 library slices (today scattered: `editor/datasheet_picker.rs`, `editor/preview.rs`, `editor/params.rs`). Collect here; never duplicate per slice.
+- **Tier 3 — slice-local `<slice>/widgets/`:** used by exactly one slice; stays private.
 - **Promotion rule (rule of three):** a piece starts Tier 3; on the second real consumer it is promoted (not copied) to Tier 2; when broadly reusable and domain-agnostic it moves to Tier 1. Promote on real reuse, not speculation. Dependency direction is one-way (slice → Tier 2 → Tier 1) and compile-enforced. All tiers hold *stateless* views per A1.
 
 ### D7. Respect the crate DAG; resolve the two domain-to-domain couplings
@@ -142,7 +142,7 @@ Keep the acyclic `apps → modules → shared` flow (Cargo enforces acyclicity).
 
 CRUD/microservice- or OO-shaped patterns that do **not** fit signex. Noted so they are not reintroduced by analogy to generic templates.
 
-- **No stateful "components."** No reintroducing the deprecated Iced `Component` (or any self-contained widget with private mutable state). It breaks the single source of truth (A1). Reusable pieces are stateless view functions; state lives in the slice Model.
+- **No stateful widgets (the deprecated `Component`).** No self-contained widget with its own private mutable state. It breaks the single source of truth (A1). Reusable pieces are stateless view functions; state lives in the slice Model.
 - **No domain logic in the app crate.** No connectivity/geometry/netlist/DRC/BOM algorithm implemented inline in `signex-app` (A2, D4). That is behavior drifting away from the model it belongs to.
 - **No cross-crate event bus.** Iced's `update` loop is already the message bus, centralized in one `Message` enum. A second in-memory/event bus between crates is redundant indirection for a single-process app.
 - **No per-layer crates** (`*_domain`, `*_application`, `*_infrastructure`). Layer *inside* a crate with folders; the command/engine pattern already gives us an application layer.
