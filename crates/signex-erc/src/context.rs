@@ -430,8 +430,9 @@ fn point_is_connected(
 // Net derivation (union-find over wire endpoints)
 // ---------------------------------------------------------------------------
 
-// Union-find lives in `crate::uf` (HI-17). Import the canonical helpers.
-use crate::uf::{find as uf_find, union as uf_union};
+// Union-find lives in the shared `signex_net::uf` crate (HI-17, ADR-0001
+// A3.1). Import the canonical helpers.
+use signex_net::uf::{find as uf_find, union as uf_union};
 
 fn derive_nets(
     wires: &[ErcWire],

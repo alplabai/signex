@@ -10,6 +10,7 @@ members = [
     "crates/signex-widgets",
     "crates/signex-erc",
     "crates/signex-erc-dsl",
+    "crates/signex-net",
     "crates/signex-output",
     "crates/chrome-catalog",
     "crates/signex-library",
@@ -27,6 +28,7 @@ default-members = [
     "crates/signex-types",
     "crates/signex-erc",
     "crates/signex-erc-dsl",
+    "crates/signex-net",
     "crates/signex-output",
     "crates/signex-library",
     "crates/signex-sketch",
@@ -87,6 +89,7 @@ signex-renderer = { path = "crates/signex-renderer" }
 signex-widgets = { path = "crates/signex-widgets" }
 signex-erc = { path = "crates/signex-erc" }
 signex-erc-dsl = { path = "crates/signex-erc-dsl" }
+signex-net = { path = "crates/signex-net" }
 signex-output = { path = "crates/signex-output" }
 signex-3d-model-importer = { path = "crates/signex-3d-model-importer" }
 

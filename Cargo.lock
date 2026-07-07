@@ -5445,6 +5445,7 @@ name = "signex-erc"
 version = "0.14.0"
 dependencies = [
  "serde",
+ "signex-net",
  "signex-types",
  "uuid",
 ]
@@ -5527,6 +5528,14 @@ dependencies = [
  "tower_governor",
  "tracing",
  "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "signex-net"
+version = "0.14.0"
+dependencies = [
+ "signex-types",
  "uuid",
 ]
 

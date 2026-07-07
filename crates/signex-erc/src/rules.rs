@@ -33,8 +33,9 @@ fn key(p: &Point) -> (i64, i64) {
     ((p.x * 1000.0).round() as i64, (p.y * 1000.0).round() as i64)
 }
 
-// Union-find lives in `crate::uf` (HI-17). Import the canonical helpers.
-use crate::uf::{find as uf_find, union as uf_union};
+// Union-find lives in the shared `signex_net::uf` crate (HI-17, ADR-0001
+// A3.1). Import the canonical helpers.
+use signex_net::uf::{find as uf_find, union as uf_union};
 
 // ---------------------------------------------------------------------------
 // Rule: UnusedPin
@@ -465,10 +466,10 @@ pub(crate) fn missing_power_flag(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     use std::collections::HashMap;
     let mut parent: HashMap<(i64, i64), (i64, i64)> = HashMap::new();
     for w in &ctx.wires {
-        crate::uf::union(&mut parent, key(&w.start), key(&w.end));
+        signex_net::uf::union(&mut parent, key(&w.start), key(&w.end));
     }
     for j in &ctx.junctions {
-        crate::uf::find(&mut parent, key(&j.position));
+        signex_net::uf::find(&mut parent, key(&j.position));
     }
     // Map each label text → set of net roots its labels sit on.
     let mut label_nets: HashMap<&str, std::collections::HashSet<(i64, i64)>> = HashMap::new();
@@ -476,7 +477,7 @@ pub(crate) fn missing_power_flag(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
         if lbl.text.is_empty() {
             continue;
         }
-        let root = crate::uf::find(&mut parent, key(&lbl.position));
+        let root = signex_net::uf::find(&mut parent, key(&lbl.position));
         label_nets
             .entry(lbl.text.as_str())
             .or_default()
@@ -494,7 +495,7 @@ pub(crate) fn missing_power_flag(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
         // Power-port symbols carry a single connection point at their
         // position (no separate pin geometry). Look up the net root
         // for that point.
-        let port_root = crate::uf::find(&mut parent, key(&symbol.position));
+        let port_root = signex_net::uf::find(&mut parent, key(&symbol.position));
         let same_net_label = label_nets
             .get(name)
             .map(|nets| nets.contains(&port_root))

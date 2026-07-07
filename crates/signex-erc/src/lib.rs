@@ -24,7 +24,6 @@ pub mod diagnostic;
 pub mod engine;
 pub mod rule;
 mod rules;
-pub(crate) mod uf;
 
 pub use context::ErcContext;
 pub use diagnostic::Diagnostic;
