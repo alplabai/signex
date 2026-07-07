@@ -78,27 +78,31 @@ A surface that owns its state and views owns its message-handling too. Handling 
 library/<surface>/            # one vertical slice = one MVU part
 ├── mod.rs                    # narrow public API: pub(crate) state + update + view entry
 ├── state.rs                  # the slice Model (the ONLY home of this surface's mutable state)
-├── message.rs                # the slice's Message sub-enum (see D3)
+├── messages/                 # the slice's Message tree, split by concern (mirrors updates/)
+│   ├── mod.rs                #   wrapper enum, e.g. EditorMsg::Datasheet(DatasheetMsg) (see D3)
+│   └── <concern>.rs          #   one sub-enum per concern, e.g. DatasheetMsg
 ├── views/                    # view FUNCTIONS (plural) — the slice's screens/panels
 │   ├── mod.rs
 │   └── <screen>.rs           # pub(super) fn ...(&State, ...) -> Element<Msg>
 ├── widgets/                  # slice-local REUSABLE view functions / custom Widgets
 │   └── <piece>.rs            #   stateless building blocks; state stays in state.rs (see A1)
-└── updates/                  # message handling, split by concern
+└── updates/                  # message handling, split by concern (mirrors messages/)
     ├── mod.rs                # thin router — an exhaustive match, NO `_` wildcard
     └── <concern>.rs          # pub(super) fns named object → action (e.g. datasheet::set_url)
 ```
 
 Naming rules:
 - **`views/` is plural** — a slice usually has more than one screen/panel; each is a view function.
+- **`messages/` mirrors `updates/`.** Each concern's sub-enum lives in `messages/<concern>.rs` (`DatasheetMsg`, `SimMsg`, …) and `messages/mod.rs` holds the wrapper (`EditorMsg::<Concern>(<Concern>Msg)`, D3). So `messages/sim.rs` defines `SimMsg` and `updates/sim.rs` handles it — the two folders line up one-to-one. This is the fix for the current 1,976-line `library/messages.rs`.
 - **`updates/`, not `reducer/`.** The folder is plural for consistency with `views/` and `widgets/`; the MVU *function* it serves stays singular `update`. `update` is the MVU term the codebase already runs on — `reducer` is borrowed Redux/JS vocabulary used nowhere else here. The router (`updates/mod.rs`) is a thin exhaustive match (no `_`), so a new message variant is a compile error until deliberately routed. Concern files are named object → action.
 - **`widgets/` = stateless reusable views only.** Per A1, these are reusable view functions / custom `Widget`s, never stateful Iced `Component`s. If a widget needs mutable state, that state lives in the slice's `state.rs` and is passed in — the widget stays a pure function of it.
 
   > Naming note: we use **`widgets/`** consistently across all three tiers — slice-local `<slice>/widgets/`, domain-shared `library/shared/widgets/`, and the app-wide `signex-widgets` crate — matching Iced's own vocabulary. The tier is the scope; the name stays the same.
+- **File ↔ folder is a move, not a rewrite.** Rust treats `foo.rs` and `foo/mod.rs` as the same module `foo`, so `messages`, `views`, `widgets`, and `updates` may each start as a single `.rs` file in a small slice and be promoted to a folder as it grows — without touching a single import path. Promote on size, not speculation.
 
 ### D3. Namespace messages hierarchically — the root wraps per-surface sub-enums
 
-Each slice owns its own `Message` sub-enum (`message.rs`). The root `Message` and the library `EditorMsg` wrap those sub-enums; they do not carry a flat leaf tail. This is A1's `.map(Message::Surface)` composition made real in the type system.
+Each slice owns its own `Message` sub-enums (in `messages/`, or a single `messages.rs` while small). The root `Message` and the library `EditorMsg` wrap those sub-enums; they do not carry a flat leaf tail. This is A1's `.map(Message::Surface)` composition made real in the type system, and it pairs one-to-one with the `updates/` split (D2).
 
 - **Target shape:** `Message::<Surface>(<Surface>Msg)`, and one level down `EditorMsg::<Surface>(<Surface>Msg)`.
 - **Migrate away from:** the ~223-variant root `Message` (~20 namespaced, ~200 flat leaves like `PrintPreview*`, `BomPreview*`, `Grid*`, `NetColor*`) and the ~140-variant **flat** `EditorMsg`.
