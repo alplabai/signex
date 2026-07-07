@@ -6,20 +6,16 @@ Brief description of what this PR does and why.
 
 -
 
-## License compliance (required — issue #62)
+## License compliance (issue #62)
 
-The main signex repo is Apache-2.0 clean. Fill in this block; CI
-(`PR-description self-declaration`) checks for it.
+This tree is Apache-2.0 (clean-room). Opening a PR affirms it is **GPL-clean**:
+no code copied from GPL-licensed sources such as KiCad. There is nothing to
+fill in — CI (`PR-description self-declaration`) passes unless a PR explicitly
+admits a GPL / KiCad source.
 
-```
-Source basis:        [my own work | Signex's prior code | published format specs | other (specify)]
-LLM-assisted:        [yes/no — if yes, list which models]
-KiCad source consulted: [yes/no — if yes, the PR belongs in signex-kicad-import, not here]
-```
-
-If "KiCad source consulted: yes," route the contribution to the
-[signex-kicad-import](https://github.com/alplabai/signex-kicad-import)
-GPL-3.0 companion repo instead of this one. See
+Contributions that are **not** GPL-clean belong in the GPL-3.0 companion repo
+[signex-kicad-import](https://github.com/alplabai/signex-kicad-import), not here
+— in that case add a line `GPL-clean: no`. See
 [docs/LICENSING.md](../docs/LICENSING.md) for the rationale.
 
 ## Labels
