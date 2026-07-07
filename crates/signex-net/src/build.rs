@@ -212,11 +212,14 @@ pub fn flood_net_elements(sheet: &SchematicSheet, target_wire: Uuid) -> Option<F
 /// Physical connectivity is [`SheetConnectivity`] — union-find over wire
 /// endpoints, with junctions merging wires that meet (including a wire
 /// terminating on another's interior, a T-junction, issue #107). On top of
-/// that, same-name labels join nets by name: a `Global` label (whole design),
-/// a `Power` label (power nets like `GND` / `VCC`), or a local `Net` label
-/// (same-sheet same-name) merges every group carrying that name into one net.
-/// `Hierarchical` labels connect to a parent sheet's pins rather than to
-/// same-name peers, so they are left to cross-sheet stitching.
+/// that, same-name labels join nets **within this sheet**: same-name `Global`,
+/// `Power` (power nets like `GND` / `VCC`), or local `Net` labels each merge
+/// every group *on this sheet* carrying that name into one net. `Global` and
+/// `Power` labels also connect by name *across* sheets, but that whole-design
+/// stitching is the cross-sheet increment's job — `build_netlist` sees a single
+/// sheet, so it realises only the on-sheet part. `Hierarchical` labels connect
+/// to a parent sheet's pins rather than to same-name peers, so they too are
+/// left to cross-sheet stitching.
 ///
 /// Component pins are projected to world space and attached as [`Terminal`]s to
 /// the net their tip lands on. Output is deterministic: nets are numbered
@@ -229,10 +232,12 @@ pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
     let mut parent = SheetConnectivity::build(sheet).parent;
 
     // Anchor each label to the wire it sits on (endpoint or interior), then
-    // merge net roots that share a same-name label whose kind joins by name:
-    // Global (whole design), Power (power nets), and local Net (same-sheet
-    // same-name). Hierarchical labels join to a parent sheet's pins, not to
-    // same-name peers, so they are left to cross-sheet stitching.
+    // merge net roots that share a same-name label whose kind joins by name,
+    // within this sheet: Global, Power (power nets), and local Net. (Global and
+    // Power also join across sheets by name — deferred to cross-sheet
+    // stitching; here we only see one sheet.) Hierarchical labels join to a
+    // parent sheet's pins, not to same-name peers, so they are left to
+    // cross-sheet stitching.
     let mut name_root: HashMap<&str, Key> = HashMap::new();
     for lbl in &sheet.labels {
         let lk = pt_key(&lbl.position);
@@ -711,6 +716,42 @@ mod tests {
 
         let netlist = build_netlist(&sheet);
         assert_eq!(netlist.nets.len(), 2, "different names are different nets");
+    }
+
+    #[test]
+    fn label_anchors_to_a_wire_interior_not_just_endpoints() {
+        // A label placed mid-segment — (5,0) on the (0,0)-(10,0) wire, not an
+        // endpoint — must anchor to that wire's net so its name-merge joins the
+        // wire's group. Without the interior on-segment anchoring the label
+        // would be a stray singleton at (5,0), and the two groups would NOT
+        // merge (R1 and R2 would land on separate nets). Regression guard for
+        // the point_on_segment anchoring path.
+        let mut sheet = empty_sheet();
+        sheet.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+        sheet.wires.push(wire(pt(50.0, 0.0), pt(60.0, 0.0)));
+        // First VBUS label sits on the *interior* of wire A, not an endpoint.
+        sheet
+            .labels
+            .push(label("VBUS", pt(5.0, 0.0), LabelType::Global));
+        sheet
+            .labels
+            .push(label("VBUS", pt(50.0, 0.0), LabelType::Global));
+        add_lib(
+            &mut sheet,
+            "R",
+            vec![lib_pin("1", pt(0.0, 0.0), PinDirection::Passive)],
+        );
+        place(&mut sheet, "R1", "R", pt(0.0, 0.0));
+        place(&mut sheet, "R2", "R", pt(50.0, 0.0));
+
+        let netlist = build_netlist(&sheet);
+        assert_eq!(
+            netlist.nets.len(),
+            1,
+            "an interior-anchored label merges its wire's net"
+        );
+        assert_eq!(netlist.nets[0].name, "VBUS");
+        assert_eq!(netlist.nets[0].terminals.len(), 2);
     }
 
     fn wire_id(a: Point, b: Point, id: Uuid) -> Wire {
