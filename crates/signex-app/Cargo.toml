@@ -28,6 +28,7 @@ anyhow = { workspace = true }
 signex-widgets = { workspace = true }
 signex-erc = { workspace = true }
 signex-erc-dsl = { workspace = true }
+signex-net = { workspace = true }
 signex-output = { workspace = true }
 signex-library = { workspace = true, features = [
     "local-git",

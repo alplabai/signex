@@ -494,86 +494,28 @@ impl Signex {
                                 if point_on_segment(
                                     hit_x, hit_y, w.start.x, w.start.y, w.end.x, w.end.y,
                                 ) {
-                                    Some(signex_types::schematic::SelectedItem::new(
-                                        w.uuid,
-                                        signex_types::schematic::SelectedKind::Wire,
-                                    ))
+                                    Some(w.uuid)
                                 } else {
                                     None
                                 }
                             });
+                            // Net membership comes from the authoritative
+                            // connectivity core (signex-net), the same one
+                            // build_netlist / ERC read. It buckets at 1 µm and
+                            // resolves T-junctions by an interior on-segment
+                            // test, so the highlight follows the real net —
+                            // unlike the old inline union-find here, which
+                            // bucketed at 0.01 mm (bleeding across nearly
+                            // coincident nets) and only tied junctions sitting
+                            // exactly on a wire endpoint (missing true Ts).
                             match hit {
-                                Some(h)
-                                    if h.kind == signex_types::schematic::SelectedKind::Wire =>
-                                {
-                                    fn q(p: &signex_types::schematic::Point) -> (i64, i64) {
-                                        ((p.x * 100.0).round() as i64, (p.y * 100.0).round() as i64)
-                                    }
-                                    fn find(
-                                        parent: &mut std::collections::HashMap<
-                                            (i64, i64),
-                                            (i64, i64),
-                                        >,
-                                        x: (i64, i64),
-                                    ) -> (i64, i64) {
-                                        let p = *parent.entry(x).or_insert(x);
-                                        if p == x {
-                                            x
-                                        } else {
-                                            let r = find(parent, p);
-                                            parent.insert(x, r);
-                                            r
-                                        }
-                                    }
-                                    fn union(
-                                        parent: &mut std::collections::HashMap<
-                                            (i64, i64),
-                                            (i64, i64),
-                                        >,
-                                        a: (i64, i64),
-                                        b: (i64, i64),
-                                    ) {
-                                        let ra = find(parent, a);
-                                        let rb = find(parent, b);
-                                        if ra != rb {
-                                            parent.insert(ra, rb);
-                                        }
-                                    }
-                                    let mut parent: std::collections::HashMap<
-                                        (i64, i64),
-                                        (i64, i64),
-                                    > = std::collections::HashMap::new();
-                                    for w in &snapshot.wires {
-                                        union(&mut parent, q(&w.start), q(&w.end));
-                                    }
-                                    match snapshot.wires.iter().find(|w| w.uuid == h.uuid) {
+                                Some(wire_uuid) => {
+                                    match signex_net::flood_net_elements(snapshot, wire_uuid) {
+                                        Some(f) => f.wires.into_iter().chain(f.junctions).collect(),
                                         None => Vec::new(),
-                                        Some(hw) => {
-                                            let root = find(&mut parent, q(&hw.start));
-                                            let mut ids: Vec<uuid::Uuid> = snapshot
-                                                .wires
-                                                .iter()
-                                                .filter(|w| find(&mut parent, q(&w.start)) == root)
-                                                .map(|w| w.uuid)
-                                                .collect();
-                                            // Junctions on this net should follow
-                                            // the colour — a junction's position
-                                            // is always a wire endpoint, so the
-                                            // union-find root test works with the
-                                            // same parent map.
-                                            for j in &snapshot.junctions {
-                                                let jq = q(&j.position);
-                                                if parent.contains_key(&jq)
-                                                    && find(&mut parent, jq) == root
-                                                {
-                                                    ids.push(j.uuid);
-                                                }
-                                            }
-                                            ids
-                                        }
                                     }
                                 }
-                                _ => Vec::new(),
+                                None => Vec::new(),
                             }
                         }
                     };

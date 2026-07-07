@@ -8,17 +8,18 @@
 //! ERC never needed but the ratsnest / PCB net assignment / netlist exporter
 //! all do.
 //!
-//! Scope (ADR-0001 A3.1, increment 1): single sheet only — no hierarchy;
-//! net names come from the highest-priority label on the net, matching the
-//! current ERC semantics. Same-name label *merging* and cross-sheet
-//! stitching are deferred to increment 2.
+//! Scope (ADR-0001 A3.1): single sheet only — no hierarchy; net names come
+//! from the highest-priority label on the net, matching the current ERC
+//! semantics. Same-name label *merging* and cross-sheet stitching are
+//! deferred to a later increment.
 
 use std::collections::HashMap;
 
 use signex_types::net::{Net, NetId, Netlist, Terminal};
 use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, Symbol};
+use uuid::Uuid;
 
-use crate::uf::{find as uf_find, union as uf_union, Key};
+use crate::uf::{Key, find as uf_find, union as uf_union};
 
 /// Projects a library symbol's local pin coordinates into world space,
 /// applying the placed instance's rotation and mirror. Kept in step with
@@ -98,7 +99,10 @@ fn point_is_connected(pos: &Point, sheet: &SchematicSheet) -> bool {
             .iter()
             .any(|b| pt_same(&b.start, pos) || pt_same(&b.end, pos))
         || sheet.labels.iter().any(|l| pt_same(&l.position, pos))
-        || sheet.no_connects.iter().any(|nc| pt_same(&nc.position, pos))
+        || sheet
+            .no_connects
+            .iter()
+            .any(|nc| pt_same(&nc.position, pos))
 }
 
 /// Highest-priority label name for a net: `Global > Power > Hierarchical >
@@ -129,39 +133,95 @@ fn class_from_name(name: Option<&str>) -> String {
     }
 }
 
-/// Build the authoritative [`Netlist`] for a single schematic sheet.
-///
-/// Connectivity is union-find over wire endpoints, with junctions merging
-/// wires that meet (including a wire terminating on another's interior — a
-/// T-junction, issue #107). Component pins are projected to world space and
-/// attached as [`Terminal`]s to the net their tip lands on. Output is
-/// deterministic: nets are numbered `1..=N` in sorted-root order and each
-/// net's terminals are sorted by `(reference, pin)`.
-pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
-    let mut parent: HashMap<Key, Key> = HashMap::new();
+/// The electrical connectivity of a single sheet: a union-find over wire
+/// endpoints with junction T-merges. This is the shared core both
+/// [`build_netlist`] and the net-colour flood ([`flood_net_elements`]) read,
+/// so they can never disagree on which points sit on the same net. The app
+/// previously hand-rolled its own coarser copy (0.01 mm buckets, no interior
+/// T-merge) — the "D4 leak" that let a highlight bleed across nets.
+pub struct SheetConnectivity {
+    parent: HashMap<Key, Key>,
+}
 
-    // Wires union their two endpoints.
-    for w in &sheet.wires {
-        uf_union(&mut parent, pt_key(&w.start), pt_key(&w.end));
-    }
-
-    // Junctions merge every wire whose segment passes through the dot —
-    // including a wire that ends on another wire's interior (T-junction).
-    // Union-find over endpoints alone never merges that case, so the
-    // junction is what asserts the connection. Regression: issue #107.
-    for j in &sheet.junctions {
-        let jk = pt_key(&j.position);
+impl SheetConnectivity {
+    /// Build connectivity for `sheet`: union each wire's two endpoints, then
+    /// merge every wire whose segment passes through a junction dot —
+    /// including a wire that ends on another wire's interior (a T-junction).
+    /// Union-find over endpoints alone never merges that case, so the junction
+    /// is what asserts the connection. Regression: issue #107.
+    pub fn build(sheet: &SchematicSheet) -> Self {
+        let mut parent: HashMap<Key, Key> = HashMap::new();
         for w in &sheet.wires {
-            if point_on_segment(jk, pt_key(&w.start), pt_key(&w.end)) {
-                uf_union(&mut parent, jk, pt_key(&w.start));
+            uf_union(&mut parent, pt_key(&w.start), pt_key(&w.end));
+        }
+        for j in &sheet.junctions {
+            let jk = pt_key(&j.position);
+            for w in &sheet.wires {
+                if point_on_segment(jk, pt_key(&w.start), pt_key(&w.end)) {
+                    uf_union(&mut parent, jk, pt_key(&w.start));
+                }
             }
         }
+        Self { parent }
     }
+
+    /// The canonical net root of point `p` — its union-find representative in
+    /// the 1 µm key space. Two points sit on the same net iff their roots are
+    /// equal. Takes `&mut self` because lookups path-compress.
+    pub fn root_of(&mut self, p: &Point) -> Key {
+        uf_find(&mut self.parent, pt_key(p))
+    }
+}
+
+/// The wire and junction uuids the net-colour flood should paint when the
+/// user clicks a wire — every wire and junction electrically connected to
+/// `target_wire`. Returned by [`flood_net_elements`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FloodElements {
+    pub wires: Vec<Uuid>,
+    pub junctions: Vec<Uuid>,
+}
+
+/// Every wire and junction on the same net as `target_wire`, for the
+/// net-colour flood. Returns `None` when `target_wire` is not a wire in
+/// `sheet`. Uses the same [`SheetConnectivity`] core as [`build_netlist`], so
+/// the highlight follows the real net exactly — it can neither bleed across
+/// nets (the old 0.01 mm-bucket over-merge) nor miss a T-junction the way the
+/// app's previous inline union-find did.
+pub fn flood_net_elements(sheet: &SchematicSheet, target_wire: Uuid) -> Option<FloodElements> {
+    let target = sheet.wires.iter().find(|w| w.uuid == target_wire)?;
+    let mut conn = SheetConnectivity::build(sheet);
+    let root = conn.root_of(&target.start);
+    let wires = sheet
+        .wires
+        .iter()
+        .filter(|w| conn.root_of(&w.start) == root)
+        .map(|w| w.uuid)
+        .collect();
+    let junctions = sheet
+        .junctions
+        .iter()
+        .filter(|j| conn.root_of(&j.position) == root)
+        .map(|j| j.uuid)
+        .collect();
+    Some(FloodElements { wires, junctions })
+}
+
+/// Build the authoritative [`Netlist`] for a single schematic sheet.
+///
+/// Connectivity is [`SheetConnectivity`] — union-find over wire endpoints,
+/// with junctions merging wires that meet (including a wire terminating on
+/// another's interior, a T-junction, issue #107). Component pins are projected
+/// to world space and attached as [`Terminal`]s to the net their tip lands on.
+/// Output is deterministic: nets are numbered `1..=N` in sorted-root order and
+/// each net's terminals are sorted by `(reference, pin)`.
+pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
+    let mut conn = SheetConnectivity::build(sheet);
 
     // Group labels by net root — the highest-priority one names the net.
     let mut net_labels: HashMap<Key, Vec<&Label>> = HashMap::new();
     for lbl in &sheet.labels {
-        let root = uf_find(&mut parent, pt_key(&lbl.position));
+        let root = conn.root_of(&lbl.position);
         net_labels.entry(root).or_default().push(lbl);
     }
 
@@ -188,7 +248,7 @@ pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
             } else {
                 lp.pin.name.clone()
             };
-            let root = uf_find(&mut parent, pt_key(&world_pos));
+            let root = conn.root_of(&world_pos);
             net_terms.entry(root).or_default().push(Terminal {
                 reference: sym.reference.clone(),
                 pin,
@@ -206,9 +266,7 @@ pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
         .enumerate()
         .map(|(idx, root)| {
             let id = NetId(idx as u32 + 1);
-            let label_name = net_labels
-                .get(&root)
-                .and_then(|lbls| best_label_name(lbls));
+            let label_name = net_labels.get(&root).and_then(|lbls| best_label_name(lbls));
             let class = class_from_name(label_name.as_deref());
             let name = label_name.unwrap_or_else(|| format!("N${}", id.0));
 
@@ -477,7 +535,9 @@ mod tests {
         // The Global one wins.
         let mut sheet = empty_sheet();
         sheet.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
-        sheet.labels.push(label("local", pt(0.0, 0.0), LabelType::Net));
+        sheet
+            .labels
+            .push(label("local", pt(0.0, 0.0), LabelType::Net));
         sheet
             .labels
             .push(label("VBUS", pt(10.0, 0.0), LabelType::Global));
@@ -525,6 +585,79 @@ mod tests {
 
         let netlist = build_netlist(&sheet);
         assert!(netlist.nets.is_empty());
+    }
+
+    fn wire_id(a: Point, b: Point, id: Uuid) -> Wire {
+        Wire {
+            uuid: id,
+            start: a,
+            end: b,
+            stroke_width: 0.0,
+        }
+    }
+
+    #[test]
+    fn flood_returns_only_the_clicked_net() {
+        // Two independent one-wire nets far apart. Clicking one must paint
+        // only that wire — no spurious merge across the gap.
+        let mut sheet = empty_sheet();
+        let a = Uuid::from_u128(1);
+        let b = Uuid::from_u128(2);
+        sheet.wires.push(wire_id(pt(0.0, 0.0), pt(10.0, 0.0), a));
+        sheet.wires.push(wire_id(pt(50.0, 0.0), pt(60.0, 0.0), b));
+
+        let flood = flood_net_elements(&sheet, a).expect("clicked wire exists");
+        assert_eq!(flood.wires, vec![a]);
+        assert!(flood.junctions.is_empty());
+    }
+
+    #[test]
+    fn flood_follows_a_t_junction_and_paints_the_dot() {
+        // Horizontal wire (0,0)-(10,0); a vertical wire ends on its interior
+        // at (5,0); a junction dot ties them. Clicking the horizontal wire
+        // must paint both wires and the junction — the app's old inline flood
+        // missed the interior T-merge and left the second wire uncoloured.
+        let mut sheet = empty_sheet();
+        let h = Uuid::from_u128(10);
+        let v = Uuid::from_u128(11);
+        let j = Uuid::from_u128(12);
+        sheet.wires.push(wire_id(pt(0.0, 0.0), pt(10.0, 0.0), h));
+        sheet.wires.push(wire_id(pt(5.0, 0.0), pt(5.0, 5.0), v));
+        sheet.junctions.push(Junction {
+            uuid: j,
+            position: pt(5.0, 0.0),
+            diameter: 0.0,
+        });
+
+        let mut flood = flood_net_elements(&sheet, h).expect("clicked wire exists");
+        flood.wires.sort();
+        assert_eq!(flood.wires, vec![h, v]);
+        assert_eq!(flood.junctions, vec![j]);
+    }
+
+    #[test]
+    fn flood_respects_micron_precision_and_does_not_leak() {
+        // Two wires whose nearest endpoints are 4 µm apart: (10,0) and
+        // (10, 0.004). At 1 µm resolution these are distinct points, so the
+        // wires are two separate nets. The app's old 0.01 mm bucket rounded
+        // both to the same cell and merged them — the leak. Clicking one must
+        // now paint only itself.
+        let mut sheet = empty_sheet();
+        let a = Uuid::from_u128(20);
+        let b = Uuid::from_u128(21);
+        sheet.wires.push(wire_id(pt(0.0, 0.0), pt(10.0, 0.0), a));
+        sheet
+            .wires
+            .push(wire_id(pt(10.0, 0.004), pt(20.0, 0.004), b));
+
+        let flood = flood_net_elements(&sheet, a).expect("clicked wire exists");
+        assert_eq!(flood.wires, vec![a], "must not leak into the 4 µm-away net");
+    }
+
+    #[test]
+    fn flood_returns_none_for_an_unknown_wire() {
+        let sheet = empty_sheet();
+        assert!(flood_net_elements(&sheet, Uuid::from_u128(99)).is_none());
     }
 
     #[test]

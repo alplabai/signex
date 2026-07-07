@@ -12,4 +12,4 @@
 pub mod uf;
 
 mod build;
-pub use build::build_netlist;
+pub use build::{FloodElements, SheetConnectivity, build_netlist, flood_net_elements};
