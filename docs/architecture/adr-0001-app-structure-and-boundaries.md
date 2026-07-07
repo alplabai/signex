@@ -82,14 +82,14 @@ library/<surface>/            # one vertical slice = one MVU part
 │   └── <screen>.rs           # pub(super) fn ...(&State, ...) -> Element<Msg>
 ├── widgets/                  # slice-local REUSABLE view functions / custom Widgets
 │   └── <piece>.rs            #   stateless building blocks; state stays in state.rs (see A1)
-└── update/                   # message handling, split by concern
+└── updates/                  # message handling, split by concern
     ├── mod.rs                # thin router — an exhaustive match, NO `_` wildcard
     └── <concern>.rs          # pub(super) fns named object → action (e.g. datasheet::set_url)
 ```
 
 Naming rules:
 - **`views/` is plural** — a slice usually has more than one screen/panel; each is a view function.
-- **`update/`, not `reducer/`.** `update` is the MVU term the codebase already runs on; `reducer` is borrowed Redux/JS vocabulary used nowhere else here. The router is a thin exhaustive match (no `_`), so a new message variant is a compile error until deliberately routed. Concern files are named object → action.
+- **`updates/`, not `reducer/`.** The folder is plural for consistency with `views/` and `widgets/`; the MVU *function* it serves stays singular `update`. `update` is the MVU term the codebase already runs on — `reducer` is borrowed Redux/JS vocabulary used nowhere else here. The router (`updates/mod.rs`) is a thin exhaustive match (no `_`), so a new message variant is a compile error until deliberately routed. Concern files are named object → action.
 - **`widgets/` = stateless reusable views only.** Per A1, these are reusable view functions / custom `Widget`s, never stateful Iced `Component`s. If a widget needs mutable state, that state lives in the slice's `state.rs` and is passed in — the widget stays a pure function of it.
 
   > Naming note: we use **`widgets/`** consistently across all three tiers — slice-local `<slice>/widgets/`, domain-shared `library/shared/widgets/`, and the app-wide `signex-widgets` crate — matching Iced's own vocabulary. The tier is the scope; the name stays the same.
