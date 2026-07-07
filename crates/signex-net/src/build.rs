@@ -301,6 +301,7 @@ pub(crate) fn collect_terminals(
             };
             let root = uf_find(parent, pt_key(&world_pos));
             net_terms.entry(root).or_default().push(Terminal {
+                symbol: sym.uuid,
                 reference: sym.reference.clone(),
                 pin,
             });
