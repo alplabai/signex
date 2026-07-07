@@ -22,6 +22,7 @@ pub mod halfedge;
 pub mod hull;
 pub mod offset;
 pub mod offset_arc;
+pub mod point;
 pub mod polylabel;
 pub mod predicates;
 pub mod segment;
@@ -35,6 +36,7 @@ pub use curves::{arc_arc_intersections, arc_circle_intersections, circle_circle_
 pub use hull::convex_hull;
 pub use offset::{offset_polygon, CornerStyle};
 pub use offset_arc::{offset_arc_polyline, PolyElement};
+pub use point::{point_in_polygon, point_to_segment_distance, point_to_segment_distance_sq};
 pub use polylabel::pole_of_inaccessibility;
 pub use simplify::{dedup, merge_colinear, simplify_polygon, snap_to_grid, MultiContour};
 pub use predicates::{orient2d, signed_area, Sign};

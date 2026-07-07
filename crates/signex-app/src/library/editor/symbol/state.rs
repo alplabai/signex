@@ -975,20 +975,7 @@ fn hit_test_graphic_body(sym: &Symbol, idx: usize, x: f64, y: f64) -> bool {
 }
 
 fn point_to_segment_dist_sq(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
-    let dx = b[0] - a[0];
-    let dy = b[1] - a[1];
-    let len_sq = dx * dx + dy * dy;
-    if len_sq <= f64::EPSILON {
-        let ddx = p[0] - a[0];
-        let ddy = p[1] - a[1];
-        return ddx * ddx + ddy * ddy;
-    }
-    let t = (((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len_sq).clamp(0.0, 1.0);
-    let cx = a[0] + t * dx;
-    let cy = a[1] + t * dy;
-    let ddx = p[0] - cx;
-    let ddy = p[1] - cy;
-    ddx * ddx + ddy * ddy
+    signex_sketch::geom::point_to_segment_distance_sq(p, a, b)
 }
 
 /// Compute the world (mm) position of a graphic's resize handle.
