@@ -452,55 +452,9 @@ pub enum Message {
     ExportBomRequested,
     /// Completion of BOM export — carries either the saved path or error.
     ExportBomFinished(Result<std::path::PathBuf, String>),
-    /// User changed BOM grouping (Grouped / Ungrouped / Flat).
-    BomPreviewSetGrouping(signex_output::BomGrouping),
-    /// User changed BOM output format (CSV / XLSX / HTML).
-    BomPreviewSetFormat(signex_output::BomFormat),
-    /// User toggled "Include DNP" in the BOM preview modal.
-    BomPreviewSetIncludeDnp(bool),
-    /// User toggled "Include Not Fitted" in the BOM preview modal.
-    BomPreviewSetIncludeNotFitted(bool),
-    /// User toggled a single column on / off in the BOM preview
-    /// column picker. The handler flips the column's presence in
-    /// `BomOptions.columns`, preserving the existing display order
-    /// when re-adding so the user's column ordering survives toggles.
-    BomPreviewToggleColumn(signex_output::BomColumn),
-    /// User picked a variant in the BOM preview variant dropdown.
-    /// `None` means the "Base" (no-variant) view.
-    BomPreviewSetVariant(Option<String>),
-    /// User clicked a column header — set or cycle the sort spec.
-    /// First click on a column sorts ascending; same column again
-    /// flips to descending; a third click clears the sort and goes
-    /// back to rollup order.
-    BomPreviewSortColumn(usize),
-    /// User started dragging a column header. Carries the source
-    /// index in `options.columns`.
-    BomPreviewColumnDragStart(usize),
-    /// User dropped a dragged column header onto another header.
-    /// The source column moves to the destination index, preserving
-    /// the user's column order intent.
-    BomPreviewColumnDragDrop(usize),
-    /// Cursor entered a column header — used by the in-progress
-    /// drag-reorder feedback to highlight the drop target.
-    BomPreviewColumnHoverEnter(usize),
-    /// Cursor left a column header. Clears the hover state for that
-    /// idx; the next on_enter on a sibling header replaces it.
-    BomPreviewColumnHoverExit(usize),
-    /// User pressed a column's right-edge resize handle. Stores
-    /// the start x and start width on `BomPreviewState`; subsequent
-    /// mouse-move events compute the new width as
-    /// `start_width + (current_x - start_x)`.
-    BomPreviewColumnResizeStart(usize),
-    /// User released the mouse — clears the in-flight resize state.
-    BomPreviewColumnResizeEnd,
-    /// User clicked a Properties-sidebar tab (General / Columns) in
-    /// the BOM preview modal.
-    BomPreviewSetSidebarTab(super::state::BomSidebarTab),
-    /// User clicked Export in the BOM preview modal — drives the file
-    /// dialog with the live options.
-    BomPreviewExport,
-    /// User dismissed the BOM preview modal.
-    BomPreviewClose,
+    /// BOM-preview modal — namespaced family (ADR-0001 D3). Routed to
+    /// `dispatch_bom_preview_message`.
+    BomPreview(BomPreviewMsg),
     /// Print-preview modal — namespaced family (ADR-0001 D3). Routed to
     /// `dispatch_print_preview_message`.
     PrintPreview(PrintPreviewMsg),
@@ -572,6 +526,62 @@ pub enum Message {
     /// `Tool::Select` reset.
     EscapePressed,
     Noop,
+}
+
+/// BOM-preview modal message family (ADR-0001 D3). Namespaced under
+/// `Message::BomPreview` and routed to `dispatch_bom_preview_message`.
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub enum BomPreviewMsg {
+    /// User changed BOM grouping (Grouped / Ungrouped / Flat).
+    SetGrouping(signex_output::BomGrouping),
+    /// User changed BOM output format (CSV / XLSX / HTML).
+    SetFormat(signex_output::BomFormat),
+    /// User toggled "Include DNP" in the BOM preview modal.
+    SetIncludeDnp(bool),
+    /// User toggled "Include Not Fitted" in the BOM preview modal.
+    SetIncludeNotFitted(bool),
+    /// User toggled a single column on / off in the BOM preview
+    /// column picker. The handler flips the column's presence in
+    /// `BomOptions.columns`, preserving the existing display order
+    /// when re-adding so the user's column ordering survives toggles.
+    ToggleColumn(signex_output::BomColumn),
+    /// User picked a variant in the BOM preview variant dropdown.
+    /// `None` means the "Base" (no-variant) view.
+    SetVariant(Option<String>),
+    /// User clicked a column header — set or cycle the sort spec.
+    /// First click on a column sorts ascending; same column again
+    /// flips to descending; a third click clears the sort and goes
+    /// back to rollup order.
+    SortColumn(usize),
+    /// User started dragging a column header. Carries the source
+    /// index in `options.columns`.
+    ColumnDragStart(usize),
+    /// User dropped a dragged column header onto another header.
+    /// The source column moves to the destination index, preserving
+    /// the user's column order intent.
+    ColumnDragDrop(usize),
+    /// Cursor entered a column header — used by the in-progress
+    /// drag-reorder feedback to highlight the drop target.
+    ColumnHoverEnter(usize),
+    /// Cursor left a column header. Clears the hover state for that
+    /// idx; the next on_enter on a sibling header replaces it.
+    ColumnHoverExit(usize),
+    /// User pressed a column's right-edge resize handle. Stores
+    /// the start x and start width on `BomPreviewState`; subsequent
+    /// mouse-move events compute the new width as
+    /// `start_width + (current_x - start_x)`.
+    ColumnResizeStart(usize),
+    /// User released the mouse — clears the in-flight resize state.
+    ColumnResizeEnd,
+    /// User clicked a Properties-sidebar tab (General / Columns) in
+    /// the BOM preview modal.
+    SetSidebarTab(super::state::BomSidebarTab),
+    /// User clicked Export in the BOM preview modal — drives the file
+    /// dialog with the live options.
+    Export,
+    /// User dismissed the BOM preview modal.
+    Close,
 }
 
 /// Print-preview modal message family (ADR-0001 D3). Namespaced under

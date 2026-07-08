@@ -117,49 +117,56 @@ impl Signex {
                 let task = self.handle_export_bom_finished(result);
                 iced::Task::batch([task, self.finish_update()])
             }
-            Message::BomPreviewSetGrouping(g) => {
+            _ => unreachable!("dispatch_document_message received non-document message"),
+        }
+    }
+
+    /// BOM-preview modal message handler (namespaced family, ADR-0001 D3).
+    pub(crate) fn dispatch_bom_preview_message(&mut self, msg: BomPreviewMsg) -> Task<Message> {
+        match msg {
+            BomPreviewMsg::SetGrouping(g) => {
                 self.handle_bom_preview_set_grouping(g);
                 self.finish_update()
             }
-            Message::BomPreviewSetFormat(f) => {
+            BomPreviewMsg::SetFormat(f) => {
                 self.handle_bom_preview_set_format(f);
                 self.finish_update()
             }
-            Message::BomPreviewSetIncludeDnp(b) => {
+            BomPreviewMsg::SetIncludeDnp(b) => {
                 self.handle_bom_preview_set_include_dnp(b);
                 self.finish_update()
             }
-            Message::BomPreviewSetIncludeNotFitted(b) => {
+            BomPreviewMsg::SetIncludeNotFitted(b) => {
                 self.handle_bom_preview_set_include_not_fitted(b);
                 self.finish_update()
             }
-            Message::BomPreviewToggleColumn(col) => {
+            BomPreviewMsg::ToggleColumn(col) => {
                 self.handle_bom_preview_toggle_column(col);
                 self.finish_update()
             }
-            Message::BomPreviewSetVariant(v) => {
+            BomPreviewMsg::SetVariant(v) => {
                 self.handle_bom_preview_set_variant(v);
                 self.finish_update()
             }
-            Message::BomPreviewSortColumn(idx) => {
+            BomPreviewMsg::SortColumn(idx) => {
                 self.handle_bom_preview_sort_column(idx);
                 self.finish_update()
             }
-            Message::BomPreviewColumnDragStart(idx) => {
+            BomPreviewMsg::ColumnDragStart(idx) => {
                 self.handle_bom_preview_column_drag_start(idx);
                 self.finish_update()
             }
-            Message::BomPreviewColumnDragDrop(idx) => {
+            BomPreviewMsg::ColumnDragDrop(idx) => {
                 self.handle_bom_preview_column_drag_drop(idx);
                 self.finish_update()
             }
-            Message::BomPreviewColumnHoverEnter(idx) => {
+            BomPreviewMsg::ColumnHoverEnter(idx) => {
                 if let Some(p) = self.document_state.bom_preview.as_mut() {
                     p.column_hover = Some(idx);
                 }
                 self.finish_update()
             }
-            Message::BomPreviewColumnHoverExit(idx) => {
+            BomPreviewMsg::ColumnHoverExit(idx) => {
                 if let Some(p) = self.document_state.bom_preview.as_mut() {
                     if p.column_hover == Some(idx) {
                         p.column_hover = None;
@@ -167,7 +174,7 @@ impl Signex {
                 }
                 self.finish_update()
             }
-            Message::BomPreviewColumnResizeStart(idx) => {
+            BomPreviewMsg::ColumnResizeStart(idx) => {
                 let cursor_x = self.interaction_state.last_mouse_pos.0;
                 if let Some(p) = self.document_state.bom_preview.as_mut() {
                     let start_width = p.column_widths.get(&idx).copied().unwrap_or_else(|| {
@@ -194,29 +201,28 @@ impl Signex {
                 }
                 self.finish_update()
             }
-            Message::BomPreviewColumnResizeEnd => {
+            BomPreviewMsg::ColumnResizeEnd => {
                 if let Some(p) = self.document_state.bom_preview.as_mut() {
                     p.column_resize = None;
                 }
                 self.finish_update()
             }
-            Message::BomPreviewSetSidebarTab(tab) => {
+            BomPreviewMsg::SetSidebarTab(tab) => {
                 if let Some(p) = self.document_state.bom_preview.as_mut() {
                     p.sidebar_tab = tab;
                 }
                 self.finish_update()
             }
-            Message::BomPreviewExport => {
+            BomPreviewMsg::Export => {
                 let task = self
                     .handle_bom_preview_export()
                     .unwrap_or_else(iced::Task::none);
                 iced::Task::batch([task, self.finish_update()])
             }
-            Message::BomPreviewClose => {
+            BomPreviewMsg::Close => {
                 let task = self.handle_bom_preview_close();
                 iced::Task::batch([task, self.finish_update()])
             }
-            _ => unreachable!("dispatch_document_message received non-document message"),
         }
     }
 

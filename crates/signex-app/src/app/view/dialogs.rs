@@ -9,7 +9,7 @@ use iced::widget::{Column, Row, Space, button, column, container, row, scrollabl
 use iced::{Background, Border, Color, Element, Length, Theme};
 
 use crate::app::state::AnnotateOrder;
-use crate::app::{Message, Signex};
+use crate::app::{BomPreviewMsg, Message, Signex};
 
 const BACKDROP: Color = Color::from_rgba(0.0, 0.0, 0.0, 0.55);
 
@@ -1687,7 +1687,11 @@ impl Signex {
                     .size(MODAL_HEADER_TITLE_SIZE)
                     .color(text_c),
                 Space::new().width(Length::Fill),
-                close_x_button(Message::BomPreviewClose, theme_id, text_muted),
+                close_x_button(
+                    Message::BomPreview(BomPreviewMsg::Close),
+                    theme_id,
+                    text_muted
+                ),
             ]
             .align_y(iced::Alignment::Center),
         )
@@ -1749,19 +1753,19 @@ impl Signex {
             row_pill(
                 "Grouped".to_string(),
                 preview.options.grouping == BomGrouping::Grouped,
-                Message::BomPreviewSetGrouping(BomGrouping::Grouped),
+                Message::BomPreview(BomPreviewMsg::SetGrouping(BomGrouping::Grouped)),
             ),
             Space::new().width(4),
             row_pill(
                 "Ungrouped".to_string(),
                 preview.options.grouping == BomGrouping::Ungrouped,
-                Message::BomPreviewSetGrouping(BomGrouping::Ungrouped),
+                Message::BomPreview(BomPreviewMsg::SetGrouping(BomGrouping::Ungrouped)),
             ),
             Space::new().width(4),
             row_pill(
                 "Flat".to_string(),
                 preview.options.grouping == BomGrouping::Flat,
-                Message::BomPreviewSetGrouping(BomGrouping::Flat),
+                Message::BomPreview(BomPreviewMsg::SetGrouping(BomGrouping::Flat)),
             ),
         ]
         .align_y(iced::Alignment::Center)
@@ -1773,19 +1777,19 @@ impl Signex {
             row_pill(
                 "CSV".to_string(),
                 preview.options.format == BomFormat::Csv,
-                Message::BomPreviewSetFormat(BomFormat::Csv),
+                Message::BomPreview(BomPreviewMsg::SetFormat(BomFormat::Csv)),
             ),
             Space::new().width(4),
             row_pill(
                 "XLSX".to_string(),
                 preview.options.format == BomFormat::Xlsx,
-                Message::BomPreviewSetFormat(BomFormat::Xlsx),
+                Message::BomPreview(BomPreviewMsg::SetFormat(BomFormat::Xlsx)),
             ),
             Space::new().width(4),
             row_pill(
                 "HTML".to_string(),
                 preview.options.format == BomFormat::Html,
-                Message::BomPreviewSetFormat(BomFormat::Html),
+                Message::BomPreview(BomPreviewMsg::SetFormat(BomFormat::Html)),
             ),
         ]
         .align_y(iced::Alignment::Center)
@@ -1795,13 +1799,15 @@ impl Signex {
             row_pill(
                 "Include DNP".to_string(),
                 preview.options.include_dnp,
-                Message::BomPreviewSetIncludeDnp(!preview.options.include_dnp),
+                Message::BomPreview(BomPreviewMsg::SetIncludeDnp(!preview.options.include_dnp)),
             ),
             Space::new().width(4),
             row_pill(
                 "Include Not Fitted".to_string(),
                 preview.options.include_not_fitted,
-                Message::BomPreviewSetIncludeNotFitted(!preview.options.include_not_fitted),
+                Message::BomPreview(BomPreviewMsg::SetIncludeNotFitted(
+                    !preview.options.include_not_fitted
+                )),
             ),
         ]
         .align_y(iced::Alignment::Center)
@@ -1823,7 +1829,7 @@ impl Signex {
                 row_pill(
                     "Base".to_string(),
                     preview.options.active_variant.is_none(),
-                    Message::BomPreviewSetVariant(None),
+                    Message::BomPreview(BomPreviewMsg::SetVariant(None)),
                 ),
             ]
             .align_y(iced::Alignment::Center);
@@ -1833,7 +1839,7 @@ impl Signex {
                 r = r.push(row_pill(
                     variant.clone(),
                     is_active,
-                    Message::BomPreviewSetVariant(Some(variant.clone())),
+                    Message::BomPreview(BomPreviewMsg::SetVariant(Some(variant.clone()))),
                 ));
             }
             r.into()
@@ -1868,7 +1874,7 @@ impl Signex {
             column_row = column_row.push(row_pill(
                 label.to_string(),
                 on,
-                Message::BomPreviewToggleColumn(col.clone()),
+                Message::BomPreview(BomPreviewMsg::ToggleColumn(col.clone())),
             ));
             column_row = column_row.push(Space::new().width(4));
         }
@@ -1878,7 +1884,7 @@ impl Signex {
             column_row = column_row.push(row_pill(
                 key.clone(),
                 on,
-                Message::BomPreviewToggleColumn(col),
+                Message::BomPreview(BomPreviewMsg::ToggleColumn(col)),
             ));
             column_row = column_row.push(Space::new().width(4));
         }
@@ -2042,14 +2048,14 @@ impl Signex {
             // `column_hover` (set via on_enter on the target) to
             // resolve where the cursor was at release time.
             let header_cell: Element<'_, Message> = iced::widget::mouse_area(cell)
-                .on_press(Message::BomPreviewColumnDragStart(idx))
+                .on_press(Message::BomPreview(BomPreviewMsg::ColumnDragStart(idx)))
                 .on_release(if preview.column_drag == Some(idx) {
-                    Message::BomPreviewSortColumn(idx)
+                    Message::BomPreview(BomPreviewMsg::SortColumn(idx))
                 } else {
-                    Message::BomPreviewColumnDragDrop(idx)
+                    Message::BomPreview(BomPreviewMsg::ColumnDragDrop(idx))
                 })
-                .on_enter(Message::BomPreviewColumnHoverEnter(idx))
-                .on_exit(Message::BomPreviewColumnHoverExit(idx))
+                .on_enter(Message::BomPreview(BomPreviewMsg::ColumnHoverEnter(idx)))
+                .on_exit(Message::BomPreview(BomPreviewMsg::ColumnHoverExit(idx)))
                 .interaction(iced::mouse::Interaction::Pointer)
                 .into();
             header_row = header_row.push(header_cell);
@@ -2066,8 +2072,8 @@ impl Signex {
                 ));
                 let resize_handle: Element<'_, Message> =
                     iced::widget::mouse_area(container(Space::new()).width(4).height(HEADER_ROW_H))
-                        .on_press(Message::BomPreviewColumnResizeStart(idx))
-                        .on_release(Message::BomPreviewColumnResizeEnd)
+                        .on_press(Message::BomPreview(BomPreviewMsg::ColumnResizeStart(idx)))
+                        .on_release(Message::BomPreview(BomPreviewMsg::ColumnResizeEnd))
                         .interaction(iced::mouse::Interaction::ResizingHorizontally)
                         .into();
                 header_row = header_row.push(resize_handle);
@@ -2297,7 +2303,7 @@ impl Signex {
             let on = sidebar_tab == target;
             button(text(label.to_string()).size(11).color(text_c))
                 .padding([4, 12])
-                .on_press(Message::BomPreviewSetSidebarTab(target))
+                .on_press(Message::BomPreview(BomPreviewMsg::SetSidebarTab(target)))
                 .style(move |_: &iced::Theme, status: button::Status| {
                     let bg = match (on, status) {
                         (true, _) => iced::Color {
@@ -2348,7 +2354,7 @@ impl Signex {
         // mirroring Altium's Columns table. Same standard column
         // set + any custom-field column discovered in the rolled
         // rows. Each row is clickable and toggles via
-        // `Message::BomPreviewToggleColumn` — the existing handler
+        // `Message::BomPreview(BomPreviewMsg::ToggleColumn)` — the existing handler
         // already does add/remove on the Vec.
         let _ = column_row; // pill row obsoleted by the list layout
         let mut col_list: Column<'_, Message> = Column::new().spacing(0);
@@ -2388,7 +2394,7 @@ impl Signex {
                 ]
                 .align_y(iced::Alignment::Center),
             )
-            .on_press(Message::BomPreviewToggleColumn(col))
+            .on_press(Message::BomPreview(BomPreviewMsg::ToggleColumn(col)))
             .padding([3, 12])
             .width(Length::Fill)
             .style(move |_: &Theme, status: button::Status| {
@@ -2481,7 +2487,7 @@ impl Signex {
                 Space::new().width(Length::Fill),
                 primary_button_themed(
                     "Export\u{2026}",
-                    Some(Message::BomPreviewExport),
+                    Some(Message::BomPreview(BomPreviewMsg::Export)),
                     border_c,
                     Some(crate::styles::ti(tokens.accent)),
                 ),
