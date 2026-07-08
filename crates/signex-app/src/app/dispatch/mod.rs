@@ -32,12 +32,9 @@ impl Signex {
             | Message::GridPickerOpen
             | Message::GridPickerClose
             | Message::GridPickerSelect(_)
-            | Message::OpenSelectionFilterCustom
-            | Message::CloseSelectionFilterCustom
-            | Message::ToggleSelectionFilterCustomKind(_)
-            | Message::ApplySelectionFilterCustom
             | Message::StatusBar(_) => self.dispatch_ui_message(message),
             Message::GridProperties(msg) => self.dispatch_grid_properties_message(msg),
+            Message::SelectionFilter(msg) => self.dispatch_selection_filter_message(msg),
             Message::TextEditChanged(_) | Message::TextEditSubmit => {
                 self.dispatch_text_edit_message(message)
             }
@@ -62,13 +59,8 @@ impl Signex {
             | Message::SaveFile
             | Message::SaveFileAs(_)
             | Message::SavePrimitiveAs { .. }
-            | Message::SchematicLoaded(_)
-            | Message::ExportPdfOpenDialog
-            | Message::ExportPdfFinished(_)
-            | Message::ExportNetlistFinished(_)
-            | Message::ExportBomRequested
-            | Message::ExportBomFinished(_)
-            | Message::DismissExportError => self.dispatch_document_message(message),
+            | Message::SchematicLoaded(_) => self.dispatch_document_message(message),
+            Message::Export(msg) => self.dispatch_export_message(msg),
             Message::PrintPreview(msg) => self.dispatch_print_preview_message(msg),
             Message::BomPreview(msg) => self.dispatch_bom_preview_message(msg),
             Message::TogglePanelList
