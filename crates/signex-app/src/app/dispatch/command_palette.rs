@@ -87,7 +87,7 @@ impl Signex {
         match action {
             CommandAction::Menu(menu_msg) => Task::done(Message::Menu(menu_msg)),
             CommandAction::Panel(panel) => Task::done(Message::OpenPanel(panel)),
-            CommandAction::OpenFile(path) => Task::done(Message::FileOpened(Some(path))),
+            CommandAction::OpenFile(path) => Task::done(Message::File(FileMsg::Opened(Some(path)))),
             CommandAction::FocusSymbol { reference } => self.focus_symbol_by_reference(&reference),
         }
     }

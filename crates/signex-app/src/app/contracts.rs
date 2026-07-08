@@ -71,15 +71,9 @@ pub enum Message {
     DragStart(DragTarget),
     DragMove(f32, f32),
     DragEnd,
-    FileOpened(Option<PathBuf>),
-    /// File ▸ New Project — destination picked by the Save-As dialog.
-    /// `None` when the user cancelled the picker; on `Some(path)` the
-    /// handler writes a fresh `<stem>.snxprj` (empty marker file — the
-    /// parser is directory-driven) plus a blank `<stem>.snxsch` next
-    /// to it, then loads the project + opens the schematic tab.
-    NewProjectFile(Option<PathBuf>),
-    #[allow(dead_code)]
-    SchematicLoaded(Box<SchematicSheet>),
+    /// File / save message family (ADR-0001 D3). Namespaced under
+    /// `Message::File` and routed to `dispatch_file_message`.
+    File(FileMsg),
     DeleteSelected,
     Undo,
     Redo,
@@ -92,19 +86,6 @@ pub enum Message {
     Paste,
     SmartPaste,
     Duplicate,
-    SaveFile,
-    SaveFileAs(PathBuf),
-    /// User picked a destination from the Save-As dialog spawned the
-    /// first time a freshly-minted `.snxsym` / `.snxfpt` editor tab is
-    /// saved (the in-memory tab opened by `Add New ▸ Symbol` /
-    /// `Add New ▸ Footprint`). Re-keys the editor + tab from the
-    /// suggested path to the user's choice, then writes the file.
-    /// `from_path` is the suggested in-memory path the editor is
-    /// currently keyed under; `to_path` is the rfd result.
-    SavePrimitiveAs {
-        from_path: PathBuf,
-        to_path: PathBuf,
-    },
     CycleDrawMode,
     CancelDrawing,
     TogglePanelList,
@@ -121,38 +102,15 @@ pub enum Message {
     /// submenu hover state machine. Routed to
     /// `dispatch_context_menu_message`.
     ContextMenu(ContextMenuMsg),
-    /// User picked an option in the project-close confirmation modal
-    /// (Save All / Discard All / Cancel) shown when closing a
-    /// project that still has entries in `dirty_paths`.
-    ProjectCloseConfirm(ProjectCloseChoice),
-    /// User choice (Save All / Discard All / Cancel) on the app-quit
-    /// confirmation modal, shown when the user tries to exit Signex
-    /// while `dirty_paths` is non-empty. Reuses `ProjectCloseChoice`.
-    AppQuitConfirm(ProjectCloseChoice),
+    /// Project lifecycle message family (ADR-0001 D3). Namespaced
+    /// under `Message::Project` and routed to `dispatch_project_message`.
+    Project(ProjectMsg),
     /// Rename modal message family — namespaced (ADR-0001 D3). Routed
     /// to `dispatch_rename_message`.
     Rename(RenameMsg),
     /// Remove-from-project modal message family — namespaced (ADR-0001
     /// D3). Routed to `dispatch_remove_message`.
     Remove(RemoveMsg),
-    /// Result of the `Add Existing to Project…` file picker. Carries
-    /// the owning project's index plus the user's picks (`None` on
-    /// cancel, otherwise one or more paths from `pick_files`) so the
-    /// handler can copy each into the project directory in turn.
-    AddExistingFilePicked {
-        project_idx: usize,
-        paths: Option<Vec<std::path::PathBuf>>,
-    },
-    /// Result of the `Add New ▸ Schematic` Save-As dialog. `None`
-    /// when the user cancelled; on `Some(path)` the handler writes
-    /// a blank `.snxsch`, registers it on the project, and marks
-    /// the .snxprj dirty.
-    AddNewSchematicPicked {
-        project_idx: usize,
-        path: Option<std::path::PathBuf>,
-    },
-    /// Dismiss the Project Options metadata modal.
-    CloseProjectOptions,
     /// Enable Version Control modal message family — namespaced
     /// (ADR-0001 D3). Routed to `dispatch_enable_version_control_message`.
     EnableVersionControl(EnableVersionControlMsg),
@@ -371,18 +329,6 @@ pub enum Message {
         generation: u32,
         path: std::path::PathBuf,
         result: Result<Vec<signex_widgets::HistoryEntry>, String>,
-    },
-    /// v0.23 — Async project-git commit completed. The dispatcher
-    /// removes the `(project_root, rel_path)` entry from
-    /// `inflight_git_commits` and logs success/failure. `result.Ok`
-    /// carries the formatted commit OID; `result.Err` carries the
-    /// error string. Best-effort — a failure here doesn't roll back
-    /// the on-disk save (data is already on disk; this just means git
-    /// didn't capture it).
-    ProjectGitCommitDone {
-        project_root: std::path::PathBuf,
-        rel_path: std::path::PathBuf,
-        result: Result<String, String>,
     },
     /// v0.14.2 — keyboard shortcut for footprint editor mode switch.
     /// Routed from the global `1` / `2` / `3` key handler in
@@ -781,6 +727,80 @@ pub enum SelectionFilterMsg {
     /// Writes the draft into the active footprint editor's
     /// `state.selection_filter` then closes.
     ApplyCustom,
+}
+
+/// File / save message family (ADR-0001 D3). Namespaced under
+/// `Message::File` and routed to `dispatch_file_message`.
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub enum FileMsg {
+    Opened(Option<PathBuf>),
+    /// File ▸ New Project — destination picked by the Save-As dialog.
+    /// `None` when the user cancelled the picker; on `Some(path)` the
+    /// handler writes a fresh `<stem>.snxprj` (empty marker file — the
+    /// parser is directory-driven) plus a blank `<stem>.snxsch` next
+    /// to it, then loads the project + opens the schematic tab.
+    NewProject(Option<PathBuf>),
+    #[allow(dead_code)]
+    SchematicLoaded(Box<SchematicSheet>),
+    Save,
+    SaveAs(PathBuf),
+    /// User picked a destination from the Save-As dialog spawned the
+    /// first time a freshly-minted `.snxsym` / `.snxfpt` editor tab is
+    /// saved (the in-memory tab opened by `Add New ▸ Symbol` /
+    /// `Add New ▸ Footprint`). Re-keys the editor + tab from the
+    /// suggested path to the user's choice, then writes the file.
+    /// `from_path` is the suggested in-memory path the editor is
+    /// currently keyed under; `to_path` is the rfd result.
+    SavePrimitiveAs {
+        from_path: PathBuf,
+        to_path: PathBuf,
+    },
+}
+
+/// Project lifecycle message family (ADR-0001 D3). Namespaced under
+/// `Message::Project` and routed to `dispatch_project_message`.
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub enum ProjectMsg {
+    /// User picked an option in the project-close confirmation modal
+    /// (Save All / Discard All / Cancel) shown when closing a
+    /// project that still has entries in `dirty_paths`.
+    CloseConfirm(ProjectCloseChoice),
+    /// User choice (Save All / Discard All / Cancel) on the app-quit
+    /// confirmation modal, shown when the user tries to exit Signex
+    /// while `dirty_paths` is non-empty. Reuses `ProjectCloseChoice`.
+    AppQuitConfirm(ProjectCloseChoice),
+    /// Dismiss the Project Options metadata modal.
+    CloseOptions,
+    /// Result of the `Add Existing to Project…` file picker. Carries
+    /// the owning project's index plus the user's picks (`None` on
+    /// cancel, otherwise one or more paths from `pick_files`) so the
+    /// handler can copy each into the project directory in turn.
+    AddExistingFilePicked {
+        project_idx: usize,
+        paths: Option<Vec<std::path::PathBuf>>,
+    },
+    /// Result of the `Add New ▸ Schematic` Save-As dialog. `None`
+    /// when the user cancelled; on `Some(path)` the handler writes
+    /// a blank `.snxsch`, registers it on the project, and marks
+    /// the .snxprj dirty.
+    AddNewSchematicPicked {
+        project_idx: usize,
+        path: Option<std::path::PathBuf>,
+    },
+    /// v0.23 — Async project-git commit completed. The dispatcher
+    /// removes the `(project_root, rel_path)` entry from
+    /// `inflight_git_commits` and logs success/failure. `result.Ok`
+    /// carries the formatted commit OID; `result.Err` carries the
+    /// error string. Best-effort — a failure here doesn't roll back
+    /// the on-disk save (data is already on disk; this just means git
+    /// didn't capture it).
+    GitCommitDone {
+        project_root: std::path::PathBuf,
+        rel_path: std::path::PathBuf,
+        result: Result<String, String>,
+    },
 }
 
 /// Per-shape edit descriptor. The Properties panel dispatches one of

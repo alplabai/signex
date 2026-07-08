@@ -283,8 +283,8 @@ impl Signex {
     /// shows immediately. The actual `git2` work runs in
     /// `finish_update`'s [`Self::drain_pending_git_commits`] which
     /// emits one `Task::perform` per queued commit. Result lands as
-    /// `Message::ProjectGitCommitDone`; the handler clears the
-    /// inflight entry.
+    /// `Message::Project(ProjectMsg::GitCommitDone)`; the handler clears
+    /// the inflight entry.
     pub fn commit_save_to_project_git(
         &mut self,
         file_path: &std::path::Path,
@@ -327,8 +327,8 @@ impl Signex {
     /// `Task::batch` of `Task::perform` calls that each open the
     /// project's git adapter and run `commit_path` on a tokio
     /// `spawn_blocking`. Each completion routes through
-    /// `Message::ProjectGitCommitDone` which clears the matching
-    /// `inflight_git_commits` entry. Returns `Task::none()` when the
+    /// `Message::Project(ProjectMsg::GitCommitDone)` which clears the
+    /// matching `inflight_git_commits` entry. Returns `Task::none()` when the
     /// queue is empty.
     ///
     /// **Ordering note:** Concurrent commits to the same project
@@ -379,10 +379,12 @@ impl Signex {
                         .await
                         .unwrap_or_else(|e| Err(format!("spawn_blocking: {e}")))
                     },
-                    move |result| crate::app::Message::ProjectGitCommitDone {
-                        project_root: response_root.clone(),
-                        rel_path: response_rel.clone(),
-                        result,
+                    move |result| {
+                        crate::app::Message::Project(crate::app::ProjectMsg::GitCommitDone {
+                            project_root: response_root.clone(),
+                            rel_path: response_rel.clone(),
+                            result,
+                        })
                     },
                 )
             })
@@ -390,7 +392,7 @@ impl Signex {
         iced::Task::batch(tasks)
     }
 
-    /// v0.23 — Handler for [`Message::ProjectGitCommitDone`]. Clears
+    /// v0.23 — Handler for [`ProjectMsg::GitCommitDone`]. Clears
     /// the matching `inflight_git_commits` entry and logs the result.
     pub(crate) fn handle_project_git_commit_done(
         &mut self,
@@ -703,8 +705,8 @@ impl Signex {
         // AsyncFileDialog so the user can pick where the new
         // primitive lands — including a global library directory
         // outside the active project. The dialog result dispatches
-        // `Message::SavePrimitiveAs { from, to }` which re-keys the
-        // editor + tab and writes the file.
+        // `Message::File(FileMsg::SavePrimitiveAs { from, to })` which
+        // re-keys the editor + tab and writes the file.
         if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab) {
             match &active_tab.kind {
                 super::super::TabKind::SymbolEditor(path)
@@ -921,7 +923,7 @@ impl Signex {
         Ok(())
     }
 
-    /// Resolve `Message::SavePrimitiveAs { from_path, to_path }` —
+    /// Resolve `Message::File(FileMsg::SavePrimitiveAs { from_path, to_path })` —
     /// re-key the editor and tab from the in-memory `from_path` to
     /// the user-chosen `to_path`, then write the file via
     /// `save_primitive_tab_at`. Same machinery the in-memory editor
@@ -1181,10 +1183,10 @@ pub(crate) fn spawn_save_as_for_new_primitive(suggested: PathBuf) -> iced::Task<
                 .map(|file| file.path().to_path_buf())
         },
         move |picked| match picked {
-            Some(to_path) => Message::SavePrimitiveAs {
+            Some(to_path) => Message::File(FileMsg::SavePrimitiveAs {
                 from_path: from.clone(),
                 to_path,
-            },
+            }),
             None => Message::Noop,
         },
     )
