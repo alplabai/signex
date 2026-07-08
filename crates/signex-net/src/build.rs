@@ -16,49 +16,10 @@
 use std::collections::{HashMap, HashSet};
 
 use signex_types::net::{Net, NetId, Netlist, Terminal};
-use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, Symbol};
+use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, SymbolTransform};
 use uuid::Uuid;
 
 use crate::uf::{Key, find as uf_find, union as uf_union};
-
-/// Projects a library symbol's local pin coordinates into world space,
-/// applying the placed instance's rotation and mirror. Kept in step with
-/// the ERC context's `SymbolTransform` so net membership is identical.
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct SymbolTransform {
-    origin: Point,
-    rotation_deg: f64,
-    mirror_x: bool,
-    mirror_y: bool,
-}
-
-impl SymbolTransform {
-    pub(crate) fn from_symbol(symbol: &Symbol) -> Self {
-        Self {
-            origin: symbol.position,
-            rotation_deg: symbol.rotation,
-            mirror_x: symbol.mirror_x,
-            mirror_y: symbol.mirror_y,
-        }
-    }
-
-    pub(crate) fn apply(&self, local: Point) -> Point {
-        let x = local.x;
-        let y = -local.y;
-        let rad = -self.rotation_deg.to_radians();
-        let cos = rad.cos();
-        let sin = rad.sin();
-        let mut rx = x * cos - y * sin;
-        let mut ry = x * sin + y * cos;
-        if self.mirror_y {
-            rx = -rx;
-        }
-        if self.mirror_x {
-            ry = -ry;
-        }
-        Point::new(rx + self.origin.x, ry + self.origin.y)
-    }
-}
 
 /// 1 µm integer bucket — the union-find key space and the single definition of
 /// "same point" for the whole derivation (D5.5). Matches ERC's `pt_key`.
@@ -199,15 +160,27 @@ impl SheetConnectivity {
     /// Union-find over endpoints alone never merges that case, so the junction
     /// is what asserts the connection. Regression: issue #107.
     pub fn build(sheet: &SchematicSheet) -> Self {
+        let wires: Vec<(Point, Point)> = sheet.wires.iter().map(|w| (w.start, w.end)).collect();
+        let junctions: Vec<Point> = sheet.junctions.iter().map(|j| j.position).collect();
+        Self::from_segments(&wires, &junctions)
+    }
+
+    /// The geometry-level core of [`build`](Self::build): the same wire-endpoint
+    /// union plus junction T-merge, but over raw `(start, end)` segments and
+    /// junction points rather than a [`SchematicSheet`]. This is the single
+    /// connectivity primitive shared across the crate boundary — the ERC context
+    /// feeds its own snapshot geometry through here so it derives net membership
+    /// identically instead of hand-rolling a second union-find.
+    pub fn from_segments(wires: &[(Point, Point)], junctions: &[Point]) -> Self {
         let mut parent: HashMap<Key, Key> = HashMap::new();
-        for w in &sheet.wires {
-            uf_union(&mut parent, pt_key(&w.start), pt_key(&w.end));
+        for (start, end) in wires {
+            uf_union(&mut parent, pt_key(start), pt_key(end));
         }
-        for j in &sheet.junctions {
-            let jk = pt_key(&j.position);
-            for w in &sheet.wires {
-                if point_on_segment(jk, pt_key(&w.start), pt_key(&w.end)) {
-                    uf_union(&mut parent, jk, pt_key(&w.start));
+        for jp in junctions {
+            let jk = pt_key(jp);
+            for (start, end) in wires {
+                if point_on_segment(jk, pt_key(start), pt_key(end)) {
+                    uf_union(&mut parent, jk, pt_key(start));
                 }
             }
         }
@@ -493,7 +466,7 @@ pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
 mod tests {
     use super::*;
     use signex_types::schematic::{
-        Junction, Label, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Wire,
+        Junction, Label, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Symbol, Wire,
     };
     use std::collections::HashMap;
     use uuid::Uuid;

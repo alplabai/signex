@@ -5,6 +5,7 @@
 
 use std::collections::HashMap;
 
+use signex_net::SheetConnectivity;
 use signex_types::schematic::{LabelType, Point, SelectedKind};
 
 use crate::context::ErcContext;
@@ -21,21 +22,16 @@ fn same(a: &Point, b: &Point) -> bool {
     (a.x - b.x).abs() < ENDPOINT_EPS && (a.y - b.y).abs() < ENDPOINT_EPS
 }
 
-/// MD-6: snap a coordinate to the union-find bucket. The on-disk wire
-/// format stores coordinates in nanometres (1e-9 m); rounding to the
-/// nearest 1 µm (`* 1000.0`) keeps the bucket smaller than any real
-/// schematic snap step (smallest is 25.4 µm = 1 mil) so coincident
-/// endpoints from a TSV round-trip never miss-bucket. The previous
-/// `* 100.0` (10 µm) was looser than the underlying nm precision and
-/// occasionally false-flagged DanglingWire when sub-µm float drift
-/// pushed two endpoints into different buckets.
-fn key(p: &Point) -> (i64, i64) {
-    ((p.x * 1000.0).round() as i64, (p.y * 1000.0).round() as i64)
+/// Wire + junction net connectivity for the rules that need net roots — the
+/// same [`SheetConnectivity`] (wire-endpoint union plus junction T-merge)
+/// `build_netlist` derives, so a rule's notion of "same net" matches the
+/// netlist's. Replaces the per-rule hand-rolled union-find, which also missed
+/// the junction T-merge (its junction loop only `find`-ed, never `union`-ed).
+fn wire_connectivity(ctx: &ErcContext) -> SheetConnectivity {
+    let wires: Vec<(Point, Point)> = ctx.wires.iter().map(|w| (w.start, w.end)).collect();
+    let junctions: Vec<Point> = ctx.junctions.iter().map(|j| j.position).collect();
+    SheetConnectivity::from_segments(&wires, &junctions)
 }
-
-// Union-find lives in the shared `signex_net::uf` crate (HI-17, ADR-0001
-// A3.1). Import the canonical helpers.
-use signex_net::uf::{find as uf_find, union as uf_union};
 
 // ---------------------------------------------------------------------------
 // Rule: UnusedPin
@@ -192,20 +188,14 @@ pub(crate) fn dangling_wire(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
 // ---------------------------------------------------------------------------
 
 pub(crate) fn net_label_conflict(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
-    let mut parent: HashMap<(i64, i64), (i64, i64)> = HashMap::new();
-    for w in &ctx.wires {
-        uf_union(&mut parent, key(&w.start), key(&w.end));
-    }
-    for j in &ctx.junctions {
-        uf_find(&mut parent, key(&j.position));
-    }
+    let mut conn = wire_connectivity(ctx);
 
     let mut by_root: HashMap<(i64, i64), Vec<&crate::context::ErcLabel>> = HashMap::new();
     for lbl in &ctx.labels {
         if !matches!(lbl.label_type, LabelType::Net) {
             continue;
         }
-        let root = uf_find(&mut parent, key(&lbl.position));
+        let root = conn.root_of(&lbl.position);
         by_root.entry(root).or_default().push(lbl);
     }
 
@@ -281,10 +271,11 @@ pub(crate) fn orphan_label(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
 // ---------------------------------------------------------------------------
 
 pub(crate) fn bus_bit_width_mismatch(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
-    let mut parent: HashMap<(i64, i64), (i64, i64)> = HashMap::new();
-    for b in &ctx.buses {
-        uf_union(&mut parent, key(&b.start), key(&b.end));
-    }
+    // Bus bundles connect by segment only (no junction dots), so no junctions
+    // are fed to the shared connectivity — same topology as before, now derived
+    // through `signex-net` rather than a hand-rolled union-find.
+    let buses: Vec<(Point, Point)> = ctx.buses.iter().map(|b| (b.start, b.end)).collect();
+    let mut conn = SheetConnectivity::from_segments(&buses, &[]);
 
     fn parse_bus_label(text: &str) -> Option<(&str, i64, i64)> {
         let open = text.rfind('[')?;
@@ -305,7 +296,7 @@ pub(crate) fn bus_bit_width_mismatch(ctx: &ErcContext, out: &mut Vec<Diagnostic>
         let Some((_base, lo, hi)) = parse_bus_label(&lbl.text) else {
             continue;
         };
-        let root = uf_find(&mut parent, key(&lbl.position));
+        let root = conn.root_of(&lbl.position);
         by_root.entry(root).or_default().push((lbl, (lo, hi)));
     }
 
@@ -457,27 +448,21 @@ pub(crate) fn bad_hier_sheet_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
 // ---------------------------------------------------------------------------
 
 pub(crate) fn missing_power_flag(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
-    // MD-12: rebuild a position→net union-find so we can verify the
-    // power port shares a NET with a same-text label. The previous
-    // `label_texts.contains(name)` check was a global text match —
-    // a port `+3V3` floating on its own net was suppressed by ANY
-    // other `+3V3` label anywhere on the sheet. The fix routes the
-    // check through the same union-find topology `derive_nets` uses.
+    // MD-12: verify the power port shares a NET with a same-text label, not just
+    // that the text exists somewhere on the sheet (a port `+3V3` floating on its
+    // own net must not be suppressed by ANY other `+3V3` label). Connectivity is
+    // the shared [`SheetConnectivity`] — the same topology `build_netlist`
+    // derives — which also honors T-junctions the old inline pass silently
+    // dropped (its junction loop only `find`-ed, never `union`-ed).
     use std::collections::HashMap;
-    let mut parent: HashMap<(i64, i64), (i64, i64)> = HashMap::new();
-    for w in &ctx.wires {
-        signex_net::uf::union(&mut parent, key(&w.start), key(&w.end));
-    }
-    for j in &ctx.junctions {
-        signex_net::uf::find(&mut parent, key(&j.position));
-    }
+    let mut conn = wire_connectivity(ctx);
     // Map each label text → set of net roots its labels sit on.
     let mut label_nets: HashMap<&str, std::collections::HashSet<(i64, i64)>> = HashMap::new();
     for lbl in &ctx.labels {
         if lbl.text.is_empty() {
             continue;
         }
-        let root = signex_net::uf::find(&mut parent, key(&lbl.position));
+        let root = conn.root_of(&lbl.position);
         label_nets
             .entry(lbl.text.as_str())
             .or_default()
@@ -495,7 +480,7 @@ pub(crate) fn missing_power_flag(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
         // Power-port symbols carry a single connection point at their
         // position (no separate pin geometry). Look up the net root
         // for that point.
-        let port_root = signex_net::uf::find(&mut parent, key(&symbol.position));
+        let port_root = conn.root_of(&symbol.position);
         let same_net_label = label_nets
             .get(name)
             .map(|nets| nets.contains(&port_root))
@@ -577,5 +562,117 @@ pub(crate) fn symbol_outside_sheet(ctx: &ErcContext, out: &mut Vec<Diagnostic>) 
                 .with_primary(sel(symbol.uuid, SelectedKind::Symbol)),
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::context::{ErcJunction, ErcLabel, ErcSymbol, ErcWire, PaperSize};
+    use signex_types::schematic::{LabelType, Point};
+    use std::collections::HashMap;
+    use uuid::Uuid;
+
+    fn pt(x: f64, y: f64) -> Point {
+        Point { x, y }
+    }
+
+    fn wire(a: Point, b: Point) -> ErcWire {
+        ErcWire {
+            uuid: Uuid::nil(),
+            start: a,
+            end: b,
+        }
+    }
+
+    fn power_label(text: &str, pos: Point) -> ErcLabel {
+        ErcLabel {
+            uuid: Uuid::nil(),
+            text: text.into(),
+            position: pos,
+            label_type: LabelType::Power,
+        }
+    }
+
+    fn power_port(value: &str, pos: Point) -> ErcSymbol {
+        ErcSymbol {
+            uuid: Uuid::nil(),
+            reference: "#PWR01".into(),
+            value: value.into(),
+            position: pos,
+            is_power: true,
+            pins: Vec::new(),
+            attrs: HashMap::new(),
+        }
+    }
+
+    fn ctx(
+        wires: Vec<ErcWire>,
+        junctions: Vec<ErcJunction>,
+        labels: Vec<ErcLabel>,
+        symbols: Vec<ErcSymbol>,
+    ) -> ErcContext {
+        ErcContext {
+            paper_size: PaperSize::A4,
+            symbols,
+            wires,
+            buses: Vec::new(),
+            labels,
+            junctions,
+            no_connects: Vec::new(),
+            bus_entries: Vec::new(),
+            child_sheets: Vec::new(),
+            nets: Vec::new(),
+            children: HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn missing_power_flag_honors_a_t_junction() {
+        // A +3V3 port at (10,0) on the horizontal wire; a matching +3V3 label at
+        // (5,5) on a vertical wire that ends on the horizontal's interior, joined
+        // by a junction at (5,0). Port and label share a net only *through* the
+        // T-junction — which the shared connectivity merges, so the port is
+        // cross-referenced and NOT flagged. (The old inline pass only `find`-ed
+        // junctions, split the net, and false-flagged this.)
+        let c = ctx(
+            vec![
+                wire(pt(0.0, 0.0), pt(10.0, 0.0)),
+                wire(pt(5.0, 0.0), pt(5.0, 5.0)),
+            ],
+            vec![ErcJunction {
+                position: pt(5.0, 0.0),
+            }],
+            vec![power_label("+3V3", pt(5.0, 5.0))],
+            vec![power_port("+3V3", pt(10.0, 0.0))],
+        );
+        let mut out = Vec::new();
+        missing_power_flag(&c, &mut out);
+        assert!(
+            out.is_empty(),
+            "port cross-referenced through the T-junction: {out:?}"
+        );
+    }
+
+    #[test]
+    fn missing_power_flag_fires_when_no_same_net_label() {
+        // Same port, but the +3V3 label sits on a disjoint wire with nothing
+        // tying it to the port's net → not cross-referenced → flagged.
+        let c = ctx(
+            vec![
+                wire(pt(0.0, 0.0), pt(10.0, 0.0)),
+                wire(pt(50.0, 0.0), pt(60.0, 0.0)),
+            ],
+            Vec::new(),
+            vec![power_label("+3V3", pt(50.0, 0.0))],
+            vec![power_port("+3V3", pt(10.0, 0.0))],
+        );
+        let mut out = Vec::new();
+        missing_power_flag(&c, &mut out);
+        assert_eq!(
+            out.len(),
+            1,
+            "port on a net with no same-name label is flagged"
+        );
     }
 }
