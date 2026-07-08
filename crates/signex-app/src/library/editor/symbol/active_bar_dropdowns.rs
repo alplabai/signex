@@ -8,7 +8,7 @@
 //!
 //! Wiring philosophy mirrors the footprint editor: items that map to
 //! existing primitives (Selection Filter pills, Shape tools) emit the
-//! real `PrimitiveEditorMsg`; items that need new primitives emit
+//! real `SymbolEditorMsg`; items that need new primitives emit
 //! `SymbolActiveBarStub` so the action logs a "coming soon" warn and
 //! dismisses the menu cleanly.
 
@@ -22,19 +22,19 @@ use crate::library::editor::symbol::canvas::SymbolTool;
 use crate::library::editor::symbol::state::{
     SymActiveBarMenu, SymbolFilterKind, SymbolSelectionFilter,
 };
-use crate::library::messages::{LibraryMessage, PrimitiveEditorMsg, SymbolToolMsg};
+use crate::library::messages::{LibraryMessage, PrimitiveEdit, SymbolEditorMsg, SymbolToolMsg};
 
-/// Convenience: route a `PrimitiveEditorMsg` to the editor at `path`.
-fn sym(path: PathBuf, msg: PrimitiveEditorMsg) -> LibraryMessage {
-    LibraryMessage::PrimitiveEditorEvent { path, msg }
+/// Convenience: route a `SymbolEditorMsg` to the editor at `path`.
+fn sym(path: PathBuf, msg: SymbolEditorMsg) -> LibraryMessage {
+    LibraryMessage::PrimitiveEditorEvent {
+        path,
+        msg: PrimitiveEdit::Symbol(msg),
+    }
 }
 
 /// "Coming soon" stub item with no icon.
 fn stub(label: &'static str, path: PathBuf) -> DropdownItem<LibraryMessage> {
-    DropdownItem::new(
-        label,
-        sym(path, PrimitiveEditorMsg::SymbolActiveBarStub(label)),
-    )
+    DropdownItem::new(label, sym(path, SymbolEditorMsg::ActiveBarStub(label)))
 }
 
 /// Stub item with an icon for visual recognition.
@@ -43,11 +43,7 @@ fn stub_with_icon(
     path: PathBuf,
     icon: iced::widget::svg::Handle,
 ) -> DropdownItem<LibraryMessage> {
-    DropdownItem::new(
-        label,
-        sym(path, PrimitiveEditorMsg::SymbolActiveBarStub(label)),
-    )
-    .icon(icon)
+    DropdownItem::new(label, sym(path, SymbolEditorMsg::ActiveBarStub(label))).icon(icon)
 }
 
 /// Build the entries for the dropdown matching `menu`. `tid` resolves
@@ -86,7 +82,7 @@ fn filter_entries(f: SymbolSelectionFilter, path: PathBuf) -> Vec<DropdownEntry<
             label,
             LibraryMessage::PrimitiveEditorEvent {
                 path: path.clone(),
-                msg: PrimitiveEditorMsg::SymbolToggleSelectionFilter(kind),
+                msg: PrimitiveEdit::Symbol(SymbolEditorMsg::ToggleSelectionFilter(kind)),
             },
             f.get(kind),
             chip_border,
@@ -99,7 +95,7 @@ fn filter_entries(f: SymbolSelectionFilter, path: PathBuf) -> Vec<DropdownEntry<
         if all_on { "All - On" } else { "All - Off" },
         LibraryMessage::PrimitiveEditorEvent {
             path: path.clone(),
-            msg: PrimitiveEditorMsg::SymbolActiveBarStub("All filters"),
+            msg: PrimitiveEdit::Symbol(SymbolEditorMsg::ActiveBarStub("All filters")),
         },
         all_on,
         chip_border,
@@ -146,28 +142,28 @@ fn snap_entries(path: PathBuf) -> Vec<DropdownEntry<LibraryMessage>> {
             "Pin Tips",
             LibraryMessage::PrimitiveEditorEvent {
                 path: PathBuf::new(),
-                msg: PrimitiveEditorMsg::SymbolActiveBarStub("Snap → Pin Tips"),
+                msg: PrimitiveEdit::Symbol(SymbolEditorMsg::ActiveBarStub("Snap → Pin Tips")),
             },
         )),
         DropdownEntry::Item(DropdownItem::new(
             "Line Endpoints",
             LibraryMessage::PrimitiveEditorEvent {
                 path: PathBuf::new(),
-                msg: PrimitiveEditorMsg::SymbolActiveBarStub("Snap → Line Endpoints"),
+                msg: PrimitiveEdit::Symbol(SymbolEditorMsg::ActiveBarStub("Snap → Line Endpoints")),
             },
         )),
         DropdownEntry::Item(DropdownItem::new(
             "Arc Centres",
             LibraryMessage::PrimitiveEditorEvent {
                 path: PathBuf::new(),
-                msg: PrimitiveEditorMsg::SymbolActiveBarStub("Snap → Arc Centres"),
+                msg: PrimitiveEdit::Symbol(SymbolEditorMsg::ActiveBarStub("Snap → Arc Centres")),
             },
         )),
         DropdownEntry::Item(DropdownItem::new(
             "Text Origins",
             LibraryMessage::PrimitiveEditorEvent {
                 path: PathBuf::new(),
-                msg: PrimitiveEditorMsg::SymbolActiveBarStub("Snap → Text Origins"),
+                msg: PrimitiveEdit::Symbol(SymbolEditorMsg::ActiveBarStub("Snap → Text Origins")),
             },
         )),
     ]
@@ -309,7 +305,7 @@ fn pin_entries(active_tool: SymbolTool, path: PathBuf) -> Vec<DropdownEntry<Libr
                 "Place Pin",
                 sym(
                     path.clone(),
-                    PrimitiveEditorMsg::SymbolSetTool(SymbolToolMsg::AddPin),
+                    SymbolEditorMsg::SetTool(SymbolToolMsg::AddPin),
                 ),
             )
             .checked(active_tool == SymbolTool::AddPin),
@@ -335,7 +331,7 @@ fn text_entries(
                 "String",
                 sym(
                     path.clone(),
-                    PrimitiveEditorMsg::SymbolSetTool(SymbolToolMsg::PlaceText),
+                    SymbolEditorMsg::SetTool(SymbolToolMsg::PlaceText),
                 ),
             )
             .icon(ic::icon_dd_text_string(tid))
@@ -355,7 +351,7 @@ fn shapes_entries(
     tid: ThemeId,
 ) -> Vec<DropdownEntry<LibraryMessage>> {
     let arm = |tool: SymbolToolMsg| -> LibraryMessage {
-        sym(path.clone(), PrimitiveEditorMsg::SymbolSetTool(tool))
+        sym(path.clone(), SymbolEditorMsg::SetTool(tool))
     };
     vec![
         DropdownEntry::Item(

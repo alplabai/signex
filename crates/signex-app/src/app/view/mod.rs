@@ -4843,8 +4843,9 @@ impl Signex {
                 let close_msg = Message::Library(
                     crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                         path: path.to_path_buf(),
-                        msg:
-                            crate::library::messages::PrimitiveEditorMsg::FootprintCloseContextMenu,
+                        msg: crate::library::messages::PrimitiveEdit::Footprint(
+                            crate::library::messages::FootprintEditorMsg::CloseContextMenu,
+                        ),
                     },
                 );
                 layers.push(Self::dismiss_layer(close_msg));
@@ -4878,7 +4879,9 @@ impl Signex {
                 let close_msg = Message::Library(
                     crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                         path: path.to_path_buf(),
-                        msg: crate::library::messages::PrimitiveEditorMsg::FootprintMoveByCancel,
+                        msg: crate::library::messages::PrimitiveEdit::Footprint(
+                            crate::library::messages::FootprintEditorMsg::MoveByCancel,
+                        ),
                     },
                 );
                 layers.push(Self::dismiss_layer(close_msg));

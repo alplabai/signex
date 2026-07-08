@@ -3,11 +3,11 @@
 //! Carved out of the monolithic `sketch::apply` (ADR-0001 D1/D2). Arm
 //! bodies are moved verbatim; each keeps its own inner `use`s.
 
-use crate::library::messages::PrimitiveEditorMsg;
+use crate::library::messages::FootprintEditorMsg;
 
-pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: PrimitiveEditorMsg) {
+pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: FootprintEditorMsg) {
     match msg {
-        PrimitiveEditorMsg::FootprintSketchSelectMany(ids) => {
+        FootprintEditorMsg::SketchSelectMany(ids) => {
             // v0.27 — Sketch-mode multi-select replacement. First
             // entity is primary (drives the inspector + DOF
             // overlay focus); the second slots into the secondary
@@ -25,12 +25,12 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             }
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::FootprintSketchSetTool(tool) => {
+        FootprintEditorMsg::SketchSetTool(tool) => {
             editor.state.active_tool = tool;
             editor.state.tool_pending = crate::library::editor::footprint::state::ToolPending::Idle;
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::FootprintSketchToggleConstruction => {
+        FootprintEditorMsg::SketchToggleConstruction => {
             editor.state.construction_mode = !editor.state.construction_mode;
             // v0.22 Phase A5 — mutual exclusivity with centerline.
             if editor.state.construction_mode {
@@ -38,7 +38,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             }
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::FootprintSketchToggleCenterline => {
+        FootprintEditorMsg::SketchToggleCenterline => {
             editor.state.centerline_mode = !editor.state.centerline_mode;
             // Mutual exclusivity — enabling centerline clears
             // construction (same Fusion 360 convention as the
@@ -49,7 +49,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             }
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::FootprintSketchToolEscape => {
+        FootprintEditorMsg::SketchToolEscape => {
             editor.state.tool_pending = crate::library::editor::footprint::state::ToolPending::Idle;
             // v0.24 Track D — leaving the gesture also drops any
             // numeric buffer the user had been typing. Otherwise a
@@ -60,7 +60,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             editor.state.placement_input_others.clear();
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::FootprintSketchSelect { id, shift } => {
+        FootprintEditorMsg::SketchSelect { id, shift } => {
             // None clears every selection slot. Some(id) without
             // shift replaces primary; with shift adds to secondary
             // (or replaces secondary with the new id).
@@ -93,7 +93,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             }
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::FootprintSketchDimensionInput(s) => {
+        FootprintEditorMsg::SketchDimensionInput(s) => {
             editor.state.dimension_input = s;
         }
         _ => unreachable!("non-selection & tool/mode UI sketch variant routed to sketch_ui.rs"),

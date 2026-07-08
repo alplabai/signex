@@ -1,21 +1,21 @@
 //! Footprint editor — selection update logic.
 //!
 //! Split out of `apply_footprint_primitive_edit` per ADR-0001 D1/D2.
-//! The router delegates all selection `PrimitiveEditorMsg` variants here;
+//! The router delegates all selection `FootprintEditorMsg` variants here;
 //! bodies are verbatim, so each arm keeps its own inner `use`s.
 
 use crate::library::editor::footprint::pad_to_sketch;
 use crate::library::editor::footprint::state::FootprintEditorState as CanvasState;
-use crate::library::messages::PrimitiveEditorMsg;
+use crate::library::messages::FootprintEditorMsg;
 
-pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: PrimitiveEditorMsg) {
+pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: FootprintEditorMsg) {
     match msg {
         // v0.18.7 — switch the active footprint within the multi-
         // footprint envelope. Resets the canvas pad list off the
         // newly-active primitive, clears selection, refits the
         // camera on the next frame so a different-sized footprint
         // doesn't open at a stale zoom.
-        PrimitiveEditorMsg::FootprintSelectActiveIdx(idx) => {
+        FootprintEditorMsg::SelectActiveIdx(idx) => {
             let last = editor.file.footprints.len().saturating_sub(1);
             let clamped = idx.min(last);
             if clamped == editor.active_idx {
@@ -37,7 +37,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
         // (`PanelMsg::FpEditorToggleSelectionFilter`) routes through
         // a dedicated handler in `handlers/dock/sch_library`; this
         // arm covers the active-bar dispatch path.
-        PrimitiveEditorMsg::FootprintToggleSelectionFilter(kind) => {
+        FootprintEditorMsg::ToggleSelectionFilter(kind) => {
             editor.state.selection_filter.toggle(kind);
             editor.canvas_cache.clear();
         }
@@ -45,7 +45,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
         // selected_pad symmetrically so the Properties panel
         // doesn't try to render two selection-specific bodies at
         // once.
-        PrimitiveEditorMsg::FootprintSelectSilkF(sel) => {
+        FootprintEditorMsg::SelectSilkF(sel) => {
             editor.state.selected_silk_f = sel;
             if sel.is_some() {
                 editor.state.selected_pad = None;
@@ -55,7 +55,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
         // v0.18.18 — delete the selected silk-front graphic.
         // No-op when nothing is selected. Updates `editor.dirty`
         // and clears the selection state.
-        PrimitiveEditorMsg::FootprintDeleteSilkF => {
+        FootprintEditorMsg::DeleteSilkF => {
             if let Some(idx) = editor.state.selected_silk_f {
                 let primitive = editor.primitive_mut();
                 if idx < primitive.silk_f.len() {
@@ -73,7 +73,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             }
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::FootprintMovePad { idx, x_mm, y_mm } => {
+        FootprintEditorMsg::MovePad { idx, x_mm, y_mm } => {
             editor.with_parts(|state, primitive| {
                 state.move_pad(idx, x_mm, y_mm);
                 // v0.15 — mirror the move into the sketch.
@@ -85,10 +85,10 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             editor.canvas_cache.clear();
             editor.dirty = true;
         }
-        PrimitiveEditorMsg::FootprintCursorAt { x_mm, y_mm } => {
+        FootprintEditorMsg::CursorAt { x_mm, y_mm } => {
             editor.state.cursor_mm = Some((x_mm, y_mm));
         }
-        PrimitiveEditorMsg::FootprintSelectPad(sel) => {
+        FootprintEditorMsg::SelectPad(sel) => {
             editor.state.selected_pad = sel;
             // v0.27 — single-pad select replaces the multi-select
             // extras too. Multi-select uses FootprintSelectPads.
@@ -111,7 +111,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             editor.state.numeric_buffers.clear();
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::FootprintSelectPads(mut pads) => {
+        FootprintEditorMsg::SelectPads(mut pads) => {
             // v0.27 — Altium-parity multi-select. Empty list = clear.
             // First entry becomes the primary (drives Properties);
             // rest land in `selected_pads_extra` for highlight only.
@@ -132,7 +132,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             editor.canvas_cache.clear();
         }
 
-        PrimitiveEditorMsg::FootprintDeleteSelected => {
+        FootprintEditorMsg::DeleteSelected => {
             // v0.27 — Delete walks the full multi-select set, not
             // just the primary `selected_pad`. Rubber-band + Ctrl-
             // click extras get the same treatment as the primary so
@@ -207,14 +207,14 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                 editor.dirty = true;
             }
         }
-        PrimitiveEditorMsg::FootprintSetSelectionMode2d(mode) => {
+        FootprintEditorMsg::SetSelectionMode2d(mode) => {
             // v0.27 — active-bar Selection picker rows. The rubber-
             // band release picker reads this on commit so Inside /
             // Touching / Outside semantics apply.
             editor.state.selection_mode_2d = mode;
             editor.state.active_bar_menu = None;
         }
-        PrimitiveEditorMsg::FootprintSelectAllOnLayer => {
+        FootprintEditorMsg::SelectAllOnLayer => {
             // v0.27 — multi-select every pad on the active layer.
             // Active layer = layer of the currently-selected pad,
             // or F.Cu when nothing is selected.
@@ -247,24 +247,24 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             editor.state.active_bar_menu = None;
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::FootprintLassoArm => {
+        FootprintEditorMsg::LassoArm => {
             editor.state.lasso_mode_active = true;
             editor.state.lasso_vertices.clear();
             editor.state.active_bar_menu = None;
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::FootprintLassoAddVertex { x_mm, y_mm } => {
+        FootprintEditorMsg::LassoAddVertex { x_mm, y_mm } => {
             if editor.state.lasso_mode_active {
                 editor.state.lasso_vertices.push((x_mm, y_mm));
                 editor.canvas_cache.clear();
             }
         }
-        PrimitiveEditorMsg::FootprintLassoCancel => {
+        FootprintEditorMsg::LassoCancel => {
             editor.state.lasso_mode_active = false;
             editor.state.lasso_vertices.clear();
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::FootprintLassoCommit => {
+        FootprintEditorMsg::LassoCommit => {
             // v0.27 — close the polygon, multi-select every pad whose
             // centre lies inside (even-odd ray casting). Anything
             // less than three vertices is a degenerate polygon and
@@ -318,24 +318,24 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             }
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::FootprintTouchingLineArm => {
+        FootprintEditorMsg::TouchingLineArm => {
             editor.state.touching_line_active = true;
             editor.state.touching_line_first = None;
             editor.state.active_bar_menu = None;
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::FootprintTouchingLineFirst { x_mm, y_mm } => {
+        FootprintEditorMsg::TouchingLineFirst { x_mm, y_mm } => {
             if editor.state.touching_line_active {
                 editor.state.touching_line_first = Some((x_mm, y_mm));
                 editor.canvas_cache.clear();
             }
         }
-        PrimitiveEditorMsg::FootprintTouchingLineCancel => {
+        FootprintEditorMsg::TouchingLineCancel => {
             editor.state.touching_line_active = false;
             editor.state.touching_line_first = None;
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::FootprintTouchingLineCommit { x_mm, y_mm } => {
+        FootprintEditorMsg::TouchingLineCommit { x_mm, y_mm } => {
             // v0.27 — Touching Line: every pad whose bbox is
             // intersected by the segment from `touching_line_first`
             // → (x_mm, y_mm) becomes selected. Liang-Barsky-style
@@ -409,14 +409,13 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             }
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::FootprintSelectOverlapped
-        | PrimitiveEditorMsg::FootprintSelectNextOverlapped => {
+        FootprintEditorMsg::SelectOverlapped | FootprintEditorMsg::SelectNextOverlapped => {
             // v0.27 — Cycle through pads stacked at the most recent
             // click world position. SelectOverlapped goes to the
             // previous pad in z-order; SelectNextOverlapped advances.
             // Without a recorded click position there's no stack to
             // cycle, so the action is a silent no-op.
-            let forward = matches!(msg, PrimitiveEditorMsg::FootprintSelectNextOverlapped);
+            let forward = matches!(msg, FootprintEditorMsg::SelectNextOverlapped);
             let Some((wx, wy)) = editor.state.last_click_world_mm else {
                 editor.state.active_bar_menu = None;
                 return;
@@ -458,7 +457,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             editor.state.active_bar_menu = None;
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::FootprintSelectOffGridPads => {
+        FootprintEditorMsg::SelectOffGridPads => {
             // v0.27 — pads whose centre falls between grid steps.
             // The active grid step lives on snap_options; defaults
             // to 1 mm. Tolerance is 1% of the step so pads exactly

@@ -2120,7 +2120,7 @@ pub enum PanelMsg {
     /// `silk_f[idx]` if it's a Text. No-op for non-Text selections.
     FpEditorSetSilkText(String),
     /// v0.18.24 — Delete the selected silk-front graphic. Mirrors the
-    /// existing `FootprintDeleteSilkF` PrimitiveEditorMsg surface but
+    /// existing `FootprintEditorMsg::DeleteSilkF` surface but
     /// is emitted from the Properties panel's silk-selection branch.
     FpEditorDeleteSelectedSilk,
     /// v0.18.13 — `Add` button on the Guide Manager table

@@ -1,20 +1,20 @@
 //! Footprint editor — geometry update logic.
 //!
 //! Split out of `apply_footprint_primitive_edit` per ADR-0001 D1/D2.
-//! The router delegates all geometry `PrimitiveEditorMsg` variants here;
+//! The router delegates all geometry `FootprintEditorMsg` variants here;
 //! bodies are verbatim, so each arm keeps its own inner `use`s.
 
 use crate::library::editor::footprint::pad_to_sketch;
 use crate::library::editor::footprint::state::FootprintEditorState as CanvasState;
-use crate::library::messages::PrimitiveEditorMsg;
+use crate::library::messages::FootprintEditorMsg;
 
-pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: PrimitiveEditorMsg) {
+pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: FootprintEditorMsg) {
     match msg {
         // v0.18.7 — append a fresh empty footprint to the envelope
         // and switch onto it. Names the new sibling `Footprint N`
         // where N counts existing siblings + 1; the user can rename
         // via the Properties panel.
-        PrimitiveEditorMsg::FootprintAddNewSibling => {
+        FootprintEditorMsg::AddNewSibling => {
             let next_n = editor.file.footprints.len() + 1;
             let new_fp = signex_library::Footprint::empty(format!("Footprint {next_n}"));
             editor.file.footprints.push(new_fp);
@@ -26,7 +26,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             editor.canvas_cache.clear();
             editor.dirty = true;
         }
-        PrimitiveEditorMsg::FootprintAddPad { x_mm, y_mm } => {
+        FootprintEditorMsg::AddPad { x_mm, y_mm } => {
             // v0.15 — bidirectional Pads → Sketch mirror. The new
             // pad gets a backing sketch Point + PadAttr (when the
             // sketch already has any other backed entity, i.e. the
@@ -46,7 +46,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             editor.canvas_cache.clear();
             editor.dirty = true;
         }
-        PrimitiveEditorMsg::FootprintAddVia { x_mm, y_mm } => {
+        FootprintEditorMsg::AddVia { x_mm, y_mm } => {
             // v0.27 — vias are a small Round plated-through pad. The
             // canonical via geometry is fixed (0.6 mm copper / 0.3 mm
             // drill / Multi-Layer F.Cu+B.Cu+masks) so the user gets a
@@ -87,7 +87,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
         // stashes the start in `state.track_first`; second click
         // commits the line to silk_f and chains by re-stashing the
         // second click as the next gesture's start.
-        PrimitiveEditorMsg::FootprintTrackClick { x_mm, y_mm } => {
+        FootprintEditorMsg::TrackClick { x_mm, y_mm } => {
             match editor.state.track_first {
                 None => {
                     editor.state.track_first = Some((x_mm, y_mm));
@@ -113,7 +113,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             }
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::FootprintTrackCancel => {
+        FootprintEditorMsg::TrackCancel => {
             editor.state.track_first = None;
             editor.canvas_cache.clear();
         }
@@ -121,7 +121,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
         // start / sweep end). Idle → Center → Start → commit. After
         // commit the gesture resets to Idle (no chain — arcs
         // typically aren't strung together).
-        PrimitiveEditorMsg::FootprintArcClick { x_mm, y_mm } => {
+        FootprintEditorMsg::ArcClick { x_mm, y_mm } => {
             use crate::library::editor::footprint::state::PlaceArcPending;
             let next = match editor.state.place_arc_pending {
                 PlaceArcPending::Idle => PlaceArcPending::Center {
@@ -159,7 +159,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             editor.state.place_arc_pending = next;
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::FootprintArcCancel => {
+        FootprintEditorMsg::ArcCancel => {
             editor.state.place_arc_pending =
                 crate::library::editor::footprint::state::PlaceArcPending::Idle;
             editor.canvas_cache.clear();
@@ -167,11 +167,11 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
         // v0.18.15.4 — Place Polygon multi-click gesture. Each
         // click appends a vertex; commit happens on tool switch /
         // Esc via `FootprintPolygonCommit`.
-        PrimitiveEditorMsg::FootprintPolygonClick { x_mm, y_mm } => {
+        FootprintEditorMsg::PolygonClick { x_mm, y_mm } => {
             editor.state.place_polygon_vertices.push((x_mm, y_mm));
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::FootprintPolygonCommit => {
+        FootprintEditorMsg::PolygonCommit => {
             let verts = std::mem::take(&mut editor.state.place_polygon_vertices);
             // v0.18.17 — emit one `Polygon` FpGraphic (instead of
             // N Lines). `filled` follows the active tool —
@@ -197,7 +197,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             }
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::FootprintPolygonCancel => {
+        FootprintEditorMsg::PolygonCancel => {
             editor.state.place_polygon_vertices.clear();
             editor.canvas_cache.clear();
         }
@@ -206,7 +206,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
         // size: 1.0 }, stroke_width: 0.0 }` to the active footprint's
         // `silk_f`. The user edits the content via the Properties
         // panel later (Properties wiring is queued).
-        PrimitiveEditorMsg::FootprintAddText { x_mm, y_mm } => {
+        FootprintEditorMsg::AddText { x_mm, y_mm } => {
             let primitive = editor.primitive_mut();
             primitive
                 .silk_f
@@ -231,7 +231,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
         // the intermediate press/drag ticks never reach the
         // dispatcher (unlike Track's 2-click gesture), so there's
         // no risk of double-stacking.
-        PrimitiveEditorMsg::FootprintAddTextFrame {
+        FootprintEditorMsg::AddTextFrame {
             x_mm,
             y_mm,
             w_mm,
@@ -248,7 +248,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
         }
         // v0.18.12 — Place Hole tool. Drops a non-plated through
         // hole at the cursor (no copper, drill from `next_pad_defaults`).
-        PrimitiveEditorMsg::FootprintAddHole { x_mm, y_mm } => {
+        FootprintEditorMsg::AddHole { x_mm, y_mm } => {
             editor.with_parts(|state, primitive| {
                 let idx = state.add_hole_at(x_mm, y_mm);
                 if let Some(pad) = state.pads.get_mut(idx) {
@@ -262,7 +262,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             editor.dirty = true;
         }
 
-        PrimitiveEditorMsg::FootprintMintBody3d => {
+        FootprintEditorMsg::MintBody3d => {
             editor.push_history();
             editor.with_parts(|_state, primitive| {
                 crate::library::editor::footprint::body3d_mint::mint_box_from_courtyard(primitive);
@@ -271,7 +271,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             editor.canvas_cache.clear();
             editor.dirty = true;
         }
-        PrimitiveEditorMsg::FootprintMintExtrudedBody3d => {
+        FootprintEditorMsg::MintExtrudedBody3d => {
             editor.push_history();
             editor.with_parts(|_state, primitive| {
                 crate::library::editor::footprint::body3d_mint::mint_extruded_from_fab(primitive);

@@ -1,7 +1,7 @@
 //! Update logic for the standalone Symbol editor.
 //!
 //! [`apply_symbol_primitive_edit`] is a thin routing table over
-//! [`PrimitiveEditorMsg`]: each symbol-mutating variant is dispatched to
+//! [`SymbolEditorMsg`]: each symbol-mutating variant is dispatched to
 //! the concern module that owns it — [`ui`], [`selection`], [`movement`],
 //! [`transform`], [`camera`], [`parts`], or [`history`]. Graphics-placement
 //! variants are handled inline. Undo/redo, drag coalescing, and the
@@ -24,7 +24,7 @@ use selection::apply_symbol_selection;
 use transform::apply_symbol_transform;
 use ui::apply_symbol_ui;
 
-use crate::library::messages::{GraphicHandleMsg, PrimitiveEditorMsg, SymbolRotatePivotMsg};
+use crate::library::messages::{GraphicHandleMsg, SymbolEditorMsg, SymbolRotatePivotMsg};
 
 type SymEditor = crate::app::SymbolEditorState;
 
@@ -75,20 +75,20 @@ fn push_graphic(
 /// through the same code path the dispatcher uses.
 pub(crate) fn apply_symbol_primitive_edit(
     editor: &mut crate::app::SymbolEditorState,
-    msg: PrimitiveEditorMsg,
+    msg: SymbolEditorMsg,
 ) {
     use crate::library::editor::symbol::state::SymbolSelection;
 
     match msg {
         // ── UI / toolbar (no undo) ───────────────────────────────
-        PrimitiveEditorMsg::SymbolSetTool(_)
-        | PrimitiveEditorMsg::SymbolToggleActiveBarMenu(_)
-        | PrimitiveEditorMsg::SymbolCloseActiveBarMenu
-        | PrimitiveEditorMsg::SymbolActiveBarStub(_)
-        | PrimitiveEditorMsg::SymbolToggleSelectionFilter(_) => apply_symbol_ui(editor, msg),
+        SymbolEditorMsg::SetTool(_)
+        | SymbolEditorMsg::ToggleActiveBarMenu(_)
+        | SymbolEditorMsg::CloseActiveBarMenu
+        | SymbolEditorMsg::ActiveBarStub(_)
+        | SymbolEditorMsg::ToggleSelectionFilter(_) => apply_symbol_ui(editor, msg),
 
         // ── Graphics placement ───────────────────────────────────
-        PrimitiveEditorMsg::SymbolAddPin { x, y } => {
+        SymbolEditorMsg::AddPin { x, y } => {
             push_undo(editor);
             let active_part = editor.active_part;
             let idx = crate::library::editor::symbol::state::add_pin(
@@ -100,7 +100,7 @@ pub(crate) fn apply_symbol_primitive_edit(
             editor.selected = Some(SymbolSelection::Pin(idx));
             mark_dirty(editor);
         }
-        PrimitiveEditorMsg::SymbolAddRectangle { x, y } => {
+        SymbolEditorMsg::AddRectangle { x, y } => {
             const W: f64 = 5.08;
             const H: f64 = 2.54;
             push_graphic(
@@ -112,7 +112,7 @@ pub(crate) fn apply_symbol_primitive_edit(
                 0.15,
             );
         }
-        PrimitiveEditorMsg::SymbolAddLine {
+        SymbolEditorMsg::AddLine {
             from_x,
             from_y,
             to_x,
@@ -127,7 +127,7 @@ pub(crate) fn apply_symbol_primitive_edit(
                 0.15,
             );
         }
-        PrimitiveEditorMsg::SymbolAddArc {
+        SymbolEditorMsg::AddArc {
             cx,
             cy,
             radius,
@@ -145,7 +145,7 @@ pub(crate) fn apply_symbol_primitive_edit(
                 0.15,
             );
         }
-        PrimitiveEditorMsg::SymbolAddText { x, y } => {
+        SymbolEditorMsg::AddText { x, y } => {
             push_graphic(
                 editor,
                 signex_library::SymbolGraphicKind::Text {
@@ -156,7 +156,7 @@ pub(crate) fn apply_symbol_primitive_edit(
                 0.0,
             );
         }
-        PrimitiveEditorMsg::SymbolAddCircle { cx, cy, radius } => {
+        SymbolEditorMsg::AddCircle { cx, cy, radius } => {
             push_graphic(
                 editor,
                 signex_library::SymbolGraphicKind::Circle {
@@ -168,144 +168,43 @@ pub(crate) fn apply_symbol_primitive_edit(
         }
 
         // ── Selection ────────────────────────────────────────────
-        PrimitiveEditorMsg::SymbolSelect(_) | PrimitiveEditorMsg::SymbolDeselect => {
+        SymbolEditorMsg::Select(_) | SymbolEditorMsg::Deselect => {
             apply_symbol_selection(editor, msg)
         }
 
         // ── Move (coalesced undo per drag gesture) ───────────────
-        PrimitiveEditorMsg::SymbolMoveSelected { .. }
-        | PrimitiveEditorMsg::SymbolMoveAll { .. }
-        | PrimitiveEditorMsg::SymbolMoveGraphicHandle { .. } => apply_symbol_move(editor, msg),
+        SymbolEditorMsg::MoveSelected { .. }
+        | SymbolEditorMsg::MoveAll { .. }
+        | SymbolEditorMsg::MoveGraphicHandle { .. } => apply_symbol_move(editor, msg),
 
         // ── Transform ────────────────────────────────────────────
-        PrimitiveEditorMsg::SymbolRotateSelected { .. }
-        | PrimitiveEditorMsg::SymbolDeleteSelected
-        | PrimitiveEditorMsg::SymbolSetPinNumber { .. }
-        | PrimitiveEditorMsg::SymbolSetPinName { .. } => apply_symbol_transform(editor, msg),
+        SymbolEditorMsg::RotateSelected { .. }
+        | SymbolEditorMsg::DeleteSelected
+        | SymbolEditorMsg::SetPinNumber { .. }
+        | SymbolEditorMsg::SetPinName { .. } => apply_symbol_transform(editor, msg),
 
         // ── Camera / viewport (no undo) ──────────────────────────
-        PrimitiveEditorMsg::SymbolPan { .. }
-        | PrimitiveEditorMsg::SymbolZoom { .. }
-        | PrimitiveEditorMsg::SymbolFit
-        | PrimitiveEditorMsg::SymbolCursorAt { .. } => apply_symbol_camera(editor, msg),
+        SymbolEditorMsg::Pan { .. }
+        | SymbolEditorMsg::Zoom { .. }
+        | SymbolEditorMsg::Fit
+        | SymbolEditorMsg::CursorAt { .. } => apply_symbol_camera(editor, msg),
 
         // ── Display settings intercepted upstream; no-op here ────
-        PrimitiveEditorMsg::SymbolSetSheetColor(_)
-        | PrimitiveEditorMsg::SymbolToggleGrid
-        | PrimitiveEditorMsg::SymbolCycleGridSize
-        | PrimitiveEditorMsg::SymbolCycleUnit => {}
+        SymbolEditorMsg::SetSheetColor(_)
+        | SymbolEditorMsg::ToggleGrid
+        | SymbolEditorMsg::CycleGridSize
+        | SymbolEditorMsg::CycleUnit => {}
 
         // ── Multi-part management ────────────────────────────────
-        PrimitiveEditorMsg::SymbolPrevPart
-        | PrimitiveEditorMsg::SymbolNextPart
-        | PrimitiveEditorMsg::SymbolNewPart
-        | PrimitiveEditorMsg::SymbolRemovePart => apply_symbol_parts(editor, msg),
+        SymbolEditorMsg::PrevPart
+        | SymbolEditorMsg::NextPart
+        | SymbolEditorMsg::NewPart
+        | SymbolEditorMsg::RemovePart => apply_symbol_parts(editor, msg),
 
         // ── Undo / redo / drag-commit ────────────────────────────
-        PrimitiveEditorMsg::SymbolUndo
-        | PrimitiveEditorMsg::SymbolRedo
-        | PrimitiveEditorMsg::SymbolDragCommit => apply_symbol_history(editor, msg),
-
-        // Footprint messages are no-ops in the symbol editor.
-        PrimitiveEditorMsg::FootprintSelectActiveIdx(_)
-        | PrimitiveEditorMsg::FootprintAddNewSibling
-        | PrimitiveEditorMsg::FootprintAddPad { .. }
-        | PrimitiveEditorMsg::FootprintAddHole { .. }
-        | PrimitiveEditorMsg::FootprintAddText { .. }
-        | PrimitiveEditorMsg::FootprintTrackClick { .. }
-        | PrimitiveEditorMsg::FootprintTrackCancel
-        | PrimitiveEditorMsg::FootprintArcClick { .. }
-        | PrimitiveEditorMsg::FootprintArcCancel
-        | PrimitiveEditorMsg::FootprintPolygonClick { .. }
-        | PrimitiveEditorMsg::FootprintPolygonCommit
-        | PrimitiveEditorMsg::FootprintPolygonCancel
-        | PrimitiveEditorMsg::FootprintSelectSilkF(_)
-        | PrimitiveEditorMsg::FootprintDeleteSilkF
-        | PrimitiveEditorMsg::FootprintToggleSelectionFilter(_)
-        | PrimitiveEditorMsg::FootprintMovePad { .. }
-        | PrimitiveEditorMsg::FootprintCursorAt { .. }
-        | PrimitiveEditorMsg::FootprintSelectPad(_)
-        | PrimitiveEditorMsg::FootprintDeleteSelected
-        | PrimitiveEditorMsg::FootprintToggleLayer(_)
-        | PrimitiveEditorMsg::FootprintToggleAutoFit
-        | PrimitiveEditorMsg::FootprintSetPadsTool(_)
-        | PrimitiveEditorMsg::FootprintToolEscape
-        | PrimitiveEditorMsg::FootprintToggleActiveBarMenu(_)
-        | PrimitiveEditorMsg::FootprintCloseActiveBarMenu
-        | PrimitiveEditorMsg::FootprintActiveBarStub(_)
-        | PrimitiveEditorMsg::FootprintActiveBarToggleSnap(_)
-        | PrimitiveEditorMsg::FootprintActiveBarSetSnappingMode(_)
-        | PrimitiveEditorMsg::FootprintActiveBarSetSnapSubTab(_)
-        | PrimitiveEditorMsg::FootprintActiveBarRotateSelection
-        | PrimitiveEditorMsg::FootprintActiveBarFlipSelection
-        | PrimitiveEditorMsg::FootprintActiveBarAlignSelectionToGrid
-        | PrimitiveEditorMsg::FootprintActiveBarMoveOriginToGrid
-        | PrimitiveEditorMsg::FootprintActiveBarSelectAll
-        | PrimitiveEditorMsg::FootprintActiveBarClearSelection
-        | PrimitiveEditorMsg::FootprintActiveBarSetSketchTool(_)
-        | PrimitiveEditorMsg::FootprintSetName(_)
-        | PrimitiveEditorMsg::FootprintSetMode(_)
-        | PrimitiveEditorMsg::FootprintSketchPlacePoint { .. }
-        | PrimitiveEditorMsg::FootprintSketchEditParameter { .. }
-        | PrimitiveEditorMsg::FootprintSketchSetTool(_)
-        | PrimitiveEditorMsg::FootprintSketchToggleConstruction
-        | PrimitiveEditorMsg::FootprintSketchToggleCenterline
-        | PrimitiveEditorMsg::FootprintTogglePlacementPause
-        | PrimitiveEditorMsg::FootprintSketchToolClick { .. }
-        | PrimitiveEditorMsg::FootprintSketchToolEscape
-        | PrimitiveEditorMsg::FootprintSketchPlacementInputChar(_)
-        | PrimitiveEditorMsg::FootprintSketchPlacementInputBackspace
-        | PrimitiveEditorMsg::FootprintSketchPlacementInputEnter
-        | PrimitiveEditorMsg::FootprintSketchPlacementInputEscape
-        | PrimitiveEditorMsg::FootprintSketchSelect { .. }
-        | PrimitiveEditorMsg::FootprintSketchMovePoint { .. }
-        | PrimitiveEditorMsg::FootprintSketchAddConstraintForSelection(_)
-        | PrimitiveEditorMsg::FootprintSketchDimensionInput(_)
-        | PrimitiveEditorMsg::FootprintSketchSetRole { .. }
-        | PrimitiveEditorMsg::FootprintSketchMakePadFromProfile
-        | PrimitiveEditorMsg::FootprintSketchUnlinkCornerRadius { .. }
-        | PrimitiveEditorMsg::FootprintAddTextFrame { .. }
-        | PrimitiveEditorMsg::FootprintSelectPads(..)
-        | PrimitiveEditorMsg::FootprintSketchSelectMany(..)
-        | PrimitiveEditorMsg::FootprintShowContextMenu { .. }
-        | PrimitiveEditorMsg::FootprintCloseContextMenu
-        | PrimitiveEditorMsg::FootprintContextMenuOpenSubmenu(..)
-        | PrimitiveEditorMsg::FootprintContextMenuAction(..)
-        | PrimitiveEditorMsg::FootprintFitConsumed
-        | PrimitiveEditorMsg::FootprintCopyPad
-        | PrimitiveEditorMsg::FootprintCutPad
-        | PrimitiveEditorMsg::FootprintPastePad
-        | PrimitiveEditorMsg::FootprintApplyFilterPreset(..)
-        | PrimitiveEditorMsg::FootprintToggleAllFilters
-        | PrimitiveEditorMsg::FootprintCaptureFilterPreset
-        | PrimitiveEditorMsg::FootprintActiveBarNudgeSelection
-        | PrimitiveEditorMsg::FootprintMoveByOpen
-        | PrimitiveEditorMsg::FootprintMoveBySetX(..)
-        | PrimitiveEditorMsg::FootprintMoveBySetY(..)
-        | PrimitiveEditorMsg::FootprintMoveByConfirm
-        | PrimitiveEditorMsg::FootprintMoveByCancel
-        | PrimitiveEditorMsg::FootprintMintBody3d
-        | PrimitiveEditorMsg::FootprintMintExtrudedBody3d
-        | PrimitiveEditorMsg::FootprintAlignPads(..)
-        | PrimitiveEditorMsg::FootprintSketchPlacementInputTab
-        | PrimitiveEditorMsg::FootprintSketchMoveLine { .. }
-        | PrimitiveEditorMsg::FootprintSketchResizeRoundPad { .. }
-        | PrimitiveEditorMsg::FootprintSetSelectionMode2d(..)
-        | PrimitiveEditorMsg::FootprintSelectAllOnLayer
-        | PrimitiveEditorMsg::FootprintAddVia { .. }
-        | PrimitiveEditorMsg::FootprintRecomputeCourtyardOutline
-        | PrimitiveEditorMsg::FootprintSelectOffGridPads
-        | PrimitiveEditorMsg::FootprintLassoArm
-        | PrimitiveEditorMsg::FootprintLassoAddVertex { .. }
-        | PrimitiveEditorMsg::FootprintLassoCommit
-        | PrimitiveEditorMsg::FootprintLassoCancel
-        | PrimitiveEditorMsg::FootprintTouchingLineArm
-        | PrimitiveEditorMsg::FootprintTouchingLineFirst { .. }
-        | PrimitiveEditorMsg::FootprintTouchingLineCommit { .. }
-        | PrimitiveEditorMsg::FootprintTouchingLineCancel
-        | PrimitiveEditorMsg::FootprintSelectOverlapped
-        | PrimitiveEditorMsg::FootprintSelectNextOverlapped
-        | PrimitiveEditorMsg::Save => {}
+        SymbolEditorMsg::Undo | SymbolEditorMsg::Redo | SymbolEditorMsg::DragCommit => {
+            apply_symbol_history(editor, msg)
+        }
     }
 }
 

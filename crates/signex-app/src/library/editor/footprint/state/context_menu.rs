@@ -33,7 +33,7 @@ pub enum FootprintContextSubmenu {
 }
 
 /// v0.26 — actions issued from the context menu that don't already
-/// have a dedicated `PrimitiveEditorMsg` variant.
+/// have a dedicated `FootprintEditorMsg` variant.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FootprintContextAction {
     SelectAllPads,

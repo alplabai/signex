@@ -25,7 +25,7 @@ use crate::app::FootprintEditorState;
 use crate::library::editor::footprint::state::{
     FootprintContextAction, FootprintContextSubmenu, FootprintContextTarget,
 };
-use crate::library::messages::{LibraryMessage, PrimitiveEditorMsg};
+use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use crate::styles::ti;
 
 /// v0.26-C — surface the silk graphic''s kind in the menu header so
@@ -59,9 +59,9 @@ pub fn view_context_menu<'a>(
     let menu_state = editor.state.context_menu.as_ref()?;
 
     let path_owned = path.to_path_buf();
-    let make_msg = move |msg: PrimitiveEditorMsg| LibraryMessage::PrimitiveEditorEvent {
+    let make_msg = move |msg: FootprintEditorMsg| LibraryMessage::PrimitiveEditorEvent {
         path: path_owned.clone(),
-        msg,
+        msg: PrimitiveEdit::Footprint(msg),
     };
 
     let mut items: Vec<Element<'a, LibraryMessage>> = Vec::new();
@@ -79,7 +79,7 @@ pub fn view_context_menu<'a>(
                 tokens,
                 "Place",
                 place_open,
-                make_msg(PrimitiveEditorMsg::FootprintContextMenuOpenSubmenu(Some(
+                make_msg(FootprintEditorMsg::ContextMenuOpenSubmenu(Some(
                     FootprintContextSubmenu::Place,
                 ))),
             ));
@@ -89,37 +89,31 @@ pub fn view_context_menu<'a>(
                     tokens,
                     "Pad",
                     "P",
-                    make_msg(PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlacePad)),
+                    make_msg(FootprintEditorMsg::SetPadsTool(PadsTool::PlacePad)),
                 ));
                 items.push(item_indented(
                     tokens,
                     "Track",
                     "T",
-                    make_msg(PrimitiveEditorMsg::FootprintSetPadsTool(
-                        PadsTool::PlaceTrack,
-                    )),
+                    make_msg(FootprintEditorMsg::SetPadsTool(PadsTool::PlaceTrack)),
                 ));
                 items.push(item_indented(
                     tokens,
                     "Arc",
                     "A",
-                    make_msg(PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlaceArc)),
+                    make_msg(FootprintEditorMsg::SetPadsTool(PadsTool::PlaceArc)),
                 ));
                 items.push(item_indented(
                     tokens,
                     "Polygon (Region)",
                     "R",
-                    make_msg(PrimitiveEditorMsg::FootprintSetPadsTool(
-                        PadsTool::PlacePolygon,
-                    )),
+                    make_msg(FootprintEditorMsg::SetPadsTool(PadsTool::PlacePolygon)),
                 ));
                 items.push(item_indented(
                     tokens,
                     "String (Text)",
                     "S",
-                    make_msg(PrimitiveEditorMsg::FootprintSetPadsTool(
-                        PadsTool::PlaceString,
-                    )),
+                    make_msg(FootprintEditorMsg::SetPadsTool(PadsTool::PlaceString)),
                 ));
             }
 
@@ -128,7 +122,7 @@ pub fn view_context_menu<'a>(
                 tokens,
                 "Selection",
                 sel_open,
-                make_msg(PrimitiveEditorMsg::FootprintContextMenuOpenSubmenu(Some(
+                make_msg(FootprintEditorMsg::ContextMenuOpenSubmenu(Some(
                     FootprintContextSubmenu::Selection,
                 ))),
             ));
@@ -137,7 +131,7 @@ pub fn view_context_menu<'a>(
                     tokens,
                     "Select All",
                     "Ctrl+A",
-                    make_msg(PrimitiveEditorMsg::FootprintContextMenuAction(
+                    make_msg(FootprintEditorMsg::ContextMenuAction(
                         FootprintContextAction::SelectAllPads,
                     )),
                 ));
@@ -145,7 +139,7 @@ pub fn view_context_menu<'a>(
                     tokens,
                     "Deselect All",
                     "Ctrl+Shift+A",
-                    make_msg(PrimitiveEditorMsg::FootprintContextMenuAction(
+                    make_msg(FootprintEditorMsg::ContextMenuAction(
                         FootprintContextAction::DeselectAll,
                     )),
                 ));
@@ -156,7 +150,7 @@ pub fn view_context_menu<'a>(
                 tokens,
                 "View",
                 view_open,
-                make_msg(PrimitiveEditorMsg::FootprintContextMenuOpenSubmenu(Some(
+                make_msg(FootprintEditorMsg::ContextMenuOpenSubmenu(Some(
                     FootprintContextSubmenu::View,
                 ))),
             ));
@@ -165,7 +159,7 @@ pub fn view_context_menu<'a>(
                     tokens,
                     "Fit to Window",
                     "V, F",
-                    make_msg(PrimitiveEditorMsg::FootprintContextMenuAction(
+                    make_msg(FootprintEditorMsg::ContextMenuAction(
                         FootprintContextAction::FitToWindow,
                     )),
                 ));
@@ -181,7 +175,7 @@ pub fn view_context_menu<'a>(
                     tokens,
                     "Paste",
                     "Ctrl+V",
-                    make_msg(PrimitiveEditorMsg::FootprintPastePad),
+                    make_msg(FootprintEditorMsg::PastePad),
                 ));
                 items.push(separator(tokens));
             }
@@ -190,7 +184,7 @@ pub fn view_context_menu<'a>(
                 tokens,
                 "Properties...",
                 "",
-                make_msg(PrimitiveEditorMsg::FootprintCloseContextMenu),
+                make_msg(FootprintEditorMsg::CloseContextMenu),
             ));
         }
 
@@ -210,7 +204,7 @@ pub fn view_context_menu<'a>(
                 tokens,
                 "Properties...",
                 "",
-                make_msg(PrimitiveEditorMsg::FootprintCloseContextMenu),
+                make_msg(FootprintEditorMsg::CloseContextMenu),
             ));
 
             // v0.26-G — Pad Actions ▸ now expands to the items we
@@ -222,7 +216,7 @@ pub fn view_context_menu<'a>(
                 tokens,
                 "Pad Actions",
                 pad_actions_open,
-                make_msg(PrimitiveEditorMsg::FootprintContextMenuOpenSubmenu(Some(
+                make_msg(FootprintEditorMsg::ContextMenuOpenSubmenu(Some(
                     FootprintContextSubmenu::PadActions,
                 ))),
             ));
@@ -231,26 +225,26 @@ pub fn view_context_menu<'a>(
                     tokens,
                     "Rotate 90°",
                     "Space",
-                    make_msg(PrimitiveEditorMsg::FootprintActiveBarRotateSelection),
+                    make_msg(FootprintEditorMsg::ActiveBarRotateSelection),
                 ));
                 items.push(item_indented(
                     tokens,
                     "Flip Layer",
                     "X",
-                    make_msg(PrimitiveEditorMsg::FootprintActiveBarFlipSelection),
+                    make_msg(FootprintEditorMsg::ActiveBarFlipSelection),
                 ));
                 // Stubs — Custom Pad + Thermal subsystems pending.
                 items.push(item_indented(
                     tokens,
                     "Custom Pad from Outline...",
                     "",
-                    make_msg(PrimitiveEditorMsg::FootprintCloseContextMenu),
+                    make_msg(FootprintEditorMsg::CloseContextMenu),
                 ));
                 items.push(item_indented(
                     tokens,
                     "Thermal Connection Points...",
                     "",
-                    make_msg(PrimitiveEditorMsg::FootprintCloseContextMenu),
+                    make_msg(FootprintEditorMsg::CloseContextMenu),
                 ));
             }
 
@@ -261,27 +255,27 @@ pub fn view_context_menu<'a>(
                 tokens,
                 "Cut",
                 "Ctrl+X",
-                make_msg(PrimitiveEditorMsg::FootprintCutPad),
+                make_msg(FootprintEditorMsg::CutPad),
             ));
             items.push(item_msg(
                 tokens,
                 "Copy",
                 "Ctrl+C",
-                make_msg(PrimitiveEditorMsg::FootprintCopyPad),
+                make_msg(FootprintEditorMsg::CopyPad),
             ));
             if has_clipboard {
                 items.push(item_msg(
                     tokens,
                     "Paste",
                     "Ctrl+V",
-                    make_msg(PrimitiveEditorMsg::FootprintPastePad),
+                    make_msg(FootprintEditorMsg::PastePad),
                 ));
             }
             items.push(item_msg(
                 tokens,
                 "Delete",
                 "Del",
-                make_msg(PrimitiveEditorMsg::FootprintDeleteSelected),
+                make_msg(FootprintEditorMsg::DeleteSelected),
             ));
 
             items.push(separator(tokens));
@@ -312,7 +306,7 @@ pub fn view_context_menu<'a>(
                 tokens,
                 "Delete",
                 "Del",
-                make_msg(PrimitiveEditorMsg::FootprintDeleteSilkF),
+                make_msg(FootprintEditorMsg::DeleteSilkF),
             ));
             items.push(separator(tokens));
             items.push(item_disabled(tokens, "Find Similar Objects...", ""));

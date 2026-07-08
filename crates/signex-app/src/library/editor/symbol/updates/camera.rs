@@ -1,15 +1,15 @@
 //! Symbol editor — pan / zoom / fit / cursor camera update logic.
 
 use super::{SymEditor, symbol_bbox};
-use crate::library::messages::PrimitiveEditorMsg;
+use crate::library::messages::SymbolEditorMsg;
 
-pub(super) fn apply_symbol_camera(editor: &mut SymEditor, msg: PrimitiveEditorMsg) {
+pub(super) fn apply_symbol_camera(editor: &mut SymEditor, msg: SymbolEditorMsg) {
     match msg {
-        PrimitiveEditorMsg::SymbolPan { dx, dy } => {
+        SymbolEditorMsg::Pan { dx, dy } => {
             editor.camera.pan(dx, dy);
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::SymbolZoom { sx, sy, delta } => {
+        SymbolEditorMsg::Zoom { sx, sy, delta } => {
             let viewport = iced::Rectangle {
                 x: 0.0,
                 y: 0.0,
@@ -23,7 +23,7 @@ pub(super) fn apply_symbol_camera(editor: &mut SymEditor, msg: PrimitiveEditorMs
                 editor.canvas_cache.clear();
             }
         }
-        PrimitiveEditorMsg::SymbolFit => {
+        SymbolEditorMsg::Fit => {
             let (min_x, min_y, max_x, max_y) = symbol_bbox(editor.primitive());
             let world_rect = iced::Rectangle {
                 x: min_x as f32,
@@ -40,7 +40,7 @@ pub(super) fn apply_symbol_camera(editor: &mut SymEditor, msg: PrimitiveEditorMs
             editor.camera.fit_rect(world_rect, viewport);
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::SymbolCursorAt { x_mm, y_mm } => {
+        SymbolEditorMsg::CursorAt { x_mm, y_mm } => {
             editor.cursor_mm = match (x_mm, y_mm) {
                 (Some(x), Some(y)) => Some((x, y)),
                 _ => None,

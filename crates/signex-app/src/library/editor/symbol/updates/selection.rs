@@ -1,12 +1,12 @@
 //! Symbol editor — selection update logic.
 
 use super::SymEditor;
-use crate::library::messages::{PrimitiveEditorMsg, SymbolSelectionMsg};
+use crate::library::messages::{SymbolEditorMsg, SymbolSelectionMsg};
 
-pub(super) fn apply_symbol_selection(editor: &mut SymEditor, msg: PrimitiveEditorMsg) {
+pub(super) fn apply_symbol_selection(editor: &mut SymEditor, msg: SymbolEditorMsg) {
     use crate::library::editor::symbol::state::{FieldKey, SymbolSelection};
     match msg {
-        PrimitiveEditorMsg::SymbolSelect(sel) => {
+        SymbolEditorMsg::Select(sel) => {
             editor.selected = Some(match sel {
                 SymbolSelectionMsg::Pin(idx) => SymbolSelection::Pin(idx),
                 SymbolSelectionMsg::FieldReference => SymbolSelection::Field(FieldKey::Reference),
@@ -23,7 +23,7 @@ pub(super) fn apply_symbol_selection(editor: &mut SymEditor, msg: PrimitiveEdito
             });
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::SymbolDeselect => {
+        SymbolEditorMsg::Deselect => {
             editor.selected = None;
             editor.canvas_cache.clear();
         }

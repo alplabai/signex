@@ -1,31 +1,31 @@
 //! Footprint editor — view update logic.
 //!
 //! Split out of `apply_footprint_primitive_edit` per ADR-0001 D1/D2.
-//! The router delegates all view `PrimitiveEditorMsg` variants here;
+//! The router delegates all view `FootprintEditorMsg` variants here;
 //! bodies are verbatim, so each arm keeps its own inner `use`s.
 
 use super::align_pads;
 use crate::library::editor::footprint::layers::FpLayer;
 use crate::library::editor::footprint::pad_to_sketch;
 use crate::library::editor::footprint::state::FootprintEditorState as CanvasState;
-use crate::library::messages::PrimitiveEditorMsg;
+use crate::library::messages::FootprintEditorMsg;
 
-pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: PrimitiveEditorMsg) {
+pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: FootprintEditorMsg) {
     match msg {
-        PrimitiveEditorMsg::FootprintToggleLayer(name) => {
+        FootprintEditorMsg::ToggleLayer(name) => {
             if let Some(layer) = FpLayer::from_standard_name(&name) {
                 editor.state.layer_visibility.toggle(layer);
                 editor.canvas_cache.clear();
             }
         }
-        PrimitiveEditorMsg::FootprintToggleAutoFit => {
+        FootprintEditorMsg::ToggleAutoFit => {
             editor.state.toggle_auto_fit();
             editor.with_parts(|state, primitive| {
                 CanvasState::sync_pads_to_primitive(state, primitive);
             });
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::FootprintSetMode(mode) => {
+        FootprintEditorMsg::SetMode(mode) => {
             use crate::library::editor::footprint::state::EditorMode;
             // v0.14.2 — bidirectional sketch ↔ pads foundation.
             // When the user enters Sketch mode for the first time on
@@ -60,22 +60,21 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             editor.canvas_cache.clear();
             editor.dirty = true;
         }
-        PrimitiveEditorMsg::FootprintTogglePlacementPause => {
+        FootprintEditorMsg::TogglePlacementPause => {
             editor.state.placement_paused = !editor.state.placement_paused;
             editor.canvas_cache.clear();
         }
 
-        PrimitiveEditorMsg::FootprintFitConsumed => {
+        FootprintEditorMsg::FitConsumed => {
             editor.state.fit_pending = false;
         }
         // v0.26-E — clipboard ops intercepted at the call site
         // (apply_footprint_clipboard_op needs split-borrow with
         // document_state.pad_clipboard). The match arm here is
         // unreachable in practice but required for exhaustiveness.
-        PrimitiveEditorMsg::FootprintCopyPad
-        | PrimitiveEditorMsg::FootprintCutPad
-        | PrimitiveEditorMsg::FootprintPastePad => {}
-        PrimitiveEditorMsg::FootprintSetPadsTool(tool) => {
+        FootprintEditorMsg::CopyPad | FootprintEditorMsg::CutPad | FootprintEditorMsg::PastePad => {
+        }
+        FootprintEditorMsg::SetPadsTool(tool) => {
             editor.state.pads_tool = tool;
             // v0.18.15.1 — leaving the PlaceTrack tool clears the
             // in-flight gesture so re-entering doesn't start
@@ -144,7 +143,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             editor.state.active_bar_menu = None;
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::FootprintToolEscape => {
+        FootprintEditorMsg::ToolEscape => {
             // v0.15 — global Esc tool cancel. Resets both Pads and
             // Sketch tool state, mode-agnostic.
             editor.state.pads_tool = crate::library::editor::footprint::state::PadsTool::Select;
@@ -172,7 +171,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             editor.state.placement_paused = false;
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::FootprintAlignPads(op) => {
+        FootprintEditorMsg::AlignPads(op) => {
             // v0.14 — active-bar Align/Distribute/Spacing. Operates on
             // the combined selection (`selected_pad` + the ctrl-click
             // extras). Mirrors every moved pad into the backing sketch
@@ -227,7 +226,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             }
             editor.state.active_bar_menu = None;
         }
-        PrimitiveEditorMsg::FootprintSetName(new_name) => {
+        FootprintEditorMsg::SetName(new_name) => {
             // Rename the ACTIVE internal footprint. The .snxfpt
             // envelope holds N footprints; only the user-selected one
             // mutates. Empty names are accepted but treated as
@@ -236,7 +235,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             editor.dirty = true;
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::FootprintRecomputeCourtyardOutline => {
+        FootprintEditorMsg::RecomputeCourtyardOutline => {
             // v0.27 — outline-following courtyard. Pure read-write
             // on the editor state; the new polygon lands on
             // `state.courtyard_outline_mm` and the canvas draws it

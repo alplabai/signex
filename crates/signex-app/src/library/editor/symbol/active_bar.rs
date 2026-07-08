@@ -25,7 +25,7 @@ use crate::app::SymbolEditorState;
 use crate::icons as ic;
 use crate::library::editor::symbol::canvas::SymbolTool;
 use crate::library::editor::symbol::state::{SymActiveBarMenu, SymbolSelectionFilter};
-use crate::library::messages::{LibraryMessage, PrimitiveEditorMsg, SymbolToolMsg};
+use crate::library::messages::{LibraryMessage, PrimitiveEdit, SymbolEditorMsg, SymbolToolMsg};
 
 /// Build the SchLib bar items only — caller mounts via
 /// `signex_widgets::active_bar::view(items, tokens)` so the chain is
@@ -47,7 +47,7 @@ pub fn bar_items(
         selected: active_tool == SymbolTool::Select,
         on_press: Some(LibraryMessage::PrimitiveEditorEvent {
             path: path.clone(),
-            msg: PrimitiveEditorMsg::SymbolSetTool(SymbolToolMsg::Select),
+            msg: PrimitiveEdit::Symbol(SymbolEditorMsg::SetTool(SymbolToolMsg::Select)),
         }),
         ..ActiveBarButton::default()
     }));
@@ -58,7 +58,7 @@ pub fn bar_items(
         selected: active_tool == SymbolTool::AddPin,
         on_press: Some(LibraryMessage::PrimitiveEditorEvent {
             path: path.clone(),
-            msg: PrimitiveEditorMsg::SymbolSetTool(SymbolToolMsg::AddPin),
+            msg: PrimitiveEdit::Symbol(SymbolEditorMsg::SetTool(SymbolToolMsg::AddPin)),
         }),
         ..ActiveBarButton::default()
     }));
@@ -108,7 +108,7 @@ pub fn dropdown_overlay<'a>(
     )
     .on_press(LibraryMessage::PrimitiveEditorEvent {
         path: editor.path.clone(),
-        msg: PrimitiveEditorMsg::SymbolCloseActiveBarMenu,
+        msg: PrimitiveEdit::Symbol(SymbolEditorMsg::CloseActiveBarMenu),
     });
 
     Some(Stack::new().push(backstop).push(panel_anchor).into())
@@ -129,15 +129,15 @@ fn dropdown_trigger_items(
     let dual = |label: &str,
                 icon: ActiveBarIcon,
                 menu: SymActiveBarMenu,
-                left: Option<PrimitiveEditorMsg>|
+                left: Option<SymbolEditorMsg>|
      -> ActiveBarItem<LibraryMessage> {
         let on_press = Some(LibraryMessage::PrimitiveEditorEvent {
             path: path.clone(),
-            msg: left.unwrap_or(PrimitiveEditorMsg::SymbolToggleActiveBarMenu(menu)),
+            msg: PrimitiveEdit::Symbol(left.unwrap_or(SymbolEditorMsg::ToggleActiveBarMenu(menu))),
         });
         let on_right_press = Some(LibraryMessage::PrimitiveEditorEvent {
             path: path.clone(),
-            msg: PrimitiveEditorMsg::SymbolToggleActiveBarMenu(menu),
+            msg: PrimitiveEdit::Symbol(SymbolEditorMsg::ToggleActiveBarMenu(menu)),
         });
         ActiveBarItem::Button(ActiveBarButton {
             icon,
@@ -167,31 +167,31 @@ fn dropdown_trigger_items(
             "Place / Move (right-click for menu)",
             ActiveBarIcon::Svg(ic::icon_move(tid)),
             SymActiveBarMenu::Place,
-            Some(PrimitiveEditorMsg::SymbolActiveBarStub("Move")),
+            Some(SymbolEditorMsg::ActiveBarStub("Move")),
         ),
         dual(
             "Select (right-click for selection-mode menu)",
             ActiveBarIcon::Svg(ic::icon_select(tid)),
             SymActiveBarMenu::Select,
-            Some(PrimitiveEditorMsg::SymbolSetTool(SymbolToolMsg::Select)),
+            Some(SymbolEditorMsg::SetTool(SymbolToolMsg::Select)),
         ),
         dual(
             "Align / Distribute (right-click for menu)",
             ActiveBarIcon::Svg(ic::icon_align(tid)),
             SymActiveBarMenu::Align,
-            Some(PrimitiveEditorMsg::SymbolActiveBarStub("Align To Grid")),
+            Some(SymbolEditorMsg::ActiveBarStub("Align To Grid")),
         ),
         dual(
             "Pin (left-click places a pin, right-click for variants)",
             ActiveBarIcon::Glyph("\u{2192}"),
             SymActiveBarMenu::Pin,
-            Some(PrimitiveEditorMsg::SymbolSetTool(SymbolToolMsg::AddPin)),
+            Some(SymbolEditorMsg::SetTool(SymbolToolMsg::AddPin)),
         ),
         dual(
             "Text (left-click places String, right-click for menu)",
             ActiveBarIcon::Svg(ic::icon_text(tid)),
             SymActiveBarMenu::Text,
-            Some(PrimitiveEditorMsg::SymbolSetTool(SymbolToolMsg::PlaceText)),
+            Some(SymbolEditorMsg::SetTool(SymbolToolMsg::PlaceText)),
         ),
         dual(
             "Shapes (right-click for shape menu)",

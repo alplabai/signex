@@ -24,7 +24,7 @@ use iced::{Background, Border, Color, Element, Length};
 use signex_types::theme::ThemeTokens;
 
 use crate::app::FootprintEditorState;
-use crate::library::messages::{LibraryMessage, PrimitiveEditorMsg};
+use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use crate::styles::ti;
 
 /// Base font size the whole card derives its spacing/widths from —
@@ -61,7 +61,7 @@ pub fn view_move_by_modal<'a>(
             close_x(
                 LibraryMessage::PrimitiveEditorEvent {
                     path: path.clone(),
-                    msg: PrimitiveEditorMsg::FootprintMoveByCancel,
+                    msg: PrimitiveEdit::Footprint(FootprintEditorMsg::MoveByCancel),
                 },
                 text_muted,
             ),
@@ -85,7 +85,7 @@ pub fn view_move_by_modal<'a>(
     let mk_field = |label: &'static str,
                     value: &str,
                     field_path: PathBuf,
-                    ctor: fn(String) -> PrimitiveEditorMsg|
+                    ctor: fn(String) -> FootprintEditorMsg|
      -> Element<'a, LibraryMessage> {
         let submit_path = field_path.clone();
         let input = text_input("0.0", value)
@@ -106,11 +106,11 @@ pub fn view_move_by_modal<'a>(
             })
             .on_input(move |s| LibraryMessage::PrimitiveEditorEvent {
                 path: field_path.clone(),
-                msg: ctor(s),
+                msg: PrimitiveEdit::Footprint(ctor(s)),
             })
             .on_submit(LibraryMessage::PrimitiveEditorEvent {
                 path: submit_path,
-                msg: PrimitiveEditorMsg::FootprintMoveByConfirm,
+                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::MoveByConfirm),
             });
         row![
             container(text(label).size(FONT_SIZE - 1.0).color(text_muted)).width(label_w),
@@ -126,13 +126,13 @@ pub fn view_move_by_modal<'a>(
             "X (mm)",
             &modal.dx_buf,
             path.clone(),
-            PrimitiveEditorMsg::FootprintMoveBySetX,
+            FootprintEditorMsg::MoveBySetX,
         ),
         mk_field(
             "Y (mm)",
             &modal.dy_buf,
             path.clone(),
-            PrimitiveEditorMsg::FootprintMoveBySetY,
+            FootprintEditorMsg::MoveBySetY,
         ),
     ]
     .spacing(FONT_SIZE * 0.6);
@@ -143,7 +143,7 @@ pub fn view_move_by_modal<'a>(
             "Cancel",
             LibraryMessage::PrimitiveEditorEvent {
                 path: path.clone(),
-                msg: PrimitiveEditorMsg::FootprintMoveByCancel,
+                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::MoveByCancel),
             },
             text_c,
             border_c,
@@ -153,7 +153,7 @@ pub fn view_move_by_modal<'a>(
             "OK",
             LibraryMessage::PrimitiveEditorEvent {
                 path,
-                msg: PrimitiveEditorMsg::FootprintMoveByConfirm,
+                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::MoveByConfirm),
             },
             border_c,
         ),

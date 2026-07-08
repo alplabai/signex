@@ -1,11 +1,11 @@
 //! Symbol editor — undo / redo / drag-commit update logic.
 
 use super::{SymEditor, mark_dirty};
-use crate::library::messages::PrimitiveEditorMsg;
+use crate::library::messages::SymbolEditorMsg;
 
-pub(super) fn apply_symbol_history(editor: &mut SymEditor, msg: PrimitiveEditorMsg) {
+pub(super) fn apply_symbol_history(editor: &mut SymEditor, msg: SymbolEditorMsg) {
     match msg {
-        PrimitiveEditorMsg::SymbolUndo => {
+        SymbolEditorMsg::Undo => {
             if let Some(snapshot) = editor.undo_snapshots.pop() {
                 let current = editor.primitive().clone();
                 editor.redo_snapshots.push(current);
@@ -15,7 +15,7 @@ pub(super) fn apply_symbol_history(editor: &mut SymEditor, msg: PrimitiveEditorM
                 mark_dirty(editor);
             }
         }
-        PrimitiveEditorMsg::SymbolRedo => {
+        SymbolEditorMsg::Redo => {
             if let Some(snapshot) = editor.redo_snapshots.pop() {
                 let current = editor.primitive().clone();
                 editor.undo_snapshots.push(current);
@@ -25,7 +25,7 @@ pub(super) fn apply_symbol_history(editor: &mut SymEditor, msg: PrimitiveEditorM
                 mark_dirty(editor);
             }
         }
-        PrimitiveEditorMsg::SymbolDragCommit => {
+        SymbolEditorMsg::DragCommit => {
             editor.mid_drag = false;
         }
         _ => {}

@@ -8,7 +8,7 @@
 //! Wiring philosophy: items that map to existing primitives (Selection
 //! Filter pills, Snap toggles, snap-mode picks, Place tools, Body3D,
 //! Extruded 3D Body, Move Selection by X,Y, Text Frame) emit the real
-//! `PrimitiveEditorMsg`; the few items that still need new primitives
+//! `FootprintEditorMsg`; the few items that still need new primitives
 //! (Break Track, Drag Track End, the generic Align… dialog launcher)
 //! emit `FootprintActiveBarStub` so the action logs a "coming soon"
 //! warn and dismisses the menu cleanly.
@@ -22,22 +22,22 @@ use crate::icons as ic;
 use crate::library::editor::footprint::state::{
     FpActiveBarMenu, PadsTool, SelectionFilterKind, SketchTool, SnapSubTab, SnappingMode,
 };
-use crate::library::messages::{LibraryMessage, PrimitiveEditorMsg};
+use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use crate::panels::SnapOptionFlag;
 
 use super::state::FootprintEditorState;
 
-/// Convenience: route a `PrimitiveEditorMsg` to the editor at `path`.
-fn fp(path: PathBuf, msg: PrimitiveEditorMsg) -> LibraryMessage {
-    LibraryMessage::PrimitiveEditorEvent { path, msg }
+/// Convenience: route a `FootprintEditorMsg` to the editor at `path`.
+fn fp(path: PathBuf, msg: FootprintEditorMsg) -> LibraryMessage {
+    LibraryMessage::PrimitiveEditorEvent {
+        path,
+        msg: PrimitiveEdit::Footprint(msg),
+    }
 }
 
 /// "Coming soon" stub item — no icon.
 fn stub(label: &'static str, path: PathBuf) -> DropdownItem<LibraryMessage> {
-    DropdownItem::new(
-        label,
-        fp(path, PrimitiveEditorMsg::FootprintActiveBarStub(label)),
-    )
+    DropdownItem::new(label, fp(path, FootprintEditorMsg::ActiveBarStub(label)))
 }
 
 /// "Coming soon" stub item with an icon for visual recognition.
@@ -46,22 +46,18 @@ fn stub_with_icon(
     path: PathBuf,
     icon: iced::widget::svg::Handle,
 ) -> DropdownItem<LibraryMessage> {
-    DropdownItem::new(
-        label,
-        fp(path, PrimitiveEditorMsg::FootprintActiveBarStub(label)),
-    )
-    .icon(icon)
+    DropdownItem::new(label, fp(path, FootprintEditorMsg::ActiveBarStub(label))).icon(icon)
 }
 
 /// v0.14 — real Align/Distribute/Spacing item, no icon. Emits
-/// [`PrimitiveEditorMsg::FootprintAlignPads`] so the dispatcher
+/// [`FootprintEditorMsg::AlignPads`] so the dispatcher
 /// transforms the current pad selection.
 fn align_item(
     label: &'static str,
     path: PathBuf,
     op: crate::library::editor::footprint::state::AlignOp,
 ) -> DropdownItem<LibraryMessage> {
-    DropdownItem::new(label, fp(path, PrimitiveEditorMsg::FootprintAlignPads(op)))
+    DropdownItem::new(label, fp(path, FootprintEditorMsg::AlignPads(op)))
 }
 
 /// v0.14 — real Align/Distribute item with an icon.
@@ -71,7 +67,7 @@ fn align_item_with_icon(
     op: crate::library::editor::footprint::state::AlignOp,
     icon: iced::widget::svg::Handle,
 ) -> DropdownItem<LibraryMessage> {
-    DropdownItem::new(label, fp(path, PrimitiveEditorMsg::FootprintAlignPads(op))).icon(icon)
+    DropdownItem::new(label, fp(path, FootprintEditorMsg::AlignPads(op))).icon(icon)
 }
 
 /// Build the entries for the dropdown matching `menu`. `tid` resolves
@@ -121,7 +117,7 @@ fn filter_entries(
             label,
             LibraryMessage::PrimitiveEditorEvent {
                 path: path.clone(),
-                msg: PrimitiveEditorMsg::FootprintToggleSelectionFilter(kind),
+                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::ToggleSelectionFilter(kind)),
             },
             f.get(kind),
             chip_border,
@@ -138,7 +134,7 @@ fn filter_entries(
         if all_on { "All - On" } else { "All - Off" },
         LibraryMessage::PrimitiveEditorEvent {
             path: path.clone(),
-            msg: PrimitiveEditorMsg::FootprintToggleAllFilters,
+            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::ToggleAllFilters),
         },
         all_on,
         chip_border,
@@ -161,7 +157,7 @@ fn filter_entries(
             label,
             LibraryMessage::PrimitiveEditorEvent {
                 path: path.clone(),
-                msg: PrimitiveEditorMsg::FootprintApplyFilterPreset(idx),
+                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::ApplyFilterPreset(idx)),
             },
             false,
             chip_border,
@@ -172,7 +168,7 @@ fn filter_entries(
             "+ Save Preset",
             LibraryMessage::PrimitiveEditorEvent {
                 path: path.clone(),
-                msg: PrimitiveEditorMsg::FootprintCaptureFilterPreset,
+                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::CaptureFilterPreset),
             },
             false,
             chip_border,
@@ -224,7 +220,7 @@ fn snap_entries(state: &FootprintEditorState, path: PathBuf) -> Vec<DropdownEntr
             label,
             fp(
                 path.clone(),
-                PrimitiveEditorMsg::FootprintActiveBarSetSnappingMode(mode),
+                FootprintEditorMsg::ActiveBarSetSnappingMode(mode),
             ),
         )
         .checked(state.snapping_mode == mode)
@@ -233,10 +229,7 @@ fn snap_entries(state: &FootprintEditorState, path: PathBuf) -> Vec<DropdownEntr
         |label: &'static str, flag: SnapOptionFlag, on: bool| -> DropdownItem<LibraryMessage> {
             DropdownItem::new(
                 label,
-                fp(
-                    path.clone(),
-                    PrimitiveEditorMsg::FootprintActiveBarToggleSnap(flag),
-                ),
+                fp(path.clone(), FootprintEditorMsg::ActiveBarToggleSnap(flag)),
             )
             .checked(on)
         };
@@ -333,12 +326,8 @@ fn place_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessag
     // to the same "grab and drag the selection" behaviour. Picking any
     // of these arms `PadsTool::Select` (and closes the menu in the
     // dispatcher) so the user can immediately grab a pad.
-    let activate_select = |p: PathBuf| -> LibraryMessage {
-        fp(
-            p,
-            PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::Select),
-        )
-    };
+    let activate_select =
+        |p: PathBuf| -> LibraryMessage { fp(p, FootprintEditorMsg::SetPadsTool(PadsTool::Select)) };
     vec![
         DropdownEntry::Item(
             DropdownItem::new("Move", activate_select(path.clone())).icon(ic::icon_dd_move(tid)),
@@ -366,24 +355,21 @@ fn place_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessag
         DropdownEntry::Item(
             DropdownItem::new(
                 "Move Selection by X, Y…",
-                fp(path.clone(), PrimitiveEditorMsg::FootprintMoveByOpen),
+                fp(path.clone(), FootprintEditorMsg::MoveByOpen),
             )
             .icon(ic::icon_dd_move_xy(tid)),
         ),
         DropdownEntry::Item(
             DropdownItem::new(
                 "Rotate Selection",
-                fp(
-                    path.clone(),
-                    PrimitiveEditorMsg::FootprintActiveBarRotateSelection,
-                ),
+                fp(path.clone(), FootprintEditorMsg::ActiveBarRotateSelection),
             )
             .icon(ic::icon_dd_rotate(tid)),
         ),
         DropdownEntry::Item(
             DropdownItem::new(
                 "Flip Selection",
-                fp(path, PrimitiveEditorMsg::FootprintActiveBarFlipSelection),
+                fp(path, FootprintEditorMsg::ActiveBarFlipSelection),
             )
             .icon(ic::icon_dd_flip_x(tid)),
         ),
@@ -395,19 +381,16 @@ fn select_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessa
     vec![
         DropdownEntry::Item(DropdownItem::new(
             "Select overlapped",
-            fp(path.clone(), PrimitiveEditorMsg::FootprintSelectOverlapped),
+            fp(path.clone(), FootprintEditorMsg::SelectOverlapped),
         )),
         DropdownEntry::Item(DropdownItem::new(
             "Select next",
-            fp(
-                path.clone(),
-                PrimitiveEditorMsg::FootprintSelectNextOverlapped,
-            ),
+            fp(path.clone(), FootprintEditorMsg::SelectNextOverlapped),
         )),
         DropdownEntry::Item(
             DropdownItem::new(
                 "Lasso Select",
-                fp(path.clone(), PrimitiveEditorMsg::FootprintLassoArm),
+                fp(path.clone(), FootprintEditorMsg::LassoArm),
             )
             .icon(ic::icon_dd_select_lasso(tid)),
         ),
@@ -417,7 +400,7 @@ fn select_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessa
                 "Inside Area",
                 fp(
                     path.clone(),
-                    PrimitiveEditorMsg::FootprintSetSelectionMode2d(FpSelectionMode::Inside),
+                    FootprintEditorMsg::SetSelectionMode2d(FpSelectionMode::Inside),
                 ),
             )
             .icon(ic::icon_dd_select_inside(tid)),
@@ -427,7 +410,7 @@ fn select_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessa
                 "Outside Area",
                 fp(
                     path.clone(),
-                    PrimitiveEditorMsg::FootprintSetSelectionMode2d(FpSelectionMode::Outside),
+                    FootprintEditorMsg::SetSelectionMode2d(FpSelectionMode::Outside),
                 ),
             )
             .icon(ic::icon_dd_select_outside(tid)),
@@ -436,37 +419,34 @@ fn select_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessa
             "Touching Rectangle",
             fp(
                 path.clone(),
-                PrimitiveEditorMsg::FootprintSetSelectionMode2d(FpSelectionMode::Touching),
+                FootprintEditorMsg::SetSelectionMode2d(FpSelectionMode::Touching),
             ),
         )),
         DropdownEntry::Item(DropdownItem::new(
             "Touching Line",
-            fp(path.clone(), PrimitiveEditorMsg::FootprintTouchingLineArm),
+            fp(path.clone(), FootprintEditorMsg::TouchingLineArm),
         )),
         DropdownEntry::Separator,
         DropdownEntry::Item(DropdownItem::new(
             "All on Layer",
-            fp(path.clone(), PrimitiveEditorMsg::FootprintSelectAllOnLayer),
+            fp(path.clone(), FootprintEditorMsg::SelectAllOnLayer),
         )),
         DropdownEntry::Item(
             DropdownItem::new(
                 "All",
-                fp(
-                    path.clone(),
-                    PrimitiveEditorMsg::FootprintActiveBarSelectAll,
-                ),
+                fp(path.clone(), FootprintEditorMsg::ActiveBarSelectAll),
             )
             .icon(ic::icon_dd_select_all(tid)),
         ),
         DropdownEntry::Item(DropdownItem::new(
             "Off Grid Pads",
-            fp(path.clone(), PrimitiveEditorMsg::FootprintSelectOffGridPads),
+            fp(path.clone(), FootprintEditorMsg::SelectOffGridPads),
         )),
         DropdownEntry::Separator,
         DropdownEntry::Item(
             DropdownItem::new(
                 "Toggle Selection",
-                fp(path, PrimitiveEditorMsg::FootprintActiveBarClearSelection),
+                fp(path, FootprintEditorMsg::ActiveBarClearSelection),
             )
             .icon(ic::icon_dd_select_toggle(tid)),
         ),
@@ -584,14 +564,14 @@ fn align_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessag
                 "Align To Grid",
                 fp(
                     path.clone(),
-                    PrimitiveEditorMsg::FootprintActiveBarAlignSelectionToGrid,
+                    FootprintEditorMsg::ActiveBarAlignSelectionToGrid,
                 ),
             )
             .icon(ic::icon_dd_align_grid(tid)),
         ),
         DropdownEntry::Item(DropdownItem::new(
             "Move All Components Origin To Grid",
-            fp(path, PrimitiveEditorMsg::FootprintActiveBarMoveOriginToGrid),
+            fp(path, FootprintEditorMsg::ActiveBarMoveOriginToGrid),
         )),
     ]
 }
@@ -603,11 +583,11 @@ fn body3d_entries(
     vec![
         DropdownEntry::Item(DropdownItem::new(
             "3D Body",
-            fp(path.clone(), PrimitiveEditorMsg::FootprintMintBody3d),
+            fp(path.clone(), FootprintEditorMsg::MintBody3d),
         )),
         DropdownEntry::Item(DropdownItem::new(
             "Extruded 3D Body",
-            fp(path, PrimitiveEditorMsg::FootprintMintExtrudedBody3d),
+            fp(path, FootprintEditorMsg::MintExtrudedBody3d),
         )),
     ]
 }
@@ -624,7 +604,7 @@ fn text_entries(
                 "String",
                 fp(
                     path.clone(),
-                    PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlaceString),
+                    FootprintEditorMsg::SetPadsTool(PadsTool::PlaceString),
                 ),
             )
             .icon(ic::icon_dd_text_string(tid))
@@ -639,7 +619,7 @@ fn text_entries(
                 "Text Frame",
                 fp(
                     path,
-                    PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlaceTextFrame),
+                    FootprintEditorMsg::SetPadsTool(PadsTool::PlaceTextFrame),
                 ),
             )
             .icon(ic::icon_dd_text_frame(tid))
@@ -656,7 +636,7 @@ fn shapes_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessa
     let arm = |tool: SketchTool| -> LibraryMessage {
         fp(
             path.clone(),
-            PrimitiveEditorMsg::FootprintActiveBarSetSketchTool(tool),
+            FootprintEditorMsg::ActiveBarSetSketchTool(tool),
         )
     };
     vec![
@@ -688,7 +668,7 @@ fn shapes_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessa
                 "Fill",
                 fp(
                     path.clone(),
-                    PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlaceRegion),
+                    FootprintEditorMsg::SetPadsTool(PadsTool::PlaceRegion),
                 ),
             )
             .icon(ic::icon_dd_polygon(tid)),
@@ -698,7 +678,7 @@ fn shapes_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessa
                 "Solid Region",
                 fp(
                     path.clone(),
-                    PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlaceRegion),
+                    FootprintEditorMsg::SetPadsTool(PadsTool::PlaceRegion),
                 ),
             )
             .icon(ic::icon_dd_polygon(tid)),

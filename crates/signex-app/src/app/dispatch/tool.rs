@@ -169,8 +169,9 @@ impl Signex {
                         let _ = self.update(crate::app::contracts::Message::Library(
                             crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                                 path,
-                                msg:
-                                    crate::library::messages::PrimitiveEditorMsg::FootprintTogglePlacementPause,
+                                msg: crate::library::messages::PrimitiveEdit::Footprint(
+                                    crate::library::messages::FootprintEditorMsg::TogglePlacementPause,
+                                ),
                             },
                         ));
                         return Task::none();
@@ -413,7 +414,9 @@ impl Signex {
                     let _ = self.update(crate::app::contracts::Message::Library(
                         crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                             path,
-                            msg: crate::library::messages::PrimitiveEditorMsg::FootprintTogglePlacementPause,
+                            msg: crate::library::messages::PrimitiveEdit::Footprint(
+                                crate::library::messages::FootprintEditorMsg::TogglePlacementPause,
+                            ),
                         },
                     ));
                 }

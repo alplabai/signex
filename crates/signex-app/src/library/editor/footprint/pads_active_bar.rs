@@ -28,7 +28,7 @@ use signex_widgets::theme_ext;
 use crate::app::FootprintEditorState;
 use crate::icons;
 use crate::library::editor::footprint::state::{EditorMode, PadsTool};
-use crate::library::messages::{LibraryMessage, PrimitiveEditorMsg};
+use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 
 /// v0.14.2 — standalone floating mode-switch widget rendered at the
 /// top-left of the canvas via `Stack` overlay (separate from the
@@ -65,7 +65,7 @@ pub fn mode_switcher_overlay<'a>(
         .padding([0, 12])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
             path,
-            msg: PrimitiveEditorMsg::FootprintSetMode(target),
+            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SetMode(target)),
         })
         .style(move |_: &Theme, _| iced::widget::button::Style {
             background: if active {
@@ -167,7 +167,7 @@ pub fn footprint_tabs_overlay<'a>(
         .padding([5, 10])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
             path,
-            msg: PrimitiveEditorMsg::FootprintSelectActiveIdx(idx),
+            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SelectActiveIdx(idx)),
         })
         .style(move |_: &Theme, _| iced::widget::button::Style {
             background: if active {
@@ -204,7 +204,7 @@ pub fn footprint_tabs_overlay<'a>(
     .padding([3, 9])
     .on_press(LibraryMessage::PrimitiveEditorEvent {
         path: path.clone(),
-        msg: PrimitiveEditorMsg::FootprintAddNewSibling,
+        msg: PrimitiveEdit::Footprint(FootprintEditorMsg::AddNewSibling),
     })
     .style(move |_: &Theme, _| iced::widget::button::Style {
         background: Some(iced::Background::Color(Color::from_rgba(
@@ -287,7 +287,7 @@ pub fn items(
         selected: pads_tool == PadsTool::Select,
         on_press: Some(LibraryMessage::PrimitiveEditorEvent {
             path: select_path,
-            msg: PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::Select),
+            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SetPadsTool(PadsTool::Select)),
         }),
         ..ActiveBarButton::default()
     });
@@ -302,7 +302,7 @@ pub fn items(
         selected: pads_tool == PadsTool::PlacePad,
         on_press: Some(LibraryMessage::PrimitiveEditorEvent {
             path: place_pad_path,
-            msg: PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlacePad),
+            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SetPadsTool(PadsTool::PlacePad)),
         }),
         ..ActiveBarButton::default()
     });
@@ -328,7 +328,7 @@ pub fn items(
         on_press: if has_selection {
             Some(LibraryMessage::PrimitiveEditorEvent {
                 path: delete_path,
-                msg: PrimitiveEditorMsg::FootprintDeleteSelected,
+                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::DeleteSelected),
             })
         } else {
             None
@@ -360,7 +360,7 @@ pub fn items(
             selected: pads_tool == PadsTool::PlaceVia,
             on_press: Some(LibraryMessage::PrimitiveEditorEvent {
                 path: path.clone(),
-                msg: PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlaceVia),
+                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SetPadsTool(PadsTool::PlaceVia)),
             }),
             ..ActiveBarButton::default()
         }),
@@ -372,7 +372,9 @@ pub fn items(
             selected: pads_tool == PadsTool::PlaceString,
             on_press: Some(LibraryMessage::PrimitiveEditorEvent {
                 path: path.clone(),
-                msg: PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlaceString),
+                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SetPadsTool(
+                    PadsTool::PlaceString,
+                )),
             }),
             ..ActiveBarButton::default()
         }),

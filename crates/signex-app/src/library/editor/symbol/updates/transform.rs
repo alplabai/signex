@@ -1,11 +1,11 @@
 //! Symbol editor — rotate / delete / pin-field transform update logic.
 
 use super::{SymEditor, mark_dirty, push_undo, rotate_pivot_msg_to_state};
-use crate::library::messages::PrimitiveEditorMsg;
+use crate::library::messages::SymbolEditorMsg;
 
-pub(super) fn apply_symbol_transform(editor: &mut SymEditor, msg: PrimitiveEditorMsg) {
+pub(super) fn apply_symbol_transform(editor: &mut SymEditor, msg: SymbolEditorMsg) {
     match msg {
-        PrimitiveEditorMsg::SymbolRotateSelected { clockwise, pivot } => {
+        SymbolEditorMsg::RotateSelected { clockwise, pivot } => {
             push_undo(editor);
             let selected = editor.selected.clone();
             let pivot_mode = rotate_pivot_msg_to_state(pivot);
@@ -17,7 +17,7 @@ pub(super) fn apply_symbol_transform(editor: &mut SymEditor, msg: PrimitiveEdito
             );
             mark_dirty(editor);
         }
-        PrimitiveEditorMsg::SymbolDeleteSelected => {
+        SymbolEditorMsg::DeleteSelected => {
             push_undo(editor);
             let selected = editor.selected.clone();
             if let Some(new_sel) = crate::library::editor::symbol::state::delete_selected(
@@ -28,14 +28,14 @@ pub(super) fn apply_symbol_transform(editor: &mut SymEditor, msg: PrimitiveEdito
                 mark_dirty(editor);
             }
         }
-        PrimitiveEditorMsg::SymbolSetPinNumber { idx, number } => {
+        SymbolEditorMsg::SetPinNumber { idx, number } => {
             push_undo(editor);
             if let Some(pin) = editor.primitive_mut().pins.get_mut(idx) {
                 pin.number = number;
                 editor.dirty = true;
             }
         }
-        PrimitiveEditorMsg::SymbolSetPinName { idx, name } => {
+        SymbolEditorMsg::SetPinName { idx, name } => {
             push_undo(editor);
             if let Some(pin) = editor.primitive_mut().pins.get_mut(idx) {
                 pin.name = name;
