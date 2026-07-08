@@ -38,7 +38,29 @@ impl Signex {
             } => self.handle_focus_at(world_x, world_y, select),
             Message::ToggleAutoFocus => self.handle_toggle_auto_focus(),
             Message::ActiveBar(msg) => self.handle_active_bar_message(msg),
-            Message::ShowContextMenu(x, y) => {
+            Message::ProjectCloseConfirm(choice) => self.handle_project_close_confirm(choice),
+            Message::AppQuitConfirm(choice) => self.handle_app_quit_confirm(choice),
+            Message::AddExistingFilePicked { project_idx, paths } => {
+                self.handle_add_existing_file_picked(project_idx, paths);
+                Task::none()
+            }
+            Message::AddNewSchematicPicked { project_idx, path } => {
+                self.handle_add_new_schematic_picked(project_idx, path);
+                Task::none()
+            }
+            Message::CloseProjectOptions => {
+                self.ui_state.project_options = None;
+                Task::none()
+            }
+            _ => unreachable!("dispatch_overlay_message received non-overlay message"),
+        }
+    }
+
+    /// Context-menu subsystem handler (canvas / project-tree / tab menus +
+    /// submenu hover state machine), namespaced (ADR-0001 D3).
+    pub(crate) fn dispatch_context_menu_message(&mut self, msg: ContextMenuMsg) -> Task<Message> {
+        match msg {
+            ContextMenuMsg::Show(x, y) => {
                 // Altium convention: right-click during placement terminates
                 // the placement flow (tool-stuck OR ghost-armed OR pending
                 // power/port OR paused preview OR net-colour pen armed)
@@ -71,7 +93,7 @@ impl Signex {
                 }
                 Task::none()
             }
-            Message::CloseContextMenu => {
+            ContextMenuMsg::Close => {
                 self.interaction_state.context_menu = None;
                 self.interaction_state.context_submenu = None;
                 self.interaction_state.pending_submenu = None;
@@ -80,7 +102,7 @@ impl Signex {
                 self.interaction_state.submenu_unhovered_since = None;
                 Task::none()
             }
-            Message::ShowProjectTreeContextMenu(path) => {
+            ContextMenuMsg::ShowProjectTree(path) => {
                 // Close any canvas context menu so the two menus never
                 // overlap, then anchor the new menu to `last_mouse_pos`
                 // (iced 0.14 mouse_area does not forward cursor coords
@@ -102,7 +124,7 @@ impl Signex {
                     Some(crate::app::ProjectTreeContextMenuState { x, y, path });
                 Task::none()
             }
-            Message::CloseProjectTreeContextMenu => {
+            ContextMenuMsg::CloseProjectTree => {
                 self.interaction_state.project_tree_context_menu = None;
                 self.interaction_state.context_submenu = None;
                 self.interaction_state.pending_submenu = None;
@@ -111,8 +133,8 @@ impl Signex {
                 self.interaction_state.submenu_unhovered_since = None;
                 Task::none()
             }
-            Message::ProjectTreeAction(action) => self.handle_project_tree_action(action),
-            Message::ShowTabContextMenu(idx) => {
+            ContextMenuMsg::ProjectTreeAction(action) => self.handle_project_tree_action(action),
+            ContextMenuMsg::ShowTab(idx) => {
                 // Mutually exclusive with the canvas + project-tree
                 // menus — close them and any submenu state from a
                 // previous right-click before anchoring the tab menu
@@ -129,7 +151,7 @@ impl Signex {
                     Some(crate::app::TabContextMenuState { x, y, tab_idx: idx });
                 Task::none()
             }
-            Message::CloseTabContextMenu => {
+            ContextMenuMsg::CloseTab => {
                 self.interaction_state.tab_context_menu = None;
                 self.interaction_state.context_submenu = None;
                 self.interaction_state.pending_submenu = None;
@@ -138,22 +160,8 @@ impl Signex {
                 self.interaction_state.submenu_unhovered_since = None;
                 Task::none()
             }
-            Message::TabContextAction(action) => self.handle_tab_context_action(action),
-            Message::ProjectCloseConfirm(choice) => self.handle_project_close_confirm(choice),
-            Message::AppQuitConfirm(choice) => self.handle_app_quit_confirm(choice),
-            Message::AddExistingFilePicked { project_idx, paths } => {
-                self.handle_add_existing_file_picked(project_idx, paths);
-                Task::none()
-            }
-            Message::AddNewSchematicPicked { project_idx, path } => {
-                self.handle_add_new_schematic_picked(project_idx, path);
-                Task::none()
-            }
-            Message::CloseProjectOptions => {
-                self.ui_state.project_options = None;
-                Task::none()
-            }
-            Message::OpenContextSubmenu(kind) => {
+            ContextMenuMsg::TabAction(action) => self.handle_tab_context_action(action),
+            ContextMenuMsg::SubmenuOpen(kind) => {
                 // Click-to-open. Toggles off if the same kind is fired
                 // again so the header row works as a collapse handle.
                 if self.interaction_state.context_submenu == Some(kind) {
@@ -165,7 +173,7 @@ impl Signex {
                 self.interaction_state.submenu_unhovered_since = None;
                 Task::none()
             }
-            Message::HoverContextSubmenu(kind) => {
+            ContextMenuMsg::SubmenuHover(kind) => {
                 // Cursor entered a launcher row — arm the hover-open
                 // timer and mark the launcher zone as hovered. The
                 // close timer (if any) gets cancelled by the zone
@@ -175,7 +183,7 @@ impl Signex {
                 self.refresh_submenu_hover_state();
                 Task::none()
             }
-            Message::LeaveContextSubmenu => {
+            ContextMenuMsg::SubmenuLeave => {
                 // Cursor left a launcher row. Cancel the pending open
                 // only if we're leaving the same launcher that armed
                 // it (avoids a stale launcher cancelling a fresh open).
@@ -184,17 +192,17 @@ impl Signex {
                 self.refresh_submenu_hover_state();
                 Task::none()
             }
-            Message::EnterContextSubmenuPanel => {
+            ContextMenuMsg::SubmenuEnterPanel => {
                 self.interaction_state.submenu_panel_hovered = true;
                 self.refresh_submenu_hover_state();
                 Task::none()
             }
-            Message::LeaveContextSubmenuPanel => {
+            ContextMenuMsg::SubmenuLeavePanel => {
                 self.interaction_state.submenu_panel_hovered = false;
                 self.refresh_submenu_hover_state();
                 Task::none()
             }
-            Message::TickContextSubmenuHover => {
+            ContextMenuMsg::SubmenuTickHover => {
                 if let Some((kind, started)) = self.interaction_state.pending_submenu {
                     if started.elapsed() >= std::time::Duration::from_millis(200) {
                         self.interaction_state.context_submenu = Some(kind);
@@ -210,7 +218,7 @@ impl Signex {
                 }
                 Task::none()
             }
-            Message::ContextAction(action) => {
+            ContextMenuMsg::Action(action) => {
                 self.interaction_state.context_menu = None;
                 self.interaction_state.context_submenu = None;
                 self.interaction_state.pending_submenu = None;
@@ -251,7 +259,6 @@ impl Signex {
                     }
                 }
             }
-            _ => unreachable!("dispatch_overlay_message received non-overlay message"),
         }
     }
 

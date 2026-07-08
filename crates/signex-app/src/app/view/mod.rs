@@ -404,7 +404,9 @@ impl Signex {
                 None,
                 "Validate Project",
                 "",
-                Message::ProjectTreeAction(A::ValidateProject(path.clone())),
+                Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::ValidateProject(
+                    path.clone(),
+                ))),
             ));
             let active_submenu = self.interaction_state.context_submenu;
             items.push(self.ctx_menu_item_submenu(
@@ -417,14 +419,18 @@ impl Signex {
                 None,
                 "Add Existing to Project...",
                 "",
-                Message::ProjectTreeAction(A::AddExistingToProject(path.clone())),
+                Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::AddExistingToProject(
+                    path.clone(),
+                ))),
             ));
             items.push(self.save_menu_item(can_save));
             items.push(self.ctx_menu_item_msg(
                 None,
                 "Rename...",
                 "",
-                Message::ProjectTreeAction(A::OpenProjectRenameDialog(path.clone())),
+                Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+                    A::OpenProjectRenameDialog(path.clone()),
+                )),
             ));
             items.push(self.ctx_menu_sep());
             items.push(if has_tabs {
@@ -432,7 +438,7 @@ impl Signex {
                     None,
                     "Close Project Documents",
                     "",
-                    Message::ProjectTreeAction(A::CloseAllDocuments),
+                    Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::CloseAllDocuments)),
                 )
             } else {
                 self.ctx_menu_item_disabled(None, "Close Project Documents", None)
@@ -441,14 +447,18 @@ impl Signex {
                 None,
                 "Close Project",
                 "",
-                Message::ProjectTreeAction(A::CloseProject(path.clone())),
+                Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::CloseProject(
+                    path.clone(),
+                ))),
             ));
             items.push(if has_project_dir {
                 self.ctx_menu_item_msg(
                     None,
                     "Explore",
                     "",
-                    Message::ProjectTreeAction(A::RevealInExplorer(path.clone())),
+                    Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::RevealInExplorer(
+                        path.clone(),
+                    ))),
                 )
             } else {
                 self.ctx_menu_item_disabled(None, "Explore", None)
@@ -464,7 +474,9 @@ impl Signex {
                 None,
                 "Project Options...",
                 "",
-                Message::ProjectTreeAction(A::OpenProjectOptions(path.clone())),
+                Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::OpenProjectOptions(
+                    path.clone(),
+                ))),
             ));
             // Enable Version Control — only surfaced when the
             // project dir has no `.git/` yet. After opt-in the row
@@ -482,7 +494,9 @@ impl Signex {
                     None,
                     "Enable Version Control...",
                     "",
-                    Message::ProjectTreeAction(A::OpenEnableVersionControl(path.clone())),
+                    Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+                        A::OpenEnableVersionControl(path.clone()),
+                    )),
                 ));
             }
         } else if is_library_node {
@@ -549,7 +563,9 @@ impl Signex {
                     None,
                     "Enable Version Control...",
                     "",
-                    Message::ProjectTreeAction(A::OpenLibraryEnableVersionControl(path.clone())),
+                    Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+                        A::OpenLibraryEnableVersionControl(path.clone()),
+                    )),
                 ));
                 items.push(self.ctx_menu_sep());
             }
@@ -558,13 +574,15 @@ impl Signex {
                 None,
                 toggle_label,
                 "",
-                Message::ProjectTreeAction(A::ToggleNode(path.clone())),
+                Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::ToggleNode(
+                    path.clone(),
+                ))),
             ));
             items.push(self.ctx_menu_item_msg(
                 None,
                 "Refresh",
                 "",
-                Message::ProjectTreeAction(A::Refresh),
+                Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::Refresh)),
             ));
             // F23 — surface "Remove from Project" on library nodes.
             // Reuses the same RemoveDialog flow as sheet leaves;
@@ -577,7 +595,9 @@ impl Signex {
                 None,
                 "Remove from Project...",
                 "",
-                Message::ProjectTreeAction(A::OpenRemoveDialog(path.clone())),
+                Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::OpenRemoveDialog(
+                    path.clone(),
+                ))),
             ));
         } else if is_openable_leaf {
             // Sheet / PCB / library leaf — Altium's per-document menu.
@@ -609,7 +629,7 @@ impl Signex {
                 None,
                 "Open",
                 "",
-                Message::ProjectTreeAction(A::OpenNode(path.clone())),
+                Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::OpenNode(path.clone()))),
             ));
             items.push(self.ctx_menu_sep());
             items.push(if has_project_dir {
@@ -617,7 +637,9 @@ impl Signex {
                     None,
                     "Explore",
                     "",
-                    Message::ProjectTreeAction(A::RevealInExplorer(path.clone())),
+                    Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::RevealInExplorer(
+                        path.clone(),
+                    ))),
                 )
             } else {
                 self.ctx_menu_item_disabled(None, "Explore", None)
@@ -627,13 +649,17 @@ impl Signex {
                 None,
                 "Rename...",
                 "",
-                Message::ProjectTreeAction(A::OpenRenameDialog(path.clone())),
+                Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::OpenRenameDialog(
+                    path.clone(),
+                ))),
             ));
             items.push(self.ctx_menu_item_msg(
                 None,
                 "Remove from Project",
                 "",
-                Message::ProjectTreeAction(A::OpenRemoveDialog(path.clone())),
+                Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::OpenRemoveDialog(
+                    path.clone(),
+                ))),
             ));
             items.push(self.ctx_menu_sep());
             // Print follows the Altium convention: it exports / prints
@@ -647,7 +673,7 @@ impl Signex {
                     None,
                     "Print...",
                     "",
-                    Message::ProjectTreeAction(A::PrintActive),
+                    Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::PrintActive)),
                 )
             } else {
                 self.ctx_menu_item_disabled(None, "Print...", None)
@@ -663,26 +689,28 @@ impl Signex {
                 None,
                 label,
                 "",
-                Message::ProjectTreeAction(A::ToggleNode(path.clone())),
+                Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::ToggleNode(
+                    path.clone(),
+                ))),
             ));
             items.push(self.ctx_menu_item_msg(
                 None,
                 "Expand All",
                 "",
-                Message::ProjectTreeAction(A::ExpandAll),
+                Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::ExpandAll)),
             ));
             items.push(self.ctx_menu_item_msg(
                 None,
                 "Collapse All",
                 "",
-                Message::ProjectTreeAction(A::CollapseAll),
+                Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::CollapseAll)),
             ));
             items.push(self.ctx_menu_sep());
             items.push(self.ctx_menu_item_msg(
                 None,
                 "Refresh",
                 "",
-                Message::ProjectTreeAction(A::Refresh),
+                Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::Refresh)),
             ));
         } else {
             // Unknown role — give the user at least Refresh so a stale
@@ -691,7 +719,7 @@ impl Signex {
                 None,
                 "Refresh",
                 "",
-                Message::ProjectTreeAction(A::Refresh),
+                Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(A::Refresh)),
             ));
         }
 
@@ -733,13 +761,13 @@ impl Signex {
         items.push(self.ctx_menu_item_msg_no_icon(
             &format!("Close {title}"),
             "",
-            Message::TabContextAction(A::Close(ctx.tab_idx)),
+            Message::ContextMenu(ContextMenuMsg::TabAction(A::Close(ctx.tab_idx))),
         ));
         if total_tabs > 1 {
             items.push(self.ctx_menu_item_msg_no_icon(
                 "Close All Other Documents",
                 "",
-                Message::TabContextAction(A::CloseAllOthers(ctx.tab_idx)),
+                Message::ContextMenu(ContextMenuMsg::TabAction(A::CloseAllOthers(ctx.tab_idx))),
             ));
         } else {
             items.push(self.ctx_menu_item_disabled_no_icon("Close All Other Documents"));
@@ -747,7 +775,7 @@ impl Signex {
         items.push(self.ctx_menu_item_msg_no_icon(
             "Close All Documents",
             "",
-            Message::TabContextAction(A::CloseAll),
+            Message::ContextMenu(ContextMenuMsg::TabAction(A::CloseAll)),
         ));
         items.push(self.ctx_menu_sep());
         items.push(if already_undocked {
@@ -756,7 +784,7 @@ impl Signex {
             self.ctx_menu_item_msg_no_icon(
                 "Open In New Window",
                 "",
-                Message::TabContextAction(A::Undock(ctx.tab_idx)),
+                Message::ContextMenu(ContextMenuMsg::TabAction(A::Undock(ctx.tab_idx))),
             )
         });
 
@@ -860,7 +888,7 @@ impl Signex {
         )
         .width(Self::CONTEXT_MENU_WIDTH)
         .padding([4, 12])
-        .on_press(Message::ContextAction(action))
+        .on_press(Message::ContextMenu(ContextMenuMsg::Action(action)))
         .style(
             move |_: &iced::Theme, status: iced::widget::button::Status| {
                 let bg = match status {
@@ -1016,7 +1044,7 @@ impl Signex {
         )
         .width(Self::CONTEXT_MENU_WIDTH)
         .padding([4, 12])
-        .on_press(Message::OpenContextSubmenu(kind))
+        .on_press(Message::ContextMenu(ContextMenuMsg::SubmenuOpen(kind)))
         .style(
             move |_: &iced::Theme, status: iced::widget::button::Status| {
                 let bg = match status {
@@ -1033,11 +1061,11 @@ impl Signex {
             },
         );
         // Wrap in mouse_area for on_enter / on_exit so the hover timer
-        // (handled by `Message::TickContextSubmenuHover`) can open the
+        // (handled by `ContextMenuMsg::SubmenuTickHover`) can open the
         // submenu after 200 ms without the user clicking.
         iced::widget::mouse_area(btn)
-            .on_enter(Message::HoverContextSubmenu(kind))
-            .on_exit(Message::LeaveContextSubmenu)
+            .on_enter(Message::ContextMenu(ContextMenuMsg::SubmenuHover(kind)))
+            .on_exit(Message::ContextMenu(ContextMenuMsg::SubmenuLeave))
             .into()
     }
 
@@ -1299,8 +1327,8 @@ impl Signex {
                     Some(ic::icon_dd_wire(tid)),
                     "Schematic",
                     "",
-                    Message::ProjectTreeAction(crate::app::ProjectTreeAction::AddNewSchematic(
-                        target_path.clone(),
+                    Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+                        crate::app::ProjectTreeAction::AddNewSchematic(target_path.clone()),
                     )),
                 ));
                 // Component Library is the Altium-style replacement
@@ -1324,9 +1352,9 @@ impl Signex {
                     Some(ic::icon_component(tid)),
                     "Symbol Library",
                     "",
-                    Message::ProjectTreeAction(
+                    Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
                         crate::app::ProjectTreeAction::AddProjectSymbolLibrary(target_path.clone()),
-                    ),
+                    )),
                 ));
                 items.push(self.ctx_menu_item_disabled(
                     Some(ic::icon_dd_part_actions(tid)),
@@ -1340,11 +1368,11 @@ impl Signex {
                         Some(ic::icon_component(tid)),
                         "PCB Library",
                         "",
-                        Message::ProjectTreeAction(
+                        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
                             crate::app::ProjectTreeAction::AddProjectFootprintLibrary(
                                 target_path.clone(),
                             ),
-                        ),
+                        )),
                     ));
                 }
                 items.push(self.ctx_menu_sep());
@@ -4587,7 +4615,7 @@ impl Signex {
         // the canvas itself owns the right-press (its pan gesture) and
         // closes the context menu once the pan actually starts moving
         // (see `canvas/mod.rs`'s `CursorMoved` handler, which fires
-        // `CloseContextMenu` the moment `pan_moved` flips on).
+        // `ContextMenuMsg::Close` the moment `pan_moved` flips on).
         const BACKDROP_OPACITY: f32 = 0.55;
         iced::widget::mouse_area(
             container(iced::widget::Space::new())
@@ -5053,7 +5081,9 @@ impl Signex {
             } else {
                 ctx_menu.y
             };
-            layers.push(Self::dismiss_layer(Message::CloseContextMenu));
+            layers.push(Self::dismiss_layer(Message::ContextMenu(
+                ContextMenuMsg::Close,
+            )));
             layers.push(
                 column![
                     iced::widget::Space::new().height(y),
@@ -5076,8 +5106,8 @@ impl Signex {
                 // can extend the close timer when the cursor crosses
                 // from the launcher into the submenu and back.
                 let submenu = iced::widget::mouse_area(submenu)
-                    .on_enter(Message::EnterContextSubmenuPanel)
-                    .on_exit(Message::LeaveContextSubmenuPanel);
+                    .on_enter(Message::ContextMenu(ContextMenuMsg::SubmenuEnterPanel))
+                    .on_exit(Message::ContextMenu(ContextMenuMsg::SubmenuLeavePanel));
                 let submenu_w = menu_w;
                 let sub_x = if x + menu_w + submenu_w + edge_margin > win_w {
                     (x - submenu_w).max(0.0)
@@ -5125,7 +5155,7 @@ impl Signex {
         // Document-tab right-click menu. Rendered before the project-
         // tree menu since the two are mutually exclusive — only one of
         // them can be open at a time, and opening one closes the
-        // others (see Message::ShowTabContextMenu).
+        // others (see ContextMenuMsg::ShowTab).
         if let Some(ref tab_ctx) = interaction.tab_context_menu {
             let menu = self.view_tab_context_menu(tab_ctx);
             // Conservative footprint matches the project-tree menu so
@@ -5144,7 +5174,9 @@ impl Signex {
             } else {
                 tab_ctx.y
             };
-            layers.push(Self::dismiss_layer(Message::CloseTabContextMenu));
+            layers.push(Self::dismiss_layer(Message::ContextMenu(
+                ContextMenuMsg::CloseTab,
+            )));
             layers.push(
                 column![
                     iced::widget::Space::new().height(y),
@@ -5162,7 +5194,7 @@ impl Signex {
         // Projects-panel tree right-click menu. Rendered here (after the
         // canvas context menu) so the canvas menu's dismiss layer does
         // not cover this one — the two are mutually exclusive in
-        // practice since `ShowProjectTreeContextMenu` nulls out
+        // practice since `ContextMenuMsg::ShowProjectTree` nulls out
         // `context_menu` before opening.
         if let Some(ref tree_ctx) = interaction.project_tree_context_menu {
             let menu = self.view_project_tree_context_menu(tree_ctx);
@@ -5183,7 +5215,9 @@ impl Signex {
             } else {
                 tree_ctx.y
             };
-            layers.push(Self::dismiss_layer(Message::CloseProjectTreeContextMenu));
+            layers.push(Self::dismiss_layer(Message::ContextMenu(
+                ContextMenuMsg::CloseProjectTree,
+            )));
             layers.push(
                 column![
                     iced::widget::Space::new().height(y),
@@ -5204,8 +5238,8 @@ impl Signex {
             if let Some(ContextSubmenu::AddNewToProject) = interaction.context_submenu {
                 let submenu = self.view_context_submenu(ContextSubmenu::AddNewToProject);
                 let submenu = iced::widget::mouse_area(submenu)
-                    .on_enter(Message::EnterContextSubmenuPanel)
-                    .on_exit(Message::LeaveContextSubmenuPanel);
+                    .on_enter(Message::ContextMenu(ContextMenuMsg::SubmenuEnterPanel))
+                    .on_exit(Message::ContextMenu(ContextMenuMsg::SubmenuLeavePanel));
                 let submenu_w = menu_w;
                 let sub_x = if x + menu_w + submenu_w + edge_margin > win_w {
                     (x - submenu_w).max(0.0)

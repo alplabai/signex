@@ -12,8 +12,8 @@
 //! still need a human eye.
 
 use signex_app::app::{
-    LoadedProject, Message, ProjectCloseChoice, ProjectTreeAction, RemoveChoice, RemoveDialogState,
-    RemoveMsg, RenameDialogState, RenameMsg, Signex,
+    ContextMenuMsg, LoadedProject, Message, ProjectCloseChoice, ProjectTreeAction, RemoveChoice,
+    RemoveDialogState, RemoveMsg, RenameDialogState, RenameMsg, Signex,
 };
 use signex_types::project::SheetEntry;
 
@@ -477,9 +477,9 @@ fn project_options_modal_opens_with_metadata_then_closes() {
         });
     }
 
-    let _ = app.update(Message::ProjectTreeAction(
+    let _ = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
         ProjectTreeAction::OpenProjectOptions(vec![0]),
-    ));
+    )));
 
     let state = app.ui_state.project_options.as_ref().expect("modal opened");
     assert_eq!(state.project_idx, 0);

@@ -879,7 +879,7 @@ impl Signex {
                 )) => Message::DragEnd,
                 iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
                     iced::mouse::Button::Left,
-                )) => Message::CloseContextMenu,
+                )) => Message::ContextMenu(ContextMenuMsg::Close),
                 // Window::Resized intentionally omitted — the
                 // `window::resize_events()` subscription below carries
                 // the window id so we can drop non-main resizes. If
@@ -898,7 +898,7 @@ impl Signex {
                 }
                 iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
                     iced::mouse::Button::Left,
-                )) => Message::CloseContextMenu,
+                )) => Message::ContextMenu(ContextMenuMsg::Close),
                 // Window::Resized intentionally omitted — the
                 // `window::resize_events()` subscription below carries
                 // the window id so we can drop non-main resizes. If
@@ -942,7 +942,7 @@ impl Signex {
             || self.interaction_state.tab_context_menu.is_some();
         let hover_tick = if any_menu_open {
             iced::time::every(std::time::Duration::from_millis(50))
-                .map(|_| Message::TickContextSubmenuHover)
+                .map(|_| Message::ContextMenu(ContextMenuMsg::SubmenuTickHover))
         } else {
             Subscription::none()
         };
