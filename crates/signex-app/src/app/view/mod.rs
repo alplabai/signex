@@ -1436,7 +1436,7 @@ impl Signex {
 
         let ok_btn = button(text("OK").size(12).color(iced::Color::WHITE))
             .padding([6, 20])
-            .on_press(Message::DismissExportError)
+            .on_press(Message::Export(ExportMsg::DismissError))
             .style(
                 move |_: &iced::Theme, _status| iced::widget::button::Style {
                     background: Some(err_red.into()),
@@ -4645,7 +4645,9 @@ impl Signex {
         // hits a user-actionable failure (write permission, invalid path,
         // empty schematic). Dismiss via OK button or clicking outside.
         if document.export_error.is_some() {
-            layers.push(Self::dismiss_layer(Message::DismissExportError));
+            layers.push(Self::dismiss_layer(Message::Export(
+                ExportMsg::DismissError,
+            )));
             layers.push(self.view_export_error());
         }
 

@@ -124,7 +124,7 @@ impl Signex {
             },
             |path| {
                 if let Some(path) = path {
-                    Message::ExportNetlistFinished(Ok(path))
+                    Message::Export(ExportMsg::NetlistFinished(Ok(path)))
                 } else {
                     Message::Noop
                 }
@@ -393,7 +393,7 @@ impl Signex {
             },
             |path| {
                 if let Some(path) = path {
-                    Message::ExportBomFinished(Ok(path))
+                    Message::Export(ExportMsg::BomFinished(Ok(path)))
                 } else {
                     Message::Noop
                 }
@@ -770,7 +770,7 @@ impl Signex {
             },
             |path| {
                 if let Some(path) = path {
-                    Message::ExportPdfFinished(Ok(path))
+                    Message::Export(ExportMsg::PdfFinished(Ok(path)))
                 } else {
                     Message::Noop
                 }

@@ -11,7 +11,7 @@ use iced::{Background, Border, Color, Element, Length, Theme};
 use crate::app::state::AnnotateOrder;
 use crate::app::{
     AnnotateMsg, BomPreviewMsg, EnableVersionControlMsg, ErcMsg, GridPropertiesMsg, Message,
-    RemoveMsg, RenameMsg, Signex,
+    RemoveMsg, RenameMsg, SelectionFilterMsg, Signex,
 };
 
 const BACKDROP: Color = Color::from_rgba(0.0, 0.0, 0.0, 0.55);
@@ -1497,7 +1497,11 @@ impl Signex {
                     .size(MODAL_HEADER_TITLE_SIZE)
                     .color(text_c),
                 Space::new().width(Length::Fill),
-                close_x_button(Message::CloseSelectionFilterCustom, theme_id, text_muted),
+                close_x_button(
+                    Message::SelectionFilter(SelectionFilterMsg::CloseCustom),
+                    theme_id,
+                    text_muted,
+                ),
             ]
             .align_y(iced::Alignment::Center),
         )
@@ -1524,7 +1528,9 @@ impl Signex {
             )
             .padding([4, 8])
             .width(Length::Fill)
-            .on_press(Message::ToggleSelectionFilterCustomKind(kind))
+            .on_press(Message::SelectionFilter(
+                SelectionFilterMsg::ToggleCustomKind(kind),
+            ))
             .style(move |_: &iced::Theme, status| iced::widget::button::Style {
                 background: match status {
                     iced::widget::button::Status::Hovered => Some(iced::Background::Color(
@@ -1570,14 +1576,14 @@ impl Signex {
                         Space::new().width(Length::Fill),
                         secondary_button(
                             "Cancel",
-                            Message::CloseSelectionFilterCustom,
+                            Message::SelectionFilter(SelectionFilterMsg::CloseCustom),
                             text_c,
                             border_c,
                         ),
                         Space::new().width(8),
                         primary_button(
                             "Apply",
-                            Some(Message::ApplySelectionFilterCustom),
+                            Some(Message::SelectionFilter(SelectionFilterMsg::ApplyCustom)),
                             border_c,
                         ),
                     ]

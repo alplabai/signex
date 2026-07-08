@@ -105,74 +105,6 @@ impl Signex {
                 self.refresh_panel_ctx();
                 self.finish_update()
             }
-            Message::OpenSelectionFilterCustom => {
-                if let Some(editor) = self.active_footprint_editor() {
-                    let f = editor.state.selection_filter;
-                    self.ui_state.selection_filter_custom =
-                        Some(crate::app::SelectionFilterCustomState {
-                            pads: f.pads,
-                            tracks: f.tracks,
-                            arcs: f.arcs,
-                            pours: f.pours,
-                            bodies_3d: f.bodies_3d,
-                            keepouts: f.keepouts,
-                            cutouts: f.cutouts,
-                            texts: f.texts,
-                            vias: f.vias,
-                            regions: f.regions,
-                            fills: f.fills,
-                            other: f.other,
-                        });
-                }
-                self.finish_update()
-            }
-            Message::CloseSelectionFilterCustom => {
-                self.ui_state.selection_filter_custom = None;
-                self.finish_update()
-            }
-            Message::ToggleSelectionFilterCustomKind(kind) => {
-                use crate::library::editor::footprint::state::SelectionFilterKind as K;
-                if let Some(state) = self.ui_state.selection_filter_custom.as_mut() {
-                    match kind {
-                        K::Pads => state.pads = !state.pads,
-                        K::Tracks => state.tracks = !state.tracks,
-                        K::Arcs => state.arcs = !state.arcs,
-                        K::Pours => state.pours = !state.pours,
-                        K::Bodies3d => state.bodies_3d = !state.bodies_3d,
-                        K::Keepouts => state.keepouts = !state.keepouts,
-                        K::Cutouts => state.cutouts = !state.cutouts,
-                        K::Texts => state.texts = !state.texts,
-                        K::Vias => state.vias = !state.vias,
-                        K::Regions => state.regions = !state.regions,
-                        K::Fills => state.fills = !state.fills,
-                        K::Other => state.other = !state.other,
-                    }
-                }
-                self.finish_update()
-            }
-            Message::ApplySelectionFilterCustom => {
-                let draft = self.ui_state.selection_filter_custom.take();
-                if let (Some(d), Some(editor)) = (draft, self.active_footprint_editor_mut()) {
-                    editor.state.selection_filter =
-                        crate::library::editor::footprint::state::SelectionFilter {
-                            pads: d.pads,
-                            tracks: d.tracks,
-                            arcs: d.arcs,
-                            pours: d.pours,
-                            bodies_3d: d.bodies_3d,
-                            keepouts: d.keepouts,
-                            cutouts: d.cutouts,
-                            texts: d.texts,
-                            vias: d.vias,
-                            regions: d.regions,
-                            fills: d.fills,
-                            other: d.other,
-                        };
-                    editor.canvas_cache.clear();
-                }
-                self.refresh_panel_ctx();
-                self.finish_update()
-            }
             Message::StatusBar(StatusBarRequest::ToggleSnap) => {
                 self.ui_state.snap_enabled = !self.ui_state.snap_enabled;
                 self.interaction_state.active_canvas_mut().snap_enabled =
@@ -213,6 +145,85 @@ impl Signex {
                 self.handle_canvas_event_in_window(window_id, event)
             }
             _ => unreachable!("dispatch_ui_message received non-ui message"),
+        }
+    }
+
+    /// Custom Selection Filter modal handler (namespaced family,
+    /// ADR-0001 D3). Drives the footprint editor's selection-filter
+    /// customization modal.
+    pub(crate) fn dispatch_selection_filter_message(
+        &mut self,
+        msg: SelectionFilterMsg,
+    ) -> Task<Message> {
+        match msg {
+            SelectionFilterMsg::OpenCustom => {
+                if let Some(editor) = self.active_footprint_editor() {
+                    let f = editor.state.selection_filter;
+                    self.ui_state.selection_filter_custom =
+                        Some(crate::app::SelectionFilterCustomState {
+                            pads: f.pads,
+                            tracks: f.tracks,
+                            arcs: f.arcs,
+                            pours: f.pours,
+                            bodies_3d: f.bodies_3d,
+                            keepouts: f.keepouts,
+                            cutouts: f.cutouts,
+                            texts: f.texts,
+                            vias: f.vias,
+                            regions: f.regions,
+                            fills: f.fills,
+                            other: f.other,
+                        });
+                }
+                self.finish_update()
+            }
+            SelectionFilterMsg::CloseCustom => {
+                self.ui_state.selection_filter_custom = None;
+                self.finish_update()
+            }
+            SelectionFilterMsg::ToggleCustomKind(kind) => {
+                use crate::library::editor::footprint::state::SelectionFilterKind as K;
+                if let Some(state) = self.ui_state.selection_filter_custom.as_mut() {
+                    match kind {
+                        K::Pads => state.pads = !state.pads,
+                        K::Tracks => state.tracks = !state.tracks,
+                        K::Arcs => state.arcs = !state.arcs,
+                        K::Pours => state.pours = !state.pours,
+                        K::Bodies3d => state.bodies_3d = !state.bodies_3d,
+                        K::Keepouts => state.keepouts = !state.keepouts,
+                        K::Cutouts => state.cutouts = !state.cutouts,
+                        K::Texts => state.texts = !state.texts,
+                        K::Vias => state.vias = !state.vias,
+                        K::Regions => state.regions = !state.regions,
+                        K::Fills => state.fills = !state.fills,
+                        K::Other => state.other = !state.other,
+                    }
+                }
+                self.finish_update()
+            }
+            SelectionFilterMsg::ApplyCustom => {
+                let draft = self.ui_state.selection_filter_custom.take();
+                if let (Some(d), Some(editor)) = (draft, self.active_footprint_editor_mut()) {
+                    editor.state.selection_filter =
+                        crate::library::editor::footprint::state::SelectionFilter {
+                            pads: d.pads,
+                            tracks: d.tracks,
+                            arcs: d.arcs,
+                            pours: d.pours,
+                            bodies_3d: d.bodies_3d,
+                            keepouts: d.keepouts,
+                            cutouts: d.cutouts,
+                            texts: d.texts,
+                            vias: d.vias,
+                            regions: d.regions,
+                            fills: d.fills,
+                            other: d.other,
+                        };
+                    editor.canvas_cache.clear();
+                }
+                self.refresh_panel_ctx();
+                self.finish_update()
+            }
         }
     }
 

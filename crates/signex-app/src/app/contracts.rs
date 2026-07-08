@@ -65,19 +65,9 @@ pub enum Message {
     GridPickerSelect(f64),
     /// Grid Properties dialog — namespaced (ADR-0001 D3).
     GridProperties(GridPropertiesMsg),
-    /// v0.18.14.1 — Custom Selection Filter modal launcher. Opens
-    /// the 8-row checkbox table over the active footprint editor.
-    OpenSelectionFilterCustom,
-    /// v0.18.14.1 — Custom Selection Filter modal: Cancel / Esc.
-    /// Discards the in-flight draft.
-    CloseSelectionFilterCustom,
-    /// v0.18.14.1 — Custom Selection Filter modal: per-row checkbox
-    /// toggle.
-    ToggleSelectionFilterCustomKind(crate::library::editor::footprint::state::SelectionFilterKind),
-    /// v0.18.14.1 — Custom Selection Filter modal: Apply button.
-    /// Writes the draft into the active footprint editor's
-    /// `state.selection_filter` then closes.
-    ApplySelectionFilterCustom,
+    /// Custom Selection Filter modal message family — namespaced
+    /// (ADR-0001 D3). Routed to `dispatch_selection_filter_message`.
+    SelectionFilter(SelectionFilterMsg),
     DragStart(DragTarget),
     DragMove(f32, f32),
     DragEnd,
@@ -332,29 +322,16 @@ pub enum Message {
     /// Polygon editable rows). Engine replaces the stored drawing by
     /// uuid with full undo.
     UpdateDrawingField(uuid::Uuid, DrawingFieldEdit),
-    /// Open the unified PDF Export overlay (File → Export → PDF…). Now
-    /// delegates to `handle_print_preview_requested`, which sets up
-    /// `document_state.preview` with the rasterized pages plus every
-    /// PDF setting in one modal.
-    ExportPdfOpenDialog,
-    /// Completion of PDF export — carries either the saved path or error.
-    ExportPdfFinished(Result<std::path::PathBuf, String>),
-    /// Completion of netlist export — carries either the saved path or error.
-    ExportNetlistFinished(Result<std::path::PathBuf, String>),
-    /// User invoked File → Export → Bill of Materials… — open the
-    /// BOM preview modal instead of going straight to the file
-    /// dialog. Mirrors Print Preview.
-    ExportBomRequested,
-    /// Completion of BOM export — carries either the saved path or error.
-    ExportBomFinished(Result<std::path::PathBuf, String>),
+    /// Export subsystem message family — namespaced (ADR-0001 D3).
+    /// PDF / netlist / BOM export lifecycle plus the export-error
+    /// modal dismiss. Routed to `dispatch_export_message`.
+    Export(ExportMsg),
     /// BOM-preview modal — namespaced family (ADR-0001 D3). Routed to
     /// `dispatch_bom_preview_message`.
     BomPreview(BomPreviewMsg),
     /// Print-preview modal — namespaced family (ADR-0001 D3). Routed to
     /// `dispatch_print_preview_message`.
     PrintPreview(PrintPreviewMsg),
-    /// User clicked the OK button on the export-error modal.
-    DismissExportError,
     /// v0.9 Library subsystem message — folded under one variant so
     /// the dispatcher can route to `library_dispatch::handle` in one
     /// shot. See `crate::library::LibraryMessage` for the inner
@@ -756,6 +733,54 @@ pub enum ContextMenuMsg {
     /// open; promotes a mature `pending_submenu` into an actual open
     /// and a mature `pending_submenu_close` into an actual close.
     SubmenuTickHover,
+}
+
+/// Export subsystem message family (ADR-0001 D3). Namespaced under
+/// `Message::Export` and routed to `dispatch_export_message`. Covers
+/// the PDF / netlist / BOM export lifecycle plus the export-error
+/// modal dismiss.
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub enum ExportMsg {
+    /// Open the unified PDF Export overlay (File → Export → PDF…). Now
+    /// delegates to `handle_print_preview_requested`, which sets up
+    /// `document_state.preview` with the rasterized pages plus every
+    /// PDF setting in one modal.
+    PdfOpenDialog,
+    /// Completion of PDF export — carries either the saved path or error.
+    PdfFinished(Result<std::path::PathBuf, String>),
+    /// Completion of netlist export — carries either the saved path or error.
+    NetlistFinished(Result<std::path::PathBuf, String>),
+    /// User invoked File → Export → Bill of Materials… — open the
+    /// BOM preview modal instead of going straight to the file
+    /// dialog. Mirrors Print Preview.
+    BomRequested,
+    /// Completion of BOM export — carries either the saved path or error.
+    BomFinished(Result<std::path::PathBuf, String>),
+    /// User clicked the OK button on the export-error modal.
+    DismissError,
+}
+
+/// Custom Selection Filter modal message family (ADR-0001 D3).
+/// Namespaced under `Message::SelectionFilter` and routed to
+/// `dispatch_selection_filter_message`. Drives the footprint editor's
+/// selection-filter customization modal.
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub enum SelectionFilterMsg {
+    /// v0.18.14.1 — Custom Selection Filter modal launcher. Opens
+    /// the 8-row checkbox table over the active footprint editor.
+    OpenCustom,
+    /// v0.18.14.1 — Custom Selection Filter modal: Cancel / Esc.
+    /// Discards the in-flight draft.
+    CloseCustom,
+    /// v0.18.14.1 — Custom Selection Filter modal: per-row checkbox
+    /// toggle.
+    ToggleCustomKind(crate::library::editor::footprint::state::SelectionFilterKind),
+    /// v0.18.14.1 — Custom Selection Filter modal: Apply button.
+    /// Writes the draft into the active footprint editor's
+    /// `state.selection_filter` then closes.
+    ApplyCustom,
 }
 
 /// Per-shape edit descriptor. The Properties panel dispatches one of

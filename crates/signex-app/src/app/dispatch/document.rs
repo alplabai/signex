@@ -93,31 +93,40 @@ impl Signex {
                 self.load_schematic_into_active_tab(*sheet);
                 self.finish_update()
             }
-            Message::ExportPdfFinished(result) => {
+            _ => unreachable!("dispatch_document_message received non-document message"),
+        }
+    }
+
+    /// Export subsystem message handler (namespaced family, ADR-0001 D3).
+    /// PDF / netlist / BOM export lifecycle plus the export-error modal
+    /// dismiss. Some arms delegate to helpers in
+    /// `app/handlers/menu/export.rs`.
+    pub(crate) fn dispatch_export_message(&mut self, msg: ExportMsg) -> Task<Message> {
+        match msg {
+            ExportMsg::PdfFinished(result) => {
                 let task = self.handle_export_pdf_finished(result);
                 iced::Task::batch([task, self.finish_update()])
             }
-            Message::ExportNetlistFinished(result) => {
+            ExportMsg::NetlistFinished(result) => {
                 let task = self.handle_export_netlist_finished(result);
                 iced::Task::batch([task, self.finish_update()])
             }
-            Message::ExportPdfOpenDialog => {
+            ExportMsg::PdfOpenDialog => {
                 let task = self.handle_export_pdf_open_dialog();
                 iced::Task::batch([task, self.finish_update()])
             }
-            Message::DismissExportError => {
+            ExportMsg::DismissError => {
                 self.handle_dismiss_export_error();
                 self.finish_update()
             }
-            Message::ExportBomRequested => {
+            ExportMsg::BomRequested => {
                 let task = self.handle_bom_preview_open();
                 iced::Task::batch([task, self.finish_update()])
             }
-            Message::ExportBomFinished(result) => {
+            ExportMsg::BomFinished(result) => {
                 let task = self.handle_export_bom_finished(result);
                 iced::Task::batch([task, self.finish_update()])
             }
-            _ => unreachable!("dispatch_document_message received non-document message"),
         }
     }
 

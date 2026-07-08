@@ -1007,7 +1007,7 @@ impl Signex {
                 true
             }
             crate::panels::PanelMsg::FpEditorOpenSelectionFilterCustom => {
-                let _ = self.update(Message::OpenSelectionFilterCustom);
+                let _ = self.update(Message::SelectionFilter(SelectionFilterMsg::OpenCustom));
                 true
             }
             crate::panels::PanelMsg::FpEditorSetSnapSubTab(tab) => {
