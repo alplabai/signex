@@ -124,85 +124,8 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         | EditorMsg::SubmitForReviewResult(_)
         | EditorMsg::OpenWhereUsedTab
         | EditorMsg::DatasheetUploadDialog
-        | EditorMsg::SymbolPickAiPdf
-        | EditorMsg::SymbolPickedAiPdf(_)
-        | EditorMsg::SymbolSetTool(_)
-        | EditorMsg::SymbolAddPin { .. }
-        | EditorMsg::SymbolSelect(_)
-        | EditorMsg::SymbolDeselect
-        | EditorMsg::SymbolMoveSelected { .. }
-        | EditorMsg::SymbolMoveAll { .. }
-        | EditorMsg::SymbolDeleteSelected
-        | EditorMsg::SymbolSetField { .. }
-        | EditorMsg::SymbolSetPinNumber { .. }
-        | EditorMsg::SymbolSetPinName { .. }
-        | EditorMsg::SymbolApplyAiPreview
-        | EditorMsg::SymbolDismissAiPreview
         | EditorMsg::SaveSymbol(_, _)
-        | EditorMsg::FootprintAddPad { .. }
-        | EditorMsg::FootprintAddHole { .. }
-        | EditorMsg::FootprintAddText { .. }
-        | EditorMsg::FootprintAddTextFrame { .. }
-        | EditorMsg::FootprintTrackClick { .. }
-        | EditorMsg::FootprintTrackCancel
-        | EditorMsg::FootprintArcClick { .. }
-        | EditorMsg::FootprintArcCancel
-        | EditorMsg::FootprintPolygonClick { .. }
-        | EditorMsg::FootprintPolygonCommit
-        | EditorMsg::FootprintPolygonCancel
-        | EditorMsg::FootprintSelectSilkF(_)
-        | EditorMsg::FootprintDeleteSilkF
-        | EditorMsg::FootprintSketchPlacePoint { .. }
-        | EditorMsg::FootprintSketchToolClick { .. }
-        | EditorMsg::FootprintSketchToolEscape
-        | EditorMsg::FootprintSketchPlacementInputChar(_)
-        | EditorMsg::FootprintSketchPlacementInputBackspace
-        | EditorMsg::FootprintSketchPlacementInputEnter
-        | EditorMsg::FootprintSketchPlacementInputEscape
-        | EditorMsg::FootprintSketchPlacementInputTab
-        | EditorMsg::FootprintSketchSelect { .. }
-        | EditorMsg::FootprintSketchMovePoint { .. }
-        | EditorMsg::FootprintSketchMoveLine { .. }
-        | EditorMsg::FootprintSketchResizeRoundPad { .. }
-        | EditorMsg::FootprintSetSelectionMode2d(_)
-        | EditorMsg::FootprintSelectAllOnLayer
-        | EditorMsg::FootprintAddVia { .. }
-        | EditorMsg::FootprintSelectOffGridPads
-        | EditorMsg::FootprintRecomputeCourtyardOutline
-        | EditorMsg::FootprintLassoArm
-        | EditorMsg::FootprintLassoAddVertex { .. }
-        | EditorMsg::FootprintLassoCommit
-        | EditorMsg::FootprintLassoCancel
-        | EditorMsg::FootprintTouchingLineArm
-        | EditorMsg::FootprintTouchingLineFirst { .. }
-        | EditorMsg::FootprintTouchingLineCommit { .. }
-        | EditorMsg::FootprintTouchingLineCancel
-        | EditorMsg::FootprintSelectOverlapped
-        | EditorMsg::FootprintSelectNextOverlapped
-        | EditorMsg::FootprintMovePad { .. }
-        | EditorMsg::FootprintCursorAt { .. }
-        | EditorMsg::FootprintSelectPad(_)
-        | EditorMsg::FootprintSelectPads(_)
-        | EditorMsg::FootprintSketchSelectMany(_)
-        | EditorMsg::FootprintDeleteSelected
-        | EditorMsg::FootprintToggleLayer(_)
-        | EditorMsg::FootprintToggleAutoFit
-        | EditorMsg::FootprintSetPadsTool(_)
-        | EditorMsg::FootprintSketchSetTool(_)
-        | EditorMsg::FootprintSketchToggleConstruction
-        | EditorMsg::FootprintSketchToggleCenterline
-        | EditorMsg::FootprintTogglePlacementPause
-        | EditorMsg::FootprintShowContextMenu { .. }
-        | EditorMsg::FootprintCloseContextMenu
-        | EditorMsg::FootprintContextMenuOpenSubmenu(_)
-        | EditorMsg::FootprintContextMenuAction(_)
-        | EditorMsg::FootprintFitConsumed
-        | EditorMsg::FootprintCopyPad
-        | EditorMsg::FootprintCutPad
-        | EditorMsg::FootprintPastePad
-        | EditorMsg::FootprintActiveBarRotateSelection
-        | EditorMsg::FootprintActiveBarFlipSelection
-        | EditorMsg::FootprintSketchSetRole { .. }
+        | EditorMsg::Footprint(_)
         | EditorMsg::SaveFootprint(_, _)
         | EditorMsg::SetBodyHeight(_)
         | EditorMsg::SetBodyOffsetZ(_)

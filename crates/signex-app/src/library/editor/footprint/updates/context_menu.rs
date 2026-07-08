@@ -87,7 +87,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Footprin
                     // access to its own State (where `scale` /
                     // `offset` / `did_initial_fit` live) and can
                     // consume the flag; it publishes
-                    // `EditorMsg::FootprintFitConsumed` to clear the
+                    // `EditorMsg::Footprint(FootprintEditorMsg::FitConsumed)` to clear the
                     // request so it doesn''t re-trigger every event.
                     editor.state.fit_pending = true;
                     editor.state.context_menu = None;

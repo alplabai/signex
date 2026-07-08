@@ -187,7 +187,7 @@ pub enum FootprintEditorMsg {
     ContextMenuAction(crate::library::editor::footprint::state::FootprintContextAction),
 
     /// v0.26-C — canvas signals that the pending Fit-to-Window
-    /// request has been honoured. See EditorMsg::FootprintFitConsumed.
+    /// request has been honoured. See EditorMsg::Footprint(FootprintEditorMsg::FitConsumed).
     FitConsumed,
 
     /// v0.26-E — clipboard ops on the selected pad.

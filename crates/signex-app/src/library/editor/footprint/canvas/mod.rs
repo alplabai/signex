@@ -46,7 +46,7 @@ use iced::mouse;
 use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point, Radians, Rectangle, Renderer, Theme, Vector};
 
-use crate::library::messages::{EditorMsg, LibraryMessage};
+use crate::library::messages::{EditorMsg, FootprintEditorMsg, LibraryMessage};
 use crate::library::state::EditorAddress;
 
 use super::layers::FpLayer;
@@ -275,7 +275,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 library_path: self.address.library_path.clone(),
                 table: self.address.table.clone(),
                 row_id: self.address.row_id,
-                msg: EditorMsg::FootprintFitConsumed,
+                msg: EditorMsg::Footprint(FootprintEditorMsg::FitConsumed),
             }));
         }
 
@@ -315,10 +315,10 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         library_path: self.address.library_path.clone(),
                         table: self.address.table.clone(),
                         row_id: self.address.row_id,
-                        msg: EditorMsg::FootprintCursorAt {
+                        msg: EditorMsg::Footprint(FootprintEditorMsg::CursorAt {
                             x_mm: world.0,
                             y_mm: world.1,
-                        },
+                        }),
                     })
                     .and_capture(),
                 );
@@ -344,7 +344,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                     library_path: self.address.library_path.clone(),
                                     table: self.address.table.clone(),
                                     row_id: self.address.row_id,
-                                    msg: EditorMsg::FootprintLassoCommit,
+                                    msg: EditorMsg::Footprint(FootprintEditorMsg::LassoCommit),
                                 })
                                 .and_capture(),
                             );
@@ -356,7 +356,9 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                     library_path: self.address.library_path.clone(),
                                     table: self.address.table.clone(),
                                     row_id: self.address.row_id,
-                                    msg: EditorMsg::FootprintTouchingLineCancel,
+                                    msg: EditorMsg::Footprint(
+                                        FootprintEditorMsg::TouchingLineCancel,
+                                    ),
                                 })
                                 .and_capture(),
                             );
@@ -364,7 +366,9 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         let cancel_msg: Option<EditorMsg> = match self.state.mode {
                             EditorMode::Normal => {
                                 if self.state.pads_tool != PadsTool::Select {
-                                    Some(EditorMsg::FootprintSetPadsTool(PadsTool::Select))
+                                    Some(EditorMsg::Footprint(FootprintEditorMsg::SetPadsTool(
+                                        PadsTool::Select,
+                                    )))
                                 } else {
                                     None
                                 }
@@ -374,7 +378,9 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 let pending_active =
                                     !matches!(self.state.tool_pending, ToolPending::Idle);
                                 if tool_active || pending_active {
-                                    Some(EditorMsg::FootprintSketchSetTool(SketchTool::Select))
+                                    Some(EditorMsg::Footprint(FootprintEditorMsg::SketchSetTool(
+                                        SketchTool::Select,
+                                    )))
                                 } else {
                                     None
                                 }
@@ -418,10 +424,10 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 library_path: self.address.library_path.clone(),
                                 table: self.address.table.clone(),
                                 row_id: self.address.row_id,
-                                msg: EditorMsg::FootprintLassoAddVertex {
+                                msg: EditorMsg::Footprint(FootprintEditorMsg::LassoAddVertex {
                                     x_mm: world.0,
                                     y_mm: world.1,
-                                },
+                                }),
                             })
                             .and_capture(),
                         );
@@ -434,15 +440,15 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     if self.state.touching_line_active {
                         let world = cstate.screen_to_world(cursor_pos);
                         let msg = if self.state.touching_line_first.is_none() {
-                            EditorMsg::FootprintTouchingLineFirst {
+                            EditorMsg::Footprint(FootprintEditorMsg::TouchingLineFirst {
                                 x_mm: world.0,
                                 y_mm: world.1,
-                            }
+                            })
                         } else {
-                            EditorMsg::FootprintTouchingLineCommit {
+                            EditorMsg::Footprint(FootprintEditorMsg::TouchingLineCommit {
                                 x_mm: world.0,
                                 y_mm: world.1,
-                            }
+                            })
                         };
                         return Some(
                             canvas::Action::publish(LibraryMessage::EditorEvent {
@@ -551,10 +557,10 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 library_path: self.address.library_path.clone(),
                                 table: self.address.table.clone(),
                                 row_id: self.address.row_id,
-                                msg: EditorMsg::FootprintSketchSelect {
+                                msg: EditorMsg::Footprint(FootprintEditorMsg::SketchSelect {
                                     id: Some(point_id),
                                     shift: false,
-                                },
+                                }),
                             })
                             .and_capture(),
                         );
@@ -636,10 +642,10 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                     library_path: self.address.library_path.clone(),
                                     table: self.address.table.clone(),
                                     row_id: self.address.row_id,
-                                    msg: EditorMsg::FootprintSketchSelect {
+                                    msg: EditorMsg::Footprint(FootprintEditorMsg::SketchSelect {
                                         id: Some(line_id),
                                         shift: false,
-                                    },
+                                    }),
                                 })
                                 .and_capture(),
                             );
@@ -676,7 +682,9 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                     library_path: self.address.library_path.clone(),
                                     table: self.address.table.clone(),
                                     row_id: self.address.row_id,
-                                    msg: EditorMsg::FootprintSketchSelectMany(ids),
+                                    msg: EditorMsg::Footprint(
+                                        FootprintEditorMsg::SketchSelectMany(ids),
+                                    ),
                                 })
                                 .and_capture(),
                             );
@@ -736,9 +744,9 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 } else if !current.contains(&pad_idx) {
                                     current.push(pad_idx);
                                 }
-                                EditorMsg::FootprintSelectPads(current)
+                                EditorMsg::Footprint(FootprintEditorMsg::SelectPads(current))
                             } else {
-                                EditorMsg::FootprintSelectPad(Some(pad_idx))
+                                EditorMsg::Footprint(FootprintEditorMsg::SelectPad(Some(pad_idx)))
                             };
                             return Some(
                                 canvas::Action::publish(LibraryMessage::EditorEvent {
@@ -798,7 +806,9 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                             library_path: self.address.library_path.clone(),
                                             table: self.address.table.clone(),
                                             row_id: self.address.row_id,
-                                            msg: EditorMsg::FootprintSelectSilkF(Some(silk_idx)),
+                                            msg: EditorMsg::Footprint(
+                                                FootprintEditorMsg::SelectSilkF(Some(silk_idx)),
+                                            ),
                                         })
                                         .and_capture(),
                                     );
@@ -883,11 +893,11 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 library_path: self.address.library_path.clone(),
                                 table: self.address.table.clone(),
                                 row_id: self.address.row_id,
-                                msg: EditorMsg::FootprintShowContextMenu {
+                                msg: EditorMsg::Footprint(FootprintEditorMsg::ShowContextMenu {
                                     x: screen_x,
                                     y: screen_y,
                                     target,
-                                },
+                                }),
                             })
                             .and_capture(),
                         );
@@ -944,12 +954,14 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                             library_path: self.address.library_path.clone(),
                                             table: self.address.table.clone(),
                                             row_id: self.address.row_id,
-                                            msg: EditorMsg::FootprintAddTextFrame {
-                                                x_mm,
-                                                y_mm,
-                                                w_mm,
-                                                h_mm,
-                                            },
+                                            msg: EditorMsg::Footprint(
+                                                FootprintEditorMsg::AddTextFrame {
+                                                    x_mm,
+                                                    y_mm,
+                                                    w_mm,
+                                                    h_mm,
+                                                },
+                                            ),
                                         },
                                     ));
                                 }
@@ -1066,7 +1078,9 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                                 library_path: self.address.library_path.clone(),
                                                 table: self.address.table.clone(),
                                                 row_id: self.address.row_id,
-                                                msg: EditorMsg::FootprintSketchSelectMany(hits),
+                                                msg: EditorMsg::Footprint(
+                                                    FootprintEditorMsg::SketchSelectMany(hits),
+                                                ),
                                             },
                                         ));
                                     }
@@ -1134,7 +1148,9 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                         library_path: self.address.library_path.clone(),
                                         table: self.address.table.clone(),
                                         row_id: self.address.row_id,
-                                        msg: EditorMsg::FootprintSelectPads(combined),
+                                        msg: EditorMsg::Footprint(FootprintEditorMsg::SelectPads(
+                                            combined,
+                                        )),
                                     },
                                 ));
                             }
@@ -1170,14 +1186,18 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 return None;
                             }
                             let msg = match self.state.active_tool {
-                                SketchTool::Select => EditorMsg::FootprintSketchSelect {
-                                    id: select_id,
-                                    shift: false,
-                                },
-                                SketchTool::Point => EditorMsg::FootprintSketchPlacePoint {
-                                    x_mm: click_world.0,
-                                    y_mm: click_world.1,
-                                },
+                                SketchTool::Select => {
+                                    EditorMsg::Footprint(FootprintEditorMsg::SketchSelect {
+                                        id: select_id,
+                                        shift: false,
+                                    })
+                                }
+                                SketchTool::Point => {
+                                    EditorMsg::Footprint(FootprintEditorMsg::SketchPlacePoint {
+                                        x_mm: click_world.0,
+                                        y_mm: click_world.1,
+                                    })
+                                }
                                 SketchTool::Line
                                 | SketchTool::Rectangle
                                 | SketchTool::RoundedRectangle
@@ -1189,11 +1209,13 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 | SketchTool::CircularPattern
                                 | SketchTool::TangentArc
                                 | SketchTool::Fillet
-                                | SketchTool::Trim => EditorMsg::FootprintSketchToolClick {
-                                    x_mm: click_world.0,
-                                    y_mm: click_world.1,
-                                    snap_id,
-                                },
+                                | SketchTool::Trim => {
+                                    EditorMsg::Footprint(FootprintEditorMsg::SketchToolClick {
+                                        x_mm: click_world.0,
+                                        y_mm: click_world.1,
+                                        snap_id,
+                                    })
+                                }
                             };
                             return Some(canvas::Action::publish(LibraryMessage::EditorEvent {
                                 library_path: self.address.library_path.clone(),
@@ -1219,10 +1241,10 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 library_path: self.address.library_path.clone(),
                                 table: self.address.table.clone(),
                                 row_id: self.address.row_id,
-                                msg: EditorMsg::FootprintAddPad {
+                                msg: EditorMsg::Footprint(FootprintEditorMsg::AddPad {
                                     x_mm: drag.grab_offset_mm.0,
                                     y_mm: drag.grab_offset_mm.1,
-                                },
+                                }),
                             }));
                         }
                         // v0.27 — PlaceVia drops a canonical via (Round
@@ -1237,10 +1259,10 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 library_path: self.address.library_path.clone(),
                                 table: self.address.table.clone(),
                                 row_id: self.address.row_id,
-                                msg: EditorMsg::FootprintAddVia {
+                                msg: EditorMsg::Footprint(FootprintEditorMsg::AddVia {
                                     x_mm: drag.grab_offset_mm.0,
                                     y_mm: drag.grab_offset_mm.1,
-                                },
+                                }),
                             }));
                         }
                         // v0.18.12 — Place Hole drops a non-plated
@@ -1253,10 +1275,10 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 library_path: self.address.library_path.clone(),
                                 table: self.address.table.clone(),
                                 row_id: self.address.row_id,
-                                msg: EditorMsg::FootprintAddHole {
+                                msg: EditorMsg::Footprint(FootprintEditorMsg::AddHole {
                                     x_mm: drag.grab_offset_mm.0,
                                     y_mm: drag.grab_offset_mm.1,
-                                },
+                                }),
                             }));
                         }
                         // v0.18.15 — Place String drops a silk-layer
@@ -1268,10 +1290,10 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 library_path: self.address.library_path.clone(),
                                 table: self.address.table.clone(),
                                 row_id: self.address.row_id,
-                                msg: EditorMsg::FootprintAddText {
+                                msg: EditorMsg::Footprint(FootprintEditorMsg::AddText {
                                     x_mm: drag.grab_offset_mm.0,
                                     y_mm: drag.grab_offset_mm.1,
-                                },
+                                }),
                             }));
                         }
                         // v0.18.15.1 — Place Track is a 2-click
@@ -1286,10 +1308,10 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 library_path: self.address.library_path.clone(),
                                 table: self.address.table.clone(),
                                 row_id: self.address.row_id,
-                                msg: EditorMsg::FootprintTrackClick {
+                                msg: EditorMsg::Footprint(FootprintEditorMsg::TrackClick {
                                     x_mm: drag.grab_offset_mm.0,
                                     y_mm: drag.grab_offset_mm.1,
-                                },
+                                }),
                             }));
                         }
                         // v0.18.15.3 — Place Arc is a 3-click
@@ -1303,10 +1325,10 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 library_path: self.address.library_path.clone(),
                                 table: self.address.table.clone(),
                                 row_id: self.address.row_id,
-                                msg: EditorMsg::FootprintArcClick {
+                                msg: EditorMsg::Footprint(FootprintEditorMsg::ArcClick {
                                     x_mm: drag.grab_offset_mm.0,
                                     y_mm: drag.grab_offset_mm.1,
-                                },
+                                }),
                             }));
                         }
                         // v0.18.15.4 / v0.18.17 — Place Polygon
@@ -1323,10 +1345,10 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 library_path: self.address.library_path.clone(),
                                 table: self.address.table.clone(),
                                 row_id: self.address.row_id,
-                                msg: EditorMsg::FootprintPolygonClick {
+                                msg: EditorMsg::Footprint(FootprintEditorMsg::PolygonClick {
                                     x_mm: drag.grab_offset_mm.0,
                                     y_mm: drag.grab_offset_mm.1,
-                                },
+                                }),
                             }));
                         }
                         // v0.20 — Select tool: empty-area left-click
@@ -1347,7 +1369,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 library_path: self.address.library_path.clone(),
                                 table: self.address.table.clone(),
                                 row_id: self.address.row_id,
-                                msg: EditorMsg::FootprintSelectPad(None),
+                                msg: EditorMsg::Footprint(FootprintEditorMsg::SelectPad(None)),
                             }));
                         }
                         return None;
@@ -1390,7 +1412,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                     library_path: self.address.library_path.clone(),
                                     table: self.address.table.clone(),
                                     row_id: self.address.row_id,
-                                    msg: EditorMsg::FootprintCloseContextMenu,
+                                    msg: EditorMsg::Footprint(FootprintEditorMsg::CloseContextMenu),
                                 })
                                 .and_capture(),
                             );
@@ -1410,10 +1432,10 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                             library_path: self.address.library_path.clone(),
                             table: self.address.table.clone(),
                             row_id: self.address.row_id,
-                            msg: EditorMsg::FootprintCursorAt {
+                            msg: EditorMsg::Footprint(FootprintEditorMsg::CursorAt {
                                 x_mm: world.0,
                                 y_mm: world.1,
-                            },
+                            }),
                         })
                         .and_capture(),
                     );
@@ -1470,10 +1492,10 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                             library_path: self.address.library_path.clone(),
                             table: self.address.table.clone(),
                             row_id: self.address.row_id,
-                            msg: EditorMsg::FootprintSketchResizeRoundPad {
+                            msg: EditorMsg::Footprint(FootprintEditorMsg::SketchResizeRoundPad {
                                 pad_idx,
                                 diameter_mm,
-                            },
+                            }),
                         }));
                     }
                 }
@@ -1510,11 +1532,11 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                             library_path: self.address.library_path.clone(),
                             table: self.address.table.clone(),
                             row_id: self.address.row_id,
-                            msg: EditorMsg::FootprintSketchMovePoint {
+                            msg: EditorMsg::Footprint(FootprintEditorMsg::SketchMovePoint {
                                 id: point_id,
                                 dx: dx_mm,
                                 dy: dy_mm,
-                            },
+                            }),
                         }));
                     }
                     // v0.27 — Line drag tick. Translate both endpoints
@@ -1595,11 +1617,11 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                             library_path: self.address.library_path.clone(),
                             table: self.address.table.clone(),
                             row_id: self.address.row_id,
-                            msg: EditorMsg::FootprintSketchMoveLine {
+                            msg: EditorMsg::Footprint(FootprintEditorMsg::SketchMoveLine {
                                 id: line_id,
                                 dx: dx_mm,
                                 dy: dy_mm,
-                            },
+                            }),
                         }));
                     }
                     if drag.moved && drag.pad_idx != usize::MAX {
@@ -1609,11 +1631,11 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                             library_path: self.address.library_path.clone(),
                             table: self.address.table.clone(),
                             row_id: self.address.row_id,
-                            msg: EditorMsg::FootprintMovePad {
+                            msg: EditorMsg::Footprint(FootprintEditorMsg::MovePad {
                                 idx: drag.pad_idx,
                                 x_mm: new_x,
                                 y_mm: new_y,
-                            },
+                            }),
                         }));
                     }
                 }
@@ -1671,10 +1693,10 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     library_path: self.address.library_path.clone(),
                     table: self.address.table.clone(),
                     row_id: self.address.row_id,
-                    msg: EditorMsg::FootprintCursorAt {
+                    msg: EditorMsg::Footprint(FootprintEditorMsg::CursorAt {
                         x_mm: world.0,
                         y_mm: world.1,
-                    },
+                    }),
                 }));
             }
             // v0.27 — track the live modifier state so the press
@@ -1717,9 +1739,9 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     && let keyboard::Key::Character(c) = key.as_ref()
                 {
                     let cb_msg = match c {
-                        "x" | "X" => Some(EditorMsg::FootprintCutPad),
-                        "c" | "C" => Some(EditorMsg::FootprintCopyPad),
-                        "v" | "V" => Some(EditorMsg::FootprintPastePad),
+                        "x" | "X" => Some(EditorMsg::Footprint(FootprintEditorMsg::CutPad)),
+                        "c" | "C" => Some(EditorMsg::Footprint(FootprintEditorMsg::CopyPad)),
+                        "v" | "V" => Some(EditorMsg::Footprint(FootprintEditorMsg::PastePad)),
                         _ => None,
                     };
                     if let Some(msg) = cb_msg {
@@ -1751,7 +1773,9 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 library_path: self.address.library_path.clone(),
                                 table: self.address.table.clone(),
                                 row_id: self.address.row_id,
-                                msg: EditorMsg::FootprintActiveBarRotateSelection,
+                                msg: EditorMsg::Footprint(
+                                    FootprintEditorMsg::ActiveBarRotateSelection,
+                                ),
                             })
                             .and_capture(),
                         );
@@ -1765,7 +1789,9 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 library_path: self.address.library_path.clone(),
                                 table: self.address.table.clone(),
                                 row_id: self.address.row_id,
-                                msg: EditorMsg::FootprintActiveBarFlipSelection,
+                                msg: EditorMsg::Footprint(
+                                    FootprintEditorMsg::ActiveBarFlipSelection,
+                                ),
                             })
                             .and_capture(),
                         );
@@ -1808,12 +1834,16 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 match key {
                     keyboard::Key::Named(keyboard::key::Named::Backspace) => {
                         if has_open_buffer {
-                            return publish(EditorMsg::FootprintSketchPlacementInputBackspace);
+                            return publish(EditorMsg::Footprint(
+                                FootprintEditorMsg::SketchPlacementInputBackspace,
+                            ));
                         }
                     }
                     keyboard::Key::Named(keyboard::key::Named::Enter) => {
                         if has_open_buffer {
-                            return publish(EditorMsg::FootprintSketchPlacementInputEnter);
+                            return publish(EditorMsg::Footprint(
+                                FootprintEditorMsg::SketchPlacementInputEnter,
+                            ));
                         }
                     }
                     keyboard::Key::Named(keyboard::key::Named::Escape) => {
@@ -1823,14 +1853,18 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         // it's the more recent intent (the user
                         // armed it from the active bar).
                         if self.state.lasso_mode_active {
-                            return publish(EditorMsg::FootprintLassoCancel);
+                            return publish(EditorMsg::Footprint(FootprintEditorMsg::LassoCancel));
                         }
                         // v0.27 — Touching Line cancel via Esc.
                         if self.state.touching_line_active {
-                            return publish(EditorMsg::FootprintTouchingLineCancel);
+                            return publish(EditorMsg::Footprint(
+                                FootprintEditorMsg::TouchingLineCancel,
+                            ));
                         }
                         if has_open_buffer {
-                            return publish(EditorMsg::FootprintSketchPlacementInputEscape);
+                            return publish(EditorMsg::Footprint(
+                                FootprintEditorMsg::SketchPlacementInputEscape,
+                            ));
                         }
                     }
                     keyboard::Key::Named(keyboard::key::Named::Tab) => {
@@ -1852,7 +1886,9 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                             .map(|p| p.kind.is_tab_switchable())
                             .unwrap_or(false);
                         if switch_fields {
-                            return publish(EditorMsg::FootprintSketchPlacementInputTab);
+                            return publish(EditorMsg::Footprint(
+                                FootprintEditorMsg::SketchPlacementInputTab,
+                            ));
                         }
                         // No active dimension buffer — let Tab reach the
                         // global pre-placement-pause subscription.
@@ -1877,8 +1913,8 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                             .map(|k| k.allows_negative())
                                             .unwrap_or(false));
                                 if useful {
-                                    return publish(EditorMsg::FootprintSketchPlacementInputChar(
-                                        ch,
+                                    return publish(EditorMsg::Footprint(
+                                        FootprintEditorMsg::SketchPlacementInputChar(ch),
                                     ));
                                 }
                             }

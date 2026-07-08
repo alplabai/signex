@@ -1024,142 +1024,18 @@ fn view_footprint_canvas<'a>(
 /// no-op `Save` (the dispatcher discards on path-keyed lookup
 /// mismatch anyway).
 fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEdit {
-    let fp = match msg {
-        EditorMsg::FootprintAddPad { x_mm, y_mm } => FootprintEditorMsg::AddPad { x_mm, y_mm },
-        EditorMsg::FootprintAddHole { x_mm, y_mm } => FootprintEditorMsg::AddHole { x_mm, y_mm },
-        EditorMsg::FootprintAddText { x_mm, y_mm } => FootprintEditorMsg::AddText { x_mm, y_mm },
-        EditorMsg::FootprintAddTextFrame {
-            x_mm,
-            y_mm,
-            w_mm,
-            h_mm,
-        } => FootprintEditorMsg::AddTextFrame {
-            x_mm,
-            y_mm,
-            w_mm,
-            h_mm,
-        },
-        EditorMsg::FootprintTrackClick { x_mm, y_mm } => {
-            FootprintEditorMsg::TrackClick { x_mm, y_mm }
-        }
-        EditorMsg::FootprintTrackCancel => FootprintEditorMsg::TrackCancel,
-        EditorMsg::FootprintArcClick { x_mm, y_mm } => FootprintEditorMsg::ArcClick { x_mm, y_mm },
-        EditorMsg::FootprintArcCancel => FootprintEditorMsg::ArcCancel,
-        EditorMsg::FootprintPolygonClick { x_mm, y_mm } => {
-            FootprintEditorMsg::PolygonClick { x_mm, y_mm }
-        }
-        EditorMsg::FootprintPolygonCommit => FootprintEditorMsg::PolygonCommit,
-        EditorMsg::FootprintPolygonCancel => FootprintEditorMsg::PolygonCancel,
-        EditorMsg::FootprintSelectSilkF(sel) => FootprintEditorMsg::SelectSilkF(sel),
-        EditorMsg::FootprintDeleteSilkF => FootprintEditorMsg::DeleteSilkF,
-        EditorMsg::FootprintSketchPlacePoint { x_mm, y_mm } => {
-            FootprintEditorMsg::SketchPlacePoint { x_mm, y_mm }
-        }
-        EditorMsg::FootprintSketchToolClick {
-            x_mm,
-            y_mm,
-            snap_id,
-        } => FootprintEditorMsg::SketchToolClick {
-            x_mm,
-            y_mm,
-            snap_id,
-        },
-        EditorMsg::FootprintSketchToolEscape => FootprintEditorMsg::SketchToolEscape,
-        EditorMsg::FootprintSketchPlacementInputChar(c) => {
-            FootprintEditorMsg::SketchPlacementInputChar(c)
-        }
-        EditorMsg::FootprintSketchPlacementInputBackspace => {
-            FootprintEditorMsg::SketchPlacementInputBackspace
-        }
-        EditorMsg::FootprintSketchPlacementInputEnter => {
-            FootprintEditorMsg::SketchPlacementInputEnter
-        }
-        EditorMsg::FootprintSketchPlacementInputEscape => {
-            FootprintEditorMsg::SketchPlacementInputEscape
-        }
-        EditorMsg::FootprintSketchSelect { id, shift } => {
-            FootprintEditorMsg::SketchSelect { id, shift }
-        }
-        EditorMsg::FootprintSketchMovePoint { id, dx, dy } => {
-            FootprintEditorMsg::SketchMovePoint { id, dx, dy }
-        }
-        EditorMsg::FootprintSketchMoveLine { id, dx, dy } => {
-            FootprintEditorMsg::SketchMoveLine { id, dx, dy }
-        }
-        EditorMsg::FootprintSketchResizeRoundPad {
-            pad_idx,
-            diameter_mm,
-        } => FootprintEditorMsg::SketchResizeRoundPad {
-            pad_idx,
-            diameter_mm,
-        },
-        EditorMsg::FootprintSetSelectionMode2d(mode) => {
-            FootprintEditorMsg::SetSelectionMode2d(mode)
-        }
-        EditorMsg::FootprintSelectAllOnLayer => FootprintEditorMsg::SelectAllOnLayer,
-        EditorMsg::FootprintAddVia { x_mm, y_mm } => FootprintEditorMsg::AddVia { x_mm, y_mm },
-        EditorMsg::FootprintSelectOffGridPads => FootprintEditorMsg::SelectOffGridPads,
-        EditorMsg::FootprintRecomputeCourtyardOutline => {
-            FootprintEditorMsg::RecomputeCourtyardOutline
-        }
-        EditorMsg::FootprintLassoArm => FootprintEditorMsg::LassoArm,
-        EditorMsg::FootprintLassoAddVertex { x_mm, y_mm } => {
-            FootprintEditorMsg::LassoAddVertex { x_mm, y_mm }
-        }
-        EditorMsg::FootprintLassoCommit => FootprintEditorMsg::LassoCommit,
-        EditorMsg::FootprintLassoCancel => FootprintEditorMsg::LassoCancel,
-        EditorMsg::FootprintTouchingLineArm => FootprintEditorMsg::TouchingLineArm,
-        EditorMsg::FootprintTouchingLineFirst { x_mm, y_mm } => {
-            FootprintEditorMsg::TouchingLineFirst { x_mm, y_mm }
-        }
-        EditorMsg::FootprintTouchingLineCommit { x_mm, y_mm } => {
-            FootprintEditorMsg::TouchingLineCommit { x_mm, y_mm }
-        }
-        EditorMsg::FootprintTouchingLineCancel => FootprintEditorMsg::TouchingLineCancel,
-        EditorMsg::FootprintSelectOverlapped => FootprintEditorMsg::SelectOverlapped,
-        EditorMsg::FootprintSelectNextOverlapped => FootprintEditorMsg::SelectNextOverlapped,
-        EditorMsg::FootprintMovePad { idx, x_mm, y_mm } => {
-            FootprintEditorMsg::MovePad { idx, x_mm, y_mm }
-        }
-        EditorMsg::FootprintCursorAt { x_mm, y_mm } => FootprintEditorMsg::CursorAt { x_mm, y_mm },
-        EditorMsg::FootprintSelectPad(sel) => FootprintEditorMsg::SelectPad(sel),
-        EditorMsg::FootprintSelectPads(pads) => FootprintEditorMsg::SelectPads(pads),
-        EditorMsg::FootprintSketchSelectMany(ids) => FootprintEditorMsg::SketchSelectMany(ids),
-        EditorMsg::FootprintDeleteSelected => FootprintEditorMsg::DeleteSelected,
-        EditorMsg::FootprintToggleLayer(name) => FootprintEditorMsg::ToggleLayer(name),
-        EditorMsg::FootprintToggleAutoFit => FootprintEditorMsg::ToggleAutoFit,
-        EditorMsg::FootprintSetPadsTool(t) => FootprintEditorMsg::SetPadsTool(t),
-        EditorMsg::FootprintSketchSetTool(t) => FootprintEditorMsg::SketchSetTool(t),
-        EditorMsg::FootprintSketchToggleConstruction => {
-            FootprintEditorMsg::SketchToggleConstruction
-        }
-        EditorMsg::FootprintSketchToggleCenterline => FootprintEditorMsg::SketchToggleCenterline,
-        EditorMsg::FootprintTogglePlacementPause => FootprintEditorMsg::TogglePlacementPause,
-        EditorMsg::FootprintShowContextMenu { x, y, target } => {
-            FootprintEditorMsg::ShowContextMenu { x, y, target }
-        }
-        EditorMsg::FootprintCloseContextMenu => FootprintEditorMsg::CloseContextMenu,
-        EditorMsg::FootprintContextMenuOpenSubmenu(sm) => {
-            FootprintEditorMsg::ContextMenuOpenSubmenu(sm)
-        }
-        EditorMsg::FootprintContextMenuAction(act) => FootprintEditorMsg::ContextMenuAction(act),
-        EditorMsg::FootprintFitConsumed => FootprintEditorMsg::FitConsumed,
-        EditorMsg::FootprintCopyPad => FootprintEditorMsg::CopyPad,
-        EditorMsg::FootprintCutPad => FootprintEditorMsg::CutPad,
-        EditorMsg::FootprintPastePad => FootprintEditorMsg::PastePad,
-        EditorMsg::FootprintActiveBarRotateSelection => {
-            FootprintEditorMsg::ActiveBarRotateSelection
-        }
-        EditorMsg::FootprintActiveBarFlipSelection => FootprintEditorMsg::ActiveBarFlipSelection,
-        EditorMsg::FootprintSketchSetRole { id, role } => {
-            FootprintEditorMsg::SketchSetRole { id, role }
-        }
-        // Anything not emitted by the footprint canvas is dropped via
-        // a benign "save of the wrong tab" — the path-keyed dispatcher
+    match msg {
+        // Pre-existing quirk preserved: Tab during sketch placement input
+        // is emitted by the canvas but was never wired through to the
+        // standalone dispatcher, so it lands as a no-op Save. Kept as-is
+        // to keep this refactor behavior-neutral.
+        EditorMsg::Footprint(FootprintEditorMsg::SketchPlacementInputTab) => PrimitiveEdit::Save,
+        EditorMsg::Footprint(fp) => PrimitiveEdit::Footprint(fp),
+        // Anything not emitted by the footprint canvas is dropped via a
+        // benign "save of the wrong tab" — the path-keyed dispatcher
         // ignores mismatches.
-        _ => return PrimitiveEdit::Save,
-    };
-    PrimitiveEdit::Footprint(fp)
+        _ => PrimitiveEdit::Save,
+    }
 }
 
 fn view_footprint_footer<'a>(
