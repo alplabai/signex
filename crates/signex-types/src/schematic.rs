@@ -1025,3 +1025,84 @@ pub fn point_to_segment_dist(px: f64, py: f64, ax: f64, ay: f64, bx: f64, by: f6
     let proj_y = ay + t * dy;
     ((px - proj_x).powi(2) + (py - proj_y).powi(2)).sqrt()
 }
+
+#[cfg(test)]
+mod symbol_transform_tests {
+    use super::{Point, SymbolTransform};
+
+    fn xform(rotation_deg: f64, mirror_x: bool, mirror_y: bool) -> SymbolTransform {
+        SymbolTransform {
+            origin: Point::ZERO,
+            rotation_deg,
+            mirror_x,
+            mirror_y,
+        }
+    }
+
+    fn assert_pt(got: Point, ex: f64, ey: f64) {
+        assert!(
+            (got.x - ex).abs() < 1e-9 && (got.y - ey).abs() < 1e-9,
+            "expected ({ex}, {ey}), got ({}, {})",
+            got.x,
+            got.y
+        );
+    }
+
+    #[test]
+    fn identity_flips_library_y_up_to_schematic_y_down() {
+        // No rotation or mirror: the only change is the Y axis flip
+        // (library Y-up → schematic Y-down); X passes through.
+        let t = xform(0.0, false, false);
+        assert_pt(t.apply(Point::new(0.0, 10.0)), 0.0, -10.0);
+        assert_pt(t.apply(Point::new(10.0, 0.0)), 10.0, 0.0);
+    }
+
+    #[test]
+    fn origin_translates_the_result() {
+        let t = xform(0.0, false, false);
+        let t = SymbolTransform {
+            origin: Point::new(5.0, 5.0),
+            ..t
+        };
+        assert_pt(t.apply(Point::new(10.0, 0.0)), 15.0, 5.0);
+    }
+
+    #[test]
+    fn rotation_90_turns_the_axes() {
+        let t = xform(90.0, false, false);
+        assert_pt(t.apply(Point::new(10.0, 0.0)), 0.0, -10.0);
+        assert_pt(t.apply(Point::new(0.0, 10.0)), -10.0, 0.0);
+    }
+
+    #[test]
+    fn mirror_x_flips_the_y_output_mirror_y_flips_the_x() {
+        assert_pt(
+            xform(0.0, true, false).apply(Point::new(0.0, 10.0)),
+            0.0,
+            10.0,
+        );
+        assert_pt(
+            xform(0.0, false, true).apply(Point::new(10.0, 0.0)),
+            -10.0,
+            0.0,
+        );
+    }
+
+    #[test]
+    fn rotation_and_mirror_compose() {
+        // A 90°-rotated, X-mirrored symbol: a pin at (2.54, 0) projects to
+        // (0, 2.54) — the placement exercised by the netlist equivalence gate.
+        let t = xform(90.0, true, false);
+        assert_pt(t.apply(Point::new(2.54, 0.0)), 0.0, 2.54);
+    }
+
+    #[test]
+    fn apply_angle_folds_rotation_and_mirror() {
+        assert!((xform(0.0, false, false).apply_angle(90.0) - 90.0).abs() < 1e-9);
+        assert!((xform(90.0, false, false).apply_angle(0.0) - 90.0).abs() < 1e-9);
+        // mirror_x: r = -(rot + child) + 180.
+        assert!((xform(0.0, true, false).apply_angle(30.0) - 150.0).abs() < 1e-9);
+        // mirror_y: r = -(rot + child), wrapped into [0, 360).
+        assert!((xform(0.0, false, true).apply_angle(30.0) - 330.0).abs() < 1e-9);
+    }
+}

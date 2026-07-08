@@ -16,49 +16,10 @@
 use std::collections::{HashMap, HashSet};
 
 use signex_types::net::{Net, NetId, Netlist, Terminal};
-use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, Symbol};
+use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, SymbolTransform};
 use uuid::Uuid;
 
 use crate::uf::{Key, find as uf_find, union as uf_union};
-
-/// Projects a library symbol's local pin coordinates into world space,
-/// applying the placed instance's rotation and mirror. Kept in step with
-/// the ERC context's `SymbolTransform` so net membership is identical.
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct SymbolTransform {
-    origin: Point,
-    rotation_deg: f64,
-    mirror_x: bool,
-    mirror_y: bool,
-}
-
-impl SymbolTransform {
-    pub(crate) fn from_symbol(symbol: &Symbol) -> Self {
-        Self {
-            origin: symbol.position,
-            rotation_deg: symbol.rotation,
-            mirror_x: symbol.mirror_x,
-            mirror_y: symbol.mirror_y,
-        }
-    }
-
-    pub(crate) fn apply(&self, local: Point) -> Point {
-        let x = local.x;
-        let y = -local.y;
-        let rad = -self.rotation_deg.to_radians();
-        let cos = rad.cos();
-        let sin = rad.sin();
-        let mut rx = x * cos - y * sin;
-        let mut ry = x * sin + y * cos;
-        if self.mirror_y {
-            rx = -rx;
-        }
-        if self.mirror_x {
-            ry = -ry;
-        }
-        Point::new(rx + self.origin.x, ry + self.origin.y)
-    }
-}
 
 /// 1 µm integer bucket — the union-find key space and the single definition of
 /// "same point" for the whole derivation (D5.5). Matches ERC's `pt_key`.
@@ -493,7 +454,7 @@ pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
 mod tests {
     use super::*;
     use signex_types::schematic::{
-        Junction, Label, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Wire,
+        Junction, Label, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Symbol, Wire,
     };
     use std::collections::HashMap;
     use uuid::Uuid;
