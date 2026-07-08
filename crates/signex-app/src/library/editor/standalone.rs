@@ -26,8 +26,8 @@ use crate::library::editor::footprint::layers::FpLayer;
 use crate::library::editor::symbol::canvas::{self as sym_canvas, SymbolCanvas};
 use crate::library::editor::symbol::state as sym_state;
 use crate::library::messages::{
-    EditorMsg, GraphicHandleMsg, LibraryMessage, PrimitiveEditorMsg, SymbolRotatePivotMsg,
-    SymbolSelectionMsg,
+    EditorMsg, FootprintEditorMsg, GraphicHandleMsg, LibraryMessage, PrimitiveEdit,
+    SymbolEditorMsg, SymbolRotatePivotMsg, SymbolSelectionMsg,
 };
 use crate::library::state::LibraryDisplaySettings;
 use crate::panels::PanelContext;
@@ -113,7 +113,7 @@ fn view_symbol_status<'a>(
         .padding([2, 6])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
             path: path.clone(),
-            msg: PrimitiveEditorMsg::SymbolToggleGrid,
+            msg: PrimitiveEdit::Symbol(SymbolEditorMsg::ToggleGrid),
         })
         .style(symbol_tool_button_style(false, border));
 
@@ -123,7 +123,7 @@ fn view_symbol_status<'a>(
         .padding([2, 6])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
             path: path.clone(),
-            msg: PrimitiveEditorMsg::SymbolCycleGridSize,
+            msg: PrimitiveEdit::Symbol(SymbolEditorMsg::CycleGridSize),
         })
         .style(symbol_tool_button_style(false, border));
 
@@ -182,7 +182,7 @@ fn view_symbol_toolbar<'a>(
     let path = editor.path.clone();
 
     // Helper: create a small toolbar button that emits a PrimitiveEditorEvent.
-    let btn = |label: &'static str, msg: PrimitiveEditorMsg| {
+    let btn = |label: &'static str, msg: PrimitiveEdit| {
         button(text(label).size(11).color(text_c))
             .padding([4, 10])
             .on_press(LibraryMessage::PrimitiveEditorEvent {
@@ -199,15 +199,15 @@ fn view_symbol_toolbar<'a>(
 
     container(
         row![
-            btn("Fit", PrimitiveEditorMsg::SymbolFit),
+            btn("Fit", PrimitiveEdit::Symbol(SymbolEditorMsg::Fit)),
             Space::new().width(Length::Fill),
-            btn("\u{2190}", PrimitiveEditorMsg::SymbolPrevPart),
+            btn("\u{2190}", PrimitiveEdit::Symbol(SymbolEditorMsg::PrevPart)),
             text(format!("Part {active_part} / {max_part}"))
                 .size(11)
                 .color(text_c),
-            btn("\u{2192}", PrimitiveEditorMsg::SymbolNextPart),
+            btn("\u{2192}", PrimitiveEdit::Symbol(SymbolEditorMsg::NextPart)),
             Space::new().width(8),
-            btn(save_label, PrimitiveEditorMsg::Save),
+            btn(save_label, PrimitiveEdit::Save),
         ]
         .spacing(6)
         .align_y(iced::Alignment::Center),
@@ -266,49 +266,47 @@ fn view_symbol_canvas<'a>(
     let path = editor.path.clone();
     widget.map(move |action| LibraryMessage::PrimitiveEditorEvent {
         path: path.clone(),
-        msg: symbol_action_to_primitive_msg(action),
+        msg: PrimitiveEdit::Symbol(symbol_action_to_primitive_msg(action)),
     })
 }
 
-fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> PrimitiveEditorMsg {
+fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> SymbolEditorMsg {
     use sym_canvas::CanvasAction;
     match action {
-        CanvasAction::AddPin { x, y } => PrimitiveEditorMsg::SymbolAddPin { x, y },
-        CanvasAction::AddRectangle { x, y } => PrimitiveEditorMsg::SymbolAddRectangle { x, y },
+        CanvasAction::AddPin { x, y } => SymbolEditorMsg::AddPin { x, y },
+        CanvasAction::AddRectangle { x, y } => SymbolEditorMsg::AddRectangle { x, y },
         CanvasAction::AddLine {
             from_x,
             from_y,
             to_x,
             to_y,
-        } => PrimitiveEditorMsg::SymbolAddLine {
+        } => SymbolEditorMsg::AddLine {
             from_x,
             from_y,
             to_x,
             to_y,
         },
-        CanvasAction::AddCircle { cx, cy, radius } => {
-            PrimitiveEditorMsg::SymbolAddCircle { cx, cy, radius }
-        }
+        CanvasAction::AddCircle { cx, cy, radius } => SymbolEditorMsg::AddCircle { cx, cy, radius },
         CanvasAction::AddArc {
             cx,
             cy,
             radius,
             start_deg,
             end_deg,
-        } => PrimitiveEditorMsg::SymbolAddArc {
+        } => SymbolEditorMsg::AddArc {
             cx,
             cy,
             radius,
             start_deg,
             end_deg,
         },
-        CanvasAction::AddText { x, y } => PrimitiveEditorMsg::SymbolAddText { x, y },
-        CanvasAction::Select(sel) => PrimitiveEditorMsg::SymbolSelect(symbol_selection_to_msg(sel)),
-        CanvasAction::Deselect => PrimitiveEditorMsg::SymbolDeselect,
-        CanvasAction::Move { x, y } => PrimitiveEditorMsg::SymbolMoveSelected { x, y },
-        CanvasAction::MoveAll { dx, dy } => PrimitiveEditorMsg::SymbolMoveAll { dx, dy },
+        CanvasAction::AddText { x, y } => SymbolEditorMsg::AddText { x, y },
+        CanvasAction::Select(sel) => SymbolEditorMsg::Select(symbol_selection_to_msg(sel)),
+        CanvasAction::Deselect => SymbolEditorMsg::Deselect,
+        CanvasAction::Move { x, y } => SymbolEditorMsg::MoveSelected { x, y },
+        CanvasAction::MoveAll { dx, dy } => SymbolEditorMsg::MoveAll { dx, dy },
         CanvasAction::MoveGraphicHandle { idx, handle, x, y } => {
-            PrimitiveEditorMsg::SymbolMoveGraphicHandle {
+            SymbolEditorMsg::MoveGraphicHandle {
                 idx,
                 handle: graphic_handle_to_msg(handle),
                 x,
@@ -318,18 +316,18 @@ fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> Primitive
         CanvasAction::RotateSelected {
             clockwise,
             pivot_mode,
-        } => PrimitiveEditorMsg::SymbolRotateSelected {
+        } => SymbolEditorMsg::RotateSelected {
             clockwise,
             pivot: rotate_pivot_to_msg(pivot_mode),
         },
-        CanvasAction::DeleteSelected => PrimitiveEditorMsg::SymbolDeleteSelected,
-        CanvasAction::Pan { dx, dy } => PrimitiveEditorMsg::SymbolPan { dx, dy },
-        CanvasAction::Zoom { sx, sy, delta } => PrimitiveEditorMsg::SymbolZoom { sx, sy, delta },
-        CanvasAction::Fit => PrimitiveEditorMsg::SymbolFit,
-        CanvasAction::CursorAt { x_mm, y_mm } => PrimitiveEditorMsg::SymbolCursorAt { x_mm, y_mm },
-        CanvasAction::DragCommit => PrimitiveEditorMsg::SymbolDragCommit,
-        CanvasAction::Undo => PrimitiveEditorMsg::SymbolUndo,
-        CanvasAction::Redo => PrimitiveEditorMsg::SymbolRedo,
+        CanvasAction::DeleteSelected => SymbolEditorMsg::DeleteSelected,
+        CanvasAction::Pan { dx, dy } => SymbolEditorMsg::Pan { dx, dy },
+        CanvasAction::Zoom { sx, sy, delta } => SymbolEditorMsg::Zoom { sx, sy, delta },
+        CanvasAction::Fit => SymbolEditorMsg::Fit,
+        CanvasAction::CursorAt { x_mm, y_mm } => SymbolEditorMsg::CursorAt { x_mm, y_mm },
+        CanvasAction::DragCommit => SymbolEditorMsg::DragCommit,
+        CanvasAction::Undo => SymbolEditorMsg::Undo,
+        CanvasAction::Redo => SymbolEditorMsg::Redo,
     }
 }
 
@@ -495,7 +493,7 @@ fn view_footprint_top_strip<'a>(
             .padding([5, 14])
             .on_press(LibraryMessage::PrimitiveEditorEvent {
                 path,
-                msg: PrimitiveEditorMsg::FootprintSetMode(target),
+                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SetMode(target)),
             })
             .style(move |_: &Theme, _| iced::widget::button::Style {
                 background: if active {
@@ -543,7 +541,7 @@ fn view_footprint_top_strip<'a>(
     .padding([5, 12])
     .on_press(LibraryMessage::PrimitiveEditorEvent {
         path: save_path,
-        msg: PrimitiveEditorMsg::Save,
+        msg: PrimitiveEdit::Save,
     })
     .style(move |_: &Theme, _| iced::widget::button::Style {
         background: Some(iced::Background::Color(iced::Color::from_rgba(
@@ -568,7 +566,7 @@ fn view_footprint_top_strip<'a>(
         .padding([5, 12])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
             path: auto_fit_path,
-            msg: PrimitiveEditorMsg::FootprintToggleAutoFit,
+            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::ToggleAutoFit),
         })
         .style(move |_: &Theme, _| iced::widget::button::Style {
             background: Some(iced::Background::Color(iced::Color::from_rgba(
@@ -648,7 +646,7 @@ fn view_footprint_layers_strip<'a>(
         .padding([3, 7])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
             path: toggle_path,
-            msg: PrimitiveEditorMsg::FootprintToggleLayer(layer_standard),
+            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::ToggleLayer(layer_standard)),
         })
         .style(move |_: &Theme, _| iced::widget::button::Style {
             background: if on {
@@ -711,7 +709,7 @@ fn view_footprint_sketch_toolbar<'a>(
     .padding([4, 10])
     .on_press(LibraryMessage::PrimitiveEditorEvent {
         path: exit_path,
-        msg: PrimitiveEditorMsg::FootprintSetMode(EditorMode::Normal),
+        msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SetMode(EditorMode::Normal)),
     })
     .style(move |_: &Theme, _| iced::widget::button::Style {
         background: Some(iced::Background::Color(iced::Color::from_rgba(
@@ -734,7 +732,7 @@ fn view_footprint_sketch_toolbar<'a>(
     .padding([4, 10])
     .on_press(LibraryMessage::PrimitiveEditorEvent {
         path: save_path,
-        msg: PrimitiveEditorMsg::Save,
+        msg: PrimitiveEdit::Save,
     })
     .style(move |_: &Theme, _| iced::widget::button::Style {
         background: Some(iced::Background::Color(iced::Color::from_rgba(
@@ -810,7 +808,7 @@ fn view_footprint_toolbar<'a>(
         .padding([3, 8])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
             path: toggle_path,
-            msg: PrimitiveEditorMsg::FootprintToggleLayer(layer_standard),
+            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::ToggleLayer(layer_standard)),
         })
         .style(move |_: &Theme, _| iced::widget::button::Style {
             background: if on {
@@ -846,7 +844,7 @@ fn view_footprint_toolbar<'a>(
         .padding([3, 8])
         .on_press(LibraryMessage::PrimitiveEditorEvent {
             path: auto_fit_path,
-            msg: PrimitiveEditorMsg::FootprintToggleAutoFit,
+            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::ToggleAutoFit),
         })
         .style(move |_: &Theme, _| iced::widget::button::Style {
             background: Some(iced::Background::Color(iced::Color::from_rgba(
@@ -869,7 +867,7 @@ fn view_footprint_toolbar<'a>(
     .padding([3, 8])
     .on_press(LibraryMessage::PrimitiveEditorEvent {
         path: save_path,
-        msg: PrimitiveEditorMsg::Save,
+        msg: PrimitiveEdit::Save,
     })
     .style(move |_: &Theme, _| iced::widget::button::Style {
         background: Some(iced::Background::Color(iced::Color::from_rgba(
@@ -896,7 +894,7 @@ fn view_footprint_toolbar<'a>(
             .padding([3, 8])
             .on_press(LibraryMessage::PrimitiveEditorEvent {
                 path,
-                msg: PrimitiveEditorMsg::FootprintSetMode(target),
+                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SetMode(target)),
             })
             .style(move |_: &Theme, _| iced::widget::button::Style {
                 background: if active {
@@ -1025,166 +1023,143 @@ fn view_footprint_canvas<'a>(
 /// ever produced here — non-footprint variants fall through to a
 /// no-op `Save` (the dispatcher discards on path-keyed lookup
 /// mismatch anyway).
-fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEditorMsg {
-    match msg {
-        EditorMsg::FootprintAddPad { x_mm, y_mm } => {
-            PrimitiveEditorMsg::FootprintAddPad { x_mm, y_mm }
-        }
-        EditorMsg::FootprintAddHole { x_mm, y_mm } => {
-            PrimitiveEditorMsg::FootprintAddHole { x_mm, y_mm }
-        }
-        EditorMsg::FootprintAddText { x_mm, y_mm } => {
-            PrimitiveEditorMsg::FootprintAddText { x_mm, y_mm }
-        }
+fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEdit {
+    let fp = match msg {
+        EditorMsg::FootprintAddPad { x_mm, y_mm } => FootprintEditorMsg::AddPad { x_mm, y_mm },
+        EditorMsg::FootprintAddHole { x_mm, y_mm } => FootprintEditorMsg::AddHole { x_mm, y_mm },
+        EditorMsg::FootprintAddText { x_mm, y_mm } => FootprintEditorMsg::AddText { x_mm, y_mm },
         EditorMsg::FootprintAddTextFrame {
             x_mm,
             y_mm,
             w_mm,
             h_mm,
-        } => PrimitiveEditorMsg::FootprintAddTextFrame {
+        } => FootprintEditorMsg::AddTextFrame {
             x_mm,
             y_mm,
             w_mm,
             h_mm,
         },
         EditorMsg::FootprintTrackClick { x_mm, y_mm } => {
-            PrimitiveEditorMsg::FootprintTrackClick { x_mm, y_mm }
+            FootprintEditorMsg::TrackClick { x_mm, y_mm }
         }
-        EditorMsg::FootprintTrackCancel => PrimitiveEditorMsg::FootprintTrackCancel,
-        EditorMsg::FootprintArcClick { x_mm, y_mm } => {
-            PrimitiveEditorMsg::FootprintArcClick { x_mm, y_mm }
-        }
-        EditorMsg::FootprintArcCancel => PrimitiveEditorMsg::FootprintArcCancel,
+        EditorMsg::FootprintTrackCancel => FootprintEditorMsg::TrackCancel,
+        EditorMsg::FootprintArcClick { x_mm, y_mm } => FootprintEditorMsg::ArcClick { x_mm, y_mm },
+        EditorMsg::FootprintArcCancel => FootprintEditorMsg::ArcCancel,
         EditorMsg::FootprintPolygonClick { x_mm, y_mm } => {
-            PrimitiveEditorMsg::FootprintPolygonClick { x_mm, y_mm }
+            FootprintEditorMsg::PolygonClick { x_mm, y_mm }
         }
-        EditorMsg::FootprintPolygonCommit => PrimitiveEditorMsg::FootprintPolygonCommit,
-        EditorMsg::FootprintPolygonCancel => PrimitiveEditorMsg::FootprintPolygonCancel,
-        EditorMsg::FootprintSelectSilkF(sel) => PrimitiveEditorMsg::FootprintSelectSilkF(sel),
-        EditorMsg::FootprintDeleteSilkF => PrimitiveEditorMsg::FootprintDeleteSilkF,
+        EditorMsg::FootprintPolygonCommit => FootprintEditorMsg::PolygonCommit,
+        EditorMsg::FootprintPolygonCancel => FootprintEditorMsg::PolygonCancel,
+        EditorMsg::FootprintSelectSilkF(sel) => FootprintEditorMsg::SelectSilkF(sel),
+        EditorMsg::FootprintDeleteSilkF => FootprintEditorMsg::DeleteSilkF,
         EditorMsg::FootprintSketchPlacePoint { x_mm, y_mm } => {
-            PrimitiveEditorMsg::FootprintSketchPlacePoint { x_mm, y_mm }
+            FootprintEditorMsg::SketchPlacePoint { x_mm, y_mm }
         }
         EditorMsg::FootprintSketchToolClick {
             x_mm,
             y_mm,
             snap_id,
-        } => PrimitiveEditorMsg::FootprintSketchToolClick {
+        } => FootprintEditorMsg::SketchToolClick {
             x_mm,
             y_mm,
             snap_id,
         },
-        EditorMsg::FootprintSketchToolEscape => PrimitiveEditorMsg::FootprintSketchToolEscape,
+        EditorMsg::FootprintSketchToolEscape => FootprintEditorMsg::SketchToolEscape,
         EditorMsg::FootprintSketchPlacementInputChar(c) => {
-            PrimitiveEditorMsg::FootprintSketchPlacementInputChar(c)
+            FootprintEditorMsg::SketchPlacementInputChar(c)
         }
         EditorMsg::FootprintSketchPlacementInputBackspace => {
-            PrimitiveEditorMsg::FootprintSketchPlacementInputBackspace
+            FootprintEditorMsg::SketchPlacementInputBackspace
         }
         EditorMsg::FootprintSketchPlacementInputEnter => {
-            PrimitiveEditorMsg::FootprintSketchPlacementInputEnter
+            FootprintEditorMsg::SketchPlacementInputEnter
         }
         EditorMsg::FootprintSketchPlacementInputEscape => {
-            PrimitiveEditorMsg::FootprintSketchPlacementInputEscape
+            FootprintEditorMsg::SketchPlacementInputEscape
         }
         EditorMsg::FootprintSketchSelect { id, shift } => {
-            PrimitiveEditorMsg::FootprintSketchSelect { id, shift }
+            FootprintEditorMsg::SketchSelect { id, shift }
         }
         EditorMsg::FootprintSketchMovePoint { id, dx, dy } => {
-            PrimitiveEditorMsg::FootprintSketchMovePoint { id, dx, dy }
+            FootprintEditorMsg::SketchMovePoint { id, dx, dy }
         }
         EditorMsg::FootprintSketchMoveLine { id, dx, dy } => {
-            PrimitiveEditorMsg::FootprintSketchMoveLine { id, dx, dy }
+            FootprintEditorMsg::SketchMoveLine { id, dx, dy }
         }
         EditorMsg::FootprintSketchResizeRoundPad {
             pad_idx,
             diameter_mm,
-        } => PrimitiveEditorMsg::FootprintSketchResizeRoundPad {
+        } => FootprintEditorMsg::SketchResizeRoundPad {
             pad_idx,
             diameter_mm,
         },
         EditorMsg::FootprintSetSelectionMode2d(mode) => {
-            PrimitiveEditorMsg::FootprintSetSelectionMode2d(mode)
+            FootprintEditorMsg::SetSelectionMode2d(mode)
         }
-        EditorMsg::FootprintSelectAllOnLayer => PrimitiveEditorMsg::FootprintSelectAllOnLayer,
-        EditorMsg::FootprintAddVia { x_mm, y_mm } => {
-            PrimitiveEditorMsg::FootprintAddVia { x_mm, y_mm }
-        }
-        EditorMsg::FootprintSelectOffGridPads => PrimitiveEditorMsg::FootprintSelectOffGridPads,
+        EditorMsg::FootprintSelectAllOnLayer => FootprintEditorMsg::SelectAllOnLayer,
+        EditorMsg::FootprintAddVia { x_mm, y_mm } => FootprintEditorMsg::AddVia { x_mm, y_mm },
+        EditorMsg::FootprintSelectOffGridPads => FootprintEditorMsg::SelectOffGridPads,
         EditorMsg::FootprintRecomputeCourtyardOutline => {
-            PrimitiveEditorMsg::FootprintRecomputeCourtyardOutline
+            FootprintEditorMsg::RecomputeCourtyardOutline
         }
-        EditorMsg::FootprintLassoArm => PrimitiveEditorMsg::FootprintLassoArm,
+        EditorMsg::FootprintLassoArm => FootprintEditorMsg::LassoArm,
         EditorMsg::FootprintLassoAddVertex { x_mm, y_mm } => {
-            PrimitiveEditorMsg::FootprintLassoAddVertex { x_mm, y_mm }
+            FootprintEditorMsg::LassoAddVertex { x_mm, y_mm }
         }
-        EditorMsg::FootprintLassoCommit => PrimitiveEditorMsg::FootprintLassoCommit,
-        EditorMsg::FootprintLassoCancel => PrimitiveEditorMsg::FootprintLassoCancel,
-        EditorMsg::FootprintTouchingLineArm => PrimitiveEditorMsg::FootprintTouchingLineArm,
+        EditorMsg::FootprintLassoCommit => FootprintEditorMsg::LassoCommit,
+        EditorMsg::FootprintLassoCancel => FootprintEditorMsg::LassoCancel,
+        EditorMsg::FootprintTouchingLineArm => FootprintEditorMsg::TouchingLineArm,
         EditorMsg::FootprintTouchingLineFirst { x_mm, y_mm } => {
-            PrimitiveEditorMsg::FootprintTouchingLineFirst { x_mm, y_mm }
+            FootprintEditorMsg::TouchingLineFirst { x_mm, y_mm }
         }
         EditorMsg::FootprintTouchingLineCommit { x_mm, y_mm } => {
-            PrimitiveEditorMsg::FootprintTouchingLineCommit { x_mm, y_mm }
+            FootprintEditorMsg::TouchingLineCommit { x_mm, y_mm }
         }
-        EditorMsg::FootprintTouchingLineCancel => PrimitiveEditorMsg::FootprintTouchingLineCancel,
-        EditorMsg::FootprintSelectOverlapped => PrimitiveEditorMsg::FootprintSelectOverlapped,
-        EditorMsg::FootprintSelectNextOverlapped => {
-            PrimitiveEditorMsg::FootprintSelectNextOverlapped
-        }
+        EditorMsg::FootprintTouchingLineCancel => FootprintEditorMsg::TouchingLineCancel,
+        EditorMsg::FootprintSelectOverlapped => FootprintEditorMsg::SelectOverlapped,
+        EditorMsg::FootprintSelectNextOverlapped => FootprintEditorMsg::SelectNextOverlapped,
         EditorMsg::FootprintMovePad { idx, x_mm, y_mm } => {
-            PrimitiveEditorMsg::FootprintMovePad { idx, x_mm, y_mm }
+            FootprintEditorMsg::MovePad { idx, x_mm, y_mm }
         }
-        EditorMsg::FootprintCursorAt { x_mm, y_mm } => {
-            PrimitiveEditorMsg::FootprintCursorAt { x_mm, y_mm }
-        }
-        EditorMsg::FootprintSelectPad(sel) => PrimitiveEditorMsg::FootprintSelectPad(sel),
-        EditorMsg::FootprintSelectPads(pads) => PrimitiveEditorMsg::FootprintSelectPads(pads),
-        EditorMsg::FootprintSketchSelectMany(ids) => {
-            PrimitiveEditorMsg::FootprintSketchSelectMany(ids)
-        }
-        EditorMsg::FootprintDeleteSelected => PrimitiveEditorMsg::FootprintDeleteSelected,
-        EditorMsg::FootprintToggleLayer(name) => PrimitiveEditorMsg::FootprintToggleLayer(name),
-        EditorMsg::FootprintToggleAutoFit => PrimitiveEditorMsg::FootprintToggleAutoFit,
-        EditorMsg::FootprintSetPadsTool(t) => PrimitiveEditorMsg::FootprintSetPadsTool(t),
-        EditorMsg::FootprintSketchSetTool(t) => PrimitiveEditorMsg::FootprintSketchSetTool(t),
+        EditorMsg::FootprintCursorAt { x_mm, y_mm } => FootprintEditorMsg::CursorAt { x_mm, y_mm },
+        EditorMsg::FootprintSelectPad(sel) => FootprintEditorMsg::SelectPad(sel),
+        EditorMsg::FootprintSelectPads(pads) => FootprintEditorMsg::SelectPads(pads),
+        EditorMsg::FootprintSketchSelectMany(ids) => FootprintEditorMsg::SketchSelectMany(ids),
+        EditorMsg::FootprintDeleteSelected => FootprintEditorMsg::DeleteSelected,
+        EditorMsg::FootprintToggleLayer(name) => FootprintEditorMsg::ToggleLayer(name),
+        EditorMsg::FootprintToggleAutoFit => FootprintEditorMsg::ToggleAutoFit,
+        EditorMsg::FootprintSetPadsTool(t) => FootprintEditorMsg::SetPadsTool(t),
+        EditorMsg::FootprintSketchSetTool(t) => FootprintEditorMsg::SketchSetTool(t),
         EditorMsg::FootprintSketchToggleConstruction => {
-            PrimitiveEditorMsg::FootprintSketchToggleConstruction
+            FootprintEditorMsg::SketchToggleConstruction
         }
-        EditorMsg::FootprintSketchToggleCenterline => {
-            PrimitiveEditorMsg::FootprintSketchToggleCenterline
-        }
-        EditorMsg::FootprintTogglePlacementPause => {
-            PrimitiveEditorMsg::FootprintTogglePlacementPause
-        }
+        EditorMsg::FootprintSketchToggleCenterline => FootprintEditorMsg::SketchToggleCenterline,
+        EditorMsg::FootprintTogglePlacementPause => FootprintEditorMsg::TogglePlacementPause,
         EditorMsg::FootprintShowContextMenu { x, y, target } => {
-            PrimitiveEditorMsg::FootprintShowContextMenu { x, y, target }
+            FootprintEditorMsg::ShowContextMenu { x, y, target }
         }
-        EditorMsg::FootprintCloseContextMenu => PrimitiveEditorMsg::FootprintCloseContextMenu,
+        EditorMsg::FootprintCloseContextMenu => FootprintEditorMsg::CloseContextMenu,
         EditorMsg::FootprintContextMenuOpenSubmenu(sm) => {
-            PrimitiveEditorMsg::FootprintContextMenuOpenSubmenu(sm)
+            FootprintEditorMsg::ContextMenuOpenSubmenu(sm)
         }
-        EditorMsg::FootprintContextMenuAction(act) => {
-            PrimitiveEditorMsg::FootprintContextMenuAction(act)
-        }
-        EditorMsg::FootprintFitConsumed => PrimitiveEditorMsg::FootprintFitConsumed,
-        EditorMsg::FootprintCopyPad => PrimitiveEditorMsg::FootprintCopyPad,
-        EditorMsg::FootprintCutPad => PrimitiveEditorMsg::FootprintCutPad,
-        EditorMsg::FootprintPastePad => PrimitiveEditorMsg::FootprintPastePad,
+        EditorMsg::FootprintContextMenuAction(act) => FootprintEditorMsg::ContextMenuAction(act),
+        EditorMsg::FootprintFitConsumed => FootprintEditorMsg::FitConsumed,
+        EditorMsg::FootprintCopyPad => FootprintEditorMsg::CopyPad,
+        EditorMsg::FootprintCutPad => FootprintEditorMsg::CutPad,
+        EditorMsg::FootprintPastePad => FootprintEditorMsg::PastePad,
         EditorMsg::FootprintActiveBarRotateSelection => {
-            PrimitiveEditorMsg::FootprintActiveBarRotateSelection
+            FootprintEditorMsg::ActiveBarRotateSelection
         }
-        EditorMsg::FootprintActiveBarFlipSelection => {
-            PrimitiveEditorMsg::FootprintActiveBarFlipSelection
-        }
+        EditorMsg::FootprintActiveBarFlipSelection => FootprintEditorMsg::ActiveBarFlipSelection,
         EditorMsg::FootprintSketchSetRole { id, role } => {
-            PrimitiveEditorMsg::FootprintSketchSetRole { id, role }
+            FootprintEditorMsg::SketchSetRole { id, role }
         }
         // Anything not emitted by the footprint canvas is dropped via
         // a benign "save of the wrong tab" — the path-keyed dispatcher
         // ignores mismatches.
-        _ => PrimitiveEditorMsg::Save,
-    }
+        _ => return PrimitiveEdit::Save,
+    };
+    PrimitiveEdit::Footprint(fp)
 }
 
 fn view_footprint_footer<'a>(

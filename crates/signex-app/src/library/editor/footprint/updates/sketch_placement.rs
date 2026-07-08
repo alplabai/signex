@@ -3,11 +3,11 @@
 //! Carved out of the monolithic `sketch::apply` (ADR-0001 D1/D2). Arm
 //! bodies are moved verbatim; each keeps its own inner `use`s.
 
-use crate::library::messages::PrimitiveEditorMsg;
+use crate::library::messages::FootprintEditorMsg;
 
-pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: PrimitiveEditorMsg) {
+pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: FootprintEditorMsg) {
     match msg {
-        PrimitiveEditorMsg::FootprintSketchPlacementInputChar(ch) => {
+        FootprintEditorMsg::SketchPlacementInputChar(ch) => {
             // v0.24 Track D — append `ch` to `placement_input.buffer`,
             // minting a fresh entry against the active tool's matching
             // `PlacementInputKind` if one isn't already pinned. Drops
@@ -61,7 +61,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             entry.buffer.push(ch);
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::FootprintSketchPlacementInputBackspace => {
+        FootprintEditorMsg::SketchPlacementInputBackspace => {
             // v0.24 Track D — pop one character; clear `placement_input`
             // entirely once the buffer empties so the next typed digit
             // mints a fresh entry against the (possibly different)
@@ -74,13 +74,13 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                 editor.canvas_cache.clear();
             }
         }
-        PrimitiveEditorMsg::FootprintSketchPlacementInputEnter => {
+        FootprintEditorMsg::SketchPlacementInputEnter => {
             // v0.24 Track D — Enter is a no-op on state. The buffer
             // stays alive so the next click consumes it. The message
             // is captured at the canvas layer purely so the keypress
             // doesn't fall through to a global shortcut.
         }
-        PrimitiveEditorMsg::FootprintSketchPlacementInputEscape => {
+        FootprintEditorMsg::SketchPlacementInputEscape => {
             // v0.24 Track D — Esc throws away the buffer immediately;
             // the next click commits at the cursor position with no
             // override. Tool pending state is left intact so the
@@ -96,7 +96,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                 editor.canvas_cache.clear();
             }
         }
-        PrimitiveEditorMsg::FootprintSketchPlacementInputTab => {
+        FootprintEditorMsg::SketchPlacementInputTab => {
             // v0.14-footprint — cycle the focused dimension field to the
             // next one in the active tool's Tab order (Line len→angle,
             // Rectangle w→h, Rounded-Rect w→h→radius→w…). The focused

@@ -35,7 +35,9 @@ use signex_widgets::theme_ext;
 use crate::app::FootprintEditorState;
 use crate::icons;
 use crate::library::editor::footprint::state::SketchTool;
-use crate::library::messages::{LibraryMessage, PrimitiveEditorMsg, SketchConstraintTag};
+use crate::library::messages::{
+    FootprintEditorMsg, LibraryMessage, PrimitiveEdit, SketchConstraintTag,
+};
 
 /// Build the Active Bar items for the given editor state. Theme is
 /// pulled from `editor.path` → `themes::current_id()` lookup at the
@@ -58,7 +60,7 @@ pub fn items<'a>(
                 selected: active_tool == tool,
                 on_press: Some(LibraryMessage::PrimitiveEditorEvent {
                     path: p,
-                    msg: PrimitiveEditorMsg::FootprintSketchSetTool(tool),
+                    msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchSetTool(tool)),
                 }),
                 ..ActiveBarButton::default()
             })
@@ -88,7 +90,9 @@ pub fn items<'a>(
             selected: false,
             on_press: Some(LibraryMessage::PrimitiveEditorEvent {
                 path: p,
-                msg: PrimitiveEditorMsg::FootprintSketchAddConstraintForSelection(tag),
+                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchAddConstraintForSelection(
+                    tag,
+                )),
             }),
             ..ActiveBarButton::default()
         }))
@@ -115,19 +119,19 @@ pub fn items<'a>(
         (
             "\u{2501}",
             "Linetype: Centerline (click → Normal)".to_string(),
-            PrimitiveEditorMsg::FootprintSketchToggleCenterline,
+            FootprintEditorMsg::SketchToggleCenterline,
         )
     } else if construction_on {
         (
             "\u{2504}",
             "Linetype: Construction (click → Centerline)".to_string(),
-            PrimitiveEditorMsg::FootprintSketchToggleCenterline,
+            FootprintEditorMsg::SketchToggleCenterline,
         )
     } else {
         (
             "\u{2501}\u{0307}", // ━̇ — solid line with overdot hint
             "Linetype: Normal (click → Construction)".to_string(),
-            PrimitiveEditorMsg::FootprintSketchToggleConstruction,
+            FootprintEditorMsg::SketchToggleConstruction,
         )
     };
     let linetype_button = ActiveBarItem::Button(ActiveBarButton {
@@ -137,7 +141,7 @@ pub fn items<'a>(
         selected: construction_on || centerline_on,
         on_press: Some(LibraryMessage::PrimitiveEditorEvent {
             path: linetype_path,
-            msg: linetype_msg,
+            msg: PrimitiveEdit::Footprint(linetype_msg),
         }),
         ..ActiveBarButton::default()
     });
@@ -205,7 +209,7 @@ pub fn items<'a>(
         on_press: if make_pad_enabled {
             Some(LibraryMessage::PrimitiveEditorEvent {
                 path: make_pad_path,
-                msg: PrimitiveEditorMsg::FootprintSketchMakePadFromProfile,
+                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchMakePadFromProfile),
             })
         } else {
             None
@@ -608,7 +612,7 @@ fn build_dimension_input<'a>(
         })
         .on_input(move |s| LibraryMessage::PrimitiveEditorEvent {
             path: path.clone(),
-            msg: PrimitiveEditorMsg::FootprintSketchDimensionInput(s),
+            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchDimensionInput(s)),
         });
 
     container(

@@ -395,7 +395,7 @@ pub struct CourtyardRect {
 }
 
 /// v0.14 — active-bar Align / Distribute / Spacing operations. Carried
-/// by [`crate::library::messages::PrimitiveEditorMsg::FootprintAlignPads`].
+/// by [`crate::library::messages::FootprintEditorMsg::AlignPads`].
 /// Pure data — the geometry lives in the dispatcher's `align_pads`
 /// helper. Align variants act on ≥2 selected pads; the two Distribute
 /// variants need ≥3.

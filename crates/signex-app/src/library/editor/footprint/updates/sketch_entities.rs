@@ -4,11 +4,11 @@
 //! bodies are moved verbatim; each keeps its own inner `use`s.
 
 use crate::library::editor::footprint::state::FootprintEditorState as CanvasState;
-use crate::library::messages::PrimitiveEditorMsg;
+use crate::library::messages::FootprintEditorMsg;
 
-pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: PrimitiveEditorMsg) {
+pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: FootprintEditorMsg) {
     match msg {
-        PrimitiveEditorMsg::FootprintSketchPlacePoint { x_mm, y_mm } => {
+        FootprintEditorMsg::SketchPlacePoint { x_mm, y_mm } => {
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
             use signex_sketch::entity::{Entity, EntityKind};
@@ -40,7 +40,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             editor.canvas_cache.clear();
             editor.dirty = true;
         }
-        PrimitiveEditorMsg::FootprintSketchMovePoint { id, dx, dy } => {
+        FootprintEditorMsg::SketchMovePoint { id, dx, dy } => {
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
             editor.with_parts(|state, primitive| {
@@ -233,7 +233,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             editor.canvas_cache.clear();
             editor.dirty = true;
         }
-        PrimitiveEditorMsg::FootprintSketchMoveLine { id, dx, dy } => {
+        FootprintEditorMsg::SketchMoveLine { id, dx, dy } => {
             // v0.27 — drag a Line edge by translating both its
             // endpoints in one solver pass. The dispatcher reads
             // the Line's start/end IDs, then emits MovePoint for
@@ -623,7 +623,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             editor.canvas_cache.clear();
             editor.dirty = true;
         }
-        PrimitiveEditorMsg::FootprintSketchResizeRoundPad {
+        FootprintEditorMsg::SketchResizeRoundPad {
             pad_idx,
             diameter_mm,
         } => {

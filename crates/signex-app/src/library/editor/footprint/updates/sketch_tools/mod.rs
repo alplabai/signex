@@ -9,7 +9,7 @@ mod draw;
 mod edit;
 mod transform;
 
-use crate::library::messages::PrimitiveEditorMsg;
+use crate::library::messages::FootprintEditorMsg;
 use signex_sketch::entity::Entity;
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::plane::PlaneId;
@@ -35,9 +35,9 @@ impl ToolClickCtx {
     }
 }
 
-pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: PrimitiveEditorMsg) {
+pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: FootprintEditorMsg) {
     match msg {
-        PrimitiveEditorMsg::FootprintSketchToolClick {
+        FootprintEditorMsg::SketchToolClick {
             x_mm,
             y_mm,
             snap_id,

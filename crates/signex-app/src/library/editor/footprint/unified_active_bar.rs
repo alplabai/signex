@@ -15,7 +15,7 @@ use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 use crate::app::FootprintEditorState;
 use crate::icons as ic;
 use crate::library::editor::footprint::state::{EditorMode, FpActiveBarMenu};
-use crate::library::messages::{LibraryMessage, PrimitiveEditorMsg};
+use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 
 // v0.26-H — layout constants for per-button dropdown positioning.
 // MUST stay in sync with `signex_widgets::active_bar` (BTN_SIZE,
@@ -182,7 +182,7 @@ pub fn dropdown_overlay<'a>(
     )
     .on_press(LibraryMessage::PrimitiveEditorEvent {
         path: editor.path.clone(),
-        msg: PrimitiveEditorMsg::FootprintCloseActiveBarMenu,
+        msg: PrimitiveEdit::Footprint(FootprintEditorMsg::CloseActiveBarMenu),
     });
 
     Some(Stack::new().push(backstop).push(panel_anchor).into())
@@ -203,15 +203,17 @@ fn dropdown_trigger_items(
     let dual = |label: &str,
                 icon: ActiveBarIcon,
                 menu: FpActiveBarMenu,
-                left: Option<PrimitiveEditorMsg>|
+                left: Option<FootprintEditorMsg>|
      -> ActiveBarItem<LibraryMessage> {
         let on_press = Some(LibraryMessage::PrimitiveEditorEvent {
             path: path.clone(),
-            msg: left.unwrap_or(PrimitiveEditorMsg::FootprintToggleActiveBarMenu(menu)),
+            msg: PrimitiveEdit::Footprint(
+                left.unwrap_or(FootprintEditorMsg::ToggleActiveBarMenu(menu)),
+            ),
         });
         let on_right_press = Some(LibraryMessage::PrimitiveEditorEvent {
             path: path.clone(),
-            msg: PrimitiveEditorMsg::FootprintToggleActiveBarMenu(menu),
+            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::ToggleActiveBarMenu(menu)),
         });
         ActiveBarItem::Button(ActiveBarButton {
             icon,
@@ -241,13 +243,13 @@ fn dropdown_trigger_items(
             "Place / Move (right-click for menu)",
             ActiveBarIcon::Svg(ic::icon_move(tid)),
             FpActiveBarMenu::Place,
-            Some(PrimitiveEditorMsg::FootprintActiveBarStub("Move")),
+            Some(FootprintEditorMsg::ActiveBarStub("Move")),
         ),
         dual(
             "Select (right-click for selection-mode menu)",
             ActiveBarIcon::Svg(ic::icon_select(tid)),
             FpActiveBarMenu::Select,
-            Some(PrimitiveEditorMsg::FootprintSetPadsTool(
+            Some(FootprintEditorMsg::SetPadsTool(
                 crate::library::editor::footprint::state::PadsTool::Select,
             )),
         ),
@@ -255,7 +257,7 @@ fn dropdown_trigger_items(
             "Align / Distribute (right-click for menu)",
             ActiveBarIcon::Svg(ic::icon_align(tid)),
             FpActiveBarMenu::Align,
-            Some(PrimitiveEditorMsg::FootprintActiveBarAlignSelectionToGrid),
+            Some(FootprintEditorMsg::ActiveBarAlignSelectionToGrid),
         ),
         dual(
             "3D Body (left or right click for menu)",
@@ -267,7 +269,7 @@ fn dropdown_trigger_items(
             "Text (left-click places String, right-click for menu)",
             ActiveBarIcon::Svg(ic::icon_text(tid)),
             FpActiveBarMenu::Text,
-            Some(PrimitiveEditorMsg::FootprintSetPadsTool(
+            Some(FootprintEditorMsg::SetPadsTool(
                 crate::library::editor::footprint::state::PadsTool::PlaceString,
             )),
         ),

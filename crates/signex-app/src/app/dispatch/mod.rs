@@ -754,7 +754,9 @@ impl Signex {
                     let _ = self.update(Message::Library(
                         crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                             path,
-                            msg: crate::library::messages::PrimitiveEditorMsg::FootprintToolEscape,
+                            msg: crate::library::messages::PrimitiveEdit::Footprint(
+                                crate::library::messages::FootprintEditorMsg::ToolEscape,
+                            ),
                         },
                     ));
                 } else {
@@ -781,8 +783,8 @@ impl Signex {
                     let _ = self.update(Message::Library(
                         crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                             path,
-                            msg: crate::library::messages::PrimitiveEditorMsg::FootprintSetMode(
-                                target,
+                            msg: crate::library::messages::PrimitiveEdit::Footprint(
+                                crate::library::messages::FootprintEditorMsg::SetMode(target),
                             ),
                         },
                     ));

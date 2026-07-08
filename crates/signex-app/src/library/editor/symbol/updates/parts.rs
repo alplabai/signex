@@ -1,31 +1,31 @@
 //! Symbol editor — multi-part (prev/next/new/remove) update logic.
 
 use super::{SymEditor, mark_dirty, push_undo};
-use crate::library::messages::PrimitiveEditorMsg;
+use crate::library::messages::SymbolEditorMsg;
 
-pub(super) fn apply_symbol_parts(editor: &mut SymEditor, msg: PrimitiveEditorMsg) {
+pub(super) fn apply_symbol_parts(editor: &mut SymEditor, msg: SymbolEditorMsg) {
     match msg {
-        PrimitiveEditorMsg::SymbolPrevPart => {
+        SymbolEditorMsg::PrevPart => {
             if editor.active_part > 1 {
                 editor.active_part -= 1;
                 editor.canvas_cache.clear();
             }
         }
-        PrimitiveEditorMsg::SymbolNextPart => {
+        SymbolEditorMsg::NextPart => {
             let max = crate::library::editor::symbol::state::max_part_number(editor.primitive());
             if editor.active_part < max {
                 editor.active_part += 1;
                 editor.canvas_cache.clear();
             }
         }
-        PrimitiveEditorMsg::SymbolNewPart => {
+        SymbolEditorMsg::NewPart => {
             push_undo(editor);
             let new_part =
                 crate::library::editor::symbol::state::max_part_number(editor.primitive()) + 1;
             editor.active_part = new_part;
             mark_dirty(editor);
         }
-        PrimitiveEditorMsg::SymbolRemovePart => {
+        SymbolEditorMsg::RemovePart => {
             let max = crate::library::editor::symbol::state::max_part_number(editor.primitive());
             if max <= 1 || editor.active_part <= 1 {
                 tracing::debug!(

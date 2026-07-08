@@ -57,7 +57,9 @@ impl Signex {
                     let _ = self.update(Message::Library(
                         crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                             path: path.clone(),
-                            msg: crate::library::messages::PrimitiveEditorMsg::FootprintAddNewSibling,
+                            msg: crate::library::messages::PrimitiveEdit::Footprint(
+                                crate::library::messages::FootprintEditorMsg::AddNewSibling,
+                            ),
                         },
                     ));
                     if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
@@ -115,7 +117,9 @@ impl Signex {
                     let _ = self.update(Message::Library(
                         crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                             path,
-                            msg: crate::library::messages::PrimitiveEditorMsg::FootprintSelectActiveIdx(*idx),
+                            msg: crate::library::messages::PrimitiveEdit::Footprint(
+                                crate::library::messages::FootprintEditorMsg::SelectActiveIdx(*idx),
+                            ),
                         },
                     ));
                     self.refresh_panel_ctx();
@@ -147,7 +151,9 @@ impl Signex {
                         let _ = self.update(Message::Library(
                             crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                                 path,
-                                msg: crate::library::messages::PrimitiveEditorMsg::FootprintToggleAutoFit,
+                                msg: crate::library::messages::PrimitiveEdit::Footprint(
+                                    crate::library::messages::FootprintEditorMsg::ToggleAutoFit,
+                                ),
                             },
                         ));
                         // v0.16.x — rebuild the panel context so the
@@ -176,10 +182,12 @@ impl Signex {
                         let _ = self.update(Message::Library(
                             crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                                 path,
-                                msg: crate::library::messages::PrimitiveEditorMsg::FootprintSketchSetRole {
-                                    id: *id,
-                                    role: *role,
-                                },
+                                msg: crate::library::messages::PrimitiveEdit::Footprint(
+                                    crate::library::messages::FootprintEditorMsg::SketchSetRole {
+                                        id: *id,
+                                        role: *role,
+                                    },
+                                ),
                             },
                         ));
                         self.refresh_panel_ctx();
@@ -765,7 +773,7 @@ impl Signex {
                 // expression and triggers a solve+rebake. Undo
                 // snapshot is captured at the dispatcher level via
                 // `mutates_footprint_state` (defaults to true for any
-                // unrecognised PrimitiveEditorMsg variant — verified
+                // unrecognised FootprintEditorMsg variant — verified
                 // for `FootprintSketchEditParameter` already).
                 let parameter_name = self.active_footprint_editor_mut().and_then(|editor| {
                     editor
@@ -783,10 +791,12 @@ impl Signex {
                             let _ = self.update(Message::Library(
                                 crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                                     path,
-                                    msg: crate::library::messages::PrimitiveEditorMsg::FootprintSketchEditParameter {
-                                        name,
-                                        expr: value.clone(),
-                                    },
+                                    msg: crate::library::messages::PrimitiveEdit::Footprint(
+                                        crate::library::messages::FootprintEditorMsg::SketchEditParameter {
+                                            name,
+                                            expr: value.clone(),
+                                        },
+                                    ),
                                 },
                             ));
                             self.refresh_panel_ctx();
@@ -803,7 +813,7 @@ impl Signex {
             }
             crate::panels::PanelMsg::FpEditorUnlinkCornerRadius { arc_entity_id } => {
                 // v0.24 Phase 3 (Track A3) — forward to the
-                // `FootprintSketchUnlinkCornerRadius` PrimitiveEditorMsg.
+                // `FootprintEditorMsg::SketchUnlinkCornerRadius`.
                 // The dispatcher walks pads for the matching arc,
                 // mints the per-corner parameter, and triggers a
                 // solve+rebake. Undo snapshot captured at dispatcher
@@ -816,9 +826,11 @@ impl Signex {
                         let _ = self.update(Message::Library(
                             crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                                 path,
-                                msg: crate::library::messages::PrimitiveEditorMsg::FootprintSketchUnlinkCornerRadius {
-                                    arc_entity_id: *arc_entity_id,
-                                },
+                                msg: crate::library::messages::PrimitiveEdit::Footprint(
+                                    crate::library::messages::FootprintEditorMsg::SketchUnlinkCornerRadius {
+                                        arc_entity_id: *arc_entity_id,
+                                    },
+                                ),
                             },
                         ));
                         self.refresh_panel_ctx();
@@ -1245,10 +1257,12 @@ impl Signex {
                         let _ = self.update(Message::Library(
                             crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                                 path,
-                                msg: crate::library::messages::PrimitiveEditorMsg::FootprintSketchEditParameter {
-                                    name: name.clone(),
-                                    expr: expr.clone(),
-                                },
+                                msg: crate::library::messages::PrimitiveEdit::Footprint(
+                                    crate::library::messages::FootprintEditorMsg::SketchEditParameter {
+                                        name: name.clone(),
+                                        expr: expr.clone(),
+                                    },
+                                ),
                             },
                         ));
                         self.refresh_panel_ctx();

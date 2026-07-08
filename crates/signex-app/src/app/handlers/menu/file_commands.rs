@@ -93,10 +93,10 @@ impl Signex {
                 Some(self.handle_add_library_primitive(signex_library::PrimitiveKind::Footprint))
             }
             MenuMessage::ToolsNewPart => self.dispatch_active_symbol_primitive_event(
-                crate::library::messages::PrimitiveEditorMsg::SymbolNewPart,
+                crate::library::messages::SymbolEditorMsg::NewPart,
             ),
             MenuMessage::ToolsRemovePart => self.dispatch_active_symbol_primitive_event(
-                crate::library::messages::PrimitiveEditorMsg::SymbolRemovePart,
+                crate::library::messages::SymbolEditorMsg::RemovePart,
             ),
             MenuMessage::ToolsDocumentOptions => {
                 // Resolve the active tab's containing `.snxlib` and
@@ -135,7 +135,7 @@ impl Signex {
     /// tab kinds (mirrors `MenuMessage::Save`-style guards).
     fn dispatch_active_symbol_primitive_event(
         &mut self,
-        msg: crate::library::messages::PrimitiveEditorMsg,
+        msg: crate::library::messages::SymbolEditorMsg,
     ) -> Option<Task<Message>> {
         let path = self
             .document_state
@@ -146,7 +146,10 @@ impl Signex {
                 _ => None,
             })?;
         Some(self.update(Message::Library(
-            crate::library::LibraryMessage::PrimitiveEditorEvent { path, msg },
+            crate::library::LibraryMessage::PrimitiveEditorEvent {
+                path,
+                msg: crate::library::messages::PrimitiveEdit::Symbol(msg),
+            },
         )))
     }
 

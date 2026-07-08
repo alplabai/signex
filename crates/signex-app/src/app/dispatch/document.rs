@@ -30,7 +30,9 @@ impl Signex {
                     let _ = self.update(Message::Library(
                         crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                             path,
-                            msg: crate::library::messages::PrimitiveEditorMsg::FootprintDeleteSelected,
+                            msg: crate::library::messages::PrimitiveEdit::Footprint(
+                                crate::library::messages::FootprintEditorMsg::DeleteSelected,
+                            ),
                         },
                     ));
                 } else {

@@ -3,11 +3,11 @@
 //! Carved out of the monolithic `sketch::apply` (ADR-0001 D1/D2). Arm
 //! bodies are moved verbatim; each keeps its own inner `use`s.
 
-use crate::library::messages::PrimitiveEditorMsg;
+use crate::library::messages::FootprintEditorMsg;
 
-pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: PrimitiveEditorMsg) {
+pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: FootprintEditorMsg) {
     match msg {
-        PrimitiveEditorMsg::FootprintSketchEditParameter { name, expr } => {
+        FootprintEditorMsg::SketchEditParameter { name, expr } => {
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
             editor.with_parts(|state, primitive| {
@@ -20,7 +20,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             editor.canvas_cache.clear();
             editor.dirty = true;
         }
-        PrimitiveEditorMsg::FootprintSketchAddConstraintForSelection(tag) => {
+        FootprintEditorMsg::SketchAddConstraintForSelection(tag) => {
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
             use crate::library::messages::SketchConstraintTag;

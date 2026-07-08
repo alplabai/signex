@@ -3,11 +3,11 @@
 //! Carved out of the monolithic `sketch::apply` (ADR-0001 D1/D2). Arm
 //! bodies are moved verbatim; each keeps its own inner `use`s.
 
-use crate::library::messages::PrimitiveEditorMsg;
+use crate::library::messages::FootprintEditorMsg;
 
-pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: PrimitiveEditorMsg) {
+pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: FootprintEditorMsg) {
     match msg {
-        PrimitiveEditorMsg::FootprintSketchSetRole { id, role } => {
+        FootprintEditorMsg::SketchSetRole { id, role } => {
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_role_with_warnings;
             use crate::library::editor::footprint::state::EditorPad;
             use signex_library::primitive::footprint::{
@@ -103,7 +103,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             editor.canvas_cache.clear();
             editor.dirty = true;
         }
-        PrimitiveEditorMsg::FootprintSketchMakePadFromProfile => {
+        FootprintEditorMsg::SketchMakePadFromProfile => {
             // v0.22 Phase D4 — convert the closed-loop profile that
             // includes the currently-selected Line into a
             // `PadShape::Custom(SketchProfile)` pad.
@@ -365,7 +365,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             editor.dirty = true;
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::FootprintSketchUnlinkCornerRadius { arc_entity_id } => {
+        FootprintEditorMsg::SketchUnlinkCornerRadius { arc_entity_id } => {
             // v0.24 Phase 3 (Track A3) — split a RoundRect pad's
             // shared `corner_r_<slug>` parameter into a per-corner
             // override for the right-clicked Arc.

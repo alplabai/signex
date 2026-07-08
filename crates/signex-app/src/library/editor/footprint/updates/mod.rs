@@ -22,7 +22,7 @@ mod sketch_tools;
 mod sketch_ui;
 mod view;
 
-use crate::library::messages::PrimitiveEditorMsg;
+use crate::library::messages::FootprintEditorMsg;
 
 /// v0.14 — apply an [`AlignOp`] to the pads at `indices` in `state`,
 /// in place. `step` is the spacing increment (mm) for the
@@ -307,13 +307,13 @@ mod align_geometry_tests {
 pub(crate) fn apply_footprint_clipboard_op(
     editor: &mut crate::app::FootprintEditorState,
     clipboard: &mut Option<crate::library::editor::footprint::state::EditorPad>,
-    msg: &PrimitiveEditorMsg,
+    msg: &FootprintEditorMsg,
 ) {
     use crate::library::editor::footprint::pad_to_sketch;
     use crate::library::editor::footprint::state::FootprintEditorState as CanvasState;
 
     match msg {
-        PrimitiveEditorMsg::FootprintCopyPad => {
+        FootprintEditorMsg::CopyPad => {
             let Some(idx) = editor.state.selected_pad else {
                 return;
             };
@@ -322,7 +322,7 @@ pub(crate) fn apply_footprint_clipboard_op(
             };
             *clipboard = Some(pad.clone());
         }
-        PrimitiveEditorMsg::FootprintCutPad => {
+        FootprintEditorMsg::CutPad => {
             let Some(idx) = editor.state.selected_pad else {
                 return;
             };
@@ -344,7 +344,7 @@ pub(crate) fn apply_footprint_clipboard_op(
                 editor.dirty = true;
             }
         }
-        PrimitiveEditorMsg::FootprintPastePad => {
+        FootprintEditorMsg::PastePad => {
             let Some(template) = clipboard.clone() else {
                 return;
             };
@@ -393,14 +393,14 @@ pub(crate) fn apply_footprint_clipboard_op(
 /// against the path-keyed standalone state.
 pub(crate) fn apply_footprint_primitive_edit(
     editor: &mut crate::app::FootprintEditorState,
-    msg: PrimitiveEditorMsg,
+    msg: FootprintEditorMsg,
 ) {
     // v0.27 — Role=Pad on a Line is shorthand for "make this loop a
     // pad." Rewrite the message here so the SetRole arm only ever
     // sees Point-targeted Pad role assignments (where it makes
     // sense). Without this, Role=Pad on a Line was a silent no-op
     // — the Properties dropdown read as broken.
-    let msg = if let PrimitiveEditorMsg::FootprintSketchSetRole {
+    let msg = if let FootprintEditorMsg::SketchSetRole {
         id,
         role: crate::library::messages::RoleTag::Pad,
     } = &msg
@@ -414,7 +414,7 @@ pub(crate) fn apply_footprint_primitive_edit(
             .unwrap_or(false);
         if is_line {
             editor.state.selected_sketch = Some(*id);
-            PrimitiveEditorMsg::FootprintSketchMakePadFromProfile
+            FootprintEditorMsg::SketchMakePadFromProfile
         } else {
             msg
         }
@@ -434,151 +434,110 @@ pub(crate) fn apply_footprint_primitive_edit(
     }
 
     match msg {
-        PrimitiveEditorMsg::FootprintSelectActiveIdx(..)
-        | PrimitiveEditorMsg::FootprintToggleSelectionFilter(..)
-        | PrimitiveEditorMsg::FootprintSelectSilkF(..)
-        | PrimitiveEditorMsg::FootprintDeleteSilkF
-        | PrimitiveEditorMsg::FootprintMovePad { .. }
-        | PrimitiveEditorMsg::FootprintCursorAt { .. }
-        | PrimitiveEditorMsg::FootprintSelectPad(..)
-        | PrimitiveEditorMsg::FootprintSelectPads(..)
-        | PrimitiveEditorMsg::FootprintDeleteSelected
-        | PrimitiveEditorMsg::FootprintSetSelectionMode2d(..)
-        | PrimitiveEditorMsg::FootprintSelectAllOnLayer
-        | PrimitiveEditorMsg::FootprintLassoArm
-        | PrimitiveEditorMsg::FootprintLassoAddVertex { .. }
-        | PrimitiveEditorMsg::FootprintLassoCancel
-        | PrimitiveEditorMsg::FootprintLassoCommit
-        | PrimitiveEditorMsg::FootprintTouchingLineArm
-        | PrimitiveEditorMsg::FootprintTouchingLineFirst { .. }
-        | PrimitiveEditorMsg::FootprintTouchingLineCancel
-        | PrimitiveEditorMsg::FootprintTouchingLineCommit { .. }
-        | PrimitiveEditorMsg::FootprintSelectOverlapped
-        | PrimitiveEditorMsg::FootprintSelectNextOverlapped
-        | PrimitiveEditorMsg::FootprintSelectOffGridPads => selection::apply(editor, msg),
+        FootprintEditorMsg::SelectActiveIdx(..)
+        | FootprintEditorMsg::ToggleSelectionFilter(..)
+        | FootprintEditorMsg::SelectSilkF(..)
+        | FootprintEditorMsg::DeleteSilkF
+        | FootprintEditorMsg::MovePad { .. }
+        | FootprintEditorMsg::CursorAt { .. }
+        | FootprintEditorMsg::SelectPad(..)
+        | FootprintEditorMsg::SelectPads(..)
+        | FootprintEditorMsg::DeleteSelected
+        | FootprintEditorMsg::SetSelectionMode2d(..)
+        | FootprintEditorMsg::SelectAllOnLayer
+        | FootprintEditorMsg::LassoArm
+        | FootprintEditorMsg::LassoAddVertex { .. }
+        | FootprintEditorMsg::LassoCancel
+        | FootprintEditorMsg::LassoCommit
+        | FootprintEditorMsg::TouchingLineArm
+        | FootprintEditorMsg::TouchingLineFirst { .. }
+        | FootprintEditorMsg::TouchingLineCancel
+        | FootprintEditorMsg::TouchingLineCommit { .. }
+        | FootprintEditorMsg::SelectOverlapped
+        | FootprintEditorMsg::SelectNextOverlapped
+        | FootprintEditorMsg::SelectOffGridPads => selection::apply(editor, msg),
 
-        PrimitiveEditorMsg::FootprintAddNewSibling
-        | PrimitiveEditorMsg::FootprintAddPad { .. }
-        | PrimitiveEditorMsg::FootprintAddVia { .. }
-        | PrimitiveEditorMsg::FootprintTrackClick { .. }
-        | PrimitiveEditorMsg::FootprintTrackCancel
-        | PrimitiveEditorMsg::FootprintArcClick { .. }
-        | PrimitiveEditorMsg::FootprintArcCancel
-        | PrimitiveEditorMsg::FootprintPolygonClick { .. }
-        | PrimitiveEditorMsg::FootprintPolygonCommit
-        | PrimitiveEditorMsg::FootprintPolygonCancel
-        | PrimitiveEditorMsg::FootprintAddText { .. }
-        | PrimitiveEditorMsg::FootprintAddTextFrame { .. }
-        | PrimitiveEditorMsg::FootprintAddHole { .. }
-        | PrimitiveEditorMsg::FootprintMintBody3d
-        | PrimitiveEditorMsg::FootprintMintExtrudedBody3d => geometry::apply(editor, msg),
-        PrimitiveEditorMsg::FootprintSketchSelectMany(..)
-        | PrimitiveEditorMsg::FootprintSketchSelect { .. }
-        | PrimitiveEditorMsg::FootprintSketchSetTool(..)
-        | PrimitiveEditorMsg::FootprintSketchToggleConstruction
-        | PrimitiveEditorMsg::FootprintSketchToggleCenterline
-        | PrimitiveEditorMsg::FootprintSketchToolEscape
-        | PrimitiveEditorMsg::FootprintSketchDimensionInput(..) => sketch_ui::apply(editor, msg),
-        PrimitiveEditorMsg::FootprintSketchPlacementInputChar(..)
-        | PrimitiveEditorMsg::FootprintSketchPlacementInputBackspace
-        | PrimitiveEditorMsg::FootprintSketchPlacementInputEnter
-        | PrimitiveEditorMsg::FootprintSketchPlacementInputEscape
-        | PrimitiveEditorMsg::FootprintSketchPlacementInputTab => {
-            sketch_placement::apply(editor, msg)
-        }
-        PrimitiveEditorMsg::FootprintSketchPlacePoint { .. }
-        | PrimitiveEditorMsg::FootprintSketchMovePoint { .. }
-        | PrimitiveEditorMsg::FootprintSketchMoveLine { .. }
-        | PrimitiveEditorMsg::FootprintSketchResizeRoundPad { .. } => {
-            sketch_entities::apply(editor, msg)
-        }
-        PrimitiveEditorMsg::FootprintSketchSetRole { .. }
-        | PrimitiveEditorMsg::FootprintSketchMakePadFromProfile
-        | PrimitiveEditorMsg::FootprintSketchUnlinkCornerRadius { .. } => {
+        FootprintEditorMsg::AddNewSibling
+        | FootprintEditorMsg::AddPad { .. }
+        | FootprintEditorMsg::AddVia { .. }
+        | FootprintEditorMsg::TrackClick { .. }
+        | FootprintEditorMsg::TrackCancel
+        | FootprintEditorMsg::ArcClick { .. }
+        | FootprintEditorMsg::ArcCancel
+        | FootprintEditorMsg::PolygonClick { .. }
+        | FootprintEditorMsg::PolygonCommit
+        | FootprintEditorMsg::PolygonCancel
+        | FootprintEditorMsg::AddText { .. }
+        | FootprintEditorMsg::AddTextFrame { .. }
+        | FootprintEditorMsg::AddHole { .. }
+        | FootprintEditorMsg::MintBody3d
+        | FootprintEditorMsg::MintExtrudedBody3d => geometry::apply(editor, msg),
+        FootprintEditorMsg::SketchSelectMany(..)
+        | FootprintEditorMsg::SketchSelect { .. }
+        | FootprintEditorMsg::SketchSetTool(..)
+        | FootprintEditorMsg::SketchToggleConstruction
+        | FootprintEditorMsg::SketchToggleCenterline
+        | FootprintEditorMsg::SketchToolEscape
+        | FootprintEditorMsg::SketchDimensionInput(..) => sketch_ui::apply(editor, msg),
+        FootprintEditorMsg::SketchPlacementInputChar(..)
+        | FootprintEditorMsg::SketchPlacementInputBackspace
+        | FootprintEditorMsg::SketchPlacementInputEnter
+        | FootprintEditorMsg::SketchPlacementInputEscape
+        | FootprintEditorMsg::SketchPlacementInputTab => sketch_placement::apply(editor, msg),
+        FootprintEditorMsg::SketchPlacePoint { .. }
+        | FootprintEditorMsg::SketchMovePoint { .. }
+        | FootprintEditorMsg::SketchMoveLine { .. }
+        | FootprintEditorMsg::SketchResizeRoundPad { .. } => sketch_entities::apply(editor, msg),
+        FootprintEditorMsg::SketchSetRole { .. }
+        | FootprintEditorMsg::SketchMakePadFromProfile
+        | FootprintEditorMsg::SketchUnlinkCornerRadius { .. } => {
             sketch_pad_bridge::apply(editor, msg)
         }
-        PrimitiveEditorMsg::FootprintSketchEditParameter { .. }
-        | PrimitiveEditorMsg::FootprintSketchAddConstraintForSelection(..) => {
+        FootprintEditorMsg::SketchEditParameter { .. }
+        | FootprintEditorMsg::SketchAddConstraintForSelection(..) => {
             sketch_constraints::apply(editor, msg)
         }
-        PrimitiveEditorMsg::FootprintSketchToolClick { .. } => sketch_tools::apply(editor, msg),
-        PrimitiveEditorMsg::FootprintToggleLayer(..)
-        | PrimitiveEditorMsg::FootprintToggleAutoFit
-        | PrimitiveEditorMsg::FootprintSetMode(..)
-        | PrimitiveEditorMsg::FootprintTogglePlacementPause
-        | PrimitiveEditorMsg::FootprintFitConsumed
-        | PrimitiveEditorMsg::FootprintCopyPad
-        | PrimitiveEditorMsg::FootprintCutPad
-        | PrimitiveEditorMsg::FootprintPastePad
-        | PrimitiveEditorMsg::FootprintSetPadsTool(..)
-        | PrimitiveEditorMsg::FootprintToolEscape
-        | PrimitiveEditorMsg::FootprintAlignPads(..)
-        | PrimitiveEditorMsg::FootprintSetName(..)
-        | PrimitiveEditorMsg::FootprintRecomputeCourtyardOutline => view::apply(editor, msg),
+        FootprintEditorMsg::SketchToolClick { .. } => sketch_tools::apply(editor, msg),
+        FootprintEditorMsg::ToggleLayer(..)
+        | FootprintEditorMsg::ToggleAutoFit
+        | FootprintEditorMsg::SetMode(..)
+        | FootprintEditorMsg::TogglePlacementPause
+        | FootprintEditorMsg::FitConsumed
+        | FootprintEditorMsg::CopyPad
+        | FootprintEditorMsg::CutPad
+        | FootprintEditorMsg::PastePad
+        | FootprintEditorMsg::SetPadsTool(..)
+        | FootprintEditorMsg::ToolEscape
+        | FootprintEditorMsg::AlignPads(..)
+        | FootprintEditorMsg::SetName(..)
+        | FootprintEditorMsg::RecomputeCourtyardOutline => view::apply(editor, msg),
 
-        PrimitiveEditorMsg::FootprintShowContextMenu { .. }
-        | PrimitiveEditorMsg::FootprintCloseContextMenu
-        | PrimitiveEditorMsg::FootprintContextMenuOpenSubmenu(..)
-        | PrimitiveEditorMsg::FootprintContextMenuAction(..) => context_menu::apply(editor, msg),
-        PrimitiveEditorMsg::FootprintToggleActiveBarMenu(..)
-        | PrimitiveEditorMsg::FootprintCloseActiveBarMenu
-        | PrimitiveEditorMsg::FootprintActiveBarStub(..)
-        | PrimitiveEditorMsg::FootprintApplyFilterPreset(..)
-        | PrimitiveEditorMsg::FootprintToggleAllFilters
-        | PrimitiveEditorMsg::FootprintCaptureFilterPreset
-        | PrimitiveEditorMsg::FootprintActiveBarToggleSnap(..)
-        | PrimitiveEditorMsg::FootprintActiveBarSetSnappingMode(..)
-        | PrimitiveEditorMsg::FootprintActiveBarSetSnapSubTab(..)
-        | PrimitiveEditorMsg::FootprintActiveBarRotateSelection
-        | PrimitiveEditorMsg::FootprintActiveBarFlipSelection
-        | PrimitiveEditorMsg::FootprintActiveBarNudgeSelection
-        | PrimitiveEditorMsg::FootprintMoveByOpen
-        | PrimitiveEditorMsg::FootprintMoveBySetX(..)
-        | PrimitiveEditorMsg::FootprintMoveBySetY(..)
-        | PrimitiveEditorMsg::FootprintMoveByConfirm
-        | PrimitiveEditorMsg::FootprintMoveByCancel
-        | PrimitiveEditorMsg::FootprintActiveBarAlignSelectionToGrid
-        | PrimitiveEditorMsg::FootprintActiveBarMoveOriginToGrid
-        | PrimitiveEditorMsg::FootprintActiveBarSelectAll
-        | PrimitiveEditorMsg::FootprintActiveBarClearSelection
-        | PrimitiveEditorMsg::FootprintActiveBarSetSketchTool(..) => active_bar::apply(editor, msg),
-        // Symbol variants are no-ops on a Footprint editor.
-        PrimitiveEditorMsg::SymbolSetTool(_)
-        | PrimitiveEditorMsg::SymbolAddPin { .. }
-        | PrimitiveEditorMsg::SymbolAddRectangle { .. }
-        | PrimitiveEditorMsg::SymbolAddLine { .. }
-        | PrimitiveEditorMsg::SymbolAddCircle { .. }
-        | PrimitiveEditorMsg::SymbolAddArc { .. }
-        | PrimitiveEditorMsg::SymbolAddText { .. }
-        | PrimitiveEditorMsg::SymbolSelect(_)
-        | PrimitiveEditorMsg::SymbolDeselect
-        | PrimitiveEditorMsg::SymbolMoveSelected { .. }
-        | PrimitiveEditorMsg::SymbolMoveGraphicHandle { .. }
-        | PrimitiveEditorMsg::SymbolDeleteSelected
-        | PrimitiveEditorMsg::SymbolSetPinNumber { .. }
-        | PrimitiveEditorMsg::SymbolSetPinName { .. }
-        | PrimitiveEditorMsg::SymbolPrevPart
-        | PrimitiveEditorMsg::SymbolNextPart
-        | PrimitiveEditorMsg::SymbolNewPart
-        | PrimitiveEditorMsg::SymbolRemovePart
-        | PrimitiveEditorMsg::SymbolPan { .. }
-        | PrimitiveEditorMsg::SymbolZoom { .. }
-        | PrimitiveEditorMsg::SymbolFit
-        | PrimitiveEditorMsg::SymbolCursorAt { .. }
-        | PrimitiveEditorMsg::SymbolSetSheetColor(_)
-        | PrimitiveEditorMsg::SymbolToggleGrid
-        | PrimitiveEditorMsg::SymbolCycleGridSize
-        | PrimitiveEditorMsg::SymbolCycleUnit
-        | PrimitiveEditorMsg::SymbolToggleActiveBarMenu(_)
-        | PrimitiveEditorMsg::SymbolCloseActiveBarMenu
-        | PrimitiveEditorMsg::SymbolActiveBarStub(_)
-        | PrimitiveEditorMsg::SymbolToggleSelectionFilter(_)
-        | PrimitiveEditorMsg::SymbolMoveAll { .. }
-        | PrimitiveEditorMsg::SymbolRotateSelected { .. }
-        | PrimitiveEditorMsg::SymbolUndo
-        | PrimitiveEditorMsg::SymbolRedo
-        | PrimitiveEditorMsg::SymbolDragCommit
-        | PrimitiveEditorMsg::Save => {}
+        FootprintEditorMsg::ShowContextMenu { .. }
+        | FootprintEditorMsg::CloseContextMenu
+        | FootprintEditorMsg::ContextMenuOpenSubmenu(..)
+        | FootprintEditorMsg::ContextMenuAction(..) => context_menu::apply(editor, msg),
+        FootprintEditorMsg::ToggleActiveBarMenu(..)
+        | FootprintEditorMsg::CloseActiveBarMenu
+        | FootprintEditorMsg::ActiveBarStub(..)
+        | FootprintEditorMsg::ApplyFilterPreset(..)
+        | FootprintEditorMsg::ToggleAllFilters
+        | FootprintEditorMsg::CaptureFilterPreset
+        | FootprintEditorMsg::ActiveBarToggleSnap(..)
+        | FootprintEditorMsg::ActiveBarSetSnappingMode(..)
+        | FootprintEditorMsg::ActiveBarSetSnapSubTab(..)
+        | FootprintEditorMsg::ActiveBarRotateSelection
+        | FootprintEditorMsg::ActiveBarFlipSelection
+        | FootprintEditorMsg::ActiveBarNudgeSelection
+        | FootprintEditorMsg::MoveByOpen
+        | FootprintEditorMsg::MoveBySetX(..)
+        | FootprintEditorMsg::MoveBySetY(..)
+        | FootprintEditorMsg::MoveByConfirm
+        | FootprintEditorMsg::MoveByCancel
+        | FootprintEditorMsg::ActiveBarAlignSelectionToGrid
+        | FootprintEditorMsg::ActiveBarMoveOriginToGrid
+        | FootprintEditorMsg::ActiveBarSelectAll
+        | FootprintEditorMsg::ActiveBarClearSelection
+        | FootprintEditorMsg::ActiveBarSetSketchTool(..) => active_bar::apply(editor, msg),
     }
 }
 
@@ -634,96 +593,95 @@ fn footprint_nudge_selection(editor: &mut crate::app::FootprintEditorState, dx: 
 /// Lean toward `true` when in doubt — extra history entries cost
 /// memory but never break correctness; missing entries leave edits
 /// unreversable.
-fn mutates_footprint_state(msg: &PrimitiveEditorMsg) -> bool {
-    use PrimitiveEditorMsg::*;
+fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
+    use FootprintEditorMsg::*;
     match msg {
         // Pure UI state — selection / hover / cursor / tool mode.
         // These don't change persisted geometry and shouldn't enter
         // the history.
-        FootprintCursorAt { .. }
-        | FootprintSelectPad(_)
-        | FootprintSelectSilkF(_)
-        | FootprintToggleLayer(_)
-        | FootprintSetPadsTool(_)
-        | FootprintToolEscape
-        | FootprintToggleActiveBarMenu(_)
-        | FootprintCloseActiveBarMenu
-        | FootprintActiveBarStub(_)
-        | FootprintActiveBarToggleSnap(_)
-        | FootprintActiveBarSetSnappingMode(_)
-        | FootprintActiveBarSetSnapSubTab(_)
-        | FootprintActiveBarSelectAll
-        | FootprintActiveBarClearSelection
-        | FootprintActiveBarSetSketchTool(_)
-        | FootprintSetMode(_)
-        | FootprintSketchSetTool(_)
-        | FootprintSketchToggleConstruction
-        | FootprintSketchToggleCenterline
-        | FootprintTogglePlacementPause
-        | FootprintSketchToolEscape
+        CursorAt { .. }
+        | SelectPad(_)
+        | SelectSilkF(_)
+        | ToggleLayer(_)
+        | SetPadsTool(_)
+        | ToolEscape
+        | ToggleActiveBarMenu(_)
+        | CloseActiveBarMenu
+        | ActiveBarStub(_)
+        | ActiveBarToggleSnap(_)
+        | ActiveBarSetSnappingMode(_)
+        | ActiveBarSetSnapSubTab(_)
+        | ActiveBarSelectAll
+        | ActiveBarClearSelection
+        | ActiveBarSetSketchTool(_)
+        | SetMode(_)
+        | SketchSetTool(_)
+        | SketchToggleConstruction
+        | SketchToggleCenterline
+        | TogglePlacementPause
+        | SketchToolEscape
         // v0.24 Track D — placement-input keypress messages mutate
         // only the transient `placement_input` overlay buffer; they
         // don't touch persisted geometry, so undo doesn't need them.
-        | FootprintSketchPlacementInputChar(_)
-        | FootprintSketchPlacementInputBackspace
-        | FootprintSketchPlacementInputEnter
-        | FootprintSketchPlacementInputEscape
-        | FootprintSketchSelect { .. }
-        | FootprintSketchDimensionInput(_)
-        | FootprintToggleSelectionFilter(_)
+        | SketchPlacementInputChar(_)
+        | SketchPlacementInputBackspace
+        | SketchPlacementInputEnter
+        | SketchPlacementInputEscape
+        | SketchSelect { .. }
+        | SketchDimensionInput(_)
+        | ToggleSelectionFilter(_)
         // Task 6 — filter preset apply/toggle/capture are UI-only
         // (they mutate `selection_filter` or the on-disk preset
         // list, never persisted footprint geometry), so they must
         // not enter the undo history like the other filter toggles
         // above.
-        | FootprintApplyFilterPreset(_)
-        | FootprintToggleAllFilters
-        | FootprintCaptureFilterPreset
-        | FootprintToggleAutoFit
-        | FootprintSelectActiveIdx(_)
-        | FootprintShowContextMenu { .. }
-        | FootprintCloseContextMenu
-        | FootprintContextMenuOpenSubmenu(_)
-        | FootprintContextMenuAction(_)
-        | FootprintFitConsumed
+        | ApplyFilterPreset(_)
+        | ToggleAllFilters
+        | CaptureFilterPreset
+        | ToggleAutoFit
+        | SelectActiveIdx(_)
+        | ShowContextMenu { .. }
+        | CloseContextMenu
+        | ContextMenuOpenSubmenu(_)
+        | ContextMenuAction(_)
+        | FitConsumed
         // v0.26-E — clipboard ops handle their own push_history at
         // call site, so the snapshot-classifier here returns false
         // (Copy mutates nothing; Cut + Paste already snapshotted).
-        | FootprintCopyPad
-        | FootprintCutPad
-        | FootprintPastePad
+        | CopyPad
+        | CutPad
+        | PastePad
         // v0.14 — Align/Distribute/Spacing pushes its own snapshot
         // inside the handler, gated on a large-enough selection, so the
         // blanket pre-push here must NOT fire (it would double-stack the
         // history and snapshot even on a sub-2-pad no-op).
-        | FootprintAlignPads(_)
+        | AlignPads(_)
         // v0.14 — "Move Selection by X, Y…" (nudge) likewise pushes its
         // own snapshot inside the handler, gated on a non-empty
         // selection. Keep it out of the blanket pre-push to avoid
         // double-stacking the history on an empty-selection no-op.
-        | FootprintActiveBarNudgeSelection
+        | ActiveBarNudgeSelection
         // v0.14 — Move-By modal open/edit/cancel are pure UI state (the
         // typed buffers live on `move_by_modal`, not persisted
         // geometry); Confirm pushes its own snapshot inside the shared
         // `footprint_nudge_selection` helper, same as the one-step
         // nudge above, so it's classified alongside it here too.
-        | FootprintMoveByOpen
-        | FootprintMoveBySetX(_)
-        | FootprintMoveBySetY(_)
-        | FootprintMoveByConfirm
-        | FootprintMoveByCancel
+        | MoveByOpen
+        | MoveBySetX(_)
+        | MoveBySetY(_)
+        | MoveByConfirm
+        | MoveByCancel
         // v0.14 — 3D Body mint pushes its own snapshot inside the
         // handler (unconditionally, unlike nudge). Keep it out of the
         // blanket pre-push to avoid double-stacking the history.
-        | FootprintMintBody3d
-        | FootprintMintExtrudedBody3d
+        | MintBody3d
+        | MintExtrudedBody3d
         // v0.14 — Place Text Frame commits once, on release, with
         // the drag already resolved (no intermediate anchor-click
         // message reaches the dispatcher like Track's 2-click
         // gesture does). It pushes its own snapshot inside the
         // handler, so keep it out of the blanket pre-push.
-        | FootprintAddTextFrame { .. }
-        | Save => false,
+        | AddTextFrame { .. } => false,
         // All other variants either add/remove/move geometry,
         // mutate pad attributes, or rebuild the sketch — they all
         // need a history snapshot.

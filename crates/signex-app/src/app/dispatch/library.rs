@@ -18,9 +18,8 @@ use crate::library::editor::footprint::updates::{
     apply_footprint_clipboard_op, apply_footprint_primitive_edit,
 };
 use crate::library::messages::{
-    BrowserEditMsg, CloseLibraryChoice, EditorMsg, GraphicHandleMsg, LibraryMessage, PickerMsg,
-    PrimitiveEditorMsg, PrimitivePickerMsg, SettingsMsg, SymbolRotatePivotMsg, SymbolSelectionMsg,
-    SymbolToolMsg,
+    BrowserEditMsg, CloseLibraryChoice, EditorMsg, FootprintEditorMsg, LibraryMessage, PickerMsg,
+    PrimitiveEdit, PrimitivePickerMsg, SettingsMsg, SymbolEditorMsg,
 };
 use crate::library::state::{
     CloseLibraryConfirmState, ComponentPreviewState, DeleteConfirmState, DocumentOptionsModalState,
@@ -3431,23 +3430,39 @@ impl Signex {
     pub(crate) fn handle_primitive_editor_event(
         &mut self,
         path: std::path::PathBuf,
-        msg: PrimitiveEditorMsg,
+        msg: PrimitiveEdit,
     ) -> Task<Message> {
-        // Save is a sibling of the canvas-mutation messages — route
-        // through the standalone save path which writes JSON back to
-        // disk and (when applicable) reloads in the LibrarySet. When
-        // the file doesn't exist on disk yet (newly-minted in-memory
-        // tab from `Add New ▸ Symbol` / `Add New ▸ Footprint`), spawn
-        // the Save-As dialog instead so the user picks where it lands
-        // — same gate as the top-level `Message::SaveFile` path uses.
-        if matches!(msg, PrimitiveEditorMsg::Save) {
-            if !path.exists() {
-                return crate::app::handlers::document_files::spawn_save_as_for_new_primitive(path);
+        match msg {
+            // Save is a sibling of the canvas-mutation messages — route
+            // through the standalone save path which writes JSON back to
+            // disk and (when applicable) reloads in the LibrarySet. When
+            // the file doesn't exist on disk yet (newly-minted in-memory
+            // tab from `Add New ▸ Symbol` / `Add New ▸ Footprint`), spawn
+            // the Save-As dialog instead so the user picks where it lands
+            // — same gate as the top-level `Message::SaveFile` path uses.
+            PrimitiveEdit::Save => {
+                if !path.exists() {
+                    return crate::app::handlers::document_files::spawn_save_as_for_new_primitive(
+                        path,
+                    );
+                }
+                self.save_primitive_tab_at(&path);
+                Task::none()
             }
-            self.save_primitive_tab_at(&path);
-            return Task::none();
+            PrimitiveEdit::Symbol(msg) => self.handle_symbol_primitive_edit(path, msg),
+            PrimitiveEdit::Footprint(msg) => self.handle_footprint_primitive_edit(path, msg),
         }
+    }
 
+    /// Symbol-tab branch of [`Self::handle_primitive_editor_event`].
+    /// Per-library display settings (sheet color, grid, unit) mutate the
+    /// shared `OpenLibrary.display`; everything else routes to the
+    /// standalone symbol editor keyed by `path`.
+    fn handle_symbol_primitive_edit(
+        &mut self,
+        path: std::path::PathBuf,
+        msg: SymbolEditorMsg,
+    ) -> Task<Message> {
         // Per-library display settings (sheet color, grid, unit)
         // mutate `OpenLibrary.display` rather than the per-tab editor
         // state — every primitive editor opened from the same
@@ -3455,7 +3470,7 @@ impl Signex {
         // Options" parity). Run these before the editor-level
         // dispatch so the editor closure doesn't see them.
         match &msg {
-            PrimitiveEditorMsg::SymbolSetSheetColor(color) => {
+            SymbolEditorMsg::SetSheetColor(color) => {
                 let color = *color;
                 if let Some(lib) = self.library.containing_library_mut(&path) {
                     lib.display.sheet_color = color;
@@ -3463,14 +3478,14 @@ impl Signex {
                 self.invalidate_primitive_canvas_cache(&path);
                 return Task::none();
             }
-            PrimitiveEditorMsg::SymbolToggleGrid => {
+            SymbolEditorMsg::ToggleGrid => {
                 if let Some(lib) = self.library.containing_library_mut(&path) {
                     lib.display.grid_visible = !lib.display.grid_visible;
                 }
                 self.invalidate_primitive_canvas_cache(&path);
                 return Task::none();
             }
-            PrimitiveEditorMsg::SymbolCycleGridSize => {
+            SymbolEditorMsg::CycleGridSize => {
                 if let Some(lib) = self.library.containing_library_mut(&path) {
                     let sizes = crate::canvas::grid::GRID_SIZES_MM;
                     let current_idx = sizes
@@ -3483,7 +3498,7 @@ impl Signex {
                 self.invalidate_primitive_canvas_cache(&path);
                 return Task::none();
             }
-            PrimitiveEditorMsg::SymbolCycleUnit => {
+            SymbolEditorMsg::CycleUnit => {
                 if let Some(lib) = self.library.containing_library_mut(&path) {
                     use signex_types::coord::Unit;
                     lib.display.unit = match lib.display.unit {
@@ -3514,13 +3529,30 @@ impl Signex {
             return Task::none();
         }
 
+        tracing::warn!(
+            target: "signex::library",
+            path = %path.display(),
+            "primitive editor event: no matching tab state",
+        );
+        Task::none()
+    }
+
+    /// Footprint-tab branch of [`Self::handle_primitive_editor_event`].
+    /// Clipboard ops split-borrow `pad_clipboard` alongside the editor;
+    /// everything else routes to the standalone footprint editor keyed
+    /// by `path`.
+    fn handle_footprint_primitive_edit(
+        &mut self,
+        path: std::path::PathBuf,
+        msg: FootprintEditorMsg,
+    ) -> Task<Message> {
         // v0.26-E — clipboard ops need both `pad_clipboard` and the
         // editor mutable simultaneously, so split-borrow at the call
         // site instead of routing through `apply_footprint_primitive_edit`.
         match &msg {
-            PrimitiveEditorMsg::FootprintCopyPad
-            | PrimitiveEditorMsg::FootprintCutPad
-            | PrimitiveEditorMsg::FootprintPastePad => {
+            FootprintEditorMsg::CopyPad
+            | FootprintEditorMsg::CutPad
+            | FootprintEditorMsg::PastePad => {
                 let crate::app::DocumentState {
                     footprint_editors,
                     pad_clipboard,
@@ -3544,8 +3576,7 @@ impl Signex {
             // `refresh_panel_ctx()` call — a few lines down — shows
             // the new chip immediately instead of waiting for a
             // restart.
-            let is_capture_preset =
-                matches!(&msg, PrimitiveEditorMsg::FootprintCaptureFilterPreset);
+            let is_capture_preset = matches!(&msg, FootprintEditorMsg::CaptureFilterPreset);
             apply_footprint_primitive_edit(editor, msg);
             if is_capture_preset {
                 self.interaction_state.footprint_filter_presets =

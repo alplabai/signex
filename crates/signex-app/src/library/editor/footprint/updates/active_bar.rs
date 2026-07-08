@@ -1,26 +1,26 @@
 //! Footprint editor — active_bar update logic.
 //!
 //! Split out of `apply_footprint_primitive_edit` per ADR-0001 D1/D2.
-//! The router delegates all active_bar `PrimitiveEditorMsg` variants here;
+//! The router delegates all active_bar `FootprintEditorMsg` variants here;
 //! bodies are verbatim, so each arm keeps its own inner `use`s.
 
 use super::footprint_nudge_selection;
 use crate::library::editor::footprint::pad_to_sketch;
 use crate::library::editor::footprint::state::FootprintEditorState as CanvasState;
-use crate::library::messages::PrimitiveEditorMsg;
+use crate::library::messages::FootprintEditorMsg;
 
-pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: PrimitiveEditorMsg) {
+pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: FootprintEditorMsg) {
     match msg {
-        PrimitiveEditorMsg::FootprintToggleActiveBarMenu(menu) => {
+        FootprintEditorMsg::ToggleActiveBarMenu(menu) => {
             editor.state.active_bar_menu = match editor.state.active_bar_menu {
                 Some(m) if m == menu => None,
                 _ => Some(menu),
             };
         }
-        PrimitiveEditorMsg::FootprintCloseActiveBarMenu => {
+        FootprintEditorMsg::CloseActiveBarMenu => {
             editor.state.active_bar_menu = None;
         }
-        PrimitiveEditorMsg::FootprintActiveBarStub(label) => {
+        FootprintEditorMsg::ActiveBarStub(label) => {
             crate::diagnostics::log_info(format!(
                 "Active bar: {label} — coming soon (footprint Altium parity)"
             ));
@@ -30,7 +30,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
         // persisted list. Re-read from disk on every apply so a
         // preset captured in a different tab/session is picked up
         // without needing an in-memory refresh.
-        PrimitiveEditorMsg::FootprintApplyFilterPreset(idx) => {
+        FootprintEditorMsg::ApplyFilterPreset(idx) => {
             let presets = crate::fonts::read_footprint_filter_presets();
             if let Some(preset) = presets.get(idx) {
                 crate::library::editor::footprint::filter_presets::apply_preset(
@@ -42,7 +42,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             editor.canvas_cache.clear();
         }
         // Task 6 — Filter dropdown's "All - On / All - Off" chip.
-        PrimitiveEditorMsg::FootprintToggleAllFilters => {
+        FootprintEditorMsg::ToggleAllFilters => {
             let all_on = crate::library::editor::footprint::state::SelectionFilterKind::ALL
                 .iter()
                 .all(|&k| editor.state.selection_filter.get(k));
@@ -54,7 +54,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
         // rename UI yet (deferred — see filter_presets.rs). Silently
         // ignores the capture once `CUSTOM_FILTER_PRESET_LIMIT` slots
         // are full rather than evicting an existing preset.
-        PrimitiveEditorMsg::FootprintCaptureFilterPreset => {
+        FootprintEditorMsg::CaptureFilterPreset => {
             let mut presets = crate::fonts::read_footprint_filter_presets();
             if presets.len() < crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT {
                 let name = format!("Filter {}", presets.len() + 1);
@@ -67,7 +67,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             }
             editor.state.active_bar_menu = None;
         }
-        PrimitiveEditorMsg::FootprintActiveBarToggleSnap(flag) => {
+        FootprintEditorMsg::ActiveBarToggleSnap(flag) => {
             use crate::panels::SnapOptionFlag;
             let opts = &mut editor.state.snap_options;
             match flag {
@@ -101,15 +101,15 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             }
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::FootprintActiveBarSetSnappingMode(mode) => {
+        FootprintEditorMsg::ActiveBarSetSnappingMode(mode) => {
             editor.state.snapping_mode = mode;
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::FootprintActiveBarSetSnapSubTab(sub) => {
+        FootprintEditorMsg::ActiveBarSetSnapSubTab(sub) => {
             editor.state.snap_subtab = sub;
             editor.canvas_cache.clear();
         }
-        PrimitiveEditorMsg::FootprintActiveBarRotateSelection => {
+        FootprintEditorMsg::ActiveBarRotateSelection => {
             editor.with_parts(|state, primitive| {
                 if let Some(idx) = state.selected_pad
                     && let Some(pad) = state.pads.get_mut(idx)
@@ -122,7 +122,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             editor.canvas_cache.clear();
             editor.dirty = true;
         }
-        PrimitiveEditorMsg::FootprintActiveBarFlipSelection => {
+        FootprintEditorMsg::ActiveBarFlipSelection => {
             editor.with_parts(|state, primitive| {
                 if let Some(idx) = state.selected_pad
                     && let Some(pad) = state.pads.get_mut(idx)
@@ -150,7 +150,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             editor.canvas_cache.clear();
             editor.dirty = true;
         }
-        PrimitiveEditorMsg::FootprintActiveBarNudgeSelection => {
+        FootprintEditorMsg::ActiveBarNudgeSelection => {
             // v0.14 — "Move Selection by X, Y…" one-step nudge: the
             // combined selection by one active grid step in +X and +Y.
             // Shares geometry + sketch-mirror + history with the
@@ -159,30 +159,30 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             footprint_nudge_selection(editor, step, step);
             editor.state.active_bar_menu = None;
         }
-        PrimitiveEditorMsg::FootprintMoveByOpen => {
+        FootprintEditorMsg::MoveByOpen => {
             editor.state.move_by_modal = Some(Default::default());
             editor.state.active_bar_menu = None;
         }
-        PrimitiveEditorMsg::FootprintMoveBySetX(v) => {
+        FootprintEditorMsg::MoveBySetX(v) => {
             if let Some(m) = editor.state.move_by_modal.as_mut() {
                 m.dx_buf = v;
             }
         }
-        PrimitiveEditorMsg::FootprintMoveBySetY(v) => {
+        FootprintEditorMsg::MoveBySetY(v) => {
             if let Some(m) = editor.state.move_by_modal.as_mut() {
                 m.dy_buf = v;
             }
         }
-        PrimitiveEditorMsg::FootprintMoveByConfirm => {
+        FootprintEditorMsg::MoveByConfirm => {
             if let Some((dx, dy)) = editor.state.move_by_modal.as_ref().and_then(|m| m.parsed()) {
                 footprint_nudge_selection(editor, dx, dy);
             }
             editor.state.move_by_modal = None;
         }
-        PrimitiveEditorMsg::FootprintMoveByCancel => {
+        FootprintEditorMsg::MoveByCancel => {
             editor.state.move_by_modal = None;
         }
-        PrimitiveEditorMsg::FootprintActiveBarAlignSelectionToGrid => {
+        FootprintEditorMsg::ActiveBarAlignSelectionToGrid => {
             editor.with_parts(|state, primitive| {
                 let step = state.snap_options.grid_step_mm.max(0.001);
                 if let Some(idx) = state.selected_pad
@@ -203,7 +203,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             editor.canvas_cache.clear();
             editor.dirty = true;
         }
-        PrimitiveEditorMsg::FootprintActiveBarMoveOriginToGrid => {
+        FootprintEditorMsg::ActiveBarMoveOriginToGrid => {
             editor.with_parts(|state, primitive| {
                 let step = state.snap_options.grid_step_mm.max(0.001);
                 let mut snapshots: Vec<crate::library::editor::footprint::state::EditorPad> =
@@ -224,7 +224,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             editor.canvas_cache.clear();
             editor.dirty = true;
         }
-        PrimitiveEditorMsg::FootprintActiveBarSelectAll => {
+        FootprintEditorMsg::ActiveBarSelectAll => {
             // v0.27 — Altium-parity: Select All multi-selects every
             // pad in Pads mode; Sketch mode still picks the first
             // entity (sketch-side multi-select is a v0.28 follow-up).
@@ -250,7 +250,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             editor.canvas_cache.clear();
             editor.state.active_bar_menu = None;
         }
-        PrimitiveEditorMsg::FootprintActiveBarClearSelection => {
+        FootprintEditorMsg::ActiveBarClearSelection => {
             editor.state.selected_pad = None;
             editor.state.selected_pads_extra.clear();
             editor.state.selected_sketch = None;
@@ -260,7 +260,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             editor.canvas_cache.clear();
             editor.state.active_bar_menu = None;
         }
-        PrimitiveEditorMsg::FootprintActiveBarSetSketchTool(tool) => {
+        FootprintEditorMsg::ActiveBarSetSketchTool(tool) => {
             // Switch to Sketch mode if not already there, then arm the
             // selected sketch tool. Cancels any in-flight gesture.
             use crate::library::editor::footprint::state::{EditorMode, ToolPending};
