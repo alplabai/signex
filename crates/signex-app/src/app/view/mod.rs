@@ -3548,7 +3548,7 @@ impl Signex {
                             .width(Length::Fill)
                             .height(Length::Fill),
                     )
-                    .on_release(Message::BomPreviewColumnResizeEnd)
+                    .on_release(Message::BomPreview(BomPreviewMsg::ColumnResizeEnd))
                     .interaction(iced::mouse::Interaction::ResizingHorizontally)
                     .into();
                     stack = stack.push(overlay);

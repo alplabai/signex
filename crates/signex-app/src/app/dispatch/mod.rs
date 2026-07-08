@@ -76,24 +76,9 @@ impl Signex {
             | Message::ExportNetlistFinished(_)
             | Message::ExportBomRequested
             | Message::ExportBomFinished(_)
-            | Message::BomPreviewSetGrouping(_)
-            | Message::BomPreviewSetFormat(_)
-            | Message::BomPreviewSetIncludeDnp(_)
-            | Message::BomPreviewSetIncludeNotFitted(_)
-            | Message::BomPreviewToggleColumn(_)
-            | Message::BomPreviewSetVariant(_)
-            | Message::BomPreviewSortColumn(_)
-            | Message::BomPreviewColumnDragStart(_)
-            | Message::BomPreviewColumnDragDrop(_)
-            | Message::BomPreviewColumnHoverEnter(_)
-            | Message::BomPreviewColumnHoverExit(_)
-            | Message::BomPreviewColumnResizeStart(_)
-            | Message::BomPreviewColumnResizeEnd
-            | Message::BomPreviewSetSidebarTab(_)
-            | Message::BomPreviewExport
-            | Message::BomPreviewClose
             | Message::DismissExportError => self.dispatch_document_message(message),
             Message::PrintPreview(msg) => self.dispatch_print_preview_message(msg),
+            Message::BomPreview(msg) => self.dispatch_bom_preview_message(msg),
             Message::TogglePanelList
             | Message::OpenPanel(_)
             | Message::OpenFind
