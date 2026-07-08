@@ -9,36 +9,41 @@ impl Signex {
     ) -> Task<Message> {
         use crate::active_bar::ActiveBarAction;
 
+        // Follow-up task from any re-entrant tool-select / power-port arm
+        // (each `self.update(...)` returns a `finish_update` task that must
+        // be propagated, not dropped). Only one match arm runs, so a single
+        // slot suffices.
+        let mut follow = Task::none();
         match action {
             ActiveBarAction::PlacePowerGND => {
-                self.set_pending_power_port("GND", "power:GND");
+                follow = self.set_pending_power_port("GND", "power:GND");
             }
             ActiveBarAction::PlacePowerVCC => {
-                self.set_pending_power_port("VCC", "power:VCC");
+                follow = self.set_pending_power_port("VCC", "power:VCC");
             }
             ActiveBarAction::PlacePowerPlus12 => {
-                self.set_pending_power_port("+12V", "power:+12V");
+                follow = self.set_pending_power_port("+12V", "power:+12V");
             }
             ActiveBarAction::PlacePowerPlus5 => {
-                self.set_pending_power_port("+5V", "power:+5V");
+                follow = self.set_pending_power_port("+5V", "power:+5V");
             }
             ActiveBarAction::PlacePowerMinus5 => {
-                self.set_pending_power_port("-5V", "power:-5V");
+                follow = self.set_pending_power_port("-5V", "power:-5V");
             }
             ActiveBarAction::PlacePowerArrow
             | ActiveBarAction::PlacePowerWave
             | ActiveBarAction::PlacePowerBar
             | ActiveBarAction::PlacePowerCircle => {
-                self.set_pending_power_port("PWR", "power:PWR_FLAG");
+                follow = self.set_pending_power_port("PWR", "power:PWR_FLAG");
             }
             ActiveBarAction::PlacePowerSignalGND => {
-                self.set_pending_power_port("GNDREF", "power:GNDREF");
+                follow = self.set_pending_power_port("GNDREF", "power:GNDREF");
             }
             ActiveBarAction::PlacePowerEarth => {
-                self.set_pending_power_port("Earth", "power:Earth");
+                follow = self.set_pending_power_port("Earth", "power:Earth");
             }
             ActiveBarAction::PlacePort => {
-                let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Label)));
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Label)));
                 self.interaction_state.pending_port = Some((
                     signex_types::schematic::LabelType::Global,
                     "bidirectional".to_string(),
@@ -57,7 +62,7 @@ impl Signex {
                     });
             }
             ActiveBarAction::PlaceOffSheetConnector => {
-                let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Label)));
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Label)));
                 self.interaction_state.pending_port = Some((
                     signex_types::schematic::LabelType::Hierarchical,
                     String::new(),
@@ -76,13 +81,13 @@ impl Signex {
                     });
             }
             ActiveBarAction::PlaceBusEntry => {
-                let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::BusEntry)));
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::BusEntry)));
                 self.interaction_state.pending_power = None;
             }
             // No-ERC directive reuses the existing No-Connect tool (Altium's
             // "Place No ERC" also drops an X marker at the clicked pin).
             ActiveBarAction::PlaceNoERC => {
-                let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::NoConnect)));
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::NoConnect)));
             }
             // Sheet-symbol / rounded rect / graphic — all rectangle-dragged
             // shapes in Altium. Until each has a bespoke tool, use the
@@ -95,23 +100,23 @@ impl Signex {
             | ActiveBarAction::PlaceReuseBlock
             | ActiveBarAction::DrawRoundRectangle
             | ActiveBarAction::PlaceGraphic => {
-                let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Rectangle)));
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Rectangle)));
             }
             // Arc — dedicated 3-click tool. Elliptical / ellipse still
             // fall back to Circle until v1.2 curves land.
             ActiveBarAction::DrawArc => {
-                let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Arc)));
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Arc)));
             }
             ActiveBarAction::DrawEllipticalArc | ActiveBarAction::DrawEllipse => {
-                let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Circle)));
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Circle)));
             }
             // Polygon — click-by-click freeform. Bezier still falls back
             // to Line until v1.2 curves.
             ActiveBarAction::DrawPolygon => {
-                let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Polyline)));
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Polyline)));
             }
             ActiveBarAction::DrawBezier => {
-                let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Line)));
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Line)));
             }
             // Harness + signal integrity directives — not yet implemented.
             // Log so the user sees the click registered and knows it's pending.
@@ -127,7 +132,7 @@ impl Signex {
                 // label-tool ghost with a "PARAM=VALUE" default so the
                 // user drops + edits inline. Bulk edits go through the
                 // Parameter Manager (Design menu).
-                let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Label)));
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Label)));
                 self.interaction_state.pending_port = None;
                 self.interaction_state.active_canvas_mut().ghost_label =
                     Some(signex_types::schematic::Label {
@@ -146,7 +151,7 @@ impl Signex {
                 // DiffPair directive — attaches a differential-pair rule.
                 // Ships as a text note until the PCB router's constraint
                 // model lands in v2.1.
-                let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Text)));
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Text)));
                 self.interaction_state.active_canvas_mut().ghost_text =
                     Some(signex_types::schematic::TextNote {
                         uuid: uuid::Uuid::new_v4(),
@@ -162,7 +167,7 @@ impl Signex {
                 // Blanket / Compile Mask — rectangular rule areas.
                 // Placement is Tool::Rectangle for v0.7; rule/mask
                 // semantics are a v1.1 (Advanced Schematic) item.
-                let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Rectangle)));
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Rectangle)));
             }
             // Net-color palette — arms pending_net_color so the next
             // canvas click on a wire floods its whole net with the
@@ -250,14 +255,14 @@ impl Signex {
             _ => {}
         }
 
-        Task::none()
+        follow
     }
 
-    fn set_pending_power_port(&mut self, net_name: &str, lib_id: &str) {
+    fn set_pending_power_port(&mut self, net_name: &str, lib_id: &str) -> Task<Message> {
         // Go through the normal tool-switch path first so previous ghosts
         // and tool_preview get cleaned up; then override tool_preview to
         // the specific power-port name and arm the ghost_symbol.
-        let _ = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Component)));
+        let task = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Component)));
         self.interaction_state.pending_power = Some((net_name.to_string(), lib_id.to_string()));
         self.interaction_state.active_canvas_mut().tool_preview = Some(net_name.to_string());
         // Live preview: build a ghost power-port symbol that follows the
@@ -294,5 +299,6 @@ impl Signex {
                 row_id: None,
                 library_version: String::new(),
             });
+        task
     }
 }

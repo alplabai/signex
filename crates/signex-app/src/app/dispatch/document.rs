@@ -22,19 +22,20 @@ impl Signex {
                     .get(self.document_state.active_tab)
                     .and_then(|t| t.kind.as_footprint_editor())
                     .cloned();
-                if let Some(path) = footprint_path {
-                    let _ = self.update(Message::Library(
+                let task = if let Some(path) = footprint_path {
+                    self.update(Message::Library(
                         crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                             path,
                             msg: crate::library::messages::PrimitiveEdit::Footprint(
                                 crate::library::messages::FootprintEditorMsg::DeleteSelected,
                             ),
                         },
-                    ));
+                    ))
                 } else {
                     self.handle_selection_delete_requested();
-                }
-                self.finish_update()
+                    Task::none()
+                };
+                Task::batch([task, self.finish_update()])
             }
             EditMsg::Undo => {
                 self.handle_undo_requested();

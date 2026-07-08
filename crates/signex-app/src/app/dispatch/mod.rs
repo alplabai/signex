@@ -555,20 +555,19 @@ impl Signex {
                     .and_then(|t| t.kind.as_footprint_editor())
                     .cloned();
                 if let Some(path) = footprint_path {
-                    let _ = self.update(Message::Library(
+                    self.update(Message::Library(
                         crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                             path,
                             msg: crate::library::messages::PrimitiveEdit::Footprint(
                                 crate::library::messages::FootprintEditorMsg::ToolEscape,
                             ),
                         },
-                    ));
+                    ))
                 } else {
-                    let _ = self.update(Message::Tool(crate::app::ToolMessage::SelectTool(
+                    self.update(Message::Tool(crate::app::ToolMessage::SelectTool(
                         crate::app::Tool::Select,
-                    )));
+                    )))
                 }
-                Task::none()
             }
             Message::FootprintModeShortcut(target) => {
                 // v0.14.2 — gate on "active tab is a footprint
@@ -584,16 +583,17 @@ impl Signex {
                     .and_then(|t| t.kind.as_footprint_editor())
                     .cloned();
                 if let Some(path) = path {
-                    let _ = self.update(Message::Library(
+                    self.update(Message::Library(
                         crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                             path,
                             msg: crate::library::messages::PrimitiveEdit::Footprint(
                                 crate::library::messages::FootprintEditorMsg::SetMode(target),
                             ),
                         },
-                    ));
+                    ))
+                } else {
+                    Task::none()
                 }
-                Task::none()
             }
             Message::Noop => Task::none(),
         }
