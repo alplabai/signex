@@ -39,6 +39,11 @@ impl RenderInvalidation {
     pub const LIB_SYMBOLS: Self = Self(1 << 10);
     pub const PAPER: Self = Self(1 << 11);
     pub const FULL: Self = Self(u32::MAX);
+
+    /// True when any bit of `mask` is also set in `self`.
+    pub fn intersects(self, mask: Self) -> bool {
+        self.0 & mask.0 != 0
+    }
 }
 
 impl std::ops::BitOr for RenderInvalidation {
