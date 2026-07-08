@@ -105,81 +105,6 @@ impl Signex {
                 self.refresh_panel_ctx();
                 self.finish_update()
             }
-            Message::GridPropertiesOpen => {
-                // Pre-populate from the active footprint editor's
-                // current step. No-op for non-footprint tabs (the
-                // modal would have nothing to drive).
-                let editor_snap = self.active_footprint_editor().map(|e| e.state.snap_options);
-                tracing::info!(
-                    target: "signex::ui",
-                    has_snap = editor_snap.is_some(),
-                    "GridPropertiesOpen received",
-                );
-                if let Some(opts) = editor_snap {
-                    let step = opts.grid_step_mm;
-                    let s = format!("{step:.4}");
-                    self.ui_state.grid_properties = Some(crate::app::GridPropertiesState {
-                        step_x_mm: s.clone(),
-                        step_y_mm: s,
-                        link_xy: true,
-                        fine_display: opts.fine_grid_display,
-                        coarse_display: opts.coarse_grid_display,
-                        multiplier: opts.coarse_multiplier,
-                    });
-                }
-                self.finish_update()
-            }
-            Message::GridPropertiesSetFineDisplay(d) => {
-                if let Some(state) = self.ui_state.grid_properties.as_mut() {
-                    state.fine_display = d;
-                }
-                self.finish_update()
-            }
-            Message::GridPropertiesSetCoarseDisplay(d) => {
-                if let Some(state) = self.ui_state.grid_properties.as_mut() {
-                    state.coarse_display = d;
-                }
-                self.finish_update()
-            }
-            Message::GridPropertiesSetMultiplier(m) => {
-                if let Some(state) = self.ui_state.grid_properties.as_mut() {
-                    state.multiplier = m.max(1);
-                }
-                self.finish_update()
-            }
-            Message::GridPropertiesClose => {
-                self.ui_state.grid_properties = None;
-                self.finish_update()
-            }
-            Message::GridPropertiesSetStepX(value) => {
-                if let Some(state) = self.ui_state.grid_properties.as_mut() {
-                    state.step_x_mm = value;
-                    if state.link_xy {
-                        state.step_y_mm = state.step_x_mm.clone();
-                    }
-                }
-                self.finish_update()
-            }
-            Message::GridPropertiesSetStepY(value) => {
-                if let Some(state) = self.ui_state.grid_properties.as_mut() {
-                    state.step_y_mm = value;
-                    if state.link_xy {
-                        state.step_x_mm = state.step_y_mm.clone();
-                    }
-                }
-                self.finish_update()
-            }
-            Message::GridPropertiesToggleLink => {
-                if let Some(state) = self.ui_state.grid_properties.as_mut() {
-                    state.link_xy = !state.link_xy;
-                    if state.link_xy {
-                        // Re-link mirrors X into Y so re-enabling
-                        // doesn't keep a desynced pair.
-                        state.step_y_mm = state.step_x_mm.clone();
-                    }
-                }
-                self.finish_update()
-            }
             Message::OpenSelectionFilterCustom => {
                 if let Some(editor) = self.active_footprint_editor() {
                     let f = editor.state.selection_filter;
@@ -248,42 +173,6 @@ impl Signex {
                 self.refresh_panel_ctx();
                 self.finish_update()
             }
-            Message::GridPropertiesApply => {
-                // Validate the X step (Y is taken from X for now —
-                // single-axis steps in `SnapOptions`; the Y field
-                // exists in the dialog for forward compatibility).
-                let draft = self.ui_state.grid_properties.clone();
-                let parsed_x = draft
-                    .as_ref()
-                    .and_then(|s| s.step_x_mm.trim().parse::<f64>().ok());
-                if let (Some(d), Some(editor)) = (draft, self.active_footprint_editor_mut()) {
-                    let opts = &mut editor.state.snap_options;
-                    if let Some(step) = parsed_x {
-                        if step > 0.0 && step.is_finite() {
-                            opts.grid_step_mm = step;
-                        }
-                    }
-                    opts.fine_grid_display = d.fine_display;
-                    opts.coarse_grid_display = d.coarse_display;
-                    opts.coarse_multiplier = d.multiplier.max(1);
-                    // v0.18.21 — mirror onto the active grid row so
-                    // multi-grid CRUD stays consistent. The Manager
-                    // displays per-row values from `grids[idx]`, so a
-                    // commit through the legacy modal must update the
-                    // matching row too.
-                    let active_idx = editor.state.active_grid_idx;
-                    if let Some(row) = editor.state.grids.get_mut(active_idx) {
-                        row.step_mm = opts.grid_step_mm;
-                        row.fine_display = opts.fine_grid_display;
-                        row.coarse_display = opts.coarse_grid_display;
-                        row.coarse_multiplier = opts.coarse_multiplier;
-                    }
-                    editor.canvas_cache.clear();
-                }
-                self.ui_state.grid_properties = None;
-                self.refresh_panel_ctx();
-                self.finish_update()
-            }
             Message::StatusBar(StatusBarRequest::ToggleSnap) => {
                 self.ui_state.snap_enabled = !self.ui_state.snap_enabled;
                 self.interaction_state.active_canvas_mut().snap_enabled =
@@ -324,6 +213,126 @@ impl Signex {
                 self.handle_canvas_event_in_window(window_id, event)
             }
             _ => unreachable!("dispatch_ui_message received non-ui message"),
+        }
+    }
+
+    /// Grid Properties dialog handler (namespaced family, ADR-0001 D3).
+    pub(crate) fn dispatch_grid_properties_message(
+        &mut self,
+        msg: GridPropertiesMsg,
+    ) -> Task<Message> {
+        match msg {
+            GridPropertiesMsg::Open => {
+                // Pre-populate from the active footprint editor's
+                // current step. No-op for non-footprint tabs (the
+                // modal would have nothing to drive).
+                let editor_snap = self.active_footprint_editor().map(|e| e.state.snap_options);
+                tracing::info!(
+                    target: "signex::ui",
+                    has_snap = editor_snap.is_some(),
+                    "GridPropertiesOpen received",
+                );
+                if let Some(opts) = editor_snap {
+                    let step = opts.grid_step_mm;
+                    let s = format!("{step:.4}");
+                    self.ui_state.grid_properties = Some(crate::app::GridPropertiesState {
+                        step_x_mm: s.clone(),
+                        step_y_mm: s,
+                        link_xy: true,
+                        fine_display: opts.fine_grid_display,
+                        coarse_display: opts.coarse_grid_display,
+                        multiplier: opts.coarse_multiplier,
+                    });
+                }
+                self.finish_update()
+            }
+            GridPropertiesMsg::SetFineDisplay(d) => {
+                if let Some(state) = self.ui_state.grid_properties.as_mut() {
+                    state.fine_display = d;
+                }
+                self.finish_update()
+            }
+            GridPropertiesMsg::SetCoarseDisplay(d) => {
+                if let Some(state) = self.ui_state.grid_properties.as_mut() {
+                    state.coarse_display = d;
+                }
+                self.finish_update()
+            }
+            GridPropertiesMsg::SetMultiplier(m) => {
+                if let Some(state) = self.ui_state.grid_properties.as_mut() {
+                    state.multiplier = m.max(1);
+                }
+                self.finish_update()
+            }
+            GridPropertiesMsg::Close => {
+                self.ui_state.grid_properties = None;
+                self.finish_update()
+            }
+            GridPropertiesMsg::SetStepX(value) => {
+                if let Some(state) = self.ui_state.grid_properties.as_mut() {
+                    state.step_x_mm = value;
+                    if state.link_xy {
+                        state.step_y_mm = state.step_x_mm.clone();
+                    }
+                }
+                self.finish_update()
+            }
+            GridPropertiesMsg::SetStepY(value) => {
+                if let Some(state) = self.ui_state.grid_properties.as_mut() {
+                    state.step_y_mm = value;
+                    if state.link_xy {
+                        state.step_x_mm = state.step_y_mm.clone();
+                    }
+                }
+                self.finish_update()
+            }
+            GridPropertiesMsg::ToggleLink => {
+                if let Some(state) = self.ui_state.grid_properties.as_mut() {
+                    state.link_xy = !state.link_xy;
+                    if state.link_xy {
+                        // Re-link mirrors X into Y so re-enabling
+                        // doesn't keep a desynced pair.
+                        state.step_y_mm = state.step_x_mm.clone();
+                    }
+                }
+                self.finish_update()
+            }
+            GridPropertiesMsg::Apply => {
+                // Validate the X step (Y is taken from X for now —
+                // single-axis steps in `SnapOptions`; the Y field
+                // exists in the dialog for forward compatibility).
+                let draft = self.ui_state.grid_properties.clone();
+                let parsed_x = draft
+                    .as_ref()
+                    .and_then(|s| s.step_x_mm.trim().parse::<f64>().ok());
+                if let (Some(d), Some(editor)) = (draft, self.active_footprint_editor_mut()) {
+                    let opts = &mut editor.state.snap_options;
+                    if let Some(step) = parsed_x {
+                        if step > 0.0 && step.is_finite() {
+                            opts.grid_step_mm = step;
+                        }
+                    }
+                    opts.fine_grid_display = d.fine_display;
+                    opts.coarse_grid_display = d.coarse_display;
+                    opts.coarse_multiplier = d.multiplier.max(1);
+                    // v0.18.21 — mirror onto the active grid row so
+                    // multi-grid CRUD stays consistent. The Manager
+                    // displays per-row values from `grids[idx]`, so a
+                    // commit through the legacy modal must update the
+                    // matching row too.
+                    let active_idx = editor.state.active_grid_idx;
+                    if let Some(row) = editor.state.grids.get_mut(active_idx) {
+                        row.step_mm = opts.grid_step_mm;
+                        row.fine_display = opts.fine_grid_display;
+                        row.coarse_display = opts.coarse_grid_display;
+                        row.coarse_multiplier = opts.coarse_multiplier;
+                    }
+                    editor.canvas_cache.clear();
+                }
+                self.ui_state.grid_properties = None;
+                self.refresh_panel_ctx();
+                self.finish_update()
+            }
         }
     }
 

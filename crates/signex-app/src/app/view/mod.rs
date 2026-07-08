@@ -2769,7 +2769,7 @@ impl Signex {
                                     ..container::Style::default()
                                 },
                             ))
-                            .on_press(Message::NetColorSet {
+                            .on_press(Message::NetColor(NetColorMsg::Set {
                                 net: net_copy.clone(),
                                 color: Some(signex_types::theme::Color {
                                     r: r_c,
@@ -2777,7 +2777,7 @@ impl Signex {
                                     b: b_c,
                                     a: 255,
                                 }),
-                            })
+                            }))
                             .style(move |_: &iced::Theme, _| iced::widget::button::Style {
                                 background: Some(iced::Background::Color(iced::Color::TRANSPARENT)),
                                 border: iced::Border::default(),
@@ -2789,10 +2789,10 @@ impl Signex {
                 let net_clear = net.clone();
                 swatches = swatches.push(
                     button(container(text("×").size(10).color(text_c)).padding([0, 6]))
-                        .on_press(Message::NetColorSet {
+                        .on_press(Message::NetColor(NetColorMsg::Set {
                             net: net_clear,
                             color: None,
-                        })
+                        }))
                         .style(move |_: &iced::Theme, _| iced::widget::button::Style {
                             background: Some(iced::Background::Color(iced::Color::from_rgba(
                                 1.0, 1.0, 1.0, 0.04,
@@ -3092,7 +3092,7 @@ impl Signex {
                     },
                 ))
                 .padding(0)
-                .on_press(Message::NetColorCustomDraft(col))
+                .on_press(Message::NetColor(NetColorMsg::CustomDraft(col)))
                 .style(move |_: &iced::Theme, _| iced::widget::button::Style {
                     background: Some(iced::Background::Color(iced::Color::TRANSPARENT)),
                     border: iced::Border::default(),
@@ -3126,7 +3126,7 @@ impl Signex {
                         .size(11)
                         .padding([3, 8])
                         .width(iced::Length::Fixed(70.0))
-                        .on_input(move |s| Message::NetColorCustomChannel(chan, s)),
+                        .on_input(move |s| Message::NetColor(NetColorMsg::CustomChannel(chan, s))),
                 ]
                 .align_y(iced::Alignment::Center)
                 .spacing(6)
@@ -3180,7 +3180,7 @@ impl Signex {
         let footer = row![
             Space::new().width(iced::Length::Fill),
             button(container(text("Cancel").size(11).color(text_c)).padding([4, 14]),)
-                .on_press(Message::NetColorCustomShow(false))
+                .on_press(Message::NetColor(NetColorMsg::CustomShow(false)))
                 .style(move |_: &iced::Theme, _| iced::widget::button::Style {
                     background: Some(iced::Background::Color(iced::Color::from_rgba(
                         1.0, 1.0, 1.0, 0.04,
@@ -3197,7 +3197,7 @@ impl Signex {
             button(
                 container(text("Use Color").size(11).color(iced::Color::WHITE)).padding([4, 14]),
             )
-            .on_press(Message::NetColorCustomSubmit(draft))
+            .on_press(Message::NetColor(NetColorMsg::CustomSubmit(draft)))
             .style(move |_: &iced::Theme, _| iced::widget::button::Style {
                 background: Some(iced::Background::Color(iced::Color::from_rgb(
                     0.00, 0.47, 0.84,
@@ -3219,7 +3219,7 @@ impl Signex {
                     row![
                         text("Pick Net Color").size(13).color(text_c),
                         Space::new().width(iced::Length::Fill),
-                        self.view_close_x(Message::NetColorCustomShow(false)),
+                        self.view_close_x(Message::NetColor(NetColorMsg::CustomShow(false))),
                     ]
                     .align_y(iced::Alignment::Center),
                 )
@@ -4650,7 +4650,9 @@ impl Signex {
         // ColorPicker) because the user needs a quick-pick palette +
         // precise RGB inputs side-by-side.
         if ui.net_color_custom.show {
-            layers.push(Self::dismiss_layer(Message::NetColorCustomShow(false)));
+            layers.push(Self::dismiss_layer(Message::NetColor(
+                NetColorMsg::CustomShow(false),
+            )));
             layers.push(self.view_net_color_custom_picker());
         }
 

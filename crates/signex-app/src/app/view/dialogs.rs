@@ -9,7 +9,7 @@ use iced::widget::{Column, Row, Space, button, column, container, row, scrollabl
 use iced::{Background, Border, Color, Element, Length, Theme};
 
 use crate::app::state::AnnotateOrder;
-use crate::app::{BomPreviewMsg, Message, Signex};
+use crate::app::{BomPreviewMsg, GridPropertiesMsg, Message, Signex};
 
 const BACKDROP: Color = Color::from_rgba(0.0, 0.0, 0.0, 0.55);
 
@@ -1234,7 +1234,11 @@ impl Signex {
                     .size(MODAL_HEADER_TITLE_SIZE)
                     .color(text_c),
                 Space::new().width(Length::Fill),
-                close_x_button(Message::GridPropertiesClose, theme_id, text_muted),
+                close_x_button(
+                    Message::GridProperties(GridPropertiesMsg::Close),
+                    theme_id,
+                    text_muted,
+                ),
             ]
             .align_y(iced::Alignment::Center),
         )
@@ -1260,7 +1264,7 @@ impl Signex {
             if enabled {
                 input = input
                     .on_input(on_input)
-                    .on_submit(Message::GridPropertiesApply);
+                    .on_submit(Message::GridProperties(GridPropertiesMsg::Apply));
             }
             input.into()
         };
@@ -1320,7 +1324,9 @@ impl Signex {
                     };
                     iced::widget::button(text(label).size(10).color(text_c))
                         .padding([3, 10])
-                        .on_press(Message::GridPropertiesSetMultiplier(target))
+                        .on_press(Message::GridProperties(GridPropertiesMsg::SetMultiplier(
+                            target,
+                        )))
                         .style(move |_: &iced::Theme, _| iced::widget::button::Style {
                             background: Some(iced::Background::Color(bg)),
                             border: iced::Border {
@@ -1348,11 +1354,16 @@ impl Signex {
             row![
                 container(text("Step X").size(11).color(text_muted))
                     .width(Length::Fixed(80.0)),
-                mk_input("0.127", &st.step_x_mm, Message::GridPropertiesSetStepX, true),
+                mk_input(
+                    "0.127",
+                    &st.step_x_mm,
+                    |v| Message::GridProperties(GridPropertiesMsg::SetStepX(v)),
+                    true,
+                ),
                 Space::new().width(8),
                 iced::widget::button(text(link_label).size(11).color(text_c))
                     .padding([4, 10])
-                    .on_press(Message::GridPropertiesToggleLink),
+                    .on_press(Message::GridProperties(GridPropertiesMsg::ToggleLink)),
             ]
             .spacing(8)
             .align_y(iced::Alignment::Center),
@@ -1362,18 +1373,18 @@ impl Signex {
                 mk_input(
                     "0.127",
                     &st.step_y_mm,
-                    Message::GridPropertiesSetStepY,
+                    |v| Message::GridProperties(GridPropertiesMsg::SetStepY(v)),
                     !st.link_xy,
                 ),
             ]
             .spacing(8)
             .align_y(iced::Alignment::Center),
-            mk_display_row("Fine", st.fine_display, Message::GridPropertiesSetFineDisplay),
-            mk_display_row(
-                "Coarse",
-                st.coarse_display,
-                Message::GridPropertiesSetCoarseDisplay,
-            ),
+            mk_display_row("Fine", st.fine_display, |d| {
+                Message::GridProperties(GridPropertiesMsg::SetFineDisplay(d))
+            }),
+            mk_display_row("Coarse", st.coarse_display, |d| {
+                Message::GridProperties(GridPropertiesMsg::SetCoarseDisplay(d))
+            }),
             mk_mult_row(st.multiplier),
             text(
                 "Step Y mirrors Step X (single-axis storage). Toggle the chain to edit Y independently. \
@@ -1392,9 +1403,18 @@ impl Signex {
                 container(
                     row![
                         Space::new().width(Length::Fill),
-                        secondary_button("Cancel", Message::GridPropertiesClose, text_c, border_c,),
+                        secondary_button(
+                            "Cancel",
+                            Message::GridProperties(GridPropertiesMsg::Close),
+                            text_c,
+                            border_c,
+                        ),
                         Space::new().width(8),
-                        primary_button("Apply", Some(Message::GridPropertiesApply), border_c,),
+                        primary_button(
+                            "Apply",
+                            Some(Message::GridProperties(GridPropertiesMsg::Apply)),
+                            border_c,
+                        ),
                     ]
                     .align_y(iced::Alignment::Center),
                 )
