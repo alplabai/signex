@@ -104,28 +104,28 @@ fn view_symbol_status<'a>(
     let sep = || text("|").size(10).color(muted);
 
     // Grid toggle button.
-    let grid_vis_label = if display.grid_visible { "Grid: ON" } else { "Grid: OFF" };
-    let grid_toggle = button(
-        text(grid_vis_label).size(11).color(text_c),
-    )
-    .padding([2, 6])
-    .on_press(LibraryMessage::PrimitiveEditorEvent {
-        path: path.clone(),
-        msg: PrimitiveEditorMsg::SymbolToggleGrid,
-    })
-    .style(symbol_tool_button_style(false, border));
+    let grid_vis_label = if display.grid_visible {
+        "Grid: ON"
+    } else {
+        "Grid: OFF"
+    };
+    let grid_toggle = button(text(grid_vis_label).size(11).color(text_c))
+        .padding([2, 6])
+        .on_press(LibraryMessage::PrimitiveEditorEvent {
+            path: path.clone(),
+            msg: PrimitiveEditorMsg::SymbolToggleGrid,
+        })
+        .style(symbol_tool_button_style(false, border));
 
     // Grid size cycle button.
     let grid_size_label = format!("{:.3} mm", display.grid_size_mm);
-    let grid_cycle = button(
-        text(grid_size_label).size(11).color(muted),
-    )
-    .padding([2, 6])
-    .on_press(LibraryMessage::PrimitiveEditorEvent {
-        path: path.clone(),
-        msg: PrimitiveEditorMsg::SymbolCycleGridSize,
-    })
-    .style(symbol_tool_button_style(false, border));
+    let grid_cycle = button(text(grid_size_label).size(11).color(muted))
+        .padding([2, 6])
+        .on_press(LibraryMessage::PrimitiveEditorEvent {
+            path: path.clone(),
+            msg: PrimitiveEditorMsg::SymbolCycleGridSize,
+        })
+        .style(symbol_tool_button_style(false, border));
 
     container(
         row![
@@ -185,7 +185,10 @@ fn view_symbol_toolbar<'a>(
     let btn = |label: &'static str, msg: PrimitiveEditorMsg| {
         button(text(label).size(11).color(text_c))
             .padding([4, 10])
-            .on_press(LibraryMessage::PrimitiveEditorEvent { path: path.clone(), msg })
+            .on_press(LibraryMessage::PrimitiveEditorEvent {
+                path: path.clone(),
+                msg,
+            })
             .style(symbol_tool_button_style(false, border))
     };
 
@@ -199,7 +202,9 @@ fn view_symbol_toolbar<'a>(
             btn("Fit", PrimitiveEditorMsg::SymbolFit),
             Space::new().width(Length::Fill),
             btn("\u{2190}", PrimitiveEditorMsg::SymbolPrevPart),
-            text(format!("Part {active_part} / {max_part}")).size(11).color(text_c),
+            text(format!("Part {active_part} / {max_part}"))
+                .size(11)
+                .color(text_c),
             btn("\u{2192}", PrimitiveEditorMsg::SymbolNextPart),
             Space::new().width(8),
             btn(save_label, PrimitiveEditorMsg::Save),
@@ -270,15 +275,33 @@ fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> Primitive
     match action {
         CanvasAction::AddPin { x, y } => PrimitiveEditorMsg::SymbolAddPin { x, y },
         CanvasAction::AddRectangle { x, y } => PrimitiveEditorMsg::SymbolAddRectangle { x, y },
-        CanvasAction::AddLine { from_x, from_y, to_x, to_y } => {
-            PrimitiveEditorMsg::SymbolAddLine { from_x, from_y, to_x, to_y }
-        }
+        CanvasAction::AddLine {
+            from_x,
+            from_y,
+            to_x,
+            to_y,
+        } => PrimitiveEditorMsg::SymbolAddLine {
+            from_x,
+            from_y,
+            to_x,
+            to_y,
+        },
         CanvasAction::AddCircle { cx, cy, radius } => {
             PrimitiveEditorMsg::SymbolAddCircle { cx, cy, radius }
         }
-        CanvasAction::AddArc { cx, cy, radius, start_deg, end_deg } => {
-            PrimitiveEditorMsg::SymbolAddArc { cx, cy, radius, start_deg, end_deg }
-        }
+        CanvasAction::AddArc {
+            cx,
+            cy,
+            radius,
+            start_deg,
+            end_deg,
+        } => PrimitiveEditorMsg::SymbolAddArc {
+            cx,
+            cy,
+            radius,
+            start_deg,
+            end_deg,
+        },
         CanvasAction::AddText { x, y } => PrimitiveEditorMsg::SymbolAddText { x, y },
         CanvasAction::Select(sel) => PrimitiveEditorMsg::SymbolSelect(symbol_selection_to_msg(sel)),
         CanvasAction::Deselect => PrimitiveEditorMsg::SymbolDeselect,
@@ -338,9 +361,13 @@ fn symbol_selection_to_msg(sel: sym_state::SymbolSelection) -> SymbolSelectionMs
         SymbolSelection::Field(FieldKey::Value) => SymbolSelectionMsg::FieldValue,
         SymbolSelection::Graphic(idx) => SymbolSelectionMsg::Graphic(idx),
         SymbolSelection::All => SymbolSelectionMsg::All,
-        SymbolSelection::Multiple { pin_indices, graphic_indices } => {
-            SymbolSelectionMsg::Multiple { pin_indices, graphic_indices }
-        }
+        SymbolSelection::Multiple {
+            pin_indices,
+            graphic_indices,
+        } => SymbolSelectionMsg::Multiple {
+            pin_indices,
+            graphic_indices,
+        },
     }
 }
 
@@ -1069,9 +1096,13 @@ fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEditorMsg {
         EditorMsg::FootprintSketchMoveLine { id, dx, dy } => {
             PrimitiveEditorMsg::FootprintSketchMoveLine { id, dx, dy }
         }
-        EditorMsg::FootprintSketchResizeRoundPad { pad_idx, diameter_mm } => {
-            PrimitiveEditorMsg::FootprintSketchResizeRoundPad { pad_idx, diameter_mm }
-        }
+        EditorMsg::FootprintSketchResizeRoundPad {
+            pad_idx,
+            diameter_mm,
+        } => PrimitiveEditorMsg::FootprintSketchResizeRoundPad {
+            pad_idx,
+            diameter_mm,
+        },
         EditorMsg::FootprintSetSelectionMode2d(mode) => {
             PrimitiveEditorMsg::FootprintSetSelectionMode2d(mode)
         }
@@ -1096,9 +1127,7 @@ fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEditorMsg {
         EditorMsg::FootprintTouchingLineCommit { x_mm, y_mm } => {
             PrimitiveEditorMsg::FootprintTouchingLineCommit { x_mm, y_mm }
         }
-        EditorMsg::FootprintTouchingLineCancel => {
-            PrimitiveEditorMsg::FootprintTouchingLineCancel
-        }
+        EditorMsg::FootprintTouchingLineCancel => PrimitiveEditorMsg::FootprintTouchingLineCancel,
         EditorMsg::FootprintSelectOverlapped => PrimitiveEditorMsg::FootprintSelectOverlapped,
         EditorMsg::FootprintSelectNextOverlapped => {
             PrimitiveEditorMsg::FootprintSelectNextOverlapped
@@ -1131,9 +1160,7 @@ fn editor_msg_to_primitive_msg(msg: EditorMsg) -> PrimitiveEditorMsg {
         EditorMsg::FootprintShowContextMenu { x, y, target } => {
             PrimitiveEditorMsg::FootprintShowContextMenu { x, y, target }
         }
-        EditorMsg::FootprintCloseContextMenu => {
-            PrimitiveEditorMsg::FootprintCloseContextMenu
-        }
+        EditorMsg::FootprintCloseContextMenu => PrimitiveEditorMsg::FootprintCloseContextMenu,
         EditorMsg::FootprintContextMenuOpenSubmenu(sm) => {
             PrimitiveEditorMsg::FootprintContextMenuOpenSubmenu(sm)
         }

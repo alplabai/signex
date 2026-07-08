@@ -11,7 +11,7 @@ pub fn meshes_to_gltf(
     source_path: &str,
     converter_version: &str,
 ) -> (Vec<u8>, Vec<u8>) {
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
 
     if meshes.is_empty() {
         let json = json!({
@@ -201,6 +201,9 @@ mod tests {
         assert!(!bin.is_empty());
         let v: serde_json::Value = serde_json::from_slice(&json).expect("not valid json");
         assert_eq!(v["meshes"].as_array().unwrap().len(), 1);
-        assert_eq!(v["materials"][0]["pbrMetallicRoughness"]["baseColorFactor"][0], 1.0);
+        assert_eq!(
+            v["materials"][0]["pbrMetallicRoughness"]["baseColorFactor"][0],
+            1.0
+        );
     }
 }

@@ -60,7 +60,10 @@ fn anchored_top_left_px(item: &TextItem, anchor_px: [f32; 2], size_px: [f32; 2])
     let offset_px = alignment_offset_px(size_px, item.h_align, item.v_align);
     let rotated_offset = rotated_offset_px(offset_px, item.rotation);
 
-    [anchor_px[0] + rotated_offset[0], anchor_px[1] + rotated_offset[1]]
+    [
+        anchor_px[0] + rotated_offset[0],
+        anchor_px[1] + rotated_offset[1],
+    ]
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -207,12 +210,8 @@ impl GlyphonTextPipeline {
         let cache = glyphon::Cache::new(device);
         let viewport = glyphon::Viewport::new(device, &cache);
         let mut atlas = glyphon::TextAtlas::new(device, queue, &cache, target_format);
-        let text_renderer = glyphon::TextRenderer::new(
-            &mut atlas,
-            device,
-            wgpu::MultisampleState::default(),
-            None,
-        );
+        let text_renderer =
+            glyphon::TextRenderer::new(&mut atlas, device, wgpu::MultisampleState::default(), None);
 
         Self {
             font_system,
@@ -299,19 +298,19 @@ impl GlyphonTextPipeline {
             return Ok(());
         }
 
-        let text_areas = self
-            .buffers
-            .iter()
-            .zip(self.prepared_texts.iter())
-            .map(|(buffer, prepared)| glyphon::TextArea {
-                buffer,
-                left: prepared.left,
-                top: prepared.top,
-                scale: prepared.scale,
-                bounds: prepared.bounds,
-                default_color: prepared.default_color,
-                custom_glyphs: &[],
-            });
+        let text_areas =
+            self.buffers
+                .iter()
+                .zip(self.prepared_texts.iter())
+                .map(|(buffer, prepared)| glyphon::TextArea {
+                    buffer,
+                    left: prepared.left,
+                    top: prepared.top,
+                    scale: prepared.scale,
+                    bounds: prepared.bounds,
+                    default_color: prepared.default_color,
+                    custom_glyphs: &[],
+                });
 
         self.text_renderer.prepare(
             device,
@@ -324,7 +323,10 @@ impl GlyphonTextPipeline {
         )
     }
 
-    pub fn draw<'a>(&'a self, render_pass: &mut wgpu::RenderPass<'a>) -> Result<(), glyphon::RenderError> {
+    pub fn draw<'a>(
+        &'a self,
+        render_pass: &mut wgpu::RenderPass<'a>,
+    ) -> Result<(), glyphon::RenderError> {
         if self.text_count == 0 {
             return Ok(());
         }

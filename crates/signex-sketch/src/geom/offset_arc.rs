@@ -105,9 +105,7 @@ impl PolyElement {
         match *self {
             PolyElement::Line { a, b } => unit_perp_outward(a, b, polygon_ccw),
             PolyElement::Arc {
-                end_rad,
-                sweep_ccw,
-                ..
+                end_rad, sweep_ccw, ..
             } => {
                 let radial = (end_rad.cos(), end_rad.sin());
                 if sweep_ccw == polygon_ccw {
@@ -127,11 +125,7 @@ fn unit_perp_outward(a: Point2, b: Point2, ccw: bool) -> (f64, f64) {
     let dy = b.y - a.y;
     let len = (dx * dx + dy * dy).sqrt().max(1e-12);
     let perp = (dy / len, -dx / len);
-    if ccw {
-        perp
-    } else {
-        (-perp.0, -perp.1)
-    }
+    if ccw { perp } else { (-perp.0, -perp.1) }
 }
 
 /// Offset an arc-aware closed polyline by signed distance `d`.
@@ -273,10 +267,7 @@ mod tests {
         // vertices with radius 1.
         let mut arc_centres: Vec<Point2> = Vec::new();
         for el in &out {
-            if let PolyElement::Arc {
-                centre, radius, ..
-            } = el
-            {
+            if let PolyElement::Arc { centre, radius, .. } = el {
                 assert!((radius - 1.0).abs() < 1e-9);
                 arc_centres.push(*centre);
             }

@@ -32,13 +32,13 @@ use iced::mouse;
 use iced::widget::canvas;
 use signex_gfx::scene::{DirtyFlags, Scene};
 use signex_library::{Symbol, SymbolGraphicKind, SymbolPin};
-use signex_types::anchor2d::rotate_vec;
-use signex_types::rotation2d::Vec2d;
 use signex_renderer::schematic::{
     ArcInput, JunctionInput, OverlayInputs, PolygonInput, SchematicRenderer,
     SchematicSnapshot as RendererSnapshot, ViewRenderer, WireInput,
 };
 use signex_renderer::theme::ResolvedTheme;
+use signex_types::anchor2d::rotate_vec;
+use signex_types::rotation2d::Vec2d;
 use signex_types::schematic::{HAlign, VAlign};
 use std::collections::HashMap;
 
@@ -504,12 +504,12 @@ const PIN_TEXT_LAYOUT: PinTextLayout = PinTextLayout {
 /// `position`, `orientation`, and `length` so that
 /// `build_symbol_renderer_snapshot` contains only push calls.
 struct PinRenderGeometry {
-    tip:           Vec2d,
-    body_end:      Vec2d,
-    number_pos:    Vec2d,
-    name_pos:      Vec2d,
+    tip: Vec2d,
+    body_end: Vec2d,
+    number_pos: Vec2d,
+    name_pos: Vec2d,
     text_rotation: f32,
-    name_h_align:  HAlign,
+    name_h_align: HAlign,
 }
 
 impl PinRenderGeometry {
@@ -520,23 +520,20 @@ impl PinRenderGeometry {
         // Orientation → angle (CCW from +x axis), tip → body direction.
         let angle_rad: f64 = match pin.orientation {
             PinOrientation::Right => 0.0,
-            PinOrientation::Up    => FRAC_PI_2,
-            PinOrientation::Left  => std::f64::consts::PI,
-            PinOrientation::Down  => -FRAC_PI_2,
-            _                     => std::f64::consts::PI,
+            PinOrientation::Up => FRAC_PI_2,
+            PinOrientation::Left => std::f64::consts::PI,
+            PinOrientation::Down => -FRAC_PI_2,
+            _ => std::f64::consts::PI,
         };
 
-        let tip  = Vec2d::new(pin.position[0], pin.position[1]);
+        let tip = Vec2d::new(pin.position[0], pin.position[1]);
         let unit = rotate_vec(Vec2d::new(1.0, 0.0), angle_rad);
-        let body_end = Vec2d::new(
-            tip.x + unit.x * pin.length,
-            tip.y + unit.y * pin.length,
-        );
+        let body_end = Vec2d::new(tip.x + unit.x * pin.length, tip.y + unit.y * pin.length);
 
         // Outer normal: 90° CCW from unit = (-unit.y, unit.x).
         // Pick the side that is visually "outer": prefer +y, break ties with -x.
         let n_ccw = rotate_vec(unit, FRAC_PI_2);
-        let n_cw  = Vec2d::new(-n_ccw.x, -n_ccw.y);
+        let n_cw = Vec2d::new(-n_ccw.x, -n_ccw.y);
         let normal = if (n_ccw.y - n_cw.y).abs() > f64::EPSILON {
             if n_ccw.y > n_cw.y { n_ccw } else { n_cw }
         } else if n_ccw.x < n_cw.x {
@@ -585,7 +582,14 @@ impl PinRenderGeometry {
             tip.y + unit.y * (pin.length + PIN_TEXT_LAYOUT.name_offset_x_mm as f64),
         );
 
-        Self { tip, body_end, number_pos, name_pos, text_rotation, name_h_align }
+        Self {
+            tip,
+            body_end,
+            number_pos,
+            name_pos,
+            text_rotation,
+            name_h_align,
+        }
     }
 }
 
@@ -606,8 +610,12 @@ fn stroke_px_at_zoom(base_width_px_at_100: f32, _scale: f32) -> f32 {
 fn unwrap_angle(prev: f64, raw: f64) -> f64 {
     let mut delta = raw - prev;
     // Bring delta into (-180, 180] so we always take the short arc.
-    if delta > 180.0 { delta -= 360.0; }
-    if delta <= -180.0 { delta += 360.0; }
+    if delta > 180.0 {
+        delta -= 360.0;
+    }
+    if delta <= -180.0 {
+        delta += 360.0;
+    }
     prev + delta
 }
 
@@ -669,16 +677,22 @@ fn world_unsnapped(canvas: &SymbolCanvas<'_>, sx: f32, sy: f32, bounds: Rectangl
 
 fn selection_anchor(symbol: &Symbol, selection: &SymbolSelection) -> Option<(f64, f64)> {
     match selection {
-        SymbolSelection::Pin(idx) => symbol.pins.get(*idx).map(|pin| (pin.position[0], pin.position[1])),
-        SymbolSelection::Graphic(idx) => symbol.graphics.get(*idx).map(|graphic| match &graphic.kind {
-            SymbolGraphicKind::Rectangle { from, .. } | SymbolGraphicKind::Line { from, .. } => {
-                (from[0], from[1])
-            }
-            SymbolGraphicKind::Circle { center, .. } | SymbolGraphicKind::Arc { center, .. } => {
-                (center[0], center[1])
-            }
-            SymbolGraphicKind::Text { position, .. } => (position[0], position[1]),
-        }),
+        SymbolSelection::Pin(idx) => symbol
+            .pins
+            .get(*idx)
+            .map(|pin| (pin.position[0], pin.position[1])),
+        SymbolSelection::Graphic(idx) => {
+            symbol
+                .graphics
+                .get(*idx)
+                .map(|graphic| match &graphic.kind {
+                    SymbolGraphicKind::Rectangle { from, .. }
+                    | SymbolGraphicKind::Line { from, .. } => (from[0], from[1]),
+                    SymbolGraphicKind::Circle { center, .. }
+                    | SymbolGraphicKind::Arc { center, .. } => (center[0], center[1]),
+                    SymbolGraphicKind::Text { position, .. } => (position[0], position[1]),
+                })
+        }
         SymbolSelection::Field(_) | SymbolSelection::All | SymbolSelection::Multiple { .. } => None,
     }
 }
@@ -693,9 +707,12 @@ fn item_in_selection(group: &SymbolSelection, item: &SymbolSelection) -> bool {
         (SymbolSelection::Multiple { pin_indices, .. }, SymbolSelection::Pin(idx)) => {
             pin_indices.contains(idx)
         }
-        (SymbolSelection::Multiple { graphic_indices, .. }, SymbolSelection::Graphic(idx)) => {
-            graphic_indices.contains(idx)
-        }
+        (
+            SymbolSelection::Multiple {
+                graphic_indices, ..
+            },
+            SymbolSelection::Graphic(idx),
+        ) => graphic_indices.contains(idx),
         _ => false,
     }
 }
@@ -705,9 +722,9 @@ fn item_in_selection(group: &SymbolSelection, item: &SymbolSelection) -> bool {
 fn is_graphic_selected(sel: &Option<SymbolSelection>, idx: usize) -> bool {
     match sel {
         Some(SymbolSelection::Graphic(i)) => *i == idx,
-        Some(SymbolSelection::Multiple { graphic_indices, .. }) => {
-            graphic_indices.contains(&idx)
-        }
+        Some(SymbolSelection::Multiple {
+            graphic_indices, ..
+        }) => graphic_indices.contains(&idx),
         Some(SymbolSelection::All) => true,
         _ => false,
     }
@@ -737,8 +754,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                         // Resize handles win over everything else.
                         // Use a screen-pixel-based tolerance so handles are
                         // equally easy to hit at any zoom level.
-                        let tol_mm = (8.0_f32 / self.camera.scale.max(0.01))
-                            .clamp(0.5, 4.0) as f64;
+                        let tol_mm = (8.0_f32 / self.camera.scale.max(0.01)).clamp(0.5, 4.0) as f64;
                         if let Some((idx, handle)) =
                             state::hit_test_graphic_handle(self.symbol, ux, uy, tol_mm)
                         {
@@ -756,9 +772,10 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
 
                             // If the clicked item is inside the current Multiple /
                             // All selection, drag the whole group as a unit.
-                            let in_group = self.selected.as_ref().map_or(false, |s| {
-                                item_in_selection(s, &sel)
-                            });
+                            let in_group = self
+                                .selected
+                                .as_ref()
+                                .map_or(false, |s| item_in_selection(s, &sel));
                             if in_group {
                                 state.dragging = true;
                                 state.last_drag_world_pos = Some((wx, wy));
@@ -770,11 +787,8 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
 
                             let is_delta = matches!(effective_sel, SymbolSelection::All);
                             state.dragging = true;
-                            state.last_drag_world_pos = if is_delta {
-                                Some((wx, wy))
-                            } else {
-                                None
-                            };
+                            state.last_drag_world_pos =
+                                if is_delta { Some((wx, wy)) } else { None };
                             state.drag_anchor_offset =
                                 selection_anchor(self.symbol, &effective_sel)
                                     .map(|(ax, ay)| (ax - wx, ay - wy));
@@ -1086,9 +1100,10 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                 state.last_drag_world_pos = None;
 
                 // Commit a rubber-band box selection if one was in progress.
-                if let (Some((ox, oy)), Some((cx, cy))) =
-                    (state.box_select_origin.take(), state.box_select_current.take())
-                {
+                if let (Some((ox, oy)), Some((cx, cy))) = (
+                    state.box_select_origin.take(),
+                    state.box_select_current.take(),
+                ) {
                     let drag_dist_sq = (cx - ox).powi(2) + (cy - oy).powi(2);
                     if drag_dist_sq > 0.5 * 0.5 {
                         // Enough movement — commit as a box selection.
@@ -1097,19 +1112,16 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                         } else {
                             state::BoxSelectKind::Crossing
                         };
-                        let result =
-                            state::select_in_box(self.symbol, ox, oy, cx, cy, kind);
+                        let result = state::select_in_box(self.symbol, ox, oy, cx, cy, kind);
                         return Some(match result {
-                            Some(sel) => canvas::Action::publish(CanvasAction::Select(sel))
-                                .and_capture(),
-                            None => canvas::Action::publish(CanvasAction::Deselect)
-                                .and_capture(),
+                            Some(sel) => {
+                                canvas::Action::publish(CanvasAction::Select(sel)).and_capture()
+                            }
+                            None => canvas::Action::publish(CanvasAction::Deselect).and_capture(),
                         });
                     } else {
                         // Micro-drag treated as a click → deselect.
-                        return Some(
-                            canvas::Action::publish(CanvasAction::Deselect).and_capture(),
-                        );
+                        return Some(canvas::Action::publish(CanvasAction::Deselect).and_capture());
                     }
                 }
 
@@ -1121,102 +1133,96 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
 
                 None
             }
-            Event::Keyboard(iced::keyboard::Event::KeyPressed {
-                key,
-                modifiers,
-                ..
-            }) => match key {
-                iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape) => {
-                    let cancelled = match self.tool {
-                        SymbolTool::PlaceLine if state.line_from.is_some() => {
-                            state.line_from = None;
-                            state.line_cursor = None;
-                            true
+            Event::Keyboard(iced::keyboard::Event::KeyPressed { key, modifiers, .. }) => {
+                match key {
+                    iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape) => {
+                        let cancelled = match self.tool {
+                            SymbolTool::PlaceLine if state.line_from.is_some() => {
+                                state.line_from = None;
+                                state.line_cursor = None;
+                                true
+                            }
+                            SymbolTool::PlaceCircle if state.circle_center.is_some() => {
+                                state.circle_center = None;
+                                state.circle_cursor = None;
+                                true
+                            }
+                            SymbolTool::PlaceArc
+                                if state.arc_center.is_some()
+                                    || state.arc_radius_start.is_some() =>
+                            {
+                                state.arc_center = None;
+                                state.arc_radius_start = None;
+                                state.arc_cursor = None;
+                                state.arc_end_deg_unwrapped = None;
+                                true
+                            }
+                            _ => false,
+                        };
+                        if cancelled {
+                            return Some(canvas::Action::capture());
                         }
-                        SymbolTool::PlaceCircle if state.circle_center.is_some() => {
-                            state.circle_center = None;
-                            state.circle_cursor = None;
-                            true
-                        }
-                        SymbolTool::PlaceArc
-                            if state.arc_center.is_some()
-                                || state.arc_radius_start.is_some() =>
-                        {
-                            state.arc_center = None;
-                            state.arc_radius_start = None;
-                            state.arc_cursor = None;
-                            state.arc_end_deg_unwrapped = None;
-                            true
-                        }
-                        _ => false,
-                    };
-                    if cancelled {
-                        return Some(canvas::Action::capture());
+                        None
                     }
-                    None
-                }
-                iced::keyboard::Key::Named(iced::keyboard::key::Named::Delete)
-                | iced::keyboard::Key::Named(iced::keyboard::key::Named::Backspace) => {
-                    Some(canvas::Action::publish(CanvasAction::DeleteSelected))
-                }
-                iced::keyboard::Key::Named(iced::keyboard::key::Named::Home) => {
-                    Some(canvas::Action::publish(CanvasAction::Fit))
-                }
-                iced::keyboard::Key::Character(c) if c.as_str() == "a" && modifiers.command() => {
-                    Some(
-                        canvas::Action::publish(CanvasAction::Select(SymbolSelection::All))
+                    iced::keyboard::Key::Named(iced::keyboard::key::Named::Delete)
+                    | iced::keyboard::Key::Named(iced::keyboard::key::Named::Backspace) => {
+                        Some(canvas::Action::publish(CanvasAction::DeleteSelected))
+                    }
+                    iced::keyboard::Key::Named(iced::keyboard::key::Named::Home) => {
+                        Some(canvas::Action::publish(CanvasAction::Fit))
+                    }
+                    iced::keyboard::Key::Character(c)
+                        if c.as_str() == "a" && modifiers.command() =>
+                    {
+                        Some(
+                            canvas::Action::publish(CanvasAction::Select(SymbolSelection::All))
+                                .and_capture(),
+                        )
+                    }
+                    iced::keyboard::Key::Named(iced::keyboard::key::Named::Space) => {
+                        let pivot_mode = if modifiers.alt() {
+                            RotatePivotMode::GeometryCenter
+                        } else {
+                            RotatePivotMode::WorldOrigin
+                        };
+                        Some(
+                            canvas::Action::publish(CanvasAction::RotateSelected {
+                                clockwise: !modifiers.shift(),
+                                pivot_mode,
+                            })
                             .and_capture(),
-                    )
+                        )
+                    }
+                    iced::keyboard::Key::Character(c) if c == " " => {
+                        let pivot_mode = if modifiers.alt() {
+                            RotatePivotMode::GeometryCenter
+                        } else {
+                            RotatePivotMode::WorldOrigin
+                        };
+                        Some(
+                            canvas::Action::publish(CanvasAction::RotateSelected {
+                                clockwise: !modifiers.shift(),
+                                pivot_mode,
+                            })
+                            .and_capture(),
+                        )
+                    }
+                    // Undo: Ctrl+Z
+                    iced::keyboard::Key::Character(c)
+                        if c.as_str() == "z" && modifiers.command() && !modifiers.shift() =>
+                    {
+                        Some(canvas::Action::publish(CanvasAction::Undo).and_capture())
+                    }
+                    // Redo: Ctrl+Y  or  Ctrl+Shift+Z
+                    iced::keyboard::Key::Character(c)
+                        if (c.as_str() == "y" && modifiers.command())
+                            || (c.as_str() == "z" && modifiers.command() && modifiers.shift()) =>
+                    {
+                        Some(canvas::Action::publish(CanvasAction::Redo).and_capture())
+                    }
+                    _ => None,
                 }
-                iced::keyboard::Key::Named(iced::keyboard::key::Named::Space) => {
-                    let pivot_mode = if modifiers.alt() {
-                        RotatePivotMode::GeometryCenter
-                    } else {
-                        RotatePivotMode::WorldOrigin
-                    };
-                    Some(
-                        canvas::Action::publish(CanvasAction::RotateSelected {
-                            clockwise: !modifiers.shift(),
-                            pivot_mode,
-                        })
-                        .and_capture(),
-                    )
-                }
-                iced::keyboard::Key::Character(c) if c == " " => {
-                    let pivot_mode = if modifiers.alt() {
-                        RotatePivotMode::GeometryCenter
-                    } else {
-                        RotatePivotMode::WorldOrigin
-                    };
-                    Some(
-                        canvas::Action::publish(CanvasAction::RotateSelected {
-                            clockwise: !modifiers.shift(),
-                            pivot_mode,
-                        })
-                        .and_capture(),
-                    )
-                }
-                // Undo: Ctrl+Z
-                iced::keyboard::Key::Character(c)
-                    if c.as_str() == "z" && modifiers.command() && !modifiers.shift() =>
-                {
-                    Some(
-                        canvas::Action::publish(CanvasAction::Undo).and_capture(),
-                    )
-                }
-                // Redo: Ctrl+Y  or  Ctrl+Shift+Z
-                iced::keyboard::Key::Character(c)
-                    if (c.as_str() == "y" && modifiers.command())
-                        || (c.as_str() == "z"
-                            && modifiers.command()
-                            && modifiers.shift()) =>
-                {
-                    Some(
-                        canvas::Action::publish(CanvasAction::Redo).and_capture(),
-                    )
-                }
-                _ => None,
-            },
+            }
             _ => None,
         }
     }
@@ -1244,8 +1250,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         if self.tool == SymbolTool::Select {
             if let Some(pos) = cursor.position_in(bounds) {
                 let (wx, wy) = world_unsnapped(self, pos.x, pos.y, bounds);
-                let tol_mm = (8.0_f32 / self.camera.scale.max(0.01))
-                    .clamp(0.5, 4.0) as f64;
+                let tol_mm = (8.0_f32 / self.camera.scale.max(0.01)).clamp(0.5, 4.0) as f64;
                 if let Some((_, handle)) =
                     state::hit_test_graphic_handle(self.symbol, wx, wy, tol_mm)
                 {
@@ -1416,8 +1421,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                     let major_screen = major_mm * scale;
                     let major_alpha_in = ((major_screen - 24.0) / 24.0).clamp(0.0, 1.0);
                     let major_alpha_out = ((400.0 - major_screen) / 200.0).clamp(0.0, 1.0);
-                    let major_alpha =
-                        self.grid_color.a * 0.35 * major_alpha_in * major_alpha_out;
+                    let major_alpha = self.grid_color.a * 0.35 * major_alpha_in * major_alpha_out;
                     if major_alpha > 0.005 {
                         let major_color = iced::Color {
                             a: major_alpha,
@@ -1529,12 +1533,17 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         }
 
         // Tool hint.
-        let tool_label = match self.tool {            SymbolTool::Select => "Tool: Select  (Del to remove)",
+        let tool_label = match self.tool {
+            SymbolTool::Select => "Tool: Select  (Del to remove)",
             SymbolTool::AddPin => "Tool: Add Pin  (click to place)",
             SymbolTool::PlaceRectangle => "Tool: Place Rectangle  (click)",
             SymbolTool::PlaceLine => "Tool: Place Line  (click start, click end / Esc to cancel)",
-            SymbolTool::PlaceCircle => "Tool: Place Ellipse  (click center, click edge / Esc to cancel)",
-            SymbolTool::PlaceArc => "Tool: Place Arc  (click center, click start, click end / Esc to cancel)",
+            SymbolTool::PlaceCircle => {
+                "Tool: Place Ellipse  (click center, click edge / Esc to cancel)"
+            }
+            SymbolTool::PlaceArc => {
+                "Tool: Place Arc  (click center, click start, click end / Esc to cancel)"
+            }
             SymbolTool::PlaceText => "Tool: Place Text  (click)",
         };
         frame.fill_text(canvas::Text {
@@ -1598,10 +1607,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                 ..self.selected_color
             };
             // Start-point dot so the user can see the anchor.
-            frame.fill(
-                &canvas::Path::circle(p0, 3.0),
-                preview_color,
-            );
+            frame.fill(&canvas::Path::circle(p0, 3.0), preview_color);
             frame.stroke(
                 &canvas::Path::line(p0, p1),
                 canvas::Stroke::default()
@@ -1613,9 +1619,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
 
         // Rubber-band circle preview — two-click flow: center set,
         // waiting for the edge click that defines the radius.
-        if let (Some((cx, cy)), Some((cur_x, cur_y))) =
-            (state.circle_center, state.circle_cursor)
-        {
+        if let (Some((cx, cy)), Some((cur_x, cur_y))) = (state.circle_center, state.circle_cursor) {
             let center_p = w2s(cx, cy);
             let dx = cur_x - cx;
             let dy = cur_y - cy;
@@ -1668,10 +1672,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                 );
                 // Start-angle endpoint dot.
                 let start_rad = start_deg.to_radians();
-                let sp = w2s(
-                    cx + radius * start_rad.cos(),
-                    cy + radius * start_rad.sin(),
-                );
+                let sp = w2s(cx + radius * start_rad.cos(), cy + radius * start_rad.sin());
                 frame.fill(&canvas::Path::circle(sp, 3.0), preview_color);
                 // Line from center to cursor (end-angle preview).
                 if let Some((cur_x, cur_y)) = state.arc_cursor {
@@ -1890,13 +1891,15 @@ impl<'a> SymbolCanvas<'a> {
             let geom = PinRenderGeometry::compute(pin);
             let selected = match selected {
                 Some(SymbolSelection::Pin(j)) => *j == i,
-                Some(SymbolSelection::Multiple { pin_indices, .. }) => {
-                    pin_indices.contains(&i)
-                }
+                Some(SymbolSelection::Multiple { pin_indices, .. }) => pin_indices.contains(&i),
                 Some(SymbolSelection::All) => true,
                 _ => false,
             };
-            let stroke_color = if selected { self.selected_color } else { self.pin_color };
+            let stroke_color = if selected {
+                self.selected_color
+            } else {
+                self.pin_color
+            };
 
             let tip_f32 = [geom.tip.x as f32, geom.tip.y as f32];
             let body_f32 = [geom.body_end.x as f32, geom.body_end.y as f32];
@@ -1954,7 +1957,10 @@ impl<'a> SymbolCanvas<'a> {
                 content: pin.name.clone(),
                 position: [geom.name_pos.x as f32, geom.name_pos.y as f32],
                 size_mm: PIN_TEXT_LAYOUT.name_size_mm,
-                color: to_rgba(Color { a: 0.85, ..self.text_color }),
+                color: to_rgba(Color {
+                    a: 0.85,
+                    ..self.text_color
+                }),
                 bold: false,
                 italic: false,
                 rotation_rad: geom.text_rotation,

@@ -39,7 +39,8 @@ pub(super) fn apply_symbol_parts(editor: &mut SymEditor, msg: PrimitiveEditorMsg
             push_undo(editor);
             let to_remove = editor.active_part;
             crate::library::editor::symbol::state::demote_part_pins_to_part_one(
-                editor.primitive_mut(), to_remove,
+                editor.primitive_mut(),
+                to_remove,
             );
             editor.active_part = 1;
             mark_dirty(editor);

@@ -10,7 +10,10 @@ pub(super) fn apply_symbol_transform(editor: &mut SymEditor, msg: PrimitiveEdito
             let selected = editor.selected.clone();
             let pivot_mode = rotate_pivot_msg_to_state(pivot);
             crate::library::editor::symbol::state::rotate_selected_with_pivot(
-                editor.primitive_mut(), selected, clockwise, pivot_mode,
+                editor.primitive_mut(),
+                selected,
+                clockwise,
+                pivot_mode,
             );
             mark_dirty(editor);
         }
@@ -18,7 +21,8 @@ pub(super) fn apply_symbol_transform(editor: &mut SymEditor, msg: PrimitiveEdito
             push_undo(editor);
             let selected = editor.selected.clone();
             if let Some(new_sel) = crate::library::editor::symbol::state::delete_selected(
-                editor.primitive_mut(), selected,
+                editor.primitive_mut(),
+                selected,
             ) {
                 editor.selected = new_sel;
                 mark_dirty(editor);

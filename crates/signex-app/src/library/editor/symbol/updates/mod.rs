@@ -61,7 +61,10 @@ fn push_graphic(
     stroke_width: f64,
 ) {
     push_undo(editor);
-    editor.primitive_mut().graphics.push(signex_library::SymbolGraphic { kind, stroke_width });
+    editor
+        .primitive_mut()
+        .graphics
+        .push(signex_library::SymbolGraphic { kind, stroke_width });
     mark_dirty(editor);
 }
 
@@ -89,7 +92,10 @@ pub(crate) fn apply_symbol_primitive_edit(
             push_undo(editor);
             let active_part = editor.active_part;
             let idx = crate::library::editor::symbol::state::add_pin(
-                editor.primitive_mut(), x, y, active_part,
+                editor.primitive_mut(),
+                x,
+                y,
+                active_part,
             );
             editor.selected = Some(SymbolSelection::Pin(idx));
             mark_dirty(editor);
@@ -97,38 +103,74 @@ pub(crate) fn apply_symbol_primitive_edit(
         PrimitiveEditorMsg::SymbolAddRectangle { x, y } => {
             const W: f64 = 5.08;
             const H: f64 = 2.54;
-            push_graphic(editor, signex_library::SymbolGraphicKind::Rectangle {
-                from: [x - W, y - H],
-                to: [x + W, y + H],
-            }, 0.15);
+            push_graphic(
+                editor,
+                signex_library::SymbolGraphicKind::Rectangle {
+                    from: [x - W, y - H],
+                    to: [x + W, y + H],
+                },
+                0.15,
+            );
         }
-        PrimitiveEditorMsg::SymbolAddLine { from_x, from_y, to_x, to_y } => {
-            push_graphic(editor, signex_library::SymbolGraphicKind::Line {
-                from: [from_x, from_y],
-                to: [to_x, to_y],
-            }, 0.15);
+        PrimitiveEditorMsg::SymbolAddLine {
+            from_x,
+            from_y,
+            to_x,
+            to_y,
+        } => {
+            push_graphic(
+                editor,
+                signex_library::SymbolGraphicKind::Line {
+                    from: [from_x, from_y],
+                    to: [to_x, to_y],
+                },
+                0.15,
+            );
         }
-        PrimitiveEditorMsg::SymbolAddArc { cx, cy, radius, start_deg, end_deg } => {
-            push_graphic(editor, signex_library::SymbolGraphicKind::Arc {
-                center: [cx, cy], radius, start_deg, end_deg,
-            }, 0.15);
+        PrimitiveEditorMsg::SymbolAddArc {
+            cx,
+            cy,
+            radius,
+            start_deg,
+            end_deg,
+        } => {
+            push_graphic(
+                editor,
+                signex_library::SymbolGraphicKind::Arc {
+                    center: [cx, cy],
+                    radius,
+                    start_deg,
+                    end_deg,
+                },
+                0.15,
+            );
         }
         PrimitiveEditorMsg::SymbolAddText { x, y } => {
-            push_graphic(editor, signex_library::SymbolGraphicKind::Text {
-                position: [x, y],
-                content: "Text".to_string(),
-                size: 1.27,
-            }, 0.0);
+            push_graphic(
+                editor,
+                signex_library::SymbolGraphicKind::Text {
+                    position: [x, y],
+                    content: "Text".to_string(),
+                    size: 1.27,
+                },
+                0.0,
+            );
         }
         PrimitiveEditorMsg::SymbolAddCircle { cx, cy, radius } => {
-            push_graphic(editor, signex_library::SymbolGraphicKind::Circle {
-                center: [cx, cy], radius,
-            }, 0.15);
+            push_graphic(
+                editor,
+                signex_library::SymbolGraphicKind::Circle {
+                    center: [cx, cy],
+                    radius,
+                },
+                0.15,
+            );
         }
 
         // ── Selection ────────────────────────────────────────────
-        PrimitiveEditorMsg::SymbolSelect(_)
-        | PrimitiveEditorMsg::SymbolDeselect => apply_symbol_selection(editor, msg),
+        PrimitiveEditorMsg::SymbolSelect(_) | PrimitiveEditorMsg::SymbolDeselect => {
+            apply_symbol_selection(editor, msg)
+        }
 
         // ── Move (coalesced undo per drag gesture) ───────────────
         PrimitiveEditorMsg::SymbolMoveSelected { .. }

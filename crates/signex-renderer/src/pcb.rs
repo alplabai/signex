@@ -12,9 +12,9 @@ use signex_gfx::primitive::polygon::GpuPolygon;
 use signex_gfx::scene::{DirtyFlags, Scene};
 use signex_gfx::style::ColorSlot;
 use signex_types::pcb::{
-    Footprint, Pad, PadShape, PadType, PcbBoard, Segment, Via, Zone, PCB_DEFAULT_PAD_SIZE_MM,
-    PCB_DEFAULT_TRACE_WIDTH_MM, PCB_DEFAULT_VIA_DIAMETER_MM, PCB_DEFAULT_VIA_DRILL_MM,
-    PCB_TRACK_MIN_MM, PCB_VIA_MIN_DIAMETER_MM, PCB_VIA_MIN_DRILL_MM,
+    Footprint, PCB_DEFAULT_PAD_SIZE_MM, PCB_DEFAULT_TRACE_WIDTH_MM, PCB_DEFAULT_VIA_DIAMETER_MM,
+    PCB_DEFAULT_VIA_DRILL_MM, PCB_TRACK_MIN_MM, PCB_VIA_MIN_DIAMETER_MM, PCB_VIA_MIN_DRILL_MM, Pad,
+    PadShape, PadType, PcbBoard, Segment, Via, Zone,
 };
 use signex_types::schematic::Point;
 use signex_types::violation::{DrcViolationType, Severity};
@@ -148,7 +148,11 @@ fn trace_from_segment(segment: &Segment) -> TraceInput {
 fn via_from_board_via(via: &Via) -> ViaInput {
     ViaInput {
         center: point_to_xy(via.position),
-        diameter_mm: mm_with_floor(via.diameter, PCB_DEFAULT_VIA_DIAMETER_MM, PCB_VIA_MIN_DIAMETER_MM),
+        diameter_mm: mm_with_floor(
+            via.diameter,
+            PCB_DEFAULT_VIA_DIAMETER_MM,
+            PCB_VIA_MIN_DIAMETER_MM,
+        ),
         drill_mm: mm_with_floor(via.drill, PCB_DEFAULT_VIA_DRILL_MM, PCB_VIA_MIN_DRILL_MM),
         net: via.net,
     }
@@ -182,7 +186,11 @@ fn zone_from_board_zone(
         return None;
     }
 
-    let vertices = zone.outline.iter().map(|point| point_to_xy(*point)).collect();
+    let vertices = zone
+        .outline
+        .iter()
+        .map(|point| point_to_xy(*point))
+        .collect();
     let layer_name = zone.layer.to_ascii_lowercase();
     let layer_rank = layer_ranks.get(&layer_name).copied().unwrap_or(u16::MAX);
 
@@ -224,11 +232,7 @@ fn zone_layer_top_composite_key(zone: &ZonePolygonInput) -> (u32, u8, u32) {
 }
 
 fn zone_connected_bucket(net: u32) -> u8 {
-    if net == 0 {
-        0
-    } else {
-        1
-    }
+    if net == 0 { 0 } else { 1 }
 }
 
 fn is_rule_area_zone(zone: &Zone) -> bool {
@@ -296,10 +300,9 @@ fn pad_vertices(pad: &PadInput) -> Vec<[f32; 2]> {
             PAD_ELLIPSE_SEGMENTS,
         ),
         PadShape::Oval => ellipse_vertices(pad.center, [half_w, half_h], PAD_ELLIPSE_SEGMENTS),
-        PadShape::Rect
-        | PadShape::RoundRect
-        | PadShape::Trapezoid
-        | PadShape::Custom => rectangle_vertices(pad.center, pad.size_mm),
+        PadShape::Rect | PadShape::RoundRect | PadShape::Trapezoid | PadShape::Custom => {
+            rectangle_vertices(pad.center, pad.size_mm)
+        }
     }
 }
 
@@ -433,7 +436,11 @@ fn drc_marker_kind(marker: &DrcMarkerInput) -> DrcMarkerKind {
             | DrcViolationType::SilkToMask
             | DrcViolationType::SilkToSilk,
         ) => DrcMarkerKind::Clearance,
-        Some(DrcViolationType::AcuteAngle | DrcViolationType::AcidTrap | DrcViolationType::CopperSliver)
+        Some(
+            DrcViolationType::AcuteAngle
+            | DrcViolationType::AcidTrap
+            | DrcViolationType::CopperSliver,
+        )
         | None => DrcMarkerKind::Generic,
     }
 }
@@ -453,7 +460,9 @@ fn drc_marker_vertices(marker: &DrcMarkerInput) -> Vec<[f32; 2]> {
             [cx, cy + radius],
             [cx - radius, cy],
         ],
-        DrcMarkerKind::Unrouted => ellipse_vertices(center, [radius, radius], MARKER_POLYGON_SEGMENTS),
+        DrcMarkerKind::Unrouted => {
+            ellipse_vertices(center, [radius, radius], MARKER_POLYGON_SEGMENTS)
+        }
         DrcMarkerKind::Dimensional => vec![
             [cx - radius, cy - radius],
             [cx + radius, cy - radius],
@@ -518,12 +527,8 @@ fn emit_overlays(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene: &mut Scen
     scene
         .overlay_lines
         .reserve(snapshot.ratsnest_lines.len() + snapshot.drc_markers.len());
-    scene
-        .overlay_circles
-        .reserve(snapshot.drc_markers.len());
-    scene
-        .overlay_polygons
-        .reserve(snapshot.drc_markers.len());
+    scene.overlay_circles.reserve(snapshot.drc_markers.len());
+    scene.overlay_polygons.reserve(snapshot.drc_markers.len());
 
     let ratsnest_color = with_alpha_mul(theme.color(ColorSlot::Selection), 0.72);
 
@@ -596,12 +601,14 @@ pub enum PcbAppEvent {
     CameraMoved,
 }
 
-const FAMILIES_TRACE_EDITED: &[PcbSliceFamily] = &[PcbSliceFamily::Traces, PcbSliceFamily::Ratsnest];
+const FAMILIES_TRACE_EDITED: &[PcbSliceFamily] =
+    &[PcbSliceFamily::Traces, PcbSliceFamily::Ratsnest];
 const FAMILIES_VIA_EDITED: &[PcbSliceFamily] = &[PcbSliceFamily::Vias, PcbSliceFamily::Traces];
 const FAMILIES_PAD_EDITED: &[PcbSliceFamily] = &[PcbSliceFamily::Pads, PcbSliceFamily::Traces];
 const FAMILIES_FOOTPRINT_MOVED: &[PcbSliceFamily] = &[PcbSliceFamily::Pads, PcbSliceFamily::Traces];
 const FAMILIES_ZONE_REFILLED: &[PcbSliceFamily] = &[PcbSliceFamily::Zones];
-const FAMILIES_RULE_AREA_UPDATED: &[PcbSliceFamily] = &[PcbSliceFamily::RuleAreas, PcbSliceFamily::Drc];
+const FAMILIES_RULE_AREA_UPDATED: &[PcbSliceFamily] =
+    &[PcbSliceFamily::RuleAreas, PcbSliceFamily::Drc];
 const FAMILIES_RATSNEST_REBUILT: &[PcbSliceFamily] = &[PcbSliceFamily::Ratsnest];
 const FAMILIES_DRC_RESULTS_UPDATED: &[PcbSliceFamily] = &[PcbSliceFamily::Drc];
 const FAMILIES_THEME_CHANGED: &[PcbSliceFamily] = &[PcbSliceFamily::Theme];
@@ -689,9 +696,9 @@ impl ViewRenderer for PcbRenderer {
 #[cfg(test)]
 mod tests {
     use super::{
-        dirty_flags_for_event, dirty_flags_for_events, dirty_flags_for_families,
-        sort_zone_stack, DrcMarkerInput, PcbAppEvent, PcbRenderer, PcbSliceFamily,
-        PcbSnapshot, RatsnestInput, ZonePolygonInput,
+        DrcMarkerInput, PcbAppEvent, PcbRenderer, PcbSliceFamily, PcbSnapshot, RatsnestInput,
+        ZonePolygonInput, dirty_flags_for_event, dirty_flags_for_events, dirty_flags_for_families,
+        sort_zone_stack,
     };
     use crate::schematic::ViewRenderer;
     use crate::theme::ResolvedTheme;
@@ -818,25 +825,25 @@ mod tests {
     }
 
     #[test]
-        fn pcb_snapshot_collects_trace_via_pad_and_zone_inputs() {
+    fn pcb_snapshot_collects_trace_via_pad_and_zone_inputs() {
         let board = sample_board();
         let snapshot = PcbSnapshot::from_board(&board);
 
         assert_eq!(snapshot.traces.len(), 1);
         assert_eq!(snapshot.vias.len(), 1);
         assert_eq!(snapshot.pads.len(), 1);
-                assert_eq!(snapshot.zones.len(), 2);
-                assert_eq!(snapshot.rule_areas.len(), 1);
+        assert_eq!(snapshot.zones.len(), 2);
+        assert_eq!(snapshot.rule_areas.len(), 1);
 
         assert_eq!(snapshot.traces[0].width_mm, 0.25);
         assert_eq!(snapshot.vias[0].diameter_mm, 0.8);
         assert_eq!(snapshot.pads[0].center[0], 10.0);
         assert_eq!(snapshot.pads[0].center[1], 22.0);
-                assert_eq!(snapshot.zones[0].vertices.len(), 4);
-                assert_eq!(snapshot.rule_areas[0].vertices.len(), 4);
-                assert_eq!(snapshot.zones[0].priority, 2);
-                assert_eq!(snapshot.zones[1].priority, 7);
-                assert!(snapshot.rule_areas[0].rule_area);
+        assert_eq!(snapshot.zones[0].vertices.len(), 4);
+        assert_eq!(snapshot.rule_areas[0].vertices.len(), 4);
+        assert_eq!(snapshot.zones[0].priority, 2);
+        assert_eq!(snapshot.zones[1].priority, 7);
+        assert!(snapshot.rule_areas[0].rule_area);
     }
 
     #[test]

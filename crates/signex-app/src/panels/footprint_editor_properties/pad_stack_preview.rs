@@ -41,11 +41,7 @@ pub(super) fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a,
         ) -> Vec<canvas::Geometry> {
             let mut frame = canvas::Frame::new(renderer, bounds.size());
             let bg = iced::Color::from_rgba8(0x18, 0x1B, 0x21, 1.0);
-            frame.fill_rectangle(
-                iced::Point::ORIGIN,
-                bounds.size(),
-                canvas::Fill::from(bg),
-            );
+            frame.fill_rectangle(iced::Point::ORIGIN, bounds.size(), canvas::Fill::from(bg));
 
             // Geometry constants.
             let pad_w = self.size_x_mm.max(0.001);
@@ -86,8 +82,8 @@ pub(super) fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a,
             let proj_w = ((mask_w + mask_h) as f32) * cos30;
             let proj_h = ((mask_w + mask_h) as f32) * sin30
                 + (copper_thickness_mm + mask_thickness_mm + substrate_gap_mm) as f32;
-            let scale = ((bounds.width * 0.75 / proj_w).min(bounds.height * 0.75 / proj_h))
-                .max(2.0);
+            let scale =
+                ((bounds.width * 0.75 / proj_w).min(bounds.height * 0.75 / proj_h)).max(2.0);
             let cx = bounds.width / 2.0;
             let cy = bounds.height / 2.0 + bounds.height * 0.10; // shift down slightly
 
@@ -119,110 +115,111 @@ pub(super) fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a,
             //   Chamfered      → 4 corners with optional 45° cuts
             //   Custom / etc.  → fallback to rect corners
             let shape_for_outline = self.shape.clone();
-            let perimeter_world =
-                move |hw: f32, hh: f32, segments: usize| -> Vec<(f32, f32)> {
-                    use signex_library::PadShape as PS;
-                    use std::f32::consts::{FRAC_PI_2, PI, TAU};
-                    match &shape_for_outline {
-                        PS::Round | PS::Oval => (0..segments)
-                            .map(|i| {
-                                let t = i as f32 / segments as f32 * TAU;
-                                (hw * t.cos(), hh * t.sin())
-                            })
-                            .collect(),
-                        PS::RoundRect { radius_ratio } => {
-                            let r = (hw.min(hh) * (*radius_ratio as f32 * 2.0))
-                                .max(0.1)
-                                .min(hw.min(hh));
-                            let inner_w = hw - r;
-                            let inner_h = hh - r;
-                            // Distribute samples roughly equally across
-                            // 4 arcs + 4 sides. A power-of-2-ish split
-                            // (8 + 2) keeps the curvature smooth without
-                            // exploding the vertex count.
-                            let arc_n = 8;
-                            let mut pts: Vec<(f32, f32)> = Vec::new();
-                            // Walk CCW starting at south-edge midpoint.
-                            // South edge: (-inner_w, -hh) → (inner_w, -hh)
-                            pts.push((-inner_w, -hh));
-                            pts.push((inner_w, -hh));
-                            // SE arc: center (inner_w, -inner_h), -π/2 → 0
-                            for i in 1..=arc_n {
-                                let t = -FRAC_PI_2 + (i as f32 / arc_n as f32) * FRAC_PI_2;
-                                pts.push((inner_w + r * t.cos(), -inner_h + r * t.sin()));
-                            }
-                            // East edge: (hw, -inner_h) → (hw, inner_h)
-                            pts.push((hw, inner_h));
-                            // NE arc: center (inner_w, inner_h), 0 → π/2
-                            for i in 1..=arc_n {
-                                let t = (i as f32 / arc_n as f32) * FRAC_PI_2;
-                                pts.push((inner_w + r * t.cos(), inner_h + r * t.sin()));
-                            }
-                            // North edge: (inner_w, hh) → (-inner_w, hh)
-                            pts.push((-inner_w, hh));
-                            // NW arc: center (-inner_w, inner_h), π/2 → π
-                            for i in 1..=arc_n {
-                                let t = FRAC_PI_2 + (i as f32 / arc_n as f32) * FRAC_PI_2;
-                                pts.push((-inner_w + r * t.cos(), inner_h + r * t.sin()));
-                            }
-                            // West edge: (-hw, inner_h) → (-hw, -inner_h)
-                            pts.push((-hw, -inner_h));
-                            // SW arc: center (-inner_w, -inner_h), π → 3π/2
-                            for i in 1..=arc_n {
-                                let t = PI + (i as f32 / arc_n as f32) * FRAC_PI_2;
-                                pts.push((-inner_w + r * t.cos(), -inner_h + r * t.sin()));
-                            }
-                            let _ = segments;
-                            pts
+            let perimeter_world = move |hw: f32, hh: f32, segments: usize| -> Vec<(f32, f32)> {
+                use signex_library::PadShape as PS;
+                use std::f32::consts::{FRAC_PI_2, PI, TAU};
+                match &shape_for_outline {
+                    PS::Round | PS::Oval => (0..segments)
+                        .map(|i| {
+                            let t = i as f32 / segments as f32 * TAU;
+                            (hw * t.cos(), hh * t.sin())
+                        })
+                        .collect(),
+                    PS::RoundRect { radius_ratio } => {
+                        let r = (hw.min(hh) * (*radius_ratio as f32 * 2.0))
+                            .max(0.1)
+                            .min(hw.min(hh));
+                        let inner_w = hw - r;
+                        let inner_h = hh - r;
+                        // Distribute samples roughly equally across
+                        // 4 arcs + 4 sides. A power-of-2-ish split
+                        // (8 + 2) keeps the curvature smooth without
+                        // exploding the vertex count.
+                        let arc_n = 8;
+                        let mut pts: Vec<(f32, f32)> = Vec::new();
+                        // Walk CCW starting at south-edge midpoint.
+                        // South edge: (-inner_w, -hh) → (inner_w, -hh)
+                        pts.push((-inner_w, -hh));
+                        pts.push((inner_w, -hh));
+                        // SE arc: center (inner_w, -inner_h), -π/2 → 0
+                        for i in 1..=arc_n {
+                            let t = -FRAC_PI_2 + (i as f32 / arc_n as f32) * FRAC_PI_2;
+                            pts.push((inner_w + r * t.cos(), -inner_h + r * t.sin()));
                         }
-                        PS::Chamfered { chamfer_ratio, corners } => {
-                            let c = (hw.min(hh) * (*chamfer_ratio as f32 * 2.0))
-                                .max(0.1)
-                                .min(hw.min(hh));
-                            let mut pts: Vec<(f32, f32)> = Vec::new();
-                            // CCW from south edge.
-                            // SE corner.
-                            if corners.bottom_right {
-                                pts.push((hw - c, -hh));
-                                pts.push((hw, -hh + c));
-                            } else {
-                                pts.push((hw, -hh));
-                            }
-                            // NE corner.
-                            if corners.top_right {
-                                pts.push((hw, hh - c));
-                                pts.push((hw - c, hh));
-                            } else {
-                                pts.push((hw, hh));
-                            }
-                            // NW corner.
-                            if corners.top_left {
-                                pts.push((-hw + c, hh));
-                                pts.push((-hw, hh - c));
-                            } else {
-                                pts.push((-hw, hh));
-                            }
-                            // SW corner.
-                            if corners.bottom_left {
-                                pts.push((-hw, -hh + c));
-                                pts.push((-hw + c, -hh));
-                            } else {
-                                pts.push((-hw, -hh));
-                            }
-                            let _ = segments;
-                            pts
+                        // East edge: (hw, -inner_h) → (hw, inner_h)
+                        pts.push((hw, inner_h));
+                        // NE arc: center (inner_w, inner_h), 0 → π/2
+                        for i in 1..=arc_n {
+                            let t = (i as f32 / arc_n as f32) * FRAC_PI_2;
+                            pts.push((inner_w + r * t.cos(), inner_h + r * t.sin()));
                         }
-                        _ => vec![(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)],
+                        // North edge: (inner_w, hh) → (-inner_w, hh)
+                        pts.push((-inner_w, hh));
+                        // NW arc: center (-inner_w, inner_h), π/2 → π
+                        for i in 1..=arc_n {
+                            let t = FRAC_PI_2 + (i as f32 / arc_n as f32) * FRAC_PI_2;
+                            pts.push((-inner_w + r * t.cos(), inner_h + r * t.sin()));
+                        }
+                        // West edge: (-hw, inner_h) → (-hw, -inner_h)
+                        pts.push((-hw, -inner_h));
+                        // SW arc: center (-inner_w, -inner_h), π → 3π/2
+                        for i in 1..=arc_n {
+                            let t = PI + (i as f32 / arc_n as f32) * FRAC_PI_2;
+                            pts.push((-inner_w + r * t.cos(), -inner_h + r * t.sin()));
+                        }
+                        let _ = segments;
+                        pts
                     }
-                };
+                    PS::Chamfered {
+                        chamfer_ratio,
+                        corners,
+                    } => {
+                        let c = (hw.min(hh) * (*chamfer_ratio as f32 * 2.0))
+                            .max(0.1)
+                            .min(hw.min(hh));
+                        let mut pts: Vec<(f32, f32)> = Vec::new();
+                        // CCW from south edge.
+                        // SE corner.
+                        if corners.bottom_right {
+                            pts.push((hw - c, -hh));
+                            pts.push((hw, -hh + c));
+                        } else {
+                            pts.push((hw, -hh));
+                        }
+                        // NE corner.
+                        if corners.top_right {
+                            pts.push((hw, hh - c));
+                            pts.push((hw - c, hh));
+                        } else {
+                            pts.push((hw, hh));
+                        }
+                        // NW corner.
+                        if corners.top_left {
+                            pts.push((-hw + c, hh));
+                            pts.push((-hw, hh - c));
+                        } else {
+                            pts.push((-hw, hh));
+                        }
+                        // SW corner.
+                        if corners.bottom_left {
+                            pts.push((-hw, -hh + c));
+                            pts.push((-hw + c, -hh));
+                        } else {
+                            pts.push((-hw, -hh));
+                        }
+                        let _ = segments;
+                        pts
+                    }
+                    _ => vec![(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)],
+                }
+            };
 
-            let perimeter_pts =
-                |hw: f32, hh: f32, z: f32, segments: usize| -> Vec<iced::Point> {
-                    perimeter_world(hw, hh, segments)
-                        .into_iter()
-                        .map(|(x, y)| project(x, y, z))
-                        .collect()
-                };
+            let perimeter_pts = |hw: f32, hh: f32, z: f32, segments: usize| -> Vec<iced::Point> {
+                perimeter_world(hw, hh, segments)
+                    .into_iter()
+                    .map(|(x, y)| project(x, y, z))
+                    .collect()
+            };
 
             let segments = 40;
             // v0.25 — copper sits ABOVE the mask with a substrate gap
@@ -234,8 +231,7 @@ pub(super) fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a,
             let mask_z_bot = 0.0_f32;
             let mask_z_top = mask_thickness_mm as f32;
             let copper_z_bot = (mask_thickness_mm + substrate_gap_mm) as f32;
-            let copper_z_top =
-                (mask_thickness_mm + substrate_gap_mm + copper_thickness_mm) as f32;
+            let copper_z_top = (mask_thickness_mm + substrate_gap_mm + copper_thickness_mm) as f32;
 
             let pad_hw = (pad_w / 2.0) as f32;
             let pad_hh = (pad_h / 2.0) as f32;
@@ -339,12 +335,7 @@ pub(super) fn pad_stack_preview<'a>(values: &PadFormValues) -> iced::Element<'a,
                     continue;
                 }
                 let j = (i + 1) % cu_top_pts.len();
-                let quad = [
-                    cu_bot_pts[i],
-                    cu_bot_pts[j],
-                    cu_top_pts[j],
-                    cu_top_pts[i],
-                ];
+                let quad = [cu_bot_pts[i], cu_bot_pts[j], cu_top_pts[j], cu_top_pts[i]];
                 fill_poly(&mut frame, &quad, copper_dark);
             }
             // v0.25 — for THT pads, render the copper top as a RING
@@ -617,7 +608,8 @@ pub(super) enum HoleShapeChoice {
 }
 
 impl HoleShapeChoice {
-    pub(super) const ALL: &'static [HoleShapeChoice] = &[HoleShapeChoice::Round, HoleShapeChoice::Slot];
+    pub(super) const ALL: &'static [HoleShapeChoice] =
+        &[HoleShapeChoice::Round, HoleShapeChoice::Slot];
 }
 
 impl std::fmt::Display for HoleShapeChoice {
@@ -651,4 +643,3 @@ impl std::fmt::Display for ExpansionMode {
         })
     }
 }
-

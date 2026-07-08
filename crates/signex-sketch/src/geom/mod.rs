@@ -31,19 +31,19 @@ pub mod triangulate;
 
 pub use aabb_index::{Aabb, AabbIndex};
 pub use boolean::intersect_convex_clip;
-pub use boolean_general::{polygon_op, BoolOp};
+pub use boolean_general::{BoolOp, polygon_op};
 pub use curves::{arc_arc_intersections, arc_circle_intersections, circle_circle_intersections};
 pub use hull::convex_hull;
-pub use offset::{offset_polygon, CornerStyle};
-pub use offset_arc::{offset_arc_polyline, PolyElement};
+pub use offset::{CornerStyle, offset_polygon};
+pub use offset_arc::{PolyElement, offset_arc_polyline};
 pub use point::{point_in_polygon, point_to_segment_distance, point_to_segment_distance_sq};
 pub use polylabel::pole_of_inaccessibility;
-pub use simplify::{dedup, merge_colinear, simplify_polygon, snap_to_grid, MultiContour};
-pub use predicates::{orient2d, signed_area, Sign};
+pub use predicates::{Sign, orient2d, signed_area};
 pub use segment::{
-    segment_arc_intersections, segment_circle_intersections, segment_segment_intersection,
-    Arc2, Circle2, Segment2, SegmentIntersection,
+    Arc2, Circle2, Segment2, SegmentIntersection, segment_arc_intersections,
+    segment_circle_intersections, segment_segment_intersection,
 };
+pub use simplify::{MultiContour, dedup, merge_colinear, simplify_polygon, snap_to_grid};
 pub use triangulate::{ear_clip, ear_clip_with_holes};
 
 /// Plain-old 2D point in plane-local mm. The crate's `EntityKind::Point`

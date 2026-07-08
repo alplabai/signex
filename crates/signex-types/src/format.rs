@@ -2265,12 +2265,12 @@ mod tests {
         for original in [
             "",
             "-",
-            "C:\\Users\\x",          // Windows path — backslash
-            "1/4\"",                 // inch mark — trailing quote
-            "he said \"hi\"",        // embedded quotes
-            "a\tb",                  // tab
-            "line1\nline2",          // embedded newline
-            "back\\slash \"q\" -",   // mixed
+            "C:\\Users\\x",        // Windows path — backslash
+            "1/4\"",               // inch mark — trailing quote
+            "he said \"hi\"",      // embedded quotes
+            "a\tb",                // tab
+            "line1\nline2",        // embedded newline
+            "back\\slash \"q\" -", // mixed
             "plain",
             "with space",
         ] {
@@ -2311,8 +2311,7 @@ mod tests {
         let mut sheet = empty_sheet();
         sheet.labels.push(label_with_text("NET_C:\\x \"1/4\""));
         let s = SnxSchematic::new(sheet).write_string().expect("serialise");
-        let back =
-            SnxSchematic::parse(&s).expect("dangerous label text must not corrupt the file");
+        let back = SnxSchematic::parse(&s).expect("dangerous label text must not corrupt the file");
         assert_eq!(back.sheet.labels.len(), 1);
         assert_eq!(back.sheet.labels[0].text, "NET_C:\\x \"1/4\"");
     }

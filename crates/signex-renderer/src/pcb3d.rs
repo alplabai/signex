@@ -5,13 +5,13 @@
 //! Sources: glTF 2.0 GLB container specification, serde_json public docs.
 
 use crate::theme::ResolvedTheme;
+use serde_json::Value;
 use signex_3d_model_importer::{
-    import_model as import_to_glb, ImportWarning as ModelImportWarning, ModelImportRequest,
+    ImportWarning as ModelImportWarning, ModelImportRequest, import_model as import_to_glb,
 };
 use signex_gfx::primitive::polygon::GpuPolygon;
 use signex_gfx::scene::Scene;
 use signex_gfx::style::ColorSlot;
-use serde_json::Value;
 use std::collections::HashSet;
 use std::fmt;
 use std::fs;
@@ -191,13 +191,19 @@ pub struct RuntimeModelBridgeRequest {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RuntimeModelBridgeWarning {
-    TextureMissing { uri: String },
+    TextureMissing {
+        uri: String,
+    },
     EmptyPrimitive {
         mesh_index: usize,
         primitive_index: usize,
     },
-    UnsupportedGeometry { entity_type: String },
-    UnsupportedGltfExtension { name: String },
+    UnsupportedGeometry {
+        entity_type: String,
+    },
+    UnsupportedGltfExtension {
+        name: String,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -423,8 +429,7 @@ fn load_glb_bytes(model_id: &str, source: &GlbSource) -> Result<Vec<u8>, Runtime
 }
 
 fn is_glb_path(path: &PathBuf) -> bool {
-    path
-        .extension()
+    path.extension()
         .and_then(|ext| ext.to_str())
         .map(|ext| ext.eq_ignore_ascii_case("glb"))
         .unwrap_or(false)
@@ -438,14 +443,14 @@ fn validate_and_stage_glb_payload(
         return Err(invalid_glb(model_id, "payload shorter than GLB header"));
     }
 
-    let magic = read_u32_le(bytes, 0)
-        .ok_or_else(|| invalid_glb(model_id, "missing GLB magic bytes"))?;
+    let magic =
+        read_u32_le(bytes, 0).ok_or_else(|| invalid_glb(model_id, "missing GLB magic bytes"))?;
     if magic != GLB_MAGIC {
         return Err(invalid_glb(model_id, "invalid GLB magic"));
     }
 
-    let version = read_u32_le(bytes, 4)
-        .ok_or_else(|| invalid_glb(model_id, "missing GLB version"))?;
+    let version =
+        read_u32_le(bytes, 4).ok_or_else(|| invalid_glb(model_id, "missing GLB version"))?;
     if version != GLB_VERSION_2 {
         return Err(invalid_glb(
             model_id,
@@ -470,12 +475,14 @@ fn validate_and_stage_glb_payload(
     let json_chunk = locate_glb_json_chunk(model_id, bytes)?;
     let root = parse_json_root(json_chunk).map_err(|reason| invalid_glb(model_id, reason))?;
 
-    let asset_version = extract_asset_version(&root).map_err(|reason| invalid_glb(model_id, reason))?;
+    let asset_version =
+        extract_asset_version(&root).map_err(|reason| invalid_glb(model_id, reason))?;
     let nodes = collect_nodes(&root).map_err(|reason| invalid_glb(model_id, reason))?;
     let scenes = collect_scenes(&root).map_err(|reason| invalid_glb(model_id, reason))?;
-    let mesh_layouts = collect_mesh_layouts(&root).map_err(|reason| invalid_glb(model_id, reason))?;
-    let opaque_primitives =
-        stage_opaque_primitives(nodes, scenes, &mesh_layouts).map_err(|reason| invalid_glb(model_id, reason))?;
+    let mesh_layouts =
+        collect_mesh_layouts(&root).map_err(|reason| invalid_glb(model_id, reason))?;
+    let opaque_primitives = stage_opaque_primitives(nodes, scenes, &mesh_layouts)
+        .map_err(|reason| invalid_glb(model_id, reason))?;
 
     let mesh_primitive_count = mesh_layouts
         .iter()
@@ -492,12 +499,7 @@ fn validate_and_stage_glb_payload(
         byte_len: bytes.len(),
     };
 
-    Ok((
-        metadata,
-        RuntimeMeshStaging {
-            opaque_primitives,
-        },
-    ))
+    Ok((metadata, RuntimeMeshStaging { opaque_primitives }))
 }
 
 fn invalid_glb(model_id: &str, reason: impl Into<String>) -> RuntimeGlbIngestError {
@@ -507,7 +509,10 @@ fn invalid_glb(model_id: &str, reason: impl Into<String>) -> RuntimeGlbIngestErr
     }
 }
 
-fn locate_glb_json_chunk<'a>(model_id: &str, bytes: &'a [u8]) -> Result<&'a [u8], RuntimeGlbIngestError> {
+fn locate_glb_json_chunk<'a>(
+    model_id: &str,
+    bytes: &'a [u8],
+) -> Result<&'a [u8], RuntimeGlbIngestError> {
     let mut offset = GLB_HEADER_LEN;
     let mut json_chunk: Option<&[u8]> = None;
 
@@ -840,10 +845,7 @@ impl fmt::Display for ProjectionAlignmentError {
                 )
             }
             Self::UvBoundsInverted { model_id, axis } => {
-                write!(
-                    f,
-                    "model {model_id}: UV bounds {axis}.min >= {axis}.max"
-                )
+                write!(f, "model {model_id}: UV bounds {axis}.min >= {axis}.max")
             }
         }
     }

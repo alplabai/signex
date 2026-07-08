@@ -3867,8 +3867,7 @@ impl Signex {
             active_tab_kind_any,
             Some(crate::app::TabKind::SymbolEditor(_))
         );
-        let has_active_bar =
-            self.has_active_schematic() || has_footprint_bar || has_symbol_bar;
+        let has_active_bar = self.has_active_schematic() || has_footprint_bar || has_symbol_bar;
         let dragging_tab = ui.tab_dragging.is_some();
         let needs_overlay = has_active_bar
             || interaction.editing_text.is_some()
@@ -4774,8 +4773,7 @@ impl Signex {
         // schematic's window-absolute coordinates. Mounting both at
         // the layers Stack with identical `Space::height(y_offset +
         // 4.0)` math guarantees pixel-identical screen y.
-        if let Some(active_tab) =
-            self.document_state.tabs.get(self.document_state.active_tab)
+        if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
             && let Some(path) = active_tab.kind.as_footprint_editor()
             && let Some(editor) = self.document_state.footprint_editors.get(path)
         {
@@ -4791,12 +4789,10 @@ impl Signex {
             // `.map(...)` then wrap in container().width(Fill).align_x(
             // Center). Dropdown overlay is a separate layer pushed
             // after the bar.
-            let bar_items =
-                crate::library::editor::footprint::unified_active_bar::bar_items(
-                    editor, theme_id, tokens,
-                );
-            let bar = signex_widgets::active_bar::view(bar_items, tokens)
-                .map(Message::Library);
+            let bar_items = crate::library::editor::footprint::unified_active_bar::bar_items(
+                editor, theme_id, tokens,
+            );
+            let bar = signex_widgets::active_bar::view(bar_items, tokens).map(Message::Library);
             layers.push(
                 column![
                     iced::widget::Space::new().height(y_offset + 4.0),
@@ -4847,8 +4843,8 @@ impl Signex {
                 let close_msg = Message::Library(
                     crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                         path: path.to_path_buf(),
-                        msg: crate::library::messages::PrimitiveEditorMsg
-                            ::FootprintCloseContextMenu,
+                        msg:
+                            crate::library::messages::PrimitiveEditorMsg::FootprintCloseContextMenu,
                     },
                 );
                 layers.push(Self::dismiss_layer(close_msg));
@@ -4877,9 +4873,7 @@ impl Signex {
             // context menu) — it's a blocking dialog once open. Gated
             // into `needs_overlay` above via `move_by_modal.is_some()`.
             if let Some(card) =
-                crate::library::editor::footprint::move_by_modal::view_move_by_modal(
-                    editor, tokens,
-                )
+                crate::library::editor::footprint::move_by_modal::view_move_by_modal(editor, tokens)
             {
                 let close_msg = Message::Library(
                     crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
@@ -4901,8 +4895,7 @@ impl Signex {
 
         // v0.13 — symbol library editor active bar mounted at the
         // SAME app-view layer as the schematic / footprint bars.
-        if let Some(active_tab) =
-            self.document_state.tabs.get(self.document_state.active_tab)
+        if let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab)
             && let Some(path) = active_tab.kind.as_symbol_editor()
             && let Some(editor) = self.document_state.symbol_editors.get(path)
         {
@@ -4914,10 +4907,8 @@ impl Signex {
             // mounts. Direct call to `signex_widgets::active_bar::view`
             // — the unified widget's view_with_overlay path is
             // bypassed at this site so the chain matches schematic.
-            let bar_items =
-                crate::library::editor::symbol::active_bar::bar_items(editor, theme_id);
-            let bar = signex_widgets::active_bar::view(bar_items, tokens)
-                .map(Message::Library);
+            let bar_items = crate::library::editor::symbol::active_bar::bar_items(editor, theme_id);
+            let bar = signex_widgets::active_bar::view(bar_items, tokens).map(Message::Library);
             layers.push(
                 column![
                     iced::widget::Space::new().height(y_offset + 4.0),
@@ -4928,14 +4919,12 @@ impl Signex {
                 .into(),
             );
             let dropdown_top: u16 = (y_offset as u16).saturating_add(42);
-            if let Some(overlay) =
-                crate::library::editor::symbol::active_bar::dropdown_overlay(
-                    editor,
-                    theme_id,
-                    tokens,
-                    dropdown_top,
-                )
-            {
+            if let Some(overlay) = crate::library::editor::symbol::active_bar::dropdown_overlay(
+                editor,
+                theme_id,
+                tokens,
+                dropdown_top,
+            ) {
                 layers.push(overlay.map(Message::Library));
             }
         }

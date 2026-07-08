@@ -4,8 +4,10 @@ use signex_renderer::pcb::PcbSnapshot;
 use signex_types::pcb::PcbBoard;
 
 fn benchmark_fixture_board() -> PcbBoard {
-    serde_json::from_str(include_str!("fixtures/pcb_zone_stack_benchmark_fixture.json"))
-        .expect("valid PCB zone stack benchmark fixture")
+    serde_json::from_str(include_str!(
+        "fixtures/pcb_zone_stack_benchmark_fixture.json"
+    ))
+    .expect("valid PCB zone stack benchmark fixture")
 }
 
 #[test]
@@ -47,10 +49,7 @@ fn benchmark_fixture_rule_area_order_uses_same_layer_top_rule() {
         .map(|zone| (zone.layer_name.clone(), zone.priority, zone.net))
         .collect();
 
-    let expected = vec![
-        ("f.cu".to_string(), 1, 0),
-        ("f.cu".to_string(), 1, 2),
-    ];
+    let expected = vec![("f.cu".to_string(), 1, 0), ("f.cu".to_string(), 1, 2)];
 
     assert_eq!(ordered, expected);
 }

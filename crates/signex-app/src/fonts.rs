@@ -830,7 +830,10 @@ pub fn read_footprint_filter_presets() -> Vec<crate::active_bar::FootprintFilter
     let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
         return Vec::new();
     };
-    let Some(array) = json.get("footprint_filter_presets").and_then(|v| v.as_array()) else {
+    let Some(array) = json
+        .get("footprint_filter_presets")
+        .and_then(|v| v.as_array())
+    else {
         return Vec::new();
     };
     array

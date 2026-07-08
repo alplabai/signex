@@ -72,9 +72,7 @@ pub(super) fn render_grid_manager<'a>(
                 .width(Length::Fixed(20.0))
                 .height(Length::Fixed(14.0))
                 .style(move |_: &Theme| iced::widget::container::Style {
-                    background: Some(Background::Color(Color::from_rgba8(
-                        0xff, 0xff, 0xff, 1.0,
-                    ))),
+                    background: Some(Background::Color(Color::from_rgba8(0xff, 0xff, 0xff, 1.0))),
                     border: Border {
                         width: 1.0,
                         radius: 2.0.into(),
@@ -98,13 +96,8 @@ pub(super) fn render_grid_manager<'a>(
                             .size(10)
                             .color(if is_active { primary } else { muted })
                             .width(Length::Fill),
-                        container(swatch)
-                            .width(Length::Fixed(40.0))
-                            .padding([0, 0]),
-                        text("0,0")
-                            .size(10)
-                            .color(muted)
-                            .width(Length::Fixed(60.0)),
+                        container(swatch).width(Length::Fixed(40.0)).padding([0, 0]),
+                        text("0,0").size(10).color(muted).width(Length::Fixed(60.0)),
                         container(enabled_check)
                             .width(Length::Fixed(50.0))
                             .center_x(Length::Shrink),
@@ -335,4 +328,3 @@ pub(super) fn grid_manager_btn<'a>(
     }
     btn.into()
 }
-

@@ -24,9 +24,7 @@ use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 use crate::app::SymbolEditorState;
 use crate::icons as ic;
 use crate::library::editor::symbol::canvas::SymbolTool;
-use crate::library::editor::symbol::state::{
-    SymActiveBarMenu, SymbolSelectionFilter,
-};
+use crate::library::editor::symbol::state::{SymActiveBarMenu, SymbolSelectionFilter};
 use crate::library::messages::{LibraryMessage, PrimitiveEditorMsg, SymbolToolMsg};
 
 /// Build the SchLib bar items only — caller mounts via
@@ -39,8 +37,7 @@ pub fn bar_items(
     let path = editor.path.clone();
     let active_tool = editor.tool;
 
-    let mut items: Vec<ActiveBarItem<LibraryMessage>> =
-        dropdown_trigger_items(editor, theme_id);
+    let mut items: Vec<ActiveBarItem<LibraryMessage>> = dropdown_trigger_items(editor, theme_id);
     items.push(ActiveBarItem::Separator);
 
     items.push(ActiveBarItem::Button(ActiveBarButton {
@@ -78,8 +75,8 @@ pub fn dropdown_overlay<'a>(
     tokens: &'a ThemeTokens,
     top_padding_px: u16,
 ) -> Option<iced::Element<'a, LibraryMessage>> {
-    use iced::widget::{Stack, container, mouse_area, Space};
     use iced::Length;
+    use iced::widget::{Space, Stack, container, mouse_area};
 
     let menu = editor.active_bar_menu?;
     let entries = crate::library::editor::symbol::active_bar_dropdowns::entries(
@@ -133,7 +130,7 @@ fn dropdown_trigger_items(
                 icon: ActiveBarIcon,
                 menu: SymActiveBarMenu,
                 left: Option<PrimitiveEditorMsg>|
-         -> ActiveBarItem<LibraryMessage> {
+     -> ActiveBarItem<LibraryMessage> {
         let on_press = Some(LibraryMessage::PrimitiveEditorEvent {
             path: path.clone(),
             msg: left.unwrap_or(PrimitiveEditorMsg::SymbolToggleActiveBarMenu(menu)),

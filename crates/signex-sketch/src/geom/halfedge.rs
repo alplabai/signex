@@ -18,8 +18,8 @@
 //! - Polygon boolean cleanup (Phase 2 follow-up).
 //! - Multi-region pad-stack composition.
 
-use super::predicates::signed_area;
 use super::Point2;
+use super::predicates::signed_area;
 
 /// Index types so signatures read clearly. `usize` underneath but
 /// distinct so calls like `mesh.next(half_edge)` don't accidentally

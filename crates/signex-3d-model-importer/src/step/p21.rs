@@ -200,14 +200,7 @@ fn parse_entity_statement(statement: &str, line: usize) -> Result<(u32, Entity),
     let kind = rhs[..open].trim().to_ascii_uppercase();
     let params = rhs[open + 1..close].trim().to_owned();
 
-    Ok((
-        id,
-        Entity {
-            kind,
-            params,
-            line,
-        },
-    ))
+    Ok((id, Entity { kind, params, line }))
 }
 
 fn parse_cartesian_point(entity: &Entity) -> Result<[f32; 3], ParseError> {
@@ -294,7 +287,10 @@ fn resolve_poly_loop_points(
     let mut out = Vec::new();
 
     for &vertex_id in vertex_refs {
-        let point_id = vertex_to_point.get(&vertex_id).copied().unwrap_or(vertex_id);
+        let point_id = vertex_to_point
+            .get(&vertex_id)
+            .copied()
+            .unwrap_or(vertex_id);
         if let Some(point) = points.get(&point_id).copied() {
             out.push(point);
         }
@@ -339,7 +335,10 @@ fn resolve_edge_loop_points(
 
     let mut out = Vec::new();
     for vertex_id in vertex_chain {
-        let point_id = vertex_to_point.get(&vertex_id).copied().unwrap_or(vertex_id);
+        let point_id = vertex_to_point
+            .get(&vertex_id)
+            .copied()
+            .unwrap_or(vertex_id);
         if let Some(point) = points.get(&point_id).copied() {
             out.push(point);
         }

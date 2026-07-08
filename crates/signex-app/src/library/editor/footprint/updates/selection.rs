@@ -287,8 +287,8 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                         j = i;
                         continue;
                     }
-                    let intersect = ((yi > py) != (yj > py))
-                        && (px < (xj - xi) * (py - yi) / denom + xi);
+                    let intersect =
+                        ((yi > py) != (yj > py)) && (px < (xj - xi) * (py - yi) / denom + xi);
                     if intersect {
                         inside = !inside;
                     }
@@ -350,9 +350,8 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             let dy = y_mm - sy;
             let segment_hits_aabb = |xmin: f64, ymin: f64, xmax: f64, ymax: f64| -> bool {
                 // Both endpoints inside?
-                let inside = |x: f64, y: f64| -> bool {
-                    x >= xmin && x <= xmax && y >= ymin && y <= ymax
-                };
+                let inside =
+                    |x: f64, y: f64| -> bool { x >= xmin && x <= xmax && y >= ymin && y <= ymax };
                 if inside(sx, sy) || inside(x_mm, y_mm) {
                     return true;
                 }
@@ -427,7 +426,13 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                 .pads
                 .iter()
                 .enumerate()
-                .filter_map(|(idx, p)| if p.contains_mm(wx, wy) { Some(idx) } else { None })
+                .filter_map(|(idx, p)| {
+                    if p.contains_mm(wx, wy) {
+                        Some(idx)
+                    } else {
+                        None
+                    }
+                })
                 .collect();
             if stack.is_empty() {
                 editor.state.active_bar_menu = None;

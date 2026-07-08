@@ -85,11 +85,7 @@ pub fn dropdown_x_offset(menu: FpActiveBarMenu) -> f32 {
 /// v0.26-H — total bar width in px. Mirrors the [`bar_items`] item
 /// list so dropdown positioning math knows where the bar's left
 /// edge sits when iced auto-sizes + centre-aligns the bar.
-pub fn bar_width(
-    editor: &FootprintEditorState,
-    theme_id: ThemeId,
-    tokens: &ThemeTokens,
-) -> f32 {
+pub fn bar_width(editor: &FootprintEditorState, theme_id: ThemeId, tokens: &ThemeTokens) -> f32 {
     let items = bar_items(editor, theme_id, tokens);
     let mut w = 2.0 * BAR_PADDING;
     for (i, item) in items.iter().enumerate() {
@@ -135,8 +131,8 @@ pub fn dropdown_overlay<'a>(
     top_padding_px: u16,
     window_width: f32,
 ) -> Option<iced::Element<'a, LibraryMessage>> {
-    use iced::widget::{Stack, container, mouse_area, Space};
     use iced::Length;
+    use iced::widget::{Space, Stack, container, mouse_area};
 
     let menu = editor.state.active_bar_menu?;
 
@@ -208,7 +204,7 @@ fn dropdown_trigger_items(
                 icon: ActiveBarIcon,
                 menu: FpActiveBarMenu,
                 left: Option<PrimitiveEditorMsg>|
-         -> ActiveBarItem<LibraryMessage> {
+     -> ActiveBarItem<LibraryMessage> {
         let on_press = Some(LibraryMessage::PrimitiveEditorEvent {
             path: path.clone(),
             msg: left.unwrap_or(PrimitiveEditorMsg::FootprintToggleActiveBarMenu(menu)),

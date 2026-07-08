@@ -23,8 +23,8 @@
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
-use super::predicates::DEFAULT_TOL;
 use super::Point2;
+use super::predicates::DEFAULT_TOL;
 
 /// Centre point + half-diagonal for one quadtree cell, plus the
 /// signed distance from `centre` to the polygon. Stored on the
@@ -183,11 +183,7 @@ fn signed_distance_to_polygon(p: Point2, polygon: &[Point2]) -> f64 {
             min_d = d;
         }
     }
-    if inside {
-        min_d
-    } else {
-        -min_d
-    }
+    if inside { min_d } else { -min_d }
 }
 
 fn point_in_polygon(p: Point2, polygon: &[Point2]) -> bool {
@@ -204,8 +200,7 @@ fn point_in_polygon(p: Point2, polygon: &[Point2]) -> bool {
             j = i;
             continue;
         }
-        let intersect =
-            ((yi > p.y) != (yj > p.y)) && (p.x < (xj - xi) * (p.y - yi) / denom + xi);
+        let intersect = ((yi > p.y) != (yj > p.y)) && (p.x < (xj - xi) * (p.y - yi) / denom + xi);
         if intersect {
             inside = !inside;
         }
@@ -285,6 +280,9 @@ mod tests {
         // Distance from pole to nearest edge should be > 0.4 (i.e.
         // roughly the half-arm-thickness).
         let d = signed_distance_to_polygon(pole, &l);
-        assert!(d > 0.4, "pole distance {d} should be > 0.4 for L with arm 1");
+        assert!(
+            d > 0.4,
+            "pole distance {d} should be > 0.4 for L with arm 1"
+        );
     }
 }

@@ -649,7 +649,8 @@ impl Signex {
         let mut dirty: Vec<std::path::PathBuf> =
             self.document_state.dirty_paths.iter().cloned().collect();
         dirty.sort();
-        self.ui_state.app_quit_confirm = Some(crate::app::AppQuitConfirmState { dirty_paths: dirty });
+        self.ui_state.app_quit_confirm =
+            Some(crate::app::AppQuitConfirmState { dirty_paths: dirty });
         Task::none()
     }
 
@@ -689,8 +690,11 @@ impl Signex {
                         match engine.save() {
                             Ok(_) => {
                                 self.document_state.dirty_paths.remove(path);
-                                if let Some(tab) =
-                                    self.document_state.tabs.iter_mut().find(|t| &t.path == path)
+                                if let Some(tab) = self
+                                    .document_state
+                                    .tabs
+                                    .iter_mut()
+                                    .find(|t| &t.path == path)
                                 {
                                     tab.dirty = false;
                                 }
@@ -713,7 +717,9 @@ impl Signex {
                     let listing: Vec<String> = failed
                         .iter()
                         .filter_map(|p| {
-                            p.file_name().and_then(|s| s.to_str()).map(|s| s.to_string())
+                            p.file_name()
+                                .and_then(|s| s.to_str())
+                                .map(|s| s.to_string())
                         })
                         .collect();
                     self.document_state.export_error = Some(format!(

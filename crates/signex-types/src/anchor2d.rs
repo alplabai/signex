@@ -25,7 +25,7 @@
 //! [`Transform2D::set_pivot_to_anchor`], which moves `pivot_world` to the new
 //! anchor position without moving the object.
 
-use crate::rotation2d::{normalize_angle_rad, Vec2d};
+use crate::rotation2d::{Vec2d, normalize_angle_rad};
 
 /// 2D transform with an explicit pivot/anchor point stored in world space.
 ///
@@ -72,17 +72,11 @@ impl Transform2D {
         size: Vec2d,
         rotation_rad: f64,
     ) -> Self {
-        let local_offset = Vec2d::new(
-            -anchor_frac.x * size.x,
-            -anchor_frac.y * size.y,
-        );
+        let local_offset = Vec2d::new(-anchor_frac.x * size.x, -anchor_frac.y * size.y);
         // pivot_world = origin_world - rotate(local_offset, rotation_rad)
         //             = origin_world + rotate(anchor_frac * size, rotation_rad)
         let rotated = rotate_vec(local_offset, rotation_rad);
-        let pivot_world = Vec2d::new(
-            origin_world.x - rotated.x,
-            origin_world.y - rotated.y,
-        );
+        let pivot_world = Vec2d::new(origin_world.x - rotated.x, origin_world.y - rotated.y);
         Self {
             pivot_world,
             local_offset,
@@ -149,8 +143,8 @@ impl Transform2D {
         let px = self.pivot_world.x;
         let py = self.pivot_world.y;
         [
-            [c,   -s,  c * lx - s * ly + px],
-            [s,    c,  s * lx + c * ly + py],
+            [c, -s, c * lx - s * ly + px],
+            [s, c, s * lx + c * ly + py],
             [0.0, 0.0, 1.0],
         ]
     }
@@ -188,18 +182,12 @@ impl Transform2D {
     /// - `local_offset = -(anchor_frac * size)`.
     pub fn set_pivot_to_anchor(&mut self, anchor_frac: Vec2d) {
         let old_origin = self.origin_world();
-        self.local_offset = Vec2d::new(
-            -anchor_frac.x * self.size.x,
-            -anchor_frac.y * self.size.y,
-        );
+        self.local_offset = Vec2d::new(-anchor_frac.x * self.size.x, -anchor_frac.y * self.size.y);
         // Recompute pivot_world so that origin_world stays at old_origin:
         //   origin_world = pivot_world + rotate(local_offset, rotation_rad)
         //   => pivot_world = origin_world - rotate(local_offset, rotation_rad)
         let rotated = rotate_vec(self.local_offset, self.rotation_rad);
-        self.pivot_world = Vec2d::new(
-            old_origin.x - rotated.x,
-            old_origin.y - rotated.y,
-        );
+        self.pivot_world = Vec2d::new(old_origin.x - rotated.x, old_origin.y - rotated.y);
     }
 }
 
@@ -245,8 +233,16 @@ mod tests {
             0.0,
         );
         // Pivot should be at center of the bounding box.
-        assert!(approx(t.pivot_world.x, 160.0), "pivot x: {}", t.pivot_world.x);
-        assert!(approx(t.pivot_world.y, 240.0), "pivot y: {}", t.pivot_world.y);
+        assert!(
+            approx(t.pivot_world.x, 160.0),
+            "pivot x: {}",
+            t.pivot_world.x
+        );
+        assert!(
+            approx(t.pivot_world.y, 240.0),
+            "pivot y: {}",
+            t.pivot_world.y
+        );
         // origin_world round-trips back.
         assert!(vec_eq(t.origin_world(), Vec2d::new(100.0, 200.0)));
     }
@@ -336,7 +332,11 @@ mod tests {
         );
         let origin_before = t.origin_world();
         t.set_pivot_to_anchor(Vec2d::new(0.0, 0.0));
-        assert!(vec_eq(t.origin_world(), origin_before), "origin shifted: {:?}", t.origin_world());
+        assert!(
+            vec_eq(t.origin_world(), origin_before),
+            "origin shifted: {:?}",
+            t.origin_world()
+        );
         // New pivot should be at the object origin (bottom-left corner).
         assert!(vec_eq(t.pivot_world, origin_before));
     }
@@ -379,9 +379,18 @@ mod tests {
             Vec2d::new(4.0, 2.0),
             0.0,
         );
-        assert!(vec_eq(t.anchor_world_at(Vec2d::new(0.0, 0.0)), Vec2d::new(0.0, 0.0)));
-        assert!(vec_eq(t.anchor_world_at(Vec2d::new(1.0, 1.0)), Vec2d::new(4.0, 2.0)));
-        assert!(vec_eq(t.anchor_world_at(Vec2d::new(0.5, 0.5)), Vec2d::new(2.0, 1.0)));
+        assert!(vec_eq(
+            t.anchor_world_at(Vec2d::new(0.0, 0.0)),
+            Vec2d::new(0.0, 0.0)
+        ));
+        assert!(vec_eq(
+            t.anchor_world_at(Vec2d::new(1.0, 1.0)),
+            Vec2d::new(4.0, 2.0)
+        ));
+        assert!(vec_eq(
+            t.anchor_world_at(Vec2d::new(0.5, 0.5)),
+            Vec2d::new(2.0, 1.0)
+        ));
     }
 
     #[test]
@@ -438,8 +447,14 @@ mod tests {
         let pivot_before = t.pivot_world;
         let delta = Vec2d::new(10.0, -20.0);
         t.translate(delta);
-        assert!(vec_eq(t.pivot_world, Vec2d::new(pivot_before.x + delta.x, pivot_before.y + delta.y)));
-        assert!(vec_eq(t.origin_world(), Vec2d::new(origin_before.x + delta.x, origin_before.y + delta.y)));
+        assert!(vec_eq(
+            t.pivot_world,
+            Vec2d::new(pivot_before.x + delta.x, pivot_before.y + delta.y)
+        ));
+        assert!(vec_eq(
+            t.origin_world(),
+            Vec2d::new(origin_before.x + delta.x, origin_before.y + delta.y)
+        ));
     }
 
     // ── B-behavior end-to-end ─────────────────────────────────────────────────
@@ -482,7 +497,7 @@ mod tests {
             Vec2d::new(60.0, 40.0),
             0.0,
         );
-        t.rotate(FRAC_PI_2);            // 90° CCW
+        t.rotate(FRAC_PI_2); // 90° CCW
         let origin_after_rot = t.origin_world();
 
         // Now change pivot to top-right corner — object must not jump.

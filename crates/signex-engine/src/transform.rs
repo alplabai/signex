@@ -334,8 +334,7 @@ impl Engine {
                 .find(|symbol| symbol.uuid == item.uuid)
                 .map(|symbol| {
                     if let Some(ref mut ref_text) = symbol.ref_text {
-                        ref_text.rotation =
-                            normalize_degrees(ref_text.rotation + angle_degrees);
+                        ref_text.rotation = normalize_degrees(ref_text.rotation + angle_degrees);
                         // Manual field rotation marks the symbol as
                         // user-placed so future rotate / mirror operations
                         // never silently re-run the autoplacer over it.
@@ -354,8 +353,7 @@ impl Engine {
                 .find(|symbol| symbol.uuid == item.uuid)
                 .map(|symbol| {
                     if let Some(ref mut val_text) = symbol.val_text {
-                        val_text.rotation =
-                            normalize_degrees(val_text.rotation + angle_degrees);
+                        val_text.rotation = normalize_degrees(val_text.rotation + angle_degrees);
                         symbol.fields_autoplaced = false;
                         symbol.fields_user_placed = true;
                         true

@@ -107,7 +107,6 @@ impl Signex {
         }
     }
 
-
     pub(crate) fn handle_selection_rotate_requested(&mut self) {
         if let Some(engine) = self.document_state.active_engine()
             && engine.selection_is_single_symbol(&self.interaction_state.active_canvas().selected)

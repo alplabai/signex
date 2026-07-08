@@ -119,4 +119,3 @@ pub(super) fn bake_linear(
 
     Ok(())
 }
-

@@ -4,9 +4,9 @@
 //! This module was written without reference to GPL-licensed software.
 //! Sources: IPC-2612-1, IEEE 315, IEC 60617, wgpu/WGSL public docs.
 
-pub mod line;
-pub mod circle;
 pub mod arc;
+pub mod circle;
+pub mod grid;
+pub mod line;
 pub mod polygon;
 pub mod text;
-pub mod grid;

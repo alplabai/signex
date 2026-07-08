@@ -269,7 +269,10 @@ async fn route_post_duplicate_row_conflicts_and_preserves_original() {
         .await
         .unwrap();
     let got: ComponentRow = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(got, row1, "the original row must survive a conflicting POST");
+    assert_eq!(
+        got, row1,
+        "the original row must survive a conflicting POST"
+    );
 }
 
 #[tokio::test]

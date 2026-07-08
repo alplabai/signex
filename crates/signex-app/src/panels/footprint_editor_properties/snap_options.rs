@@ -29,32 +29,39 @@ pub(super) fn render_snapping_mode_row<'a>(
     let chip_border = Color::from_rgba8(0xE7, 0x8B, 0x2A, 1.0);
     let active_bg = Color::from_rgba8(0x2E, 0x33, 0x45, 1.0);
     let inactive_bg = Color::from_rgba8(0x1A, 0x1D, 0x28, 1.0);
-    let mk_pill = move |label: &'static str, target: M, active: bool| -> Element<'static, PanelMsg> {
-        iced::widget::button(
-            text(label)
-                .size(10)
-                .color(if active { primary } else { muted })
-                .align_x(iced::alignment::Horizontal::Center),
-        )
-        .padding([3, 12])
-        .on_press(PanelMsg::FpEditorSetSnappingMode(target))
-        .style(move |_: &Theme, status: iced::widget::button::Status| {
-            let bg = match status {
-                iced::widget::button::Status::Hovered => Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.06))),
-                _ => Some(Background::Color(if active { active_bg } else { inactive_bg })),
-            };
-            iced::widget::button::Style {
-                background: bg,
-                border: Border {
-                    width: 1.0,
-                    radius: 2.0.into(),
-                    color: chip_border,
-                },
-                ..iced::widget::button::Style::default()
-            }
-        })
-        .into()
-    };
+    let mk_pill =
+        move |label: &'static str, target: M, active: bool| -> Element<'static, PanelMsg> {
+            iced::widget::button(
+                text(label)
+                    .size(10)
+                    .color(if active { primary } else { muted })
+                    .align_x(iced::alignment::Horizontal::Center),
+            )
+            .padding([3, 12])
+            .on_press(PanelMsg::FpEditorSetSnappingMode(target))
+            .style(move |_: &Theme, status: iced::widget::button::Status| {
+                let bg = match status {
+                    iced::widget::button::Status::Hovered => {
+                        Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.06)))
+                    }
+                    _ => Some(Background::Color(if active {
+                        active_bg
+                    } else {
+                        inactive_bg
+                    })),
+                };
+                iced::widget::button::Style {
+                    background: bg,
+                    border: Border {
+                        width: 1.0,
+                        radius: 2.0.into(),
+                        color: chip_border,
+                    },
+                    ..iced::widget::button::Style::default()
+                }
+            })
+            .into()
+        };
     col = col.push(
         container(text("Snap layers").size(10).color(muted))
             .padding([4, 8])
@@ -126,4 +133,3 @@ pub(super) fn render_snap_subtab_row<'a>(
     );
     col
 }
-

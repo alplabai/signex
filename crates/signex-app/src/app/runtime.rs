@@ -1081,20 +1081,16 @@ fn build_footprint_editor_panel_ctx(
         None => (0, 0),
     };
 
-    let last_solve = editor
-        .state
-        .last_solve
-        .as_ref()
-        .map(|out| {
-            let over_constraints = build_over_constraint_summaries(editor.primitive(), out);
-            FootprintSolveSummary {
-                iterations: out.result.iterations,
-                elapsed_ms: out.result.elapsed_ms,
-                final_residual_norm: out.result.final_residual_norm,
-                over_constraint_count: out.over_constraints.len(),
-                over_constraints,
-            }
-        });
+    let last_solve = editor.state.last_solve.as_ref().map(|out| {
+        let over_constraints = build_over_constraint_summaries(editor.primitive(), out);
+        FootprintSolveSummary {
+            iterations: out.result.iterations,
+            elapsed_ms: out.result.elapsed_ms,
+            final_residual_norm: out.result.final_residual_norm,
+            over_constraint_count: out.over_constraints.len(),
+            over_constraints,
+        }
+    });
 
     // Pad summary — populated only when in Pads mode AND a pad is
     // selected. Avoids confusing the user with a stale pad selection
@@ -1106,11 +1102,7 @@ fn build_footprint_editor_panel_ctx(
                 // Side derived from the first layer's prefix. THT/NPT
                 // pads carry both copper sides → All. Otherwise Top
                 // for F.* and Bottom for B.*.
-                let side = if pad
-                    .layers
-                    .iter()
-                    .any(|l| l.as_str().starts_with("*."))
-                {
+                let side = if pad.layers.iter().any(|l| l.as_str().starts_with("*.")) {
                     PadSide::All
                 } else if pad
                     .layers
@@ -1181,11 +1173,7 @@ fn build_footprint_editor_panel_ctx(
                 .selected_pad
                 .and_then(|idx| editor.state.pads.get(idx))
                 .map(|pad| {
-                    let parameters = editor
-                        .primitive()
-                        .sketch
-                        .as_ref()
-                        .map(|s| &s.parameters);
+                    let parameters = editor.primitive().sketch.as_ref().map(|s| &s.parameters);
                     let mut entries: Vec<crate::panels::PadShapeParamSummary> = pad
                         .shape_params
                         .iter()
@@ -1389,60 +1377,60 @@ fn build_footprint_editor_panel_ctx(
     // panel renders the sub-form conditionally below the Role pick_list.
     let (selected_pour, selected_keepout, selected_cutout, selected_sketch_pad) =
         match selected_sketch_entity_id {
-        Some(id) => editor
-            .primitive()
-            .sketch
-            .as_ref()
-            .and_then(|s| s.entities.iter().find(|e| e.id == id))
-            .map(|e| {
-                let pour = e.pour.as_ref().map(|p| crate::panels::PourSummary {
-                    net: p.net.clone(),
-                    fill_type: p.fill_type,
-                    priority: p.priority,
-                });
-                let keepout = e.keepout.as_ref().map(|k| crate::panels::KeepoutSummary {
-                    no_routing: k.kinds.no_routing,
-                    no_components: k.kinds.no_components,
-                    no_copper: k.kinds.no_copper,
-                    no_vias: k.kinds.no_vias,
-                    no_drilling: k.kinds.no_drilling,
-                    no_pours: k.kinds.no_pours,
-                });
-                let cutout = e
-                    .board_cutout
-                    .as_ref()
-                    .map(|c| crate::panels::CutoutSummary {
-                        edge_radius_expr: c.edge_radius_expr.clone(),
-                        through: c.through,
+            Some(id) => editor
+                .primitive()
+                .sketch
+                .as_ref()
+                .and_then(|s| s.entities.iter().find(|e| e.id == id))
+                .map(|e| {
+                    let pour = e.pour.as_ref().map(|p| crate::panels::PourSummary {
+                        net: p.net.clone(),
+                        fill_type: p.fill_type,
+                        priority: p.priority,
                     });
-                let sketch_pad = e.pad.as_ref().map(|p| crate::panels::SketchPadAttrSummary {
-                    id: e.id,
-                    electrical_type: p.electrical_type,
-                    net: p.net.clone(),
-                    locked: p.locked,
-                    template: p.template.clone(),
-                    template_library: p.library.clone(),
-                    feature_top: p.feature_top,
-                    feature_bottom: p.feature_bottom,
-                    testpoint: p.testpoint,
-                    thermal_relief: p.stack.thermal_relief,
-                    mask_top_tented: p.stack.mask_top_tented,
-                    mask_bottom_tented: p.stack.mask_bottom_tented,
-                    paste_top_enabled: p.stack.paste_top_enabled,
-                    paste_bottom_enabled: p.stack.paste_bottom_enabled,
-                    corner_radius_pct: p.stack.corner_radius_pct,
-                    hole_tolerance_plus_mm: p.hole_tolerance_plus_mm,
-                    hole_tolerance_minus_mm: p.hole_tolerance_minus_mm,
-                    hole_rotation_deg: p.hole_rotation_deg,
-                    copper_offset_x_mm: p.copper_offset_x_mm,
-                    copper_offset_y_mm: p.copper_offset_y_mm,
-                    has_drill: p.drill.is_some(),
-                });
-                (pour, keepout, cutout, sketch_pad)
-            })
-            .unwrap_or((None, None, None, None)),
-        None => (None, None, None, None),
-    };
+                    let keepout = e.keepout.as_ref().map(|k| crate::panels::KeepoutSummary {
+                        no_routing: k.kinds.no_routing,
+                        no_components: k.kinds.no_components,
+                        no_copper: k.kinds.no_copper,
+                        no_vias: k.kinds.no_vias,
+                        no_drilling: k.kinds.no_drilling,
+                        no_pours: k.kinds.no_pours,
+                    });
+                    let cutout = e
+                        .board_cutout
+                        .as_ref()
+                        .map(|c| crate::panels::CutoutSummary {
+                            edge_radius_expr: c.edge_radius_expr.clone(),
+                            through: c.through,
+                        });
+                    let sketch_pad = e.pad.as_ref().map(|p| crate::panels::SketchPadAttrSummary {
+                        id: e.id,
+                        electrical_type: p.electrical_type,
+                        net: p.net.clone(),
+                        locked: p.locked,
+                        template: p.template.clone(),
+                        template_library: p.library.clone(),
+                        feature_top: p.feature_top,
+                        feature_bottom: p.feature_bottom,
+                        testpoint: p.testpoint,
+                        thermal_relief: p.stack.thermal_relief,
+                        mask_top_tented: p.stack.mask_top_tented,
+                        mask_bottom_tented: p.stack.mask_bottom_tented,
+                        paste_top_enabled: p.stack.paste_top_enabled,
+                        paste_bottom_enabled: p.stack.paste_bottom_enabled,
+                        corner_radius_pct: p.stack.corner_radius_pct,
+                        hole_tolerance_plus_mm: p.hole_tolerance_plus_mm,
+                        hole_tolerance_minus_mm: p.hole_tolerance_minus_mm,
+                        hole_rotation_deg: p.hole_rotation_deg,
+                        copper_offset_x_mm: p.copper_offset_x_mm,
+                        copper_offset_y_mm: p.copper_offset_y_mm,
+                        has_drill: p.drill.is_some(),
+                    });
+                    (pour, keepout, cutout, sketch_pad)
+                })
+                .unwrap_or((None, None, None, None)),
+            None => (None, None, None, None),
+        };
 
     // v0.18.8 — surface every footprint inside the active envelope
     // for the Footprint Library panel rows (Altium PCB Library
@@ -1521,12 +1509,15 @@ fn build_footprint_editor_panel_ctx(
                 depopulation,
                 ..
             } => {
-                let center_position_mm = sketch.entities.iter().find(|e| e.id == *center).and_then(
-                    |e| match e.kind {
-                        signex_sketch::entity::EntityKind::Point { x, y } => Some([x, y]),
-                        _ => None,
-                    },
-                );
+                let center_position_mm =
+                    sketch
+                        .entities
+                        .iter()
+                        .find(|e| e.id == *center)
+                        .and_then(|e| match e.kind {
+                            signex_sketch::entity::EntityKind::Point { x, y } => Some([x, y]),
+                            _ => None,
+                        });
                 let (mask_expr, suppressed_instances): (String, Vec<u32>) = depopulation
                     .as_ref()
                     .map(|d| {
@@ -1554,9 +1545,7 @@ fn build_footprint_editor_panel_ctx(
             NumberingScheme::LinearIncrement { .. } => {
                 crate::panels::NumberingSchemeKindUi::LinearIncrement
             }
-            NumberingScheme::BgaRowCol { .. } => {
-                crate::panels::NumberingSchemeKindUi::BgaRowCol
-            }
+            NumberingScheme::BgaRowCol { .. } => crate::panels::NumberingSchemeKindUi::BgaRowCol,
             NumberingScheme::Explicit { .. } => crate::panels::NumberingSchemeKindUi::Explicit,
         };
         // v0.25 polish — surface BGA-specific config when the
@@ -1594,7 +1583,10 @@ fn build_footprint_editor_panel_ctx(
         let (kind_label, kind) = match &g.kind {
             FpGraphicKind::Line { from, to } => (
                 "Line",
-                SilkKindGeometry::Line { from_mm: *from, to_mm: *to },
+                SilkKindGeometry::Line {
+                    from_mm: *from,
+                    to_mm: *to,
+                },
             ),
             FpGraphicKind::Text {
                 position,

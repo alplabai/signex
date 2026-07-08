@@ -193,4 +193,3 @@ pub(super) fn bake_polar(
 
     Ok(())
 }
-

@@ -74,8 +74,7 @@ pub fn view_context_menu<'a>(
             // Place ▸ — switches the Pads-mode tool. The five most-
             // used Place targets; rest of the Pads palette is still
             // reachable via the active bar.
-            let place_open =
-                menu_state.submenu == Some(FootprintContextSubmenu::Place);
+            let place_open = menu_state.submenu == Some(FootprintContextSubmenu::Place);
             items.push(item_submenu_header(
                 tokens,
                 "Place",
@@ -96,7 +95,9 @@ pub fn view_context_menu<'a>(
                     tokens,
                     "Track",
                     "T",
-                    make_msg(PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlaceTrack)),
+                    make_msg(PrimitiveEditorMsg::FootprintSetPadsTool(
+                        PadsTool::PlaceTrack,
+                    )),
                 ));
                 items.push(item_indented(
                     tokens,
@@ -108,18 +109,21 @@ pub fn view_context_menu<'a>(
                     tokens,
                     "Polygon (Region)",
                     "R",
-                    make_msg(PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlacePolygon)),
+                    make_msg(PrimitiveEditorMsg::FootprintSetPadsTool(
+                        PadsTool::PlacePolygon,
+                    )),
                 ));
                 items.push(item_indented(
                     tokens,
                     "String (Text)",
                     "S",
-                    make_msg(PrimitiveEditorMsg::FootprintSetPadsTool(PadsTool::PlaceString)),
+                    make_msg(PrimitiveEditorMsg::FootprintSetPadsTool(
+                        PadsTool::PlaceString,
+                    )),
                 ));
             }
 
-            let sel_open =
-                menu_state.submenu == Some(FootprintContextSubmenu::Selection);
+            let sel_open = menu_state.submenu == Some(FootprintContextSubmenu::Selection);
             items.push(item_submenu_header(
                 tokens,
                 "Selection",
@@ -147,8 +151,7 @@ pub fn view_context_menu<'a>(
                 ));
             }
 
-            let view_open =
-                menu_state.submenu == Some(FootprintContextSubmenu::View);
+            let view_open = menu_state.submenu == Some(FootprintContextSubmenu::View);
             items.push(item_submenu_header(
                 tokens,
                 "View",
@@ -214,8 +217,7 @@ pub fn view_context_menu<'a>(
             // can wire today (Rotate 90°, Flip Layer). Altium''s
             // Custom Pad / Thermal Connection ops remain stubs until
             // those subsystems land.
-            let pad_actions_open =
-                menu_state.submenu == Some(FootprintContextSubmenu::PadActions);
+            let pad_actions_open = menu_state.submenu == Some(FootprintContextSubmenu::PadActions);
             items.push(item_submenu_header(
                 tokens,
                 "Pad Actions",
@@ -359,20 +361,20 @@ fn item_msg<'a>(
     .width(MENU_WIDTH)
     .padding([ROW_PAD_Y, ROW_PAD_X])
     .on_press(message)
-    .style(move |_: &iced::Theme, status: iced::widget::button::Status| {
-        let bg = match status {
-            iced::widget::button::Status::Hovered => {
-                Some(Background::Color(hover_c))
+    .style(
+        move |_: &iced::Theme, status: iced::widget::button::Status| {
+            let bg = match status {
+                iced::widget::button::Status::Hovered => Some(Background::Color(hover_c)),
+                _ => None,
+            };
+            iced::widget::button::Style {
+                background: bg,
+                border: Border::default(),
+                text_color: text_c,
+                ..iced::widget::button::Style::default()
             }
-            _ => None,
-        };
-        iced::widget::button::Style {
-            background: bg,
-            border: Border::default(),
-            text_color: text_c,
-            ..iced::widget::button::Style::default()
-        }
-    })
+        },
+    )
     .into()
 }
 
@@ -399,20 +401,20 @@ fn item_indented<'a>(
     .width(MENU_WIDTH)
     .padding([ROW_PAD_Y, ROW_PAD_X])
     .on_press(message)
-    .style(move |_: &iced::Theme, status: iced::widget::button::Status| {
-        let bg = match status {
-            iced::widget::button::Status::Hovered => {
-                Some(Background::Color(hover_c))
+    .style(
+        move |_: &iced::Theme, status: iced::widget::button::Status| {
+            let bg = match status {
+                iced::widget::button::Status::Hovered => Some(Background::Color(hover_c)),
+                _ => None,
+            };
+            iced::widget::button::Style {
+                background: bg,
+                border: Border::default(),
+                text_color: text_c,
+                ..iced::widget::button::Style::default()
             }
-            _ => None,
-        };
-        iced::widget::button::Style {
-            background: bg,
-            border: Border::default(),
-            text_color: text_c,
-            ..iced::widget::button::Style::default()
-        }
-    })
+        },
+    )
     .into()
 }
 
@@ -459,20 +461,22 @@ fn item_submenu_header<'a>(
     .width(MENU_WIDTH)
     .padding([ROW_PAD_Y, ROW_PAD_X])
     .on_press(message)
-    .style(move |_: &iced::Theme, status: iced::widget::button::Status| {
-        let bg = match status {
-            iced::widget::button::Status::Hovered | iced::widget::button::Status::Pressed => {
-                Some(Background::Color(hover_c))
+    .style(
+        move |_: &iced::Theme, status: iced::widget::button::Status| {
+            let bg = match status {
+                iced::widget::button::Status::Hovered | iced::widget::button::Status::Pressed => {
+                    Some(Background::Color(hover_c))
+                }
+                _ => None,
+            };
+            iced::widget::button::Style {
+                background: bg,
+                border: Border::default(),
+                text_color: text_c,
+                ..iced::widget::button::Style::default()
             }
-            _ => None,
-        };
-        iced::widget::button::Style {
-            background: bg,
-            border: Border::default(),
-            text_color: text_c,
-            ..iced::widget::button::Style::default()
-        }
-    })
+        },
+    )
     .into()
 }
 

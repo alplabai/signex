@@ -11,8 +11,8 @@ use iced::{Background, Border, Color, Element, Length, Theme};
 
 use super::super::PanelMsg;
 use super::pad_form::{
-    pad_size_x_msg, pad_size_y_msg, pad_shape_msg, pad_thermal_relief_msg, PadEditTarget,
-    PadFormValues,
+    PadEditTarget, PadFormValues, pad_shape_msg, pad_size_x_msg, pad_size_y_msg,
+    pad_thermal_relief_msg,
 };
 use super::pad_stack_preview::PadShapeChoice;
 
@@ -26,7 +26,9 @@ pub(super) fn pad_table_header<'a>(
     muted: Color,
     border_c: Color,
 ) -> iced::Element<'a, PanelMsg> {
-    let mut row = iced::widget::Row::new().spacing(4).align_y(iced::Alignment::Center);
+    let mut row = iced::widget::Row::new()
+        .spacing(4)
+        .align_y(iced::Alignment::Center);
     for (i, label) in cols.iter().enumerate() {
         let portion = portions.get(i).copied().unwrap_or(1);
         row = row.push(
@@ -66,7 +68,9 @@ pub(super) fn pad_table_row<'a>(
 ) -> iced::Element<'a, PanelMsg> {
     let _ = muted;
     let label_portion = 3_u16;
-    let mut row = iced::widget::Row::new().spacing(4).align_y(iced::Alignment::Center);
+    let mut row = iced::widget::Row::new()
+        .spacing(4)
+        .align_y(iced::Alignment::Center);
     row = row.push(
         text(label.to_string())
             .size(10)
@@ -246,4 +250,3 @@ pub(super) fn pad_copper_row<'a>(
     };
     pad_table_row(label, cells, &[2, 2, 3, 1], muted, primary, border_c)
 }
-

@@ -23,14 +23,15 @@ use super::super::{
     KeepoutKindFlag, PanelMsg, SnapOptionFlag,
 };
 use super::{
-    fp_is_collapsed, props_section_header,
+    fp_is_collapsed,
     pad_stack_preview::{
-        pad_stack_preview, pad_stack_tab_strip, ExpansionMode, HoleShapeChoice, PadShapeChoice,
+        ExpansionMode, HoleShapeChoice, PadShapeChoice, pad_stack_preview, pad_stack_tab_strip,
     },
     pad_table::{
         pad_copper_row, pad_table_check_cell, pad_table_disabled_cell, pad_table_header,
         pad_table_input_cell, pad_table_picklist_cell, pad_table_row, pad_table_static_cell,
     },
+    props_section_header,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -112,7 +113,10 @@ impl PadFormValues {
             numeric_buffers: fp.numeric_buffers.clone(),
         }
     }
-    pub(super) fn from_selected_pad(pad: &FootprintPadSummary, fp: &FootprintEditorPanelContext) -> Self {
+    pub(super) fn from_selected_pad(
+        pad: &FootprintPadSummary,
+        fp: &FootprintEditorPanelContext,
+    ) -> Self {
         Self {
             designator: pad.number.clone(),
             side: pad.side,
@@ -229,7 +233,10 @@ pub(super) fn pad_input_row<'a>(
 ) -> iced::Element<'a, PanelMsg> {
     container(
         row![
-            text(label).size(10).color(muted).width(Length::Fixed(110.0)),
+            text(label)
+                .size(10)
+                .color(muted)
+                .width(Length::Fixed(110.0)),
             text_input(placeholder, &value)
                 .size(10)
                 .padding(2)
@@ -270,7 +277,10 @@ where
 {
     container(
         row![
-            text(label).size(10).color(muted).width(Length::Fixed(110.0)),
+            text(label)
+                .size(10)
+                .color(muted)
+                .width(Length::Fixed(110.0)),
             pick_list(options, Some(selected), on_change)
                 .text_size(10)
                 .padding([3, 8])
@@ -295,7 +305,10 @@ pub(super) fn pad_check_row<'a>(
 ) -> iced::Element<'a, PanelMsg> {
     container(
         row![
-            text(label).size(10).color(if on { primary } else { muted }).width(Length::Fixed(110.0)),
+            text(label)
+                .size(10)
+                .color(if on { primary } else { muted })
+                .width(Length::Fixed(110.0)),
             iced::widget::checkbox(on)
                 .on_toggle(on_toggle)
                 .size(12)
@@ -580,10 +593,7 @@ pub(super) fn render_pad_form_pad_stack<'a>(
         } else {
             HoleShapeChoice::Round
         };
-        let slot_default = values
-            .drill_diameter_mm
-            .map(|d| d * 1.5)
-            .unwrap_or(1.0);
+        let slot_default = values.drill_diameter_mm.map(|d| d * 1.5).unwrap_or(1.0);
         // v0.25 polish — prefer the verbatim user buffer if one is
         // registered for this input; only fall back to formatting
         // the canonical f64 when no buffer exists. Without this
@@ -636,9 +646,7 @@ pub(super) fn render_pad_form_pad_stack<'a>(
                     HoleShapeChoice::ALL,
                     hole_shape_current,
                     move |c: HoleShapeChoice| match c {
-                        HoleShapeChoice::Round => {
-                            pad_drill_slot_length_msg(target, String::new())
-                        }
+                        HoleShapeChoice::Round => pad_drill_slot_length_msg(target, String::new()),
                         HoleShapeChoice::Slot => {
                             pad_drill_slot_length_msg(target, format!("{slot_default:.3}"))
                         }
@@ -672,7 +680,9 @@ pub(super) fn render_pad_form_pad_stack<'a>(
             "0",
             tol_p_buf,
             move |v| pad_hole_tolerance_plus_msg(target, v),
-            muted, primary, border_c,
+            muted,
+            primary,
+            border_c,
         ));
         let tol_m_buf = values
             .hole_tolerance_minus_mm
@@ -683,7 +693,9 @@ pub(super) fn render_pad_form_pad_stack<'a>(
             "0",
             tol_m_buf,
             move |v| pad_hole_tolerance_minus_msg(target, v),
-            muted, primary, border_c,
+            muted,
+            primary,
+            border_c,
         ));
         let rot_buf = values
             .hole_rotation_deg
@@ -694,7 +706,9 @@ pub(super) fn render_pad_form_pad_stack<'a>(
             "0",
             rot_buf,
             move |v| pad_hole_rotation_msg(target, v),
-            muted, primary, border_c,
+            muted,
+            primary,
+            border_c,
         ));
         let cox_buf = values
             .copper_offset_x_mm
@@ -705,7 +719,9 @@ pub(super) fn render_pad_form_pad_stack<'a>(
             "0",
             cox_buf,
             move |v| pad_copper_offset_x_msg(target, v),
-            muted, primary, border_c,
+            muted,
+            primary,
+            border_c,
         ));
         let coy_buf = values
             .copper_offset_y_mm
@@ -716,7 +732,9 @@ pub(super) fn render_pad_form_pad_stack<'a>(
             "0",
             coy_buf,
             move |v| pad_copper_offset_y_msg(target, v),
-            muted, primary, border_c,
+            muted,
+            primary,
+            border_c,
         ));
     }
 
@@ -979,4 +997,3 @@ pub(super) fn render_pad_form_pad_features<'a>(
     let _ = border_c;
     col
 }
-

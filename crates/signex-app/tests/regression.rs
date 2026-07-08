@@ -1204,9 +1204,7 @@ fn grid_depopulation_round_trips_suppressed_instances_through_app_layer() {
     // FootprintEditorState's primitive. This test pins the schema:
     // empty mask + non-empty suppression list survives a TOML
     // round trip via signex-sketch.
-    use signex_sketch::array::{
-        Array, ArrayId, ArrayKind, GridDepopulation, NumberingScheme,
-    };
+    use signex_sketch::array::{Array, ArrayId, ArrayKind, GridDepopulation, NumberingScheme};
     use signex_sketch::id::SketchEntityId;
 
     let a = Array {
@@ -1378,7 +1376,10 @@ fn tangent_arc_tool_first_click_sets_pending() {
 
     // tool_pending must transition to TangentArcFirst.
     assert!(
-        matches!(editor.state.tool_pending, ToolPending::TangentArcFirst { .. }),
+        matches!(
+            editor.state.tool_pending,
+            ToolPending::TangentArcFirst { .. }
+        ),
         "tool_pending = {:?}, expected TangentArcFirst",
         editor.state.tool_pending
     );
@@ -1909,7 +1910,10 @@ fn mirror_add_round_pad_mints_circle_with_diameter_param() {
     if let EntityKind::Circle { center, radius } = circles[0].kind {
         assert_eq!(center, centre_id, "Circle.center references centre Point");
         // radius = diameter / 2 = 0.75
-        assert!((radius - 0.75).abs() < 1e-9, "Circle.radius is half the diameter");
+        assert!(
+            (radius - 0.75).abs() < 1e-9,
+            "Circle.radius is half the diameter"
+        );
     } else {
         unreachable!()
     }
@@ -2028,9 +2032,7 @@ fn mirror_add_round_rect_pad_mints_4_arcs_linked_to_corner_r() {
     let mut arc_radii: Vec<f64> = Vec::with_capacity(4);
     for arc in &arcs {
         let (center_id, start_id) = match arc.kind {
-            EntityKind::Arc {
-                center, start, ..
-            } => (center, start),
+            EntityKind::Arc { center, start, .. } => (center, start),
             _ => unreachable!(),
         };
         let center_pos = sketch
@@ -2507,17 +2509,21 @@ fn mirror_add_oval_pad_mints_2_arcs_2_lines_with_w_and_h_params() {
         .parameters
         .get_raw(height_param)
         .expect("height parameter is registered on sketch.parameters");
-    assert_eq!(raw_w, "2mm", "width parameter records the long-axis literal");
-    assert_eq!(raw_h, "1mm", "height parameter records the short-axis literal");
+    assert_eq!(
+        raw_w, "2mm",
+        "width parameter records the long-axis literal"
+    );
+    assert_eq!(
+        raw_h, "1mm",
+        "height parameter records the short-axis literal"
+    );
 
     // Both Arcs implicitly share the same `height_<slug>` parameter
     // (= H/2 = 0.5mm). Verify both Arc radii are equal and match.
     let mut arc_radii: Vec<f64> = Vec::with_capacity(2);
     for arc in &arcs {
         let (center_id, start_id) = match arc.kind {
-            EntityKind::Arc {
-                center, start, ..
-            } => (center, start),
+            EntityKind::Arc { center, start, .. } => (center, start),
             _ => unreachable!(),
         };
         let center_pos = sketch
@@ -2641,8 +2647,8 @@ fn editing_oval_width_param_propagates_through_solve() {
     // Surface 2 — the resolved-parameter map reads 3.0mm. The Lines'
     // endpoints (and a future width-linked constraint) would propagate
     // this value when the solver next runs.
-    let resolved = parameter::resolve(&sketch.parameters)
-        .expect("resolved parameter map after width edit");
+    let resolved =
+        parameter::resolve(&sketch.parameters).expect("resolved parameter map after width edit");
     let resolved_width = resolved
         .get(&width_param_name)
         .copied()
@@ -3128,7 +3134,10 @@ fn place_round_rect_then_undo_restores_pre_place_state() {
     // Place a RoundRect pad through the dispatcher.
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
         path: path.clone(),
-        msg: PrimitiveEditorMsg::FootprintAddPad { x_mm: 0.0, y_mm: 0.0 },
+        msg: PrimitiveEditorMsg::FootprintAddPad {
+            x_mm: 0.0,
+            y_mm: 0.0,
+        },
     }));
 
     let after_place = editor_state_proj(&app, &path);
@@ -3456,10 +3465,10 @@ fn placement_input_does_not_corrupt_history_on_undo() {
 /// shared `corner_r` binding survives.
 #[test]
 fn place_round_rect_then_select_arc_unlink_then_undo_restores_link() {
+    use signex_app::app::{FootprintEditorState, TabInfo, TabKind};
     use signex_app::library::editor::footprint::pad_to_sketch::mirror_add_pad_to_sketch;
     use signex_app::library::editor::footprint::state::EditorPad;
     use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
-    use signex_app::app::{FootprintEditorState, TabInfo, TabKind};
     use signex_library::{Footprint, FootprintFile, PadShape};
     use signex_sketch::id::SketchEntityId;
 
@@ -3666,8 +3675,8 @@ fn editing_corner_r_via_properties_updates_all_4_arcs() {
     // Surface 2 — the resolved-parameter map propagates the new value
     // (0.5mm). Future constraint-bound or mirror-bound Arc geometry
     // would read this in lockstep.
-    let resolved = parameter::resolve(&sketch.parameters)
-        .expect("resolved parameter map after edit");
+    let resolved =
+        parameter::resolve(&sketch.parameters).expect("resolved parameter map after edit");
     let resolved_corner_r = resolved
         .get(&parameter_name)
         .copied()
@@ -3953,8 +3962,8 @@ fn oval_width_edit_propagates_to_arc_centre_via_solve() {
     // binding the right-side arc centre to `width / 2 - height / 2`
     // would resolve to (3 - 1) / 2 = 1.0mm. Today the resolver
     // surface alone is what's wired; the constraint is Phase 6.
-    let resolved = parameter::resolve(&sketch.parameters)
-        .expect("resolved parameter map after width edit");
+    let resolved =
+        parameter::resolve(&sketch.parameters).expect("resolved parameter map after width edit");
     let resolved_w = resolved
         .get(&width_param)
         .copied()
@@ -4105,9 +4114,7 @@ fn type_5_during_line_draw_commits_at_5mm() {
 /// to commit).
 #[test]
 fn tangent_arc_after_line_creates_tangent_constraint() {
-    use signex_app::library::editor::footprint::state::{
-        EditorMode, SketchTool, ToolPending,
-    };
+    use signex_app::library::editor::footprint::state::{EditorMode, SketchTool, ToolPending};
     use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
     use signex_sketch::constraint::ConstraintKind;
     use signex_sketch::entity::EntityKind;
@@ -4211,7 +4218,11 @@ fn tangent_arc_after_line_creates_tangent_constraint() {
         .iter()
         .filter(|e| matches!(e.kind, EntityKind::Arc { .. }))
         .collect();
-    assert_eq!(arcs.len(), 1, "exactly one Arc minted by the TangentArc gesture");
+    assert_eq!(
+        arcs.len(),
+        1,
+        "exactly one Arc minted by the TangentArc gesture"
+    );
     let arc_id = arcs[0].id;
 
     // The TangentLineArc constraint must reference (line_id, arc_id).
@@ -4223,7 +4234,11 @@ fn tangent_arc_after_line_creates_tangent_constraint() {
         "TangentLineArc {{ line, arc }} constraint links the seed Line to the new Arc; \
          got {} constraints: {:?}",
         sketch.constraints.len(),
-        sketch.constraints.iter().map(|c| &c.kind).collect::<Vec<_>>()
+        sketch
+            .constraints
+            .iter()
+            .map(|c| &c.kind)
+            .collect::<Vec<_>>()
     );
 }
 
@@ -4241,8 +4256,8 @@ fn tangent_arc_after_line_creates_tangent_constraint() {
 #[test]
 fn chamfered_pad_with_2_enabled_corners_has_2_chamfer_cuts() {
     use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
-    use signex_library::primitive::footprint::ChamferedCorners;
     use signex_library::PadShape;
+    use signex_library::primitive::footprint::ChamferedCorners;
     use signex_sketch::entity::EntityKind;
 
     let (mut app, path, _tmp) = fixture_empty_footprint_editor("phase5-chamfered-2-corners");
@@ -4268,7 +4283,10 @@ fn chamfered_pad_with_2_enabled_corners_has_2_chamfer_cuts() {
     // push_history → mirror chain runs.
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
         path: path.clone(),
-        msg: PrimitiveEditorMsg::FootprintAddPad { x_mm: 0.0, y_mm: 0.0 },
+        msg: PrimitiveEditorMsg::FootprintAddPad {
+            x_mm: 0.0,
+            y_mm: 0.0,
+        },
     }));
 
     let editor = app
@@ -4513,18 +4531,6 @@ fn new_project_over_existing_non_empty_snxprj_is_refused() {
 
 // ── v0.14 / v0.25 / v0.26 footprint-editor regression tests ──────────────
 
-
-
-
-
-
-
-
-
-
-
-
-
 /// Helpers used by the Phase 6 geometric-assertion tightening of
 /// the v0.24 deferred suite. Centralised to keep the assertion
 /// blocks above readable.
@@ -4558,7 +4564,9 @@ fn arc_endpoint_ids(
         .find(|e| e.id == arc_id)
         .unwrap_or_else(|| panic!("arc {arc_id:?} not in sketch"));
     match arc.kind {
-        EntityKind::Arc { center, start, end, .. } => (center, start, end),
+        EntityKind::Arc {
+            center, start, end, ..
+        } => (center, start, end),
         ref other => panic!("entity {arc_id:?} not an Arc: {other:?}"),
     }
 }
@@ -4582,15 +4590,6 @@ fn point_pos(
 fn approx_eq_pt(a: (f64, f64), b: (f64, f64)) -> bool {
     (a.0 - b.0).abs() < 1e-6 && (a.1 - b.1).abs() < 1e-6
 }
-
-
-
-
-
-
-
-
-
 
 // ─────────────────────────────────────────────────────────────────
 // v0.26-E — pad clipboard (Cut / Copy / Paste)
@@ -4625,8 +4624,6 @@ fn fixture_footprint_with_pads(stem: &str, count: usize) -> (Signex, PathBuf) {
     (app, path)
 }
 
-
-
 #[test]
 fn v026e_copy_with_no_selection_is_noop() {
     use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
@@ -4650,9 +4647,6 @@ fn v026e_copy_with_no_selection_is_noop() {
         "Copy with no selection must leave clipboard untouched"
     );
 }
-
-
-
 
 #[test]
 fn v026e_copy_populates_clipboard_with_selected_pad() {
@@ -4687,9 +4681,6 @@ fn v026e_copy_populates_clipboard_with_selected_pad() {
         "Copy must not delete the source pad"
     );
 }
-
-
-
 
 #[test]
 fn v026e_cut_removes_pad_populates_clipboard_and_pushes_history() {
@@ -4726,10 +4717,6 @@ fn v026e_cut_removes_pad_populates_clipboard_and_pushes_history() {
     );
     assert!(editor.dirty, "Cut marks the editor dirty");
 }
-
-
-
-
 
 #[test]
 fn v026e_paste_at_cursor_with_bumped_designator() {
@@ -4772,9 +4759,6 @@ fn v026e_paste_at_cursor_with_bumped_designator() {
     );
 }
 
-
-
-
 #[test]
 fn v026e_paste_resets_sketch_entity_links() {
     use signex_app::library::editor::footprint::state::EditorPad;
@@ -4808,9 +4792,6 @@ fn v026e_paste_resets_sketch_entity_links() {
     );
 }
 
-
-
-
 #[test]
 fn v026e_paste_with_empty_clipboard_is_noop() {
     use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
@@ -4841,9 +4822,6 @@ fn v026e_paste_with_empty_clipboard_is_noop() {
     );
 }
 
-
-
-
 // ─────────────────────────────────────────────────────────────────
 // v0.26-G — Pad Actions submenu (Rotate 90° / Flip Layer)
 //
@@ -4872,9 +4850,6 @@ fn v026g_rotate_selection_increments_rotation_by_90_degrees() {
     assert!(editor.dirty, "Rotate marks the editor dirty");
 }
 
-
-
-
 #[test]
 fn v026g_rotate_selection_wraps_at_360() {
     use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
@@ -4894,9 +4869,6 @@ fn v026g_rotate_selection_wraps_at_360() {
         "Rotate from 270° must wrap to 0° via rem_euclid(360)"
     );
 }
-
-
-
 
 #[test]
 fn v026g_flip_selection_swaps_top_to_bottom_layers() {
@@ -4954,10 +4926,6 @@ fn v026g_flip_selection_swaps_top_to_bottom_layers() {
     let _: LayerId = LayerId::new("F.Cu");
 }
 
-
-
-
-
 #[test]
 fn v026g_rotate_with_no_selection_is_noop() {
     use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
@@ -4977,9 +4945,6 @@ fn v026g_rotate_with_no_selection_is_noop() {
         "Rotate with no selection must not touch any pad"
     );
 }
-
-
-
 
 // ─────────────────────────────────────────────────────────────────
 // v0.26-C — Fit-to-Window one-shot signal
@@ -5023,9 +4988,6 @@ fn v026c_fit_to_window_action_arms_fit_pending_and_closes_menu() {
     );
 }
 
-
-
-
 #[test]
 fn v026c_fit_consumed_clears_fit_pending() {
     use signex_app::library::messages::{LibraryMessage, PrimitiveEditorMsg};
@@ -5050,9 +5012,6 @@ fn v026c_fit_consumed_clears_fit_pending() {
         "FitConsumed must clear fit_pending so the next event tick doesn't re-fit"
     );
 }
-
-
-
 
 // ─────────────────────────────────────────────────────────────────
 // v0.26-I — auto-courtyard removed (default flipped to false)
@@ -5085,8 +5044,6 @@ fn v026i_recompute_courtyard_with_auto_fit_off_does_not_overwrite_courtyard() {
     );
 }
 
-
-
 #[test]
 fn v026i_recompute_courtyard_with_auto_fit_on_still_computes_pad_bbox() {
     let (mut app, path) = fixture_footprint_with_pads("v026i-on", 2);
@@ -5101,8 +5058,6 @@ fn v026i_recompute_courtyard_with_auto_fit_on_still_computes_pad_bbox() {
         "with auto_fit_courtyard explicitly on, recompute must populate courtyard_mm"
     );
 }
-
-
 
 // ─────────────────────────────────────────────────────────────────
 // v0.26-B / v0.26-D — right-click context menu target dispatch
@@ -5152,9 +5107,6 @@ fn v026b_show_context_menu_pad_target_selects_pad_and_clears_silk() {
     );
 }
 
-
-
-
 #[test]
 fn v026d_show_context_menu_silk_target_selects_silk_and_clears_pad() {
     use signex_app::library::editor::footprint::state::FootprintContextTarget;
@@ -5191,9 +5143,6 @@ fn v026d_show_context_menu_silk_target_selects_silk_and_clears_pad() {
     assert!(matches!(menu.target, FootprintContextTarget::SilkF(5)));
 }
 
-
-
-
 #[test]
 fn v026b_show_context_menu_empty_target_preserves_selection_and_opens_menu() {
     use signex_app::library::editor::footprint::state::FootprintContextTarget;
@@ -5222,9 +5171,6 @@ fn v026b_show_context_menu_empty_target_preserves_selection_and_opens_menu() {
         "Empty target still opens the menu"
     );
 }
-
-
-
 
 // ─────────────────────────────────────────────────────────────────
 // v0.25 polish — BGA numbering config (PanelMsg path)
@@ -5297,12 +5243,6 @@ fn fixture_footprint_with_bga_array(stem: &str) -> (Signex, signex_sketch::array
     (app, array_id)
 }
 
-
-
-
-
-
-
 /// Read back the current BgaRowCol triple from the active footprint
 /// editor's first array. Panics if the array isn't BgaRowCol — that
 /// would indicate the test setup got clobbered.
@@ -5341,7 +5281,11 @@ fn v025_bga_set_skip_letters_round_trips_bool() {
     use signex_app::dock::DockMessage;
     use signex_app::panels::PanelMsg;
     let (mut app, array_id) = fixture_footprint_with_bga_array("v025-bga-skip");
-    assert_eq!(read_bga_config(&app).0, true, "fixture seeds skip_letters=true");
+    assert_eq!(
+        read_bga_config(&app).0,
+        true,
+        "fixture seeds skip_letters=true"
+    );
     let _ = app.update(Message::Dock(DockMessage::Panel(
         PanelMsg::FpEditorSetBgaSkipLetters {
             array_id,
@@ -5354,9 +5298,6 @@ fn v025_bga_set_skip_letters_round_trips_bool() {
         "FpEditorSetBgaSkipLetters must round-trip the bool into the array"
     );
 }
-
-
-
 
 #[test]
 fn v025_bga_set_start_row_uppercases_lowercase_input() {
@@ -5375,9 +5316,6 @@ fn v025_bga_set_start_row_uppercases_lowercase_input() {
         "lowercase input must be uppercased before storage"
     );
 }
-
-
-
 
 #[test]
 fn v025_bga_set_start_row_rejects_non_alphabetic_input() {
@@ -5404,9 +5342,6 @@ fn v025_bga_set_start_row_rejects_non_alphabetic_input() {
     );
 }
 
-
-
-
 #[test]
 fn v025_bga_set_start_col_parses_valid_integer() {
     use signex_app::dock::DockMessage;
@@ -5424,9 +5359,6 @@ fn v025_bga_set_start_col_parses_valid_integer() {
         "trimmed valid integer must parse and round-trip into start_col"
     );
 }
-
-
-
 
 #[test]
 fn v025_bga_set_start_col_rejects_non_numeric_input() {
@@ -5448,9 +5380,6 @@ fn v025_bga_set_start_col_rejects_non_numeric_input() {
         "non-numeric / negative / decimal inputs must leave start_col unchanged"
     );
 }
-
-
-
 
 // ─────────────────────────────────────────────────────────────────
 // v0.25 polish #2 — Offset placement-input
@@ -5572,16 +5501,6 @@ fn v025_offset_placement_input_pins_typed_distance_over_cursor() {
     );
 }
 
-
-
-
-
-
-
-
-
-
-
 // ─────────────────────────────────────────────────────────────────
 // v0.25 polish #3 — Oval reverse-mirror to pad.size_mm
 //
@@ -5656,12 +5575,6 @@ fn v025_oval_width_edit_mirrors_back_to_pad_size_mm() {
         editor.state.solve_warnings
     );
 }
-
-
-
-
-
-
 
 /// v0.27 — dragging a pad-outline edge in Sketch mode must propagate
 /// through to `pad.size_mm` / `pad.position_mm`. Pre-fix: the sketch
@@ -5765,12 +5678,6 @@ fn v027_sketch_line_drag_resizes_rect_pad_bbox() {
     );
 }
 
-
-
-
-
-
-
 // ─────────────────────────────────────────────────────────────────
 // v0.13.0 — footprint editor gated off for release
 //
@@ -5840,10 +5747,6 @@ fn opening_snxfpt_does_not_create_editable_tab_when_gated() {
     }
 }
 
-
-
-
-
 #[test]
 fn opening_snxsym_still_creates_editable_tab() {
     use signex_app::app::TabKind;
@@ -5866,9 +5769,6 @@ fn opening_snxsym_still_creates_editable_tab() {
         "a SymbolEditorState should be registered for the opened .snxsym path"
     );
 }
-
-
-
 
 // ─────────────────────────────────────────────────────────────────
 // v0.14-footprint — #23 TAB-pause click suppression + #24 Line
@@ -5985,12 +5885,6 @@ fn placement_paused_suppresses_rounded_rect_commit_click() {
     );
 }
 
-
-
-
-
-
-
 /// v0.14-footprint #24 — Tab toggles the focused Line dimension field
 /// between length and angle, stashing the inactive field in
 /// `placement_input_other`. Each field keeps its own typed digits
@@ -6026,11 +5920,7 @@ fn placement_input_tab_swaps_line_length_and_angle() {
     }));
     // Focus = length "10", nothing stashed yet.
     {
-        let editor = app
-            .document_state
-            .footprint_editors
-            .get_mut(&path)
-            .unwrap();
+        let editor = app.document_state.footprint_editors.get_mut(&path).unwrap();
         assert!(
             matches!(editor.state.tool_pending, ToolPending::LineFirst { .. }),
             "sanity: first click arms LineFirst"
@@ -6110,12 +6000,6 @@ fn placement_input_tab_swaps_line_length_and_angle() {
     }
 }
 
-
-
-
-
-
-
 /// v0.14-footprint #24 — with BOTH a typed length and a typed angle
 /// pinned (in either placement slot), the Line second click commits
 /// the endpoint at `first + (len @ angle°)`, ignoring the cursor's own
@@ -6154,11 +6038,7 @@ fn placement_input_line_length_and_angle_commit_at_polar_offset() {
     // Pin length = 10 (focused) and angle = 90 (stashed). The commit
     // reads each field from whichever slot holds it.
     {
-        let editor = app
-            .document_state
-            .footprint_editors
-            .get_mut(&path)
-            .unwrap();
+        let editor = app.document_state.footprint_editors.get_mut(&path).unwrap();
         editor.state.placement_input = Some(PlacementInput {
             buffer: "10".into(),
             kind: PlacementInputKind::LineLength,
@@ -6218,12 +6098,6 @@ fn placement_input_line_length_and_angle_commit_at_polar_offset() {
     );
 }
 
-
-
-
-
-
-
 /// v0.14-footprint re-verify — Circle still honours a typed radius:
 /// click the centre, type "4", then a click at the cursor's 10 mm
 /// must commit a circle of radius 4 (the typed value), not 10.
@@ -6259,11 +6133,7 @@ fn placement_input_circle_radius_pins_typed_radius() {
     }));
     // Pin radius = 4.
     {
-        let editor = app
-            .document_state
-            .footprint_editors
-            .get_mut(&path)
-            .unwrap();
+        let editor = app.document_state.footprint_editors.get_mut(&path).unwrap();
         editor.state.placement_input = Some(PlacementInput {
             buffer: "4".into(),
             kind: PlacementInputKind::CircleRadius,
@@ -6294,10 +6164,6 @@ fn placement_input_circle_radius_pins_typed_radius() {
         unreachable!()
     }
 }
-
-
-
-
 
 /// v0.14-footprint — Rectangle accepts typed width/height during
 /// placement. With width 6 and height 4 pinned (one in each slot), the
@@ -6335,11 +6201,7 @@ fn placement_input_rectangle_commits_typed_width_height() {
     }));
     // Pin width = 6 (focused) and height = 4 (parked).
     {
-        let editor = app
-            .document_state
-            .footprint_editors
-            .get_mut(&path)
-            .unwrap();
+        let editor = app.document_state.footprint_editors.get_mut(&path).unwrap();
         editor.state.placement_input = Some(PlacementInput {
             buffer: "6".into(),
             kind: PlacementInputKind::RectWidth,
@@ -6384,10 +6246,6 @@ fn placement_input_rectangle_commits_typed_width_height() {
     );
 }
 
-
-
-
-
 /// v0.14-footprint — Tab cycles the Rounded-Rectangle's THREE dimension
 /// fields (width → height → radius → width…), parking the inactive
 /// ones in `placement_input_others` and preserving each field's digits
@@ -6422,11 +6280,7 @@ fn placement_input_tab_cycles_rounded_rect_three_fields() {
         },
     }));
     {
-        let editor = app
-            .document_state
-            .footprint_editors
-            .get_mut(&path)
-            .unwrap();
+        let editor = app.document_state.footprint_editors.get_mut(&path).unwrap();
         assert!(
             matches!(
                 editor.state.tool_pending,
@@ -6486,11 +6340,6 @@ fn placement_input_tab_cycles_rounded_rect_three_fields() {
     );
 }
 
-
-
-
-
-
 /// v0.14-footprint — Rounded-Rectangle commit honours typed width,
 /// height AND corner radius. Width 8 / height 5 / radius 1.5 pinned
 /// across the slots; the committed box spans 8×5 and each corner arc
@@ -6527,11 +6376,7 @@ fn placement_input_rounded_rect_commits_typed_size_and_radius() {
     }));
     // Pin width=8 (focused), height=5 + radius=1.5 (parked).
     {
-        let editor = app
-            .document_state
-            .footprint_editors
-            .get_mut(&path)
-            .unwrap();
+        let editor = app.document_state.footprint_editors.get_mut(&path).unwrap();
         editor.state.placement_input = Some(PlacementInput {
             buffer: "8".into(),
             kind: PlacementInputKind::RectWidth,
@@ -6559,10 +6404,14 @@ fn placement_input_rounded_rect_commits_typed_size_and_radius() {
     let editor = app.document_state.footprint_editors.get(&path).unwrap();
     let sketch = editor.primitive().sketch.as_ref().expect("sketch present");
     let resolve = |id| {
-        sketch.entities.iter().find(|e| e.id == id).and_then(|e| match e.kind {
-            EntityKind::Point { x, y } => Some((x, y)),
-            _ => None,
-        })
+        sketch
+            .entities
+            .iter()
+            .find(|e| e.id == id)
+            .and_then(|e| match e.kind {
+                EntityKind::Point { x, y } => Some((x, y)),
+                _ => None,
+            })
     };
     // Outer bounding box of all corner points = width × height.
     let pts: Vec<(f64, f64)> = sketch

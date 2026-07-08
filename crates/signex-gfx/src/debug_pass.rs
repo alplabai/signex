@@ -7,7 +7,7 @@
 use crate::camera::{CameraGpu, CameraUniform};
 use crate::pipeline::arc::ArcPipeline;
 use crate::pipeline::circle::CirclePipeline;
-use crate::pipeline::grid::{lod_fade_factors, GridLodFactors, GridPipeline};
+use crate::pipeline::grid::{GridLodFactors, GridPipeline, lod_fade_factors};
 use crate::pipeline::line::LinePipeline;
 use crate::pipeline::polygon::PolygonPipeline;
 use crate::pipeline::text::GlyphonTextPipeline;
@@ -84,7 +84,8 @@ pub async fn run_line_circle_smoke_pass(scale_px_per_mm: f32) -> Result<SmokePas
     let camera = CameraUniform::ortho([128.0, 128.0], [0.0, 0.0], scale_px_per_mm);
     let camera_gpu = CameraGpu::new(&device, camera);
 
-    let mut line_pipeline = LinePipeline::new(&device, target_format, camera_gpu.bind_group_layout());
+    let mut line_pipeline =
+        LinePipeline::new(&device, target_format, camera_gpu.bind_group_layout());
     let mut circle_pipeline =
         CirclePipeline::new(&device, target_format, camera_gpu.bind_group_layout());
 
@@ -183,16 +184,14 @@ async fn run_arc_smoke_pass_with(scale_px_per_mm: f32, arcs: &[Arc]) -> Result<u
         .map_err(|err| format!("failed to acquire adapter: {err}"))?;
 
     let (device, queue) = adapter
-        .request_device(
-            &wgpu::DeviceDescriptor {
-                label: Some("signex_gfx_arc_smoke_device"),
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::downlevel_defaults(),
-                experimental_features: wgpu::ExperimentalFeatures::disabled(),
-                memory_hints: wgpu::MemoryHints::Performance,
-                trace: wgpu::Trace::Off,
-            },
-        )
+        .request_device(&wgpu::DeviceDescriptor {
+            label: Some("signex_gfx_arc_smoke_device"),
+            required_features: wgpu::Features::empty(),
+            required_limits: wgpu::Limits::downlevel_defaults(),
+            experimental_features: wgpu::ExperimentalFeatures::disabled(),
+            memory_hints: wgpu::MemoryHints::Performance,
+            trace: wgpu::Trace::Off,
+        })
         .await
         .map_err(|err| format!("failed to acquire device: {err}"))?;
 
@@ -280,16 +279,14 @@ async fn run_polygon_smoke_pass_with(
         .map_err(|err| format!("failed to acquire adapter: {err}"))?;
 
     let (device, queue) = adapter
-        .request_device(
-            &wgpu::DeviceDescriptor {
-                label: Some("signex_gfx_polygon_smoke_device"),
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::downlevel_defaults(),
-                experimental_features: wgpu::ExperimentalFeatures::disabled(),
-                memory_hints: wgpu::MemoryHints::Performance,
-                trace: wgpu::Trace::Off,
-            },
-        )
+        .request_device(&wgpu::DeviceDescriptor {
+            label: Some("signex_gfx_polygon_smoke_device"),
+            required_features: wgpu::Features::empty(),
+            required_limits: wgpu::Limits::downlevel_defaults(),
+            experimental_features: wgpu::ExperimentalFeatures::disabled(),
+            memory_hints: wgpu::MemoryHints::Performance,
+            trace: wgpu::Trace::Off,
+        })
         .await
         .map_err(|err| format!("failed to acquire device: {err}"))?;
 
@@ -371,16 +368,14 @@ async fn run_grid_smoke_pass_with(scale_px_per_mm: f32) -> Result<GridSmokeRepor
         .map_err(|err| format!("failed to acquire adapter: {err}"))?;
 
     let (device, queue) = adapter
-        .request_device(
-            &wgpu::DeviceDescriptor {
-                label: Some("signex_gfx_grid_smoke_device"),
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::downlevel_defaults(),
-                experimental_features: wgpu::ExperimentalFeatures::disabled(),
-                memory_hints: wgpu::MemoryHints::Performance,
-                trace: wgpu::Trace::Off,
-            },
-        )
+        .request_device(&wgpu::DeviceDescriptor {
+            label: Some("signex_gfx_grid_smoke_device"),
+            required_features: wgpu::Features::empty(),
+            required_limits: wgpu::Limits::downlevel_defaults(),
+            experimental_features: wgpu::ExperimentalFeatures::disabled(),
+            memory_hints: wgpu::MemoryHints::Performance,
+            trace: wgpu::Trace::Off,
+        })
         .await
         .map_err(|err| format!("failed to acquire device: {err}"))?;
 
@@ -461,16 +456,14 @@ async fn run_text_smoke_pass_with(scale_px_per_mm: f32, texts: &[TextItem]) -> R
         .map_err(|err| format!("failed to acquire adapter: {err}"))?;
 
     let (device, queue) = adapter
-        .request_device(
-            &wgpu::DeviceDescriptor {
-                label: Some("signex_gfx_text_smoke_device"),
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::downlevel_defaults(),
-                experimental_features: wgpu::ExperimentalFeatures::disabled(),
-                memory_hints: wgpu::MemoryHints::Performance,
-                trace: wgpu::Trace::Off,
-            },
-        )
+        .request_device(&wgpu::DeviceDescriptor {
+            label: Some("signex_gfx_text_smoke_device"),
+            required_features: wgpu::Features::empty(),
+            required_limits: wgpu::Limits::downlevel_defaults(),
+            experimental_features: wgpu::ExperimentalFeatures::disabled(),
+            memory_hints: wgpu::MemoryHints::Performance,
+            trace: wgpu::Trace::Off,
+        })
         .await
         .map_err(|err| format!("failed to acquire device: {err}"))?;
 
@@ -576,16 +569,14 @@ async fn run_text_geometry_composite_smoke_pass_with(
         .map_err(|err| format!("failed to acquire adapter: {err}"))?;
 
     let (device, queue) = adapter
-        .request_device(
-            &wgpu::DeviceDescriptor {
-                label: Some("signex_gfx_text_geometry_composite_smoke_device"),
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::downlevel_defaults(),
-                experimental_features: wgpu::ExperimentalFeatures::disabled(),
-                memory_hints: wgpu::MemoryHints::Performance,
-                trace: wgpu::Trace::Off,
-            },
-        )
+        .request_device(&wgpu::DeviceDescriptor {
+            label: Some("signex_gfx_text_geometry_composite_smoke_device"),
+            required_features: wgpu::Features::empty(),
+            required_limits: wgpu::Limits::downlevel_defaults(),
+            experimental_features: wgpu::ExperimentalFeatures::disabled(),
+            memory_hints: wgpu::MemoryHints::Performance,
+            trace: wgpu::Trace::Off,
+        })
         .await
         .map_err(|err| format!("failed to acquire device: {err}"))?;
 
@@ -708,16 +699,14 @@ async fn run_grid_overlay_text_composite_smoke_pass_with(
         .map_err(|err| format!("failed to acquire adapter: {err}"))?;
 
     let (device, queue) = adapter
-        .request_device(
-            &wgpu::DeviceDescriptor {
-                label: Some("signex_gfx_grid_overlay_text_composite_smoke_device"),
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::downlevel_defaults(),
-                experimental_features: wgpu::ExperimentalFeatures::disabled(),
-                memory_hints: wgpu::MemoryHints::Performance,
-                trace: wgpu::Trace::Off,
-            },
-        )
+        .request_device(&wgpu::DeviceDescriptor {
+            label: Some("signex_gfx_grid_overlay_text_composite_smoke_device"),
+            required_features: wgpu::Features::empty(),
+            required_limits: wgpu::Limits::downlevel_defaults(),
+            experimental_features: wgpu::ExperimentalFeatures::disabled(),
+            memory_hints: wgpu::MemoryHints::Performance,
+            trace: wgpu::Trace::Off,
+        })
         .await
         .map_err(|err| format!("failed to acquire device: {err}"))?;
 
@@ -820,8 +809,8 @@ async fn run_grid_overlay_text_composite_smoke_pass_with(
     })
 }
 
-pub async fn run_grid_overlay_text_composite_smoke_pass(
-) -> Result<OverlayCompositeSmokeReport, String> {
+pub async fn run_grid_overlay_text_composite_smoke_pass()
+-> Result<OverlayCompositeSmokeReport, String> {
     let polygons = [GpuPolygon {
         vertices: vec![[0.5, 0.5], [4.5, 0.5], [4.5, 4.5], [0.5, 4.5]],
         fill_color: [0.18, 0.22, 0.78, 1.0],
@@ -861,13 +850,7 @@ pub async fn run_grid_overlay_text_composite_smoke_pass(
     }];
 
     run_grid_overlay_text_composite_smoke_pass_with(
-        32.0,
-        true,
-        true,
-        true,
-        &polygons,
-        &overlays,
-        &texts,
+        32.0, true, true, true, &polygons, &overlays, &texts,
     )
     .await
 }
@@ -875,12 +858,12 @@ pub async fn run_grid_overlay_text_composite_smoke_pass(
 #[cfg(test)]
 mod tests {
     use super::{
-        run_arc_smoke_pass, run_arc_smoke_pass_with, run_grid_smoke_pass,
+        CompositeStage, run_arc_smoke_pass, run_arc_smoke_pass_with,
         run_grid_overlay_text_composite_smoke_pass,
-        run_grid_overlay_text_composite_smoke_pass_with, run_grid_smoke_pass_with,
-        run_line_circle_smoke_pass, run_polygon_smoke_pass, run_polygon_smoke_pass_with,
-        run_text_geometry_composite_smoke_pass, run_text_smoke_pass, run_text_smoke_pass_with,
-        CompositeStage,
+        run_grid_overlay_text_composite_smoke_pass_with, run_grid_smoke_pass,
+        run_grid_smoke_pass_with, run_line_circle_smoke_pass, run_polygon_smoke_pass,
+        run_polygon_smoke_pass_with, run_text_geometry_composite_smoke_pass, run_text_smoke_pass,
+        run_text_smoke_pass_with,
     };
     use crate::primitive::arc::Arc;
     use crate::primitive::line::LineSegment;
@@ -959,8 +942,8 @@ mod tests {
 
         let low_zoom_count =
             pollster::block_on(run_polygon_smoke_pass_with(8.0, &polygons)).expect("polygon low");
-        let high_zoom_count = pollster::block_on(run_polygon_smoke_pass_with(64.0, &polygons))
-            .expect("polygon high");
+        let high_zoom_count =
+            pollster::block_on(run_polygon_smoke_pass_with(64.0, &polygons)).expect("polygon high");
 
         assert_eq!(low_zoom_count, 6);
         assert_eq!(high_zoom_count, 6);
@@ -1050,8 +1033,8 @@ mod tests {
 
         let low_zoom_count =
             pollster::block_on(run_text_smoke_pass_with(8.0, &texts)).expect("text pass low");
-        let high_zoom_count = pollster::block_on(run_text_smoke_pass_with(64.0, &texts))
-            .expect("text pass high");
+        let high_zoom_count =
+            pollster::block_on(run_text_smoke_pass_with(64.0, &texts)).expect("text pass high");
 
         assert_eq!(low_zoom_count, 3);
         assert_eq!(high_zoom_count, 3);

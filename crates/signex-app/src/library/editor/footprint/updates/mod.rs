@@ -36,10 +36,7 @@ fn align_pads(
     // Snapshot centres in selection order, run the pure geometry, then
     // write the results back to the same pads. Indexing is safe — the
     // caller guarantees every index is in range.
-    let centres: Vec<(f64, f64)> = indices
-        .iter()
-        .map(|&i| state.pads[i].position_mm)
-        .collect();
+    let centres: Vec<(f64, f64)> = indices.iter().map(|&i| state.pads[i].position_mm).collect();
     let out = apply_align(&centres, op, step);
     for (&i, &new_centre) in indices.iter().zip(out.iter()) {
         state.pads[i].position_mm = new_centre;
@@ -76,9 +73,15 @@ fn apply_align(
     }
 
     let min_x = centres.iter().map(|c| c.0).fold(f64::INFINITY, f64::min);
-    let max_x = centres.iter().map(|c| c.0).fold(f64::NEG_INFINITY, f64::max);
+    let max_x = centres
+        .iter()
+        .map(|c| c.0)
+        .fold(f64::NEG_INFINITY, f64::max);
     let min_y = centres.iter().map(|c| c.1).fold(f64::INFINITY, f64::min);
-    let max_y = centres.iter().map(|c| c.1).fold(f64::NEG_INFINITY, f64::max);
+    let max_y = centres
+        .iter()
+        .map(|c| c.1)
+        .fold(f64::NEG_INFINITY, f64::max);
     let mean_x = centres.iter().map(|c| c.0).sum::<f64>() / n as f64;
     let mean_y = centres.iter().map(|c| c.1).sum::<f64>() / n as f64;
 
