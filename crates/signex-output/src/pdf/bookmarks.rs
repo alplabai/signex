@@ -501,6 +501,7 @@ mod tests {
                 sheet_count: 1,
             }],
             metadata: ProjectMetadata::default(),
+            netlist: None,
         }
     }
 
@@ -696,6 +697,7 @@ mod tests {
                 sheet_count: 1,
             }],
             metadata: ProjectMetadata::default(),
+            netlist: None,
         };
 
         let opts = PdfOptions {
@@ -769,6 +771,7 @@ mod tests {
             ExportContext {
                 sheets,
                 metadata: ProjectMetadata::default(),
+                netlist: None,
             }
         };
         let opts = PdfOptions {

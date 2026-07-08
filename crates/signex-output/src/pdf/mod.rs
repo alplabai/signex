@@ -795,6 +795,7 @@ mod tests {
                 })
                 .collect(),
             metadata: ProjectMetadata::default(),
+            netlist: None,
         }
     }
 
@@ -823,6 +824,7 @@ mod tests {
         let ctx = ExportContext {
             sheets: vec![],
             metadata: ProjectMetadata::default(),
+            netlist: None,
         };
         let err = PdfExporter
             .export(&ctx, &PdfOptions::default())

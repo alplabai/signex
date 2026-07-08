@@ -1071,5 +1071,32 @@ fn build_export_context(
         custom_fields,
     };
 
-    Some(ExportContext { sheets, metadata })
+    // Derive the authoritative project netlist off the same sheet set, so the
+    // netlist exporter reads the contract instead of re-deriving connectivity
+    // (ADR-0002 D7). The children map is keyed by the exact `ChildSheet.filename`
+    // each parent references — the shared project view (ADR-0002 D8).
+    let netlist = {
+        let by_path: std::collections::HashMap<PathBuf, signex_types::schematic::SchematicSheet> =
+            sheets
+                .iter()
+                .map(|s| (s.path.clone(), s.schematic.clone()))
+                .collect();
+        by_path.get(active_path).map(|root| {
+            let children = crate::app::project_sheets::project_children_map(&by_path);
+            let project_dir = document_state
+                .active_loaded_project()
+                .map(|p| PathBuf::from(&p.data.dir));
+            let root_filename = crate::app::project_sheets::root_reference_name(
+                active_path,
+                project_dir.as_deref(),
+            );
+            signex_net::build_project_netlist(root, &children, root_filename.as_deref()).netlist
+        })
+    };
+
+    Some(ExportContext {
+        sheets,
+        metadata,
+        netlist,
+    })
 }
