@@ -501,73 +501,9 @@ pub enum Message {
     BomPreviewExport,
     /// User dismissed the BOM preview modal.
     BomPreviewClose,
-    /// User triggered print preview via Ctrl+P or menu. Open preview dialog.
-    PrintPreviewRequested,
-    /// User selected a page in the print preview thumbnail list.
-    PrintPreviewSelectPage(usize),
-    /// User changed preview colour mode.
-    PrintPreviewSetColourMode(signex_output::ColourMode),
-    /// User changed preview page range to all sheets.
-    PrintPreviewSetPageRangeAll,
-    /// User changed preview page range to current sheet.
-    PrintPreviewSetPageRangeCurrent,
-    /// User changed preview page range to one specific page.
-    PrintPreviewSetPageRangeSpecific,
-    /// User edited the specific page input in preview.
-    PrintPreviewSetSpecificPageInput(String),
-    /// User toggled "Fit to Page" in the unified PDF preview modal.
-    PrintPreviewSetFitToPage(bool),
-    /// User toggled "Include Title Block" in the unified PDF preview modal.
-    PrintPreviewSetIncludeTitleBlock(bool),
-    /// Mouse wheel scrolled over the preview image. Carries the
-    /// vertical delta — positive = scroll up = zoom in. Multiplies
-    /// `PreviewState.zoom` by `ZOOM_STEP` per notch.
-    PrintPreviewZoom(f32),
-    /// User clicked the "Export PDF" button in the preview dialog.
-    PrintPreviewExport,
-    /// User closed the print preview dialog.
-    PrintPreviewClose,
-    /// User clicked the Preview / Settings tab inside the unified
-    /// Export PDF modal.
-    PrintPreviewSetTab(super::state::PdfPreviewTab),
-    /// User pressed mouse-down on the preview viewport — kicks off
-    /// pan-drag. The handler reads the cursor from
-    /// `interaction_state.last_mouse_pos` rather than carrying it on
-    /// the message; iced builds messages eagerly at view-render time
-    /// so embedded coords would be one frame stale.
-    PrintPreviewPanStart,
-    /// User released the pan drag — clears `panning`.
-    PrintPreviewPanFinished,
-    /// User toggled a project file in the Settings → Files list.
-    PrintPreviewToggleFile(std::path::PathBuf),
-    /// Select all project files in the Settings → Files list.
-    PrintPreviewSelectAllFiles,
-    /// Deselect all project files (effectively "no override —
-    /// fall back to all").
-    PrintPreviewClearAllFiles,
-    /// Variant picker dropdown — None = Base.
-    PrintPreviewSetVariant(Option<String>),
-    PrintPreviewSetUsePhysicalStructure(bool),
-    PrintPreviewSetPhysicalDesignators(bool),
-    PrintPreviewSetPhysicalNetLabels(bool),
-    PrintPreviewSetPhysicalPorts(bool),
-    PrintPreviewSetPhysicalSheetNumber(bool),
-    PrintPreviewSetPhysicalDocumentNumber(bool),
-    PrintPreviewSetIncludeNoErcMarkers(bool),
-    PrintPreviewSetIncludeParameterSets(bool),
-    PrintPreviewSetIncludeProbes(bool),
-    PrintPreviewSetIncludeBlankets(bool),
-    PrintPreviewSetIncludeNotes(bool),
-    PrintPreviewSetIncludeCollapsedNotes(bool),
-    PrintPreviewSetQuality(super::state::PdfQuality),
-    PrintPreviewSetBookmarkZoom(f32),
-    PrintPreviewSetGenerateNetsInfo(bool),
-    PrintPreviewSetBookmarkPins(bool),
-    PrintPreviewSetBookmarkNetLabels(bool),
-    PrintPreviewSetBookmarkPorts(bool),
-    PrintPreviewSetIncludeComponentParameters(bool),
-    PrintPreviewSetGlobalBookmarks(bool),
-    PrintPreviewSetPcbColourMode(signex_output::ColourMode),
+    /// Print-preview modal — namespaced family (ADR-0001 D3). Routed to
+    /// `dispatch_print_preview_message`.
+    PrintPreview(PrintPreviewMsg),
     /// User clicked the OK button on the export-error modal.
     DismissExportError,
     /// v0.9 Library subsystem message — folded under one variant so
@@ -636,6 +572,80 @@ pub enum Message {
     /// `Tool::Select` reset.
     EscapePressed,
     Noop,
+}
+
+/// Print-preview modal message family (ADR-0001 D3). Namespaced under
+/// `Message::PrintPreview` and routed to `dispatch_print_preview_message`.
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub enum PrintPreviewMsg {
+    /// User triggered print preview via Ctrl+P or menu. Open preview dialog.
+    Requested,
+    /// User selected a page in the print preview thumbnail list.
+    SelectPage(usize),
+    /// User changed preview colour mode.
+    SetColourMode(signex_output::ColourMode),
+    /// User changed preview page range to all sheets.
+    SetPageRangeAll,
+    /// User changed preview page range to current sheet.
+    SetPageRangeCurrent,
+    /// User changed preview page range to one specific page.
+    SetPageRangeSpecific,
+    /// User edited the specific page input in preview.
+    SetSpecificPageInput(String),
+    /// User toggled "Fit to Page" in the unified PDF preview modal.
+    SetFitToPage(bool),
+    /// User toggled "Include Title Block" in the unified PDF preview modal.
+    SetIncludeTitleBlock(bool),
+    /// Mouse wheel scrolled over the preview image. Carries the
+    /// vertical delta — positive = scroll up = zoom in. Multiplies
+    /// `PreviewState.zoom` by `ZOOM_STEP` per notch.
+    Zoom(f32),
+    /// User clicked the "Export PDF" button in the preview dialog.
+    Export,
+    /// User closed the print preview dialog.
+    Close,
+    /// User clicked the Preview / Settings tab inside the unified
+    /// Export PDF modal.
+    SetTab(super::state::PdfPreviewTab),
+    /// User pressed mouse-down on the preview viewport — kicks off
+    /// pan-drag. The handler reads the cursor from
+    /// `interaction_state.last_mouse_pos` rather than carrying it on
+    /// the message; iced builds messages eagerly at view-render time
+    /// so embedded coords would be one frame stale.
+    PanStart,
+    /// User released the pan drag — clears `panning`.
+    PanFinished,
+    /// User toggled a project file in the Settings → Files list.
+    ToggleFile(std::path::PathBuf),
+    /// Select all project files in the Settings → Files list.
+    SelectAllFiles,
+    /// Deselect all project files (effectively "no override —
+    /// fall back to all").
+    ClearAllFiles,
+    /// Variant picker dropdown — None = Base.
+    SetVariant(Option<String>),
+    SetUsePhysicalStructure(bool),
+    SetPhysicalDesignators(bool),
+    SetPhysicalNetLabels(bool),
+    SetPhysicalPorts(bool),
+    SetPhysicalSheetNumber(bool),
+    SetPhysicalDocumentNumber(bool),
+    SetIncludeNoErcMarkers(bool),
+    SetIncludeParameterSets(bool),
+    SetIncludeProbes(bool),
+    SetIncludeBlankets(bool),
+    SetIncludeNotes(bool),
+    SetIncludeCollapsedNotes(bool),
+    SetQuality(super::state::PdfQuality),
+    SetBookmarkZoom(f32),
+    SetGenerateNetsInfo(bool),
+    SetBookmarkPins(bool),
+    SetBookmarkNetLabels(bool),
+    SetBookmarkPorts(bool),
+    SetIncludeComponentParameters(bool),
+    SetGlobalBookmarks(bool),
+    SetPcbColourMode(signex_output::ColourMode),
 }
 
 /// Per-shape edit descriptor. The Properties panel dispatches one of

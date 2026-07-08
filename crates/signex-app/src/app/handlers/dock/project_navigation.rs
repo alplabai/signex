@@ -165,7 +165,9 @@ impl Signex {
                 }
             }
             ProjectTreeAction::PrintActive => {
-                return Task::perform(async {}, |_| Message::PrintPreviewRequested);
+                return Task::perform(async {}, |_| {
+                    Message::PrintPreview(PrintPreviewMsg::Requested)
+                });
             }
             ProjectTreeAction::OpenRenameDialog(tree_path) => {
                 self.open_rename_dialog(tree_path);
