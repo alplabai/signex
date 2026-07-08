@@ -147,6 +147,8 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                 editor.canvas_cache.clear();
             }
         }
-        _ => unreachable!("non-numeric placement-input buffer sketch variant routed to sketch_placement.rs"),
+        _ => unreachable!(
+            "non-numeric placement-input buffer sketch variant routed to sketch_placement.rs"
+        ),
     }
 }

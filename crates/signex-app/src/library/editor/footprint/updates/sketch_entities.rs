@@ -3,8 +3,8 @@
 //! Carved out of the monolithic `sketch::apply` (ADR-0001 D1/D2). Arm
 //! bodies are moved verbatim; each keeps its own inner `use`s.
 
-use crate::library::messages::PrimitiveEditorMsg;
 use crate::library::editor::footprint::state::FootprintEditorState as CanvasState;
+use crate::library::messages::PrimitiveEditorMsg;
 
 pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: PrimitiveEditorMsg) {
     match msg {
@@ -680,6 +680,8 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             editor.canvas_cache.clear();
             editor.dirty = true;
         }
-        _ => unreachable!("non-entity placement & drag geometry sketch variant routed to sketch_entities.rs"),
+        _ => unreachable!(
+            "non-entity placement & drag geometry sketch variant routed to sketch_entities.rs"
+        ),
     }
 }

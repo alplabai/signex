@@ -22,7 +22,6 @@ mod sketch_tools;
 mod sketch_ui;
 mod view;
 
-use crate::library::editor::footprint::state::FootprintEditorState as CanvasState;
 use crate::library::messages::PrimitiveEditorMsg;
 
 /// v0.14 — apply an [`AlignOp`] to the pads at `indices` in `state`,
@@ -396,11 +395,6 @@ pub(crate) fn apply_footprint_primitive_edit(
     editor: &mut crate::app::FootprintEditorState,
     msg: PrimitiveEditorMsg,
 ) {
-    use crate::library::editor::footprint::layers::FpLayer;
-    use crate::library::editor::footprint::state::FootprintEditorState as CanvasState;
-
-    use crate::library::editor::footprint::pad_to_sketch;
-
     // v0.27 — Role=Pad on a Line is shorthand for "make this loop a
     // pad." Rewrite the message here so the SetRole arm only ever
     // sees Point-targeted Pad role assignments (where it makes

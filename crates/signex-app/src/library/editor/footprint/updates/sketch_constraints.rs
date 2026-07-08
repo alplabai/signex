@@ -269,6 +269,8 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                 editor.canvas_cache.clear();
             }
         }
-        _ => unreachable!("non-parameters & constraints sketch variant routed to sketch_constraints.rs"),
+        _ => unreachable!(
+            "non-parameters & constraints sketch variant routed to sketch_constraints.rs"
+        ),
     }
 }

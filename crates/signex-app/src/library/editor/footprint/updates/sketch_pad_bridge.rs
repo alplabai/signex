@@ -482,6 +482,8 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             editor.dirty = true;
             editor.canvas_cache.clear();
         }
-        _ => unreachable!("non-sketch↔pad bridge (roles / profile / corner radius) sketch variant routed to sketch_pad_bridge.rs"),
+        _ => unreachable!(
+            "non-sketch↔pad bridge (roles / profile / corner radius) sketch variant routed to sketch_pad_bridge.rs"
+        ),
     }
 }
