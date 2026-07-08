@@ -13,7 +13,7 @@
 //! semantics. Same-name label *merging* and cross-sheet stitching are
 //! deferred to a later increment.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use signex_types::net::{Net, NetId, Netlist, Terminal};
 use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, Symbol};
@@ -369,6 +369,43 @@ pub(crate) fn collect_membership(
     m
 }
 
+/// Enforce net-name uniqueness in net order: the first net to claim a name
+/// keeps it; any later net with the same name is renamed with a deterministic
+/// `_<n>` suffix. This closes two ambiguities a bare projection leaves — two
+/// electrically distinct nets sharing a label (e.g. two non-merging
+/// `Hierarchical` labels of one name on a sheet), and an auto `N$k` colliding
+/// with a user label spelt `N$k`.
+///
+/// The suffix starts at the net's own `id` (stable across builds) and only
+/// bumps in the pathological case a user label already occupies it, so the
+/// result is deterministic and itself collision-free. Both entry points —
+/// [`build_netlist`] and the cross-sheet stitcher — run this same pass, so the
+/// names they emit agree. Returns each base name that collided, in net order,
+/// for callers that surface it (the stitcher's `NameCollision`); single-sheet
+/// callers discard it.
+pub(crate) fn dedup_net_names(nets: &mut [Net]) -> Vec<String> {
+    let mut used: HashSet<String> = HashSet::with_capacity(nets.len());
+    let mut collided: Vec<String> = Vec::new();
+    let mut reported: HashSet<String> = HashSet::new();
+    for net in nets.iter_mut() {
+        if used.insert(net.name.clone()) {
+            continue;
+        }
+        if reported.insert(net.name.clone()) {
+            collided.push(net.name.clone());
+        }
+        let base = net.name.clone();
+        let mut n = net.id.0;
+        let mut candidate = format!("{base}_{n}");
+        while !used.insert(candidate.clone()) {
+            n += 1;
+            candidate = format!("{base}_{n}");
+        }
+        net.name = candidate;
+    }
+    collided
+}
+
 /// Build the authoritative [`Netlist`] for a single schematic sheet.
 ///
 /// Physical connectivity is [`SheetConnectivity`] — union-find over wire
@@ -404,7 +441,7 @@ pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
     let mut roots: Vec<Key> = net_terms.keys().copied().collect();
     roots.sort_unstable();
 
-    let nets = roots
+    let mut nets: Vec<Net> = roots
         .into_iter()
         .enumerate()
         .map(|(idx, root)| {
@@ -433,6 +470,11 @@ pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
             }
         })
         .collect();
+
+    // Two distinct nets may still carry the same name (e.g. same-name
+    // `Hierarchical` labels that don't merge on one sheet, or an auto `N$k`
+    // meeting a user label of that spelling). Rename the later one.
+    dedup_net_names(&mut nets);
 
     Netlist { nets }
 }
@@ -918,6 +960,54 @@ mod tests {
             netlist.nets.len(),
             2,
             "hierarchical same-name is not merged on one sheet"
+        );
+    }
+
+    #[test]
+    fn same_name_nets_on_one_sheet_get_unique_names() {
+        // Two non-merging hierarchical labels of one name leave two electrically
+        // distinct nets both wanting "BUS". A netlist with two nets of one name
+        // is ambiguous to every downstream consumer, so names must stay unique:
+        // the first keeps "BUS", the second is deterministically suffixed (D5.6).
+        let netlist = two_labelled_groups("BUS", LabelType::Hierarchical);
+        assert_eq!(netlist.nets.len(), 2);
+        let names: Vec<&str> = netlist.nets.iter().map(|n| n.name.as_str()).collect();
+        assert_ne!(
+            names[0], names[1],
+            "the two nets must not share a name: {names:?}"
+        );
+        assert!(names.contains(&"BUS"), "one keeps the bare name: {names:?}");
+        assert!(
+            names.iter().any(|n| n.starts_with("BUS_")),
+            "the other is suffixed: {names:?}"
+        );
+    }
+
+    #[test]
+    fn auto_name_never_collides_with_a_user_label() {
+        // Bug #6: an unlabelled net auto-names "N$k"; the first net here (root at
+        // the origin) takes "N$1". A user then spelled the *other* net's label
+        // "N$1" too — the two must not resolve to one name.
+        let mut sheet = empty_sheet();
+        sheet.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+        sheet.wires.push(wire(pt(50.0, 0.0), pt(60.0, 0.0)));
+        sheet
+            .labels
+            .push(label("N$1", pt(50.0, 0.0), LabelType::Global));
+        add_lib(
+            &mut sheet,
+            "R",
+            vec![lib_pin("1", pt(0.0, 0.0), PinDirection::Passive)],
+        );
+        place(&mut sheet, "R1", "R", pt(0.0, 0.0));
+        place(&mut sheet, "R2", "R", pt(50.0, 0.0));
+
+        let netlist = build_netlist(&sheet);
+        assert_eq!(netlist.nets.len(), 2);
+        let names: Vec<&str> = netlist.nets.iter().map(|n| n.name.as_str()).collect();
+        assert_ne!(
+            names[0], names[1],
+            "names stay unique despite the clash: {names:?}"
         );
     }
 
