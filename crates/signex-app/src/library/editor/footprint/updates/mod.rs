@@ -3,15 +3,23 @@
 //! `apply_footprint_primitive_edit` is the router: the pre-match `msg`
 //! rewrite, the exhaustive dispatch match, and the shared pad/undo helpers.
 //! Each concern's arms live in a sibling module and are reached through one
-//! `|`-grouped delegating arm per concern (ADR-0001 D1/D2):
+//! `|`-grouped delegating arm per concern (ADR-0001 D1/D2). The former
+//! monolithic `sketch` module is itself now split by sketch concern
+//! (ui / placement / entities / pad-bridge / constraints / tools):
 //!
-//!   sketch · active_bar · geometry · selection · context_menu · view
+//!   sketch_{ui,placement,entities,pad_bridge,constraints,tools}
+//!   · active_bar · geometry · selection · context_menu · view
 
 mod active_bar;
 mod context_menu;
 mod geometry;
 mod selection;
-mod sketch;
+mod sketch_constraints;
+mod sketch_entities;
+mod sketch_pad_bridge;
+mod sketch_placement;
+mod sketch_tools;
+mod sketch_ui;
 mod view;
 
 use crate::library::editor::footprint::state::FootprintEditorState as CanvasState;
@@ -471,27 +479,35 @@ pub(crate) fn apply_footprint_primitive_edit(
         | PrimitiveEditorMsg::FootprintMintBody3d
         | PrimitiveEditorMsg::FootprintMintExtrudedBody3d => geometry::apply(editor, msg),
         PrimitiveEditorMsg::FootprintSketchSelectMany(..)
-        | PrimitiveEditorMsg::FootprintSketchPlacePoint { .. }
-        | PrimitiveEditorMsg::FootprintSketchEditParameter { .. }
+        | PrimitiveEditorMsg::FootprintSketchSelect { .. }
         | PrimitiveEditorMsg::FootprintSketchSetTool(..)
         | PrimitiveEditorMsg::FootprintSketchToggleConstruction
         | PrimitiveEditorMsg::FootprintSketchToggleCenterline
         | PrimitiveEditorMsg::FootprintSketchToolEscape
-        | PrimitiveEditorMsg::FootprintSketchPlacementInputChar(..)
+        | PrimitiveEditorMsg::FootprintSketchDimensionInput(..) => sketch_ui::apply(editor, msg),
+        PrimitiveEditorMsg::FootprintSketchPlacementInputChar(..)
         | PrimitiveEditorMsg::FootprintSketchPlacementInputBackspace
         | PrimitiveEditorMsg::FootprintSketchPlacementInputEnter
         | PrimitiveEditorMsg::FootprintSketchPlacementInputEscape
-        | PrimitiveEditorMsg::FootprintSketchPlacementInputTab
-        | PrimitiveEditorMsg::FootprintSketchSelect { .. }
+        | PrimitiveEditorMsg::FootprintSketchPlacementInputTab => {
+            sketch_placement::apply(editor, msg)
+        }
+        PrimitiveEditorMsg::FootprintSketchPlacePoint { .. }
         | PrimitiveEditorMsg::FootprintSketchMovePoint { .. }
         | PrimitiveEditorMsg::FootprintSketchMoveLine { .. }
-        | PrimitiveEditorMsg::FootprintSketchResizeRoundPad { .. }
-        | PrimitiveEditorMsg::FootprintSketchDimensionInput(..)
-        | PrimitiveEditorMsg::FootprintSketchSetRole { .. }
+        | PrimitiveEditorMsg::FootprintSketchResizeRoundPad { .. } => {
+            sketch_entities::apply(editor, msg)
+        }
+        PrimitiveEditorMsg::FootprintSketchSetRole { .. }
         | PrimitiveEditorMsg::FootprintSketchMakePadFromProfile
-        | PrimitiveEditorMsg::FootprintSketchUnlinkCornerRadius { .. }
-        | PrimitiveEditorMsg::FootprintSketchAddConstraintForSelection(..)
-        | PrimitiveEditorMsg::FootprintSketchToolClick { .. } => sketch::apply(editor, msg),
+        | PrimitiveEditorMsg::FootprintSketchUnlinkCornerRadius { .. } => {
+            sketch_pad_bridge::apply(editor, msg)
+        }
+        PrimitiveEditorMsg::FootprintSketchEditParameter { .. }
+        | PrimitiveEditorMsg::FootprintSketchAddConstraintForSelection(..) => {
+            sketch_constraints::apply(editor, msg)
+        }
+        PrimitiveEditorMsg::FootprintSketchToolClick { .. } => sketch_tools::apply(editor, msg),
         PrimitiveEditorMsg::FootprintToggleLayer(..)
         | PrimitiveEditorMsg::FootprintToggleAutoFit
         | PrimitiveEditorMsg::FootprintSetMode(..)
