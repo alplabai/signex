@@ -151,9 +151,9 @@ impl Signex {
         }
     }
 
-    pub(super) fn dispatch_tool_message(&mut self, message: Message) -> Task<Message> {
+    pub(super) fn dispatch_tool_message(&mut self, message: ToolMessage) -> Task<Message> {
         match message {
-            Message::PrePlacementTab => {
+            ToolMessage::PrePlacementTab => {
                 // v0.16.1 — footprint-pad placement pause/resume.
                 // When the active tab is a footprint editor and the
                 // user has armed Pads-mode PlacePad, route TAB to a
@@ -396,7 +396,7 @@ impl Signex {
                 }
                 self.finish_update()
             }
-            Message::ResumePlacement => {
+            ToolMessage::ResumePlacement => {
                 // Big on-canvas "Resume" button (Altium-style pause overlay).
                 // Keep `pre_placement` alive so the next click consumes the
                 // values the user just edited — only un-pause the canvas and
@@ -422,13 +422,13 @@ impl Signex {
                 }
                 self.finish_update()
             }
-            Message::CycleDrawMode => {
+            ToolMessage::CycleDrawMode => {
                 self.interaction_state.draw_mode = self.interaction_state.draw_mode.next();
                 self.interaction_state.active_canvas_mut().draw_mode =
                     self.interaction_state.draw_mode;
                 self.finish_update()
             }
-            Message::CancelDrawing => {
+            ToolMessage::CancelDrawing => {
                 if self.interaction_state.wire_drawing {
                     self.interaction_state.wire_drawing = false;
                     self.interaction_state.wire_points.clear();
@@ -442,7 +442,7 @@ impl Signex {
                 }
                 self.finish_update()
             }
-            Message::Tool(ToolMessage::SelectTool(tool)) => {
+            ToolMessage::SelectTool(tool) => {
                 self.interaction_state.current_tool = tool;
                 // Re-label the floating cursor tag so the user sees which
                 // placement mode they're in. Altium shows the tool name near
@@ -485,7 +485,6 @@ impl Signex {
                 }
                 self.finish_update()
             }
-            _ => unreachable!("dispatch_tool_message received non-tool message"),
         }
     }
 }

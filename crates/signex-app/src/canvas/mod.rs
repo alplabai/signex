@@ -20,6 +20,7 @@ pub use grid::GridState;
 use crate::schematic_runtime::SchematicSheetExt as _;
 
 use crate::app::{ContextMenuMsg, Message};
+use crate::toolbar::ToolMessage;
 
 // ─── Canvas State (per-canvas mutable state) ──────────────────
 
@@ -585,7 +586,9 @@ impl canvas::Program<Message> for SchematicCanvas {
                 if !did_pan {
                     if self.drawing_mode {
                         // Right-click cancels wire drawing (Altium behavior)
-                        return Some(canvas::Action::publish(Message::CancelDrawing));
+                        return Some(canvas::Action::publish(Message::Tool(
+                            ToolMessage::CancelDrawing,
+                        )));
                     }
                     // Show context menu at screen position
                     if let Some(cursor_pos) = cursor.position_in(bounds) {

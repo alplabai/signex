@@ -7,7 +7,7 @@ use iced::widget::{Space, button, column, container, row, text};
 use iced::{Element, Length};
 use signex_types::theme::ThemeTokens;
 
-use crate::app::Message;
+use crate::app::{Message, OverlayMsg};
 use crate::styles;
 
 const CARD_W: f32 = 360.0;
@@ -23,7 +23,7 @@ pub fn view<'a>(tokens: &'a ThemeTokens) -> Element<'a, Message> {
             text("Welcome to Signex").size(13).color(text_primary),
             Space::new().width(Length::Fill),
             button(text("✕").size(11).color(text_secondary))
-                .on_press(Message::DismissFirstRunTour)
+                .on_press(Message::Overlay(OverlayMsg::DismissFirstRunTour))
                 .style(styles::menu_item(tokens)),
         ]
         .align_y(iced::Alignment::Center)

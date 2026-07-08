@@ -29,14 +29,15 @@ mod state;
 pub(crate) mod view;
 
 pub use contracts::{
-    AnnotateMsg, AppQuitConfirmState, BomPreviewMsg, ContextAction, ContextMenuMsg,
-    ContextMenuState, ContextSubmenu, DragTarget, EditMsg, EnableVersionControlMsg,
+    AnnotateMsg, AppQuitConfirmState, BomPreviewMsg, CommandPaletteMsg, ContextAction,
+    ContextMenuMsg, ContextMenuState, ContextSubmenu, DragTarget, EditMsg, EnableVersionControlMsg,
     EnableVersionControlState, ErcMsg, ExportMsg, FileMsg, GridPickerState, GridPropertiesMsg,
-    GridPropertiesState, Message, NetColorMsg, PreferencesMsg, PrintPreviewMsg, ProjectCloseChoice,
-    ProjectCloseConfirmState, ProjectMsg, ProjectOptionsState, ProjectTreeAction,
-    ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState, RemoveMsg, RenameDialogState,
-    RenameMsg, SelectionFilterCustomState, SelectionFilterMsg, StatusBarRequest, TabContextAction,
-    TabContextMenuState, TextEditState, TrackItem, VersionControlScope,
+    GridPropertiesState, Message, NetColorMsg, OverlayMsg, PreferencesMsg, PrintPreviewMsg,
+    ProjectCloseChoice, ProjectCloseConfirmState, ProjectMsg, ProjectOptionsState,
+    ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState, RemoveMsg,
+    RenameDialogState, RenameMsg, SelectionFilterCustomState, SelectionFilterMsg, StatusBarRequest,
+    TabContextAction, TabContextMenuState, TextEditMsg, TextEditState, TrackItem, UiMsg,
+    VersionControlScope,
 };
 pub use documents::{
     ComponentEditorTab, DrawMode, FootprintEditorState, SchematicTabSession, SymbolEditorState,

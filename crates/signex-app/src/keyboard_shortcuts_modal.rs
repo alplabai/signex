@@ -8,10 +8,10 @@ use iced::widget::{Column, Space, column, container, row, scrollable, text};
 use iced::{Border, Element, Length, Theme};
 use signex_types::theme::{ThemeId, ThemeTokens};
 
-use crate::app::Message;
 use crate::app::view::dialogs::{
     MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE, close_x_button,
 };
+use crate::app::{Message, OverlayMsg};
 use crate::shortcuts::{SHORTCUTS, ShortcutCategory};
 use crate::styles::{self, MODAL_CORNER_RADIUS};
 
@@ -42,7 +42,11 @@ pub fn view<'a>(tokens: &'a ThemeTokens, theme_id: ThemeId) -> Element<'a, Messa
                 .size(MODAL_HEADER_TITLE_SIZE)
                 .color(text_primary),
             Space::new().width(Length::Fill),
-            close_x_button(Message::CloseKeyboardShortcuts, theme_id, text_secondary),
+            close_x_button(
+                Message::Overlay(OverlayMsg::CloseKeyboardShortcuts),
+                theme_id,
+                text_secondary,
+            ),
         ]
         .align_y(iced::Alignment::Center),
     )

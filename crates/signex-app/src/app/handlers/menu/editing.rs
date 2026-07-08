@@ -19,8 +19,8 @@ impl Signex {
                 selection_request::SelectionRequest::SelectAll,
             ))),
             MenuMessage::Duplicate => Some(self.update(Message::Edit(EditMsg::Duplicate))),
-            MenuMessage::Find => Some(self.update(Message::OpenFind)),
-            MenuMessage::Replace => Some(self.update(Message::OpenReplace)),
+            MenuMessage::Find => Some(self.update(Message::Overlay(OverlayMsg::OpenFind))),
+            MenuMessage::Replace => Some(self.update(Message::Overlay(OverlayMsg::OpenReplace))),
             MenuMessage::Annotate => Some(self.update(Message::Annotate(AnnotateMsg::OpenDialog))),
             MenuMessage::AnnotateReset => {
                 Some(self.update(Message::Annotate(AnnotateMsg::OpenResetConfirm)))
@@ -54,7 +54,9 @@ impl Signex {
                 Some(Task::none())
             }
             MenuMessage::Erc => Some(self.update(Message::Erc(ErcMsg::OpenDialog))),
-            MenuMessage::ToggleAutoFocus => Some(self.update(Message::ToggleAutoFocus)),
+            MenuMessage::ToggleAutoFocus => {
+                Some(self.update(Message::Overlay(OverlayMsg::ToggleAutoFocus)))
+            }
             MenuMessage::GenerateBom => {
                 crate::diagnostics::log_info("Generate BOM is v0.8 scope");
                 Some(Task::none())

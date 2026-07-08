@@ -511,26 +511,26 @@ impl Signex {
                         if palette_open {
                             return match (key.as_ref(), m) {
                                 (keyboard::Key::Named(keyboard::key::Named::Escape), _) => {
-                                    Message::CommandPaletteClose
+                                    Message::CommandPalette(CommandPaletteMsg::Close)
                                 }
                                 (keyboard::Key::Named(keyboard::key::Named::ArrowDown), _) => {
-                                    Message::CommandPaletteMoveSelection(1)
+                                    Message::CommandPalette(CommandPaletteMsg::MoveSelection(1))
                                 }
                                 (keyboard::Key::Named(keyboard::key::Named::ArrowUp), _) => {
-                                    Message::CommandPaletteMoveSelection(-1)
+                                    Message::CommandPalette(CommandPaletteMsg::MoveSelection(-1))
                                 }
                                 // Toggle: Ctrl+Shift+P while open closes.
                                 (keyboard::Key::Character(c), m)
                                     if c.eq_ignore_ascii_case("p") && m.command() && m.shift() =>
                                 {
-                                    Message::CommandPaletteClose
+                                    Message::CommandPalette(CommandPaletteMsg::Close)
                                 }
                                 _ => Message::Noop,
                             };
                         }
                         match (key.as_ref(), m) {
                             (keyboard::Key::Character(c), m) if c == "q" && m.command() => {
-                                Message::UnitCycled
+                                Message::Ui(UiMsg::UnitCycled)
                             }
                             (keyboard::Key::Character(c), m)
                                 if c == "g" && !m.command() && !m.shift() =>
@@ -540,7 +540,7 @@ impl Signex {
                                 // wires it to set the snap step;
                                 // schematic / PCB tabs ignore (the
                                 // dispatcher's context check no-ops).
-                                Message::GridPickerOpen
+                                Message::Ui(UiMsg::GridPickerOpen)
                             }
                             (keyboard::Key::Character(c), m)
                                 if c == "g" && m.command() && !m.shift() =>
@@ -579,17 +579,17 @@ impl Signex {
                             (keyboard::Key::Character(c), m)
                                 if c.eq_ignore_ascii_case("p") && m.command() && m.shift() =>
                             {
-                                Message::CommandPaletteOpen
+                                Message::CommandPalette(CommandPaletteMsg::Open)
                             }
                             // Ctrl+, open Preferences
                             (keyboard::Key::Character(c), m) if c == "," && m.command() => {
                                 Message::Preferences(PreferencesMsg::Open)
                             }
                             (keyboard::Key::Character(c), m) if c == "f" && m.command() => {
-                                Message::OpenFind
+                                Message::Overlay(OverlayMsg::OpenFind)
                             }
                             (keyboard::Key::Character(c), m) if c == "h" && m.command() => {
-                                Message::OpenReplace
+                                Message::Overlay(OverlayMsg::OpenReplace)
                             }
                             (keyboard::Key::Named(keyboard::key::Named::Escape), _)
                                 if find_replace_open =>
@@ -599,12 +599,12 @@ impl Signex {
                             (keyboard::Key::Named(keyboard::key::Named::Escape), _)
                                 if kbd_shortcuts_open =>
                             {
-                                Message::CloseKeyboardShortcuts
+                                Message::Overlay(OverlayMsg::CloseKeyboardShortcuts)
                             }
                             (keyboard::Key::Named(keyboard::key::Named::Escape), _)
                                 if first_run_tour_open =>
                             {
-                                Message::DismissFirstRunTour
+                                Message::Overlay(OverlayMsg::DismissFirstRunTour)
                             }
                             // Esc closes the deepest open modal first (UX §1.3).
                             // The order here goes "user-facing top → bottom":
@@ -668,7 +668,7 @@ impl Signex {
                             (keyboard::Key::Named(keyboard::key::Named::F1), _) => {
                                 // F1 toggles: open if closed, close if open.
                                 if kbd_shortcuts_open {
-                                    Message::CloseKeyboardShortcuts
+                                    Message::Overlay(OverlayMsg::CloseKeyboardShortcuts)
                                 } else {
                                     Message::Menu(MenuMessage::OpenKeyboardShortcuts)
                                 }
@@ -677,7 +677,7 @@ impl Signex {
                                 Message::Erc(ErcMsg::Run)
                             }
                             (keyboard::Key::Named(keyboard::key::Named::F9), _) => {
-                                Message::ToggleAutoFocus
+                                Message::Overlay(OverlayMsg::ToggleAutoFocus)
                             }
                             // F5: Net color palette (Altium convention).
                             (keyboard::Key::Named(keyboard::key::Named::F5), _) => {
@@ -736,7 +736,7 @@ impl Signex {
                             }
                             // Shift+Space: cycle draw mode (90-degree -> 45-degree -> Free)
                             (keyboard::Key::Named(keyboard::key::Named::Space), m) if m.shift() => {
-                                Message::CycleDrawMode
+                                Message::Tool(ToolMessage::CycleDrawMode)
                             }
                             // Space: rotate selected symbol (Altium convention)
                             (keyboard::Key::Named(keyboard::key::Named::Space), _) => {
@@ -825,11 +825,11 @@ impl Signex {
                             (keyboard::Key::Character(c), m)
                                 if c.eq_ignore_ascii_case("g") && m.command() && m.shift() =>
                             {
-                                Message::GridToggle
+                                Message::Ui(UiMsg::GridToggle)
                             }
                             // Tab -- pre-placement properties (only during active tool)
                             (keyboard::Key::Named(keyboard::key::Named::Tab), _) => {
-                                Message::PrePlacementTab
+                                Message::Tool(ToolMessage::PrePlacementTab)
                             }
                             _ => Message::Noop,
                         }
@@ -857,11 +857,11 @@ impl Signex {
             // specifically (not the generic DragEnd).
             iced::event::listen().map(|event| match event {
                 iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
-                    Message::DragMove(position.x, position.y)
+                    Message::Ui(UiMsg::DragMove(position.x, position.y))
                 }
                 iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
                     iced::mouse::Button::Left,
-                )) => Message::ModalDragEnd,
+                )) => Message::Overlay(OverlayMsg::ModalDragEnd),
                 // Window::Resized intentionally omitted — the
                 // `window::resize_events()` subscription below carries
                 // the window id so we can drop non-main resizes. If
@@ -872,11 +872,11 @@ impl Signex {
         } else if drag_active {
             iced::event::listen().map(|event| match event {
                 iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
-                    Message::DragMove(position.x, position.y)
+                    Message::Ui(UiMsg::DragMove(position.x, position.y))
                 }
                 iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
                     iced::mouse::Button::Left,
-                )) => Message::DragEnd,
+                )) => Message::Ui(UiMsg::DragEnd),
                 iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
                     iced::mouse::Button::Left,
                 )) => Message::ContextMenu(ContextMenuMsg::Close),
@@ -894,7 +894,7 @@ impl Signex {
             // active (it just updates last_mouse_pos).
             iced::event::listen().map(|event| match event {
                 iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
-                    Message::DragMove(position.x, position.y)
+                    Message::Ui(UiMsg::DragMove(position.x, position.y))
                 }
                 iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
                     iced::mouse::Button::Left,

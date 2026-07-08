@@ -11,7 +11,7 @@ use iced::{Background, Border, Color, Element, Length, Theme};
 use crate::app::state::AnnotateOrder;
 use crate::app::{
     AnnotateMsg, BomPreviewMsg, EnableVersionControlMsg, ErcMsg, GridPropertiesMsg, Message,
-    ProjectMsg, RemoveMsg, RenameMsg, SelectionFilterMsg, Signex,
+    OverlayMsg, ProjectMsg, RemoveMsg, RenameMsg, SelectionFilterMsg, Signex,
 };
 
 const BACKDROP: Color = Color::from_rgba(0.0, 0.0, 0.0, 0.55);
@@ -3002,11 +3002,11 @@ pub(in crate::app::view) fn draggable_header<'a>(
     last_mouse: (f32, f32),
 ) -> Element<'a, Message> {
     iced::widget::mouse_area(header_content)
-        .on_press(Message::ModalDragStart {
+        .on_press(Message::Overlay(OverlayMsg::ModalDragStart {
             modal,
             x: last_mouse.0,
             y: last_mouse.1,
-        })
+        }))
         .into()
 }
 

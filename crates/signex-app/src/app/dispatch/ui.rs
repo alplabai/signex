@@ -3,19 +3,19 @@ use iced::Task;
 use super::super::*;
 
 impl Signex {
-    pub(super) fn dispatch_ui_message(&mut self, message: Message) -> Task<Message> {
+    pub(super) fn dispatch_ui_message(&mut self, message: UiMsg) -> Task<Message> {
         match message {
-            Message::ThemeChanged(id) => {
+            UiMsg::ThemeChanged(id) => {
                 self.ui_state.theme_id = id;
                 self.update_canvas_theme();
                 crate::fonts::write_theme_pref(id);
                 self.finish_update()
             }
-            Message::UnitCycled | Message::StatusBar(StatusBarRequest::CycleUnit) => {
+            UiMsg::UnitCycled | UiMsg::StatusBar(StatusBarRequest::CycleUnit) => {
                 self.handle_unit_cycle_request();
                 self.finish_update()
             }
-            Message::GridToggle | Message::StatusBar(StatusBarRequest::ToggleGrid) => {
+            UiMsg::GridToggle | UiMsg::StatusBar(StatusBarRequest::ToggleGrid) => {
                 self.ui_state.grid_visible = !self.ui_state.grid_visible;
                 self.interaction_state.active_canvas_mut().grid_visible =
                     self.ui_state.grid_visible;
@@ -25,11 +25,11 @@ impl Signex {
                 crate::fonts::write_grid_visible_pref(self.ui_state.grid_visible);
                 self.finish_update()
             }
-            Message::DragStart(target) => {
+            UiMsg::DragStart(target) => {
                 self.handle_layout_drag_started(target);
                 self.finish_update()
             }
-            Message::DragMove(x, y) => {
+            UiMsg::DragMove(x, y) => {
                 self.handle_layout_drag_moved(x, y);
                 // Altium parity: cursor leaving the main window during a
                 // modal, floating-panel, or tab drag hands the content
@@ -48,19 +48,19 @@ impl Signex {
                     finish
                 }
             }
-            Message::WindowResized(w, h) => {
+            UiMsg::WindowResized(w, h) => {
                 self.ui_state.window_size = (w, h);
                 self.finish_update()
             }
-            Message::DragEnd => {
+            UiMsg::DragEnd => {
                 self.handle_layout_drag_finished();
                 self.finish_update()
             }
-            Message::GridCycle => {
+            UiMsg::GridCycle => {
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.finish_update()
             }
-            Message::GridPickerOpen => {
+            UiMsg::GridPickerOpen => {
                 // v0.18.10 — only mount the picker when the active
                 // tab is a Footprint editor; the schematic / PCB
                 // grid systems aren't wired through this picker yet.
@@ -85,11 +85,11 @@ impl Signex {
                 }
                 self.finish_update()
             }
-            Message::GridPickerClose => {
+            UiMsg::GridPickerClose => {
                 self.interaction_state.grid_picker = None;
                 self.finish_update()
             }
-            Message::GridPickerSelect(step_mm) => {
+            UiMsg::GridPickerSelect(step_mm) => {
                 self.interaction_state.grid_picker = None;
                 if let Some(editor) = self.active_footprint_editor_mut() {
                     if step_mm > 0.0 && step_mm.is_finite() {
@@ -105,7 +105,7 @@ impl Signex {
                 self.refresh_panel_ctx();
                 self.finish_update()
             }
-            Message::StatusBar(StatusBarRequest::ToggleSnap) => {
+            UiMsg::StatusBar(StatusBarRequest::ToggleSnap) => {
                 self.ui_state.snap_enabled = !self.ui_state.snap_enabled;
                 self.interaction_state.active_canvas_mut().snap_enabled =
                     self.ui_state.snap_enabled;
@@ -121,30 +121,12 @@ impl Signex {
                 }
                 self.finish_update()
             }
-            Message::StatusBar(StatusBarRequest::TogglePanelList) => {
-                self.dispatch_overlay_message(Message::TogglePanelList)
+            UiMsg::StatusBar(StatusBarRequest::TogglePanelList) => {
+                self.dispatch_overlay_message(OverlayMsg::TogglePanelList)
             }
-            Message::StatusBar(StatusBarRequest::OpenPropertiesForSelection) => {
-                self.dispatch_overlay_message(Message::Menu(MenuMessage::OpenPropertiesPanel))
+            UiMsg::StatusBar(StatusBarRequest::OpenPropertiesForSelection) => {
+                self.handle_menu_message(MenuMessage::OpenPropertiesPanel)
             }
-            Message::CanvasEvent(event) => {
-                // First user gesture on the canvas dismisses the
-                // first-run tour card (UX §4.3). Cheap inline check —
-                // false branch when the card is already dismissed.
-                if self.ui_state.first_run_tour_open {
-                    self.ui_state.first_run_tour_open = false;
-                    crate::fonts::write_first_run_tour_dismissed(true);
-                }
-                self.handle_canvas_interaction_event(event)
-            }
-            Message::CanvasEventInWindow { window_id, event } => {
-                if self.ui_state.first_run_tour_open {
-                    self.ui_state.first_run_tour_open = false;
-                    crate::fonts::write_first_run_tour_dismissed(true);
-                }
-                self.handle_canvas_event_in_window(window_id, event)
-            }
-            _ => unreachable!("dispatch_ui_message received non-ui message"),
         }
     }
 
@@ -369,7 +351,7 @@ impl Signex {
     /// **Panic safety:** the swap is guarded with `catch_unwind` +
     /// `resume_unwind` so a panicking handler still restores both the
     /// canvas slot and `active_path` before the panic propagates.
-    fn handle_canvas_event_in_window(
+    pub(super) fn handle_canvas_event_in_window(
         &mut self,
         window_id: iced::window::Id,
         event: crate::canvas::CanvasEvent,
