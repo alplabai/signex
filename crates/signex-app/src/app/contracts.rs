@@ -126,22 +126,11 @@ pub enum Message {
     ResumePlacement,
     TextEditChanged(String),
     TextEditSubmit,
-    ShowContextMenu(f32, f32),
-    CloseContextMenu,
-    /// Right-click landed on a specific tree node — open the per-node
-    /// context menu at `last_mouse_pos`. `path = None` → background menu.
-    ShowProjectTreeContextMenu(Option<Vec<usize>>),
-    /// Dismiss the Projects-panel tree context menu.
-    CloseProjectTreeContextMenu,
-    /// Menu item picked — route the action.
-    ProjectTreeAction(ProjectTreeAction),
-    /// Right-click on a document tab — open the per-tab context menu
-    /// at `last_mouse_pos`. Carries the clicked tab's index.
-    ShowTabContextMenu(usize),
-    /// Dismiss the document-tab right-click menu.
-    CloseTabContextMenu,
-    /// Menu item picked — route the action.
-    TabContextAction(TabContextAction),
+    /// Context-menu subsystem message family — namespaced (ADR-0001
+    /// D3). Canvas / project-tree / tab right-click menus plus the
+    /// submenu hover state machine. Routed to
+    /// `dispatch_context_menu_message`.
+    ContextMenu(ContextMenuMsg),
     /// User picked an option in the project-close confirmation modal
     /// (Save All / Discard All / Cancel) shown when closing a
     /// project that still has entries in `dirty_paths`.
@@ -177,27 +166,6 @@ pub enum Message {
     /// Enable Version Control modal message family — namespaced
     /// (ADR-0001 D3). Routed to `dispatch_enable_version_control_message`.
     EnableVersionControl(EnableVersionControlMsg),
-    /// Expand a click-to-open submenu inside the right-click context
-    /// menu (Place or Align). Toggles off when the same kind is fired
-    /// twice, otherwise replaces the current submenu.
-    OpenContextSubmenu(ContextSubmenu),
-    /// Hover entered a submenu launcher row — start the 200 ms
-    /// hover-open timer for that submenu (and cancel any pending
-    /// close).
-    HoverContextSubmenu(ContextSubmenu),
-    /// Hover left the submenu launcher row — cancels any pending
-    /// open and starts the 150 ms close timer if a submenu is open.
-    LeaveContextSubmenu,
-    /// Hover entered the open submenu panel — cancels the close timer
-    /// so the panel stays visible while the cursor traverses it.
-    EnterContextSubmenuPanel,
-    /// Hover left the open submenu panel — starts the close timer.
-    LeaveContextSubmenuPanel,
-    /// 50 ms tick fired by the subscription while the context menu is
-    /// open; promotes a mature `pending_submenu` into an actual open
-    /// and a mature `pending_submenu_close` into an actual close.
-    TickContextSubmenuHover,
-    ContextAction(ContextAction),
     /// Preferences modal message family — namespaced (ADR-0001 D3).
     /// Routed to `dispatch_preferences_message`.
     Preferences(PreferencesMsg),
@@ -741,6 +709,53 @@ pub enum RemoveMsg {
     Confirm(RemoveChoice),
     /// Dismiss the Remove modal without applying.
     Close,
+}
+
+/// Context-menu subsystem message family (ADR-0001 D3). Namespaced
+/// under `Message::ContextMenu` and routed to
+/// `dispatch_context_menu_message`. Covers the canvas right-click
+/// menu, the Projects-panel tree right-click menu, the document-tab
+/// right-click menu, and the shared submenu hover/open state machine.
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub enum ContextMenuMsg {
+    Show(f32, f32),
+    Close,
+    Action(ContextAction),
+    /// Right-click landed on a specific tree node — open the per-node
+    /// context menu at `last_mouse_pos`. `path = None` → background menu.
+    ShowProjectTree(Option<Vec<usize>>),
+    /// Dismiss the Projects-panel tree context menu.
+    CloseProjectTree,
+    /// Menu item picked — route the action.
+    ProjectTreeAction(ProjectTreeAction),
+    /// Right-click on a document tab — open the per-tab context menu
+    /// at `last_mouse_pos`. Carries the clicked tab's index.
+    ShowTab(usize),
+    /// Dismiss the document-tab right-click menu.
+    CloseTab,
+    /// Menu item picked — route the action.
+    TabAction(TabContextAction),
+    /// Expand a click-to-open submenu inside the right-click context
+    /// menu (Place or Align). Toggles off when the same kind is fired
+    /// twice, otherwise replaces the current submenu.
+    SubmenuOpen(ContextSubmenu),
+    /// Hover entered a submenu launcher row — start the 200 ms
+    /// hover-open timer for that submenu (and cancel any pending
+    /// close).
+    SubmenuHover(ContextSubmenu),
+    /// Hover left the submenu launcher row — cancels any pending
+    /// open and starts the 150 ms close timer if a submenu is open.
+    SubmenuLeave,
+    /// Hover entered the open submenu panel — cancels the close timer
+    /// so the panel stays visible while the cursor traverses it.
+    SubmenuEnterPanel,
+    /// Hover left the open submenu panel — starts the close timer.
+    SubmenuLeavePanel,
+    /// 50 ms tick fired by the subscription while the context menu is
+    /// open; promotes a mature `pending_submenu` into an actual open
+    /// and a mature `pending_submenu_close` into an actual close.
+    SubmenuTickHover,
 }
 
 /// Per-shape edit descriptor. The Properties panel dispatches one of

@@ -19,7 +19,7 @@ pub use grid::GridState;
 #[allow(deprecated)]
 use crate::schematic_runtime::SchematicSheetExt as _;
 
-use crate::app::Message;
+use crate::app::{ContextMenuMsg, Message};
 
 // ─── Canvas State (per-canvas mutable state) ──────────────────
 
@@ -591,8 +591,8 @@ impl canvas::Program<Message> for SchematicCanvas {
                     if let Some(cursor_pos) = cursor.position_in(bounds) {
                         let screen_x = bounds.x + cursor_pos.x;
                         let screen_y = bounds.y + cursor_pos.y;
-                        return Some(canvas::Action::publish(Message::ShowContextMenu(
-                            screen_x, screen_y,
+                        return Some(canvas::Action::publish(Message::ContextMenu(
+                            ContextMenuMsg::Show(screen_x, screen_y),
                         )));
                     }
                 }
@@ -630,7 +630,10 @@ impl canvas::Program<Message> for SchematicCanvas {
                         // normally.
                         if pan_just_started {
                             return Some(
-                                canvas::Action::publish(Message::CloseContextMenu).and_capture(),
+                                canvas::Action::publish(Message::ContextMenu(
+                                    ContextMenuMsg::Close,
+                                ))
+                                .and_capture(),
                             );
                         }
                         return Some(

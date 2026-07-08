@@ -74,7 +74,7 @@ impl Signex {
                 if !is_main {
                     return Task::none();
                 }
-                Task::done(Message::ShowTabContextMenu(idx))
+                Task::done(Message::ContextMenu(ContextMenuMsg::ShowTab(idx)))
             }
             TabMessage::StartDrag(idx, x, y) => {
                 // Drag-to-reorder / drag-out-to-detach originates only

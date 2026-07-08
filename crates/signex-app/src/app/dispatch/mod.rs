@@ -79,30 +79,16 @@ impl Signex {
             | Message::DismissFirstRunTour
             | Message::FindReplaceMsg(_)
             | Message::ActiveBar(_)
-            | Message::ShowContextMenu(_, _)
-            | Message::CloseContextMenu
-            | Message::ShowProjectTreeContextMenu(_)
-            | Message::CloseProjectTreeContextMenu
-            | Message::ProjectTreeAction(_)
-            | Message::ShowTabContextMenu(_)
-            | Message::CloseTabContextMenu
-            | Message::TabContextAction(_)
             | Message::ProjectCloseConfirm(_)
             | Message::AppQuitConfirm(_)
             | Message::AddExistingFilePicked { .. }
             | Message::AddNewSchematicPicked { .. }
             | Message::CloseProjectOptions
-            | Message::OpenContextSubmenu(_)
-            | Message::HoverContextSubmenu(_)
-            | Message::LeaveContextSubmenu
-            | Message::EnterContextSubmenuPanel
-            | Message::LeaveContextSubmenuPanel
-            | Message::TickContextSubmenuHover
-            | Message::ContextAction(_)
             | Message::ModalDragStart { .. }
             | Message::ModalDragEnd
             | Message::FocusAt { .. }
             | Message::ToggleAutoFocus => self.dispatch_overlay_message(message),
+            Message::ContextMenu(msg) => self.dispatch_context_menu_message(msg),
             Message::Annotate(msg) => self.dispatch_annotate_message(msg),
             Message::Erc(msg) => self.dispatch_erc_message(msg),
             Message::Preferences(msg) => self.dispatch_preferences_message(msg),
