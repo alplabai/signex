@@ -135,6 +135,11 @@ pub struct UiState {
     /// Global cursor into the flattened ERC diagnostics list spanning all
     /// sheets in `erc_violations_by_path`. Used by next/prev navigation.
     pub erc_focus_global_index: Option<usize>,
+    /// Cached authoritative project netlist (ADR-0002 D7). Derived state, held
+    /// like any other Model state: recomputed in `update` off the shared sheet
+    /// view and invalidated whenever a schematic edit touches connectivity
+    /// (`finish_schematic_mutation`). `None` means "recompute before next use".
+    pub project_netlist: Option<signex_net::ProjectNetlist>,
     /// Per-rule severity override — if empty, the rule's default is used.
     pub erc_severity_override:
         std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,

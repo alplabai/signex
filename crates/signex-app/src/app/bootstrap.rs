@@ -144,6 +144,7 @@ impl Signex {
                 erc_violations: Vec::new(),
                 erc_violations_by_path: std::collections::HashMap::new(),
                 erc_focus_global_index: None,
+                project_netlist: None,
                 erc_severity_override: crate::fonts::read_erc_severity_overrides(),
                 net_colors: std::collections::HashMap::new(),
                 auto_focus: false,

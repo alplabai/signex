@@ -102,6 +102,7 @@ fn main() {
     let ctx = ExportContext {
         sheets: snapshots,
         metadata,
+        netlist: None,
     };
 
     println!();

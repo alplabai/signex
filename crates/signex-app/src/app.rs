@@ -22,6 +22,7 @@ mod helpers;
 mod load_gateway;
 mod mutation_gateway;
 mod pcb_dirty_adapter;
+pub(crate) mod project_sheets;
 mod runtime;
 mod selection_request;
 mod state;

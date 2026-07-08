@@ -36,16 +36,11 @@ impl Signex {
         let mut by_path: std::collections::HashMap<std::path::PathBuf, Vec<signex_erc::Violation>> =
             std::collections::HashMap::new();
 
-        // First pass: collect every sheet's snapshot keyed by BOTH its
-        // absolute path AND its bare filename. BadHierSheetPin looks up
-        // children by the filename stored on the parent's sheet symbol,
-        // which is often just the basename (e.g. "power.standard_sch").
+        // First pass: collect every project sheet's snapshot keyed by its
+        // absolute path (live engine snapshots for open tabs, disk parses for
+        // the rest).
         let mut snapshots_by_path: std::collections::HashMap<
             std::path::PathBuf,
-            crate::schematic_runtime::SchematicRenderSnapshot,
-        > = std::collections::HashMap::new();
-        let mut children: std::collections::HashMap<
-            String,
             crate::schematic_runtime::SchematicRenderSnapshot,
         > = std::collections::HashMap::new();
 
@@ -60,32 +55,11 @@ impl Signex {
             .active_loaded_project()
             .and_then(|p| p.path.parent().map(std::path::PathBuf::from));
 
-        let push_snap = |path: std::path::PathBuf,
-                         snap: crate::schematic_runtime::SchematicRenderSnapshot,
-                         by_path_out: &mut std::collections::HashMap<
-            std::path::PathBuf,
-            crate::schematic_runtime::SchematicRenderSnapshot,
-        >,
-                         children_out: &mut std::collections::HashMap<
-            String,
-            crate::schematic_runtime::SchematicRenderSnapshot,
-        >| {
-            if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
-                children_out.insert(name.to_string(), snap.clone());
-            }
-            by_path_out.insert(path, snap);
-        };
-
         // Active tab.
         if let Some(tab) = self.document_state.tabs.get(self.document_state.active_tab)
             && let Some(snapshot) = self.active_render_snapshot()
         {
-            push_snap(
-                tab.path.clone(),
-                snapshot.clone(),
-                &mut snapshots_by_path,
-                &mut children,
-            );
+            snapshots_by_path.insert(tab.path.clone(), snapshot.clone());
         }
         // Cached tabs — engines for every open schematic tab live in
         // `document_state.engines`, keyed by path. The active one was
@@ -95,13 +69,7 @@ impl Signex {
                 continue;
             }
             if let Some(engine) = self.document_state.engines.get(&tab.path) {
-                let snapshot = engine.document().clone();
-                push_snap(
-                    tab.path.clone(),
-                    snapshot,
-                    &mut snapshots_by_path,
-                    &mut children,
-                );
+                snapshots_by_path.insert(tab.path.clone(), engine.document().clone());
             }
         }
         // Unopened project sheets.
@@ -122,10 +90,14 @@ impl Signex {
                 else {
                     continue;
                 };
-                let snapshot = parsed.clone();
-                push_snap(path, snapshot, &mut snapshots_by_path, &mut children);
+                snapshots_by_path.insert(path, parsed);
             }
         }
+
+        // The child sheet-map keyed by the exact `ChildSheet.filename` each
+        // parent references (not the bare basename) — the shared view the
+        // netlist stitcher and ERC's `BadHierSheetPin` both read (ADR-0002 D8).
+        let children = crate::app::project_sheets::project_children_map(&snapshots_by_path);
 
         // Second pass: run ERC with the shared children map so
         // BadHierSheetPin can cross-check each sheet symbol against

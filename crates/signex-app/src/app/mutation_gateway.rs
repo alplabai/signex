@@ -229,6 +229,14 @@ impl Signex {
         if update_selection_info {
             self.update_selection_info();
         }
+        // Invalidate + re-derive the cached project netlist when this edit
+        // touched connectivity (ADR-0002 D7). Same electrical bits that drive
+        // net membership — deliberately including no-connects and buses, which
+        // `point_is_connected` reads.
+        if invalidation.intersects(Self::netlist_render_mask()) {
+            self.ui_state.project_netlist = None;
+            self.refresh_project_netlist();
+        }
         // Re-derive panel context — `tab.dirty` has just transitioned
         // false→true (or stayed true), and `panel_ctx.projects[*].sheets[*]
         // .is_dirty` is what drives the red dot on the project-tree row.
@@ -236,5 +244,162 @@ impl Signex {
         // unrelated event that happens to call `refresh_panel_ctx`.
         self.refresh_panel_ctx();
         true
+    }
+
+    /// The `RenderInvalidation` bits that mean project connectivity changed, so
+    /// the cached netlist must be re-derived. Mirrors the electrical
+    /// `DocumentPatch` bits: symbols, wires, labels, junctions, child sheets,
+    /// and — easy to miss — no-connects and buses, which `point_is_connected`
+    /// reads when deciding whether a pin lands on a net.
+    fn netlist_render_mask() -> crate::schematic_runtime::RenderInvalidation {
+        use crate::schematic_runtime::RenderInvalidation as R;
+        R::SYMBOLS
+            | R::WIRES
+            | R::LABELS
+            | R::JUNCTIONS
+            | R::CHILD_SHEETS
+            | R::NO_CONNECTS
+            | R::BUSES
+            | R::BUS_ENTRIES
+    }
+
+    /// Gather every project sheet as `path → schematic` from the live engines,
+    /// plus any unopened project sheets parsed from disk — the input to the
+    /// shared child sheet-map ([`crate::app::project_sheets::project_children_map`]).
+    fn assemble_project_snapshots(
+        &self,
+    ) -> std::collections::HashMap<std::path::PathBuf, signex_types::schematic::SchematicSheet>
+    {
+        let mut by_path = std::collections::HashMap::new();
+        for (path, engine) in &self.document_state.engines {
+            by_path.insert(path.clone(), engine.document().clone());
+        }
+        if let Some(project) = self.document_state.active_loaded_project() {
+            let project_root = project.path.parent().map(std::path::PathBuf::from);
+            for sheet in &project.data.sheets {
+                let path = match project_root.as_ref() {
+                    Some(root) => root.join(&sheet.filename),
+                    None => std::path::PathBuf::from(&sheet.filename),
+                };
+                if by_path.contains_key(&path) {
+                    continue;
+                }
+                if let Ok(text) = std::fs::read_to_string(&path)
+                    && let Ok(parsed) =
+                        signex_types::format::SnxSchematic::parse(&text).map(|snx| snx.sheet)
+                {
+                    by_path.insert(path, parsed);
+                }
+            }
+        }
+        by_path
+    }
+
+    /// Re-derive the cached project netlist off the shared sheet view (rooted at
+    /// the active sheet) and surface any stitch issues in the Messages panel.
+    /// A cheap no-op while the cache is still valid.
+    pub(crate) fn refresh_project_netlist(&mut self) {
+        if self.ui_state.project_netlist.is_some() {
+            return;
+        }
+        let Some(active_path) = self.document_state.active_path.clone() else {
+            return;
+        };
+        let by_path = self.assemble_project_snapshots();
+        let Some(root) = by_path.get(&active_path).cloned() else {
+            return;
+        };
+        let children = crate::app::project_sheets::project_children_map(&by_path);
+        let project_dir = self
+            .document_state
+            .active_loaded_project()
+            .map(|p| std::path::PathBuf::from(&p.data.dir));
+        let root_filename =
+            crate::app::project_sheets::root_reference_name(&active_path, project_dir.as_deref());
+        let result = signex_net::build_project_netlist(&root, &children, root_filename.as_deref());
+        for issue in &result.issues {
+            crate::diagnostics::log_warning(stitch_issue_message(issue));
+        }
+        self.ui_state.project_netlist = Some(result);
+    }
+}
+
+/// A one-line, user-facing message for a cross-sheet stitch issue (ADR-0002 D7,
+/// part 3) — shown in the Messages panel alongside other diagnostics.
+fn stitch_issue_message(issue: &signex_net::StitchIssue) -> String {
+    use signex_net::StitchIssue as I;
+    match issue {
+        I::MissingChild {
+            parent_path,
+            sheet_name,
+            filename,
+        } => format!(
+            "Netlist: sheet '{sheet_name}' on '{parent_path}' references a child '{filename}' that could not be found"
+        ),
+        I::SheetCycle {
+            parent_path,
+            filename,
+        } => format!("Netlist: sheet cycle — '{parent_path}' re-enters '{filename}'"),
+        I::DuplicateSheetUuid {
+            filename_a,
+            filename_b,
+        } => format!(
+            "Netlist: sheets '{filename_a}' and '{filename_b}' share a UUID (copied as a template?)"
+        ),
+        I::SharedReferenceAcrossInstances {
+            filename,
+            reference,
+        } => format!(
+            "Netlist: reference '{reference}' in '{filename}' is shared across sheet instances"
+        ),
+        I::NameCollision { name } => {
+            format!(
+                "Netlist: two distinct nets are both named '{name}'; the later one was suffixed"
+            )
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signex_engine::DocumentPatch;
+
+    fn touches_netlist(patch: DocumentPatch) -> bool {
+        Signex::render_invalidation_for_patch(patch).intersects(Signex::netlist_render_mask())
+    }
+
+    #[test]
+    fn connectivity_edits_invalidate_the_netlist_cache() {
+        // Every bit that changes net membership must invalidate the cache —
+        // including the two the review flagged as easy to miss: no-connects and
+        // buses, which `point_is_connected` reads.
+        for bit in [
+            DocumentPatch::SYMBOLS,
+            DocumentPatch::WIRES,
+            DocumentPatch::LABELS,
+            DocumentPatch::JUNCTIONS,
+            DocumentPatch::CHILD_SHEETS,
+            DocumentPatch::NO_CONNECTS,
+            DocumentPatch::BUSES,
+            DocumentPatch::BUS_ENTRIES,
+        ] {
+            assert!(touches_netlist(bit), "{bit:?} must invalidate the netlist");
+        }
+    }
+
+    #[test]
+    fn non_connectivity_edits_leave_the_netlist_cache() {
+        for bit in [
+            DocumentPatch::TEXT_NOTES,
+            DocumentPatch::DRAWINGS,
+            DocumentPatch::LIB_SYMBOLS,
+            DocumentPatch::PAPER,
+        ] {
+            assert!(
+                !touches_netlist(bit),
+                "{bit:?} must not invalidate the netlist"
+            );
+        }
     }
 }
