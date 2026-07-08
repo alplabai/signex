@@ -43,17 +43,7 @@ impl Signex {
             | Message::CycleDrawMode
             | Message::CancelDrawing
             | Message::Tool(_) => self.dispatch_tool_message(message),
-            Message::DeleteSelected
-            | Message::Undo
-            | Message::Redo
-            | Message::RotateSelected
-            | Message::MirrorSelectedX
-            | Message::MirrorSelectedY
-            | Message::Cut
-            | Message::Copy
-            | Message::Paste
-            | Message::SmartPaste
-            | Message::Duplicate => self.dispatch_document_message(message),
+            Message::Edit(msg) => self.dispatch_edit_message(msg),
             Message::File(msg) => self.dispatch_file_message(msg),
             Message::Export(msg) => self.dispatch_export_message(msg),
             Message::PrintPreview(msg) => self.dispatch_print_preview_message(msg),

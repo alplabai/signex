@@ -243,19 +243,15 @@ impl Signex {
                 self.interaction_state.submenu_panel_hovered = false;
                 self.interaction_state.submenu_unhovered_since = None;
                 match action {
-                    ContextAction::Copy => self.dispatch_document_message(Message::Copy),
-                    ContextAction::Cut => self.dispatch_document_message(Message::Cut),
-                    ContextAction::Paste => self.dispatch_document_message(Message::Paste),
-                    ContextAction::SmartPaste => {
-                        self.dispatch_document_message(Message::SmartPaste)
-                    }
+                    ContextAction::Copy => self.dispatch_edit_message(EditMsg::Copy),
+                    ContextAction::Cut => self.dispatch_edit_message(EditMsg::Cut),
+                    ContextAction::Paste => self.dispatch_edit_message(EditMsg::Paste),
+                    ContextAction::SmartPaste => self.dispatch_edit_message(EditMsg::SmartPaste),
                     ContextAction::OpenChildSheet => {
                         self.open_selected_child_sheet();
                         Task::none()
                     }
-                    ContextAction::Delete => {
-                        self.dispatch_document_message(Message::DeleteSelected)
-                    }
+                    ContextAction::Delete => self.dispatch_edit_message(EditMsg::DeleteSelected),
                     ContextAction::SelectAll => self.dispatch_routed_message(Message::Selection(
                         selection_request::SelectionRequest::SelectAll,
                     )),
@@ -263,14 +259,10 @@ impl Signex {
                         self.dispatch_ui_message(Message::CanvasEvent(CanvasEvent::FitAll))
                     }
                     ContextAction::RotateSelected => {
-                        self.dispatch_document_message(Message::RotateSelected)
+                        self.dispatch_edit_message(EditMsg::RotateSelected)
                     }
-                    ContextAction::MirrorX => {
-                        self.dispatch_document_message(Message::MirrorSelectedY)
-                    }
-                    ContextAction::MirrorY => {
-                        self.dispatch_document_message(Message::MirrorSelectedX)
-                    }
+                    ContextAction::MirrorX => self.dispatch_edit_message(EditMsg::MirrorSelectedY),
+                    ContextAction::MirrorY => self.dispatch_edit_message(EditMsg::MirrorSelectedX),
                     ContextAction::ActiveBar(active_bar_action) => {
                         self.handle_active_bar_action(active_bar_action)
                     }

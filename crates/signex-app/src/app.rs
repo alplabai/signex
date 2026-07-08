@@ -30,7 +30,7 @@ pub(crate) mod view;
 
 pub use contracts::{
     AnnotateMsg, AppQuitConfirmState, BomPreviewMsg, ContextAction, ContextMenuMsg,
-    ContextMenuState, ContextSubmenu, DragTarget, EnableVersionControlMsg,
+    ContextMenuState, ContextSubmenu, DragTarget, EditMsg, EnableVersionControlMsg,
     EnableVersionControlState, ErcMsg, ExportMsg, FileMsg, GridPickerState, GridPropertiesMsg,
     GridPropertiesState, Message, NetColorMsg, PreferencesMsg, PrintPreviewMsg, ProjectCloseChoice,
     ProjectCloseConfirmState, ProjectMsg, ProjectOptionsState, ProjectTreeAction,

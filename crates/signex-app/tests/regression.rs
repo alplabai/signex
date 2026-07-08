@@ -12,7 +12,7 @@
 //! still need a human eye.
 
 use signex_app::app::{
-    ContextMenuMsg, FileMsg, LoadedProject, Message, ProjectCloseChoice, ProjectMsg,
+    ContextMenuMsg, EditMsg, FileMsg, LoadedProject, Message, ProjectCloseChoice, ProjectMsg,
     ProjectTreeAction, RemoveChoice, RemoveDialogState, RemoveMsg, RenameDialogState, RenameMsg,
     Signex,
 };
@@ -3010,7 +3010,7 @@ fn editing_chamfer_len_propagates_through_solve() {
 /// Phase-5 helper — fresh `Signex` + a `FootprintEditorState` parked
 /// in `document_state.footprint_editors` for a `<stem>.snxfpt` path
 /// inside a tempdir. The active tab points at the editor with
-/// `TabKind::FootprintEditor` so the `Message::Undo`/`Redo` fork in
+/// `TabKind::FootprintEditor` so the `Message::Edit(EditMsg::Undo)`/`Redo` fork in
 /// `handle_undo_requested` resolves the editor via
 /// `active_footprint_editor_path()` and not the schematic engine.
 ///
@@ -3123,9 +3123,10 @@ fn set_pad_defaults(
 /// through `apply_footprint_primitive_edit`'s
 /// `mutates_footprint_state` gate, which classifies it as mutating
 /// state and calls `push_history()` first. A subsequent
-/// `Message::Undo` must restore the pre-place projection (one fewer
-/// pad + the parametric geometry the mirror minted gone). `Message::
-/// Redo` must roll forward to the post-place projection again.
+/// `Message::Edit(EditMsg::Undo)` must restore the pre-place projection
+/// (one fewer pad + the parametric geometry the mirror minted gone).
+/// `Message::Edit(EditMsg::Redo)` must roll forward to the post-place
+/// projection again.
 #[test]
 fn place_round_rect_then_undo_restores_pre_place_state() {
     use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
@@ -3166,17 +3167,17 @@ fn place_round_rect_then_undo_restores_pre_place_state() {
         after_place.parameters
     );
 
-    // Undo via Message::Undo — full dispatcher routing through
-    // `handle_undo_requested` → editor.undo().
-    let _ = app.update(Message::Undo);
+    // Undo via Message::Edit(EditMsg::Undo) — full dispatcher routing
+    // through `handle_undo_requested` → editor.undo().
+    let _ = app.update(Message::Edit(EditMsg::Undo));
     let after_undo = editor_state_proj(&app, &path);
     assert_eq!(
         after_undo, pre,
         "Ctrl+Z restores the full pre-place projection"
     );
 
-    // Redo via Message::Redo.
-    let _ = app.update(Message::Redo);
+    // Redo via Message::Edit(EditMsg::Redo).
+    let _ = app.update(Message::Edit(EditMsg::Redo));
     let after_redo = editor_state_proj(&app, &path);
     assert_eq!(
         after_redo, after_place,
@@ -3186,14 +3187,14 @@ fn place_round_rect_then_undo_restores_pre_place_state() {
 
 /// Phase-5 #8 — Drive a TangentArc gesture end-to-end via the
 /// dispatcher (no manual `tool_pending` seeding); then issue
-/// `Message::Undo`. Both clicks should roll back: the Arc, its
+/// `Message::Edit(EditMsg::Undo)`. Both clicks should roll back: the Arc, its
 /// auto-generated `TangentLineArc` constraint, and any anchor / centre
 /// Points the dispatcher minted on the way. The seed Line stays.
 ///
 /// The dispatcher's TangentArc handler emits two separate
 /// `mutates_footprint_state` messages (one per click), so the second
 /// click's `push_history` snapshot covers exactly the click-2 work
-/// (mint arc + tangent constraint). A single `Message::Undo` rolls
+/// (mint arc + tangent constraint). A single `Message::Edit(EditMsg::Undo)` rolls
 /// back that one snapshot — the click-1 mint stays. We test that
 /// behaviour here: a single Undo must remove the arc + constraint
 /// without disturbing the seed Line.
@@ -3310,9 +3311,9 @@ fn ctrl_z_during_tangent_arc_undoes_last_segment() {
         );
     }
 
-    // Undo via Message::Undo — should roll back ONLY the click-2
-    // snapshot, leaving the seed Line + Points intact.
-    let _ = app.update(Message::Undo);
+    // Undo via Message::Edit(EditMsg::Undo) — should roll back ONLY the
+    // click-2 snapshot, leaving the seed Line + Points intact.
+    let _ = app.update(Message::Edit(EditMsg::Undo));
 
     let after_undo = editor_state_proj(&app, &path);
     assert_eq!(
@@ -3442,7 +3443,7 @@ fn placement_input_does_not_corrupt_history_on_undo() {
     // away (rollback to before-click-2 snapshot). placement_input
     // must STAY None — snapshot intentionally omits it so the
     // transient buffer doesn't leak across undo boundaries.
-    let _ = app.update(Message::Undo);
+    let _ = app.update(Message::Edit(EditMsg::Undo));
     let editor = app.document_state.footprint_editors.get(&path).unwrap();
     let sketch = editor.file.footprints[0].sketch.as_ref().unwrap();
     let line_count = sketch
@@ -3460,7 +3461,7 @@ fn placement_input_does_not_corrupt_history_on_undo() {
 
     // A second undo rolls back the first click as well, restoring
     // the pre-click projection (only the placeholder Point).
-    let _ = app.update(Message::Undo);
+    let _ = app.update(Message::Edit(EditMsg::Undo));
     let after_two_undos = editor_state_proj(&app, &path);
     assert_eq!(
         after_two_undos, pre,
@@ -3470,7 +3471,7 @@ fn placement_input_does_not_corrupt_history_on_undo() {
 
 /// Phase-5 #10 — Place a RoundRect pad, dispatch
 /// `FootprintSketchUnlinkCornerRadius` for one of its corner Arcs,
-/// then issue `Message::Undo`. The unlink action's snapshot should
+/// then issue `Message::Edit(EditMsg::Undo)`. The unlink action's snapshot should
 /// roll back: the per-corner override key (e.g. `corner_r_ne`) is
 /// removed, the per-corner sketch parameter is dropped, and only the
 /// shared `corner_r` binding survives.
@@ -3562,7 +3563,7 @@ fn place_round_rect_then_select_arc_unlink_then_undo_restores_link() {
     );
 
     // Undo — per-corner override goes away; only shared survives.
-    let _ = app.update(Message::Undo);
+    let _ = app.update(Message::Edit(EditMsg::Undo));
 
     let editor = app.document_state.footprint_editors.get(&path).unwrap();
     let pad = &editor.state.pads[0];

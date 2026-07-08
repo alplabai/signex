@@ -3,9 +3,13 @@ use iced::Task;
 use super::super::*;
 
 impl Signex {
-    pub(super) fn dispatch_document_message(&mut self, message: Message) -> Task<Message> {
-        match message {
-            Message::DeleteSelected => {
+    /// Edit-command message handler (namespaced family, ADR-0001 D3).
+    /// Delete / undo / redo / rotate / mirror / clipboard (copy, cut,
+    /// paste, smart-paste) / duplicate. Routed from `dispatch_update`
+    /// via `Message::Edit`.
+    pub(crate) fn dispatch_edit_message(&mut self, msg: EditMsg) -> Task<Message> {
+        match msg {
+            EditMsg::DeleteSelected => {
                 // v0.20 — if the active tab is a footprint editor,
                 // route the Delete key to FootprintDeleteSelected so
                 // the selected pad / silk graphic is removed via the
@@ -32,44 +36,43 @@ impl Signex {
                 }
                 self.finish_update()
             }
-            Message::Undo => {
+            EditMsg::Undo => {
                 self.handle_undo_requested();
                 self.finish_update()
             }
-            Message::Redo => {
+            EditMsg::Redo => {
                 self.handle_redo_requested();
                 self.finish_update()
             }
-            Message::RotateSelected => {
+            EditMsg::RotateSelected => {
                 self.handle_selection_rotate_requested();
                 self.finish_update()
             }
-            Message::MirrorSelectedX => {
+            EditMsg::MirrorSelectedX => {
                 self.handle_selection_mirror_x_requested();
                 self.finish_update()
             }
-            Message::MirrorSelectedY => {
+            EditMsg::MirrorSelectedY => {
                 self.handle_selection_mirror_y_requested();
                 self.finish_update()
             }
-            Message::Cut => self.handle_selection_cut_requested(),
-            Message::Copy => {
+            EditMsg::Cut => self.handle_selection_cut_requested(),
+            EditMsg::Copy => {
                 self.handle_selection_copy_requested();
                 self.finish_update()
             }
-            Message::Paste => {
+            EditMsg::Paste => {
                 self.handle_clipboard_paste_requested();
                 self.finish_update()
             }
-            Message::SmartPaste => {
+            EditMsg::SmartPaste => {
                 self.handle_clipboard_smart_paste_requested();
                 self.finish_update()
             }
-            Message::Duplicate => {
+            EditMsg::Duplicate => {
                 self.handle_selection_duplicate_requested();
                 self.finish_update()
             }
-            _ => unreachable!("dispatch_document_message received non-document message"),
         }
     }
 

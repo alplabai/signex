@@ -88,10 +88,10 @@ impl Signex {
                 self.update(Message::Tool(ToolMessage::SelectTool(Tool::Circle)))
             }
             ActiveBarAction::RotateSelection | ActiveBarAction::RotateSelectionCW => {
-                self.update(Message::RotateSelected)
+                self.update(Message::Edit(EditMsg::RotateSelected))
             }
-            ActiveBarAction::FlipSelectedX => self.update(Message::MirrorSelectedX),
-            ActiveBarAction::FlipSelectedY => self.update(Message::MirrorSelectedY),
+            ActiveBarAction::FlipSelectedX => self.update(Message::Edit(EditMsg::MirrorSelectedX)),
+            ActiveBarAction::FlipSelectedY => self.update(Message::Edit(EditMsg::MirrorSelectedY)),
             // "Select → Connection": if a wire/bus/junction/label is already
             // selected, expand immediately. Otherwise fall through to Select
             // tool so the next click triggers the net walk via the hit-test

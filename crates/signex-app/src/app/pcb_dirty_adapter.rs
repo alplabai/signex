@@ -18,7 +18,7 @@ const PCB_EVENTS_WIDE_MUTATION: &[PcbAppEvent] = &[
 pub(crate) fn pcb_renderer_events_for_message(message: &Message) -> &'static [PcbAppEvent] {
     match message {
         Message::ThemeChanged(_) => PCB_EVENTS_THEME,
-        Message::Undo | Message::Redo => PCB_EVENTS_WIDE_MUTATION,
+        Message::Edit(EditMsg::Undo | EditMsg::Redo) => PCB_EVENTS_WIDE_MUTATION,
         Message::CanvasEvent(CanvasEvent::MoveSelected { .. })
         | Message::CanvasEventInWindow {
             event: CanvasEvent::MoveSelected { .. },

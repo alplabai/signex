@@ -718,21 +718,21 @@ impl Signex {
                             }
                             // Delete selected
                             (keyboard::Key::Named(keyboard::key::Named::Delete), _) => {
-                                Message::DeleteSelected
+                                Message::Edit(EditMsg::DeleteSelected)
                             }
                             // Undo/Redo
                             (keyboard::Key::Character(c), m)
                                 if c == "z" && m.command() && !m.shift() =>
                             {
-                                Message::Undo
+                                Message::Edit(EditMsg::Undo)
                             }
                             (keyboard::Key::Character(c), m) if c == "y" && m.command() => {
-                                Message::Redo
+                                Message::Edit(EditMsg::Redo)
                             }
                             (keyboard::Key::Character(c), m)
                                 if c.eq_ignore_ascii_case("z") && m.command() && m.shift() =>
                             {
-                                Message::Redo
+                                Message::Edit(EditMsg::Redo)
                             }
                             // Shift+Space: cycle draw mode (90-degree -> 45-degree -> Free)
                             (keyboard::Key::Named(keyboard::key::Named::Space), m) if m.shift() => {
@@ -740,15 +740,15 @@ impl Signex {
                             }
                             // Space: rotate selected symbol (Altium convention)
                             (keyboard::Key::Named(keyboard::key::Named::Space), _) => {
-                                Message::RotateSelected
+                                Message::Edit(EditMsg::RotateSelected)
                             }
                             // Mirror: X key = horizontal flip (left-right) = Standard mirror_y
                             //         Y key = vertical flip (top-bottom) = Standard mirror_x
                             (keyboard::Key::Character(c), m) if c == "x" && !m.command() => {
-                                Message::MirrorSelectedY // X key = horizontal flip = toggle mirror_y
+                                Message::Edit(EditMsg::MirrorSelectedY) // X key = horizontal flip = toggle mirror_y
                             }
                             (keyboard::Key::Character(c), m) if c == "y" && !m.command() => {
-                                Message::MirrorSelectedX // Y key = vertical flip = toggle mirror_x
+                                Message::Edit(EditMsg::MirrorSelectedX) // Y key = vertical flip = toggle mirror_x
                             }
                             // Ctrl+S save
                             (keyboard::Key::Character(c), m) if c == "s" && m.command() => {
@@ -802,24 +802,24 @@ impl Signex {
                             }
                             // Ctrl+C copy, Ctrl+X cut
                             (keyboard::Key::Character(c), m) if c == "c" && m.command() => {
-                                Message::Copy
+                                Message::Edit(EditMsg::Copy)
                             }
                             (keyboard::Key::Character(c), m) if c == "x" && m.command() => {
-                                Message::Cut
+                                Message::Edit(EditMsg::Cut)
                             }
                             // Shift+Ctrl+V smart paste
                             (keyboard::Key::Character(c), m)
                                 if c.eq_ignore_ascii_case("v") && m.command() && m.shift() =>
                             {
-                                Message::SmartPaste
+                                Message::Edit(EditMsg::SmartPaste)
                             }
                             // Ctrl+V paste
                             (keyboard::Key::Character(c), m) if c == "v" && m.command() => {
-                                Message::Paste
+                                Message::Edit(EditMsg::Paste)
                             }
                             // Ctrl+D duplicate
                             (keyboard::Key::Character(c), m) if c == "d" && m.command() => {
-                                Message::Duplicate
+                                Message::Edit(EditMsg::Duplicate)
                             }
                             // Shift+Ctrl+G -- toggle grid visibility
                             (keyboard::Key::Character(c), m)

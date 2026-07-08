@@ -74,18 +74,10 @@ pub enum Message {
     /// File / save message family (ADR-0001 D3). Namespaced under
     /// `Message::File` and routed to `dispatch_file_message`.
     File(FileMsg),
-    DeleteSelected,
-    Undo,
-    Redo,
-    RotateSelected,
-    MirrorSelectedX,
-    MirrorSelectedY,
+    /// Edit-command message family (ADR-0001 D3). Namespaced under
+    /// `Message::Edit` and routed to `dispatch_edit_message`.
+    Edit(EditMsg),
     Selection(SelectionRequest),
-    Copy,
-    Cut,
-    Paste,
-    SmartPaste,
-    Duplicate,
     CycleDrawMode,
     CancelDrawing,
     TogglePanelList,
@@ -801,6 +793,37 @@ pub enum ProjectMsg {
         rel_path: std::path::PathBuf,
         result: Result<String, String>,
     },
+}
+
+/// Edit-command message family (ADR-0001 D3). Namespaced under
+/// `Message::Edit` and routed to `dispatch_edit_message`.
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub enum EditMsg {
+    /// Delete the current selection. In a footprint editor this routes
+    /// to the footprint dispatcher's `DeleteSelected`; otherwise the
+    /// schematic engine removes the selected elements.
+    DeleteSelected,
+    /// Undo the most recent edit.
+    Undo,
+    /// Redo the most recently undone edit.
+    Redo,
+    /// Rotate the current selection.
+    RotateSelected,
+    /// Mirror the current selection about the X axis.
+    MirrorSelectedX,
+    /// Mirror the current selection about the Y axis.
+    MirrorSelectedY,
+    /// Copy the current selection to the clipboard.
+    Copy,
+    /// Cut the current selection to the clipboard.
+    Cut,
+    /// Paste the clipboard contents.
+    Paste,
+    /// Smart-paste the clipboard contents.
+    SmartPaste,
+    /// Duplicate the current selection in place.
+    Duplicate,
 }
 
 /// Per-shape edit descriptor. The Properties panel dispatches one of
