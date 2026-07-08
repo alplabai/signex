@@ -915,6 +915,53 @@ mod tests {
     }
 
     #[test]
+    fn membership_aggregates_across_sheet_occurrences() {
+        // D3.1 cross-sheet: a net stitched from a Global label on two sheets
+        // carries the wire uuids from *both* occurrences, so the net-flood
+        // highlights the whole net project-wide — not just the clicked sheet.
+        let rw = Uuid::from_u128(0x11);
+        let cw = Uuid::from_u128(0x22);
+
+        let mut root = empty_sheet();
+        root.wires.push(Wire {
+            uuid: rw,
+            start: pt(0.0, 0.0),
+            end: pt(10.0, 0.0),
+            stroke_width: 0.0,
+        });
+        root.labels
+            .push(label("NET5V", pt(0.0, 0.0), LabelType::Global));
+        add_lib(&mut root, "R");
+        place(&mut root, "R1", "R", pt(10.0, 0.0));
+        root.child_sheets
+            .push(child_sheet("A", "a.sch", Vec::new()));
+
+        let mut child = empty_sheet();
+        child.wires.push(Wire {
+            uuid: cw,
+            start: pt(0.0, 0.0),
+            end: pt(10.0, 0.0),
+            stroke_width: 0.0,
+        });
+        child
+            .labels
+            .push(label("NET5V", pt(0.0, 0.0), LabelType::Global));
+        add_lib(&mut child, "R");
+        place(&mut child, "R2", "R", pt(10.0, 0.0));
+
+        let mut map = HashMap::new();
+        map.insert("a.sch".to_string(), child);
+        let p = build_project_netlist(&root, &map, None);
+        assert_eq!(p.netlist.nets.len(), 1, "same-name Global spans sheets");
+        let net = &p.netlist.nets[0];
+        assert!(
+            net.wires.contains(&rw) && net.wires.contains(&cw),
+            "both occurrences' wires belong to the net: {:?}",
+            net.wires
+        );
+    }
+
+    #[test]
     fn power_symbol_and_power_label_merge_across_sheets() {
         // Root: GND power-port symbol. Child: GND Power label. One net.
         let mut root = empty_sheet();
