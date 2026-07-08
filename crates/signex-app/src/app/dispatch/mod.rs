@@ -75,12 +75,8 @@ impl Signex {
             | Message::OpenPanel(_)
             | Message::OpenFind
             | Message::OpenReplace
-            | Message::OpenPreferences
-            | Message::ClosePreferences
             | Message::CloseKeyboardShortcuts
             | Message::DismissFirstRunTour
-            | Message::PreferencesNav(_)
-            | Message::PreferencesMsg(_)
             | Message::FindReplaceMsg(_)
             | Message::ActiveBar(_)
             | Message::ShowContextMenu(_, _)
@@ -93,18 +89,9 @@ impl Signex {
             | Message::TabContextAction(_)
             | Message::ProjectCloseConfirm(_)
             | Message::AppQuitConfirm(_)
-            | Message::RenameBufferChanged(_)
-            | Message::RenameSubmit
-            | Message::CloseRenameDialog
-            | Message::RemoveConfirm(_)
-            | Message::CloseRemoveDialog
             | Message::AddExistingFilePicked { .. }
             | Message::AddNewSchematicPicked { .. }
             | Message::CloseProjectOptions
-            | Message::EnableVersionControlToggleLfs
-            | Message::EnableVersionControlToggleItem(_)
-            | Message::EnableVersionControlConfirm
-            | Message::CloseEnableVersionControl
             | Message::OpenContextSubmenu(_)
             | Message::HoverContextSubmenu(_)
             | Message::LeaveContextSubmenu
@@ -118,6 +105,10 @@ impl Signex {
             | Message::ToggleAutoFocus => self.dispatch_overlay_message(message),
             Message::Annotate(msg) => self.dispatch_annotate_message(msg),
             Message::Erc(msg) => self.dispatch_erc_message(msg),
+            Message::Preferences(msg) => self.dispatch_preferences_message(msg),
+            Message::EnableVersionControl(msg) => self.dispatch_enable_version_control_message(msg),
+            Message::Rename(msg) => self.dispatch_rename_message(msg),
+            Message::Remove(msg) => self.dispatch_remove_message(msg),
             Message::WindowResizedFor(id, w, h) => {
                 // Only main-window resizes drive layout math. Detached
                 // modal + undocked-tab windows have their own sizes

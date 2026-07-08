@@ -13,7 +13,7 @@
 
 use signex_app::app::{
     LoadedProject, Message, ProjectCloseChoice, ProjectTreeAction, RemoveChoice, RemoveDialogState,
-    RenameDialogState, Signex,
+    RemoveMsg, RenameDialogState, RenameMsg, Signex,
 };
 use signex_types::project::SheetEntry;
 
@@ -122,7 +122,7 @@ fn f6_project_rename_does_not_touch_companion_snxsch_snxpcb() {
     let companion_pcb = dir.join("OldProj.snxpcb");
 
     arm_project_rename(&mut app, &old_prj, "NewProj");
-    let _ = app.update(Message::RenameSubmit);
+    let _ = app.update(Message::Rename(RenameMsg::Submit));
 
     let new_prj = dir.join("NewProj.snxprj");
     assert!(!old_prj.exists(), "old .snxprj must be removed");
@@ -167,7 +167,7 @@ fn f6_project_rename_refuses_to_overwrite_existing_target() {
     fs::write(&collision, b"existing content").unwrap();
 
     arm_project_rename(&mut app, &old_prj, "Beta");
-    let _ = app.update(Message::RenameSubmit);
+    let _ = app.update(Message::Rename(RenameMsg::Submit));
 
     assert!(
         old_prj.exists(),
@@ -190,7 +190,7 @@ fn f6_project_rename_rejects_path_separators_in_buffer() {
     let (mut app, _tmp, old_prj) = fixture_project_with_companions("Gamma");
 
     arm_project_rename(&mut app, &old_prj, "../Escape");
-    let _ = app.update(Message::RenameSubmit);
+    let _ = app.update(Message::Rename(RenameMsg::Submit));
 
     assert!(old_prj.exists(), ".snxprj must remain untouched");
     let dlg = app
@@ -206,7 +206,7 @@ fn f6_project_rename_with_unchanged_stem_is_a_silent_noop() {
     let (mut app, _tmp, prj_path) = fixture_project_with_companions("Delta");
 
     arm_project_rename(&mut app, &prj_path, "Delta");
-    let _ = app.update(Message::RenameSubmit);
+    let _ = app.update(Message::Rename(RenameMsg::Submit));
 
     assert!(prj_path.exists(), "file remains at original path");
     assert!(
@@ -226,7 +226,9 @@ fn remove_with_delete_choice_unlinks_the_file() {
     assert!(target.exists());
 
     arm_remove_dialog(&mut app, &target);
-    let _ = app.update(Message::RemoveConfirm(RemoveChoice::DeleteFile));
+    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
+        RemoveChoice::DeleteFile,
+    )));
 
     assert!(
         !target.exists(),
@@ -241,7 +243,9 @@ fn remove_with_exclude_choice_keeps_the_file_on_disk() {
     assert!(target.exists());
 
     arm_remove_dialog(&mut app, &target);
-    let _ = app.update(Message::RemoveConfirm(RemoveChoice::ExcludeFromProject));
+    let _ = app.update(Message::Remove(RemoveMsg::Confirm(
+        RemoveChoice::ExcludeFromProject,
+    )));
 
     assert!(
         target.exists(),
@@ -386,7 +390,7 @@ fn project_rename_migrates_dirty_paths_to_new_path() {
     app.document_state.dirty_paths.insert(old_prj.clone());
 
     arm_project_rename(&mut app, &old_prj, "Lima");
-    let _ = app.update(Message::RenameSubmit);
+    let _ = app.update(Message::Rename(RenameMsg::Submit));
 
     let new_prj = tmp.path().join("Lima.snxprj");
     assert!(
@@ -502,11 +506,15 @@ fn rename_buffer_changed_updates_modal_buffer() {
     let (mut app, _tmp, prj_path) = fixture_project_with_companions("Papa");
     arm_project_rename(&mut app, &prj_path, "");
 
-    let _ = app.update(Message::RenameBufferChanged("PartialName".into()));
+    let _ = app.update(Message::Rename(RenameMsg::BufferChanged(
+        "PartialName".into(),
+    )));
     let dlg = app.ui_state.rename_dialog.as_ref().unwrap();
     assert_eq!(dlg.buffer, "PartialName");
 
-    let _ = app.update(Message::RenameBufferChanged("LongerName".into()));
+    let _ = app.update(Message::Rename(RenameMsg::BufferChanged(
+        "LongerName".into(),
+    )));
     let dlg = app.ui_state.rename_dialog.as_ref().unwrap();
     assert_eq!(dlg.buffer, "LongerName");
 }
@@ -516,7 +524,7 @@ fn close_rename_dialog_dismisses_modal_without_filesystem_changes() {
     let (mut app, _tmp, prj_path) = fixture_project_with_companions("Quebec");
     arm_project_rename(&mut app, &prj_path, "WouldBeRenamed");
 
-    let _ = app.update(Message::CloseRenameDialog);
+    let _ = app.update(Message::Rename(RenameMsg::Close));
 
     assert!(app.ui_state.rename_dialog.is_none(), "modal closed");
     assert!(
@@ -536,7 +544,7 @@ fn close_remove_dialog_dismisses_modal_without_filesystem_changes() {
     assert!(target.exists());
 
     arm_remove_dialog(&mut app, &target);
-    let _ = app.update(Message::CloseRemoveDialog);
+    let _ = app.update(Message::Remove(RemoveMsg::Close));
 
     assert!(app.ui_state.remove_dialog.is_none(), "modal closed");
     assert!(target.exists(), "no removal happened — file still there");

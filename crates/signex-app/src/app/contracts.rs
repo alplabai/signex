@@ -150,17 +150,12 @@ pub enum Message {
     /// confirmation modal, shown when the user tries to exit Signex
     /// while `dirty_paths` is non-empty. Reuses `ProjectCloseChoice`.
     AppQuitConfirm(ProjectCloseChoice),
-    /// Text input in the rename modal — updates the live buffer.
-    RenameBufferChanged(String),
-    /// Commit the rename: fs::rename + update in-memory sheet / tab
-    /// state. Errors surface in `RenameDialogState::error`.
-    RenameSubmit,
-    /// Dismiss the rename modal without applying.
-    CloseRenameDialog,
-    /// User picked Delete / Exclude in the Remove modal.
-    RemoveConfirm(RemoveChoice),
-    /// Dismiss the Remove modal without applying.
-    CloseRemoveDialog,
+    /// Rename modal message family — namespaced (ADR-0001 D3). Routed
+    /// to `dispatch_rename_message`.
+    Rename(RenameMsg),
+    /// Remove-from-project modal message family — namespaced (ADR-0001
+    /// D3). Routed to `dispatch_remove_message`.
+    Remove(RemoveMsg),
     /// Result of the `Add Existing to Project…` file picker. Carries
     /// the owning project's index plus the user's picks (`None` on
     /// cancel, otherwise one or more paths from `pick_files`) so the
@@ -179,19 +174,9 @@ pub enum Message {
     },
     /// Dismiss the Project Options metadata modal.
     CloseProjectOptions,
-    /// Toggle the LFS checkbox on the Enable Version Control modal.
-    EnableVersionControlToggleLfs,
-    /// Toggle the per-item "Track" checkbox on the Enable Version
-    /// Control modal. Index is into `EnableVersionControlState::items`.
-    /// Untracked items are written into a generated `.gitignore` at
-    /// confirm time so they sit outside the initial commit.
-    EnableVersionControlToggleItem(usize),
-    /// Confirm — runs `git init` + initial commit at the project
-    /// dir, refreshes the panel ctx so any in-tree dirty markers
-    /// reflect the new state.
-    EnableVersionControlConfirm,
-    /// Dismiss the Enable Version Control modal without writing.
-    CloseEnableVersionControl,
+    /// Enable Version Control modal message family — namespaced
+    /// (ADR-0001 D3). Routed to `dispatch_enable_version_control_message`.
+    EnableVersionControl(EnableVersionControlMsg),
     /// Expand a click-to-open submenu inside the right-click context
     /// menu (Place or Align). Toggles off when the same kind is fired
     /// twice, otherwise replaces the current submenu.
@@ -213,7 +198,9 @@ pub enum Message {
     /// and a mature `pending_submenu_close` into an actual close.
     TickContextSubmenuHover,
     ContextAction(ContextAction),
-    OpenPreferences,
+    /// Preferences modal message family — namespaced (ADR-0001 D3).
+    /// Routed to `dispatch_preferences_message`.
+    Preferences(PreferencesMsg),
     /// Close the Help ▸ Keyboard Shortcuts modal — fired by the close
     /// chrome ✕ and by Esc dismiss handling.
     CloseKeyboardShortcuts,
@@ -223,9 +210,6 @@ pub enum Message {
     DismissFirstRunTour,
     OpenFind,
     OpenReplace,
-    ClosePreferences,
-    PreferencesNav(crate::preferences::PrefNav),
-    PreferencesMsg(crate::preferences::PrefMsg),
     FindReplaceMsg(crate::find_replace::FindReplaceMsg),
     WindowResized(f32, f32),
     /// Resize event carrying the window id. Forwarded by the
@@ -696,6 +680,67 @@ pub enum ErcMsg {
     CloseDialog,
     /// Override the severity for a single rule from within the ERC dialog.
     SeverityChanged(signex_erc::RuleKind, signex_erc::Severity),
+}
+
+/// Preferences modal message family (ADR-0001 D3). Namespaced under
+/// `Message::Preferences` and routed to `dispatch_preferences_message`.
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub enum PreferencesMsg {
+    /// Open the Preferences modal.
+    Open,
+    /// Close the Preferences modal.
+    Close,
+    /// Navigate to a Preferences pane.
+    Nav(crate::preferences::PrefNav),
+    /// Forward an inner Preferences message to the pane handler.
+    Inner(crate::preferences::PrefMsg),
+}
+
+/// Enable Version Control modal message family (ADR-0001 D3).
+/// Namespaced under `Message::EnableVersionControl` and routed to
+/// `dispatch_enable_version_control_message`.
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub enum EnableVersionControlMsg {
+    /// Toggle the LFS checkbox on the Enable Version Control modal.
+    ToggleLfs,
+    /// Toggle the per-item "Track" checkbox on the Enable Version
+    /// Control modal. Index is into `EnableVersionControlState::items`.
+    /// Untracked items are written into a generated `.gitignore` at
+    /// confirm time so they sit outside the initial commit.
+    ToggleItem(usize),
+    /// Confirm — runs `git init` + initial commit at the project
+    /// dir, refreshes the panel ctx so any in-tree dirty markers
+    /// reflect the new state.
+    Confirm,
+    /// Dismiss the Enable Version Control modal without writing.
+    Close,
+}
+
+/// Rename modal message family (ADR-0001 D3). Namespaced under
+/// `Message::Rename` and routed to `dispatch_rename_message`.
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub enum RenameMsg {
+    /// Text input in the rename modal — updates the live buffer.
+    BufferChanged(String),
+    /// Commit the rename: fs::rename + update in-memory sheet / tab
+    /// state. Errors surface in `RenameDialogState::error`.
+    Submit,
+    /// Dismiss the rename modal without applying.
+    Close,
+}
+
+/// Remove-from-project modal message family (ADR-0001 D3). Namespaced
+/// under `Message::Remove` and routed to `dispatch_remove_message`.
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub enum RemoveMsg {
+    /// User picked Delete / Exclude in the Remove modal.
+    Confirm(RemoveChoice),
+    /// Dismiss the Remove modal without applying.
+    Close,
 }
 
 /// Per-shape edit descriptor. The Properties panel dispatches one of

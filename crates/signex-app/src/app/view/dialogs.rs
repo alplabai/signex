@@ -9,7 +9,10 @@ use iced::widget::{Column, Row, Space, button, column, container, row, scrollabl
 use iced::{Background, Border, Color, Element, Length, Theme};
 
 use crate::app::state::AnnotateOrder;
-use crate::app::{AnnotateMsg, BomPreviewMsg, ErcMsg, GridPropertiesMsg, Message, Signex};
+use crate::app::{
+    AnnotateMsg, BomPreviewMsg, EnableVersionControlMsg, ErcMsg, GridPropertiesMsg, Message,
+    RemoveMsg, RenameMsg, Signex,
+};
 
 const BACKDROP: Color = Color::from_rgba(0.0, 0.0, 0.0, 0.55);
 
@@ -900,7 +903,7 @@ impl Signex {
             row![
                 text(title).size(MODAL_HEADER_TITLE_SIZE).color(text_c),
                 Space::new().width(Length::Fill),
-                close_x_button(Message::CloseRenameDialog, theme_id, text_muted),
+                close_x_button(Message::Rename(RenameMsg::Close), theme_id, text_muted),
             ]
             .align_y(iced::Alignment::Center),
         )
@@ -942,8 +945,8 @@ impl Signex {
         let mut body: iced::widget::Column<'_, Message> = column![
             text(prompt).size(11).color(text_muted),
             text_input(placeholder, &st.buffer)
-                .on_input(Message::RenameBufferChanged)
-                .on_submit(Message::RenameSubmit)
+                .on_input(|s| Message::Rename(RenameMsg::BufferChanged(s)))
+                .on_submit(Message::Rename(RenameMsg::Submit))
                 .size(12)
                 .padding(6)
                 .width(Length::Fill),
@@ -961,9 +964,18 @@ impl Signex {
                 container(
                     row![
                         Space::new().width(Length::Fill),
-                        secondary_button("Cancel", Message::CloseRenameDialog, text_c, border_c),
+                        secondary_button(
+                            "Cancel",
+                            Message::Rename(RenameMsg::Close),
+                            text_c,
+                            border_c,
+                        ),
                         Space::new().width(8),
-                        primary_button("Rename", Some(Message::RenameSubmit), border_c),
+                        primary_button(
+                            "Rename",
+                            Some(Message::Rename(RenameMsg::Submit)),
+                            border_c
+                        ),
                     ]
                     .align_y(iced::Alignment::Center),
                 )
@@ -1091,7 +1103,11 @@ impl Signex {
                     .size(MODAL_HEADER_TITLE_SIZE)
                     .color(text_c),
                 Space::new().width(Length::Fill),
-                close_x_button(Message::CloseEnableVersionControl, theme_id, text_muted),
+                close_x_button(
+                    Message::EnableVersionControl(EnableVersionControlMsg::Close),
+                    theme_id,
+                    text_muted,
+                ),
             ]
             .align_y(iced::Alignment::Center),
         )
@@ -1127,7 +1143,9 @@ impl Signex {
             for (idx, item) in st.items.iter().enumerate() {
                 let cb: Element<'_, Message> = checkbox(item.tracked)
                     .size(13)
-                    .on_toggle(move |_| Message::EnableVersionControlToggleItem(idx))
+                    .on_toggle(move |_| {
+                        Message::EnableVersionControl(EnableVersionControlMsg::ToggleItem(idx))
+                    })
                     .into();
                 let row_widget = row![
                     cb,
@@ -1143,7 +1161,7 @@ impl Signex {
 
         let lfs_check: Element<'_, Message> = checkbox(st.use_lfs)
             .size(14)
-            .on_toggle(|_| Message::EnableVersionControlToggleLfs)
+            .on_toggle(|_| Message::EnableVersionControl(EnableVersionControlMsg::ToggleLfs))
             .into();
         let lfs_row = row![
             lfs_check,
@@ -1184,14 +1202,16 @@ impl Signex {
                         Space::new().width(Length::Fill),
                         secondary_button(
                             "Cancel",
-                            Message::CloseEnableVersionControl,
+                            Message::EnableVersionControl(EnableVersionControlMsg::Close),
                             text_c,
                             border_c,
                         ),
                         Space::new().width(8),
                         primary_button(
                             "Enable",
-                            Some(Message::EnableVersionControlConfirm),
+                            Some(Message::EnableVersionControl(
+                                EnableVersionControlMsg::Confirm
+                            )),
                             border_c,
                         ),
                     ]
@@ -1589,7 +1609,7 @@ impl Signex {
                     .size(MODAL_HEADER_TITLE_SIZE)
                     .color(text_c),
                 Space::new().width(Length::Fill),
-                close_x_button(Message::CloseRemoveDialog, theme_id, text_muted),
+                close_x_button(Message::Remove(RemoveMsg::Close), theme_id, text_muted),
             ]
             .align_y(iced::Alignment::Center),
         )
@@ -1659,12 +1679,16 @@ impl Signex {
                         option_card(
                             "Delete file",
                             "File will be removed from project and permanently deleted.",
-                            Message::RemoveConfirm(crate::app::RemoveChoice::DeleteFile),
+                            Message::Remove(RemoveMsg::Confirm(
+                                crate::app::RemoveChoice::DeleteFile,
+                            )),
                         ),
                         option_card(
                             "Exclude from project",
                             "File will be excluded from project but left in local folder. Not recommended for projects stored in version control.",
-                            Message::RemoveConfirm(crate::app::RemoveChoice::ExcludeFromProject),
+                            Message::Remove(RemoveMsg::Confirm(
+                                crate::app::RemoveChoice::ExcludeFromProject,
+                            )),
                         ),
                     ]
                     .spacing(8)
@@ -1673,7 +1697,12 @@ impl Signex {
                 container(
                     row![
                         Space::new().width(Length::Fill),
-                        secondary_button("Cancel", Message::CloseRemoveDialog, text_c, border_c),
+                        secondary_button(
+                            "Cancel",
+                            Message::Remove(RemoveMsg::Close),
+                            text_c,
+                            border_c,
+                        ),
                     ],
                 )
                 .padding([14, 14]),

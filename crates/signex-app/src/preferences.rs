@@ -109,7 +109,7 @@ pub enum PrefMsg {
     /// Library → Distributor APIs pane forwarded a settings message.
     /// Folded into `PrefMsg` so the Preferences modal can mount the
     /// live panel as a first-class pane without breaking the
-    /// existing `Message::PreferencesMsg` plumbing. The handler
+    /// existing `Message::Preferences(PreferencesMsg::Inner(_))` plumbing. The handler
     /// re-dispatches via `Message::Library(LibraryMessage::Settings)`.
     LibrarySettings(crate::library::messages::SettingsMsg),
     /// Component-class editor messages — all edits land on the
@@ -532,7 +532,7 @@ fn build_content<'a>(
 ///
 /// The panel emits `LibraryMessage::Settings(_)`; we wrap every
 /// message in `PrefMsg::LibrarySettings(_)` so the modal's outer
-/// `Message::PreferencesMsg(_)` map stays a single layer. The
+/// `Message::Preferences(PreferencesMsg::Inner(_))` map stays a single layer. The
 /// `app/handlers/preferences.rs` handler unwraps and re-dispatches
 /// via `Message::Library` so the canonical state writeback runs
 /// through the same dispatcher the Tools-menu surface uses.

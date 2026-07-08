@@ -19,8 +19,6 @@ impl Signex {
             }
             Message::OpenFind => self.handle_find_replace_open_requested(false),
             Message::OpenReplace => self.handle_find_replace_open_requested(true),
-            Message::OpenPreferences => self.handle_preferences_open_requested(),
-            Message::ClosePreferences => self.handle_preferences_close_requested(),
             Message::CloseKeyboardShortcuts => {
                 self.ui_state.keyboard_shortcuts_open = false;
                 Task::none()
@@ -30,8 +28,6 @@ impl Signex {
                 crate::fonts::write_first_run_tour_dismissed(true);
                 Task::none()
             }
-            Message::PreferencesNav(nav) => self.handle_preferences_navigation_requested(nav),
-            Message::PreferencesMsg(msg) => self.handle_preferences_message(msg),
             Message::FindReplaceMsg(msg) => self.handle_find_replace_message(msg),
             Message::ModalDragStart { modal, x, y } => self.handle_modal_drag_start(modal, x, y),
             Message::ModalDragEnd => self.handle_modal_drag_end(),
@@ -145,23 +141,6 @@ impl Signex {
             Message::TabContextAction(action) => self.handle_tab_context_action(action),
             Message::ProjectCloseConfirm(choice) => self.handle_project_close_confirm(choice),
             Message::AppQuitConfirm(choice) => self.handle_app_quit_confirm(choice),
-            Message::RenameBufferChanged(s) => {
-                if let Some(d) = self.ui_state.rename_dialog.as_mut() {
-                    d.buffer = s;
-                    d.error = None;
-                }
-                Task::none()
-            }
-            Message::RenameSubmit => self.handle_rename_submit(),
-            Message::CloseRenameDialog => {
-                self.ui_state.rename_dialog = None;
-                Task::none()
-            }
-            Message::RemoveConfirm(choice) => self.handle_remove_confirm(choice),
-            Message::CloseRemoveDialog => {
-                self.ui_state.remove_dialog = None;
-                Task::none()
-            }
             Message::AddExistingFilePicked { project_idx, paths } => {
                 self.handle_add_existing_file_picked(project_idx, paths);
                 Task::none()
@@ -172,28 +151,6 @@ impl Signex {
             }
             Message::CloseProjectOptions => {
                 self.ui_state.project_options = None;
-                Task::none()
-            }
-            Message::EnableVersionControlToggleLfs => {
-                if let Some(s) = self.ui_state.enable_version_control.as_mut() {
-                    s.use_lfs = !s.use_lfs;
-                }
-                Task::none()
-            }
-            Message::EnableVersionControlToggleItem(idx) => {
-                if let Some(s) = self.ui_state.enable_version_control.as_mut() {
-                    if let Some(item) = s.items.get_mut(idx) {
-                        item.tracked = !item.tracked;
-                    }
-                }
-                Task::none()
-            }
-            Message::EnableVersionControlConfirm => {
-                self.handle_enable_version_control_confirm();
-                Task::none()
-            }
-            Message::CloseEnableVersionControl => {
-                self.ui_state.enable_version_control = None;
                 Task::none()
             }
             Message::OpenContextSubmenu(kind) => {
@@ -334,6 +291,76 @@ impl Signex {
             ErcMsg::OpenDialog => self.handle_open_erc_dialog(),
             ErcMsg::CloseDialog => self.handle_close_erc_dialog(),
             ErcMsg::SeverityChanged(rule, sev) => self.handle_erc_severity_changed(rule, sev),
+        }
+    }
+
+    /// Preferences modal family handler (namespaced, ADR-0001 D3).
+    pub(crate) fn dispatch_preferences_message(&mut self, msg: PreferencesMsg) -> Task<Message> {
+        match msg {
+            PreferencesMsg::Open => self.handle_preferences_open_requested(),
+            PreferencesMsg::Close => self.handle_preferences_close_requested(),
+            PreferencesMsg::Nav(nav) => self.handle_preferences_navigation_requested(nav),
+            PreferencesMsg::Inner(msg) => self.handle_preferences_message(msg),
+        }
+    }
+
+    /// Enable Version Control modal family handler (namespaced, ADR-0001 D3).
+    pub(crate) fn dispatch_enable_version_control_message(
+        &mut self,
+        msg: EnableVersionControlMsg,
+    ) -> Task<Message> {
+        match msg {
+            EnableVersionControlMsg::ToggleLfs => {
+                if let Some(s) = self.ui_state.enable_version_control.as_mut() {
+                    s.use_lfs = !s.use_lfs;
+                }
+                Task::none()
+            }
+            EnableVersionControlMsg::ToggleItem(idx) => {
+                if let Some(s) = self.ui_state.enable_version_control.as_mut() {
+                    if let Some(item) = s.items.get_mut(idx) {
+                        item.tracked = !item.tracked;
+                    }
+                }
+                Task::none()
+            }
+            EnableVersionControlMsg::Confirm => {
+                self.handle_enable_version_control_confirm();
+                Task::none()
+            }
+            EnableVersionControlMsg::Close => {
+                self.ui_state.enable_version_control = None;
+                Task::none()
+            }
+        }
+    }
+
+    /// Rename modal family handler (namespaced, ADR-0001 D3).
+    pub(crate) fn dispatch_rename_message(&mut self, msg: RenameMsg) -> Task<Message> {
+        match msg {
+            RenameMsg::BufferChanged(s) => {
+                if let Some(d) = self.ui_state.rename_dialog.as_mut() {
+                    d.buffer = s;
+                    d.error = None;
+                }
+                Task::none()
+            }
+            RenameMsg::Submit => self.handle_rename_submit(),
+            RenameMsg::Close => {
+                self.ui_state.rename_dialog = None;
+                Task::none()
+            }
+        }
+    }
+
+    /// Remove-from-project modal family handler (namespaced, ADR-0001 D3).
+    pub(crate) fn dispatch_remove_message(&mut self, msg: RemoveMsg) -> Task<Message> {
+        match msg {
+            RemoveMsg::Confirm(choice) => self.handle_remove_confirm(choice),
+            RemoveMsg::Close => {
+                self.ui_state.remove_dialog = None;
+                Task::none()
+            }
         }
     }
 

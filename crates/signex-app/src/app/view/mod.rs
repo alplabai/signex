@@ -277,7 +277,7 @@ impl Signex {
             Some(ic::icon_dd_preferences(tid)),
             "Preferences...",
             "",
-            Message::OpenPreferences,
+            Message::Preferences(PreferencesMsg::Open),
         ));
 
         if !canvas.selected.is_empty() {
@@ -3476,7 +3476,7 @@ impl Signex {
             &ui.preferences_draft_component_classes,
             ui.theme_id,
         )
-        .map(Message::PreferencesMsg);
+        .map(|m| Message::Preferences(PreferencesMsg::Inner(m)));
 
         // OS-level drag handle covering the header strip, minus the
         // close-X hit zone on the right. Press anywhere on the title
@@ -5450,7 +5450,7 @@ impl Signex {
                 &ui.preferences_draft_component_classes,
                 ui.theme_id,
             )
-            .map(Message::PreferencesMsg);
+            .map(|m| Message::Preferences(PreferencesMsg::Inner(m)));
             layers.push(pref_view);
         }
 

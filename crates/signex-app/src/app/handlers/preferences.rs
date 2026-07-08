@@ -266,7 +266,7 @@ impl Signex {
                     if let Some(f) = picked {
                         let bytes = f.read().await;
                         let s = String::from_utf8_lossy(&bytes).to_string();
-                        Message::PreferencesMsg(PrefMsg::ThemeFileLoaded(s))
+                        Message::Preferences(PreferencesMsg::Inner(PrefMsg::ThemeFileLoaded(s)))
                     } else {
                         Message::Noop
                     }

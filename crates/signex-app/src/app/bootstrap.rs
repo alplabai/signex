@@ -583,7 +583,7 @@ impl Signex {
                             }
                             // Ctrl+, open Preferences
                             (keyboard::Key::Character(c), m) if c == "," && m.command() => {
-                                Message::OpenPreferences
+                                Message::Preferences(PreferencesMsg::Open)
                             }
                             (keyboard::Key::Character(c), m) if c == "f" && m.command() => {
                                 Message::OpenFind
@@ -621,22 +621,22 @@ impl Signex {
                             (keyboard::Key::Named(keyboard::key::Named::Escape), _)
                                 if prefs_open =>
                             {
-                                Message::ClosePreferences
+                                Message::Preferences(PreferencesMsg::Close)
                             }
                             (keyboard::Key::Named(keyboard::key::Named::Escape), _)
                                 if rename_open =>
                             {
-                                Message::CloseRenameDialog
+                                Message::Rename(RenameMsg::Close)
                             }
                             (keyboard::Key::Named(keyboard::key::Named::Escape), _)
                                 if remove_open =>
                             {
-                                Message::CloseRemoveDialog
+                                Message::Remove(RemoveMsg::Close)
                             }
                             (keyboard::Key::Named(keyboard::key::Named::Escape), _)
                                 if enable_vc_open =>
                             {
-                                Message::CloseEnableVersionControl
+                                Message::EnableVersionControl(EnableVersionControlMsg::Close)
                             }
                             // F12 — Library Options modal Esc gap. Without
                             // this, Esc fell through to `Tool::Select`
