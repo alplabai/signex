@@ -21,16 +21,18 @@ impl Signex {
             MenuMessage::Duplicate => Some(self.update(Message::Duplicate)),
             MenuMessage::Find => Some(self.update(Message::OpenFind)),
             MenuMessage::Replace => Some(self.update(Message::OpenReplace)),
-            MenuMessage::Annotate => Some(self.update(Message::OpenAnnotateDialog)),
-            MenuMessage::AnnotateReset => Some(self.update(Message::OpenAnnotateResetConfirm)),
+            MenuMessage::Annotate => Some(self.update(Message::Annotate(AnnotateMsg::OpenDialog))),
+            MenuMessage::AnnotateReset => {
+                Some(self.update(Message::Annotate(AnnotateMsg::OpenResetConfirm)))
+            }
             // Alt+A shortcut-style: run incremental annotate without opening
             // the dialog. Matches Altium "Annotate Schematics Quietly".
-            MenuMessage::AnnotateQuietly => {
-                Some(self.update(Message::Annotate(signex_engine::AnnotateMode::Incremental)))
-            }
+            MenuMessage::AnnotateQuietly => Some(self.update(Message::Annotate(AnnotateMsg::Run(
+                signex_engine::AnnotateMode::Incremental,
+            )))),
             // Shift+Alt+A: force reset + renumber without confirm dialog.
             MenuMessage::AnnotateForceAll => Some(self.update(Message::Annotate(
-                signex_engine::AnnotateMode::ResetAndRenumber,
+                AnnotateMsg::Run(signex_engine::AnnotateMode::ResetAndRenumber),
             ))),
             // Reset Duplicate Designators — scan every sheet (active,
             // cached, and on-disk project sheets), find references
@@ -51,7 +53,7 @@ impl Signex {
                 );
                 Some(Task::none())
             }
-            MenuMessage::Erc => Some(self.update(Message::OpenErcDialog)),
+            MenuMessage::Erc => Some(self.update(Message::Erc(ErcMsg::OpenDialog))),
             MenuMessage::ToggleAutoFocus => Some(self.update(Message::ToggleAutoFocus)),
             MenuMessage::GenerateBom => {
                 crate::diagnostics::log_info("Generate BOM is v0.8 scope");

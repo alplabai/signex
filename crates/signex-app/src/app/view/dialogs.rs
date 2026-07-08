@@ -9,7 +9,7 @@ use iced::widget::{Column, Row, Space, button, column, container, row, scrollabl
 use iced::{Background, Border, Color, Element, Length, Theme};
 
 use crate::app::state::AnnotateOrder;
-use crate::app::{BomPreviewMsg, GridPropertiesMsg, Message, Signex};
+use crate::app::{AnnotateMsg, BomPreviewMsg, ErcMsg, GridPropertiesMsg, Message, Signex};
 
 const BACKDROP: Color = Color::from_rgba(0.0, 0.0, 0.0, 0.55);
 
@@ -102,7 +102,11 @@ impl Signex {
             row![
                 text("Annotate").size(MODAL_HEADER_TITLE_SIZE).color(text_c),
                 Space::new().width(Length::Fill),
-                close_x_button(Message::CloseAnnotateDialog, theme_id, text_muted),
+                close_x_button(
+                    Message::Annotate(AnnotateMsg::CloseDialog),
+                    theme_id,
+                    text_muted
+                ),
             ]
             .align_y(iced::Alignment::Center),
         )
@@ -457,7 +461,7 @@ impl Signex {
                         .align_x(iced::alignment::Horizontal::Center)
                         .align_y(iced::alignment::Vertical::Center),
                 )
-                .on_press(Message::AnnotateToggleLock(uuid))
+                .on_press(Message::Annotate(AnnotateMsg::ToggleLock(uuid)))
                 .padding(0)
                 .style(move |_: &Theme, _| button::Style {
                     background: Some(Background::Color(if is_locked {
@@ -531,35 +535,37 @@ impl Signex {
         let footer = row![
             secondary_button(
                 "All On",
-                Message::CloseAnnotateDialog, // placeholder — multi-sheet v1.1
+                Message::Annotate(AnnotateMsg::CloseDialog), // placeholder — multi-sheet v1.1
                 text_c,
                 border_c,
             ),
             Space::new().width(4),
             secondary_button(
                 "All Off",
-                Message::CloseAnnotateDialog, // placeholder — multi-sheet v1.1
+                Message::Annotate(AnnotateMsg::CloseDialog), // placeholder — multi-sheet v1.1
                 text_c,
                 border_c,
             ),
             Space::new().width(Length::Fill),
             secondary_button(
                 "Update Changes List",
-                Message::CloseAnnotateDialog, // preview is already live; close = cheap redraw
+                Message::Annotate(AnnotateMsg::CloseDialog), // preview is already live; close = cheap redraw
                 text_c,
                 border_c,
             ),
             Space::new().width(4),
             secondary_button(
                 "Reset All",
-                Message::Annotate(signex_engine::AnnotateMode::ResetOnly),
+                Message::Annotate(AnnotateMsg::Run(signex_engine::AnnotateMode::ResetOnly)),
                 text_c,
                 border_c,
             ),
             Space::new().width(4),
             secondary_button(
                 "Reset & Renumber",
-                Message::Annotate(signex_engine::AnnotateMode::ResetAndRenumber),
+                Message::Annotate(AnnotateMsg::Run(
+                    signex_engine::AnnotateMode::ResetAndRenumber,
+                )),
                 text_c,
                 border_c,
             ),
@@ -569,12 +575,19 @@ impl Signex {
                 if changes == 0 {
                     None
                 } else {
-                    Some(Message::Annotate(signex_engine::AnnotateMode::Incremental))
+                    Some(Message::Annotate(AnnotateMsg::Run(
+                        signex_engine::AnnotateMode::Incremental,
+                    )))
                 },
                 border_c,
             ),
             Space::new().width(4),
-            secondary_button("Close", Message::CloseAnnotateDialog, text_c, border_c),
+            secondary_button(
+                "Close",
+                Message::Annotate(AnnotateMsg::CloseDialog),
+                text_c,
+                border_c
+            ),
         ]
         .align_y(iced::Alignment::Center);
 
@@ -631,7 +644,11 @@ impl Signex {
                     .size(MODAL_HEADER_TITLE_SIZE)
                     .color(text_c),
                 Space::new().width(Length::Fill),
-                close_x_button(Message::CloseAnnotateResetConfirm, theme_id, text_muted),
+                close_x_button(
+                    Message::Annotate(AnnotateMsg::CloseResetConfirm),
+                    theme_id,
+                    text_muted
+                ),
             ]
             .align_y(iced::Alignment::Center),
         )
@@ -666,13 +683,13 @@ impl Signex {
                 container(
                     row![
                         Space::new().width(Length::Fill),
-                        secondary_button("Cancel", Message::CloseAnnotateResetConfirm, text_c, border_c),
+                        secondary_button("Cancel", Message::Annotate(AnnotateMsg::CloseResetConfirm), text_c, border_c),
                         Space::new().width(8),
                         primary_button(
                             "Reset & Renumber",
-                            Some(Message::Annotate(
+                            Some(Message::Annotate(AnnotateMsg::Run(
                                 signex_engine::AnnotateMode::ResetAndRenumber,
-                            )),
+                            ))),
                             border_c,
                         ),
                     ]
@@ -715,7 +732,7 @@ impl Signex {
                     .size(MODAL_HEADER_TITLE_SIZE)
                     .color(text_c),
                 Space::new().width(Length::Fill),
-                close_x_button(Message::CloseErcDialog, theme_id, text_muted),
+                close_x_button(Message::Erc(ErcMsg::CloseDialog), theme_id, text_muted),
             ]
             .align_y(iced::Alignment::Center),
         )
@@ -771,9 +788,9 @@ impl Signex {
 
         let footer = row![
             Space::new().width(Length::Fill),
-            primary_button("Run ERC", Some(Message::RunErc), border_c),
+            primary_button("Run ERC", Some(Message::Erc(ErcMsg::Run)), border_c),
             Space::new().width(8),
-            secondary_button("Close", Message::CloseErcDialog, text_c, border_c),
+            secondary_button("Close", Message::Erc(ErcMsg::CloseDialog), text_c, border_c),
         ]
         .align_y(iced::Alignment::Center);
 
@@ -3141,7 +3158,7 @@ fn order_radio(
     };
     let fg = if selected { Color::WHITE } else { text_c };
     button(container(text(label.to_string()).size(11).color(fg)).padding([4, 10]))
-        .on_press(Message::AnnotateOrderChanged(value))
+        .on_press(Message::Annotate(AnnotateMsg::OrderChanged(value)))
         .style(move |_: &Theme, _| button::Style {
             background: Some(Background::Color(bg)),
             border: Border {
@@ -3174,7 +3191,7 @@ fn severity_segmented(
         };
         let fg = if selected { Color::WHITE } else { text_muted };
         button(container(text(label.to_string()).size(10).color(fg)).padding([3, 8]))
-            .on_press(Message::ErcSeverityChanged(rule, value))
+            .on_press(Message::Erc(ErcMsg::SeverityChanged(rule, value)))
             .style(move |_: &Theme, _| button::Style {
                 background: Some(Background::Color(bg)),
                 border: Border {

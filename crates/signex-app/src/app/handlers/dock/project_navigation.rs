@@ -833,7 +833,7 @@ impl Signex {
             }
         }
         self.refresh_panel_ctx();
-        self.update(Message::OpenErcDialog)
+        self.update(Message::Erc(ErcMsg::OpenDialog))
     }
 
     /// `Add Existing to Project…` — open a multi-select file picker
