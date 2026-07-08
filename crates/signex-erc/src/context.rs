@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 
+use signex_net::SheetConnectivity;
 use signex_types::schematic::SchematicSheet;
 use signex_types::schematic::{LabelType, PinDirection, Point, SymbolTransform};
 use uuid::Uuid;
@@ -182,7 +183,8 @@ pub struct ErcContext {
     pub no_connects: Vec<ErcNoConnect>,
     pub bus_entries: Vec<ErcBusEntry>,
     pub child_sheets: Vec<ErcChildSheet>,
-    /// Derived logical nets (union-find over wire topology).
+    /// Logical net summaries for the DSL, projected off the shared
+    /// [`SheetConnectivity`] derivation (see `summarize_nets`).
     pub nets: Vec<ErcNet>,
     /// Child sheet contexts keyed by filename. Only populated when built via
     /// [`from_snapshot_with_children`].
@@ -328,7 +330,7 @@ impl ErcContext {
             .collect();
 
         // --- Step 3: derive logical nets ----------------------------------
-        let nets = derive_nets(&wires, &labels, &junctions, &symbols);
+        let nets = summarize_nets(&wires, &labels, &junctions, &symbols);
 
         ErcContext {
             paper_size: PaperSize::parse(&snapshot.paper_size),
@@ -356,21 +358,6 @@ fn pt_key(p: &Point) -> (i64, i64) {
     ((p.x * 1000.0).round() as i64, (p.y * 1000.0).round() as i64)
 }
 
-/// True when point `p` lies on the segment `a`–`b` (endpoints included),
-/// in the integer key space used by the union-find. Collinearity is a
-/// zero cross-product (computed in `i128` so large micron coordinates
-/// can't overflow), then `p` must sit inside the segment's bounding box.
-fn point_on_segment(p: (i64, i64), a: (i64, i64), b: (i64, i64)) -> bool {
-    let cross =
-        (b.0 - a.0) as i128 * (p.1 - a.1) as i128 - (b.1 - a.1) as i128 * (p.0 - a.0) as i128;
-    if cross != 0 {
-        return false;
-    }
-    let within_x = p.0 >= a.0.min(b.0) && p.0 <= a.0.max(b.0);
-    let within_y = p.1 >= a.1.min(b.1) && p.1 <= a.1.max(b.1);
-    within_x && within_y
-}
-
 /// True when a wire endpoint, junction, label, or no-connect sits at `pos`,
 /// compared in the 1 µm key space — the same "same point" definition the
 /// union-find uses, so the gate and the net partition never disagree (D5.5).
@@ -394,48 +381,31 @@ fn point_is_connected(
 }
 
 // ---------------------------------------------------------------------------
-// Net derivation (union-find over wire endpoints)
+// Net summaries for the DSL
 // ---------------------------------------------------------------------------
 
-// Union-find lives in the shared `signex_net::uf` crate (HI-17, ADR-0001
-// A3.1). Import the canonical helpers.
-use signex_net::uf::{find as uf_find, union as uf_union};
-
-fn derive_nets(
+/// Summarise each geometric net into the flat [`ErcNet`] the ERC DSL reads:
+/// its highest-priority label name, a coarse class, and the electrical types of
+/// the pins on it.
+///
+/// Connectivity is **not** derived here — it comes from the shared
+/// [`SheetConnectivity`] (the same wire-endpoint union plus junction T-merge
+/// `build_netlist` uses), so ERC and the netlist agree on membership by
+/// construction instead of ERC hand-rolling a second union-find.
+fn summarize_nets(
     wires: &[ErcWire],
     labels: &[ErcLabel],
     junctions: &[ErcJunction],
     symbols: &[ErcSymbol],
 ) -> Vec<ErcNet> {
-    let mut parent: HashMap<(i64, i64), (i64, i64)> = HashMap::new();
-
-    // Wire segments connect their two endpoints.
-    for w in wires {
-        uf_union(&mut parent, pt_key(&w.start), pt_key(&w.end));
-    }
-    // Junctions connect every wire that touches the junction point —
-    // including a wire that *ends on the interior* of another (a
-    // T-junction). Union-find over endpoints alone never merges that
-    // case: the through-wire only carries its own two endpoints, so the
-    // point where a second wire lands sits inside a segment the union
-    // never visited. A bare `uf_find` here inserted a singleton and
-    // unioned nothing, splitting every mid-wire connection into its own
-    // net. Union the junction key with each wire whose segment contains
-    // it (endpoint or interior); a shared root propagates through the
-    // wire's own start~end union.
-    for j in junctions {
-        let jk = pt_key(&j.position);
-        for w in wires {
-            if point_on_segment(jk, pt_key(&w.start), pt_key(&w.end)) {
-                uf_union(&mut parent, jk, pt_key(&w.start));
-            }
-        }
-    }
+    let segments: Vec<(Point, Point)> = wires.iter().map(|w| (w.start, w.end)).collect();
+    let junction_pts: Vec<Point> = junctions.iter().map(|j| j.position).collect();
+    let mut conn = SheetConnectivity::from_segments(&segments, &junction_pts);
 
     // Group labels by net root.
     let mut net_labels: HashMap<(i64, i64), Vec<&ErcLabel>> = HashMap::new();
     for lbl in labels {
-        let root = uf_find(&mut parent, pt_key(&lbl.position));
+        let root = conn.root_of(&lbl.position);
         net_labels.entry(root).or_default().push(lbl);
     }
 
@@ -452,7 +422,7 @@ fn derive_nets(
             // We can't distinguish nc-only from wire-connected here without
             // re-probing, so we include everything that's "connected" — the
             // no-connect case creates a small singleton net that harms nothing.
-            let root = uf_find(&mut parent, pt_key(&pin.world_pos));
+            let root = conn.root_of(&pin.world_pos);
             net_pins.entry(root).or_default().push(pin.electrical_type);
         }
     }
@@ -546,19 +516,6 @@ mod tests {
     }
 
     #[test]
-    fn point_on_segment_detects_interior_and_rejects_off_segment() {
-        let a = (0, 0);
-        let b = (10_000, 0);
-        assert!(point_on_segment((5_000, 0), a, b), "interior point");
-        assert!(point_on_segment((0, 0), a, b), "endpoint");
-        assert!(!point_on_segment((5_000, 1_000), a, b), "off the line");
-        assert!(
-            !point_on_segment((11_000, 0), a, b),
-            "collinear but past the end"
-        );
-    }
-
-    #[test]
     fn junction_gates_connectivity_but_off_points_do_not() {
         // D5.3: a pin tapping a wire mid-span where a junction sits is
         // connected. D5.4: buses no longer gate, so a point that is only on a
@@ -602,7 +559,7 @@ mod tests {
             pin(pt(5.0, 5.0), PinDirection::Input),
         ])];
 
-        let nets = derive_nets(&wires, &[], &junctions, &syms);
+        let nets = summarize_nets(&wires, &[], &junctions, &syms);
         assert_eq!(
             nets.len(),
             1,
@@ -629,7 +586,7 @@ mod tests {
             pin(pt(5.0, 5.0), PinDirection::Input),
         ])];
 
-        let nets = derive_nets(&wires, &[], &[], &syms);
+        let nets = summarize_nets(&wires, &[], &[], &syms);
         assert_eq!(
             nets.len(),
             2,
