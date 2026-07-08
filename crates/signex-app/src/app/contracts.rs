@@ -233,28 +233,12 @@ pub enum Message {
     /// can drop non-main-window resizes before they touch
     /// `ui_state.window_size`.
     WindowResizedFor(iced::window::Id, f32, f32),
-    /// Run the ERC engine against the active schematic snapshot and populate
-    /// `ui_state.erc_violations`. Bound to F8.
-    RunErc,
-    /// Auto-annotate every unannotated symbol (reference ends in `?`).
-    /// Three modes: incremental, reset+renumber, reset-only.
-    Annotate(signex_engine::AnnotateMode),
-    /// Show the Annotate Schematics modal with preview of proposed changes.
-    OpenAnnotateDialog,
-    /// Dismiss the Annotate dialog without applying.
-    CloseAnnotateDialog,
-    /// Change the Annotate dialog's order-of-processing choice.
-    AnnotateOrderChanged(super::state::AnnotateOrder),
-    /// Show the ERC modal (severity matrix + pin-compatibility matrix).
-    OpenErcDialog,
-    /// Dismiss the ERC dialog.
-    CloseErcDialog,
-    /// Override the severity for a single rule from within the ERC dialog.
-    ErcSeverityChanged(signex_erc::RuleKind, signex_erc::Severity),
-    /// Show the Reset-Annotations confirm modal.
-    OpenAnnotateResetConfirm,
-    /// Dismiss the Reset-Annotations confirm modal.
-    CloseAnnotateResetConfirm,
+    /// ERC dialog message family — namespaced (ADR-0001 D3). Routed to
+    /// `dispatch_erc_message`.
+    Erc(ErcMsg),
+    /// Annotate dialog message family — namespaced (ADR-0001 D3). Routed
+    /// to `dispatch_annotate_message`.
+    Annotate(AnnotateMsg),
     /// User pressed the title bar of a modal at window-space (x, y) — begin
     /// dragging it. The next DragMove events update its offset.
     ModalDragStart {
@@ -385,10 +369,6 @@ pub enum Message {
         row: u8,
         col: u8,
     },
-    /// Toggle the "locked against reannotation" flag on a symbol from
-    /// inside the Annotate dialog. Locked symbols keep their current
-    /// designator even under Reset & Renumber.
-    AnnotateToggleLock(uuid::Uuid),
     /// Cycle Altium's rubber-band selection mode
     /// Inside → Outside → TouchingLine → Inside. Bound to Shift+S.
     CycleSelectionMode,
@@ -676,6 +656,46 @@ pub enum NetColorMsg {
     /// Edit one R/G/B channel of the custom-picker draft via text
     /// input. Parsed as 0-255; invalid values ignored.
     CustomChannel(Channel, String),
+}
+
+/// Annotate dialog message family (ADR-0001 D3). Namespaced under
+/// `Message::Annotate` and routed to `dispatch_annotate_message`.
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub enum AnnotateMsg {
+    /// Auto-annotate every unannotated symbol (reference ends in `?`).
+    /// Three modes: incremental, reset+renumber, reset-only.
+    Run(signex_engine::AnnotateMode),
+    /// Show the Annotate Schematics modal with preview of proposed changes.
+    OpenDialog,
+    /// Dismiss the Annotate dialog without applying.
+    CloseDialog,
+    /// Change the Annotate dialog's order-of-processing choice.
+    OrderChanged(super::state::AnnotateOrder),
+    /// Show the Reset-Annotations confirm modal.
+    OpenResetConfirm,
+    /// Dismiss the Reset-Annotations confirm modal.
+    CloseResetConfirm,
+    /// Toggle the "locked against reannotation" flag on a symbol from
+    /// inside the Annotate dialog. Locked symbols keep their current
+    /// designator even under Reset & Renumber.
+    ToggleLock(uuid::Uuid),
+}
+
+/// ERC dialog message family (ADR-0001 D3). Namespaced under
+/// `Message::Erc` and routed to `dispatch_erc_message`.
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub enum ErcMsg {
+    /// Run the ERC engine against the active schematic snapshot and populate
+    /// `ui_state.erc_violations`. Bound to F8.
+    Run,
+    /// Show the ERC modal (severity matrix + pin-compatibility matrix).
+    OpenDialog,
+    /// Dismiss the ERC dialog.
+    CloseDialog,
+    /// Override the severity for a single rule from within the ERC dialog.
+    SeverityChanged(signex_erc::RuleKind, signex_erc::Severity),
 }
 
 /// Per-shape edit descriptor. The Properties panel dispatches one of

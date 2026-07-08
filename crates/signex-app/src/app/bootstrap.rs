@@ -611,12 +611,12 @@ impl Signex {
                             // ERC, then Annotate, then Preferences. Once those
                             // are closed, Esc falls through to the tool reset.
                             (keyboard::Key::Named(keyboard::key::Named::Escape), _) if erc_open => {
-                                Message::CloseErcDialog
+                                Message::Erc(ErcMsg::CloseDialog)
                             }
                             (keyboard::Key::Named(keyboard::key::Named::Escape), _)
                                 if annotate_open =>
                             {
-                                Message::CloseAnnotateDialog
+                                Message::Annotate(AnnotateMsg::CloseDialog)
                             }
                             (keyboard::Key::Named(keyboard::key::Named::Escape), _)
                                 if prefs_open =>
@@ -673,7 +673,9 @@ impl Signex {
                                     Message::Menu(MenuMessage::OpenKeyboardShortcuts)
                                 }
                             }
-                            (keyboard::Key::Named(keyboard::key::Named::F8), _) => Message::RunErc,
+                            (keyboard::Key::Named(keyboard::key::Named::F8), _) => {
+                                Message::Erc(ErcMsg::Run)
+                            }
                             (keyboard::Key::Named(keyboard::key::Named::F9), _) => {
                                 Message::ToggleAutoFocus
                             }
@@ -702,13 +704,17 @@ impl Signex {
                             (keyboard::Key::Character(c), m)
                                 if c.eq_ignore_ascii_case("a") && m.alt() && m.shift() =>
                             {
-                                Message::Annotate(signex_engine::AnnotateMode::ResetAndRenumber)
+                                Message::Annotate(AnnotateMsg::Run(
+                                    signex_engine::AnnotateMode::ResetAndRenumber,
+                                ))
                             }
                             // Alt+A: annotate (Altium convention, incremental)
                             (keyboard::Key::Character(c), m)
                                 if c.eq_ignore_ascii_case("a") && m.alt() && !m.shift() =>
                             {
-                                Message::Annotate(signex_engine::AnnotateMode::Incremental)
+                                Message::Annotate(AnnotateMsg::Run(
+                                    signex_engine::AnnotateMode::Incremental,
+                                ))
                             }
                             // Delete selected
                             (keyboard::Key::Named(keyboard::key::Named::Delete), _) => {

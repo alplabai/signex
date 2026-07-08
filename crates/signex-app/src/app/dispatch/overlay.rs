@@ -33,25 +33,6 @@ impl Signex {
             Message::PreferencesNav(nav) => self.handle_preferences_navigation_requested(nav),
             Message::PreferencesMsg(msg) => self.handle_preferences_message(msg),
             Message::FindReplaceMsg(msg) => self.handle_find_replace_message(msg),
-            Message::RunErc => {
-                let close_task = if self.ui_state.erc_dialog_open {
-                    self.handle_close_erc_dialog()
-                } else {
-                    Task::none()
-                };
-                let task = self.handle_run_erc();
-                let finish = self.finish_update();
-                Task::batch([close_task, finish, task])
-            }
-            Message::Annotate(mode) => self.handle_annotate(mode),
-            Message::OpenAnnotateDialog => self.handle_open_annotate_dialog(),
-            Message::CloseAnnotateDialog => self.handle_close_annotate_dialog(),
-            Message::AnnotateOrderChanged(order) => self.handle_annotate_order_changed(order),
-            Message::OpenErcDialog => self.handle_open_erc_dialog(),
-            Message::CloseErcDialog => self.handle_close_erc_dialog(),
-            Message::ErcSeverityChanged(rule, sev) => self.handle_erc_severity_changed(rule, sev),
-            Message::OpenAnnotateResetConfirm => self.handle_open_annotate_reset_confirm(),
-            Message::CloseAnnotateResetConfirm => self.handle_close_annotate_reset_confirm(),
             Message::ModalDragStart { modal, x, y } => self.handle_modal_drag_start(modal, x, y),
             Message::ModalDragEnd => self.handle_modal_drag_end(),
             Message::FocusAt {
@@ -314,6 +295,45 @@ impl Signex {
                 }
             }
             _ => unreachable!("dispatch_overlay_message received non-overlay message"),
+        }
+    }
+
+    /// Annotate dialog family handler (namespaced, ADR-0001 D3).
+    pub(crate) fn dispatch_annotate_message(&mut self, msg: AnnotateMsg) -> Task<Message> {
+        match msg {
+            AnnotateMsg::Run(mode) => self.handle_annotate(mode),
+            AnnotateMsg::OpenDialog => self.handle_open_annotate_dialog(),
+            AnnotateMsg::CloseDialog => self.handle_close_annotate_dialog(),
+            AnnotateMsg::OrderChanged(order) => self.handle_annotate_order_changed(order),
+            AnnotateMsg::OpenResetConfirm => self.handle_open_annotate_reset_confirm(),
+            AnnotateMsg::CloseResetConfirm => self.handle_close_annotate_reset_confirm(),
+            AnnotateMsg::ToggleLock(uuid) => {
+                if self.ui_state.annotate_locked.contains(&uuid) {
+                    self.ui_state.annotate_locked.remove(&uuid);
+                } else {
+                    self.ui_state.annotate_locked.insert(uuid);
+                }
+                Task::none()
+            }
+        }
+    }
+
+    /// ERC dialog family handler (namespaced, ADR-0001 D3).
+    pub(crate) fn dispatch_erc_message(&mut self, msg: ErcMsg) -> Task<Message> {
+        match msg {
+            ErcMsg::Run => {
+                let close_task = if self.ui_state.erc_dialog_open {
+                    self.handle_close_erc_dialog()
+                } else {
+                    Task::none()
+                };
+                let task = self.handle_run_erc();
+                let finish = self.finish_update();
+                Task::batch([close_task, finish, task])
+            }
+            ErcMsg::OpenDialog => self.handle_open_erc_dialog(),
+            ErcMsg::CloseDialog => self.handle_close_erc_dialog(),
+            ErcMsg::SeverityChanged(rule, sev) => self.handle_erc_severity_changed(rule, sev),
         }
     }
 

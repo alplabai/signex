@@ -112,20 +112,12 @@ impl Signex {
             | Message::LeaveContextSubmenuPanel
             | Message::TickContextSubmenuHover
             | Message::ContextAction(_)
-            | Message::RunErc
-            | Message::Annotate(_)
-            | Message::OpenAnnotateDialog
-            | Message::CloseAnnotateDialog
-            | Message::AnnotateOrderChanged(_)
-            | Message::OpenErcDialog
-            | Message::CloseErcDialog
-            | Message::ErcSeverityChanged(_, _)
-            | Message::OpenAnnotateResetConfirm
-            | Message::CloseAnnotateResetConfirm
             | Message::ModalDragStart { .. }
             | Message::ModalDragEnd
             | Message::FocusAt { .. }
             | Message::ToggleAutoFocus => self.dispatch_overlay_message(message),
+            Message::Annotate(msg) => self.dispatch_annotate_message(msg),
+            Message::Erc(msg) => self.dispatch_erc_message(msg),
             Message::WindowResizedFor(id, w, h) => {
                 // Only main-window resizes drive layout math. Detached
                 // modal + undocked-tab windows have their own sizes
@@ -423,14 +415,6 @@ impl Signex {
                 key,
                 value,
             } => self.handle_parameter_manager_edit(symbol_uuid, key, value),
-            Message::AnnotateToggleLock(uuid) => {
-                if self.ui_state.annotate_locked.contains(&uuid) {
-                    self.ui_state.annotate_locked.remove(&uuid);
-                } else {
-                    self.ui_state.annotate_locked.insert(uuid);
-                }
-                Task::none()
-            }
             Message::LassoCommit => {
                 // Altium-style single terminator — Enter commits
                 // whichever multi-click buffer is currently armed:
