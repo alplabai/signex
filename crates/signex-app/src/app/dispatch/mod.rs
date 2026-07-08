@@ -43,9 +43,7 @@ impl Signex {
             | Message::CycleDrawMode
             | Message::CancelDrawing
             | Message::Tool(_) => self.dispatch_tool_message(message),
-            Message::FileOpened(_)
-            | Message::NewProjectFile(_)
-            | Message::DeleteSelected
+            Message::DeleteSelected
             | Message::Undo
             | Message::Redo
             | Message::RotateSelected
@@ -55,11 +53,8 @@ impl Signex {
             | Message::Copy
             | Message::Paste
             | Message::SmartPaste
-            | Message::Duplicate
-            | Message::SaveFile
-            | Message::SaveFileAs(_)
-            | Message::SavePrimitiveAs { .. }
-            | Message::SchematicLoaded(_) => self.dispatch_document_message(message),
+            | Message::Duplicate => self.dispatch_document_message(message),
+            Message::File(msg) => self.dispatch_file_message(msg),
             Message::Export(msg) => self.dispatch_export_message(msg),
             Message::PrintPreview(msg) => self.dispatch_print_preview_message(msg),
             Message::BomPreview(msg) => self.dispatch_bom_preview_message(msg),
@@ -71,15 +66,11 @@ impl Signex {
             | Message::DismissFirstRunTour
             | Message::FindReplaceMsg(_)
             | Message::ActiveBar(_)
-            | Message::ProjectCloseConfirm(_)
-            | Message::AppQuitConfirm(_)
-            | Message::AddExistingFilePicked { .. }
-            | Message::AddNewSchematicPicked { .. }
-            | Message::CloseProjectOptions
             | Message::ModalDragStart { .. }
             | Message::ModalDragEnd
             | Message::FocusAt { .. }
             | Message::ToggleAutoFocus => self.dispatch_overlay_message(message),
+            Message::Project(msg) => self.dispatch_project_message(msg),
             Message::ContextMenu(msg) => self.dispatch_context_menu_message(msg),
             Message::Annotate(msg) => self.dispatch_annotate_message(msg),
             Message::Erc(msg) => self.dispatch_erc_message(msg),
@@ -576,14 +567,6 @@ impl Signex {
                     Err(_) => Vec::new(),
                 };
                 self.document_state.panel_ctx.history = self.document_state.history.clone();
-                Task::none()
-            }
-            Message::ProjectGitCommitDone {
-                project_root,
-                rel_path,
-                result,
-            } => {
-                self.handle_project_git_commit_done(project_root, rel_path, result);
                 Task::none()
             }
             Message::EscapePressed => {

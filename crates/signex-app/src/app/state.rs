@@ -487,14 +487,14 @@ pub struct DocumentState {
     /// v0.23 — Async git commit work queue. Save handlers push tuples
     /// here; `finish_update` drains them into `Task::perform` calls
     /// that run the actual commit on a tokio `spawn_blocking`. Each
-    /// completion routes through `Message::ProjectGitCommitDone`.
+    /// completion routes through `Message::Project(ProjectMsg::GitCommitDone)`.
     pub pending_git_commits: Vec<PendingGitCommit>,
     /// v0.23 — Set of `(project_root, rel_path)` pairs whose commits
     /// are currently queued or in flight. Drives the status bar's
     /// "Saving…" pill — when non-empty the user sees an indicator.
     /// An entry lands here as soon as
     /// [`Signex::commit_save_to_project_git`] enqueues the work and
-    /// clears on `Message::ProjectGitCommitDone`.
+    /// clears on `Message::Project(ProjectMsg::GitCommitDone)`.
     pub inflight_git_commits: std::collections::HashSet<(PathBuf, PathBuf)>,
 }
 

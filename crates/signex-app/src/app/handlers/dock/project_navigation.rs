@@ -838,7 +838,7 @@ impl Signex {
 
     /// `Add Existing to Project…` — open a multi-select file picker
     /// scoped to schematic / PCB / library extensions. Picked paths
-    /// land in [`Message::AddExistingFilePicked`]; the handler copies
+    /// land in [`ProjectMsg::AddExistingFilePicked`]; the handler copies
     /// any outside the project directory in turn and opens each.
     pub(crate) fn add_existing_to_project(&mut self, tree_path: Vec<usize>) -> iced::Task<Message> {
         let Some(&project_idx) = tree_path.first() else {
@@ -869,12 +869,12 @@ impl Signex {
                             .collect::<Vec<_>>()
                     })
             },
-            move |paths| Message::AddExistingFilePicked { project_idx, paths },
+            move |paths| Message::Project(ProjectMsg::AddExistingFilePicked { project_idx, paths }),
         )
     }
 
     /// `Add New ▸ Schematic` — Save-As dialog scoped to the project
-    /// directory; result returns through [`Message::AddNewSchematicPicked`].
+    /// directory; result returns through [`ProjectMsg::AddNewSchematicPicked`].
     /// The handler writes a blank `.snxsch`, registers the entry on
     /// the project, and marks the .snxprj dirty.
     pub(crate) fn add_new_schematic(&mut self, tree_path: Vec<usize>) -> iced::Task<Message> {
@@ -902,7 +902,7 @@ impl Signex {
                     .await
                     .map(|file| file.path().to_path_buf())
             },
-            move |path| Message::AddNewSchematicPicked { project_idx, path },
+            move |path| Message::Project(ProjectMsg::AddNewSchematicPicked { project_idx, path }),
         )
     }
 

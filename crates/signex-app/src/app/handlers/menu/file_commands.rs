@@ -17,9 +17,9 @@ impl Signex {
                         .await
                         .map(|file| file.path().to_path_buf())
                 },
-                Message::FileOpened,
+                |p| Message::File(FileMsg::Opened(p)),
             )),
-            MenuMessage::Save => Some(self.update(Message::SaveFile)),
+            MenuMessage::Save => Some(self.update(Message::File(FileMsg::Save))),
             MenuMessage::SaveAs => Some(Task::perform(
                 async {
                     rfd::AsyncFileDialog::new()
@@ -29,7 +29,10 @@ impl Signex {
                         .await
                         .map(|file| file.path().to_path_buf())
                 },
-                |path| path.map(Message::SaveFileAs).unwrap_or(Message::Noop),
+                |path| {
+                    path.map(|p| Message::File(FileMsg::SaveAs(p)))
+                        .unwrap_or(Message::Noop)
+                },
             )),
             MenuMessage::NewProject => Some(Task::perform(
                 async {
@@ -41,7 +44,7 @@ impl Signex {
                         .await
                         .map(|file| file.path().to_path_buf())
                 },
-                Message::NewProjectFile,
+                |p| Message::File(FileMsg::NewProject(p)),
             )),
             MenuMessage::PrintPreview => {
                 Some(self.update(Message::PrintPreview(PrintPreviewMsg::Requested)))

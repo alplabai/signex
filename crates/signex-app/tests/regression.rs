@@ -12,8 +12,9 @@
 //! still need a human eye.
 
 use signex_app::app::{
-    ContextMenuMsg, LoadedProject, Message, ProjectCloseChoice, ProjectTreeAction, RemoveChoice,
-    RemoveDialogState, RemoveMsg, RenameDialogState, RenameMsg, Signex,
+    ContextMenuMsg, FileMsg, LoadedProject, Message, ProjectCloseChoice, ProjectMsg,
+    ProjectTreeAction, RemoveChoice, RemoveDialogState, RemoveMsg, RenameDialogState, RenameMsg,
+    Signex,
 };
 use signex_types::project::SheetEntry;
 
@@ -266,7 +267,7 @@ fn f10_save_clears_dirty_paths_and_refreshes_panel_ctx() {
     app.document_state.dirty_paths.insert(prj_path.clone());
     assert!(app.document_state.dirty_paths.contains(&prj_path));
 
-    let _ = app.update(Message::SaveFile);
+    let _ = app.update(Message::File(FileMsg::Save));
 
     // Title strip: dirty_paths empty → "(N unsaved)" suffix gone.
     assert!(
@@ -301,7 +302,7 @@ fn f10_save_persists_snxprj_as_valid_json() {
     }
     app.document_state.dirty_paths.insert(prj_path.clone());
 
-    let _ = app.update(Message::SaveFile);
+    let _ = app.update(Message::File(FileMsg::Save));
 
     // Re-parse the file from disk — assert the mutations landed.
     let reloaded = signex_types::project::parse_project(&prj_path).expect("parse");
@@ -325,10 +326,10 @@ fn add_existing_same_file_twice_is_silently_skipped() {
     assert!(new_sheet.exists());
 
     // First add — succeeds, sheet appears.
-    let _ = app.update(Message::AddExistingFilePicked {
+    let _ = app.update(Message::Project(ProjectMsg::AddExistingFilePicked {
         project_idx: 0,
         paths: Some(vec![new_sheet.clone()]),
-    });
+    }));
     assert_eq!(
         app.document_state.projects[0].data.sheets.len(),
         1,
@@ -336,10 +337,10 @@ fn add_existing_same_file_twice_is_silently_skipped() {
     );
 
     // Second add — silent no-op, list size unchanged.
-    let _ = app.update(Message::AddExistingFilePicked {
+    let _ = app.update(Message::Project(ProjectMsg::AddExistingFilePicked {
         project_idx: 0,
         paths: Some(vec![new_sheet.clone()]),
-    });
+    }));
     assert_eq!(
         app.document_state.projects[0].data.sheets.len(),
         1,
@@ -357,10 +358,10 @@ fn add_existing_with_external_path_copies_into_project_dir() {
     let external_sheet = external.path().join("ExternalSheet.snxsch");
     fs::write(&external_sheet, b"external sheet bytes").unwrap();
 
-    let _ = app.update(Message::AddExistingFilePicked {
+    let _ = app.update(Message::Project(ProjectMsg::AddExistingFilePicked {
         project_idx: 0,
         paths: Some(vec![external_sheet.clone()]),
-    });
+    }));
 
     let copied = project_dir.join("ExternalSheet.snxsch");
     assert!(
@@ -413,10 +414,10 @@ fn add_new_schematic_writes_blank_snxsch_marks_project_dirty_no_tab_open() {
     let new_sheet = tmp.path().join("FreshSheet.snxsch");
     assert!(!new_sheet.exists());
 
-    let _ = app.update(Message::AddNewSchematicPicked {
+    let _ = app.update(Message::Project(ProjectMsg::AddNewSchematicPicked {
         project_idx: 0,
         path: Some(new_sheet.clone()),
-    });
+    }));
 
     assert!(new_sheet.exists(), "new .snxsch must land on disk");
     assert_eq!(
@@ -442,10 +443,10 @@ fn add_new_schematic_writes_blank_snxsch_marks_project_dirty_no_tab_open() {
 fn add_new_schematic_cancelled_picker_is_a_clean_noop() {
     let (mut app, _tmp, prj_path) = fixture_project_with_companions("November");
 
-    let _ = app.update(Message::AddNewSchematicPicked {
+    let _ = app.update(Message::Project(ProjectMsg::AddNewSchematicPicked {
         project_idx: 0,
         path: None, // user cancelled the Save-As dialog
-    });
+    }));
 
     assert!(
         app.document_state.projects[0].data.sheets.is_empty(),
@@ -490,7 +491,7 @@ fn project_options_modal_opens_with_metadata_then_closes() {
     assert_eq!(state.library_count, 0);
 
     // Close-X / Esc both fire CloseProjectOptions.
-    let _ = app.update(Message::CloseProjectOptions);
+    let _ = app.update(Message::Project(ProjectMsg::CloseOptions));
     assert!(
         app.ui_state.project_options.is_none(),
         "Project Options modal closed after CloseProjectOptions"
@@ -1112,8 +1113,8 @@ fn loaded_project_data_round_trips_via_write_then_parse() {
 fn project_git_commit_done_clears_inflight_entry() {
     // The async pipeline tracks (project_root, rel_path) pairs in
     // `inflight_git_commits` while the commit runs in the
-    // background. `Message::ProjectGitCommitDone` must remove the
-    // pair regardless of success/failure so the "Saving…" pill
+    // background. `Message::Project(ProjectMsg::GitCommitDone)` must
+    // remove the pair regardless of success/failure so the "Saving…" pill
     // clears.
     let (mut app, _tmp, prj_path) = fixture_project_with_companions("Foxtrot");
     let project_root = prj_path.parent().unwrap().to_path_buf();
@@ -1123,11 +1124,11 @@ fn project_git_commit_done_clears_inflight_entry() {
     assert!(app.document_state.inflight_git_commits.contains(&key));
 
     // Success path.
-    let _ = app.update(Message::ProjectGitCommitDone {
+    let _ = app.update(Message::Project(ProjectMsg::GitCommitDone {
         project_root: project_root.clone(),
         rel_path: rel_path.clone(),
         result: Ok("deadbeef".to_string()),
-    });
+    }));
     assert!(
         !app.document_state.inflight_git_commits.contains(&key),
         "inflight entry must be cleared on success"
@@ -1135,11 +1136,11 @@ fn project_git_commit_done_clears_inflight_entry() {
 
     // Failure path also clears (data is on disk regardless of git).
     app.document_state.inflight_git_commits.insert(key.clone());
-    let _ = app.update(Message::ProjectGitCommitDone {
+    let _ = app.update(Message::Project(ProjectMsg::GitCommitDone {
         project_root: project_root.clone(),
         rel_path: rel_path.clone(),
         result: Err("commit_path: …".to_string()),
-    });
+    }));
     assert!(
         !app.document_state.inflight_git_commits.contains(&key),
         "inflight entry must be cleared on failure too"
@@ -4464,7 +4465,9 @@ fn app_exit_confirm_cancel_dismisses_modal_and_keeps_dirty_state() {
     let _ = app.update(Message::CloseMainWindow);
     assert!(app.ui_state.app_quit_confirm.is_some());
 
-    let _ = app.update(Message::AppQuitConfirm(ProjectCloseChoice::Cancel));
+    let _ = app.update(Message::Project(ProjectMsg::AppQuitConfirm(
+        ProjectCloseChoice::Cancel,
+    )));
     assert!(
         app.ui_state.app_quit_confirm.is_none(),
         "Cancel must dismiss the modal"
@@ -4485,7 +4488,9 @@ fn app_exit_confirm_discard_all_clears_modal() {
     assert!(app.ui_state.app_quit_confirm.is_some());
 
     // Discard All resolves the modal (and returns the exit task).
-    let _ = app.update(Message::AppQuitConfirm(ProjectCloseChoice::DiscardAll));
+    let _ = app.update(Message::Project(ProjectMsg::AppQuitConfirm(
+        ProjectCloseChoice::DiscardAll,
+    )));
     assert!(
         app.ui_state.app_quit_confirm.is_none(),
         "Discard All must resolve the modal"
@@ -4503,7 +4508,9 @@ fn app_exit_save_all_never_loses_an_unsaveable_file() {
     let _ = app.update(Message::CloseMainWindow);
     assert!(app.ui_state.app_quit_confirm.is_some());
 
-    let _ = app.update(Message::AppQuitConfirm(ProjectCloseChoice::SaveAll));
+    let _ = app.update(Message::Project(ProjectMsg::AppQuitConfirm(
+        ProjectCloseChoice::SaveAll,
+    )));
 
     // Modal resolved, but the unsaveable file is reported and retained.
     assert!(app.ui_state.app_quit_confirm.is_none());
@@ -4530,7 +4537,7 @@ fn new_project_over_existing_non_empty_snxprj_is_refused() {
     let before = std::fs::read(&prj_path).expect("read .snxprj");
     assert!(!before.is_empty(), "fixture .snxprj should be non-empty");
 
-    let _ = app.update(Message::NewProjectFile(Some(prj_path.clone())));
+    let _ = app.update(Message::File(FileMsg::NewProject(Some(prj_path.clone()))));
 
     let after = std::fs::read(&prj_path).expect("read .snxprj after");
     assert_eq!(
@@ -5698,7 +5705,7 @@ fn v027_sketch_line_drag_resizes_rect_pad_bbox() {
 // v0.13.0 "Symbol & Library" release. These tests pin the gate at the
 // two behavioural funnels every footprint-editor entry routes through:
 //
-//   * OPEN  — `Message::FileOpened` → `open_document_path` →
+//   * OPEN  — `Message::File(FileMsg::Opened)` → `open_document_path` →
 //     `handle_open_primitive` ("snxfpt" arm). A valid `.snxfpt` must
 //     NOT push an editable FootprintEditor tab while the flag is off.
 //   * The symbol path (`.snxsym`) is the positive control — it MUST
@@ -5736,7 +5743,7 @@ fn opening_snxfpt_does_not_create_editable_tab_when_gated() {
     let fpt = tmp.path().join("gated.snxfpt");
     write_valid_snxfpt(&fpt, "GATED");
     let (mut app, _t) = Signex::new();
-    let _ = app.update(Message::FileOpened(Some(fpt.clone())));
+    let _ = app.update(Message::File(FileMsg::Opened(Some(fpt.clone()))));
     let opened_footprint_tab = app
         .document_state
         .tabs
@@ -5766,7 +5773,7 @@ fn opening_snxsym_still_creates_editable_tab() {
     let sym = tmp.path().join("control.snxsym");
     write_valid_snxsym(&sym, "CONTROL");
     let (mut app, _t) = Signex::new();
-    let _ = app.update(Message::FileOpened(Some(sym.clone())));
+    let _ = app.update(Message::File(FileMsg::Opened(Some(sym.clone()))));
     // Positive control: the symbol editor is the headline feature of
     // v0.13.0 and must open regardless of the footprint gate.
     assert!(

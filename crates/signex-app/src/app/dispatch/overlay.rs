@@ -38,21 +38,38 @@ impl Signex {
             } => self.handle_focus_at(world_x, world_y, select),
             Message::ToggleAutoFocus => self.handle_toggle_auto_focus(),
             Message::ActiveBar(msg) => self.handle_active_bar_message(msg),
-            Message::ProjectCloseConfirm(choice) => self.handle_project_close_confirm(choice),
-            Message::AppQuitConfirm(choice) => self.handle_app_quit_confirm(choice),
-            Message::AddExistingFilePicked { project_idx, paths } => {
-                self.handle_add_existing_file_picked(project_idx, paths);
-                Task::none()
-            }
-            Message::AddNewSchematicPicked { project_idx, path } => {
-                self.handle_add_new_schematic_picked(project_idx, path);
-                Task::none()
-            }
-            Message::CloseProjectOptions => {
+            _ => unreachable!("dispatch_overlay_message received non-overlay message"),
+        }
+    }
+
+    /// Project lifecycle family handler (namespaced, ADR-0001 D3).
+    /// Covers the project-close / app-quit confirm modals, the Project
+    /// Options dismiss, the Add-Existing / Add-New-Schematic file-picker
+    /// completions, and the async git-commit completion.
+    pub(crate) fn dispatch_project_message(&mut self, msg: ProjectMsg) -> Task<Message> {
+        match msg {
+            ProjectMsg::CloseConfirm(choice) => self.handle_project_close_confirm(choice),
+            ProjectMsg::AppQuitConfirm(choice) => self.handle_app_quit_confirm(choice),
+            ProjectMsg::CloseOptions => {
                 self.ui_state.project_options = None;
                 Task::none()
             }
-            _ => unreachable!("dispatch_overlay_message received non-overlay message"),
+            ProjectMsg::AddExistingFilePicked { project_idx, paths } => {
+                self.handle_add_existing_file_picked(project_idx, paths);
+                Task::none()
+            }
+            ProjectMsg::AddNewSchematicPicked { project_idx, path } => {
+                self.handle_add_new_schematic_picked(project_idx, path);
+                Task::none()
+            }
+            ProjectMsg::GitCommitDone {
+                project_root,
+                rel_path,
+                result,
+            } => {
+                self.handle_project_git_commit_done(project_root, rel_path, result);
+                Task::none()
+            }
         }
     }
 

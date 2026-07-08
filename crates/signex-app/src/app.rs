@@ -31,11 +31,11 @@ pub(crate) mod view;
 pub use contracts::{
     AnnotateMsg, AppQuitConfirmState, BomPreviewMsg, ContextAction, ContextMenuMsg,
     ContextMenuState, ContextSubmenu, DragTarget, EnableVersionControlMsg,
-    EnableVersionControlState, ErcMsg, ExportMsg, GridPickerState, GridPropertiesMsg,
+    EnableVersionControlState, ErcMsg, ExportMsg, FileMsg, GridPickerState, GridPropertiesMsg,
     GridPropertiesState, Message, NetColorMsg, PreferencesMsg, PrintPreviewMsg, ProjectCloseChoice,
-    ProjectCloseConfirmState, ProjectOptionsState, ProjectTreeAction, ProjectTreeContextMenuState,
-    RemoveChoice, RemoveDialogState, RemoveMsg, RenameDialogState, RenameMsg,
-    SelectionFilterCustomState, SelectionFilterMsg, StatusBarRequest, TabContextAction,
+    ProjectCloseConfirmState, ProjectMsg, ProjectOptionsState, ProjectTreeAction,
+    ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState, RemoveMsg, RenameDialogState,
+    RenameMsg, SelectionFilterCustomState, SelectionFilterMsg, StatusBarRequest, TabContextAction,
     TabContextMenuState, TextEditState, TrackItem, VersionControlScope,
 };
 pub use documents::{

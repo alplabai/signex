@@ -3439,7 +3439,7 @@ impl Signex {
             // the file doesn't exist on disk yet (newly-minted in-memory
             // tab from `Add New ▸ Symbol` / `Add New ▸ Footprint`), spawn
             // the Save-As dialog instead so the user picks where it lands
-            // — same gate as the top-level `Message::SaveFile` path uses.
+            // — same gate as the top-level `Message::File(FileMsg::Save)` path uses.
             PrimitiveEdit::Save => {
                 if !path.exists() {
                     return crate::app::handlers::document_files::spawn_save_as_for_new_primitive(

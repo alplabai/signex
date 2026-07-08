@@ -5,14 +5,6 @@ use super::super::*;
 impl Signex {
     pub(super) fn dispatch_document_message(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::FileOpened(path) => {
-                self.handle_document_file_opened(path);
-                self.finish_update()
-            }
-            Message::NewProjectFile(path) => {
-                self.handle_new_project_file(path);
-                self.finish_update()
-            }
             Message::DeleteSelected => {
                 // v0.20 — if the active tab is a footprint editor,
                 // route the Delete key to FootprintDeleteSelected so
@@ -77,23 +69,39 @@ impl Signex {
                 self.handle_selection_duplicate_requested();
                 self.finish_update()
             }
-            Message::SaveFile => {
+            _ => unreachable!("dispatch_document_message received non-document message"),
+        }
+    }
+
+    /// File / save message handler (namespaced family, ADR-0001 D3).
+    /// Covers open / new-project / save / save-as / save-primitive-as
+    /// plus the async `SchematicLoaded` completion.
+    pub(crate) fn dispatch_file_message(&mut self, msg: FileMsg) -> Task<Message> {
+        match msg {
+            FileMsg::Opened(path) => {
+                self.handle_document_file_opened(path);
+                self.finish_update()
+            }
+            FileMsg::NewProject(path) => {
+                self.handle_new_project_file(path);
+                self.finish_update()
+            }
+            FileMsg::Save => {
                 let task = self.handle_active_document_save_requested();
                 iced::Task::batch([task, self.finish_update()])
             }
-            Message::SaveFileAs(path) => {
+            FileMsg::SaveAs(path) => {
                 self.handle_active_document_save_as_requested(path);
                 self.finish_update()
             }
-            Message::SavePrimitiveAs { from_path, to_path } => {
+            FileMsg::SavePrimitiveAs { from_path, to_path } => {
                 self.handle_save_primitive_as(&from_path, &to_path);
                 self.finish_update()
             }
-            Message::SchematicLoaded(sheet) => {
+            FileMsg::SchematicLoaded(sheet) => {
                 self.load_schematic_into_active_tab(*sheet);
                 self.finish_update()
             }
-            _ => unreachable!("dispatch_document_message received non-document message"),
         }
     }
 

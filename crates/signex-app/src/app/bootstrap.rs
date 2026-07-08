@@ -752,7 +752,7 @@ impl Signex {
                             }
                             // Ctrl+S save
                             (keyboard::Key::Character(c), m) if c == "s" && m.command() => {
-                                Message::SaveFile
+                                Message::File(FileMsg::Save)
                             }
                             // v0.14.2 — footprint editor mode shortcuts.
                             // 1 = Sketch, 2 = Pads, 3 = 3D View. The

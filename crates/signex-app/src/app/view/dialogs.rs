@@ -11,7 +11,7 @@ use iced::{Background, Border, Color, Element, Length, Theme};
 use crate::app::state::AnnotateOrder;
 use crate::app::{
     AnnotateMsg, BomPreviewMsg, EnableVersionControlMsg, ErcMsg, GridPropertiesMsg, Message,
-    RemoveMsg, RenameMsg, SelectionFilterMsg, Signex,
+    ProjectMsg, RemoveMsg, RenameMsg, SelectionFilterMsg, Signex,
 };
 
 const BACKDROP: Color = Color::from_rgba(0.0, 0.0, 0.0, 0.55);
@@ -1015,7 +1015,11 @@ impl Signex {
                     .size(MODAL_HEADER_TITLE_SIZE)
                     .color(text_c),
                 Space::new().width(Length::Fill),
-                close_x_button(Message::CloseProjectOptions, theme_id, text_muted),
+                close_x_button(
+                    Message::Project(ProjectMsg::CloseOptions),
+                    theme_id,
+                    text_muted,
+                ),
             ]
             .align_y(iced::Alignment::Center),
         )
@@ -1062,7 +1066,11 @@ impl Signex {
                 container(
                     row![
                         Space::new().width(Length::Fill),
-                        primary_button("Close", Some(Message::CloseProjectOptions), border_c),
+                        primary_button(
+                            "Close",
+                            Some(Message::Project(ProjectMsg::CloseOptions)),
+                            border_c,
+                        ),
                     ]
                     .align_y(iced::Alignment::Center),
                 )
@@ -2620,7 +2628,7 @@ impl Signex {
                     .color(text_c),
                 Space::new().width(Length::Fill),
                 close_x_button(
-                    Message::ProjectCloseConfirm(ProjectCloseChoice::Cancel),
+                    Message::Project(ProjectMsg::CloseConfirm(ProjectCloseChoice::Cancel)),
                     theme_id,
                     text_muted,
                 ),
@@ -2678,21 +2686,25 @@ impl Signex {
                         Space::new().width(Length::Fill),
                         secondary_button(
                             "Cancel",
-                            Message::ProjectCloseConfirm(ProjectCloseChoice::Cancel),
+                            Message::Project(ProjectMsg::CloseConfirm(ProjectCloseChoice::Cancel)),
                             text_c,
                             border_c,
                         ),
                         Space::new().width(8),
                         secondary_button(
                             "Discard All",
-                            Message::ProjectCloseConfirm(ProjectCloseChoice::DiscardAll),
+                            Message::Project(ProjectMsg::CloseConfirm(
+                                ProjectCloseChoice::DiscardAll,
+                            )),
                             text_c,
                             border_c,
                         ),
                         Space::new().width(8),
                         primary_button(
                             "Save All",
-                            Some(Message::ProjectCloseConfirm(ProjectCloseChoice::SaveAll)),
+                            Some(Message::Project(ProjectMsg::CloseConfirm(
+                                ProjectCloseChoice::SaveAll,
+                            ))),
                             border_c,
                         ),
                     ]
@@ -2734,7 +2746,7 @@ impl Signex {
                     .color(text_c),
                 Space::new().width(Length::Fill),
                 close_x_button(
-                    Message::AppQuitConfirm(ProjectCloseChoice::Cancel),
+                    Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::Cancel)),
                     theme_id,
                     text_muted,
                 ),
@@ -2789,21 +2801,27 @@ impl Signex {
                         Space::new().width(Length::Fill),
                         secondary_button(
                             "Cancel",
-                            Message::AppQuitConfirm(ProjectCloseChoice::Cancel),
+                            Message::Project(ProjectMsg::AppQuitConfirm(
+                                ProjectCloseChoice::Cancel
+                            )),
                             text_c,
                             border_c,
                         ),
                         Space::new().width(8),
                         secondary_button(
                             "Discard All",
-                            Message::AppQuitConfirm(ProjectCloseChoice::DiscardAll),
+                            Message::Project(ProjectMsg::AppQuitConfirm(
+                                ProjectCloseChoice::DiscardAll,
+                            )),
                             text_c,
                             border_c,
                         ),
                         Space::new().width(8),
                         primary_button(
                             "Save All",
-                            Some(Message::AppQuitConfirm(ProjectCloseChoice::SaveAll)),
+                            Some(Message::Project(ProjectMsg::AppQuitConfirm(
+                                ProjectCloseChoice::SaveAll,
+                            ))),
                             border_c,
                         ),
                     ]
