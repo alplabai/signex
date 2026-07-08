@@ -331,8 +331,13 @@ impl ErcContext {
                         let _world = SymbolTransform::from_symbol(sym).apply(lp.pin.position);
                         let (wx, wy) = (_world.x, _world.y);
                         let world_pos = Point::new(wx, wy);
-                        let connected =
-                            point_is_connected(&world_pos, &wires, &buses, &labels, &no_connects);
+                        let connected = point_is_connected(
+                            &world_pos,
+                            &wires,
+                            &junctions,
+                            &labels,
+                            &no_connects,
+                        );
                         let required = !matches!(
                             lp.pin.direction,
                             PinDirection::Unclassified | PinDirection::DoNotConnect
@@ -381,14 +386,8 @@ impl ErcContext {
 // Helpers
 // ---------------------------------------------------------------------------
 
-const EPS: f64 = 1e-4;
-
-fn pt_same(a: &Point, b: &Point) -> bool {
-    (a.x - b.x).abs() < EPS && (a.y - b.y).abs() < EPS
-}
-
-/// MD-6: see `rules::key` — same 1 µm bucket so context + rule
-/// projections agree on net membership.
+/// MD-6: see `rules::key` — the 1 µm bucket, the single "same point" metric so
+/// context + rule projections agree on net membership (D5.5).
 fn pt_key(p: &Point) -> (i64, i64) {
     ((p.x * 1000.0).round() as i64, (p.y * 1000.0).round() as i64)
 }
@@ -398,8 +397,8 @@ fn pt_key(p: &Point) -> (i64, i64) {
 /// zero cross-product (computed in `i128` so large micron coordinates
 /// can't overflow), then `p` must sit inside the segment's bounding box.
 fn point_on_segment(p: (i64, i64), a: (i64, i64), b: (i64, i64)) -> bool {
-    let cross = (b.0 - a.0) as i128 * (p.1 - a.1) as i128
-        - (b.1 - a.1) as i128 * (p.0 - a.0) as i128;
+    let cross =
+        (b.0 - a.0) as i128 * (p.1 - a.1) as i128 - (b.1 - a.1) as i128 * (p.0 - a.0) as i128;
     if cross != 0 {
         return false;
     }
@@ -408,22 +407,26 @@ fn point_on_segment(p: (i64, i64), a: (i64, i64), b: (i64, i64)) -> bool {
     within_x && within_y
 }
 
-/// Returns `true` if any wire/bus endpoint, label, or no-connect sits at `pos`.
+/// True when a wire endpoint, junction, label, or no-connect sits at `pos`,
+/// compared in the 1 µm key space — the same "same point" definition the
+/// union-find uses, so the gate and the net partition never disagree (D5.5).
+/// Junctions count: a pin may tap a wire mid-span where a junction sits (D5.3).
+/// Buses do not: a bundle is never unioned, so gating on a bus endpoint minted
+/// a one-terminal phantom net and a spurious unconnected-pin warning (D5.4).
 fn point_is_connected(
     pos: &Point,
     wires: &[ErcWire],
-    buses: &[ErcBus],
+    junctions: &[ErcJunction],
     labels: &[ErcLabel],
     no_connects: &[ErcNoConnect],
 ) -> bool {
+    let k = pt_key(pos);
     wires
         .iter()
-        .any(|w| pt_same(&w.start, pos) || pt_same(&w.end, pos))
-        || buses
-            .iter()
-            .any(|b| pt_same(&b.start, pos) || pt_same(&b.end, pos))
-        || labels.iter().any(|l| pt_same(&l.position, pos))
-        || no_connects.iter().any(|nc| pt_same(&nc.position, pos))
+        .any(|w| pt_key(&w.start) == k || pt_key(&w.end) == k)
+        || junctions.iter().any(|j| pt_key(&j.position) == k)
+        || labels.iter().any(|l| pt_key(&l.position) == k)
+        || no_connects.iter().any(|nc| pt_key(&nc.position) == k)
 }
 
 // ---------------------------------------------------------------------------
@@ -528,7 +531,7 @@ fn derive_nets(
                 .unwrap_or_else(|| name.to_ascii_lowercase());
 
             let has_driver = pins.iter().any(|t| DRIVING.contains(t));
-            let has_pullup = pins.iter().any(|t| *t == PinDirection::Passive);
+            let has_pullup = pins.contains(&PinDirection::Passive);
 
             ErcNet {
                 name,
@@ -585,7 +588,36 @@ mod tests {
         assert!(point_on_segment((5_000, 0), a, b), "interior point");
         assert!(point_on_segment((0, 0), a, b), "endpoint");
         assert!(!point_on_segment((5_000, 1_000), a, b), "off the line");
-        assert!(!point_on_segment((11_000, 0), a, b), "collinear but past the end");
+        assert!(
+            !point_on_segment((11_000, 0), a, b),
+            "collinear but past the end"
+        );
+    }
+
+    #[test]
+    fn junction_gates_connectivity_but_off_points_do_not() {
+        // D5.3: a pin tapping a wire mid-span where a junction sits is
+        // connected. D5.4: buses no longer gate, so a point that is only on a
+        // bus (off every wire/junction/label) is not connected — no phantom net
+        // or spurious unconnected-pin warning.
+        let wires = vec![wire(pt(0.0, 0.0), pt(10.0, 0.0))];
+        let junctions = vec![ErcJunction {
+            position: pt(5.0, 0.0),
+        }];
+        let labels: Vec<ErcLabel> = Vec::new();
+        let no_connects: Vec<ErcNoConnect> = Vec::new();
+        assert!(
+            point_is_connected(&pt(5.0, 0.0), &wires, &junctions, &labels, &no_connects),
+            "pin on a mid-wire junction is connected"
+        );
+        assert!(
+            point_is_connected(&pt(0.0, 0.0), &wires, &junctions, &labels, &no_connects),
+            "pin on a wire endpoint is connected"
+        );
+        assert!(
+            !point_is_connected(&pt(7.0, 3.0), &wires, &junctions, &labels, &no_connects),
+            "a point off every wire/junction/label is not connected"
+        );
     }
 
     #[test]
@@ -607,8 +639,16 @@ mod tests {
         ])];
 
         let nets = derive_nets(&wires, &[], &junctions, &syms);
-        assert_eq!(nets.len(), 1, "a T-junction must merge both wires into one net");
-        assert_eq!(nets[0].pin_types.len(), 2, "both pins belong to the merged net");
+        assert_eq!(
+            nets.len(),
+            1,
+            "a T-junction must merge both wires into one net"
+        );
+        assert_eq!(
+            nets[0].pin_types.len(),
+            2,
+            "both pins belong to the merged net"
+        );
     }
 
     #[test]
@@ -626,6 +666,10 @@ mod tests {
         ])];
 
         let nets = derive_nets(&wires, &[], &[], &syms);
-        assert_eq!(nets.len(), 2, "without a junction the T is two separate nets");
+        assert_eq!(
+            nets.len(),
+            2,
+            "without a junction the T is two separate nets"
+        );
     }
 }

@@ -13,7 +13,7 @@
 //! semantics. Same-name label *merging* and cross-sheet stitching are
 //! deferred to a later increment.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use signex_types::net::{Net, NetId, Netlist, Terminal};
 use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, Symbol};
@@ -60,14 +60,8 @@ impl SymbolTransform {
     }
 }
 
-const EPS: f64 = 1e-4;
-
-fn pt_same(a: &Point, b: &Point) -> bool {
-    (a.x - b.x).abs() < EPS && (a.y - b.y).abs() < EPS
-}
-
-/// 1 µm integer bucket — the union-find key space. Matches ERC's `pt_key`
-/// so both derivations agree on which points are "the same".
+/// 1 µm integer bucket — the union-find key space and the single definition of
+/// "same point" for the whole derivation (D5.5). Matches ERC's `pt_key`.
 pub(crate) fn pt_key(p: &Point) -> Key {
     ((p.x * 1000.0).round() as i64, (p.y * 1000.0).round() as i64)
 }
@@ -75,6 +69,16 @@ pub(crate) fn pt_key(p: &Point) -> Key {
 /// True when `p` lies on segment `a`–`b` (endpoints included) in the integer
 /// key space. A zero cross-product (computed in `i128` so large micron
 /// coordinates can't overflow) plus a bounding-box containment check.
+///
+/// Collinearity is **exact** in the 1 µm bucket space (D5.5): `p` must sit
+/// precisely on the integer line through `a`–`b`. For axis-aligned wires — the
+/// overwhelming majority — every on-wire bucket is exactly collinear, so this is
+/// tight. A point geometrically on a *diagonal* wire can round just off that
+/// line and be rejected; we deliberately do **not** widen to a ±1-bucket band
+/// here, because a band would also glue near-miss points that are not really on
+/// the wire. The real fix is exact integer-nanometre coordinates (the schematic
+/// model still stores `f64` mm); that migration is the future coordinate ADR's
+/// job, and until then exact collinearity is the safe, deterministic rule.
 pub(crate) fn point_on_segment(p: Key, a: Key, b: Key) -> bool {
     let cross =
         (b.0 - a.0) as i128 * (p.1 - a.1) as i128 - (b.1 - a.1) as i128 * (p.0 - a.0) as i128;
@@ -86,23 +90,26 @@ pub(crate) fn point_on_segment(p: Key, a: Key, b: Key) -> bool {
     within_x && within_y
 }
 
-/// True when a wire/bus endpoint, label, or no-connect marker sits at `pos`.
-/// Mirrors ERC's `point_is_connected`; a pin is only a terminal of a net if
-/// something actually lands on its world-space tip.
+/// True when a wire endpoint, junction, label, or no-connect marker sits at
+/// `pos`, compared in the 1 µm key space — the *same* "same point" definition
+/// the union-find uses, so the connectivity gate and the net partition can
+/// never disagree (D5.5). A pin is a terminal only if something lands on its
+/// world-space tip.
+///
+/// Junctions count: a pin may tap a wire mid-span where a junction sits (D5.3).
+/// Buses do **not**: a bus is a member bundle, not a single net, and the
+/// union-find never merges buses, so gating on a bus endpoint used to mint a
+/// one-terminal phantom net (D5.4). Direct bus-pin connectivity (through bus
+/// entries) is deliberately out of scope here.
 fn point_is_connected(pos: &Point, sheet: &SchematicSheet) -> bool {
+    let k = pt_key(pos);
     sheet
         .wires
         .iter()
-        .any(|w| pt_same(&w.start, pos) || pt_same(&w.end, pos))
-        || sheet
-            .buses
-            .iter()
-            .any(|b| pt_same(&b.start, pos) || pt_same(&b.end, pos))
-        || sheet.labels.iter().any(|l| pt_same(&l.position, pos))
-        || sheet
-            .no_connects
-            .iter()
-            .any(|nc| pt_same(&nc.position, pos))
+        .any(|w| pt_key(&w.start) == k || pt_key(&w.end) == k)
+        || sheet.junctions.iter().any(|j| pt_key(&j.position) == k)
+        || sheet.labels.iter().any(|l| pt_key(&l.position) == k)
+        || sheet.no_connects.iter().any(|nc| pt_key(&nc.position) == k)
 }
 
 /// Selection priority of a label kind for naming a net: `Global > Power >
@@ -173,19 +180,6 @@ pub(crate) fn power_name_carriers(
         }
     }
     carriers
-}
-
-/// Net class = the first word of the name before `_`, lowercased (`"i2c"`
-/// from `"I2C_SDA"`); the whole lowercased name when there is no `_`. Empty
-/// for auto-named nets, which carry no class intent.
-pub(crate) fn class_from_name(name: Option<&str>) -> String {
-    match name {
-        Some(n) => n
-            .find('_')
-            .map(|i| n[..i].to_ascii_lowercase())
-            .unwrap_or_else(|| n.to_ascii_lowercase()),
-        None => String::new(),
-    }
 }
 
 /// The electrical connectivity of a single sheet: a union-find over wire
@@ -365,6 +359,63 @@ pub(crate) fn collect_terminals(
     net_terms
 }
 
+/// Group each wire and junction uuid under its net root — the geometric
+/// membership of the net (what the net-flood highlights and the ratsnest read).
+/// Wires and junctions are kept in document order for determinism. `parent`
+/// must already be fully merged ([`merged_sheet_parent`]).
+pub(crate) fn collect_membership(
+    sheet: &SchematicSheet,
+    parent: &mut HashMap<Key, Key>,
+) -> HashMap<Key, (Vec<Uuid>, Vec<Uuid>)> {
+    let mut m: HashMap<Key, (Vec<Uuid>, Vec<Uuid>)> = HashMap::new();
+    for w in &sheet.wires {
+        let root = uf_find(parent, pt_key(&w.start));
+        m.entry(root).or_default().0.push(w.uuid);
+    }
+    for j in &sheet.junctions {
+        let root = uf_find(parent, pt_key(&j.position));
+        m.entry(root).or_default().1.push(j.uuid);
+    }
+    m
+}
+
+/// Enforce net-name uniqueness in net order: the first net to claim a name
+/// keeps it; any later net with the same name is renamed with a deterministic
+/// `_<n>` suffix. This closes two ambiguities a bare projection leaves — two
+/// electrically distinct nets sharing a label (e.g. two non-merging
+/// `Hierarchical` labels of one name on a sheet), and an auto `N$k` colliding
+/// with a user label spelt `N$k`.
+///
+/// The suffix starts at the net's own `id` (stable across builds) and only
+/// bumps in the pathological case a user label already occupies it, so the
+/// result is deterministic and itself collision-free. Both entry points —
+/// [`build_netlist`] and the cross-sheet stitcher — run this same pass, so the
+/// names they emit agree. Returns each base name that collided, in net order,
+/// for callers that surface it (the stitcher's `NameCollision`); single-sheet
+/// callers discard it.
+pub(crate) fn dedup_net_names(nets: &mut [Net]) -> Vec<String> {
+    let mut used: HashSet<String> = HashSet::with_capacity(nets.len());
+    let mut collided: Vec<String> = Vec::new();
+    let mut reported: HashSet<String> = HashSet::new();
+    for net in nets.iter_mut() {
+        if used.insert(net.name.clone()) {
+            continue;
+        }
+        if reported.insert(net.name.clone()) {
+            collided.push(net.name.clone());
+        }
+        let base = net.name.clone();
+        let mut n = net.id.0;
+        let mut candidate = format!("{base}_{n}");
+        while !used.insert(candidate.clone()) {
+            n += 1;
+            candidate = format!("{base}_{n}");
+        }
+        net.name = candidate;
+    }
+    collided
+}
+
 /// Build the authoritative [`Netlist`] for a single schematic sheet.
 ///
 /// Physical connectivity is [`SheetConnectivity`] — union-find over wire
@@ -392,6 +443,7 @@ pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
     for (root, value) in power_name_carriers(sheet, &mut parent) {
         power_by_root.entry(root).or_default().push(value);
     }
+    let mut membership = collect_membership(sheet, &mut parent);
     let mut net_terms = collect_terminals(sheet, &mut parent);
 
     // A net exists wherever at least one terminal lands. A label with no pins
@@ -399,7 +451,7 @@ pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
     let mut roots: Vec<Key> = net_terms.keys().copied().collect();
     roots.sort_unstable();
 
-    let nets = roots
+    let mut nets: Vec<Net> = roots
         .into_iter()
         .enumerate()
         .map(|(idx, root)| {
@@ -410,22 +462,29 @@ pub fn build_netlist(sheet: &SchematicSheet) -> Netlist {
                 .map(|v| v.iter().map(String::as_str).collect())
                 .unwrap_or_default();
             let selected = best_net_name(labels, &power_vals);
-            let class = class_from_name(selected.as_ref().map(|(_, t)| t.as_str()));
             let name = selected
                 .map(|(_, t)| t)
                 .unwrap_or_else(|| format!("N${}", id.0));
 
+            let (wires, junctions) = membership.remove(&root).unwrap_or_default();
             let mut terminals = net_terms.remove(&root).unwrap_or_default();
             terminals.sort_by(|a, b| a.reference.cmp(&b.reference).then(a.pin.cmp(&b.pin)));
 
             Net {
                 id,
                 name,
-                class,
+                class: None,
+                wires,
+                junctions,
                 terminals,
             }
         })
         .collect();
+
+    // Two distinct nets may still carry the same name (e.g. same-name
+    // `Hierarchical` labels that don't merge on one sheet, or an auto `N$k`
+    // meeting a user label of that spelling). Rename the later one.
+    dedup_net_names(&mut nets);
 
     Netlist { nets }
 }
@@ -594,6 +653,55 @@ mod tests {
     }
 
     #[test]
+    fn pin_on_a_junction_mid_wire_is_a_terminal() {
+        // A pin tapping a wire mid-span where a junction sits is a terminal
+        // (D5.3). The gate used to check only wire endpoints, so this pin was
+        // silently dropped (and ERC flagged it unconnected).
+        let mut sheet = empty_sheet();
+        sheet.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+        sheet.junctions.push(junction(pt(5.0, 0.0)));
+        add_lib(
+            &mut sheet,
+            "R",
+            vec![lib_pin("1", pt(0.0, 0.0), PinDirection::Passive)],
+        );
+        place(&mut sheet, "R1", "R", pt(0.0, 0.0));
+        place(&mut sheet, "R2", "R", pt(5.0, 0.0));
+
+        let netlist = build_netlist(&sheet);
+        assert_eq!(netlist.nets.len(), 1);
+        assert_eq!(
+            netlist.nets[0].terminals.len(),
+            2,
+            "the mid-wire junction pin is a terminal"
+        );
+    }
+
+    #[test]
+    fn pin_on_a_bare_bus_endpoint_forms_no_phantom_net() {
+        // A bus is a bundle, never unioned; gating on a bus endpoint used to
+        // mint a one-terminal phantom net (D5.4). Now it does not connect.
+        let mut sheet = empty_sheet();
+        sheet.buses.push(signex_types::schematic::Bus {
+            uuid: Uuid::nil(),
+            start: pt(0.0, 0.0),
+            end: pt(10.0, 0.0),
+        });
+        add_lib(
+            &mut sheet,
+            "R",
+            vec![lib_pin("1", pt(0.0, 0.0), PinDirection::Passive)],
+        );
+        place(&mut sheet, "R1", "R", pt(0.0, 0.0));
+
+        let netlist = build_netlist(&sheet);
+        assert!(
+            netlist.nets.is_empty(),
+            "a bus-only pin forms no phantom net"
+        );
+    }
+
+    #[test]
     fn power_port_symbol_names_its_net() {
         // A power-port symbol (is_power, value "GND") names its net GND with no
         // GND label — new in #156; build_netlist used to ignore power ports for
@@ -629,6 +737,24 @@ mod tests {
         assert!(
             !point_on_segment((11_000, 0), a, b),
             "collinear but past the end"
+        );
+    }
+
+    #[test]
+    fn point_on_segment_is_exact_on_a_diagonal_wire() {
+        // D5.5 decision: collinearity is exact in the bucket space, diagonals
+        // included. A point exactly on a 45° wire is detected; one a single
+        // bucket off the integer line is not (no ±1-bucket tolerance — that is
+        // deferred to the integer-nm coordinate migration).
+        let a = (0, 0);
+        let b = (10_000, 10_000);
+        assert!(
+            point_on_segment((5_000, 5_000), a, b),
+            "exactly on diagonal"
+        );
+        assert!(
+            !point_on_segment((5_000, 5_001), a, b),
+            "one bucket off the line is rejected"
         );
     }
 
@@ -738,7 +864,9 @@ mod tests {
     }
 
     #[test]
-    fn class_is_first_word_before_underscore() {
+    fn class_is_left_to_project_rules() {
+        // The builder no longer derives a class from the name prefix (D3.2):
+        // class resolution is a project-rules concern layered on connectivity.
         let mut sheet = empty_sheet();
         sheet.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
         sheet
@@ -752,7 +880,39 @@ mod tests {
         place(&mut sheet, "R1", "R", pt(0.0, 0.0));
 
         let netlist = build_netlist(&sheet);
-        assert_eq!(netlist.nets[0].class, "i2c");
+        assert_eq!(netlist.nets[0].name, "I2C_SDA");
+        assert!(netlist.nets[0].class.is_none());
+    }
+
+    #[test]
+    fn net_records_its_wire_and_junction_membership() {
+        // D3.1: a net carries the wire + junction uuids it occupies — the
+        // membership the net-flood highlights and the ratsnest reads.
+        let mut sheet = empty_sheet();
+        let w1 = Uuid::from_u128(1);
+        let w2 = Uuid::from_u128(2);
+        let jn = Uuid::from_u128(3);
+        sheet.wires.push(wire_id(pt(0.0, 0.0), pt(10.0, 0.0), w1));
+        sheet.wires.push(wire_id(pt(5.0, 0.0), pt(5.0, 5.0), w2));
+        sheet.junctions.push(Junction {
+            uuid: jn,
+            position: pt(5.0, 0.0),
+            diameter: 0.0,
+        });
+        add_lib(
+            &mut sheet,
+            "R",
+            vec![lib_pin("1", pt(0.0, 0.0), PinDirection::Passive)],
+        );
+        place(&mut sheet, "R1", "R", pt(0.0, 0.0));
+        place(&mut sheet, "R2", "R", pt(5.0, 5.0));
+
+        let netlist = build_netlist(&sheet);
+        assert_eq!(netlist.nets.len(), 1);
+        let net = &netlist.nets[0];
+        assert_eq!(net.wires.len(), 2, "both wires belong to the net");
+        assert!(net.wires.contains(&w1) && net.wires.contains(&w2));
+        assert_eq!(net.junctions, vec![jn]);
     }
 
     #[test]
@@ -828,6 +988,54 @@ mod tests {
             netlist.nets.len(),
             2,
             "hierarchical same-name is not merged on one sheet"
+        );
+    }
+
+    #[test]
+    fn same_name_nets_on_one_sheet_get_unique_names() {
+        // Two non-merging hierarchical labels of one name leave two electrically
+        // distinct nets both wanting "BUS". A netlist with two nets of one name
+        // is ambiguous to every downstream consumer, so names must stay unique:
+        // the first keeps "BUS", the second is deterministically suffixed (D5.6).
+        let netlist = two_labelled_groups("BUS", LabelType::Hierarchical);
+        assert_eq!(netlist.nets.len(), 2);
+        let names: Vec<&str> = netlist.nets.iter().map(|n| n.name.as_str()).collect();
+        assert_ne!(
+            names[0], names[1],
+            "the two nets must not share a name: {names:?}"
+        );
+        assert!(names.contains(&"BUS"), "one keeps the bare name: {names:?}");
+        assert!(
+            names.iter().any(|n| n.starts_with("BUS_")),
+            "the other is suffixed: {names:?}"
+        );
+    }
+
+    #[test]
+    fn auto_name_never_collides_with_a_user_label() {
+        // Bug #6: an unlabelled net auto-names "N$k"; the first net here (root at
+        // the origin) takes "N$1". A user then spelled the *other* net's label
+        // "N$1" too — the two must not resolve to one name.
+        let mut sheet = empty_sheet();
+        sheet.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+        sheet.wires.push(wire(pt(50.0, 0.0), pt(60.0, 0.0)));
+        sheet
+            .labels
+            .push(label("N$1", pt(50.0, 0.0), LabelType::Global));
+        add_lib(
+            &mut sheet,
+            "R",
+            vec![lib_pin("1", pt(0.0, 0.0), PinDirection::Passive)],
+        );
+        place(&mut sheet, "R1", "R", pt(0.0, 0.0));
+        place(&mut sheet, "R2", "R", pt(50.0, 0.0));
+
+        let netlist = build_netlist(&sheet);
+        assert_eq!(netlist.nets.len(), 2);
+        let names: Vec<&str> = netlist.nets.iter().map(|n| n.name.as_str()).collect();
+        assert_ne!(
+            names[0], names[1],
+            "names stay unique despite the clash: {names:?}"
         );
     }
 

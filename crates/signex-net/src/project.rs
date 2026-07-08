@@ -22,8 +22,8 @@ use signex_types::schematic::{Label, LabelType, SchematicSheet};
 use uuid::Uuid;
 
 use crate::build::{
-    class_from_name, collect_net_labels, collect_terminals, label_priority, merged_sheet_parent,
-    point_on_segment, power_name_carriers, pt_key,
+    collect_membership, collect_net_labels, collect_terminals, dedup_net_names, label_priority,
+    merged_sheet_parent, point_on_segment, power_name_carriers, pt_key,
 };
 use crate::uf::{Key, find as uf_find, union as uf_union};
 
@@ -92,6 +92,8 @@ struct Analysis<'a> {
     /// Hierarchical/Global label text → net roots carrying it (the child side
     /// of sheet-pin binding).
     port_labels: HashMap<String, Vec<Key>>,
+    /// Net root → (wire uuids, junction uuids) on this sheet.
+    membership: HashMap<Key, (Vec<Uuid>, Vec<Uuid>)>,
 }
 
 /// Build the whole-project [`Netlist`] by stitching the root sheet to its
@@ -201,31 +203,31 @@ pub fn build_project_netlist(
     // Deterministic ids: sorted-root order extended by (occurrence, root).
     raw.sort_by_key(|r| r.sort_key);
 
-    let mut nets: Vec<Net> = Vec::with_capacity(raw.len());
-    let mut used: HashSet<String> = HashSet::new();
-    let mut collided: HashSet<String> = HashSet::new();
-    for (idx, r) in raw.into_iter().enumerate() {
-        let id = NetId(idx as u32 + 1);
-        let mut name = r.name.unwrap_or_else(|| format!("N${}", id.0));
-        // Suffix only *qualified* (cross-sheet) collisions; bare single-sheet
-        // duplicates pass through to stay byte-identical to build_netlist.
-        if r.qualified && !used.insert(name.clone()) {
-            if collided.insert(name.clone()) {
-                issues.push(StitchIssue::NameCollision { name: name.clone() });
+    let mut nets: Vec<Net> = raw
+        .into_iter()
+        .enumerate()
+        .map(|(idx, r)| {
+            let id = NetId(idx as u32 + 1);
+            let name = r.name.unwrap_or_else(|| format!("N${}", id.0));
+            let mut terminals = r.terminals;
+            terminals.sort_by(|a, b| a.reference.cmp(&b.reference).then(a.pin.cmp(&b.pin)));
+            Net {
+                id,
+                name,
+                class: None,
+                wires: r.wires,
+                junctions: r.junctions,
+                terminals,
             }
-            name = format!("{}_{}", name, id.0);
-            used.insert(name.clone());
-        } else {
-            used.insert(name.clone());
-        }
-        let mut terminals = r.terminals;
-        terminals.sort_by(|a, b| a.reference.cmp(&b.reference).then(a.pin.cmp(&b.pin)));
-        nets.push(Net {
-            id,
-            name,
-            class: r.class,
-            terminals,
-        });
+        })
+        .collect();
+
+    // Two electrically distinct nets may resolve to one name — sibling children
+    // that qualify to the same `chain/label`, or any of the single-sheet cases.
+    // Suffix the later one and report it. Same pass `build_netlist` runs, so the
+    // single-root netlist stays byte-identical.
+    for name in dedup_net_names(&mut nets) {
+        issues.push(StitchIssue::NameCollision { name });
     }
 
     ProjectNetlist {
@@ -238,11 +240,11 @@ pub fn build_project_netlist(
 struct RawNet {
     sort_key: L2,
     terminals: Vec<Terminal>,
+    /// Wire / junction membership, aggregated across the net's occurrences.
+    wires: Vec<Uuid>,
+    junctions: Vec<Uuid>,
     /// Selected name (bare or already qualified), or `None` for an auto name.
     name: Option<String>,
-    class: String,
-    /// Whether `name` was qualified off a non-root occurrence (drives dedup).
-    qualified: bool,
 }
 
 /// Assemble one final net from its level-2 member nodes. Returns `None` when
@@ -290,25 +292,34 @@ fn assemble_net(mut members: Vec<L2>, occs: &[Occ], analyses: &[Analysis]) -> Op
         }
     }
 
-    let (name, class, qualified) = match best {
-        None => (None, String::new(), false),
+    let name = match best {
+        None => None,
         Some((_, qualifiable, text, occ)) => {
-            let class = class_from_name(Some(&text));
             let chain = &occs[occ].name_chain;
             if qualifiable && !chain.is_empty() {
-                (Some(format!("{}/{}", chain.join("/"), text)), class, true)
+                Some(format!("{}/{}", chain.join("/"), text))
             } else {
-                (Some(text), class, false)
+                Some(text)
             }
         }
     };
 
+    // Wire / junction membership across every member occurrence.
+    let mut wires: Vec<Uuid> = Vec::new();
+    let mut junctions: Vec<Uuid> = Vec::new();
+    for &(oid, root) in &members {
+        if let Some((w, j)) = analyses[oid].membership.get(&root) {
+            wires.extend(w.iter().copied());
+            junctions.extend(j.iter().copied());
+        }
+    }
+
     Some(RawNet {
         sort_key: members[0],
         terminals,
+        wires,
+        junctions,
         name,
-        class,
-        qualified,
     })
 }
 
@@ -333,6 +344,7 @@ fn analyze(sheet: &SchematicSheet) -> Analysis<'_> {
 
     let terminals = collect_terminals(sheet, &mut parent);
     let net_labels = collect_net_labels(sheet, &mut parent);
+    let membership = collect_membership(sheet, &mut parent);
 
     let mut power_by_root: HashMap<Key, Vec<String>> = HashMap::new();
     for (root, value) in power_name_carriers(sheet, &mut parent) {
@@ -368,6 +380,7 @@ fn analyze(sheet: &SchematicSheet) -> Analysis<'_> {
         power_by_root,
         pin_roots,
         port_labels,
+        membership,
     }
 }
 
@@ -902,6 +915,53 @@ mod tests {
     }
 
     #[test]
+    fn membership_aggregates_across_sheet_occurrences() {
+        // D3.1 cross-sheet: a net stitched from a Global label on two sheets
+        // carries the wire uuids from *both* occurrences, so the net-flood
+        // highlights the whole net project-wide — not just the clicked sheet.
+        let rw = Uuid::from_u128(0x11);
+        let cw = Uuid::from_u128(0x22);
+
+        let mut root = empty_sheet();
+        root.wires.push(Wire {
+            uuid: rw,
+            start: pt(0.0, 0.0),
+            end: pt(10.0, 0.0),
+            stroke_width: 0.0,
+        });
+        root.labels
+            .push(label("NET5V", pt(0.0, 0.0), LabelType::Global));
+        add_lib(&mut root, "R");
+        place(&mut root, "R1", "R", pt(10.0, 0.0));
+        root.child_sheets
+            .push(child_sheet("A", "a.sch", Vec::new()));
+
+        let mut child = empty_sheet();
+        child.wires.push(Wire {
+            uuid: cw,
+            start: pt(0.0, 0.0),
+            end: pt(10.0, 0.0),
+            stroke_width: 0.0,
+        });
+        child
+            .labels
+            .push(label("NET5V", pt(0.0, 0.0), LabelType::Global));
+        add_lib(&mut child, "R");
+        place(&mut child, "R2", "R", pt(10.0, 0.0));
+
+        let mut map = HashMap::new();
+        map.insert("a.sch".to_string(), child);
+        let p = build_project_netlist(&root, &map, None);
+        assert_eq!(p.netlist.nets.len(), 1, "same-name Global spans sheets");
+        let net = &p.netlist.nets[0];
+        assert!(
+            net.wires.contains(&rw) && net.wires.contains(&cw),
+            "both occurrences' wires belong to the net: {:?}",
+            net.wires
+        );
+    }
+
+    #[test]
     fn power_symbol_and_power_label_merge_across_sheets() {
         // Root: GND power-port symbol. Child: GND Power label. One net.
         let mut root = empty_sheet();
@@ -1163,6 +1223,43 @@ mod tests {
         assert!(
             p.issues.contains(&StitchIssue::NameCollision {
                 name: "charger/SDA".to_string()
+            }),
+            "collision reported: {:?}",
+            p.issues
+        );
+    }
+
+    // 10b ── A bare single-sheet collision dedups through the same shared pass,
+    // so the root netlist stays byte-identical to build_netlist while the
+    // stitcher still surfaces the clash.
+    #[test]
+    fn single_sheet_name_collision_matches_build_netlist_and_is_reported() {
+        let mut root = empty_sheet();
+        root.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
+        root.wires.push(wire(pt(50.0, 0.0), pt(60.0, 0.0)));
+        root.labels
+            .push(label("BUS", pt(0.0, 0.0), LabelType::Hierarchical));
+        root.labels
+            .push(label("BUS", pt(50.0, 0.0), LabelType::Hierarchical));
+        add_lib(&mut root, "R");
+        place(&mut root, "R1", "R", pt(0.0, 0.0));
+        place(&mut root, "R2", "R", pt(50.0, 0.0));
+
+        let p = build_project_netlist(&root, &HashMap::new(), None);
+        assert_eq!(
+            p.netlist,
+            build_netlist(&root),
+            "dedup keeps both paths byte-identical"
+        );
+        let ns = names(&p.netlist);
+        assert!(ns.contains(&"BUS"), "one keeps the bare name: {ns:?}");
+        assert!(
+            ns.iter().any(|n| n.starts_with("BUS_")),
+            "the other is suffixed: {ns:?}"
+        );
+        assert!(
+            p.issues.contains(&StitchIssue::NameCollision {
+                name: "BUS".to_string()
             }),
             "collision reported: {:?}",
             p.issues
