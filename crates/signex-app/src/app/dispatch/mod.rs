@@ -32,20 +32,12 @@ impl Signex {
             | Message::GridPickerOpen
             | Message::GridPickerClose
             | Message::GridPickerSelect(_)
-            | Message::GridPropertiesOpen
-            | Message::GridPropertiesClose
-            | Message::GridPropertiesSetStepX(_)
-            | Message::GridPropertiesSetStepY(_)
-            | Message::GridPropertiesToggleLink
-            | Message::GridPropertiesApply
-            | Message::GridPropertiesSetFineDisplay(_)
-            | Message::GridPropertiesSetCoarseDisplay(_)
-            | Message::GridPropertiesSetMultiplier(_)
             | Message::OpenSelectionFilterCustom
             | Message::CloseSelectionFilterCustom
             | Message::ToggleSelectionFilterCustomKind(_)
             | Message::ApplySelectionFilterCustom
             | Message::StatusBar(_) => self.dispatch_ui_message(message),
+            Message::GridProperties(msg) => self.dispatch_grid_properties_message(msg),
             Message::TextEditChanged(_) | Message::TextEditSubmit => {
                 self.dispatch_text_edit_message(message)
             }
@@ -417,17 +409,7 @@ impl Signex {
                 self.ui_state.net_color_palette_open = false;
                 self.close_detached_modal(super::state::ModalId::NetColorPalette)
             }
-            Message::NetColorSet { net, color } => {
-                if let Some(c) = color {
-                    self.ui_state.net_colors.insert(net, c);
-                } else {
-                    self.ui_state.net_colors.remove(&net);
-                }
-                self.interaction_state
-                    .active_canvas_mut()
-                    .clear_content_cache();
-                Task::none()
-            }
+            Message::NetColor(msg) => self.dispatch_net_color_message(msg),
             Message::OpenParameterManager => {
                 self.ui_state.parameter_manager_open = true;
                 self.handle_detach_modal(super::state::ModalId::ParameterManager)
@@ -446,41 +428,6 @@ impl Signex {
                     self.ui_state.annotate_locked.remove(&uuid);
                 } else {
                     self.ui_state.annotate_locked.insert(uuid);
-                }
-                Task::none()
-            }
-            Message::NetColorCustomShow(show) => {
-                self.ui_state.net_color_custom.show = show;
-                Task::none()
-            }
-            Message::NetColorCustomDraft(c) => {
-                self.ui_state.net_color_custom.draft = c;
-                Task::none()
-            }
-            Message::NetColorCustomSubmit(c) => {
-                self.ui_state.net_color_custom.show = false;
-                self.ui_state.net_color_custom.draft = c;
-                let color = signex_types::theme::Color {
-                    r: (c.r * 255.0).round() as u8,
-                    g: (c.g * 255.0).round() as u8,
-                    b: (c.b * 255.0).round() as u8,
-                    a: 255,
-                };
-                self.ui_state.pending_net_color = Some(color);
-                self.interaction_state.active_canvas_mut().pending_net_color = Some(color);
-                Task::none()
-            }
-            Message::NetColorCustomChannel(chan, s) => {
-                // Parse as u8; silently ignore invalid input so the
-                // text_input doesn't reject intermediate values like
-                // the empty string while the user types.
-                let parsed = s.trim().parse::<u16>().unwrap_or(0).min(255) as u8;
-                let draft = &mut self.ui_state.net_color_custom.draft;
-                let v = parsed as f32 / 255.0;
-                match chan {
-                    super::contracts::Channel::R => draft.r = v,
-                    super::contracts::Channel::G => draft.g = v,
-                    super::contracts::Channel::B => draft.b = v,
                 }
                 Task::none()
             }
@@ -738,6 +685,58 @@ impl Signex {
                 Task::none()
             }
             Message::Noop => Task::none(),
+        }
+    }
+
+    /// Per-net colour override handler (namespaced family, ADR-0001 D3).
+    pub(crate) fn dispatch_net_color_message(&mut self, msg: NetColorMsg) -> Task<Message> {
+        match msg {
+            NetColorMsg::Set { net, color } => {
+                if let Some(c) = color {
+                    self.ui_state.net_colors.insert(net, c);
+                } else {
+                    self.ui_state.net_colors.remove(&net);
+                }
+                self.interaction_state
+                    .active_canvas_mut()
+                    .clear_content_cache();
+                Task::none()
+            }
+            NetColorMsg::CustomShow(show) => {
+                self.ui_state.net_color_custom.show = show;
+                Task::none()
+            }
+            NetColorMsg::CustomDraft(c) => {
+                self.ui_state.net_color_custom.draft = c;
+                Task::none()
+            }
+            NetColorMsg::CustomSubmit(c) => {
+                self.ui_state.net_color_custom.show = false;
+                self.ui_state.net_color_custom.draft = c;
+                let color = signex_types::theme::Color {
+                    r: (c.r * 255.0).round() as u8,
+                    g: (c.g * 255.0).round() as u8,
+                    b: (c.b * 255.0).round() as u8,
+                    a: 255,
+                };
+                self.ui_state.pending_net_color = Some(color);
+                self.interaction_state.active_canvas_mut().pending_net_color = Some(color);
+                Task::none()
+            }
+            NetColorMsg::CustomChannel(chan, s) => {
+                // Parse as u8; silently ignore invalid input so the
+                // text_input doesn't reject intermediate values like
+                // the empty string while the user types.
+                let parsed = s.trim().parse::<u16>().unwrap_or(0).min(255) as u8;
+                let draft = &mut self.ui_state.net_color_custom.draft;
+                let v = parsed as f32 / 255.0;
+                match chan {
+                    super::contracts::Channel::R => draft.r = v,
+                    super::contracts::Channel::G => draft.g = v,
+                    super::contracts::Channel::B => draft.b = v,
+                }
+                Task::none()
+            }
         }
     }
 }

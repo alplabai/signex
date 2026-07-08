@@ -63,33 +63,8 @@ pub enum Message {
     /// payload is the step in mm; the dispatcher writes it to the
     /// active footprint editor's `state.snap_options.grid_step_mm`.
     GridPickerSelect(f64),
-    /// v0.18.11 — open the Cartesian Grid Editor modal (Ctrl+G).
-    /// Footprint editor only; other contexts no-op.
-    GridPropertiesOpen,
-    /// v0.18.11 — close the Grid Properties modal (Cancel button or
-    /// Esc). Discards in-flight edits.
-    GridPropertiesClose,
-    /// v0.18.11 — Grid Properties modal: text input bound to the
-    /// Step X field. Strings are validated on Apply, not per
-    /// keystroke, so partial input doesn't fight the user.
-    GridPropertiesSetStepX(String),
-    /// v0.18.11 — Grid Properties modal: text input bound to the
-    /// Step Y field.
-    GridPropertiesSetStepY(String),
-    /// v0.18.11 — Grid Properties modal: toggle the X/Y link.
-    /// When linked, editing Step X mirrors into Step Y.
-    GridPropertiesToggleLink,
-    /// v0.18.11 — Grid Properties modal: Apply button. Validates +
-    /// writes the active footprint editor's `snap_options.grid_step_mm`
-    /// (and Y if/when separate axes ship). v0.18.19: also commits
-    /// fine/coarse display + multiplier.
-    GridPropertiesApply,
-    /// v0.18.19 — Grid Properties modal: Fine grid display style.
-    GridPropertiesSetFineDisplay(crate::library::editor::footprint::state::GridDisplay),
-    /// v0.18.19 — Grid Properties modal: Coarse grid display style.
-    GridPropertiesSetCoarseDisplay(crate::library::editor::footprint::state::GridDisplay),
-    /// v0.18.19 — Grid Properties modal: Multiplier (5x / 10x / 2x / 1x).
-    GridPropertiesSetMultiplier(u32),
+    /// Grid Properties dialog — namespaced (ADR-0001 D3).
+    GridProperties(GridPropertiesMsg),
     /// v0.18.14.1 — Custom Selection Filter modal launcher. Opens
     /// the 8-row checkbox table over the active footprint editor.
     OpenSelectionFilterCustom,
@@ -393,11 +368,8 @@ pub enum Message {
     /// Open the F5 Net Color palette.
     OpenNetColorPalette,
     CloseNetColorPalette,
-    /// Assign a color to a net label text, or clear the override.
-    NetColorSet {
-        net: String,
-        color: Option<signex_types::theme::Color>,
-    },
+    /// Per-net colour overrides — namespaced (ADR-0001 D3).
+    NetColor(NetColorMsg),
     /// Open the Parameter Manager dialog (bulk parameter editor).
     OpenParameterManager,
     CloseParameterManager,
@@ -423,15 +395,6 @@ pub enum Message {
     /// Close the in-flight lasso polygon (Enter key). Commits the
     /// selection if >= 3 vertices, otherwise cancels.
     LassoCommit,
-    /// Show / hide the custom net-color picker modal.
-    NetColorCustomShow(bool),
-    /// Live-update the draft colour as the user drags the picker.
-    NetColorCustomDraft(iced::Color),
-    /// Commit the draft colour and arm net-colour flood mode.
-    NetColorCustomSubmit(iced::Color),
-    /// Edit one R/G/B channel of the custom-picker draft via text
-    /// input. Parsed as 0-255; invalid values ignored.
-    NetColorCustomChannel(Channel, String),
     /// Apply an edit to a placed SchDrawing. Dispatched from the
     /// post-placement Properties panel (Line / Rect / Circle / Arc /
     /// Polygon editable rows). Engine replaces the stored drawing by
@@ -656,6 +619,63 @@ pub enum PrintPreviewMsg {
     SetIncludeComponentParameters(bool),
     SetGlobalBookmarks(bool),
     SetPcbColourMode(signex_output::ColourMode),
+}
+
+/// Grid Properties dialog message family (ADR-0001 D3). Namespaced
+/// under `Message::GridProperties` and routed to
+/// `dispatch_grid_properties_message`.
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub enum GridPropertiesMsg {
+    /// v0.18.11 — open the Cartesian Grid Editor modal (Ctrl+G).
+    /// Footprint editor only; other contexts no-op.
+    Open,
+    /// v0.18.11 — close the Grid Properties modal (Cancel button or
+    /// Esc). Discards in-flight edits.
+    Close,
+    /// v0.18.11 — Grid Properties modal: text input bound to the
+    /// Step X field. Strings are validated on Apply, not per
+    /// keystroke, so partial input doesn't fight the user.
+    SetStepX(String),
+    /// v0.18.11 — Grid Properties modal: text input bound to the
+    /// Step Y field.
+    SetStepY(String),
+    /// v0.18.11 — Grid Properties modal: toggle the X/Y link.
+    /// When linked, editing Step X mirrors into Step Y.
+    ToggleLink,
+    /// v0.18.11 — Grid Properties modal: Apply button. Validates +
+    /// writes the active footprint editor's `snap_options.grid_step_mm`
+    /// (and Y if/when separate axes ship). v0.18.19: also commits
+    /// fine/coarse display + multiplier.
+    Apply,
+    /// v0.18.19 — Grid Properties modal: Fine grid display style.
+    SetFineDisplay(crate::library::editor::footprint::state::GridDisplay),
+    /// v0.18.19 — Grid Properties modal: Coarse grid display style.
+    SetCoarseDisplay(crate::library::editor::footprint::state::GridDisplay),
+    /// v0.18.19 — Grid Properties modal: Multiplier (5x / 10x / 2x / 1x).
+    SetMultiplier(u32),
+}
+
+/// Per-net colour override message family (ADR-0001 D3). Namespaced
+/// under `Message::NetColor` and routed to
+/// `dispatch_net_color_message`.
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub enum NetColorMsg {
+    /// Assign a color to a net label text, or clear the override.
+    Set {
+        net: String,
+        color: Option<signex_types::theme::Color>,
+    },
+    /// Show / hide the custom net-color picker modal.
+    CustomShow(bool),
+    /// Live-update the draft colour as the user drags the picker.
+    CustomDraft(iced::Color),
+    /// Commit the draft colour and arm net-colour flood mode.
+    CustomSubmit(iced::Color),
+    /// Edit one R/G/B channel of the custom-picker draft via text
+    /// input. Parsed as 0-255; invalid values ignored.
+    CustomChannel(Channel, String),
 }
 
 /// Per-shape edit descriptor. The Properties panel dispatches one of

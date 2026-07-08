@@ -1069,7 +1069,7 @@ impl Signex {
                 // handler reads `snap_options.grid_step_mm` and seeds
                 // the buffers; the commit path mirrors back to
                 // `grids[active_grid_idx]` (see GridPropertiesCommit).
-                let _ = self.update(Message::GridPropertiesOpen);
+                let _ = self.update(Message::GridProperties(GridPropertiesMsg::Open));
                 true
             }
             crate::panels::PanelMsg::FpEditorGridManagerDelete => {

@@ -551,7 +551,7 @@ impl Signex {
                                 // before the Shift+Ctrl+G `GridToggle`
                                 // arm — guards don't overlap (`!m.shift()`
                                 // vs `m.shift()`).
-                                Message::GridPropertiesOpen
+                                Message::GridProperties(GridPropertiesMsg::Open)
                             }
                             (keyboard::Key::Character(c), m) if c == "w" && !m.command() => {
                                 Message::Tool(ToolMessage::SelectTool(Tool::Wire))
