@@ -69,6 +69,16 @@ pub(crate) fn pt_key(p: &Point) -> Key {
 /// True when `p` lies on segment `a`–`b` (endpoints included) in the integer
 /// key space. A zero cross-product (computed in `i128` so large micron
 /// coordinates can't overflow) plus a bounding-box containment check.
+///
+/// Collinearity is **exact** in the 1 µm bucket space (D5.5): `p` must sit
+/// precisely on the integer line through `a`–`b`. For axis-aligned wires — the
+/// overwhelming majority — every on-wire bucket is exactly collinear, so this is
+/// tight. A point geometrically on a *diagonal* wire can round just off that
+/// line and be rejected; we deliberately do **not** widen to a ±1-bucket band
+/// here, because a band would also glue near-miss points that are not really on
+/// the wire. The real fix is exact integer-nanometre coordinates (the schematic
+/// model still stores `f64` mm); that migration is the future coordinate ADR's
+/// job, and until then exact collinearity is the safe, deterministic rule.
 pub(crate) fn point_on_segment(p: Key, a: Key, b: Key) -> bool {
     let cross =
         (b.0 - a.0) as i128 * (p.1 - a.1) as i128 - (b.1 - a.1) as i128 * (p.0 - a.0) as i128;
@@ -727,6 +737,24 @@ mod tests {
         assert!(
             !point_on_segment((11_000, 0), a, b),
             "collinear but past the end"
+        );
+    }
+
+    #[test]
+    fn point_on_segment_is_exact_on_a_diagonal_wire() {
+        // D5.5 decision: collinearity is exact in the bucket space, diagonals
+        // included. A point exactly on a 45° wire is detected; one a single
+        // bucket off the integer line is not (no ±1-bucket tolerance — that is
+        // deferred to the integer-nm coordinate migration).
+        let a = (0, 0);
+        let b = (10_000, 10_000);
+        assert!(
+            point_on_segment((5_000, 5_000), a, b),
+            "exactly on diagonal"
+        );
+        assert!(
+            !point_on_segment((5_000, 5_001), a, b),
+            "one bucket off the line is rejected"
         );
     }
 
