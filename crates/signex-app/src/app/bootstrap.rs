@@ -569,7 +569,7 @@ impl Signex {
                             (keyboard::Key::Character(c), m)
                                 if c == "p" && m.command() && !m.shift() =>
                             {
-                                Message::PrintPreviewRequested
+                                Message::PrintPreview(PrintPreviewMsg::Requested)
                             }
                             // Ctrl+Shift+P: open command palette (VS Code parity).
                             // Export PDF stays reachable via File ▸ Export ▸ PDF…

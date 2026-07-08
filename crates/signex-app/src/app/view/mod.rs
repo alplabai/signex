@@ -1516,7 +1516,11 @@ impl Signex {
                     .size(MODAL_HEADER_TITLE_SIZE)
                     .color(text_c),
                 Space::new().width(Length::Fill),
-                close_x_button(Message::PrintPreviewClose, theme_id, text_muted),
+                close_x_button(
+                    Message::PrintPreview(PrintPreviewMsg::Close),
+                    theme_id,
+                    text_muted
+                ),
             ]
             .align_y(iced::Alignment::Center),
         )
@@ -1546,7 +1550,7 @@ impl Signex {
         // Footer — page count + Export PDF.
         let export_btn = button(text("Export PDF").size(12).color(iced::Color::WHITE))
             .padding([6, 14])
-            .on_press(Message::PrintPreviewExport)
+            .on_press(Message::PrintPreview(PrintPreviewMsg::Export))
             .style(
                 move |_: &iced::Theme, _status| iced::widget::button::Style {
                     background: Some(accent_c.into()),
@@ -1625,7 +1629,7 @@ impl Signex {
             };
             let inner = container(text(label).size(12).color(label_color)).padding([6, 18]);
             mouse_area(TabPill::new(inner, style))
-                .on_press(Message::PrintPreviewSetTab(this))
+                .on_press(Message::PrintPreview(PrintPreviewMsg::SetTab(this)))
                 .interaction(iced::mouse::Interaction::Pointer)
         };
 
@@ -1702,7 +1706,9 @@ impl Signex {
                     preview.pdf_options.colour_mode,
                     signex_output::ColourMode::Colour
                 ),
-                Message::PrintPreviewSetColourMode(signex_output::ColourMode::Colour),
+                Message::PrintPreview(PrintPreviewMsg::SetColourMode(
+                    signex_output::ColourMode::Colour
+                )),
             ),
             mode_button(
                 "Gray",
@@ -1710,7 +1716,9 @@ impl Signex {
                     preview.pdf_options.colour_mode,
                     signex_output::ColourMode::Grayscale
                 ),
-                Message::PrintPreviewSetColourMode(signex_output::ColourMode::Grayscale),
+                Message::PrintPreview(PrintPreviewMsg::SetColourMode(
+                    signex_output::ColourMode::Grayscale
+                )),
             ),
             mode_button(
                 "B/W",
@@ -1718,7 +1726,9 @@ impl Signex {
                     preview.pdf_options.colour_mode,
                     signex_output::ColourMode::BlackAndWhite
                 ),
-                Message::PrintPreviewSetColourMode(signex_output::ColourMode::BlackAndWhite),
+                Message::PrintPreview(PrintPreviewMsg::SetColourMode(
+                    signex_output::ColourMode::BlackAndWhite
+                )),
             ),
         ]
         .spacing(8)
@@ -1732,7 +1742,7 @@ impl Signex {
                     preview.pdf_options.page_range,
                     signex_output::PageRange::All
                 ),
-                Message::PrintPreviewSetPageRangeAll,
+                Message::PrintPreview(PrintPreviewMsg::SetPageRangeAll),
             ),
             mode_button(
                 "Current",
@@ -1740,7 +1750,7 @@ impl Signex {
                     preview.pdf_options.page_range,
                     signex_output::PageRange::Current
                 ),
-                Message::PrintPreviewSetPageRangeCurrent,
+                Message::PrintPreview(PrintPreviewMsg::SetPageRangeCurrent),
             ),
             mode_button(
                 "Specific",
@@ -1748,7 +1758,7 @@ impl Signex {
                     preview.pdf_options.page_range,
                     signex_output::PageRange::Specific(_)
                 ),
-                Message::PrintPreviewSetPageRangeSpecific,
+                Message::PrintPreview(PrintPreviewMsg::SetPageRangeSpecific),
             ),
         ]
         .spacing(8)
@@ -1761,7 +1771,7 @@ impl Signex {
             row![
                 text("Page").size(11).color(text_muted),
                 text_input("1", &preview.specific_page_input)
-                    .on_input(Message::PrintPreviewSetSpecificPageInput)
+                    .on_input(|v| Message::PrintPreview(PrintPreviewMsg::SetSpecificPageInput(v)))
                     .padding([4, 8])
                     .size(12)
                     .width(80),
@@ -1780,14 +1790,15 @@ impl Signex {
         let toggles_row = row![
             text("Output").size(11).color(text_muted),
             row![
-                checkbox(fit_to_page).on_toggle(Message::PrintPreviewSetFitToPage),
+                checkbox(fit_to_page)
+                    .on_toggle(|v| Message::PrintPreview(PrintPreviewMsg::SetFitToPage(v))),
                 text("Fit to Page").size(11).color(text_c),
             ]
             .spacing(6)
             .align_y(iced::Alignment::Center),
             row![
                 checkbox(preview.pdf_options.include_title_block)
-                    .on_toggle(Message::PrintPreviewSetIncludeTitleBlock),
+                    .on_toggle(|v| Message::PrintPreview(PrintPreviewMsg::SetIncludeTitleBlock(v))),
                 text("Title Block").size(11).color(text_c),
             ]
             .spacing(6)
@@ -1871,7 +1882,9 @@ impl Signex {
                 },
                 ..container::Style::default()
             });
-            thumbs = thumbs.push(mouse_area(card).on_press(Message::PrintPreviewSelectPage(i)));
+            thumbs = thumbs.push(
+                mouse_area(card).on_press(Message::PrintPreview(PrintPreviewMsg::SelectPage(i))),
+            );
         }
         let thumb_rail = scrollable(thumbs).width(148).height(Length::Fill);
 
@@ -1948,15 +1961,15 @@ impl Signex {
                 iced::mouse::Interaction::default()
             };
             iced::widget::mouse_area(surface)
-                .on_press(Message::PrintPreviewPanStart)
-                .on_release(Message::PrintPreviewPanFinished)
+                .on_press(Message::PrintPreview(PrintPreviewMsg::PanStart))
+                .on_release(Message::PrintPreview(PrintPreviewMsg::PanFinished))
                 .on_scroll(|delta| {
                     use iced::mouse::ScrollDelta;
                     let dy = match delta {
                         ScrollDelta::Lines { y, .. } => y,
                         ScrollDelta::Pixels { y, .. } => y,
                     };
-                    Message::PrintPreviewZoom(dy)
+                    Message::PrintPreview(PrintPreviewMsg::Zoom(dy))
                 })
                 .interaction(interaction)
                 .into()
@@ -2086,7 +2099,7 @@ impl Signex {
                 let row_el = row![
                     checkbox(is_selected).on_toggle({
                         let path = path.clone();
-                        move |_| Message::PrintPreviewToggleFile(path.clone())
+                        move |_| Message::PrintPreview(PrintPreviewMsg::ToggleFile(path.clone()))
                     }),
                     column![
                         text(name.clone()).size(11).color(text_c),
@@ -2112,11 +2125,11 @@ impl Signex {
         let file_actions = row![
             button(text("Select All").size(11).color(text_c))
                 .padding([3, 8])
-                .on_press(Message::PrintPreviewSelectAllFiles)
+                .on_press(Message::PrintPreview(PrintPreviewMsg::SelectAllFiles))
                 .style(secondary_btn_style),
             button(text("Clear").size(11).color(text_c))
                 .padding([3, 8])
-                .on_press(Message::PrintPreviewClearAllFiles)
+                .on_press(Message::PrintPreview(PrintPreviewMsg::ClearAllFiles))
                 .style(secondary_btn_style),
         ]
         .spacing(6);
@@ -2166,9 +2179,9 @@ impl Signex {
         variant_options.dedup();
         let variant_picker = iced::widget::pick_list(variant_options, Some(variant_label), |s| {
             if s.eq_ignore_ascii_case("Base") {
-                Message::PrintPreviewSetVariant(None)
+                Message::PrintPreview(PrintPreviewMsg::SetVariant(None))
             } else {
-                Message::PrintPreviewSetVariant(Some(s))
+                Message::PrintPreview(PrintPreviewMsg::SetVariant(Some(s)))
             }
         })
         .text_size(11)
@@ -2196,7 +2209,7 @@ impl Signex {
                     Space::new().height(8),
                     row![
                         checkbox(opts.use_physical_structure)
-                            .on_toggle(Message::PrintPreviewSetUsePhysicalStructure),
+                            .on_toggle(|v| Message::PrintPreview(PrintPreviewMsg::SetUsePhysicalStructure(v))),
                         text("Use Physical Structure").size(11).color(text_c),
                     ]
                     .spacing(6)
@@ -2209,11 +2222,11 @@ impl Signex {
                     .spacing(8)
                     .align_y(iced::Alignment::Center),
                     Space::new().height(8),
-                    labelled_check("Designators", opts.physical_designators, Message::PrintPreviewSetPhysicalDesignators),
-                    labelled_check("Net Labels", opts.physical_net_labels, Message::PrintPreviewSetPhysicalNetLabels),
-                    labelled_check("Ports and Sheet Entries", opts.physical_ports, Message::PrintPreviewSetPhysicalPorts),
-                    labelled_check("Sheet Number Parameter", opts.physical_sheet_number, Message::PrintPreviewSetPhysicalSheetNumber),
-                    labelled_check("Document Number Parameter", opts.physical_document_number, Message::PrintPreviewSetPhysicalDocumentNumber),
+                    labelled_check("Designators", opts.physical_designators, |v| Message::PrintPreview(PrintPreviewMsg::SetPhysicalDesignators(v))),
+                    labelled_check("Net Labels", opts.physical_net_labels, |v| Message::PrintPreview(PrintPreviewMsg::SetPhysicalNetLabels(v))),
+                    labelled_check("Ports and Sheet Entries", opts.physical_ports, |v| Message::PrintPreview(PrintPreviewMsg::SetPhysicalPorts(v))),
+                    labelled_check("Sheet Number Parameter", opts.physical_sheet_number, |v| Message::PrintPreview(PrintPreviewMsg::SetPhysicalSheetNumber(v))),
+                    labelled_check("Document Number Parameter", opts.physical_document_number, |v| Message::PrintPreview(PrintPreviewMsg::SetPhysicalDocumentNumber(v))),
                 ]
                 .padding([10, 12])
                 .spacing(2),
@@ -2244,11 +2257,9 @@ impl Signex {
             .align_y(iced::Alignment::Center)
         };
 
-        let zoom_slider = iced::widget::slider(
-            0.0_f32..=1.0,
-            opts.bookmark_zoom,
-            Message::PrintPreviewSetBookmarkZoom,
-        )
+        let zoom_slider = iced::widget::slider(0.0_f32..=1.0, opts.bookmark_zoom, |v| {
+            Message::PrintPreview(PrintPreviewMsg::SetBookmarkZoom(v))
+        })
         .step(0.05_f32)
         .width(180);
         let zoom_col = column![
@@ -2270,11 +2281,9 @@ impl Signex {
         let info_col = column![
             text("Additional Information").size(11).color(text_c),
             Space::new().height(4),
-            lbl_check(
-                "Generate nets information",
-                opts.generate_nets_info,
-                Message::PrintPreviewSetGenerateNetsInfo,
-            ),
+            lbl_check("Generate nets information", opts.generate_nets_info, |v| {
+                Message::PrintPreview(PrintPreviewMsg::SetGenerateNetsInfo(v))
+            },),
             Space::new().height(4),
             text("The following bookmarks can be created in the PDF for nets:")
                 .size(10)
@@ -2282,21 +2291,15 @@ impl Signex {
             row![
                 Space::new().width(14),
                 column![
-                    lbl_check(
-                        "Pins",
-                        opts.bookmark_pins,
-                        Message::PrintPreviewSetBookmarkPins
-                    ),
-                    lbl_check(
-                        "Net Labels",
-                        opts.bookmark_net_labels,
-                        Message::PrintPreviewSetBookmarkNetLabels
-                    ),
-                    lbl_check(
-                        "Ports",
-                        opts.bookmark_ports,
-                        Message::PrintPreviewSetBookmarkPorts
-                    ),
+                    lbl_check("Pins", opts.bookmark_pins, |v| Message::PrintPreview(
+                        PrintPreviewMsg::SetBookmarkPins(v)
+                    )),
+                    lbl_check("Net Labels", opts.bookmark_net_labels, |v| {
+                        Message::PrintPreview(PrintPreviewMsg::SetBookmarkNetLabels(v))
+                    }),
+                    lbl_check("Ports", opts.bookmark_ports, |v| Message::PrintPreview(
+                        PrintPreviewMsg::SetBookmarkPorts(v)
+                    )),
                 ]
                 .spacing(2),
             ],
@@ -2304,12 +2307,12 @@ impl Signex {
             lbl_check(
                 "Include Component Parameters",
                 opts.include_component_parameters,
-                Message::PrintPreviewSetIncludeComponentParameters,
+                |v| Message::PrintPreview(PrintPreviewMsg::SetIncludeComponentParameters(v)),
             ),
             lbl_check(
                 "Global Bookmarks for Components and Nets",
                 opts.global_bookmarks,
-                Message::PrintPreviewSetGlobalBookmarks,
+                |v| Message::PrintPreview(PrintPreviewMsg::SetGlobalBookmarks(v)),
             ),
         ]
         .spacing(2);
@@ -2317,38 +2320,28 @@ impl Signex {
         let schematics_include_col = column![
             text("Schematics include").size(11).color(text_c),
             Space::new().height(4),
-            lbl_check(
-                "No-ERC Markers",
-                opts.include_no_erc_markers,
-                Message::PrintPreviewSetIncludeNoErcMarkers
-            ),
-            lbl_check(
-                "Parameter Sets",
-                opts.include_parameter_sets,
-                Message::PrintPreviewSetIncludeParameterSets
-            ),
-            lbl_check(
-                "Probes",
-                opts.include_probes,
-                Message::PrintPreviewSetIncludeProbes
-            ),
+            lbl_check("No-ERC Markers", opts.include_no_erc_markers, |v| {
+                Message::PrintPreview(PrintPreviewMsg::SetIncludeNoErcMarkers(v))
+            }),
+            lbl_check("Parameter Sets", opts.include_parameter_sets, |v| {
+                Message::PrintPreview(PrintPreviewMsg::SetIncludeParameterSets(v))
+            }),
+            lbl_check("Probes", opts.include_probes, |v| Message::PrintPreview(
+                PrintPreviewMsg::SetIncludeProbes(v)
+            )),
             lbl_check(
                 "Blankets",
                 opts.include_blankets,
-                Message::PrintPreviewSetIncludeBlankets
+                |v| Message::PrintPreview(PrintPreviewMsg::SetIncludeBlankets(v))
             ),
-            lbl_check(
-                "Notes",
-                opts.include_notes,
-                Message::PrintPreviewSetIncludeNotes
-            ),
+            lbl_check("Notes", opts.include_notes, |v| Message::PrintPreview(
+                PrintPreviewMsg::SetIncludeNotes(v)
+            )),
             row![
                 Space::new().width(14),
-                lbl_check(
-                    "Collapsed notes",
-                    opts.include_collapsed_notes,
-                    Message::PrintPreviewSetIncludeCollapsedNotes
-                ),
+                lbl_check("Collapsed notes", opts.include_collapsed_notes, |v| {
+                    Message::PrintPreview(PrintPreviewMsg::SetIncludeCollapsedNotes(v))
+                }),
             ],
             Space::new().height(8),
             text("Quality").size(11).color(text_c),
@@ -2359,7 +2352,7 @@ impl Signex {
                     PdfQuality::High600
                 ],
                 Some(preview.quality),
-                Message::PrintPreviewSetQuality,
+                |v| Message::PrintPreview(PrintPreviewMsg::SetQuality(v)),
             )
             .text_size(11)
             .width(180),
@@ -2382,19 +2375,19 @@ impl Signex {
                 "Color",
                 signex_output::ColourMode::Colour,
                 opts.colour_mode,
-                Message::PrintPreviewSetColourMode
+                |v| Message::PrintPreview(PrintPreviewMsg::SetColourMode(v))
             ),
             radio(
                 "Greyscale",
                 signex_output::ColourMode::Grayscale,
                 opts.colour_mode,
-                Message::PrintPreviewSetColourMode
+                |v| Message::PrintPreview(PrintPreviewMsg::SetColourMode(v))
             ),
             radio(
                 "Monochrome",
                 signex_output::ColourMode::BlackAndWhite,
                 opts.colour_mode,
-                Message::PrintPreviewSetColourMode
+                |v| Message::PrintPreview(PrintPreviewMsg::SetColourMode(v))
             ),
             Space::new().height(8),
             text("PCB Color Mode").size(11).color(text_c),
@@ -2403,19 +2396,19 @@ impl Signex {
                 "Color",
                 signex_output::ColourMode::Colour,
                 opts.pcb_colour_mode,
-                Message::PrintPreviewSetPcbColourMode
+                |v| Message::PrintPreview(PrintPreviewMsg::SetPcbColourMode(v))
             ),
             radio(
                 "Greyscale",
                 signex_output::ColourMode::Grayscale,
                 opts.pcb_colour_mode,
-                Message::PrintPreviewSetPcbColourMode
+                |v| Message::PrintPreview(PrintPreviewMsg::SetPcbColourMode(v))
             ),
             radio(
                 "Monochrome",
                 signex_output::ColourMode::BlackAndWhite,
                 opts.pcb_colour_mode,
-                Message::PrintPreviewSetPcbColourMode
+                |v| Message::PrintPreview(PrintPreviewMsg::SetPcbColourMode(v))
             ),
         ]
         .spacing(2);

@@ -43,7 +43,9 @@ impl Signex {
                 },
                 Message::NewProjectFile,
             )),
-            MenuMessage::PrintPreview => Some(self.update(Message::PrintPreviewRequested)),
+            MenuMessage::PrintPreview => {
+                Some(self.update(Message::PrintPreview(PrintPreviewMsg::Requested)))
+            }
             MenuMessage::ExportPdf => Some(self.update(Message::ExportPdfOpenDialog)),
             MenuMessage::ExportNetlist => self.handle_export_netlist_requested(),
             MenuMessage::ExportBom => Some(self.handle_bom_preview_open()),
