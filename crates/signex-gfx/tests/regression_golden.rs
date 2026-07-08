@@ -6,9 +6,9 @@
 
 use serde::Deserialize;
 use signex_gfx::debug_pass::{
-    run_arc_smoke_pass, run_grid_overlay_text_composite_smoke_pass, run_grid_smoke_pass,
-    run_line_circle_smoke_pass, run_polygon_smoke_pass, run_text_geometry_composite_smoke_pass,
-    run_text_smoke_pass, CompositeStage,
+    CompositeStage, run_arc_smoke_pass, run_grid_overlay_text_composite_smoke_pass,
+    run_grid_smoke_pass, run_line_circle_smoke_pass, run_polygon_smoke_pass,
+    run_text_geometry_composite_smoke_pass, run_text_smoke_pass,
 };
 use signex_gfx::primitive::arc::Arc;
 use signex_gfx::primitive::circle::Circle;
@@ -16,8 +16,8 @@ use signex_gfx::primitive::line::LineSegment;
 use signex_gfx::primitive::polygon::GpuPolygon;
 use signex_gfx::primitive::text::{TextHAlign, TextItem, TextVAlign};
 use signex_gfx::scene::{
-    apply_dirty_uploads, apply_dirty_uploads_with_culling, DirtyFlags, Scene, SceneUploadTarget,
-    TextUploadParams, UploadCounters, UploadCulling, ViewportAabbMm,
+    DirtyFlags, Scene, SceneUploadTarget, TextUploadParams, UploadCounters, UploadCulling,
+    ViewportAabbMm, apply_dirty_uploads, apply_dirty_uploads_with_culling,
 };
 
 #[derive(Debug, Deserialize)]
@@ -177,7 +177,11 @@ fn load_golden_fixture() -> GoldenBaseline {
 }
 
 fn expected_stage_order(stages: &[GoldenStage]) -> Vec<CompositeStage> {
-    stages.iter().copied().map(GoldenStage::as_runtime).collect()
+    stages
+        .iter()
+        .copied()
+        .map(GoldenStage::as_runtime)
+        .collect()
 }
 
 fn assert_float_eq(lhs: f32, rhs: f32, epsilon: f32) {
@@ -386,10 +390,21 @@ fn regression_golden_smoke_reports_match_fixture_baseline() {
     assert_eq!(polygon_vertices, golden.smoke.polygon_vertices);
     assert_eq!(text_instances, golden.smoke.text_instances);
 
-    assert_float_eq(grid.minor_lod_alpha, golden.smoke.grid_minor_lod_alpha, 0.000001);
-    assert_float_eq(grid.major_lod_alpha, golden.smoke.grid_major_lod_alpha, 0.000001);
+    assert_float_eq(
+        grid.minor_lod_alpha,
+        golden.smoke.grid_minor_lod_alpha,
+        0.000001,
+    );
+    assert_float_eq(
+        grid.major_lod_alpha,
+        golden.smoke.grid_major_lod_alpha,
+        0.000001,
+    );
 
-    assert_eq!(text_geometry.polygon_vertices, golden.smoke.polygon_vertices);
+    assert_eq!(
+        text_geometry.polygon_vertices,
+        golden.smoke.polygon_vertices
+    );
     assert_eq!(
         text_geometry.text_instances,
         golden.smoke.text_geometry_text_instances
@@ -399,7 +414,10 @@ fn regression_golden_smoke_reports_match_fixture_baseline() {
         expected_stage_order(&golden.smoke.text_geometry_stage_order)
     );
 
-    assert_eq!(overlay.geometry_vertices, golden.smoke.overlay_geometry_vertices);
+    assert_eq!(
+        overlay.geometry_vertices,
+        golden.smoke.overlay_geometry_vertices
+    );
     assert_eq!(overlay.overlay_instances, golden.smoke.overlay_instances);
     assert_eq!(overlay.text_instances, golden.smoke.overlay_text_instances);
     assert_eq!(
@@ -452,9 +470,15 @@ fn regression_golden_upload_gating_matches_fixture_baseline() {
         golden.upload.core_culling_total_updates
     );
     assert_eq!(core_target.uploaded_lines, golden.upload.core_visible_lines);
-    assert_eq!(core_target.uploaded_circles, golden.upload.core_visible_circles);
+    assert_eq!(
+        core_target.uploaded_circles,
+        golden.upload.core_visible_circles
+    );
     assert_eq!(core_target.uploaded_arcs, golden.upload.core_visible_arcs);
-    assert_eq!(core_target.uploaded_polygons, golden.upload.core_visible_polygons);
+    assert_eq!(
+        core_target.uploaded_polygons,
+        golden.upload.core_visible_polygons
+    );
     assert_eq!(core_target.uploaded_texts, golden.upload.core_visible_texts);
 
     let mut overlay_target = MockUploadTarget::default();
@@ -483,7 +507,10 @@ fn regression_golden_upload_gating_matches_fixture_baseline() {
         overlay_target.uploaded_overlay_polygons,
         golden.upload.overlay_visible_polygons
     );
-    assert_eq!(overlay_target.uploaded_erc_lines, golden.upload.overlay_visible_erc_lines);
+    assert_eq!(
+        overlay_target.uploaded_erc_lines,
+        golden.upload.overlay_visible_erc_lines
+    );
     assert_eq!(
         overlay_target.uploaded_erc_circles,
         golden.upload.overlay_visible_erc_circles

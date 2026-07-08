@@ -252,9 +252,7 @@ impl UploadCounters {
     }
 
     pub fn is_theme_only_refresh(&self) -> bool {
-        self.theme_refreshes == 1
-            && self.grid_refreshes == 0
-            && self.geometry_uploads() == 0
+        self.theme_refreshes == 1 && self.grid_refreshes == 0 && self.geometry_uploads() == 0
     }
 
     pub fn is_idle(&self) -> bool {
@@ -314,7 +312,9 @@ pub fn apply_dirty_uploads_with_culling<T: SceneUploadTarget>(
     }
 
     if dirty.contains(DirtyFlags::CIRCLES) {
-        let circles = cull_items(&scene.circles, viewport, |circle| Some(circle_envelope(circle)));
+        let circles = cull_items(&scene.circles, viewport, |circle| {
+            Some(circle_envelope(circle))
+        });
         target.upload_circles(circles.as_ref());
         counters.circle_uploads += 1;
     }
@@ -343,12 +343,15 @@ pub fn apply_dirty_uploads_with_culling<T: SceneUploadTarget>(
     }
 
     if dirty.contains(DirtyFlags::OVERLAY) {
-        let overlay_lines = cull_items(&scene.overlay_lines, viewport, |line| Some(line_envelope(line)));
+        let overlay_lines = cull_items(&scene.overlay_lines, viewport, |line| {
+            Some(line_envelope(line))
+        });
         target.upload_overlay_lines(overlay_lines.as_ref());
         counters.overlay_line_uploads += 1;
 
-        let overlay_circles =
-            cull_items(&scene.overlay_circles, viewport, |circle| Some(circle_envelope(circle)));
+        let overlay_circles = cull_items(&scene.overlay_circles, viewport, |circle| {
+            Some(circle_envelope(circle))
+        });
         target.upload_overlay_circles(overlay_circles.as_ref());
         counters.overlay_circle_uploads += 1;
 
@@ -356,12 +359,15 @@ pub fn apply_dirty_uploads_with_culling<T: SceneUploadTarget>(
         target.upload_overlay_polygons(overlay_polygons.as_ref());
         counters.overlay_polygon_uploads += 1;
 
-        let erc_lines = cull_items(&scene.erc_marker_lines, viewport, |line| Some(line_envelope(line)));
+        let erc_lines = cull_items(&scene.erc_marker_lines, viewport, |line| {
+            Some(line_envelope(line))
+        });
         target.upload_erc_marker_lines(erc_lines.as_ref());
         counters.erc_marker_line_uploads += 1;
 
-        let erc_circles =
-            cull_items(&scene.erc_marker_circles, viewport, |circle| Some(circle_envelope(circle)));
+        let erc_circles = cull_items(&scene.erc_marker_circles, viewport, |circle| {
+            Some(circle_envelope(circle))
+        });
         target.upload_erc_marker_circles(erc_circles.as_ref());
         counters.erc_marker_circle_uploads += 1;
 
@@ -381,8 +387,8 @@ pub fn apply_dirty_uploads_with_culling<T: SceneUploadTarget>(
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_dirty_uploads, apply_dirty_uploads_with_culling, SceneUploadTarget,
-        TextUploadParams, UploadCounters, UploadCulling, ViewportAabbMm,
+        SceneUploadTarget, TextUploadParams, UploadCounters, UploadCulling, ViewportAabbMm,
+        apply_dirty_uploads, apply_dirty_uploads_with_culling,
     };
     use crate::primitive::arc::Arc;
     use crate::primitive::circle::Circle;

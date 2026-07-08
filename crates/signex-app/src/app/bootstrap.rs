@@ -128,7 +128,8 @@ impl Signex {
                 preferences_draft_multisheet_style: crate::fonts::read_multisheet_style_pref(),
                 grid_style: crate::fonts::read_grid_style_pref(),
                 preferences_draft_grid_style: crate::fonts::read_grid_style_pref(),
-                preferences_draft_symbol_grid_size_mm: crate::fonts::read_symbol_grid_size_mm_pref(),
+                preferences_draft_symbol_grid_size_mm: crate::fonts::read_symbol_grid_size_mm_pref(
+                ),
                 preferences_draft_symbol_grid_style: crate::fonts::read_symbol_grid_style_pref(),
                 preferences_dirty: false,
                 custom_theme: None,

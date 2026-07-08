@@ -123,10 +123,30 @@ pub fn mirror_solve_to_chamfer_anchors(
         let r = chamfer_len_mm.max(0.0).min(w.min(h) / 2.0);
 
         let corners: [(&str, &str, (f64, f64), (f64, f64)); 4] = [
-            ("chamfer_ne_anchor1", "chamfer_ne_anchor2", (xmax - r, ymin), (xmax, ymin + r)),
-            ("chamfer_se_anchor1", "chamfer_se_anchor2", (xmax, ymax - r), (xmax - r, ymax)),
-            ("chamfer_sw_anchor1", "chamfer_sw_anchor2", (xmin + r, ymax), (xmin, ymax - r)),
-            ("chamfer_nw_anchor1", "chamfer_nw_anchor2", (xmin, ymin + r), (xmin + r, ymin)),
+            (
+                "chamfer_ne_anchor1",
+                "chamfer_ne_anchor2",
+                (xmax - r, ymin),
+                (xmax, ymin + r),
+            ),
+            (
+                "chamfer_se_anchor1",
+                "chamfer_se_anchor2",
+                (xmax, ymax - r),
+                (xmax - r, ymax),
+            ),
+            (
+                "chamfer_sw_anchor1",
+                "chamfer_sw_anchor2",
+                (xmin + r, ymax),
+                (xmin, ymax - r),
+            ),
+            (
+                "chamfer_nw_anchor1",
+                "chamfer_nw_anchor2",
+                (xmin, ymin + r),
+                (xmin + r, ymin),
+            ),
         ];
 
         for (key1, key2, pos1, pos2) in corners {
@@ -162,8 +182,14 @@ pub fn mirror_solve_to_round_rect_geometry(
         let (w, h) = pad.size_mm;
         let half_min = w.min(h) / 2.0;
 
-        let arc_keys: [&str; 4] = ["corner_r_ne_arc", "corner_r_se_arc", "corner_r_sw_arc", "corner_r_nw_arc"];
-        let per_corner_keys: [&str; 4] = ["corner_r_ne", "corner_r_se", "corner_r_sw", "corner_r_nw"];
+        let arc_keys: [&str; 4] = [
+            "corner_r_ne_arc",
+            "corner_r_se_arc",
+            "corner_r_sw_arc",
+            "corner_r_nw_arc",
+        ];
+        let per_corner_keys: [&str; 4] =
+            ["corner_r_ne", "corner_r_se", "corner_r_sw", "corner_r_nw"];
 
         // Per-corner expected positions for the Arc's three Point refs
         // given a resolved radius `r`. Order matches mint's arc_keys.
@@ -199,9 +225,9 @@ pub fn mirror_solve_to_round_rect_geometry(
                 .find(|e| e.id == arc_id)
                 .map(|e| &e.kind)
             {
-                Some(signex_sketch::entity::EntityKind::Arc { center, start, end, .. }) => {
-                    (*center, *start, *end)
-                }
+                Some(signex_sketch::entity::EntityKind::Arc {
+                    center, start, end, ..
+                }) => (*center, *start, *end),
                 _ => continue,
             };
 
@@ -285,10 +311,7 @@ pub fn mirror_solve_to_oval_geometry(
 /// Resolve a `pad.shape_params[key]` UUID-slug sidecar into a
 /// `SketchEntityId`. Returns `None` when the key is absent or its
 /// value isn't a valid UUID.
-fn sidecar_to_id(
-    pad: &super::super::state::EditorPad,
-    key: &str,
-) -> Option<SketchEntityId> {
+fn sidecar_to_id(pad: &super::super::state::EditorPad, key: &str) -> Option<SketchEntityId> {
     let slug = pad.shape_params.get(key)?;
     uuid::Uuid::parse_str(slug).ok().map(SketchEntityId)
 }

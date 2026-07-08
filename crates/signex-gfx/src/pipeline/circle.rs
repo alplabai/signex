@@ -109,12 +109,7 @@ impl CirclePipeline {
     }
 
     /// Upload circle instances into the instance buffer.
-    pub fn upload(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        circles: &[Circle],
-    ) {
+    pub fn upload(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, circles: &[Circle]) {
         self.instance_count = circles.len() as u32;
 
         if circles.is_empty() {

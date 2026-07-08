@@ -17,14 +17,14 @@ enum Node {
     Transform {
         translation: [f32; 3],
         #[allow(dead_code)]
-        rotation: [f32; 4],   // axis-angle: [ax, ay, az, angle] — deferred to E3
+        rotation: [f32; 4], // axis-angle: [ax, ay, az, angle] — deferred to E3
         scale: [f32; 3],
         children: Vec<Node>,
     },
     Shape {
         color: [f32; 4],
         positions: Vec<[f32; 3]>,
-        indices: Vec<i32>,   // VRML uses -1 as face separator
+        indices: Vec<i32>, // VRML uses -1 as face separator
     },
     Group {
         children: Vec<Node>,
@@ -37,7 +37,10 @@ enum Node {
 ///
 /// Returns `(meshes, warnings)` on success; panics are converted to
 /// `VrmlParseError` by the caller layer in `vrml/mod.rs`.
-pub fn parse(tokens: &[super::lexer::Token], line_offsets: &[usize]) -> Result<Vec<VrmlMesh>, ParseError> {
+pub fn parse(
+    tokens: &[super::lexer::Token],
+    line_offsets: &[usize],
+) -> Result<Vec<VrmlMesh>, ParseError> {
     let mut parser = Parser::new(tokens, line_offsets);
     parser.skip_vrml_header();
     let nodes = parser.parse_node_list()?;
@@ -87,7 +90,11 @@ impl Transform {
         [x, y, z]
     }
 
-    fn compose_translation(parent: &Transform, translation: [f32; 3], scale: [f32; 3]) -> Transform {
+    fn compose_translation(
+        parent: &Transform,
+        translation: [f32; 3],
+        scale: [f32; 3],
+    ) -> Transform {
         // Build a simple TRS matrix (no rotation for Milestone D E1 - WRL
         // root transforms are axis-aligned for most components).
         // T * S applied on top of parent.
@@ -114,7 +121,12 @@ fn collect_meshes(
     out: &mut Vec<VrmlMesh>,
 ) {
     match node {
-        Node::Transform { translation, scale, children, .. } => {
+        Node::Transform {
+            translation,
+            scale,
+            children,
+            ..
+        } => {
             let xf = Transform::compose_translation(parent_transform, *translation, *scale);
             for child in children {
                 collect_meshes(child, &xf, def_map, out);
@@ -125,7 +137,11 @@ fn collect_meshes(
                 collect_meshes(child, parent_transform, def_map, out);
             }
         }
-        Node::Shape { color, positions, indices } => {
+        Node::Shape {
+            color,
+            positions,
+            indices,
+        } => {
             let mesh = build_mesh(positions, indices, *color, parent_transform);
             if !mesh.indices.is_empty() {
                 out.push(mesh);
@@ -182,7 +198,11 @@ fn build_mesh(
         }
     }
 
-    VrmlMesh { positions: out_positions, indices: out_indices, color }
+    VrmlMesh {
+        positions: out_positions,
+        indices: out_indices,
+        color,
+    }
 }
 
 // ─── Token-stream parser ───────────────────────────────────────────────────────
@@ -197,7 +217,11 @@ struct Parser<'a> {
 
 impl<'a> Parser<'a> {
     fn new(tokens: &'a [Token], lines: &'a [usize]) -> Self {
-        Self { tokens, lines, pos: 0 }
+        Self {
+            tokens,
+            lines,
+            pos: 0,
+        }
     }
 
     fn current_line(&self) -> usize {
@@ -219,7 +243,9 @@ impl<'a> Parser<'a> {
     fn expect_word(&mut self) -> Result<String, ParseError> {
         match self.next() {
             Some(Token::Word(w)) => Ok(w.clone()),
-            _ => Err(ParseError::UnexpectedEof { line: self.current_line() }),
+            _ => Err(ParseError::UnexpectedEof {
+                line: self.current_line(),
+            }),
         }
     }
 
@@ -289,9 +315,15 @@ impl<'a> Parser<'a> {
 
         loop {
             match self.peek() {
-                None | Some(Token::RBrace) => { self.next(); break; }
+                None | Some(Token::RBrace) => {
+                    self.next();
+                    break;
+                }
                 Some(Token::Word(_)) => {}
-                _ => { self.next(); continue; }
+                _ => {
+                    self.next();
+                    continue;
+                }
             }
             let field = self.expect_word()?;
             match field.as_str() {
@@ -319,7 +351,12 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        Ok(Node::Transform { translation, rotation, scale, children })
+        Ok(Node::Transform {
+            translation,
+            rotation,
+            scale,
+            children,
+        })
     }
 
     fn parse_group(&mut self) -> Result<Node, ParseError> {
@@ -327,9 +364,15 @@ impl<'a> Parser<'a> {
         let mut children = Vec::new();
         loop {
             match self.peek() {
-                None | Some(Token::RBrace) => { self.next(); break; }
+                None | Some(Token::RBrace) => {
+                    self.next();
+                    break;
+                }
                 Some(Token::Word(_)) => {}
-                _ => { self.next(); continue; }
+                _ => {
+                    self.next();
+                    continue;
+                }
             }
             let field = self.expect_word()?;
             match field.as_str() {
@@ -352,9 +395,15 @@ impl<'a> Parser<'a> {
 
         loop {
             match self.peek() {
-                None | Some(Token::RBrace) => { self.next(); break; }
+                None | Some(Token::RBrace) => {
+                    self.next();
+                    break;
+                }
                 Some(Token::Word(_)) => {}
-                _ => { self.next(); continue; }
+                _ => {
+                    self.next();
+                    continue;
+                }
             }
             let field = self.expect_word()?;
             match field.as_str() {
@@ -374,7 +423,11 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        Ok(Node::Shape { color, positions, indices })
+        Ok(Node::Shape {
+            color,
+            positions,
+            indices,
+        })
     }
 
     fn parse_appearance_color(&mut self) -> Result<[f32; 4], ParseError> {
@@ -382,16 +435,24 @@ impl<'a> Parser<'a> {
         // We skip all appearance fields except diffuseColor.
         let node_type = self.expect_word()?;
         if node_type != "Appearance" {
-            if let Some(Token::LBrace) = self.peek() { self.consume_block()?; }
+            if let Some(Token::LBrace) = self.peek() {
+                self.consume_block()?;
+            }
             return Ok([0.7, 0.7, 0.7, 1.0]);
         }
         self.expect_lbrace()?;
         let mut color = [0.7f32, 0.7, 0.7, 1.0];
         loop {
             match self.peek() {
-                None | Some(Token::RBrace) => { self.next(); break; }
+                None | Some(Token::RBrace) => {
+                    self.next();
+                    break;
+                }
                 Some(Token::Word(_)) => {}
-                _ => { self.next(); continue; }
+                _ => {
+                    self.next();
+                    continue;
+                }
             }
             let field = self.expect_word()?;
             match field.as_str() {
@@ -416,9 +477,15 @@ impl<'a> Parser<'a> {
         let mut color = [0.7f32, 0.7, 0.7, 1.0];
         loop {
             match self.peek() {
-                None | Some(Token::RBrace) => { self.next(); break; }
+                None | Some(Token::RBrace) => {
+                    self.next();
+                    break;
+                }
                 Some(Token::Word(_)) => {}
-                _ => { self.next(); continue; }
+                _ => {
+                    self.next();
+                    continue;
+                }
             }
             let field = self.expect_word()?;
             match field.as_str() {
@@ -446,9 +513,15 @@ impl<'a> Parser<'a> {
 
         loop {
             match self.peek() {
-                None | Some(Token::RBrace) => { self.next(); break; }
+                None | Some(Token::RBrace) => {
+                    self.next();
+                    break;
+                }
                 Some(Token::Word(_)) => {}
-                _ => { self.next(); continue; }
+                _ => {
+                    self.next();
+                    continue;
+                }
             }
             let field = self.expect_word()?;
             match field.as_str() {
@@ -476,25 +549,37 @@ impl<'a> Parser<'a> {
         let mut points = Vec::new();
         loop {
             match self.peek() {
-                None | Some(Token::RBrace) => { self.next(); break; }
+                None | Some(Token::RBrace) => {
+                    self.next();
+                    break;
+                }
                 Some(Token::Word(w)) if w == "point" => {
                     self.next();
                     self.expect_lbracket()?;
                     loop {
                         match self.peek() {
-                            None | Some(Token::RBracket) => { self.next(); break; }
-                            Some(Token::Comma) => { self.next(); }
+                            None | Some(Token::RBracket) => {
+                                self.next();
+                                break;
+                            }
+                            Some(Token::Comma) => {
+                                self.next();
+                            }
                             Some(Token::Word(_)) => {
                                 let x = self.parse_f32()?;
                                 let y = self.parse_f32()?;
                                 let z = self.parse_f32()?;
                                 points.push([x, y, z]);
                             }
-                            _ => { self.next(); }
+                            _ => {
+                                self.next();
+                            }
                         }
                     }
                 }
-                _ => { self.next(); }
+                _ => {
+                    self.next();
+                }
             }
         }
         Ok(points)
@@ -505,19 +590,25 @@ impl<'a> Parser<'a> {
         let mut values = Vec::new();
         loop {
             match self.peek() {
-                None | Some(Token::RBracket) => { self.next(); break; }
-                Some(Token::Comma) => { self.next(); }
+                None | Some(Token::RBracket) => {
+                    self.next();
+                    break;
+                }
+                Some(Token::Comma) => {
+                    self.next();
+                }
                 Some(Token::Word(w)) => {
                     let s = w.clone();
                     let line = self.current_line();
                     self.next();
-                    let v = s.parse::<i32>().map_err(|_| ParseError::MalformedNumber {
-                        line,
-                        value: s,
-                    })?;
+                    let v = s
+                        .parse::<i32>()
+                        .map_err(|_| ParseError::MalformedNumber { line, value: s })?;
                     values.push(v);
                 }
-                _ => { self.next(); }
+                _ => {
+                    self.next();
+                }
             }
         }
         Ok(values)
@@ -528,8 +619,13 @@ impl<'a> Parser<'a> {
         let mut children = Vec::new();
         loop {
             match self.peek() {
-                None | Some(Token::RBracket) => { self.next(); break; }
-                Some(Token::Comma) => { self.next(); }
+                None | Some(Token::RBracket) => {
+                    self.next();
+                    break;
+                }
+                Some(Token::Comma) => {
+                    self.next();
+                }
                 _ => {
                     if let Some(node) = self.parse_node()? {
                         children.push(node);
@@ -545,23 +641,30 @@ impl<'a> Parser<'a> {
             Some(Token::Word(w)) => {
                 let s = w.clone();
                 let line = self.current_line();
-                s.parse::<f32>().map_err(|_| ParseError::MalformedNumber { line, value: s })
+                s.parse::<f32>()
+                    .map_err(|_| ParseError::MalformedNumber { line, value: s })
             }
-            _ => Err(ParseError::UnexpectedEof { line: self.current_line() }),
+            _ => Err(ParseError::UnexpectedEof {
+                line: self.current_line(),
+            }),
         }
     }
 
     fn expect_lbrace(&mut self) -> Result<(), ParseError> {
         match self.next() {
             Some(Token::LBrace) => Ok(()),
-            _ => Err(ParseError::UnexpectedEof { line: self.current_line() }),
+            _ => Err(ParseError::UnexpectedEof {
+                line: self.current_line(),
+            }),
         }
     }
 
     fn expect_lbracket(&mut self) -> Result<(), ParseError> {
         match self.next() {
             Some(Token::LBracket) => Ok(()),
-            _ => Err(ParseError::UnexpectedEof { line: self.current_line() }),
+            _ => Err(ParseError::UnexpectedEof {
+                line: self.current_line(),
+            }),
         }
     }
 
@@ -569,7 +672,10 @@ impl<'a> Parser<'a> {
     fn skip_field_value(&mut self) -> Result<(), ParseError> {
         match self.peek() {
             Some(Token::LBrace | Token::LBracket) => self.consume_block(),
-            Some(Token::Word(_)) => { self.next(); Ok(()) }
+            Some(Token::Word(_)) => {
+                self.next();
+                Ok(())
+            }
             _ => Ok(()),
         }
     }
@@ -581,15 +687,25 @@ impl<'a> Parser<'a> {
             Some(Token::LBracket) => Token::LBracket,
             _ => return Ok(()),
         };
-        let close = if open == Token::LBrace { Token::RBrace } else { Token::RBracket };
+        let close = if open == Token::LBrace {
+            Token::RBrace
+        } else {
+            Token::RBracket
+        };
         let mut depth = 1usize;
         loop {
             match self.next() {
-                None => return Err(ParseError::UnexpectedEof { line: self.current_line() }),
+                None => {
+                    return Err(ParseError::UnexpectedEof {
+                        line: self.current_line(),
+                    });
+                }
                 Some(t) if *t == Token::LBrace || *t == Token::LBracket => depth += 1,
                 Some(t) if *t == close => {
                     depth -= 1;
-                    if depth == 0 { break; }
+                    if depth == 0 {
+                        break;
+                    }
                 }
                 _ => {}
             }

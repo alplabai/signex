@@ -239,8 +239,7 @@ pub struct SymbolEditorState {
     /// the footprint editor's `selection_filter`.
     pub selection_filter: crate::library::editor::symbol::state::SymbolSelectionFilter,
     /// v0.13 — Open active-bar dropdown menu. `None` = no menu open.
-    pub active_bar_menu:
-        Option<crate::library::editor::symbol::state::SymActiveBarMenu>,
+    pub active_bar_menu: Option<crate::library::editor::symbol::state::SymActiveBarMenu>,
     /// v0.13 — Pause flag for placement (TAB during Place Pin / etc.).
     pub placement_paused: bool,
     /// Snapshot stack for undo. Each entry is a full clone of the

@@ -38,9 +38,7 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         // ── Datasheet ────────────────────────────────────────────────
         EditorMsg::DatasheetSetMode(mode) => datasheet::set_mode(state, mode),
         EditorMsg::DatasheetSetUrl(url) => datasheet::set_url(state, url),
-        EditorMsg::DatasheetUploadResult(payload) => {
-            datasheet::apply_upload_result(state, payload)
-        }
+        EditorMsg::DatasheetUploadResult(payload) => datasheet::apply_upload_result(state, payload),
 
         // ── Pin map ──────────────────────────────────────────────────
         EditorMsg::PinMapAutoMatchByNumber | EditorMsg::PinMapClearOverrides => {
@@ -84,19 +82,13 @@ pub(crate) fn apply_inline_edit(state: &mut ComponentPreviewState, msg: EditorMs
         EditorMsg::SupplyListingSetDistributor { idx, value } => {
             supply::set_listing_distributor(state, idx, value)
         }
-        EditorMsg::SupplyListingSetSku { idx, value } => {
-            supply::set_listing_sku(state, idx, value)
-        }
-        EditorMsg::SupplyListingSetUrl { idx, value } => {
-            supply::set_listing_url(state, idx, value)
-        }
+        EditorMsg::SupplyListingSetSku { idx, value } => supply::set_listing_sku(state, idx, value),
+        EditorMsg::SupplyListingSetUrl { idx, value } => supply::set_listing_url(state, idx, value),
         EditorMsg::SupplyListingRemove { idx } => supply::remove_listing(state, idx),
 
         // ── Parameters ───────────────────────────────────────────────
         EditorMsg::ParamSetText { name, value } => parameters::set_text(state, name, value),
-        EditorMsg::ParamSetNumberBuf { name, buf } => {
-            parameters::set_number_buf(state, name, buf)
-        }
+        EditorMsg::ParamSetNumberBuf { name, buf } => parameters::set_number_buf(state, name, buf),
         EditorMsg::ParamCommitNumber { name } => parameters::commit_number(state, name),
         EditorMsg::ParamSetMeasurementBuf { name, buf } => {
             parameters::set_measurement_buf(state, name, buf)

@@ -4,11 +4,11 @@
 //! The router delegates all view `PrimitiveEditorMsg` variants here;
 //! bodies are verbatim, so each arm keeps its own inner `use`s.
 
+use super::align_pads;
 use crate::library::editor::footprint::layers::FpLayer;
 use crate::library::editor::footprint::pad_to_sketch;
 use crate::library::editor::footprint::state::FootprintEditorState as CanvasState;
 use crate::library::messages::PrimitiveEditorMsg;
-use super::align_pads;
 
 pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: PrimitiveEditorMsg) {
     match msg {

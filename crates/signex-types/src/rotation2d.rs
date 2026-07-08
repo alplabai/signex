@@ -118,14 +118,20 @@ pub fn rotate_pose(
             let pivot_local = resolve_local_pivot(pose, geometry_center_local, pivot);
             let delta = translation_matrix(pivot_local)
                 .mul(rotation_matrix(delta_rad))
-                .mul(translation_matrix(Vec2d::new(-pivot_local.x, -pivot_local.y)));
+                .mul(translation_matrix(Vec2d::new(
+                    -pivot_local.x,
+                    -pivot_local.y,
+                )));
             model.mul(delta)
         }
         RotationSpace::World => {
             let pivot_world = resolve_world_pivot(pose, geometry_center_local, pivot);
             let delta = translation_matrix(pivot_world)
                 .mul(rotation_matrix(delta_rad))
-                .mul(translation_matrix(Vec2d::new(-pivot_world.x, -pivot_world.y)));
+                .mul(translation_matrix(Vec2d::new(
+                    -pivot_world.x,
+                    -pivot_world.y,
+                )));
             delta.mul(model)
         }
     };

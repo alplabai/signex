@@ -39,7 +39,9 @@ pub use pad::{
 };
 pub use placement::{PlaceArcPending, PlacementInput, PlacementInputKind};
 pub use selection_filter::{FpSelectionMode, SelectionFilter, SelectionFilterKind};
-pub use snap_options::{GridDef, GridDisplay, Guide, GuideAxis, SnapOptions, SnapSubTab, SnappingMode};
+pub use snap_options::{
+    GridDef, GridDisplay, Guide, GuideAxis, SnapOptions, SnapSubTab, SnappingMode,
+};
 pub use tool::{PadsTool, SketchTool, ToolPending};
 
 use signex_library::{Footprint, LayerId};
@@ -518,9 +520,7 @@ impl FootprintEditorState {
     /// rectangle. Returns `true` when a polygon was produced;
     /// `false` when there are no pads or the boolean union failed.
     pub fn recompute_courtyard_outline(&mut self) -> bool {
-        use signex_sketch::geom::{
-            offset_polygon, polygon_op, BoolOp, CornerStyle, Point2,
-        };
+        use signex_sketch::geom::{BoolOp, CornerStyle, Point2, offset_polygon, polygon_op};
 
         if self.pads.is_empty() {
             self.courtyard_outline_mm = None;
@@ -575,8 +575,11 @@ impl FootprintEditorState {
         // corner — enough to read smooth at typical zooms.
         let mut offsetted: Vec<Vec<Point2>> = Vec::new();
         for ring in &accumulated {
-            let off =
-                offset_polygon(ring, COURTYARD_SLACK_MM, CornerStyle::Round { arc_segments: 4 });
+            let off = offset_polygon(
+                ring,
+                COURTYARD_SLACK_MM,
+                CornerStyle::Round { arc_segments: 4 },
+            );
             if off.len() >= 3 {
                 offsetted.push(off);
             }

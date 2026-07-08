@@ -650,7 +650,10 @@ pub enum EditorMsg {
     },
     /// Shift every pin and graphic by `(dx, dy)` mm.
     /// Emitted while the user drags with All selected (Ctrl+A).
-    SymbolMoveAll { dx: f64, dy: f64 },
+    SymbolMoveAll {
+        dx: f64,
+        dy: f64,
+    },
     /// Delete-key — drop the currently-selected element.
     SymbolDeleteSelected,
     /// Properties pane — set the value text of one of the canonical
@@ -863,7 +866,10 @@ pub enum EditorMsg {
     /// `FootprintLassoCancel`.
     FootprintLassoArm,
     /// v0.27 — append a vertex to the in-flight lasso polygon.
-    FootprintLassoAddVertex { x_mm: f64, y_mm: f64 },
+    FootprintLassoAddVertex {
+        x_mm: f64,
+        y_mm: f64,
+    },
     /// v0.27 — commit the lasso polygon: walk pads, multi-select
     /// every pad whose centre is inside the polygon. Disarms.
     FootprintLassoCommit,
@@ -873,10 +879,16 @@ pub enum EditorMsg {
     /// v0.27 — arm the Touching Line tool (2-click line gesture).
     FootprintTouchingLineArm,
     /// v0.27 — first endpoint click for the Touching Line tool.
-    FootprintTouchingLineFirst { x_mm: f64, y_mm: f64 },
+    FootprintTouchingLineFirst {
+        x_mm: f64,
+        y_mm: f64,
+    },
     /// v0.27 — second endpoint click; runs line-vs-pad-bbox
     /// intersection and multi-selects every hit.
-    FootprintTouchingLineCommit { x_mm: f64, y_mm: f64 },
+    FootprintTouchingLineCommit {
+        x_mm: f64,
+        y_mm: f64,
+    },
     /// v0.27 — disarm the Touching Line tool without selecting.
     FootprintTouchingLineCancel,
     /// v0.27 — Select overlapped: cycle to the previous pad in
@@ -946,9 +958,7 @@ pub enum EditorMsg {
     /// Deselect All / Fit to Window). Items that overlap with
     /// existing handlers (Delete, PadsTool switch, Properties focus)
     /// reuse those messages directly.
-    FootprintContextMenuAction(
-        crate::library::editor::footprint::state::FootprintContextAction,
-    ),
+    FootprintContextMenuAction(crate::library::editor::footprint::state::FootprintContextAction),
     /// v0.26-C — canvas Program signals that the pending Fit-to-Window
     /// request has been honoured. Dispatcher clears
     /// `editor.state.fit_pending` so the next event tick sees false.
@@ -1313,7 +1323,7 @@ pub enum SymbolSelectionMsg {
     All,
     /// A subset of pins and graphics from a rubber-band box selection.
     Multiple {
-        pin_indices:     Vec<usize>,
+        pin_indices: Vec<usize>,
         graphic_indices: Vec<usize>,
     },
 }
@@ -1374,9 +1384,15 @@ pub enum PrimitiveEditorMsg {
     SymbolSetTool(SymbolToolMsg),
     /// Click-to-place a pin on the standalone Symbol canvas at the
     /// given grid-snapped (mm) world position.
-    SymbolAddPin { x: f64, y: f64 },
+    SymbolAddPin {
+        x: f64,
+        y: f64,
+    },
     /// Stamp a default-sized 10×5 mm rectangle centred on `(x, y)`.
-    SymbolAddRectangle { x: f64, y: f64 },
+    SymbolAddRectangle {
+        x: f64,
+        y: f64,
+    },
     /// Place a line segment from `from` to `to` (both grid-snapped mm world positions).
     SymbolAddLine {
         from_x: f64,
@@ -1386,23 +1402,42 @@ pub enum PrimitiveEditorMsg {
     },
     /// Place a circle with center `(cx, cy)` and the given radius.
     /// Emitted on the second click of the two-click canvas draw flow.
-    SymbolAddCircle { cx: f64, cy: f64, radius: f64 },
+    SymbolAddCircle {
+        cx: f64,
+        cy: f64,
+        radius: f64,
+    },
     /// Place an arc with center, radius, and start/end angles in degrees
     /// (0° = right, 90° = up). Emitted on the third click of the
     /// three-click canvas draw flow.
-    SymbolAddArc { cx: f64, cy: f64, radius: f64, start_deg: f64, end_deg: f64 },
+    SymbolAddArc {
+        cx: f64,
+        cy: f64,
+        radius: f64,
+        start_deg: f64,
+        end_deg: f64,
+    },
     /// Stamp a default "Text" label anchored at `(x, y)`. Edit the
     /// content via the Properties panel after placement.
-    SymbolAddText { x: f64, y: f64 },
+    SymbolAddText {
+        x: f64,
+        y: f64,
+    },
     /// Select a symbol element (pin index / field key).
     SymbolSelect(SymbolSelectionMsg),
     /// Click landed on empty canvas — drop the current selection.
     SymbolDeselect,
     /// Drag the currently-selected element to a new grid-snapped
     /// world position.
-    SymbolMoveSelected { x: f64, y: f64 },
+    SymbolMoveSelected {
+        x: f64,
+        y: f64,
+    },
     /// Shift every pin and graphic by `(dx, dy)` mm (All selection drag).
-    SymbolMoveAll { dx: f64, dy: f64 },
+    SymbolMoveAll {
+        dx: f64,
+        dy: f64,
+    },
     /// Drag-to-resize: move one resize handle of the graphic at
     /// `idx` to grid-snapped world coordinates `(x, y)`. Fires
     /// continuously while the user holds and drags a graphic handle
@@ -1426,18 +1461,31 @@ pub enum PrimitiveEditorMsg {
     /// Delete-key — drop the currently-selected element.
     SymbolDeleteSelected,
     /// Properties pane — overwrite the pin number string at index.
-    SymbolSetPinNumber { idx: usize, number: String },
+    SymbolSetPinNumber {
+        idx: usize,
+        number: String,
+    },
     /// Properties pane — overwrite the pin name string at index.
-    SymbolSetPinName { idx: usize, name: String },
+    SymbolSetPinName {
+        idx: usize,
+        name: String,
+    },
 
     // ── View / camera (Altium-style pan/zoom/grid) ─────────
     /// Right- or middle-button pan delta in screen pixels.
     /// Updates `editor.camera.offset`.
-    SymbolPan { dx: f32, dy: f32 },
+    SymbolPan {
+        dx: f32,
+        dy: f32,
+    },
     /// Mouse-wheel zoom centred on the cursor screen position
     /// `(sx, sy)` in canvas-local pixels. Positive `delta` zooms
     /// in, negative zooms out. Updates `editor.camera`.
-    SymbolZoom { sx: f32, sy: f32, delta: f32 },
+    SymbolZoom {
+        sx: f32,
+        sy: f32,
+        delta: f32,
+    },
     /// Fit the active symbol's bounding box into the viewport.
     /// Bound to the Home key + the Fit button on the toolbar.
     SymbolFit,
@@ -1507,30 +1555,53 @@ pub enum PrimitiveEditorMsg {
     /// new footprint `Footprint N` where N is the next free index.
     FootprintAddNewSibling,
     /// Click-to-place a pad at the given world position.
-    FootprintAddPad { x_mm: f64, y_mm: f64 },
+    FootprintAddPad {
+        x_mm: f64,
+        y_mm: f64,
+    },
     /// v0.18.12 — Click-to-place a non-plated through hole (NPT) at
     /// the given world position. Mints a `Pad` with `kind = NptHole`,
     /// no copper / mask / paste, drill diameter from
     /// `next_pad_defaults.size_x_mm`. The active bar's "Place Hole"
     /// tool fires this on empty-canvas click.
-    FootprintAddHole { x_mm: f64, y_mm: f64 },
+    FootprintAddHole {
+        x_mm: f64,
+        y_mm: f64,
+    },
     /// v0.18.15 — Click-to-place a silk-layer text label. Appends an
     /// `FpGraphic { kind: Text { ... } }` to `footprint.silk_f`
     /// with placeholder content "TEXT" + 1mm size. The user edits
     /// the content via the Properties panel later.
-    FootprintAddText { x_mm: f64, y_mm: f64 },
+    FootprintAddText {
+        x_mm: f64,
+        y_mm: f64,
+    },
     /// v0.14 — commit a dragged text frame (anchor + size, mm).
-    FootprintAddTextFrame { x_mm: f64, y_mm: f64, w_mm: f64, h_mm: f64 },
+    FootprintAddTextFrame {
+        x_mm: f64,
+        y_mm: f64,
+        w_mm: f64,
+        h_mm: f64,
+    },
     /// v0.18.15.1 — click during a Place Track 2-click gesture.
-    FootprintTrackClick { x_mm: f64, y_mm: f64 },
+    FootprintTrackClick {
+        x_mm: f64,
+        y_mm: f64,
+    },
     /// v0.18.15.1 — Esc / right-click during Place Track.
     FootprintTrackCancel,
     /// v0.18.15.3 — click during a Place Arc 3-click gesture.
-    FootprintArcClick { x_mm: f64, y_mm: f64 },
+    FootprintArcClick {
+        x_mm: f64,
+        y_mm: f64,
+    },
     /// v0.18.15.3 — Esc / right-click during Place Arc.
     FootprintArcCancel,
     /// v0.18.15.4 — Place Polygon click (appends a vertex).
-    FootprintPolygonClick { x_mm: f64, y_mm: f64 },
+    FootprintPolygonClick {
+        x_mm: f64,
+        y_mm: f64,
+    },
     /// v0.18.15.4 — explicit polygon commit.
     FootprintPolygonCommit,
     /// v0.18.15.4 — Esc / right-click during Place Polygon.
@@ -1546,9 +1617,16 @@ pub enum PrimitiveEditorMsg {
     /// `editor.state.selection_filter` directly.
     FootprintToggleSelectionFilter(crate::library::editor::footprint::state::SelectionFilterKind),
     /// Drag the pad at `idx` to a new world position.
-    FootprintMovePad { idx: usize, x_mm: f64, y_mm: f64 },
+    FootprintMovePad {
+        idx: usize,
+        x_mm: f64,
+        y_mm: f64,
+    },
     /// Cursor moved over the canvas — drives the footer X/Y readout.
-    FootprintCursorAt { x_mm: f64, y_mm: f64 },
+    FootprintCursorAt {
+        x_mm: f64,
+        y_mm: f64,
+    },
     /// Select / deselect a pad. `None` deselects everything.
     FootprintSelectPad(Option<usize>),
     /// v0.27 — Multi-select replacement. Replaces the entire
@@ -1575,10 +1653,16 @@ pub enum PrimitiveEditorMsg {
     FootprintSetMode(crate::library::editor::footprint::state::EditorMode),
     /// Sketch tool — place a Point at the given world-mm position.
     /// Triggers a solve + bake via the dispatcher.
-    FootprintSketchPlacePoint { x_mm: f64, y_mm: f64 },
+    FootprintSketchPlacePoint {
+        x_mm: f64,
+        y_mm: f64,
+    },
     /// Sketch inspector — edit / insert a parameter source string.
     /// Triggers a solve + bake.
-    FootprintSketchEditParameter { name: String, expr: String },
+    FootprintSketchEditParameter {
+        name: String,
+        expr: String,
+    },
     /// v0.13.2 — Tool palette: switch the active drawing tool.
     /// Clears any in-flight multi-click gesture (`tool_pending`) so
     /// switching tools mid-gesture doesn't leave dangling anchors.
@@ -1604,9 +1688,7 @@ pub enum PrimitiveEditorMsg {
         Option<crate::library::editor::footprint::state::FootprintContextSubmenu>,
     ),
     /// v0.26 — execute one of the context-menu lightweight actions.
-    FootprintContextMenuAction(
-        crate::library::editor::footprint::state::FootprintContextAction,
-    ),
+    FootprintContextMenuAction(crate::library::editor::footprint::state::FootprintContextAction),
     /// v0.26-C — canvas signals that the pending Fit-to-Window
     /// request has been honoured. See EditorMsg::FootprintFitConsumed.
     FootprintFitConsumed,
@@ -1682,14 +1764,10 @@ pub enum PrimitiveEditorMsg {
     FootprintActiveBarToggleSnap(crate::panels::SnapOptionFlag),
     /// Snapping-mode pick from the active-bar Snap dropdown
     /// (All Layers / Current Layer / Off).
-    FootprintActiveBarSetSnappingMode(
-        crate::library::editor::footprint::state::SnappingMode,
-    ),
+    FootprintActiveBarSetSnappingMode(crate::library::editor::footprint::state::SnappingMode),
     /// Snap sub-tab pick from the active-bar Snap dropdown
     /// (Grids / Guides / Axes).
-    FootprintActiveBarSetSnapSubTab(
-        crate::library::editor::footprint::state::SnapSubTab,
-    ),
+    FootprintActiveBarSetSnapSubTab(crate::library::editor::footprint::state::SnapSubTab),
     /// Active-bar Place → Rotate Selection. 90° CCW rotation on the
     /// currently-selected pad's `rotation_deg`.
     FootprintActiveBarRotateSelection,
@@ -1744,9 +1822,7 @@ pub enum PrimitiveEditorMsg {
     FootprintActiveBarClearSelection,
     /// Active-bar Shapes → arm a sketch tool. Switches the editor to
     /// Sketch mode if it isn't already and sets `state.active_tool`.
-    FootprintActiveBarSetSketchTool(
-        crate::library::editor::footprint::state::SketchTool,
-    ),
+    FootprintActiveBarSetSketchTool(crate::library::editor::footprint::state::SketchTool),
     /// Properties panel — rename the active internal footprint. Writes
     /// `editor.primitive_mut().name` so the rename mirrors into the
     /// .snxfpt envelope on next save.
@@ -1759,9 +1835,7 @@ pub enum PrimitiveEditorMsg {
     /// "Coming soon" stub for symbol-editor active-bar items.
     SymbolActiveBarStub(&'static str),
     /// Toggle a kind on the symbol-editor selection filter.
-    SymbolToggleSelectionFilter(
-        crate::library::editor::symbol::state::SymbolFilterKind,
-    ),
+    SymbolToggleSelectionFilter(crate::library::editor::symbol::state::SymbolFilterKind),
     /// v0.13.2 — Canvas left-click in Sketch mode while a multi-click
     /// drawing tool is active. The dispatcher advances the per-tool
     /// state machine on `tool_pending` and emits the appropriate
@@ -1841,7 +1915,10 @@ pub enum PrimitiveEditorMsg {
     /// v0.27 — drop a via at the cursor (Round, 0.6 mm copper,
     /// 0.3 mm drill, Multi-Layer plated). Bypasses Pads-mode
     /// `next_pad_defaults` so the via geometry is canonical.
-    FootprintAddVia { x_mm: f64, y_mm: f64 },
+    FootprintAddVia {
+        x_mm: f64,
+        y_mm: f64,
+    },
     /// v0.27 — Rebuild the outline-following courtyard polygon
     /// from the current pad layout (union + offset). Stores the
     /// result on `state.courtyard_outline_mm`.
@@ -1850,13 +1927,22 @@ pub enum PrimitiveEditorMsg {
     FootprintSelectOffGridPads,
     /// v0.27 — Lasso tool lifecycle.
     FootprintLassoArm,
-    FootprintLassoAddVertex { x_mm: f64, y_mm: f64 },
+    FootprintLassoAddVertex {
+        x_mm: f64,
+        y_mm: f64,
+    },
     FootprintLassoCommit,
     FootprintLassoCancel,
     /// v0.27 — Touching Line tool lifecycle.
     FootprintTouchingLineArm,
-    FootprintTouchingLineFirst { x_mm: f64, y_mm: f64 },
-    FootprintTouchingLineCommit { x_mm: f64, y_mm: f64 },
+    FootprintTouchingLineFirst {
+        x_mm: f64,
+        y_mm: f64,
+    },
+    FootprintTouchingLineCommit {
+        x_mm: f64,
+        y_mm: f64,
+    },
     FootprintTouchingLineCancel,
     /// v0.27 — Z-order cycle on the last-clicked stacked pads.
     FootprintSelectOverlapped,

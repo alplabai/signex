@@ -8,9 +8,7 @@ use iced::widget::{
 };
 use iced::{Background, Border, Color, Element, Length, Theme};
 
-use super::super::{
-    CollapsedSections, FootprintEditorPanelContext, KeepoutKindFlag, PanelMsg,
-};
+use super::super::{CollapsedSections, FootprintEditorPanelContext, KeepoutKindFlag, PanelMsg};
 use super::pad_form::{pad_check_row, pad_input_row, pad_pick_row};
 use super::{fp_is_collapsed, props_section_header};
 
@@ -106,8 +104,9 @@ pub(super) fn render_sketch_pad_subform<'a>(
         "Top Side",
         signex_sketch::attr::PadFeature::ALL,
         p.feature_top,
-        move |v: signex_sketch::attr::PadFeature| {
-            PanelMsg::FpEditorSetSketchPadFeatureTop { id, value: v }
+        move |v: signex_sketch::attr::PadFeature| PanelMsg::FpEditorSetSketchPadFeatureTop {
+            id,
+            value: v,
         },
         muted,
     ));
@@ -115,8 +114,9 @@ pub(super) fn render_sketch_pad_subform<'a>(
         "Bottom Side",
         signex_sketch::attr::PadFeature::ALL,
         p.feature_bottom,
-        move |v: signex_sketch::attr::PadFeature| {
-            PanelMsg::FpEditorSetSketchPadFeatureBottom { id, value: v }
+        move |v: signex_sketch::attr::PadFeature| PanelMsg::FpEditorSetSketchPadFeatureBottom {
+            id,
+            value: v,
         },
         muted,
     ));
@@ -610,7 +610,10 @@ pub(super) fn render_pattern_subform<'a>(
     col = col.push(
         container(
             row![
-                text("Kind").size(10).color(muted).width(Length::Fixed(80.0)),
+                text("Kind")
+                    .size(10)
+                    .color(muted)
+                    .width(Length::Fixed(80.0)),
                 text(kind_label).size(10).color(primary),
             ]
             .spacing(6)
@@ -761,15 +764,14 @@ pub(super) fn render_pattern_subform<'a>(
                             .iter()
                             .any(|(si, sj)| *si == i && *sj == j);
                         let on = !suppressed;
-                        let cb = iced::widget::checkbox(on)
-                            .size(12)
-                            .spacing(0)
-                            .on_toggle(move |checked| PanelMsg::FpEditorToggleArrayInstance {
+                        let cb = iced::widget::checkbox(on).size(12).spacing(0).on_toggle(
+                            move |checked| PanelMsg::FpEditorToggleArrayInstance {
                                 array_id,
                                 i,
                                 j,
                                 value: checked,
-                            });
+                            },
+                        );
                         grid_row = grid_row.push(cb);
                     }
                     grid_col = grid_col.push(grid_row);
@@ -879,15 +881,16 @@ pub(super) fn render_pattern_subform<'a>(
                 for i in 0..count {
                     let suppressed = suppressed_instances.iter().any(|si| *si == i);
                     let on = !suppressed;
-                    let cb = iced::widget::checkbox(on)
-                        .size(12)
-                        .spacing(0)
-                        .on_toggle(move |checked| PanelMsg::FpEditorToggleArrayInstance {
-                            array_id,
-                            i,
-                            j: 0,
-                            value: checked,
-                        });
+                    let cb =
+                        iced::widget::checkbox(on)
+                            .size(12)
+                            .spacing(0)
+                            .on_toggle(move |checked| PanelMsg::FpEditorToggleArrayInstance {
+                                array_id,
+                                i,
+                                j: 0,
+                                value: checked,
+                            });
                     grid_row = grid_row.push(cb);
                 }
                 col = col.push(grid_row);
@@ -906,10 +909,7 @@ pub(super) fn render_pattern_subform<'a>(
                 pick_list(
                     NumberingSchemeKindUi::ALL.as_slice(),
                     Some(arr.numbering),
-                    move |scheme| PanelMsg::FpEditorSetArrayNumberingScheme {
-                        array_id,
-                        scheme,
-                    }
+                    move |scheme| PanelMsg::FpEditorSetArrayNumberingScheme { array_id, scheme }
                 )
                 .text_size(10)
                 .padding([3, 8])
@@ -929,10 +929,7 @@ pub(super) fn render_pattern_subform<'a>(
         col = col.push(pad_check_row(
             "Skip I/O/Q/S/X/Z (IPC-7351)",
             bga.skip_letters,
-            move |v| PanelMsg::FpEditorSetBgaSkipLetters {
-                array_id,
-                value: v,
-            },
+            move |v| PanelMsg::FpEditorSetBgaSkipLetters { array_id, value: v },
             muted,
             primary,
         ));
@@ -940,10 +937,7 @@ pub(super) fn render_pattern_subform<'a>(
             "Start row",
             "A",
             bga.start_row.to_string(),
-            move |v| PanelMsg::FpEditorSetBgaStartRow {
-                array_id,
-                value: v,
-            },
+            move |v| PanelMsg::FpEditorSetBgaStartRow { array_id, value: v },
             muted,
             primary,
             border_c,
@@ -952,10 +946,7 @@ pub(super) fn render_pattern_subform<'a>(
             "Start col",
             "1",
             bga.start_col.to_string(),
-            move |v| PanelMsg::FpEditorSetBgaStartCol {
-                array_id,
-                value: v,
-            },
+            move |v| PanelMsg::FpEditorSetBgaStartCol { array_id, value: v },
             muted,
             primary,
             border_c,
@@ -976,4 +967,3 @@ pub(super) fn render_pattern_subform<'a>(
 
     col
 }
-

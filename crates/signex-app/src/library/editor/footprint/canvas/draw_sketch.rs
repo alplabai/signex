@@ -10,7 +10,6 @@ use super::super::snap::{self, SnapKind, SnapResult};
 use super::super::state::{EditorPad, FootprintEditorState};
 use super::FootprintCanvasState;
 
-
 /// v0.13.2 Phase 6.6 — render constraint glyphs above the sketch
 /// entities. Each constraint's centroid (geometric mean of the
 /// entities it touches) gets a small Unicode glyph; over-constrained
@@ -355,7 +354,6 @@ pub(super) fn draw_constraint_icons(
     }
 }
 
-
 /// Render the sketch entities (Phase 6.2). Points draw as small
 /// filled circles, Lines stroke between their endpoints (dashed if
 /// `construction == true`), Circles stroke the radius circle, Arcs
@@ -532,8 +530,7 @@ pub(super) fn draw_sketch_overlay(
                         let mut t = 0.0_f32;
                         while t < len {
                             let long_end = (t + 12.0).min(len);
-                            let q0 =
-                                Point::new(p0.x + dx * (t / len), p0.y + dy * (t / len));
+                            let q0 = Point::new(p0.x + dx * (t / len), p0.y + dy * (t / len));
                             let q1 = Point::new(
                                 p0.x + dx * (long_end / len),
                                 p0.y + dy * (long_end / len),
@@ -593,21 +590,15 @@ pub(super) fn draw_sketch_overlay(
                 // Filled cyan disc with a darker outline; the
                 // outline picks up the DOF palette so a fully-
                 // constrained Circle's handle is rimmed in black.
-                let handle =
-                    Path::circle(Point::new(centre.x + r_screen, centre.y), 4.0);
-                frame.fill(
-                    &handle,
-                    Color::from_rgba(0.20, 0.65, 0.95, 1.00),
-                );
+                let handle = Path::circle(Point::new(centre.x + r_screen, centre.y), 4.0);
+                frame.fill(&handle, Color::from_rgba(0.20, 0.65, 0.95, 1.00));
                 frame.stroke(
                     &handle,
-                    Stroke::default()
-                        .with_width(1.0)
-                        .with_color(if unsolved {
-                            Color::from_rgba(0.05, 0.30, 0.55, 1.0)
-                        } else {
-                            dof
-                        }),
+                    Stroke::default().with_width(1.0).with_color(if unsolved {
+                        Color::from_rgba(0.05, 0.30, 0.55, 1.0)
+                    } else {
+                        dof
+                    }),
                 );
             }
             EntityKind::Arc {
@@ -673,7 +664,6 @@ pub(super) fn draw_sketch_overlay(
         }
     }
 }
-
 
 /// v0.22 Phase E2 — DOF direction-arrow overlay for under-constrained
 /// Points. For every Point with `DofColor::Under`, draws a 10-px-long
@@ -759,8 +749,7 @@ pub(super) fn draw_dof_direction_arrows(
             d += cy * cy;
             b += cx * cy;
         }
-        let (mut dirx, mut diry) = if a.abs() < 1e-12 && d.abs() < 1e-12 && b.abs() < 1e-12
-        {
+        let (mut dirx, mut diry) = if a.abs() < 1e-12 && d.abs() < 1e-12 && b.abs() < 1e-12 {
             (1.0, 0.0)
         } else {
             let half = (a + d) * 0.5;
@@ -823,7 +812,6 @@ pub(super) fn draw_dof_direction_arrows(
     }
 }
 
-
 /// v0.22 Phase A6 — Inferred-constraint snap glyph at the cursor.
 /// Rendered AFTER the entity overlay so the badge sits on top of the
 /// underlying geometry. Drives off `cstate.last_snap` which the
@@ -870,19 +858,13 @@ pub(super) fn draw_sketch_snap_glyph(
         }
         SnapKind::Horizontal => {
             frame.stroke(
-                &Path::line(
-                    Point::new(p.x - 10.0, p.y),
-                    Point::new(p.x + 10.0, p.y),
-                ),
+                &Path::line(Point::new(p.x - 10.0, p.y), Point::new(p.x + 10.0, p.y)),
                 stroke,
             );
         }
         SnapKind::Vertical => {
             frame.stroke(
-                &Path::line(
-                    Point::new(p.x, p.y - 10.0),
-                    Point::new(p.x, p.y + 10.0),
-                ),
+                &Path::line(Point::new(p.x, p.y - 10.0), Point::new(p.x, p.y + 10.0)),
                 stroke,
             );
         }
@@ -922,7 +904,6 @@ pub(super) fn draw_sketch_snap_glyph(
         SnapKind::Guide | SnapKind::Grid | SnapKind::Raw => {}
     }
 }
-
 
 /// v0.16.1 — Walk the sketch's line graph, find simple closed
 /// cycles, and render each as a filled polygon. Skips cycles where
@@ -994,12 +975,20 @@ pub(super) fn find_closed_loops(
     for e in &sketch.entities {
         match e.kind {
             EntityKind::Line { start, end } => {
-                adj.entry(start).or_default().push((end, e.id, e.bake_skipped()));
-                adj.entry(end).or_default().push((start, e.id, e.bake_skipped()));
+                adj.entry(start)
+                    .or_default()
+                    .push((end, e.id, e.bake_skipped()));
+                adj.entry(end)
+                    .or_default()
+                    .push((start, e.id, e.bake_skipped()));
             }
             EntityKind::Arc { start, end, .. } => {
-                adj.entry(start).or_default().push((end, e.id, e.bake_skipped()));
-                adj.entry(end).or_default().push((start, e.id, e.bake_skipped()));
+                adj.entry(start)
+                    .or_default()
+                    .push((end, e.id, e.bake_skipped()));
+                adj.entry(end)
+                    .or_default()
+                    .push((start, e.id, e.bake_skipped()));
             }
             _ => {}
         }
@@ -1310,7 +1299,6 @@ pub(super) fn draw_filled_closed_loops(
     }
 }
 
-
 /// v0.14.2 — live ghost preview for the multi-click sketch drawing
 /// tools. Reads `state.tool_pending` + `state.cursor_mm` and draws a
 /// dashed semi-transparent overlay showing where the next click would
@@ -1489,7 +1477,9 @@ pub(super) fn draw_sketch_tool_preview(
             // will commit.
             let len_buf = placement_field_buf(state, PlacementInputKind::LineLength);
             let ang_buf = placement_field_buf(state, PlacementInputKind::LineAngle);
-            let typed_len = len_buf.and_then(|b| b.parse::<f64>().ok()).filter(|v| *v > 0.0);
+            let typed_len = len_buf
+                .and_then(|b| b.parse::<f64>().ok())
+                .filter(|v| *v > 0.0);
             let typed_ang = ang_buf.and_then(|b| b.parse::<f64>().ok());
             // Cursor-relative azimuth + distance (world space) — the
             // fallback when a field hasn't been typed. Mirrors the
@@ -1498,7 +1488,11 @@ pub(super) fn draw_sketch_tool_preview(
             let dxw = cursor.0 - first_world.0;
             let dyw = cursor.1 - first_world.1;
             let cursor_len = (dxw * dxw + dyw * dyw).sqrt();
-            let cursor_ang = if cursor_len > 1e-9 { dyw.atan2(dxw) } else { 0.0 };
+            let cursor_ang = if cursor_len > 1e-9 {
+                dyw.atan2(dxw)
+            } else {
+                0.0
+            };
             let eff_len = typed_len.unwrap_or(cursor_len);
             let eff_ang = typed_ang.map(f64::to_radians).unwrap_or(cursor_ang);
             // Effective endpoint = first + (eff_len @ eff_ang). Draw the
@@ -1556,8 +1550,12 @@ pub(super) fn draw_sketch_tool_preview(
             };
             let w_buf = placement_field_buf(state, PlacementInputKind::RectWidth);
             let h_buf = placement_field_buf(state, PlacementInputKind::RectHeight);
-            let typed_w = w_buf.and_then(|b| b.parse::<f64>().ok()).filter(|v| *v > 0.0);
-            let typed_h = h_buf.and_then(|b| b.parse::<f64>().ok()).filter(|v| *v > 0.0);
+            let typed_w = w_buf
+                .and_then(|b| b.parse::<f64>().ok())
+                .filter(|v| *v > 0.0);
+            let typed_h = h_buf
+                .and_then(|b| b.parse::<f64>().ok())
+                .filter(|v| *v > 0.0);
             let sx = if cursor.0 < first_world.0 { -1.0 } else { 1.0 };
             let sy = if cursor.1 < first_world.1 { -1.0 } else { 1.0 };
             let ex = typed_w.map(|w| first_world.0 + sx * w).unwrap_or(cursor.0);
@@ -1613,12 +1611,20 @@ pub(super) fn draw_sketch_tool_preview(
             let w_buf = placement_field_buf(state, PlacementInputKind::RectWidth);
             let h_buf = placement_field_buf(state, PlacementInputKind::RectHeight);
             let rr_buf = placement_field_buf(state, PlacementInputKind::RRectRadius);
-            let typed_w = w_buf.and_then(|b| b.parse::<f64>().ok()).filter(|v| *v > 0.0);
-            let typed_h = h_buf.and_then(|b| b.parse::<f64>().ok()).filter(|v| *v > 0.0);
+            let typed_w = w_buf
+                .and_then(|b| b.parse::<f64>().ok())
+                .filter(|v| *v > 0.0);
+            let typed_h = h_buf
+                .and_then(|b| b.parse::<f64>().ok())
+                .filter(|v| *v > 0.0);
             let sgnx = if cursor.0 < first_world.0 { -1.0 } else { 1.0 };
             let sgny = if cursor.1 < first_world.1 { -1.0 } else { 1.0 };
-            let cx_corner = typed_w.map(|w| first_world.0 + sgnx * w).unwrap_or(cursor.0);
-            let cy_corner = typed_h.map(|h| first_world.1 + sgny * h).unwrap_or(cursor.1);
+            let cx_corner = typed_w
+                .map(|w| first_world.0 + sgnx * w)
+                .unwrap_or(cursor.0);
+            let cy_corner = typed_h
+                .map(|h| first_world.1 + sgny * h)
+                .unwrap_or(cursor.1);
             let x0 = first_world.0.min(cx_corner);
             let y0 = first_world.1.min(cy_corner);
             let x1 = first_world.0.max(cx_corner);
@@ -1775,8 +1781,7 @@ pub(super) fn draw_sketch_tool_preview(
             let c_screen = cstate.world_to_screen(c_world);
             dashed(frame, c_screen, cursor_screen);
             // v0.27 — radius pill on the radial midpoint.
-            let r_world =
-                ((cursor.0 - c_world.0).powi(2) + (cursor.1 - c_world.1).powi(2)).sqrt();
+            let r_world = ((cursor.0 - c_world.0).powi(2) + (cursor.1 - c_world.1).powi(2)).sqrt();
             let mid = Point::new(
                 (c_screen.x + cursor_screen.x) / 2.0,
                 (c_screen.y + cursor_screen.y) / 2.0,
@@ -1906,11 +1911,9 @@ pub(super) fn draw_sketch_tool_preview(
                     let ey = cursor.1 - first_world.1;
                     let sweep_ccw = lx * ey - ly * ex >= 0.0;
                     // Stroke the dashed arc.
-                    let c_screen =
-                        cstate.world_to_screen((cx, cy));
+                    let c_screen = cstate.world_to_screen((cx, cy));
                     let r_screen = (r_world as f32) * cstate.scale;
-                    let start_angle =
-                        (first_world.1 - cy).atan2(first_world.0 - cx) as f32;
+                    let start_angle = (first_world.1 - cy).atan2(first_world.0 - cx) as f32;
                     let end_angle = (cursor.1 - cy).atan2(cursor.0 - cx) as f32;
                     let mut delta = end_angle - start_angle;
                     if sweep_ccw {
@@ -2013,4 +2016,3 @@ pub(super) fn draw_sketch_tool_preview(
         });
     }
 }
-

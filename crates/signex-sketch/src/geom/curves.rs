@@ -4,8 +4,8 @@
 //! Built on the Circle × Circle quadratic root-finder; arc filters
 //! reuse the angular containment helpers on `Arc2`.
 
-use super::segment::{Arc2, Circle2};
 use super::Point2;
+use super::segment::{Arc2, Circle2};
 
 /// Find the intersection points of two circles. Returns 0, 1, or
 /// 2 hit points.
@@ -143,13 +143,7 @@ mod tests {
         // circle of unit radius offset to (1, 0) crosses at
         // (0.5, ±√3/2) — only the +√3/2 hit lies in the arc's
         // first-quadrant sweep.
-        let arc = Arc2::new(
-            p(0.0, 0.0),
-            1.0,
-            0.0,
-            std::f64::consts::FRAC_PI_2,
-            true,
-        );
+        let arc = Arc2::new(p(0.0, 0.0), 1.0, 0.0, std::f64::consts::FRAC_PI_2, true);
         let circle = Circle2::new(p(1.0, 0.0), 1.0);
         let hits = arc_circle_intersections(arc, circle);
         assert_eq!(hits.len(), 1);
@@ -183,13 +177,7 @@ mod tests {
         // RIGHT half (270°..360°) — no shared hit lies in both
         // sweeps.
         let a = Arc2::new(p(0.0, 0.0), 1.0, 0.0, std::f64::consts::PI, true);
-        let b = Arc2::new(
-            p(1.0, 0.0),
-            1.0,
-            -std::f64::consts::FRAC_PI_2,
-            0.0,
-            true,
-        );
+        let b = Arc2::new(p(1.0, 0.0), 1.0, -std::f64::consts::FRAC_PI_2, 0.0, true);
         let hits = arc_arc_intersections(a, b);
         assert!(hits.is_empty());
     }

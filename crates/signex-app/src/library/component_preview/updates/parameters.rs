@@ -48,10 +48,10 @@ pub(super) fn set_measurement_buf(state: &mut ComponentPreviewState, name: Strin
 pub(super) fn commit_measurement(state: &mut ComponentPreviewState, name: String, unit: String) {
     if let Some(buf) = state.params_edit_buf.get(&name).cloned() {
         if let Ok(value) = buf.trim().parse::<f64>() {
-            state
-                .row
-                .parameters
-                .insert(name, signex_library::ParamValue::Measurement { value, unit });
+            state.row.parameters.insert(
+                name,
+                signex_library::ParamValue::Measurement { value, unit },
+            );
             state.dirty = true;
         }
     }

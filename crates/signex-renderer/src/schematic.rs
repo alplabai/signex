@@ -130,7 +130,11 @@ pub struct SchematicSnapshot {
     pub wire_color_overrides: HashMap<u64, [f32; 4]>,
 }
 
-fn resolve_wire_color(wire: &WireInput, snapshot: &SchematicSnapshot, theme: &ResolvedTheme) -> [f32; 4] {
+fn resolve_wire_color(
+    wire: &WireInput,
+    snapshot: &SchematicSnapshot,
+    theme: &ResolvedTheme,
+) -> [f32; 4] {
     snapshot
         .wire_color_overrides
         .get(&wire.id)
@@ -287,9 +291,9 @@ fn emit_overlays(snapshot: &SchematicSnapshot, scene: &mut Scene) {
     scene.overlay_circles.clear();
     scene.overlay_polygons.clear();
 
-    scene.overlay_lines.reserve(
-        snapshot.overlays.preview_lines.len() + snapshot.overlays.lasso_lines.len(),
-    );
+    scene
+        .overlay_lines
+        .reserve(snapshot.overlays.preview_lines.len() + snapshot.overlays.lasso_lines.len());
     scene
         .overlay_circles
         .reserve(snapshot.overlays.snap_circles.len());
@@ -298,7 +302,10 @@ fn emit_overlays(snapshot: &SchematicSnapshot, scene: &mut Scene) {
         .reserve(snapshot.overlays.ghost_polygons.len());
 
     emit_overlay_line_bucket(&snapshot.overlays.preview_lines, &mut scene.overlay_lines);
-    emit_overlay_polygon_bucket(&snapshot.overlays.ghost_polygons, &mut scene.overlay_polygons);
+    emit_overlay_polygon_bucket(
+        &snapshot.overlays.ghost_polygons,
+        &mut scene.overlay_polygons,
+    );
     emit_overlay_line_bucket(&snapshot.overlays.lasso_lines, &mut scene.overlay_lines);
     emit_overlay_circle_bucket(&snapshot.overlays.snap_circles, &mut scene.overlay_circles);
 }
@@ -375,7 +382,9 @@ fn emit_erc_markers(snapshot: &SchematicSnapshot, theme: &ResolvedTheme, scene: 
 
     scene.erc_marker_lines.reserve(snapshot.erc_markers.len());
     scene.erc_marker_circles.reserve(snapshot.erc_markers.len());
-    scene.erc_marker_polygons.reserve(snapshot.erc_markers.len());
+    scene
+        .erc_marker_polygons
+        .reserve(snapshot.erc_markers.len());
 
     for marker in &snapshot.erc_markers {
         let style = erc_style_ref(marker.severity);
@@ -611,9 +620,17 @@ mod tests {
             reference_value_texts: Vec::new(),
             parameter_texts: Vec::new(),
             overlays: OverlayInputs {
-                preview_lines: vec![make_overlay_line([0.0, 5.0], [4.0, 5.0], [0.7, 0.7, 1.0, 0.7])],
+                preview_lines: vec![make_overlay_line(
+                    [0.0, 5.0],
+                    [4.0, 5.0],
+                    [0.7, 0.7, 1.0, 0.7],
+                )],
                 ghost_polygons: vec![make_overlay_polygon([0.4, 0.6, 1.0, 0.3])],
-                lasso_lines: vec![make_overlay_line([1.0, 1.0], [1.0, 4.0], [0.9, 0.9, 0.3, 1.0])],
+                lasso_lines: vec![make_overlay_line(
+                    [1.0, 1.0],
+                    [1.0, 4.0],
+                    [0.9, 0.9, 0.3, 1.0],
+                )],
                 snap_circles: vec![make_overlay_circle([2.0, 2.0], [0.2, 0.9, 0.9, 1.0])],
             },
             erc_markers: vec![make_erc_marker([2.8, 2.8], 0.25, Severity::Warning)],
@@ -739,7 +756,11 @@ mod tests {
         };
 
         let mut scene = Scene::default();
-        build_scene_with_default_theme(&snapshot, DirtyFlags::POLYGONS | DirtyFlags::TEXT, &mut scene);
+        build_scene_with_default_theme(
+            &snapshot,
+            DirtyFlags::POLYGONS | DirtyFlags::TEXT,
+            &mut scene,
+        );
 
         assert_eq!(scene.polygons.len(), 1);
         assert_eq!(scene.polygons[0].vertices.len(), 4);
@@ -829,7 +850,11 @@ mod tests {
             reference_value_texts: Vec::new(),
             parameter_texts: Vec::new(),
             overlays: OverlayInputs {
-                preview_lines: vec![make_overlay_line([0.0, 0.0], [2.0, 0.0], [0.6, 0.6, 1.0, 0.8])],
+                preview_lines: vec![make_overlay_line(
+                    [0.0, 0.0],
+                    [2.0, 0.0],
+                    [0.6, 0.6, 1.0, 0.8],
+                )],
                 ghost_polygons: vec![make_overlay_polygon([0.5, 0.8, 1.0, 0.3])],
                 lasso_lines: vec![
                     make_overlay_line([1.0, 1.0], [3.0, 1.0], [0.9, 0.9, 0.4, 1.0]),
@@ -930,11 +955,18 @@ mod tests {
         assert_eq!(scene.erc_marker_circles.len(), 6);
         assert_eq!(scene.erc_marker_polygons.len(), 6);
         assert!(scene.erc_marker_lines.iter().all(|line| line.width > 0.0));
-        assert!(scene.erc_marker_circles.iter().all(|circle| circle.radius > 0.0));
-        assert!(scene
-            .erc_marker_polygons
-            .iter()
-            .all(|polygon| polygon.vertices.len() >= 3));
+        assert!(
+            scene
+                .erc_marker_circles
+                .iter()
+                .all(|circle| circle.radius > 0.0)
+        );
+        assert!(
+            scene
+                .erc_marker_polygons
+                .iter()
+                .all(|polygon| polygon.vertices.len() >= 3)
+        );
         assert!(scene.dirty.contains(DirtyFlags::OVERLAY));
     }
 

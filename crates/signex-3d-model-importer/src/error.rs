@@ -12,10 +12,18 @@ pub enum ModelImportError {
     IoFailed { path: PathBuf, message: String },
 
     #[error("STEP parse error at line {line} in {path:?}: {reason}")]
-    StepParseFailed { path: PathBuf, line: usize, reason: String },
+    StepParseFailed {
+        path: PathBuf,
+        line: usize,
+        reason: String,
+    },
 
     #[error("VRML parse error at line {line} in {path:?}: {reason}")]
-    VrmlParseFailed { path: PathBuf, line: usize, reason: String },
+    VrmlParseFailed {
+        path: PathBuf,
+        line: usize,
+        reason: String,
+    },
 
     #[error("unresolved VRML USE node: {name}")]
     VrmlUnresolvedUse { name: String },
@@ -35,8 +43,17 @@ pub enum ModelImportError {
 
 #[derive(Debug, Clone)]
 pub enum ImportWarning {
-    TextureMissing { uri: String },
-    EmptyPrimitive { mesh_index: usize, primitive_index: usize },
-    UnsupportedGeometry { entity_type: String },
-    UnsupportedGltfExtension { name: String },
+    TextureMissing {
+        uri: String,
+    },
+    EmptyPrimitive {
+        mesh_index: usize,
+        primitive_index: usize,
+    },
+    UnsupportedGeometry {
+        entity_type: String,
+    },
+    UnsupportedGltfExtension {
+        name: String,
+    },
 }

@@ -54,7 +54,9 @@ pub fn view_move_by_modal<'a>(
 
     let header = container(
         row![
-            text("Move Selection By").size(FONT_SIZE + 1.0).color(text_c),
+            text("Move Selection By")
+                .size(FONT_SIZE + 1.0)
+                .color(text_c),
             iced::widget::Space::new().width(Length::Fill),
             close_x(
                 LibraryMessage::PrimitiveEditorEvent {
@@ -191,8 +193,12 @@ fn secondary_button<'a>(
     border: Color,
 ) -> Element<'a, LibraryMessage> {
     button(
-        container(text(label.to_string()).size(FONT_SIZE - 1.0).color(text_color))
-            .padding([FONT_SIZE * 0.4, FONT_SIZE * 1.1]),
+        container(
+            text(label.to_string())
+                .size(FONT_SIZE - 1.0)
+                .color(text_color),
+        )
+        .padding([FONT_SIZE * 0.4, FONT_SIZE * 1.1]),
     )
     .on_press(message)
     .style(move |_: &iced::Theme, _| button::Style {
@@ -214,8 +220,12 @@ fn primary_button<'a>(
     border: Color,
 ) -> Element<'a, LibraryMessage> {
     button(
-        container(text(label.to_string()).size(FONT_SIZE - 1.0).color(Color::WHITE))
-            .padding([FONT_SIZE * 0.4, FONT_SIZE * 1.1]),
+        container(
+            text(label.to_string())
+                .size(FONT_SIZE - 1.0)
+                .color(Color::WHITE),
+        )
+        .padding([FONT_SIZE * 0.4, FONT_SIZE * 1.1]),
     )
     .on_press(message)
     .style(move |_: &iced::Theme, _| button::Style {

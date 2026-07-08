@@ -128,8 +128,7 @@ impl ArcPipeline {
             self.instance_capacity = arcs.len().next_power_of_two();
             self.instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("signex_gfx_arc_instances"),
-                size: (self.instance_capacity * std::mem::size_of::<Arc>())
-                    as wgpu::BufferAddress,
+                size: (self.instance_capacity * std::mem::size_of::<Arc>()) as wgpu::BufferAddress,
                 usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             });

@@ -23,8 +23,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             } else {
                 editor.state.selected_sketch = Some(ids[0]);
                 editor.state.selected_sketch_secondary = ids.get(1).copied();
-                editor.state.selected_sketch_extra =
-                    ids.iter().skip(2).copied().collect();
+                editor.state.selected_sketch_extra = ids.iter().skip(2).copied().collect();
             }
             editor.canvas_cache.clear();
         }
@@ -501,11 +500,8 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             // Used after the translate step to detect which bbox edge
             // the line lay on (so the matching pad can resize). Read
             // BEFORE the MovePoint passes shift these Points.
-            let pre_drag_endpoints: Option<((f64, f64), (f64, f64))> = editor
-                .primitive()
-                .sketch
-                .as_ref()
-                .and_then(|s| {
+            let pre_drag_endpoints: Option<((f64, f64), (f64, f64))> =
+                editor.primitive().sketch.as_ref().and_then(|s| {
                     let pos_of = |pid: signex_sketch::id::SketchEntityId| -> Option<(f64, f64)> {
                         s.entities.iter().find(|e| e.id == pid).and_then(|e| {
                             if let EntityKind::Point { x, y } = e.kind {
@@ -537,10 +533,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                         ..
                     } = e.kind
                     {
-                        let touches = a_s == start
-                            || a_s == end
-                            || a_e == start
-                            || a_e == end;
+                        let touches = a_s == start || a_s == end || a_e == start || a_e == end;
                         if touches {
                             arc_victims.insert(a_c);
                             if a_s != start && a_s != end {
@@ -721,9 +714,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                         if !in_x || !in_y {
                             continue;
                         }
-                        let edge: Option<&str> = if is_horizontal
-                            && (sy - ymin).abs() < EDGE_EPS
-                        {
+                        let edge: Option<&str> = if is_horizontal && (sy - ymin).abs() < EDGE_EPS {
                             Some("top")
                         } else if is_horizontal && (sy - ymax).abs() < EDGE_EPS {
                             Some("bottom")
@@ -762,8 +753,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                     let (corners_arr, centre_id) = {
                         let pad = &editor.state.pads[pad_idx];
                         (
-                            pad.corner_entity_ids
-                                .expect("checked is_some above"),
+                            pad.corner_entity_ids.expect("checked is_some above"),
                             pad.sketch_entity_id,
                         )
                     };
@@ -776,8 +766,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                     // bake produce the resized pad on its own.
                     if let Some(centre_id) = centre_id
                         && let Some(sketch) = editor.primitive_mut().sketch.as_mut()
-                        && let Some(centre) =
-                            sketch.entities.iter_mut().find(|e| e.id == centre_id)
+                        && let Some(centre) = sketch.entities.iter_mut().find(|e| e.id == centre_id)
                         && let Some(attr) = centre.pad.as_mut()
                     {
                         attr.size_x_expr = format!("{:.4}mm", new_w);
@@ -889,11 +878,16 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             //      centre Point's PadAttr size_x_expr / size_y_expr —
             //      the bake reads these to emit the baked pad.
             let d = diameter_mm.max(0.05);
-            let centre_id = editor.state.pads.get(pad_idx).and_then(|p| p.sketch_entity_id);
-            let diameter_param =
-                editor.state.pads.get(pad_idx).and_then(|p| {
-                    p.shape_params.get("diameter").cloned()
-                });
+            let centre_id = editor
+                .state
+                .pads
+                .get(pad_idx)
+                .and_then(|p| p.sketch_entity_id);
+            let diameter_param = editor
+                .state
+                .pads
+                .get(pad_idx)
+                .and_then(|p| p.shape_params.get("diameter").cloned());
             if let Some(pad) = editor.state.pads.get_mut(pad_idx) {
                 pad.size_mm = (d, d);
             }
@@ -1006,7 +1000,8 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                         hole_rotation_deg: None,
                         copper_offset_x_mm: None,
                         copper_offset_y_mm: None,
-                        shape_params: crate::library::editor::footprint::state::ShapeParamMap::new(),
+                        shape_params: crate::library::editor::footprint::state::ShapeParamMap::new(
+                        ),
                     });
                 }
                 (false, Some(idx)) => {
@@ -1054,8 +1049,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
             use crate::library::editor::footprint::sketch_mode::SketchEdit;
             use signex_sketch::attr::{
-                CustomPadShape, PadAttr, PadKind, PadShape, PadSide,
-                PasteAperturePattern,
+                CustomPadShape, PadAttr, PadKind, PadShape, PadSide, PasteAperturePattern,
             };
             use signex_sketch::entity::{Entity, EntityKind};
             use signex_sketch::id::SketchEntityId;
@@ -1095,9 +1089,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                             s.entities
                                 .iter()
                                 .find(|e| match e.kind {
-                                    EntityKind::Line { start, end } => {
-                                        start == *id || end == *id
-                                    }
+                                    EntityKind::Line { start, end } => start == *id || end == *id,
                                     _ => false,
                                 })
                                 .map(|e| e.id)
@@ -1145,8 +1137,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                 None => return,
             };
 
-            let trace =
-                signex_bake::profile::trace_closed_profile(sketch_for_walk, solve, line_id);
+            let trace = signex_bake::profile::trace_closed_profile(sketch_for_walk, solve, line_id);
             let vertices = match trace {
                 Ok(v) if v.len() >= 3 => v,
                 Ok(_) => {
@@ -1180,10 +1171,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             let mut cy_acc = 0.0_f64;
             for i in 0..n_v {
                 let (x0, y0) = (vertices[i][0], vertices[i][1]);
-                let (x1, y1) = (
-                    vertices[(i + 1) % n_v][0],
-                    vertices[(i + 1) % n_v][1],
-                );
+                let (x1, y1) = (vertices[(i + 1) % n_v][0], vertices[(i + 1) % n_v][1]);
                 let cross = x0 * y1 - x1 * y0;
                 signed_area += cross;
                 cx_acc += (x0 + x1) * cross;
@@ -1258,11 +1246,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                 + 1;
 
             let centre_id = SketchEntityId::new();
-            let mut centre = Entity::new(
-                centre_id,
-                plane_id,
-                EntityKind::Point { x: cx, y: cy },
-            );
+            let mut centre = Entity::new(centre_id, plane_id, EntityKind::Point { x: cx, y: cy });
             centre.pad = Some(PadAttr {
                 number: next_pad_num.to_string(),
                 kind: PadKind::Smd,
@@ -1282,11 +1266,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                 ..PadAttr::default()
             });
             editor.with_parts(|state, primitive| {
-                apply_sketch_edit_with_warnings(
-                    state,
-                    primitive,
-                    SketchEdit::AddEntity(centre),
-                );
+                apply_sketch_edit_with_warnings(state, primitive, SketchEdit::AddEntity(centre));
             });
             // v0.27 — pivot the selection onto the new pad's centre
             // Point. Without this, the Role dropdown still reads
@@ -1327,12 +1307,8 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             let arc_id_str = arc_entity_id.0.simple().to_string();
 
             // Locate the pad + corner this arc belongs to.
-            let pad_corner: Option<(usize, &'static str)> = editor
-                .state
-                .pads
-                .iter()
-                .enumerate()
-                .find_map(|(idx, pad)| {
+            let pad_corner: Option<(usize, &'static str)> =
+                editor.state.pads.iter().enumerate().find_map(|(idx, pad)| {
                     let arc_keys: [(&str, &str); 4] = [
                         ("corner_r_ne_arc", "corner_r_ne"),
                         ("corner_r_se_arc", "corner_r_se"),
@@ -1398,9 +1374,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             // suffix (e.g. `_ne`) appended to the shared name's slug
             // so the per-corner names cluster together in the
             // parameter table for inspection.
-            let corner_suffix = corner_key
-                .strip_prefix("corner_r_")
-                .unwrap_or(corner_key);
+            let corner_suffix = corner_key.strip_prefix("corner_r_").unwrap_or(corner_key);
             let new_param_name = format!("{shared_name}_{corner_suffix}");
 
             // Apply the rewrite. push_history is already captured at
@@ -1408,7 +1382,9 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             editor.with_parts(|state, primitive| {
                 // Mint the new parameter on the sketch.
                 if let Some(sketch) = primitive.sketch.as_mut() {
-                    sketch.parameters.insert(new_param_name.clone(), shared_value.clone());
+                    sketch
+                        .parameters
+                        .insert(new_param_name.clone(), shared_value.clone());
                 }
                 // Record the per-corner override on the pad.
                 if let Some(pad) = state.pads.get_mut(pad_idx) {
@@ -1640,16 +1616,18 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                     Some("Point"),
                     Some(p1),
                     Some(p2),
-                ) if extra_kind == Some("Line") => extra
-                    .map(|line| ConstraintKind::SymmetricAboutLine { p1, p2, line }),
+                ) if extra_kind == Some("Line") => {
+                    extra.map(|line| ConstraintKind::SymmetricAboutLine { p1, p2, line })
+                }
                 (
                     SketchConstraintTag::SymmetricAboutPoint,
                     Some("Point"),
                     Some("Point"),
                     Some(p1),
                     Some(p2),
-                ) if extra_kind == Some("Point") => extra
-                    .map(|center| ConstraintKind::SymmetricAboutPoint { p1, p2, center }),
+                ) if extra_kind == Some("Point") => {
+                    extra.map(|center| ConstraintKind::SymmetricAboutPoint { p1, p2, center })
+                }
                 _ => None,
             };
 
@@ -1780,17 +1758,18 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             let line_ang_typed = field_value(PlacementInputKind::LineAngle);
             let rect_w_typed = field_value(PlacementInputKind::RectWidth);
             let rect_h_typed = field_value(PlacementInputKind::RectHeight);
-            let resolve_point_xy =
-                |id: SketchEntityId, primitive: &signex_library::primitive::footprint::Footprint| -> Option<(f64, f64)> {
-                    primitive
-                        .sketch
-                        .as_ref()
-                        .and_then(|s| s.entities.iter().find(|e| e.id == id))
-                        .and_then(|e| match e.kind {
-                            EntityKind::Point { x, y } => Some((x, y)),
-                            _ => None,
-                        })
-                };
+            let resolve_point_xy = |id: SketchEntityId,
+                                    primitive: &signex_library::primitive::footprint::Footprint|
+             -> Option<(f64, f64)> {
+                primitive
+                    .sketch
+                    .as_ref()
+                    .and_then(|s| s.entities.iter().find(|e| e.id == id))
+                    .and_then(|e| match e.kind {
+                        EntityKind::Point { x, y } => Some((x, y)),
+                        _ => None,
+                    })
+            };
             let (eff_x_mm, eff_y_mm, used_placement_input): (f64, f64, bool) = match (
                 placement_input_kind,
                 placement_input_value,
@@ -1818,11 +1797,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                         // World azimuth of the cursor relative to the
                         // first endpoint; 0 when the cursor sits exactly
                         // on `first` (no direction to read).
-                        let cursor_ang = if cursor_len > 1e-9 {
-                            dy.atan2(dx)
-                        } else {
-                            0.0
-                        };
+                        let cursor_ang = if cursor_len > 1e-9 { dy.atan2(dx) } else { 0.0 };
                         // Typed angle wins; else follow the cursor.
                         let ang_rad = match line_ang_typed {
                             Some(a) => a.to_radians(),
@@ -1915,11 +1890,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                         if r > 1e-9 {
                             let start_ang = (sy - cy).atan2(sx - cx);
                             let end_ang = start_ang + deg.to_radians();
-                            (
-                                cx + r * end_ang.cos(),
-                                cy + r * end_ang.sin(),
-                                true,
-                            )
+                            (cx + r * end_ang.cos(), cy + r * end_ang.sin(), true)
                         } else {
                             (x_mm, y_mm, false)
                         }
@@ -1966,11 +1937,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
             // When numeric input pinned the click, ignore the snap
             // hit (the user explicitly asked for a different
             // distance / angle).
-            let effective_snap_id = if used_placement_input {
-                None
-            } else {
-                snap_id
-            };
+            let effective_snap_id = if used_placement_input { None } else { snap_id };
 
             let resolved_id: SketchEntityId = match effective_snap_id {
                 Some(target) if matches!(editor.state.active_tool, SketchTool::Point) => {
@@ -2543,8 +2510,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                         Some(p) => p,
                         None => {
                             editor.state.solve_warnings.push(
-                                "Mirror: selection is not a Line — pick a Line entity first"
-                                    .into(),
+                                "Mirror: selection is not a Line — pick a Line entity first".into(),
                             );
                             editor.state.tool_pending = ToolPending::Idle;
                             editor.canvas_cache.clear();
@@ -2587,9 +2553,10 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                     let vy = by - ay;
                     let v_dot_v = vx * vx + vy * vy;
                     if v_dot_v <= 1e-12 {
-                        editor.state.solve_warnings.push(
-                            "Mirror: degenerate Line (zero length)".into(),
-                        );
+                        editor
+                            .state
+                            .solve_warnings
+                            .push("Mirror: degenerate Line (zero length)".into());
                         editor.state.tool_pending = ToolPending::Idle;
                         editor.canvas_cache.clear();
                         return;
@@ -2607,42 +2574,41 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                     // and mirror. Returns the new Point's ID.
                     // Captured by reference so the closure can be
                     // called repeatedly for chained-Point entities.
-                    let mut mint_mirror_point =
-                        |editor: &mut crate::app::FootprintEditorState,
-                         pt_id: SketchEntityId,
-                         pos: (f64, f64)|
-                         -> SketchEntityId {
-                            let (rx, ry) = reflect(pos.0, pos.1);
-                            let new_id = SketchEntityId::new();
-                            let new_entity = flag(Entity::new(
-                                new_id,
-                                plane_id,
-                                EntityKind::Point { x: rx, y: ry },
-                            ));
-                            editor.with_parts(|state, primitive| {
-                                apply_sketch_edit_with_warnings(
-                                    state,
-                                    primitive,
-                                    SketchEdit::AddEntity(new_entity),
-                                );
-                            });
-                            let constraint = Constraint {
-                                id: ConstraintId::new(),
-                                kind: ConstraintKind::SymmetricAboutLine {
-                                    p1: pt_id,
-                                    p2: new_id,
-                                    line: line_id,
-                                },
-                            };
-                            editor.with_parts(|state, primitive| {
-                                apply_sketch_edit_with_warnings(
-                                    state,
-                                    primitive,
-                                    SketchEdit::AddConstraint(constraint),
-                                );
-                            });
-                            new_id
+                    let mut mint_mirror_point = |editor: &mut crate::app::FootprintEditorState,
+                                                 pt_id: SketchEntityId,
+                                                 pos: (f64, f64)|
+                     -> SketchEntityId {
+                        let (rx, ry) = reflect(pos.0, pos.1);
+                        let new_id = SketchEntityId::new();
+                        let new_entity = flag(Entity::new(
+                            new_id,
+                            plane_id,
+                            EntityKind::Point { x: rx, y: ry },
+                        ));
+                        editor.with_parts(|state, primitive| {
+                            apply_sketch_edit_with_warnings(
+                                state,
+                                primitive,
+                                SketchEdit::AddEntity(new_entity),
+                            );
+                        });
+                        let constraint = Constraint {
+                            id: ConstraintId::new(),
+                            kind: ConstraintKind::SymmetricAboutLine {
+                                p1: pt_id,
+                                p2: new_id,
+                                line: line_id,
+                            },
                         };
+                        editor.with_parts(|state, primitive| {
+                            apply_sketch_edit_with_warnings(
+                                state,
+                                primitive,
+                                SketchEdit::AddConstraint(constraint),
+                            );
+                        });
+                        new_id
+                    };
 
                     match kind_of {
                         EntityKind::Point { x, y } => {
@@ -2834,9 +2800,10 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                     let source_kind = match source_kind {
                         Some(k) => k,
                         None => {
-                            editor.state.solve_warnings.push(
-                                "Offset: selection no longer exists in the sketch".into(),
-                            );
+                            editor
+                                .state
+                                .solve_warnings
+                                .push("Offset: selection no longer exists in the sketch".into());
                             editor.state.tool_pending = ToolPending::Idle;
                             editor.canvas_cache.clear();
                             return;
@@ -2857,9 +2824,10 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                             let dy = by - ay;
                             let len = (dx * dx + dy * dy).sqrt();
                             if len < 1e-9 {
-                                editor.state.solve_warnings.push(
-                                    "Offset: degenerate Line (zero length)".into(),
-                                );
+                                editor
+                                    .state
+                                    .solve_warnings
+                                    .push("Offset: degenerate Line (zero length)".into());
                                 editor.state.tool_pending = ToolPending::Idle;
                                 editor.canvas_cache.clear();
                                 return;
@@ -3061,10 +3029,8 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                             };
                             // Source radius from start position;
                             // direction from start angle.
-                            let source_r =
-                                ((sx - cx).powi(2) + (sy - cy).powi(2)).sqrt();
-                            let click_r =
-                                ((x_mm - cx).powi(2) + (y_mm - cy).powi(2)).sqrt();
+                            let source_r = ((sx - cx).powi(2) + (sy - cy).powi(2)).sqrt();
+                            let click_r = ((x_mm - cx).powi(2) + (y_mm - cy).powi(2)).sqrt();
                             let signed = if click_r < source_r { -dist } else { dist };
                             let new_r = (source_r + signed).max(1e-6);
                             let scale = new_r / source_r.max(1e-9);
@@ -3153,8 +3119,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                         }
                         EntityKind::Point { .. } => {
                             editor.state.solve_warnings.push(
-                                "Offset: selection is a Point — pick a Line / Arc / Circle"
-                                    .into(),
+                                "Offset: selection is a Point — pick a Line / Arc / Circle".into(),
                             );
                         }
                     }
@@ -3187,11 +3152,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                         .get_or_insert_with(signex_sketch::SketchData::default);
                     sketch.arrays.push(array);
                     editor.with_parts(|state, primitive| {
-                        apply_sketch_edit_with_warnings(
-                            state,
-                            primitive,
-                            SketchEdit::ForceRebuild,
-                        );
+                        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
                     });
                     editor.state.tool_pending = ToolPending::Idle;
                 }
@@ -3227,11 +3188,11 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                         ToolPending::TangentArcFirst { first } => {
                             // Look up the first endpoint position +
                             // any Line ending at `first`.
-                            let (
-                                first_pos,
-                                end_pos,
-                                incident_line,
-                            ): ((f64, f64), (f64, f64), Option<(SketchEntityId, (f64, f64))>) = {
+                            let (first_pos, end_pos, incident_line): (
+                                (f64, f64),
+                                (f64, f64),
+                                Option<(SketchEntityId, (f64, f64))>,
+                            ) = {
                                 let sketch_ref = match editor.primitive().sketch.as_ref() {
                                     Some(s) => s,
                                     None => {
@@ -3239,16 +3200,15 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                                         return;
                                     }
                                 };
-                                let pos_of = |id: SketchEntityId| -> Option<(f64, f64)> {
-                                    sketch_ref
-                                        .entities
-                                        .iter()
-                                        .find(|e| e.id == id)
-                                        .and_then(|e| match e.kind {
-                                            EntityKind::Point { x, y } => Some((x, y)),
-                                            _ => None,
-                                        })
-                                };
+                                let pos_of =
+                                    |id: SketchEntityId| -> Option<(f64, f64)> {
+                                        sketch_ref.entities.iter().find(|e| e.id == id).and_then(
+                                            |e| match e.kind {
+                                                EntityKind::Point { x, y } => Some((x, y)),
+                                                _ => None,
+                                            },
+                                        )
+                                    };
                                 let first_p = match pos_of(first) {
                                     Some(p) => p,
                                     None => {
@@ -3268,11 +3228,8 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                                 // (last in the list) so chained sketches
                                 // pick up the immediately preceding
                                 // Line, not an unrelated old one.
-                                let line = sketch_ref
-                                    .entities
-                                    .iter()
-                                    .rev()
-                                    .find_map(|e| match e.kind {
+                                let line =
+                                    sketch_ref.entities.iter().rev().find_map(|e| match e.kind {
                                         EntityKind::Line { start, end } if end == first => {
                                             pos_of(start).map(|p| (e.id, p))
                                         }
@@ -3495,11 +3452,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                         .get_or_insert_with(signex_sketch::SketchData::default);
                     sketch.arrays.push(array);
                     editor.with_parts(|state, primitive| {
-                        apply_sketch_edit_with_warnings(
-                            state,
-                            primitive,
-                            SketchEdit::ForceRebuild,
-                        );
+                        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
                     });
                     editor.state.tool_pending = ToolPending::Idle;
                 }
@@ -3525,12 +3478,15 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                         y: f64,
                     ) -> Option<SketchEntityId> {
                         const TOL_MM: f64 = 0.30;
-                        let pos_of = |id: SketchEntityId| -> Option<(f64, f64)> {
-                            sketch.entities.iter().find(|e| e.id == id).and_then(|e| match e.kind {
-                                EntityKind::Point { x, y } => Some((x, y)),
-                                _ => None,
-                            })
-                        };
+                        let pos_of =
+                            |id: SketchEntityId| -> Option<(f64, f64)> {
+                                sketch.entities.iter().find(|e| e.id == id).and_then(|e| {
+                                    match e.kind {
+                                        EntityKind::Point { x, y } => Some((x, y)),
+                                        _ => None,
+                                    }
+                                })
+                            };
                         let mut best: Option<(f64, SketchEntityId)> = None;
                         for e in &sketch.entities {
                             if let EntityKind::Line { start, end } = e.kind {
@@ -3598,23 +3554,24 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                                 }
                             };
                             // Resolve the two Lines' endpoints.
-                            let line_endpoints = |id: SketchEntityId| -> Option<(SketchEntityId, SketchEntityId)> {
+                            let line_endpoints =
+                                |id: SketchEntityId| -> Option<(SketchEntityId, SketchEntityId)> {
+                                    sketch_ref
+                                        .entities
+                                        .iter()
+                                        .find(|e| e.id == id)
+                                        .and_then(|e| match e.kind {
+                                            EntityKind::Line { start, end } => Some((start, end)),
+                                            _ => None,
+                                        })
+                                };
+                            let pos_of = |id: SketchEntityId| -> Option<(f64, f64)> {
                                 sketch_ref.entities.iter().find(|e| e.id == id).and_then(
                                     |e| match e.kind {
-                                        EntityKind::Line { start, end } => Some((start, end)),
+                                        EntityKind::Point { x, y } => Some((x, y)),
                                         _ => None,
                                     },
                                 )
-                            };
-                            let pos_of = |id: SketchEntityId| -> Option<(f64, f64)> {
-                                sketch_ref
-                                    .entities
-                                    .iter()
-                                    .find(|e| e.id == id)
-                                    .and_then(|e| match e.kind {
-                                        EntityKind::Point { x, y } => Some((x, y)),
-                                        _ => None,
-                                    })
                             };
                             let (a_s, a_e) = match line_endpoints(first_line) {
                                 Some(p) => p,
@@ -3685,9 +3642,10 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                             let cos_theta = (aux * bux + auy * buy).clamp(-1.0, 1.0);
                             let theta = cos_theta.acos();
                             if theta < 1e-3 || (std::f64::consts::PI - theta) < 1e-3 {
-                                editor.state.solve_warnings.push(
-                                    "Fillet: lines are colinear — nothing to round".into(),
-                                );
+                                editor
+                                    .state
+                                    .solve_warnings
+                                    .push("Fillet: lines are colinear — nothing to round".into());
                                 editor.state.tool_pending = ToolPending::Idle;
                                 return;
                             }
@@ -3697,7 +3655,8 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                             let cap = trim.min(alen * 0.999).min(blen * 0.999);
                             if cap < radius_mm * 0.05 {
                                 editor.state.solve_warnings.push(
-                                    "Fillet: radius too large for these lines — pick a smaller r".into(),
+                                    "Fillet: radius too large for these lines — pick a smaller r"
+                                        .into(),
                                 );
                                 editor.state.tool_pending = ToolPending::Idle;
                                 return;
@@ -3821,7 +3780,8 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                             };
                             match pick_line_at(sketch_ref, click_xy.0, click_xy.1) {
                                 Some(id) => {
-                                    editor.state.tool_pending = ToolPending::FilletFirst { line: id };
+                                    editor.state.tool_pending =
+                                        ToolPending::FilletFirst { line: id };
                                 }
                                 None => {
                                     editor.state.solve_warnings.push(
@@ -3850,17 +3810,23 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                         id: SketchEntityId,
                     ) -> Option<((f64, f64), (f64, f64))> {
                         let pos_of = |pid: SketchEntityId| -> Option<(f64, f64)> {
-                            sketch.entities.iter().find(|e| e.id == pid).and_then(|e| match e.kind {
-                                EntityKind::Point { x, y } => Some((x, y)),
-                                _ => None,
+                            sketch.entities.iter().find(|e| e.id == pid).and_then(|e| {
+                                match e.kind {
+                                    EntityKind::Point { x, y } => Some((x, y)),
+                                    _ => None,
+                                }
                             })
                         };
-                        sketch.entities.iter().find(|e| e.id == id).and_then(|e| match e.kind {
-                            EntityKind::Line { start, end } => {
-                                Some((pos_of(start)?, pos_of(end)?))
-                            }
-                            _ => None,
-                        })
+                        sketch
+                            .entities
+                            .iter()
+                            .find(|e| e.id == id)
+                            .and_then(|e| match e.kind {
+                                EntityKind::Line { start, end } => {
+                                    Some((pos_of(start)?, pos_of(end)?))
+                                }
+                                _ => None,
+                            })
                     }
                     fn pick_line_at_for_trim(
                         sketch: &signex_sketch::SketchData,
@@ -3900,7 +3866,8 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                     };
                     let Some(target_line) = target_line else {
                         editor.state.solve_warnings.push(
-                            "Trim: click missed any Line — try clicking closer to a line stroke".into(),
+                            "Trim: click missed any Line — try clicking closer to a line stroke"
+                                .into(),
                         );
                         editor.state.tool_pending = ToolPending::Idle;
                         return;
@@ -3950,7 +3917,11 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                         };
                         // Bracketing the click between the nearest
                         // intersection below and above.
-                        let lo = hits.iter().copied().filter(|t| *t < click_t).fold(0.0_f64, f64::max);
+                        let lo = hits
+                            .iter()
+                            .copied()
+                            .filter(|t| *t < click_t)
+                            .fold(0.0_f64, f64::max);
                         let hi = hits
                             .iter()
                             .copied()
@@ -4042,12 +4013,13 @@ pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: Primitiv
                             // Capture the original end-point id so the
                             // mint of the second segment is correct.
                             let orig_end = if let Some(sk) = editor.primitive().sketch.as_ref() {
-                                sk.entities.iter().find(|e| e.id == target_line).and_then(
-                                    |e| match e.kind {
+                                sk.entities
+                                    .iter()
+                                    .find(|e| e.id == target_line)
+                                    .and_then(|e| match e.kind {
                                         EntityKind::Line { end, .. } => Some(end),
                                         _ => None,
-                                    },
-                                )
+                                    })
                             } else {
                                 None
                             };

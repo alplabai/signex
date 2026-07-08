@@ -209,16 +209,28 @@ pub struct Pad {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub corner_radius_pct: Option<f64>,
     /// Top-side surface feature (Altium "Pad Features → Top Side").
-    #[serde(default, skip_serializing_if = "signex_sketch::attr::PadFeature::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "signex_sketch::attr::PadFeature::is_none"
+    )]
     pub feature_top: signex_sketch::attr::PadFeature,
     /// Bottom-side surface feature.
-    #[serde(default, skip_serializing_if = "signex_sketch::attr::PadFeature::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "signex_sketch::attr::PadFeature::is_none"
+    )]
     pub feature_bottom: signex_sketch::attr::PadFeature,
     /// Test-point participation (top/bottom × assembly/fab).
-    #[serde(default, skip_serializing_if = "signex_sketch::attr::TestpointFlags::is_default")]
+    #[serde(
+        default,
+        skip_serializing_if = "signex_sketch::attr::TestpointFlags::is_default"
+    )]
     pub testpoint: signex_sketch::attr::TestpointFlags,
     /// Altium-parity electrical-type flag (Load/Source/Terminator).
-    #[serde(default, skip_serializing_if = "signex_sketch::attr::ElectricalType::is_default")]
+    #[serde(
+        default,
+        skip_serializing_if = "signex_sketch::attr::ElectricalType::is_default"
+    )]
     pub electrical_type: signex_sketch::attr::ElectricalType,
     /// Net assignment. Empty = unassigned.
     #[serde(default, skip_serializing_if = "String::is_empty")]

@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use base64::Engine;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::error::{ImportWarning, ModelImportError};
 
@@ -23,10 +23,11 @@ pub fn wrap_gltf(
     source_path: &PathBuf,
     converter_version: &str,
 ) -> Result<GltfWrapResult, ModelImportError> {
-    let mut root: Value = serde_json::from_str(source).map_err(|err| ModelImportError::GltfParseFailed {
-        path: source_path.clone(),
-        reason: format!("JSON parse failed: {err}"),
-    })?;
+    let mut root: Value =
+        serde_json::from_str(source).map_err(|err| ModelImportError::GltfParseFailed {
+            path: source_path.clone(),
+            reason: format!("JSON parse failed: {err}"),
+        })?;
 
     validate_asset_version(&root, source_path)?;
 
@@ -82,10 +83,11 @@ pub fn wrap_gltf(
         })
         .unwrap_or(0);
 
-    let json_bytes = serde_json::to_vec(&root).map_err(|err| ModelImportError::GltfParseFailed {
-        path: source_path.clone(),
-        reason: format!("JSON serialization failed: {err}"),
-    })?;
+    let json_bytes =
+        serde_json::to_vec(&root).map_err(|err| ModelImportError::GltfParseFailed {
+            path: source_path.clone(),
+            reason: format!("JSON serialization failed: {err}"),
+        })?;
 
     Ok(GltfWrapResult {
         json_bytes,
@@ -122,7 +124,10 @@ fn read_buffer_payload(
     index: usize,
     buffer: &Value,
 ) -> Result<Vec<u8>, ModelImportError> {
-    let uri = buffer.get("uri").and_then(Value::as_str).unwrap_or_default();
+    let uri = buffer
+        .get("uri")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
 
     if uri.is_empty() {
         return Ok(Vec::new());
@@ -138,7 +143,10 @@ fn read_buffer_payload(
     let buffer_path = base_dir.join(uri);
     std::fs::read(&buffer_path).map_err(|err| ModelImportError::GltfParseFailed {
         path: source_path.clone(),
-        reason: format!("buffers[{index}] missing external resource {:?}: {err}", buffer_path),
+        reason: format!(
+            "buffers[{index}] missing external resource {:?}: {err}",
+            buffer_path
+        ),
     })
 }
 
@@ -158,14 +166,15 @@ fn rewrite_buffer_views(
             .and_then(|raw| usize::try_from(raw).ok())
             .unwrap_or(0);
 
-        let base_offset = buffer_offsets.get(old_buffer_index).copied().ok_or_else(|| {
-            ModelImportError::GltfParseFailed {
+        let base_offset = buffer_offsets
+            .get(old_buffer_index)
+            .copied()
+            .ok_or_else(|| ModelImportError::GltfParseFailed {
                 path: source_path.clone(),
                 reason: format!(
                     "bufferViews[{index}] references missing buffer index {old_buffer_index}"
                 ),
-            }
-        })?;
+            })?;
 
         let old_offset = view
             .get("byteOffset")
@@ -186,7 +195,11 @@ fn embed_image_uris(root: &mut Value, base_dir: &Path, warnings: &mut Vec<Import
     };
 
     for image in images {
-        let Some(uri) = image.get("uri").and_then(Value::as_str).map(ToOwned::to_owned) else {
+        let Some(uri) = image
+            .get("uri")
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned)
+        else {
             continue;
         };
 
@@ -236,7 +249,9 @@ fn decode_data_uri(uri: &str) -> Option<Vec<u8>> {
     }
 
     let (_, encoded) = uri.split_once(',')?;
-    base64::engine::general_purpose::STANDARD.decode(encoded).ok()
+    base64::engine::general_purpose::STANDARD
+        .decode(encoded)
+        .ok()
 }
 
 fn guess_mime_type(path: &Path) -> &'static str {

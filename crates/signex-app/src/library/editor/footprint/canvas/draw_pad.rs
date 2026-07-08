@@ -75,7 +75,10 @@ pub(super) fn draw_pad(
                 b.close();
             })
         }
-        PS::Chamfered { chamfer_ratio, corners } => {
+        PS::Chamfered {
+            chamfer_ratio,
+            corners,
+        } => {
             let c = (half_w.min(half_h) * (*chamfer_ratio as f32 * 2.0)).max(0.5);
             Path::new(|b| {
                 let tl = Point::new(centre.x - half_w, centre.y - half_h);
@@ -114,16 +117,12 @@ pub(super) fn draw_pad(
         }
         PS::Custom(poly) => Path::new(|b| {
             if let Some((first, rest)) = poly.points.split_first() {
-                let p0 = cstate.world_to_screen((
-                    pad.position_mm.0 + first[0],
-                    pad.position_mm.1 + first[1],
-                ));
+                let p0 = cstate
+                    .world_to_screen((pad.position_mm.0 + first[0], pad.position_mm.1 + first[1]));
                 b.move_to(p0);
                 for pt in rest {
-                    let p = cstate.world_to_screen((
-                        pad.position_mm.0 + pt[0],
-                        pad.position_mm.1 + pt[1],
-                    ));
+                    let p = cstate
+                        .world_to_screen((pad.position_mm.0 + pt[0], pad.position_mm.1 + pt[1]));
                     b.line_to(p);
                 }
                 b.close();

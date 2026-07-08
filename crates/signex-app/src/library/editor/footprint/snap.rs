@@ -244,14 +244,12 @@ pub fn snap_cursor(
         if let Some(sketch) = sketch {
             use signex_sketch::entity::EntityKind;
             use signex_sketch::geom::{
-                segment_arc_intersections, segment_circle_intersections,
-                segment_segment_intersection, Arc2, Circle2, Point2, Segment2,
-                SegmentIntersection,
+                Arc2, Circle2, Point2, Segment2, SegmentIntersection, segment_arc_intersections,
+                segment_circle_intersections, segment_segment_intersection,
             };
 
-            let resolve = |id: SketchEntityId| -> Option<(f64, f64)> {
-                point_pos(id, Some(sketch), state)
-            };
+            let resolve =
+                |id: SketchEntityId| -> Option<(f64, f64)> { point_pos(id, Some(sketch), state) };
 
             // Lines as (start, end) world-mm pairs.
             let lines: Vec<(Point2, Point2)> = sketch
@@ -367,8 +365,7 @@ pub fn snap_cursor(
             // sketch curves yields a snap target at their
             // crossing.
             use signex_sketch::geom::{
-                arc_arc_intersections, arc_circle_intersections,
-                circle_circle_intersections,
+                arc_arc_intersections, arc_circle_intersections, circle_circle_intersections,
             };
             for i in 0..circles.len() {
                 for j in (i + 1)..circles.len() {

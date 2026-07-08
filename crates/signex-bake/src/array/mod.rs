@@ -40,7 +40,6 @@ use signex_sketch::unit::Quantity;
 
 use crate::pad::bake_one_pad;
 
-
 mod grid;
 mod linear;
 mod numbering;

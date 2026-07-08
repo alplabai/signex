@@ -882,11 +882,7 @@ pub enum NumberingSchemeKindUi {
 }
 
 impl NumberingSchemeKindUi {
-    pub const ALL: [Self; 3] = [
-        Self::LinearIncrement,
-        Self::BgaRowCol,
-        Self::Explicit,
-    ];
+    pub const ALL: [Self; 3] = [Self::LinearIncrement, Self::BgaRowCol, Self::Explicit];
 }
 
 impl std::fmt::Display for NumberingSchemeKindUi {
@@ -1129,7 +1125,10 @@ pub struct FootprintSelectedSilkSummary {
 /// editing.
 #[derive(Debug, Clone)]
 pub enum SilkKindGeometry {
-    Line { from_mm: [f64; 2], to_mm: [f64; 2] },
+    Line {
+        from_mm: [f64; 2],
+        to_mm: [f64; 2],
+    },
     Text {
         position_mm: [f64; 2],
         content: String,
@@ -1654,32 +1653,110 @@ pub enum PanelMsg {
     /// `state.pads[idx]` (and dirty-marks the editor + syncs the
     /// primitive). String-typed numeric inputs preserve the
     /// per-field typing buffer behaviour.
-    FpEditorSetSelectedPadDesignator { idx: usize, value: String },
-    FpEditorSetSelectedPadSide { idx: usize, side: crate::library::editor::footprint::state::PadSide },
-    FpEditorSetSelectedPadShape { idx: usize, shape: signex_library::PadShape },
-    FpEditorSetSelectedPadKind { idx: usize, kind: signex_library::PadKind },
-    FpEditorSetSelectedPadSizeX { idx: usize, value: String },
-    FpEditorSetSelectedPadSizeY { idx: usize, value: String },
-    FpEditorSetSelectedPadDrillDiameter { idx: usize, value: String },
-    FpEditorSetSelectedPadDrillSlotLength { idx: usize, value: String },
-    FpEditorSetSelectedPadCornerRadiusPct { idx: usize, value: String },
-    FpEditorSetSelectedPadTemplate { idx: usize, value: String },
-    FpEditorSetSelectedPadTemplateLibrary { idx: usize, value: String },
-    FpEditorSetSelectedPadPasteMarginTop { idx: usize, value: String },
-    FpEditorSetSelectedPadPasteMarginBottom { idx: usize, value: String },
-    FpEditorToggleSelectedPadPasteEnabledTop { idx: usize, value: bool },
-    FpEditorToggleSelectedPadPasteEnabledBottom { idx: usize, value: bool },
-    FpEditorSetSelectedPadMaskMarginTop { idx: usize, value: String },
-    FpEditorSetSelectedPadMaskMarginBottom { idx: usize, value: String },
-    FpEditorToggleSelectedPadMaskTentedTop { idx: usize, value: bool },
-    FpEditorToggleSelectedPadMaskTentedBottom { idx: usize, value: bool },
-    FpEditorToggleSelectedPadThermalRelief { idx: usize, value: bool },
-    FpEditorSetSelectedPadFeatureTop { idx: usize, value: signex_sketch::attr::PadFeature },
-    FpEditorSetSelectedPadFeatureBottom { idx: usize, value: signex_sketch::attr::PadFeature },
-    FpEditorToggleSelectedPadTestpointTopAssembly { idx: usize, value: bool },
-    FpEditorToggleSelectedPadTestpointTopFab { idx: usize, value: bool },
-    FpEditorToggleSelectedPadTestpointBottomAssembly { idx: usize, value: bool },
-    FpEditorToggleSelectedPadTestpointBottomFab { idx: usize, value: bool },
+    FpEditorSetSelectedPadDesignator {
+        idx: usize,
+        value: String,
+    },
+    FpEditorSetSelectedPadSide {
+        idx: usize,
+        side: crate::library::editor::footprint::state::PadSide,
+    },
+    FpEditorSetSelectedPadShape {
+        idx: usize,
+        shape: signex_library::PadShape,
+    },
+    FpEditorSetSelectedPadKind {
+        idx: usize,
+        kind: signex_library::PadKind,
+    },
+    FpEditorSetSelectedPadSizeX {
+        idx: usize,
+        value: String,
+    },
+    FpEditorSetSelectedPadSizeY {
+        idx: usize,
+        value: String,
+    },
+    FpEditorSetSelectedPadDrillDiameter {
+        idx: usize,
+        value: String,
+    },
+    FpEditorSetSelectedPadDrillSlotLength {
+        idx: usize,
+        value: String,
+    },
+    FpEditorSetSelectedPadCornerRadiusPct {
+        idx: usize,
+        value: String,
+    },
+    FpEditorSetSelectedPadTemplate {
+        idx: usize,
+        value: String,
+    },
+    FpEditorSetSelectedPadTemplateLibrary {
+        idx: usize,
+        value: String,
+    },
+    FpEditorSetSelectedPadPasteMarginTop {
+        idx: usize,
+        value: String,
+    },
+    FpEditorSetSelectedPadPasteMarginBottom {
+        idx: usize,
+        value: String,
+    },
+    FpEditorToggleSelectedPadPasteEnabledTop {
+        idx: usize,
+        value: bool,
+    },
+    FpEditorToggleSelectedPadPasteEnabledBottom {
+        idx: usize,
+        value: bool,
+    },
+    FpEditorSetSelectedPadMaskMarginTop {
+        idx: usize,
+        value: String,
+    },
+    FpEditorSetSelectedPadMaskMarginBottom {
+        idx: usize,
+        value: String,
+    },
+    FpEditorToggleSelectedPadMaskTentedTop {
+        idx: usize,
+        value: bool,
+    },
+    FpEditorToggleSelectedPadMaskTentedBottom {
+        idx: usize,
+        value: bool,
+    },
+    FpEditorToggleSelectedPadThermalRelief {
+        idx: usize,
+        value: bool,
+    },
+    FpEditorSetSelectedPadFeatureTop {
+        idx: usize,
+        value: signex_sketch::attr::PadFeature,
+    },
+    FpEditorSetSelectedPadFeatureBottom {
+        idx: usize,
+        value: signex_sketch::attr::PadFeature,
+    },
+    FpEditorToggleSelectedPadTestpointTopAssembly {
+        idx: usize,
+        value: bool,
+    },
+    FpEditorToggleSelectedPadTestpointTopFab {
+        idx: usize,
+        value: bool,
+    },
+    FpEditorToggleSelectedPadTestpointBottomAssembly {
+        idx: usize,
+        value: bool,
+    },
+    FpEditorToggleSelectedPadTestpointBottomFab {
+        idx: usize,
+        value: bool,
+    },
     /// v0.20 — switch the Pad Stack section's tab (Simple /
     /// Top-Middle-Bottom / Full Stack). UI-only; mutates
     /// `editor.state.pad_stack_tab`.
@@ -1727,12 +1804,30 @@ pub enum PanelMsg {
     /// (plated), `false` = NPT (non-plated).
     FpEditorToggleNextPadPlated(bool),
     /// v0.21 — Selected-pad hole-detail mirror.
-    FpEditorSetSelectedPadHoleTolerancePlus { idx: usize, value: String },
-    FpEditorSetSelectedPadHoleToleranceMinus { idx: usize, value: String },
-    FpEditorSetSelectedPadHoleRotation { idx: usize, value: String },
-    FpEditorSetSelectedPadCopperOffsetX { idx: usize, value: String },
-    FpEditorSetSelectedPadCopperOffsetY { idx: usize, value: String },
-    FpEditorToggleSelectedPadPlated { idx: usize, value: bool },
+    FpEditorSetSelectedPadHoleTolerancePlus {
+        idx: usize,
+        value: String,
+    },
+    FpEditorSetSelectedPadHoleToleranceMinus {
+        idx: usize,
+        value: String,
+    },
+    FpEditorSetSelectedPadHoleRotation {
+        idx: usize,
+        value: String,
+    },
+    FpEditorSetSelectedPadCopperOffsetX {
+        idx: usize,
+        value: String,
+    },
+    FpEditorSetSelectedPadCopperOffsetY {
+        idx: usize,
+        value: String,
+    },
+    FpEditorToggleSelectedPadPlated {
+        idx: usize,
+        value: bool,
+    },
     /// v0.21 — Sketch-mode pad attribute edits. Mutate the `PadAttr`
     /// on the selected sketch entity (identified by SketchEntityId)
     /// and re-run solve+bake. Mirrors the new pad fields surfaced in
@@ -1830,7 +1925,9 @@ pub enum PanelMsg {
     /// backing sketch entity. Switches editor mode to Sketch and
     /// selects the entity. No-op when the pad has no
     /// `sketch_entity_id` (placed before sketch-mode auto-mint).
-    FpEditorEditPadInSketch { pad_idx: usize },
+    FpEditorEditPadInSketch {
+        pad_idx: usize,
+    },
     /// v0.24 Phase 3 (Track A2) — Properties-panel parametric handle
     /// row edit. The handler looks up `pad.shape_params[key]` to
     /// resolve the bound parameter name, writes `value` into

@@ -111,7 +111,11 @@ fn build_ring(positions: &[Point2]) -> Option<Vec<Vertex>> {
 /// between `start_idx` (the corner that begins the edge) and
 /// whatever vertex currently follows it. Multiple intersections
 /// on one edge sort by ascending `alpha`.
-fn insert_after_in_alpha_order(verts: &mut Vec<Vertex>, start_idx: usize, new_vertex: Vertex) -> usize {
+fn insert_after_in_alpha_order(
+    verts: &mut Vec<Vertex>,
+    start_idx: usize,
+    new_vertex: Vertex,
+) -> usize {
     let new_idx = verts.len();
     verts.push(new_vertex);
     // Walk forward from start_idx until we find the insertion
@@ -248,7 +252,11 @@ fn walk_one_ring(
         }
         step_budget -= 1;
 
-        let v = if on_subject { &mut subject[cur] } else { &mut clip[cur] };
+        let v = if on_subject {
+            &mut subject[cur]
+        } else {
+            &mut clip[cur]
+        };
         if v.intersect {
             v.visited = true;
         }
@@ -268,11 +276,7 @@ fn walk_one_ring(
                     // backward at exits.
                     // Clip side: walk backward at entries, forward
                     // at exits (the clip is logically reversed).
-                    if on_subject {
-                        v.entry
-                    } else {
-                        !v.entry
-                    }
+                    if on_subject { v.entry } else { !v.entry }
                 }
             }
         } else {
@@ -288,7 +292,11 @@ fn walk_one_ring(
 
         // Step along the current ring.
         let next_idx = if forward {
-            if on_subject { subject[cur].next } else { clip[cur].next }
+            if on_subject {
+                subject[cur].next
+            } else {
+                clip[cur].next
+            }
         } else if on_subject {
             subject[cur].prev
         } else {
@@ -322,10 +330,11 @@ fn walk_one_ring(
                 // Termination check — we've looped back to the
                 // start vertex's position via the neighbor link.
                 let start_pos = subject_start_pos_or_default(subject, start);
-                let last = out.last().copied().unwrap_or(Point2::new(f64::INFINITY, f64::INFINITY));
-                if (last.x - start_pos.x).abs() < 1e-12
-                    && (last.y - start_pos.y).abs() < 1e-12
-                {
+                let last = out
+                    .last()
+                    .copied()
+                    .unwrap_or(Point2::new(f64::INFINITY, f64::INFINITY));
+                if (last.x - start_pos.x).abs() < 1e-12 && (last.y - start_pos.y).abs() < 1e-12 {
                     out.pop();
                     break;
                 }
@@ -342,7 +351,10 @@ fn walk_one_ring(
 }
 
 fn subject_start_pos_or_default(subject: &[Vertex], idx: usize) -> Point2 {
-    subject.get(idx).map(|v| v.pos).unwrap_or(Point2::new(f64::NAN, f64::NAN))
+    subject
+        .get(idx)
+        .map(|v| v.pos)
+        .unwrap_or(Point2::new(f64::NAN, f64::NAN))
 }
 
 /// Compute `subject ∩ clip`, `subject ∪ clip`, or `subject − clip`
@@ -389,16 +401,10 @@ pub fn polygon_op(subject: &[Point2], clip: &[Point2], op: BoolOp) -> Vec<Vec<Po
             let c_a = cl[ci].pos;
             let c_b = cl[(ci + 1) % n_clip_corners].pos;
             if let Some((pt, t_s, t_c)) = proper_segment_intersection(s_a, s_b, c_a, c_b) {
-                let s_inserted = insert_after_in_alpha_order(
-                    &mut subj,
-                    si,
-                    Vertex::intersection(pt, t_s),
-                );
-                let c_inserted = insert_after_in_alpha_order(
-                    &mut cl,
-                    ci,
-                    Vertex::intersection(pt, t_c),
-                );
+                let s_inserted =
+                    insert_after_in_alpha_order(&mut subj, si, Vertex::intersection(pt, t_s));
+                let c_inserted =
+                    insert_after_in_alpha_order(&mut cl, ci, Vertex::intersection(pt, t_c));
                 subj[s_inserted].neighbor = Some(c_inserted);
                 cl[c_inserted].neighbor = Some(s_inserted);
                 had_intersection = true;
@@ -409,8 +415,7 @@ pub fn polygon_op(subject: &[Point2], clip: &[Point2], op: BoolOp) -> Vec<Vec<Po
     if !had_intersection {
         // No edges cross. Check containment to pick the trivial
         // case for each operation.
-        let subj_inside = !subj.is_empty()
-            && point_in_ring(&cl, 0, subj[0].pos);
+        let subj_inside = !subj.is_empty() && point_in_ring(&cl, 0, subj[0].pos);
         let clip_inside = !cl.is_empty() && point_in_ring(&subj, 0, cl[0].pos);
         return match (op, subj_inside, clip_inside) {
             (BoolOp::Intersection, true, _) => vec![subject.to_vec()],
@@ -426,10 +431,10 @@ pub fn polygon_op(subject: &[Point2], clip: &[Point2], op: BoolOp) -> Vec<Vec<Po
     }
 
     // Phase 2 — classify entries and exits.
-    let subj_seed = first_corner(&subj, 0)
-        .expect("non-degenerate polygon must have a non-intersection corner");
-    let clip_seed = first_corner(&cl, 0)
-        .expect("non-degenerate polygon must have a non-intersection corner");
+    let subj_seed =
+        first_corner(&subj, 0).expect("non-degenerate polygon must have a non-intersection corner");
+    let clip_seed =
+        first_corner(&cl, 0).expect("non-degenerate polygon must have a non-intersection corner");
     let subj_starts_inside_clip = point_in_ring(&cl, 0, subj[subj_seed].pos);
     let clip_starts_inside_subj = point_in_ring(&subj, 0, cl[clip_seed].pos);
     classify_entries(&mut subj, subj_seed, subj_starts_inside_clip);

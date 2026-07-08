@@ -550,15 +550,11 @@ fn solve_and_bake(
                 // canonical key, so all three run unconditionally
                 // without per-shape branching here.
                 if let Some(sketch) = footprint.sketch.as_mut() {
-                    super::pad_to_sketch::mirror_solve_to_chamfer_anchors(
-                        state, sketch, &resolved,
-                    );
+                    super::pad_to_sketch::mirror_solve_to_chamfer_anchors(state, sketch, &resolved);
                     super::pad_to_sketch::mirror_solve_to_round_rect_geometry(
                         state, sketch, &resolved,
                     );
-                    super::pad_to_sketch::mirror_solve_to_oval_geometry(
-                        state, sketch, &resolved,
-                    );
+                    super::pad_to_sketch::mirror_solve_to_oval_geometry(state, sketch, &resolved);
                 }
             }
 

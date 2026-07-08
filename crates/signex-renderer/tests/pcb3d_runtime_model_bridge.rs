@@ -1,8 +1,8 @@
 //! Integration tests for runtime bridge: source model -> importer -> GLB ingest.
 
 use signex_renderer::pcb3d::{
-    ingest_runtime_model_with_bridge, ModelTransform, RuntimeMaterialPolicy,
-    RuntimeModelBridgeError, RuntimeModelBridgeRequest, RuntimeModelSource,
+    ModelTransform, RuntimeMaterialPolicy, RuntimeModelBridgeError, RuntimeModelBridgeRequest,
+    RuntimeModelSource, ingest_runtime_model_with_bridge,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -185,7 +185,11 @@ fn pcb3d_runtime_bridge_reports_import_failure_for_missing_source() {
     .expect_err("missing source should fail");
 
     match err {
-        RuntimeModelBridgeError::ImportFailed { model_id, path, reason } => {
+        RuntimeModelBridgeError::ImportFailed {
+            model_id,
+            path,
+            reason,
+        } => {
             assert_eq!(model_id, "B5");
             assert_eq!(path, missing_path);
             assert!(reason.contains("source file not found"));

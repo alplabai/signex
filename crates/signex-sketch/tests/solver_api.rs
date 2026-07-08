@@ -252,4 +252,3 @@ fn solver_tolerance_field_is_honoured() {
         "default tolerance should take at least one iteration"
     );
 }
-

@@ -2,10 +2,9 @@
 
 use signex_gfx::scene::Scene;
 use signex_renderer::pcb3d::{
-    check_projection_alignment, emit_opaque_pass_preview, emit_projection_pass,
-    ingest_runtime_glb, GlbSource, ModelTransform, OpaquePassLayout, ProjectionAlignmentError,
-    ProjectionBounds, ProjectionPassConfig, RuntimeGlbIngestError, RuntimeGlbIngestRequest,
-    RuntimeMaterialPolicy,
+    GlbSource, ModelTransform, OpaquePassLayout, ProjectionAlignmentError, ProjectionBounds,
+    ProjectionPassConfig, RuntimeGlbIngestError, RuntimeGlbIngestRequest, RuntimeMaterialPolicy,
+    check_projection_alignment, emit_opaque_pass_preview, emit_projection_pass, ingest_runtime_glb,
 };
 use signex_renderer::theme::ResolvedTheme;
 use std::fs;
@@ -153,14 +152,14 @@ fn pcb3d_runtime_glb_ingest_accepts_minimal_valid_payload_from_path() {
 
     assert_eq!(model.model_id, "U6");
     assert_eq!(model.metadata.mesh_count, 1);
-        assert_eq!(model.mesh_staging.opaque_primitives.len(), 1);
+    assert_eq!(model.mesh_staging.opaque_primitives.len(), 1);
 
     fs::remove_file(path).expect("must remove temp test glb");
 }
 
 #[test]
 fn pcb3d_runtime_glb_ingest_stages_mesh_primitives_for_scene_nodes() {
-        let json = r#"{
+    let json = r#"{
             "asset": { "version": "2.0" },
             "scenes": [{ "nodes": [0] }],
             "nodes": [
@@ -178,57 +177,58 @@ fn pcb3d_runtime_glb_ingest_stages_mesh_primitives_for_scene_nodes() {
             ]
         }"#;
 
-        let source = GlbSource::Bytes(make_glb_with_json(json));
-        let model = ingest_runtime_glb(request("U7", source)).expect("valid staged mesh payload");
+    let source = GlbSource::Bytes(make_glb_with_json(json));
+    let model = ingest_runtime_glb(request("U7", source)).expect("valid staged mesh payload");
 
-        assert_eq!(model.metadata.mesh_count, 2);
-        assert_eq!(model.metadata.mesh_primitive_count, 3);
-        assert_eq!(model.metadata.opaque_instance_count, 3);
-        assert_eq!(model.mesh_staging.opaque_primitives.len(), 3);
+    assert_eq!(model.metadata.mesh_count, 2);
+    assert_eq!(model.metadata.mesh_primitive_count, 3);
+    assert_eq!(model.metadata.opaque_instance_count, 3);
+    assert_eq!(model.mesh_staging.opaque_primitives.len(), 3);
 
-        let first = model.mesh_staging.opaque_primitives[0];
-        assert_eq!(first.scene_index, 0);
-        assert_eq!(first.node_index, 0);
-        assert_eq!(first.mesh_index, 0);
-        assert_eq!(first.primitive_index, 0);
-        assert_eq!(first.material_index, None);
+    let first = model.mesh_staging.opaque_primitives[0];
+    assert_eq!(first.scene_index, 0);
+    assert_eq!(first.node_index, 0);
+    assert_eq!(first.mesh_index, 0);
+    assert_eq!(first.primitive_index, 0);
+    assert_eq!(first.material_index, None);
 
-        let second = model.mesh_staging.opaque_primitives[1];
-        assert_eq!(second.mesh_index, 0);
-        assert_eq!(second.primitive_index, 1);
-        assert_eq!(second.material_index, Some(3));
+    let second = model.mesh_staging.opaque_primitives[1];
+    assert_eq!(second.mesh_index, 0);
+    assert_eq!(second.primitive_index, 1);
+    assert_eq!(second.material_index, Some(3));
 
-        let third = model.mesh_staging.opaque_primitives[2];
-        assert_eq!(third.node_index, 1);
-        assert_eq!(third.mesh_index, 1);
-        assert_eq!(third.primitive_index, 0);
-        assert_eq!(third.material_index, Some(8));
+    let third = model.mesh_staging.opaque_primitives[2];
+    assert_eq!(third.node_index, 1);
+    assert_eq!(third.mesh_index, 1);
+    assert_eq!(third.primitive_index, 0);
+    assert_eq!(third.material_index, Some(8));
 }
 
 #[test]
 fn pcb3d_runtime_glb_ingest_rejects_out_of_range_mesh_index() {
-        let json = r#"{
+    let json = r#"{
             "asset": { "version": "2.0" },
             "scenes": [{ "nodes": [0] }],
             "nodes": [{ "mesh": 4 }],
             "meshes": [{ "primitives": [{ "attributes": {} }] }]
         }"#;
 
-        let source = GlbSource::Bytes(make_glb_with_json(json));
-        let err = ingest_runtime_glb(request("U8", source)).expect_err("out-of-range mesh index must fail");
+    let source = GlbSource::Bytes(make_glb_with_json(json));
+    let err =
+        ingest_runtime_glb(request("U8", source)).expect_err("out-of-range mesh index must fail");
 
-        match err {
-                RuntimeGlbIngestError::InvalidGlb { model_id, reason } => {
-                        assert_eq!(model_id, "U8");
-                        assert!(reason.contains("mesh index") || reason.contains("out of range"));
-                }
-                other => panic!("unexpected error: {other:?}"),
+    match err {
+        RuntimeGlbIngestError::InvalidGlb { model_id, reason } => {
+            assert_eq!(model_id, "U8");
+            assert!(reason.contains("mesh index") || reason.contains("out of range"));
         }
+        other => panic!("unexpected error: {other:?}"),
+    }
 }
 
 #[test]
 fn pcb3d_runtime_glb_opaque_pass_preview_emits_one_polygon_per_staged_primitive() {
-        let json = r#"{
+    let json = r#"{
             "asset": { "version": "2.0" },
             "scenes": [{ "nodes": [0] }],
             "nodes": [{ "mesh": 0 }],
@@ -238,19 +238,23 @@ fn pcb3d_runtime_glb_opaque_pass_preview_emits_one_polygon_per_staged_primitive(
             ] }]
         }"#;
 
-        let source = GlbSource::Bytes(make_glb_with_json(json));
-        let model = ingest_runtime_glb(request("U9", source)).expect("valid staged payload for opaque pass");
-        let mut scene = Scene::default();
-        let theme = ResolvedTheme::builtin_default();
+    let source = GlbSource::Bytes(make_glb_with_json(json));
+    let model =
+        ingest_runtime_glb(request("U9", source)).expect("valid staged payload for opaque pass");
+    let mut scene = Scene::default();
+    let theme = ResolvedTheme::builtin_default();
 
-        emit_opaque_pass_preview(&model, &theme, &mut scene, OpaquePassLayout::default());
+    emit_opaque_pass_preview(&model, &theme, &mut scene, OpaquePassLayout::default());
 
-        assert_eq!(scene.polygons.len(), model.mesh_staging.opaque_primitives.len());
-        assert_eq!(scene.polygons.len(), 2);
-        assert_eq!(scene.polygons[0].vertices.len(), 4);
-        assert_eq!(scene.polygons[1].vertices.len(), 4);
-        assert!(scene.polygons[1].vertices[0][0] > scene.polygons[0].vertices[0][0]);
-        assert!(scene.polygons[0].stroke_color.is_some());
+    assert_eq!(
+        scene.polygons.len(),
+        model.mesh_staging.opaque_primitives.len()
+    );
+    assert_eq!(scene.polygons.len(), 2);
+    assert_eq!(scene.polygons[0].vertices.len(), 4);
+    assert_eq!(scene.polygons[1].vertices.len(), 4);
+    assert!(scene.polygons[1].vertices[0][0] > scene.polygons[0].vertices[0][0]);
+    assert!(scene.polygons[0].stroke_color.is_some());
 }
 
 // ---------------------------------------------------------------------------
@@ -287,7 +291,11 @@ fn pcb3d_projection_alignment_rejects_uv_out_of_range() {
     let err = check_projection_alignment("R2", &config).unwrap_err();
     assert!(matches!(
         err,
-        ProjectionAlignmentError::UvBoundsOutOfRange { axis: "x", which: "max", .. }
+        ProjectionAlignmentError::UvBoundsOutOfRange {
+            axis: "x",
+            which: "max",
+            ..
+        }
     ));
 }
 
@@ -310,7 +318,10 @@ fn pcb3d_projection_alignment_rejects_inverted_uv_bounds() {
 #[test]
 fn pcb3d_projection_alignment_accepts_valid_config() {
     let result = check_projection_alignment("R4", &ProjectionPassConfig::default());
-    assert!(result.is_ok(), "valid default config must pass alignment check");
+    assert!(
+        result.is_ok(),
+        "valid default config must pass alignment check"
+    );
 }
 
 #[test]
@@ -332,8 +343,15 @@ fn pcb3d_projection_pass_emits_to_overlay_polygons_not_base_polygons() {
     emit_projection_pass(&model, &theme, &mut scene, ProjectionPassConfig::default())
         .expect("valid projection config");
 
-    assert_eq!(scene.polygons.len(), opaque_count, "base polygons must not change after projection pass");
-    assert!(!scene.overlay_polygons.is_empty(), "projection pass must populate overlay_polygons");
+    assert_eq!(
+        scene.polygons.len(),
+        opaque_count,
+        "base polygons must not change after projection pass"
+    );
+    assert!(
+        !scene.overlay_polygons.is_empty(),
+        "projection pass must populate overlay_polygons"
+    );
 }
 
 #[test]

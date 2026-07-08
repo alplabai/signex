@@ -257,8 +257,7 @@ pub fn mirror_delete_pad_from_sketch(pad: &EditorPad, footprint: &mut Footprint)
             EntityKind::Arc {
                 center, start, end, ..
             } => {
-                if drop_set.contains(center) || drop_set.contains(start) || drop_set.contains(end)
-                {
+                if drop_set.contains(center) || drop_set.contains(start) || drop_set.contains(end) {
                     secondary_drops.insert(entity.id);
                     secondary_drops.insert(*center);
                     secondary_drops.insert(*start);
@@ -285,11 +284,7 @@ pub fn mirror_delete_pad_from_sketch(pad: &EditorPad, footprint: &mut Footprint)
             }
             EntityKind::Arc {
                 center, start, end, ..
-            } => {
-                !(drop_set.contains(center)
-                    || drop_set.contains(start)
-                    || drop_set.contains(end))
-            }
+            } => !(drop_set.contains(center) || drop_set.contains(start) || drop_set.contains(end)),
             EntityKind::Circle { center, .. } => !drop_set.contains(center),
             EntityKind::Point { .. } => true,
         }

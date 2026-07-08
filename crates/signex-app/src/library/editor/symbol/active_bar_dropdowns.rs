@@ -73,14 +73,11 @@ pub fn entries(
     }
 }
 
-fn filter_entries(
-    f: SymbolSelectionFilter,
-    path: PathBuf,
-) -> Vec<DropdownEntry<LibraryMessage>> {
+fn filter_entries(f: SymbolSelectionFilter, path: PathBuf) -> Vec<DropdownEntry<LibraryMessage>> {
+    use SymbolFilterKind as K;
     use iced::widget::{column, container, row};
     use iced::{Color, Length};
     use signex_widgets::active_bar_dropdown::chip_btn;
-    use SymbolFilterKind as K;
 
     let chip_border = Color::from_rgba8(0xE7, 0x8B, 0x2A, 1.0);
 
@@ -301,10 +298,7 @@ fn align_entries(path: PathBuf, tid: ThemeId) -> Vec<DropdownEntry<LibraryMessag
     ]
 }
 
-fn pin_entries(
-    active_tool: SymbolTool,
-    path: PathBuf,
-) -> Vec<DropdownEntry<LibraryMessage>> {
+fn pin_entries(active_tool: SymbolTool, path: PathBuf) -> Vec<DropdownEntry<LibraryMessage>> {
     // SchLib has one Place Pin tool today; the variants (input /
     // output / passive / etc.) mutate a pin AFTER placement via the
     // Properties panel. Surface "Place Pin" as the only wired item;

@@ -26,7 +26,6 @@ impl FpSelectionMode {
     }
 }
 
-
 /// Each flag gates whether the corresponding kind is selectable in
 /// the canvas. `Pads` is the only one functionally wired today; the
 /// others are stored for forward compatibility so the pill row

@@ -65,7 +65,6 @@ const MIN_SCALE: f32 = 5.0;
 const MAX_SCALE: f32 = 400.0;
 const ZOOM_FACTOR: f32 = 1.15;
 
-
 /// Canvas-only state owned by `iced::widget::Canvas`. The editor's
 /// model lives in `FootprintEditorState`; this struct only holds
 /// per-instance interaction state (camera, drag flags).
@@ -480,8 +479,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     let select_mode = (matches!(self.state.mode, _EM::Sketch)
                         && self.state.active_tool == _ST::Select)
                         || (matches!(self.state.mode, _EM::Normal)
-                            && self.state.pads_tool
-                                == super::state::PadsTool::Select);
+                            && self.state.pads_tool == super::state::PadsTool::Select);
                     let world = if select_mode {
                         cstate.last_snap = None;
                         raw_world
@@ -508,16 +506,12 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                             if pad.sketch_entity_id.is_none() {
                                 continue;
                             }
-                            let handle_world = (
-                                pad.position_mm.0 + pad.size_mm.0 / 2.0,
-                                pad.position_mm.1,
-                            );
+                            let handle_world =
+                                (pad.position_mm.0 + pad.size_mm.0 / 2.0, pad.position_mm.1);
                             let handle_screen = cstate.world_to_screen(handle_world);
                             let dx = cursor_pos.x - handle_screen.x;
                             let dy = cursor_pos.y - handle_screen.y;
-                            if dx * dx + dy * dy
-                                <= HANDLE_HIT_RADIUS_PX * HANDLE_HIT_RADIUS_PX
-                            {
+                            if dx * dx + dy * dy <= HANDLE_HIT_RADIUS_PX * HANDLE_HIT_RADIUS_PX {
                                 cstate.round_resize_drag = Some(idx);
                                 cstate.drag = Some(DragState {
                                     pad_idx: usize::MAX,
@@ -578,35 +572,31 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         && let Some(sketch_ref) = self.sketch
                     {
                         const LINE_HIT_TOL_PX: f32 = 10.0;
-                        let tol_mm =
-                            (LINE_HIT_TOL_PX / cstate.scale.max(1.0)) as f64;
-                        let mut best_line: Option<(f64, signex_sketch::id::SketchEntityId)> =
-                            None;
-                        let pos_of = |id: signex_sketch::id::SketchEntityId| -> Option<(f64, f64)> {
-                            if let Some(solve) = self.state.last_solve.as_ref()
-                                && let Some(p) = signex_sketch::solver::state::point_xy(
-                                    id,
-                                    &solve.result.state,
-                                    &solve.result.index,
-                                    sketch_ref,
+                        let tol_mm = (LINE_HIT_TOL_PX / cstate.scale.max(1.0)) as f64;
+                        let mut best_line: Option<(f64, signex_sketch::id::SketchEntityId)> = None;
+                        let pos_of =
+                            |id: signex_sketch::id::SketchEntityId| -> Option<(f64, f64)> {
+                                if let Some(solve) = self.state.last_solve.as_ref()
+                                    && let Some(p) = signex_sketch::solver::state::point_xy(
+                                        id,
+                                        &solve.result.state,
+                                        &solve.result.index,
+                                        sketch_ref,
+                                    )
+                                {
+                                    return Some(p);
+                                }
+                                sketch_ref.entities.iter().find(|e| e.id == id).and_then(
+                                    |e| match e.kind {
+                                        signex_sketch::entity::EntityKind::Point { x, y } => {
+                                            Some((x, y))
+                                        }
+                                        _ => None,
+                                    },
                                 )
-                            {
-                                return Some(p);
-                            }
-                            sketch_ref
-                                .entities
-                                .iter()
-                                .find(|e| e.id == id)
-                                .and_then(|e| match e.kind {
-                                    signex_sketch::entity::EntityKind::Point { x, y } => {
-                                        Some((x, y))
-                                    }
-                                    _ => None,
-                                })
-                        };
+                            };
                         for ent in &sketch_ref.entities {
-                            if let signex_sketch::entity::EntityKind::Line { start, end } =
-                                ent.kind
+                            if let signex_sketch::entity::EntityKind::Line { start, end } = ent.kind
                                 && let (Some(a), Some(b)) = (pos_of(start), pos_of(end))
                             {
                                 let dx = b.0 - a.0;
@@ -615,8 +605,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 if llen2 <= 1e-12 {
                                     continue;
                                 }
-                                let t = ((world.0 - a.0) * dx + (world.1 - a.1) * dy)
-                                    / llen2;
+                                let t = ((world.0 - a.0) * dx + (world.1 - a.1) * dy) / llen2;
                                 let tc = t.clamp(0.0, 1.0);
                                 let px = a.0 + tc * dx;
                                 let py = a.1 + tc * dy;
@@ -680,8 +669,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                             }
                         }
                         if let Some(lp) = hit {
-                            let mut ids: Vec<signex_sketch::id::SketchEntityId> =
-                                lp.lines.clone();
+                            let mut ids: Vec<signex_sketch::id::SketchEntityId> = lp.lines.clone();
                             ids.extend(lp.points.iter().copied());
                             return Some(
                                 canvas::Action::publish(LibraryMessage::EditorEvent {
@@ -785,8 +773,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                     FpGraphicKind::Line { .. } => {
                                         self.state.selection_filter.tracks
                                     }
-                                    FpGraphicKind::Arc { .. }
-                                    | FpGraphicKind::Circle { .. } => {
+                                    FpGraphicKind::Arc { .. } | FpGraphicKind::Circle { .. } => {
                                         self.state.selection_filter.arcs
                                     }
                                     FpGraphicKind::Rectangle { .. } => {
@@ -803,9 +790,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                             self.state.selection_filter.tracks
                                         }
                                     }
-                                    FpGraphicKind::Text { .. } => {
-                                        self.state.selection_filter.texts
-                                    }
+                                    FpGraphicKind::Text { .. } => self.state.selection_filter.texts,
                                 };
                                 if allowed {
                                     return Some(
@@ -837,10 +822,8 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     // for Pads mode (PadsTool::Select) + Sketch mode
                     // (SketchTool::Select). Each mode's release
                     // picker walks the appropriate entity list.
-                    let arm_rubber = matches!(
-                        self.state.mode,
-                        super::state::EditorMode::Normal
-                    ) && self.state.pads_tool == super::state::PadsTool::Select
+                    let arm_rubber = matches!(self.state.mode, super::state::EditorMode::Normal)
+                        && self.state.pads_tool == super::state::PadsTool::Select
                         || matches!(self.state.mode, super::state::EditorMode::Sketch)
                             && self.state.active_tool == super::state::SketchTool::Select;
                     if arm_rubber {
@@ -881,12 +864,9 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         // through to silk graphics, then Empty. Pads
                         // win because they''re drawn on top of silk
                         // in the rendered footprint.
-                        use crate::library::editor::footprint::state
-                            ::FootprintContextTarget;
+                        use crate::library::editor::footprint::state::FootprintContextTarget;
                         let world = cstate.screen_to_world(cursor_pos);
-                        let target = if let Some(idx) =
-                            self.state.pad_at(world.0, world.1)
-                        {
+                        let target = if let Some(idx) = self.state.pad_at(world.0, world.1) {
                             FootprintContextTarget::Pad(idx)
                         } else {
                             // Same tolerance the left-click silk
@@ -947,9 +927,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                             // message. A drag that collapses to ~0 in
                             // either axis is a cancelled gesture, not
                             // a degenerate frame.
-                            if self.state.pads_tool
-                                == super::state::PadsTool::PlaceTextFrame
-                            {
+                            if self.state.pads_tool == super::state::PadsTool::PlaceTextFrame {
                                 let anchor = drag.grab_offset_mm;
                                 let release_world = cursor
                                     .position_in(bounds)
@@ -1076,10 +1054,8 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                             let Some((bx0, by0, bx1, by1)) = bbox_of(e) else {
                                                 continue;
                                             };
-                                            let fully_inside = bx0 >= x0
-                                                && bx1 <= x1
-                                                && by0 >= y0
-                                                && by1 <= y1;
+                                            let fully_inside =
+                                                bx0 >= x0 && bx1 <= x1 && by0 >= y0 && by1 <= y1;
                                             if fully_inside {
                                                 hits.push(e.id);
                                             }
@@ -1108,14 +1084,10 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 let mut hits: Vec<usize> = Vec::new();
                                 for (idx, pad) in self.state.pads.iter().enumerate() {
                                     let (px0, py0, px1, py1) = pad.bbox_mm();
-                                    let fully_inside = px0 >= x0
-                                        && px1 <= x1
-                                        && py0 >= y0
-                                        && py1 <= y1;
-                                    let fully_outside = px1 < x0
-                                        || px0 > x1
-                                        || py1 < y0
-                                        || py0 > y1;
+                                    let fully_inside =
+                                        px0 >= x0 && px1 <= x1 && py0 >= y0 && py1 <= y1;
+                                    let fully_outside =
+                                        px1 < x0 || px0 > x1 || py1 < y0 || py0 > y1;
                                     let touching = !fully_outside;
                                     let keep = match mode {
                                         FpSelectionMode::Inside => fully_inside,
@@ -1136,9 +1108,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 let combined: Vec<usize> = if cmd || shift {
                                     let mut acc: Vec<usize> =
                                         self.state.selected_pad.into_iter().collect();
-                                    acc.extend(
-                                        self.state.selected_pads_extra.iter().copied(),
-                                    );
+                                    acc.extend(self.state.selected_pads_extra.iter().copied());
                                     if cmd {
                                         for h in &hits {
                                             if let Some(p) = acc.iter().position(|i| i == h) {
@@ -1464,8 +1434,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 let select_mode_tick = (matches!(self.state.mode, _EMt::Sketch)
                     && self.state.active_tool == _STt::Select)
                     || (matches!(self.state.mode, _EMt::Normal)
-                        && self.state.pads_tool
-                            == super::state::PadsTool::Select);
+                        && self.state.pads_tool == super::state::PadsTool::Select);
                 let drag_active_for_snap = cstate
                     .drag
                     .as_ref()
@@ -1490,11 +1459,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 // a resize message. Bypass the generic drag handler
                 // so the Point-drag / pad-drag paths don't fire.
                 if let Some(pad_idx) = cstate.round_resize_drag {
-                    let centre = self
-                        .state
-                        .pads
-                        .get(pad_idx)
-                        .map(|p| p.position_mm);
+                    let centre = self.state.pads.get(pad_idx).map(|p| p.position_mm);
                     if let Some(centre) = centre {
                         let dx_mm = world.0 - centre.0;
                         let dy_mm = world.1 - centre.1;
@@ -1580,56 +1545,51 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                                 }
                                 _ => None,
                             });
-                        let pos_of = |id: signex_sketch::id::SketchEntityId| -> Option<(f64, f64)> {
-                            if let Some(solve) = self.state.last_solve.as_ref()
-                                && let Some(p) = signex_sketch::solver::state::point_xy(
-                                    id,
-                                    &solve.result.state,
-                                    &solve.result.index,
-                                    sketch_ref,
-                                )
-                            {
-                                return Some(p);
-                            }
-                            sketch_ref
-                                .entities
-                                .iter()
-                                .find(|e| e.id == id)
-                                .and_then(|e| match e.kind {
-                                    signex_sketch::entity::EntityKind::Point { x, y } => {
-                                        Some((x, y))
-                                    }
-                                    _ => None,
-                                })
-                        };
-                        let (dx_mm, dy_mm) = match endpoints
-                            .and_then(|(s, e)| pos_of(s).zip(pos_of(e)))
-                        {
-                            Some(((ax, ay), (bx, by))) => {
-                                let lx = bx - ax;
-                                let ly = by - ay;
-                                let llen = (lx * lx + ly * ly).sqrt();
-                                if llen <= 1e-9 {
-                                    (raw_dx, raw_dy)
-                                } else {
-                                    // Unit perpendicular (rotate
-                                    // tangent +90°): (-ly, lx)/llen.
-                                    let nx = -ly / llen;
-                                    let ny = lx / llen;
-                                    let proj = raw_dx * nx + raw_dy * ny;
-                                    (proj * nx, proj * ny)
+                        let pos_of =
+                            |id: signex_sketch::id::SketchEntityId| -> Option<(f64, f64)> {
+                                if let Some(solve) = self.state.last_solve.as_ref()
+                                    && let Some(p) = signex_sketch::solver::state::point_xy(
+                                        id,
+                                        &solve.result.state,
+                                        &solve.result.index,
+                                        sketch_ref,
+                                    )
+                                {
+                                    return Some(p);
                                 }
-                            }
-                            None => (raw_dx, raw_dy),
-                        };
+                                sketch_ref.entities.iter().find(|e| e.id == id).and_then(
+                                    |e| match e.kind {
+                                        signex_sketch::entity::EntityKind::Point { x, y } => {
+                                            Some((x, y))
+                                        }
+                                        _ => None,
+                                    },
+                                )
+                            };
+                        let (dx_mm, dy_mm) =
+                            match endpoints.and_then(|(s, e)| pos_of(s).zip(pos_of(e))) {
+                                Some(((ax, ay), (bx, by))) => {
+                                    let lx = bx - ax;
+                                    let ly = by - ay;
+                                    let llen = (lx * lx + ly * ly).sqrt();
+                                    if llen <= 1e-9 {
+                                        (raw_dx, raw_dy)
+                                    } else {
+                                        // Unit perpendicular (rotate
+                                        // tangent +90°): (-ly, lx)/llen.
+                                        let nx = -ly / llen;
+                                        let ny = lx / llen;
+                                        let proj = raw_dx * nx + raw_dy * ny;
+                                        (proj * nx, proj * ny)
+                                    }
+                                }
+                                None => (raw_dx, raw_dy),
+                            };
                         // Advance last_world by the CONSTRAINED delta
                         // so the cursor's parallel motion accumulates
                         // (instead of dropping silently each tick and
                         // forcing the user to overshoot).
-                        drag.last_world = (
-                            drag.last_world.0 + dx_mm,
-                            drag.last_world.1 + dy_mm,
-                        );
+                        drag.last_world = (drag.last_world.0 + dx_mm, drag.last_world.1 + dy_mm);
                         self.cache.clear();
                         return Some(canvas::Action::publish(LibraryMessage::EditorEvent {
                             library_path: self.address.library_path.clone(),
@@ -1686,8 +1646,8 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     && self.state.pads_tool == PadsTool::PlaceTextFrame;
                 // v0.27 — re-render lasso ghost as the cursor moves
                 // so the open polygon edge tracks live to the cursor.
-                let in_lasso = self.state.lasso_mode_active
-                    && !self.state.lasso_vertices.is_empty();
+                let in_lasso =
+                    self.state.lasso_mode_active && !self.state.lasso_vertices.is_empty();
                 let in_touching_line =
                     self.state.touching_line_active && self.state.touching_line_first.is_some();
                 // v0.27 — Sketch mode also redraws every cursor tick
@@ -1986,7 +1946,11 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
             // multiplier can stay modest while still reading
             // visibly. Fine = 50% alpha → ~#BFBFBF, matches the
             // Fusion sketch grid weight.
-            let (fine_alpha, coarse_alpha) = if in_sketch { (0.50, 0.55) } else { (0.10, 0.30) };
+            let (fine_alpha, coarse_alpha) = if in_sketch {
+                (0.50, 0.55)
+            } else {
+                (0.10, 0.30)
+            };
             if fine_step >= 6.0 {
                 let fine_color = Color {
                     a: fine_alpha,
@@ -2172,17 +2136,22 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     .filter_map(|a| {
                         use signex_sketch::array::ArrayKind;
                         let (source, count) = match &a.kind {
-                            ArrayKind::Linear { source, count_expr, .. } => {
-                                (*source, count_expr.trim().parse::<usize>().unwrap_or(0))
-                            }
-                            ArrayKind::Grid { source, nx_expr, ny_expr, .. } => {
+                            ArrayKind::Linear {
+                                source, count_expr, ..
+                            } => (*source, count_expr.trim().parse::<usize>().unwrap_or(0)),
+                            ArrayKind::Grid {
+                                source,
+                                nx_expr,
+                                ny_expr,
+                                ..
+                            } => {
                                 let nx = nx_expr.trim().parse::<usize>().unwrap_or(0);
                                 let ny = ny_expr.trim().parse::<usize>().unwrap_or(0);
                                 (*source, nx * ny)
                             }
-                            ArrayKind::Polar { source, count_expr, .. } => {
-                                (*source, count_expr.trim().parse::<usize>().unwrap_or(0))
-                            }
+                            ArrayKind::Polar {
+                                source, count_expr, ..
+                            } => (*source, count_expr.trim().parse::<usize>().unwrap_or(0)),
                         };
                         if count > 0 {
                             Some((source, count))
@@ -2190,13 +2159,10 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                             None
                         }
                     })
-                    .fold(
-                        std::collections::HashMap::new(),
-                        |mut acc, (id, count)| {
-                            *acc.entry(id).or_insert(0) += count;
-                            acc
-                        },
-                    );
+                    .fold(std::collections::HashMap::new(), |mut acc, (id, count)| {
+                        *acc.entry(id).or_insert(0) += count;
+                        acc
+                    });
 
                 if !array_source_counts.is_empty() && cstate.scale >= 12.0 {
                     for pad in self.state.pads.iter() {
@@ -2219,10 +2185,8 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         let badge_h: f32 = 12.0;
                         let bx = p1.x + 4.0;
                         let by = p1.y - 6.0 - badge_h;
-                        let badge_rect = Path::rectangle(
-                            Point::new(bx, by),
-                            iced::Size::new(badge_w, badge_h),
-                        );
+                        let badge_rect =
+                            Path::rectangle(Point::new(bx, by), iced::Size::new(badge_w, badge_h));
                         // Altium-orange accent fill.
                         frame.fill(&badge_rect, Color::from_rgba(0.96, 0.62, 0.18, 0.95));
                         frame.stroke(
@@ -2271,14 +2235,34 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 let centre = cstate.world_to_screen((cx, cy));
                 let paused = self.state.placement_paused;
                 let ghost_fill = if paused {
-                    Color { r: 0.55, g: 0.55, b: 0.55, a: 1.0 }
+                    Color {
+                        r: 0.55,
+                        g: 0.55,
+                        b: 0.55,
+                        a: 1.0,
+                    }
                 } else {
-                    Color { r: 0.85, g: 0.20, b: 0.20, a: 1.0 }
+                    Color {
+                        r: 0.85,
+                        g: 0.20,
+                        b: 0.20,
+                        a: 1.0,
+                    }
                 };
                 let ghost_stroke = if paused {
-                    Color { r: 0.40, g: 0.40, b: 0.40, a: 1.0 }
+                    Color {
+                        r: 0.40,
+                        g: 0.40,
+                        b: 0.40,
+                        a: 1.0,
+                    }
                 } else {
-                    Color { r: 1.0, g: 1.0, b: 1.0, a: 1.0 }
+                    Color {
+                        r: 1.0,
+                        g: 1.0,
+                        b: 1.0,
+                        a: 1.0,
+                    }
                 };
 
                 let path = match &defaults.shape {
@@ -2327,7 +2311,10 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                             b.close();
                         })
                     }
-                    PS::Chamfered { chamfer_ratio, corners } => {
+                    PS::Chamfered {
+                        chamfer_ratio,
+                        corners,
+                    } => {
                         let c = (half_w.min(half_h) * (*chamfer_ratio as f32 * 2.0)).max(0.5);
                         Path::new(|b| {
                             let tl = Point::new(centre.x - half_w, centre.y - half_h);
@@ -2380,14 +2367,26 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 // at the pad centre so it reads against the red /
                 // grey pad fill without a stroke ring (the rendered
                 // pad uses the same convention).
-                if let Some(d) = defaults.drill_diameter_mm.filter(|d| *d > f32::EPSILON as f64)
+                if let Some(d) = defaults
+                    .drill_diameter_mm
+                    .filter(|d| *d > f32::EPSILON as f64)
                 {
                     let r_px = (d / 2.0) as f32 * cstate.scale;
                     if r_px > 0.5 {
                         let hole_color = if paused {
-                            Color { r: 0.10, g: 0.10, b: 0.10, a: 0.85 }
+                            Color {
+                                r: 0.10,
+                                g: 0.10,
+                                b: 0.10,
+                                a: 0.85,
+                            }
                         } else {
-                            Color { r: 0.05, g: 0.05, b: 0.05, a: 0.95 }
+                            Color {
+                                r: 0.05,
+                                g: 0.05,
+                                b: 0.05,
+                                a: 0.95,
+                            }
                         };
                         frame.fill(&Path::circle(centre, r_px), hole_color);
                         frame.stroke(
@@ -2477,17 +2476,11 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 );
                 let stroke = Stroke::default().with_width(1.0).with_color(near_black);
                 frame.stroke(
-                    &Path::line(
-                        Point::new(p.x - arm, p.y),
-                        Point::new(p.x + arm, p.y),
-                    ),
+                    &Path::line(Point::new(p.x - arm, p.y), Point::new(p.x + arm, p.y)),
                     stroke,
                 );
                 frame.stroke(
-                    &Path::line(
-                        Point::new(p.x, p.y - arm),
-                        Point::new(p.x, p.y + arm),
-                    ),
+                    &Path::line(Point::new(p.x, p.y - arm), Point::new(p.x, p.y + arm)),
                     stroke,
                 );
             }
@@ -2521,72 +2514,65 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                 // mouse_interaction's hover test so the cursor
                 // glyph swaps in/out at the same threshold the
                 // grab gesture activates.
-                let hovered_line_angle: Option<f32> =
-                    if let Some(sketch_ref) = self.sketch {
-                        const LINE_HIT_TOL_PX: f32 = 6.0;
-                        let world = cstate.screen_to_world(p);
-                        let tol_mm = (LINE_HIT_TOL_PX / cstate.scale.max(1.0)) as f64;
-                        let pos_of = |pid: signex_sketch::id::SketchEntityId|
-                            -> Option<(f64, f64)> {
-                            if let Some(solve) = self.state.last_solve.as_ref()
-                                && let Some(q) = signex_sketch::solver::state::point_xy(
-                                    pid,
-                                    &solve.result.state,
-                                    &solve.result.index,
-                                    sketch_ref,
-                                )
-                            {
-                                return Some(q);
+                let hovered_line_angle: Option<f32> = if let Some(sketch_ref) = self.sketch {
+                    const LINE_HIT_TOL_PX: f32 = 6.0;
+                    let world = cstate.screen_to_world(p);
+                    let tol_mm = (LINE_HIT_TOL_PX / cstate.scale.max(1.0)) as f64;
+                    let pos_of = |pid: signex_sketch::id::SketchEntityId| -> Option<(f64, f64)> {
+                        if let Some(solve) = self.state.last_solve.as_ref()
+                            && let Some(q) = signex_sketch::solver::state::point_xy(
+                                pid,
+                                &solve.result.state,
+                                &solve.result.index,
+                                sketch_ref,
+                            )
+                        {
+                            return Some(q);
+                        }
+                        sketch_ref
+                            .entities
+                            .iter()
+                            .find(|e| e.id == pid)
+                            .and_then(|e| match e.kind {
+                                signex_sketch::entity::EntityKind::Point { x, y } => Some((x, y)),
+                                _ => None,
+                            })
+                    };
+                    let mut hit: Option<f32> = None;
+                    for ent in &sketch_ref.entities {
+                        if let signex_sketch::entity::EntityKind::Line { start, end } = ent.kind
+                            && let (Some(a), Some(b)) = (pos_of(start), pos_of(end))
+                        {
+                            let line_dx = b.0 - a.0;
+                            let line_dy = b.1 - a.1;
+                            let llen2 = line_dx * line_dx + line_dy * line_dy;
+                            if llen2 <= 1e-12 {
+                                continue;
                             }
-                            sketch_ref
-                                .entities
-                                .iter()
-                                .find(|e| e.id == pid)
-                                .and_then(|e| match e.kind {
-                                    signex_sketch::entity::EntityKind::Point { x, y } => {
-                                        Some((x, y))
-                                    }
-                                    _ => None,
-                                })
-                        };
-                        let mut hit: Option<f32> = None;
-                        for ent in &sketch_ref.entities {
-                            if let signex_sketch::entity::EntityKind::Line { start, end } =
-                                ent.kind
-                                && let (Some(a), Some(b)) = (pos_of(start), pos_of(end))
-                            {
-                                let line_dx = b.0 - a.0;
-                                let line_dy = b.1 - a.1;
-                                let llen2 = line_dx * line_dx + line_dy * line_dy;
-                                if llen2 <= 1e-12 {
-                                    continue;
-                                }
-                                let t = ((world.0 - a.0) * line_dx
-                                    + (world.1 - a.1) * line_dy)
-                                    / llen2;
-                                let tc = t.clamp(0.0, 1.0);
-                                let px = a.0 + tc * line_dx;
-                                let py = a.1 + tc * line_dy;
-                                let d2 = (px - world.0).powi(2) + (py - world.1).powi(2);
-                                if d2 <= tol_mm * tol_mm {
-                                    // World coords use the same Y-down
-                                    // mapping as screen (cstate.world_to_screen
-                                    // does no Y flip), so atan2 in
-                                    // world space matches the screen-
-                                    // space angle the user sees.
-                                    let a_screen = cstate.world_to_screen(a);
-                                    let b_screen = cstate.world_to_screen(b);
-                                    let sdx = b_screen.x - a_screen.x;
-                                    let sdy = b_screen.y - a_screen.y;
-                                    hit = Some(sdy.atan2(sdx));
-                                    break;
-                                }
+                            let t = ((world.0 - a.0) * line_dx + (world.1 - a.1) * line_dy) / llen2;
+                            let tc = t.clamp(0.0, 1.0);
+                            let px = a.0 + tc * line_dx;
+                            let py = a.1 + tc * line_dy;
+                            let d2 = (px - world.0).powi(2) + (py - world.1).powi(2);
+                            if d2 <= tol_mm * tol_mm {
+                                // World coords use the same Y-down
+                                // mapping as screen (cstate.world_to_screen
+                                // does no Y flip), so atan2 in
+                                // world space matches the screen-
+                                // space angle the user sees.
+                                let a_screen = cstate.world_to_screen(a);
+                                let b_screen = cstate.world_to_screen(b);
+                                let sdx = b_screen.x - a_screen.x;
+                                let sdy = b_screen.y - a_screen.y;
+                                hit = Some(sdy.atan2(sdx));
+                                break;
                             }
                         }
-                        hit
-                    } else {
-                        None
-                    };
+                    }
+                    hit
+                } else {
+                    None
+                };
 
                 if let Some(line_angle) = hovered_line_angle {
                     // Perpendicular to the line — that's the drag
@@ -2599,8 +2585,7 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     let length = 16.0_f32; // shaft + head tip extent
                     let head_len = 7.0_f32;
                     let head_half = 5.0_f32;
-                    let shaft_stroke =
-                        Stroke::default().with_width(2.2).with_color(near_black);
+                    let shaft_stroke = Stroke::default().with_width(2.2).with_color(near_black);
                     let halo_stroke = Stroke::default()
                         .with_width(4.5)
                         .with_color(Color::from_rgba(1.0, 1.0, 1.0, 0.85));
@@ -2647,17 +2632,11 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     });
                 } else {
                     frame.stroke(
-                        &Path::line(
-                            Point::new(p.x - arm, p.y),
-                            Point::new(p.x + arm, p.y),
-                        ),
+                        &Path::line(Point::new(p.x - arm, p.y), Point::new(p.x + arm, p.y)),
                         stroke,
                     );
                     frame.stroke(
-                        &Path::line(
-                            Point::new(p.x, p.y - arm),
-                            Point::new(p.x, p.y + arm),
-                        ),
+                        &Path::line(Point::new(p.x, p.y - arm), Point::new(p.x, p.y + arm)),
                         stroke,
                     );
                 }
@@ -2733,16 +2712,10 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                     let y0 = a.y.min(c.y);
                     let w = (c.x - a.x).abs();
                     let h = (c.y - a.y).abs();
-                    let rect_path = Path::rectangle(
-                        Point::new(x0, y0),
-                        iced::Size::new(w, h),
-                    );
+                    let rect_path = Path::rectangle(Point::new(x0, y0), iced::Size::new(w, h));
                     // Altium pen: cyan-ish translucent fill +
                     // dashed-look outline at 1 px.
-                    frame.fill(
-                        &rect_path,
-                        Color::from_rgba(0.30, 0.55, 0.90, 0.18),
-                    );
+                    frame.fill(&rect_path, Color::from_rgba(0.30, 0.55, 0.90, 0.18));
                     frame.stroke(
                         &rect_path,
                         Stroke::default()
@@ -3070,4 +3043,3 @@ pub(super) fn silk_f_hit_at(
     }
     None
 }
-

@@ -196,13 +196,12 @@ where
                     .width(Length::Shrink);
                 // Leading icon column — fixed-width for alignment.
                 if let Some(handle) = icon {
-                    row_w = row_w.push(
-                        svg(handle).width(20).height(20).style(
-                            move |_: &Theme, _| iced::widget::svg::Style {
+                    row_w =
+                        row_w.push(svg(handle).width(20).height(20).style(move |_: &Theme, _| {
+                            iced::widget::svg::Style {
                                 color: Some(row_text_c),
-                            },
-                        ),
-                    );
+                            }
+                        }));
                 } else {
                     row_w = row_w.push(Space::new().width(Length::Fixed(20.0)));
                 }
@@ -219,27 +218,27 @@ where
                 if checked {
                     right = right.push(text("\u{2713}").size(13).color(accent));
                 }
-                row_w = row_w.push(Space::new().width(Length::Fixed(20.0))).push(right);
+                row_w = row_w
+                    .push(Space::new().width(Length::Fixed(20.0)))
+                    .push(right);
 
                 // Wrap in a button that triggers on_press when armed.
-                let mut btn = button(
-                    container(row_w)
-                        .padding([5, 12])
-                        .width(Length::Fill),
-                )
-                .padding(0)
-                .style(move |_: &Theme, status: button::Status| {
-                    let bg = match status {
-                        button::Status::Hovered if !disabled => Some(Background::Color(hover_c)),
-                        _ => None,
-                    };
-                    button::Style {
-                        background: bg,
-                        border: Border::default(),
-                        text_color: row_text_c,
-                        ..button::Style::default()
-                    }
-                });
+                let mut btn = button(container(row_w).padding([5, 12]).width(Length::Fill))
+                    .padding(0)
+                    .style(move |_: &Theme, status: button::Status| {
+                        let bg = match status {
+                            button::Status::Hovered if !disabled => {
+                                Some(Background::Color(hover_c))
+                            }
+                            _ => None,
+                        };
+                        button::Style {
+                            background: bg,
+                            border: Border::default(),
+                            text_color: row_text_c,
+                            ..button::Style::default()
+                        }
+                    });
                 if let Some(msg) = on_press {
                     btn = btn.on_press(msg);
                 }
