@@ -3,13 +3,13 @@ use iced::Task;
 use super::super::*;
 
 impl Signex {
-    pub(super) fn dispatch_overlay_message(&mut self, message: Message) -> Task<Message> {
+    pub(super) fn dispatch_overlay_message(&mut self, message: OverlayMsg) -> Task<Message> {
         match message {
-            Message::TogglePanelList => {
+            OverlayMsg::TogglePanelList => {
                 self.ui_state.panel_list_open = !self.ui_state.panel_list_open;
                 Task::none()
             }
-            Message::OpenPanel(kind) => {
+            OverlayMsg::OpenPanel(kind) => {
                 self.ui_state.panel_list_open = false;
                 self.document_state
                     .dock
@@ -17,28 +17,25 @@ impl Signex {
                 crate::fonts::write_dock_layout(&self.document_state.dock);
                 Task::none()
             }
-            Message::OpenFind => self.handle_find_replace_open_requested(false),
-            Message::OpenReplace => self.handle_find_replace_open_requested(true),
-            Message::CloseKeyboardShortcuts => {
+            OverlayMsg::OpenFind => self.handle_find_replace_open_requested(false),
+            OverlayMsg::OpenReplace => self.handle_find_replace_open_requested(true),
+            OverlayMsg::CloseKeyboardShortcuts => {
                 self.ui_state.keyboard_shortcuts_open = false;
                 Task::none()
             }
-            Message::DismissFirstRunTour => {
+            OverlayMsg::DismissFirstRunTour => {
                 self.ui_state.first_run_tour_open = false;
                 crate::fonts::write_first_run_tour_dismissed(true);
                 Task::none()
             }
-            Message::FindReplaceMsg(msg) => self.handle_find_replace_message(msg),
-            Message::ModalDragStart { modal, x, y } => self.handle_modal_drag_start(modal, x, y),
-            Message::ModalDragEnd => self.handle_modal_drag_end(),
-            Message::FocusAt {
+            OverlayMsg::ModalDragStart { modal, x, y } => self.handle_modal_drag_start(modal, x, y),
+            OverlayMsg::ModalDragEnd => self.handle_modal_drag_end(),
+            OverlayMsg::FocusAt {
                 world_x,
                 world_y,
                 select,
             } => self.handle_focus_at(world_x, world_y, select),
-            Message::ToggleAutoFocus => self.handle_toggle_auto_focus(),
-            Message::ActiveBar(msg) => self.handle_active_bar_message(msg),
-            _ => unreachable!("dispatch_overlay_message received non-overlay message"),
+            OverlayMsg::ToggleAutoFocus => self.handle_toggle_auto_focus(),
         }
     }
 
@@ -252,11 +249,10 @@ impl Signex {
                         Task::none()
                     }
                     ContextAction::Delete => self.dispatch_edit_message(EditMsg::DeleteSelected),
-                    ContextAction::SelectAll => self.dispatch_routed_message(Message::Selection(
-                        selection_request::SelectionRequest::SelectAll,
-                    )),
+                    ContextAction::SelectAll => self
+                        .handle_selection_request(selection_request::SelectionRequest::SelectAll),
                     ContextAction::ZoomFit => {
-                        self.dispatch_ui_message(Message::CanvasEvent(CanvasEvent::FitAll))
+                        self.handle_canvas_interaction_event(CanvasEvent::FitAll)
                     }
                     ContextAction::RotateSelected => {
                         self.dispatch_edit_message(EditMsg::RotateSelected)

@@ -36,7 +36,7 @@ pub(crate) const CHROME_SEARCH_RIGHT_GAP: f32 = 16.0;
 impl Signex {
     /// v0.18.10 — Altium-style grid picker popup body. Renders the
     /// standard 1mil…2.5mm ladder; clicking a row sends
-    /// `Message::GridPickerSelect(step_mm)` and closes the popup.
+    /// `Message::Ui(UiMsg::GridPickerSelect(step_mm))` and closes the popup.
     fn view_grid_picker_menu(&self) -> Element<'_, Message> {
         use iced::widget::{button, column, container, text};
         let tokens = &self.document_state.panel_ctx.tokens;
@@ -88,7 +88,7 @@ impl Signex {
                     .width(iced::Length::Fill),
             )
             .padding(0)
-            .on_press(Message::GridPickerSelect(row_step))
+            .on_press(Message::Ui(UiMsg::GridPickerSelect(row_step)))
             .style(move |_: &iced::Theme, status| iced::widget::button::Style {
                 background: match status {
                     iced::widget::button::Status::Hovered => Some(iced::Background::Color(
@@ -138,7 +138,7 @@ impl Signex {
             Some(ic::icon_chrome_search(tid)),
             "Find Text...",
             "Ctrl+F",
-            Message::OpenFind,
+            Message::Overlay(OverlayMsg::OpenFind),
         ));
         items.push(self.ctx_menu_item_disabled(
             Some(ic::icon_dd_clear_filter(tid)),
@@ -3401,8 +3401,8 @@ impl Signex {
             &self.ui_state.command_palette.query,
         )
         .id(crate::app::command_palette::COMMAND_PALETTE_INPUT_ID.clone())
-        .on_input(Message::CommandPaletteQueryChanged)
-        .on_submit(Message::CommandPaletteExecuteSelected)
+        .on_input(|q| Message::CommandPalette(CommandPaletteMsg::QueryChanged(q)))
+        .on_submit(Message::CommandPalette(CommandPaletteMsg::ExecuteSelected))
         .padding(iced::Padding::ZERO)
         .size(11)
         .width(Length::Fill)
@@ -3764,7 +3764,7 @@ impl Signex {
             &document.panel_ctx.tokens,
             document.inflight_git_commits.len(),
         )
-        .map(Message::StatusBar);
+        .map(|req| Message::Ui(UiMsg::StatusBar(req)));
 
         // Partition tabs across windows: main owns every tab that isn't
         // currently rendered by an undocked-tab window; each undocked
@@ -4158,7 +4158,7 @@ impl Signex {
         };
         iced::widget::mouse_area(handle_container)
             .interaction(interaction)
-            .on_press(Message::DragStart(target))
+            .on_press(Message::Ui(UiMsg::DragStart(target)))
             .into()
     }
 
@@ -4520,7 +4520,9 @@ impl Signex {
             let btn = button(row_inner)
                 .width(Length::Fill)
                 .padding([6, 12])
-                .on_press(Message::CommandPaletteSelect(display_idx))
+                .on_press(Message::CommandPalette(CommandPaletteMsg::Select(
+                    display_idx,
+                )))
                 .style(move |_: &iced::Theme, status: button::Status| {
                     let bg = match status {
                         button::Status::Hovered | button::Status::Pressed => {
@@ -4734,7 +4736,7 @@ impl Signex {
                             .color(iced::Color::WHITE)
                     )
                     .padding([6, 18])
-                    .on_press(Message::ResumePlacement)
+                    .on_press(Message::Tool(ToolMessage::ResumePlacement))
                     .style(iced::widget::button::primary),
                 ]
                 .spacing(8)
@@ -5000,8 +5002,8 @@ impl Signex {
                         iced::widget::Space::new().width(abs_x.max(0.0)),
                         container(
                             iced::widget::text_input("", &text)
-                                .on_input(Message::TextEditChanged)
-                                .on_submit(Message::TextEditSubmit)
+                                .on_input(|t| Message::TextEdit(TextEditMsg::Changed(t)))
+                                .on_submit(Message::TextEdit(TextEditMsg::Submit))
                                 .size(font_px)
                                 .padding([1, 2])
                                 .width(approx_w)
@@ -5275,7 +5277,7 @@ impl Signex {
         // v0.18.10 — Altium-style grid picker popup. Floats at the
         // cursor when `G` is pressed in a footprint editor; rows are
         // the standard 1mil…2.5mm ladder. Outside-click and Esc both
-        // dismiss via `Message::GridPickerClose`.
+        // dismiss via `Message::Ui(UiMsg::GridPickerClose)`.
         if let Some(ref picker) = interaction.grid_picker {
             let menu = self.view_grid_picker_menu();
             let menu_w: f32 = 200.0;
@@ -5292,7 +5294,7 @@ impl Signex {
             } else {
                 picker.y
             };
-            layers.push(Self::dismiss_layer(Message::GridPickerClose));
+            layers.push(Self::dismiss_layer(Message::Ui(UiMsg::GridPickerClose)));
             layers.push(
                 column![
                     iced::widget::Space::new().height(y),
@@ -5364,7 +5366,7 @@ impl Signex {
                     )
                     .padding([4, 12])
                     .width(Length::Fill)
-                    .on_press(Message::OpenPanel(kind))
+                    .on_press(Message::Overlay(OverlayMsg::OpenPanel(kind)))
                     .style(crate::styles::menu_item(&document.panel_ctx.tokens))
                     .into()
                 })
@@ -5377,7 +5379,9 @@ impl Signex {
                 .padding([6, 0])
                 .style(crate::styles::context_menu(&document.panel_ctx.tokens));
 
-            layers.push(Self::dismiss_layer(Message::TogglePanelList));
+            layers.push(Self::dismiss_layer(Message::Overlay(
+                OverlayMsg::TogglePanelList,
+            )));
             // Anchor the popup directly above the "Panels" button in the
             // bottom-right of the status bar. Approx: popup 210 px wide,
             // 22 px per row × visible rows + 12 px vertical padding.
@@ -5808,7 +5812,9 @@ impl Signex {
         // sits above every other modal layer; click-outside dismisses
         // via the standard dismiss_layer pattern.
         if ui.command_palette.open {
-            layers.push(Self::dismiss_layer(Message::CommandPaletteClose));
+            layers.push(Self::dismiss_layer(Message::CommandPalette(
+                CommandPaletteMsg::Close,
+            )));
             layers.push(self.view_command_palette_dropdown());
         }
 

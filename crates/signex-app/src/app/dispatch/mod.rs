@@ -6,7 +6,6 @@ mod command_palette;
 mod document;
 pub(crate) mod library;
 mod overlay;
-mod routed;
 mod text_edit;
 mod tool;
 mod ui;
@@ -16,50 +15,43 @@ impl Signex {
         self.apply_pcb_renderer_dirty_hint(&message);
 
         match message {
-            Message::Menu(_) | Message::Tab { .. } | Message::Dock(_) | Message::Selection(_) => {
-                self.dispatch_routed_message(message)
+            Message::Menu(msg) => self.handle_menu_message(msg),
+            Message::Tab { window_id, msg } => {
+                let task = self.handle_document_tab_message(window_id, msg);
+                Task::batch([self.finish_update(), task])
             }
-            Message::ThemeChanged(_)
-            | Message::UnitCycled
-            | Message::GridToggle
-            | Message::CanvasEvent(_)
-            | Message::CanvasEventInWindow { .. }
-            | Message::DragStart(_)
-            | Message::DragMove(_, _)
-            | Message::WindowResized(_, _)
-            | Message::DragEnd
-            | Message::GridCycle
-            | Message::GridPickerOpen
-            | Message::GridPickerClose
-            | Message::GridPickerSelect(_)
-            | Message::StatusBar(_) => self.dispatch_ui_message(message),
+            Message::Dock(msg) => self.handle_dock_message(msg),
+            Message::Selection(request) => self.handle_selection_request(request),
+            Message::Ui(msg) => self.dispatch_ui_message(msg),
+            // Canvas events keep their own top-level variants (hot path,
+            // many emit sites). Both dismiss the first-run tour card on
+            // the first gesture (UX §4.3) before running the handler.
+            Message::CanvasEvent(event) => {
+                if self.ui_state.first_run_tour_open {
+                    self.ui_state.first_run_tour_open = false;
+                    crate::fonts::write_first_run_tour_dismissed(true);
+                }
+                self.handle_canvas_interaction_event(event)
+            }
+            Message::CanvasEventInWindow { window_id, event } => {
+                if self.ui_state.first_run_tour_open {
+                    self.ui_state.first_run_tour_open = false;
+                    crate::fonts::write_first_run_tour_dismissed(true);
+                }
+                self.handle_canvas_event_in_window(window_id, event)
+            }
             Message::GridProperties(msg) => self.dispatch_grid_properties_message(msg),
             Message::SelectionFilter(msg) => self.dispatch_selection_filter_message(msg),
-            Message::TextEditChanged(_) | Message::TextEditSubmit => {
-                self.dispatch_text_edit_message(message)
-            }
-            Message::PrePlacementTab
-            | Message::ResumePlacement
-            | Message::CycleDrawMode
-            | Message::CancelDrawing
-            | Message::Tool(_) => self.dispatch_tool_message(message),
+            Message::TextEdit(msg) => self.dispatch_text_edit_message(msg),
+            Message::Tool(msg) => self.dispatch_tool_message(msg),
             Message::Edit(msg) => self.dispatch_edit_message(msg),
             Message::File(msg) => self.dispatch_file_message(msg),
             Message::Export(msg) => self.dispatch_export_message(msg),
             Message::PrintPreview(msg) => self.dispatch_print_preview_message(msg),
             Message::BomPreview(msg) => self.dispatch_bom_preview_message(msg),
-            Message::TogglePanelList
-            | Message::OpenPanel(_)
-            | Message::OpenFind
-            | Message::OpenReplace
-            | Message::CloseKeyboardShortcuts
-            | Message::DismissFirstRunTour
-            | Message::FindReplaceMsg(_)
-            | Message::ActiveBar(_)
-            | Message::ModalDragStart { .. }
-            | Message::ModalDragEnd
-            | Message::FocusAt { .. }
-            | Message::ToggleAutoFocus => self.dispatch_overlay_message(message),
+            Message::Overlay(msg) => self.dispatch_overlay_message(msg),
+            Message::FindReplaceMsg(msg) => self.handle_find_replace_message(msg),
+            Message::ActiveBar(msg) => self.handle_active_bar_message(msg),
             Message::Project(msg) => self.dispatch_project_message(msg),
             Message::ContextMenu(msg) => self.dispatch_context_menu_message(msg),
             Message::Annotate(msg) => self.dispatch_annotate_message(msg),
@@ -530,14 +522,7 @@ impl Signex {
             }
             Message::UpdateDrawingField(uuid, edit) => self.handle_update_drawing_field(uuid, edit),
             Message::Library(msg) => self.dispatch_library_message(msg),
-            Message::CommandPaletteOpen
-            | Message::CommandPaletteClose
-            | Message::CommandPaletteQueryChanged(_)
-            | Message::CommandPaletteMoveSelection(_)
-            | Message::CommandPaletteSelect(_)
-            | Message::CommandPaletteExecuteSelected => {
-                self.dispatch_command_palette_message(message)
-            }
+            Message::CommandPalette(msg) => self.dispatch_command_palette_message(msg),
             Message::HistoryLoaded {
                 generation,
                 path: _,
@@ -570,20 +555,19 @@ impl Signex {
                     .and_then(|t| t.kind.as_footprint_editor())
                     .cloned();
                 if let Some(path) = footprint_path {
-                    let _ = self.update(Message::Library(
+                    self.update(Message::Library(
                         crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                             path,
                             msg: crate::library::messages::PrimitiveEdit::Footprint(
                                 crate::library::messages::FootprintEditorMsg::ToolEscape,
                             ),
                         },
-                    ));
+                    ))
                 } else {
-                    let _ = self.update(Message::Tool(crate::app::ToolMessage::SelectTool(
+                    self.update(Message::Tool(crate::app::ToolMessage::SelectTool(
                         crate::app::Tool::Select,
-                    )));
+                    )))
                 }
-                Task::none()
             }
             Message::FootprintModeShortcut(target) => {
                 // v0.14.2 — gate on "active tab is a footprint
@@ -599,16 +583,17 @@ impl Signex {
                     .and_then(|t| t.kind.as_footprint_editor())
                     .cloned();
                 if let Some(path) = path {
-                    let _ = self.update(Message::Library(
+                    self.update(Message::Library(
                         crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                             path,
                             msg: crate::library::messages::PrimitiveEdit::Footprint(
                                 crate::library::messages::FootprintEditorMsg::SetMode(target),
                             ),
                         },
-                    ));
+                    ))
+                } else {
+                    Task::none()
                 }
-                Task::none()
             }
             Message::Noop => Task::none(),
         }

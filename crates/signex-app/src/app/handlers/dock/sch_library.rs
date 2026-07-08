@@ -7,6 +7,8 @@
 //! so the panel never writes the file directly — keeps the dirty /
 //! save semantics consistent with every other in-tab mutation.
 
+use iced::Task;
+
 use super::super::super::*;
 
 impl Signex {
@@ -21,11 +23,16 @@ impl Signex {
         active_tab.kind.as_footprint_editor().cloned()
     }
 
+    /// Returns `None` when the message isn't an SCH-library message (so
+    /// the caller falls through to the next dock handler), or `Some(task)`
+    /// when handled — the task carries any follow-up work from a
+    /// re-entrant `self.update(...)` so it isn't dropped.
     pub(super) fn handle_dock_sch_library_message(
         &mut self,
         panel_msg: &crate::panels::PanelMsg,
-    ) -> bool {
-        match panel_msg {
+    ) -> Option<Task<Message>> {
+        let mut follow = Task::none();
+        let handled = match panel_msg {
             crate::panels::PanelMsg::FpLibraryOpenSibling(sibling_path) => {
                 // v0.14.2 — open the sibling .snxfpt as a new tab
                 // (or activate an existing tab if it's already open)
@@ -54,7 +61,7 @@ impl Signex {
             // empty Footprint and switches `active_idx` onto it.
             crate::panels::PanelMsg::FpLibraryAddInternal => {
                 if let Some(path) = self.active_footprint_editor_path() {
-                    let _ = self.update(Message::Library(
+                    follow = self.update(Message::Library(
                         crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                             path: path.clone(),
                             msg: crate::library::messages::PrimitiveEdit::Footprint(
@@ -114,7 +121,7 @@ impl Signex {
             // `FootprintSelectActiveIdx` dispatcher.
             crate::panels::PanelMsg::FpLibraryEditInternal(idx) => {
                 if let Some(path) = self.active_footprint_editor_path() {
-                    let _ = self.update(Message::Library(
+                    follow = self.update(Message::Library(
                         crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                             path,
                             msg: crate::library::messages::PrimitiveEdit::Footprint(
@@ -148,7 +155,7 @@ impl Signex {
                 {
                     if let Some(path) = active_tab.kind.as_footprint_editor() {
                         let path = path.clone();
-                        let _ = self.update(Message::Library(
+                        follow = self.update(Message::Library(
                             crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                                 path,
                                 msg: crate::library::messages::PrimitiveEdit::Footprint(
@@ -179,7 +186,7 @@ impl Signex {
                 {
                     if let Some(path) = active_tab.kind.as_footprint_editor() {
                         let path = path.clone();
-                        let _ = self.update(Message::Library(
+                        follow = self.update(Message::Library(
                             crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                                 path,
                                 msg: crate::library::messages::PrimitiveEdit::Footprint(
@@ -788,7 +795,7 @@ impl Signex {
                     {
                         if let Some(path) = active_tab.kind.as_footprint_editor() {
                             let path = path.clone();
-                            let _ = self.update(Message::Library(
+                            follow = self.update(Message::Library(
                                 crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                                     path,
                                     msg: crate::library::messages::PrimitiveEdit::Footprint(
@@ -823,7 +830,7 @@ impl Signex {
                 {
                     if let Some(path) = active_tab.kind.as_footprint_editor() {
                         let path = path.clone();
-                        let _ = self.update(Message::Library(
+                        follow = self.update(Message::Library(
                             crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                                 path,
                                 msg: crate::library::messages::PrimitiveEdit::Footprint(
@@ -1007,7 +1014,7 @@ impl Signex {
                 true
             }
             crate::panels::PanelMsg::FpEditorOpenSelectionFilterCustom => {
-                let _ = self.update(Message::SelectionFilter(SelectionFilterMsg::OpenCustom));
+                follow = self.update(Message::SelectionFilter(SelectionFilterMsg::OpenCustom));
                 true
             }
             crate::panels::PanelMsg::FpEditorSetSnapSubTab(tab) => {
@@ -1069,7 +1076,7 @@ impl Signex {
                 // handler reads `snap_options.grid_step_mm` and seeds
                 // the buffers; the commit path mirrors back to
                 // `grids[active_grid_idx]` (see GridPropertiesCommit).
-                let _ = self.update(Message::GridProperties(GridPropertiesMsg::Open));
+                follow = self.update(Message::GridProperties(GridPropertiesMsg::Open));
                 true
             }
             crate::panels::PanelMsg::FpEditorGridManagerDelete => {
@@ -1254,7 +1261,7 @@ impl Signex {
                 {
                     if let Some(path) = active_tab.kind.as_footprint_editor() {
                         let path = path.clone();
-                        let _ = self.update(Message::Library(
+                        follow = self.update(Message::Library(
                             crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                                 path,
                                 msg: crate::library::messages::PrimitiveEdit::Footprint(
@@ -1475,7 +1482,8 @@ impl Signex {
                 true
             }
             _ => false,
-        }
+        };
+        if handled { Some(follow) } else { None }
     }
 
     /// Resolve the active `.snxsym` tab → its containing `.snxlib`,

@@ -34,7 +34,10 @@ pub enum Message {
         msg: TabMessage,
     },
     Dock(DockMessage),
-    StatusBar(StatusBarRequest),
+    /// UI / chrome message family (ADR-0001 D3). Theme, unit + grid
+    /// toggles, the grid picker, layout drag, window resize, and the
+    /// status-bar request enum. Routed to `dispatch_ui_message`.
+    Ui(UiMsg),
     CanvasEvent(CanvasEvent),
     /// Canvas event stamped with the window that produced it. The
     /// dispatch layer swaps the window's `SchematicCanvas` into the
@@ -48,29 +51,11 @@ pub enum Message {
         window_id: iced::window::Id,
         event: CanvasEvent,
     },
-    #[allow(dead_code)]
-    ThemeChanged(ThemeId),
-    UnitCycled,
-    GridToggle,
-    GridCycle,
-    /// v0.18.10 — open the Altium-style grid picker popup at the
-    /// current `last_mouse_pos`. Footprint editor only (today);
-    /// other contexts fall through to no-op.
-    GridPickerOpen,
-    /// v0.18.10 — dismiss the grid picker without picking.
-    GridPickerClose,
-    /// v0.18.10 — user picked a grid step from the picker. The
-    /// payload is the step in mm; the dispatcher writes it to the
-    /// active footprint editor's `state.snap_options.grid_step_mm`.
-    GridPickerSelect(f64),
     /// Grid Properties dialog — namespaced (ADR-0001 D3).
     GridProperties(GridPropertiesMsg),
     /// Custom Selection Filter modal message family — namespaced
     /// (ADR-0001 D3). Routed to `dispatch_selection_filter_message`.
     SelectionFilter(SelectionFilterMsg),
-    DragStart(DragTarget),
-    DragMove(f32, f32),
-    DragEnd,
     /// File / save message family (ADR-0001 D3). Namespaced under
     /// `Message::File` and routed to `dispatch_file_message`.
     File(FileMsg),
@@ -78,17 +63,16 @@ pub enum Message {
     /// `Message::Edit` and routed to `dispatch_edit_message`.
     Edit(EditMsg),
     Selection(SelectionRequest),
-    CycleDrawMode,
-    CancelDrawing,
-    TogglePanelList,
-    OpenPanel(crate::panels::PanelKind),
+    /// Overlay / modal-chrome message family (ADR-0001 D3). Panel-list
+    /// toggle, panel open, find/replace open, keyboard-shortcuts and
+    /// first-run-tour dismiss, modal drag, canvas focus-at, auto-focus
+    /// toggle. Routed to `dispatch_overlay_message`.
+    Overlay(OverlayMsg),
     ActiveBar(crate::active_bar::ActiveBarMsg),
-    PrePlacementTab,
-    /// Resume placement after TAB paused it — clears `pre_placement` and
-    /// `placement_paused`. Wired to the big on-canvas "Resume" overlay.
-    ResumePlacement,
-    TextEditChanged(String),
-    TextEditSubmit,
+    /// In-canvas text-edit message family (ADR-0001 D3). Namespaced
+    /// under `Message::TextEdit` and routed to
+    /// `dispatch_text_edit_message`.
+    TextEdit(TextEditMsg),
     /// Context-menu subsystem message family — namespaced (ADR-0001
     /// D3). Canvas / project-tree / tab right-click menus plus the
     /// submenu hover state machine. Routed to
@@ -109,17 +93,7 @@ pub enum Message {
     /// Preferences modal message family — namespaced (ADR-0001 D3).
     /// Routed to `dispatch_preferences_message`.
     Preferences(PreferencesMsg),
-    /// Close the Help ▸ Keyboard Shortcuts modal — fired by the close
-    /// chrome ✕ and by Esc dismiss handling.
-    CloseKeyboardShortcuts,
-    /// Dismiss the first-run tour card and persist the flag so it
-    /// never reappears. Fired by the card's ✕ button, by Esc, and by
-    /// the first canvas interaction after launch.
-    DismissFirstRunTour,
-    OpenFind,
-    OpenReplace,
     FindReplaceMsg(crate::find_replace::FindReplaceMsg),
-    WindowResized(f32, f32),
     /// Resize event carrying the window id. Forwarded by the
     /// `iced::window::resize_events()` subscription so the dispatcher
     /// can drop non-main-window resizes before they touch
@@ -131,25 +105,6 @@ pub enum Message {
     /// Annotate dialog message family — namespaced (ADR-0001 D3). Routed
     /// to `dispatch_annotate_message`.
     Annotate(AnnotateMsg),
-    /// User pressed the title bar of a modal at window-space (x, y) — begin
-    /// dragging it. The next DragMove events update its offset.
-    ModalDragStart {
-        modal: super::state::ModalId,
-        x: f32,
-        y: f32,
-    },
-    /// Modal drag released (mouse-up). Clears `modal_dragging`.
-    ModalDragEnd,
-    /// Navigate to a world-space point on the canvas; optionally replace the
-    /// current selection with the given item. Used for click-to-zoom in the
-    /// Messages panel.
-    FocusAt {
-        world_x: f64,
-        world_y: f64,
-        select: Option<signex_types::schematic::SelectedItem>,
-    },
-    /// Toggle AutoFocus — dim everything not in the current selection.
-    ToggleAutoFocus,
     /// Fired once `iced::window::open` completes for the initial main
     /// window — lets us stash the id so `view(id)` knows which window is
     /// the primary app shell versus a detached modal / undocked tab.
@@ -287,28 +242,10 @@ pub enum Message {
     /// shot. See `crate::library::LibraryMessage` for the inner
     /// shape.
     Library(crate::library::LibraryMessage),
-    /// Open the command palette dropdown and focus the chrome-strip
-    /// search bar. Bound to Ctrl+Shift+P. Idempotent — already-open
-    /// keeps state, just refocuses the input.
-    CommandPaletteOpen,
-    /// Close the dropdown without executing. Bound to Esc and to
-    /// click-outside. Leaves the chrome-strip input visible (it's the
-    /// always-on placeholder) but unfocused; query is preserved so a
-    /// re-open continues where the user left off.
-    CommandPaletteClose,
-    /// Live query update from the chrome-strip text_input. Resets the
-    /// selected row to 0 because the result list reorders on every
-    /// keystroke.
-    CommandPaletteQueryChanged(String),
-    /// Move the highlighted row by `delta` (clamped to result count).
-    /// Wired to ArrowUp / ArrowDown when the palette is open.
-    CommandPaletteMoveSelection(i32),
-    /// Click on a specific row in the dropdown — sets selected_index
-    /// and executes in one shot.
-    CommandPaletteSelect(usize),
-    /// Execute the currently selected entry. Wired to Enter and to
-    /// `text_input::on_submit`.
-    CommandPaletteExecuteSelected,
+    /// Command-palette message family (ADR-0001 D3). Namespaced under
+    /// `Message::CommandPalette` and routed to
+    /// `dispatch_command_palette_message`.
+    CommandPalette(CommandPaletteMsg),
     /// Async result of a per-file Git history load issued by the
     /// right-dock History panel. `generation` is the value of
     /// `DocumentState.history.generation` at the time the load was
@@ -336,6 +273,124 @@ pub enum Message {
     /// `Tool::Select` reset.
     EscapePressed,
     Noop,
+}
+
+/// Command-palette message family (ADR-0001 D3). Namespaced under
+/// `Message::CommandPalette` and routed to
+/// `dispatch_command_palette_message`.
+#[derive(Debug, Clone)]
+pub enum CommandPaletteMsg {
+    /// Open the command palette dropdown and focus the chrome-strip
+    /// search bar. Bound to Ctrl+Shift+P. Idempotent — already-open
+    /// keeps state, just refocuses the input.
+    Open,
+    /// Close the dropdown without executing. Bound to Esc and to
+    /// click-outside. Leaves the chrome-strip input visible (it's the
+    /// always-on placeholder) but unfocused; query is preserved so a
+    /// re-open continues where the user left off.
+    Close,
+    /// Live query update from the chrome-strip text_input. Resets the
+    /// selected row to 0 because the result list reorders on every
+    /// keystroke.
+    QueryChanged(String),
+    /// Move the highlighted row by `delta` (clamped to result count).
+    /// Wired to ArrowUp / ArrowDown when the palette is open.
+    MoveSelection(i32),
+    /// Click on a specific row in the dropdown — sets selected_index
+    /// and executes in one shot.
+    Select(usize),
+    /// Execute the currently selected entry. Wired to Enter and to
+    /// `text_input::on_submit`.
+    ExecuteSelected,
+}
+
+/// In-canvas text-edit message family (ADR-0001 D3). Namespaced under
+/// `Message::TextEdit` and routed to `dispatch_text_edit_message`.
+#[derive(Debug, Clone)]
+pub enum TextEditMsg {
+    /// Live text update from the in-place editor overlay.
+    Changed(String),
+    /// Commit the in-place edit back to the engine (Enter / blur).
+    Submit,
+}
+
+/// Overlay / modal-chrome message family (ADR-0001 D3). Namespaced
+/// under `Message::Overlay` and routed to `dispatch_overlay_message`.
+#[derive(Debug, Clone)]
+pub enum OverlayMsg {
+    /// Toggle the "＋ panel" dropdown in the right dock header.
+    TogglePanelList,
+    /// Open (dock) a panel of the given kind in the right column.
+    OpenPanel(crate::panels::PanelKind),
+    /// Open the Find modal (replace row hidden).
+    OpenFind,
+    /// Open the Find/Replace modal with the replace row visible.
+    OpenReplace,
+    /// Close the Help ▸ Keyboard Shortcuts modal — fired by the close
+    /// chrome ✕ and by Esc dismiss handling.
+    CloseKeyboardShortcuts,
+    /// Dismiss the first-run tour card and persist the flag so it
+    /// never reappears. Fired by the card's ✕ button, by Esc, and by
+    /// the first canvas interaction after launch.
+    DismissFirstRunTour,
+    /// User pressed the title bar of a modal at window-space (x, y) —
+    /// begin dragging it. The next DragMove events update its offset.
+    ModalDragStart {
+        modal: super::state::ModalId,
+        x: f32,
+        y: f32,
+    },
+    /// Modal drag released (mouse-up). Clears `modal_dragging`.
+    ModalDragEnd,
+    /// Navigate to a world-space point on the canvas; optionally
+    /// replace the current selection with the given item. Used for
+    /// click-to-zoom in the Messages panel.
+    FocusAt {
+        world_x: f64,
+        world_y: f64,
+        select: Option<signex_types::schematic::SelectedItem>,
+    },
+    /// Toggle AutoFocus — dim everything not in the current selection.
+    ToggleAutoFocus,
+}
+
+/// UI / chrome message family (ADR-0001 D3). Namespaced under
+/// `Message::Ui` and routed to `dispatch_ui_message`. Groups theme,
+/// unit + grid toggles, the footprint grid picker, layout drag, main-
+/// window resize, and the status-bar request enum. Canvas events keep
+/// their own top-level `Message::CanvasEvent(…)` variants.
+#[derive(Debug, Clone)]
+pub enum UiMsg {
+    /// Switch the active colour theme and persist the preference.
+    #[allow(dead_code)]
+    ThemeChanged(ThemeId),
+    /// Cycle the display unit (mm / mil / inch).
+    UnitCycled,
+    /// Toggle grid visibility across every canvas.
+    GridToggle,
+    /// Clear the active canvas background cache (grid density change).
+    GridCycle,
+    /// v0.18.10 — open the Altium-style grid picker popup at the
+    /// current `last_mouse_pos`. Footprint editor only (today);
+    /// other contexts fall through to no-op.
+    GridPickerOpen,
+    /// v0.18.10 — dismiss the grid picker without picking.
+    GridPickerClose,
+    /// v0.18.10 — user picked a grid step from the picker. The
+    /// payload is the step in mm; the dispatcher writes it to the
+    /// active footprint editor's `state.snap_options.grid_step_mm`.
+    GridPickerSelect(f64),
+    /// Layout drag started on a dock splitter / floating element.
+    DragStart(DragTarget),
+    /// Layout drag moved to window-space (x, y).
+    DragMove(f32, f32),
+    /// Layout drag released.
+    DragEnd,
+    /// Main-window content resized (width, height) in logical px.
+    WindowResized(f32, f32),
+    /// Status-bar request (unit / grid / snap toggles, panel list,
+    /// properties). Kept as its own sub-enum in `StatusBarRequest`.
+    StatusBar(StatusBarRequest),
 }
 
 /// BOM-preview modal message family (ADR-0001 D3). Namespaced under

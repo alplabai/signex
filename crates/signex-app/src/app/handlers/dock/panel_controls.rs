@@ -1,3 +1,5 @@
+use iced::Task;
+
 use super::super::super::*;
 
 impl Signex {
@@ -14,10 +16,15 @@ impl Signex {
         self.interaction_state.active_canvas_mut().clear_bg_cache();
     }
 
+    /// Returns `None` when the message isn't a panel-control message
+    /// (so the caller can fall through to the next dock handler), or
+    /// `Some(task)` when handled — the task carries any follow-up work
+    /// from a re-entrant `self.update(...)` so it isn't dropped.
     pub(super) fn handle_dock_panel_control_message(
         &mut self,
         panel_msg: &crate::panels::PanelMsg,
-    ) -> bool {
+    ) -> Option<Task<Message>> {
+        let mut follow = Task::none();
         match panel_msg {
             crate::panels::PanelMsg::SetUnit(unit) => {
                 self.ui_state.unit = *unit;
@@ -225,7 +232,7 @@ impl Signex {
                             Some(signex_types::schematic::SelectedKind::Drawing)
                         )
                     }) {
-                        let _ = self.update(crate::app::Message::UpdateDrawingField(uuid, edit));
+                        follow = self.update(crate::app::Message::UpdateDrawingField(uuid, edit));
                     }
                 }
             }
@@ -239,7 +246,7 @@ impl Signex {
                         Some(signex_types::schematic::SelectedKind::Drawing)
                     )
                 }) {
-                    let _ = self.update(crate::app::Message::UpdateDrawingField(uuid, *edit));
+                    follow = self.update(crate::app::Message::UpdateDrawingField(uuid, *edit));
                 }
             }
             crate::panels::PanelMsg::ConfirmPrePlacement => {
@@ -392,9 +399,9 @@ impl Signex {
             crate::panels::PanelMsg::SelectCustomFilterTab(idx) => {
                 self.handle_select_custom_filter_tab(*idx);
             }
-            _ => return false,
+            _ => return None,
         }
 
-        true
+        Some(follow)
     }
 }

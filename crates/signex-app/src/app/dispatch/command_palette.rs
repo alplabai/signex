@@ -9,14 +9,17 @@ use crate::app::command_palette::{
 };
 
 impl Signex {
-    pub(super) fn dispatch_command_palette_message(&mut self, message: Message) -> Task<Message> {
+    pub(super) fn dispatch_command_palette_message(
+        &mut self,
+        message: CommandPaletteMsg,
+    ) -> Task<Message> {
         match message {
-            Message::CommandPaletteOpen => self.open_command_palette(),
-            Message::CommandPaletteClose => {
+            CommandPaletteMsg::Open => self.open_command_palette(),
+            CommandPaletteMsg::Close => {
                 self.ui_state.command_palette.open = false;
                 Task::none()
             }
-            Message::CommandPaletteQueryChanged(q) => {
+            CommandPaletteMsg::QueryChanged(q) => {
                 self.ui_state.command_palette.query = q;
                 self.ui_state.command_palette.selected_index = 0;
                 // First keystroke promotes a passive (placeholder)
@@ -24,16 +27,15 @@ impl Signex {
                 self.ui_state.command_palette.open = true;
                 Task::none()
             }
-            Message::CommandPaletteMoveSelection(delta) => {
+            CommandPaletteMsg::MoveSelection(delta) => {
                 self.move_command_palette_selection(delta);
                 Task::none()
             }
-            Message::CommandPaletteSelect(idx) => {
+            CommandPaletteMsg::Select(idx) => {
                 self.ui_state.command_palette.selected_index = idx;
                 self.execute_command_palette_selected()
             }
-            Message::CommandPaletteExecuteSelected => self.execute_command_palette_selected(),
-            _ => unreachable!("dispatch_command_palette_message received non-palette message"),
+            CommandPaletteMsg::ExecuteSelected => self.execute_command_palette_selected(),
         }
     }
 
@@ -86,7 +88,9 @@ impl Signex {
 
         match action {
             CommandAction::Menu(menu_msg) => Task::done(Message::Menu(menu_msg)),
-            CommandAction::Panel(panel) => Task::done(Message::OpenPanel(panel)),
+            CommandAction::Panel(panel) => {
+                Task::done(Message::Overlay(OverlayMsg::OpenPanel(panel)))
+            }
             CommandAction::OpenFile(path) => Task::done(Message::File(FileMsg::Opened(Some(path)))),
             CommandAction::FocusSymbol { reference } => self.focus_symbol_by_reference(&reference),
         }
@@ -111,13 +115,13 @@ impl Signex {
         else {
             return Task::none();
         };
-        Task::done(Message::FocusAt {
+        Task::done(Message::Overlay(OverlayMsg::FocusAt {
             world_x: symbol.position.x,
             world_y: symbol.position.y,
             select: Some(signex_types::schematic::SelectedItem {
                 uuid: symbol.uuid,
                 kind: signex_types::schematic::SelectedKind::Symbol,
             }),
-        })
+        }))
     }
 }
