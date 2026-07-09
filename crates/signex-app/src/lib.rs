@@ -30,6 +30,7 @@ pub mod preferences;
 pub mod render_config;
 pub mod renderer_scene_canvas;
 pub mod schematic_runtime;
+pub mod schematic_shader;
 pub mod shortcuts;
 pub mod status_bar;
 pub mod styles;

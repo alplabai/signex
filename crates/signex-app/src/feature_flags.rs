@@ -25,3 +25,11 @@
 /// `opening_snxfpt_does_not_create_editable_tab_when_gated` regression
 /// test branches on this flag so it stays valid either way.
 pub const FOOTPRINT_EDITOR_ENABLED: bool = true;
+
+/// Route the schematic canvas content through the GPU (`signex_gfx` pipelines
+/// via iced's shader widget) instead of CPU `canvas::Frame` tessellation
+/// (issue #169 PR 2). Default `false`: the render module exists and is
+/// exercised by a headless test, but the CPU path stays the default until
+/// GPU visual parity is proven and pointer/overlay layers are wired onto the
+/// shader surface. See [`crate::schematic_shader`].
+pub const SCHEMATIC_GPU_RENDER: bool = false;

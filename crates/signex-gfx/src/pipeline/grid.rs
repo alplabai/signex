@@ -96,10 +96,10 @@ impl GridPipeline {
         Self { render_pipeline }
     }
 
-    pub fn draw<'a>(
-        &'a self,
-        render_pass: &mut wgpu::RenderPass<'a>,
-        camera_bind_group: &'a wgpu::BindGroup,
+    pub fn draw(
+        &self,
+        render_pass: &mut wgpu::RenderPass<'_>,
+        camera_bind_group: &wgpu::BindGroup,
     ) {
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_bind_group(0, camera_bind_group, &[]);

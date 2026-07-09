@@ -332,9 +332,9 @@ impl GlyphonTextPipeline {
         result
     }
 
-    pub fn draw<'a>(
-        &'a self,
-        render_pass: &mut wgpu::RenderPass<'a>,
+    pub fn draw(
+        &self,
+        render_pass: &mut wgpu::RenderPass<'_>,
     ) -> Result<(), cryoglyph::RenderError> {
         if self.text_count == 0 {
             return Ok(());

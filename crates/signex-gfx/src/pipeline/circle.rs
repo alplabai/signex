@@ -131,10 +131,10 @@ impl CirclePipeline {
     }
 
     /// Draw all uploaded circle instances.
-    pub fn draw<'a>(
-        &'a self,
-        render_pass: &mut wgpu::RenderPass<'a>,
-        camera_bind_group: &'a wgpu::BindGroup,
+    pub fn draw(
+        &self,
+        render_pass: &mut wgpu::RenderPass<'_>,
+        camera_bind_group: &wgpu::BindGroup,
     ) {
         if self.instance_count == 0 {
             return;
