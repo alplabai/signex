@@ -37,7 +37,7 @@ pub use contracts::{
     ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState, RemoveMsg,
     RenameDialogState, RenameMsg, SelectionFilterCustomState, SelectionFilterMsg, StatusBarRequest,
     TabContextAction, TabContextMenuState, TextEditMsg, TextEditState, TrackItem, UiMsg,
-    VersionControlScope,
+    VersionControlScope, WindowMsg,
 };
 pub use documents::{
     ComponentEditorTab, DrawMode, FootprintEditorState, SchematicTabSession, SymbolEditorState,

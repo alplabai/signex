@@ -761,8 +761,8 @@ pub struct InteractionState {
     /// about per-window routing.
     pub canvas: SchematicCanvas,
     /// Extra schematic canvases owned by non-main windows (undocked
-    /// tabs). Populated on `Message::UndockedTabOpened`; drained on
-    /// `Message::SecondaryWindowClosed`. Reads go through
+    /// tabs). Populated on `Message::Window(WindowMsg::UndockedTabOpened)`; drained on
+    /// `Message::Window(WindowMsg::SecondaryWindowClosed)`. Reads go through
     /// `canvas_for_window`; writes happen via the dispatch swap trick.
     pub canvases: std::collections::HashMap<iced::window::Id, SchematicCanvas>,
     pub pcb_canvas: PcbCanvas,

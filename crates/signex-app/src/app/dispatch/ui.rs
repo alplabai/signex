@@ -39,11 +39,20 @@ impl Signex {
                 let tab_detach = self.check_tab_auto_detach(x, y);
                 let finish = self.finish_update();
                 if let Some(modal) = modal_detach {
-                    Task::batch([finish, Task::done(Message::DetachModal(modal))])
+                    Task::batch([
+                        finish,
+                        Task::done(Message::Window(WindowMsg::DetachModal(modal))),
+                    ])
                 } else if let Some(idx) = panel_detach {
-                    Task::batch([finish, Task::done(Message::DetachFloatingPanel(idx))])
+                    Task::batch([
+                        finish,
+                        Task::done(Message::Window(WindowMsg::DetachFloatingPanel(idx))),
+                    ])
                 } else if let Some(idx) = tab_detach {
-                    Task::batch([finish, Task::done(Message::UndockTab(idx))])
+                    Task::batch([
+                        finish,
+                        Task::done(Message::Window(WindowMsg::UndockTab(idx))),
+                    ])
                 } else {
                     finish
                 }
