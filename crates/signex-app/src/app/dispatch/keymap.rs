@@ -145,8 +145,13 @@ fn message_for_keymap_command(command: &AppCommandId) -> Option<Message> {
         "force_annotate_all_schematics" => {
             Message::Annotate(AnnotateMsg::Run(signex_engine::AnnotateMode::ResetAndRenumber))
         }
-        "mirror_x" => Message::Edit(EditMsg::MirrorSelectedX),
-        "mirror_y" => Message::Edit(EditMsg::MirrorSelectedY),
+        // Visual-flip semantics (preserved from the pre-keymap hardcoded map):
+        // the `X` key = a horizontal (left-right) flip = internal MirrorSelectedY,
+        // and `Y` = vertical (top-bottom) flip = MirrorSelectedX. The presets
+        // bind physical `X`->mirror_x / `Y`->mirror_y, so the command id names
+        // the KEY, and the arm names the AXIS it flips — hence the cross.
+        "mirror_x" => Message::Edit(EditMsg::MirrorSelectedY),
+        "mirror_y" => Message::Edit(EditMsg::MirrorSelectedX),
         "open_components_panel" | "place_symbol" => {
             Message::Tool(ToolMessage::SelectTool(Tool::Component))
         }
