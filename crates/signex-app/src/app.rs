@@ -32,12 +32,12 @@ pub use contracts::{
     AnnotateMsg, AppQuitConfirmState, BomPreviewMsg, CommandPaletteMsg, ContextAction,
     ContextMenuMsg, ContextMenuState, ContextSubmenu, DragTarget, EditMsg, EnableVersionControlMsg,
     EnableVersionControlState, ErcMsg, ExportMsg, FileMsg, GridPickerState, GridPropertiesMsg,
-    GridPropertiesState, Message, MoveSelectionMsg, NetColorMsg, OverlayMsg, PreferencesMsg,
-    PrintPreviewMsg, ProjectCloseChoice, ProjectCloseConfirmState, ProjectMsg, ProjectOptionsState,
-    ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState, RemoveMsg,
-    RenameDialogState, RenameMsg, SelectionFilterCustomState, SelectionFilterMsg, StatusBarRequest,
-    TabContextAction, TabContextMenuState, TextEditMsg, TextEditState, TrackItem, UiMsg,
-    VersionControlScope, WindowMsg,
+    GridPropertiesState, Message, MoveSelectionMsg, NetColorMsg, OverlayMsg, ParameterManagerMsg,
+    PreferencesMsg, PrintPreviewMsg, ProjectCloseChoice, ProjectCloseConfirmState, ProjectMsg,
+    ProjectOptionsState, ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice,
+    RemoveDialogState, RemoveMsg, RenameDialogState, RenameMsg, SelectionFilterCustomState,
+    SelectionFilterMsg, StatusBarRequest, TabContextAction, TabContextMenuState, TextEditMsg,
+    TextEditState, TrackItem, UiMsg, VersionControlScope, WindowMsg,
 };
 pub use documents::{
     ComponentEditorTab, DrawMode, FootprintEditorState, SchematicTabSession, SymbolEditorState,

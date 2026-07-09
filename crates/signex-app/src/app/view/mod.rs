@@ -2720,7 +2720,7 @@ impl Signex {
                 row![
                     text("Net Colors").size(14).color(text_c),
                     Space::new().width(iced::Length::Fill),
-                    self.view_close_x(Message::CloseNetColorPalette),
+                    self.view_close_x(Message::NetColor(NetColorMsg::Close)),
                 ]
                 .align_y(iced::Alignment::Center),
             )
@@ -2886,7 +2886,7 @@ impl Signex {
                 row![
                     text("Parameters").size(14).color(text_c),
                     Space::new().width(iced::Length::Fill),
-                    self.view_close_x(Message::CloseParameterManager),
+                    self.view_close_x(Message::ParameterManager(ParameterManagerMsg::Close)),
                 ]
                 .align_y(iced::Alignment::Center),
             )
@@ -2978,10 +2978,12 @@ impl Signex {
                 let k_str = k.clone();
                 r = r.push(
                     text_input("", &v)
-                        .on_input(move |new_val| Message::ParameterManagerEdit {
-                            symbol_uuid: sym_uuid,
-                            key: k_str.clone(),
-                            value: new_val,
+                        .on_input(move |new_val| {
+                            Message::ParameterManager(ParameterManagerMsg::Edit {
+                                symbol_uuid: sym_uuid,
+                                key: k_str.clone(),
+                                value: new_val,
+                            })
                         })
                         .padding([2, 6])
                         .size(11)

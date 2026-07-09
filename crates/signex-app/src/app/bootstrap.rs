@@ -681,7 +681,7 @@ impl Signex {
                             }
                             // F5: Net color palette (Altium convention).
                             (keyboard::Key::Named(keyboard::key::Named::F5), _) => {
-                                Message::OpenNetColorPalette
+                                Message::NetColor(NetColorMsg::Open)
                             }
                             // Shift+S: cycle rubber-band selection mode
                             // (Inside → Outside → TouchingLine).

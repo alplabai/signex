@@ -106,20 +106,12 @@ pub enum Message {
     /// Move Selection dialog family (ADR-0001 D3). Altium numeric
     /// ΔX / ΔY move. Routed to `dispatch_move_selection_message`.
     MoveSelection(MoveSelectionMsg),
-    /// Open the F5 Net Color palette.
-    OpenNetColorPalette,
-    CloseNetColorPalette,
-    /// Per-net colour overrides — namespaced (ADR-0001 D3).
+    /// Per-net colour overrides + F5 palette open/close — namespaced
+    /// (ADR-0001 D3). Routed to `dispatch_net_color_message`.
     NetColor(NetColorMsg),
-    /// Open the Parameter Manager dialog (bulk parameter editor).
-    OpenParameterManager,
-    CloseParameterManager,
-    /// Edit a single parameter on a single symbol via the manager.
-    ParameterManagerEdit {
-        symbol_uuid: uuid::Uuid,
-        key: String,
-        value: String,
-    },
+    /// Parameter Manager dialog family (ADR-0001 D3). Bulk parameter
+    /// editor. Routed to `dispatch_parameter_manager_message`.
+    ParameterManager(ParameterManagerMsg),
     /// Click on a pin-connection matrix cell: cycle its severity
     /// Error → Warning → Info → Off → (back to baseline default).
     PinMatrixCellCycled {
@@ -586,6 +578,10 @@ pub enum GridPropertiesMsg {
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub enum NetColorMsg {
+    /// Open the F5 Net Color palette (detached modal).
+    Open,
+    /// Close the Net Color palette.
+    Close,
     /// Assign a color to a net label text, or clear the override.
     Set {
         net: String,
@@ -600,6 +596,24 @@ pub enum NetColorMsg {
     /// Edit one R/G/B channel of the custom-picker draft via text
     /// input. Parsed as 0-255; invalid values ignored.
     CustomChannel(Channel, String),
+}
+
+/// Parameter Manager dialog message family (ADR-0001 D3). Namespaced
+/// under `Message::ParameterManager` and routed to
+/// `dispatch_parameter_manager_message`.
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub enum ParameterManagerMsg {
+    /// Open the Parameter Manager dialog (bulk parameter editor).
+    Open,
+    /// Close the dialog.
+    Close,
+    /// Edit a single parameter on a single symbol via the manager.
+    Edit {
+        symbol_uuid: uuid::Uuid,
+        key: String,
+        value: String,
+    },
 }
 
 /// Annotate dialog message family (ADR-0001 D3). Namespaced under

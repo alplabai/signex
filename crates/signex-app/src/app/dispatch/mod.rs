@@ -62,28 +62,8 @@ impl Signex {
             Message::Remove(msg) => self.dispatch_remove_message(msg),
             Message::Window(msg) => self.dispatch_window_message(msg),
             Message::MoveSelection(msg) => self.dispatch_move_selection_message(msg),
-            Message::OpenNetColorPalette => {
-                self.ui_state.net_color_palette_open = true;
-                self.handle_detach_modal(super::state::ModalId::NetColorPalette)
-            }
-            Message::CloseNetColorPalette => {
-                self.ui_state.net_color_palette_open = false;
-                self.close_detached_modal(super::state::ModalId::NetColorPalette)
-            }
             Message::NetColor(msg) => self.dispatch_net_color_message(msg),
-            Message::OpenParameterManager => {
-                self.ui_state.parameter_manager_open = true;
-                self.handle_detach_modal(super::state::ModalId::ParameterManager)
-            }
-            Message::CloseParameterManager => {
-                self.ui_state.parameter_manager_open = false;
-                self.close_detached_modal(super::state::ModalId::ParameterManager)
-            }
-            Message::ParameterManagerEdit {
-                symbol_uuid,
-                key,
-                value,
-            } => self.handle_parameter_manager_edit(symbol_uuid, key, value),
+            Message::ParameterManager(msg) => self.dispatch_parameter_manager_message(msg),
             Message::LassoCommit => {
                 // Altium-style single terminator — Enter commits
                 // whichever multi-click buffer is currently armed:
@@ -599,9 +579,18 @@ impl Signex {
         }
     }
 
-    /// Per-net colour override handler (namespaced family, ADR-0001 D3).
+    /// Per-net colour override + F5-palette handler (namespaced family,
+    /// ADR-0001 D3).
     pub(crate) fn dispatch_net_color_message(&mut self, msg: NetColorMsg) -> Task<Message> {
         match msg {
+            NetColorMsg::Open => {
+                self.ui_state.net_color_palette_open = true;
+                self.handle_detach_modal(super::state::ModalId::NetColorPalette)
+            }
+            NetColorMsg::Close => {
+                self.ui_state.net_color_palette_open = false;
+                self.close_detached_modal(super::state::ModalId::NetColorPalette)
+            }
             NetColorMsg::Set { net, color } => {
                 if let Some(c) = color {
                     self.ui_state.net_colors.insert(net, c);
@@ -648,6 +637,28 @@ impl Signex {
                 }
                 Task::none()
             }
+        }
+    }
+
+    /// Parameter Manager dialog handler (namespaced family, ADR-0001 D3).
+    pub(crate) fn dispatch_parameter_manager_message(
+        &mut self,
+        msg: ParameterManagerMsg,
+    ) -> Task<Message> {
+        match msg {
+            ParameterManagerMsg::Open => {
+                self.ui_state.parameter_manager_open = true;
+                self.handle_detach_modal(super::state::ModalId::ParameterManager)
+            }
+            ParameterManagerMsg::Close => {
+                self.ui_state.parameter_manager_open = false;
+                self.close_detached_modal(super::state::ModalId::ParameterManager)
+            }
+            ParameterManagerMsg::Edit {
+                symbol_uuid,
+                key,
+                value,
+            } => self.handle_parameter_manager_edit(symbol_uuid, key, value),
         }
     }
 }
