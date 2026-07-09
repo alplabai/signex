@@ -3566,7 +3566,7 @@ fn pin_matrix_view(
                 .align_x(iced::alignment::Horizontal::Center)
                 .align_y(iced::alignment::Vertical::Center),
         )
-        .on_press(Message::PinMatrixCellCycled { row: r, col: c })
+        .on_press(Message::Erc(ErcMsg::PinMatrixCellCycled { row: r, col: c }))
         .padding(0)
         .style(move |_: &Theme, _| button::Style {
             background: Some(Background::Color(bg)),
