@@ -234,7 +234,7 @@ impl Signex {
                     Task::batch(tasks)
                 }
             }
-            A::Undock(idx) => Task::done(Message::UndockTab(idx)),
+            A::Undock(idx) => Task::done(Message::Window(WindowMsg::UndockTab(idx))),
         }
     }
 }

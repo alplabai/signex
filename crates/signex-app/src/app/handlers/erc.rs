@@ -969,9 +969,11 @@ impl Signex {
                 title,
             },
         );
-        open_task.map(move |settled_id| Message::UndockedTabOpened {
-            path: path.clone(),
-            id: settled_id,
+        open_task.map(move |settled_id| {
+            Message::Window(WindowMsg::UndockedTabOpened {
+                path: path.clone(),
+                id: settled_id,
+            })
         })
     }
 
@@ -996,9 +998,11 @@ impl Signex {
         self.ui_state
             .windows
             .insert(id, super::super::state::WindowKind::DetachedPanel(kind));
-        open_task.map(move |settled_id| Message::DetachedPanelOpened {
-            kind,
-            id: settled_id,
+        open_task.map(move |settled_id| {
+            Message::Window(WindowMsg::DetachedPanelOpened {
+                kind,
+                id: settled_id,
+            })
         })
     }
 
@@ -1079,9 +1083,11 @@ impl Signex {
             .insert(id, super::super::state::WindowKind::DetachedModal(modal));
         // When the OS finishes opening the window, forward the id so the
         // update can double-check and clear any leftover drag state.
-        open_task.map(move |settled_id| Message::DetachedModalOpened {
-            modal,
-            id: settled_id,
+        open_task.map(move |settled_id| {
+            Message::Window(WindowMsg::DetachedModalOpened {
+                modal,
+                id: settled_id,
+            })
         })
     }
 

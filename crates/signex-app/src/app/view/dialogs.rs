@@ -11,7 +11,7 @@ use iced::{Background, Border, Color, Element, Length, Theme};
 use crate::app::state::AnnotateOrder;
 use crate::app::{
     AnnotateMsg, BomPreviewMsg, EnableVersionControlMsg, ErcMsg, GridPropertiesMsg, Message,
-    OverlayMsg, ProjectMsg, RemoveMsg, RenameMsg, SelectionFilterMsg, Signex,
+    OverlayMsg, ProjectMsg, RemoveMsg, RenameMsg, SelectionFilterMsg, Signex, WindowMsg,
 };
 
 const BACKDROP: Color = Color::from_rgba(0.0, 0.0, 0.0, 0.55);
@@ -3018,7 +3018,7 @@ pub(crate) fn detached_header<'a>(
     modal: super::super::state::ModalId,
 ) -> Element<'a, Message> {
     iced::widget::mouse_area(header_content)
-        .on_press(Message::StartDetachedWindowDrag(modal))
+        .on_press(Message::Window(WindowMsg::StartDetachedWindowDrag(modal)))
         .interaction(iced::mouse::Interaction::Grab)
         .into()
 }

@@ -60,267 +60,7 @@ impl Signex {
             Message::EnableVersionControl(msg) => self.dispatch_enable_version_control_message(msg),
             Message::Rename(msg) => self.dispatch_rename_message(msg),
             Message::Remove(msg) => self.dispatch_remove_message(msg),
-            Message::WindowResizedFor(id, w, h) => {
-                // Only main-window resizes drive layout math. Detached
-                // modal + undocked-tab windows have their own sizes
-                // that would otherwise clobber the main-window state.
-                if self.ui_state.main_window_id == Some(id) {
-                    self.ui_state.window_size = (w, h);
-                    // Windows fires a resize event whenever DWM moves
-                    // the window to a monitor with a different DPI, so
-                    // re-querying the scale factor here keeps the
-                    // wordmark-PNG tier picker in sync after a
-                    // cross-monitor drag.
-                    return iced::window::scale_factor(id).map(Message::MainWindowScaleChanged);
-                }
-                Task::none()
-            }
-            Message::MainWindowScaleChanged(scale) => {
-                self.ui_state.main_window_scale = scale;
-                Task::none()
-            }
-            Message::MainWindowOpened(id) => {
-                self.ui_state.main_window_id = Some(id);
-                // Pull the real initial size from winit — opening the
-                // window at Settings.size doesn't always land at
-                // exactly that size (OS DPI scaling, display clamps).
-                // Without this, Active-Bar dropdown positions are off
-                // until the user physically resizes the window.
-                let size_task = iced::window::size(id)
-                    .map(move |size| Message::WindowResizedFor(id, size.width, size.height));
-                // Stash the scale factor so the wordmark PNG picker
-                // can render at native device-pixel count. Re-queried
-                // on every resize to track monitor moves.
-                let scale_task =
-                    iced::window::scale_factor(id).map(Message::MainWindowScaleChanged);
-                // Re-add Windows 11 DWM rounded corners + drop shadow
-                // (silently no-ops on Windows 10 and non-Windows). Has
-                // to run after the HWND is alive, hence here rather than
-                // in bootstrap.
-                let corners_task = crate::chrome::apply_rounded_corners::<Message>(id);
-                iced::Task::batch([size_task, scale_task, corners_task])
-            }
-            Message::SecondaryWindowClosed(id) => {
-                // Main window closed → terminate the process.
-                if self.ui_state.main_window_id == Some(id) {
-                    return iced::exit();
-                }
-                // Drop the entry and dismiss the backing modal state so
-                // closing the OS window fully exits the modal instead of
-                // reattaching a phantom copy to the main window on the
-                // next view frame. Phase 3 will add undocked-tab cleanup
-                // here too.
-                if let Some(kind) = self.ui_state.windows.remove(&id) {
-                    use super::state::{ModalId, WindowKind};
-                    match kind {
-                        WindowKind::DetachedModal(modal) => match modal {
-                            ModalId::AnnotateDialog => self.ui_state.annotate_dialog_open = false,
-                            ModalId::AnnotateResetConfirm => {
-                                self.ui_state.annotate_reset_confirm = false
-                            }
-                            ModalId::ErcDialog => self.ui_state.erc_dialog_open = false,
-                            ModalId::Preferences => self.ui_state.preferences_open = false,
-                            ModalId::FindReplace => self.ui_state.find_replace.open = false,
-                            ModalId::MoveSelection => self.ui_state.move_selection.open = false,
-                            ModalId::NetColorPalette => {
-                                self.ui_state.net_color_palette_open = false
-                            }
-                            ModalId::ParameterManager => {
-                                self.ui_state.parameter_manager_open = false
-                            }
-                            ModalId::RenameDialog => self.ui_state.rename_dialog = None,
-                            ModalId::RemoveDialog => self.ui_state.remove_dialog = None,
-                            ModalId::PrintPreview => self.document_state.preview = None,
-                            ModalId::BomPreview => self.document_state.bom_preview = None,
-                            ModalId::ProjectOptions => {
-                                self.ui_state.project_options = None;
-                            }
-                            ModalId::EnableVersionControl => {
-                                self.ui_state.enable_version_control = None;
-                            }
-                            ModalId::GridProperties => {
-                                self.ui_state.grid_properties = None;
-                            }
-                            ModalId::SelectionFilterCustom => {
-                                self.ui_state.selection_filter_custom = None;
-                            }
-                        },
-                        // Closing an undocked-tab window is the reattach
-                        // gesture — the tab itself stays in
-                        // document_state.tabs. Drop the per-window
-                        // canvas so we don't leak caches for a window
-                        // that's gone.
-                        WindowKind::UndockedTab { .. } => {
-                            self.interaction_state.canvases.remove(&id);
-                        }
-                        // Closing a detached panel reattaches it as a
-                        // docked panel in the right column so the user
-                        // doesn't lose access to the panel kind.
-                        WindowKind::DetachedPanel(kind) => {
-                            self.document_state
-                                .dock
-                                .add_panel(crate::dock::PanelPosition::Right, kind);
-                        }
-                        // The Component Preview lives as a tab in the
-                        // main window; its state outlasts the
-                        // detached OS window. Closing the OS window
-                        // re-docks the editor to the main-window tab
-                        // bar — `library.editors` keeps the in-flight
-                        // edits keyed by `(library_path, table,
-                        // row_id)`, and the main-window tab
-                        // already exists, so there's nothing to do
-                        // here beyond letting the window-id mapping
-                        // drop above.
-                        WindowKind::ComponentEditor { .. } => {}
-                    }
-                }
-                Task::none()
-            }
-            Message::DetachModal(modal) => self.handle_detach_modal(modal),
-            Message::DetachedModalOpened { modal, id } => {
-                // handle_detach_modal already inserted the entry when the
-                // open was requested.  Re-inserting here is fine when the
-                // window is still tracked, but if close_detached_modal
-                // already removed it before this callback arrived (a race
-                // where the user closes the dialog before the OS confirms
-                // the window open), re-inserting would leave a stale entry
-                // that blocks every subsequent open attempt.
-                if self.ui_state.windows.contains_key(&id) {
-                    self.ui_state
-                        .windows
-                        .insert(id, super::state::WindowKind::DetachedModal(modal));
-                }
-                // Any lingering drag state belongs to the main window —
-                // once the modal is popped out, the OS handles window
-                // drags directly.
-                self.ui_state.modal_dragging = None;
-                // Win11 DWM rounded corners on the detached window so
-                // its edges visually match the modal_card's 8 px
-                // radius. Silent no-op on Win10 / non-Windows.
-                // Without this the OS paints the window with hard
-                // corners and the modal_card's rounded border is
-                // hidden inside a square OS frame.
-                crate::chrome::apply_rounded_corners::<Message>(id)
-            }
-            Message::UndockTab(idx) => self.handle_undock_tab(idx),
-            Message::UndockedTabOpened { path, id } => {
-                let title = self
-                    .document_state
-                    .tabs
-                    .iter()
-                    .find(|t| t.path == path)
-                    .map(|t| t.title.clone())
-                    .unwrap_or_default();
-                self.ui_state.windows.insert(
-                    id,
-                    super::state::WindowKind::UndockedTab {
-                        path: path.clone(),
-                        title,
-                    },
-                );
-                // Spin up a fresh canvas for this window, seeded from
-                // the engine that the tab points at so the new window
-                // renders the correct schematic from its first frame.
-                // Pan/zoom/selection start at SchematicCanvas::new
-                // defaults — independent of the main canvas.
-                let mut per_window = crate::canvas::SchematicCanvas::new();
-                if let Some(engine) = self.document_state.engines.get(&path) {
-                    per_window.set_render_cache(Some(
-                        crate::schematic_runtime::SchematicRenderCache::from_sheet(
-                            engine.document(),
-                        ),
-                    ));
-                }
-                // Mirror the main canvas's theme / snap / grid / paper
-                // settings so the new window doesn't flash with the
-                // defaults before any sync happens.
-                per_window.theme_bg = self.interaction_state.canvas.theme_bg;
-                per_window.theme_grid = self.interaction_state.canvas.theme_grid;
-                per_window.theme_paper = self.interaction_state.canvas.theme_paper;
-                per_window.canvas_colors = self.interaction_state.canvas.canvas_colors;
-                per_window.snap_enabled = self.interaction_state.canvas.snap_enabled;
-                per_window.snap_grid_mm = self.interaction_state.canvas.snap_grid_mm;
-                per_window.visible_grid_mm = self.interaction_state.canvas.visible_grid_mm;
-                per_window.grid_visible = self.interaction_state.canvas.grid_visible;
-                per_window.paper_width_mm = self.interaction_state.canvas.paper_width_mm;
-                per_window.paper_height_mm = self.interaction_state.canvas.paper_height_mm;
-                per_window.fit_to_paper();
-                self.interaction_state.canvases.insert(id, per_window);
-                Task::none()
-            }
-            Message::ReattachTab(id) => {
-                // Pre-remove so the tab bar shows the reattached tab on
-                // the next view frame even before the OS-level close
-                // fires `SecondaryWindowClosed`. Clear the per-window
-                // canvas here too — otherwise `SecondaryWindowClosed`
-                // short-circuits on `windows.remove -> None` and the
-                // canvas cache + selection leak.
-                self.ui_state.windows.remove(&id);
-                self.interaction_state.canvases.remove(&id);
-                iced::window::close(id)
-            }
-            Message::DetachFloatingPanel(idx) => self.handle_detach_floating_panel(idx),
-            Message::DetachedPanelOpened { kind, id } => {
-                self.ui_state
-                    .windows
-                    .insert(id, super::state::WindowKind::DetachedPanel(kind));
-                Task::none()
-            }
-            Message::StartDetachedWindowDrag(modal) => {
-                self.handle_start_detached_window_drag(modal)
-            }
-            Message::StartMainWindowDrag => match self.ui_state.main_window_id {
-                Some(id) => crate::chrome::start_window_drag(id),
-                None => Task::none(),
-            },
-            Message::StartMainWindowResize(direction) => match self.ui_state.main_window_id {
-                Some(id) => crate::chrome::start_window_resize(id, direction),
-                None => Task::none(),
-            },
-            Message::StartDetachedModalResize { modal, direction } => {
-                // Find the OS window id hosting this modal, then ask
-                // the OS to start a resize drag in the requested
-                // direction. Same pattern as the main window —
-                // detached modals have `decorations: false`, so
-                // there's no OS frame to grab; the 6 px overlay
-                // strips are how we expose resize. Routed through
-                // `crate::chrome::start_window_resize` so the Win32
-                // SC_SIZE fallback applies here too — winit's own
-                // path silently no-ops on borderless windows after
-                // the first attempt.
-                let id = self.ui_state.windows.iter().find_map(|(id, kind)| {
-                    if let super::state::WindowKind::DetachedModal(m) = kind {
-                        if *m == modal {
-                            return Some(*id);
-                        }
-                    }
-                    None
-                });
-                match id {
-                    Some(id) => crate::chrome::start_window_resize(id, direction),
-                    None => Task::none(),
-                }
-            }
-            Message::MinimizeMainWindow => match self.ui_state.main_window_id {
-                Some(id) => iced::window::minimize(id, true),
-                None => Task::none(),
-            },
-            Message::ToggleMaximizeMainWindow => match self.ui_state.main_window_id {
-                Some(id) => iced::window::toggle_maximize(id),
-                None => Task::none(),
-            },
-            Message::CloseMainWindow => self.handle_app_quit_requested(),
-            Message::WindowCloseRequested(id) => {
-                // OS close request (Alt+F4 / native close). Daemon mode
-                // does not auto-close, so route the main window through
-                // the unsaved-changes guard and close any other window
-                // directly.
-                if self.ui_state.main_window_id == Some(id) {
-                    self.handle_app_quit_requested()
-                } else {
-                    iced::window::close(id)
-                }
-            }
+            Message::Window(msg) => self.dispatch_window_message(msg),
             Message::MoveSelection(msg) => self.dispatch_move_selection_message(msg),
             Message::OpenNetColorPalette => {
                 self.ui_state.net_color_palette_open = true;
@@ -583,6 +323,279 @@ impl Signex {
                 }
             }
             Message::Noop => Task::none(),
+        }
+    }
+
+    /// Window lifecycle, docking, and native-chrome message family
+    /// (namespaced, ADR-0001 D3). Main + secondary window open / close /
+    /// resize / scale, detach + reattach of modals, undocked tabs and
+    /// floating panels, and the borderless-chrome drag / resize / minimize
+    /// / maximize buttons. Routed from `dispatch_update`.
+    pub(crate) fn dispatch_window_message(&mut self, message: WindowMsg) -> Task<Message> {
+        match message {
+            WindowMsg::WindowResizedFor(id, w, h) => {
+                // Only main-window resizes drive layout math. Detached
+                // modal + undocked-tab windows have their own sizes
+                // that would otherwise clobber the main-window state.
+                if self.ui_state.main_window_id == Some(id) {
+                    self.ui_state.window_size = (w, h);
+                    // Windows fires a resize event whenever DWM moves
+                    // the window to a monitor with a different DPI, so
+                    // re-querying the scale factor here keeps the
+                    // wordmark-PNG tier picker in sync after a
+                    // cross-monitor drag.
+                    return iced::window::scale_factor(id)
+                        .map(|s| Message::Window(WindowMsg::MainWindowScaleChanged(s)));
+                }
+                Task::none()
+            }
+            WindowMsg::MainWindowScaleChanged(scale) => {
+                self.ui_state.main_window_scale = scale;
+                Task::none()
+            }
+            WindowMsg::MainWindowOpened(id) => {
+                self.ui_state.main_window_id = Some(id);
+                // Pull the real initial size from winit — opening the
+                // window at Settings.size doesn't always land at
+                // exactly that size (OS DPI scaling, display clamps).
+                // Without this, Active-Bar dropdown positions are off
+                // until the user physically resizes the window.
+                let size_task = iced::window::size(id).map(move |size| {
+                    Message::Window(WindowMsg::WindowResizedFor(id, size.width, size.height))
+                });
+                // Stash the scale factor so the wordmark PNG picker
+                // can render at native device-pixel count. Re-queried
+                // on every resize to track monitor moves.
+                let scale_task = iced::window::scale_factor(id)
+                    .map(|s| Message::Window(WindowMsg::MainWindowScaleChanged(s)));
+                // Re-add Windows 11 DWM rounded corners + drop shadow
+                // (silently no-ops on Windows 10 and non-Windows). Has
+                // to run after the HWND is alive, hence here rather than
+                // in bootstrap.
+                let corners_task = crate::chrome::apply_rounded_corners::<Message>(id);
+                iced::Task::batch([size_task, scale_task, corners_task])
+            }
+            WindowMsg::SecondaryWindowClosed(id) => {
+                // Main window closed → terminate the process.
+                if self.ui_state.main_window_id == Some(id) {
+                    return iced::exit();
+                }
+                // Drop the entry and dismiss the backing modal state so
+                // closing the OS window fully exits the modal instead of
+                // reattaching a phantom copy to the main window on the
+                // next view frame. Phase 3 will add undocked-tab cleanup
+                // here too.
+                if let Some(kind) = self.ui_state.windows.remove(&id) {
+                    use super::state::{ModalId, WindowKind};
+                    match kind {
+                        WindowKind::DetachedModal(modal) => match modal {
+                            ModalId::AnnotateDialog => self.ui_state.annotate_dialog_open = false,
+                            ModalId::AnnotateResetConfirm => {
+                                self.ui_state.annotate_reset_confirm = false
+                            }
+                            ModalId::ErcDialog => self.ui_state.erc_dialog_open = false,
+                            ModalId::Preferences => self.ui_state.preferences_open = false,
+                            ModalId::FindReplace => self.ui_state.find_replace.open = false,
+                            ModalId::MoveSelection => self.ui_state.move_selection.open = false,
+                            ModalId::NetColorPalette => {
+                                self.ui_state.net_color_palette_open = false
+                            }
+                            ModalId::ParameterManager => {
+                                self.ui_state.parameter_manager_open = false
+                            }
+                            ModalId::RenameDialog => self.ui_state.rename_dialog = None,
+                            ModalId::RemoveDialog => self.ui_state.remove_dialog = None,
+                            ModalId::PrintPreview => self.document_state.preview = None,
+                            ModalId::BomPreview => self.document_state.bom_preview = None,
+                            ModalId::ProjectOptions => {
+                                self.ui_state.project_options = None;
+                            }
+                            ModalId::EnableVersionControl => {
+                                self.ui_state.enable_version_control = None;
+                            }
+                            ModalId::GridProperties => {
+                                self.ui_state.grid_properties = None;
+                            }
+                            ModalId::SelectionFilterCustom => {
+                                self.ui_state.selection_filter_custom = None;
+                            }
+                        },
+                        // Closing an undocked-tab window is the reattach
+                        // gesture — the tab itself stays in
+                        // document_state.tabs. Drop the per-window
+                        // canvas so we don't leak caches for a window
+                        // that's gone.
+                        WindowKind::UndockedTab { .. } => {
+                            self.interaction_state.canvases.remove(&id);
+                        }
+                        // Closing a detached panel reattaches it as a
+                        // docked panel in the right column so the user
+                        // doesn't lose access to the panel kind.
+                        WindowKind::DetachedPanel(kind) => {
+                            self.document_state
+                                .dock
+                                .add_panel(crate::dock::PanelPosition::Right, kind);
+                        }
+                        // The Component Preview lives as a tab in the
+                        // main window; its state outlasts the
+                        // detached OS window. Closing the OS window
+                        // re-docks the editor to the main-window tab
+                        // bar — `library.editors` keeps the in-flight
+                        // edits keyed by `(library_path, table,
+                        // row_id)`, and the main-window tab
+                        // already exists, so there's nothing to do
+                        // here beyond letting the window-id mapping
+                        // drop above.
+                        WindowKind::ComponentEditor { .. } => {}
+                    }
+                }
+                Task::none()
+            }
+            WindowMsg::DetachModal(modal) => self.handle_detach_modal(modal),
+            WindowMsg::DetachedModalOpened { modal, id } => {
+                // handle_detach_modal already inserted the entry when the
+                // open was requested.  Re-inserting here is fine when the
+                // window is still tracked, but if close_detached_modal
+                // already removed it before this callback arrived (a race
+                // where the user closes the dialog before the OS confirms
+                // the window open), re-inserting would leave a stale entry
+                // that blocks every subsequent open attempt.
+                if self.ui_state.windows.contains_key(&id) {
+                    self.ui_state
+                        .windows
+                        .insert(id, super::state::WindowKind::DetachedModal(modal));
+                }
+                // Any lingering drag state belongs to the main window —
+                // once the modal is popped out, the OS handles window
+                // drags directly.
+                self.ui_state.modal_dragging = None;
+                // Win11 DWM rounded corners on the detached window so
+                // its edges visually match the modal_card's 8 px
+                // radius. Silent no-op on Win10 / non-Windows.
+                // Without this the OS paints the window with hard
+                // corners and the modal_card's rounded border is
+                // hidden inside a square OS frame.
+                crate::chrome::apply_rounded_corners::<Message>(id)
+            }
+            WindowMsg::UndockTab(idx) => self.handle_undock_tab(idx),
+            WindowMsg::UndockedTabOpened { path, id } => {
+                let title = self
+                    .document_state
+                    .tabs
+                    .iter()
+                    .find(|t| t.path == path)
+                    .map(|t| t.title.clone())
+                    .unwrap_or_default();
+                self.ui_state.windows.insert(
+                    id,
+                    super::state::WindowKind::UndockedTab {
+                        path: path.clone(),
+                        title,
+                    },
+                );
+                // Spin up a fresh canvas for this window, seeded from
+                // the engine that the tab points at so the new window
+                // renders the correct schematic from its first frame.
+                // Pan/zoom/selection start at SchematicCanvas::new
+                // defaults — independent of the main canvas.
+                let mut per_window = crate::canvas::SchematicCanvas::new();
+                if let Some(engine) = self.document_state.engines.get(&path) {
+                    per_window.set_render_cache(Some(
+                        crate::schematic_runtime::SchematicRenderCache::from_sheet(
+                            engine.document(),
+                        ),
+                    ));
+                }
+                // Mirror the main canvas's theme / snap / grid / paper
+                // settings so the new window doesn't flash with the
+                // defaults before any sync happens.
+                per_window.theme_bg = self.interaction_state.canvas.theme_bg;
+                per_window.theme_grid = self.interaction_state.canvas.theme_grid;
+                per_window.theme_paper = self.interaction_state.canvas.theme_paper;
+                per_window.canvas_colors = self.interaction_state.canvas.canvas_colors;
+                per_window.snap_enabled = self.interaction_state.canvas.snap_enabled;
+                per_window.snap_grid_mm = self.interaction_state.canvas.snap_grid_mm;
+                per_window.visible_grid_mm = self.interaction_state.canvas.visible_grid_mm;
+                per_window.grid_visible = self.interaction_state.canvas.grid_visible;
+                per_window.paper_width_mm = self.interaction_state.canvas.paper_width_mm;
+                per_window.paper_height_mm = self.interaction_state.canvas.paper_height_mm;
+                per_window.fit_to_paper();
+                self.interaction_state.canvases.insert(id, per_window);
+                Task::none()
+            }
+            WindowMsg::ReattachTab(id) => {
+                // Pre-remove so the tab bar shows the reattached tab on
+                // the next view frame even before the OS-level close
+                // fires `SecondaryWindowClosed`. Clear the per-window
+                // canvas here too — otherwise `SecondaryWindowClosed`
+                // short-circuits on `windows.remove -> None` and the
+                // canvas cache + selection leak.
+                self.ui_state.windows.remove(&id);
+                self.interaction_state.canvases.remove(&id);
+                iced::window::close(id)
+            }
+            WindowMsg::DetachFloatingPanel(idx) => self.handle_detach_floating_panel(idx),
+            WindowMsg::DetachedPanelOpened { kind, id } => {
+                self.ui_state
+                    .windows
+                    .insert(id, super::state::WindowKind::DetachedPanel(kind));
+                Task::none()
+            }
+            WindowMsg::StartDetachedWindowDrag(modal) => {
+                self.handle_start_detached_window_drag(modal)
+            }
+            WindowMsg::StartMainWindowDrag => match self.ui_state.main_window_id {
+                Some(id) => crate::chrome::start_window_drag(id),
+                None => Task::none(),
+            },
+            WindowMsg::StartMainWindowResize(direction) => match self.ui_state.main_window_id {
+                Some(id) => crate::chrome::start_window_resize(id, direction),
+                None => Task::none(),
+            },
+            WindowMsg::StartDetachedModalResize { modal, direction } => {
+                // Find the OS window id hosting this modal, then ask
+                // the OS to start a resize drag in the requested
+                // direction. Same pattern as the main window —
+                // detached modals have `decorations: false`, so
+                // there's no OS frame to grab; the 6 px overlay
+                // strips are how we expose resize. Routed through
+                // `crate::chrome::start_window_resize` so the Win32
+                // SC_SIZE fallback applies here too — winit's own
+                // path silently no-ops on borderless windows after
+                // the first attempt.
+                let id = self.ui_state.windows.iter().find_map(|(id, kind)| {
+                    if let super::state::WindowKind::DetachedModal(m) = kind {
+                        if *m == modal {
+                            return Some(*id);
+                        }
+                    }
+                    None
+                });
+                match id {
+                    Some(id) => crate::chrome::start_window_resize(id, direction),
+                    None => Task::none(),
+                }
+            }
+            WindowMsg::MinimizeMainWindow => match self.ui_state.main_window_id {
+                Some(id) => iced::window::minimize(id, true),
+                None => Task::none(),
+            },
+            WindowMsg::ToggleMaximizeMainWindow => match self.ui_state.main_window_id {
+                Some(id) => iced::window::toggle_maximize(id),
+                None => Task::none(),
+            },
+            WindowMsg::CloseMainWindow => self.handle_app_quit_requested(),
+            WindowMsg::WindowCloseRequested(id) => {
+                // OS close request (Alt+F4 / native close). Daemon mode
+                // does not auto-close, so route the main window through
+                // the unsaved-changes guard and close any other window
+                // directly.
+                if self.ui_state.main_window_id == Some(id) {
+                    self.handle_app_quit_requested()
+                } else {
+                    iced::window::close(id)
+                }
+            }
         }
     }
 

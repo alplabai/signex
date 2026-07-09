@@ -94,17 +94,107 @@ pub enum Message {
     /// Routed to `dispatch_preferences_message`.
     Preferences(PreferencesMsg),
     FindReplaceMsg(crate::find_replace::FindReplaceMsg),
-    /// Resize event carrying the window id. Forwarded by the
-    /// `iced::window::resize_events()` subscription so the dispatcher
-    /// can drop non-main-window resizes before they touch
-    /// `ui_state.window_size`.
-    WindowResizedFor(iced::window::Id, f32, f32),
+    /// Window lifecycle / docking / native-chrome message
+    /// family (ADR-0001 D3). Routed to `dispatch_window_message`.
+    Window(WindowMsg),
     /// ERC dialog message family — namespaced (ADR-0001 D3). Routed to
     /// `dispatch_erc_message`.
     Erc(ErcMsg),
     /// Annotate dialog message family — namespaced (ADR-0001 D3). Routed
     /// to `dispatch_annotate_message`.
     Annotate(AnnotateMsg),
+    /// Move Selection dialog family (ADR-0001 D3). Altium numeric
+    /// ΔX / ΔY move. Routed to `dispatch_move_selection_message`.
+    MoveSelection(MoveSelectionMsg),
+    /// Open the F5 Net Color palette.
+    OpenNetColorPalette,
+    CloseNetColorPalette,
+    /// Per-net colour overrides — namespaced (ADR-0001 D3).
+    NetColor(NetColorMsg),
+    /// Open the Parameter Manager dialog (bulk parameter editor).
+    OpenParameterManager,
+    CloseParameterManager,
+    /// Edit a single parameter on a single symbol via the manager.
+    ParameterManagerEdit {
+        symbol_uuid: uuid::Uuid,
+        key: String,
+        value: String,
+    },
+    /// Click on a pin-connection matrix cell: cycle its severity
+    /// Error → Warning → Info → Off → (back to baseline default).
+    PinMatrixCellCycled {
+        row: u8,
+        col: u8,
+    },
+    /// Cycle Altium's rubber-band selection mode
+    /// Inside → Outside → TouchingLine → Inside. Bound to Shift+S.
+    CycleSelectionMode,
+    /// Close the in-flight lasso polygon (Enter key). Commits the
+    /// selection if >= 3 vertices, otherwise cancels.
+    LassoCommit,
+    /// Apply an edit to a placed SchDrawing. Dispatched from the
+    /// post-placement Properties panel (Line / Rect / Circle / Arc /
+    /// Polygon editable rows). Engine replaces the stored drawing by
+    /// uuid with full undo.
+    UpdateDrawingField(uuid::Uuid, DrawingFieldEdit),
+    /// Export subsystem message family — namespaced (ADR-0001 D3).
+    /// PDF / netlist / BOM export lifecycle plus the export-error
+    /// modal dismiss. Routed to `dispatch_export_message`.
+    Export(ExportMsg),
+    /// BOM-preview modal — namespaced family (ADR-0001 D3). Routed to
+    /// `dispatch_bom_preview_message`.
+    BomPreview(BomPreviewMsg),
+    /// Print-preview modal — namespaced family (ADR-0001 D3). Routed to
+    /// `dispatch_print_preview_message`.
+    PrintPreview(PrintPreviewMsg),
+    /// v0.9 Library subsystem message — folded under one variant so
+    /// the dispatcher can route to `library_dispatch::handle` in one
+    /// shot. See `crate::library::LibraryMessage` for the inner
+    /// shape.
+    Library(crate::library::LibraryMessage),
+    /// Command-palette message family (ADR-0001 D3). Namespaced under
+    /// `Message::CommandPalette` and routed to
+    /// `dispatch_command_palette_message`.
+    CommandPalette(CommandPaletteMsg),
+    /// Async result of a per-file Git history load issued by the
+    /// right-dock History panel. `generation` is the value of
+    /// `DocumentState.history.generation` at the time the load was
+    /// kicked off; the handler discards stale results whose
+    /// generation no longer matches the current counter (the user
+    /// has switched tabs since). `path` is the file the load
+    /// targeted, surfaced for diagnostic logging only — the
+    /// generation token is the authoritative staleness check.
+    HistoryLoaded {
+        generation: u32,
+        path: std::path::PathBuf,
+        result: Result<Vec<signex_widgets::HistoryEntry>, String>,
+    },
+    /// v0.14.2 — keyboard shortcut for footprint editor mode switch.
+    /// Routed from the global `1` / `2` / `3` key handler in
+    /// `bootstrap.rs::subscription`. The dispatcher checks whether
+    /// the active tab is a footprint editor; if yes, sets the mode;
+    /// otherwise no-op so the keys don't steal text input on other
+    /// tabs.
+    FootprintModeShortcut(crate::library::editor::footprint::state::EditorMode),
+    /// v0.15 — Esc-key tool cancel routed through the dispatcher.
+    /// If the active tab is a footprint editor, fires
+    /// `FootprintToolEscape` (resets PadsTool + SketchTool +
+    /// tool_pending); otherwise falls back to the schematic
+    /// `Tool::Select` reset.
+    EscapePressed,
+    Noop,
+}
+
+/// Window lifecycle, docking, and native-chrome message family
+/// (ADR-0001 D3). Namespaced under `Message::Window`, routed to
+/// `dispatch_window_message`.
+#[derive(Debug, Clone)]
+pub enum WindowMsg {
+    /// Resize event carrying the window id. Forwarded by the
+    /// `iced::window::resize_events()` subscription so the dispatcher
+    /// can drop non-main-window resizes before they touch
+    /// `ui_state.window_size`.
+    WindowResizedFor(iced::window::Id, f32, f32),
     /// Fired once `iced::window::open` completes for the initial main
     /// window — lets us stash the id so `view(id)` knows which window is
     /// the primary app shell versus a detached modal / undocked tab.
@@ -188,86 +278,6 @@ pub enum Message {
     MinimizeMainWindow,
     ToggleMaximizeMainWindow,
     CloseMainWindow,
-    /// Move Selection dialog family (ADR-0001 D3). Altium numeric
-    /// ΔX / ΔY move. Routed to `dispatch_move_selection_message`.
-    MoveSelection(MoveSelectionMsg),
-    /// Open the F5 Net Color palette.
-    OpenNetColorPalette,
-    CloseNetColorPalette,
-    /// Per-net colour overrides — namespaced (ADR-0001 D3).
-    NetColor(NetColorMsg),
-    /// Open the Parameter Manager dialog (bulk parameter editor).
-    OpenParameterManager,
-    CloseParameterManager,
-    /// Edit a single parameter on a single symbol via the manager.
-    ParameterManagerEdit {
-        symbol_uuid: uuid::Uuid,
-        key: String,
-        value: String,
-    },
-    /// Click on a pin-connection matrix cell: cycle its severity
-    /// Error → Warning → Info → Off → (back to baseline default).
-    PinMatrixCellCycled {
-        row: u8,
-        col: u8,
-    },
-    /// Cycle Altium's rubber-band selection mode
-    /// Inside → Outside → TouchingLine → Inside. Bound to Shift+S.
-    CycleSelectionMode,
-    /// Close the in-flight lasso polygon (Enter key). Commits the
-    /// selection if >= 3 vertices, otherwise cancels.
-    LassoCommit,
-    /// Apply an edit to a placed SchDrawing. Dispatched from the
-    /// post-placement Properties panel (Line / Rect / Circle / Arc /
-    /// Polygon editable rows). Engine replaces the stored drawing by
-    /// uuid with full undo.
-    UpdateDrawingField(uuid::Uuid, DrawingFieldEdit),
-    /// Export subsystem message family — namespaced (ADR-0001 D3).
-    /// PDF / netlist / BOM export lifecycle plus the export-error
-    /// modal dismiss. Routed to `dispatch_export_message`.
-    Export(ExportMsg),
-    /// BOM-preview modal — namespaced family (ADR-0001 D3). Routed to
-    /// `dispatch_bom_preview_message`.
-    BomPreview(BomPreviewMsg),
-    /// Print-preview modal — namespaced family (ADR-0001 D3). Routed to
-    /// `dispatch_print_preview_message`.
-    PrintPreview(PrintPreviewMsg),
-    /// v0.9 Library subsystem message — folded under one variant so
-    /// the dispatcher can route to `library_dispatch::handle` in one
-    /// shot. See `crate::library::LibraryMessage` for the inner
-    /// shape.
-    Library(crate::library::LibraryMessage),
-    /// Command-palette message family (ADR-0001 D3). Namespaced under
-    /// `Message::CommandPalette` and routed to
-    /// `dispatch_command_palette_message`.
-    CommandPalette(CommandPaletteMsg),
-    /// Async result of a per-file Git history load issued by the
-    /// right-dock History panel. `generation` is the value of
-    /// `DocumentState.history.generation` at the time the load was
-    /// kicked off; the handler discards stale results whose
-    /// generation no longer matches the current counter (the user
-    /// has switched tabs since). `path` is the file the load
-    /// targeted, surfaced for diagnostic logging only — the
-    /// generation token is the authoritative staleness check.
-    HistoryLoaded {
-        generation: u32,
-        path: std::path::PathBuf,
-        result: Result<Vec<signex_widgets::HistoryEntry>, String>,
-    },
-    /// v0.14.2 — keyboard shortcut for footprint editor mode switch.
-    /// Routed from the global `1` / `2` / `3` key handler in
-    /// `bootstrap.rs::subscription`. The dispatcher checks whether
-    /// the active tab is a footprint editor; if yes, sets the mode;
-    /// otherwise no-op so the keys don't steal text input on other
-    /// tabs.
-    FootprintModeShortcut(crate::library::editor::footprint::state::EditorMode),
-    /// v0.15 — Esc-key tool cancel routed through the dispatcher.
-    /// If the active tab is a footprint editor, fires
-    /// `FootprintToolEscape` (resets PadsTool + SketchTool +
-    /// tool_pending); otherwise falls back to the schematic
-    /// `Tool::Select` reset.
-    EscapePressed,
-    Noop,
 }
 
 /// Command-palette message family (ADR-0001 D3). Namespaced under

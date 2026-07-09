@@ -2575,9 +2575,9 @@ impl Signex {
             .padding([10, 14])
             .style(crate::styles::modal_header_strip(tokens)),
         )
-        .on_press(Message::StartDetachedWindowDrag(
+        .on_press(Message::Window(WindowMsg::StartDetachedWindowDrag(
             super::state::ModalId::MoveSelection,
-        ))
+        )))
         .interaction(iced::mouse::Interaction::Grab);
 
         let field = |label: &'static str, value: &str, msg: fn(String) -> Message| {
@@ -2727,9 +2727,9 @@ impl Signex {
             .padding([10, 14])
             .style(crate::styles::modal_header_strip(tokens)),
         )
-        .on_press(Message::StartDetachedWindowDrag(
+        .on_press(Message::Window(WindowMsg::StartDetachedWindowDrag(
             super::state::ModalId::NetColorPalette,
-        ))
+        )))
         .interaction(iced::mouse::Interaction::Grab);
 
         // Gather unique net labels from the active snapshot.
@@ -2893,9 +2893,9 @@ impl Signex {
             .padding([10, 14])
             .style(crate::styles::modal_header_strip(tokens)),
         )
-        .on_press(Message::StartDetachedWindowDrag(
+        .on_press(Message::Window(WindowMsg::StartDetachedWindowDrag(
             super::state::ModalId::ParameterManager,
-        ))
+        )))
         .interaction(iced::mouse::Interaction::Grab);
 
         // Collect all parameter keys across symbols (besides the built-
@@ -3364,16 +3364,21 @@ impl Signex {
         };
 
         let controls = row![
-            chrome_btn(h_min.clone(), Message::MinimizeMainWindow, hover_c, text_c),
+            chrome_btn(
+                h_min.clone(),
+                Message::Window(WindowMsg::MinimizeMainWindow),
+                hover_c,
+                text_c
+            ),
             chrome_btn(
                 h_max.clone(),
-                Message::ToggleMaximizeMainWindow,
+                Message::Window(WindowMsg::ToggleMaximizeMainWindow),
                 hover_c,
                 text_c,
             ),
             chrome_btn(
                 h_close.clone(),
-                Message::CloseMainWindow,
+                Message::Window(WindowMsg::CloseMainWindow),
                 close_hover,
                 Color::WHITE,
             ),
@@ -3461,8 +3466,8 @@ impl Signex {
                     .width(Length::Fill)
                     .height(Length::Fill),
             )
-            .on_press(Message::StartMainWindowDrag)
-            .on_double_click(Message::ToggleMaximizeMainWindow)
+            .on_press(Message::Window(WindowMsg::StartMainWindowDrag))
+            .on_double_click(Message::Window(WindowMsg::ToggleMaximizeMainWindow))
             .into()
         };
 
@@ -3523,7 +3528,7 @@ impl Signex {
                         .width(Length::Fill)
                         .height(Length::Fixed(MODAL_HEADER_HEIGHT))
                 )
-                .on_press(Message::StartDetachedWindowDrag(modal))
+                .on_press(Message::Window(WindowMsg::StartDetachedWindowDrag(modal)))
                 .interaction(iced::mouse::Interaction::Grab),
                 Space::new()
                     .width(Length::Fixed(MODAL_CLOSE_X_HIT_W))
@@ -3623,7 +3628,10 @@ impl Signex {
                 (Length::Fixed(EDGE), Length::Fill)
             };
             mouse_area(Space::new().width(w).height(h))
-                .on_press(Message::StartDetachedModalResize { modal, direction })
+                .on_press(Message::Window(WindowMsg::StartDetachedModalResize {
+                    modal,
+                    direction,
+                }))
                 .interaction(cursor)
                 .into()
         };
@@ -3633,7 +3641,10 @@ impl Signex {
                     .width(Length::Fixed(EDGE))
                     .height(Length::Fixed(EDGE)),
             )
-            .on_press(Message::StartDetachedModalResize { modal, direction })
+            .on_press(Message::Window(WindowMsg::StartDetachedModalResize {
+                modal,
+                direction,
+            }))
             .interaction(cursor)
             .into()
         };
@@ -4027,7 +4038,7 @@ impl Signex {
                     (Length::Fixed(EDGE), Length::Fill)
                 };
                 mouse_area(Space::new().width(w).height(h))
-                    .on_press(Message::StartMainWindowResize(direction))
+                    .on_press(Message::Window(WindowMsg::StartMainWindowResize(direction)))
                     .interaction(cursor)
                     .into()
             };
@@ -4038,7 +4049,7 @@ impl Signex {
                     .width(Length::Fixed(EDGE))
                     .height(Length::Fixed(EDGE)),
             )
-            .on_press(Message::StartMainWindowResize(direction))
+            .on_press(Message::Window(WindowMsg::StartMainWindowResize(direction)))
             .interaction(cursor)
             .into()
         };

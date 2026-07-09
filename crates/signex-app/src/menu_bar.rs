@@ -102,7 +102,7 @@ pub enum MenuMessage {
     ExportNetlist,
     ExportBom,
     /// File ▸ Exit — closes the main window via the same path as the
-    /// chrome ✕ button (`Message::CloseMainWindow`). Wired through
+    /// chrome ✕ button (`Message::Window(WindowMsg::CloseMainWindow)`). Wired through
     /// `handle_menu_file_command`.
     Exit,
     /// File ▸ Library ▸ Open Library… (v0.9 Phase 1).

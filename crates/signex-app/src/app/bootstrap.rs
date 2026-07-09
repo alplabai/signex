@@ -364,7 +364,7 @@ impl Signex {
             ..Default::default()
         });
         app.ui_state.main_window_id = Some(main_id);
-        let boot_task = open_task.map(Message::MainWindowOpened);
+        let boot_task = open_task.map(|id| Message::Window(WindowMsg::MainWindowOpened(id)));
         (app, boot_task)
     }
 
@@ -909,15 +909,16 @@ impl Signex {
         };
         // Window-close events from winit: routed so Phase 2/3 can drop
         // detached-modal / undocked-tab entries from ui_state.windows.
-        let window_close = iced::window::close_events().map(Message::SecondaryWindowClosed);
+        let window_close = iced::window::close_events()
+            .map(|id| Message::Window(WindowMsg::SecondaryWindowClosed(id)));
         // OS close requests (native close button, Alt+F4, taskbar close).
         // In daemon mode iced does NOT auto-close on these, so we route
         // them explicitly: the main window goes through the unsaved-
         // changes guard, any other window closes. Without this, an
         // Alt+F4 on a dirty main window would otherwise be silently
         // dropped (or, if iced ever auto-closed, lose unsaved edits).
-        let window_close_request =
-            iced::window::close_requests().map(Message::WindowCloseRequested);
+        let window_close_request = iced::window::close_requests()
+            .map(|id| Message::Window(WindowMsg::WindowCloseRequested(id)));
         // Window-resize subscription. `iced::event::listen()`'s
         // Window::Resized event doesn't fire on the very first frame —
         // subscribing to `window::resize_events()` directly gets the
@@ -929,8 +930,9 @@ impl Signex {
         // without the id would clobber `ui_state.window_size` with
         // e.g. the 420x240 size of the Move dialog, which then shifts
         // the Active-Bar dropdowns on the main window.
-        let window_resize = iced::window::resize_events()
-            .map(|(id, size)| Message::WindowResizedFor(id, size.width, size.height));
+        let window_resize = iced::window::resize_events().map(|(id, size)| {
+            Message::Window(WindowMsg::WindowResizedFor(id, size.width, size.height))
+        });
 
         // Hover-open timer for the right-click context-menu submenus.
         // Active while ANY menu that owns submenus is open — canvas
