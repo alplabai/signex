@@ -112,12 +112,6 @@ pub enum Message {
     /// Parameter Manager dialog family (ADR-0001 D3). Bulk parameter
     /// editor. Routed to `dispatch_parameter_manager_message`.
     ParameterManager(ParameterManagerMsg),
-    /// Click on a pin-connection matrix cell: cycle its severity
-    /// Error → Warning → Info → Off → (back to baseline default).
-    PinMatrixCellCycled {
-        row: u8,
-        col: u8,
-    },
     /// Cycle Altium's rubber-band selection mode
     /// Inside → Outside → TouchingLine → Inside. Bound to Shift+S.
     CycleSelectionMode,
@@ -654,6 +648,9 @@ pub enum ErcMsg {
     CloseDialog,
     /// Override the severity for a single rule from within the ERC dialog.
     SeverityChanged(signex_erc::RuleKind, signex_erc::Severity),
+    /// Click on a pin-connection matrix cell: cycle its severity
+    /// Error → Warning → Info → Off → (back to baseline default).
+    PinMatrixCellCycled { row: u8, col: u8 },
 }
 
 /// Preferences modal message family (ADR-0001 D3). Namespaced under

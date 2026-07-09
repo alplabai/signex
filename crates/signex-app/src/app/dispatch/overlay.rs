@@ -327,6 +327,87 @@ impl Signex {
             ErcMsg::OpenDialog => self.handle_open_erc_dialog(),
             ErcMsg::CloseDialog => self.handle_close_erc_dialog(),
             ErcMsg::SeverityChanged(rule, sev) => self.handle_erc_severity_changed(rule, sev),
+            ErcMsg::PinMatrixCellCycled { row, col } => {
+                use signex_erc::Severity;
+                // Baseline defaults must match the `MATRIX` constant in
+                // `pin_matrix_view` so "clearing" an override drops back
+                // to the same severity the user sees in the UI.
+                const BASELINE: [[Severity; 6]; 6] = [
+                    [
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Off,
+                    ],
+                    [
+                        Severity::Off,
+                        Severity::Error,
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Error,
+                        Severity::Error,
+                    ],
+                    [
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Warning,
+                    ],
+                    [
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Error,
+                    ],
+                    [
+                        Severity::Off,
+                        Severity::Error,
+                        Severity::Off,
+                        Severity::Off,
+                        Severity::Error,
+                        Severity::Error,
+                    ],
+                    [
+                        Severity::Off,
+                        Severity::Error,
+                        Severity::Warning,
+                        Severity::Error,
+                        Severity::Error,
+                        Severity::Off,
+                    ],
+                ];
+                let key = (row, col);
+                let baseline = BASELINE
+                    .get(row as usize)
+                    .and_then(|r| r.get(col as usize))
+                    .copied()
+                    .unwrap_or(Severity::Off);
+                let current = self
+                    .ui_state
+                    .pin_matrix_overrides
+                    .get(&key)
+                    .copied()
+                    .unwrap_or(baseline);
+                let next = match current {
+                    Severity::Error => Severity::Warning,
+                    Severity::Warning => Severity::Info,
+                    Severity::Info => Severity::Off,
+                    Severity::Off => Severity::Error,
+                };
+                if next == baseline {
+                    self.ui_state.pin_matrix_overrides.remove(&key);
+                } else {
+                    self.ui_state.pin_matrix_overrides.insert(key, next);
+                }
+                crate::fonts::write_pin_matrix_overrides(&self.ui_state.pin_matrix_overrides);
+                Task::none()
+            }
         }
     }
 
