@@ -47,9 +47,15 @@ expression = "ISC AND MIT AND OpenSSL"
 license-files = [{ path = "LICENSE", hash = 0xbd0eed23 }]
 
 [bans]
-# No banned crates yet, but the section is here so additions are easy.
+# `multiple-versions` stays "warn": the ~60 remaining duplicates are all
+# transitive GUI-stack deps pinned by iced/winit/image with no clean remedy.
+# Flipping to "deny" needs an enumerated `skip` list for those, generated and
+# verified with cargo-deny locally — tracked as CI hardening.
 multiple-versions = "warn"
-deny = []
+# `glyphon` was removed when signex-gfx moved onto iced's wgpu 27 + the
+# cryoglyph text shaper; re-adding it would relink a second wgpu/naga/
+# cosmic-text stack, so it is banned outright as a regression guard.
+deny = [{ name = "glyphon" }]
 
 [advisories]
 # Surface RUSTSEC advisories at "warn" — security advisories are

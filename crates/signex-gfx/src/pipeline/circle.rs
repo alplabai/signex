@@ -29,8 +29,8 @@ impl CirclePipeline {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("signex_gfx_circle_pipeline_layout"),
-            bind_group_layouts: &[Some(camera_bind_group_layout)],
-            immediate_size: 0,
+            bind_group_layouts: &[camera_bind_group_layout],
+            push_constant_ranges: &[],
         });
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -88,7 +88,7 @@ impl CirclePipeline {
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
-            multiview_mask: None,
+            multiview: None,
             cache: None,
         });
 
