@@ -70,6 +70,30 @@ impl Signex {
         }
     }
 
+    /// Move Selection dialog family handler (namespaced, ADR-0001 D3).
+    /// Altium numeric ΔX / ΔY move on the current selection.
+    pub(crate) fn dispatch_move_selection_message(
+        &mut self,
+        msg: MoveSelectionMsg,
+    ) -> Task<Message> {
+        match msg {
+            MoveSelectionMsg::Open => self.handle_open_move_selection_dialog(),
+            MoveSelectionMsg::Close => {
+                let _ = self.handle_close_move_selection_dialog();
+                self.close_detached_modal(super::state::ModalId::MoveSelection)
+            }
+            MoveSelectionMsg::DxChanged(s) => {
+                self.ui_state.move_selection.dx = s;
+                Task::none()
+            }
+            MoveSelectionMsg::DyChanged(s) => {
+                self.ui_state.move_selection.dy = s;
+                Task::none()
+            }
+            MoveSelectionMsg::Apply => self.handle_move_selection_apply(),
+        }
+    }
+
     /// Context-menu subsystem handler (canvas / project-tree / tab menus +
     /// submenu hover state machine), namespaced (ADR-0001 D3).
     pub(crate) fn dispatch_context_menu_message(&mut self, msg: ContextMenuMsg) -> Task<Message> {

@@ -321,20 +321,7 @@ impl Signex {
                     iced::window::close(id)
                 }
             }
-            Message::OpenMoveSelectionDialog => self.handle_open_move_selection_dialog(),
-            Message::CloseMoveSelectionDialog => {
-                let _ = self.handle_close_move_selection_dialog();
-                self.close_detached_modal(super::state::ModalId::MoveSelection)
-            }
-            Message::MoveSelectionDxChanged(s) => {
-                self.ui_state.move_selection.dx = s;
-                Task::none()
-            }
-            Message::MoveSelectionDyChanged(s) => {
-                self.ui_state.move_selection.dy = s;
-                Task::none()
-            }
-            Message::MoveSelectionApply => self.handle_move_selection_apply(),
+            Message::MoveSelection(msg) => self.dispatch_move_selection_message(msg),
             Message::OpenNetColorPalette => {
                 self.ui_state.net_color_palette_open = true;
                 self.handle_detach_modal(super::state::ModalId::NetColorPalette)

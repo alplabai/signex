@@ -188,14 +188,9 @@ pub enum Message {
     MinimizeMainWindow,
     ToggleMaximizeMainWindow,
     CloseMainWindow,
-    /// Open the Move Selection dialog (Altium numeric ΔX / ΔY move).
-    OpenMoveSelectionDialog,
-    CloseMoveSelectionDialog,
-    MoveSelectionDxChanged(String),
-    MoveSelectionDyChanged(String),
-    /// Apply the current ΔX / ΔY to every selected item. Closes the
-    /// dialog on success.
-    MoveSelectionApply,
+    /// Move Selection dialog family (ADR-0001 D3). Altium numeric
+    /// ΔX / ΔY move. Routed to `dispatch_move_selection_message`.
+    MoveSelection(MoveSelectionMsg),
     /// Open the F5 Net Color palette.
     OpenNetColorPalette,
     CloseNetColorPalette,
@@ -391,6 +386,23 @@ pub enum UiMsg {
     /// Status-bar request (unit / grid / snap toggles, panel list,
     /// properties). Kept as its own sub-enum in `StatusBarRequest`.
     StatusBar(StatusBarRequest),
+}
+
+/// Move Selection dialog message family (ADR-0001 D3). Namespaced under
+/// `Message::MoveSelection` and routed to `dispatch_move_selection_message`.
+#[derive(Debug, Clone)]
+pub enum MoveSelectionMsg {
+    /// Open the Move Selection dialog (Altium numeric ΔX / ΔY move).
+    Open,
+    /// Close the dialog without applying.
+    Close,
+    /// ΔX text-field edit.
+    DxChanged(String),
+    /// ΔY text-field edit.
+    DyChanged(String),
+    /// Apply the current ΔX / ΔY to every selected item. Closes the
+    /// dialog on success.
+    Apply,
 }
 
 /// BOM-preview modal message family (ADR-0001 D3). Namespaced under

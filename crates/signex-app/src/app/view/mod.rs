@@ -2568,7 +2568,7 @@ impl Signex {
                 row![
                     text("Move Selection").size(14).color(text_c),
                     Space::new().width(iced::Length::Fill),
-                    self.view_close_x(Message::CloseMoveSelectionDialog),
+                    self.view_close_x(Message::MoveSelection(MoveSelectionMsg::Close)),
                 ]
                 .align_y(iced::Alignment::Center),
             )
@@ -2598,9 +2598,13 @@ impl Signex {
                     .color(text_muted),
                 Space::new().height(12),
                 row![
-                    field("ΔX (mm)", &ms.dx, Message::MoveSelectionDxChanged),
+                    field("ΔX (mm)", &ms.dx, |s| {
+                        Message::MoveSelection(MoveSelectionMsg::DxChanged(s))
+                    }),
                     Space::new().width(14),
-                    field("ΔY (mm)", &ms.dy, Message::MoveSelectionDyChanged),
+                    field("ΔY (mm)", &ms.dy, |s| {
+                        Message::MoveSelection(MoveSelectionMsg::DyChanged(s))
+                    }),
                 ]
                 .align_y(iced::Alignment::Start),
             ]
@@ -2631,14 +2635,14 @@ impl Signex {
                 ..iced::widget::button::Style::default()
             });
         if ok_enabled {
-            ok_btn = ok_btn.on_press(Message::MoveSelectionApply);
+            ok_btn = ok_btn.on_press(Message::MoveSelection(MoveSelectionMsg::Apply));
         }
 
         let footer = container(
             row![
                 Space::new().width(iced::Length::Fill),
                 button(container(text("Cancel").size(11).color(text_c)).padding([4, 14]))
-                    .on_press(Message::CloseMoveSelectionDialog)
+                    .on_press(Message::MoveSelection(MoveSelectionMsg::Close))
                     .style(move |_: &iced::Theme, _| iced::widget::button::Style {
                         background: Some(iced::Background::Color(iced::Color::from_rgba(
                             1.0, 1.0, 1.0, 0.04

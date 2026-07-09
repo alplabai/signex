@@ -287,7 +287,7 @@ impl Signex {
             // Selection dialog (numeric ΔX / ΔY apply to every
             // selected item through Command::MoveSelection).
             ActiveBarAction::MoveSelection | ActiveBarAction::MoveSelectionXY => {
-                self.update(Message::OpenMoveSelectionDialog)
+                self.update(Message::MoveSelection(MoveSelectionMsg::Open))
             }
             ActiveBarAction::AlignLeft
             | ActiveBarAction::AlignRight
