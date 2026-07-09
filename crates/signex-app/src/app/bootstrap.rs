@@ -2,6 +2,7 @@ use iced::Subscription;
 
 use crate::canvas::SchematicCanvas;
 use crate::dock::{DockArea, PanelPosition};
+use crate::keymap::KeyStroke;
 use crate::panels::PanelKind;
 
 use super::*;
@@ -85,6 +86,16 @@ impl Signex {
             standard_libraries.insert(0, helpers::ALL_LIBRARIES.to_string());
         }
 
+        // Keyboard shortcut profiles: prefer the user's saved set from
+        // the OS config dir, else fall back to the bundled Altium /
+        // Classic built-ins (which must always parse). The active
+        // profile is compiled once here into a fast lookup table.
+        let keymap_profiles = crate::keymap::load_profile_set().unwrap_or_else(|_| {
+            crate::keymap::ShortcutProfileSet::built_ins()
+                .expect("bundled keyboard shortcut profiles must parse")
+        });
+        let active_keymap = keymap_profiles.compile_active();
+
         let mut app = Self {
             ui_state: UiState {
                 // Persisted user-toggleable state (UX §1.5). Reads
@@ -103,6 +114,9 @@ impl Signex {
                 ui_font_name: crate::fonts::read_ui_font_pref(),
                 component_classes: crate::fonts::read_component_classes_pref(),
                 preferences_draft_component_classes: crate::fonts::read_component_classes_pref(),
+                keymap_profiles,
+                active_keymap,
+                keymap_pending_sequence: Vec::new(),
                 canvas_font_name: crate::fonts::DEFAULT_CANVAS_FONT.to_string(),
                 canvas_font_size: 11.0,
                 canvas_font_bold: false,
@@ -528,69 +542,17 @@ impl Signex {
                                 _ => Message::Noop,
                             };
                         }
+                        // v0.19 keymap migration: per-key tool / command
+                        // shortcuts now come from the active profile (see
+                        // `dispatch::keymap`). Only keys that can't be
+                        // profile-driven stay hardcoded here: the modal-close
+                        // Esc ladder and F1 (they depend on which modal is
+                        // open — subscription state, not the profile), and
+                        // the Ctrl/Alt+1-8 selection-memory chords (they
+                        // carry the digit as data the profile can't express).
+                        // Everything else is forwarded to the keymap resolver
+                        // in `update`.
                         match (key.as_ref(), m) {
-                            (keyboard::Key::Character(c), m) if c == "q" && m.command() => {
-                                Message::Ui(UiMsg::UnitCycled)
-                            }
-                            (keyboard::Key::Character(c), m)
-                                if c == "g" && !m.command() && !m.shift() =>
-                            {
-                                // v0.18.10 — Altium parity: G opens the
-                                // grid picker popup. Footprint editor
-                                // wires it to set the snap step;
-                                // schematic / PCB tabs ignore (the
-                                // dispatcher's context check no-ops).
-                                Message::Ui(UiMsg::GridPickerOpen)
-                            }
-                            (keyboard::Key::Character(c), m)
-                                if c == "g" && m.command() && !m.shift() =>
-                            {
-                                // v0.18.11 — Ctrl+G opens the Cartesian
-                                // Grid Editor modal (Step X / Y, link
-                                // toggle, Apply / Cancel). Matched
-                                // before the Shift+Ctrl+G `GridToggle`
-                                // arm — guards don't overlap (`!m.shift()`
-                                // vs `m.shift()`).
-                                Message::GridProperties(GridPropertiesMsg::Open)
-                            }
-                            (keyboard::Key::Character(c), m) if c == "w" && !m.command() => {
-                                Message::Tool(ToolMessage::SelectTool(Tool::Wire))
-                            }
-                            (keyboard::Key::Character(c), m) if c == "b" && !m.command() => {
-                                Message::Tool(ToolMessage::SelectTool(Tool::Bus))
-                            }
-                            (keyboard::Key::Character(c), m) if c == "l" && !m.command() => {
-                                Message::Tool(ToolMessage::SelectTool(Tool::Label))
-                            }
-                            (keyboard::Key::Character(c), m) if c == "p" && !m.command() => {
-                                Message::Tool(ToolMessage::SelectTool(Tool::Component))
-                            }
-                            // Ctrl+P: Print Preview
-                            (keyboard::Key::Character(c), m)
-                                if c == "p" && m.command() && !m.shift() =>
-                            {
-                                Message::PrintPreview(PrintPreviewMsg::Requested)
-                            }
-                            // Ctrl+Shift+P: open command palette (VS Code parity).
-                            // Export PDF stays reachable via File ▸ Export ▸ PDF…
-                            // Accept both "p" and "P" — iced/winit delivers
-                            // either depending on platform when Ctrl+Shift
-                            // suppress the shift-uppercase transform.
-                            (keyboard::Key::Character(c), m)
-                                if c.eq_ignore_ascii_case("p") && m.command() && m.shift() =>
-                            {
-                                Message::CommandPalette(CommandPaletteMsg::Open)
-                            }
-                            // Ctrl+, open Preferences
-                            (keyboard::Key::Character(c), m) if c == "," && m.command() => {
-                                Message::Preferences(PreferencesMsg::Open)
-                            }
-                            (keyboard::Key::Character(c), m) if c == "f" && m.command() => {
-                                Message::Overlay(OverlayMsg::OpenFind)
-                            }
-                            (keyboard::Key::Character(c), m) if c == "h" && m.command() => {
-                                Message::Overlay(OverlayMsg::OpenReplace)
-                            }
                             (keyboard::Key::Named(keyboard::key::Named::Escape), _)
                                 if find_replace_open =>
                             {
@@ -662,9 +624,6 @@ impl Signex {
                                 // Tool::Select reset otherwise.
                                 Message::EscapePressed
                             }
-                            (keyboard::Key::Named(keyboard::key::Named::Home), _) => {
-                                Message::CanvasEvent(CanvasEvent::FitAll)
-                            }
                             (keyboard::Key::Named(keyboard::key::Named::F1), _) => {
                                 // F1 toggles: open if closed, close if open.
                                 if kbd_shortcuts_open {
@@ -673,113 +632,14 @@ impl Signex {
                                     Message::Menu(MenuMessage::OpenKeyboardShortcuts)
                                 }
                             }
-                            (keyboard::Key::Named(keyboard::key::Named::F8), _) => {
-                                Message::Erc(ErcMsg::Run)
-                            }
-                            (keyboard::Key::Named(keyboard::key::Named::F9), _) => {
-                                Message::Overlay(OverlayMsg::ToggleAutoFocus)
-                            }
-                            // F5: Net color palette (Altium convention).
-                            (keyboard::Key::Named(keyboard::key::Named::F5), _) => {
-                                Message::NetColor(NetColorMsg::Open)
-                            }
-                            // Shift+S: cycle rubber-band selection mode
-                            // (Inside → Outside → TouchingLine).
-                            (keyboard::Key::Character(c), m)
-                                if c == "S" && m.shift() && !m.command() =>
-                            {
-                                Message::CycleSelectionMode
-                            }
-                            // Enter also closes the in-flight lasso (in
-                            // addition to a second canvas click). Useful
-                            // when the user's cursor is somewhere they'd
-                            // rather not drop a final vertex.
-                            (keyboard::Key::Named(keyboard::key::Named::Enter), _) => {
-                                Message::LassoCommit
-                            }
-                            // Shift+Alt+A: reset and renumber. Must come
-                            // before the plain Alt+A arm — with Shift held
-                            // iced delivers the uppercase character, so the
-                            // comparison is case-insensitive.
-                            (keyboard::Key::Character(c), m)
-                                if c.eq_ignore_ascii_case("a") && m.alt() && m.shift() =>
-                            {
-                                Message::Annotate(AnnotateMsg::Run(
-                                    signex_engine::AnnotateMode::ResetAndRenumber,
-                                ))
-                            }
-                            // Alt+A: annotate (Altium convention, incremental)
-                            (keyboard::Key::Character(c), m)
-                                if c.eq_ignore_ascii_case("a") && m.alt() && !m.shift() =>
-                            {
-                                Message::Annotate(AnnotateMsg::Run(
-                                    signex_engine::AnnotateMode::Incremental,
-                                ))
-                            }
-                            // Delete selected
-                            (keyboard::Key::Named(keyboard::key::Named::Delete), _) => {
-                                Message::Edit(EditMsg::DeleteSelected)
-                            }
-                            // Undo/Redo
-                            (keyboard::Key::Character(c), m)
-                                if c == "z" && m.command() && !m.shift() =>
-                            {
-                                Message::Edit(EditMsg::Undo)
-                            }
-                            (keyboard::Key::Character(c), m) if c == "y" && m.command() => {
-                                Message::Edit(EditMsg::Redo)
-                            }
-                            (keyboard::Key::Character(c), m)
-                                if c.eq_ignore_ascii_case("z") && m.command() && m.shift() =>
-                            {
-                                Message::Edit(EditMsg::Redo)
-                            }
-                            // Shift+Space: cycle draw mode (90-degree -> 45-degree -> Free)
-                            (keyboard::Key::Named(keyboard::key::Named::Space), m) if m.shift() => {
-                                Message::Tool(ToolMessage::CycleDrawMode)
-                            }
-                            // Space: rotate selected symbol (Altium convention)
-                            (keyboard::Key::Named(keyboard::key::Named::Space), _) => {
-                                Message::Edit(EditMsg::RotateSelected)
-                            }
-                            // Mirror: X key = horizontal flip (left-right) = Standard mirror_y
-                            //         Y key = vertical flip (top-bottom) = Standard mirror_x
-                            (keyboard::Key::Character(c), m) if c == "x" && !m.command() => {
-                                Message::Edit(EditMsg::MirrorSelectedY) // X key = horizontal flip = toggle mirror_y
-                            }
-                            (keyboard::Key::Character(c), m) if c == "y" && !m.command() => {
-                                Message::Edit(EditMsg::MirrorSelectedX) // Y key = vertical flip = toggle mirror_x
-                            }
-                            // Ctrl+S save
-                            (keyboard::Key::Character(c), m) if c == "s" && m.command() => {
-                                Message::File(FileMsg::Save)
-                            }
-                            // v0.14.2 — footprint editor mode shortcuts.
-                            // 1 = Sketch, 2 = Pads, 3 = 3D View. The
-                            // dispatcher gates on "active tab is a
-                            // footprint editor" so the bare digits
-                            // don't steal text input on other tabs.
-                            (keyboard::Key::Character(c), m) if c == "1" && !m.command() && !m.alt() => {
-                                use crate::library::editor::footprint::state::EditorMode;
-                                Message::FootprintModeShortcut(EditorMode::Sketch)
-                            }
-                            (keyboard::Key::Character(c), m) if c == "2" && !m.command() && !m.alt() => {
-                                use crate::library::editor::footprint::state::EditorMode;
-                                Message::FootprintModeShortcut(EditorMode::Normal)
-                            }
-                            (keyboard::Key::Character(c), m) if c == "3" && !m.command() && !m.alt() => {
-                                use crate::library::editor::footprint::state::EditorMode;
-                                Message::FootprintModeShortcut(EditorMode::View3d)
-                            }
-                            // Ctrl+A select all
-                            (keyboard::Key::Character(c), m) if c == "a" && m.command() => {
-                                Message::Selection(selection_request::SelectionRequest::SelectAll)
-                            }
                             // Ctrl+1-8 store selection memory, Alt+1-8 recall
-                            // selection memory. The `is_some` guard is load-
-                            // bearing: without it this arm matched EVERY
-                            // Ctrl/Alt chord and returned Noop, shadowing the
-                            // Ctrl+C/X/V/D and Shift+Ctrl+V/G arms below.
+                            // selection memory. These carry the digit as data
+                            // the profile format can't express, so they stay
+                            // hardcoded. The `is_some` guard is load-bearing
+                            // (#127): without it this arm matched EVERY
+                            // Ctrl/Alt chord and returned Noop, which would
+                            // shadow Ctrl+C/X/V/D before they reach the keymap
+                            // resolver below.
                             (keyboard::Key::Character(c), m)
                                 if m.command() && !m.alt() && selection_slot_from_key(c).is_some() =>
                             {
@@ -800,38 +660,15 @@ impl Signex {
                                     _ => Message::Noop,
                                 }
                             }
-                            // Ctrl+C copy, Ctrl+X cut
-                            (keyboard::Key::Character(c), m) if c == "c" && m.command() => {
-                                Message::Edit(EditMsg::Copy)
-                            }
-                            (keyboard::Key::Character(c), m) if c == "x" && m.command() => {
-                                Message::Edit(EditMsg::Cut)
-                            }
-                            // Shift+Ctrl+V smart paste
-                            (keyboard::Key::Character(c), m)
-                                if c.eq_ignore_ascii_case("v") && m.command() && m.shift() =>
-                            {
-                                Message::Edit(EditMsg::SmartPaste)
-                            }
-                            // Ctrl+V paste
-                            (keyboard::Key::Character(c), m) if c == "v" && m.command() => {
-                                Message::Edit(EditMsg::Paste)
-                            }
-                            // Ctrl+D duplicate
-                            (keyboard::Key::Character(c), m) if c == "d" && m.command() => {
-                                Message::Edit(EditMsg::Duplicate)
-                            }
-                            // Shift+Ctrl+G -- toggle grid visibility
-                            (keyboard::Key::Character(c), m)
-                                if c.eq_ignore_ascii_case("g") && m.command() && m.shift() =>
-                            {
-                                Message::Ui(UiMsg::GridToggle)
-                            }
-                            // Tab -- pre-placement properties (only during active tool)
-                            (keyboard::Key::Named(keyboard::key::Named::Tab), _) => {
-                                Message::Tool(ToolMessage::PrePlacementTab)
-                            }
-                            _ => Message::Noop,
+                            // Everything else routes through the active
+                            // keymap: forward the raw stroke, resolved in
+                            // `update` where the multi-stroke chord buffer
+                            // lives in `UiState` (sound across windows). A
+                            // stroke iced can't express as a `KeyStroke`
+                            // (e.g. a bare modifier press) is ignored here.
+                            _ => KeyStroke::from_iced(&key, m)
+                                .map(|stroke| Message::Ui(UiMsg::KeymapStroke(stroke)))
+                                .unwrap_or(Message::Noop),
                         }
                     }
                     _ => Message::Noop,

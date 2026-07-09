@@ -136,6 +136,12 @@ impl Signex {
             UiMsg::StatusBar(StatusBarRequest::OpenPropertiesForSelection) => {
                 self.handle_menu_message(MenuMessage::OpenPropertiesPanel)
             }
+            UiMsg::ToggleSnapHotspots => {
+                self.ui_state.snap_hotspots = !self.ui_state.snap_hotspots;
+                self.document_state.panel_ctx.snap_hotspots = self.ui_state.snap_hotspots;
+                self.finish_update()
+            }
+            UiMsg::KeymapStroke(stroke) => self.resolve_keymap_stroke(stroke),
         }
     }
 

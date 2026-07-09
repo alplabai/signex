@@ -4,6 +4,7 @@ use super::*;
 
 mod command_palette;
 mod document;
+mod keymap;
 pub(crate) mod library;
 mod overlay;
 mod text_edit;

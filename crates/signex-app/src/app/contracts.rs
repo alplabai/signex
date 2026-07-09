@@ -382,6 +382,16 @@ pub enum UiMsg {
     /// Status-bar request (unit / grid / snap toggles, panel list,
     /// properties). Kept as its own sub-enum in `StatusBarRequest`.
     StatusBar(StatusBarRequest),
+    /// Toggle electrical-hotspot snapping (the keymap's
+    /// `toggle_electrical_grid` command). Namespaced here rather than as
+    /// a flat root variant, per ADR-0001 D3.
+    ToggleSnapHotspots,
+    /// A raw keystroke forwarded from the keyboard subscription for
+    /// keymap resolution. Multi-stroke chords are accumulated in
+    /// `UiState::keymap_pending_sequence` and resolved here in `update`
+    /// (where `&mut self` is available), which keeps the chord buffer
+    /// out of a process-global static.
+    KeymapStroke(crate::keymap::KeyStroke),
 }
 
 /// Move Selection dialog message family (ADR-0001 D3). Namespaced under

@@ -44,6 +44,19 @@ pub struct UiState {
     /// semantics — mutated as the user edits, copied back into
     /// `component_classes` + persisted on Save.
     pub preferences_draft_component_classes: Vec<crate::fonts::ComponentClassEntry>,
+    /// Loaded keyboard-shortcut profiles (bundled Altium / Classic
+    /// built-ins plus any user profile in the OS config dir). Drives
+    /// shortcut dispatch and the Help ▸ Keyboard Shortcuts reference.
+    pub keymap_profiles: crate::keymap::ShortcutProfileSet,
+    /// Active profile compiled to a fast key-sequence → command lookup.
+    /// Rebuilt whenever the active profile changes.
+    pub active_keymap: crate::keymap::CompiledKeymap,
+    /// Pending multi-stroke chord buffer (e.g. Altium's `P W`). Lives in
+    /// `UiState` rather than a process-global static so chords resolve in
+    /// `update` under `&mut self` — sound across multiple windows. The
+    /// resolver clears it on a match, a definite miss, or via the
+    /// single-stroke restart retry.
+    pub keymap_pending_sequence: Vec<crate::keymap::KeyStroke>,
     pub canvas_font_name: String,
     pub canvas_font_size: f32,
     pub canvas_font_bold: bool,
@@ -61,9 +74,9 @@ pub struct UiState {
     pub main_window_scale: f32,
     pub panel_list_open: bool,
     pub preferences_open: bool,
-    /// Help ▸ Keyboard Shortcuts modal — flat reference table over
-    /// every binding registered in `crate::shortcuts::SHORTCUTS`.
-    /// Toggled from the Help menu and from F1.
+    /// Help ▸ Keyboard Shortcuts modal — reference table over the
+    /// active keyboard-shortcut profile. Toggled from the Help menu
+    /// and from F1.
     pub keyboard_shortcuts_open: bool,
     /// First-run tour overlay — a single dismissible card shown only
     /// before the user has dismissed it once. Initial value is read
