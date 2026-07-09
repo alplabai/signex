@@ -434,7 +434,14 @@ impl Signex {
                         )
                     })
                     .collect(),
-                snapshot.paper_size.clone(),
+                // Older documents may carry an empty paper_size (serde
+                // default); normalize so the Page Options selector and the
+                // drawn sheet agree on the effective A4 fallback.
+                if snapshot.paper_size.is_empty() {
+                    "A4".to_string()
+                } else {
+                    snapshot.paper_size.clone()
+                },
             )
         } else if let Some(snapshot) = self.active_pcb_snapshot() {
             (
@@ -470,5 +477,12 @@ impl Signex {
         self.document_state.panel_ctx.lib_symbol_names = document_summary.5;
         self.document_state.panel_ctx.placed_symbols = document_summary.6;
         self.document_state.panel_ctx.paper_size = document_summary.7;
+
+        // Drive the drawn sheet from the (re)loaded document's paper size —
+        // without this the canvas keeps the previous tab's dimensions and the
+        // sheet rectangle stops matching the stored A-series format.
+        if self.has_active_schematic() {
+            self.apply_page_dimensions_to_canvas();
+        }
     }
 }

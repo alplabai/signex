@@ -1017,6 +1017,19 @@ impl Engine {
                 self.record_history(before, patch_pair);
                 Ok(CommandResult::changed(patch_pair))
             }
+            Command::SetPaperSize { paper_size } => {
+                if self.document.paper_size == paper_size {
+                    return Ok(CommandResult::unchanged());
+                }
+                self.document.paper_size = paper_size;
+
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::StyleUpdated,
+                    document: DocumentPatch::PAPER,
+                };
+                self.record_history(before, patch_pair);
+                Ok(CommandResult::changed(patch_pair))
+            }
         }
     }
 
@@ -1271,5 +1284,36 @@ mod tests {
         assert_eq!(moved.rotation, 180.0);
         assert_eq!(moved.position.y, 20.0 + GRID_MM);
         assert!(moved.user_moved);
+    }
+
+    #[test]
+    fn set_paper_size_persists_no_ops_and_undoes() {
+        let mut engine = Engine::new(test_sheet()).expect("engine");
+        assert_eq!(engine.document().paper_size, "A4");
+
+        // Change is applied, patched as PAPER, and recorded in history.
+        let result = engine
+            .execute(Command::SetPaperSize {
+                paper_size: "A3".to_string(),
+            })
+            .expect("set paper size");
+        assert!(result.changed);
+        assert_eq!(
+            result.patch_pair.expect("patch").document,
+            DocumentPatch::PAPER
+        );
+        assert_eq!(engine.document().paper_size, "A3");
+
+        // Same value again is a no-op (no history garbage).
+        let result = engine
+            .execute(Command::SetPaperSize {
+                paper_size: "A3".to_string(),
+            })
+            .expect("no-op set");
+        assert!(!result.changed);
+
+        // Undo restores the previous format.
+        engine.undo().expect("undo");
+        assert_eq!(engine.document().paper_size, "A4");
     }
 }

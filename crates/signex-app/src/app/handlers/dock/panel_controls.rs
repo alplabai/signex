@@ -4,8 +4,10 @@ use super::super::super::*;
 
 impl Signex {
     /// Push the effective paper dimensions from PanelContext into the canvas so
-    /// the background / grid track Page Options changes immediately.
-    fn apply_page_dimensions_to_canvas(&mut self) {
+    /// the background / grid track Page Options changes immediately. Also
+    /// called from the document-load path so an opened sheet's stored paper
+    /// size drives the drawn sheet, not the previous tab's leftovers.
+    pub(crate) fn apply_page_dimensions_to_canvas(&mut self) {
         let ctx = &self.document_state.panel_ctx;
         let (w, h) = match ctx.page_format_mode {
             crate::panels::PageFormatMode::Custom => (ctx.custom_paper_w_mm, ctx.custom_paper_h_mm),
@@ -352,6 +354,15 @@ impl Signex {
             crate::panels::PanelMsg::SetPaperSize(size) => {
                 self.document_state.panel_ctx.paper_size = size.clone();
                 self.apply_page_dimensions_to_canvas();
+                // Persist into the document (SchematicSheet.paper_size) so the
+                // choice survives save/reopen; undoable like any other edit.
+                self.apply_engine_command(
+                    signex_engine::Command::SetPaperSize {
+                        paper_size: size.clone(),
+                    },
+                    false,
+                    false,
+                );
             }
             crate::panels::PanelMsg::SetPageOrigin(origin) => {
                 self.document_state.panel_ctx.page_origin = *origin;

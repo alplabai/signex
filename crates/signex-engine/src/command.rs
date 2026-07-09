@@ -59,6 +59,7 @@ pub enum CommandKind {
     MoveSymbolAbsolute,
     ReorderObjects,
     ReconcileChildSheetPins,
+    SetPaperSize,
 }
 
 #[derive(Debug, Clone)]
@@ -208,6 +209,12 @@ pub enum Command {
         child_filename: String,
         ports: Vec<SheetPort>,
     },
+    /// Set the sheet's paper size (a named format like "A4"/"A3" — the
+    /// Page Options panel is the producer). Persists through
+    /// `SchematicSheet.paper_size` and is undoable like any other edit.
+    SetPaperSize {
+        paper_size: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -265,6 +272,7 @@ impl Command {
             Command::MoveSymbolAbsolute { .. } => CommandKind::MoveSymbolAbsolute,
             Command::ReorderObjects { .. } => CommandKind::ReorderObjects,
             Command::ReconcileChildSheetPins { .. } => CommandKind::ReconcileChildSheetPins,
+            Command::SetPaperSize { .. } => CommandKind::SetPaperSize,
         }
     }
 }
