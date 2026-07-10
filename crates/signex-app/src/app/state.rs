@@ -44,6 +44,19 @@ pub struct UiState {
     /// semantics — mutated as the user edits, copied back into
     /// `component_classes` + persisted on Save.
     pub preferences_draft_component_classes: Vec<crate::fonts::ComponentClassEntry>,
+    /// Loaded keyboard-shortcut profiles (bundled Altium / Classic
+    /// built-ins plus any user profile in the OS config dir). Drives
+    /// shortcut dispatch and the Help ▸ Keyboard Shortcuts reference.
+    pub keymap_profiles: crate::keymap::ShortcutProfileSet,
+    /// Active profile compiled to a fast key-sequence → command lookup.
+    /// Rebuilt whenever the active profile changes.
+    pub active_keymap: crate::keymap::CompiledKeymap,
+    /// Pending multi-stroke chord buffer (e.g. Altium's `P W`). Lives in
+    /// `UiState` rather than a process-global static so chords resolve in
+    /// `update` under `&mut self` — sound across multiple windows. The
+    /// resolver clears it on a match, a definite miss, or via the
+    /// single-stroke restart retry.
+    pub keymap_pending_sequence: Vec<crate::keymap::KeyStroke>,
     pub canvas_font_name: String,
     pub canvas_font_size: f32,
     pub canvas_font_bold: bool,
@@ -61,9 +74,9 @@ pub struct UiState {
     pub main_window_scale: f32,
     pub panel_list_open: bool,
     pub preferences_open: bool,
-    /// Help ▸ Keyboard Shortcuts modal — flat reference table over
-    /// every binding registered in `crate::shortcuts::SHORTCUTS`.
-    /// Toggled from the Help menu and from F1.
+    /// Help ▸ Keyboard Shortcuts modal — reference table over the
+    /// active keyboard-shortcut profile. Toggled from the Help menu
+    /// and from F1.
     pub keyboard_shortcuts_open: bool,
     /// First-run tour overlay — a single dismissible card shown only
     /// before the user has dismissed it once. Initial value is read
@@ -88,6 +101,27 @@ pub struct UiState {
     pub preferences_draft_symbol_grid_size_mm: f32,
     /// Symbol-editor grid display style (Dots / Crosses / Lines).
     pub preferences_draft_symbol_grid_style: crate::render_config::GridStyle,
+    /// Keyboard Shortcuts pane — editable working copy of the shortcut
+    /// profile set. Seeded from [`keymap_profiles`] each time the
+    /// Preferences window opens (and on Discard), mutated through the
+    /// [`crate::keymap::KeymapEditorModel`] API as the user edits, and
+    /// committed back to `keymap_profiles` + recompiled into
+    /// `active_keymap` on Save so live dispatch picks up the change.
+    pub preferences_keymap_editor: crate::keymap::KeymapEditorModel,
+    /// Status / error line shown under the Keyboard Shortcuts pane —
+    /// carries parse failures, save failures and profile actions so no
+    /// error is swallowed silently. Empty renders the default conflict
+    /// summary instead.
+    pub preferences_keymap_status: String,
+    /// Live search query for the Keyboard Shortcuts pane. Filters the
+    /// grouped shortcut table case-insensitively by label / command id /
+    /// trigger. Reset to empty each time Preferences opens.
+    pub preferences_keymap_search: String,
+    /// Chord recorder overlay. `Some` while the user is capturing a new
+    /// keystroke for a binding; the keyboard subscription routes raw
+    /// strokes to the recorder instead of the live keymap resolver
+    /// while it is open.
+    pub preferences_keymap_recorder: Option<KeymapRecorderState>,
     pub preferences_dirty: bool,
     pub custom_theme: Option<signex_types::theme::CustomThemeFile>,
     /// Rename-sheet modal state. Opened from the Projects-panel tree
@@ -235,6 +269,59 @@ pub struct UiState {
     /// row. The chrome-strip search bar is the always-rendered input;
     /// `open` gates the dropdown overlay only.
     pub command_palette: super::command_palette::CommandPaletteState,
+}
+
+/// Chord-recorder overlay state for the Preferences ▸ Keyboard
+/// Shortcuts pane. Holds the binding being edited plus the strokes
+/// captured so far. The keyboard subscription feeds raw key events
+/// here (as `PrefMsg::KeymapRecorderKeyPressed`) while this is `Some`,
+/// so recording never triggers a live command.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeymapRecorderState {
+    pub command: crate::keymap::AppCommandId,
+    pub command_label: String,
+    pub context: crate::keymap::ShortcutContext,
+    pub original_trigger: String,
+    pub strokes: Vec<crate::keymap::KeyStroke>,
+    pub modifiers: crate::keymap::Modifiers,
+    pub recording: bool,
+}
+
+impl KeymapRecorderState {
+    /// Longest chord the recorder will hold before wrapping back to a
+    /// single stroke (Altium-style two/three-key gestures fit inside).
+    pub const MAX_STROKES: usize = 3;
+
+    pub fn new(
+        command: crate::keymap::AppCommandId,
+        command_label: String,
+        context: crate::keymap::ShortcutContext,
+        trigger: String,
+    ) -> Self {
+        // Seed the capture buffer with the binding's current key
+        // sequence so the user sees what they are replacing. Pointer
+        // gestures aren't keyboard-recordable, so they start empty.
+        let strokes = crate::keymap::ShortcutTrigger::parse(&trigger)
+            .ok()
+            .and_then(|trigger| match trigger {
+                crate::keymap::ShortcutTrigger::KeySequence(strokes) => Some(strokes),
+                crate::keymap::ShortcutTrigger::PointerGesture(_) => None,
+            })
+            .unwrap_or_default();
+        Self {
+            command,
+            command_label,
+            context,
+            original_trigger: trigger,
+            strokes,
+            modifiers: crate::keymap::Modifiers::default(),
+            recording: true,
+        }
+    }
+
+    pub fn trigger_text(&self) -> String {
+        crate::keymap::ShortcutTrigger::KeySequence(self.strokes.clone()).display_text()
+    }
 }
 
 /// Role of a non-main window opened by Signex. Phase 2 adds detached

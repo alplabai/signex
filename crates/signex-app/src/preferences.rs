@@ -23,6 +23,10 @@ use crate::styles::MODAL_CORNER_RADIUS;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PrefNav {
     Appearance,
+    /// Keyboard-shortcut profile editor — pick / create / delete /
+    /// import / export a profile and rebind individual commands via the
+    /// chord recorder. Backed by `UiState::preferences_keymap_editor`.
+    Keyboard,
     /// Electrical Rule Check — per-rule severity override.
     Erc,
     /// v0.9 Library settings — Distributor APIs, lifecycle defaults.
@@ -38,6 +42,7 @@ pub enum PrefNav {
 impl PrefNav {
     pub const ALL: &'static [PrefNav] = &[
         PrefNav::Appearance,
+        PrefNav::Keyboard,
         PrefNav::Erc,
         PrefNav::LibraryDistributors,
         PrefNav::ComponentClasses,
@@ -46,6 +51,7 @@ impl PrefNav {
     pub fn label(self) -> &'static str {
         match self {
             PrefNav::Appearance => "Appearance",
+            PrefNav::Keyboard => "Keyboard Shortcuts",
             PrefNav::Erc => "Electrical Rules",
             PrefNav::LibraryDistributors => "Distributor APIs",
             // Now a *seed* pane — the actual class registry is
@@ -60,6 +66,7 @@ impl PrefNav {
     pub fn group(self) -> &'static str {
         match self {
             PrefNav::Appearance => "System",
+            PrefNav::Keyboard => "System",
             PrefNav::Erc => "Validation",
             PrefNav::LibraryDistributors => "Library",
             PrefNav::ComponentClasses => "Library",
@@ -131,6 +138,55 @@ pub enum PrefMsg {
     },
     /// Reset the draft list to the seed defaults (`DEFAULT_COMPONENT_CLASSES`).
     ComponentClassResetDefaults,
+
+    // ── Keyboard Shortcuts pane ──
+    // All edits land on `UiState::preferences_keymap_editor` (a working
+    // copy) so Cancel / Discard revert cleanly; Save commits the set
+    // and recompiles the live keymap.
+    /// Live search query for the shortcut table (case-insensitive filter
+    /// on label / command id / trigger). Pure view state — the handler
+    /// just stores it and never marks the draft dirty.
+    KeymapSearchChanged(String),
+    /// Switch the active profile shown in the editor.
+    KeymapProfileSelected(String),
+    /// Fork the active profile into a new editable custom profile.
+    KeymapCreateCustomProfile,
+    /// Delete the active custom profile draft (built-ins are protected).
+    KeymapDeleteActiveProfile,
+    /// Open a file picker to import a custom profile (`.toml`).
+    KeymapImportProfile,
+    /// Loaded profile source from the import pick dialog.
+    KeymapProfileLoaded(String),
+    /// Save the active profile to a `.toml` file.
+    KeymapExportProfile,
+    /// Direct text edit of a binding's trigger (kept for API parity;
+    /// the recorder is the primary edit path).
+    KeymapBindingChanged {
+        command: crate::keymap::AppCommandId,
+        context: crate::keymap::ShortcutContext,
+        trigger: String,
+    },
+    /// Open the chord recorder for a specific binding.
+    KeymapRecorderOpen {
+        command: crate::keymap::AppCommandId,
+        label: String,
+        context: crate::keymap::ShortcutContext,
+        trigger: String,
+    },
+    /// Dismiss the recorder without applying.
+    KeymapRecorderCancel,
+    /// Arm the recorder to capture keystrokes.
+    KeymapRecorderStart,
+    /// Stop capturing (keeps what was recorded).
+    KeymapRecorderStop,
+    /// Clear the captured strokes and keep recording.
+    KeymapRecorderClear,
+    /// Live modifier state while recording (drives the transient hint).
+    KeymapRecorderModifiersChanged(crate::keymap::Modifiers),
+    /// A captured keystroke, routed from the keyboard subscription.
+    KeymapRecorderKeyPressed(crate::keymap::KeyStroke),
+    /// Apply the recorded chord to the binding under edit.
+    KeymapRecorderApply,
 }
 
 // ─── Dialog sizes ─────────────────────────────────────────────
@@ -141,22 +197,96 @@ const NAV_W: f32 = 220.0;
 const HDR_H: f32 = 40.0;
 const FOOTER_H: f32 = 44.0;
 
-// ─── Colors ───────────────────────────────────────────────────
+// ─── Theme-aware text styles ──────────────────────────────────
+// The whole modal shell + text now follow the active theme via
+// `theme.extended_palette()` tokens — the same palette source the keymap
+// widget islands (further down) already use — so every section reads
+// correctly on dark AND light palettes. Text colours are resolved at
+// render time through these tiny `.style(|theme| …)` helpers rather than
+// threading a `&Theme` parameter through every builder signature.
 
-const DLG_BG: Color = Color::from_rgb(0.13, 0.13, 0.15);
-const NAV_BG: Color = Color::from_rgb(0.10, 0.10, 0.12);
-const CONTENT_BG: Color = Color::from_rgb(0.15, 0.15, 0.17);
-const HDR_BG: Color = Color::from_rgb(0.11, 0.11, 0.13);
-const ROW_ACTIVE: Color = Color::from_rgb(0.17, 0.30, 0.50);
-const ROW_HOVER: Color = Color::from_rgb(0.18, 0.18, 0.21);
-const SEP: Color = Color::from_rgb(0.22, 0.22, 0.25);
-const TEXT_PRI: Color = Color::from_rgb(0.90, 0.90, 0.92);
-const TEXT_MUT: Color = Color::from_rgb(0.50, 0.50, 0.55);
-const WARN_YELLOW: Color = Color::from_rgb(0.95, 0.72, 0.15);
-const BTN_IMPORT: Color = Color::from_rgb(0.18, 0.26, 0.40);
-const BTN_IMPORT_HOV: Color = Color::from_rgb(0.24, 0.34, 0.52);
-const BTN_DANGER: Color = Color::from_rgb(0.38, 0.16, 0.16);
-const BTN_DANGER_HOV: Color = Color::from_rgb(0.50, 0.22, 0.22);
+/// Primary body text — the theme's guaranteed-readable text colour on the
+/// base background surface.
+fn text_primary(theme: &Theme) -> text::Style {
+    text::Style {
+        color: Some(theme.extended_palette().background.base.text),
+    }
+}
+
+/// Muted / secondary text — the theme's secondary accent, still legible on
+/// the base and weak background surfaces used across the modal.
+fn text_muted(theme: &Theme) -> text::Style {
+    text::Style {
+        color: Some(theme.extended_palette().secondary.base.color),
+    }
+}
+
+/// Warning text (unsaved-changes marker, invalid / conflicting bindings).
+/// iced's `ExtendedPalette` carries no warning token, but the base
+/// `Palette` exposes a caution hue that is semantic and reads correctly on
+/// both dark and light backgrounds — so we resolve it from there.
+fn text_warning(theme: &Theme) -> text::Style {
+    text::Style {
+        color: Some(theme.palette().warning),
+    }
+}
+
+/// Primary action button (Import / Export / Add / Reset-ERC) — theme accent
+/// fill with its guaranteed-contrast text colour.
+fn primary_button_style(theme: &Theme, status: button::Status) -> button::Style {
+    let palette = theme.extended_palette();
+    let bg = match status {
+        button::Status::Hovered | button::Status::Pressed => palette.primary.strong.color,
+        _ => palette.primary.base.color,
+    };
+    button::Style {
+        background: Some(Background::Color(bg)),
+        text_color: palette.primary.base.text,
+        border: Border {
+            radius: 3.0.into(),
+            ..Border::default()
+        },
+        ..button::Style::default()
+    }
+}
+
+/// Destructive button (Discard / Delete / Remove / Stop) — theme danger
+/// fill with its guaranteed-contrast text colour.
+fn danger_button_style(theme: &Theme, status: button::Status) -> button::Style {
+    let palette = theme.extended_palette();
+    let bg = match status {
+        button::Status::Hovered | button::Status::Pressed => palette.danger.strong.color,
+        _ => palette.danger.base.color,
+    };
+    button::Style {
+        background: Some(Background::Color(bg)),
+        text_color: palette.danger.base.text,
+        border: Border {
+            radius: 3.0.into(),
+            ..Border::default()
+        },
+        ..button::Style::default()
+    }
+}
+
+/// Confirm / commit button (Save) — theme success fill with its
+/// guaranteed-contrast text colour.
+fn success_button_style(theme: &Theme, status: button::Status) -> button::Style {
+    let palette = theme.extended_palette();
+    let bg = match status {
+        button::Status::Hovered | button::Status::Pressed => palette.success.strong.color,
+        _ => palette.success.base.color,
+    };
+    button::Style {
+        background: Some(Background::Color(bg)),
+        text_color: palette.success.base.text,
+        border: Border {
+            radius: 3.0.into(),
+            ..Border::default()
+        },
+        ..button::Style::default()
+    }
+}
 
 // ─── Public view ──────────────────────────────────────────────
 
@@ -185,6 +315,10 @@ pub fn view<'a>(
     distributor_settings: &'a crate::library::state::DistributorSettings,
     panel_tokens: &'a signex_types::theme::ThemeTokens,
     draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
+    keymap_editor: &'a crate::keymap::KeymapEditorModel,
+    keymap_status: &'a str,
+    keymap_search: &'a str,
+    keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
     theme_id: ThemeId,
 ) -> Element<'a, PrefMsg> {
     let dialog = build_dialog(
@@ -204,6 +338,10 @@ pub fn view<'a>(
         distributor_settings,
         panel_tokens,
         draft_component_classes,
+        keymap_editor,
+        keymap_status,
+        keymap_search,
+        keymap_recorder,
         theme_id,
     );
 
@@ -253,6 +391,10 @@ pub(crate) fn view_body<'a>(
     distributor_settings: &'a crate::library::state::DistributorSettings,
     panel_tokens: &'a signex_types::theme::ThemeTokens,
     draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
+    keymap_editor: &'a crate::keymap::KeymapEditorModel,
+    keymap_status: &'a str,
+    keymap_search: &'a str,
+    keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
     theme_id: ThemeId,
 ) -> Element<'a, PrefMsg> {
     build_dialog(
@@ -272,6 +414,10 @@ pub(crate) fn view_body<'a>(
         distributor_settings,
         panel_tokens,
         draft_component_classes,
+        keymap_editor,
+        keymap_status,
+        keymap_search,
+        keymap_recorder,
         theme_id,
     )
 }
@@ -294,6 +440,10 @@ fn build_dialog<'a>(
     distributor_settings: &'a crate::library::state::DistributorSettings,
     panel_tokens: &'a signex_types::theme::ThemeTokens,
     draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
+    keymap_editor: &'a crate::keymap::KeymapEditorModel,
+    keymap_status: &'a str,
+    keymap_search: &'a str,
+    keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
     theme_id: ThemeId,
 ) -> Element<'a, PrefMsg> {
     // ── Header ── canonical modal chrome (28px, asymmetric padding,
@@ -303,7 +453,7 @@ fn build_dialog<'a>(
         row![
             text("Preferences")
                 .size(MODAL_HEADER_TITLE_SIZE)
-                .color(TEXT_PRI),
+                .style(text_primary),
             Space::new().width(Length::Fill),
             close_btn(theme_id),
         ]
@@ -312,8 +462,8 @@ fn build_dialog<'a>(
     .width(Length::Fill)
     .height(MODAL_HEADER_HEIGHT)
     .padding(MODAL_HEADER_PADDING)
-    .style(move |_: &Theme| container::Style {
-        background: Some(Background::Color(HDR_BG)),
+    .style(move |theme: &Theme| container::Style {
+        background: Some(Background::Color(theme.extended_palette().background.weak.color)),
         border: Border {
             width: 0.0,
             radius: iced::border::Radius::default()
@@ -331,8 +481,8 @@ fn build_dialog<'a>(
         container(Space::new())
             .width(1)
             .height(Length::Fill)
-            .style(move |_: &Theme| container::Style {
-                background: Some(Background::Color(SEP)),
+            .style(move |theme: &Theme| container::Style {
+                background: Some(Background::Color(theme.extended_palette().background.strong.color)),
                 ..container::Style::default()
             }),
         build_content(
@@ -351,6 +501,10 @@ fn build_dialog<'a>(
             distributor_settings,
             panel_tokens,
             draft_component_classes,
+            keymap_editor,
+            keymap_status,
+            keymap_search,
+            keymap_recorder,
         ),
     ]
     .width(Length::Fill)
@@ -364,8 +518,8 @@ fn build_dialog<'a>(
         container(Space::new())
             .width(Length::Fill)
             .height(1)
-            .style(move |_: &Theme| container::Style {
-                background: Some(Background::Color(SEP)),
+            .style(move |theme: &Theme| container::Style {
+                background: Some(Background::Color(theme.extended_palette().background.strong.color)),
                 ..container::Style::default()
             })
             .into()
@@ -380,12 +534,12 @@ fn build_dialog<'a>(
     container(Column::with_children(col_items).spacing(0))
         .width(DLG_W)
         .height(DLG_H)
-        .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(DLG_BG)),
+        .style(move |theme: &Theme| container::Style {
+            background: Some(Background::Color(theme.extended_palette().background.base.color)),
             border: Border {
                 width: 1.0,
                 radius: MODAL_CORNER_RADIUS.into(),
-                color: SEP,
+                color: theme.extended_palette().background.strong.color,
             },
             shadow: iced::Shadow {
                 color: Color::from_rgba(0.0, 0.0, 0.0, 0.7),
@@ -410,7 +564,7 @@ fn build_nav<'a>(active: PrefNav) -> Element<'a, PrefMsg> {
         if group != last_group {
             last_group = group;
             col = col.push(
-                container(text(group.to_uppercase()).size(9).color(TEXT_MUT))
+                container(text(group.to_uppercase()).size(9).style(text_muted))
                     .padding(iced::Padding {
                         top: 10.0,
                         right: 12.0,
@@ -426,8 +580,8 @@ fn build_nav<'a>(active: PrefNav) -> Element<'a, PrefMsg> {
     container(scrollable(col).width(Length::Fill))
         .width(NAV_W)
         .height(Length::Fill)
-        .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(NAV_BG)),
+        .style(move |theme: &Theme| container::Style {
+            background: Some(Background::Color(theme.extended_palette().background.weak.color)),
             ..container::Style::default()
         })
         .into()
@@ -435,31 +589,45 @@ fn build_nav<'a>(active: PrefNav) -> Element<'a, PrefMsg> {
 
 fn nav_item<'a>(item: PrefNav, active: PrefNav) -> Element<'a, PrefMsg> {
     let is_active = item == active;
-    let bg = if is_active {
-        Some(Background::Color(ROW_ACTIVE))
-    } else {
-        None
-    };
-    let tc = if is_active { Color::WHITE } else { TEXT_PRI };
 
     button(
-        container(row![text(item.label()).size(12).color(tc),].align_y(iced::Alignment::Center))
-            .padding([6, 12])
-            .width(Length::Fill),
+        container(
+            row![
+                text(item.label())
+                    .size(12)
+                    .style(move |theme: &Theme| text::Style {
+                        color: Some(if is_active {
+                            theme.extended_palette().primary.base.text
+                        } else {
+                            theme.extended_palette().background.base.text
+                        }),
+                    }),
+            ]
+            .align_y(iced::Alignment::Center),
+        )
+        .padding([6, 12])
+        .width(Length::Fill),
     )
     .padding(0)
     .width(Length::Fill)
     .on_press(PrefMsg::Nav(item))
-    .style(move |_: &Theme, status: button::Status| {
+    .style(move |theme: &Theme, status: button::Status| {
+        let palette = theme.extended_palette();
         let bg = match (is_active, status) {
-            (true, _) => Some(Background::Color(ROW_ACTIVE)),
-            (false, button::Status::Hovered) => Some(Background::Color(ROW_HOVER)),
-            _ => bg,
+            (true, _) => Some(Background::Color(palette.primary.base.color)),
+            (false, button::Status::Hovered) => {
+                Some(Background::Color(palette.background.strong.color))
+            }
+            _ => None,
         };
         button::Style {
             background: bg,
             border: Border::default(),
-            text_color: tc,
+            text_color: if is_active {
+                palette.primary.base.text
+            } else {
+                palette.background.base.text
+            },
             ..button::Style::default()
         }
     })
@@ -485,6 +653,10 @@ fn build_content<'a>(
     distributor_settings: &'a crate::library::state::DistributorSettings,
     panel_tokens: &'a signex_types::theme::ThemeTokens,
     draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
+    keymap_editor: &'a crate::keymap::KeymapEditorModel,
+    keymap_status: &'a str,
+    keymap_search: &'a str,
+    keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
 ) -> Element<'a, PrefMsg> {
     let inner = match nav {
         PrefNav::Appearance => content_appearance(
@@ -512,6 +684,9 @@ fn build_content<'a>(
         PrefNav::LibraryDistributors => {
             content_library_distributors(distributor_settings, panel_tokens)
         }
+        PrefNav::Keyboard => {
+            content_keyboard_shortcuts(keymap_editor, keymap_status, keymap_search, keymap_recorder)
+        }
         PrefNav::ComponentClasses => content_component_classes(draft_component_classes),
     };
 
@@ -519,8 +694,8 @@ fn build_content<'a>(
         .width(Length::Fill)
         .height(Length::Fill)
         .padding(0)
-        .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(CONTENT_BG)),
+        .style(move |theme: &Theme| container::Style {
+            background: Some(Background::Color(theme.extended_palette().background.base.color)),
             ..container::Style::default()
         })
         .into()
@@ -675,10 +850,10 @@ fn content_appearance<'a>(
     col = col.push(
         row![
             column![
-                text("UI Font").size(12).color(TEXT_PRI),
+                text("UI Font").size(12).style(text_primary),
                 text("Applies to all panels and menus. Requires restart.")
                     .size(10)
-                    .color(TEXT_MUT),
+                    .style(text_muted),
             ]
             .spacing(3)
             .width(200),
@@ -707,10 +882,10 @@ fn content_appearance<'a>(
     col = col.push(
         row![
             column![
-                text("Grid Style").size(12).color(TEXT_PRI),
+                text("Grid Style").size(12).style(text_primary),
                 text("Appearance of snap points on the schematic canvas.")
                     .size(10)
-                    .color(TEXT_MUT),
+                    .style(text_muted),
             ]
             .spacing(3)
             .width(200),
@@ -733,10 +908,10 @@ fn content_appearance<'a>(
     col = col.push(
         row![
             column![
-                text("Power Port Style").size(12).color(TEXT_PRI),
+                text("Power Port Style").size(12).style(text_primary),
                 text("Choose how power symbols are rendered on canvas.")
                     .size(10)
-                    .color(TEXT_MUT),
+                    .style(text_muted),
             ]
             .spacing(3)
             .width(200),
@@ -755,16 +930,16 @@ fn content_appearance<'a>(
     col = col.push(
         text("Restyled mode reshapes pin labels for rendering only. Standard preserves the library symbol's authored appearance.")
             .size(10)
-            .color(TEXT_MUT),
+            .style(text_muted),
     );
     col = col.push(Space::new().height(16));
     col = col.push(
         row![
             column![
-                text("Global/Hier Label Style").size(12).color(TEXT_PRI),
+                text("Global/Hier Label Style").size(12).style(text_primary),
                 text("Controls multi-sheet and global label appearance.")
                     .size(10)
-                    .color(TEXT_MUT),
+                    .style(text_muted),
             ]
             .spacing(3)
             .width(200),
@@ -783,13 +958,13 @@ fn content_appearance<'a>(
     col = col.push(
         row![
             column![
-                text("Multisheet Style").size(12).color(TEXT_PRI),
+                text("Multisheet Style").size(12).style(text_primary),
                 text(
                     "Controls hierarchical sheet body fill defaults. \
                      Per-sheet colours from the source file always win."
                 )
                 .size(10)
-                .color(TEXT_MUT),
+                .style(text_muted),
             ]
             .spacing(3)
             .width(200),
@@ -814,13 +989,13 @@ fn content_appearance<'a>(
     col = col.push(
         row![
             column![
-                text("Default Grid Size").size(12).color(TEXT_PRI),
+                text("Default Grid Size").size(12).style(text_primary),
                 text(
                     "Applied when a symbol library is first opened. \
                       Can be changed per-library from the canvas status bar."
                 )
                 .size(10)
-                .color(TEXT_MUT),
+                .style(text_muted),
             ]
             .spacing(3)
             .width(200),
@@ -851,10 +1026,10 @@ fn content_appearance<'a>(
     col = col.push(
         row![
             column![
-                text("Grid Style").size(12).color(TEXT_PRI),
+                text("Grid Style").size(12).style(text_primary),
                 text("Appearance of snap points on the symbol editor canvas.")
                     .size(10)
-                    .color(TEXT_MUT),
+                    .style(text_muted),
             ]
             .spacing(3)
             .width(200),
@@ -878,12 +1053,12 @@ fn content_appearance<'a>(
 
 fn section_title<'a>(title: &str) -> Element<'a, PrefMsg> {
     column![
-        text(title.to_owned()).size(13).color(TEXT_PRI),
+        text(title.to_owned()).size(13).style(text_primary),
         container(Space::new())
             .width(Length::Fill)
             .height(1)
-            .style(move |_: &Theme| container::Style {
-                background: Some(Background::Color(SEP)),
+            .style(move |theme: &Theme| container::Style {
+                background: Some(Background::Color(theme.extended_palette().background.strong.color)),
                 ..container::Style::default()
             }),
     ]
@@ -895,8 +1070,8 @@ fn h_sep<'a>() -> Element<'a, PrefMsg> {
     container(Space::new())
         .width(Length::Fill)
         .height(1)
-        .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(SEP)),
+        .style(move |theme: &Theme| container::Style {
+            background: Some(Background::Color(theme.extended_palette().background.strong.color)),
             ..container::Style::default()
         })
         .into()
@@ -909,28 +1084,35 @@ fn theme_card<'a>(
     current: ThemeId,
 ) -> Element<'a, PrefMsg> {
     let is_active = id == current;
-    let border_c = if is_active {
-        Color::from_rgb(0.30, 0.55, 0.90)
-    } else {
-        SEP
-    };
     let label = format!("{}{name}", if is_active { "✓ " } else { "" });
-    let card_bg = if is_active {
-        Color::from_rgb(0.13, 0.21, 0.35)
-    } else {
-        Color::from_rgb(0.17, 0.17, 0.20)
-    };
-    let text_color = if is_active { Color::WHITE } else { TEXT_PRI };
-    let hover_bg = Color::from_rgb(0.20, 0.20, 0.24);
     let msg = PrefMsg::DraftTheme(id);
+
+    // Card title / description resolve their colour against the card's own
+    // (active vs inactive) background so they stay legible when the theme
+    // flips light — active cards sit on a primary tint, inactive cards on
+    // the weak background surface.
+    let title_style = move |theme: &Theme| text::Style {
+        color: Some(if is_active {
+            theme.extended_palette().primary.weak.text
+        } else {
+            theme.extended_palette().background.base.text
+        }),
+    };
+    let desc_style = move |theme: &Theme| text::Style {
+        color: Some(if is_active {
+            theme.extended_palette().primary.weak.text
+        } else {
+            theme.extended_palette().secondary.base.color
+        }),
+    };
 
     button(
         container(
             column![
-                text(label).size(12).color(text_color),
+                text(label).size(12).style(title_style),
                 text(desc)
                     .size(10)
-                    .color(TEXT_MUT)
+                    .style(desc_style)
                     .wrapping(iced::widget::text::Wrapping::None),
             ]
             .spacing(4),
@@ -941,17 +1123,25 @@ fn theme_card<'a>(
     .padding(0)
     .width(Length::Fill)
     .on_press(msg)
-    .style(move |_: &Theme, status: button::Status| {
-        let bg = match status {
-            button::Status::Hovered | button::Status::Pressed => Background::Color(hover_bg),
-            _ => Background::Color(card_bg),
+    .style(move |theme: &Theme, status: button::Status| {
+        let palette = theme.extended_palette();
+        let bg = if is_active {
+            palette.primary.weak.color
+        } else if matches!(status, button::Status::Hovered | button::Status::Pressed) {
+            palette.background.strong.color
+        } else {
+            palette.background.weak.color
         };
         button::Style {
-            background: Some(bg),
+            background: Some(Background::Color(bg)),
             border: Border {
                 width: 1.0,
                 radius: 4.0.into(),
-                color: border_c,
+                color: if is_active {
+                    palette.primary.base.color
+                } else {
+                    palette.background.strong.color
+                },
             },
             ..button::Style::default()
         }
@@ -971,8 +1161,11 @@ fn close_btn<'a>(theme_id: ThemeId) -> Element<'a, PrefMsg> {
             svg(handle)
                 .width(MODAL_CLOSE_X_ICON)
                 .height(MODAL_CLOSE_X_ICON)
-                .style(move |_: &Theme, _| svg::Style {
-                    color: Some(Color::WHITE),
+                // Resolve against the theme so the glyph stays legible on a
+                // light header; the red hover footprint contrasts with the
+                // near-white/near-black text colour on both palettes.
+                .style(move |theme: &Theme, _| svg::Style {
+                    color: Some(theme.extended_palette().background.base.text),
                 }),
         )
         .width(MODAL_CLOSE_X_HIT_W)
@@ -1015,7 +1208,7 @@ fn build_footer<'a>(dirty: bool) -> Option<Element<'a, PrefMsg>> {
         return None;
     }
     let footer_row: Element<'a, PrefMsg> = row![
-        text("● Unsaved changes").size(11).color(WARN_YELLOW),
+        text("● Unsaved changes").size(11).style(text_warning),
         Space::new().width(Length::Fill),
         discard_btn(),
         Space::new().width(8),
@@ -1029,67 +1222,38 @@ fn build_footer<'a>(dirty: bool) -> Option<Element<'a, PrefMsg>> {
             .width(Length::Fill)
             .height(FOOTER_H)
             .padding([0, 16])
-            .style(move |_: &Theme| container::Style {
-                background: Some(Background::Color(HDR_BG)),
-                border: Border {
-                    width: 1.0,
-                    color: SEP,
-                    radius: iced::border::Radius::default()
-                        .bottom_left(MODAL_CORNER_RADIUS)
-                        .bottom_right(MODAL_CORNER_RADIUS),
-                },
-                ..container::Style::default()
+            .style(move |theme: &Theme| {
+                let palette = theme.extended_palette();
+                container::Style {
+                    background: Some(Background::Color(palette.background.weak.color)),
+                    border: Border {
+                        width: 1.0,
+                        color: palette.background.strong.color,
+                        radius: iced::border::Radius::default()
+                            .bottom_left(MODAL_CORNER_RADIUS)
+                            .bottom_right(MODAL_CORNER_RADIUS),
+                    },
+                    ..container::Style::default()
+                }
             })
             .into(),
     )
 }
 
 fn save_btn<'a>() -> Element<'a, PrefMsg> {
-    button(text("Save").size(12).color(Color::WHITE))
+    button(text("Save").size(12))
         .padding([6, 20])
         .on_press(PrefMsg::Save)
-        .style(|_: &Theme, status: button::Status| {
-            let bg = match status {
-                button::Status::Hovered => Color::from_rgb(0.18, 0.52, 0.30),
-                _ => Color::from_rgb(0.14, 0.42, 0.24),
-            };
-            button::Style {
-                background: Some(Background::Color(bg)),
-                border: Border {
-                    radius: 3.0.into(),
-                    ..Border::default()
-                },
-                text_color: Color::WHITE,
-                ..button::Style::default()
-            }
-        })
+        .style(success_button_style)
         .into()
 }
 
 fn discard_btn<'a>() -> Element<'a, PrefMsg> {
-    button(
-        text("Discard & Close")
-            .size(12)
-            .color(Color::from_rgb(0.85, 0.60, 0.60)),
-    )
-    .padding([6, 16])
-    .on_press(PrefMsg::DiscardAndClose)
-    .style(|_: &Theme, status: button::Status| {
-        let bg = match status {
-            button::Status::Hovered => BTN_DANGER_HOV,
-            _ => BTN_DANGER,
-        };
-        button::Style {
-            background: Some(Background::Color(bg)),
-            border: Border {
-                radius: 3.0.into(),
-                ..Border::default()
-            },
-            text_color: Color::from_rgb(0.90, 0.70, 0.70),
-            ..button::Style::default()
-        }
-    })
-    .into()
+    button(text("Discard & Close").size(12))
+        .padding([6, 16])
+        .on_press(PrefMsg::DiscardAndClose)
+        .style(danger_button_style)
+        .into()
 }
 
 fn close_footer_btn<'a>() -> Element<'a, PrefMsg> {
@@ -1115,48 +1279,18 @@ fn close_footer_btn<'a>() -> Element<'a, PrefMsg> {
 }
 
 fn import_btn<'a>() -> Element<'a, PrefMsg> {
-    button(text("⬆ Import Theme…").size(11).color(TEXT_PRI))
+    button(text("⬆ Import Theme…").size(11))
         .padding([5, 12])
         .on_press(PrefMsg::ImportTheme)
-        .style(|_: &Theme, status: button::Status| {
-            let bg = match status {
-                button::Status::Hovered => BTN_IMPORT_HOV,
-                _ => BTN_IMPORT,
-            };
-            button::Style {
-                background: Some(Background::Color(bg)),
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: SEP,
-                },
-                text_color: TEXT_PRI,
-                ..button::Style::default()
-            }
-        })
+        .style(primary_button_style)
         .into()
 }
 
 fn export_btn<'a>() -> Element<'a, PrefMsg> {
-    button(text("⬇ Export Theme…").size(11).color(TEXT_MUT))
+    button(text("⬇ Export Theme…").size(11))
         .padding([5, 12])
         .on_press(PrefMsg::ExportTheme)
-        .style(|_: &Theme, status: button::Status| {
-            let bg = match status {
-                button::Status::Hovered => BTN_IMPORT_HOV,
-                _ => BTN_IMPORT,
-            };
-            button::Style {
-                background: Some(Background::Color(bg)),
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: SEP,
-                },
-                text_color: TEXT_MUT,
-                ..button::Style::default()
-            }
-        })
+        .style(primary_button_style)
         .into()
 }
 
@@ -1187,11 +1321,11 @@ fn content_erc<'a>(
     ];
 
     let header = column![
-        text("Electrical Rules Severity").size(15).color(TEXT_PRI),
+        text("Electrical Rules Severity").size(15).style(text_primary),
         Space::new().height(4),
         text("Per-rule severity override. Errors show red, Warnings yellow, Info blue; Off silences the rule entirely.")
             .size(11)
-            .color(TEXT_MUT),
+            .style(text_muted),
     ]
     .padding([16, 20]);
 
@@ -1205,7 +1339,7 @@ fn content_erc<'a>(
         let mut row_ui = row![
             text(rule.label())
                 .size(12)
-                .color(TEXT_PRI)
+                .style(text_primary)
                 .width(Length::Fill)
         ]
         .spacing(6)
@@ -1216,27 +1350,41 @@ fn content_erc<'a>(
             let s = sev;
             let d = default_sev;
             row_ui = row_ui.push(
-                button(text(severity_label(sev)).size(11).color(if active {
-                    Color::from_rgb(1.0, 1.0, 1.0)
-                } else {
-                    TEXT_MUT
-                }))
+                button(
+                    text(severity_label(sev))
+                        .size(11)
+                        .style(move |theme: &Theme| text::Style {
+                            // Active chips sit on the saturated (theme-neutral)
+                            // severity fill, so white reads on both palettes;
+                            // inactive chips use the muted secondary token.
+                            color: Some(if active {
+                                Color::from_rgb(1.0, 1.0, 1.0)
+                            } else {
+                                theme.extended_palette().secondary.base.color
+                            }),
+                        }),
+                )
                 .padding([4, 10])
                 .on_press(PrefMsg::DraftErcSeverity(r, if s == d { d } else { s }))
-                .style(move |_: &Theme, status: button::Status| {
+                .style(move |theme: &Theme, status: button::Status| {
+                    let palette = theme.extended_palette();
                     let bg = if active {
                         severity_bg(sev)
                     } else if matches!(status, button::Status::Hovered) {
-                        ROW_HOVER
+                        palette.background.strong.color
                     } else {
-                        NAV_BG
+                        palette.background.weak.color
                     };
                     button::Style {
                         background: Some(Background::Color(bg)),
                         border: Border {
                             width: 1.0,
                             radius: 3.0.into(),
-                            color: if active { severity_bg(sev) } else { SEP },
+                            color: if active {
+                                severity_bg(sev)
+                            } else {
+                                palette.background.strong.color
+                            },
                         },
                         ..button::Style::default()
                     }
@@ -1244,11 +1392,11 @@ fn content_erc<'a>(
             );
         }
         rows_col = rows_col.push(container(row_ui).padding([6, 4]).width(Length::Fill).style(
-            |_: &Theme| container::Style {
+            |theme: &Theme| container::Style {
                 background: None,
                 border: Border {
                     width: 1.0,
-                    color: SEP,
+                    color: theme.extended_palette().background.strong.color,
                     radius: 0.0.into(),
                 },
                 ..container::Style::default()
@@ -1259,25 +1407,10 @@ fn content_erc<'a>(
     let reset_row = container(
         row![
             Space::new().width(Length::Fill),
-            button(text("Reset to defaults").size(11).color(TEXT_MUT))
+            button(text("Reset to defaults").size(11))
                 .padding([5, 12])
                 .on_press(PrefMsg::ResetErcSeverities)
-                .style(|_: &Theme, status: button::Status| {
-                    let bg = match status {
-                        button::Status::Hovered => BTN_IMPORT_HOV,
-                        _ => BTN_IMPORT,
-                    };
-                    button::Style {
-                        background: Some(Background::Color(bg)),
-                        border: Border {
-                            width: 1.0,
-                            radius: 3.0.into(),
-                            color: SEP,
-                        },
-                        text_color: TEXT_MUT,
-                        ..button::Style::default()
-                    }
-                }),
+                .style(primary_button_style),
         ]
         .align_y(iced::Alignment::Center),
     )
@@ -1305,13 +1438,544 @@ fn severity_bg(sev: signex_erc::Severity) -> Color {
     }
 }
 
+// ─── Keyboard Shortcuts editor ────────────────────────────────
+
+fn content_keyboard_shortcuts<'a>(
+    editor: &'a crate::keymap::KeymapEditorModel,
+    status: &'a str,
+    search: &'a str,
+    recorder: Option<&'a crate::app::KeymapRecorderState>,
+) -> Element<'a, PrefMsg> {
+    let profiles = editor.profiles();
+    let active = profiles.iter().find(|profile| profile.active);
+    let active_option = active.map(KeymapProfileOption::from);
+    let active_is_custom = active
+        .map(|profile| profile.kind == crate::keymap::ShortcutProfileKind::Custom)
+        .unwrap_or(false);
+    let active_summary = active
+        .map(|profile| format!("{} bindings", profile.binding_count))
+        .unwrap_or_else(|| "No active profile".to_string());
+
+    let profile_options: Vec<KeymapProfileOption> =
+        profiles.iter().map(KeymapProfileOption::from).collect();
+
+    // Delete is only wired for custom profiles — built-ins are
+    // protected by the model, so the button is inert on a built-in.
+    let delete_button = {
+        let base = button(container(text("Delete").size(11)).padding([5, 12]))
+            .style(danger_button_style);
+        if active_is_custom {
+            base.on_press(PrefMsg::KeymapDeleteActiveProfile)
+        } else {
+            base
+        }
+    };
+
+    let header = column![
+        section_title("Keyboard Shortcuts"),
+        Space::new().height(4),
+        text("Configure keyboard shortcut profiles. Command names and categories come from Signex command metadata.")
+            .size(11)
+            .style(text_muted),
+    ]
+    .spacing(6);
+
+    // Profile picker + recorder stay ABOVE the search box and groups.
+    let profile_row = row![
+        column![
+            text("Profile").size(12).style(text_primary),
+            text(active_summary).size(10).style(text_muted),
+        ]
+        .spacing(3)
+        .width(160),
+        iced::widget::pick_list(profile_options, active_option, |profile| {
+            PrefMsg::KeymapProfileSelected(profile.id)
+        })
+        .text_size(12)
+        .width(180),
+        button(container(text("Create").size(11)).padding([5, 12]))
+            .on_press(PrefMsg::KeymapCreateCustomProfile)
+            .style(primary_button_style),
+        delete_button,
+        button(container(text("Import").size(11)).padding([5, 12]))
+            .on_press(PrefMsg::KeymapImportProfile)
+            .style(secondary_button_style),
+        button(container(text("Export").size(11)).padding([5, 12]))
+            .on_press(PrefMsg::KeymapExportProfile)
+            .style(secondary_button_style),
+        Space::new().width(Length::Fill),
+    ]
+    .spacing(8)
+    .align_y(iced::Alignment::Center);
+
+    let conflicts = editor.active_conflicts();
+    let conflict_count = conflicts.len();
+    // A non-empty status (parse / save error, profile action) wins;
+    // otherwise fall back to the conflict summary.
+    let status_line = if !status.is_empty() {
+        status.to_string()
+    } else if conflict_count == 1 {
+        "1 conflict in active profile".to_string()
+    } else if conflict_count > 1 {
+        format!("{conflict_count} conflicts in active profile")
+    } else {
+        "No conflicts detected in active keyboard shortcuts.".to_string()
+    };
+
+    // Search box — case-insensitive filter across every group. Uses the
+    // default (theme-aware) text_input styling like the other panes.
+    let search_box = text_input("Search shortcuts…", search)
+        .on_input(PrefMsg::KeymapSearchChanged)
+        .padding(6)
+        .size(12)
+        .width(Length::Fill);
+
+    let table_header = row![
+        container(text("Category").size(11).style(text_muted)).width(Length::FillPortion(2)),
+        container(text("Command").size(11).style(text_muted)).width(Length::FillPortion(4)),
+        container(text("Context").size(11).style(text_muted)).width(Length::FillPortion(2)),
+        container(text("Shortcut").size(11).style(text_muted)).width(Length::FillPortion(2)),
+        container(text("State").size(11).style(text_muted)).width(Length::FillPortion(2)),
+    ]
+    .spacing(8)
+    .padding([4, 0]);
+
+    let active_profile_is_custom = editor.active_profile_is_custom();
+    let filtered = editor.filtered_rows(search);
+
+    let mut content = column![
+        header,
+        profile_row,
+        text(status_line).size(10).style(text_muted),
+    ]
+    .spacing(10)
+    .padding(20);
+
+    if let Some(recorder) = recorder {
+        content = content.push(keymap_recorder_control(recorder));
+    }
+
+    content = content.push(search_box);
+    content = content.push(h_sep());
+
+    if filtered.is_empty() {
+        let empty = if editor.rows().is_empty() {
+            "No shortcuts are defined in the active profile.".to_string()
+        } else {
+            format!("No shortcuts match “{}”.", search.trim())
+        };
+        content = content.push(text(empty).size(11).style(text_muted));
+        return content.into();
+    }
+
+    content = content.push(table_header);
+
+    // One block per group, in the fixed CommandGroup::ALL display order.
+    // Groups with no matching rows are skipped entirely.
+    for &group in crate::keymap::CommandGroup::ALL {
+        let group_rows: Vec<Element<'a, PrefMsg>> = filtered
+            .iter()
+            .filter(|row_model| row_model.group == group)
+            .map(|row_model| keymap_table_row(row_model, &conflicts, active_profile_is_custom))
+            .collect();
+        if group_rows.is_empty() {
+            continue;
+        }
+        content = content.push(Space::new().height(6));
+        content = content.push(section_title(group.display_name()));
+        content = content.push(Column::with_children(group_rows).spacing(2));
+    }
+
+    content.into()
+}
+
+/// Render one shortcut table row. Extracted so the grouped view can build
+/// rows per [`crate::keymap::CommandGroup`] without duplicating the cell
+/// layout. Text that sits directly on the (theme-neutral) modal surface
+/// keeps the shared muted / primary constants; the trigger chip and Edit
+/// button pull their colours from the active theme.
+fn keymap_table_row<'a>(
+    row_model: &crate::keymap::KeymapEditorRow,
+    conflicts: &[crate::keymap::BindingConflict],
+    active_profile_is_custom: bool,
+) -> Element<'a, PrefMsg> {
+    let has_conflict = conflicts.iter().any(|conflict| {
+        conflict.context == row_model.context
+            && conflict.trigger == row_model.trigger
+            && row_model.command.as_ref().is_some_and(|command| {
+                command == &conflict.first_command || command == &conflict.second_command
+            })
+    });
+    let state = if !row_model.trigger_valid {
+        "Invalid"
+    } else if has_conflict {
+        "Conflict"
+    } else if row_model.trigger.trim().is_empty() {
+        "Unbound"
+    } else if row_model.keyboard_editable && active_profile_is_custom {
+        "Editable"
+    } else if row_model.keyboard_editable {
+        "Create custom"
+    } else {
+        "Gesture"
+    };
+    let state_warn = !row_model.trigger_valid || has_conflict;
+    let state_unbound = row_model.trigger.trim().is_empty();
+    let state_style = move |theme: &Theme| text::Style {
+        color: Some(if state_warn {
+            theme.palette().warning
+        } else if state_unbound {
+            theme.extended_palette().secondary.base.color
+        } else {
+            theme.extended_palette().background.base.text
+        }),
+    };
+
+    // Keyboard-editable rows in a custom profile get an inline Edit button
+    // that opens the chord recorder; everything else is read-only (built-in
+    // profiles, pointer gestures).
+    let trigger_cell: Element<'a, PrefMsg> = if active_profile_is_custom
+        && row_model.keyboard_editable
+    {
+        if let Some(command) = row_model.command.clone() {
+            let context = row_model.context;
+            let label = row_model.label.clone();
+            let trigger = row_model.trigger.clone();
+            let tone = if state_warn {
+                ChipTone::Warning
+            } else {
+                ChipTone::Neutral
+            };
+            row![
+                shortcut_chip(&row_model.trigger, tone),
+                button(container(text("Edit").size(10)).padding([3, 8]))
+                    .on_press(PrefMsg::KeymapRecorderOpen {
+                        command,
+                        label,
+                        context,
+                        trigger,
+                    })
+                    .style(secondary_button_style),
+            ]
+            .spacing(6)
+            .align_y(iced::Alignment::Center)
+            .into()
+        } else {
+            text(row_model.trigger.clone())
+                .size(11)
+                .style(text_muted)
+                .into()
+        }
+    } else {
+        shortcut_chip(&row_model.trigger, ChipTone::Neutral)
+    };
+
+    row![
+        container(text(title_case(&row_model.category)).size(11).style(text_muted))
+            .width(Length::FillPortion(2)),
+        container(text(row_model.label.clone()).size(11).style(text_primary))
+            .width(Length::FillPortion(4)),
+        container(text(context_label(row_model.context)).size(11).style(text_muted))
+            .width(Length::FillPortion(2)),
+        container(trigger_cell).width(Length::FillPortion(2)),
+        container(text(state).size(11).style(state_style)).width(Length::FillPortion(2)),
+    ]
+    .spacing(8)
+    .align_y(iced::Alignment::Center)
+    .padding([5, 0])
+    .into()
+}
+
+/// Colour intent for a shortcut chip. Resolved against the active theme
+/// inside [`shortcut_chip`] so chips read correctly on light and dark
+/// palettes alike.
+#[derive(Debug, Clone, Copy)]
+enum ChipTone {
+    /// Regular trigger text — pairs with the chip's own background.
+    Neutral,
+    /// Invalid / conflicting / transient-modifier trigger.
+    Warning,
+}
+
+fn shortcut_chip<'a>(label: &str, tone: ChipTone) -> Element<'a, PrefMsg> {
+    let label = if label.trim().is_empty() {
+        "Unbound".to_string()
+    } else {
+        label.to_string()
+    };
+    container(
+        text(label)
+            .size(11)
+            .style(move |theme: &Theme| text::Style {
+                color: Some(match tone {
+                    ChipTone::Neutral => theme.extended_palette().background.weak.text,
+                    ChipTone::Warning => theme.palette().warning,
+                }),
+            }),
+    )
+    .padding([3, 8])
+    .width(Length::Shrink)
+    .style(move |theme: &Theme| {
+        let palette = theme.extended_palette();
+        container::Style {
+            background: Some(Background::Color(palette.background.weak.color)),
+            border: Border {
+                width: 1.0,
+                color: palette.background.strong.color,
+                radius: 3.0.into(),
+            },
+            ..container::Style::default()
+        }
+    })
+    .into()
+}
+
+fn keymap_recorder_control<'a>(
+    recorder: &'a crate::app::KeymapRecorderState,
+) -> Element<'a, PrefMsg> {
+    // The recorder card carries its own themed surfaces, so its text uses
+    // theme-aware helpers (base / secondary / warning) rather than the
+    // modal's neutral constants — otherwise the labels would vanish on a
+    // light theme where the card background flips light.
+    let recorded: Element<'a, PrefMsg> = if recorder.strokes.is_empty() {
+        text("Press Record, then type a shortcut")
+            .size(12)
+            .style(iced::widget::text::secondary)
+            .into()
+    } else {
+        row(recorded_shortcut_chips(recorder))
+            .spacing(6)
+            .align_y(iced::Alignment::Center)
+            .into()
+    };
+
+    let transient_modifiers = if recorder.recording
+        && recorder.modifiers != crate::keymap::Modifiers::default()
+        && recorder.strokes.len() < crate::app::KeymapRecorderState::MAX_STROKES
+    {
+        Some(shortcut_chip(
+            &format!("{}...", modifiers_label(recorder.modifiers)),
+            ChipTone::Warning,
+        ))
+    } else {
+        None
+    };
+    let capture_status: Element<'a, PrefMsg> = if recorder.recording {
+        text("Recording")
+            .size(11)
+            .style(iced::widget::text::warning)
+            .into()
+    } else {
+        text("Recorded")
+            .size(11)
+            .style(iced::widget::text::secondary)
+            .into()
+    };
+    let mut capture_row = row![capture_status, recorded]
+        .spacing(8)
+        .align_y(iced::Alignment::Center);
+    if let Some(transient_modifiers) = transient_modifiers {
+        capture_row = capture_row.push(transient_modifiers);
+    }
+
+    let record_button = if recorder.recording {
+        button(container(text("Stop").size(11)).padding([5, 12]))
+            .on_press(PrefMsg::KeymapRecorderStop)
+            .style(danger_button_style)
+    } else {
+        button(container(text("Record").size(11)).padding([5, 12]))
+            .on_press(PrefMsg::KeymapRecorderStart)
+            .style(primary_button_style)
+    };
+
+    container(
+        column![
+            row![
+                column![
+                    text("Edit Shortcut").size(15).style(iced::widget::text::base),
+                    text(recorder.command_label.clone())
+                        .size(11)
+                        .style(iced::widget::text::secondary),
+                ]
+                .spacing(3),
+                Space::new().width(Length::Fill),
+                button(container(text("Cancel").size(11)).padding([5, 12]))
+                    .on_press(PrefMsg::KeymapRecorderCancel)
+                    .style(secondary_button_style),
+            ]
+            .align_y(iced::Alignment::Center),
+            container(
+                column![
+                    row![
+                        text(context_label(recorder.context))
+                            .size(11)
+                            .style(iced::widget::text::secondary),
+                        text("Current").size(11).style(iced::widget::text::secondary),
+                        shortcut_chip(&recorder.original_trigger, ChipTone::Neutral),
+                    ]
+                    .spacing(8)
+                    .align_y(iced::Alignment::Center),
+                    capture_row,
+                ]
+                .spacing(10),
+            )
+            .padding(12)
+            .width(Length::Fill)
+            .style(move |theme: &Theme| {
+                let palette = theme.extended_palette();
+                container::Style {
+                    background: Some(Background::Color(palette.background.weak.color)),
+                    border: Border {
+                        width: 1.0,
+                        color: palette.background.strong.color,
+                        radius: 4.0.into(),
+                    },
+                    ..container::Style::default()
+                }
+            }),
+            text("Press the exact keystroke to record it. ESC is recorded as a key; use Cancel to close.")
+                .size(10)
+                .style(iced::widget::text::secondary),
+            row![
+                record_button,
+                button(container(text("Clear").size(11)).padding([5, 12]))
+                    .on_press(PrefMsg::KeymapRecorderClear)
+                    .style(secondary_button_style),
+                Space::new().width(Length::Fill),
+                button(container(text("OK").size(11)).padding([5, 12]))
+                    .on_press(PrefMsg::KeymapRecorderApply)
+                    .style(primary_button_style),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center),
+        ]
+        .spacing(12),
+    )
+    .padding(16)
+    .width(Length::Fill)
+    .style(move |theme: &Theme| {
+        let palette = theme.extended_palette();
+        container::Style {
+            background: Some(Background::Color(palette.background.base.color)),
+            border: Border {
+                width: 1.0,
+                color: palette.primary.base.color,
+                radius: 6.0.into(),
+            },
+            ..container::Style::default()
+        }
+    })
+    .into()
+}
+
+fn recorded_shortcut_chips<'a>(
+    recorder: &'a crate::app::KeymapRecorderState,
+) -> Vec<Element<'a, PrefMsg>> {
+    recorder
+        .strokes
+        .iter()
+        .map(|stroke| shortcut_chip(&stroke.to_string(), ChipTone::Neutral))
+        .collect()
+}
+
+fn modifiers_label(modifiers: crate::keymap::Modifiers) -> String {
+    let mut parts = Vec::new();
+    if modifiers.ctrl {
+        parts.push("Ctrl");
+    }
+    if modifiers.command && !modifiers.ctrl {
+        parts.push("Cmd");
+    }
+    if modifiers.alt {
+        parts.push("Alt");
+    }
+    if modifiers.shift {
+        parts.push("Shift");
+    }
+    parts.join("+")
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct KeymapProfileOption {
+    id: String,
+    label: String,
+}
+
+impl From<&crate::keymap::KeymapEditorProfile> for KeymapProfileOption {
+    fn from(profile: &crate::keymap::KeymapEditorProfile) -> Self {
+        let kind = match profile.kind {
+            crate::keymap::ShortcutProfileKind::BuiltIn => "built-in",
+            crate::keymap::ShortcutProfileKind::Custom => "custom",
+        };
+        Self {
+            id: profile.id.clone(),
+            label: format!("{} ({kind})", profile.name),
+        }
+    }
+}
+
+impl std::fmt::Display for KeymapProfileOption {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.label)
+    }
+}
+
+fn context_label(context: crate::keymap::ShortcutContext) -> &'static str {
+    match context {
+        crate::keymap::ShortcutContext::Global => "Global",
+        crate::keymap::ShortcutContext::Schematic => "Schematic",
+        crate::keymap::ShortcutContext::Footprint => "Footprint",
+        crate::keymap::ShortcutContext::Pcb => "PCB",
+        crate::keymap::ShortcutContext::Library => "Library",
+        crate::keymap::ShortcutContext::Modal => "Modal",
+        crate::keymap::ShortcutContext::TextInput => "Text Input",
+        crate::keymap::ShortcutContext::CommandPalette => "Command Palette",
+        crate::keymap::ShortcutContext::Placement => "Placement",
+    }
+}
+
+fn title_case(value: &str) -> String {
+    value
+        .split(['_', '-', ' '])
+        .filter(|part| !part.is_empty())
+        .map(|part| {
+            let mut chars = part.chars();
+            match chars.next() {
+                Some(first) => format!("{}{}", first.to_uppercase(), chars.as_str()),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Neutral secondary button (Import / Export / Edit / Cancel / Clear) —
+/// theme-derived so it reads on both light and dark palettes.
+fn secondary_button_style(theme: &Theme, status: button::Status) -> button::Style {
+    let palette = theme.extended_palette();
+    let bg = match status {
+        button::Status::Hovered | button::Status::Pressed => palette.background.strong.color,
+        _ => palette.background.weak.color,
+    };
+    button::Style {
+        background: Some(Background::Color(bg)),
+        text_color: palette.background.base.text,
+        border: Border {
+            width: 1.0,
+            color: palette.background.strong.color,
+            radius: 3.0.into(),
+        },
+        ..button::Style::default()
+    }
+}
+
 // ─── Component Classes editor ─────────────────────────────────
 
 fn content_component_classes<'a>(
     classes: &'a [crate::fonts::ComponentClassEntry],
 ) -> Element<'a, PrefMsg> {
     let header = column![
-        text("Default Component Classes").size(15).color(TEXT_PRI),
+        text("Default Component Classes").size(15).style(text_primary),
         text(
             "Seeds the class registry of newly-created libraries. \
               Per-library edits live inside each .snxlib's manifest \
@@ -1319,13 +1983,13 @@ fn content_component_classes<'a>(
               controls only what new libraries inherit."
         )
         .size(11)
-        .color(TEXT_MUT),
+        .style(text_muted),
     ]
     .spacing(6);
 
     let column_header = row![
-        container(text("Key").size(11).color(TEXT_MUT)).width(Length::FillPortion(2)),
-        container(text("Label").size(11).color(TEXT_MUT)).width(Length::FillPortion(3)),
+        container(text("Key").size(11).style(text_muted)).width(Length::FillPortion(2)),
+        container(text("Label").size(11).style(text_muted)).width(Length::FillPortion(3)),
         container(Space::new()).width(80),
     ]
     .spacing(8)
@@ -1347,26 +2011,12 @@ fn content_component_classes<'a>(
             .size(12)
             .width(Length::FillPortion(3));
         let remove_btn = button(
-            container(text("Remove").size(11).color(Color::WHITE))
+            container(text("Remove").size(11))
                 .padding([4, 10])
                 .center_x(Length::Fill),
         )
         .on_press(PrefMsg::ComponentClassRemove { index: idx })
-        .style(move |_: &Theme, status: button::Status| {
-            let bg = match status {
-                button::Status::Hovered | button::Status::Pressed => BTN_DANGER_HOV,
-                _ => BTN_DANGER,
-            };
-            button::Style {
-                background: Some(Background::Color(bg)),
-                text_color: Color::WHITE,
-                border: Border {
-                    radius: 3.0.into(),
-                    ..Border::default()
-                },
-                ..button::Style::default()
-            }
-        })
+        .style(danger_button_style)
         .width(80);
 
         rows.push(
@@ -1380,52 +2030,19 @@ fn content_component_classes<'a>(
     let body: Element<'a, PrefMsg> = if rows.is_empty() {
         text("No classes defined. Click \"+ Add Class\" to add one or \"Reset to Defaults\" to restore the seed list.")
             .size(11)
-            .color(TEXT_MUT)
+            .style(text_muted)
             .into()
     } else {
         Column::with_children(rows).spacing(6).into()
     };
 
-    let add_btn =
-        button(container(text("+ Add Class").size(11).color(Color::WHITE)).padding([5, 12]))
-            .on_press(PrefMsg::ComponentClassAdd)
-            .style(move |_: &Theme, status: button::Status| {
-                let bg = match status {
-                    button::Status::Hovered | button::Status::Pressed => BTN_IMPORT_HOV,
-                    _ => BTN_IMPORT,
-                };
-                button::Style {
-                    background: Some(Background::Color(bg)),
-                    text_color: Color::WHITE,
-                    border: Border {
-                        radius: 3.0.into(),
-                        ..Border::default()
-                    },
-                    ..button::Style::default()
-                }
-            });
+    let add_btn = button(container(text("+ Add Class").size(11)).padding([5, 12]))
+        .on_press(PrefMsg::ComponentClassAdd)
+        .style(primary_button_style);
 
-    let reset_btn =
-        button(container(text("Reset to Defaults").size(11).color(TEXT_PRI)).padding([5, 12]))
-            .on_press(PrefMsg::ComponentClassResetDefaults)
-            .style(move |_: &Theme, status: button::Status| {
-                let bg = match status {
-                    button::Status::Hovered | button::Status::Pressed => {
-                        Color::from_rgb(0.22, 0.22, 0.26)
-                    }
-                    _ => Color::from_rgb(0.18, 0.18, 0.21),
-                };
-                button::Style {
-                    background: Some(Background::Color(bg)),
-                    text_color: TEXT_PRI,
-                    border: Border {
-                        width: 1.0,
-                        color: SEP,
-                        radius: 3.0.into(),
-                    },
-                    ..button::Style::default()
-                }
-            });
+    let reset_btn = button(container(text("Reset to Defaults").size(11)).padding([5, 12]))
+        .on_press(PrefMsg::ComponentClassResetDefaults)
+        .style(secondary_button_style);
 
     let toolbar = row![
         add_btn,

@@ -17,11 +17,12 @@
 //! positions the card at exactly those pixels.
 
 use iced::widget::{button, column, container, row, text};
-use iced::{Background, Border, Color, Element, Length, Padding};
+use iced::{Background, Border, Element, Length, Padding};
 
 use signex_types::theme::ThemeTokens;
 
 use crate::app::FootprintEditorState;
+use crate::keymap::{AppCommandId, CompiledKeymap};
 use crate::library::editor::footprint::state::{
     FootprintContextAction, FootprintContextSubmenu, FootprintContextTarget,
 };
@@ -55,6 +56,7 @@ pub fn view_context_menu<'a>(
     tokens: &'a ThemeTokens,
     path: &'a std::path::Path,
     has_clipboard: bool,
+    keymap: &'a CompiledKeymap,
 ) -> Option<Element<'a, LibraryMessage>> {
     let menu_state = editor.state.context_menu.as_ref()?;
 
@@ -65,6 +67,13 @@ pub fn view_context_menu<'a>(
     };
 
     let mut items: Vec<Element<'a, LibraryMessage>> = Vec::new();
+    // Shortcut hints resolved from the active keymap profile, with the
+    // historic fixed labels as fallbacks.
+    let select_all_shortcut = shortcut_label(keymap, "select_all", "Ctrl+A");
+    let unselect_all_shortcut = shortcut_label(keymap, "unselect_all", "Ctrl+Shift+A");
+    let cut_shortcut = shortcut_label(keymap, "cut", "Ctrl+X");
+    let copy_shortcut = shortcut_label(keymap, "copy", "Ctrl+C");
+    let paste_shortcut = shortcut_label(keymap, "paste", "Ctrl+V");
 
     match menu_state.target {
         FootprintContextTarget::Empty => {
@@ -130,7 +139,7 @@ pub fn view_context_menu<'a>(
                 items.push(item_indented(
                     tokens,
                     "Select All",
-                    "Ctrl+A",
+                    &select_all_shortcut,
                     make_msg(FootprintEditorMsg::ContextMenuAction(
                         FootprintContextAction::SelectAllPads,
                     )),
@@ -138,7 +147,7 @@ pub fn view_context_menu<'a>(
                 items.push(item_indented(
                     tokens,
                     "Deselect All",
-                    "Ctrl+Shift+A",
+                    &unselect_all_shortcut,
                     make_msg(FootprintEditorMsg::ContextMenuAction(
                         FootprintContextAction::DeselectAll,
                     )),
@@ -174,7 +183,7 @@ pub fn view_context_menu<'a>(
                 items.push(item_msg(
                     tokens,
                     "Paste",
-                    "Ctrl+V",
+                    &paste_shortcut,
                     make_msg(FootprintEditorMsg::PastePad),
                 ));
                 items.push(separator(tokens));
@@ -254,20 +263,20 @@ pub fn view_context_menu<'a>(
             items.push(item_msg(
                 tokens,
                 "Cut",
-                "Ctrl+X",
+                &cut_shortcut,
                 make_msg(FootprintEditorMsg::CutPad),
             ));
             items.push(item_msg(
                 tokens,
                 "Copy",
-                "Ctrl+C",
+                &copy_shortcut,
                 make_msg(FootprintEditorMsg::CopyPad),
             ));
             if has_clipboard {
                 items.push(item_msg(
                     tokens,
                     "Paste",
-                    "Ctrl+V",
+                    &paste_shortcut,
                     make_msg(FootprintEditorMsg::PastePad),
                 ));
             }
@@ -329,6 +338,15 @@ pub fn view_context_menu<'a>(
         .width(MENU_WIDTH);
 
     Some(card.into())
+}
+
+/// Resolve a keymap command id to its label under the active profile,
+/// falling back to `fallback` when the command is unbound.
+fn shortcut_label(keymap: &CompiledKeymap, command_id: &str, fallback: &str) -> String {
+    AppCommandId::new(command_id)
+        .ok()
+        .and_then(|command| keymap.shortcut_label(&command))
+        .unwrap_or_else(|| fallback.to_string())
 }
 
 // ── helpers ─────────────────────────────────────────────────────────

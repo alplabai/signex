@@ -1,0 +1,103 @@
+# Built-in keyboard shortcut profile defaults based on Altium references.
+
+[signex_settings]
+application = "signex"
+file_kind = "keyboard_shortcuts"
+version = 1
+
+[keyboard_shortcuts]
+schema_version = 1
+profile_id = "altium"
+profile_name = "Altium"
+profile_kind = "built_in"
+description = "Altium-style keyboard shortcut defaults for Signex."
+
+[[keyboard_shortcuts.sections]]
+context = "global"
+
+[keyboard_shortcuts.sections.bindings]
+"P P" = "open_components_panel"
+"P W" = "place_wire"
+"Ctrl+W" = "place_wire"
+"P N" = "place_net_label"
+"P V N" = "place_no_erc"
+"P V K" = "place_compile_mask"
+"M M" = "move_object"
+"E W" = "break_wire"
+"T A" = "annotate_schematic"
+"T A E" = "reset_schematic_designators"
+"R I" = "report_manager_bom"
+"T P" = "open_schematic_preferences"
+"Tab" = "placement_properties"
+"Enter" = "placement_accept"
+"Escape" = "cancel_current_tool"
+"Space" = "rotate_counterclockwise"
+"Shift+Space" = "rotate_clockwise"
+"X" = "mirror_x"
+"Y" = "mirror_y"
+"Backspace" = "remove_last_vertex"
+"Delete" = "remove_last_vertex"
+"Insert" = "copy_attributes_or_add_vertex"
+"Ctrl+Space" = "cycle_wiring_mode"
+"F1" = "show_current_command_hotkeys"
+"Shift+F1" = "show_current_command_shortcuts"
+"DoubleClick" = "edit_object_properties"
+"F2" = "edit_text_in_place"
+"Ctrl+C" = "copy"
+"Ctrl+X" = "cut"
+"Ctrl+V" = "paste"
+"Ctrl+D" = "duplicate"
+"Ctrl+R" = "rubber_stamp_copy"
+"Ctrl+Shift+V" = "smart_paste"
+"Ctrl+Q" = "cycle_unit"
+"Alt+A" = "annotate_schematic_quietly"
+"Shift+Alt+A" = "force_annotate_all_schematics"
+"F8" = "run_erc"
+"F9" = "toggle_auto_focus"
+"F5" = "open_net_color_palette"
+
+[[keyboard_shortcuts.sections]]
+context = "global"
+
+[keyboard_shortcuts.sections.bindings]
+"Delete" = "delete_selection"
+"Ctrl+Z" = "undo"
+"Ctrl+Y" = "redo"
+"Ctrl+A" = "select_all"
+"Shift+Click" = "toggle_selection"
+"Alt+Click" = "highlight_related_net_objects"
+"Shift+F" = "find_similar_objects"
+"Ctrl+Shift+X" = "toggle_cross_select_mode"
+"PageUp" = "zoom_in_at_cursor"
+"PageDown" = "zoom_out_at_cursor"
+"Ctrl+PageDown" = "show_all_design_objects"
+"Home" = "center_view_at_cursor"
+"End" = "refresh_view"
+"G" = "cycle_snap_grid_forward"
+"Shift+G" = "cycle_snap_grid_backward"
+"Ctrl+Shift+G" = "toggle_visible_grid"
+"Shift+E" = "toggle_electrical_grid"
+"Ctrl+M" = "measure_distance"
+"F11" = "toggle_properties_panel"
+"F12" = "toggle_schematic_filter_panel"
+"Shift+F12" = "toggle_schematic_list_panel"
+"Ctrl+F" = "find_text"
+"Ctrl+H" = "find_and_replace"
+"Ctrl+Shift+P" = "open_command_palette"
+"Ctrl+," = "open_preferences"
+"F3" = "find_next"
+"Ctrl+O" = "open_document"
+"Ctrl+S" = "save_document"
+"Ctrl+P" = "print"
+"Ctrl+F4" = "close_active_document"
+"Ctrl+Tab" = "next_document_tab"
+"Ctrl+Shift+Tab" = "previous_document_tab"
+"F4" = "toggle_floating_panels"
+
+[[keyboard_shortcuts.sections]]
+context = "footprint"
+
+[keyboard_shortcuts.sections.bindings]
+"1" = "footprint_mode_sketch"
+"2" = "footprint_mode_pads"
+"3" = "footprint_mode_view_3d"
