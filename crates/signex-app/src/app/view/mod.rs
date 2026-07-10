@@ -9,6 +9,7 @@ mod context_menus;
 mod context_submenu;
 mod dialog_annotate;
 mod dialog_annotate_preview;
+mod dialog_bom;
 mod dialog_erc;
 mod dialog_widgets;
 mod pdf_preview;
