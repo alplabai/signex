@@ -1,5 +1,5 @@
 use crate::keymap::{
-    AppCommandId, BindingConflict, CompiledKeymap, ProfileLoadError, ShortcutContext,
+    AppCommandId, BindingConflict, CommandGroup, CompiledKeymap, ProfileLoadError, ShortcutContext,
     ShortcutBinding, ShortcutBindingAction, ShortcutProfile, ShortcutProfileKind,
     ShortcutProfileSet, ShortcutTrigger, fallback_label, metadata_for,
 };
@@ -68,6 +68,9 @@ impl KeymapEditorModel {
                         .is_none_or(|key| !self.invalid_trigger_drafts.contains(key));
                     KeymapEditorRow {
                         command,
+                        group: metadata
+                            .map(|metadata| metadata.group)
+                            .unwrap_or(CommandGroup::General),
                         category: metadata
                             .map(|metadata| metadata.category.to_string())
                             .unwrap_or_else(|| "uncategorized".to_string()),
@@ -83,6 +86,16 @@ impl KeymapEditorModel {
                     }
                 })
             })
+            .collect()
+    }
+
+    /// [`Self::rows`] filtered by a case-insensitive search query against
+    /// each row's label, command id or trigger text. An empty query
+    /// returns every row.
+    pub fn filtered_rows(&self, query: &str) -> Vec<KeymapEditorRow> {
+        self.rows()
+            .into_iter()
+            .filter(|row| row.matches_query(query))
             .collect()
     }
 
@@ -216,6 +229,9 @@ pub struct KeymapEditorProfile {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeymapEditorRow {
     pub command: Option<AppCommandId>,
+    /// Coarse editor-surface bucket used to group rows in the editor.
+    /// Rows without command metadata fall back to [`CommandGroup::General`].
+    pub group: CommandGroup,
     pub category: String,
     pub label: String,
     pub context: ShortcutContext,
@@ -223,6 +239,27 @@ pub struct KeymapEditorRow {
     pub trigger_valid: bool,
     pub keyboard_editable: bool,
     pub source: KeymapEditorSource,
+}
+
+impl KeymapEditorRow {
+    /// Case-insensitive substring match on the row's label, command id or
+    /// current trigger text. An empty (or whitespace-only) query matches
+    /// every row. Never panics — safe on empty / odd input.
+    pub fn matches_query(&self, query: &str) -> bool {
+        let needle = query.trim().to_lowercase();
+        if needle.is_empty() {
+            return true;
+        }
+        if self.label.to_lowercase().contains(&needle) {
+            return true;
+        }
+        if self.trigger.to_lowercase().contains(&needle) {
+            return true;
+        }
+        self.command
+            .as_ref()
+            .is_some_and(|command| command.as_str().to_lowercase().contains(&needle))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

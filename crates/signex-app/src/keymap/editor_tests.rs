@@ -1,4 +1,4 @@
-use super::{AppCommandId, KeyStroke, KeymapEditorModel, ShortcutContext};
+use super::{AppCommandId, CommandGroup, KeyStroke, KeymapEditorModel, ShortcutContext, metadata_for};
 use std::str::FromStr;
 
 #[test]
@@ -46,6 +46,62 @@ fn custom_profile_trigger_edit_updates_compiled_keymap() {
         &[ShortcutContext::Global],
     );
     assert_eq!(lookup.command.as_ref(), Some(&command));
+}
+
+#[test]
+fn empty_search_query_returns_every_row() {
+    let editor = KeymapEditorModel::built_ins().unwrap();
+    assert_eq!(editor.filtered_rows("").len(), editor.rows().len());
+    // Whitespace-only queries behave like an empty query and never panic.
+    assert_eq!(editor.filtered_rows("   ").len(), editor.rows().len());
+}
+
+#[test]
+fn search_filters_rows_by_label_command_or_trigger() {
+    let editor = KeymapEditorModel::built_ins().unwrap();
+    let matches = editor.filtered_rows("save");
+
+    assert!(
+        !matches.is_empty(),
+        "the built-in profile should bind at least one save command"
+    );
+    // Case-insensitive; every surviving row matches on label, id or trigger.
+    for row in &matches {
+        let label = row.label.to_lowercase();
+        let trigger = row.trigger.to_lowercase();
+        let command = row
+            .command
+            .as_ref()
+            .map(|command| command.as_str().to_lowercase())
+            .unwrap_or_default();
+        assert!(
+            label.contains("save") || trigger.contains("save") || command.contains("save"),
+            "row `{}` leaked through the `save` filter",
+            row.label
+        );
+    }
+
+    // A query that cannot match anything yields an empty set (no panic).
+    assert!(editor.filtered_rows("zzz-no-such-command").is_empty());
+}
+
+#[test]
+fn rows_carry_the_command_group_from_metadata() {
+    let editor = KeymapEditorModel::built_ins().unwrap();
+    let rows = editor.rows();
+    assert!(!rows.is_empty());
+
+    // Every row's group agrees with its command metadata; rows without
+    // metadata fall back to General.
+    for row in &rows {
+        let expected = row
+            .command
+            .as_ref()
+            .and_then(metadata_for)
+            .map(|metadata| metadata.group)
+            .unwrap_or(CommandGroup::General);
+        assert_eq!(row.group, expected, "row `{}` mis-grouped", row.label);
+    }
 }
 
 #[test]
