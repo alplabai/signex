@@ -3,6 +3,7 @@
 use iced::widget::{column, container, scrollable};
 use iced::{Background, Element, Length, Theme};
 use signex_types::theme::{ThemeId, ThemeTokens, theme_tokens};
+use signex_widgets::passive_calculator::{CalculatorControl, CalculatorMessage};
 
 use crate::{bom_modal, modal_card, project_tree, section, tabs, theme, theme_picker};
 
@@ -17,11 +18,13 @@ pub(crate) fn run() -> iced::Result {
 struct Catalog {
     theme: ThemeId,
     tokens: ThemeTokens,
+    passive_calculator: CalculatorControl,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) enum Message {
     SelectTheme(ThemeId),
+    PassiveCalculator(CalculatorMessage),
 }
 
 impl Catalog {
@@ -29,6 +32,7 @@ impl Catalog {
         Self {
             theme: ThemeId::Signex,
             tokens: theme_tokens(ThemeId::Signex),
+            passive_calculator: CalculatorControl::default(),
         }
     }
 
@@ -38,6 +42,7 @@ impl Catalog {
                 self.theme = theme_id;
                 self.tokens = theme_tokens(theme_id);
             }
+            Message::PassiveCalculator(message) => self.passive_calculator.update(message),
         }
     }
 
@@ -76,6 +81,13 @@ impl Catalog {
                 "BOM modal — Altium-style layout (table + properties sidebar)",
                 tokens,
                 bom_modal::view(tokens),
+            ),
+            section::view(
+                "Passive network calculator control",
+                tokens,
+                self.passive_calculator
+                    .view(tokens)
+                    .map(Message::PassiveCalculator),
             ),
         ]
         .spacing(20)

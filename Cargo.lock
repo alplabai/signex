@@ -5438,6 +5438,7 @@ version = "0.15.0"
 dependencies = [
  "chrono",
  "iced",
+ "iced_aw",
  "signex-types",
 ]
 
