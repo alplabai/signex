@@ -7,6 +7,8 @@ pub(crate) mod translate;
 mod context_menu_items;
 mod context_menus;
 mod context_submenu;
+mod dialog_annotate;
+mod dialog_annotate_preview;
 mod dialog_widgets;
 mod pdf_preview;
 mod print_preview;
