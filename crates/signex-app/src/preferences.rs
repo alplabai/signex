@@ -23,6 +23,10 @@ use crate::styles::MODAL_CORNER_RADIUS;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PrefNav {
     Appearance,
+    /// Keyboard-shortcut profile editor — pick / create / delete /
+    /// import / export a profile and rebind individual commands via the
+    /// chord recorder. Backed by `UiState::preferences_keymap_editor`.
+    Keyboard,
     /// Electrical Rule Check — per-rule severity override.
     Erc,
     /// v0.9 Library settings — Distributor APIs, lifecycle defaults.
@@ -38,6 +42,7 @@ pub enum PrefNav {
 impl PrefNav {
     pub const ALL: &'static [PrefNav] = &[
         PrefNav::Appearance,
+        PrefNav::Keyboard,
         PrefNav::Erc,
         PrefNav::LibraryDistributors,
         PrefNav::ComponentClasses,
@@ -46,6 +51,7 @@ impl PrefNav {
     pub fn label(self) -> &'static str {
         match self {
             PrefNav::Appearance => "Appearance",
+            PrefNav::Keyboard => "Keyboard Shortcuts",
             PrefNav::Erc => "Electrical Rules",
             PrefNav::LibraryDistributors => "Distributor APIs",
             // Now a *seed* pane — the actual class registry is
@@ -60,6 +66,7 @@ impl PrefNav {
     pub fn group(self) -> &'static str {
         match self {
             PrefNav::Appearance => "System",
+            PrefNav::Keyboard => "System",
             PrefNav::Erc => "Validation",
             PrefNav::LibraryDistributors => "Library",
             PrefNav::ComponentClasses => "Library",
@@ -131,6 +138,51 @@ pub enum PrefMsg {
     },
     /// Reset the draft list to the seed defaults (`DEFAULT_COMPONENT_CLASSES`).
     ComponentClassResetDefaults,
+
+    // ── Keyboard Shortcuts pane ──
+    // All edits land on `UiState::preferences_keymap_editor` (a working
+    // copy) so Cancel / Discard revert cleanly; Save commits the set
+    // and recompiles the live keymap.
+    /// Switch the active profile shown in the editor.
+    KeymapProfileSelected(String),
+    /// Fork the active profile into a new editable custom profile.
+    KeymapCreateCustomProfile,
+    /// Delete the active custom profile draft (built-ins are protected).
+    KeymapDeleteActiveProfile,
+    /// Open a file picker to import a custom profile (`.toml`).
+    KeymapImportProfile,
+    /// Loaded profile source from the import pick dialog.
+    KeymapProfileLoaded(String),
+    /// Save the active profile to a `.toml` file.
+    KeymapExportProfile,
+    /// Direct text edit of a binding's trigger (kept for API parity;
+    /// the recorder is the primary edit path).
+    KeymapBindingChanged {
+        command: crate::keymap::AppCommandId,
+        context: crate::keymap::ShortcutContext,
+        trigger: String,
+    },
+    /// Open the chord recorder for a specific binding.
+    KeymapRecorderOpen {
+        command: crate::keymap::AppCommandId,
+        label: String,
+        context: crate::keymap::ShortcutContext,
+        trigger: String,
+    },
+    /// Dismiss the recorder without applying.
+    KeymapRecorderCancel,
+    /// Arm the recorder to capture keystrokes.
+    KeymapRecorderStart,
+    /// Stop capturing (keeps what was recorded).
+    KeymapRecorderStop,
+    /// Clear the captured strokes and keep recording.
+    KeymapRecorderClear,
+    /// Live modifier state while recording (drives the transient hint).
+    KeymapRecorderModifiersChanged(crate::keymap::Modifiers),
+    /// A captured keystroke, routed from the keyboard subscription.
+    KeymapRecorderKeyPressed(crate::keymap::KeyStroke),
+    /// Apply the recorded chord to the binding under edit.
+    KeymapRecorderApply,
 }
 
 // ─── Dialog sizes ─────────────────────────────────────────────
@@ -185,6 +237,9 @@ pub fn view<'a>(
     distributor_settings: &'a crate::library::state::DistributorSettings,
     panel_tokens: &'a signex_types::theme::ThemeTokens,
     draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
+    keymap_editor: &'a crate::keymap::KeymapEditorModel,
+    keymap_status: &'a str,
+    keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
     theme_id: ThemeId,
 ) -> Element<'a, PrefMsg> {
     let dialog = build_dialog(
@@ -204,6 +259,9 @@ pub fn view<'a>(
         distributor_settings,
         panel_tokens,
         draft_component_classes,
+        keymap_editor,
+        keymap_status,
+        keymap_recorder,
         theme_id,
     );
 
@@ -253,6 +311,9 @@ pub(crate) fn view_body<'a>(
     distributor_settings: &'a crate::library::state::DistributorSettings,
     panel_tokens: &'a signex_types::theme::ThemeTokens,
     draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
+    keymap_editor: &'a crate::keymap::KeymapEditorModel,
+    keymap_status: &'a str,
+    keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
     theme_id: ThemeId,
 ) -> Element<'a, PrefMsg> {
     build_dialog(
@@ -272,6 +333,9 @@ pub(crate) fn view_body<'a>(
         distributor_settings,
         panel_tokens,
         draft_component_classes,
+        keymap_editor,
+        keymap_status,
+        keymap_recorder,
         theme_id,
     )
 }
@@ -294,6 +358,9 @@ fn build_dialog<'a>(
     distributor_settings: &'a crate::library::state::DistributorSettings,
     panel_tokens: &'a signex_types::theme::ThemeTokens,
     draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
+    keymap_editor: &'a crate::keymap::KeymapEditorModel,
+    keymap_status: &'a str,
+    keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
     theme_id: ThemeId,
 ) -> Element<'a, PrefMsg> {
     // ── Header ── canonical modal chrome (28px, asymmetric padding,
@@ -351,6 +418,9 @@ fn build_dialog<'a>(
             distributor_settings,
             panel_tokens,
             draft_component_classes,
+            keymap_editor,
+            keymap_status,
+            keymap_recorder,
         ),
     ]
     .width(Length::Fill)
@@ -485,6 +555,9 @@ fn build_content<'a>(
     distributor_settings: &'a crate::library::state::DistributorSettings,
     panel_tokens: &'a signex_types::theme::ThemeTokens,
     draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
+    keymap_editor: &'a crate::keymap::KeymapEditorModel,
+    keymap_status: &'a str,
+    keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
 ) -> Element<'a, PrefMsg> {
     let inner = match nav {
         PrefNav::Appearance => content_appearance(
@@ -511,6 +584,9 @@ fn build_content<'a>(
         // `LibraryState.settings`.
         PrefNav::LibraryDistributors => {
             content_library_distributors(distributor_settings, panel_tokens)
+        }
+        PrefNav::Keyboard => {
+            content_keyboard_shortcuts(keymap_editor, keymap_status, keymap_recorder)
         }
         PrefNav::ComponentClasses => content_component_classes(draft_component_classes),
     };
@@ -1302,6 +1378,526 @@ fn severity_bg(sev: signex_erc::Severity) -> Color {
         signex_erc::Severity::Warning => Color::from_rgb(0.55, 0.45, 0.12),
         signex_erc::Severity::Info => Color::from_rgb(0.20, 0.36, 0.58),
         signex_erc::Severity::Off => Color::from_rgb(0.28, 0.28, 0.32),
+    }
+}
+
+// ─── Keyboard Shortcuts editor ────────────────────────────────
+
+fn content_keyboard_shortcuts<'a>(
+    editor: &'a crate::keymap::KeymapEditorModel,
+    status: &'a str,
+    recorder: Option<&'a crate::app::KeymapRecorderState>,
+) -> Element<'a, PrefMsg> {
+    let profiles = editor.profiles();
+    let active = profiles.iter().find(|profile| profile.active);
+    let active_option = active.map(KeymapProfileOption::from);
+    let active_is_custom = active
+        .map(|profile| profile.kind == crate::keymap::ShortcutProfileKind::Custom)
+        .unwrap_or(false);
+    let active_summary = active
+        .map(|profile| format!("{} bindings", profile.binding_count))
+        .unwrap_or_else(|| "No active profile".to_string());
+
+    let profile_options: Vec<KeymapProfileOption> =
+        profiles.iter().map(KeymapProfileOption::from).collect();
+
+    // Delete is only wired for custom profiles — built-ins are
+    // protected by the model, so the button is inert on a built-in.
+    let delete_button = {
+        let base = button(container(text("Delete").size(11).color(Color::WHITE)).padding([5, 12]))
+            .style(move |_: &Theme, status: button::Status| {
+                let bg = match status {
+                    button::Status::Hovered | button::Status::Pressed => BTN_DANGER_HOV,
+                    _ => BTN_DANGER,
+                };
+                button::Style {
+                    background: Some(Background::Color(bg)),
+                    text_color: Color::WHITE,
+                    border: Border {
+                        radius: 3.0.into(),
+                        ..Border::default()
+                    },
+                    ..button::Style::default()
+                }
+            });
+        if active_is_custom {
+            base.on_press(PrefMsg::KeymapDeleteActiveProfile)
+        } else {
+            base
+        }
+    };
+
+    let header = column![
+        section_title("Keyboard Shortcuts"),
+        Space::new().height(4),
+        text("Configure keyboard shortcut profiles. Command names and categories come from Signex command metadata.")
+            .size(11)
+            .color(TEXT_MUT),
+    ]
+    .spacing(6);
+
+    let profile_row = row![
+        column![
+            text("Profile").size(12).color(TEXT_PRI),
+            text(active_summary).size(10).color(TEXT_MUT),
+        ]
+        .spacing(3)
+        .width(160),
+        iced::widget::pick_list(profile_options, active_option, |profile| {
+            PrefMsg::KeymapProfileSelected(profile.id)
+        })
+        .text_size(12)
+        .width(180),
+        button(container(text("Create").size(11).color(Color::WHITE)).padding([5, 12]))
+            .on_press(PrefMsg::KeymapCreateCustomProfile)
+            .style(move |_: &Theme, status: button::Status| {
+                let bg = match status {
+                    button::Status::Hovered | button::Status::Pressed => BTN_IMPORT_HOV,
+                    _ => BTN_IMPORT,
+                };
+                button::Style {
+                    background: Some(Background::Color(bg)),
+                    text_color: Color::WHITE,
+                    border: Border {
+                        radius: 3.0.into(),
+                        ..Border::default()
+                    },
+                    ..button::Style::default()
+                }
+            }),
+        delete_button,
+        button(container(text("Import").size(11).color(TEXT_PRI)).padding([5, 12]))
+            .on_press(PrefMsg::KeymapImportProfile)
+            .style(secondary_button_style),
+        button(container(text("Export").size(11).color(TEXT_PRI)).padding([5, 12]))
+            .on_press(PrefMsg::KeymapExportProfile)
+            .style(secondary_button_style),
+        Space::new().width(Length::Fill),
+    ]
+    .spacing(8)
+    .align_y(iced::Alignment::Center);
+
+    let conflicts = editor.active_conflicts();
+    let conflict_count = conflicts.len();
+    // A non-empty status (parse / save error, profile action) wins;
+    // otherwise fall back to the conflict summary.
+    let status_line = if !status.is_empty() {
+        status.to_string()
+    } else if conflict_count == 1 {
+        "1 conflict in active profile".to_string()
+    } else if conflict_count > 1 {
+        format!("{conflict_count} conflicts in active profile")
+    } else {
+        "No conflicts detected in active keyboard shortcuts.".to_string()
+    };
+
+    let table_header = row![
+        container(text("Category").size(11).color(TEXT_MUT)).width(Length::FillPortion(2)),
+        container(text("Command").size(11).color(TEXT_MUT)).width(Length::FillPortion(4)),
+        container(text("Context").size(11).color(TEXT_MUT)).width(Length::FillPortion(2)),
+        container(text("Shortcut").size(11).color(TEXT_MUT)).width(Length::FillPortion(2)),
+        container(text("State").size(11).color(TEXT_MUT)).width(Length::FillPortion(2)),
+    ]
+    .spacing(8)
+    .padding([4, 0]);
+
+    let rows = editor.rows();
+    let active_profile_is_custom = editor.active_profile_is_custom();
+    let mut table_rows: Vec<Element<'a, PrefMsg>> = Vec::with_capacity(rows.len());
+    for row_model in rows {
+        let has_conflict = conflicts.iter().any(|conflict| {
+            conflict.context == row_model.context
+                && conflict.trigger == row_model.trigger
+                && row_model.command.as_ref().is_some_and(|command| {
+                    command == &conflict.first_command || command == &conflict.second_command
+                })
+        });
+        let state = if !row_model.trigger_valid {
+            "Invalid"
+        } else if has_conflict {
+            "Conflict"
+        } else if row_model.trigger.trim().is_empty() {
+            "Unbound"
+        } else if row_model.keyboard_editable && active_profile_is_custom {
+            "Editable"
+        } else if row_model.keyboard_editable {
+            "Create custom"
+        } else {
+            "Gesture"
+        };
+        let state_color = if !row_model.trigger_valid || has_conflict {
+            WARN_YELLOW
+        } else if row_model.trigger.trim().is_empty() {
+            TEXT_MUT
+        } else {
+            TEXT_PRI
+        };
+
+        // Keyboard-editable rows in a custom profile get an inline Edit
+        // button that opens the chord recorder; everything else is
+        // read-only (built-in profiles, pointer gestures).
+        let trigger_cell: Element<'a, PrefMsg> = if active_profile_is_custom
+            && row_model.keyboard_editable
+        {
+            if let Some(command) = row_model.command.clone() {
+                let context = row_model.context;
+                let label = row_model.label.clone();
+                let trigger = row_model.trigger.clone();
+                row![
+                    shortcut_chip(&row_model.trigger, state_color),
+                    button(container(text("Edit").size(10).color(TEXT_PRI)).padding([3, 8]))
+                        .on_press(PrefMsg::KeymapRecorderOpen {
+                            command,
+                            label,
+                            context,
+                            trigger,
+                        })
+                        .style(secondary_button_style),
+                ]
+                .spacing(6)
+                .align_y(iced::Alignment::Center)
+                .into()
+            } else {
+                text(row_model.trigger).size(11).color(TEXT_MUT).into()
+            }
+        } else {
+            shortcut_chip(&row_model.trigger, TEXT_PRI)
+        };
+
+        table_rows.push(
+            row![
+                container(
+                    text(title_case(&row_model.category))
+                        .size(11)
+                        .color(TEXT_MUT)
+                )
+                .width(Length::FillPortion(2)),
+                container(text(row_model.label).size(11).color(TEXT_PRI))
+                    .width(Length::FillPortion(4)),
+                container(
+                    text(context_label(row_model.context))
+                        .size(11)
+                        .color(TEXT_MUT)
+                )
+                .width(Length::FillPortion(2)),
+                container(trigger_cell).width(Length::FillPortion(2)),
+                container(text(state).size(11).color(state_color)).width(Length::FillPortion(2)),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center)
+            .padding([5, 0])
+            .into(),
+        );
+    }
+
+    let table: Element<'a, PrefMsg> = if table_rows.is_empty() {
+        text("No shortcuts are defined in the active profile.")
+            .size(11)
+            .color(TEXT_MUT)
+            .into()
+    } else {
+        Column::with_children(table_rows).spacing(2).into()
+    };
+
+    let mut content = column![
+        header,
+        profile_row,
+        text(status_line).size(10).color(TEXT_MUT),
+    ]
+    .spacing(10)
+    .padding(20);
+
+    if let Some(recorder) = recorder {
+        content = content.push(keymap_recorder_control(recorder));
+    }
+
+    content.push(h_sep()).push(table_header).push(table).into()
+}
+
+fn shortcut_chip<'a>(label: &str, color: Color) -> Element<'a, PrefMsg> {
+    let label = if label.trim().is_empty() {
+        "Unbound".to_string()
+    } else {
+        label.to_string()
+    };
+    container(text(label).size(11).color(color))
+        .padding([3, 8])
+        .width(Length::Shrink)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(Color::from_rgb(0.10, 0.10, 0.12))),
+            border: Border {
+                width: 1.0,
+                color: SEP,
+                radius: 3.0.into(),
+            },
+            ..container::Style::default()
+        })
+        .into()
+}
+
+fn keymap_recorder_control<'a>(
+    recorder: &'a crate::app::KeymapRecorderState,
+) -> Element<'a, PrefMsg> {
+    let recorded: Element<'a, PrefMsg> = if recorder.strokes.is_empty() {
+        text("Press Record, then type a shortcut")
+            .size(12)
+            .color(TEXT_MUT)
+            .into()
+    } else {
+        row(recorded_shortcut_chips(recorder))
+            .spacing(6)
+            .align_y(iced::Alignment::Center)
+            .into()
+    };
+
+    let transient_modifiers = if recorder.recording
+        && recorder.modifiers != crate::keymap::Modifiers::default()
+        && recorder.strokes.len() < crate::app::KeymapRecorderState::MAX_STROKES
+    {
+        Some(shortcut_chip(
+            &format!("{}...", modifiers_label(recorder.modifiers)),
+            WARN_YELLOW,
+        ))
+    } else {
+        None
+    };
+    let mut capture_row = row![
+        text(if recorder.recording {
+            "Recording"
+        } else {
+            "Recorded"
+        })
+        .size(11)
+        .color(if recorder.recording {
+            WARN_YELLOW
+        } else {
+            TEXT_MUT
+        }),
+        recorded,
+    ]
+    .spacing(8)
+    .align_y(iced::Alignment::Center);
+    if let Some(transient_modifiers) = transient_modifiers {
+        capture_row = capture_row.push(transient_modifiers);
+    }
+
+    let record_button = if recorder.recording {
+        button(container(text("Stop").size(11).color(Color::WHITE)).padding([5, 12]))
+            .on_press(PrefMsg::KeymapRecorderStop)
+            .style(move |_: &Theme, status: button::Status| {
+                let bg = match status {
+                    button::Status::Hovered | button::Status::Pressed => BTN_DANGER_HOV,
+                    _ => BTN_DANGER,
+                };
+                button::Style {
+                    background: Some(Background::Color(bg)),
+                    text_color: Color::WHITE,
+                    border: Border {
+                        radius: 3.0.into(),
+                        ..Border::default()
+                    },
+                    ..button::Style::default()
+                }
+            })
+    } else {
+        button(container(text("Record").size(11).color(Color::WHITE)).padding([5, 12]))
+            .on_press(PrefMsg::KeymapRecorderStart)
+            .style(move |_: &Theme, status: button::Status| {
+                let bg = match status {
+                    button::Status::Hovered | button::Status::Pressed => BTN_IMPORT_HOV,
+                    _ => BTN_IMPORT,
+                };
+                button::Style {
+                    background: Some(Background::Color(bg)),
+                    text_color: Color::WHITE,
+                    border: Border {
+                        radius: 3.0.into(),
+                        ..Border::default()
+                    },
+                    ..button::Style::default()
+                }
+            })
+    };
+
+    container(
+        column![
+            row![
+                column![
+                    text("Edit Shortcut").size(15).color(TEXT_PRI),
+                    text(recorder.command_label.clone()).size(11).color(TEXT_MUT),
+                ]
+                .spacing(3),
+                Space::new().width(Length::Fill),
+                button(container(text("Cancel").size(11).color(TEXT_PRI)).padding([5, 12]))
+                    .on_press(PrefMsg::KeymapRecorderCancel)
+                    .style(secondary_button_style),
+            ]
+            .align_y(iced::Alignment::Center),
+            container(
+                column![
+                    row![
+                        text(context_label(recorder.context)).size(11).color(TEXT_MUT),
+                        text("Current").size(11).color(TEXT_MUT),
+                        shortcut_chip(&recorder.original_trigger, TEXT_PRI),
+                    ]
+                    .spacing(8)
+                    .align_y(iced::Alignment::Center),
+                    capture_row,
+                ]
+                .spacing(10),
+            )
+            .padding(12)
+            .width(Length::Fill)
+            .style(move |_: &Theme| container::Style {
+                background: Some(Background::Color(Color::from_rgb(0.10, 0.10, 0.12))),
+                border: Border {
+                    width: 1.0,
+                    color: SEP,
+                    radius: 4.0.into(),
+                },
+                ..container::Style::default()
+            }),
+            text("Press the exact keystroke to record it. ESC is recorded as a key; use Cancel to close.")
+                .size(10)
+                .color(TEXT_MUT),
+            row![
+                record_button,
+                button(container(text("Clear").size(11).color(TEXT_PRI)).padding([5, 12]))
+                    .on_press(PrefMsg::KeymapRecorderClear)
+                    .style(secondary_button_style),
+                Space::new().width(Length::Fill),
+                button(container(text("OK").size(11).color(Color::WHITE)).padding([5, 12]))
+                    .on_press(PrefMsg::KeymapRecorderApply)
+                    .style(move |_: &Theme, status: button::Status| {
+                        let bg = match status {
+                            button::Status::Hovered | button::Status::Pressed => BTN_IMPORT_HOV,
+                            _ => BTN_IMPORT,
+                        };
+                        button::Style {
+                            background: Some(Background::Color(bg)),
+                            text_color: Color::WHITE,
+                            border: Border {
+                                radius: 3.0.into(),
+                                ..Border::default()
+                            },
+                            ..button::Style::default()
+                        }
+                    }),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center),
+        ]
+        .spacing(12),
+    )
+    .padding(16)
+    .width(Length::Fill)
+    .style(move |_: &Theme| container::Style {
+        background: Some(Background::Color(Color::from_rgb(0.085, 0.09, 0.105))),
+        border: Border {
+            width: 1.0,
+            color: BTN_IMPORT,
+            radius: 6.0.into(),
+        },
+        ..container::Style::default()
+    })
+    .into()
+}
+
+fn recorded_shortcut_chips<'a>(
+    recorder: &'a crate::app::KeymapRecorderState,
+) -> Vec<Element<'a, PrefMsg>> {
+    recorder
+        .strokes
+        .iter()
+        .map(|stroke| shortcut_chip(&stroke.to_string(), TEXT_PRI))
+        .collect()
+}
+
+fn modifiers_label(modifiers: crate::keymap::Modifiers) -> String {
+    let mut parts = Vec::new();
+    if modifiers.ctrl {
+        parts.push("Ctrl");
+    }
+    if modifiers.command && !modifiers.ctrl {
+        parts.push("Cmd");
+    }
+    if modifiers.alt {
+        parts.push("Alt");
+    }
+    if modifiers.shift {
+        parts.push("Shift");
+    }
+    parts.join("+")
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct KeymapProfileOption {
+    id: String,
+    label: String,
+}
+
+impl From<&crate::keymap::KeymapEditorProfile> for KeymapProfileOption {
+    fn from(profile: &crate::keymap::KeymapEditorProfile) -> Self {
+        let kind = match profile.kind {
+            crate::keymap::ShortcutProfileKind::BuiltIn => "built-in",
+            crate::keymap::ShortcutProfileKind::Custom => "custom",
+        };
+        Self {
+            id: profile.id.clone(),
+            label: format!("{} ({kind})", profile.name),
+        }
+    }
+}
+
+impl std::fmt::Display for KeymapProfileOption {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.label)
+    }
+}
+
+fn context_label(context: crate::keymap::ShortcutContext) -> &'static str {
+    match context {
+        crate::keymap::ShortcutContext::Global => "Global",
+        crate::keymap::ShortcutContext::Schematic => "Schematic",
+        crate::keymap::ShortcutContext::Footprint => "Footprint",
+        crate::keymap::ShortcutContext::Pcb => "PCB",
+        crate::keymap::ShortcutContext::Library => "Library",
+        crate::keymap::ShortcutContext::Modal => "Modal",
+        crate::keymap::ShortcutContext::TextInput => "Text Input",
+        crate::keymap::ShortcutContext::CommandPalette => "Command Palette",
+        crate::keymap::ShortcutContext::Placement => "Placement",
+    }
+}
+
+fn title_case(value: &str) -> String {
+    value
+        .split(['_', '-', ' '])
+        .filter(|part| !part.is_empty())
+        .map(|part| {
+            let mut chars = part.chars();
+            match chars.next() {
+                Some(first) => format!("{}{}", first.to_uppercase(), chars.as_str()),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn secondary_button_style(_: &Theme, status: button::Status) -> button::Style {
+    let bg = match status {
+        button::Status::Hovered | button::Status::Pressed => Color::from_rgb(0.22, 0.22, 0.26),
+        _ => Color::from_rgb(0.18, 0.18, 0.21),
+    };
+    button::Style {
+        background: Some(Background::Color(bg)),
+        text_color: TEXT_PRI,
+        border: Border {
+            width: 1.0,
+            color: SEP,
+            radius: 3.0.into(),
+        },
+        ..button::Style::default()
     }
 }
 

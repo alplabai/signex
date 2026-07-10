@@ -3530,6 +3530,9 @@ impl Signex {
             &self.library.settings,
             &self.document_state.panel_ctx.tokens,
             &ui.preferences_draft_component_classes,
+            &ui.preferences_keymap_editor,
+            &ui.preferences_keymap_status,
+            ui.preferences_keymap_recorder.as_ref(),
             ui.theme_id,
         )
         .map(|m| Message::Preferences(PreferencesMsg::Inner(m)));
@@ -5525,6 +5528,9 @@ impl Signex {
                 &self.library.settings,
                 &document.panel_ctx.tokens,
                 &ui.preferences_draft_component_classes,
+                &ui.preferences_keymap_editor,
+                &ui.preferences_keymap_status,
+                ui.preferences_keymap_recorder.as_ref(),
                 ui.theme_id,
             )
             .map(|m| Message::Preferences(PreferencesMsg::Inner(m)));

@@ -95,6 +95,11 @@ impl Signex {
                 .expect("bundled keyboard shortcut profiles must parse")
         });
         let active_keymap = keymap_profiles.compile_active();
+        // Working copy for the Preferences ▸ Keyboard Shortcuts pane.
+        // Re-seeded from `keymap_profiles` every time the window opens,
+        // so this initial clone just keeps the pane renderable before
+        // the first open.
+        let keymap_editor = crate::keymap::KeymapEditorModel::new(keymap_profiles.clone());
 
         let mut app = Self {
             ui_state: UiState {
@@ -145,6 +150,9 @@ impl Signex {
                 preferences_draft_symbol_grid_size_mm: crate::fonts::read_symbol_grid_size_mm_pref(
                 ),
                 preferences_draft_symbol_grid_style: crate::fonts::read_symbol_grid_style_pref(),
+                preferences_keymap_editor: keymap_editor,
+                preferences_keymap_status: String::new(),
+                preferences_keymap_recorder: None,
                 preferences_dirty: false,
                 custom_theme: None,
                 rename_dialog: None,
@@ -497,6 +505,7 @@ impl Signex {
                 self.ui_state.remove_dialog.is_some(),
                 self.ui_state.enable_version_control.is_some(),
                 self.library.create_options.is_some(),
+                self.ui_state.preferences_keymap_recorder.is_some(),
             ))
             .map(
                 |(
@@ -512,12 +521,40 @@ impl Signex {
                         remove_open,
                         enable_vc_open,
                         library_create_options_open,
+                        keymap_recorder_open,
                     ),
                     event,
                 )| match event {
+                    // Chord recorder open (Preferences ▸ Keyboard
+                    // Shortcuts): held modifiers drive the live
+                    // "Ctrl+…" hint before a key lands.
+                    keyboard::Event::ModifiersChanged(modifiers) if keymap_recorder_open => {
+                        Message::Preferences(PreferencesMsg::Inner(
+                            crate::preferences::PrefMsg::KeymapRecorderModifiersChanged(
+                                crate::keymap::Modifiers::from_iced(modifiers),
+                            ),
+                        ))
+                    }
                     keyboard::Event::KeyPressed {
                         key, modifiers: m, ..
                     } => {
+                        // While the recorder is open, every raw stroke
+                        // is captured for the binding under edit — it
+                        // must NOT reach the live keymap resolver, or
+                        // recording a shortcut would also fire it. The
+                        // pending chord buffer is left untouched (it is
+                        // only advanced by the resolver, which we skip).
+                        if keymap_recorder_open {
+                            return KeyStroke::from_iced(&key, m)
+                                .map(|stroke| {
+                                    Message::Preferences(PreferencesMsg::Inner(
+                                        crate::preferences::PrefMsg::KeymapRecorderKeyPressed(
+                                            stroke,
+                                        ),
+                                    ))
+                                })
+                                .unwrap_or(Message::Noop);
+                        }
                         // Command palette captures most input while open so
                         // typing into the search field doesn't fire tool
                         // shortcuts (`p`, `w`, `l`, …). Only navigation

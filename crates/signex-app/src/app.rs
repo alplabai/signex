@@ -43,7 +43,9 @@ pub use documents::{
     ComponentEditorTab, DrawMode, FootprintEditorState, SchematicTabSession, SymbolEditorState,
     TabDocument, TabInfo, TabKind, Tool,
 };
-pub use state::{DocumentState, InteractionState, LoadedProject, ProjectId, Signex, UiState};
+pub use state::{
+    DocumentState, InteractionState, KeymapRecorderState, LoadedProject, ProjectId, Signex, UiState,
+};
 
 // Re-exported so modal dialogs outside `state` can reference the type.
 #[allow(unused_imports)]
