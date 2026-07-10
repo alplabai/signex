@@ -350,7 +350,13 @@ pub fn view<'a>(
             Space::new().height(Length::Fill),
             row![
                 Space::new().width(Length::Fill),
-                dialog,
+                // In-app overlay: keep a centred, capped card (the detached
+                // window path uses `view_body` directly and fills the window).
+                container(dialog)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .max_width(DLG_W)
+                    .max_height(DLG_H),
                 Space::new().width(Length::Fill),
             ],
             Space::new().height(Length::Fill),
@@ -531,9 +537,13 @@ fn build_dialog<'a>(
         col_items.push(footer);
     }
 
+    // Fill the container we are given: as an in-app overlay `view()` wraps us
+    // in a fixed DLG_W×DLG_H card; as the detached Preferences window content
+    // this fills the OS window so the modal grows/shrinks with a window resize
+    // instead of staying a fixed 960×660 island.
     container(Column::with_children(col_items).spacing(0))
-        .width(DLG_W)
-        .height(DLG_H)
+        .width(Length::Fill)
+        .height(Length::Fill)
         .style(move |theme: &Theme| container::Style {
             background: Some(Background::Color(theme.extended_palette().background.base.color)),
             border: Border {
