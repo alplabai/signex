@@ -143,6 +143,10 @@ pub enum PrefMsg {
     // All edits land on `UiState::preferences_keymap_editor` (a working
     // copy) so Cancel / Discard revert cleanly; Save commits the set
     // and recompiles the live keymap.
+    /// Live search query for the shortcut table (case-insensitive filter
+    /// on label / command id / trigger). Pure view state — the handler
+    /// just stores it and never marks the draft dirty.
+    KeymapSearchChanged(String),
     /// Switch the active profile shown in the editor.
     KeymapProfileSelected(String),
     /// Fork the active profile into a new editable custom profile.
@@ -239,6 +243,7 @@ pub fn view<'a>(
     draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
     keymap_editor: &'a crate::keymap::KeymapEditorModel,
     keymap_status: &'a str,
+    keymap_search: &'a str,
     keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
     theme_id: ThemeId,
 ) -> Element<'a, PrefMsg> {
@@ -261,6 +266,7 @@ pub fn view<'a>(
         draft_component_classes,
         keymap_editor,
         keymap_status,
+        keymap_search,
         keymap_recorder,
         theme_id,
     );
@@ -313,6 +319,7 @@ pub(crate) fn view_body<'a>(
     draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
     keymap_editor: &'a crate::keymap::KeymapEditorModel,
     keymap_status: &'a str,
+    keymap_search: &'a str,
     keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
     theme_id: ThemeId,
 ) -> Element<'a, PrefMsg> {
@@ -335,6 +342,7 @@ pub(crate) fn view_body<'a>(
         draft_component_classes,
         keymap_editor,
         keymap_status,
+        keymap_search,
         keymap_recorder,
         theme_id,
     )
@@ -360,6 +368,7 @@ fn build_dialog<'a>(
     draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
     keymap_editor: &'a crate::keymap::KeymapEditorModel,
     keymap_status: &'a str,
+    keymap_search: &'a str,
     keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
     theme_id: ThemeId,
 ) -> Element<'a, PrefMsg> {
@@ -420,6 +429,7 @@ fn build_dialog<'a>(
             draft_component_classes,
             keymap_editor,
             keymap_status,
+            keymap_search,
             keymap_recorder,
         ),
     ]
@@ -557,6 +567,7 @@ fn build_content<'a>(
     draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
     keymap_editor: &'a crate::keymap::KeymapEditorModel,
     keymap_status: &'a str,
+    keymap_search: &'a str,
     keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
 ) -> Element<'a, PrefMsg> {
     let inner = match nav {
@@ -586,7 +597,7 @@ fn build_content<'a>(
             content_library_distributors(distributor_settings, panel_tokens)
         }
         PrefNav::Keyboard => {
-            content_keyboard_shortcuts(keymap_editor, keymap_status, keymap_recorder)
+            content_keyboard_shortcuts(keymap_editor, keymap_status, keymap_search, keymap_recorder)
         }
         PrefNav::ComponentClasses => content_component_classes(draft_component_classes),
     };
@@ -1386,6 +1397,7 @@ fn severity_bg(sev: signex_erc::Severity) -> Color {
 fn content_keyboard_shortcuts<'a>(
     editor: &'a crate::keymap::KeymapEditorModel,
     status: &'a str,
+    search: &'a str,
     recorder: Option<&'a crate::app::KeymapRecorderState>,
 ) -> Element<'a, PrefMsg> {
     let profiles = editor.profiles();
@@ -1404,22 +1416,8 @@ fn content_keyboard_shortcuts<'a>(
     // Delete is only wired for custom profiles — built-ins are
     // protected by the model, so the button is inert on a built-in.
     let delete_button = {
-        let base = button(container(text("Delete").size(11).color(Color::WHITE)).padding([5, 12]))
-            .style(move |_: &Theme, status: button::Status| {
-                let bg = match status {
-                    button::Status::Hovered | button::Status::Pressed => BTN_DANGER_HOV,
-                    _ => BTN_DANGER,
-                };
-                button::Style {
-                    background: Some(Background::Color(bg)),
-                    text_color: Color::WHITE,
-                    border: Border {
-                        radius: 3.0.into(),
-                        ..Border::default()
-                    },
-                    ..button::Style::default()
-                }
-            });
+        let base = button(container(text("Delete").size(11)).padding([5, 12]))
+            .style(keymap_danger_button_style);
         if active_is_custom {
             base.on_press(PrefMsg::KeymapDeleteActiveProfile)
         } else {
@@ -1436,6 +1434,7 @@ fn content_keyboard_shortcuts<'a>(
     ]
     .spacing(6);
 
+    // Profile picker + recorder stay ABOVE the search box and groups.
     let profile_row = row![
         column![
             text("Profile").size(12).color(TEXT_PRI),
@@ -1448,28 +1447,14 @@ fn content_keyboard_shortcuts<'a>(
         })
         .text_size(12)
         .width(180),
-        button(container(text("Create").size(11).color(Color::WHITE)).padding([5, 12]))
+        button(container(text("Create").size(11)).padding([5, 12]))
             .on_press(PrefMsg::KeymapCreateCustomProfile)
-            .style(move |_: &Theme, status: button::Status| {
-                let bg = match status {
-                    button::Status::Hovered | button::Status::Pressed => BTN_IMPORT_HOV,
-                    _ => BTN_IMPORT,
-                };
-                button::Style {
-                    background: Some(Background::Color(bg)),
-                    text_color: Color::WHITE,
-                    border: Border {
-                        radius: 3.0.into(),
-                        ..Border::default()
-                    },
-                    ..button::Style::default()
-                }
-            }),
+            .style(keymap_primary_button_style),
         delete_button,
-        button(container(text("Import").size(11).color(TEXT_PRI)).padding([5, 12]))
+        button(container(text("Import").size(11)).padding([5, 12]))
             .on_press(PrefMsg::KeymapImportProfile)
             .style(secondary_button_style),
-        button(container(text("Export").size(11).color(TEXT_PRI)).padding([5, 12]))
+        button(container(text("Export").size(11)).padding([5, 12]))
             .on_press(PrefMsg::KeymapExportProfile)
             .style(secondary_button_style),
         Space::new().width(Length::Fill),
@@ -1491,6 +1476,14 @@ fn content_keyboard_shortcuts<'a>(
         "No conflicts detected in active keyboard shortcuts.".to_string()
     };
 
+    // Search box — case-insensitive filter across every group. Uses the
+    // default (theme-aware) text_input styling like the other panes.
+    let search_box = text_input("Search shortcuts…", search)
+        .on_input(PrefMsg::KeymapSearchChanged)
+        .padding(6)
+        .size(12)
+        .width(Length::Fill);
+
     let table_header = row![
         container(text("Category").size(11).color(TEXT_MUT)).width(Length::FillPortion(2)),
         container(text("Command").size(11).color(TEXT_MUT)).width(Length::FillPortion(4)),
@@ -1501,103 +1494,8 @@ fn content_keyboard_shortcuts<'a>(
     .spacing(8)
     .padding([4, 0]);
 
-    let rows = editor.rows();
     let active_profile_is_custom = editor.active_profile_is_custom();
-    let mut table_rows: Vec<Element<'a, PrefMsg>> = Vec::with_capacity(rows.len());
-    for row_model in rows {
-        let has_conflict = conflicts.iter().any(|conflict| {
-            conflict.context == row_model.context
-                && conflict.trigger == row_model.trigger
-                && row_model.command.as_ref().is_some_and(|command| {
-                    command == &conflict.first_command || command == &conflict.second_command
-                })
-        });
-        let state = if !row_model.trigger_valid {
-            "Invalid"
-        } else if has_conflict {
-            "Conflict"
-        } else if row_model.trigger.trim().is_empty() {
-            "Unbound"
-        } else if row_model.keyboard_editable && active_profile_is_custom {
-            "Editable"
-        } else if row_model.keyboard_editable {
-            "Create custom"
-        } else {
-            "Gesture"
-        };
-        let state_color = if !row_model.trigger_valid || has_conflict {
-            WARN_YELLOW
-        } else if row_model.trigger.trim().is_empty() {
-            TEXT_MUT
-        } else {
-            TEXT_PRI
-        };
-
-        // Keyboard-editable rows in a custom profile get an inline Edit
-        // button that opens the chord recorder; everything else is
-        // read-only (built-in profiles, pointer gestures).
-        let trigger_cell: Element<'a, PrefMsg> = if active_profile_is_custom
-            && row_model.keyboard_editable
-        {
-            if let Some(command) = row_model.command.clone() {
-                let context = row_model.context;
-                let label = row_model.label.clone();
-                let trigger = row_model.trigger.clone();
-                row![
-                    shortcut_chip(&row_model.trigger, state_color),
-                    button(container(text("Edit").size(10).color(TEXT_PRI)).padding([3, 8]))
-                        .on_press(PrefMsg::KeymapRecorderOpen {
-                            command,
-                            label,
-                            context,
-                            trigger,
-                        })
-                        .style(secondary_button_style),
-                ]
-                .spacing(6)
-                .align_y(iced::Alignment::Center)
-                .into()
-            } else {
-                text(row_model.trigger).size(11).color(TEXT_MUT).into()
-            }
-        } else {
-            shortcut_chip(&row_model.trigger, TEXT_PRI)
-        };
-
-        table_rows.push(
-            row![
-                container(
-                    text(title_case(&row_model.category))
-                        .size(11)
-                        .color(TEXT_MUT)
-                )
-                .width(Length::FillPortion(2)),
-                container(text(row_model.label).size(11).color(TEXT_PRI))
-                    .width(Length::FillPortion(4)),
-                container(
-                    text(context_label(row_model.context))
-                        .size(11)
-                        .color(TEXT_MUT)
-                )
-                .width(Length::FillPortion(2)),
-                container(trigger_cell).width(Length::FillPortion(2)),
-                container(text(state).size(11).color(state_color)).width(Length::FillPortion(2)),
-            ]
-            .spacing(8)
-            .align_y(iced::Alignment::Center)
-            .padding([5, 0])
-            .into(),
-        );
-    }
-
-    let table: Element<'a, PrefMsg> = if table_rows.is_empty() {
-        text("No shortcuts are defined in the active profile.")
-            .size(11)
-            .color(TEXT_MUT)
-            .into()
-    } else {
-        Column::with_children(table_rows).spacing(2).into()
-    };
+    let filtered = editor.filtered_rows(search);
 
     let mut content = column![
         header,
@@ -1611,37 +1509,189 @@ fn content_keyboard_shortcuts<'a>(
         content = content.push(keymap_recorder_control(recorder));
     }
 
-    content.push(h_sep()).push(table_header).push(table).into()
+    content = content.push(search_box);
+    content = content.push(h_sep());
+
+    if filtered.is_empty() {
+        let empty = if editor.rows().is_empty() {
+            "No shortcuts are defined in the active profile.".to_string()
+        } else {
+            format!("No shortcuts match “{}”.", search.trim())
+        };
+        content = content.push(text(empty).size(11).color(TEXT_MUT));
+        return content.into();
+    }
+
+    content = content.push(table_header);
+
+    // One block per group, in the fixed CommandGroup::ALL display order.
+    // Groups with no matching rows are skipped entirely.
+    for &group in crate::keymap::CommandGroup::ALL {
+        let group_rows: Vec<Element<'a, PrefMsg>> = filtered
+            .iter()
+            .filter(|row_model| row_model.group == group)
+            .map(|row_model| keymap_table_row(row_model, &conflicts, active_profile_is_custom))
+            .collect();
+        if group_rows.is_empty() {
+            continue;
+        }
+        content = content.push(Space::new().height(6));
+        content = content.push(section_title(group.display_name()));
+        content = content.push(Column::with_children(group_rows).spacing(2));
+    }
+
+    content.into()
 }
 
-fn shortcut_chip<'a>(label: &str, color: Color) -> Element<'a, PrefMsg> {
+/// Render one shortcut table row. Extracted so the grouped view can build
+/// rows per [`crate::keymap::CommandGroup`] without duplicating the cell
+/// layout. Text that sits directly on the (theme-neutral) modal surface
+/// keeps the shared muted / primary constants; the trigger chip and Edit
+/// button pull their colours from the active theme.
+fn keymap_table_row<'a>(
+    row_model: &crate::keymap::KeymapEditorRow,
+    conflicts: &[crate::keymap::BindingConflict],
+    active_profile_is_custom: bool,
+) -> Element<'a, PrefMsg> {
+    let has_conflict = conflicts.iter().any(|conflict| {
+        conflict.context == row_model.context
+            && conflict.trigger == row_model.trigger
+            && row_model.command.as_ref().is_some_and(|command| {
+                command == &conflict.first_command || command == &conflict.second_command
+            })
+    });
+    let state = if !row_model.trigger_valid {
+        "Invalid"
+    } else if has_conflict {
+        "Conflict"
+    } else if row_model.trigger.trim().is_empty() {
+        "Unbound"
+    } else if row_model.keyboard_editable && active_profile_is_custom {
+        "Editable"
+    } else if row_model.keyboard_editable {
+        "Create custom"
+    } else {
+        "Gesture"
+    };
+    let state_warn = !row_model.trigger_valid || has_conflict;
+    let state_color = if state_warn {
+        WARN_YELLOW
+    } else if row_model.trigger.trim().is_empty() {
+        TEXT_MUT
+    } else {
+        TEXT_PRI
+    };
+
+    // Keyboard-editable rows in a custom profile get an inline Edit button
+    // that opens the chord recorder; everything else is read-only (built-in
+    // profiles, pointer gestures).
+    let trigger_cell: Element<'a, PrefMsg> = if active_profile_is_custom
+        && row_model.keyboard_editable
+    {
+        if let Some(command) = row_model.command.clone() {
+            let context = row_model.context;
+            let label = row_model.label.clone();
+            let trigger = row_model.trigger.clone();
+            let tone = if state_warn {
+                ChipTone::Warning
+            } else {
+                ChipTone::Neutral
+            };
+            row![
+                shortcut_chip(&row_model.trigger, tone),
+                button(container(text("Edit").size(10)).padding([3, 8]))
+                    .on_press(PrefMsg::KeymapRecorderOpen {
+                        command,
+                        label,
+                        context,
+                        trigger,
+                    })
+                    .style(secondary_button_style),
+            ]
+            .spacing(6)
+            .align_y(iced::Alignment::Center)
+            .into()
+        } else {
+            text(row_model.trigger.clone())
+                .size(11)
+                .color(TEXT_MUT)
+                .into()
+        }
+    } else {
+        shortcut_chip(&row_model.trigger, ChipTone::Neutral)
+    };
+
+    row![
+        container(text(title_case(&row_model.category)).size(11).color(TEXT_MUT))
+            .width(Length::FillPortion(2)),
+        container(text(row_model.label.clone()).size(11).color(TEXT_PRI))
+            .width(Length::FillPortion(4)),
+        container(text(context_label(row_model.context)).size(11).color(TEXT_MUT))
+            .width(Length::FillPortion(2)),
+        container(trigger_cell).width(Length::FillPortion(2)),
+        container(text(state).size(11).color(state_color)).width(Length::FillPortion(2)),
+    ]
+    .spacing(8)
+    .align_y(iced::Alignment::Center)
+    .padding([5, 0])
+    .into()
+}
+
+/// Colour intent for a shortcut chip. Resolved against the active theme
+/// inside [`shortcut_chip`] so chips read correctly on light and dark
+/// palettes alike.
+#[derive(Debug, Clone, Copy)]
+enum ChipTone {
+    /// Regular trigger text — pairs with the chip's own background.
+    Neutral,
+    /// Invalid / conflicting / transient-modifier trigger.
+    Warning,
+}
+
+fn shortcut_chip<'a>(label: &str, tone: ChipTone) -> Element<'a, PrefMsg> {
     let label = if label.trim().is_empty() {
         "Unbound".to_string()
     } else {
         label.to_string()
     };
-    container(text(label).size(11).color(color))
-        .padding([3, 8])
-        .width(Length::Shrink)
-        .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(Color::from_rgb(0.10, 0.10, 0.12))),
+    container(
+        text(label)
+            .size(11)
+            .style(move |theme: &Theme| text::Style {
+                color: Some(match tone {
+                    ChipTone::Neutral => theme.extended_palette().background.weak.text,
+                    ChipTone::Warning => theme.palette().warning,
+                }),
+            }),
+    )
+    .padding([3, 8])
+    .width(Length::Shrink)
+    .style(move |theme: &Theme| {
+        let palette = theme.extended_palette();
+        container::Style {
+            background: Some(Background::Color(palette.background.weak.color)),
             border: Border {
                 width: 1.0,
-                color: SEP,
+                color: palette.background.strong.color,
                 radius: 3.0.into(),
             },
             ..container::Style::default()
-        })
-        .into()
+        }
+    })
+    .into()
 }
 
 fn keymap_recorder_control<'a>(
     recorder: &'a crate::app::KeymapRecorderState,
 ) -> Element<'a, PrefMsg> {
+    // The recorder card carries its own themed surfaces, so its text uses
+    // theme-aware helpers (base / secondary / warning) rather than the
+    // modal's neutral constants — otherwise the labels would vanish on a
+    // light theme where the card background flips light.
     let recorded: Element<'a, PrefMsg> = if recorder.strokes.is_empty() {
         text("Press Record, then type a shortcut")
             .size(12)
-            .color(TEXT_MUT)
+            .style(iced::widget::text::secondary)
             .into()
     } else {
         row(recorded_shortcut_chips(recorder))
@@ -1656,79 +1706,51 @@ fn keymap_recorder_control<'a>(
     {
         Some(shortcut_chip(
             &format!("{}...", modifiers_label(recorder.modifiers)),
-            WARN_YELLOW,
+            ChipTone::Warning,
         ))
     } else {
         None
     };
-    let mut capture_row = row![
-        text(if recorder.recording {
-            "Recording"
-        } else {
-            "Recorded"
-        })
-        .size(11)
-        .color(if recorder.recording {
-            WARN_YELLOW
-        } else {
-            TEXT_MUT
-        }),
-        recorded,
-    ]
-    .spacing(8)
-    .align_y(iced::Alignment::Center);
+    let capture_status: Element<'a, PrefMsg> = if recorder.recording {
+        text("Recording")
+            .size(11)
+            .style(iced::widget::text::warning)
+            .into()
+    } else {
+        text("Recorded")
+            .size(11)
+            .style(iced::widget::text::secondary)
+            .into()
+    };
+    let mut capture_row = row![capture_status, recorded]
+        .spacing(8)
+        .align_y(iced::Alignment::Center);
     if let Some(transient_modifiers) = transient_modifiers {
         capture_row = capture_row.push(transient_modifiers);
     }
 
     let record_button = if recorder.recording {
-        button(container(text("Stop").size(11).color(Color::WHITE)).padding([5, 12]))
+        button(container(text("Stop").size(11)).padding([5, 12]))
             .on_press(PrefMsg::KeymapRecorderStop)
-            .style(move |_: &Theme, status: button::Status| {
-                let bg = match status {
-                    button::Status::Hovered | button::Status::Pressed => BTN_DANGER_HOV,
-                    _ => BTN_DANGER,
-                };
-                button::Style {
-                    background: Some(Background::Color(bg)),
-                    text_color: Color::WHITE,
-                    border: Border {
-                        radius: 3.0.into(),
-                        ..Border::default()
-                    },
-                    ..button::Style::default()
-                }
-            })
+            .style(keymap_danger_button_style)
     } else {
-        button(container(text("Record").size(11).color(Color::WHITE)).padding([5, 12]))
+        button(container(text("Record").size(11)).padding([5, 12]))
             .on_press(PrefMsg::KeymapRecorderStart)
-            .style(move |_: &Theme, status: button::Status| {
-                let bg = match status {
-                    button::Status::Hovered | button::Status::Pressed => BTN_IMPORT_HOV,
-                    _ => BTN_IMPORT,
-                };
-                button::Style {
-                    background: Some(Background::Color(bg)),
-                    text_color: Color::WHITE,
-                    border: Border {
-                        radius: 3.0.into(),
-                        ..Border::default()
-                    },
-                    ..button::Style::default()
-                }
-            })
+            .style(keymap_primary_button_style)
     };
 
     container(
         column![
             row![
                 column![
-                    text("Edit Shortcut").size(15).color(TEXT_PRI),
-                    text(recorder.command_label.clone()).size(11).color(TEXT_MUT),
+                    text("Edit Shortcut").size(15).style(iced::widget::text::base),
+                    text(recorder.command_label.clone())
+                        .size(11)
+                        .style(iced::widget::text::secondary),
                 ]
                 .spacing(3),
                 Space::new().width(Length::Fill),
-                button(container(text("Cancel").size(11).color(TEXT_PRI)).padding([5, 12]))
+                button(container(text("Cancel").size(11)).padding([5, 12]))
                     .on_press(PrefMsg::KeymapRecorderCancel)
                     .style(secondary_button_style),
             ]
@@ -1736,9 +1758,11 @@ fn keymap_recorder_control<'a>(
             container(
                 column![
                     row![
-                        text(context_label(recorder.context)).size(11).color(TEXT_MUT),
-                        text("Current").size(11).color(TEXT_MUT),
-                        shortcut_chip(&recorder.original_trigger, TEXT_PRI),
+                        text(context_label(recorder.context))
+                            .size(11)
+                            .style(iced::widget::text::secondary),
+                        text("Current").size(11).style(iced::widget::text::secondary),
+                        shortcut_chip(&recorder.original_trigger, ChipTone::Neutral),
                     ]
                     .spacing(8)
                     .align_y(iced::Alignment::Center),
@@ -1748,41 +1772,30 @@ fn keymap_recorder_control<'a>(
             )
             .padding(12)
             .width(Length::Fill)
-            .style(move |_: &Theme| container::Style {
-                background: Some(Background::Color(Color::from_rgb(0.10, 0.10, 0.12))),
-                border: Border {
-                    width: 1.0,
-                    color: SEP,
-                    radius: 4.0.into(),
-                },
-                ..container::Style::default()
+            .style(move |theme: &Theme| {
+                let palette = theme.extended_palette();
+                container::Style {
+                    background: Some(Background::Color(palette.background.weak.color)),
+                    border: Border {
+                        width: 1.0,
+                        color: palette.background.strong.color,
+                        radius: 4.0.into(),
+                    },
+                    ..container::Style::default()
+                }
             }),
             text("Press the exact keystroke to record it. ESC is recorded as a key; use Cancel to close.")
                 .size(10)
-                .color(TEXT_MUT),
+                .style(iced::widget::text::secondary),
             row![
                 record_button,
-                button(container(text("Clear").size(11).color(TEXT_PRI)).padding([5, 12]))
+                button(container(text("Clear").size(11)).padding([5, 12]))
                     .on_press(PrefMsg::KeymapRecorderClear)
                     .style(secondary_button_style),
                 Space::new().width(Length::Fill),
-                button(container(text("OK").size(11).color(Color::WHITE)).padding([5, 12]))
+                button(container(text("OK").size(11)).padding([5, 12]))
                     .on_press(PrefMsg::KeymapRecorderApply)
-                    .style(move |_: &Theme, status: button::Status| {
-                        let bg = match status {
-                            button::Status::Hovered | button::Status::Pressed => BTN_IMPORT_HOV,
-                            _ => BTN_IMPORT,
-                        };
-                        button::Style {
-                            background: Some(Background::Color(bg)),
-                            text_color: Color::WHITE,
-                            border: Border {
-                                radius: 3.0.into(),
-                                ..Border::default()
-                            },
-                            ..button::Style::default()
-                        }
-                    }),
+                    .style(keymap_primary_button_style),
             ]
             .spacing(8)
             .align_y(iced::Alignment::Center),
@@ -1791,14 +1804,17 @@ fn keymap_recorder_control<'a>(
     )
     .padding(16)
     .width(Length::Fill)
-    .style(move |_: &Theme| container::Style {
-        background: Some(Background::Color(Color::from_rgb(0.085, 0.09, 0.105))),
-        border: Border {
-            width: 1.0,
-            color: BTN_IMPORT,
-            radius: 6.0.into(),
-        },
-        ..container::Style::default()
+    .style(move |theme: &Theme| {
+        let palette = theme.extended_palette();
+        container::Style {
+            background: Some(Background::Color(palette.background.base.color)),
+            border: Border {
+                width: 1.0,
+                color: palette.primary.base.color,
+                radius: 6.0.into(),
+            },
+            ..container::Style::default()
+        }
     })
     .into()
 }
@@ -1809,7 +1825,7 @@ fn recorded_shortcut_chips<'a>(
     recorder
         .strokes
         .iter()
-        .map(|stroke| shortcut_chip(&stroke.to_string(), TEXT_PRI))
+        .map(|stroke| shortcut_chip(&stroke.to_string(), ChipTone::Neutral))
         .collect()
 }
 
@@ -1884,18 +1900,59 @@ fn title_case(value: &str) -> String {
         .join(" ")
 }
 
-fn secondary_button_style(_: &Theme, status: button::Status) -> button::Style {
+/// Neutral secondary button (Import / Export / Edit / Cancel / Clear) —
+/// theme-derived so it reads on both light and dark palettes.
+fn secondary_button_style(theme: &Theme, status: button::Status) -> button::Style {
+    let palette = theme.extended_palette();
     let bg = match status {
-        button::Status::Hovered | button::Status::Pressed => Color::from_rgb(0.22, 0.22, 0.26),
-        _ => Color::from_rgb(0.18, 0.18, 0.21),
+        button::Status::Hovered | button::Status::Pressed => palette.background.strong.color,
+        _ => palette.background.weak.color,
     };
     button::Style {
         background: Some(Background::Color(bg)),
-        text_color: TEXT_PRI,
+        text_color: palette.background.base.text,
         border: Border {
             width: 1.0,
-            color: SEP,
+            color: palette.background.strong.color,
             radius: 3.0.into(),
+        },
+        ..button::Style::default()
+    }
+}
+
+/// Primary action button (Create / Record / OK) — theme accent fill with
+/// its guaranteed-contrast text colour.
+fn keymap_primary_button_style(theme: &Theme, status: button::Status) -> button::Style {
+    let palette = theme.extended_palette();
+    let bg = match status {
+        button::Status::Hovered | button::Status::Pressed => palette.primary.strong.color,
+        _ => palette.primary.base.color,
+    };
+    button::Style {
+        background: Some(Background::Color(bg)),
+        text_color: palette.primary.base.text,
+        border: Border {
+            radius: 3.0.into(),
+            ..Border::default()
+        },
+        ..button::Style::default()
+    }
+}
+
+/// Destructive button (Delete / Stop) — theme danger fill with its
+/// guaranteed-contrast text colour.
+fn keymap_danger_button_style(theme: &Theme, status: button::Status) -> button::Style {
+    let palette = theme.extended_palette();
+    let bg = match status {
+        button::Status::Hovered | button::Status::Pressed => palette.danger.strong.color,
+        _ => palette.danger.base.color,
+    };
+    button::Style {
+        background: Some(Background::Color(bg)),
+        text_color: palette.danger.base.text,
+        border: Border {
+            radius: 3.0.into(),
+            ..Border::default()
         },
         ..button::Style::default()
     }

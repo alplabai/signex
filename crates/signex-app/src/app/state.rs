@@ -113,6 +113,10 @@ pub struct UiState {
     /// error is swallowed silently. Empty renders the default conflict
     /// summary instead.
     pub preferences_keymap_status: String,
+    /// Live search query for the Keyboard Shortcuts pane. Filters the
+    /// grouped shortcut table case-insensitively by label / command id /
+    /// trigger. Reset to empty each time Preferences opens.
+    pub preferences_keymap_search: String,
     /// Chord recorder overlay. `Some` while the user is capturing a new
     /// keystroke for a binding; the keyboard subscription routes raw
     /// strokes to the recorder instead of the live keymap resolver

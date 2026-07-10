@@ -17,6 +17,7 @@ impl Signex {
         self.ui_state.preferences_keymap_editor =
             crate::keymap::KeymapEditorModel::new(self.ui_state.keymap_profiles.clone());
         self.ui_state.preferences_keymap_status.clear();
+        self.ui_state.preferences_keymap_search.clear();
         self.ui_state.preferences_keymap_recorder = None;
         self.ui_state.preferences_dirty = false;
         self.ui_state.panel_list_open = false;
@@ -448,6 +449,11 @@ impl Signex {
                 self.ui_state.preferences_draft_component_classes =
                     crate::fonts::default_component_classes();
                 self.ui_state.preferences_dirty = true;
+            }
+            PrefMsg::KeymapSearchChanged(query) => {
+                // Pure view filter — does not touch the editor model or the
+                // dirty flag, so opening/searching never marks unsaved work.
+                self.ui_state.preferences_keymap_search = query;
             }
             PrefMsg::KeymapProfileSelected(id) => {
                 match self
