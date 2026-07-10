@@ -24,11 +24,11 @@ concurrency:
 
 jobs:
   no-kicad-imports:
-    name: No `use kicad_parser`/`use kicad_writer` in crates/
+    name: No GPL-licensed parser/writer imports in crates/
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Forbid kicad-parser / kicad-writer imports
+      - name: Forbid the GPL-licensed parser/writer imports
         run: |
           set -e
           if git grep -nE 'use\s+(kicad_parser|kicad_writer)::' -- 'crates/**/*.rs'; then
@@ -41,11 +41,11 @@ jobs:
           echo "No KiCad-crate imports."
 
   no-kicad-cargo-deps:
-    name: No `kicad-parser`/`kicad-writer` Cargo.toml deps
+    name: No GPL-licensed parser/writer Cargo.toml deps
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Forbid kicad-parser / kicad-writer Cargo.toml deps
+      - name: Forbid the GPL-licensed parser/writer Cargo.toml deps
         run: |
           set -e
           if git grep -nE '^\s*kicad-(parser|writer)\s*=' -- 'crates/**/Cargo.toml' 'Cargo.toml'; then
@@ -57,7 +57,7 @@ jobs:
           echo "No kicad-parser / kicad-writer Cargo.toml deps."
 
   no-removed-kicad-api:
-    name: No re-introduction of removed KiCad-shaped API surface
+    name: No re-introduction of the removed GPL-tool API surface
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -77,11 +77,11 @@ jobs:
           echo "No removed API surface re-introduced."
 
   no-kicad-shaped-symbols:
-    name: No KiCad-shaped names anywhere in crates/
+    name: No GPL-tool-shaped names anywhere in crates/
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Forbid any "kicad" / "KiCad" mention under crates/
+      - name: Forbid any GPL-tool name mention under crates/
         run: |
           set -e
           # Strict check: the substring "kicad" (any case) is not allowed
@@ -97,7 +97,7 @@ jobs:
           echo "No KiCad-shaped names anywhere in crates/."
 
   no-numeric-layer-constants:
-    name: No KiCad-numbered LayerId constants
+    name: No GPL-tool-numbered LayerId constants
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -122,7 +122,7 @@ jobs:
           echo "No KiCad-numbered layer constants."
 
   no-kicad-net-name-format:
-    name: No KiCad auto-net-name format string
+    name: No GPL-tool auto-net-name format string
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -142,7 +142,7 @@ jobs:
           echo "No KiCad auto-net-name format string."
 
   no-kicad-cpp-class-names:
-    name: No KiCad C++ class / file references in source comments
+    name: No GPL-tool C++ class / file references in source comments
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -208,11 +208,11 @@ jobs:
           echo "No bare 'Standard' comment-words in renderer / engine."
 
   no-kicad-published-format-substrings:
-    name: No `.kicad_sch` / `.kicad_pcb` / `.kicad_sym` literals
+    name: No GPL-tool schematic/PCB/symbol format literals
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Forbid published KiCad file-format extension substrings
+      - name: Forbid the GPL-tool published file-format extension substrings
         run: |
           set -e
           # The Apache-clean Signex repo doesn't read or write KiCad
@@ -285,11 +285,11 @@ jobs:
           echo "No third-party constraint-solver attribution comments."
 
   no-derivation-attribution-markers:
-    name: No DeepWiki / KiCad-mirror-source markers
+    name: No DeepWiki / GPL-tool-mirror-source markers
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Forbid "DeepWiki" / "KiCad mirror source" / etc. anywhere in repo
+      - name: Forbid "DeepWiki" / GPL-tool-mirror-source / etc. anywhere in repo
         run: |
           set -e
           # Specific markers that appeared in pre-v0.9.0 agent-context
