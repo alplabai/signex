@@ -4,7 +4,9 @@ use iced::{Element, Length};
 pub(crate) mod dialogs;
 pub(crate) mod translate;
 
+mod context_menu_items;
 mod context_menus;
+mod context_submenu;
 mod print_preview;
 
 use super::*;
