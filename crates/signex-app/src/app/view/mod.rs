@@ -110,6 +110,22 @@ impl Signex {
         // detached so we don't double-render.
         if let Some(kind) = self.ui_state.windows.get(&window_id) {
             return match kind {
+                super::state::WindowKind::PassiveCalculator => {
+                    let tokens = &self.document_state.panel_ctx.tokens;
+                    iced::widget::container(
+                        self.ui_state
+                            .passive_calculator
+                            .view(tokens)
+                            .map(Message::PassiveCalculator),
+                    )
+                    .width(iced::Length::Fill)
+                    .height(iced::Length::Fill)
+                    .style(move |_theme| iced::widget::container::Style {
+                        background: Some(iced::Background::Color(crate::styles::ti(tokens.bg))),
+                        ..iced::widget::container::Style::default()
+                    })
+                    .into()
+                }
                 super::state::WindowKind::DetachedModal(modal) => self.view_detached_modal(*modal),
                 // Undocked tab = full duplicate of the main app view.
                 // Shared Signex state means edits sync automatically; the

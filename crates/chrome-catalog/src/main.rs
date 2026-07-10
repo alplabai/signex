@@ -26,6 +26,7 @@ use std::sync::OnceLock;
 
 use iced::widget::{Column, Row, Space, button, column, container, row, scrollable, svg, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
+use signex_passive_calculator::{CalculatorControl, CalculatorMessage};
 use signex_types::theme::{Color as TokColor, ThemeId, ThemeTokens, theme_tokens};
 use signex_widgets::tab_pill::{AccentPosition, TabPill, TabPillStyle};
 
@@ -49,23 +50,32 @@ fn main() -> iced::Result {
 
 struct Catalog {
     theme: ThemeId,
+    tokens: ThemeTokens,
+    passive_calculator: CalculatorControl,
 }
 
 #[derive(Debug, Clone)]
 enum Message {
     SelectTheme(ThemeId),
+    PassiveCalculator(CalculatorMessage),
 }
 
 impl Catalog {
     fn new() -> Self {
         Self {
             theme: ThemeId::Signex,
+            tokens: theme_tokens(ThemeId::Signex),
+            passive_calculator: CalculatorControl::default(),
         }
     }
 
     fn update(&mut self, message: Message) {
         match message {
-            Message::SelectTheme(id) => self.theme = id,
+            Message::SelectTheme(id) => {
+                self.theme = id;
+                self.tokens = theme_tokens(id);
+            }
+            Message::PassiveCalculator(message) => self.passive_calculator.update(message),
         }
     }
 
@@ -82,36 +92,43 @@ impl Catalog {
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let tokens = theme_tokens(self.theme);
+        let tokens = &self.tokens;
         let panel_bg = ti(tokens.bg);
 
-        let header = self.theme_picker(&tokens);
+        let header = self.theme_picker(tokens);
         let body = column![
             section(
                 "Document tabs (3 visible, middle is active)",
-                &tokens,
-                doc_tab_strip(&tokens)
+                tokens,
+                doc_tab_strip(tokens)
             ),
             section(
                 "Document tabs — every state side-by-side",
-                &tokens,
-                tab_state_matrix(&tokens),
+                tokens,
+                tab_state_matrix(tokens),
             ),
             section(
                 "Panel tabs (same widget; should match doc tabs)",
-                &tokens,
-                panel_tab_strip(&tokens),
+                tokens,
+                panel_tab_strip(tokens),
             ),
-            section("Modal card chrome", &tokens, modal_card_demo(&tokens)),
+            section("Modal card chrome", tokens, modal_card_demo(tokens)),
             section(
                 "Project tree leaf indicators",
-                &tokens,
-                tree_row_demo(&tokens),
+                tokens,
+                tree_row_demo(tokens),
             ),
             section(
                 "BOM modal — Altium-style layout (table + properties sidebar)",
-                &tokens,
-                bom_modal_demo(&tokens),
+                tokens,
+                bom_modal_demo(tokens),
+            ),
+            section(
+                "Passive network calculator control",
+                tokens,
+                self.passive_calculator
+                    .view(tokens)
+                    .map(Message::PassiveCalculator),
             ),
         ]
         .spacing(20)

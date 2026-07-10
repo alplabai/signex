@@ -7,6 +7,7 @@ mod document;
 mod keymap;
 pub(crate) mod library;
 mod overlay;
+mod passive_calculator;
 mod text_edit;
 mod tool;
 mod ui;
@@ -16,6 +17,17 @@ impl Signex {
         self.apply_pcb_renderer_dirty_hint(&message);
 
         match message {
+            Message::OpenPassiveCalculator => self.handle_open_passive_calculator(),
+            Message::PassiveCalculator(message) => {
+                self.ui_state.passive_calculator.update(message);
+                Task::none()
+            }
+            Message::PassiveCalculatorOpened(id) => {
+                self.ui_state
+                    .windows
+                    .insert(id, super::state::WindowKind::PassiveCalculator);
+                Task::none()
+            }
             Message::Menu(msg) => self.handle_menu_message(msg),
             Message::Tab { window_id, msg } => {
                 let task = self.handle_document_tab_message(window_id, msg);
@@ -388,6 +400,7 @@ impl Signex {
                         // here beyond letting the window-id mapping
                         // drop above.
                         WindowKind::ComponentEditor { .. } => {}
+                        WindowKind::PassiveCalculator => {}
                     }
                 }
                 Task::none()

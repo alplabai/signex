@@ -734,6 +734,7 @@ name = "chrome-catalog"
 version = "0.14.0"
 dependencies = [
  "iced",
+ "signex-passive-calculator",
  "signex-types",
  "signex-widgets",
 ]
@@ -5230,6 +5231,7 @@ dependencies = [
  "signex-library",
  "signex-net",
  "signex-output",
+ "signex-passive-calculator",
  "signex-renderer",
  "signex-sketch",
  "signex-types",
@@ -5391,6 +5393,15 @@ dependencies = [
  "tiny-skia",
  "ttf-parser",
  "uuid",
+]
+
+[[package]]
+name = "signex-passive-calculator"
+version = "0.14.0"
+dependencies = [
+ "iced",
+ "iced_aw",
+ "signex-types",
 ]
 
 [[package]]

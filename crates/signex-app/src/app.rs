@@ -44,7 +44,8 @@ pub use documents::{
     LocalColorSlot, SchematicTabSession, SymbolEditorState, TabDocument, TabInfo, TabKind, Tool,
 };
 pub use state::{
-    DocumentState, InteractionState, KeymapRecorderState, LoadedProject, ProjectId, Signex, UiState,
+    DocumentState, InteractionState, KeymapRecorderState, LoadedProject, ProjectId, Signex,
+    UiState, WindowKind,
 };
 
 // Re-exported so modal dialogs outside `state` can reference the type.

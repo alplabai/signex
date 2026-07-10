@@ -40,6 +40,7 @@ signex-library = { workspace = true, features = [
 ] }
 signex-sketch = { workspace = true }
 signex-bake = { workspace = true }
+signex-passive-calculator = { workspace = true }
 # `log` feature: signex-app installs a `log`-based logger (SignexLogger) but
 # no tracing subscriber, and several crates (notably signex-library) report
 # non-fatal errors via tracing::warn!. Without this feature those records

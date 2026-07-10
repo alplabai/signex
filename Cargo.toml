@@ -18,6 +18,7 @@ members = [
     "crates/signex-sketch",
     "crates/signex-bake",
     "crates/signex-3d-model-importer",
+    "crates/signex-passive-calculator",
 ]
 # A bare `cargo build` / `cargo test` at the root only builds the daily-
 # driver crates. The library server and the chrome-catalog dev sandbox are
@@ -99,6 +100,7 @@ signex-erc-dsl = { path = "crates/signex-erc-dsl" }
 signex-net = { path = "crates/signex-net" }
 signex-output = { path = "crates/signex-output" }
 signex-3d-model-importer = { path = "crates/signex-3d-model-importer" }
+signex-passive-calculator = { path = "crates/signex-passive-calculator" }
 
 # Library subsystem (v0.9 plan, restored at v0.11)
 chrono = { version = "0.4", features = ["serde"] }

@@ -10,6 +10,7 @@ license.workspace = true
 iced = { workspace = true }
 signex-types = { path = "../signex-types" }
 signex-widgets = { path = "../signex-widgets" }
+signex-passive-calculator = { path = "../signex-passive-calculator" }
 
 [[bin]]
 name = "chrome-catalog"
