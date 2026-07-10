@@ -308,4 +308,392 @@ impl Signex {
         .on_press(on_press)
         .into()
     }
+
+    /// Active-bar dropdown menu (Place / Align / filter presets etc.).
+    /// Absolute-positioned with `Translate` so the column can auto-size
+    /// to its widest label. Pushes the dismiss layer then the dropdown.
+    pub(super) fn active_bar_menu_overlay(&self) -> Vec<Element<'_, Message>> {
+        let ui = &self.ui_state;
+        let document = &self.document_state;
+        let interaction = &self.interaction_state;
+        let Some(ab_menu) = interaction.active_bar_menu else {
+            return Vec::new();
+        };
+        let has_selection = !interaction.canvas.selected.is_empty();
+        let has_net_colors = !ui.net_colors.is_empty();
+        let dropdown = crate::active_bar::view_dropdown(
+            ab_menu,
+            &document.panel_ctx.tokens,
+            &interaction.selection_filters,
+            &interaction.custom_filter_presets,
+            self.ui_state.theme_id,
+            has_selection,
+            has_net_colors,
+        )
+        .map(Message::ActiveBar);
+        let x_off = crate::active_bar::dropdown_x_offset(ab_menu);
+        // Bar: MENU_BAR_HEIGHT + tabs + 4 top-margin + bar-height ≈ bottom of bar.
+        // Bar-height = 28 button + 6 vertical padding + 2 border = 36, plus 4
+        // top margin = 40. Add a small gap so the dropdown visually touches.
+        let ab_y: f32 = crate::menu_bar::MENU_BAR_HEIGHT
+            + if document.tabs.is_empty() { 0.0 } else { 28.0 }
+            + 40.0;
+        let bar_w: f32 = crate::active_bar::BAR_WIDTH_PX;
+        let (ww, _) = ui.window_size;
+        let adjusted_x = x_off + (ww - bar_w) / 2.0;
+        vec![
+            Self::dismiss_layer(Message::ActiveBar(
+                crate::active_bar::ActiveBarMsg::CloseMenus,
+            )),
+            super::translate::Translate::new(dropdown, (adjusted_x, ab_y)).into(),
+        ]
+    }
+
+    /// Canvas right-click context menu (+ its Place/Align submenu).
+    /// Clamps the menu inside the window; the submenu pops to the right
+    /// (or left on overflow) aligned to its launcher row. Pushes dismiss,
+    /// menu, then the optional submenu.
+    pub(super) fn context_menu_overlay(&self) -> Vec<Element<'_, Message>> {
+        use iced::widget::{column, row};
+
+        let interaction = &self.interaction_state;
+        let Some(ctx_menu) = interaction.context_menu.as_ref() else {
+            return Vec::new();
+        };
+        let menu = self.view_context_menu();
+        // Clamp the menu inside the window so a click near the
+        // right/bottom edge doesn't push it off-screen. Estimate
+        // the menu's footprint conservatively from the maximum
+        // possible row count (≈ 22 rows × 22 px + padding) and
+        // CONTEXT_MENU_WIDTH; flip-up / flip-left when the click
+        // lands too close to an edge.
+        let (win_w, win_h) = self.ui_state.window_size;
+        let menu_w = Self::CONTEXT_MENU_WIDTH as f32;
+        let est_menu_h: f32 = 22.0 * 22.0 + 8.0;
+        let edge_margin: f32 = 4.0;
+        let x = if ctx_menu.x + menu_w + edge_margin > win_w {
+            (win_w - menu_w - edge_margin).max(0.0)
+        } else {
+            ctx_menu.x
+        };
+        let y = if ctx_menu.y + est_menu_h + edge_margin > win_h {
+            (ctx_menu.y - est_menu_h).max(0.0)
+        } else {
+            ctx_menu.y
+        };
+        let mut out: Vec<Element<'_, Message>> = Vec::new();
+        out.push(Self::dismiss_layer(Message::ContextMenu(
+            ContextMenuMsg::Close,
+        )));
+        out.push(
+            column![
+                iced::widget::Space::new().height(y),
+                row![
+                    iced::widget::Space::new().width(x),
+                    menu,
+                    iced::widget::Space::new().width(Length::Fill),
+                ]
+                .width(Length::Fill),
+            ]
+            .into(),
+        );
+        // Submenu (Place / Align) — pop to the right of the parent
+        // menu (or left if the right edge would overflow), and
+        // align its top to the launcher row's y-position so the
+        // first submenu item sits next to the row that opened it.
+        if let Some(submenu_kind) = interaction.context_submenu {
+            let submenu = self.view_context_submenu(submenu_kind);
+            // Wrap in mouse_area so on_enter/on_exit on the panel
+            // can extend the close timer when the cursor crosses
+            // from the launcher into the submenu and back.
+            let submenu = iced::widget::mouse_area(submenu)
+                .on_enter(Message::ContextMenu(ContextMenuMsg::SubmenuEnterPanel))
+                .on_exit(Message::ContextMenu(ContextMenuMsg::SubmenuLeavePanel));
+            let submenu_w = menu_w;
+            let sub_x = if x + menu_w + submenu_w + edge_margin > win_w {
+                (x - submenu_w).max(0.0)
+            } else {
+                x + menu_w
+            };
+            // Approximate launcher-row y inside the parent menu.
+            // Each ctx_menu_item_* row is ≈ 22 px tall (text + 4 px
+            // top + 4 px bottom + a tiny line-height fudge); the
+            // separator is rendered as a 1 px line. The numbers
+            // below come from counting rows above each launcher in
+            // `view_context_menu`.
+            const ROW_H: f32 = 22.0;
+            const SEP_H: f32 = 1.0;
+            const TOP_PAD: f32 = 4.0;
+            let launcher_y = match submenu_kind {
+                // Above Place: 3 always-visible rows + 1 separator.
+                ContextSubmenu::Place => TOP_PAD + 3.0 * ROW_H + SEP_H,
+                // Align is only shown when something is selected;
+                // above Align: the same 3 rows + 1 sep, then
+                // Place / Part Actions / Sheet Actions / References.
+                ContextSubmenu::Align => TOP_PAD + 7.0 * ROW_H + SEP_H,
+                // AddNewToProject only fires from the project-tree
+                // menu, never from the canvas menu — fall through
+                // to a safe placeholder if the state somehow leaks
+                // (no submenu rendered, just a 0-offset).
+                ContextSubmenu::AddNewToProject => 0.0,
+            };
+            let sub_y = (y + launcher_y - 4.0).max(0.0);
+            out.push(
+                column![
+                    iced::widget::Space::new().height(sub_y),
+                    row![
+                        iced::widget::Space::new().width(sub_x),
+                        submenu,
+                        iced::widget::Space::new().width(Length::Fill),
+                    ]
+                    .width(Length::Fill),
+                ]
+                .into(),
+            );
+        }
+        out
+    }
+
+    /// Document-tab right-click menu. Rendered before the project-tree
+    /// menu since the two are mutually exclusive. Pushes dismiss then the
+    /// clamped menu.
+    pub(super) fn tab_context_menu_overlay(&self) -> Vec<Element<'_, Message>> {
+        use iced::widget::{column, row};
+
+        let ui = &self.ui_state;
+        let interaction = &self.interaction_state;
+        let Some(tab_ctx) = interaction.tab_context_menu.as_ref() else {
+            return Vec::new();
+        };
+        let menu = self.view_tab_context_menu(tab_ctx);
+        // Conservative footprint matches the project-tree menu so
+        // the two visually align.
+        let menu_w = Self::CONTEXT_MENU_WIDTH as f32;
+        let est_menu_h: f32 = 5.0 * 22.0 + 8.0;
+        let (win_w, win_h) = ui.window_size;
+        let edge_margin: f32 = 4.0;
+        let x = if tab_ctx.x + menu_w + edge_margin > win_w {
+            (win_w - menu_w - edge_margin).max(0.0)
+        } else {
+            tab_ctx.x
+        };
+        let y = if tab_ctx.y + est_menu_h + edge_margin > win_h {
+            (tab_ctx.y - est_menu_h).max(0.0)
+        } else {
+            tab_ctx.y
+        };
+        vec![
+            Self::dismiss_layer(Message::ContextMenu(ContextMenuMsg::CloseTab)),
+            column![
+                iced::widget::Space::new().height(y),
+                row![
+                    iced::widget::Space::new().width(x),
+                    menu,
+                    iced::widget::Space::new().width(Length::Fill),
+                ]
+                .width(Length::Fill),
+            ]
+            .into(),
+        ]
+    }
+
+    /// Projects-panel tree right-click menu (+ its AddNewToProject
+    /// submenu). Pushes dismiss, menu, then the optional submenu.
+    pub(super) fn project_tree_context_menu_overlay(&self) -> Vec<Element<'_, Message>> {
+        use iced::widget::{column, row};
+
+        let ui = &self.ui_state;
+        let interaction = &self.interaction_state;
+        let Some(tree_ctx) = interaction.project_tree_context_menu.as_ref() else {
+            return Vec::new();
+        };
+        let menu = self.view_project_tree_context_menu(tree_ctx);
+        // Conservative footprint: at most 6 rows × 22 px + 8 px
+        // padding. Width matches the canvas menu so the two look
+        // consistent.
+        let menu_w = Self::CONTEXT_MENU_WIDTH as f32;
+        let est_menu_h: f32 = 6.0 * 22.0 + 8.0;
+        let (win_w, win_h) = ui.window_size;
+        let edge_margin: f32 = 4.0;
+        let x = if tree_ctx.x + menu_w + edge_margin > win_w {
+            (win_w - menu_w - edge_margin).max(0.0)
+        } else {
+            tree_ctx.x
+        };
+        let y = if tree_ctx.y + est_menu_h + edge_margin > win_h {
+            (tree_ctx.y - est_menu_h).max(0.0)
+        } else {
+            tree_ctx.y
+        };
+        let mut out: Vec<Element<'_, Message>> = Vec::new();
+        out.push(Self::dismiss_layer(Message::ContextMenu(
+            ContextMenuMsg::CloseProjectTree,
+        )));
+        out.push(
+            column![
+                iced::widget::Space::new().height(y),
+                row![
+                    iced::widget::Space::new().width(x),
+                    menu,
+                    iced::widget::Space::new().width(Length::Fill),
+                ]
+                .width(Length::Fill),
+            ]
+            .into(),
+        );
+        // Adjacent submenu (currently only AddNewToProject opens
+        // from this menu). Mirrors the canvas-menu submenu logic
+        // above — pop to the right of the parent (or left if the
+        // right edge would overflow), align top to the launcher
+        // row's y inside the parent menu.
+        if let Some(ContextSubmenu::AddNewToProject) = interaction.context_submenu {
+            let submenu = self.view_context_submenu(ContextSubmenu::AddNewToProject);
+            let submenu = iced::widget::mouse_area(submenu)
+                .on_enter(Message::ContextMenu(ContextMenuMsg::SubmenuEnterPanel))
+                .on_exit(Message::ContextMenu(ContextMenuMsg::SubmenuLeavePanel));
+            let submenu_w = menu_w;
+            let sub_x = if x + menu_w + submenu_w + edge_margin > win_w {
+                (x - submenu_w).max(0.0)
+            } else {
+                x + menu_w
+            };
+            // Launcher position inside the project-tree menu:
+            // `Make Project Available Online...` (row 0)
+            // `Validate Project`                 (row 1)
+            // `Add New to Project ›`             (row 2) ← target
+            // → top + 2 rows, no separator above the launcher.
+            const ROW_H: f32 = 22.0;
+            const TOP_PAD: f32 = 4.0;
+            let launcher_y = TOP_PAD + 2.0 * ROW_H;
+            let sub_y = (y + launcher_y - 4.0).max(0.0);
+            out.push(
+                column![
+                    iced::widget::Space::new().height(sub_y),
+                    row![
+                        iced::widget::Space::new().width(sub_x),
+                        submenu,
+                        iced::widget::Space::new().width(Length::Fill),
+                    ]
+                    .width(Length::Fill),
+                ]
+                .into(),
+            );
+        }
+        out
+    }
+
+    /// v0.18.10 — Altium-style grid picker popup. Floats at the cursor
+    /// when `G` is pressed in a footprint editor. Pushes dismiss then the
+    /// clamped menu.
+    pub(super) fn grid_picker_overlay(&self) -> Vec<Element<'_, Message>> {
+        use iced::widget::{column, row};
+
+        let ui = &self.ui_state;
+        let interaction = &self.interaction_state;
+        let Some(picker) = interaction.grid_picker.as_ref() else {
+            return Vec::new();
+        };
+        let menu = self.view_grid_picker_menu();
+        let menu_w: f32 = 200.0;
+        let est_menu_h: f32 = 13.0 * 22.0 + 8.0; // 13 rows + padding
+        let (win_w, win_h) = ui.window_size;
+        let edge_margin: f32 = 4.0;
+        let x = if picker.x + menu_w + edge_margin > win_w {
+            (win_w - menu_w - edge_margin).max(0.0)
+        } else {
+            picker.x
+        };
+        let y = if picker.y + est_menu_h + edge_margin > win_h {
+            (picker.y - est_menu_h).max(0.0)
+        } else {
+            picker.y
+        };
+        vec![
+            Self::dismiss_layer(Message::Ui(UiMsg::GridPickerClose)),
+            column![
+                iced::widget::Space::new().height(y),
+                row![
+                    iced::widget::Space::new().width(x),
+                    menu,
+                    iced::widget::Space::new().width(Length::Fill),
+                ]
+                .width(Length::Fill),
+            ]
+            .into(),
+        ]
+    }
+
+    /// Dock drag-target highlight — paints the left / right / bottom dock
+    /// zone the currently-dragged floating panel would snap into.
+    pub(super) fn dock_drag_zone_overlay(&self) -> Option<Element<'_, Message>> {
+        use iced::widget::{column, container, row};
+
+        let ui = &self.ui_state;
+        let document = &self.document_state;
+        let fp = document.dock.floating.iter().find(|fp| fp.dragging)?;
+        let (ww, wh) = ui.window_size;
+        let zone = 120.0;
+        let cx = fp.x + fp.width / 2.0;
+        let cy = fp.y + fp.height / 4.0;
+        let zone_style = crate::styles::dock_zone_highlight(&document.panel_ctx.tokens);
+        if cx < zone {
+            Some(
+                container(iced::widget::Space::new())
+                    .width(ui.left_width)
+                    .height(Length::Fill)
+                    .style(zone_style)
+                    .into(),
+            )
+        } else if cx > ww - zone {
+            Some(
+                row![
+                    iced::widget::Space::new().width(Length::Fill),
+                    container(iced::widget::Space::new())
+                        .width(ui.right_width)
+                        .height(Length::Fill)
+                        .style(zone_style),
+                ]
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into(),
+            )
+        } else if cy > wh - zone {
+            Some(
+                column![
+                    iced::widget::Space::new().height(Length::Fill),
+                    container(iced::widget::Space::new())
+                        .width(Length::Fill)
+                        .height(ui.bottom_height)
+                        .style(zone_style),
+                ]
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into(),
+            )
+        } else {
+            None
+        }
+    }
+
+    /// Floating panels — one `Translate`-positioned widget per floating
+    /// panel. No clamp: panels follow Altium behaviour and may be
+    /// dragged anywhere, even past the window edge (the OS clips).
+    pub(super) fn floating_panels_overlay(&self) -> Vec<Element<'_, Message>> {
+        let document = &self.document_state;
+        let mut out: Vec<Element<'_, Message>> = Vec::new();
+        for i in 0..document.dock.floating.len() {
+            if let Some(panel_widget) =
+                document
+                    .dock
+                    .view_floating_panel(i, &document.panel_ctx, &self.library)
+            {
+                let fp = &document.dock.floating[i];
+                out.push(
+                    super::translate::Translate::new(panel_widget.map(Message::Dock), (fp.x, fp.y))
+                        .into(),
+                );
+            }
+        }
+        out
+    }
 }
