@@ -3,8 +3,8 @@
 use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point};
 
-use super::super::state::{EditorPad, FootprintEditorState, PadsTool, PlaceArcPending};
-use super::FootprintCanvasState;
+use super::super::super::state::{EditorPad, FootprintEditorState, PadsTool, PlaceArcPending};
+use super::super::FootprintCanvasState;
 
 /// Render a single pad — copper outline, drilled hole, and pad number
 /// (when zoomed in enough to read).
@@ -196,7 +196,7 @@ pub(super) fn draw_pad(
 /// in-flight tool state (`track_first` / `place_arc_pending` /
 /// `place_polygon_vertices`) plus `cursor_mm` and draws a ghost
 /// preview of what the next click will commit.
-pub(super) fn draw_pads_tool_preview(
+pub(in crate::library::editor::footprint::canvas) fn draw_pads_tool_preview(
     frame: &mut canvas::Frame,
     cstate: &FootprintCanvasState,
     state: &FootprintEditorState,

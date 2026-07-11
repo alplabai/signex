@@ -13,7 +13,7 @@ use iced::Point;
 use crate::library::editor::footprint::state::{EditorMode, PadsTool, SketchTool};
 use crate::library::messages::{EditorMsg, FootprintEditorMsg, LibraryMessage};
 
-use super::super::draw_sketch::{find_closed_loops, ClosedLoop};
+use super::super::draw::{find_closed_loops, ClosedLoop};
 use super::super::geometry::point_in_polygon;
 use super::super::hit_test::sketch_snap;
 use super::super::silk_f_hit_at;

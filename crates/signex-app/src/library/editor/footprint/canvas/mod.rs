@@ -13,17 +13,13 @@
 //! Submodules:
 //! - [`geometry`] — pure helpers (point-in-poly, segment distance).
 //! - [`hit_test`] — sketch entity hit-test + `sketch_snap`.
-//! - [`draw_grid`] — fine + coarse grid rendering.
-//! - [`draw_pad`] — pad copper / hole / number + Pads-mode tool preview.
-//! - [`draw_silk`] — silk-front + silk-back graphics renderer.
-//! - [`draw_sketch`] — sketch entity overlay, DOF arrows, snap glyph,
-//!   constraint icons, filled closed loops, and the multi-click ghost
-//!   preview for sketch drawing tools.
+//! - [`input`] — the `Program::update` event handlers.
+//! - [`draw`] — the `Program::draw` layer methods plus the free
+//!   renderers they call: grid (fine + coarse), pad (copper / hole /
+//!   number + Pads-mode tool preview), silk (front + back graphics),
+//!   and sketch (entity overlay, DOF arrows, snap glyph, constraint
+//!   icons, filled closed loops, and the multi-click ghost preview).
 
-mod draw_grid;
-mod draw_pad;
-mod draw_silk;
-mod draw_sketch;
 mod geometry;
 mod hit_test;
 mod input;
@@ -37,7 +33,7 @@ mod tests;
 // `hit_test` helpers are called from the `input` / `draw` submodules,
 // which import them directly. `geometry` helpers are still used by
 // `silk_f_hit_at` below.
-use draw_pad::draw_pads_tool_preview;
+use draw::draw_pads_tool_preview;
 use geometry::{point_in_polygon, point_to_segment_dist, polygon_outline_hit};
 
 use iced::event::Event;
