@@ -12,7 +12,7 @@ impl Signex {
     /// of the parent context menu. Each row dispatches an Active Bar
     /// action via `ContextAction::ActiveBar(...)` so the placement /
     /// transform pipelines stay shared with the toolbar.
-    pub(super) fn view_context_submenu(&self, kind: ContextSubmenu) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_context_submenu(&self, kind: ContextSubmenu) -> Element<'_, Message> {
         use crate::active_bar::ActiveBarAction as A;
         use crate::icons as ic;
         let tid = self.ui_state.theme_id;

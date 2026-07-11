@@ -80,7 +80,7 @@ impl Signex {
 
     /// Resolve a keymap command id to its display label under the active
     /// profile, falling back to `fallback` when the command is unbound.
-    pub(super) fn keymap_shortcut_label(&self, command_id: &str, fallback: &str) -> String {
+    pub(in crate::app::view) fn keymap_shortcut_label(&self, command_id: &str, fallback: &str) -> String {
         crate::keymap::AppCommandId::new(command_id)
             .ok()
             .and_then(|command| self.ui_state.active_keymap.shortcut_label(&command))
