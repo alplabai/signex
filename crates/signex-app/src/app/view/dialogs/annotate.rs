@@ -11,21 +11,21 @@ use iced::{Background, Border, Color, Element, Length, Theme};
 
 use crate::app::state::AnnotateOrder;
 
-use super::dialog_widgets::{
+use super::widgets::{
     close_x_button, detached_header, draggable_header, primary_button, secondary_button,
     wrap_modal,
 };
-use super::dialogs::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
+use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 
 impl Signex {
-    pub(super) fn view_annotate_dialog(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_annotate_dialog(&self) -> Element<'_, Message> {
         let modal_w = 1100.0_f32;
         let modal_h = 760.0_f32;
         let dialog = self.view_annotate_dialog_body_inner(true);
         let offset = self
             .ui_state
             .modal_offsets
-            .get(&super::super::state::ModalId::AnnotateDialog)
+            .get(&super::super::super::state::ModalId::AnnotateDialog)
             .copied()
             .unwrap_or((0.0, 0.0));
         wrap_modal(
@@ -38,7 +38,7 @@ impl Signex {
 
     /// Detached-window flavour — just the body, no backdrop, no drag
     /// handler on the header (the OS window chrome owns that).
-    pub(super) fn view_annotate_dialog_body(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_annotate_dialog_body(&self) -> Element<'_, Message> {
         self.view_annotate_dialog_body_inner(false)
     }
 
@@ -83,11 +83,11 @@ impl Signex {
         let header = if draggable {
             draggable_header(
                 header_content,
-                super::super::state::ModalId::AnnotateDialog,
+                super::super::super::state::ModalId::AnnotateDialog,
                 self.interaction_state.last_mouse_pos,
             )
         } else {
-            detached_header(header_content, super::super::state::ModalId::AnnotateDialog)
+            detached_header(header_content, super::super::super::state::ModalId::AnnotateDialog)
         };
 
         // ── Left column: Schematic Annotation Configuration ──
@@ -581,18 +581,18 @@ impl Signex {
         dialog.into()
     }
 
-    pub(super) fn view_annotate_reset_confirm(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_annotate_reset_confirm(&self) -> Element<'_, Message> {
         let dialog = self.view_annotate_reset_confirm_body_inner(true);
         let offset = self
             .ui_state
             .modal_offsets
-            .get(&super::super::state::ModalId::AnnotateResetConfirm)
+            .get(&super::super::super::state::ModalId::AnnotateResetConfirm)
             .copied()
             .unwrap_or((0.0, 0.0));
         wrap_modal(dialog, offset, self.ui_state.window_size, (420.0, 180.0))
     }
 
-    pub(super) fn view_annotate_reset_confirm_body(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_annotate_reset_confirm_body(&self) -> Element<'_, Message> {
         self.view_annotate_reset_confirm_body_inner(false)
     }
 
@@ -625,13 +625,13 @@ impl Signex {
         let header = if draggable {
             draggable_header(
                 header_content,
-                super::super::state::ModalId::AnnotateResetConfirm,
+                super::super::super::state::ModalId::AnnotateResetConfirm,
                 self.interaction_state.last_mouse_pos,
             )
         } else {
             detached_header(
                 header_content,
-                super::super::state::ModalId::AnnotateResetConfirm,
+                super::super::super::state::ModalId::AnnotateResetConfirm,
             )
         };
         let dialog = container(

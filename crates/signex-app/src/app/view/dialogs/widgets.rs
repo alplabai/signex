@@ -9,7 +9,7 @@ use super::*;
 use iced::widget::{Space, button, container, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
-use super::dialogs::{
+use super::{
     MODAL_CLOSE_X_HIT_H, MODAL_CLOSE_X_HIT_W, MODAL_CLOSE_X_HOVER, MODAL_CLOSE_X_ICON,
 };
 
@@ -47,7 +47,7 @@ pub(in crate::app::view) fn wrap_modal<'a>(
         .into();
 
     let positioned: Element<'a, Message> =
-        super::translate::Translate::new(inner, (left, top)).into();
+        super::super::translate::Translate::new(inner, (left, top)).into();
 
     iced::widget::stack![backdrop, positioned].into()
 }
@@ -56,7 +56,7 @@ pub(in crate::app::view) fn wrap_modal<'a>(
 /// drag. Uses the last known mouse position as the drag anchor.
 pub(in crate::app::view) fn draggable_header<'a>(
     header_content: Element<'a, Message>,
-    modal: super::super::state::ModalId,
+    modal: super::super::super::state::ModalId,
     last_mouse: (f32, f32),
 ) -> Element<'a, Message> {
     iced::widget::mouse_area(header_content)
@@ -73,7 +73,7 @@ pub(in crate::app::view) fn draggable_header<'a>(
 /// bar for detached modals opened with `decorations: false`.
 pub(crate) fn detached_header<'a>(
     header_content: Element<'a, Message>,
-    modal: super::super::state::ModalId,
+    modal: super::super::super::state::ModalId,
 ) -> Element<'a, Message> {
     iced::widget::mouse_area(header_content)
         .on_press(Message::Window(WindowMsg::StartDetachedWindowDrag(modal)))

@@ -9,18 +9,18 @@ use super::*;
 use iced::widget::{Space, button, column, container, row, scrollable, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
-use super::dialog_widgets::{
+use super::widgets::{
     close_x_button, draggable_header, primary_button, secondary_button, wrap_modal,
 };
-use super::dialogs::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
+use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 
 impl Signex {
-    pub(super) fn view_remove_dialog(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_remove_dialog(&self) -> Element<'_, Message> {
         let dialog = self.view_remove_dialog_body();
         let offset = self
             .ui_state
             .modal_offsets
-            .get(&super::super::state::ModalId::RemoveDialog)
+            .get(&super::super::super::state::ModalId::RemoveDialog)
             .copied()
             .unwrap_or((0.0, 0.0));
         wrap_modal(dialog, offset, self.ui_state.window_size, (560.0, 260.0))
@@ -54,7 +54,7 @@ impl Signex {
         let _ = border_c;
         let header = draggable_header(
             header_content,
-            super::super::state::ModalId::RemoveDialog,
+            super::super::super::state::ModalId::RemoveDialog,
             self.interaction_state.last_mouse_pos,
         );
 
@@ -148,7 +148,7 @@ impl Signex {
         dialog.into()
     }
 
-    pub(super) fn view_project_close_confirm(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_project_close_confirm(&self) -> Element<'_, Message> {
         let dialog = self.view_project_close_confirm_body();
         // Reuse the rename modal's offset slot — `RenameDialog` is
         // never up at the same time as project-close confirm, and
@@ -191,7 +191,7 @@ impl Signex {
         let _ = border_c;
         let header = draggable_header(
             header_content,
-            super::super::state::ModalId::RenameDialog,
+            super::super::super::state::ModalId::RenameDialog,
             self.interaction_state.last_mouse_pos,
         );
 
@@ -268,7 +268,7 @@ impl Signex {
         dialog.into()
     }
 
-    pub(super) fn view_app_quit_confirm(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_app_quit_confirm(&self) -> Element<'_, Message> {
         let dialog = self.view_app_quit_confirm_body();
         // Reuse the rename modal's centred offset slot — the app-quit
         // confirm is never up at the same time as the rename dialog.
@@ -308,7 +308,7 @@ impl Signex {
         .into();
         let header = draggable_header(
             header_content,
-            super::super::state::ModalId::RenameDialog,
+            super::super::super::state::ModalId::RenameDialog,
             self.interaction_state.last_mouse_pos,
         );
 

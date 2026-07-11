@@ -9,25 +9,25 @@ use super::*;
 use iced::widget::{Space, button, column, container, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
-use super::dialog_widgets::{
+use super::widgets::{
     close_x_button, detached_header, draggable_header, primary_button, secondary_button,
     wrap_modal,
 };
-use super::dialogs::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
+use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 
 impl Signex {
-    pub(super) fn view_erc_dialog(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_erc_dialog(&self) -> Element<'_, Message> {
         let dialog = self.view_erc_dialog_body_inner(true);
         let offset = self
             .ui_state
             .modal_offsets
-            .get(&super::super::state::ModalId::ErcDialog)
+            .get(&super::super::super::state::ModalId::ErcDialog)
             .copied()
             .unwrap_or((0.0, 0.0));
         wrap_modal(dialog, offset, self.ui_state.window_size, (1000.0, 600.0))
     }
 
-    pub(super) fn view_erc_dialog_body(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_erc_dialog_body(&self) -> Element<'_, Message> {
         self.view_erc_dialog_body_inner(false)
     }
 
@@ -56,11 +56,11 @@ impl Signex {
         let header = if draggable {
             draggable_header(
                 header_content,
-                super::super::state::ModalId::ErcDialog,
+                super::super::super::state::ModalId::ErcDialog,
                 self.interaction_state.last_mouse_pos,
             )
         } else {
-            detached_header(header_content, super::super::state::ModalId::ErcDialog)
+            detached_header(header_content, super::super::super::state::ModalId::ErcDialog)
         };
 
         // Per-rule severity grid. 11 rules × 4 severities.

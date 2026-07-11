@@ -2,10 +2,20 @@
 //! of the shared modal primitives, kept at this path so the existing
 //! `crate::app::view::dialogs::…` imports across the crate keep resolving.
 //!
-//! The dialog builders that used to live here were split into `dialog_*`
-//! sibling modules (ADR-0001, issue #164) as pure code motion.
+//! The dialog builders that used to live here were split into the child
+//! modules of this `dialogs` folder (ADR-0001, issue #164) as pure code
+//! motion.
 
+use super::*;
 use iced::Color;
+
+mod annotate;
+mod annotate_preview;
+mod bom;
+mod confirms;
+mod erc;
+mod project;
+mod widgets;
 
 // ── Modal chrome — single source of truth ───────────────────────────
 //
@@ -46,5 +56,5 @@ pub(crate) const MODAL_CLOSE_X_ICON: f32 = 14.0;
 /// Hover background for the close-X (Windows-native destructive red).
 pub(crate) const MODAL_CLOSE_X_HOVER: Color = Color::from_rgba(0.78, 0.22, 0.22, 1.0);
 
-pub(in crate::app::view) use super::dialog_widgets::{draggable_header, wrap_modal};
-pub(crate) use super::dialog_widgets::{close_x_button, detached_header};
+pub(in crate::app::view) use widgets::{draggable_header, wrap_modal};
+pub(crate) use widgets::{close_x_button, detached_header};

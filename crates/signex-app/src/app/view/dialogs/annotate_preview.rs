@@ -22,7 +22,7 @@ pub(super) struct AnnotatePreviewEntry {
     pub uuid: uuid::Uuid,
 }
 
-impl super::super::Signex {
+impl super::super::super::Signex {
     /// Walk every schematic in the project — open tabs (live engine or
     /// cached session) plus every sheet listed in project_data.sheets that
     /// hasn't been opened yet. Unopened sheets are parsed on-the-fly so
