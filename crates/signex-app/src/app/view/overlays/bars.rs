@@ -17,7 +17,7 @@ impl Signex {
     /// export-error, print preview, or the custom net-colour picker.
     /// Mirrors the inline guard that early-returns from
     /// `collect_overlays` before any tool/menu overlay is pushed.
-    pub(super) fn has_blocking_modal(&self) -> bool {
+    pub(in crate::app::view) fn has_blocking_modal(&self) -> bool {
         self.document_state.export_error.is_some()
             || self.document_state.preview.is_some()
             || self.ui_state.net_color_custom.show
@@ -27,7 +27,7 @@ impl Signex {
     /// hits a user-actionable failure (write permission, invalid path,
     /// empty schematic). Dismiss via OK button or clicking outside.
     /// Pushes the dismiss backdrop then the error card.
-    pub(super) fn export_error_overlay(&self) -> Vec<Element<'_, Message>> {
+    pub(in crate::app::view) fn export_error_overlay(&self) -> Vec<Element<'_, Message>> {
         if self.document_state.export_error.is_none() {
             return Vec::new();
         }
@@ -41,7 +41,7 @@ impl Signex {
     /// window (see `handle_print_preview_requested → handle_detach_modal`)
     /// so it can be dragged outside the app's client area. Only fall
     /// back to the in-window overlay if the OS window failed to open.
-    pub(super) fn print_preview_overlay(&self) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn print_preview_overlay(&self) -> Option<Element<'_, Message>> {
         let preview_detached = self.ui_state.windows.values().any(|kind| {
             matches!(
                 kind,
@@ -58,7 +58,7 @@ impl Signex {
     }
 
     /// BOM preview overlay — same detach-first pattern as Print Preview.
-    pub(super) fn bom_preview_overlay(&self) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn bom_preview_overlay(&self) -> Option<Element<'_, Message>> {
         let bom_detached = self.ui_state.windows.values().any(|kind| {
             matches!(
                 kind,
@@ -78,7 +78,7 @@ impl Signex {
     /// ColorPicker) because the user needs a quick-pick palette +
     /// precise RGB inputs side-by-side. Pushes the dismiss backdrop
     /// then the picker card.
-    pub(super) fn net_color_custom_overlay(&self) -> Vec<Element<'_, Message>> {
+    pub(in crate::app::view) fn net_color_custom_overlay(&self) -> Vec<Element<'_, Message>> {
         if !self.ui_state.net_color_custom.show {
             return Vec::new();
         }
@@ -94,7 +94,7 @@ impl Signex {
     /// so the user can keep dropping objects with the edited properties.
     /// v0.13 — Also fires when a footprint editor's placement is paused
     /// so TAB during pad/via/string placement surfaces the same overlay.
-    pub(super) fn placement_paused_overlay(&self) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn placement_paused_overlay(&self) -> Option<Element<'_, Message>> {
         let document = &self.document_state;
         let interaction = &self.interaction_state;
         let footprint_paused = self
@@ -162,7 +162,7 @@ impl Signex {
 
     /// Schematic Active Bar overlay — only painted on the main window,
     /// so the main canvas's selection set is the right gate.
-    pub(super) fn schematic_active_bar_overlay(&self) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn schematic_active_bar_overlay(&self) -> Option<Element<'_, Message>> {
         if !self.has_active_schematic() {
             return None;
         }
@@ -198,7 +198,7 @@ impl Signex {
     /// mounted at the SAME app-view layer as the schematic's, so both
     /// share identical `Space::height(y_offset + 4.0)` math and land on
     /// a pixel-identical screen y.
-    pub(super) fn footprint_active_bar_overlay(&self) -> Vec<Element<'_, Message>> {
+    pub(in crate::app::view) fn footprint_active_bar_overlay(&self) -> Vec<Element<'_, Message>> {
         let document = &self.document_state;
         let interaction = &self.interaction_state;
         let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab) else {
@@ -253,7 +253,7 @@ impl Signex {
     /// canvas. Sits above the active-bar dropdown so a long-press menu
     /// is occluded by — never under — its own dismiss layer. Pushes the
     /// dismiss layer then the clamped menu card.
-    pub(super) fn footprint_context_menu_overlay(&self) -> Vec<Element<'_, Message>> {
+    pub(in crate::app::view) fn footprint_context_menu_overlay(&self) -> Vec<Element<'_, Message>> {
         let document = &self.document_state;
         let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab) else {
             return Vec::new();
@@ -308,14 +308,14 @@ impl Signex {
         };
         vec![
             Self::dismiss_layer(close_msg),
-            super::translate::Translate::new(card_msg, (x, y)).into(),
+            super::super::translate::Translate::new(card_msg, (x, y)).into(),
         ]
     }
 
     /// v0.14 — typed-delta "Move Selection By X, Y…" modal for the
     /// footprint editor. A blocking dialog once open; pushes its dismiss
     /// backdrop then the centered card.
-    pub(super) fn footprint_move_by_overlay(&self) -> Vec<Element<'_, Message>> {
+    pub(in crate::app::view) fn footprint_move_by_overlay(&self) -> Vec<Element<'_, Message>> {
         let document = &self.document_state;
         let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab) else {
             return Vec::new();
@@ -354,7 +354,7 @@ impl Signex {
     /// v0.13 — symbol library editor active bar (+ its dropdown overlay)
     /// mounted at the SAME app-view layer as the schematic / footprint
     /// bars.
-    pub(super) fn symbol_editor_active_bar_overlay(&self) -> Vec<Element<'_, Message>> {
+    pub(in crate::app::view) fn symbol_editor_active_bar_overlay(&self) -> Vec<Element<'_, Message>> {
         let document = &self.document_state;
         let Some(active_tab) = self.document_state.tabs.get(self.document_state.active_tab) else {
             return Vec::new();
@@ -397,7 +397,7 @@ impl Signex {
     /// top of the label being edited. Converts the object's world
     /// position through the live camera into a window-absolute screen
     /// position each frame.
-    pub(super) fn text_edit_overlay(&self) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn text_edit_overlay(&self) -> Option<Element<'_, Message>> {
         let ui = &self.ui_state;
         let document = &self.document_state;
         let interaction = &self.interaction_state;
@@ -475,7 +475,7 @@ impl Signex {
     /// button in the bottom-right of the status bar; each row shows a ✓
     /// when the panel is open somewhere (docked, floating, or detached).
     /// Pushes the dismiss layer then the popup.
-    pub(super) fn panel_list_overlay(&self) -> Vec<Element<'_, Message>> {
+    pub(in crate::app::view) fn panel_list_overlay(&self) -> Vec<Element<'_, Message>> {
         let ui = &self.ui_state;
         let document = &self.document_state;
         if !ui.panel_list_open {
@@ -566,7 +566,7 @@ impl Signex {
         let top = (wh - popup_h - 26.0).max(0.0);
         vec![
             Self::dismiss_layer(Message::Overlay(OverlayMsg::TogglePanelList)),
-            super::translate::Translate::new(Element::from(popup), (left, top)).into(),
+            super::super::translate::Translate::new(Element::from(popup), (left, top)).into(),
         ]
     }
 }

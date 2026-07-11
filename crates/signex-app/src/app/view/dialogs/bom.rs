@@ -9,21 +9,21 @@ use super::*;
 use iced::widget::{Column, Row, Space, button, column, container, row, scrollable, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 
-use super::dialog_widgets::{
+use super::widgets::{
     close_x_button, detached_header, draggable_header, primary_button_themed, section_header,
     wrap_modal,
 };
-use super::dialogs::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
+use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 
 impl Signex {
-    pub(super) fn view_bom_preview(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_bom_preview(&self) -> Element<'_, Message> {
         let modal_w = 1000.0_f32;
         let modal_h = 700.0_f32;
         let dialog = self.view_bom_preview_body_inner(true);
         let offset = self
             .ui_state
             .modal_offsets
-            .get(&super::super::state::ModalId::BomPreview)
+            .get(&super::super::super::state::ModalId::BomPreview)
             .copied()
             .unwrap_or((0.0, 0.0));
         wrap_modal(
@@ -34,7 +34,7 @@ impl Signex {
         )
     }
 
-    pub(super) fn view_bom_preview_body(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_bom_preview_body(&self) -> Element<'_, Message> {
         self.view_bom_preview_body_inner(false)
     }
 
@@ -71,11 +71,11 @@ impl Signex {
         let header = if draggable {
             draggable_header(
                 header_content,
-                super::super::state::ModalId::BomPreview,
+                super::super::super::state::ModalId::BomPreview,
                 self.interaction_state.last_mouse_pos,
             )
         } else {
-            detached_header(header_content, super::super::state::ModalId::BomPreview)
+            detached_header(header_content, super::super::super::state::ModalId::BomPreview)
         };
 
         // Pill style mirrors the main-app right-side Properties

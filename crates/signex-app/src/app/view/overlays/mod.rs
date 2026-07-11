@@ -10,6 +10,9 @@
 
 use super::*;
 
+mod bars;
+mod modals;
+
 impl Signex {
     /// Hover tooltip card showing the placed symbol's designator,
     /// value, footprint, and library id. Only paints after the cursor

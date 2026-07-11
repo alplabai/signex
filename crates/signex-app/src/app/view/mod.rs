@@ -7,20 +7,11 @@ pub(crate) mod translate;
 mod context_menu_items;
 mod context_menus;
 mod context_submenu;
-mod dialog_annotate;
-mod dialog_annotate_preview;
-mod dialog_bom;
-mod dialog_confirms;
-mod dialog_erc;
-mod dialog_project;
-mod dialog_widgets;
 mod pdf_preview;
 mod print_preview;
 mod modals;
 mod chrome;
 mod overlays;
-mod overlays_bars;
-mod overlays_modals;
 
 use super::*;
 
@@ -658,8 +649,8 @@ impl Signex {
     /// Assemble the floating overlay stack painted over the main view.
     ///
     /// Pure assembler: each overlay's guard + widget tree lives in a
-    /// dedicated `*_overlay` builder (see the `overlays`, `overlays_bars`
-    /// and `overlays_modals` sibling modules). Call ORDER here is
+    /// dedicated `*_overlay` builder (see the `overlays` module and its
+    /// `bars` / `modals` submodules). Call ORDER here is
     /// load-bearing — overlays stack visually in push order, so the
     /// sequence below reproduces the original inline push order exactly.
     /// `has_blocking_modal` short-circuits the tool/menu overlays just as

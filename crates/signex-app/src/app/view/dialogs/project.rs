@@ -9,10 +9,10 @@ use super::*;
 use iced::widget::{Space, column, container, row, text};
 use iced::{Color, Element, Length};
 
-use super::dialog_widgets::{
+use super::widgets::{
     close_x_button, draggable_header, primary_button, secondary_button, wrap_modal,
 };
-use super::dialogs::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
+use super::{MODAL_HEADER_HEIGHT, MODAL_HEADER_PADDING, MODAL_HEADER_TITLE_SIZE};
 
 impl Signex {
     // ────────────────────────────────────────────────────────────────
@@ -23,12 +23,12 @@ impl Signex {
     // persistence in `ui_state.modal_offsets`.
     // ────────────────────────────────────────────────────────────────
 
-    pub(super) fn view_rename_dialog(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_rename_dialog(&self) -> Element<'_, Message> {
         let dialog = self.view_rename_dialog_body();
         let offset = self
             .ui_state
             .modal_offsets
-            .get(&super::super::state::ModalId::RenameDialog)
+            .get(&super::super::super::state::ModalId::RenameDialog)
             .copied()
             .unwrap_or((0.0, 0.0));
         wrap_modal(dialog, offset, self.ui_state.window_size, (420.0, 200.0))
@@ -68,7 +68,7 @@ impl Signex {
         let _ = border_c;
         let header = draggable_header(
             header_content,
-            super::super::state::ModalId::RenameDialog,
+            super::super::super::state::ModalId::RenameDialog,
             self.interaction_state.last_mouse_pos,
         );
 
@@ -142,12 +142,12 @@ impl Signex {
         dialog.into()
     }
 
-    pub(super) fn view_project_options_dialog(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_project_options_dialog(&self) -> Element<'_, Message> {
         let dialog = self.view_project_options_dialog_body();
         let offset = self
             .ui_state
             .modal_offsets
-            .get(&super::super::state::ModalId::ProjectOptions)
+            .get(&super::super::super::state::ModalId::ProjectOptions)
             .copied()
             .unwrap_or((0.0, 0.0));
         wrap_modal(dialog, offset, self.ui_state.window_size, (520.0, 360.0))
@@ -183,7 +183,7 @@ impl Signex {
         .into();
         let header = draggable_header(
             header_content,
-            super::super::state::ModalId::ProjectOptions,
+            super::super::super::state::ModalId::ProjectOptions,
             self.interaction_state.last_mouse_pos,
         );
 
@@ -237,12 +237,12 @@ impl Signex {
         dialog.into()
     }
 
-    pub(super) fn view_enable_version_control_dialog(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_enable_version_control_dialog(&self) -> Element<'_, Message> {
         let dialog = self.view_enable_version_control_dialog_body();
         let offset = self
             .ui_state
             .modal_offsets
-            .get(&super::super::state::ModalId::EnableVersionControl)
+            .get(&super::super::super::state::ModalId::EnableVersionControl)
             .copied()
             .unwrap_or((0.0, 0.0));
         wrap_modal(dialog, offset, self.ui_state.window_size, (520.0, 320.0))
@@ -279,7 +279,7 @@ impl Signex {
         .into();
         let header = draggable_header(
             header_content,
-            super::super::state::ModalId::EnableVersionControl,
+            super::super::super::state::ModalId::EnableVersionControl,
             self.interaction_state.last_mouse_pos,
         );
 
@@ -393,12 +393,12 @@ impl Signex {
     /// stripped-down field set: Step X / Step Y + link toggle, plus
     /// OK / Cancel. Display style + multiplier + per-grid-color land
     /// in v0.18.11.x as the underlying canvas/grid system grows them.
-    pub(super) fn view_grid_properties_dialog(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_grid_properties_dialog(&self) -> Element<'_, Message> {
         let dialog = self.view_grid_properties_dialog_body();
         let offset = self
             .ui_state
             .modal_offsets
-            .get(&super::super::state::ModalId::GridProperties)
+            .get(&super::super::super::state::ModalId::GridProperties)
             .copied()
             .unwrap_or((0.0, 0.0));
         wrap_modal(dialog, offset, self.ui_state.window_size, (480.0, 280.0))
@@ -436,7 +436,7 @@ impl Signex {
         .into();
         let header = draggable_header(
             header_content,
-            super::super::state::ModalId::GridProperties,
+            super::super::super::state::ModalId::GridProperties,
             self.interaction_state.last_mouse_pos,
         );
 
@@ -619,12 +619,12 @@ impl Signex {
     /// per-kind checkboxes (Pads / Tracks / Arcs / Pours / 3D Bodies
     /// / Keepouts / Cutouts / Texts) + Apply / Cancel. Apply writes
     /// the draft into `editor.state.selection_filter`.
-    pub(super) fn view_selection_filter_custom_dialog(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_selection_filter_custom_dialog(&self) -> Element<'_, Message> {
         let dialog = self.view_selection_filter_custom_body();
         let offset = self
             .ui_state
             .modal_offsets
-            .get(&super::super::state::ModalId::SelectionFilterCustom)
+            .get(&super::super::super::state::ModalId::SelectionFilterCustom)
             .copied()
             .unwrap_or((0.0, 0.0));
         wrap_modal(dialog, offset, self.ui_state.window_size, (440.0, 380.0))
@@ -662,7 +662,7 @@ impl Signex {
         .into();
         let header = draggable_header(
             header_content,
-            super::super::state::ModalId::SelectionFilterCustom,
+            super::super::super::state::ModalId::SelectionFilterCustom,
             self.interaction_state.last_mouse_pos,
         );
 

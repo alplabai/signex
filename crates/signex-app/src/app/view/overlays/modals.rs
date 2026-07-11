@@ -17,7 +17,7 @@ impl Signex {
     /// its own OS window. Open-flow auto-detaches via
     /// `handle_preferences_open_requested`, so this in-window path is
     /// the fallback when the detach failed.
-    pub(super) fn preferences_overlay(&self) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn preferences_overlay(&self) -> Option<Element<'_, Message>> {
         let ui = &self.ui_state;
         let document = &self.document_state;
         let prefs_detached = ui.windows.values().any(|kind| {
@@ -59,7 +59,7 @@ impl Signex {
     }
 
     /// Find & Replace dialog.
-    pub(super) fn find_replace_overlay(&self) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn find_replace_overlay(&self) -> Option<Element<'_, Message>> {
         let ui = &self.ui_state;
         if !ui.find_replace.open {
             return None;
@@ -71,7 +71,7 @@ impl Signex {
     }
 
     /// Keyboard-shortcuts reference modal.
-    pub(super) fn keyboard_shortcuts_overlay(&self) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn keyboard_shortcuts_overlay(&self) -> Option<Element<'_, Message>> {
         let ui = &self.ui_state;
         if !ui.keyboard_shortcuts_open {
             return None;
@@ -84,7 +84,7 @@ impl Signex {
     }
 
     /// First-run onboarding tour overlay.
-    pub(super) fn first_run_tour_overlay(&self) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn first_run_tour_overlay(&self) -> Option<Element<'_, Message>> {
         if !self.ui_state.first_run_tour_open {
             return None;
         }
@@ -97,7 +97,7 @@ impl Signex {
     /// independent single-condition push; order matches the inline
     /// sequence exactly (rename → remove → project-close → app-quit →
     /// project-options → enable-VC → grid-properties → selection-filter).
-    pub(super) fn simple_dialogs_overlay(&self) -> Vec<Element<'_, Message>> {
+    pub(in crate::app::view) fn simple_dialogs_overlay(&self) -> Vec<Element<'_, Message>> {
         let ui = &self.ui_state;
         let mut out: Vec<Element<'_, Message>> = Vec::new();
         if ui.rename_dialog.is_some() {
@@ -130,7 +130,7 @@ impl Signex {
     /// Detachable dialogs (annotate, annotate-reset confirm, ERC). Each
     /// is skipped when its detached OS window owns the view so the modal
     /// never renders in both windows at once.
-    pub(super) fn detachable_dialogs_overlay(&self) -> Vec<Element<'_, Message>> {
+    pub(in crate::app::view) fn detachable_dialogs_overlay(&self) -> Vec<Element<'_, Message>> {
         let ui = &self.ui_state;
         let modal_detached = |m: crate::app::state::ModalId| -> bool {
             ui.windows.values().any(|kind| {
@@ -154,7 +154,7 @@ impl Signex {
 
     /// v0.9 Library — picker modal overlay. Centered card on a dim
     /// backdrop; dismiss-on-ESC handled via the close X.
-    pub(super) fn library_picker_overlay(&self) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn library_picker_overlay(&self) -> Option<Element<'_, Message>> {
         let document = &self.document_state;
         let picker = self.library.picker.as_ref()?;
         let card = crate::library::picker::view(&self.library, picker, &document.panel_ctx.tokens)
@@ -179,7 +179,7 @@ impl Signex {
     /// until the append-row-direct dispatcher migration lands and the
     /// `library.new_component` state + messages can be pruned. It
     /// deliberately contributes no overlay.
-    pub(super) fn new_component_overlay(&self) -> Vec<Element<'_, Message>> {
+    pub(in crate::app::view) fn new_component_overlay(&self) -> Vec<Element<'_, Message>> {
         if let Some(nc) = self.library.new_component.as_ref() {
             // Class registry is per-library: use the picked library's
             // manifest classes. Falls back to the user's prefs default
@@ -213,7 +213,7 @@ impl Signex {
     /// selects → Properties panel surfaces detail. Render branch retained
     /// behind `EDIT_MODAL_ENABLED` for one release; prune the supporting
     /// state + dispatchers in a follow-up cleanup pass.
-    pub(super) fn edit_row_modal_overlay(&self) -> Vec<Element<'_, Message>> {
+    pub(in crate::app::view) fn edit_row_modal_overlay(&self) -> Vec<Element<'_, Message>> {
         let document = &self.document_state;
         const EDIT_MODAL_ENABLED: bool = false;
         let mut out: Vec<Element<'_, Message>> = Vec::new();
@@ -271,7 +271,7 @@ impl Signex {
 
     /// Delete Selected confirm modal (Deliverable D). First browser with
     /// a pending confirm wins.
-    pub(super) fn delete_confirm_overlay(&self) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn delete_confirm_overlay(&self) -> Option<Element<'_, Message>> {
         let document = &self.document_state;
         for (lib_path, browser_state) in &self.library.library_browsers {
             if let Some(confirm) = browser_state.delete_confirm.as_ref() {
@@ -299,7 +299,7 @@ impl Signex {
     }
 
     /// Primitive picker (Pick Symbol / Pick Footprint).
-    pub(super) fn primitive_picker_overlay(&self) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn primitive_picker_overlay(&self) -> Option<Element<'_, Message>> {
         let document = &self.document_state;
         let picker = self.library.primitive_picker.as_ref()?;
         let card = crate::library::primitive_picker::view(
@@ -323,7 +323,7 @@ impl Signex {
     }
 
     /// Tools ▸ Document Options modal — Altium SchLib parity.
-    pub(super) fn document_options_overlay(&self) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn document_options_overlay(&self) -> Option<Element<'_, Message>> {
         let document = &self.document_state;
         let state = self.library.document_options.as_ref()?;
         let card = crate::library::document_options::view(state, &document.panel_ctx.tokens)
@@ -345,7 +345,7 @@ impl Signex {
     /// "Library Options" modal — pops between the New Library Save-As
     /// dialog and the actual `LocalGitAdapter::init` so the user can opt
     /// into Git LFS for binary 3D models before anything hits disk.
-    pub(super) fn create_options_overlay(&self) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn create_options_overlay(&self) -> Option<Element<'_, Message>> {
         let document = &self.document_state;
         let state = self.library.create_options.as_ref()?;
         let card = crate::library::create_options::view(state, &document.panel_ctx.tokens)
@@ -365,7 +365,7 @@ impl Signex {
     }
 
     /// Close-Library — Unsaved Drafts confirm modal.
-    pub(super) fn close_library_confirm_overlay(&self) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn close_library_confirm_overlay(&self) -> Option<Element<'_, Message>> {
         let document = &self.document_state;
         let confirm = self.library.close_library_confirm.as_ref()?;
         let card =
@@ -388,7 +388,7 @@ impl Signex {
     /// Library recovery dialog (Stage 10). Surfaces missing-snxlib,
     /// missing-.git, and broken primitive bindings as user-facing modals
     /// instead of silent log lines.
-    pub(super) fn library_recovery_overlay(&self) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn library_recovery_overlay(&self) -> Option<Element<'_, Message>> {
         let document = &self.document_state;
         let dialog = self.library.recovery.as_ref()?;
         let card = crate::library::recovery::view(dialog, &document.panel_ctx.tokens)
@@ -411,7 +411,7 @@ impl Signex {
     /// above every other modal layer; click-outside dismisses via the
     /// standard dismiss_layer pattern. Pushes the dismiss layer then the
     /// dropdown.
-    pub(super) fn command_palette_overlay(&self) -> Vec<Element<'_, Message>> {
+    pub(in crate::app::view) fn command_palette_overlay(&self) -> Vec<Element<'_, Message>> {
         if !self.ui_state.command_palette.open {
             return Vec::new();
         }
@@ -424,7 +424,7 @@ impl Signex {
     /// "Library Updates Available" modal (Stage 16 §3.5). Opened on
     /// schematic open under Team workflow mode when a placed Symbol's
     /// `library_version` drifts from the source row's current version.
-    pub(super) fn library_updates_overlay(&self) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn library_updates_overlay(&self) -> Option<Element<'_, Message>> {
         let document = &self.document_state;
         let state = self.library.library_updates.as_ref()?;
         let card = crate::library::updates_dialog::view(state, &document.panel_ctx.tokens)
