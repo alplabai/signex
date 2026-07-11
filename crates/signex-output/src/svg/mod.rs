@@ -9,21 +9,25 @@ use std::fmt::Write as _;
 use signex_types::markup::{
     ExpressionEvalContext, RichSegment, evaluate_expressions, parse_signex_markup,
 };
-use signex_types::schematic::{FillType, HAlign, LabelType, VAlign};
+use signex_types::schematic::{FillType, LabelType};
 use tiny_skia::{Color, FillRule, Paint, PathBuilder, Pixmap, Stroke};
 use ttf_parser::{Face, GlyphId, OutlineBuilder};
 
 use crate::SheetSnapshot;
 use crate::pdf::layout::PageTransform;
-use crate::pdf::palette::SchematicPalette;
-use crate::pdf::{ColourMode, PdfOptions, PdfScale};
+use crate::pdf::{ColourMode, PdfOptions};
 
 mod drawings;
 mod geometry;
+mod labels;
 mod symbols;
 
 use drawings::push_sch_drawing_path;
 use geometry::{path_to_tiny_skia, rect_path};
+use labels::{
+    halign_to_svg, label_colour, label_size_pt, label_spin_style, schematic_text_offset_global,
+    schematic_text_offset_hier, schematic_text_offset_net, spin_text_style, valign_to_svg,
+};
 use symbols::{
     field_effective_style, push_symbol_lib_graphics, push_symbol_pins, symbol_eval_variables,
 };
@@ -633,25 +637,6 @@ fn fill_to_rgb(
     }
 }
 
-fn label_size_pt(font_size_mm: f64, mm_to_unit: f64, scale: &PdfScale) -> f32 {
-    if font_size_mm > 0.0 {
-        (font_size_mm * mm_to_unit) as f32
-    } else {
-        match scale {
-            PdfScale::OneToOne | PdfScale::FitToPage | PdfScale::Percent(_) => 9.0,
-        }
-    }
-}
-
-fn label_colour(label_type: LabelType, palette: &SchematicPalette) -> (f32, f32, f32) {
-    match label_type {
-        LabelType::Net => palette.net_label,
-        LabelType::Global => palette.global_label,
-        LabelType::Hierarchical => palette.hier_label,
-        LabelType::Power => palette.power_label,
-    }
-}
-
 fn normalize_standard_text(input: &str) -> String {
     normalize_standard_text_with_ctx(input, &ExpressionEvalContext::default())
 }
@@ -661,98 +646,6 @@ fn normalize_standard_text_with_ctx(input: &str, ctx: &ExpressionEvalContext<'_>
     // in Phase 2.3 of the Apache-clean remediation. Inputs no longer carry
     // those tokens because the main repo no longer parses Standard files.
     evaluate_expressions(input, ctx)
-}
-
-#[derive(Clone, Copy)]
-enum SpinStyle {
-    Left,
-    Right,
-    Up,
-    Bottom,
-}
-
-fn label_spin_style(justify: HAlign, rotation: f64) -> SpinStyle {
-    let rot = normalize_rotation(rotation);
-    let vertical = rot == 90 || rot == 270;
-
-    if vertical {
-        if matches!(justify, HAlign::Right) {
-            SpinStyle::Bottom
-        } else {
-            SpinStyle::Up
-        }
-    } else if matches!(justify, HAlign::Right) {
-        SpinStyle::Left
-    } else {
-        SpinStyle::Right
-    }
-}
-
-fn schematic_text_offset_net(spin: SpinStyle) -> (f64, f64) {
-    let dist = 0.15;
-    match spin {
-        SpinStyle::Up | SpinStyle::Bottom => (-dist, 0.0),
-        SpinStyle::Left | SpinStyle::Right => (0.0, -dist),
-    }
-}
-
-fn schematic_text_offset_hier(text: &str, font_size_mm: f64, spin: SpinStyle) -> (f64, f64) {
-    let dist = font_size_mm * 0.4
-        + (parse_signex_markup(&normalize_standard_text(text))
-            .iter()
-            .map(|seg| match seg {
-                RichSegment::Normal(t)
-                | RichSegment::Bold(t)
-                | RichSegment::Italic(t)
-                | RichSegment::Strike(t)
-                | RichSegment::Subscript(t)
-                | RichSegment::Superscript(t)
-                | RichSegment::Overbar(t) => t.chars().count(),
-                RichSegment::Link { label, .. } => label.chars().count(),
-            })
-            .sum::<usize>() as f64)
-            * font_size_mm
-            * 0.6;
-    match spin {
-        SpinStyle::Left => (-dist, 0.0),
-        SpinStyle::Up => (0.0, -dist),
-        SpinStyle::Right => (dist, 0.0),
-        SpinStyle::Bottom => (0.0, dist),
-    }
-}
-
-fn schematic_text_offset_global(shape: &str, spin: SpinStyle) -> (f64, f64) {
-    let mut horiz = signex_types::schematic::SCHEMATIC_TEXT_MM * 0.5;
-    let vert = signex_types::schematic::SCHEMATIC_TEXT_MM * 0.0715;
-
-    if matches!(shape, "input" | "bidirectional" | "tri_state") {
-        horiz += signex_types::schematic::SCHEMATIC_TEXT_MM * 0.75;
-    }
-
-    match spin {
-        SpinStyle::Left => (-horiz, vert),
-        SpinStyle::Up => (vert, -horiz),
-        SpinStyle::Right => (horiz, vert),
-        SpinStyle::Bottom => (vert, horiz),
-    }
-}
-
-fn spin_text_style(spin: SpinStyle) -> (SvgTextAlign, SvgTextVAlign, f32) {
-    let align = match spin {
-        SpinStyle::Left | SpinStyle::Bottom => SvgTextAlign::Right,
-        SpinStyle::Right | SpinStyle::Up => SvgTextAlign::Left,
-    };
-    let rotation = match spin {
-        SpinStyle::Up => -90.0,
-        SpinStyle::Bottom => 90.0,
-        _ => 0.0,
-    };
-    (align, SvgTextVAlign::Bottom, rotation)
-}
-
-fn normalize_rotation(deg: f64) -> i32 {
-    let r = (deg.round() as i32) % 360;
-    if r < 0 { r + 360 } else { r }
 }
 
 fn rgb_css((r, g, b): (f32, f32, f32)) -> String {
@@ -1045,22 +938,6 @@ impl TinyPathOutlineBuilder {
         let rx = self.anchor_x + dx * self.rot_cos - dy * self.rot_sin;
         let ry = self.anchor_y + dx * self.rot_sin + dy * self.rot_cos;
         (rx, ry)
-    }
-}
-
-fn halign_to_svg(h: HAlign) -> SvgTextAlign {
-    match h {
-        HAlign::Left => SvgTextAlign::Left,
-        HAlign::Center => SvgTextAlign::Center,
-        HAlign::Right => SvgTextAlign::Right,
-    }
-}
-
-fn valign_to_svg(v: VAlign) -> SvgTextVAlign {
-    match v {
-        VAlign::Top => SvgTextVAlign::Top,
-        VAlign::Center => SvgTextVAlign::Center,
-        VAlign::Bottom => SvgTextVAlign::Bottom,
     }
 }
 
