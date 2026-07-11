@@ -1,10 +1,8 @@
-//! Footprint-editor pour / keepout / cutout / snap / array / silk
-//! setters — the helper methods behind the remaining `FpEditor*`
-//! dock-panel messages that edit copper pours, keepouts, cutouts,
-//! the snapping model, pad arrays, and silkscreen geometry on the
-//! active `.snxfpt` editor. Also owns the `SilkLineEndpoint` /
-//! `SilkTextField` enums the silk setters take. The dispatcher in
-//! `mod.rs` routes here.
+//! Footprint-editor pour / keepout / cutout / snap / array setters —
+//! the helper methods behind the remaining `FpEditor*` dock-panel
+//! messages that edit copper pours, keepouts, cutouts, the snapping
+//! model, and pad arrays on the active `.snxfpt` editor. The
+//! dispatcher in `mod.rs` routes here.
 //!
 //! Pure code motion out of the former `sch_library.rs` god-file
 //! (ADR-0001 #163); zero behaviour change.
@@ -17,7 +15,7 @@ impl Signex {
         &mut self,
         id: signex_sketch::id::SketchEntityId,
         value: String,
-    ) {
+    ) -> bool {
         let net = if value.trim().is_empty() {
             None
         } else {
@@ -40,13 +38,14 @@ impl Signex {
             editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
+        true
     }
 
     pub(crate) fn fp_editor_set_pour_fill_type(
         &mut self,
         id: signex_sketch::id::SketchEntityId,
         value: signex_sketch::attr::PourFillType,
-    ) {
+    ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
                 if let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id) {
@@ -64,13 +63,14 @@ impl Signex {
             editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
+        true
     }
 
     pub(crate) fn fp_editor_set_pour_priority(
         &mut self,
         id: signex_sketch::id::SketchEntityId,
         value: String,
-    ) {
+    ) -> bool {
         let parsed = value.trim().parse::<u32>().ok();
         if let Some(editor) = self.active_footprint_editor_mut() {
             if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
@@ -91,6 +91,7 @@ impl Signex {
             editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
+        true
     }
 
     pub(crate) fn fp_editor_set_keepout_kind(
@@ -98,7 +99,7 @@ impl Signex {
         id: signex_sketch::id::SketchEntityId,
         kind: crate::panels::KeepoutKindFlag,
         value: bool,
-    ) {
+    ) -> bool {
         use crate::panels::KeepoutKindFlag;
         if let Some(editor) = self.active_footprint_editor_mut() {
             if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
@@ -124,13 +125,14 @@ impl Signex {
             editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
+        true
     }
 
     pub(crate) fn fp_editor_set_cutout_edge_radius(
         &mut self,
         id: signex_sketch::id::SketchEntityId,
         value: String,
-    ) {
+    ) -> bool {
         let edge_radius = if value.trim().is_empty() {
             None
         } else {
@@ -153,9 +155,13 @@ impl Signex {
             editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
+        true
     }
 
-    pub(crate) fn fp_editor_toggle_snap_option(&mut self, flag: crate::panels::SnapOptionFlag) {
+    pub(crate) fn fp_editor_toggle_snap_option(
+        &mut self,
+        flag: crate::panels::SnapOptionFlag,
+    ) -> bool {
         use crate::panels::SnapOptionFlag;
         if let Some(editor) = self.active_footprint_editor_mut() {
             let opts = &mut editor.state.snap_options;
@@ -191,10 +197,11 @@ impl Signex {
             editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
+        true
     }
 
     /// v0.13 — Altium "Snap Distance" setter.
-    pub(crate) fn handle_fp_set_snap_distance(&mut self, raw: String) {
+    pub(crate) fn handle_fp_set_snap_distance(&mut self, raw: String) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             if let Ok(v) = raw.trim().parse::<f64>() {
                 editor.state.snap_options.snap_distance_mm = v.clamp(0.001, 100.0);
@@ -202,10 +209,11 @@ impl Signex {
             }
         }
         self.refresh_panel_ctx();
+        true
     }
 
     /// v0.13 — Altium "Axis Snap Range" setter.
-    pub(crate) fn handle_fp_set_axis_snap_range(&mut self, raw: String) {
+    pub(crate) fn handle_fp_set_axis_snap_range(&mut self, raw: String) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             if let Ok(v) = raw.trim().parse::<f64>() {
                 editor.state.snap_options.axis_snap_range_mm = v.clamp(0.001, 100.0);
@@ -213,6 +221,7 @@ impl Signex {
             }
         }
         self.refresh_panel_ctx();
+        true
     }
 
     /// v0.18.9 — Properties-panel "Grid step" numeric input. Parses
@@ -220,14 +229,14 @@ impl Signex {
     /// `state.snap_options.grid_step_mm`. Invalid / empty / non-
     /// positive strings no-op so partial keystrokes don't snap to
     /// zero (which would crash the canvas's grid math).
-    pub(crate) fn fp_editor_set_snap_grid_step(&mut self, value: &str) {
+    pub(crate) fn fp_editor_set_snap_grid_step(&mut self, value: &str) -> bool {
         let trimmed = value.trim();
         if trimmed.is_empty() {
-            return;
+            return true;
         }
         let parsed: f64 = match trimmed.parse::<f64>() {
             Ok(v) if v > 0.0 && v.is_finite() => v,
-            _ => return,
+            _ => return true,
         };
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.state.snap_options.grid_step_mm = parsed;
@@ -240,13 +249,14 @@ impl Signex {
             editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
+        true
     }
 
     pub(crate) fn fp_editor_set_cutout_through(
         &mut self,
         id: signex_sketch::id::SketchEntityId,
         value: bool,
-    ) {
+    ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
                 if let Some(e) = sketch.entities.iter_mut().find(|e| e.id == id) {
@@ -264,6 +274,7 @@ impl Signex {
             editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
+        true
     }
 
     /// v0.23 — Pattern sub-form text-input edit. Walks `sketch.arrays`
@@ -277,7 +288,7 @@ impl Signex {
         array_id: signex_sketch::array::ArrayId,
         field: crate::panels::ArrayParamField,
         value: String,
-    ) {
+    ) -> bool {
         use crate::panels::ArrayParamField;
         use signex_sketch::array::{ArrayKind, GridDepopulation};
         if let Some(editor) = self.active_footprint_editor_mut() {
@@ -357,6 +368,7 @@ impl Signex {
             editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
+        true
     }
 
     /// v0.23 — Switch numbering scheme. Maps the panel's enum onto
@@ -368,7 +380,7 @@ impl Signex {
         &mut self,
         array_id: signex_sketch::array::ArrayId,
         scheme: crate::panels::NumberingSchemeKindUi,
-    ) {
+    ) -> bool {
         use crate::panels::NumberingSchemeKindUi;
         use signex_sketch::array::NumberingScheme;
         if let Some(editor) = self.active_footprint_editor_mut() {
@@ -401,13 +413,14 @@ impl Signex {
             editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
+        true
     }
 
     pub(crate) fn fp_editor_set_bga_skip_letters(
         &mut self,
         array_id: signex_sketch::array::ArrayId,
         skip_letters: bool,
-    ) {
+    ) -> bool {
         use signex_sketch::array::NumberingScheme;
         if let Some(editor) = self.active_footprint_editor_mut() {
             if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
@@ -429,6 +442,7 @@ impl Signex {
             editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
+        true
     }
 
     /// v0.25 polish — set BGA `start_row` letter. Empty / non-letter
@@ -440,13 +454,13 @@ impl Signex {
         &mut self,
         array_id: signex_sketch::array::ArrayId,
         value: String,
-    ) {
+    ) -> bool {
         use signex_sketch::array::NumberingScheme;
         let Some(first_char) = value.chars().next() else {
-            return;
+            return true;
         };
         if !first_char.is_ascii_alphabetic() {
-            return;
+            return true;
         }
         let upper = first_char.to_ascii_uppercase();
         if let Some(editor) = self.active_footprint_editor_mut() {
@@ -466,6 +480,7 @@ impl Signex {
             editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
+        true
     }
 
     /// v0.25 polish — set BGA `start_col` integer. Empty / non-numeric
@@ -475,11 +490,11 @@ impl Signex {
         &mut self,
         array_id: signex_sketch::array::ArrayId,
         value: String,
-    ) {
+    ) -> bool {
         use signex_sketch::array::NumberingScheme;
         let trimmed = value.trim();
         let Ok(parsed) = trimmed.parse::<u32>() else {
-            return;
+            return true;
         };
         if let Some(editor) = self.active_footprint_editor_mut() {
             if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
@@ -498,12 +513,16 @@ impl Signex {
             editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
+        true
     }
 
     /// v0.23 — Delete an array. The source entity stays in the sketch
     /// — only the array record is removed, so existing constraints on
     /// the source survive intact.
-    pub(crate) fn fp_editor_delete_array(&mut self, array_id: signex_sketch::array::ArrayId) {
+    pub(crate) fn fp_editor_delete_array(
+        &mut self,
+        array_id: signex_sketch::array::ArrayId,
+    ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
                 sketch.arrays.retain(|a| a.id != array_id);
@@ -517,6 +536,7 @@ impl Signex {
             editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
+        true
     }
 
     /// v0.23 — Begin re-picking a polar centre. Sets
@@ -527,13 +547,14 @@ impl Signex {
     pub(crate) fn fp_editor_begin_repick_polar_center(
         &mut self,
         array_id: signex_sketch::array::ArrayId,
-    ) {
+    ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             use crate::library::editor::footprint::state::ToolPending;
             editor.state.tool_pending = ToolPending::RepickPolarCenter { array_id };
             editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
+        true
     }
 
     /// v0.23 — Toggle a single `(i, j)` instance in an array's
@@ -552,7 +573,7 @@ impl Signex {
         i: u32,
         j: u32,
         value: bool,
-    ) {
+    ) -> bool {
         use signex_sketch::array::{ArrayKind, GridDepopulation};
         if let Some(editor) = self.active_footprint_editor_mut() {
             if let Some(sketch) = editor.primitive_mut().sketch.as_mut() {
@@ -560,7 +581,7 @@ impl Signex {
                     let depop_slot: &mut Option<GridDepopulation> = match &mut array.kind {
                         ArrayKind::Grid { depopulation, .. } => depopulation,
                         ArrayKind::Polar { depopulation, .. } => depopulation,
-                        ArrayKind::Linear { .. } => return,
+                        ArrayKind::Linear { .. } => return true,
                     };
                     if value {
                         // Re-enable the instance — drop matching entries.
@@ -596,92 +617,6 @@ impl Signex {
             editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
-    }
-}
-
-/// Apply one numeric Properties-pane edit to a graphic. (idx, field)
-/// pairs whose field doesn't apply to the graphic's variant silently
-/// no-op so a stale Properties pane can't mutate the wrong slot.
-/// Click-to-cycle the symbol's local color override through a small
-/// preset palette and back to `None` (= inherit). 5 steps total:
-/// None → red → green → blue → yellow → back to None.
-/// v0.21 — Silk Line endpoint to mutate.
-#[derive(Debug, Clone, Copy)]
-pub(crate) enum SilkLineEndpoint {
-    FromX,
-    FromY,
-    ToX,
-    ToY,
-}
-
-/// v0.21 — Silk Text field to mutate.
-#[derive(Debug, Clone, Copy)]
-pub(crate) enum SilkTextField {
-    PositionX,
-    PositionY,
-    Size,
-}
-
-impl Signex {
-    pub(crate) fn fp_editor_set_silk_line_endpoint(
-        &mut self,
-        endpoint: SilkLineEndpoint,
-        value: String,
-    ) {
-        let parsed = value.trim().parse::<f64>().ok();
-        if let Some(parsed) = parsed {
-            if let Some(editor) = self.active_footprint_editor_mut() {
-                if let Some(idx) = editor.state.selected_silk_f {
-                    if let Some(g) = editor.primitive_mut().silk_f.get_mut(idx) {
-                        if let signex_library::primitive::footprint::FpGraphicKind::Line {
-                            from,
-                            to,
-                        } = &mut g.kind
-                        {
-                            match endpoint {
-                                SilkLineEndpoint::FromX => from[0] = parsed,
-                                SilkLineEndpoint::FromY => from[1] = parsed,
-                                SilkLineEndpoint::ToX => to[0] = parsed,
-                                SilkLineEndpoint::ToY => to[1] = parsed,
-                            }
-                            editor.dirty = true;
-                            editor.canvas_cache.clear();
-                        }
-                    }
-                }
-            }
-        }
-        self.refresh_panel_ctx();
-    }
-
-    pub(crate) fn fp_editor_set_silk_text_field(&mut self, field: SilkTextField, value: String) {
-        let parsed = value.trim().parse::<f64>().ok();
-        if let Some(parsed) = parsed {
-            if let Some(editor) = self.active_footprint_editor_mut() {
-                if let Some(idx) = editor.state.selected_silk_f {
-                    if let Some(g) = editor.primitive_mut().silk_f.get_mut(idx) {
-                        if let signex_library::primitive::footprint::FpGraphicKind::Text {
-                            position,
-                            size,
-                            ..
-                        } = &mut g.kind
-                        {
-                            match field {
-                                SilkTextField::PositionX => position[0] = parsed,
-                                SilkTextField::PositionY => position[1] = parsed,
-                                SilkTextField::Size => {
-                                    if parsed > 0.0 {
-                                        *size = parsed;
-                                    }
-                                }
-                            }
-                            editor.dirty = true;
-                            editor.canvas_cache.clear();
-                        }
-                    }
-                }
-            }
-        }
-        self.refresh_panel_ctx();
+        true
     }
 }
