@@ -1,0 +1,242 @@
+//! Pointer input — pan start/stop, cursor-move (handle drag, item
+//! drag, rubber-band + multi-click preview tracking, idle readout),
+//! and left-release commit (box-select / drag-commit). Each method is
+//! the corresponding `Program::update` branch extracted verbatim;
+//! conditions, coordinate math, and `Action` capture/publish sites are
+//! unchanged.
+
+use super::super::*;
+use iced::Rectangle;
+use iced::mouse;
+use iced::widget::canvas;
+
+impl SymbolCanvas<'_> {
+    /// Right/Middle press: cancel an in-progress multi-click draw, else
+    /// start a pan.
+    pub(in crate::library::editor::symbol::canvas) fn on_secondary_press(
+        &self,
+        state: &mut CanvasState,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
+    ) -> Option<canvas::Action<CanvasAction>> {
+        // Right-click cancels any in-progress multi-click draw;
+        // otherwise starts a pan (same as schematic canvas).
+        let draw_in_progress = match self.tool {
+            SymbolTool::PlaceLine => state.line_from.is_some(),
+            SymbolTool::PlaceCircle => state.circle_center.is_some(),
+            SymbolTool::PlaceArc => state.arc_center.is_some() || state.arc_radius_start.is_some(),
+            _ => false,
+        };
+        if draw_in_progress {
+            state.line_from = None;
+            state.line_cursor = None;
+            state.circle_center = None;
+            state.circle_cursor = None;
+            state.arc_center = None;
+            state.arc_radius_start = None;
+            state.arc_cursor = None;
+            state.arc_end_deg_unwrapped = None;
+            return Some(canvas::Action::capture());
+        }
+        let pos = cursor.position_in(bounds)?;
+        state.panning = true;
+        state.last_pan_pos = Some(pos);
+        Some(canvas::Action::capture())
+    }
+
+    /// Right/Middle release: end the pan.
+    pub(in crate::library::editor::symbol::canvas) fn on_secondary_release(
+        &self,
+        state: &mut CanvasState,
+    ) -> Option<canvas::Action<CanvasAction>> {
+        state.panning = false;
+        state.last_pan_pos = None;
+        None
+    }
+
+    /// Cursor move: pan / handle-drag / item-drag / rubber-band +
+    /// multi-click preview tracking / idle coordinate readout.
+    pub(in crate::library::editor::symbol::canvas) fn on_cursor_moved(
+        &self,
+        state: &mut CanvasState,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
+    ) -> Option<canvas::Action<CanvasAction>> {
+        let pos = cursor.position_in(bounds)?;
+        // Pan first so panning while a handle is grabbed
+        // doesn't accidentally reshape geometry.
+        if state.panning {
+            let last = state.last_pan_pos.unwrap_or(pos);
+            let dx = pos.x - last.x;
+            let dy = pos.y - last.y;
+            state.last_pan_pos = Some(pos);
+            if dx != 0.0 || dy != 0.0 {
+                return Some(canvas::Action::publish(CanvasAction::Pan { dx, dy }));
+            }
+            return None;
+        }
+        let (wx, wy) = world_for(self, pos.x, pos.y, bounds);
+        let (ux, uy) = world_unsnapped(self, pos.x, pos.y, bounds);
+        if let Some((idx, handle)) = state.dragging_handle {
+            return Some(canvas::Action::publish(CanvasAction::MoveGraphicHandle {
+                idx,
+                handle,
+                x: wx,
+                y: wy,
+            }));
+        }
+        if state.dragging {
+            // All or Multiple selection: delta-based drag.
+            let is_delta_based = matches!(
+                self.selected,
+                Some(SymbolSelection::All) | Some(SymbolSelection::Multiple { .. })
+            );
+            if is_delta_based {
+                if let Some((last_wx, last_wy)) = state.last_drag_world_pos {
+                    let dx = wx - last_wx;
+                    let dy = wy - last_wy;
+                    state.last_drag_world_pos = Some((wx, wy));
+                    if dx.abs() > f64::EPSILON || dy.abs() > f64::EPSILON {
+                        return Some(canvas::Action::publish(CanvasAction::MoveAll { dx, dy }));
+                    }
+                } else {
+                    state.last_drag_world_pos = Some((wx, wy));
+                }
+                return None;
+            }
+            // Single-item selection: absolute positioning with anchor offset.
+            let (move_x, move_y) = state
+                .drag_anchor_offset
+                .map(|(dx, dy)| (wx + dx, wy + dy))
+                .unwrap_or((wx, wy));
+            return Some(canvas::Action::publish(CanvasAction::Move {
+                x: move_x,
+                y: move_y,
+            }));
+        }
+        // Update rubber-band box while the user drags on empty space.
+        // Publishing CursorAt forces iced to process the event as a
+        // state-changing message, which triggers draw() on the next
+        // frame so the rubber band animates in real time.
+        if state.box_select_origin.is_some() {
+            state.box_select_current = Some((ux, uy));
+            return Some(
+                canvas::Action::publish(CanvasAction::CursorAt {
+                    x_mm: Some(ux),
+                    y_mm: Some(uy),
+                })
+                .and_capture(),
+            );
+        }
+        // While waiting for a subsequent click in a multi-click
+        // draw flow, update the rubber-band cursor and force a
+        // redraw so the preview animates in real time.
+        if self.tool == SymbolTool::PlaceLine && state.line_from.is_some() {
+            state.line_cursor = Some((wx, wy));
+            return Some(
+                canvas::Action::publish(CanvasAction::CursorAt {
+                    x_mm: Some(ux),
+                    y_mm: Some(uy),
+                })
+                .and_capture(),
+            );
+        }
+        if self.tool == SymbolTool::PlaceCircle && state.circle_center.is_some() {
+            state.circle_cursor = Some((wx, wy));
+            return Some(
+                canvas::Action::publish(CanvasAction::CursorAt {
+                    x_mm: Some(ux),
+                    y_mm: Some(uy),
+                })
+                .and_capture(),
+            );
+        }
+        if self.tool == SymbolTool::PlaceArc
+            && (state.arc_center.is_some() || state.arc_radius_start.is_some())
+        {
+            state.arc_cursor = Some((wx, wy));
+            // Phase 2: keep a continuous (unwrapped) end angle so
+            // arcs that sweep past ±180° don't jump.
+            if let Some((cx, cy)) = state.arc_center {
+                if state.arc_radius_start.is_some() {
+                    let raw = (wy - cy).atan2(wx - cx).to_degrees();
+                    state.arc_end_deg_unwrapped = Some(match state.arc_end_deg_unwrapped {
+                        Some(prev) => unwrap_angle(prev, raw),
+                        None => raw,
+                    });
+                }
+            }
+            return Some(
+                canvas::Action::publish(CanvasAction::CursorAt {
+                    x_mm: Some(ux),
+                    y_mm: Some(uy),
+                })
+                .and_capture(),
+            );
+        }
+        // Idle cursor — publish the unsnapped world position
+        // for the status footer X/Y readout.
+        Some(canvas::Action::publish(CanvasAction::CursorAt {
+            x_mm: Some(ux),
+            y_mm: Some(uy),
+        }))
+    }
+
+    /// Cursor left the canvas: end pan, clear the coordinate readout.
+    pub(in crate::library::editor::symbol::canvas) fn on_cursor_left(
+        &self,
+        state: &mut CanvasState,
+    ) -> Option<canvas::Action<CanvasAction>> {
+        state.panning = false;
+        state.last_pan_pos = None;
+        Some(canvas::Action::publish(CanvasAction::CursorAt {
+            x_mm: None,
+            y_mm: None,
+        }))
+    }
+
+    /// Left release: commit a rubber-band box selection, or close the
+    /// coalesced move-drag undo group.
+    pub(in crate::library::editor::symbol::canvas) fn on_left_release(
+        &self,
+        state: &mut CanvasState,
+    ) -> Option<canvas::Action<CanvasAction>> {
+        let was_dragging = state.dragging || state.dragging_handle.is_some();
+        state.dragging = false;
+        state.dragging_handle = None;
+        state.drag_anchor_offset = None;
+        state.last_drag_world_pos = None;
+
+        // Commit a rubber-band box selection if one was in progress.
+        if let (Some((ox, oy)), Some((cx, cy))) = (
+            state.box_select_origin.take(),
+            state.box_select_current.take(),
+        ) {
+            let drag_dist_sq = (cx - ox).powi(2) + (cy - oy).powi(2);
+            if drag_dist_sq > 0.5 * 0.5 {
+                // Enough movement — commit as a box selection.
+                let kind = if cx >= ox {
+                    state::BoxSelectKind::Window
+                } else {
+                    state::BoxSelectKind::Crossing
+                };
+                let result = state::select_in_box(self.symbol, ox, oy, cx, cy, kind);
+                return Some(match result {
+                    Some(sel) => canvas::Action::publish(CanvasAction::Select(sel)).and_capture(),
+                    None => canvas::Action::publish(CanvasAction::Deselect).and_capture(),
+                });
+            } else {
+                // Micro-drag treated as a click → deselect.
+                return Some(canvas::Action::publish(CanvasAction::Deselect).and_capture());
+            }
+        }
+
+        // Notify dispatcher that a move drag completed so it can
+        // close the coalesced undo snapshot group.
+        if was_dragging {
+            return Some(canvas::Action::publish(CanvasAction::DragCommit));
+        }
+
+        None
+    }
+}
