@@ -9,6 +9,68 @@
 use super::*;
 
 impl Signex {
+    /// Resolution of the "New Component Library" save-as dialog — pops
+    /// the "Library Options" modal (Git / LFS opt-in) rather than
+    /// creating immediately.
+    pub(super) fn handle_prompt_library_create_options(
+        &mut self,
+        project_path: std::path::PathBuf,
+        lib_path: std::path::PathBuf,
+    ) -> Task<Message> {
+        // Stage 11 of `v0.9-snxlib-as-file-plan.md`: pop the
+        // "Library Options" modal here instead of creating
+        // immediately. The modal lets the user opt into Git
+        // LFS for binary 3D models before any disk +
+        // `git init` runs. Confirming dispatches
+        // `LibraryCreateOptionsConfirm` which calls into
+        // `handle_create_library_at_path`.
+        self.library.create_options = Some(LibraryCreateOptionsState {
+            project_path,
+            lib_path,
+            enable_git: false,
+            use_lfs: false,
+        });
+        Task::none()
+    }
+
+    /// "Library Options" modal — toggle the "Use Git LFS" checkbox.
+    pub(super) fn handle_library_create_options_toggle_lfs(&mut self) -> Task<Message> {
+        if let Some(state) = self.library.create_options.as_mut() {
+            state.use_lfs = !state.use_lfs;
+        }
+        Task::none()
+    }
+
+    /// "Library Options" modal — toggle the "Enable version control"
+    /// checkbox.
+    pub(super) fn handle_library_create_options_toggle_git(&mut self) -> Task<Message> {
+        if let Some(state) = self.library.create_options.as_mut() {
+            state.enable_git = !state.enable_git;
+            // LFS is meaningless without git — keep the two
+            // toggles consistent so the user doesn't end up
+            // with LFS-on-no-git which the adapter would
+            // silently drop anyway.
+            if !state.enable_git {
+                state.use_lfs = false;
+            }
+        }
+        Task::none()
+    }
+
+    /// "Library Options" modal — Create Library button.
+    pub(super) fn handle_library_create_options_confirm(&mut self) -> Task<Message> {
+        if let Some(state) = self.library.create_options.take() {
+            self.handle_create_library_at_path(
+                state.project_path,
+                state.lib_path,
+                state.enable_git,
+                state.use_lfs,
+            )
+        } else {
+            Task::none()
+        }
+    }
+
     /// Spawn the "New Component Library" Save-As dialog for the
     /// project rooted at `project_root`. The dialog defaults to
     /// `<project_dir>/<project>-lib.snxlib` so the common

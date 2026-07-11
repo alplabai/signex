@@ -129,6 +129,22 @@ pub(super) fn handle_recovery_library_missing(
     }
 }
 
+/// Result of the "Locate Library" file pick fired from the
+/// *Library missing* recovery dialog. Clears the recovery state and,
+/// when the user picked a replacement, re-opens the library there.
+pub(super) fn handle_recovery_library_missing_locate_result(
+    app: &mut Signex,
+    picked: Option<std::path::PathBuf>,
+) -> Task<Message> {
+    app.library.recovery = None;
+    if let Some(new_path) = picked {
+        return Task::done(Message::Library(LibraryMessage::OpenLibraryAt(Some(
+            new_path,
+        ))));
+    }
+    Task::none()
+}
+
 /// Handle the user's choice from the *Git missing* recovery dialog.
 pub(super) fn handle_recovery_git_missing(app: &mut Signex, choice: GitMissingChoice) -> Task<Message> {
     match choice {

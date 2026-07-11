@@ -12,6 +12,28 @@ use super::*;
 // ─────────────────────────────────────────────────────────────────────
 
 impl Signex {
+    /// Toggle one row's checkbox in the Library Updates modal.
+    pub(super) fn handle_library_updates_toggle_selection(
+        &mut self,
+        symbol_uuid: uuid::Uuid,
+    ) -> Task<Message> {
+        if let Some(state) = self.library.library_updates.as_mut() {
+            state.toggle(symbol_uuid);
+        }
+        Task::none()
+    }
+
+    /// User clicked Skip All — close the modal and record the path on
+    /// `skipped_updates_for` so the status bar can flag it persistently.
+    pub(super) fn handle_library_updates_skip_all(&mut self) -> Task<Message> {
+        if let Some(state) = self.library.library_updates.take() {
+            self.library
+                .skipped_updates_for
+                .insert(state.schematic_path);
+        }
+        Task::none()
+    }
+
     /// Scan the schematic at `path` for placed Symbols whose
     /// `library_version` drifted from the source row's current
     /// version. Splits into two control paths:

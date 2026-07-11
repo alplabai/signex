@@ -8,6 +8,24 @@
 use super::*;
 
 impl Signex {
+    /// Trace-only signal: a Component Preview tab was opened for the
+    /// given address. Fired alongside `OpenComponentRow`.
+    pub(super) fn handle_component_preview_opened(
+        &mut self,
+        path: std::path::PathBuf,
+        table: String,
+        row_id: RowId,
+    ) -> Task<Message> {
+        tracing::debug!(
+            target: "signex::library",
+            path = %path.display(),
+            table = %table,
+            row_id = %row_id,
+            "ComponentPreviewOpened — Component Preview tab opened"
+        );
+        Task::none()
+    }
+
     /// Component Preview event handler.
     pub(super) fn handle_editor_event(&mut self, address: EditorAddress, msg: EditorMsg) -> Task<Message> {
         match msg {

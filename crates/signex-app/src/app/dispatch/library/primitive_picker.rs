@@ -8,6 +8,22 @@
 use super::*;
 
 impl Signex {
+    /// Open the Symbol/Footprint primitive picker modal. `target`
+    /// determines what happens when the user picks something.
+    pub(super) fn handle_open_primitive_picker(
+        &mut self,
+        kind: PrimitiveKind,
+        target: PrimitivePickerTarget,
+    ) -> Task<Message> {
+        self.library.primitive_picker = Some(PrimitivePickerState {
+            kind,
+            target,
+            filter: String::new(),
+            error: None,
+        });
+        Task::none()
+    }
+
     /// Apply a primitive picker sub-message. Most variants close the
     /// modal once the pick lands.
     pub(super) fn handle_primitive_picker_msg(&mut self, msg: PrimitivePickerMsg) -> Task<Message> {
