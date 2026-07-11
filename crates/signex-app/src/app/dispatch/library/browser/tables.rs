@@ -9,7 +9,7 @@ use super::*;
 
 impl Signex {
     /// Flip the browser into add-table mode.
-    pub(super) fn handle_browser_begin_add_table(
+    pub(in crate::app::dispatch::library) fn handle_browser_begin_add_table(
         &mut self,
         library_path: std::path::PathBuf,
     ) -> Task<Message> {
@@ -20,7 +20,7 @@ impl Signex {
     }
 
     /// Live-edit of the `+ Add Table` name buffer.
-    pub(super) fn handle_browser_set_new_table_name(
+    pub(in crate::app::dispatch::library) fn handle_browser_set_new_table_name(
         &mut self,
         library_path: std::path::PathBuf,
         value: String,
@@ -35,7 +35,7 @@ impl Signex {
     }
 
     /// Cancel the inline `+ Add Table` form without writing.
-    pub(super) fn handle_browser_cancel_add_table(
+    pub(in crate::app::dispatch::library) fn handle_browser_cancel_add_table(
         &mut self,
         library_path: std::path::PathBuf,
     ) -> Task<Message> {
@@ -46,7 +46,7 @@ impl Signex {
     }
 
     /// Delete an empty table from the strip's per-tab `×` button.
-    pub(super) fn handle_browser_delete_table(
+    pub(in crate::app::dispatch::library) fn handle_browser_delete_table(
         &mut self,
         library_path: std::path::PathBuf,
         table: String,
@@ -85,7 +85,7 @@ impl Signex {
     }
 
     /// Dismiss the inline delete-table error message.
-    pub(super) fn handle_browser_dismiss_delete_error(
+    pub(in crate::app::dispatch::library) fn handle_browser_dismiss_delete_error(
         &mut self,
         library_path: std::path::PathBuf,
     ) -> Task<Message> {
@@ -96,7 +96,7 @@ impl Signex {
     }
 
     /// Flip a table row into inline rename mode.
-    pub(super) fn handle_browser_begin_rename_table(
+    pub(in crate::app::dispatch::library) fn handle_browser_begin_rename_table(
         &mut self,
         library_path: std::path::PathBuf,
         table: String,
@@ -109,7 +109,7 @@ impl Signex {
     }
 
     /// Live-edit of the inline rename buffer.
-    pub(super) fn handle_browser_set_rename_name(
+    pub(in crate::app::dispatch::library) fn handle_browser_set_rename_name(
         &mut self,
         library_path: std::path::PathBuf,
         value: String,
@@ -124,7 +124,7 @@ impl Signex {
     }
 
     /// Cancel the inline rename without writing.
-    pub(super) fn handle_browser_cancel_rename_table(
+    pub(in crate::app::dispatch::library) fn handle_browser_cancel_rename_table(
         &mut self,
         library_path: std::path::PathBuf,
     ) -> Task<Message> {
@@ -137,7 +137,7 @@ impl Signex {
 
     /// Confirm — calls `rename_table` on the adapter, swaps every
     /// in-memory reference to the table over to the new name.
-    pub(super) fn handle_browser_confirm_rename_table(
+    pub(in crate::app::dispatch::library) fn handle_browser_confirm_rename_table(
         &mut self,
         library_path: std::path::PathBuf,
     ) -> Task<Message> {
@@ -193,7 +193,7 @@ impl Signex {
     /// Confirm `+ Add Table` — calls `create_empty_table` on the
     /// adapter, refreshes the browser cache, switches the active
     /// tab to the new table.
-    pub(super) fn handle_browser_confirm_add_table(
+    pub(in crate::app::dispatch::library) fn handle_browser_confirm_add_table(
         &mut self,
         library_path: std::path::PathBuf,
     ) -> Task<Message> {
