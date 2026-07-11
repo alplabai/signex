@@ -6,7 +6,10 @@
 use crate::library::editor::footprint::state::FootprintEditorState as CanvasState;
 use crate::library::messages::FootprintEditorMsg;
 
-pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: FootprintEditorMsg) {
+pub(in crate::library::editor::footprint::updates) fn apply(
+    editor: &mut crate::app::FootprintEditorState,
+    msg: FootprintEditorMsg,
+) {
     match msg {
         FootprintEditorMsg::SketchPlacePoint { x_mm, y_mm } => {
             use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;

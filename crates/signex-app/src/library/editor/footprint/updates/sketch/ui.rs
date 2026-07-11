@@ -5,7 +5,10 @@
 
 use crate::library::messages::FootprintEditorMsg;
 
-pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: FootprintEditorMsg) {
+pub(in crate::library::editor::footprint::updates) fn apply(
+    editor: &mut crate::app::FootprintEditorState,
+    msg: FootprintEditorMsg,
+) {
     match msg {
         FootprintEditorMsg::SketchSelectMany(ids) => {
             // v0.27 — Sketch-mode multi-select replacement. First
