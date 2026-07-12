@@ -34,9 +34,6 @@ use crate::library::state::{
 use signex_library::{PrimitiveKind, PrimitiveRef, RowId};
 
 mod browser;
-mod browser_classes;
-mod browser_grid;
-mod browser_tables;
 mod component_preview;
 mod components_panel;
 mod document_options;

@@ -9,7 +9,7 @@ use super::*;
 
 impl Signex {
     /// Active table change inside a Library Browser tab.
-    pub(super) fn handle_browser_select_table(
+    pub(in crate::app::dispatch::library) fn handle_browser_select_table(
         &mut self,
         library_path: std::path::PathBuf,
         table: String,
@@ -22,7 +22,7 @@ impl Signex {
     }
 
     /// Search-buffer edit inside a Library Browser tab.
-    pub(super) fn handle_browser_search_changed(
+    pub(in crate::app::dispatch::library) fn handle_browser_search_changed(
         &mut self,
         library_path: std::path::PathBuf,
         value: String,
@@ -39,7 +39,7 @@ impl Signex {
     }
 
     /// Column-header click — toggles sort direction on the matching key.
-    pub(super) fn handle_browser_sort_column(
+    pub(in crate::app::dispatch::library) fn handle_browser_sort_column(
         &mut self,
         library_path: std::path::PathBuf,
         column_key: String,
@@ -51,7 +51,7 @@ impl Signex {
     }
 
     /// Row click inside the browser grid.
-    pub(super) fn handle_browser_select_row(
+    pub(in crate::app::dispatch::library) fn handle_browser_select_row(
         &mut self,
         library_path: std::path::PathBuf,
         table: String,
@@ -68,7 +68,7 @@ impl Signex {
     }
 
     /// User dismissed the delete confirm modal without deleting.
-    pub(super) fn handle_browser_delete_row_cancel(
+    pub(in crate::app::dispatch::library) fn handle_browser_delete_row_cancel(
         &mut self,
         library_path: std::path::PathBuf,
     ) -> Task<Message> {
@@ -80,7 +80,7 @@ impl Signex {
 
     /// Live edit of a cell in the browser grid — updates the per-cell
     /// edit buffer.
-    pub(super) fn handle_browser_cell_edit(
+    pub(in crate::app::dispatch::library) fn handle_browser_cell_edit(
         &mut self,
         library_path: std::path::PathBuf,
         row_id: RowId,
@@ -94,7 +94,7 @@ impl Signex {
     }
 
     /// Drop the per-cell edit buffer (Esc).
-    pub(super) fn handle_browser_cell_cancel(
+    pub(in crate::app::dispatch::library) fn handle_browser_cell_cancel(
         &mut self,
         library_path: std::path::PathBuf,
         row_id: RowId,
@@ -107,7 +107,7 @@ impl Signex {
     }
 
     /// Pick a lifecycle filter mode for the active Library Browser tab.
-    pub(super) fn handle_browser_set_lifecycle_filter(
+    pub(in crate::app::dispatch::library) fn handle_browser_set_lifecycle_filter(
         &mut self,
         library_path: std::path::PathBuf,
         filter: crate::library::state::LifecycleFilter,
@@ -124,7 +124,7 @@ impl Signex {
     }
 
     /// Toggle the per-class filter.
-    pub(super) fn handle_browser_class_filter_clicked(
+    pub(in crate::app::dispatch::library) fn handle_browser_class_filter_clicked(
         &mut self,
         library_path: std::path::PathBuf,
         key: String,
@@ -143,7 +143,7 @@ impl Signex {
 
     /// Right-click on a Library Browser row → "Refresh Pricing".
     /// Stage 18 stub.
-    pub(super) fn handle_browser_refresh_pricing(
+    pub(in crate::app::dispatch::library) fn handle_browser_refresh_pricing(
         &mut self,
         library_path: std::path::PathBuf,
         table: String,
@@ -164,7 +164,7 @@ impl Signex {
     }
 
     /// Library node right-click → "Refresh All Pricing". Stage 18 stub.
-    pub(super) fn handle_library_refresh_all_pricing(
+    pub(in crate::app::dispatch::library) fn handle_library_refresh_all_pricing(
         &mut self,
         library_path: std::path::PathBuf,
     ) -> Task<Message> {

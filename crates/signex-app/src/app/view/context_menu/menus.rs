@@ -11,7 +11,7 @@ impl Signex {
     /// v0.18.10 — Altium-style grid picker popup body. Renders the
     /// standard 1mil…2.5mm ladder; clicking a row sends
     /// `Message::Ui(UiMsg::GridPickerSelect(step_mm))` and closes the popup.
-    pub(super) fn view_grid_picker_menu(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_grid_picker_menu(&self) -> Element<'_, Message> {
         use iced::widget::{button, column, container, text};
         let tokens = &self.document_state.panel_ctx.tokens;
         let primary = signex_widgets::theme_ext::text_primary(tokens);
@@ -96,7 +96,7 @@ impl Signex {
     }
 
     #[allow(clippy::vec_init_then_push)]
-    pub(super) fn view_context_menu(&self) -> Element<'_, Message> {
+    pub(in crate::app::view) fn view_context_menu(&self) -> Element<'_, Message> {
         use crate::icons as ic;
         let mut items: Vec<Element<'_, Message>> = Vec::with_capacity(20);
         let canvas = self.interaction_state.active_canvas();
@@ -291,7 +291,7 @@ impl Signex {
     /// menu matches what Altium shows in each context. Empty-area
     /// clicks are filtered out upstream (no menu shown), so `path`
     /// is guaranteed `Some` whenever this function runs.
-    pub(super) fn view_project_tree_context_menu(
+    pub(in crate::app::view) fn view_project_tree_context_menu(
         &self,
         ctx: &crate::app::ProjectTreeContextMenuState,
     ) -> Element<'_, Message> {
@@ -718,7 +718,7 @@ impl Signex {
     /// "others" to close). The split / tile / merge rows from
     /// Altium's screenshot are intentionally left out: Signex's
     /// editor doesn't support split-pane layout yet.
-    pub(super) fn view_tab_context_menu(
+    pub(in crate::app::view) fn view_tab_context_menu(
         &self,
         ctx: &crate::app::TabContextMenuState,
     ) -> Element<'_, Message> {
@@ -737,7 +737,7 @@ impl Signex {
         // OS window. Single-tab workspaces still show the row (Altium
         // does too) — undocking a sole tab leaves the main window
         // empty, which is fine.
-        use super::state::WindowKind;
+        use super::super::state::WindowKind;
         let already_undocked =
             self.ui_state.windows.values().any(
                 |kind| matches!(kind, WindowKind::UndockedTab { path, .. } if *path == tab.path),

@@ -9,7 +9,7 @@ use super::*;
 
 impl Signex {
     /// Open the inline create-class form.
-    pub(super) fn handle_browser_begin_add_class(
+    pub(in crate::app::dispatch::library) fn handle_browser_begin_add_class(
         &mut self,
         library_path: std::path::PathBuf,
     ) -> Task<Message> {
@@ -21,7 +21,7 @@ impl Signex {
     }
 
     /// Live-edit of the new-class key buffer.
-    pub(super) fn handle_browser_set_new_class_key(
+    pub(in crate::app::dispatch::library) fn handle_browser_set_new_class_key(
         &mut self,
         library_path: std::path::PathBuf,
         value: String,
@@ -36,7 +36,7 @@ impl Signex {
     }
 
     /// Live-edit of the new-class label buffer.
-    pub(super) fn handle_browser_set_new_class_label(
+    pub(in crate::app::dispatch::library) fn handle_browser_set_new_class_label(
         &mut self,
         library_path: std::path::PathBuf,
         value: String,
@@ -51,7 +51,7 @@ impl Signex {
     }
 
     /// Cancel the inline create-class form.
-    pub(super) fn handle_browser_cancel_add_class(
+    pub(in crate::app::dispatch::library) fn handle_browser_cancel_add_class(
         &mut self,
         library_path: std::path::PathBuf,
     ) -> Task<Message> {
@@ -63,7 +63,7 @@ impl Signex {
 
     /// Append the new class to the library's `[[classes]]` block via
     /// `add_library_class` and refresh.
-    pub(super) fn handle_browser_confirm_add_class(
+    pub(in crate::app::dispatch::library) fn handle_browser_confirm_add_class(
         &mut self,
         library_path: std::path::PathBuf,
     ) -> Task<Message> {
@@ -120,7 +120,7 @@ impl Signex {
 
     /// Per-row `×` delete — drops the matching class from the library's
     /// `[[classes]]` block.
-    pub(super) fn handle_browser_delete_class(
+    pub(in crate::app::dispatch::library) fn handle_browser_delete_class(
         &mut self,
         library_path: std::path::PathBuf,
         key: String,
@@ -142,7 +142,7 @@ impl Signex {
     }
 
     /// Sidebar `✎` rename for a class row — flips it into edit mode.
-    pub(super) fn handle_browser_begin_rename_class(
+    pub(in crate::app::dispatch::library) fn handle_browser_begin_rename_class(
         &mut self,
         library_path: std::path::PathBuf,
         key: String,
@@ -166,7 +166,7 @@ impl Signex {
     }
 
     /// Live-edit of the rename-class key buffer.
-    pub(super) fn handle_browser_set_rename_class_key(
+    pub(in crate::app::dispatch::library) fn handle_browser_set_rename_class_key(
         &mut self,
         library_path: std::path::PathBuf,
         value: String,
@@ -181,7 +181,7 @@ impl Signex {
     }
 
     /// Live-edit of the rename-class label buffer.
-    pub(super) fn handle_browser_set_rename_class_label(
+    pub(in crate::app::dispatch::library) fn handle_browser_set_rename_class_label(
         &mut self,
         library_path: std::path::PathBuf,
         value: String,
@@ -196,7 +196,7 @@ impl Signex {
     }
 
     /// Cancel the inline rename-class form.
-    pub(super) fn handle_browser_cancel_rename_class(
+    pub(in crate::app::dispatch::library) fn handle_browser_cancel_rename_class(
         &mut self,
         library_path: std::path::PathBuf,
     ) -> Task<Message> {
@@ -208,7 +208,7 @@ impl Signex {
     }
 
     /// Confirm — writes the renamed class via `rename_library_class`.
-    pub(super) fn handle_browser_confirm_rename_class(
+    pub(in crate::app::dispatch::library) fn handle_browser_confirm_rename_class(
         &mut self,
         library_path: std::path::PathBuf,
     ) -> Task<Message> {
