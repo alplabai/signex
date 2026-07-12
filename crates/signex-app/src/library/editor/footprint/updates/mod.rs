@@ -5,21 +5,17 @@
 //! Each concern's arms live in a sibling module and are reached through one
 //! `|`-grouped delegating arm per concern (ADR-0001 D1/D2). The former
 //! monolithic `sketch` module is itself now split by sketch concern
-//! (ui / placement / entities / pad-bridge / constraints / tools):
+//! into the `sketch/` folder (ui / placement / entities / pad_bridge /
+//! constraints / tools):
 //!
-//!   sketch_{ui,placement,entities,pad_bridge,constraints,tools}
+//!   sketch::{ui, placement, entities, pad_bridge, constraints, tools}
 //!   · active_bar · geometry · selection · context_menu · view
 
 mod active_bar;
 mod context_menu;
 mod geometry;
 mod selection;
-mod sketch_constraints;
-mod sketch_entities;
-mod sketch_pad_bridge;
-mod sketch_placement;
-mod sketch_tools;
-mod sketch_ui;
+mod sketch;
 mod view;
 
 use crate::library::messages::FootprintEditorMsg;
@@ -478,26 +474,26 @@ pub(crate) fn apply_footprint_primitive_edit(
         | FootprintEditorMsg::SketchToggleConstruction
         | FootprintEditorMsg::SketchToggleCenterline
         | FootprintEditorMsg::SketchToolEscape
-        | FootprintEditorMsg::SketchDimensionInput(..) => sketch_ui::apply(editor, msg),
+        | FootprintEditorMsg::SketchDimensionInput(..) => sketch::ui::apply(editor, msg),
         FootprintEditorMsg::SketchPlacementInputChar(..)
         | FootprintEditorMsg::SketchPlacementInputBackspace
         | FootprintEditorMsg::SketchPlacementInputEnter
         | FootprintEditorMsg::SketchPlacementInputEscape
-        | FootprintEditorMsg::SketchPlacementInputTab => sketch_placement::apply(editor, msg),
+        | FootprintEditorMsg::SketchPlacementInputTab => sketch::placement::apply(editor, msg),
         FootprintEditorMsg::SketchPlacePoint { .. }
         | FootprintEditorMsg::SketchMovePoint { .. }
         | FootprintEditorMsg::SketchMoveLine { .. }
-        | FootprintEditorMsg::SketchResizeRoundPad { .. } => sketch_entities::apply(editor, msg),
+        | FootprintEditorMsg::SketchResizeRoundPad { .. } => sketch::entities::apply(editor, msg),
         FootprintEditorMsg::SketchSetRole { .. }
         | FootprintEditorMsg::SketchMakePadFromProfile
         | FootprintEditorMsg::SketchUnlinkCornerRadius { .. } => {
-            sketch_pad_bridge::apply(editor, msg)
+            sketch::pad_bridge::apply(editor, msg)
         }
         FootprintEditorMsg::SketchEditParameter { .. }
         | FootprintEditorMsg::SketchAddConstraintForSelection(..) => {
-            sketch_constraints::apply(editor, msg)
+            sketch::constraints::apply(editor, msg)
         }
-        FootprintEditorMsg::SketchToolClick { .. } => sketch_tools::apply(editor, msg),
+        FootprintEditorMsg::SketchToolClick { .. } => sketch::tools::apply(editor, msg),
         FootprintEditorMsg::ToggleLayer(..)
         | FootprintEditorMsg::ToggleAutoFit
         | FootprintEditorMsg::SetMode(..)

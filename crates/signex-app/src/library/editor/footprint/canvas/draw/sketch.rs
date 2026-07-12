@@ -5,10 +5,10 @@
 use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point, Radians, Vector};
 
-use super::super::layers::FpLayer;
-use super::super::snap::{self, SnapKind, SnapResult};
-use super::super::state::{EditorPad, FootprintEditorState};
-use super::FootprintCanvasState;
+use super::super::super::layers::FpLayer;
+use super::super::super::snap::{self, SnapKind, SnapResult};
+use super::super::super::state::{EditorPad, FootprintEditorState};
+use super::super::FootprintCanvasState;
 
 /// v0.13.2 Phase 6.6 — render constraint glyphs above the sketch
 /// entities. Each constraint's centroid (geometric mean of the
@@ -833,7 +833,7 @@ pub(super) fn draw_sketch_snap_glyph(
     cstate: &FootprintCanvasState,
     state: &FootprintEditorState,
 ) {
-    use super::super::state::SketchTool;
+    use super::super::super::state::SketchTool;
 
     if matches!(state.active_tool, SketchTool::Select) {
         return;
@@ -914,16 +914,16 @@ pub(super) fn draw_sketch_snap_glyph(
 ///
 /// v0.16.2 — Looks up the role attr on every entity in the loop.
 /// The first hit picks the fill colour from the matching layer in
-/// [`super::layers::FpLayer`]. Loops with no role assignment fall
+/// [`super::super::super::layers::FpLayer`]. Loops with no role assignment fall
 /// back to neutral grey.
 /// v0.27 — closed-loop record exposed to the click handler so a
 /// single click on the polygon fill can select every entity in the
 /// loop. Mirrors what `draw_filled_closed_loops` walks internally.
-pub(super) struct ClosedLoop {
+pub(in crate::library::editor::footprint::canvas) struct ClosedLoop {
     pub lines: Vec<signex_sketch::id::SketchEntityId>,
     pub points: Vec<signex_sketch::id::SketchEntityId>,
     /// Vertex array shaped as `[[x, y]; n]` for direct hand-off to
-    /// `super::geometry::point_in_polygon`.
+    /// `super::super::geometry::point_in_polygon`.
     pub polygon: Vec<[f64; 2]>,
 }
 
@@ -932,7 +932,7 @@ pub(super) struct ClosedLoop {
 /// reuse it. Skips loops where every line is bake-skipped (purely
 /// construction loops); those are visible only as dashed strokes
 /// and selecting them via fill would surprise the user.
-pub(super) fn find_closed_loops(
+pub(in crate::library::editor::footprint::canvas) fn find_closed_loops(
     sketch: &signex_sketch::SketchData,
     state: &FootprintEditorState,
 ) -> Vec<ClosedLoop> {
@@ -1377,7 +1377,7 @@ fn draw_dim_pill_styled(frame: &mut canvas::Frame, centre: Point, label: &str, f
 /// verbatim (never reformatted mid-type).
 fn placement_field_buf(
     state: &FootprintEditorState,
-    kind: super::super::state::PlacementInputKind,
+    kind: super::super::super::state::PlacementInputKind,
 ) -> Option<&str> {
     std::iter::once(state.placement_input.as_ref())
         .chain(state.placement_input_others.iter().map(Some))

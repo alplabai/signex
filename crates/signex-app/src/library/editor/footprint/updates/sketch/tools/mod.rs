@@ -35,7 +35,10 @@ impl ToolClickCtx {
     }
 }
 
-pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: FootprintEditorMsg) {
+pub(in crate::library::editor::footprint::updates) fn apply(
+    editor: &mut crate::app::FootprintEditorState,
+    msg: FootprintEditorMsg,
+) {
     match msg {
         FootprintEditorMsg::SketchToolClick {
             x_mm,

@@ -5,8 +5,8 @@
 use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point};
 
-use super::super::layers::FpLayer;
-use super::FootprintCanvasState;
+use super::super::super::layers::FpLayer;
+use super::super::FootprintCanvasState;
 
 /// v0.18.16 — render the silk-layer graphics list. Each `FpGraphic`
 /// becomes a single Path stroke / fill in the layer's colour.

@@ -5,7 +5,10 @@
 
 use crate::library::messages::FootprintEditorMsg;
 
-pub(super) fn apply(editor: &mut crate::app::FootprintEditorState, msg: FootprintEditorMsg) {
+pub(in crate::library::editor::footprint::updates) fn apply(
+    editor: &mut crate::app::FootprintEditorState,
+    msg: FootprintEditorMsg,
+) {
     match msg {
         FootprintEditorMsg::SketchPlacementInputChar(ch) => {
             // v0.24 Track D — append `ch` to `placement_input.buffer`,

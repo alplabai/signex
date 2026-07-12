@@ -6,7 +6,7 @@ use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point, Rectangle};
 
 use super::super::{FootprintCanvas, FootprintCanvasState};
-use super::super::draw_grid::{draw_grid, draw_grid_dots};
+use super::grid::{draw_grid, draw_grid_dots};
 
 impl FootprintCanvas<'_> {
     /// Background fill + fine/coarse grid. Sketch mode flips to a
