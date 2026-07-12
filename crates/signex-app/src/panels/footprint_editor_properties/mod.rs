@@ -29,14 +29,12 @@ const MAX_POLAR_CHECKBOX_COUNT: u32 = 64;
 
 // Submodule declarations (split from the original 4570-line file).
 mod managers;
-mod pad_form;
-mod pad_stack_preview;
-mod pad_table;
+mod pad;
 mod snap_options;
 mod subforms;
 
 use managers::{grid_manager_btn, render_grid_manager, render_guide_manager, render_other_section};
-use pad_form::{
+use pad::{
     PadEditTarget, PadFormValues, pad_check_row, pad_copper_offset_x_msg, pad_copper_offset_y_msg,
     pad_corner_radius_msg, pad_designator_msg, pad_drill_diameter_msg, pad_drill_slot_length_msg,
     pad_electrical_type_msg, pad_feature_bottom_msg, pad_feature_top_msg, pad_hole_rotation_msg,

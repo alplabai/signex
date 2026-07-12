@@ -18,24 +18,21 @@ use iced::widget::{
 };
 use iced::{Background, Border, Color, Element, Length, Theme};
 
-use super::super::{
+use super::super::super::{
     CollapsedSections, FootprintEditorPanelContext, FootprintModeKind, FootprintPadSummary,
     KeepoutKindFlag, PanelMsg, SnapOptionFlag,
 };
-use super::{
-    fp_is_collapsed,
-    pad_stack_preview::{
-        ExpansionMode, HoleShapeChoice, PadShapeChoice, pad_stack_preview, pad_stack_tab_strip,
-    },
-    pad_table::{
-        pad_copper_row, pad_table_check_cell, pad_table_disabled_cell, pad_table_header,
-        pad_table_input_cell, pad_table_picklist_cell, pad_table_row, pad_table_static_cell,
-    },
-    props_section_header,
+use super::super::{fp_is_collapsed, props_section_header};
+use super::stack_preview::{
+    ExpansionMode, HoleShapeChoice, PadShapeChoice, pad_stack_preview, pad_stack_tab_strip,
+};
+use super::table::{
+    pad_copper_row, pad_table_check_cell, pad_table_disabled_cell, pad_table_header,
+    pad_table_input_cell, pad_table_picklist_cell, pad_table_row, pad_table_static_cell,
 };
 
 #[derive(Debug, Clone, Copy)]
-pub(super) enum PadEditTarget {
+pub(in crate::panels::footprint_editor_properties) enum PadEditTarget {
     Next,
     Selected(usize),
 }
@@ -44,7 +41,7 @@ pub(super) enum PadEditTarget {
 /// `FootprintEditorPanelContext.next_pad_*` for placement, or from
 /// `FootprintPadSummary` for the selected-pad branch.
 #[derive(Debug, Clone)]
-pub(super) struct PadFormValues {
+pub(in crate::panels::footprint_editor_properties) struct PadFormValues {
     pub(super) designator: String,
     pub(super) side: crate::library::editor::footprint::state::PadSide,
     pub(super) rotation_deg: f64,
@@ -84,7 +81,9 @@ pub(super) struct PadFormValues {
 }
 
 impl PadFormValues {
-    pub(super) fn from_next_pad(fp: &FootprintEditorPanelContext) -> Self {
+    pub(in crate::panels::footprint_editor_properties) fn from_next_pad(
+        fp: &FootprintEditorPanelContext,
+    ) -> Self {
         Self {
             designator: fp.next_pad_designator_override.clone().unwrap_or_default(),
             side: fp.next_pad_side,
@@ -113,7 +112,7 @@ impl PadFormValues {
             numeric_buffers: fp.numeric_buffers.clone(),
         }
     }
-    pub(super) fn from_selected_pad(
+    pub(in crate::panels::footprint_editor_properties) fn from_selected_pad(
         pad: &FootprintPadSummary,
         fp: &FootprintEditorPanelContext,
     ) -> Self {
@@ -167,7 +166,7 @@ impl PadFormValues {
 macro_rules! pad_msg_fns {
     ($(($fn_name:ident, $ty:ty, $next:ident, $sel:ident, $field:ident);)*) => {
         $(
-            pub(super) fn $fn_name(t: PadEditTarget, v: $ty) -> PanelMsg {
+            pub(in crate::panels::footprint_editor_properties) fn $fn_name(t: PadEditTarget, v: $ty) -> PanelMsg {
                 match t {
                     PadEditTarget::Next => PanelMsg::$next(v),
                     PadEditTarget::Selected(idx) => PanelMsg::$sel { idx, $field: v },
@@ -222,7 +221,7 @@ pad_msg_fns! {
 /// v0.20 — single-line label + text-input row used by every Pad
 /// Properties field. Mirrors the existing rotation/size_x rows'
 /// chrome (40 px label, padded input, dim border).
-pub(super) fn pad_input_row<'a>(
+pub(in crate::panels::footprint_editor_properties) fn pad_input_row<'a>(
     label: &'a str,
     placeholder: &'a str,
     value: String,
@@ -265,7 +264,7 @@ pub(super) fn pad_input_row<'a>(
 }
 
 /// v0.20 — pick_list row for a Pad Properties field.
-pub(super) fn pad_pick_row<'a, T>(
+pub(in crate::panels::footprint_editor_properties) fn pad_pick_row<'a, T>(
     label: &'a str,
     options: &'a [T],
     selected: T,
@@ -296,7 +295,7 @@ where
 
 /// v0.20 — checkbox row for a Pad Properties field. Label on left,
 /// flat checkbox on right.
-pub(super) fn pad_check_row<'a>(
+pub(in crate::panels::footprint_editor_properties) fn pad_check_row<'a>(
     label: &'a str,
     on: bool,
     on_toggle: impl Fn(bool) -> PanelMsg + 'a,
@@ -326,7 +325,7 @@ pub(super) fn pad_check_row<'a>(
 /// edits write to `next_pad_defaults` (placement form) or to a
 /// specific selected pad. The pause/resume hint banner only shows
 /// for the placement form (`PadEditTarget::Next`).
-pub(super) fn render_pad_form_properties<'a>(
+pub(in crate::panels::footprint_editor_properties) fn render_pad_form_properties<'a>(
     mut col: Column<'a, PanelMsg>,
     values: &PadFormValues,
     target: PadEditTarget,
@@ -465,7 +464,7 @@ pub(super) fn render_pad_form_properties<'a>(
 /// without entering Sketch mode. Empty for pads with no parametric
 /// handles (Rect / Oval) and during pad placement (no minted
 /// entities yet).
-pub(super) fn render_pad_form_pad_stack<'a>(
+pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_stack<'a>(
     mut col: Column<'a, PanelMsg>,
     values: &PadFormValues,
     target: PadEditTarget,
@@ -925,7 +924,7 @@ pub(super) fn render_pad_form_pad_stack<'a>(
 
 /// v0.20 — render the "Pad Features" section: top/bottom surface
 /// treatment + testpoint flags.
-pub(super) fn render_pad_form_pad_features<'a>(
+pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_features<'a>(
     mut col: Column<'a, PanelMsg>,
     values: &PadFormValues,
     target: PadEditTarget,

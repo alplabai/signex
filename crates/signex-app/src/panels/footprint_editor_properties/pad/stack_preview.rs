@@ -7,8 +7,8 @@ use iced::widget::{
 };
 use iced::{Background, Border, Color, Element, Length, Theme};
 
-use super::super::PanelMsg;
-use super::pad_form::PadFormValues;
+use super::super::super::PanelMsg;
+use super::form::PadFormValues;
 
 /// v0.20 — Pad Stack preview. CPU-side iso-projected 3D rendering of
 /// the pad: copper top face (red), solder mask outset (blue) at the

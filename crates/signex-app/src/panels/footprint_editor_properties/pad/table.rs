@@ -9,12 +9,12 @@ use iced::widget::{
 };
 use iced::{Background, Border, Color, Element, Length, Theme};
 
-use super::super::PanelMsg;
-use super::pad_form::{
+use super::super::super::PanelMsg;
+use super::form::{
     PadEditTarget, PadFormValues, pad_shape_msg, pad_size_x_msg, pad_size_y_msg,
     pad_thermal_relief_msg,
 };
-use super::pad_stack_preview::PadShapeChoice;
+use super::stack_preview::PadShapeChoice;
 
 /// v0.20 — Altium-style table header row. Renders the column titles
 /// in muted small text with the same FillPortion layout the data

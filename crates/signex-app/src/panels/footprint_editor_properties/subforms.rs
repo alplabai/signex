@@ -9,7 +9,7 @@ use iced::widget::{
 use iced::{Background, Border, Color, Element, Length, Theme};
 
 use super::super::{CollapsedSections, FootprintEditorPanelContext, KeepoutKindFlag, PanelMsg};
-use super::pad_form::{pad_check_row, pad_input_row, pad_pick_row};
+use super::pad::{pad_check_row, pad_input_row, pad_pick_row};
 use super::{fp_is_collapsed, props_section_header};
 
 // v0.23 — safety caps mirrored from mod.rs's constants for the
