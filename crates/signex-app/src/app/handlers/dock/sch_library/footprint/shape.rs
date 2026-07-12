@@ -7,7 +7,7 @@
 //! Pure code motion out of the former `sch_library.rs` god-file
 //! (ADR-0001 #163); zero behaviour change.
 
-use super::*;
+use super::super::*;
 
 impl Signex {
     /// v0.16.4 — mutate the selected entity's pour `net` and re-bake.

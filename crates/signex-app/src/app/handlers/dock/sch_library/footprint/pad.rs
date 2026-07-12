@@ -7,7 +7,7 @@
 //! Pure code motion out of the former `sch_library.rs` god-file
 //! (ADR-0001 #163); zero behaviour change.
 
-use super::*;
+use super::super::*;
 
 impl Signex {
     /// v0.16.3 — sibling of [`Self::active_symbol_editor_mut`] for
@@ -316,7 +316,7 @@ impl Signex {
     // canvas cache so the new value renders. The `with_parts` block
     // syncs the pad list back onto the underlying primitive so the
     // saved file picks up the change.
-    pub(super) fn with_selected_pad<F>(&mut self, idx: usize, f: F) -> bool
+    pub(in crate::app::handlers::dock::sch_library) fn with_selected_pad<F>(&mut self, idx: usize, f: F) -> bool
     where
         F: FnOnce(&mut crate::library::editor::footprint::state::EditorPad),
     {
@@ -339,7 +339,7 @@ impl Signex {
     /// (creating one only if it already exists; non-pad entities are
     /// silently skipped), then dirty-marks the editor + clears the
     /// canvas cache. Solve+bake is queued on the next mutation cycle.
-    pub(super) fn with_selected_sketch_pad<F>(
+    pub(in crate::app::handlers::dock::sch_library) fn with_selected_sketch_pad<F>(
         &mut self,
         id: signex_sketch::id::SketchEntityId,
         f: F,
@@ -608,7 +608,7 @@ impl Signex {
     // slice of `editor.state.next_pad_defaults` (or `pad_stack_tab`)
     // so the next placement click picks up the new value; the panel
     // refresh re-reads the form.
-    pub(super) fn handle_fp_editor_set_pad_stack_tab(
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_pad_stack_tab(
         &mut self,
         tab: &crate::library::editor::footprint::state::PadStackTab,
     ) -> bool {
@@ -619,7 +619,7 @@ impl Signex {
         true
     }
 
-    pub(super) fn handle_fp_editor_set_next_pad_electrical_type(
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_next_pad_electrical_type(
         &mut self,
         v: &signex_sketch::attr::ElectricalType,
     ) -> bool {
@@ -630,7 +630,7 @@ impl Signex {
         true
     }
 
-    pub(super) fn handle_fp_editor_set_next_pad_net(&mut self, v: &str) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_next_pad_net(&mut self, v: &str) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.state.next_pad_defaults.net = v.to_string();
         }
@@ -638,7 +638,7 @@ impl Signex {
         true
     }
 
-    pub(super) fn handle_fp_editor_toggle_next_pad_locked(&mut self, on: &bool) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_toggle_next_pad_locked(&mut self, on: &bool) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.state.next_pad_defaults.locked = *on;
         }
@@ -646,7 +646,7 @@ impl Signex {
         true
     }
 
-    pub(super) fn handle_fp_editor_set_next_pad_hole_tolerance_plus(&mut self, v: &str) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_next_pad_hole_tolerance_plus(&mut self, v: &str) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.state.next_pad_defaults.hole_tolerance_plus_mm = fp_parse_optional_mm(v);
         }
@@ -654,7 +654,7 @@ impl Signex {
         true
     }
 
-    pub(super) fn handle_fp_editor_set_next_pad_hole_tolerance_minus(&mut self, v: &str) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_next_pad_hole_tolerance_minus(&mut self, v: &str) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.state.next_pad_defaults.hole_tolerance_minus_mm = fp_parse_optional_mm(v);
         }
@@ -662,7 +662,7 @@ impl Signex {
         true
     }
 
-    pub(super) fn handle_fp_editor_set_next_pad_hole_rotation(&mut self, v: &str) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_next_pad_hole_rotation(&mut self, v: &str) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.state.next_pad_defaults.hole_rotation_deg = v.trim().parse::<f64>().ok();
         }
@@ -670,7 +670,7 @@ impl Signex {
         true
     }
 
-    pub(super) fn handle_fp_editor_set_next_pad_copper_offset_x(&mut self, v: &str) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_next_pad_copper_offset_x(&mut self, v: &str) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.state.next_pad_defaults.copper_offset_x_mm = fp_parse_optional_mm(v);
         }
@@ -678,7 +678,7 @@ impl Signex {
         true
     }
 
-    pub(super) fn handle_fp_editor_set_next_pad_copper_offset_y(&mut self, v: &str) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_next_pad_copper_offset_y(&mut self, v: &str) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.state.next_pad_defaults.copper_offset_y_mm = fp_parse_optional_mm(v);
         }
@@ -686,7 +686,7 @@ impl Signex {
         true
     }
 
-    pub(super) fn handle_fp_editor_toggle_next_pad_plated(&mut self, plated: &bool) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_toggle_next_pad_plated(&mut self, plated: &bool) -> bool {
         use signex_library::PadKind as Pk;
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.state.next_pad_defaults.kind = if *plated { Pk::Tht } else { Pk::NptHole };

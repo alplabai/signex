@@ -7,13 +7,13 @@
 //! real logic delegates to a `handle_*` method living in the matching
 //! concern module:
 //!   - [`symbol`] — `SchLibrary*` / `SymEditor*` mutators.
-//!   - [`footprint_pad`] — active-editor accessors + pad-defaults setters.
-//!   - [`footprint_shape`] — pour / keepout / cutout / snap / array / silk.
-//!   - [`footprint_library`] — Footprint Library panel (envelope CRUD).
-//!   - [`footprint_props`] — footprint component-level properties.
-//!   - [`footprint_grid`] — grid / guide managers + snap sub-tab / mode.
-//!   - [`footprint_silk`] — selected silk-graphic edits.
-//!   - [`footprint_sketch`] — sketch-entity jumps + parameter forwards.
+//!   - [`footprint::pad`] — active-editor accessors + pad-defaults setters.
+//!   - [`footprint::shape`] — pour / keepout / cutout / snap / array.
+//!   - [`footprint::library`] — Footprint Library panel (envelope CRUD).
+//!   - [`footprint::props`] — footprint component-level properties.
+//!   - [`footprint::grid`] — grid / guide managers + snap sub-tab / mode.
+//!   - [`footprint::silk`] — selected silk-graphic edits.
+//!   - [`footprint::sketch`] — sketch-entity jumps + parameter forwards.
 //!
 //! Mutations mark the tab dirty and clear the canvas cache; the actual
 //! save to disk happens through the existing Save flow
@@ -29,16 +29,10 @@ use iced::Task;
 use super::super::super::*;
 use crate::panels::PanelMsg;
 
-mod footprint_grid;
-mod footprint_library;
-mod footprint_pad;
-mod footprint_props;
-mod footprint_shape;
-mod footprint_silk;
-mod footprint_sketch;
+mod footprint;
 mod symbol;
 
-use footprint_silk::{SilkLineEndpoint, SilkTextField};
+use footprint::{SilkLineEndpoint, SilkTextField};
 
 impl Signex {
     /// v0.18.8 — convenience: resolve the active tab's `.snxfpt`

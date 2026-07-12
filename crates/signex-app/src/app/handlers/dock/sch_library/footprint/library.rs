@@ -9,10 +9,10 @@
 
 use iced::Task;
 
-use super::*;
+use super::super::*;
 
 impl Signex {
-    pub(super) fn handle_fp_library_open_sibling(
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_library_open_sibling(
         &mut self,
         sibling_path: &std::path::Path,
     ) -> bool {
@@ -29,7 +29,7 @@ impl Signex {
     // editor so the row tints + button row gates correctly.
     // Independent of `active_idx`: only the Edit button (or
     // a double-click hook later) promotes selection to active.
-    pub(super) fn handle_fp_library_select_internal(&mut self, idx: &usize) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_library_select_internal(&mut self, idx: &usize) -> bool {
         if let Some(path) = self.active_footprint_editor_path() {
             if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
                 let last = editor.file.footprints.len().saturating_sub(1);
@@ -43,7 +43,7 @@ impl Signex {
     // v0.18.8 — `+ Add` button. Routes through the existing
     // `FootprintAddNewSibling` dispatcher which appends an
     // empty Footprint and switches `active_idx` onto it.
-    pub(super) fn handle_fp_library_add_internal(&mut self) -> Task<Message> {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_library_add_internal(&mut self) -> Task<Message> {
         let mut follow = Task::none();
         if let Some(path) = self.active_footprint_editor_path() {
             follow = self.update(Message::Library(
@@ -69,7 +69,7 @@ impl Signex {
     // footprint from the envelope. Refuses to remove the
     // last remaining footprint (an empty FootprintFile would
     // fail to load on next open).
-    pub(super) fn handle_fp_library_delete_internal(&mut self, idx: &usize) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_library_delete_internal(&mut self, idx: &usize) -> bool {
         if let Some(path) = self.active_footprint_editor_path() {
             if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
                 let last = editor.file.footprints.len();
@@ -106,7 +106,7 @@ impl Signex {
     // v0.18.8 — `Edit` button. Promotes the panel selection
     // to `active_idx` via the existing
     // `FootprintSelectActiveIdx` dispatcher.
-    pub(super) fn handle_fp_library_edit_internal(&mut self, idx: &usize) -> Task<Message> {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_library_edit_internal(&mut self, idx: &usize) -> Task<Message> {
         let mut follow = Task::none();
         if let Some(path) = self.active_footprint_editor_path() {
             follow = self.update(Message::Library(

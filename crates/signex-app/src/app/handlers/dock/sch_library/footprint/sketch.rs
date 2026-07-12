@@ -11,10 +11,10 @@
 
 use iced::Task;
 
-use super::*;
+use super::super::*;
 
 impl Signex {
-    pub(super) fn handle_fp_editor_edit_pad_in_sketch(&mut self, pad_idx: &usize) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_edit_pad_in_sketch(&mut self, pad_idx: &usize) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             let entity_id = editor
                 .state
@@ -30,7 +30,7 @@ impl Signex {
         true
     }
 
-    pub(super) fn handle_fp_editor_edit_pad_shape_param(
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_edit_pad_shape_param(
         &mut self,
         pad_idx: &usize,
         key: &str,
@@ -81,7 +81,7 @@ impl Signex {
         follow
     }
 
-    pub(super) fn handle_fp_editor_unlink_corner_radius(
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_unlink_corner_radius(
         &mut self,
         arc_entity_id: &signex_sketch::id::SketchEntityId,
     ) -> Task<Message> {
@@ -111,7 +111,7 @@ impl Signex {
         follow
     }
 
-    pub(super) fn handle_fp_editor_edit_sketch_pad_in_pads(
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_edit_sketch_pad_in_pads(
         &mut self,
         id: &signex_sketch::id::SketchEntityId,
     ) -> bool {
@@ -134,7 +134,7 @@ impl Signex {
         true
     }
 
-    pub(super) fn handle_fp_editor_select_sketch_entity(
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_select_sketch_entity(
         &mut self,
         id: &signex_sketch::id::SketchEntityId,
     ) -> bool {
@@ -151,7 +151,7 @@ impl Signex {
         true
     }
 
-    pub(super) fn handle_fp_editor_hover_over_constraint(
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_hover_over_constraint(
         &mut self,
         constraint: &Option<signex_sketch::id::ConstraintId>,
     ) -> bool {
@@ -168,7 +168,7 @@ impl Signex {
         true
     }
 
-    pub(super) fn handle_fp_editor_edit_parameter(
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_edit_parameter(
         &mut self,
         name: &str,
         expr: &str,

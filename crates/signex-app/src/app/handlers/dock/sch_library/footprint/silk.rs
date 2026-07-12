@@ -9,7 +9,7 @@
 //! Pure code motion out of the former `sch_library.rs` god-file
 //! (ADR-0001 #163); zero behaviour change.
 
-use super::*;
+use super::super::*;
 
 /// v0.21 — Silk Line endpoint to mutate.
 #[derive(Debug, Clone, Copy)]
@@ -97,7 +97,7 @@ impl Signex {
         true
     }
 
-    pub(super) fn handle_fp_editor_set_silk_stroke_width(&mut self, v: &str) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_silk_stroke_width(&mut self, v: &str) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             let parsed = v.trim().parse::<f64>().ok();
             if let Some(idx) = editor.state.selected_silk_f {
@@ -116,7 +116,7 @@ impl Signex {
         true
     }
 
-    pub(super) fn handle_fp_editor_toggle_silk_filled(&mut self, on: &bool) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_toggle_silk_filled(&mut self, on: &bool) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             if let Some(idx) = editor.state.selected_silk_f {
                 if let Some(g) = editor.primitive_mut().silk_f.get_mut(idx) {
@@ -130,7 +130,7 @@ impl Signex {
         true
     }
 
-    pub(super) fn handle_fp_editor_set_silk_text(&mut self, value: &str) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_silk_text(&mut self, value: &str) -> bool {
         // v0.18.24 — edit the selected silk-front graphic's
         // Text content. No-op when the selection isn't a
         // Text or no silk graphic is selected.
@@ -153,7 +153,7 @@ impl Signex {
         true
     }
 
-    pub(super) fn handle_fp_editor_delete_selected_silk(&mut self) -> bool {
+    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_delete_selected_silk(&mut self) -> bool {
         // v0.18.24 — delete the currently-selected silk-front
         // graphic and clear the selection.
         if let Some(editor) = self.active_footprint_editor_mut() {
