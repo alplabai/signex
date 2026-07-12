@@ -4,7 +4,6 @@
 //! No Iced fork — composition only.
 
 pub mod active_bar;
-pub mod active_bar_dropdown;
 pub mod history_pane;
 pub mod icon_button;
 pub mod status_bar;
@@ -12,6 +11,11 @@ pub mod symbol_preview;
 pub mod tab_pill;
 pub mod theme_ext;
 pub mod tree_view;
+
+// The dropdown widget now lives at `active_bar::dropdown`; keep the
+// flat `active_bar_dropdown` path so external
+// `signex_widgets::active_bar_dropdown::…` consumers resolve unchanged.
+pub use active_bar::dropdown as active_bar_dropdown;
 
 pub use history_pane::{HistoryEntry, history_pane};
 pub use tab_pill::{AccentPosition, TabPill, TabPillStyle};

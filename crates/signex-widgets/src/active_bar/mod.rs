@@ -42,6 +42,8 @@
 //! Render the resulting `Element<M>` into a `Stack` overlay so it
 //! floats over the canvas content.
 
+pub mod dropdown;
+
 use iced::widget::{button, container, image, mouse_area, row, svg, text, tooltip};
 use iced::{Border, Color, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
