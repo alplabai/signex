@@ -27,6 +27,8 @@
 //! [`LibraryRow`] cell-map at the boundary. Stage 12 will retire
 //! the legacy schema in favour of user-defined columns.
 
+pub mod project;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, RwLock};

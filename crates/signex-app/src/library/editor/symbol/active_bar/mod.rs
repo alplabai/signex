@@ -27,6 +27,8 @@ use crate::library::editor::symbol::canvas::SymbolTool;
 use crate::library::editor::symbol::state::{SymActiveBarMenu, SymbolSelectionFilter};
 use crate::library::messages::{LibraryMessage, PrimitiveEdit, SymbolEditorMsg, SymbolToolMsg};
 
+mod dropdowns;
+
 /// Build the SchLib bar items only — caller mounts via
 /// `signex_widgets::active_bar::view(items, tokens)` so the chain is
 /// identical to the schematic.
@@ -79,7 +81,7 @@ pub fn dropdown_overlay<'a>(
     use iced::widget::{Space, Stack, container, mouse_area};
 
     let menu = editor.active_bar_menu?;
-    let entries = crate::library::editor::symbol::active_bar_dropdowns::entries(
+    let entries = dropdowns::entries(
         menu,
         editor.selection_filter,
         editor.tool,
