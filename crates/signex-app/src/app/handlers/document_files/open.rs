@@ -1,0 +1,266 @@
+//! Document/project open + create handlers. Split from `handlers/document_files.rs`.
+
+use std::path::PathBuf;
+
+use anyhow::{Context, Result};
+
+use super::super::super::*;
+
+impl Signex {
+    pub(crate) fn handle_document_file_opened(&mut self, path: Option<PathBuf>) {
+        let Some(path) = path else {
+            return;
+        };
+
+        self.interaction_state.editing_text = None;
+        self.interaction_state.context_menu = None;
+
+        if let Err(error) = self.open_document_path(path) {
+            crate::diagnostics::log_error("Failed to open document path", &error);
+        }
+    }
+
+    pub(crate) fn handle_new_project_file(&mut self, path: Option<PathBuf>) {
+        let Some(path) = path else { return };
+
+        self.interaction_state.editing_text = None;
+        self.interaction_state.context_menu = None;
+
+        if let Err(error) = self.create_new_project(&path) {
+            crate::diagnostics::log_error("Failed to create new project", &error);
+        }
+    }
+
+    /// Create a brand-new `.snxprj` at `path` plus a blank companion
+    /// `<stem>.snxsch` in the same directory, then load the project and
+    /// open the schematic as a tab. The `.snxprj` is written empty —
+    /// `parse_project` is directory-driven and ignores file content.
+    fn create_new_project(&mut self, project_path: &std::path::Path) -> Result<()> {
+        if project_path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.eq_ignore_ascii_case("snxprj"))
+            != Some(true)
+        {
+            anyhow::bail!(
+                "new project path must end in .snxprj (got {})",
+                project_path.display()
+            );
+        }
+        let dir = project_path
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("project path has no parent directory"))?;
+        let stem = project_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .ok_or_else(|| anyhow::anyhow!("project path has no file stem"))?
+            .to_string();
+
+        std::fs::create_dir_all(dir)
+            .with_context(|| format!("create project directory {}", dir.display()))?;
+
+        // Refuse to create a new project over an existing, non-empty
+        // `.snxprj` — writing the empty marker below would truncate it
+        // and destroy the user's project. A zero-byte file is a legacy
+        // marker and safe to (re)write.
+        if let Ok(meta) = std::fs::metadata(project_path)
+            && meta.len() > 0
+        {
+            anyhow::bail!(
+                "a project already exists at {} — open it instead of creating a new one over it",
+                project_path.display()
+            );
+        }
+
+        std::fs::write(project_path, b"")
+            .with_context(|| format!("write project file {}", project_path.display()))?;
+
+        let sch_path = dir.join(format!("{stem}.snxsch"));
+        if !sch_path.exists() {
+            let sheet = super::blank_schematic_sheet();
+            let serialised = signex_types::format::SnxSchematic::new(sheet)
+                .write_string()
+                .context("serialise blank schematic")?;
+            signex_types::atomic_io::atomic_write(&sch_path, serialised.as_bytes())
+                .with_context(|| format!("write blank schematic {}", sch_path.display()))?;
+        }
+
+        self.open_document_path(project_path.to_path_buf())?;
+        if sch_path.exists() {
+            // Best-effort: surface the schematic tab so the new project
+            // lands the user on a drawable canvas. Errors here just
+            // leave them on the Welcome view.
+            if let Err(error) = self.open_document_path(sch_path) {
+                crate::diagnostics::log_error("Open new project schematic", &error);
+            }
+        }
+        self.refresh_panel_ctx();
+        Ok(())
+    }
+
+    pub(crate) fn handle_active_document_save_requested(&mut self) -> iced::Task<Message> {
+        match self.save_active_document() {
+            Ok(task) => task,
+            Err(error) => {
+                crate::diagnostics::log_error("Failed to save active document", &error);
+                iced::Task::none()
+            }
+        }
+    }
+
+    pub(crate) fn handle_active_document_save_as_requested(&mut self, path: PathBuf) {
+        if let Err(error) = self.save_active_document_as(path) {
+            crate::diagnostics::log_error("Failed to save active document as", &error);
+        }
+    }
+
+    fn open_document_path(&mut self, path: PathBuf) -> Result<()> {
+        let ext = path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .unwrap_or("");
+        match ext {
+            "standard_pro" | "snxprj" => self.open_project_file(path)?,
+            "standard_sch" | "snxsch" => self.open_schematic_file(path)?,
+            "standard_pcb" | "snxpcb" => self.open_pcb_file(path)?,
+            "snxsym" | "snxfpt" => {
+                let _ = self.handle_open_primitive(path);
+            }
+            // `.snxlib/` is a directory package — open it as a Library
+            // Browser tab in the main canvas area. The handler mounts
+            // the library if not already mounted and pushes the tab
+            // (or activates it if a tab for the same library is
+            // already open).
+            "snxlib" => {
+                let _ = self.handle_open_library_browser(path);
+            }
+            _ => anyhow::bail!("unsupported file type: .{ext}"),
+        }
+
+        Ok(())
+    }
+
+    fn open_project_file(&mut self, path: PathBuf) -> Result<()> {
+        self.load_or_activate_project(&path)?;
+        self.refresh_panel_ctx();
+        Ok(())
+    }
+
+    /// Append a `LoadedProject` for `project_path` to the workspace if
+    /// it isn't already loaded, then make it active. De-dupes by path
+    /// so re-opening the same project just switches activity. Used by
+    /// both `open_project_file` (direct .standard_pro open) and the
+    /// companion-project path inside `open_schematic_file` /
+    /// `open_pcb_file`. Returns the resolved `ProjectId`.
+    fn load_or_activate_project(
+        &mut self,
+        project_path: &std::path::Path,
+    ) -> Result<crate::app::state::ProjectId> {
+        if let Some(existing) = self
+            .document_state
+            .projects
+            .iter()
+            .find(|p| p.path == project_path)
+        {
+            let id = existing.id;
+            self.document_state.active_project = Some(id);
+            return Ok(id);
+        }
+        let data = signex_types::project::parse_project(project_path)
+            .with_context(|| format!("parse project {}", project_path.display()))?;
+        let id = self.document_state.mint_project_id();
+        // Auto-mount every library referenced by `Project::libraries`
+        // so the project tree picks them up before the panel rebuild
+        // fires. Errors are logged inside `auto_mount_project_libraries`
+        // and never bubble: a missing library shouldn't block the
+        // project from loading.
+        let mounted =
+            crate::library::commands::auto_mount_project_libraries(&mut self.library, &data);
+        if mounted > 0 {
+            tracing::info!(
+                target: "signex::library",
+                project = %project_path.display(),
+                mounted,
+                "auto-mounted project libraries"
+            );
+        }
+        self.document_state
+            .projects
+            .push(super::super::super::state::LoadedProject {
+                id,
+                path: project_path.to_path_buf(),
+                data,
+                pending_libraries: std::collections::HashMap::new(),
+            });
+        self.document_state.active_project = Some(id);
+        Ok(id)
+    }
+
+    fn open_schematic_file(&mut self, path: PathBuf) -> Result<()> {
+        // Try to load the companion project so the schematic tab gets
+        // a `project_id` via `project_for_path`. Best-effort: a missing
+        // or unparseable `.snxprj` doesn't block opening the loose
+        // schematic.
+        if let Some(dir) = path.parent() {
+            let stem = path
+                .file_stem()
+                .and_then(|segment| segment.to_str())
+                .unwrap_or("");
+            let companion = dir.join(format!("{stem}.snxprj"));
+            if companion.exists()
+                && let Err(error) = self.load_or_activate_project(&companion)
+            {
+                crate::diagnostics::log_error("Failed to parse companion project", &error);
+            }
+        }
+        let title = path
+            .file_stem()
+            .map(|stem| stem.to_string_lossy().to_string())
+            .unwrap_or_else(|| "Schematic".to_string());
+        // Parked-engine restore — same Altium-parity rule as the
+        // project-tree open path. Reparsing from disk would discard
+        // edits the user made before closing the tab.
+        if self.document_state.engines.contains_key(&path)
+            && self.document_state.dirty_paths.contains(&path)
+        {
+            self.attach_parked_schematic_tab(path, title);
+            return Ok(());
+        }
+        let text = std::fs::read_to_string(&path)
+            .with_context(|| format!("read schematic {}", path.display()))?;
+        let sheet = signex_types::format::SnxSchematic::parse(&text)
+            .with_context(|| format!("parse schematic {}", path.display()))?
+            .sheet;
+        self.open_schematic_tab(path, title, sheet);
+        Ok(())
+    }
+
+    fn open_pcb_file(&mut self, path: PathBuf) -> Result<()> {
+        let text = std::fs::read_to_string(&path)
+            .with_context(|| format!("read pcb {}", path.display()))?;
+        let board = signex_types::format::SnxPcb::parse(&text)
+            .with_context(|| format!("parse pcb {}", path.display()))?
+            .board;
+        // Same companion-project resolution as `open_schematic_file` so
+        // the PCB tab can resolve `project_id` for project-scoped
+        // handlers.
+        if let Some(dir) = path.parent() {
+            let stem = path
+                .file_stem()
+                .and_then(|segment| segment.to_str())
+                .unwrap_or("");
+            let companion = dir.join(format!("{stem}.snxprj"));
+            if companion.exists()
+                && let Err(error) = self.load_or_activate_project(&companion)
+            {
+                crate::diagnostics::log_error("Failed to parse companion project", &error);
+            }
+        }
+        let title = path
+            .file_stem()
+            .map(|stem| stem.to_string_lossy().to_string())
+            .unwrap_or_else(|| "PCB".to_string());
+        self.open_pcb_tab(path, title, board);
+        Ok(())
+    }
+}
