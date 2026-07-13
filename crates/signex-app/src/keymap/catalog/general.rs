@@ -1,64 +1,10 @@
-use crate::keymap::AppCommandId;
+//! General-surface command metadata — shared editing / file / view /
+//! transform commands, plus anything without an obvious home. Split
+//! from `keymap/catalog.rs`; entries verbatim.
 
-/// Coarse editor-surface bucket used by the Keyboard Shortcuts pane to
-/// group commands for display. Distinct from [`CommandMetadata::category`],
-/// which stays fine-grained (place / edit / view …); the group is the
-/// primary *surface* a command belongs to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CommandGroup {
-    /// Shared editing / file / view / transform commands available on
-    /// every surface, plus anything without an obvious home.
-    General,
-    /// Schematic-specific placement, net, annotation and sheet-navigation
-    /// commands.
-    Schematic,
-    /// PCB routing / layer / via / DRC commands.
-    Pcb,
-    /// Footprint-editor and 3D-view commands.
-    ThreeD,
-}
+use super::{CommandGroup, CommandMetadata};
 
-impl CommandGroup {
-    /// Display order for the grouped Keyboard Shortcuts view.
-    pub const ALL: &'static [CommandGroup] = &[
-        CommandGroup::General,
-        CommandGroup::Schematic,
-        CommandGroup::Pcb,
-        CommandGroup::ThreeD,
-    ];
-
-    /// Human-readable header shown above each group.
-    pub fn display_name(&self) -> &'static str {
-        match self {
-            CommandGroup::General => "General",
-            CommandGroup::Schematic => "Schematic",
-            CommandGroup::Pcb => "PCB",
-            CommandGroup::ThreeD => "3D",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CommandMetadata {
-    pub id: &'static str,
-    pub category: &'static str,
-    pub label: &'static str,
-    pub group: CommandGroup,
-}
-
-pub const COMMAND_METADATA: &[CommandMetadata] = &[
-    CommandMetadata {
-        id: "annotate_schematic",
-        category: "design",
-        label: "Annotate schematic",
-        group: CommandGroup::Schematic,
-    },
-    CommandMetadata {
-        id: "annotate_schematic_quietly",
-        category: "design",
-        label: "Annotate schematic quietly",
-        group: CommandGroup::Schematic,
-    },
+pub(super) const GENERAL: &[CommandMetadata] = &[
     CommandMetadata {
         id: "autoplace_fields",
         category: "edit",
@@ -88,12 +34,6 @@ pub const COMMAND_METADATA: &[CommandMetadata] = &[
         category: "view",
         label: "Center/redraw view around cursor",
         group: CommandGroup::General,
-    },
-    CommandMetadata {
-        id: "clear_net_highlighting",
-        category: "select",
-        label: "Clear net highlighting",
-        group: CommandGroup::Schematic,
     },
     CommandMetadata {
         id: "close_active_document",
@@ -172,18 +112,6 @@ pub const COMMAND_METADATA: &[CommandMetadata] = &[
         category: "modify",
         label: "Drag while keeping connections",
         group: CommandGroup::General,
-    },
-    CommandMetadata {
-        id: "draw_graphic_line",
-        category: "place",
-        label: "Draw graphic line",
-        group: CommandGroup::Schematic,
-    },
-    CommandMetadata {
-        id: "draw_hierarchical_sheet",
-        category: "place",
-        label: "Draw hierarchical sheet",
-        group: CommandGroup::Schematic,
     },
     CommandMetadata {
         id: "duplicate",
@@ -288,52 +216,10 @@ pub const COMMAND_METADATA: &[CommandMetadata] = &[
         group: CommandGroup::General,
     },
     CommandMetadata {
-        id: "footprint_mode_pads",
-        category: "library",
-        label: "Switch footprint editor to Pads mode",
-        group: CommandGroup::ThreeD,
-    },
-    CommandMetadata {
-        id: "footprint_mode_sketch",
-        category: "library",
-        label: "Switch footprint editor to Sketch mode",
-        group: CommandGroup::ThreeD,
-    },
-    CommandMetadata {
-        id: "footprint_mode_view_3d",
-        category: "library",
-        label: "Switch footprint editor to 3D View mode",
-        group: CommandGroup::ThreeD,
-    },
-    CommandMetadata {
-        id: "force_annotate_all_schematics",
-        category: "design",
-        label: "Force annotate all schematics",
-        group: CommandGroup::Schematic,
-    },
-    CommandMetadata {
-        id: "highlight_net_under_cursor",
-        category: "select",
-        label: "Highlight net under cursor",
-        group: CommandGroup::Schematic,
-    },
-    CommandMetadata {
-        id: "highlight_related_net_objects",
-        category: "select",
-        label: "Highlight/select related net objects across sheets",
-        group: CommandGroup::Schematic,
-    },
-    CommandMetadata {
         id: "import_graphics",
         category: "library",
         label: "Import graphics",
         group: CommandGroup::General,
-    },
-    CommandMetadata {
-        id: "leave_sheet",
-        category: "navigation",
-        label: "Leave sheet / go to parent sheet",
-        group: CommandGroup::Schematic,
     },
     CommandMetadata {
         id: "measure_distance",
@@ -366,12 +252,6 @@ pub const COMMAND_METADATA: &[CommandMetadata] = &[
         group: CommandGroup::General,
     },
     CommandMetadata {
-        id: "navigate_up_hierarchy",
-        category: "navigation",
-        label: "Navigate up hierarchy",
-        group: CommandGroup::Schematic,
-    },
-    CommandMetadata {
         id: "new_document",
         category: "file",
         label: "New",
@@ -388,24 +268,6 @@ pub const COMMAND_METADATA: &[CommandMetadata] = &[
         category: "view",
         label: "Next grid",
         group: CommandGroup::General,
-    },
-    CommandMetadata {
-        id: "next_highlighted_net_item",
-        category: "select",
-        label: "Next item on highlighted net",
-        group: CommandGroup::Schematic,
-    },
-    CommandMetadata {
-        id: "next_sheet",
-        category: "navigation",
-        label: "Next sheet",
-        group: CommandGroup::Schematic,
-    },
-    CommandMetadata {
-        id: "open_components_panel",
-        category: "panels",
-        label: "Open Components panel / place components",
-        group: CommandGroup::Schematic,
     },
     CommandMetadata {
         id: "open_command_palette",
@@ -438,12 +300,6 @@ pub const COMMAND_METADATA: &[CommandMetadata] = &[
         group: CommandGroup::General,
     },
     CommandMetadata {
-        id: "open_net_color_palette",
-        category: "view",
-        label: "Open net color palette",
-        group: CommandGroup::Schematic,
-    },
-    CommandMetadata {
         id: "open_preferences",
         category: "preferences",
         label: "Open preferences",
@@ -468,96 +324,6 @@ pub const COMMAND_METADATA: &[CommandMetadata] = &[
         group: CommandGroup::General,
     },
     CommandMetadata {
-        id: "place_bus",
-        category: "place",
-        label: "Draw bus",
-        group: CommandGroup::Schematic,
-    },
-    CommandMetadata {
-        id: "place_compile_mask",
-        category: "place",
-        label: "Place Compile Mask directive",
-        group: CommandGroup::Schematic,
-    },
-    CommandMetadata {
-        id: "place_design_block",
-        category: "place",
-        label: "Place design block",
-        group: CommandGroup::Schematic,
-    },
-    CommandMetadata {
-        id: "place_global_label",
-        category: "place",
-        label: "Place global label",
-        group: CommandGroup::Schematic,
-    },
-    CommandMetadata {
-        id: "place_hierarchical_label",
-        category: "place",
-        label: "Place hierarchical label",
-        group: CommandGroup::Schematic,
-    },
-    CommandMetadata {
-        id: "place_junction",
-        category: "place",
-        label: "Place junction",
-        group: CommandGroup::Schematic,
-    },
-    CommandMetadata {
-        id: "place_local_net_label",
-        category: "place",
-        label: "Place local net label",
-        group: CommandGroup::Schematic,
-    },
-    CommandMetadata {
-        id: "place_net_label",
-        category: "place",
-        label: "Place net label",
-        group: CommandGroup::Schematic,
-    },
-    CommandMetadata {
-        id: "place_no_connect",
-        category: "place",
-        label: "Place no-connect flag",
-        group: CommandGroup::Schematic,
-    },
-    CommandMetadata {
-        id: "place_no_erc",
-        category: "place",
-        label: "Place Generic No ERC directive",
-        group: CommandGroup::Schematic,
-    },
-    CommandMetadata {
-        id: "place_power_symbol",
-        category: "place",
-        label: "Place power symbol",
-        group: CommandGroup::Schematic,
-    },
-    CommandMetadata {
-        id: "place_symbol",
-        category: "place",
-        label: "Place symbol",
-        group: CommandGroup::Schematic,
-    },
-    CommandMetadata {
-        id: "place_text",
-        category: "place",
-        label: "Place text",
-        group: CommandGroup::Schematic,
-    },
-    CommandMetadata {
-        id: "place_wire",
-        category: "place",
-        label: "Place wire",
-        group: CommandGroup::Schematic,
-    },
-    CommandMetadata {
-        id: "place_wire_to_bus_entry",
-        category: "place",
-        label: "Place wire-to-bus entry",
-        group: CommandGroup::Schematic,
-    },
-    CommandMetadata {
         id: "placement_accept",
         category: "interactive",
         label: "Accept current placement or move stage",
@@ -580,18 +346,6 @@ pub const COMMAND_METADATA: &[CommandMetadata] = &[
         category: "view",
         label: "Previous grid",
         group: CommandGroup::General,
-    },
-    CommandMetadata {
-        id: "previous_highlighted_net_item",
-        category: "select",
-        label: "Previous item on highlighted net",
-        group: CommandGroup::Schematic,
-    },
-    CommandMetadata {
-        id: "previous_sheet",
-        category: "navigation",
-        label: "Previous sheet",
-        group: CommandGroup::Schematic,
     },
     CommandMetadata {
         id: "print",
@@ -630,22 +384,10 @@ pub const COMMAND_METADATA: &[CommandMetadata] = &[
         group: CommandGroup::General,
     },
     CommandMetadata {
-        id: "run_erc",
-        category: "validation",
-        label: "Run electrical rules check",
-        group: CommandGroup::Schematic,
-    },
-    CommandMetadata {
         id: "reset_local_coordinates",
         category: "view",
         label: "Reset local coordinates",
         group: CommandGroup::General,
-    },
-    CommandMetadata {
-        id: "reset_schematic_designators",
-        category: "design",
-        label: "Reset schematic designators",
-        group: CommandGroup::Schematic,
     },
     CommandMetadata {
         id: "rotate_clockwise",
@@ -694,18 +436,6 @@ pub const COMMAND_METADATA: &[CommandMetadata] = &[
         category: "select",
         label: "Select node / connection item under cursor",
         group: CommandGroup::General,
-    },
-    CommandMetadata {
-        id: "sheet_navigation_back",
-        category: "navigation",
-        label: "Sheet navigation back",
-        group: CommandGroup::Schematic,
-    },
-    CommandMetadata {
-        id: "sheet_navigation_forward",
-        category: "navigation",
-        label: "Sheet navigation forward",
-        group: CommandGroup::Schematic,
     },
     CommandMetadata {
         id: "show_all_design_objects",
@@ -816,12 +546,6 @@ pub const COMMAND_METADATA: &[CommandMetadata] = &[
         group: CommandGroup::General,
     },
     CommandMetadata {
-        id: "update_pcb_from_schematic",
-        category: "pcb_sync",
-        label: "Update PCB from schematic",
-        group: CommandGroup::Schematic,
-    },
-    CommandMetadata {
         id: "zoom_in_at_cursor",
         category: "view",
         label: "Zoom in at cursor",
@@ -852,108 +576,3 @@ pub const COMMAND_METADATA: &[CommandMetadata] = &[
         group: CommandGroup::General,
     },
 ];
-
-pub fn metadata_for(command: &AppCommandId) -> Option<&'static CommandMetadata> {
-    COMMAND_METADATA
-        .iter()
-        .find(|metadata| metadata.id == command.as_str())
-}
-
-pub fn fallback_label(command: &AppCommandId) -> String {
-    command
-        .as_str()
-        .split('_')
-        .filter(|part| !part.is_empty())
-        .map(|part| {
-            let mut chars = part.chars();
-            match chars.next() {
-                Some(first) => {
-                    let mut label = first.to_ascii_uppercase().to_string();
-                    label.push_str(chars.as_str());
-                    label
-                }
-                None => String::new(),
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn group_of(id: &str) -> CommandGroup {
-        COMMAND_METADATA
-            .iter()
-            .find(|metadata| metadata.id == id)
-            .unwrap_or_else(|| panic!("missing command metadata for `{id}`"))
-            .group
-    }
-
-    #[test]
-    fn every_command_has_a_group_in_display_order() {
-        // Catches an entry that was left with a stray / unlisted group.
-        for metadata in COMMAND_METADATA {
-            assert!(
-                CommandGroup::ALL.contains(&metadata.group),
-                "command `{}` has a group absent from CommandGroup::ALL",
-                metadata.id
-            );
-        }
-    }
-
-    #[test]
-    fn command_groups_follow_primary_surface() {
-        // Schematic: placement, design, ERC, PCB-sync, net, sheet-nav.
-        assert_eq!(group_of("place_wire"), CommandGroup::Schematic);
-        assert_eq!(group_of("place_symbol"), CommandGroup::Schematic);
-        assert_eq!(group_of("run_erc"), CommandGroup::Schematic);
-        assert_eq!(group_of("annotate_schematic"), CommandGroup::Schematic);
-        assert_eq!(group_of("update_pcb_from_schematic"), CommandGroup::Schematic);
-        assert_eq!(group_of("next_sheet"), CommandGroup::Schematic);
-        assert_eq!(
-            group_of("highlight_net_under_cursor"),
-            CommandGroup::Schematic
-        );
-        assert_eq!(group_of("open_components_panel"), CommandGroup::Schematic);
-        // Footprint editor / 3D view.
-        assert_eq!(group_of("footprint_mode_pads"), CommandGroup::ThreeD);
-        assert_eq!(group_of("footprint_mode_view_3d"), CommandGroup::ThreeD);
-        // Shared editing / transform / view / file → General.
-        assert_eq!(group_of("copy"), CommandGroup::General);
-        assert_eq!(group_of("rotate_clockwise"), CommandGroup::General);
-        assert_eq!(group_of("mirror_x"), CommandGroup::General);
-        assert_eq!(group_of("zoom_to_fit"), CommandGroup::General);
-        assert_eq!(group_of("open_preferences"), CommandGroup::General);
-    }
-
-    #[test]
-    fn grouping_partitions_every_command_exactly_once() {
-        let summed: usize = CommandGroup::ALL
-            .iter()
-            .map(|group| {
-                COMMAND_METADATA
-                    .iter()
-                    .filter(|metadata| metadata.group == *group)
-                    .count()
-            })
-            .sum();
-        assert_eq!(
-            summed,
-            COMMAND_METADATA.len(),
-            "each command must land in exactly one CommandGroup"
-        );
-        // The two primary EDA surfaces must carry commands.
-        assert!(
-            COMMAND_METADATA
-                .iter()
-                .any(|metadata| metadata.group == CommandGroup::Schematic)
-        );
-        assert!(
-            COMMAND_METADATA
-                .iter()
-                .any(|metadata| metadata.group == CommandGroup::ThreeD)
-        );
-    }
-}
