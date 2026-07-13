@@ -42,7 +42,7 @@
 //! - The click-outside backstop layer (each editor's view stacks it).
 
 use iced::widget::svg;
-use iced::widget::{Column, Space, button, column, container, row, text};
+use iced::widget::{Column, Space, button, container, row, text};
 use iced::{Background, Border, Color, Element, Length, Theme};
 use signex_types::theme::ThemeTokens;
 
@@ -205,8 +205,14 @@ where
                 } else {
                     row_w = row_w.push(Space::new().width(Length::Fixed(20.0)));
                 }
-                // Label.
-                row_w = row_w.push(text(label).size(13).color(row_text_c));
+                // Label. Menu rows never wrap — a too-narrow width_hint
+                // clips rather than reflowing a label onto two lines.
+                row_w = row_w.push(
+                    text(label)
+                        .size(13)
+                        .color(row_text_c)
+                        .wrapping(text::Wrapping::None),
+                );
                 // Right-aligned cluster: shortcut + check.
                 let mut right = row![]
                     .spacing(8)
@@ -260,6 +266,13 @@ where
                 width: 1.0,
                 radius: 4.0.into(),
                 color: border_c,
+            },
+            // Drop shadow lifts the popup off the canvas — shared by every
+            // editor's active-bar dropdown so the chrome reads identically.
+            shadow: iced::Shadow {
+                color: Color::from_rgba(0.0, 0.0, 0.0, 0.5),
+                offset: iced::Vector::new(0.0, 4.0),
+                blur_radius: 12.0,
             },
             ..iced::widget::container::Style::default()
         })
