@@ -328,6 +328,19 @@ impl MenuColors {
 mod view;
 
 pub use view::view;
+/// Menu-display label for `command_id`, sourced from the command table's
+/// terse `menu_label` (which falls back to the descriptive `label`). The
+/// `fallback` literal covers a command with no catalog entry so the visible
+/// menu text is never changed by the lookup. Pairs with [`shortcut_for`] so
+/// a menu row's label and keybinding come from the same `AppCommandId`.
+fn cmd_label(command_id: &str, fallback: &str) -> String {
+    AppCommandId::new(command_id)
+        .ok()
+        .and_then(|command| crate::keymap::metadata_for(&command))
+        .map(|meta| meta.menu_label().to_string())
+        .unwrap_or_else(|| fallback.to_string())
+}
+
 fn shortcut_for(ctx: &MenuContext, command_id: &str, fallback: &str) -> Option<String> {
     let command = AppCommandId::new(command_id).ok()?;
     Some(
