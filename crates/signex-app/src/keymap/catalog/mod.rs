@@ -47,8 +47,28 @@ impl CommandGroup {
 pub struct CommandMetadata {
     pub id: &'static str,
     pub category: &'static str,
+    /// Descriptive command label — shown in the Keyboard Shortcuts pane
+    /// and the (future) command palette, where the full phrasing helps
+    /// ("Place wire", "Zoom in at cursor").
     pub label: &'static str,
+    /// Optional terse label for menu surfaces (menu_bar). `None` falls
+    /// back to `label`. Lets one command carry both a short menu label
+    /// ("Wire") and a descriptive catalog label ("Place wire") so the two
+    /// UIs don't have to agree on a single string. Resolve via
+    /// [`CommandMetadata::menu_label`].
+    pub menu_label: Option<&'static str>,
     pub group: CommandGroup,
+}
+
+impl CommandMetadata {
+    /// The label a menu surface should display: the terse `menu_label`
+    /// override when present, else the descriptive `label`.
+    pub const fn menu_label(&self) -> &'static str {
+        match self.menu_label {
+            Some(menu) => menu,
+            None => self.label,
+        }
+    }
 }
 
 /// Every command-metadata table, one per surface group. `metadata_for`
@@ -157,5 +177,50 @@ mod tests {
         // The two primary EDA surfaces must carry commands.
         assert!(all_metadata().any(|metadata| metadata.group == CommandGroup::Schematic));
         assert!(all_metadata().any(|metadata| metadata.group == CommandGroup::ThreeD));
+    }
+
+    #[test]
+    fn menu_label_falls_back_to_label_when_unset() {
+        // No override → menus show the descriptive label unchanged.
+        let copy = metadata_for(&AppCommandId::new("copy").unwrap()).unwrap();
+        assert_eq!(copy.menu_label, None);
+        assert_eq!(copy.menu_label(), copy.label);
+        assert_eq!(copy.menu_label(), "Copy");
+        // Override present → menus get the terse form while `label` keeps
+        // the descriptive phrasing for the Keyboard Shortcuts pane.
+        let wire = metadata_for(&AppCommandId::new("place_wire").unwrap()).unwrap();
+        assert_eq!(wire.label, "Place wire");
+        assert_eq!(wire.menu_label(), "Wire");
+    }
+
+    #[test]
+    fn menu_label_overrides_match_menu_bar_text() {
+        // Locks the terse menu labels to what menu_bar renders today, so a
+        // catalog edit that would silently change a menu's visible text
+        // fails here (drift guard toward #271/#272). (command id, menu text)
+        const MENU: &[(&str, &str)] = &[
+            ("new_document", "New Project"),
+            ("open_document", "Open..."),
+            ("save_document", "Save"),
+            ("save_document_as", "Save As..."),
+            ("smart_paste", "Paste Special"),
+            ("delete_selection", "Delete"),
+            ("select_all", "Select All"),
+            ("zoom_to_fit", "Fit All"),
+            ("zoom_in_at_cursor", "Zoom In"),
+            ("toggle_visible_grid", "Toggle Grid"),
+            ("place_wire", "Wire"),
+            ("place_bus", "Bus"),
+            ("place_net_label", "Net Label"),
+            ("open_components_panel", "Component..."),
+            ("run_erc", "Electrical Rules Check"),
+            ("open_preferences", "Preferences..."),
+            ("show_current_command_hotkeys", "Keyboard Shortcuts"),
+        ];
+        for (id, expected) in MENU {
+            let md = metadata_for(&AppCommandId::new(*id).unwrap())
+                .unwrap_or_else(|| panic!("missing catalog entry for `{id}`"));
+            assert_eq!(md.menu_label(), *expected, "menu label drift for `{id}`");
+        }
     }
 }
