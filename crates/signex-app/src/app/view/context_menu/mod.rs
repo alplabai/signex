@@ -6,6 +6,10 @@
 
 mod items;
 mod menus;
+mod project_tree;
 mod submenu;
+
+#[cfg(test)]
+mod tests;
 
 use super::*;
