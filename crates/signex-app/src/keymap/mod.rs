@@ -29,4 +29,6 @@ mod binding_tests;
 #[cfg(test)]
 mod editor_tests;
 #[cfg(test)]
+mod menu_command_tests;
+#[cfg(test)]
 mod profile_tests;
