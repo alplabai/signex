@@ -43,7 +43,12 @@ impl SymbolCanvas<'_> {
                     state.box_select_current = None;
                     return Some(canvas::Action::capture());
                 }
-                if let Some(sel) = state::hit_test(self.symbol, ux, uy, self.active_part) {
+                // Pin tip + graphic hit-test wins; a click on a pin's
+                // name/number label is a fallback so the pin is grabbable
+                // by its text, not only its ~1.5 mm tip.
+                let sel = state::hit_test(self.symbol, ux, uy, self.active_part)
+                    .or_else(|| self.pin_hit_by_label(ux, uy).map(state::SymbolSelection::Pin));
+                if let Some(sel) = sel {
                     state.box_select_origin = None;
                     state.box_select_current = None;
 

@@ -4,7 +4,7 @@
 //! Left side: tree of settings categories.
 //! Right side: settings panel for the selected category.
 
-use crate::render_config::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
+use crate::render_config::{GridStyle, LabelStyle, MultisheetStyle, PinSelectionMode, PowerPortStyle};
 use iced::widget::{
     Column, Space, button, column, container, row, scrollable, svg, text,
 };
@@ -122,6 +122,8 @@ pub enum PrefMsg {
     DraftSymbolGridSize(f32),
     /// Update the symbol-editor grid style (applies immediately, persisted).
     DraftSymbolGridStyle(GridStyle),
+    /// Update the symbol-editor pin-selection mode (persisted on change).
+    DraftSymbolPinSelection(PinSelectionMode),
     /// Open a file picker to import a custom theme JSON.
     ImportTheme,
     /// Save the current draft theme as a JSON file.
@@ -238,6 +240,7 @@ pub fn view<'a>(
     draft_grid_style: GridStyle,
     draft_symbol_grid_size_mm: f32,
     draft_symbol_grid_style: GridStyle,
+    draft_symbol_pin_selection: PinSelectionMode,
     custom_name: Option<&'a str>,
     dirty: bool,
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
@@ -261,6 +264,7 @@ pub fn view<'a>(
         draft_grid_style,
         draft_symbol_grid_size_mm,
         draft_symbol_grid_style,
+        draft_symbol_pin_selection,
         custom_name,
         dirty,
         erc_overrides,
@@ -320,6 +324,7 @@ pub(crate) fn view_body<'a>(
     draft_grid_style: GridStyle,
     draft_symbol_grid_size_mm: f32,
     draft_symbol_grid_style: GridStyle,
+    draft_symbol_pin_selection: PinSelectionMode,
     custom_name: Option<&'a str>,
     dirty: bool,
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
@@ -343,6 +348,7 @@ pub(crate) fn view_body<'a>(
         draft_grid_style,
         draft_symbol_grid_size_mm,
         draft_symbol_grid_style,
+        draft_symbol_pin_selection,
         custom_name,
         dirty,
         erc_overrides,
@@ -369,6 +375,7 @@ fn build_dialog<'a>(
     draft_grid_style: GridStyle,
     draft_symbol_grid_size_mm: f32,
     draft_symbol_grid_style: GridStyle,
+    draft_symbol_pin_selection: PinSelectionMode,
     custom_name: Option<&'a str>,
     dirty: bool,
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
@@ -431,6 +438,7 @@ fn build_dialog<'a>(
             draft_grid_style,
             draft_symbol_grid_size_mm,
             draft_symbol_grid_style,
+            draft_symbol_pin_selection,
             custom_name,
             erc_overrides,
             distributor_settings,
@@ -587,6 +595,7 @@ fn build_content<'a>(
     draft_grid_style: GridStyle,
     draft_symbol_grid_size_mm: f32,
     draft_symbol_grid_style: GridStyle,
+    draft_symbol_pin_selection: PinSelectionMode,
     custom_name: Option<&'a str>,
     erc_overrides: &'a std::collections::HashMap<signex_erc::RuleKind, signex_erc::Severity>,
     distributor_settings: &'a crate::library::state::DistributorSettings,
@@ -608,6 +617,7 @@ fn build_content<'a>(
             draft_grid_style,
             draft_symbol_grid_size_mm,
             draft_symbol_grid_style,
+            draft_symbol_pin_selection,
             custom_name,
         ),
         PrefNav::Erc => content_erc(erc_overrides),

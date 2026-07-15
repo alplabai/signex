@@ -311,6 +311,10 @@ impl Signex {
                 crate::render_config::set_symbol_grid_style(style);
                 crate::fonts::write_symbol_grid_style_pref(style);
             }
+            PrefMsg::DraftSymbolPinSelection(mode) => {
+                self.ui_state.preferences_draft_symbol_pin_selection = mode;
+                crate::fonts::write_symbol_pin_selection_pref(mode);
+            }
             PrefMsg::ImportTheme => {
                 return Task::future(async {
                     let picked = rfd::AsyncFileDialog::new()

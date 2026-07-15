@@ -84,6 +84,11 @@ pub struct SymbolCanvas<'a> {
     /// `panel_ctx.grid_visible` (View ▸ Toggle Grid / status-bar
     /// click).
     pub grid_visible: bool,
+    /// When on, pins can be grabbed by their name/number label and a
+    /// selected pin's labels glow with it. Sourced from
+    /// `LibraryDisplaySettings.pin_selection` via
+    /// `PinSelectionMode::allows_label_grab` (Document Options picker).
+    pub pin_label_grab: bool,
     pub bg_color: Color,
     pub grid_color: Color,
     pub body_color: Color,
@@ -109,6 +114,7 @@ impl<'a> SymbolCanvas<'a> {
         camera: &'a crate::canvas::Camera,
         grid_size_mm: f64,
         grid_visible: bool,
+        pin_label_grab: bool,
         sheet_color: Color,
         accent_color: Color,
         _body_color_unused: Color,
@@ -130,6 +136,7 @@ impl<'a> SymbolCanvas<'a> {
             camera,
             grid_size_mm,
             grid_visible,
+            pin_label_grab,
             bg_color: sheet_color,
             grid_color: palette.grid,
             body_color: palette.body,
@@ -145,6 +152,26 @@ impl<'a> SymbolCanvas<'a> {
     /// pins only render when they match `active_part`.
     fn pin_visible_on_active_part(&self, pin: &SymbolPin) -> bool {
         pin.part_number == 0 || pin.part_number == self.active_part
+    }
+
+    /// Pin index whose NAME or NUMBER label bounding box contains (x, y),
+    /// respecting the active-unit visibility filter. Lets the user grab a
+    /// pin by its text, not just its tip. Iterates in reverse so the
+    /// last-drawn pin wins on overlap.
+    fn pin_hit_by_label(&self, x: f64, y: f64) -> Option<usize> {
+        if !self.pin_label_grab {
+            return None;
+        }
+        for (i, pin) in self.symbol.pins.iter().enumerate().rev() {
+            if !self.pin_visible_on_active_part(pin) {
+                continue;
+            }
+            let geom = PinRenderGeometry::compute(pin);
+            if geom.label_hit_boxes(pin).iter().any(|b| b.contains(x, y)) {
+                return Some(i);
+            }
+        }
+        None
     }
 
     /// Body rectangle, when present, derived from the first
@@ -616,7 +643,13 @@ impl<'a> SymbolCanvas<'a> {
                 content: pin.number.clone(),
                 position: [geom.number_pos.x as f32, geom.number_pos.y as f32],
                 size_mm: PIN_TEXT_LAYOUT.number_size_mm,
-                color: to_rgba(self.text_color),
+                // Glow the number with the pin when selected — the pin,
+                // its number and its name read as one selected unit.
+                color: to_rgba(if selected && self.pin_label_grab {
+                    self.selected_color
+                } else {
+                    self.text_color
+                }),
                 bold: false,
                 italic: false,
                 rotation_rad: geom.text_rotation,
@@ -628,9 +661,13 @@ impl<'a> SymbolCanvas<'a> {
                 content: pin.name.clone(),
                 position: [geom.name_pos.x as f32, geom.name_pos.y as f32],
                 size_mm: PIN_TEXT_LAYOUT.name_size_mm,
-                color: to_rgba(Color {
-                    a: 0.85,
-                    ..self.text_color
+                color: to_rgba(if selected && self.pin_label_grab {
+                    self.selected_color
+                } else {
+                    Color {
+                        a: 0.85,
+                        ..self.text_color
+                    }
                 }),
                 bold: false,
                 italic: false,

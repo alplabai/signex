@@ -13,7 +13,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
-use crate::render_config::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
+use crate::render_config::{GridStyle, LabelStyle, MultisheetStyle, PinSelectionMode, PowerPortStyle};
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeId;
 
@@ -674,6 +674,20 @@ pub fn write_symbol_grid_style_pref(style: GridStyle) {
     };
     update_prefs_json(&prefs_path(), |json| {
         json["symbol_grid_style"] = serde_json::Value::String(token.to_string());
+    })
+}
+
+/// Read the symbol-editor pin-selection preference. Defaults to `PinOnly`.
+pub fn read_symbol_pin_selection_pref() -> PinSelectionMode {
+    let raw = read_prefs_json(&prefs_path())
+        .and_then(|j| j["symbol_pin_selection"].as_str().map(str::to_string))
+        .unwrap_or_default();
+    PinSelectionMode::from_pref_token(&raw)
+}
+
+pub fn write_symbol_pin_selection_pref(mode: PinSelectionMode) {
+    update_prefs_json(&prefs_path(), |json| {
+        json["symbol_pin_selection"] = serde_json::Value::String(mode.pref_token().to_string());
     })
 }
 

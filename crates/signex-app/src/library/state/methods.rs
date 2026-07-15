@@ -353,6 +353,11 @@ pub struct LibraryDisplaySettings {
     /// Sheet background colour preset — Altium "Sheet Color"
     /// (Black / White / Dark Gray / Light Gray / Cream).
     pub sheet_color: SheetColor,
+    /// How a click selects/drags a pin — pin body only (Altium
+    /// parity) or pin body plus its name/number labels (which then
+    /// glow with the selected pin). Seeded from the
+    /// `symbol_pin_selection` preference when a library is opened.
+    pub pin_selection: crate::render_config::PinSelectionMode,
 }
 
 impl Default for LibraryDisplaySettings {
@@ -365,6 +370,7 @@ impl Default for LibraryDisplaySettings {
             grid_size_mm: crate::fonts::read_symbol_grid_size_mm_pref(),
             grid_visible: true,
             sheet_color: SheetColor::Cream,
+            pin_selection: crate::fonts::read_symbol_pin_selection_pref(),
         }
     }
 }

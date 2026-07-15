@@ -91,6 +91,8 @@ pub struct UiState {
     pub preferences_draft_symbol_grid_size_mm: f32,
     /// Symbol-editor grid display style (Dots / Crosses / Lines).
     pub preferences_draft_symbol_grid_style: crate::render_config::GridStyle,
+    /// Symbol-editor pin-selection mode (pin body only / body + labels).
+    pub preferences_draft_symbol_pin_selection: crate::render_config::PinSelectionMode,
     /// Keyboard Shortcuts pane — editable working copy of the shortcut
     /// profile set. Seeded from [`keymap_profiles`] each time the
     /// Preferences window opens (and on Discard), mutated through the
