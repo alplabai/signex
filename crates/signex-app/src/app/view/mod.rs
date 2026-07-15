@@ -4,12 +4,12 @@ use iced::{Element, Length};
 pub(crate) mod dialogs;
 pub(crate) mod translate;
 
+mod chrome;
 mod context_menu;
+mod modals;
+mod overlays;
 mod pdf_preview;
 mod print_preview;
-mod modals;
-mod chrome;
-mod overlays;
 
 use super::*;
 
@@ -89,6 +89,12 @@ impl Signex {
                         // so the daemon doesn't panic.
                         iced::widget::container(iced::widget::Space::new()).into()
                     }
+                }
+                super::state::WindowKind::TransmissionLineCalculator => {
+                    crate::transmission_line_calculator::view(
+                        &self.ui_state.transmission_line_calculator,
+                    )
+                    .map(Message::TransmissionLineCalculator)
                 }
             };
         }

@@ -32,6 +32,7 @@ pub mod render_config;
 pub mod renderer_scene_canvas;
 pub mod schematic_runtime;
 pub mod schematic_shader;
+pub use signex_transmission_line_calculator::tool as transmission_line_calculator;
 pub mod status_bar;
 pub mod styles;
 pub mod tab_bar;

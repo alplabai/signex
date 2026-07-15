@@ -1,7 +1,6 @@
 //! UI-surface state — theme, tool overlays, modal flags, dropdown and
 //! command-palette state. Split from `app/state.rs` as pure code motion.
 
-
 use crate::render_config::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeId;
@@ -261,4 +260,7 @@ pub struct UiState {
     /// row. The chrome-strip search bar is the always-rendered input;
     /// `open` gates the dropdown overlay only.
     pub command_palette: super::super::command_palette::CommandPaletteState,
+    /// Tools -> Transmission Line Calculator window state. The RF math lives in the
+    /// dedicated `signex-transmission-line-calculator` crate; this holds editable buffers.
+    pub transmission_line_calculator: crate::transmission_line_calculator::SmithChartState,
 }

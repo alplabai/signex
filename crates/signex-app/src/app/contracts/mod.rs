@@ -142,6 +142,8 @@ pub enum Message {
     /// `Message::CommandPalette` and routed to
     /// `dispatch_command_palette_message`.
     CommandPalette(CommandPaletteMsg),
+    /// Editable Transmission Line Calculator state changed.
+    TransmissionLineCalculator(crate::transmission_line_calculator::SmithChartMessage),
     /// Async result of a per-file Git history load issued by the
     /// right-dock History panel. `generation` is the value of
     /// `DocumentState.history.generation` at the time the load was
@@ -170,7 +172,6 @@ pub enum Message {
     EscapePressed,
     Noop,
 }
-
 
 mod dialogs;
 mod messages;

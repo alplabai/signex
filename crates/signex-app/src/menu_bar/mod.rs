@@ -196,6 +196,8 @@ pub enum MenuMessage {
     /// Altium's Tools ▸ Document Options entry. No-op when not on
     /// a SchLib tab.
     ToolsDocumentOptions,
+    /// Tools -> Transmission Line Calculator opens the RF impedance matching tool.
+    OpenTransmissionLineCalculator,
 }
 
 /// Context passed into `view` so each menu leaf can decide whether to
@@ -323,7 +325,6 @@ impl MenuColors {
         }
     }
 }
-
 
 mod view;
 

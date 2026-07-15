@@ -26,6 +26,10 @@ pub enum WindowMsg {
     /// corresponding entry in `ui_state.windows` so the app can re-attach
     /// the modal or tab to the main window's overlay stack.
     SecondaryWindowClosed(iced::window::Id),
+    /// Tools -> Transmission Line Calculator opens the dedicated RF solver window.
+    OpenTransmissionLineCalculator,
+    /// `iced::window::open` resolved for the Transmission Line Calculator.
+    TransmissionLineCalculatorOpened(iced::window::Id),
     /// OS-level close request (native close button, Alt+F4, taskbar
     /// close) for a window. In `iced::daemon` mode windows do NOT
     /// auto-close on this event, so the app decides what to do: the
@@ -406,4 +410,3 @@ pub enum GridPropertiesMsg {
     /// v0.18.19 — Grid Properties modal: Multiplier (5x / 10x / 2x / 1x).
     SetMultiplier(u32),
 }
-

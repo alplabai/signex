@@ -58,6 +58,9 @@ impl Signex {
             MenuMessage::OpenPreferences => {
                 Some(self.update(Message::Preferences(PreferencesMsg::Open)))
             }
+            MenuMessage::OpenTransmissionLineCalculator => {
+                Some(self.update(Message::Window(WindowMsg::OpenTransmissionLineCalculator)))
+            }
             MenuMessage::OpenKeyboardShortcuts => {
                 // Single-flag toggle — opening the modal is enough; the
                 // close path goes through

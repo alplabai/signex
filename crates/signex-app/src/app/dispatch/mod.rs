@@ -9,6 +9,7 @@ pub(crate) mod library;
 mod overlay;
 mod text_edit;
 mod tool;
+mod transmission_line_calculator;
 mod ui;
 
 impl Signex {
@@ -150,6 +151,9 @@ impl Signex {
             Message::UpdateDrawingField(uuid, edit) => self.handle_update_drawing_field(uuid, edit),
             Message::Library(msg) => self.dispatch_library_message(msg),
             Message::CommandPalette(msg) => self.dispatch_command_palette_message(msg),
+            Message::TransmissionLineCalculator(msg) => {
+                self.dispatch_transmission_line_calculator_message(msg)
+            }
             Message::HistoryLoaded {
                 generation,
                 path: _,
@@ -233,6 +237,15 @@ impl Signex {
     /// / maximize buttons. Routed from `dispatch_update`.
     pub(crate) fn dispatch_window_message(&mut self, message: WindowMsg) -> Task<Message> {
         match message {
+            WindowMsg::OpenTransmissionLineCalculator => self.open_transmission_line_calculator(),
+            WindowMsg::TransmissionLineCalculatorOpened(id) => {
+                if self.ui_state.windows.contains_key(&id) {
+                    self.ui_state
+                        .windows
+                        .insert(id, super::state::WindowKind::TransmissionLineCalculator);
+                }
+                Task::none()
+            }
             WindowMsg::WindowResizedFor(id, w, h) => {
                 // Only main-window resizes drive layout math. Detached
                 // modal + undocked-tab windows have their own sizes
@@ -347,6 +360,7 @@ impl Signex {
                         // here beyond letting the window-id mapping
                         // drop above.
                         WindowKind::ComponentEditor { .. } => {}
+                        WindowKind::TransmissionLineCalculator => {}
                     }
                 }
                 Task::none()

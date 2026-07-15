@@ -22,7 +22,6 @@ pub struct Signex {
     pub library: crate::library::LibraryState,
 }
 
-
 /// Chord-recorder overlay state for the Preferences ▸ Keyboard
 /// Shortcuts pane. Holds the binding being edited plus the strokes
 /// captured so far. The keyboard subscription feeds raw key events
@@ -103,6 +102,8 @@ pub enum WindowKind {
         table: String,
         row_id: signex_library::RowId,
     },
+    /// Dedicated Tools -> Transmission Line Calculator utility window.
+    TransmissionLineCalculator,
 }
 
 /// Kind of z-order picker currently armed. Drives the first-click
@@ -589,4 +590,3 @@ impl DocumentState {
         self.engines.get(target_path)
     }
 }
-
