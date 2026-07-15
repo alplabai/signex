@@ -3,7 +3,13 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
+      # Strict semver only. A bare "v*" also matches checkpoint tags like
+      # v0.11-pre-library-restore-2026-04-29, which are snapshots rather
+      # than releases — they fired a full cross-platform release build and
+      # tried to publish a GitHub Release off a CHANGELOG section that does
+      # not exist. Keep snapshot tags outside this pattern.
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-*"   # pre-releases: v1.0.0-rc.1
 
 permissions:
   contents: write

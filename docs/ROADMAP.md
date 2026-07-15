@@ -1,100 +1,133 @@
 # Signex — Roadmap
 
-> **Status:** Living document. Updated quarterly.
+> **Status:** Living document. Updated quarterly. Last reconciled against
+> reality 2026-07-15.
 > **Audience:** Anyone planning work, allocating engineering time, or
 > communicating timelines.
-> **Companion to:** `MASTER_PLAN.md` (scope and principles), `ARCHITECTURE.md`
-> (technical foundation), `REPOSITORY_AND_CODEBASE.md` (crate ownership).
+> **Owns:** the version axis. Every version number Signex ships is defined
+> here and nowhere else.
 
-This document describes *when* things ship and *who* builds them. It does not
-describe *what* features do — that is in `MASTER_PLAN.md` and
-`PRODUCT_AND_EDITIONS.md`. It does not describe *how* features are
-implemented — that is in `ARCHITECTURE.md`.
+This document describes *when* things ship. It does not describe *what*
+features do — that is `MASTER_PLAN.md` and `PRODUCT_AND_EDITIONS.md`. It
+does not describe *how* they are implemented — that is `ARCHITECTURE.md`.
 
-The dates and durations in this document are working estimates based on a
-small team. They are not commitments. They will move. The order and the gates
-are firmer than the dates.
-
----
-
-## 1. How to Read This Document
-
-The roadmap is organized into:
-
-- **Phase 0** — the foundation gate. No UI. Must succeed before anything else.
-- **v1.0 phases** — schematic-only editor.
-- **v2.0 phases** — PCB editor.
-- **v3.0 phases** — Pro launch (Signal AI + collaboration).
-- **Beyond v3.0** — simulation, advanced features, plugins.
-
-Each phase has:
-
-- A goal (what success looks like)
-- Workstreams (what gets built in parallel)
-- Deliverables (concrete outputs)
-- Exit criteria (how we know the phase is complete)
-- A duration estimate (rough, not committed)
-
-Phases are sequential. A phase does not start until the previous phase's exit
-criteria are met.
+The dates and durations here are working estimates. They are not
+commitments. They will move. The order and the gates are firmer than the
+dates.
 
 ---
 
-## 2. Versioning Strategy
+## 1. Version Axis Ownership
 
-Signex uses **semantic versioning** with the following meaning:
+**This document is the single source of truth for the version axis.**
+Nothing else defines what ships in a version.
+
+| Source | Owns | Does not own |
+|--------|------|--------------|
+| `docs/ROADMAP.md` (this file) | Version numbers, ordering, gates, exit criteria | Feature semantics |
+| `MASTER_PLAN.md` | Scope, principles, product thesis, format stance | Version numbers |
+| `.github/milestones.yml` | The GitHub projection of this file | Anything not listed here |
+| `signex-internal` → `docs/ROADMAP_DETAIL.md` | Near-term per-version scope decomposition | Gate definitions |
+
+This rule exists because it was broken. Before 2026-07-15 the version
+axis was defined in three places at once — this file, `MASTER_PLAN.md`
+§7, and a set of hand-made GitHub milestones — and all three disagreed.
+Two of them placed different features at v1.4 and v1.5. A fourth axis
+(v0.15–v0.26) lived only in commit messages. See §9.
+
+**If you need a version that this file does not list, add it here first.**
+
+---
+
+## 2. Where We Are Now
+
+Honesty first, because the previous revision of this document did not
+have this section and drifted six versions away from reality as a result.
+
+| Fact | State (2026-07-15) |
+|------|--------------------|
+| Latest tagged release | **v0.13.0** (2026-05-31) |
+| `workspace.package.version` | **0.14.0** |
+| Latest CHANGELOG section | **0.14.0** — written, not yet tagged |
+| Current work | Footprint editor, sketch mode, symbol multi-unit, command registry |
+
+Phases 0–6 below (the original v0.1 → v0.8 schematic-editor plan) are
+**shipped**. The work since v0.9 — the Apache-clean native-format
+cutover, the library browser, the cleanroom renderer rewrite, and the
+parametric sketch/footprint editor — was scope added *after* the original
+phase model was written, and is not described by any phase. That is why
+this document read as fiction until it was reconciled.
+
+**Known gaps, tracked but not resolved by this document:**
+
+- CHANGELOG `[Unreleased]` is empty while trunk carries merged work
+  (symbol multi-unit, command registry, god-file decomposition).
+- v0.14.0 has a CHANGELOG section but no tag.
+- **v0.12.0 never existed** as a release. The cleanroom renderer rewrite
+  planned for it merged into the long-running library branch; no tag, no
+  CHANGELOG section. `CLEANROOM_REWRITE_PLAN.md` still says "Pending"
+  and is wrong.
+
+---
+
+## 3. Versioning Strategy
+
+Signex uses **semantic versioning**.
 
 | Version | Meaning                                                          |
 |---------|------------------------------------------------------------------|
-| 0.x     | Pre-release. Foundation, no public users.                        |
-| 1.0     | First public release. Community schematic editor is real.        |
-| 1.x     | Schematic-editor refinement. PCB development happens in parallel.|
-| 2.0     | PCB editor ships. Signex is now a complete EDA tool.             |
-| 2.x     | PCB-editor refinement. Pro development happens in parallel.      |
-| 3.0     | Pro launch. Signal AI and collaboration ship.                    |
-| 3.x     | Pro refinement, simulation begins.                               |
-| 4.0+    | Simulation, advanced features, plugins.                          |
+| 0.x     | Pre-release. Foundation and editor build-out. No public users.    |
+| 1.0     | First public release. Community schematic editor is real.         |
+| 1.x     | Schematic-editor refinement. PCB development happens in parallel. |
+| 2.0     | PCB viewer ships.                                                 |
+| 2.x     | PCB build-out: routing, output, 3D, advanced, high-speed.         |
+| 3.0     | Pro launch. Signal AI, plugins, and collaboration ship.           |
+| 3.x     | Pro refinement.                                                   |
+| 4.x     | Simulation, advanced output, foreign-format import.               |
+| 5.x     | Signex 365 — cloud PLM platform.                                  |
 
 **Major versions are gates, not arbitrary cuts.** v1.0 ships when the
-schematic editor is production-ready — not when a date passes. v2.0 ships when
-PCB is production-ready. We do not ship v1.0 to "claim" a 1.0 milestone; we
-ship v1.0 because users can use it.
+schematic editor is production-ready — not when a date passes. We do not
+ship v1.0 to "claim" a 1.0 milestone; we ship v1.0 because users can use
+it.
 
-**Patch releases** (1.0.1, 1.0.2, etc.) ship as needed for bug fixes. Minor
-releases (1.1, 1.2, etc.) bundle non-breaking feature additions.
-
----
-
-## 3. Priority Tiers
-
-Every feature falls into one of four tiers. Tiers determine when a feature
-can ship, not whether it ships at all.
-
-| Tier   | Meaning                                                        | Ships in       |
-|:------:|----------------------------------------------------------------|----------------|
-| **P0** | Required for v1.0. Cannot ship Community without it.           | v0.1–v1.0      |
-| **P1** | Required for v2.0. Professional users expect it.               | v1.1–v2.0      |
-| **P2** | Differentiator. Drives Pro adoption.                           | v2.1–v3.0      |
-| **P3** | Nice-to-have. Stable core required first.                      | v3.x and later |
-
-**Decision rule:** if a feature is proposed for an earlier version than its
-tier allows, the answer is "after the current target ships." This rule has no
-exceptions during Phase 0 or v1.0 development. It is the single most
-important defense against scope creep.
+**Version numbers are not work labels.** A version number means "this was
+or will be tagged and released". It does not mean "the branch I am on".
+This rule exists because ~100 commits shipped carrying labels v0.13
+through v0.26-G, of which exactly one (v0.13.0) was ever released — which
+is how this document and the milestone set drifted apart in the first
+place. Use issue numbers and milestones to track in-flight work.
 
 ---
 
-## 4. Workstreams
+## 4. Priority Tiers
 
-Workstreams are parallel tracks of development. Each workstream owns a set of
-crates (see `REPOSITORY_AND_CODEBASE.md`) and a set of features. Workstreams
-are sized so that a workstream can be assigned to one engineer at a time
-without overlapping with another workstream's crates.
+Every feature falls into one of four tiers. Tiers determine when a
+feature *can* ship, not whether it ships at all.
 
-Not every workstream is active in every phase. Workstreams activate and
-complete on their own schedules.
+| Tier   | Meaning                                              | Ships in       | Label |
+|:------:|------------------------------------------------------|----------------|-------|
+| **P0** | Required for v1.0. Cannot ship Community without it.  | v0.x–v1.0      | `tier: p0` |
+| **P1** | Required for v2.0. Professional users expect it.      | v1.1–v2.0      | `tier: p1` |
+| **P2** | Differentiator. Drives Pro adoption.                  | v2.1–v3.0      | `tier: p2` |
+| **P3** | Nice-to-have. Stable core required first.             | v3.x and later | `tier: p3` |
 
-### Workstream Catalog
+**Decision rule:** if a feature is proposed for an earlier version than
+its tier allows, the answer is "after the current target ships." This is
+the single most important defense against scope creep.
+
+`tier:` is not `priority:`. Tier is a scope gate ("which release can this
+ship in"); priority is urgency ("how soon should someone look"). A
+`tier: p2` issue can legitimately be `priority: critical`.
+
+---
+
+## 5. Workstreams
+
+Parallel tracks of development. Each owns a set of crates (see
+`REPOSITORY_AND_CODEBASE.md`). Workstreams are sized so one can be
+assigned to one engineer without overlapping another's crates. Not every
+workstream is active in every phase.
 
 | ID      | Name                          | Owns                                         |
 |---------|-------------------------------|----------------------------------------------|
@@ -112,682 +145,228 @@ complete on their own schedules.
 | **WS-C**  | Collaboration (Pro)         | `signex-collab`, Supabase backend            |
 | **WS-X**  | Plugins                     | `signex-plugin`                              |
 
-These workstream IDs are referenced throughout the rest of this document.
+Workstreams are deliberately **not** GitHub labels. They overlap the
+`area:` family almost exactly, and two labels meaning the same thing is
+how taxonomies rot.
 
 ---
 
-## 5. Phase 0 — The Foundation Gate
+## 6. Shipped — v0.1 → v0.13
 
-> **Historical note (post-v0.9):** Phase 0 as written below was the pre-v0.9
-> foundation gate, framed around a KiCad-native parser/writer in the main
-> workspace. After the v0.9 Apache-clean cutover (issue #62), Signex's
-> canonical formats are native `.snxsch` / `.snxpcb` / `.snxlib` / `.snxsym`
-> / `.snxfpt` and the KiCad parser/writer have been relocated to the
-> separate GPL-3.0 companion repo `signex-kicad-import` (one-way KiCad →
-> Signex import only). The phase description below is preserved as
-> historical record of the pre-v0.9 plan; current foundation work targets
-> the native S-expression-style `.snx*` formats.
+Recorded so the phase model below is readable as history rather than
+plan. Detail lives in `CHANGELOG.md`.
 
-**Goal:** prove that the architectural foundation works on real design files
-before building anything that depends on it.
+| Version | Shipped | Scope |
+|---------|---------|-------|
+| v0.1.0 – v0.6.4 | ✅ | Shell, canvas, schematic viewer, schematic editor, installers |
+| v0.7.x | ✅ | ERC (11 rules), annotation, pin matrix, multi-window |
+| v0.8.0 | ✅ | PDF / BOM / netlist export, multi-project workspaces |
+| v0.9.x | ✅ | **Apache-clean cutover (#62)** — native `.snx*`, KiCad I/O → companion repo |
+| v0.10.0 – v0.11.0 | ✅ | Library browser, `.snxlib` classes, master-detail browser |
+| v0.12.0 | ⚠️ | Cleanroom renderer rewrite — merged, **never released** (see §2) |
+| v0.13.0 | ✅ | Sketch mode α — Newton-LM constraint solver, footprint pad-bake |
 
-**Duration estimate:** 8–12 weeks with one engineer; 6–8 weeks with two.
-
-**Active workstreams:** WS-D (primary), WS-M (secondary), WS-E (tertiary).
-
-### What Phase 0 Builds
-
-#### Phase 0.1 — Parser
-
-- `signex-document` crate scaffold (pre-v0.9 plan named this `kicad-document`;
-  since v0.9 it targets native `.snx*` formats)
-- S-expression tokenizer
-- S-expression tree builder with arena allocation, `NodeHandle` identity, span
-  tracking
-- Parsers for `.snxsch`, `.snxpcb`, `.snxsym`, `.snxpro` (pre-v0.9 plan listed
-  `.kicad_sch`/`.kicad_pcb`/`.kicad_sym`/`.kicad_pro`; KiCad parsing has since
-  moved to the GPL-3.0 companion repo `signex-kicad-import`)
-- Unknown-node preservation in the tree structure
-- Round-trip test harness (parse → write → parse → assert equal)
-
-#### Phase 0.2 — Writer
-
-- Minimal-diff writer that preserves node order, spans, and unknown content
-- Configurable formatting; round-trip stability against the native `.snx*`
-  fixture corpus (pre-v0.9 plan compared against KiCad's own writer output)
-- Diff comparison against the canonical writer output on the fixture corpus
-
-#### Phase 0.3 — Semantic Model Skeleton
-
-- `signex-model` crate scaffold
-- Core types: `Symbol`, `Wire`, `Junction`, `Label`, `Sheet`, `Pin` (read-only
-  surface; mutation lives in WS-E)
-- `ObjectId` type and identity assignment
-- `IdentityMap` between `ObjectId` and `NodeHandle`
-- Builder that constructs a semantic model from a `Document`
-
-#### Phase 0.4 — Engine Skeleton
-
-- `signex-engine` crate scaffold
-- `Command`, `SemanticPatch`, `DocumentPatch`, `PatchPair` types
-- `Engine` struct with `execute`, `undo`, `redo`, `save`, `open`
-- A small set of test commands (move, update property, delete) sufficient to
-  exercise the patch system end-to-end
-- The Invariant check (Section 4.5 of `ARCHITECTURE.md`) running in debug
-  builds after every operation
-
-### Phase 0 Exit Criteria
-
-Phase 0 is complete when **all** of the following are true:
-
-1. **20+ real Signex projects** parse without error. Fixture corpus is
-   committed to the repository. (Pre-v0.9 plan used 20+ KiCad projects;
-   updated post-issue-#62 to native `.snx*` fixtures.)
-2. **Round-trip stability:** every fixture project, parsed and written
-   without modification, produces byte-stable output that the Signex parser
-   re-reads without warnings.
-3. **Diff stability:** the written output differs from the original by no
-   more than whitespace and ordering of irrelevant constructs (defined by an
-   automated diff classifier).
-4. **Unknown-node preservation:** at least three fixtures contain
-   intentionally-introduced vendor extensions or unknown constructs; these
-   round-trip through the parser/writer without loss.
-5. **Engine end-to-end:** a headless test exercises a sequence of 50+
-   commands (place, move, update, delete, undo, redo) on a real schematic and
-   asserts the Invariant after each step.
-6. **Performance baseline:** parsing a 500-symbol schematic takes under 200 ms
-   on a 2020-era laptop. Writing takes under 200 ms.
-
-If any of these criteria fails, Phase 0 continues. We do not start Phase 1
-with a half-working foundation.
-
-### Phase 0 Decision Points
-
-The following architectural decisions are made or finalized during Phase 0:
-
-- **Byte-identical vs. structural minimal rewrite** (see `ARCHITECTURE.md`
-  Section 9.1)
-- **Lossless trivia preservation** in the parser (whitespace, comments)
-- **UI stack lock-in** (iced + wgpu, or a switch if iced proves insufficient
-  during early prototyping at the end of Phase 0)
-- **Native `.snx*` schema versioning policy** (forward/backward compat rules
-  for the canonical `.snxsch` / `.snxpcb` / `.snxlib` formats; pre-v0.9 plan
-  listed "first-class KiCad version target" here, dropped post-issue-#62)
-
-After Phase 0 ends, these decisions are locked.
+This covers Phases 0–6 of the original plan. Those phases are closed.
 
 ---
 
-## 6. v1.0 — Schematic Editor (Community)
+## 7. Release Train — v0.14 → v1.0
 
-**Goal:** ship a Community schematic editor that a working EDA user (whether
-coming from KiCad, Altium, or starting fresh in Signex) can use as a daily
-driver.
+Near-term and concrete. **Scope decomposition for each version lives in
+the private companion repo** (`signex-internal`, `docs/ROADMAP_DETAIL.md`).
+Only the coarse shape is public.
 
-**Total duration estimate:** 10–14 months from end of Phase 0, with a small
-team (2–3 engineers).
+| Version | Scope | Milestone |
+|---------|-------|-----------|
+| **v0.14.0** | Footprint editor enabled — sketch constraints, active-bar tooling, closed-profile bakes | `v0.14.0 — Footprint Editor` |
+| **v0.15.0** | Footprint editor parity — selection filter, units, full pad stack, unified active bar | `v0.15.0 — Footprint Editor Parity` |
+| **v0.16.0** | PCB outline editor, pour fill + DRC enforcement, TOML+TSV primitive migration | `v0.16.0 — PCB Outline & Pours` |
+| v0.17+ | Properties-panel parity, sketch Fusion parity, parametric pads | *(not yet gated; see internal detail)* |
 
-v1.0 is broken into six phases. Each phase is roughly 6–8 weeks with two
-engineers.
-
-### Phase 1 — UI Foundation (v0.1 → v0.2)
-
-**Active workstreams:** WS-U (primary), WS-R (start).
-
-**Duration:** 6–8 weeks.
-
-**Goal:** Empty editor shell with iced, panel docking system, themes, status
-bar, and a working canvas (no design rendering yet).
-
-**Deliverables:**
-
-- iced application that launches and shows a window
-- Custom panel docking system (left/right/bottom regions, tabs, collapse)
-- Custom tree view widget (for Projects panel)
-- Menu bar, toolbar, status bar
-- Document tab bar
-- All six themes implemented and switchable
-- Empty `iced::widget::Canvas` in the center area with pan/zoom/grid
-- Right-click pan, scroll-wheel zoom (cursor-centered)
-- Coordinate display in status bar with unit cycling
-
-**Exit criteria:**
-
-- Application launches reliably on Windows, macOS, Linux
-- All six themes render without artifacts
-- Pan/zoom is smooth at 60 fps on an empty canvas
-- Panel system supports all `UX_REFERENCE_ALTIUM.md` Section 2 behaviors
-  except floating panels
-
-### Phase 2 — Schematic Viewer (v0.3 → v0.4)
-
-**Active workstreams:** WS-U (primary), WS-R (primary), WS-M (extending
-support for full schematic types).
-
-**Duration:** 6–8 weeks.
-
-**Goal:** Open a Signex project and render every schematic element correctly.
-
-**Deliverables:**
-
-- File → Open Project dialog
-- Parse `.snxpro`, populate Projects panel with sheet hierarchy
-- Render all schematic element types: wires, symbols, pins, labels (all four
-  kinds), junctions, no-connects, buses, bus entries, drawings, text
-- Sheet borders, title blocks, multiple paper sizes
-- Multi-sheet navigation via Projects panel and Ctrl+double-click
-- Rich text markup (subscript, superscript, overbar)
-- Theme-aware rendering (theme switch re-renders correctly)
-
-**Exit criteria:**
-
-- Five real Signex fixture projects render correctly across all six themes
-- 500-symbol schematic pans and zooms at 60 fps
-- All six themes render every element type correctly
-
-### Phase 3 — Schematic Editing Core (v0.5)
-
-**Active workstreams:** WS-E (primary), WS-U (primary), WS-V (start with ERC
-prep).
-
-**Duration:** 8–10 weeks. *(This is the longest single phase — the engine
-contract is established here and everything that follows depends on it.)*
-
-**Goal:** Edit schematics. Select, move, wire, delete, rotate, mirror,
-undo/redo, save. The engine becomes real.
-
-**Deliverables:**
-
-- Selection system (click, shift-click, box select with direction-sensitive
-  semantics)
-- Selection filter
-- Move with rubber-banding; Ctrl+drag for stiff move; Ctrl+arrow nudge
-- Wire drawing (W key) with three routing modes (Shift+Space cycle)
-- Auto-junction at T-intersections
-- Delete, rotate (Space/R), mirror (X/Y)
-- Engine `Command` set covering all editing operations above
-- `SemanticPatch` and `DocumentPatch` generation for all commands
-- Undo/redo (50+ levels)
-- Save (Ctrl+S) with minimal-diff writer
-- Properties panel (F11) with context-aware content
-
-**Exit criteria:**
-
-- A Signex `.snxsch` schematic can be loaded, edited (place, move, wire,
-  delete, property change), saved, and reopened with zero unexpected diffs
-- The Invariant holds after every operation in a 200-command stress test
-- Undo/redo works correctly across all command types
-
-### Phase 4 — Full Editing Workflow (v0.6)
-
-**Active workstreams:** WS-U (primary), WS-E (extending command set), WS-V
-(continuing).
-
-**Duration:** 6–8 weeks.
-
-**Goal:** All the editing operations a user actually does, beyond the basics.
-
-**Deliverables:**
-
-- Copy/Cut/Paste (`Ctrl+C/X/V`)
-- Smart paste (`Shift+Ctrl+V`)
-- Duplicate (`Ctrl+D`)
-- Label placement (L key) for all four label types
-- Bus drawing (B key), bus entries
-- Component placement (P key) with library browser
-- In-place text editing (F2 or click-pause-click)
-- Context menu (right-click no-drag)
-- Find / Find and Replace (`Ctrl+F`, `Ctrl+H`)
-- Selection memory (`Ctrl+1-8`, `Alt+1-8`)
-- Measure tool (`Ctrl+M`)
-
-**Exit criteria:**
-
-- All shortcuts in `UX_REFERENCE_ALTIUM.md` Section 4 work as documented
-- A user can build a non-trivial schematic from scratch using only the
-  editor and library browser
-- Library browser displays all mounted `.snxlib` libraries (with optional
-  KiCad-symbol-library import via the `signex-kicad-import` companion repo)
-
-### Phase 5 — Validation and Annotation (v0.7)
-
-**Active workstreams:** WS-V (primary), WS-U (Messages panel and integration),
-WS-E (annotation commands).
-
-**Duration:** 6–8 weeks.
-
-**Goal:** ERC, annotation, net-aware visualization.
-
-**Deliverables:**
-
-- ERC engine in `signex-erc` covering 11 standard rule types (duplicate
-  designators, unconnected pins, floating wires, no driver, single-pin nets,
-  output conflicts, multiple net names, unannotated components, pin matrix
-  conflicts, undriven power pins, unlabeled nets)
-- 12×12 pin connection matrix (configurable per cell)
-- Messages panel with click-to-zoom-and-highlight
-- Annotation system with four modes, preview, lock/unlock per designator
-- Net color override (F5)
-- AutoFocus (dim unrelated objects on hover/select)
-
-**Exit criteria:**
-
-- ERC catches all 11 violation types correctly on a fixture set of
-  intentionally-broken schematics
-- Click on a violation in the Messages panel zooms to the source on the canvas
-- Annotation produces correct results across all four modes
-
-### Phase 6 — Output and Polish (v0.8 → v1.0)
-
-**Active workstreams:** WS-O (primary), WS-U (polish), WS-E (final commands).
-
-**Duration:** 8–10 weeks.
-
-**Goal:** Export everything users need, and polish the editor to v1.0 quality.
-
-**Deliverables:**
-
-- PDF export (single sheet, multi-sheet, configurable DPI and color mode)
-- BOM export (CSV, TSV, HTML, Excel)
-- Netlist export (Signex S-expression; optional KiCad-format export via the
-  `signex-kicad-import` companion repo on the round-trip side once it lands)
-- Print via system dialog
-- Sheet templates (ISO A4, ANSI A)
-- Title block field substitution (=Title, =Date, =Rev, etc.)
-- Drawing tools (line, rectangle, circle, arc, polyline, polygon)
-- Watermarking (optional DRAFT/CONFIDENTIAL overlay)
-- Symbol library editor (basic — create/edit symbols, pins, graphics)
-- Performance pass: profile and fix any frame-rate regression on the fixture
-  corpus
-- Stability pass: fix all P0 bugs from the issue tracker
-- Installer for Windows (.msi), macOS (.dmg), Linux (.AppImage)
-- Native file associations for the canonical `.snx*` family (`.snxsch`,
-  `.snxpcb`, `.snxpro`, `.snxlib`, `.snxsym`, `.snxfpt`, etc.)
-- Documentation: user guide, keyboard reference, getting-started tutorial
-
-**Exit criteria — v1.0 RELEASE:**
-
-- All v1.0 must-do items from `MASTER_PLAN.md` Section 5.1 are complete
-- All exit criteria of all previous phases still pass
-- Fixture corpus has grown to 50+ real Signex projects, all round-tripping
-  cleanly through the native `.snx*` parser/writer
-- A non-developer beta tester can install Signex, create or open a project
-  in the native format (with optional one-way KiCad import via
-  `signex-kicad-import`), edit it, and save it without consulting a developer
-- The issue tracker has zero P0 bugs
+The v0.17+ band is deliberately not enumerated here. It has been
+re-planned repeatedly under labels that never shipped, and publishing a
+sequence that has never survived contact with reality is how the last
+revision of this document lost credibility. It gets versions when it gets
+milestones.
 
 ---
 
-## 7. v2.0 — PCB Editor (Community)
+## 8. Version Gates — v1.0 → v5.0
 
-**Goal:** Add PCB editing, making Signex a complete EDA tool.
+Strategic. Undated by policy. A gate ships when its exit criteria pass.
 
-**Total duration estimate:** 12–16 months from v1.0, with 2–3 engineers.
+### v1.0.0 — Community Preview
 
-v2.0 development overlaps with v1.x maintenance. The schematic editor
-continues to receive bug fixes and refinement during v2.0 development.
-
-### Phase 7 — PCB Viewer (v1.1)
-
-**Active workstreams:** WS-R (primary, learning instanced rendering), WS-U
-(PCB canvas widget), WS-M (extending model with PCB types).
-
-**Duration:** 8–10 weeks.
-
-**Goal:** Open and render Signex `.snxpcb` files. No editing yet.
-
-**Deliverables:**
-
-- PCB types in `signex-model`: `Track`, `Pad`, `Via`, `Zone`, `Footprint`,
-  `BoardOutline`
-- PCB canvas widget using `iced::widget::Shader` with custom WGSL pipelines
-- Instanced rendering for tracks, pads, vias
-- Zone fill rendering (pre-tessellated polygons)
-- 32 copper layers + technical layers, Altium default colors
-- Layer Stack panel with visibility, color, active layer
-- Single-layer mode (Shift+S cycle)
-- Board flip (Ctrl+F)
-- Cross-probe between schematic and PCB (Ctrl+double-click)
-- Ratsnest (MST + UnionFind)
+Schematic-only early access. First shipped executables for Windows,
+macOS, Linux.
 
 **Exit criteria:**
 
-- Five real Signex `.snxpcb` fixtures render correctly
-- 10,000-track PCB pans and zooms at 60 fps
-- Cross-probe works bidirectionally
+- All v1.0 must-do items from `MASTER_PLAN.md` §5.1 complete
+- Fixture corpus of 50+ native `.snx*` projects, all round-tripping cleanly
+- A non-developer beta tester can install Signex, create or open a project,
+  edit it, and save it without consulting a developer
+- Issue tracker has zero `tier: p0` bugs
 
-### Phase 8 — PCB Editing Core (v1.2)
+### v1.x — Schematic Refinement
 
-**Active workstreams:** WS-E (PCB commands), WS-U (PCB tools), WS-P (geometry).
+| Version | Scope |
+|---------|-------|
+| v1.1.0 | Advanced schematic — variants, multi-channel, harness, parameter manager |
+| v1.2.0 | Schematic tables, ToC, drawing tools, named unions |
+| v1.3.0 | Enhanced output — smart PDF, variant BOM, watermark, output jobs |
+| v1.4.0 | Design Notebook — Typst editor, component-linked annotations |
+| v1.5.0 | Block Diagram — system-level functional blocks, signal flow |
 
-**Duration:** 10–12 weeks.
+### v2.0.0 — PCB Viewer
 
-**Goal:** Move components, edit zones, modify board outline. Not yet routing.
+PCB rendering via `iced::widget::Shader`, 32 copper layers + technical
+layers, layer stack panel, cross-probe with schematic, ratsnest. No
+editing.
 
-**Deliverables:**
+**Exit criteria:** five real `.snxpcb` fixtures render correctly;
+10,000-track PCB pans and zooms at 60 fps; cross-probe works
+bidirectionally.
 
-- Component placement (move, rotate any angle, flip to other side)
-- Board outline editing
-- Zone (copper pour) drawing and editing
-- Polygon clipping (Clipper2 integration)
-- Hit testing for PCB element types
-- PCB commands in the engine (move, rotate, flip, edit zone, edit outline)
+### v2.1.0 — PCB Routing
 
-**Exit criteria:**
+Professional-grade interactive routing, implemented clean-room under
+Apache-2.0 with no reference to other EDA tools' source or format docs.
+Ships as five staged sub-releases: greedy (v2.1.0), walkaround (v2.1.1),
+push-and-shove (v2.1.2), diff-pair + length tuning (v2.1.3), copper pour
+(v2.1.4). DRC (15 base rules) and net-class management land in this band.
 
-- A PCB can be modified (components moved, zones edited, outline changed)
-- All edits round-trip cleanly through the native `.snxpcb` parser/writer
+Routing is the hardest single feature in EDA and is fundamentally one
+engineer's deep work for 3+ months. See `PCB_ROUTER_PLAN.md` for the
+authoritative plan.
 
-### Phase 9 — Routing (v2.1)
+**Exit criteria:** 50-board fixture corpus routes end-to-end with no
+panic, stuck state, or geometry corruption across 10,000 random routing
+actions per board; shove converges in ≤8 iterations on 95% of actions;
+median action latency ≤16 ms, 95th percentile ≤33 ms.
 
-**Active workstreams:** WS-P (primary, router algorithms), WS-V
-(router-facing incremental DRC), WS-E (router commit command), WS-U
-(routing tools, net-class editor).
+**Deferred:** multi-track routing, BGA fanout, via stitching → v2.2
+candidates. Autorouting → not scoped.
 
-**Duration:** 25–36 weeks total across five stage releases.
-*(Routing is the hardest single feature in EDA. See
-`docs/internal/docs/PCB_ROUTER_PLAN.md` for the authoritative detailed
-plan including crate layout, algorithms, library choices, and quality
-gates.)*
+### v2.2.0 — Community Release
 
-**Goal:** Professional-grade interactive routing (greedy → walkaround →
-push-and-shove → diff pair / length tuning → copper pour), implemented
-clean-room under Apache-2.0 with no reference to other EDA tools' source
-code or public format docs (per cleanroom rules).
+Manufacturing output: Gerber X2, Excellon, ODB++, pick-and-place,
+IPC-2581, STEP export. Full schematic + PCB editor.
 
-**Sub-phases (each is its own shippable release):**
+**Exit criteria:** a complete project can be designed, validated, and
+exported to manufacturing files; a real PCB designed in Signex has been
+successfully fabricated by at least one beta user; zero `tier: p0` bugs.
 
-- **9.1 Greedy (v2.1.0, 4–6 weeks)** — single-trace routing with
-  correct corners, vias, and net-class-driven widths. Obstacle
-  detection at the "refuse to cross" level (no walkaround yet).
-- **9.2 Walkaround (v2.1.1, 6–8 weeks)** — A* pathfinding over a
-  Minkowski-inflated obstacle graph, with live incremental DRC.
-- **9.3 Push-and-shove (v2.1.2, 8–12 weeks)** — topology-preserving
-  shove solver with rigidity heuristics. The gate to professional
-  credibility.
-- **9.4 Diff pair + length tuning (v2.1.3, 4–6 weeks)** — coupled
-  two-net routing, accordion / trombone / sawtooth meanders, length
-  and skew reporting.
-- **9.5 Copper pour (v2.1.4, 3–4 weeks)** — zone fill with thermal
-  relief and island removal, using the same geometry core as the
-  router.
+### v2.3.0 – v2.5.0 — PCB Build-out
 
-**Deferred:**
+| Version | Scope |
+|---------|-------|
+| v2.3.0 | 3D viewer — 3D PCB, PBR materials, STEP model loading |
+| v2.4.0 | Advanced PCB — layer stack editor, impedance, constraints, keepout |
+| v2.5.0 | High-speed design — xSignals, DDR SI, eye diagram, PDN analysis |
 
-- Multi-track (bus) routing, BGA fanout, via stitching — v2.2 candidates
-- Autorouting — not scoped; v2.5+ if ever
+### v3.0.0 — Pro Release
 
-**Exit criteria:**
+Signal AI, plugin system, and live collaboration. Pro development happens
+in feature-gated crates; the Community editor continues to ship.
 
-- Fixture corpus of 50 open-source PCBs routes end-to-end with no
-  panic, stuck-state, or geometry corruption across 10 000 random
-  routing actions per board
-- Shove converges in ≤ 8 iterations on 95% of actions
-- Median action latency ≤ 16 ms (one frame at 60 Hz); 95th percentile
-  ≤ 33 ms
-- Push-and-shove quality matches the documented Signex shove-test fixture
-  set (own benchmark suite; no comparison against other tools' source)
+Sub-releases: Signal AI core (v3.1), Signal AI tools (v3.2), plugin
+system (v3.3), collaboration (v3.4).
 
-### Phase 10 — DRC and Design Rules (v1.4)
+**Exit criteria:** a Pro user can hold a productive design conversation
+with Signal AI and its tool use is correctly undoable; three test users
+can edit the same schematic and PCB simultaneously without conflicts;
+pricing is set and subscription billing is operational; Pro and Community
+binaries both build clean from a single workspace.
 
-**Active workstreams:** WS-V (primary, DRC engine), WS-U (DRC panel,
-constraint dialogs), WS-E (rule application).
+### v4.0.0 — Simulation
 
-**Duration:** 8–10 weeks.
+Unified simulation view with block-diagram composition, SPICE (ngspice),
+simulation wizards. Then PCB sim blocks, parameter sweep / Monte Carlo,
+OpenEMS and Elmer bridges, advanced output, and foreign-format import
+(Altium, Eagle) plus built-in Git.
 
-**Goal:** DRC engine with the standard rule set, and the constraint editing
-that drives it.
+### v5.0.0 — Signex 365
 
-**Deliverables:**
-
-- DRC engine in `signex-drc` covering 15 base rules (clearance, min track
-  width, min via, annular ring, drill, mask, paste, courtyard, hole-to-hole,
-  edge clearance, silk-silk, copper edge, zone fill, unconnected, short)
-- DRC panel with click-to-zoom on violations
-- Net class management (assign nets, define rules per class)
-- Constraint editing dialogs
-
-**Exit criteria:**
-
-- DRC catches all 15 violation types on intentionally-broken fixtures
-- Net class rules are applied correctly during routing and DRC
-- A real PCB design passes DRC with zero false positives on the fixture corpus
-
-### Phase 11 — PCB Output and v2.0 Polish (v1.5 → v2.0)
-
-**Active workstreams:** WS-O (primary), WS-3D (activates here), all others (polish).
-
-**Duration:** 10–12 weeks.
-
-**Goal:** Manufacturing-ready output, interactive 3D viewer, and v2.0 release polish.
-
-WS-3D activation: `signex-model-import` converts STEP/VRML/GLTF source models to
-GLB cache artifacts; `signex-render-3d` consumes the GLB artifacts via the runtime
-contract established in Milestone C. See renderer-phase-notes Milestone D for the
-full import pipeline preparation package.
-
-**Deliverables:**
-
-- Gerber RS-274X with X2 attributes
-- Excellon drill files
-- ODB++ export
-- Pick-and-place CSV
-- IPC-2581 export
-- STEP 3D export (board body)
-- Interactive 3D viewer (PCB + component models; STEP/VRML/GLTF source support via `signex-model-import`)
-- Assembly drawings (SVG)
-- Performance pass on PCB editor
-- Stability pass
-- Installer updates
-- Updated documentation
-
-**Exit criteria — v2.0 RELEASE:**
-
-- A complete project (schematic + PCB) can be designed, validated, and
-  exported to manufacturing files
-- A real PCB designed in Signex has been successfully fabricated by at least
-  one beta user
-- Issue tracker has zero P0 bugs
+Cloud PLM platform: BOM Studio with live pricing and lifecycle status,
+ECO workflow, document linking, ERP bridge (Odoo / ERPNext), compliance
+dashboard.
 
 ---
 
-## 8. v3.0 — Pro Launch
+## 9. Reconciliation Log — 2026-07-15
 
-**Goal:** Add Signal AI and live collaboration, launch the Pro subscription.
+What this revision changed, so the next reader knows why the old version
+numbers do not match older documents:
 
-**Total duration estimate:** 8–12 months from v2.0.
-
-Pro development happens in feature-gated crates (see `PRODUCT_AND_EDITIONS.md`
-Section 5). The Community editor continues to ship, refined and bug-fixed.
-
-### Phase 12 — Signal AI (v2.1 → v2.5)
-
-**Active workstreams:** WS-AI (primary), WS-U (Signal panel UI in `pro` cfg).
-
-**Duration:** 16–20 weeks.
-
-**Goal:** A working Signal AI integration that justifies a subscription.
-
-**Deliverables:**
-
-- Alp Lab API gateway (managed Claude API access)
-- License validation system
-- Signal panel in the bottom dock (Pro builds only)
-- Streaming chat with markdown rendering
-- Tool use definitions for: simulation, query, edit, analysis, review
-- Design context injection (component list, nets, ERC/DRC results)
-- Visual context (canvas screenshot to vision API)
-- Circuit template library (6+ templates)
-- Design review mode (structured analysis with severity ranking)
-- Usage metering and reasonable fair-use limits
-
-**Exit criteria:**
-
-- A Pro user can hold a productive design conversation with Signal AI
-- Tool use successfully executes design changes that are correctly undoable
-- Beta testers report Signal AI is worth the subscription
-
-### Phase 13 — Live Collaboration Backend (v2.6 → v2.8)
-
-**Active workstreams:** WS-C (primary), backend (Supabase setup).
-
-**Duration:** 12–16 weeks.
-
-**Goal:** Backend infrastructure for collaboration. Client work begins in
-parallel toward end of phase.
-
-**Deliverables:**
-
-- Supabase project provisioning and schema (see `PRODUCT_AND_EDITIONS.md`
-  for tables)
-- Edge Functions for CRDT merge, lock acquisition, notifications, cleanup
-- Row-Level Security policies for owner/editor/viewer roles
-- Authentication flows (email, GitHub, Google OAuth)
-- Storage layer for project files
-- Local SQLite offline operation queue (client side)
-- Client connection layer (WebSocket Realtime channels)
-
-**Exit criteria:**
-
-- Two test clients can connect to a shared project and exchange CRDT
-  operations
-- Authentication and RLS are enforced correctly
-- Offline operation queueing and replay work correctly
-
-### Phase 14 — Live Collaboration Client (v2.9 → v3.0)
-
-**Active workstreams:** WS-C (primary), WS-U (collaboration UI in `pro` cfg).
-
-**Duration:** 12–16 weeks.
-
-**Goal:** Full collaboration experience visible in the editor.
-
-**Deliverables:**
-
-- Per-user cursors rendered on canvas with name/color
-- Presence panel (online users, follow mode)
-- Sheet/region/layer/net locking
-- Comments pinned to canvas locations
-- Review workflow (request, diff overlay, approve, reject)
-- Version history browser
-- Activity feed
-- Conflict resolution UI
-
-**Exit criteria — v3.0 RELEASE:**
-
-- Three test users can edit the same schematic and PCB simultaneously
-  without conflicts
-- All Pro features in `PRODUCT_AND_EDITIONS.md` Section 4.4.2 work as
-  documented
-- Pricing is set, subscription billing is operational
-- Pro and Community binaries both build clean from a single workspace
-
----
-
-## 9. Beyond v3.0
-
-Post-v3.0 development happens in parallel feature streams. Order is
-flexible and driven by user demand.
-
-| Stream                          | Tier | Tentative Window |
-|---------------------------------|:----:|------------------|
-| Plugin system (WASM, Extism)    | P1   | v3.x             |
-| 3D PCB viewer                   | P1   | v3.x             |
-| SPICE simulation (ngspice)      | P2   | v3.x             |
-| EM simulation (OpenEMS)         | P2   | v4.x             |
-| Thermal simulation (Elmer)      | P2   | v4.x             |
-| Advanced schematic (variants, multi-channel, harnesses) | P2 | v3.x |
-| Advanced PCB (impedance, length matching, xSignals)     | P2 | v3.x |
-| High-speed design (DDR SI, eye diagrams, PDN)            | P3 | v4.x+ |
-| Altium/Eagle import                                      | P3 | v4.x  |
-| Git integration                                          | P2 | v3.x  |
-| Auto-router                                              | P3 | v4.x+ |
-| Rigid-flex, embedded components                          | P3 | v5.x+ |
-
-These are not commitments. They are recognition that work continues after
-v3.0 and these are the candidates.
+- **Version axis consolidated here.** `MASTER_PLAN.md` §7 previously
+  declared itself authoritative for versioning and carried the release
+  table that generated the GitHub milestones. It now defers to this file.
+- **v1.4 / v1.5 collision resolved.** This document said v1.4 = DRC and
+  v1.5 = PCB output; `MASTER_PLAN.md` §7 said v1.4 = Design Notebook and
+  v1.5 = Block Diagram. MASTER_PLAN's mapping wins — it was the one
+  already reflected in the milestone set. **DRC moved into the v2.1
+  routing band**, where it is actually built.
+- **Router / Signal AI collision resolved.** Phase 9 claimed v2.1 for
+  routing while Phase 12 claimed "v2.1 → v2.5" for Signal AI. Routing
+  keeps v2.1.x; Signal AI moves to v3.1–v3.2.
+- **Non-monotonic phase versions removed.** Phases previously ran
+  v1.1 → v1.2 → **v2.1** → **v1.4** → v1.5. Phases no longer carry
+  version numbers; they are narrative, and the version axis is §7–§8.
+- **PCB viewer renumbered** v1.1 → v2.0, and "v2.0 = complete EDA tool"
+  retired in favour of v2.2 = Community Release.
+- **Ghost versions acknowledged.** v0.15–v0.26 existed only as work
+  labels on commits and internal plans, never as releases. The train
+  restarts from the real anchor (v0.14) in §7.
+- **v4.0 / v5.0 promoted to gates.** Previously only half-covered by a
+  "Beyond v3.0" table; they have dedicated internal plans
+  (`SIMULATION_VIEW.md`, `PLM_INTEGRATION.md`) and milestones.
 
 ---
 
 ## 10. Staffing Assumptions
 
-This roadmap is planned for a **small team**: 2–3 engineers during
-v0.x–v1.0, scaling to 3–5 during v2.0 and v3.0.
+Planned for a **small team**: 2–3 engineers during v0.x–v1.0, scaling to
+3–5 during v2.0 and v3.0.
 
-### What That Implies
-
-- Phases overlap less than they would with a larger team
 - A single engineer typically owns one workstream at a time
-- Specialists may rotate between workstreams as their expertise becomes
-  needed (e.g., the WS-D parser engineer may move to WS-O writer/exporter
-  work after Phase 0)
-- The roadmap is paced for sustainability, not for sprint-to-failure
-
-### Scaling Up
-
-If the team grows, parallelism increases:
-
-- WS-V (validation) can be developed in parallel with WS-U (UI) once the
-  engine API is stable
-- WS-O (output) can be parallel with WS-V once the model is stable
-- WS-3D and WS-S are independent of the editor's main path and can be done
-  by separate engineers without coordination overhead
-- WS-AI and WS-C are largely independent of each other in v3.0
-
-### Scaling Down
-
-If the team shrinks to one engineer (which is realistic at certain points):
-
-- Phase durations approximately double from the estimates above
-- The roadmap order remains the same; only velocity changes
-- v1.0 in particular is achievable solo if the engineer is committed and the
-  scope discipline holds
-
-### What Doesn't Scale
-
-- Phase 0 always requires one focused engineer for 2–3 months. More people
-  do not make parser/writer development faster; they make it slower.
-- Routing (Phase 9) is fundamentally one engineer's deep work for 3+ months.
-  It is the canonical example of a feature where adding people slows things
-  down.
-- Architectural decisions (the kind documented in `ARCHITECTURE.md`) are made
-  by a small group and then communicated. They are not decided in committee.
+- If the team shrinks to one engineer, phase durations approximately
+  double; the order stays the same, only velocity changes
+- **What does not scale:** routing is one engineer's deep work for 3+
+  months — the canonical example of a feature where adding people slows
+  things down. Architectural decisions are made by a small group and then
+  communicated; they are not decided in committee.
 
 ---
 
 ## 11. What This Roadmap Does Not Commit To
 
-Listed honestly to manage expectations:
-
-- **Calendar dates.** Estimates are working numbers. They will move. We do
-  not announce ship dates publicly until a release candidate exists.
-- **Feature ordering within a phase.** Within a phase, the order of
-  individual deliverables may shift based on dependencies and engineer
+- **Calendar dates.** Estimates are working numbers. They will move. We
+  do not announce ship dates publicly until a release candidate exists.
+- **Feature ordering within a version.** May shift on dependencies and
   availability.
-- **The post-v3.0 list (Section 9).** Order and timing are speculative.
-  User feedback and operational realities will reshape this list.
+- **The v0.17+ band and everything past v3.0.** Order and timing are
+  speculative; user feedback will reshape them.
 - **Pricing (Pro).** Set when v3.0 is in beta, not earlier.
-- **Promised performance numbers.** The performance targets in this document
-  are exit criteria, not user-facing promises. Real-world performance varies
-  with hardware and design complexity.
+- **Performance numbers.** The targets here are exit criteria, not
+  user-facing promises. Real-world performance varies with hardware and
+  design complexity.
 
 ---
 
 ## 12. Rules for Changing This Document
 
-- **Phase order does not change** without an architectural reason. "We
+- **Add the version here before using it anywhere.** Not in a commit
+  message, not in a milestone, not in an internal plan. Here first.
+- **Gate order does not change** without an architectural reason. "We
   changed our minds" is not sufficient.
-- **Phase 0 cannot be skipped, abbreviated, or merged into Phase 1.** It is
-  a gate.
-- **Adding scope to a phase requires removing equivalent scope from the
-  same phase.** The phase duration does not silently grow.
-- **Pulling a feature forward** (from v2.x to v1.x, for example) requires
-  explicit justification and an updated tier classification.
-- **Pushing a feature back** is always allowed and does not require
-  justification beyond "we underestimated the scope."
-- **Quarterly review:** this document is reviewed and updated every quarter.
-  Estimates are refreshed against actual progress. Phases that are running
-  significantly long or short are re-planned.
-- **Major version exit criteria** (the lists at the end of v1.0, v2.0, v3.0)
-  are very stable. Changing them requires a strong product reason and is
-  treated like changing the master plan.
+- **Adding scope to a version requires removing equivalent scope from the
+  same version.** The version does not silently grow.
+- **Pulling a feature forward** requires explicit justification and an
+  updated tier classification. **Pushing a feature back** is always
+  allowed and needs no justification beyond "we underestimated."
+- **Milestones follow this file, never lead it.** `.github/milestones.yml`
+  is a projection; edit the roadmap first.
+- **Quarterly review**, and reconcile against `CHANGELOG.md` + `git tag`
+  every time. If this document and the tags disagree, the tags are right
+  and this document is broken — fix it the same day and add a line to §9.

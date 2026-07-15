@@ -1,3 +1,10 @@
+# Normalize to LF in the repository and check out LF everywhere. Without
+# this, a tool or editor that rewrites the tree to CRLF shows up as every
+# file being modified (core.autocrlf is false), and a stray `git add -A`
+# commits the churn and destroys `git blame`. The `binary` rules below
+# still win for the fixtures they match.
+* text=auto eol=lf
+
 # Binary fixtures — never line-ending-convert.
 *.pdf binary
 *.step binary
