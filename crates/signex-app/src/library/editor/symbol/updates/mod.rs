@@ -201,7 +201,6 @@ pub(crate) fn apply_symbol_primitive_edit(
         // ── Display settings intercepted upstream; no-op here ────
         SymbolEditorMsg::SetSheetColor(_)
         | SymbolEditorMsg::ToggleGrid
-        | SymbolEditorMsg::TogglePinLabelGrab
         | SymbolEditorMsg::CycleGridSize
         | SymbolEditorMsg::CycleUnit => {}
 

@@ -338,6 +338,34 @@ pub struct OpenLibrary {
     pub display: LibraryDisplaySettings,
 }
 
+/// How a click selects/drags a pin in the symbol editor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PinSelectionMode {
+    /// Altium parity — only the pin body/tip is grabbable.
+    #[default]
+    PinOnly,
+    /// The pin is also grabbable by its name or number label, and a
+    /// selected pin's labels glow with it.
+    TextAndPin,
+}
+
+impl PinSelectionMode {
+    pub const ALL: [PinSelectionMode; 2] = [PinSelectionMode::PinOnly, PinSelectionMode::TextAndPin];
+    /// True when name/number labels are grabbable + glow.
+    pub fn allows_label_grab(self) -> bool {
+        matches!(self, PinSelectionMode::TextAndPin)
+    }
+}
+
+impl std::fmt::Display for PinSelectionMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            PinSelectionMode::PinOnly => "Pin only",
+            PinSelectionMode::TextAndPin => "Text and pin",
+        })
+    }
+}
+
 /// Per-library canvas + UI defaults shared across every primitive
 /// editor tab opened from the same `.snxlib`. See [`OpenLibrary::display`].
 #[derive(Debug, Clone, Copy)]
@@ -353,10 +381,10 @@ pub struct LibraryDisplaySettings {
     /// Sheet background colour preset — Altium "Sheet Color"
     /// (Black / White / Dark Gray / Light Gray / Cream).
     pub sheet_color: SheetColor,
-    /// When on, pins are selectable/draggable by their name or
-    /// number label, and a selected pin's labels glow with it.
-    /// Grid-toggle-style per-tab setting.
-    pub pin_label_grab: bool,
+    /// How a click selects/drags a pin — pin body only (Altium
+    /// parity) or pin body plus its name/number labels (which then
+    /// glow with the selected pin). Set via Document Options.
+    pub pin_selection: PinSelectionMode,
 }
 
 impl Default for LibraryDisplaySettings {
@@ -369,7 +397,7 @@ impl Default for LibraryDisplaySettings {
             grid_size_mm: crate::fonts::read_symbol_grid_size_mm_pref(),
             grid_visible: true,
             sheet_color: SheetColor::Cream,
-            pin_label_grab: false,
+            pin_selection: PinSelectionMode::PinOnly,
         }
     }
 }

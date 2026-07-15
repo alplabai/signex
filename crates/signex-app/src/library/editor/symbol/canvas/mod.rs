@@ -86,7 +86,8 @@ pub struct SymbolCanvas<'a> {
     pub grid_visible: bool,
     /// When on, pins can be grabbed by their name/number label and a
     /// selected pin's labels glow with it. Sourced from
-    /// `LibraryDisplaySettings.pin_label_grab` (status-bar toggle).
+    /// `LibraryDisplaySettings.pin_selection` via
+    /// `PinSelectionMode::allows_label_grab` (Document Options picker).
     pub pin_label_grab: bool,
     pub bg_color: Color,
     pub grid_color: Color,

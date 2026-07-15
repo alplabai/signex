@@ -35,6 +35,17 @@ impl Signex {
         Task::none()
     }
 
+    /// Modal — pick a new pin selection mode.
+    pub(super) fn handle_document_options_set_pin_selection(
+        &mut self,
+        mode: crate::library::state::PinSelectionMode,
+    ) -> Task<Message> {
+        if let Some(s) = self.library.document_options.as_mut() {
+            s.draft.pin_selection = mode;
+        }
+        Task::none()
+    }
+
     /// Modal — toggle the visible-grid checkbox.
     pub(super) fn handle_document_options_toggle_grid(&mut self) -> Task<Message> {
         if let Some(s) = self.library.document_options.as_mut() {

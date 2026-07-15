@@ -121,9 +121,6 @@ pub enum SymbolEditorMsg {
     /// the dot grid renders. Applies to the containing `.snxlib`.
     ToggleGrid,
 
-    /// Toggle the pin-label grab + glow feature for this .snxsym tab.
-    TogglePinLabelGrab,
-
     /// Status-footer click on the grid spacing — cycles through
     /// `crate::canvas::grid::GRID_SIZES_MM`. Applies to the
     /// containing `.snxlib`.
