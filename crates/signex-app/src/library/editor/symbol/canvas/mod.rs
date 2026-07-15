@@ -384,7 +384,6 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         self.draw_origin_marker(&mut frame, bounds);
         self.draw_symbol_with_renderer(&mut frame, &self.selected, self.camera.scale);
         self.draw_resize_handles(&mut frame);
-        self.draw_tool_hint(&mut frame);
         self.draw_box_select_overlay(&mut frame, state);
         self.draw_line_preview(&mut frame, state);
         self.draw_circle_preview(&mut frame, state);

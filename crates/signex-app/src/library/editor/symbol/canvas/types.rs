@@ -135,7 +135,6 @@ pub enum SymbolTool {
 }
 
 impl SymbolTool {
-    #[allow(dead_code)]
     pub fn label(self) -> &'static str {
         match self {
             SymbolTool::Select => "Select",
