@@ -38,6 +38,12 @@ pub struct PcbCanvas {
     /// cache hand-off and the shader primitive share the geometry by refcount
     /// bump — no per-frame deep copy.
     scene_cache: std::cell::RefCell<Option<Arc<Scene>>>,
+    /// Monotonic id of the geometry in `scene_cache`, bumped on every
+    /// invalidation (`clear_content_cache` / `set_renderer_snapshot`). Handed to
+    /// the shader via [`Self::scene_generation`] so the GPU pipeline skips
+    /// re-uploading unchanged geometry on pan/zoom. `Cell` for the same
+    /// `&self`-in-`view()` reason as `scene_cache`.
+    scene_generation: std::cell::Cell<u64>,
     /// Mirror of the widget-`State` camera `(offset.x, offset.y, scale)`,
     /// published from `update` so `view()` can read the current pan/zoom to
     /// build the GPU shader program — the real camera lives in
@@ -68,6 +74,7 @@ impl PcbCanvas {
             content_cache: canvas::Cache::default(),
             content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
             scene_cache: std::cell::RefCell::new(None),
+            scene_generation: std::cell::Cell::new(0),
             live_camera: {
                 // Seed with the same default the widget `State` uses so the
                 // first GPU frame (before any pointer event) matches the CPU
@@ -94,6 +101,7 @@ impl PcbCanvas {
         self.renderer_snapshot = renderer_snapshot;
         // The board changed — the cached GPU scene no longer matches.
         *self.scene_cache.get_mut() = None;
+        *self.scene_generation.get_mut() += 1;
     }
 
     pub fn clear_bg_cache(&mut self) {
@@ -104,6 +112,7 @@ impl PcbCanvas {
         self.content_cache.clear();
         // GPU scene shares this content-changed signal (theme + geometry).
         *self.scene_cache.get_mut() = None;
+        *self.scene_generation.get_mut() += 1;
     }
 
     pub fn fit_to_board(&mut self) {
@@ -182,6 +191,15 @@ impl PcbCanvas {
         let scene = Arc::new(scene);
         *self.scene_cache.borrow_mut() = Some(Arc::clone(&scene));
         Some(scene)
+    }
+
+    /// Generation id of the scene [`Self::gpu_scene`] currently returns. Passed
+    /// to the shader so the GPU pipeline can skip re-uploading unchanged
+    /// geometry on pan/zoom. Read in `view()` right after `gpu_scene()`, so it
+    /// reflects the same geometry that call returned (a rebuild bumps this at
+    /// its invalidation site, never mid-`gpu_scene`).
+    pub fn scene_generation(&self) -> u64 {
+        self.scene_generation.get()
     }
 }
 
@@ -635,5 +653,32 @@ mod tests {
 
         canvas.set_renderer_snapshot(Some(PcbSnapshot::default()));
         assert!(canvas.scene_cache.borrow().is_none());
+    }
+
+    #[test]
+    fn scene_generation_bumps_on_every_invalidation() {
+        let mut canvas = PcbCanvas::new();
+        let g0 = canvas.scene_generation();
+
+        canvas.set_renderer_snapshot(Some(PcbSnapshot::default()));
+        let g1 = canvas.scene_generation();
+        assert!(g1 > g0, "snapshot swap must bump the generation");
+
+        canvas.clear_content_cache();
+        let g2 = canvas.scene_generation();
+        assert!(g2 > g1, "content/theme change must bump the generation");
+    }
+
+    #[test]
+    fn gpu_scene_keeps_a_stable_generation_across_cache_hits() {
+        let mut canvas = PcbCanvas::new();
+        canvas.set_renderer_snapshot(Some(PcbSnapshot::default()));
+
+        let gen_at_build = canvas.scene_generation();
+        let _ = canvas.gpu_scene(); // miss: builds + caches
+        // A pan/zoom re-reads gpu_scene without invalidating: same generation,
+        // so the shader will skip the geometry upload.
+        let _ = canvas.gpu_scene(); // hit
+        assert_eq!(canvas.scene_generation(), gen_at_build);
     }
 }

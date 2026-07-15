@@ -615,9 +615,14 @@ impl Signex {
                 // the grid. The shader's `update` is a no-op that never
                 // captures, so pointer events fall through to the canvas below.
                 let scene = pcb_canvas.gpu_scene().unwrap_or_default();
+                // Read the generation after `gpu_scene()` so it matches the
+                // geometry just returned; it lets the shader skip re-uploading
+                // unchanged geometry on pan/zoom.
+                let generation = pcb_canvas.scene_generation();
                 let (offset_x, offset_y, scale) = pcb_canvas.live_camera();
                 let content_shader = shader(crate::scene_shader::SceneShaderProgram::new(
                     scene,
+                    Some(generation),
                     [offset_x, offset_y],
                     scale,
                 ))

@@ -57,6 +57,12 @@ pub struct ScenePipeline {
     arc: ArcPipeline,
     polygon: PolygonPipeline,
     text: GlyphonTextPipeline,
+    /// Scene generation currently resident in the instance buffers, or `None`
+    /// if geometry has never been uploaded. When a frame's primitive carries
+    /// the same generation, `prepare` skips re-uploading identical geometry and
+    /// refreshes only the camera uniform — so a pure pan/zoom moves ~64 bytes
+    /// instead of the whole board. See [`ScenePrimitive::generation`].
+    uploaded_generation: Option<u64>,
 }
 
 impl shader::Pipeline for ScenePipeline {
@@ -78,6 +84,7 @@ impl shader::Pipeline for ScenePipeline {
             polygon: PolygonPipeline::new(device, format, layout),
             text: GlyphonTextPipeline::new(device, queue, format),
             camera,
+            uploaded_generation: None,
         }
     }
 }
@@ -90,6 +97,12 @@ pub struct ScenePrimitive {
     /// building the primitive each frame is an `Arc` refcount bump, not a deep
     /// copy of the geometry.
     pub scene: Arc<Scene>,
+    /// Identity of `scene`'s geometry, used to skip redundant GPU uploads.
+    /// `Some(g)` comes from a cached source (the PCB `gpu_scene` cache) that
+    /// bumps `g` only when the geometry actually changes, so equal generations
+    /// across frames mean "same geometry, don't re-upload". `None` marks an
+    /// uncached source (the schematic path) that must upload every frame.
+    pub generation: Option<u64>,
     /// Screen-space pan offset in logical pixels.
     pub offset_px: [f32; 2],
     /// Zoom in logical pixels per millimetre.
@@ -116,16 +129,35 @@ impl shader::Primitive for ScenePrimitive {
 
         let offset_mm = world_origin_mm(self.offset_px, self.scale_px_per_mm);
 
+        // The camera changes on every pan/zoom frame, so always refresh it.
         pipeline
             .camera
             .update(queue, CameraUniform::ortho(vp_px, offset_mm, scale_px));
 
-        pipeline.polygon.upload(device, queue, &self.scene.polygons);
-        pipeline.line.upload(device, queue, &self.scene.lines);
-        pipeline.arc.upload(device, queue, &self.scene.arcs);
-        pipeline.circle.upload(device, queue, &self.scene.circles);
-        // Text prep can fail if the glyph atlas is exhausted; a dropped frame
-        // of text is preferable to a panic on the render thread.
+        // Skip re-uploading identical geometry. The line/circle/arc/polygon
+        // instances live in *world* space and the camera ortho above applies
+        // pan/zoom on the GPU, so their buffers — which the reused `Pipeline`
+        // keeps resident across frames — only need refreshing when the geometry
+        // itself changes. When this frame's generation already matches what's
+        // resident, a pure pan/zoom moved just the camera uniform. An uncached
+        // source (`generation == None`) never matches and re-uploads.
+        let geometry_is_current = matches!(
+            (self.generation, pipeline.uploaded_generation),
+            (Some(current), Some(resident)) if current == resident
+        );
+        if !geometry_is_current {
+            pipeline.polygon.upload(device, queue, &self.scene.polygons);
+            pipeline.line.upload(device, queue, &self.scene.lines);
+            pipeline.arc.upload(device, queue, &self.scene.arcs);
+            pipeline.circle.upload(device, queue, &self.scene.circles);
+            pipeline.uploaded_generation = self.generation;
+        }
+
+        // Text is NOT guarded: glyphon rasterises glyphs in screen-pixel space
+        // (`size_mm * scale_px_per_mm`, pixel positions), so it must be
+        // re-prepared every frame that pan/zoom/viewport changes. Its prep can
+        // also fail if the glyph atlas is exhausted; a dropped frame of text is
+        // preferable to a panic on the render thread.
         let _ = pipeline.text.upload(
             device,
             queue,
@@ -162,6 +194,7 @@ impl shader::Primitive for ScenePrimitive {
 /// canvas below.
 pub struct SceneShaderProgram {
     scene: Arc<Scene>,
+    generation: Option<u64>,
     offset_px: [f32; 2],
     scale_px_per_mm: f32,
 }
@@ -169,10 +202,19 @@ pub struct SceneShaderProgram {
 impl SceneShaderProgram {
     /// Build from an already-tessellated `Scene` and the current screen-space
     /// transform (`offset_px` = pan in logical pixels, `scale_px_per_mm` =
-    /// zoom in logical pixels per millimetre).
-    pub fn new(scene: Arc<Scene>, offset_px: [f32; 2], scale_px_per_mm: f32) -> Self {
+    /// zoom in logical pixels per millimetre). `generation` identifies the
+    /// geometry so the pipeline can skip redundant GPU uploads on pan/zoom:
+    /// `Some(g)` from a cached source that bumps `g` only on real geometry
+    /// changes, or `None` for an uncached source that uploads every frame.
+    pub fn new(
+        scene: Arc<Scene>,
+        generation: Option<u64>,
+        offset_px: [f32; 2],
+        scale_px_per_mm: f32,
+    ) -> Self {
         Self {
             scene,
+            generation,
             offset_px,
             scale_px_per_mm,
         }
@@ -191,6 +233,7 @@ impl shader::Program<Message> for SceneShaderProgram {
     ) -> Self::Primitive {
         ScenePrimitive {
             scene: Arc::clone(&self.scene),
+            generation: self.generation,
             offset_px: self.offset_px,
             scale_px_per_mm: self.scale_px_per_mm,
         }
@@ -228,11 +271,12 @@ mod tests {
             _pad: 0,
         });
 
-        let program = SceneShaderProgram::new(Arc::new(scene), [5.0, 6.0], 3.0);
+        let program = SceneShaderProgram::new(Arc::new(scene), Some(7), [5.0, 6.0], 3.0);
         let primitive =
             program.draw(&(), iced::mouse::Cursor::Unavailable, iced::Rectangle::default());
 
         assert_eq!(primitive.scene.lines.len(), 1);
+        assert_eq!(primitive.generation, Some(7));
         assert_eq!(primitive.offset_px, [5.0, 6.0]);
         assert_eq!(primitive.scale_px_per_mm, 3.0);
     }

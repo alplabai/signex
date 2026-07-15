@@ -31,6 +31,9 @@ pub fn schematic_shader_program(
 ) -> SceneShaderProgram {
     SceneShaderProgram::new(
         Arc::new(scene),
+        // Uncached source: the schematic rebuilds its scene each frame, so it
+        // has no stable generation and must upload every frame.
+        None,
         [transform.offset_x, transform.offset_y],
         transform.scale,
     )
