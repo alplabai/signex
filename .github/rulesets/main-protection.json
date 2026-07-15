@@ -1,10 +1,10 @@
 {
-  "name": "Protect trunk",
+  "name": "main-protection",
   "target": "branch",
   "enforcement": "active",
   "conditions": {
     "ref_name": {
-      "include": ["~DEFAULT_BRANCH"],
+      "include": ["refs/heads/main"],
       "exclude": []
     }
   },
@@ -19,7 +19,7 @@
         "require_code_owner_review": true,
         "require_last_push_approval": true,
         "required_review_thread_resolution": true,
-        "allowed_merge_methods": ["merge", "squash"]
+        "allowed_merge_methods": ["merge"]
       }
     },
     {
