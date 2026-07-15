@@ -28,19 +28,16 @@ Signex's planning documents live in a private submodule at
 made, written down, and then made invisible to everyone outside the
 repository. We never published them, and we never told anyone we hadn't.
 
-The cost landed on a contributor. PR #304 proposed a ~13k-line
-transmission-line/Smith-chart implementation that hand-rolled complex
-arithmetic, hand-rolled a Touchstone parser, and pulled `boa_engine` — a
-complete JavaScript interpreter — into `build.rs` to render formulas. All
-three problems were already solved by tools we had chosen: scikit-rf for
-the RF math and Touchstone, typst for the formulas. None of that was
-knowable from the public repository. The same contributor opened #233
-(Topola for routing, where we have our own router plan) and #303
-(IPC-2221 calculator) against the same blind spot.
+The cost landed on contributors, not on us. PR #304 arrived as several
+thousand lines of skilled RF work built on a stack we had already ruled
+out — for reasons that were sound, written down, and unpublished. #233
+and #303 hit the same wall from different directions. In each case the
+contributor did the reasonable thing with the information available;
+the information was just missing.
 
-That was our failure, not theirs. Reviewing work that could not have been
-aimed correctly is not a code-quality problem; it is a documentation
-problem, and this file is the fix. It is tracked by issue #306.
+That is a documentation failure, not a code-quality one. Work that
+could not have been aimed correctly should not be reviewed as though it
+missed. This file is the fix, and it is tracked by issue #306.
 
 ---
 
@@ -226,8 +223,9 @@ that touches KiCad formats.
 **Formulas — not MathJax, not KaTeX.** Both are JavaScript. Using either
 means a JS engine in the build graph or in the runtime, and neither is
 acceptable in a Rust desktop application whose install size and build
-determinism we care about. #304 demonstrated the failure mode exactly: it
-reached for `boa_engine` in `build.rs` to render formulas. typst is
+determinism we care about. The pull is real, though — the Rust MathJax
+wrappers on crates.io look convenient right up until you notice a whole
+JS interpreter has entered your build graph. typst is
 Rust-native, does real math typesetting, and emits PDF directly — which is
 also the output the Design Notebook needs anyway.
 
