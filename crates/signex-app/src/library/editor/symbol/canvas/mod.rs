@@ -147,6 +147,23 @@ impl<'a> SymbolCanvas<'a> {
         pin.part_number == 0 || pin.part_number == self.active_part
     }
 
+    /// Pin index whose NAME or NUMBER label bounding box contains (x, y),
+    /// respecting the active-unit visibility filter. Lets the user grab a
+    /// pin by its text, not just its tip. Iterates in reverse so the
+    /// last-drawn pin wins on overlap.
+    fn pin_hit_by_label(&self, x: f64, y: f64) -> Option<usize> {
+        for (i, pin) in self.symbol.pins.iter().enumerate().rev() {
+            if !self.pin_visible_on_active_part(pin) {
+                continue;
+            }
+            let geom = PinRenderGeometry::compute(pin);
+            if geom.label_hit_boxes(pin).iter().any(|b| b.contains(x, y)) {
+                return Some(i);
+            }
+        }
+        None
+    }
+
     /// Body rectangle, when present, derived from the first
     /// `SymbolGraphicKind::Rectangle` in `symbol.graphics`.
     fn body_rect(&self) -> Option<(f64, f64, f64, f64)> {
@@ -616,7 +633,13 @@ impl<'a> SymbolCanvas<'a> {
                 content: pin.number.clone(),
                 position: [geom.number_pos.x as f32, geom.number_pos.y as f32],
                 size_mm: PIN_TEXT_LAYOUT.number_size_mm,
-                color: to_rgba(self.text_color),
+                // Glow the number with the pin when selected — the pin,
+                // its number and its name read as one selected unit.
+                color: to_rgba(if selected {
+                    self.selected_color
+                } else {
+                    self.text_color
+                }),
                 bold: false,
                 italic: false,
                 rotation_rad: geom.text_rotation,
@@ -628,9 +651,13 @@ impl<'a> SymbolCanvas<'a> {
                 content: pin.name.clone(),
                 position: [geom.name_pos.x as f32, geom.name_pos.y as f32],
                 size_mm: PIN_TEXT_LAYOUT.name_size_mm,
-                color: to_rgba(Color {
-                    a: 0.85,
-                    ..self.text_color
+                color: to_rgba(if selected {
+                    self.selected_color
+                } else {
+                    Color {
+                        a: 0.85,
+                        ..self.text_color
+                    }
                 }),
                 bold: false,
                 italic: false,
