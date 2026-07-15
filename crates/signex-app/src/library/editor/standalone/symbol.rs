@@ -84,6 +84,7 @@ fn view_symbol_status<'a>(
     };
     let zoom_text = format!("{:.0}%", editor.camera.zoom_percent());
     let pin_count = format!("{} pins", editor.primitive().pins.len());
+    let tool_text = format!("Tool: {}", editor.tool.label());
 
     let sep = || text("|").size(10).color(muted);
 
@@ -118,6 +119,8 @@ fn view_symbol_status<'a>(
             text(zoom_text).size(11).color(muted),
             sep(),
             text(pin_count).size(11).color(muted),
+            sep(),
+            text(tool_text).size(11).color(muted),
             sep(),
             grid_toggle,
             grid_cycle,
@@ -190,6 +193,12 @@ fn view_symbol_toolbar<'a>(
                 .size(11)
                 .color(text_c),
             btn("\u{2192}", PrimitiveEdit::Symbol(SymbolEditorMsg::NextPart)),
+            Space::new().width(6),
+            // Add-unit (+) / remove-unit (−). Wire the existing
+            // NewPart / RemovePart messages; Phase B fixes their
+            // semantics (real delete + persistent empty unit).
+            btn("+", PrimitiveEdit::Symbol(SymbolEditorMsg::NewPart)),
+            btn("\u{2212}", PrimitiveEdit::Symbol(SymbolEditorMsg::RemovePart)),
             Space::new().width(8),
             btn(save_label, PrimitiveEdit::Save),
         ]

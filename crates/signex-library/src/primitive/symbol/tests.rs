@@ -48,6 +48,7 @@ fn symbol_json_roundtrip() {
         local_pin_color: None,
         version: "0.0.1".into(),
         released: false,
+        part_count: 1,
         created: Utc::now(),
         updated: Utc::now(),
     };
@@ -396,4 +397,39 @@ fn empty_symbol_starts_without_default_pins() {
     let s = Symbol::empty("test");
     assert_eq!(s.name, "test");
     assert_eq!(s.pins.len(), 0);
+}
+
+// ---- Phase B — part_count serialization back-compat ----
+
+/// A declared multi-unit symbol with no pins keeps its `part_count`
+/// across a TOML+TSV round-trip (the count is first-class, not derived
+/// from pins alone).
+#[test]
+fn part_count_round_trips() {
+    let mut s = Symbol::empty("X");
+    s.part_count = 3;
+    let file = SymbolFile::from_symbol(s);
+    let toml_text = file.to_toml_string().expect("serialise");
+    let back = SymbolFile::from_toml_str(&toml_text).expect("parse");
+    assert_eq!(back.symbols[0].part_count, 3);
+}
+
+/// Legacy `.snxsym` files were written before `part_count` existed, so
+/// they load with the serde default (`1`) even when pins live on higher
+/// parts. The loader must reconcile the declared count upward from the
+/// highest pin `part_number` so no populated unit is lost.
+#[test]
+fn legacy_file_reconciles_part_count() {
+    // Reliable fallback path: a symbol whose declared `part_count` (1)
+    // lags its highest pin part (3) — identical to a legacy file whose
+    // missing field defaults to 1. Round-tripping must lift the count.
+    let mut s = Symbol::empty("LEGACY");
+    let mut pin = SymbolPin::new("1", "A");
+    pin.part_number = 3;
+    s.pins = vec![pin];
+    s.part_count = 1;
+    let file = SymbolFile::from_symbol(s);
+    let toml_text = file.to_toml_string().expect("serialise");
+    let back = SymbolFile::from_toml_str(&toml_text).expect("parse");
+    assert!(back.symbols[0].part_count >= 3);
 }

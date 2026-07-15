@@ -1,7 +1,6 @@
-//! Top overlays — the tool hint text plus the rubber-band box
-//! selection and the line / circle / arc multi-click placement
-//! previews. Drawn last (top of the z-stack). Extracted verbatim from
-//! `Program::draw`.
+//! Top overlays — the rubber-band box selection and the line /
+//! circle / arc multi-click placement previews. Drawn last (top of
+//! the z-stack).
 
 use super::super::*;
 use iced::Color;
@@ -9,37 +8,6 @@ use iced::Size;
 use iced::widget::canvas;
 
 impl SymbolCanvas<'_> {
-    /// Tool hint text in the top-left corner.
-    pub(in crate::library::editor::symbol::canvas) fn draw_tool_hint(
-        &self,
-        frame: &mut canvas::Frame,
-    ) {
-        let tool_label = match self.tool {
-            SymbolTool::Select => "Tool: Select  (Del to remove)",
-            SymbolTool::AddPin => "Tool: Add Pin  (click to place)",
-            SymbolTool::PlaceRectangle => "Tool: Place Rectangle  (click)",
-            SymbolTool::PlaceLine => "Tool: Place Line  (click start, click end / Esc to cancel)",
-            SymbolTool::PlaceCircle => {
-                "Tool: Place Ellipse  (click center, click edge / Esc to cancel)"
-            }
-            SymbolTool::PlaceArc => {
-                "Tool: Place Arc  (click center, click start, click end / Esc to cancel)"
-            }
-            SymbolTool::PlaceText => "Tool: Place Text  (click)",
-        };
-        frame.fill_text(canvas::Text {
-            content: tool_label.to_string(),
-            position: iced::Point::new(8.0, 8.0),
-            size: 11.0.into(),
-            color: Color {
-                a: 0.55,
-                ..self.text_color
-            },
-            font: crate::render_config::IOSEVKA,
-            ..canvas::Text::default()
-        });
-    }
-
     /// Rubber-band box selection overlay (Window blue / Crossing green).
     pub(in crate::library::editor::symbol::canvas) fn draw_box_select_overlay(
         &self,

@@ -130,3 +130,8 @@ status.txt
 
 # Runtime debug logs (e.g. iced_debug.log)
 *.log
+
+# Local-only editor + orchestrator config (not shared).
+# Placed last so it overrides the earlier !.vscode/* whitelist above.
+.vscode/
+CLAUDE.md

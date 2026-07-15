@@ -311,6 +311,14 @@ pub struct Symbol {
     /// marks them released.
     #[serde(default)]
     pub released: bool,
+    /// Number of sub-parts (Altium "parts" / units) this symbol
+    /// declares. First-class so an empty unit persists across save —
+    /// unit count is no longer derived from pins alone. Defaults to
+    /// `1` for new symbols and legacy `.snxsym` files missing the
+    /// field; loaders reconcile it upward against the highest pin
+    /// `part_number` so old multi-part files stay intact.
+    #[serde(default = "default_part_count")]
+    pub part_count: u8,
     pub created: DateTime<Utc>,
     pub updated: DateTime<Utc>,
 }
@@ -325,6 +333,10 @@ fn default_designator() -> String {
 
 fn default_comment() -> String {
     "*".to_string()
+}
+
+fn default_part_count() -> u8 {
+    1
 }
 
 impl Symbol {
@@ -348,6 +360,7 @@ impl Symbol {
             local_pin_color: None,
             version: default_version(),
             released: false,
+            part_count: 1,
             created: now,
             updated: now,
         }
@@ -467,6 +480,8 @@ struct SymbolWire {
     version: String,
     #[serde(default)]
     released: bool,
+    #[serde(default = "default_part_count")]
+    part_count: u8,
     created: DateTime<Utc>,
     updated: DateTime<Utc>,
 }
@@ -529,6 +544,11 @@ impl SymbolFile {
         let mut symbols = Vec::with_capacity(wire.symbols.len());
         for sw in wire.symbols {
             let pins = pins_from_tsv(&sw.pins_tsv)?;
+            // Reconcile the declared part count upward against the
+            // highest pin part so legacy multi-part files (written
+            // before `part_count` existed, defaulting to 1) keep all
+            // their units instead of collapsing to one.
+            let pin_max = pins.iter().map(|p| p.part_number).max().unwrap_or(1).max(1);
             symbols.push(Symbol {
                 uuid: sw.uuid,
                 name: sw.name,
@@ -546,6 +566,7 @@ impl SymbolFile {
                 local_pin_color: sw.local_pin_color,
                 version: sw.version,
                 released: sw.released,
+                part_count: sw.part_count.max(pin_max),
                 created: sw.created,
                 updated: sw.updated,
             });
@@ -594,6 +615,7 @@ impl SymbolFile {
                 local_pin_color: sym.local_pin_color,
                 version: sym.version.clone(),
                 released: sym.released,
+                part_count: sym.part_count,
                 created: sym.created,
                 updated: sym.updated,
             });
