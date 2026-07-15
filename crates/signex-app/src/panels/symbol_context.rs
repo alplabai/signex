@@ -41,6 +41,13 @@ pub struct SymbolEditorPanelContext {
     /// What's currently selected on the canvas. Drives the right-dock
     /// Properties panel's mode (Pin / Field / Component default).
     pub selected: SymbolEditorSelection,
+    /// Copy of the active editor's transient graphic-fill picker
+    /// open-state so the pure view can expand a graphic's inline colour
+    /// palette / HSV overlay. `None` = closed.
+    pub graphic_fill_picker: Option<crate::app::GraphicFillPicker>,
+    /// Copy of the active editor's transient local-colour picker
+    /// open-state (Fills / Lines / Pins). `None` = closed.
+    pub local_color_picker: Option<crate::app::LocalColorPicker>,
     /// All symbols in the open `.snxsym` container — feeds the SCH
     /// Library left-dock panel's components list.
     pub symbols_in_file: Vec<SymbolFileEntry>,

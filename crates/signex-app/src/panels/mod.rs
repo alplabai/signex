@@ -23,6 +23,7 @@ mod symbol_editor_properties;
 
 // v0.14.x -- domain modules split out of the former single-file panels module.
 mod messages;
+mod color_field;
 mod context;
 mod footprint_context;
 mod symbol_context;
@@ -57,6 +58,7 @@ use symbol_editor_properties::view_symbol_editor_properties;
 // -- Re-exports: keep the `crate::panels::*` public surface stable and the
 //    sibling `super::` / `crate::panels::` paths resolving after the split. --
 pub use messages::PanelMsg;
+pub use color_field::{ColorFieldProps, color_field};
 pub use context::PanelContext;
 pub use footprint_context::{
     ArrayKindSummary, ArrayParamField, ArraySummary, BgaConfigSummary, CutoutSummary,

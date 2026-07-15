@@ -54,7 +54,13 @@ pub(super) fn view_symbol_editor_properties<'a>(
             col = pin::view_pin_selection(col, pin, muted, primary, border_c);
         }
         SymbolEditorSelection::Graphic(g) => {
-            col = graphic::view_graphic_selection(col, g, muted);
+            col = graphic::view_graphic_selection(
+                col,
+                g,
+                muted,
+                border_c,
+                sym.graphic_fill_picker,
+            );
         }
         SymbolEditorSelection::FieldReference => {
             col = col.push(prop_row_static(

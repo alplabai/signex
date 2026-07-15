@@ -4,7 +4,6 @@
 //! `element_properties` module.
 
 use super::super::*;
-use iced::widget::column;
 
 /// Properties section for a single hierarchical child sheet.
 /// Shows read-only info (Name / File / Position / Size) plus
@@ -138,201 +137,52 @@ fn child_sheet_color_row<'a>(
     border_c: Color,
     is_border: bool,
 ) -> Element<'a, PanelMsg> {
-    let preview_color = current
-        .map(|c| {
-            iced::Color::from_rgba(
-                c.r as f32 / 255.0,
-                c.g as f32 / 255.0,
-                c.b as f32 / 255.0,
-                c.a as f32 / 255.0,
-            )
-        })
-        .unwrap_or(iced::Color::from_rgba(0.5, 0.5, 0.5, 0.4));
-    let label_text = if let Some(c) = current {
-        format!("#{:02X}{:02X}{:02X}", c.r, c.g, c.b)
-    } else {
-        "Default".to_string()
-    };
+    use std::rc::Rc;
 
-    let toggle_msg = if is_border {
+    // StrokeColor → [u8; 4] RGBA so the generic widget stays agnostic
+    // of the schematic colour type.
+    let current_rgba = current.map(|c| [c.r, c.g, c.b, c.a]);
+
+    let on_toggle = if is_border {
         PanelMsg::ToggleChildSheetBorderPicker(sheet_id)
     } else {
         PanelMsg::ToggleChildSheetFillPicker(sheet_id)
     };
 
-    // Swatch button: 18x18 colour fill + small hex / "Default" caption.
-    let swatch_color = preview_color;
-    let swatch: Element<'a, PanelMsg> = container(Space::new())
-        .width(18)
-        .height(18)
-        .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(swatch_color)),
-            border: Border {
-                width: 1.0,
-                color: border_c,
-                radius: 2.0.into(),
-            },
-            ..container::Style::default()
-        })
-        .into();
-
-    let swatch_button = iced::widget::button(
-        row![
-            swatch,
-            text(label_text)
-                .size(10)
-                .color(Color::from_rgb(0.90, 0.90, 0.92)),
-        ]
-        .spacing(8)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([2, 6])
-    .on_press(toggle_msg)
-    .style(iced::widget::button::secondary);
-
-    // Build the per-channel "submit colour" message.
-    let make_submit = move |c: iced::Color| -> PanelMsg {
+    // Both the preset pick and the HSV submit reuse the same
+    // `EditChildSheet*Color` message so the engine command + undo/redo
+    // round-trip is identical for both paths. `from_rgba8` reproduces
+    // the exact `iced::Color` the old preset path emitted; the handler
+    // re-quantises to `StrokeColor` regardless.
+    let on_pick: Rc<dyn Fn([u8; 4]) -> PanelMsg + 'static> = Rc::new(move |rgba: [u8; 4]| {
+        let color = iced::Color::from_rgba8(rgba[0], rgba[1], rgba[2], rgba[3] as f32 / 255.0);
         if is_border {
-            PanelMsg::EditChildSheetBorderColor(sheet_id, c)
+            PanelMsg::EditChildSheetBorderColor(sheet_id, color)
         } else {
-            PanelMsg::EditChildSheetFillColor(sheet_id, c)
+            PanelMsg::EditChildSheetFillColor(sheet_id, color)
         }
-    };
+    });
 
-    // ── Advanced (HSV / RGB) overlay ──
-    if show_advanced {
-        let picker = iced_aw::ColorPicker::new(
-            true,
-            preview_color,
-            swatch_button,
-            PanelMsg::CancelChildSheetColorPicker,
-            move |c| make_submit(c),
-        );
-        return container(
-            row![
-                text(label.to_string()).size(10).color(muted).width(96),
-                picker,
-            ]
-            .spacing(4)
-            .align_y(iced::Alignment::Center),
-        )
-        .padding([4, 8])
-        .width(Length::Fill)
-        .into();
-    }
+    // Reset-to-default only shows when an override is active — matches
+    // the former `current.is_some()` gate.
+    let on_clear = current
+        .is_some()
+        .then_some(PanelMsg::ResetChildSheetStyle(sheet_id));
 
-    // The header row (label + swatch button) is always shown.
-    let header = container(
-        row![
-            text(label.to_string()).size(10).color(muted).width(96),
-            swatch_button,
-        ]
-        .spacing(4)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([4, 8])
-    .width(Length::Fill);
-
-    if !show_picker {
-        return header.into();
-    }
-
-    // ── Inline preset palette (rendered below the row, full width) ──
-    let presets: [(&str, [u8; 3]); 12] = [
-        ("Black", [0x00, 0x00, 0x00]),
-        ("Dark Gray", [0x40, 0x40, 0x40]),
-        ("Gray", [0x80, 0x80, 0x80]),
-        ("White", [0xFF, 0xFF, 0xFF]),
-        ("Red", [0xC0, 0x39, 0x2B]),
-        ("Orange", [0xE6, 0x7E, 0x22]),
-        ("Yellow", [0xF1, 0xC4, 0x0F]),
-        ("Olive", [0xB4, 0xA5, 0x58]),
-        ("Green", [0x27, 0xAE, 0x60]),
-        ("Teal", [0x16, 0xA0, 0x85]),
-        ("Blue", [0x29, 0x80, 0xB9]),
-        ("Purple", [0x8E, 0x44, 0xAD]),
-    ];
-
-    // 6 columns × 2 rows of preset swatches; each cell stretches
-    // proportionally so the grid always fills the available panel
-    // width (no clipping in narrow docks).
-    let mut palette_grid: Column<'a, PanelMsg> = Column::new().spacing(4);
-    for chunk in presets.chunks(6) {
-        let mut r: iced::widget::Row<'a, PanelMsg> = iced::widget::Row::new().spacing(4);
-        for (_name, rgb) in chunk {
-            let c = iced::Color::from_rgb(
-                rgb[0] as f32 / 255.0,
-                rgb[1] as f32 / 255.0,
-                rgb[2] as f32 / 255.0,
-            );
-            let swatch_btn = iced::widget::button(Space::new())
-                .width(Length::Fill)
-                .height(22)
-                .padding(0)
-                .on_press(make_submit(c))
-                .style(move |_t: &Theme, _s| iced::widget::button::Style {
-                    background: Some(Background::Color(c)),
-                    border: Border {
-                        width: 1.0,
-                        color: border_c,
-                        radius: 2.0.into(),
-                    },
-                    ..iced::widget::button::Style::default()
-                });
-            r = r.push(swatch_btn);
-        }
-        palette_grid = palette_grid.push(r);
-    }
-
-    let mut palette_col: Column<'a, PanelMsg> =
-        Column::new().spacing(6).padding([6, 8]).width(Length::Fill);
-    palette_col = palette_col.push(text("Preset Colours").size(10).color(muted));
-    palette_col = palette_col.push(palette_grid);
-
-    let mut action_row: iced::widget::Row<'a, PanelMsg> =
-        iced::widget::Row::new().spacing(4).width(Length::Fill);
-    action_row = action_row.push(
-        iced::widget::button(
-            text("Custom…")
-                .size(10)
-                .color(Color::from_rgb(0.92, 0.92, 0.94)),
-        )
-        .padding([4, 10])
-        .width(Length::Fill)
-        .on_press(PanelMsg::OpenChildSheetAdvancedPicker(sheet_id, is_border))
-        .style(iced::widget::button::secondary),
-    );
-    if current.is_some() {
-        action_row = action_row.push(
-            iced::widget::button(
-                text("Reset to Default")
-                    .size(10)
-                    .color(Color::from_rgb(0.92, 0.92, 0.94)),
-            )
-            .padding([4, 10])
-            .width(Length::Fill)
-            .on_press(PanelMsg::ResetChildSheetStyle(sheet_id))
-            .style(iced::widget::button::secondary),
-        );
-    }
-    palette_col = palette_col.push(action_row);
-
-    let palette_panel = container(palette_col)
-        .width(Length::Fill)
-        .style(move |_t: &Theme| container::Style {
-            background: Some(Background::Color(Color::from_rgb(0.16, 0.16, 0.18))),
-            border: Border {
-                width: 1.0,
-                color: border_c,
-                radius: 4.0.into(),
-            },
-            ..container::Style::default()
-        });
-
-    column![header, container(palette_panel).padding([0, 8])]
-        .spacing(4)
-        .width(Length::Fill)
-        .into()
+    color_field(ColorFieldProps {
+        label,
+        current: current_rgba,
+        none_label: "Default",
+        show_palette: show_picker,
+        show_advanced,
+        muted,
+        border_c,
+        on_toggle,
+        on_advanced: PanelMsg::OpenChildSheetAdvancedPicker(sheet_id, is_border),
+        on_cancel: PanelMsg::CancelChildSheetColorPicker,
+        on_pick,
+        on_clear,
+    })
 }
 
 /// Numeric stroke-width row for the child-sheet Style section.

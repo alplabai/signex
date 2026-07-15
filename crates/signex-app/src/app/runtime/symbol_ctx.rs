@@ -147,6 +147,8 @@ pub(super) fn build_symbol_editor_panel_ctx(
         pins,
         graphics,
         selected,
+        graphic_fill_picker: editor.graphic_fill_picker,
+        local_color_picker: editor.local_color_picker,
         symbols_in_file,
         active_idx: editor.active_idx,
         active_part: editor.active_part,

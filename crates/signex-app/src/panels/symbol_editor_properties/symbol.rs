@@ -1,77 +1,48 @@
 //! Symbol-level (nothing-selected) Properties rows + local-colour swatches.
 
-use iced::widget::{Column, Space, column, container, row, text};
+use iced::widget::{Column, container, row, text};
 use iced::{Color, Element, Length};
 
-use super::super::{PanelMsg, SymbolEditorPanelContext};
+use super::super::{ColorFieldProps, PanelMsg, SymbolEditorPanelContext, color_field};
 
-/// Render one Local Colors row — three click-to-cycle swatches
-/// (Fills / Lines / Pins). Each swatch shows the current override
-/// colour or a striped "inherit" pattern when `None`. Clicking
-/// cycles through a small preset palette + back to None.
-fn local_colors_row<'a>(
+/// Render one Local Colors row (Fills / Lines / Pins) via the shared
+/// [`color_field`] widget. `picker` carries the transient open-state;
+/// the inline palette / HSV overlay only expands when it targets this
+/// slot. `None` = inherit from the sheet palette.
+fn local_color_field<'a>(
     label: &'a str,
-    fill: Option<[u8; 4]>,
-    line: Option<[u8; 4]>,
-    pin: Option<[u8; 4]>,
+    slot: crate::app::LocalColorSlot,
+    current: Option<[u8; 4]>,
     muted: Color,
+    border_c: Color,
+    picker: Option<crate::app::LocalColorPicker>,
 ) -> Element<'a, PanelMsg> {
-    let swatch = |slot_label: &'a str, c: Option<[u8; 4]>, msg: PanelMsg| {
-        let bg = match c {
-            Some([r, g, b, a]) => iced::Color::from_rgba8(r, g, b, (a as f32) / 255.0),
-            None => iced::Color::from_rgba(0.5, 0.5, 0.5, 0.25),
-        };
-        let border = if c.is_some() {
-            iced::Color::from_rgba(0.0, 0.0, 0.0, 0.35)
-        } else {
-            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.30)
-        };
-        column![
-            text(slot_label).size(9).color(muted),
-            iced::widget::button(iced::widget::Space::new())
-                .padding(0)
-                .width(Length::Fixed(28.0))
-                .height(Length::Fixed(16.0))
-                .on_press(msg)
-                .style(
-                    move |_: &iced::Theme, _status: iced::widget::button::Status| {
-                        iced::widget::button::Style {
-                            background: Some(iced::Background::Color(bg)),
-                            border: iced::Border {
-                                width: 1.0,
-                                radius: 2.0.into(),
-                                color: border,
-                            },
-                            ..iced::widget::button::Style::default()
-                        }
-                    }
-                ),
-        ]
-        .spacing(2)
-        .align_x(iced::Alignment::Center)
-    };
+    use std::rc::Rc;
 
-    container(
-        row![
-            text(label.to_string())
-                .size(10)
-                .color(muted)
-                .width(Length::FillPortion(2)),
-            row![
-                swatch("Fills", fill, PanelMsg::SymEditorCycleLocalFillColor),
-                Space::new().width(8),
-                swatch("Lines", line, PanelMsg::SymEditorCycleLocalLineColor),
-                Space::new().width(8),
-                swatch("Pins", pin, PanelMsg::SymEditorCycleLocalPinColor),
-            ]
-            .width(Length::FillPortion(3)),
-        ]
-        .spacing(4)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([3, 8])
-    .width(Length::Fill)
-    .into()
+    let this = picker.filter(|p| p.slot == slot);
+    let show_palette = this.is_some();
+    let show_advanced = this.map(|p| p.advanced).unwrap_or(false);
+
+    let on_pick: Rc<dyn Fn([u8; 4]) -> PanelMsg + 'static> =
+        Rc::new(move |rgba| PanelMsg::SymEditorSetLocalColor { slot, color: rgba });
+    let on_clear = current
+        .is_some()
+        .then_some(PanelMsg::SymEditorClearLocalColor(slot));
+
+    color_field(ColorFieldProps {
+        label,
+        current,
+        none_label: "Inherit",
+        show_palette,
+        show_advanced,
+        muted,
+        border_c,
+        on_toggle: PanelMsg::SymEditorToggleLocalColorPicker(slot),
+        on_advanced: PanelMsg::SymEditorOpenLocalColorAdvanced(slot),
+        on_cancel: PanelMsg::SymEditorCancelLocalColorPicker,
+        on_pick,
+        on_clear,
+    })
 }
 
 /// Symbol-level default Properties (nothing selected): identity,
@@ -179,12 +150,32 @@ pub(super) fn view_symbol_selection<'a>(
             col = col.push(mirrored_row);
 
             // ── Local Colors (Fills / Lines / Pins) ──
-            col = col.push(local_colors_row(
-                "Local Colors",
+            col = col.push(super::super::thin_sep(border_c));
+            col = col
+                .push(container(text("Local Colors").size(11).color(primary)).padding([6, 8]));
+            col = col.push(local_color_field(
+                "Fills",
+                crate::app::LocalColorSlot::Fill,
                 sym.symbol_local_fill_color,
+                muted,
+                border_c,
+                sym.local_color_picker,
+            ));
+            col = col.push(local_color_field(
+                "Lines",
+                crate::app::LocalColorSlot::Line,
                 sym.symbol_local_line_color,
+                muted,
+                border_c,
+                sym.local_color_picker,
+            ));
+            col = col.push(local_color_field(
+                "Pins",
+                crate::app::LocalColorSlot::Pin,
                 sym.symbol_local_pin_color,
                 muted,
+                border_c,
+                sym.local_color_picker,
             ));
     col
 }

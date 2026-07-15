@@ -1,6 +1,6 @@
 //! Symbol editor — rotate / delete / pin-field transform update logic.
 
-use super::{SymEditor, mark_dirty, push_undo, rotate_pivot_msg_to_state};
+use super::{SymEditor, close_pickers, mark_dirty, push_undo, rotate_pivot_msg_to_state};
 use crate::library::messages::SymbolEditorMsg;
 
 pub(super) fn apply_symbol_transform(editor: &mut SymEditor, msg: SymbolEditorMsg) {
@@ -25,6 +25,7 @@ pub(super) fn apply_symbol_transform(editor: &mut SymEditor, msg: SymbolEditorMs
                 selected,
             ) {
                 editor.selected = new_sel;
+                close_pickers(editor);
                 mark_dirty(editor);
             }
         }
@@ -43,5 +44,49 @@ pub(super) fn apply_symbol_transform(editor: &mut SymEditor, msg: SymbolEditorMs
             }
         }
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::{GraphicFillPicker, SymbolEditorState};
+    use crate::library::editor::symbol::state::SymbolSelection;
+    use signex_library::{Symbol, SymbolFile, SymbolGraphic, SymbolGraphicKind};
+    use std::path::PathBuf;
+
+    /// Deleting the selected graphic must close a fill picker that was
+    /// open on it, so the transient picker state can't reopen on a
+    /// different graphic that later reuses the freed index.
+    #[test]
+    fn delete_selected_closes_open_fill_picker() {
+        let mut sym = Symbol::empty("T");
+        sym.graphics.push(SymbolGraphic {
+            kind: SymbolGraphicKind::Rectangle {
+                from: [0.0, 0.0],
+                to: [2.0, 1.0],
+            },
+            stroke_width: 0.15,
+            fill: Some([220, 60, 60, 255]),
+            part_number: 0,
+        });
+        let file = SymbolFile::from_symbol(sym);
+        let mut editor = SymbolEditorState::new(PathBuf::from("t.snxsym"), file);
+        editor.selected = Some(SymbolSelection::Graphic(0));
+        editor.graphic_fill_picker = Some(GraphicFillPicker {
+            idx: 0,
+            advanced: true,
+        });
+
+        apply_symbol_transform(&mut editor, SymbolEditorMsg::DeleteSelected);
+
+        assert!(
+            editor.primitive().graphics.is_empty(),
+            "graphic should be deleted"
+        );
+        assert!(
+            editor.graphic_fill_picker.is_none(),
+            "fill picker must close when its graphic is deleted"
+        );
     }
 }

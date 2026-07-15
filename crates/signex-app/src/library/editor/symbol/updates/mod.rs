@@ -54,6 +54,16 @@ fn mark_dirty(editor: &mut SymEditor) {
     editor.canvas_cache.clear();
 }
 
+/// Close any open colour picker (graphic-fill / local-colours). Call
+/// whenever the selection is dropped or the graphics vector is
+/// structurally mutated (delete / undo / redo / part switch) so a
+/// picker keyed by a now-stale graphic index can't silently reopen on
+/// an unrelated shape that happens to reuse that index.
+pub(super) fn close_pickers(editor: &mut SymEditor) {
+    editor.graphic_fill_picker = None;
+    editor.local_color_picker = None;
+}
+
 /// Push a graphic onto the symbol, recording an undo snapshot first.
 fn push_graphic(
     editor: &mut SymEditor,

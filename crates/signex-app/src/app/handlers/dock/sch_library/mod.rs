@@ -646,8 +646,20 @@ impl Signex {
                     }
                 })
             }
-            PanelMsg::SymEditorCycleGraphicFill { idx } => {
-                self.sym_editor_mutate_graphic(*idx, |g| g.fill = cycle_local_color(g.fill))
+            PanelMsg::SymEditorToggleGraphicFillPicker { idx } => {
+                self.sym_editor_toggle_graphic_fill_picker(*idx)
+            }
+            PanelMsg::SymEditorOpenGraphicFillAdvanced { idx } => {
+                self.sym_editor_open_graphic_fill_advanced(*idx)
+            }
+            PanelMsg::SymEditorCancelGraphicFillPicker => {
+                self.sym_editor_cancel_graphic_fill_picker()
+            }
+            PanelMsg::SymEditorSetGraphicFill { idx, color } => {
+                self.sym_editor_set_graphic_fill(*idx, Some(*color))
+            }
+            PanelMsg::SymEditorClearGraphicFill { idx } => {
+                self.sym_editor_set_graphic_fill(*idx, None)
             }
             PanelMsg::SymEditorSetSymbolDesignator(value) => {
                 self.sym_editor_mutate_symbol(|s| s.designator = value.clone())
@@ -664,15 +676,19 @@ impl Signex {
             PanelMsg::SymEditorToggleSymbolMirrored => {
                 self.sym_editor_mutate_symbol(|s| s.mirrored = !s.mirrored)
             }
-            PanelMsg::SymEditorCycleLocalFillColor => self.sym_editor_mutate_symbol(|s| {
-                s.local_fill_color = cycle_local_color(s.local_fill_color);
-            }),
-            PanelMsg::SymEditorCycleLocalLineColor => self.sym_editor_mutate_symbol(|s| {
-                s.local_line_color = cycle_local_color(s.local_line_color);
-            }),
-            PanelMsg::SymEditorCycleLocalPinColor => self.sym_editor_mutate_symbol(|s| {
-                s.local_pin_color = cycle_local_color(s.local_pin_color);
-            }),
+            PanelMsg::SymEditorToggleLocalColorPicker(slot) => {
+                self.sym_editor_toggle_local_color_picker(*slot)
+            }
+            PanelMsg::SymEditorOpenLocalColorAdvanced(slot) => {
+                self.sym_editor_open_local_color_advanced(*slot)
+            }
+            PanelMsg::SymEditorCancelLocalColorPicker => self.sym_editor_cancel_local_color_picker(),
+            PanelMsg::SymEditorSetLocalColor { slot, color } => {
+                self.sym_editor_set_local_color(*slot, Some(*color))
+            }
+            PanelMsg::SymEditorClearLocalColor(slot) => {
+                self.sym_editor_set_local_color(*slot, None)
+            }
             PanelMsg::SymEditorSetDisplaySheetColor(color) => {
                 self.sym_editor_mutate_display(|d| d.sheet_color = *color)
             }
@@ -712,22 +728,6 @@ pub(super) fn fp_parse_optional_mm(value: &str) -> Option<f64> {
         return None;
     }
     s.parse::<f64>().ok()
-}
-
-fn cycle_local_color(current: Option<[u8; 4]>) -> Option<[u8; 4]> {
-    const PALETTE: &[[u8; 4]] = &[
-        [220, 60, 60, 255],  // red
-        [60, 180, 80, 255],  // green
-        [60, 110, 220, 255], // blue
-        [240, 200, 80, 255], // yellow
-    ];
-    match current {
-        None => Some(PALETTE[0]),
-        Some(c) => match PALETTE.iter().position(|p| *p == c) {
-            Some(i) if i + 1 < PALETTE.len() => Some(PALETTE[i + 1]),
-            _ => None,
-        },
-    }
 }
 
 fn apply_graphic_field(

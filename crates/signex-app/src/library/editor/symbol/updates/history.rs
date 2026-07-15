@@ -1,6 +1,6 @@
 //! Symbol editor — undo / redo / drag-commit update logic.
 
-use super::{SymEditor, mark_dirty};
+use super::{SymEditor, close_pickers, mark_dirty};
 use crate::library::messages::SymbolEditorMsg;
 
 pub(super) fn apply_symbol_history(editor: &mut SymEditor, msg: SymbolEditorMsg) {
@@ -12,6 +12,7 @@ pub(super) fn apply_symbol_history(editor: &mut SymEditor, msg: SymbolEditorMsg)
                 *editor.primitive_mut() = snapshot;
                 editor.mid_drag = false;
                 editor.selected = None;
+                close_pickers(editor);
                 clamp_active_part(editor);
                 mark_dirty(editor);
             }
@@ -23,6 +24,7 @@ pub(super) fn apply_symbol_history(editor: &mut SymEditor, msg: SymbolEditorMsg)
                 *editor.primitive_mut() = snapshot;
                 editor.mid_drag = false;
                 editor.selected = None;
+                close_pickers(editor);
                 clamp_active_part(editor);
                 mark_dirty(editor);
             }

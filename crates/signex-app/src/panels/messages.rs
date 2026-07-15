@@ -793,12 +793,29 @@ pub enum PanelMsg {
         idx: usize,
         value: String,
     },
-    /// Properties panel — cycle the placed graphic at `idx` through its
-    /// fill states: `None` (unfilled) → preset palette → back to `None`.
-    /// A single control that both toggles fill on/off and picks the
-    /// colour, mirroring the symbol-level local-colour swatches. No-op
-    /// for open shapes (Line / Arc / Text).
-    SymEditorCycleGraphicFill {
+    /// Properties panel — open / close the fill colour-picker for the
+    /// placed graphic at `idx` (swatch click). Opening one picker closes
+    /// any other. UI-only; no dirty.
+    SymEditorToggleGraphicFillPicker {
+        idx: usize,
+    },
+    /// Properties panel — expand the open graphic-fill picker into the
+    /// HSV / RGB overlay (`Custom…` click). UI-only; no dirty.
+    SymEditorOpenGraphicFillAdvanced {
+        idx: usize,
+    },
+    /// Properties panel — cancel / close the graphic-fill picker without
+    /// committing. UI-only; no dirty.
+    SymEditorCancelGraphicFillPicker,
+    /// Properties panel — set the fill colour of the placed graphic at
+    /// `idx` (preset cell or HSV submit) and close the picker. Dirties.
+    SymEditorSetGraphicFill {
+        idx: usize,
+        color: [u8; 4],
+    },
+    /// Properties panel — clear the placed graphic's fill (back to
+    /// unfilled) and close the picker. Dirties.
+    SymEditorClearGraphicFill {
         idx: usize,
     },
     /// Properties panel — edit the active symbol's name (Altium
@@ -819,15 +836,25 @@ pub enum PanelMsg {
     SymEditorSetSymbolType(signex_library::ComponentType),
     /// Properties panel — toggle the active symbol's mirrored flag.
     SymEditorToggleSymbolMirrored,
-    /// Properties panel — cycle the active symbol's local fill
-    /// colour through preset palette → None → preset palette.
-    SymEditorCycleLocalFillColor,
-    /// Properties panel — cycle the active symbol's local line
-    /// colour.
-    SymEditorCycleLocalLineColor,
-    /// Properties panel — cycle the active symbol's local pin
-    /// colour.
-    SymEditorCycleLocalPinColor,
+    /// Properties panel — open / close a symbol-level local-colour
+    /// picker (Fills / Lines / Pins). Opening one closes any other.
+    /// UI-only; no dirty.
+    SymEditorToggleLocalColorPicker(crate::app::LocalColorSlot),
+    /// Properties panel — expand the open local-colour picker into the
+    /// HSV / RGB overlay (`Custom…` click). UI-only; no dirty.
+    SymEditorOpenLocalColorAdvanced(crate::app::LocalColorSlot),
+    /// Properties panel — cancel / close the local-colour picker
+    /// without committing. UI-only; no dirty.
+    SymEditorCancelLocalColorPicker,
+    /// Properties panel — set a symbol-level local colour (preset cell
+    /// or HSV submit) and close the picker. Dirties.
+    SymEditorSetLocalColor {
+        slot: crate::app::LocalColorSlot,
+        color: [u8; 4],
+    },
+    /// Properties panel — clear a symbol-level local colour (back to
+    /// inherit) and close the picker. Dirties.
+    SymEditorClearLocalColor(crate::app::LocalColorSlot),
     /// Document Options (Properties pane when nothing is selected)
     /// — set the sheet background color preset on the containing
     /// `.snxlib`. All `.snxsym` tabs from the same library share.
