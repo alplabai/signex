@@ -149,10 +149,11 @@ pub enum SymbolEditorMsg {
     /// active_part selected.
     NewPart,
 
-    /// Tools ▸ Remove Part — drops the active part. Pins scoped to
-    /// that part get demoted to `part_number = 1` (defensive — keep
-    /// the data, lose only the partition); the active part falls
-    /// back to `1`. No-op when only one part exists.
+    /// Tools ▸ Remove Part / toolbar "−" — deletes the active sub-
+    /// part outright: its pins are dropped, every higher part
+    /// renumbers down by one, and the declared `part_count`
+    /// decrements. The active part clamps to the new top unit. No-op
+    /// when only one part exists or the active part is part 1.
     RemovePart,
 
     /// Undo the last symbol mutation. Pops from `undo_snapshots`

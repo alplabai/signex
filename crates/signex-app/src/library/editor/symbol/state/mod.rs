@@ -266,27 +266,45 @@ impl SymbolSelectionFilter {
 /// pins or only Part Zero pins so multi-part wiring still has a
 /// sensible "current max part = 1" baseline.
 pub fn max_part_number(sym: &Symbol) -> u8 {
-    let mut max = 1;
-    for pin in &sym.pins {
-        if pin.part_number > 0 && pin.part_number > max {
-            max = pin.part_number;
-        }
-    }
-    max
+    let pin_max = sym
+        .pins
+        .iter()
+        .filter(|p| p.part_number > 0)
+        .map(|p| p.part_number)
+        .max()
+        .unwrap_or(1);
+    // `part_count` is the authoritative declared unit count; reconcile
+    // it with the highest pin part so an empty New Part (no pins yet)
+    // still counts and legacy files never lose a populated part.
+    sym.part_count.max(pin_max).max(1)
 }
 
-/// Demote every pin on the active part down to `part_number = 1`.
-/// Used by Tools ▸ Remove Part — the partition disappears but the
-/// pins survive on part 1.
-pub fn demote_part_pins_to_part_one(sym: &mut Symbol, part: u8) {
-    if part == 0 || part == 1 {
-        return;
+/// Delete sub-part `part` from the symbol: drop its pins, renumber
+/// every higher part down by one, and decrement the declared
+/// `part_count`. Part 0 (the "appears on every part" marker) and the
+/// last remaining part are never deleted. Returns the sub-part the
+/// caller should make active after the delete.
+pub fn delete_unit(sym: &mut Symbol, part: u8) -> u8 {
+    let count = max_part_number(sym);
+    if part == 0 || part > count || count <= 1 {
+        // Nothing to delete — part 0 is the "every part" marker, an
+        // out-of-range `part` (e.g. a stale `active_part` after undo)
+        // must not decrement the count, and a single-unit symbol has
+        // nothing to drop. Normalise the declared count and clamp the
+        // active part to a valid unit.
+        sym.part_count = count.max(1);
+        return count.max(1);
     }
+    sym.pins.retain(|pin| pin.part_number != part);
     for pin in sym.pins.iter_mut() {
-        if pin.part_number == part {
-            pin.part_number = 1;
+        if pin.part_number > part {
+            pin.part_number -= 1;
         }
     }
+    sym.part_count = (count - 1).max(1);
+    // Stay on the same slot index if it still exists, else clamp to
+    // the new top part.
+    part.min(sym.part_count).max(1)
 }
 
 /// Add a pin at the given canvas coordinates and return its index in
@@ -315,10 +333,9 @@ fn next_pin_number(sym: &Symbol) -> String {
     (highest + 1).to_string()
 }
 
-
+mod hit_test;
 mod movement;
 mod rotation;
-mod hit_test;
 #[cfg(test)]
 mod tests;
 
