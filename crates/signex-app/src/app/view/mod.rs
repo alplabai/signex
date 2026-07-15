@@ -90,6 +90,10 @@ impl Signex {
                         iced::widget::container(iced::widget::Space::new()).into()
                     }
                 }
+                super::state::WindowKind::PcbTraceCalculator => {
+                    crate::pcb_trace_calculator::view(&self.ui_state.pcb_trace_calculator)
+                        .map(Message::PcbTraceCalculator)
+                }
             };
         }
         self.view_main_for(window_id)
