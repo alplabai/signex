@@ -8,17 +8,17 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
-Everything below landed on `trunk` between 2026-05-06 and 2026-07-15 — 170
-commits — and was never recorded here. The v0.14.0 section was written on
-2026-05-31 and never tagged; work kept landing past it. This section is a
-backfill, reconstructed from `git log`, so it summarises by theme rather than
-listing every commit.
+## [0.14.0] — unreleased
 
-**This work is not the v0.15.0 the roadmap describes.** `docs/ROADMAP.md`
-gates v0.15.0 as "Footprint Editor Parity" (selection filter, units, pad
-stack), which is the internal specs' plan. What is actually sitting unreleased
-on `trunk` is symbol-editor, netlist, and command-registry work. Decide which
-version claims it before tagging.
+**Everything since v0.13.0** — 170 commits, 2026-05-06 → 2026-07-15.
+
+This section was originally written on 2026-05-31 covering only the footprint
+editor, and never tagged. Work kept landing past it: symbol multi-unit, the
+`signex-net` netlist contract, keyboard-shortcut profiles, the schematic GPU
+render path, and 83 commits of ADR-0001 decomposition. Rather than mint a
+phantom version — v0.12 is already one, planned and merged but never tagged —
+v0.14.0 claims all of it. The bulk below was reconstructed from `git log` and
+summarises by theme rather than listing every commit.
 
 ### Added — netlist
 
@@ -116,15 +116,14 @@ version claims it before tagging.
   the org control-process convention (#134); Linux dependency install hardened
   against the `packages.microsoft.com` apt outage (#155).
 
-## [0.14.0] — 2026-05-31
+### Added — footprint editor (the original v0.14 scope)
 
-The **v0.14 "Footprint Editor"** milestone. v0.13.0 shipped the
-footprint / sketch editor compiled but hidden behind a feature flag
-while it was finished; v0.14 completes the remaining active-bar tooling
-and **enables the editor** — opening a `.snxfpt` now opens an editable
+v0.13.0 shipped the footprint / sketch editor compiled but hidden behind a
+feature flag while it was finished; v0.14 completes the remaining active-bar
+tooling and **enables the editor** — opening a `.snxfpt` now opens an editable
 tab, and the New Footprint / PCB Library create flow is live again.
 
-### Added — sketch constraints
+#### Sketch constraints
 
 - **Nine more sketch constraints exposed** in the sketch-mode active
   bar: Tangent (line-arc + arc-arc), Angle, Equal-Radius, Point-on-Arc,
@@ -135,7 +134,7 @@ tab, and the New Footprint / PCB Library create flow is live again.
   constraint buttons light up. The two 3-entity Symmetric constraints
   take their third entity from the multi-select extra slot.
 
-### Added — active-bar tools wired
+#### Active-bar tools wired
 
 - **Align / Distribute / Spacing** (12 ops) — Align Left/Right/Top/
   Bottom + center H/V, Distribute Horizontally/Vertically (equal centre
@@ -153,7 +152,7 @@ tab, and the New Footprint / PCB Library create flow is live again.
 - **Selection-filter "All - On / All - Off"** toggle wired to a new
   `SelectionFilter::set_all`.
 
-### Added — deferred cleanup
+#### Deferred cleanup
 
 - **Move Selection by X, Y…** now opens a typed-delta modal (two mm
   inputs) that nudges the pad selection by the entered amount, reusing
@@ -171,21 +170,21 @@ tab, and the New Footprint / PCB Library create flow is live again.
   in prefs, with a "Save current filter as preset" capture. (Replaces the
   schematic-typed presets that could not apply to footprints.)
 
-### Fixed
+#### Fixed — footprint editor
 
 - **Pad shape-param leak** — `mint_shape_geometry_for` now clears a
   pad's `shape_params` before regenerating geometry, so changing a pad's
   shape (e.g. RoundRect → Round) no longer strands stale parameter keys
   for the solver / next bake.
 
-### Changed
+#### Changed — footprint editor
 
 - `FOOTPRINT_EDITOR_ENABLED` flipped `false` → `true`
   (`crates/signex-app/src/feature_flags.rs`). The
   `opening_snxfpt_does_not_create_editable_tab_when_gated` regression
   test branches on the flag and now asserts the enabled behaviour.
 
-### Deferred to v0.15
+#### Deferred to v0.15
 
 - Break Track / Drag Track End (need track-segment split infra).
 

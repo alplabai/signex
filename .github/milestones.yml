@@ -72,20 +72,34 @@
   state: closed
 
 # ─────────────── release train ───────────────
-# Near-term, concrete. Per-version scope decomposition lives in the
-# private companion repo (signex-internal, docs/ROADMAP_DETAIL.md);
-# only the coarse milestone lives here.
-- title: "v0.14.0 — Footprint Editor"
-  description: "Footprint/sketch editor enabled: sketch constraints, active-bar tooling, align/distribute, closed-profile bakes."
+# Near-term, concrete. Derived from the ISSUE TRACKER, not from the
+# internal specs — the specs describe work that has largely already
+# shipped (see docs/ROADMAP.md §9 "Correction, same day"). An issue is
+# open because the work is outstanding; a spec section says only that
+# someone once intended it.
+- title: "v0.14.0 — Footprint, Symbol Units & Netlist"
+  description: "Everything since v0.13.0: footprint editor enabled + parity, symbol multi-unit, signex-net netlist contract, keyboard-shortcut profiles, schematic GPU render, ADR-0001 decomposition."
   state: open
+  # Was "Footprint Editor". Renamed because the section was written
+  # 2026-05-31 and never tagged while 170 further commits landed past it;
+  # v0.14.0 claims all of it rather than minting a phantom version.
+  aliases: ["v0.14.0 — Footprint Editor"]
 
-- title: "v0.15.0 — Footprint Editor Parity"
-  description: "Selection filter, units toggle, full pad stack properties, unified active bar."
+- title: "v0.15.0 — Editor Fixes"
+  description: "Editor defects carrying tier: p0, plus Break Track / Drag Track End — the one item v0.14.0 actually deferred."
   state: open
+  # Was "Footprint Editor Parity" — that work was already on trunk when
+  # the milestone was created. v0.14.0's own CHANGELOG names its only
+  # v0.15 deferral as Break Track / Drag Track End.
+  aliases: ["v0.15.0 — Footprint Editor Parity"]
 
-- title: "v0.16.0 — PCB Outline & Pours"
-  description: "PCB outline editor, pour fill generation with DRC enforcement, TOML+TSV primitive migration."
+- title: "v0.16.0 — Command Registry & Symbol Units"
+  description: "Command Registry — one addressable action system for menus, keybindings, CLI and plugins — plus the symbol multi-unit tail."
   state: open
+  # Was "PCB Outline & Pours", inherited from the internal specs' v0.18
+  # band. The issues actually assigned here are the command-registry epic
+  # (#278) and symbol multi-unit (#289).
+  aliases: ["v0.16.0 — PCB Outline & Pours"]
 
 # ─────────────── version gates ───────────────
 # Strategic. Undated by policy — see docs/ROADMAP.md §"What this does
