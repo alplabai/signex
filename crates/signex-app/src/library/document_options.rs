@@ -68,15 +68,6 @@ pub fn view<'a>(
     .text_size(11)
     .into();
 
-    let pin_selection_picker: Element<'a, LibraryMessage> = pick_list(
-        crate::library::state::PinSelectionMode::ALL.to_vec(),
-        Some(state.draft.pin_selection),
-        LibraryMessage::DocumentOptionsSetPinSelection,
-    )
-    .padding([2, 6])
-    .text_size(11)
-    .into();
-
     let grid_check: Element<'a, LibraryMessage> = iced::widget::checkbox(state.draft.grid_visible)
         .size(14)
         .on_toggle(|_| LibraryMessage::DocumentOptionsToggleGrid)
@@ -124,7 +115,6 @@ pub fn view<'a>(
         row_field("Grid Visible", grid_check),
         row_field("Grid Spacing", grid_size_btn),
         row_field("Unit", unit_btn),
-        row_field("Pin Selection", pin_selection_picker),
     ]
     .spacing(2);
 

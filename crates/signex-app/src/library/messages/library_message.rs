@@ -435,8 +435,6 @@ pub enum LibraryMessage {
     },
     /// Modal — pick a new sheet color preset.
     DocumentOptionsSetSheetColor(crate::panels::SheetColor),
-    /// Modal — pick the pin selection mode (pin only / text and pin).
-    DocumentOptionsSetPinSelection(crate::library::state::PinSelectionMode),
     /// Modal — toggle the visible-grid checkbox.
     DocumentOptionsToggleGrid,
     /// Modal — cycle the visible grid spacing.

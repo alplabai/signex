@@ -227,6 +227,7 @@ impl Signex {
             ui.preferences_draft_grid_style,
             ui.preferences_draft_symbol_grid_size_mm,
             ui.preferences_draft_symbol_grid_style,
+            ui.preferences_draft_symbol_pin_selection,
             ui.custom_theme.as_ref().map(|c| c.name.as_str()),
             ui.preferences_dirty,
             &ui.erc_severity_override,

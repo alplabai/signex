@@ -338,34 +338,6 @@ pub struct OpenLibrary {
     pub display: LibraryDisplaySettings,
 }
 
-/// How a click selects/drags a pin in the symbol editor.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum PinSelectionMode {
-    /// Altium parity — only the pin body/tip is grabbable.
-    #[default]
-    PinOnly,
-    /// The pin is also grabbable by its name or number label, and a
-    /// selected pin's labels glow with it.
-    TextAndPin,
-}
-
-impl PinSelectionMode {
-    pub const ALL: [PinSelectionMode; 2] = [PinSelectionMode::PinOnly, PinSelectionMode::TextAndPin];
-    /// True when name/number labels are grabbable + glow.
-    pub fn allows_label_grab(self) -> bool {
-        matches!(self, PinSelectionMode::TextAndPin)
-    }
-}
-
-impl std::fmt::Display for PinSelectionMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            PinSelectionMode::PinOnly => "Pin only",
-            PinSelectionMode::TextAndPin => "Text and pin",
-        })
-    }
-}
-
 /// Per-library canvas + UI defaults shared across every primitive
 /// editor tab opened from the same `.snxlib`. See [`OpenLibrary::display`].
 #[derive(Debug, Clone, Copy)]
@@ -383,8 +355,9 @@ pub struct LibraryDisplaySettings {
     pub sheet_color: SheetColor,
     /// How a click selects/drags a pin — pin body only (Altium
     /// parity) or pin body plus its name/number labels (which then
-    /// glow with the selected pin). Set via Document Options.
-    pub pin_selection: PinSelectionMode,
+    /// glow with the selected pin). Seeded from the
+    /// `symbol_pin_selection` preference when a library is opened.
+    pub pin_selection: crate::render_config::PinSelectionMode,
 }
 
 impl Default for LibraryDisplaySettings {
@@ -397,7 +370,7 @@ impl Default for LibraryDisplaySettings {
             grid_size_mm: crate::fonts::read_symbol_grid_size_mm_pref(),
             grid_visible: true,
             sheet_color: SheetColor::Cream,
-            pin_selection: PinSelectionMode::PinOnly,
+            pin_selection: crate::fonts::read_symbol_pin_selection_pref(),
         }
     }
 }

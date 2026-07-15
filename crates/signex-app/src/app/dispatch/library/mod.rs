@@ -348,9 +348,6 @@ impl Signex {
             LibraryMessage::DocumentOptionsSetSheetColor(c) => {
                 self.handle_document_options_set_sheet_color(c)
             }
-            LibraryMessage::DocumentOptionsSetPinSelection(mode) => {
-                self.handle_document_options_set_pin_selection(mode)
-            }
             LibraryMessage::DocumentOptionsToggleGrid => self.handle_document_options_toggle_grid(),
             LibraryMessage::DocumentOptionsCycleGridSize => {
                 self.handle_document_options_cycle_grid_size()

@@ -6,7 +6,7 @@
 
 use super::*;
 use crate::fonts;
-use crate::render_config::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
+use crate::render_config::{GridStyle, LabelStyle, MultisheetStyle, PinSelectionMode, PowerPortStyle};
 use iced::widget::{Space, button, column, container, row, text};
 use iced::{Background, Border, Element, Length, Theme};
 use signex_types::theme::ThemeId;
@@ -21,6 +21,7 @@ pub(super) fn content_appearance<'a>(
     draft_grid_style: GridStyle,
     draft_symbol_grid_size_mm: f32,
     draft_symbol_grid_style: GridStyle,
+    draft_symbol_pin_selection: PinSelectionMode,
     custom_name: Option<&'a str>,
 ) -> Element<'a, PrefMsg> {
     let mut col = column![].spacing(0).padding([16, 20]);
@@ -309,6 +310,28 @@ pub(super) fn content_appearance<'a>(
                 GridStyle::ALL,
                 Some(draft_symbol_grid_style),
                 PrefMsg::DraftSymbolGridStyle,
+            )
+            .text_size(12)
+            .width(200),
+        ]
+        .align_y(iced::Alignment::Center),
+    );
+    col = col.push(Space::new().height(16));
+    col = col.push(
+        row![
+            column![
+                text("Pin Selection").size(12).style(text_primary),
+                text("How a click selects a pin on the symbol editor canvas — the pin body only, or its name and number labels too.")
+                    .size(10)
+                    .style(text_muted),
+            ]
+            .spacing(3)
+            .width(200),
+            Space::new().width(Length::Fill),
+            iced::widget::pick_list(
+                PinSelectionMode::ALL,
+                Some(draft_symbol_pin_selection),
+                PrefMsg::DraftSymbolPinSelection,
             )
             .text_size(12)
             .width(200),
