@@ -25,6 +25,15 @@ pub struct PcbCanvas {
     pub bg_cache: canvas::Cache,
     pub content_cache: canvas::Cache,
     pub content_cache_camera: std::cell::Cell<(f32, f32, f32)>,
+    /// Cached GPU scene for the `gpu_render` path. The tessellated geometry is
+    /// camera-independent — pan/zoom is applied by the shader's ortho
+    /// projection at draw time, not baked into the instance data — so the scene
+    /// survives across pan/zoom frames and is rebuilt only when the board
+    /// content or theme changes. Invalidated by [`Self::clear_content_cache`]
+    /// (the single content-changed signal every mutation site already calls)
+    /// and [`Self::set_renderer_snapshot`]. `RefCell` because `gpu_scene` is
+    /// called from `view()`, which holds `&self`.
+    scene_cache: std::cell::RefCell<Option<Scene>>,
     /// Mirror of the widget-`State` camera `(offset.x, offset.y, scale)`,
     /// published from `update` so `view()` can read the current pan/zoom to
     /// build the GPU shader program — the real camera lives in
@@ -54,6 +63,7 @@ impl PcbCanvas {
             bg_cache: canvas::Cache::default(),
             content_cache: canvas::Cache::default(),
             content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
+            scene_cache: std::cell::RefCell::new(None),
             live_camera: {
                 // Seed with the same default the widget `State` uses so the
                 // first GPU frame (before any pointer event) matches the CPU
@@ -78,6 +88,8 @@ impl PcbCanvas {
 
     pub fn set_renderer_snapshot(&mut self, renderer_snapshot: Option<PcbSnapshot>) {
         self.renderer_snapshot = renderer_snapshot;
+        // The board changed — the cached GPU scene no longer matches.
+        *self.scene_cache.get_mut() = None;
     }
 
     pub fn clear_bg_cache(&mut self) {
@@ -86,6 +98,8 @@ impl PcbCanvas {
 
     pub fn clear_content_cache(&mut self) {
         self.content_cache.clear();
+        // GPU scene shares this content-changed signal (theme + geometry).
+        *self.scene_cache.get_mut() = None;
     }
 
     pub fn fit_to_board(&mut self) {
@@ -143,6 +157,14 @@ impl PcbCanvas {
     /// the single shader pass draws them last (on top of the content of the
     /// same kind). Returns `None` when no board snapshot is loaded.
     pub fn gpu_scene(&self) -> Option<Scene> {
+        // Fast path: hand back a clone of the cached scene without
+        // re-tessellating. Cloning `None` here is free, so the miss path pays
+        // nothing; the `borrow()` temporary is released before the rebuild
+        // below takes a `borrow_mut()`. See [`Self::scene_cache`].
+        if let Some(scene) = self.scene_cache.borrow().clone() {
+            return Some(scene);
+        }
+
         let snapshot = self.active_renderer_snapshot()?;
         let mut scene = self.build_scene(snapshot);
 
@@ -153,6 +175,7 @@ impl PcbCanvas {
         scene.circles.extend(overlay_circles);
         scene.polygons.extend(overlay_polygons);
 
+        *self.scene_cache.borrow_mut() = Some(scene.clone());
         Some(scene)
     }
 }
@@ -557,5 +580,55 @@ impl canvas::Program<Message> for PcbCanvas {
         } else {
             mouse::Interaction::default()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signex_renderer::pcb::PcbSnapshot;
+
+    #[test]
+    fn gpu_scene_is_none_without_a_snapshot() {
+        let canvas = PcbCanvas::new();
+        assert!(canvas.gpu_scene().is_none());
+        // A missing snapshot must not populate the cache.
+        assert!(canvas.scene_cache.borrow().is_none());
+    }
+
+    #[test]
+    fn gpu_scene_builds_once_then_serves_from_cache() {
+        let mut canvas = PcbCanvas::new();
+        canvas.set_renderer_snapshot(Some(PcbSnapshot::default()));
+
+        // First call tessellates and fills the cache.
+        assert!(canvas.gpu_scene().is_some());
+        assert!(canvas.scene_cache.borrow().is_some());
+
+        // Subsequent calls are served from the cache (still populated).
+        assert!(canvas.gpu_scene().is_some());
+        assert!(canvas.scene_cache.borrow().is_some());
+    }
+
+    #[test]
+    fn clear_content_cache_invalidates_the_gpu_scene() {
+        let mut canvas = PcbCanvas::new();
+        canvas.set_renderer_snapshot(Some(PcbSnapshot::default()));
+        let _ = canvas.gpu_scene();
+        assert!(canvas.scene_cache.borrow().is_some());
+
+        canvas.clear_content_cache();
+        assert!(canvas.scene_cache.borrow().is_none());
+    }
+
+    #[test]
+    fn setting_a_new_snapshot_invalidates_the_gpu_scene() {
+        let mut canvas = PcbCanvas::new();
+        canvas.set_renderer_snapshot(Some(PcbSnapshot::default()));
+        let _ = canvas.gpu_scene();
+        assert!(canvas.scene_cache.borrow().is_some());
+
+        canvas.set_renderer_snapshot(Some(PcbSnapshot::default()));
+        assert!(canvas.scene_cache.borrow().is_none());
     }
 }
