@@ -61,10 +61,17 @@ fn push_graphic(
     stroke_width: f64,
 ) {
     push_undo(editor);
+    // part_number 0 = shared (drawn on every unit), preserving current
+    // behaviour. Phase C2 threads `editor.active_part` here so new
+    // shapes scope to the active unit alongside the render filter.
     editor
         .primitive_mut()
         .graphics
-        .push(signex_library::SymbolGraphic { kind, stroke_width });
+        .push(signex_library::SymbolGraphic {
+            kind,
+            stroke_width,
+            part_number: 0,
+        });
     mark_dirty(editor);
 }
 

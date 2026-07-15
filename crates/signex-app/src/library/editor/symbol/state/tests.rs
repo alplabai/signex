@@ -108,6 +108,7 @@ fn graphic_handle_position_returns_rectangle_corners() {
             to: [2.0, 1.0],
         },
         stroke_width: 0.15,
+        part_number: 0,
     });
     // TL = (from.x, to.y), BR = (to.x, from.y)
     assert_eq!(
@@ -129,6 +130,7 @@ fn hit_test_graphic_handle_finds_rectangle_corner() {
             to: [10.0, 5.0],
         },
         stroke_width: 0.15,
+        part_number: 0,
     });
     // BR corner is at (to.x, from.y) = (10.0, 0.0).
     let hit = hit_test_graphic_handle(&s, 10.0, 0.0, 1.5);
@@ -144,6 +146,7 @@ fn move_graphic_handle_moves_line_endpoint() {
             to: [5.0, 0.0],
         },
         stroke_width: 0.15,
+        part_number: 0,
     });
     move_graphic_handle(&mut s, 0, GraphicHandle::LineEndpoint(1), 7.0, 3.0);
     match &s.graphics[0].kind {
@@ -161,6 +164,7 @@ fn move_graphic_handle_resizes_circle_radius() {
             radius: 1.0,
         },
         stroke_width: 0.15,
+        part_number: 0,
     });
     move_graphic_handle(&mut s, 0, GraphicHandle::CircleRadius, 3.0, 4.0);
     match &s.graphics[0].kind {
@@ -178,6 +182,7 @@ fn hit_test_returns_graphic_inside_rectangle() {
             to: [10.0, 5.0],
         },
         stroke_width: 0.15,
+        part_number: 0,
     });
     // No pins in empty symbol — graphic hit is unambiguous.
     let hit = hit_test(&s, 5.0, 2.5);
@@ -193,6 +198,7 @@ fn move_selected_translates_rectangle_by_anchor_delta() {
             to: [10.0, 5.0],
         },
         stroke_width: 0.15,
+        part_number: 0,
     });
     move_selected(&mut s, Some(SymbolSelection::Graphic(0)), 3.0, 7.0);
     match &s.graphics[0].kind {
@@ -213,6 +219,7 @@ fn rotate_selected_rotates_rectangle_clockwise_around_origin() {
             to: [3.0, 4.0],
         },
         stroke_width: 0.15,
+        part_number: 0,
     });
 
     rotate_selected(&mut s, Some(SymbolSelection::Graphic(0)), true);
@@ -249,6 +256,7 @@ fn rotate_selected_about_geometry_center_keeps_rectangle_center() {
             to: [3.0, 4.0],
         },
         stroke_width: 0.15,
+        part_number: 0,
     });
 
     rotate_selected_with_pivot(
@@ -277,6 +285,7 @@ fn rotate_selected_about_geometry_center_keeps_text_anchor_fixed() {
             size: 1.0,
         },
         stroke_width: 0.15,
+        part_number: 0,
     });
 
     rotate_selected_about_geometry_center(&mut s, Some(SymbolSelection::Graphic(0)), false);
@@ -298,6 +307,7 @@ fn delete_selected_removes_graphic() {
             radius: 1.0,
         },
         stroke_width: 0.15,
+        part_number: 0,
     });
     let new_sel = delete_selected(&mut s, Some(SymbolSelection::Graphic(0)));
     assert_eq!(new_sel, Some(None));
@@ -313,6 +323,7 @@ fn move_graphic_handle_no_op_for_mismatched_variant() {
             to: [5.0, 0.0],
         },
         stroke_width: 0.15,
+        part_number: 0,
     });
     // Asking to move a rectangle corner on a Line — should silently no-op.
     move_graphic_handle(&mut s, 0, GraphicHandle::RectCorner(0), 99.0, 99.0);

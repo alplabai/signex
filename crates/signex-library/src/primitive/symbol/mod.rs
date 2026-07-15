@@ -229,6 +229,14 @@ pub struct SymbolGraphic {
     /// Stroke width in mm (0.0 = use renderer default).
     #[serde(default)]
     pub stroke_width: f64,
+    /// Which sub-part (unit) this graphic belongs to. `0` (default)
+    /// means "shared" — drawn on every part, matching pre-C1 files
+    /// where body geometry carried no part scoping. `1..=N` scope the
+    /// graphic to a specific unit. Additive and back-compatible:
+    /// files written before this field load as `0` and render exactly
+    /// as before, so no `.snxsym` format-token bump is required.
+    #[serde(default)]
+    pub part_number: u8,
 }
 
 /// Altium "Component Type" — drives BOM rules and schematic

@@ -36,6 +36,7 @@ fn symbol_json_roundtrip() {
                 to: [2.5, 2.5],
             },
             stroke_width: 0.15,
+            part_number: 0,
         }],
         schematic_params: ParamMap::new(),
         designator: "U?".into(),
@@ -432,4 +433,45 @@ fn legacy_file_reconciles_part_count() {
     let toml_text = file.to_toml_string().expect("serialise");
     let back = SymbolFile::from_toml_str(&toml_text).expect("parse");
     assert!(back.symbols[0].part_count >= 3);
+}
+
+// ---- Phase C1 — SymbolGraphic.part_number serialization ----
+
+/// A graphic scoped to a specific unit keeps its `part_number` across a
+/// TOML+TSV round-trip — body geometry is now per-unit addressable.
+#[test]
+fn graphic_part_number_round_trips() {
+    let mut s = Symbol::empty("X");
+    s.graphics.push(SymbolGraphic {
+        kind: SymbolGraphicKind::Rectangle {
+            from: [-2.5, -2.5],
+            to: [2.5, 2.5],
+        },
+        stroke_width: 0.15,
+        part_number: 2,
+    });
+    let file = SymbolFile::from_symbol(s);
+    let toml_text = file.to_toml_string().expect("serialise");
+    let back = SymbolFile::from_toml_str(&toml_text).expect("parse");
+    assert_eq!(back.symbols[0].graphics[0].part_number, 2);
+}
+
+/// A graphic left at the default (`0` = shared / drawn on every unit)
+/// reloads as `0` — proves the additive, back-compatible default so
+/// pre-C1 files whose graphics carried no part scoping render as before.
+#[test]
+fn graphic_missing_part_number_defaults_to_zero() {
+    let mut s = Symbol::empty("X");
+    s.graphics.push(SymbolGraphic {
+        kind: SymbolGraphicKind::Rectangle {
+            from: [-2.5, -2.5],
+            to: [2.5, 2.5],
+        },
+        stroke_width: 0.15,
+        part_number: 0,
+    });
+    let file = SymbolFile::from_symbol(s);
+    let toml_text = file.to_toml_string().expect("serialise");
+    let back = SymbolFile::from_toml_str(&toml_text).expect("parse");
+    assert_eq!(back.symbols[0].graphics[0].part_number, 0);
 }
