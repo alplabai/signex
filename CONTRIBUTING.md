@@ -211,20 +211,101 @@ with every contributor.
 ## License compliance for contributions
 
 The main signex repo is **Apache-2.0 clean**. Patches must not introduce
-KiCad-derived code or any GPL-licensed dependency. KiCad import / export
-lives in the [signex-kicad-import](https://github.com/alplabai/signex-kicad-import)
+code, data, or dependencies under any licence incompatible with
+Apache-2.0 — which is a wider net than GPL, and the next section defines
+it. KiCad import / export lives in the
+[signex-kicad-import](https://github.com/alplabai/signex-kicad-import)
 GPL-3.0-or-later companion repo — that's where KiCad-related work
-belongs. See [docs/LICENSING.md](docs/LICENSING.md) for the rationale
-behind the two-repo split.
+belongs. See [docs/LICENSING.md](docs/LICENSING.md) for the full statement
+and the rationale behind the two-repo split.
 
-When you open a PR against the main `signex` repo, no declaration block
-is required — opening the PR affirms **no license-gated source files**
-were used (nothing under GPL/copyleft or otherwise Apache-incompatible).
-CI (see `.github/workflows/license-guard.yml` and the
+### What "otherwise Apache-incompatible" means
+
+Opening a PR affirms that **no license-gated source files** were used —
+nothing under GPL/copyleft **or otherwise Apache-incompatible**. We asked
+that for a long time without ever saying what the second half meant, which
+was our omission, not a contributor's problem to guess at.
+
+It cost someone. [PR #304](https://github.com/alplabai/signex/pull/304)
+arrived as a skilled, careful Rust rewrite of a project licensed
+"CC BY 4.0 … You may not resell this tool". That is Apache-incompatible on
+two counts, and it passed all twelve of our licence CI jobs plus
+`cargo deny` green. The declaration was answered honestly — CC BY reads as
+permissive, and the resale restriction is a trailing sentence that isn't
+part of the CC BY licence text at all. Nothing we automated would have
+changed that answer. Only writing the rule down does. So:
+
+**A port is a derivative work.** Rewriting a project's JavaScript in Rust
+does not reset its copyright. Neither does re-typing its C++, renaming the
+identifiers, restructuring the modules, or having an LLM do the
+translation. If you read someone else's source and wrote code that follows
+it, their licence governs your result — however different it looks. This is
+the single point engineers most often don't know, and it is not a close
+call legally.
+
+Implementing a *published algorithm or formula* independently is a
+different thing and is fine. The line is what you had in front of you when
+you wrote it, not how much the output diverges.
+
+**Licence classes that are incompatible with this repo:**
+
+- **GPL / copyleft** — GPL-2.0/3.0, AGPL, and **LGPL**. Reciprocal terms
+  relicense Signex; a binding is a link. Copyleft solvers are reached
+  across a process boundary only — see
+  [docs/EXTERNAL_TOOLS.md §4](docs/EXTERNAL_TOOLS.md#4-the-gpl--lgpl-bridge-boundary),
+  which is the dependency-side counterpart to this section.
+- **Any Creative Commons licence** — CC BY, CC BY-SA, CC BY-NC, all of
+  them. CC is not a software licence; Creative Commons says so itself. CC
+  BY's attribution terms don't compose with Apache-2.0's `NOTICE` model,
+  and BY-SA is copyleft. "But CC BY is permissive" is the exact trap #304
+  fell into. (CC0 is a public-domain dedication, not a CC licence in this
+  sense, and is fine.)
+- **Non-commercial / no-resale / any field-of-use restriction** — CC BY-NC,
+  "you may not resell this tool", "personal use only", "not for commercial
+  use". See below; this class is fatal here specifically.
+- **Source-available / open-core / "fair source"** — BUSL, SSPL, Elastic,
+  Commons Clause, PolyForm. Not open source, whatever the marketing says.
+- **The text, tables, and figures of paywalled standards** — IPC, IEC,
+  JEDEC, ISO. Important distinction: the **formulas and physical facts** in
+  a standard are facts, not copyrightable, and implementing them from your
+  own understanding is fine and welcome. The **document** is copyrighted —
+  do not copy its prose, its tables, its figure geometry, or its worked
+  examples, and don't paste it into an LLM to do it for you.
+
+MIT, BSD, ISC, Zlib, Unlicense, CC0, and Apache-2.0 are fine. Anything on
+neither list: ask.
+
+**Why "no resale" is fatal here in particular.** Signex Community is
+Apache-2.0 and free; **Signex Pro is a paid commercial edition built from
+this same tree**. A field-of-use restriction on any code in `crates/` would
+be violated the day Pro ships, and would break the Apache-2.0 surface we
+promise every downstream redistributor and embedder. Plenty of projects
+could live with a non-commercial clause. We cannot. That's a property of
+our business model, not a judgement about the licence.
+
+### If you're not sure, ask — don't PR
+
+[Open an issue](https://github.com/alplabai/signex/issues/new), name the
+source and its licence, and we'll answer. It costs you one comment. A wrong
+guess discovered at review costs you the weekend you spent on the code, and
+we would rather spend our time saying "yes, go" than "sorry". This is the
+same rule [docs/EXTERNAL_TOOLS.md §1](docs/EXTERNAL_TOOLS.md#1-the-rule)
+applies to stack choices, for the same reason.
+
+### Mechanics
+
+The PR template asks you to confirm the work is original or derived only
+from sources whose licence you checked, and to name the source and licence
+if it is derived. CI (see `.github/workflows/license-guard.yml` and the
 PR-license-declaration workflow) passes unless the description explicitly
-admits one. If your contribution did draw on a license-gated source, add
-a line `License-gated sources: yes` — CI rejects it here with a pointer
-to the companion repo, which is where that work belongs.
+admits a license-gated source. If your contribution did draw on one, add a
+line `License-gated sources: yes` — CI rejects it here with a pointer to
+the companion repo, which is where that work belongs.
+
+A PR that adds a new crate or more than ~2000 lines of Rust also gets an
+automated comment asking the provenance question directly. It's advisory,
+it never blocks, and it fires on plenty of entirely original work — if it
+lands on yours, it means nothing more than "this PR is large".
 
 Why this matters: large-language-model assistants that have been
 trained on KiCad source can inadvertently produce structurally
@@ -237,6 +318,13 @@ introduces KiCad-flavoured identifiers (`kicad`, `KiCad`, `F_CU`,
 `B_CU`, `F_SILKS`, `tri_state`, `Net-(`, …) anywhere under `crates/`.
 This is a structural backstop on top of the PR-description self-
 declaration.
+
+Those gates are shaped around one past incident and they do not detect a
+port of some project they've never heard of. There's also an advisory
+`port-smell` job that greps for residue a port tends to leave — it never
+blocks, and a careful port trips none of it. Treat none of this as a
+clean bill of health: the section above is the actual rule, and reading
+it is the thing that works.
 
 ## Questions?
 

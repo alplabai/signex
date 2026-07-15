@@ -1,0 +1,190 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: PR Provenance Prompt
+
+# Asks one question, once, on PRs big enough that the answer matters:
+# "was any of this derived from an existing project?"
+#
+# WHY THIS EXISTS (issue #305)
+#
+# PR #304 was a several-thousand-line Rust port of a CC-BY-4.0 project
+# carrying a "you may not resell this tool" rider. It passed every
+# licence gate we had. The contributor answered our self-declaration
+# honestly — he read "CC BY" as permissive, and the resale restriction
+# is a trailing sentence that is not part of the CC BY licence text at
+# all. No grep would have changed his answer, but being asked a direct
+# question, in the open, before review, might have.
+#
+# So this is a prompt, not a gate. It NEVER fails a build and it never
+# implies anything about the PR it lands on — large, entirely original
+# PRs trip it too, and that is fine.
+#
+# WHY A SEPARATE WORKFLOW rather than a job in pr-license-declaration.yml:
+#
+#   1. Trigger. Commenting needs a writable token, and `pull_request`
+#      grants forks a read-only one. Every PR this is aimed at is a
+#      fork PR (#304 was), so it must run on `pull_request_target`.
+#      pr-license-declaration.yml is a `pull_request` workflow; mixing
+#      both triggers in one file double-runs every job and needs
+#      per-job event guards to untangle.
+#   2. Permission blast radius. pr-license-declaration.yml reads the
+#      attacker-controlled PR body. Its token should stay read-only.
+#      Confining `pull-requests: write` to this file keeps that true.
+#   3. Semantics. That workflow is a required blocking check. This one
+#      can never block. Separate files keep that legible in the checks
+#      list rather than hiding an advisory job inside a gate.
+#
+# SAFETY: `pull_request_target` runs with a writable token in the
+# context of the BASE repo. This workflow therefore does NOT check out,
+# build, or execute any PR code — it reads file metadata over the API
+# and posts a comment. Do not add a checkout step here.
+
+on:
+  pull_request_target:
+    branches: [main, trunk]
+    types: [opened, reopened, synchronize, ready_for_review]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  provenance-prompt:
+    name: Provenance prompt (advisory — never fails)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ask once, if this PR is big enough to warrant it
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          # Added lines of Rust above which we ask. Round number, no
+          # science behind it — big enough that a port is plausible,
+          # small enough to catch one.
+          LINE_THRESHOLD: '2000'
+        run: |
+          set -uo pipefail
+
+          # Invisible in the rendered comment. The `signex-provenance-prompt`
+          # substring — not the whole string — is the idempotency key, so the
+          # version suffix can be bumped without every open PR being commented
+          # on a second time. Renaming the substring itself would do exactly
+          # that.
+          MARKER='<!-- signex-provenance-prompt v1 -->'
+
+          # --- Idempotency, checked FIRST ---------------------------
+          # `synchronize` fires on every push. Without this, a PR under
+          # active review collects one comment per push. Bail before
+          # doing anything else, whether or not the trip conditions
+          # still hold: the question has been asked, and asking it
+          # again is noise, not diligence.
+          EXISTING=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+                       --jq '.[] | select(.body | contains("signex-provenance-prompt")) | .id' 2>/dev/null || true)
+          if [ -n "$EXISTING" ]; then
+            echo "Already asked on #$PR (comment id: $(echo "$EXISTING" | head -n1)). Not commenting again."
+            exit 0
+          fi
+
+          # --- Trip conditions --------------------------------------
+          FILES=$(gh api "repos/$REPO/pulls/$PR/files" --paginate \
+                    --jq '.[] | [.status, (.additions|tostring), .filename] | @tsv' 2>/dev/null || true)
+          if [ -z "$FILES" ]; then
+            echo "Could not read the file list for #$PR — nothing to do."
+            exit 0
+          fi
+
+          NEW_CRATES=$(printf '%s\n' "$FILES" \
+            | awk -F'\t' '$1 == "added" && $3 ~ /^crates\/[^\/]+\/Cargo\.toml$/ { print $3 }' \
+            | sed -E 's#^crates/([^/]+)/Cargo\.toml$#\1#' || true)
+          ADDED_RUST=$(printf '%s\n' "$FILES" \
+            | awk -F'\t' '$3 ~ /\.rs$/ { s += $2 } END { print s + 0 }')
+
+          echo "new crates: ${NEW_CRATES:-none}"
+          echo "added lines of Rust: $ADDED_RUST (threshold $LINE_THRESHOLD)"
+
+          REASON=''
+          if [ -n "$NEW_CRATES" ]; then
+            LIST=$(printf '%s\n' "$NEW_CRATES" | sed 's/^/`/; s/$/`/' | paste -sd', ' -)
+            REASON="it adds a new crate ($LIST)"
+          fi
+          if [ "$ADDED_RUST" -gt "$LINE_THRESHOLD" ]; then
+            if [ -n "$REASON" ]; then
+              REASON="$REASON and adds $ADDED_RUST lines of Rust"
+            else
+              REASON="it adds $ADDED_RUST lines of Rust"
+            fi
+          fi
+
+          if [ -z "$REASON" ]; then
+            echo "Below both thresholds — no prompt."
+            exit 0
+          fi
+
+          # --- Ask --------------------------------------------------
+          BODY_FILE="$RUNNER_TEMP/provenance-prompt.md"
+          # The heredoc body must stay indented to at least this block
+          # scalar's indent (10 spaces) or the YAML block ends early and
+          # the workflow won't parse. The 10 spaces are stripped by YAML
+          # before the shell ever sees them, so the posted markdown is
+          # flush-left as written.
+          {
+            echo "$MARKER"
+            # Blank line is load-bearing: an HTML comment with text on the
+            # very next line is parsed as one HTML block, and the paragraph
+            # under it renders as raw text instead of markdown.
+            echo ""
+            cat <<EOF
+          **Not a blocker, and not a comment on your work.** This is an automated
+          question that every PR of this size gets, because $REASON. Large,
+          entirely original PRs trip it too.
+
+          ### Was any of this derived from an existing project?
+
+          If yes — just name the project and its licence in a reply, and we'll
+          take it from there. If it's original, or built only from published
+          formulas, textbooks, standards you worked the maths out of, or
+          datasheets, say so and we're done.
+
+          **Why we ask: a port is a derivative work.** Rewriting a project's
+          JavaScript (or C++, or Python) in Rust does not reset its copyright —
+          the original licence still applies to the result, however different
+          the code looks. And some licences that read as permissive are not
+          compatible with this tree:
+
+          - **any Creative Commons licence** — CC BY included; CC is not a
+            software licence
+          - anything with a **"non-commercial"** or **"no resale"** term, or any
+            other field-of-use restriction — Signex Pro is sold from this
+            source, so such a term is fatal here
+          - **source-available** licences (BUSL, SSPL, Commons Clause)
+          - the **text, tables, and figures** of paywalled standards (IPC, IEC,
+            JEDEC) — the formulas in them are facts and fine to implement; the
+            document is copyrighted
+
+          The full statement is in
+          [CONTRIBUTING.md](https://github.com/$REPO/blob/trunk/CONTRIBUTING.md#license-compliance-for-contributions).
+          Unsure about a source? Ask here or in an issue — a much cheaper place
+          to find out than review.
+
+          We ask up front because we got this wrong from the other side: our own
+          policy never spelled any of this out until issue #305, and a
+          contributor paid for that omission. Answering costs you a sentence.
+
+          <sub>Posted once per PR by \`.github/workflows/pr-provenance-prompt.yml\`
+          because it adds a new crate or more than $LINE_THRESHOLD lines of Rust.
+          It never blocks a merge and will not comment again on this PR.</sub>
+          EOF
+          } > "$BODY_FILE"
+
+          # -F body=@file reads the body verbatim from disk; passing it
+          # as a shell-expanded -f value mangles multi-line markdown.
+          if gh api "repos/$REPO/issues/$PR/comments" -F "body=@$BODY_FILE" --silent; then
+            echo "Provenance prompt posted on #$PR."
+          else
+            echo "::warning::Could not post the provenance prompt on #$PR (advisory only — not failing)."
+          fi
+          exit 0

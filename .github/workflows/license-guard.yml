@@ -11,6 +11,14 @@ name: License Guard
 # Allowed residual `kicad` mentions are documented in
 # `docs/audit/kicad-derivation.md` §"Residual-mention catalog" with
 # rationale per category.
+#
+# Every job above `port-smell-advisory` is shaped around the issue-62
+# KiCad incident and BLOCKS. `port-smell-advisory` (issue #305) is the
+# one job here that never blocks: it is a heuristic for a threat the
+# rest of this file cannot see — an Apache-incompatible source port of
+# some project we have never heard of. It is deliberately weak. The
+# actual control for that threat is written policy, in CONTRIBUTING.md
+# §"License compliance for contributions".
 
 on:
   push:
@@ -304,6 +312,122 @@ jobs:
             exit 1
           fi
           echo "No derivation-attribution markers."
+
+  port-smell-advisory:
+    name: Port-smell heuristic (advisory — never fails)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan crates/ for residue a source port tends to leave
+        run: |
+          set -uo pipefail
+          # WHY THIS JOB EXISTS
+          #
+          # PR #304 was a Rust port of a CC-BY-4.0 project carrying a
+          # "you may not resell this tool" rider — Apache-incompatible,
+          # and incompatible with Signex Pro being sold from this tree.
+          # It passed every blocking job in this file and `cargo deny`
+          # green, because a port is not a Cargo dependency and contains
+          # no KiCad-shaped identifier. The contributor declared it clean
+          # in good faith; the rule he needed was unwritten. See #305.
+          #
+          # So this job is NOT the fix. The fix is the policy text in
+          # CONTRIBUTING.md. This is a speed bump that catches the
+          # residue #304 happened to leave, and it is advisory because a
+          # heuristic this cheap must never be able to reject a good PR.
+          #
+          # Scoping notes, learned the hard way:
+          #   * URL tells match STRING LITERALS ONLY and skip comment
+          #     lines. The repo legitimately cites allaboutcircuits.com,
+          #     vendor docs, and datasheets in comments — a bare
+          #     third-party-URL grep is far too broad to be useful.
+          #   * URLs in literal position are filtered against an
+          #     allowlist of hosts we deliberately integrate with
+          #     (distributor APIs, our own domains, SVG namespaces, and
+          #     example/test placeholders). Adding a new distributor
+          #     will trip this. That is correct and harmless: answer the
+          #     question, extend the allowlist in the same PR.
+          # Verified at authoring time: 0 hits on trunk, 43 hits on #304.
+
+          ALLOW_HOSTS='(127\.0\.0\.1|localhost|(www\.)?w3\.org|(www\.)?signex\.dev|(www\.)?alplab\.ai|(api|www)\.digikey\.com|(api|www)\.mouser\.com|([a-z0-9-]+\.)*lcsc\.com|(www\.)?jlcpcb\.com|(www\.)?yageo\.com|(www\.)?distributor\.com|([a-z0-9-]+\.)*example(\.[a-z]+)?|([a-z0-9-]+\.)*(test|invalid|localdomain))'
+          COMMENT_LINE='^[^:]+:[0-9]+:[[:space:]]*(//|/\*|\*[^/])'
+          HITS=0
+
+          report() {
+            if [ -z "$2" ]; then return 0; fi
+            HITS=$((HITS + $(printf '%s\n' "$2" | wc -l)))
+            echo "::warning::Port smell — $1"
+            printf '%s\n' "$2" | sed 's/^/    /'
+            {
+              echo "### $1"
+              echo ''
+              echo '```'
+              printf '%s\n' "$2"
+              echo '```'
+              echo ''
+            } >> "$GITHUB_STEP_SUMMARY"
+          }
+
+          # 1. Identifiers naming "the website" — i.e. named after the
+          #    thing being ported rather than after what they do.
+          M=$(git grep -nE 'like_website|_LIKE_WEBSITE|\bWEBSITE_[A-Z0-9_]+\b' \
+                -- 'crates/**/*.rs' || true)
+          report 'identifier or test named after "the website" (#304 had WEBSITE_IMPEDANCE_ARC_SEGMENTS)' "$M"
+
+          # 2. A reference-link enum / const pointing at another
+          #    project's GitHub repo. Links to our own org are fine.
+          M=$(git grep -nE '"https?://(www\.)?github\.com/' -- 'crates/**/*.rs' \
+                | grep -vE "$COMMENT_LINE" \
+                | grep -viE '"https?://(www\.)?github\.com/(alplabai|signex)/' || true)
+          report 'GitHub repo of another project in string-literal position (#304 had a reference-link enum with a Github arm pointing at the ported project)' "$M"
+
+          # 3. A third-party product URL in literal position — the tell
+          #    that state is being encoded INTO someone else's tool.
+          #    #304 serialised its model into onlinesmithchart.com's
+          #    query format via ONLINE_SMITH_CHART_BASE_URL.
+          M=$(git grep -nE '"https?://' -- 'crates/**/*.rs' \
+                | grep -vE "$COMMENT_LINE" \
+                | grep -viE "\"https?://${ALLOW_HOSTS}[\"/:]" || true)
+          report 'non-allowlisted third-party URL in string-literal position — is this a codec or state target?' "$M"
+
+          # 4. Tests asserting bug-compatibility with a named external
+          #    tool. Matching another tool's rounding quirks is strong
+          #    evidence its source was in front of someone.
+          M=$(git grep -nE 'fn[[:space:]]+[a-z0-9_]+_like_[a-z0-9_]+[[:space:]]*\(|bug_compat|bug_for_bug|quirk_compat' \
+                -- 'crates/**/*.rs' || true)
+          report 'test name asserting bug-compatibility with an external tool (#304 had …_rounds_frequency_keys_like_website)' "$M"
+
+          # Heredoc body must stay indented to at least this block
+          # scalar's indent (10 spaces) or the YAML block ends early.
+          NOTE=$(cat <<'EOF'
+
+          Read this before reacting to anything above.
+
+            * This is a HEURISTIC, not a finding. It greps for residue that a
+              source port tends to leave behind. It does not detect derivation.
+            * A careful port trips none of it. A clean original can trip it by
+              accident — a new distributor URL will do it.
+            * A hit is a QUESTION — "where did this come from?" — not an
+              accusation, and never a judgement about the person who wrote it.
+            * This job cannot fail. It has no power to block your PR, and it is
+              not evidence in a review.
+            * The real control is the written policy: CONTRIBUTING.md
+              §"License compliance for contributions". If you read that and
+              your source is fine, it is fine, and a warning here changes
+              nothing.
+          EOF
+          )
+
+          if [ "$HITS" -eq 0 ]; then
+            echo "No port smells found."
+            echo "This is weak evidence, not a clean bill of health — see the note below."
+          else
+            echo ""
+            echo "$HITS line(s) matched across the tells above."
+            echo "$NOTE" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "$NOTE"
+          exit 0
 
   cargo-deny:
     name: cargo-deny license + transitive-dep audit
