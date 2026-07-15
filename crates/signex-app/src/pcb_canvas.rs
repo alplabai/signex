@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use iced::event::Event;
 use iced::mouse;
 use iced::widget::canvas;
@@ -32,8 +34,10 @@ pub struct PcbCanvas {
     /// content or theme changes. Invalidated by [`Self::clear_content_cache`]
     /// (the single content-changed signal every mutation site already calls)
     /// and [`Self::set_renderer_snapshot`]. `RefCell` because `gpu_scene` is
-    /// called from `view()`, which holds `&self`.
-    scene_cache: std::cell::RefCell<Option<Scene>>,
+    /// called from `view()`, which holds `&self`. Stored behind an `Arc` so the
+    /// cache hand-off and the shader primitive share the geometry by refcount
+    /// bump — no per-frame deep copy.
+    scene_cache: std::cell::RefCell<Option<Arc<Scene>>>,
     /// Mirror of the widget-`State` camera `(offset.x, offset.y, scale)`,
     /// published from `update` so `view()` can read the current pan/zoom to
     /// build the GPU shader program — the real camera lives in
@@ -156,11 +160,11 @@ impl PcbCanvas {
     /// but the overlay primitives are folded into the main instance buffers so
     /// the single shader pass draws them last (on top of the content of the
     /// same kind). Returns `None` when no board snapshot is loaded.
-    pub fn gpu_scene(&self) -> Option<Scene> {
-        // Fast path: hand back a clone of the cached scene without
-        // re-tessellating. Cloning `None` here is free, so the miss path pays
-        // nothing; the `borrow()` temporary is released before the rebuild
-        // below takes a `borrow_mut()`. See [`Self::scene_cache`].
+    pub fn gpu_scene(&self) -> Option<Arc<Scene>> {
+        // Fast path: hand back the shared cached scene without re-tessellating.
+        // `borrow().clone()` is an `Arc` refcount bump (on a miss it clones
+        // `None`, which is free); the `borrow()` temporary is released before
+        // the rebuild below takes a `borrow_mut()`. See [`Self::scene_cache`].
         if let Some(scene) = self.scene_cache.borrow().clone() {
             return Some(scene);
         }
@@ -175,7 +179,8 @@ impl PcbCanvas {
         scene.circles.extend(overlay_circles);
         scene.polygons.extend(overlay_polygons);
 
-        *self.scene_cache.borrow_mut() = Some(scene.clone());
+        let scene = Arc::new(scene);
+        *self.scene_cache.borrow_mut() = Some(Arc::clone(&scene));
         Some(scene)
     }
 }

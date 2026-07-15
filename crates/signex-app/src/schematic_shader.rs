@@ -16,6 +16,8 @@
 //! GPU surface is a follow-up. See [`crate::schematic_runtime::ScreenTransform`]
 //! for the world→screen mapping the shared camera mirrors.
 
+use std::sync::Arc;
+
 use signex_gfx::scene::Scene;
 
 use crate::scene_shader::SceneShaderProgram;
@@ -28,7 +30,7 @@ pub fn schematic_shader_program(
     transform: &ScreenTransform,
 ) -> SceneShaderProgram {
     SceneShaderProgram::new(
-        scene,
+        Arc::new(scene),
         [transform.offset_x, transform.offset_y],
         transform.scale,
     )

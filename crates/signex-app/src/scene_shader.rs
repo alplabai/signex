@@ -16,6 +16,8 @@
 //! region), so the caller is responsible for painting the background + grid on
 //! a layer *below* this shader in a `stack!`.
 
+use std::sync::Arc;
+
 use iced::widget::shader::{self, Viewport};
 use iced::{Rectangle, mouse};
 
@@ -84,7 +86,10 @@ impl shader::Pipeline for ScenePipeline {
 /// frame — it is the same instance data the CPU path already produces.
 #[derive(Debug)]
 pub struct ScenePrimitive {
-    pub scene: Scene,
+    /// Shared with the owning [`SceneShaderProgram`] and the `gpu_scene` cache:
+    /// building the primitive each frame is an `Arc` refcount bump, not a deep
+    /// copy of the geometry.
+    pub scene: Arc<Scene>,
     /// Screen-space pan offset in logical pixels.
     pub offset_px: [f32; 2],
     /// Zoom in logical pixels per millimetre.
@@ -156,7 +161,7 @@ impl shader::Primitive for ScenePrimitive {
 /// is the default no-op and never captures — events fall through to the
 /// canvas below.
 pub struct SceneShaderProgram {
-    scene: Scene,
+    scene: Arc<Scene>,
     offset_px: [f32; 2],
     scale_px_per_mm: f32,
 }
@@ -165,7 +170,7 @@ impl SceneShaderProgram {
     /// Build from an already-tessellated `Scene` and the current screen-space
     /// transform (`offset_px` = pan in logical pixels, `scale_px_per_mm` =
     /// zoom in logical pixels per millimetre).
-    pub fn new(scene: Scene, offset_px: [f32; 2], scale_px_per_mm: f32) -> Self {
+    pub fn new(scene: Arc<Scene>, offset_px: [f32; 2], scale_px_per_mm: f32) -> Self {
         Self {
             scene,
             offset_px,
@@ -185,7 +190,7 @@ impl shader::Program<Message> for SceneShaderProgram {
         _bounds: Rectangle,
     ) -> Self::Primitive {
         ScenePrimitive {
-            scene: self.scene.clone(),
+            scene: Arc::clone(&self.scene),
             offset_px: self.offset_px,
             scale_px_per_mm: self.scale_px_per_mm,
         }
@@ -223,7 +228,7 @@ mod tests {
             _pad: 0,
         });
 
-        let program = SceneShaderProgram::new(scene, [5.0, 6.0], 3.0);
+        let program = SceneShaderProgram::new(Arc::new(scene), [5.0, 6.0], 3.0);
         let primitive =
             program.draw(&(), iced::mouse::Cursor::Unavailable, iced::Rectangle::default());
 
