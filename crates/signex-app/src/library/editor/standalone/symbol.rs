@@ -112,6 +112,20 @@ fn view_symbol_status<'a>(
         })
         .style(symbol_tool_button_style(false, border));
 
+    // Pin-label grab + glow toggle button.
+    let pin_label_label = if display.pin_label_grab {
+        "Pin Labels: ON"
+    } else {
+        "Pin Labels: OFF"
+    };
+    let pin_label_toggle = button(text(pin_label_label).size(11).color(text_c))
+        .padding([2, 6])
+        .on_press(LibraryMessage::PrimitiveEditorEvent {
+            path: path.clone(),
+            msg: PrimitiveEdit::Symbol(SymbolEditorMsg::TogglePinLabelGrab),
+        })
+        .style(symbol_tool_button_style(false, border));
+
     container(
         row![
             text(coord_text).size(11).color(text_c),
@@ -124,6 +138,8 @@ fn view_symbol_status<'a>(
             sep(),
             grid_toggle,
             grid_cycle,
+            sep(),
+            pin_label_toggle,
             Space::new().width(Length::Fill),
             text(if editor.selected.is_some() {
                 "Del removes · drag to move · scroll zooms · right-drag pans · Home fits"
@@ -243,6 +259,7 @@ fn view_symbol_canvas<'a>(
         &editor.camera,
         display.grid_size_mm as f64,
         display.grid_visible,
+        display.pin_label_grab,
         display.sheet_color.to_color(),
         crate::styles::ti(tokens.accent),
         crate::styles::ti(tokens.text),

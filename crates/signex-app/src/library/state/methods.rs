@@ -353,6 +353,10 @@ pub struct LibraryDisplaySettings {
     /// Sheet background colour preset — Altium "Sheet Color"
     /// (Black / White / Dark Gray / Light Gray / Cream).
     pub sheet_color: SheetColor,
+    /// When on, pins are selectable/draggable by their name or
+    /// number label, and a selected pin's labels glow with it.
+    /// Grid-toggle-style per-tab setting.
+    pub pin_label_grab: bool,
 }
 
 impl Default for LibraryDisplaySettings {
@@ -365,6 +369,7 @@ impl Default for LibraryDisplaySettings {
             grid_size_mm: crate::fonts::read_symbol_grid_size_mm_pref(),
             grid_visible: true,
             sheet_color: SheetColor::Cream,
+            pin_label_grab: false,
         }
     }
 }

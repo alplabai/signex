@@ -282,6 +282,13 @@ impl Signex {
                 self.invalidate_primitive_canvas_cache(&path);
                 return Task::none();
             }
+            SymbolEditorMsg::TogglePinLabelGrab => {
+                if let Some(lib) = self.library.containing_library_mut(&path) {
+                    lib.display.pin_label_grab = !lib.display.pin_label_grab;
+                }
+                self.invalidate_primitive_canvas_cache(&path);
+                return Task::none();
+            }
             SymbolEditorMsg::CycleGridSize => {
                 if let Some(lib) = self.library.containing_library_mut(&path) {
                     let sizes = crate::canvas::grid::GRID_SIZES_MM;
