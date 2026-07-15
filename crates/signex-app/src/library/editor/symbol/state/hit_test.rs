@@ -58,9 +58,12 @@ pub fn delete_selected(
 /// bodies. Pins win (small hit target, often inside graphics);
 /// graphics scan in reverse so the most-recently-placed graphic
 /// wins overlap.
-pub fn hit_test(sym: &Symbol, x: f64, y: f64) -> Option<SymbolSelection> {
+pub fn hit_test(sym: &Symbol, x: f64, y: f64, active_part: u8) -> Option<SymbolSelection> {
     const PIN_HIT_R_SQ: f64 = 1.5 * 1.5;
     for (i, pin) in sym.pins.iter().enumerate() {
+        if !super::pin_on_part(pin, active_part) {
+            continue;
+        }
         let dx = pin.position[0] - x;
         let dy = pin.position[1] - y;
         if dx * dx + dy * dy <= PIN_HIT_R_SQ {
@@ -68,6 +71,12 @@ pub fn hit_test(sym: &Symbol, x: f64, y: f64) -> Option<SymbolSelection> {
         }
     }
     for idx in (0..sym.graphics.len()).rev() {
+        let Some(g) = sym.graphics.get(idx) else {
+            continue;
+        };
+        if !super::graphic_on_part(g, active_part) {
+            continue;
+        }
         if hit_test_graphic_body(sym, idx, x, y) {
             return Some(SymbolSelection::Graphic(idx));
         }
@@ -275,9 +284,16 @@ pub fn hit_test_graphic_handle(
     x: f64,
     y: f64,
     tol_mm: f64,
+    active_part: u8,
 ) -> Option<(usize, GraphicHandle)> {
     let r_sq = tol_mm * tol_mm;
     for idx in (0..sym.graphics.len()).rev() {
+        let Some(g) = sym.graphics.get(idx) else {
+            continue;
+        };
+        if !super::graphic_on_part(g, active_part) {
+            continue;
+        }
         for (handle, pos) in graphic_handles(sym, idx) {
             let dx = pos[0] - x;
             let dy = pos[1] - y;

@@ -95,7 +95,7 @@ fn move_selected_updates_position() {
 fn hit_test_returns_pin() {
     let mut s = Symbol::empty("test");
     add_pin(&mut s, 3.0, 4.0, 1);
-    let sel = hit_test(&s, 3.0, 4.0);
+    let sel = hit_test(&s, 3.0, 4.0, 1);
     assert_eq!(sel, Some(SymbolSelection::Pin(0)));
 }
 
@@ -133,7 +133,7 @@ fn hit_test_graphic_handle_finds_rectangle_corner() {
         part_number: 0,
     });
     // BR corner is at (to.x, from.y) = (10.0, 0.0).
-    let hit = hit_test_graphic_handle(&s, 10.0, 0.0, 1.5);
+    let hit = hit_test_graphic_handle(&s, 10.0, 0.0, 1.5, 1);
     assert_eq!(hit, Some((0, GraphicHandle::RectCorner(2))));
 }
 
@@ -185,7 +185,7 @@ fn hit_test_returns_graphic_inside_rectangle() {
         part_number: 0,
     });
     // No pins in empty symbol — graphic hit is unambiguous.
-    let hit = hit_test(&s, 5.0, 2.5);
+    let hit = hit_test(&s, 5.0, 2.5, 1);
     assert_eq!(hit, Some(SymbolSelection::Graphic(0)));
 }
 
@@ -335,3 +335,213 @@ fn move_graphic_handle_no_op_for_mismatched_variant() {
         _ => panic!("expected Line"),
     }
 }
+
+#[test]
+fn graphic_on_part_shared_and_scoped() {
+    let mut s = Symbol::empty("test");
+    // Shared graphic (part 0) — visible on every unit.
+    s.graphics.push(signex_library::SymbolGraphic {
+        kind: SymbolGraphicKind::Rectangle {
+            from: [0.0, 0.0],
+            to: [1.0, 1.0],
+        },
+        stroke_width: 0.15,
+        part_number: 0,
+    });
+    // Graphic scoped to unit 2.
+    s.graphics.push(signex_library::SymbolGraphic {
+        kind: SymbolGraphicKind::Rectangle {
+            from: [0.0, 0.0],
+            to: [1.0, 1.0],
+        },
+        stroke_width: 0.15,
+        part_number: 2,
+    });
+
+    let shared = &s.graphics[0];
+    let scoped = &s.graphics[1];
+
+    // Part 0 is visible regardless of the active unit.
+    assert!(graphic_on_part(shared, 1));
+    assert!(graphic_on_part(shared, 2));
+    assert!(graphic_on_part(shared, 5));
+
+    // A scoped graphic is visible only on its own unit.
+    assert!(graphic_on_part(scoped, 2));
+    assert!(!graphic_on_part(scoped, 1));
+    assert!(!graphic_on_part(scoped, 3));
+}
+
+#[test]
+fn hit_test_respects_active_part() {
+    let mut s = Symbol::empty("test");
+    // A rectangle scoped to unit 2, covering the point (5.0, 2.5).
+    s.graphics.push(signex_library::SymbolGraphic {
+        kind: SymbolGraphicKind::Rectangle {
+            from: [0.0, 0.0],
+            to: [10.0, 5.0],
+        },
+        stroke_width: 0.15,
+        part_number: 2,
+    });
+    // Hidden on unit 1 — nothing under the point.
+    assert_eq!(hit_test(&s, 5.0, 2.5, 1), None);
+    // Visible on unit 2 — the graphic is picked up.
+    assert!(matches!(
+        hit_test(&s, 5.0, 2.5, 2),
+        Some(SymbolSelection::Graphic(_))
+    ));
+
+    // A shared (part 0) rectangle is hittable on any active unit.
+    let mut shared = Symbol::empty("test");
+    shared.graphics.push(signex_library::SymbolGraphic {
+        kind: SymbolGraphicKind::Rectangle {
+            from: [0.0, 0.0],
+            to: [10.0, 5.0],
+        },
+        stroke_width: 0.15,
+        part_number: 0,
+    });
+    assert!(matches!(
+        hit_test(&shared, 5.0, 2.5, 1),
+        Some(SymbolSelection::Graphic(_))
+    ));
+    assert!(matches!(
+        hit_test(&shared, 5.0, 2.5, 7),
+        Some(SymbolSelection::Graphic(_))
+    ));
+}
+
+// --- Phase C2 regression tests ------------------------------------------
+
+#[test]
+fn delete_unit_prunes_and_renumbers_graphics() {
+    let mut s = Symbol::empty("test");
+    // Shared body geometry (part 0) — must survive untouched.
+    s.graphics.push(signex_library::SymbolGraphic {
+        kind: SymbolGraphicKind::Rectangle {
+            from: [0.0, 0.0],
+            to: [1.0, 1.0],
+        },
+        stroke_width: 0.15,
+        part_number: 0,
+    });
+    // Distinct `from` per unit so we can identify which rectangle survived.
+    s.graphics.push(signex_library::SymbolGraphic {
+        kind: SymbolGraphicKind::Rectangle {
+            from: [10.0, 10.0],
+            to: [11.0, 11.0],
+        },
+        stroke_width: 0.15,
+        part_number: 1,
+    });
+    s.graphics.push(signex_library::SymbolGraphic {
+        kind: SymbolGraphicKind::Rectangle {
+            from: [20.0, 20.0],
+            to: [21.0, 21.0],
+        },
+        stroke_width: 0.15,
+        part_number: 2,
+    });
+    s.graphics.push(signex_library::SymbolGraphic {
+        kind: SymbolGraphicKind::Rectangle {
+            from: [30.0, 30.0],
+            to: [31.0, 31.0],
+        },
+        stroke_width: 0.15,
+        part_number: 3,
+    });
+    s.part_count = 3;
+
+    delete_unit(&mut s, 2);
+
+    // Part 3 collapsed down — no graphic sits on part 3 any more.
+    assert!(s.graphics.iter().all(|g| g.part_number != 3));
+    // The shared graphic (part 0) is left alone — exactly one remains.
+    assert_eq!(s.graphics.iter().filter(|g| g.part_number == 0).count(), 1);
+    // The graphic that WAS on part 3 renumbered down to part 2 — identify
+    // it by the `from` coordinate that was unique to the old part 3.
+    let renumbered = s
+        .graphics
+        .iter()
+        .find(|g| g.part_number == 2)
+        .expect("part 3 graphic renumbers down to part 2");
+    match &renumbered.kind {
+        SymbolGraphicKind::Rectangle { from, .. } => assert_eq!(*from, [30.0, 30.0]),
+        _ => panic!("expected Rectangle"),
+    }
+    // The graphic originally scoped to the deleted part 2 is gone.
+    assert!(!s.graphics.iter().any(|g| matches!(
+        &g.kind,
+        SymbolGraphicKind::Rectangle { from, .. } if *from == [20.0, 20.0]
+    )));
+    assert_eq!(s.part_count, 2);
+}
+
+#[test]
+fn hit_test_ignores_other_unit_pin() {
+    let mut s = Symbol::empty("test");
+    add_pin(&mut s, 3.0, 3.0, 2); // pin scoped to unit 2
+
+    // Hidden while unit 1 is active — nothing under the cursor.
+    assert_eq!(hit_test(&s, 3.0, 3.0, 1), None);
+    // Visible on its own unit — the pin is picked up.
+    assert!(matches!(
+        hit_test(&s, 3.0, 3.0, 2),
+        Some(SymbolSelection::Pin(_))
+    ));
+
+    // A Part-Zero pin is hittable on any active unit.
+    add_pin(&mut s, -3.0, -3.0, 0);
+    assert!(matches!(
+        hit_test(&s, -3.0, -3.0, 1),
+        Some(SymbolSelection::Pin(_))
+    ));
+}
+
+#[test]
+fn select_in_box_all_uses_visible_counts() {
+    let mut s = Symbol::empty("test");
+    // One pin and one rectangle visible on unit 1.
+    add_pin(&mut s, 5.0, 5.0, 1);
+    s.graphics.push(signex_library::SymbolGraphic {
+        kind: SymbolGraphicKind::Rectangle {
+            from: [0.0, 0.0],
+            to: [10.0, 10.0],
+        },
+        stroke_width: 0.15,
+        part_number: 1,
+    });
+    // A unit-2 rectangle far away — invisible while unit 1 is active.
+    s.graphics.push(signex_library::SymbolGraphic {
+        kind: SymbolGraphicKind::Rectangle {
+            from: [100.0, 100.0],
+            to: [101.0, 101.0],
+        },
+        stroke_width: 0.15,
+        part_number: 2,
+    });
+    s.part_count = 2;
+
+    // A box enclosing everything VISIBLE on unit 1 (but not the unit-2
+    // rectangle) resolves to `All` — the count is against visible items,
+    // not the unfiltered whole-symbol total.
+    assert_eq!(
+        select_in_box(&s, -1.0, -1.0, 11.0, 11.0, BoxSelectKind::Window, 1),
+        Some(SymbolSelection::All)
+    );
+
+    // A tight box that fully contains only the pin (not the whole
+    // rectangle) is a partial selection — `Multiple`, never `All`.
+    match select_in_box(&s, 4.0, 4.0, 6.0, 6.0, BoxSelectKind::Window, 1) {
+        Some(SymbolSelection::Multiple {
+            pin_indices,
+            graphic_indices,
+        }) => {
+            assert_eq!(pin_indices, vec![0]);
+            assert!(graphic_indices.is_empty());
+        }
+        other => panic!("expected Multiple, got {other:?}"),
+    }
+}
+

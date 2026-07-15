@@ -31,6 +31,9 @@ impl SymbolCanvas<'_> {
                 if !is_graphic_selected(&self.selected, idx) {
                     continue;
                 }
+                if !state::graphic_on_part(&self.symbol.graphics[idx], self.active_part) {
+                    continue;
+                }
                 for (handle, pos) in state::graphic_handles(self.symbol, idx) {
                     let p = w2s(pos[0], pos[1]);
                     let is_corner = matches!(handle, state::GraphicHandle::RectCorner(_));

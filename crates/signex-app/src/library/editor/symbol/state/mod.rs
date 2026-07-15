@@ -301,10 +301,34 @@ pub fn delete_unit(sym: &mut Symbol, part: u8) -> u8 {
             pin.part_number -= 1;
         }
     }
+    // Graphics carry a unit too (Phase C1) — prune and renumber them
+    // in lockstep with the pins so a deleted unit leaves no orphaned
+    // body geometry and higher units' bodies stay aligned with their
+    // pins. Shared graphics (part 0) are untouched.
+    sym.graphics.retain(|g| g.part_number != part);
+    for g in sym.graphics.iter_mut() {
+        if g.part_number > part {
+            g.part_number -= 1;
+        }
+    }
     sym.part_count = (count - 1).max(1);
     // Stay on the same slot index if it still exists, else clamp to
     // the new top part.
     part.min(sym.part_count).max(1)
+}
+
+/// A graphic is visible/editable on `active_part` when it is shared
+/// (part 0) or scoped to that exact unit — mirrors pin part visibility.
+pub fn graphic_on_part(g: &signex_library::SymbolGraphic, active_part: u8) -> bool {
+    g.part_number == 0 || g.part_number == active_part
+}
+
+/// A pin is visible/editable on `active_part` when it is shared (Part
+/// Zero) or scoped to that exact unit — the interaction-side mirror of
+/// `SymbolCanvas::pin_visible_on_active_part`, so click / box-select /
+/// handle hit-tests match what the canvas actually draws.
+pub fn pin_on_part(pin: &SymbolPin, active_part: u8) -> bool {
+    pin.part_number == 0 || pin.part_number == active_part
 }
 
 /// Add a pin at the given canvas coordinates and return its index in

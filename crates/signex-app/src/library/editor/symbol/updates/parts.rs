@@ -8,6 +8,9 @@ pub(super) fn apply_symbol_parts(editor: &mut SymEditor, msg: SymbolEditorMsg) {
         SymbolEditorMsg::PrevPart => {
             if editor.active_part > 1 {
                 editor.active_part -= 1;
+                // Drop any selection so it can't dangle on a graphic that
+                // just became hidden on the newly-active unit.
+                editor.selected = None;
                 editor.canvas_cache.clear();
             }
         }
@@ -15,6 +18,9 @@ pub(super) fn apply_symbol_parts(editor: &mut SymEditor, msg: SymbolEditorMsg) {
             let max = crate::library::editor::symbol::state::max_part_number(editor.primitive());
             if editor.active_part < max {
                 editor.active_part += 1;
+                // Drop any selection so it can't dangle on a graphic that
+                // just became hidden on the newly-active unit.
+                editor.selected = None;
                 editor.canvas_cache.clear();
             }
         }
@@ -27,6 +33,9 @@ pub(super) fn apply_symbol_parts(editor: &mut SymEditor, msg: SymbolEditorMsg) {
             // navigate + save — the count is now stored, not derived.
             editor.primitive_mut().part_count = new_part;
             editor.active_part = new_part;
+            // Drop any selection so a stale index can't act (via keyboard
+            // Delete / Rotate) on a graphic hidden by the unit switch.
+            editor.selected = None;
             mark_dirty(editor);
         }
         SymbolEditorMsg::RemovePart => {
@@ -47,6 +56,9 @@ pub(super) fn apply_symbol_parts(editor: &mut SymEditor, msg: SymbolEditorMsg) {
                 to_remove,
             );
             editor.active_part = new_active;
+            // Drop any selection so a stale index can't act on geometry
+            // shifted or hidden by the delete + renumber.
+            editor.selected = None;
             mark_dirty(editor);
         }
         _ => {}

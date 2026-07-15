@@ -79,6 +79,7 @@ pub fn select_in_box(
     x1: f64,
     y1: f64,
     kind: BoxSelectKind,
+    active_part: u8,
 ) -> Option<SymbolSelection> {
     let xmin = x0.min(x1);
     let xmax = x0.max(x1);
@@ -87,6 +88,9 @@ pub fn select_in_box(
 
     let mut pin_indices = Vec::new();
     for (i, pin) in sym.pins.iter().enumerate() {
+        if !super::pin_on_part(pin, active_part) {
+            continue;
+        }
         let hit = match kind {
             BoxSelectKind::Window => {
                 point_in_box(pin.position[0], pin.position[1], xmin, xmax, ymin, ymax)
@@ -114,6 +118,9 @@ pub fn select_in_box(
 
     let mut graphic_indices = Vec::new();
     for (i, g) in sym.graphics.iter().enumerate() {
+        if !super::graphic_on_part(g, active_part) {
+            continue;
+        }
         let hit = match kind {
             BoxSelectKind::Window => graphic_fully_inside_box(&g.kind, xmin, xmax, ymin, ymax),
             BoxSelectKind::Crossing => graphic_intersects_box(&g.kind, xmin, xmax, ymin, ymax),
@@ -126,7 +133,22 @@ pub fn select_in_box(
     if pin_indices.is_empty() && graphic_indices.is_empty() {
         return None;
     }
-    if pin_indices.len() == sym.pins.len() && graphic_indices.len() == sym.graphics.len() {
+    // Compare against the counts of items VISIBLE on the active unit,
+    // not the whole-symbol totals — otherwise a box enclosing every
+    // visible item never resolves to `All` on a multi-unit symbol,
+    // silently downgrading to `Multiple` (whose Delete is not the
+    // documented accidental-wipe no-op).
+    let visible_pins = sym
+        .pins
+        .iter()
+        .filter(|p| super::pin_on_part(p, active_part))
+        .count();
+    let visible_graphics = sym
+        .graphics
+        .iter()
+        .filter(|g| super::graphic_on_part(g, active_part))
+        .count();
+    if pin_indices.len() == visible_pins && graphic_indices.len() == visible_graphics {
         return Some(SymbolSelection::All);
     }
     Some(SymbolSelection::Multiple {

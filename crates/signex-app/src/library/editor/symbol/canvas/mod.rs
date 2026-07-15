@@ -352,7 +352,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                 let (wx, wy) = world_unsnapped(self, pos.x, pos.y, bounds);
                 let tol_mm = (8.0_f32 / self.camera.scale.max(0.01)).clamp(0.5, 4.0) as f64;
                 if let Some((_, handle)) =
-                    state::hit_test_graphic_handle(self.symbol, wx, wy, tol_mm)
+                    state::hit_test_graphic_handle(self.symbol, wx, wy, tol_mm, self.active_part)
                 {
                     return state::handle_interaction(handle);
                 }
@@ -455,6 +455,9 @@ impl<'a> SymbolCanvas<'a> {
 
         let mut body_drawn = false;
         for (i, g) in self.symbol.graphics.iter().enumerate() {
+            if !state::graphic_on_part(g, self.active_part) {
+                continue;
+            }
             let is_selected = is_graphic_selected(selected, i);
             let stroke_color = if is_selected {
                 self.selected_color

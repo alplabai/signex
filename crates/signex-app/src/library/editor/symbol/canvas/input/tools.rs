@@ -33,7 +33,7 @@ impl SymbolCanvas<'_> {
                 // equally easy to hit at any zoom level.
                 let tol_mm = (8.0_f32 / self.camera.scale.max(0.01)).clamp(0.5, 4.0) as f64;
                 if let Some((idx, handle)) =
-                    state::hit_test_graphic_handle(self.symbol, ux, uy, tol_mm)
+                    state::hit_test_graphic_handle(self.symbol, ux, uy, tol_mm, self.active_part)
                 {
                     state.dragging_handle = Some((idx, handle));
                     state.dragging = false;
@@ -43,7 +43,7 @@ impl SymbolCanvas<'_> {
                     state.box_select_current = None;
                     return Some(canvas::Action::capture());
                 }
-                if let Some(sel) = state::hit_test(self.symbol, ux, uy) {
+                if let Some(sel) = state::hit_test(self.symbol, ux, uy, self.active_part) {
                     state.box_select_origin = None;
                     state.box_select_current = None;
 

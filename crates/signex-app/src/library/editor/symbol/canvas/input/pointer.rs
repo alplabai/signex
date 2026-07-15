@@ -220,7 +220,8 @@ impl SymbolCanvas<'_> {
                 } else {
                     state::BoxSelectKind::Crossing
                 };
-                let result = state::select_in_box(self.symbol, ox, oy, cx, cy, kind);
+                let result =
+                    state::select_in_box(self.symbol, ox, oy, cx, cy, kind, self.active_part);
                 return Some(match result {
                     Some(sel) => canvas::Action::publish(CanvasAction::Select(sel)).and_capture(),
                     None => canvas::Action::publish(CanvasAction::Deselect).and_capture(),
