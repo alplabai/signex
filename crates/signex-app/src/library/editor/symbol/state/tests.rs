@@ -109,6 +109,7 @@ fn graphic_handle_position_returns_rectangle_corners() {
         },
         stroke_width: 0.15,
         part_number: 0,
+        fill: None,
     });
     // TL = (from.x, to.y), BR = (to.x, from.y)
     assert_eq!(
@@ -131,6 +132,7 @@ fn hit_test_graphic_handle_finds_rectangle_corner() {
         },
         stroke_width: 0.15,
         part_number: 0,
+        fill: None,
     });
     // BR corner is at (to.x, from.y) = (10.0, 0.0).
     let hit = hit_test_graphic_handle(&s, 10.0, 0.0, 1.5, 1);
@@ -147,6 +149,7 @@ fn move_graphic_handle_moves_line_endpoint() {
         },
         stroke_width: 0.15,
         part_number: 0,
+        fill: None,
     });
     move_graphic_handle(&mut s, 0, GraphicHandle::LineEndpoint(1), 7.0, 3.0);
     match &s.graphics[0].kind {
@@ -165,6 +168,7 @@ fn move_graphic_handle_resizes_circle_radius() {
         },
         stroke_width: 0.15,
         part_number: 0,
+        fill: None,
     });
     move_graphic_handle(&mut s, 0, GraphicHandle::CircleRadius, 3.0, 4.0);
     match &s.graphics[0].kind {
@@ -183,6 +187,7 @@ fn hit_test_returns_graphic_inside_rectangle() {
         },
         stroke_width: 0.15,
         part_number: 0,
+        fill: None,
     });
     // No pins in empty symbol — graphic hit is unambiguous.
     let hit = hit_test(&s, 5.0, 2.5, 1);
@@ -199,6 +204,7 @@ fn move_selected_translates_rectangle_by_anchor_delta() {
         },
         stroke_width: 0.15,
         part_number: 0,
+        fill: None,
     });
     move_selected(&mut s, Some(SymbolSelection::Graphic(0)), 3.0, 7.0);
     match &s.graphics[0].kind {
@@ -220,6 +226,7 @@ fn rotate_selected_rotates_rectangle_clockwise_around_origin() {
         },
         stroke_width: 0.15,
         part_number: 0,
+        fill: None,
     });
 
     rotate_selected(&mut s, Some(SymbolSelection::Graphic(0)), true);
@@ -257,6 +264,7 @@ fn rotate_selected_about_geometry_center_keeps_rectangle_center() {
         },
         stroke_width: 0.15,
         part_number: 0,
+        fill: None,
     });
 
     rotate_selected_with_pivot(
@@ -286,6 +294,7 @@ fn rotate_selected_about_geometry_center_keeps_text_anchor_fixed() {
         },
         stroke_width: 0.15,
         part_number: 0,
+        fill: None,
     });
 
     rotate_selected_about_geometry_center(&mut s, Some(SymbolSelection::Graphic(0)), false);
@@ -308,6 +317,7 @@ fn delete_selected_removes_graphic() {
         },
         stroke_width: 0.15,
         part_number: 0,
+        fill: None,
     });
     let new_sel = delete_selected(&mut s, Some(SymbolSelection::Graphic(0)));
     assert_eq!(new_sel, Some(None));
@@ -324,6 +334,7 @@ fn move_graphic_handle_no_op_for_mismatched_variant() {
         },
         stroke_width: 0.15,
         part_number: 0,
+        fill: None,
     });
     // Asking to move a rectangle corner on a Line — should silently no-op.
     move_graphic_handle(&mut s, 0, GraphicHandle::RectCorner(0), 99.0, 99.0);
@@ -347,6 +358,7 @@ fn graphic_on_part_shared_and_scoped() {
         },
         stroke_width: 0.15,
         part_number: 0,
+        fill: None,
     });
     // Graphic scoped to unit 2.
     s.graphics.push(signex_library::SymbolGraphic {
@@ -356,6 +368,7 @@ fn graphic_on_part_shared_and_scoped() {
         },
         stroke_width: 0.15,
         part_number: 2,
+        fill: None,
     });
 
     let shared = &s.graphics[0];
@@ -383,6 +396,7 @@ fn hit_test_respects_active_part() {
         },
         stroke_width: 0.15,
         part_number: 2,
+        fill: None,
     });
     // Hidden on unit 1 — nothing under the point.
     assert_eq!(hit_test(&s, 5.0, 2.5, 1), None);
@@ -401,6 +415,7 @@ fn hit_test_respects_active_part() {
         },
         stroke_width: 0.15,
         part_number: 0,
+        fill: None,
     });
     assert!(matches!(
         hit_test(&shared, 5.0, 2.5, 1),
@@ -425,6 +440,7 @@ fn delete_unit_prunes_and_renumbers_graphics() {
         },
         stroke_width: 0.15,
         part_number: 0,
+        fill: None,
     });
     // Distinct `from` per unit so we can identify which rectangle survived.
     s.graphics.push(signex_library::SymbolGraphic {
@@ -434,6 +450,7 @@ fn delete_unit_prunes_and_renumbers_graphics() {
         },
         stroke_width: 0.15,
         part_number: 1,
+        fill: None,
     });
     s.graphics.push(signex_library::SymbolGraphic {
         kind: SymbolGraphicKind::Rectangle {
@@ -442,6 +459,7 @@ fn delete_unit_prunes_and_renumbers_graphics() {
         },
         stroke_width: 0.15,
         part_number: 2,
+        fill: None,
     });
     s.graphics.push(signex_library::SymbolGraphic {
         kind: SymbolGraphicKind::Rectangle {
@@ -450,6 +468,7 @@ fn delete_unit_prunes_and_renumbers_graphics() {
         },
         stroke_width: 0.15,
         part_number: 3,
+        fill: None,
     });
     s.part_count = 3;
 
@@ -511,6 +530,7 @@ fn select_in_box_all_uses_visible_counts() {
         },
         stroke_width: 0.15,
         part_number: 1,
+        fill: None,
     });
     // A unit-2 rectangle far away — invisible while unit 1 is active.
     s.graphics.push(signex_library::SymbolGraphic {
@@ -520,6 +540,7 @@ fn select_in_box_all_uses_visible_counts() {
         },
         stroke_width: 0.15,
         part_number: 2,
+        fill: None,
     });
     s.part_count = 2;
 

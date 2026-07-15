@@ -174,6 +174,9 @@ pub struct GraphicSummary {
     pub idx: usize,
     pub kind: GraphicKindSummary,
     pub stroke_width: f64,
+    /// Solid fill colour (RGBA) or `None` for an unfilled outline.
+    /// Only surfaced in the panel for closed shapes (Rectangle / Circle).
+    pub fill: Option<[u8; 4]>,
 }
 
 /// Per-variant geometry for [`GraphicSummary`] — mirrors

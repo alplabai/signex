@@ -646,6 +646,9 @@ impl Signex {
                     }
                 })
             }
+            PanelMsg::SymEditorCycleGraphicFill { idx } => {
+                self.sym_editor_mutate_graphic(*idx, |g| g.fill = cycle_local_color(g.fill))
+            }
             PanelMsg::SymEditorSetSymbolDesignator(value) => {
                 self.sym_editor_mutate_symbol(|s| s.designator = value.clone())
             }

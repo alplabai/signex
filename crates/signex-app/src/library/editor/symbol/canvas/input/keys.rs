@@ -17,6 +17,11 @@ impl SymbolCanvas<'_> {
         match key {
             iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape) => {
                 let cancelled = match self.tool {
+                    SymbolTool::PlaceRectangle if state.rect_from.is_some() => {
+                        state.rect_from = None;
+                        state.rect_cursor = None;
+                        true
+                    }
                     SymbolTool::PlaceLine if state.line_from.is_some() => {
                         state.line_from = None;
                         state.line_cursor = None;

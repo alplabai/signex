@@ -268,7 +268,17 @@ fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> SymbolEdi
     use sym_canvas::CanvasAction;
     match action {
         CanvasAction::AddPin { x, y } => SymbolEditorMsg::AddPin { x, y },
-        CanvasAction::AddRectangle { x, y } => SymbolEditorMsg::AddRectangle { x, y },
+        CanvasAction::AddRectangle {
+            from_x,
+            from_y,
+            to_x,
+            to_y,
+        } => SymbolEditorMsg::AddRectangle {
+            from_x,
+            from_y,
+            to_x,
+            to_y,
+        },
         CanvasAction::AddLine {
             from_x,
             from_y,

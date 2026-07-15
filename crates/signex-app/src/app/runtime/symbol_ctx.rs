@@ -79,6 +79,7 @@ pub(super) fn build_symbol_editor_panel_ctx(
             idx,
             kind: graphic_kind_to_summary(&g.kind),
             stroke_width: g.stroke_width,
+            fill: g.fill,
         })
         .collect();
 
@@ -102,6 +103,7 @@ pub(super) fn build_symbol_editor_panel_ctx(
                     idx,
                     kind: graphic_kind_to_summary(&g.kind),
                     stroke_width: g.stroke_width,
+                    fill: g.fill,
                 })
             })
             .unwrap_or(SymbolEditorSelection::None),

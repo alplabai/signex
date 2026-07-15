@@ -15,8 +15,16 @@ pub enum SymbolEditorMsg {
     /// given grid-snapped (mm) world position.
     AddPin { x: f64, y: f64 },
 
-    /// Stamp a default-sized 10×5 mm rectangle centred on `(x, y)`.
-    AddRectangle { x: f64, y: f64 },
+    /// Place an axis-aligned rectangle spanning the two opposite corners
+    /// (both grid-snapped mm world positions). Emitted on the second
+    /// click of the two-click canvas draw flow; the handler normalizes
+    /// the corners.
+    AddRectangle {
+        from_x: f64,
+        from_y: f64,
+        to_x: f64,
+        to_y: f64,
+    },
 
     /// Place a line segment from `from` to `to` (both grid-snapped mm world positions).
     AddLine {

@@ -22,12 +22,15 @@ impl SymbolCanvas<'_> {
         // Right-click cancels any in-progress multi-click draw;
         // otherwise starts a pan (same as schematic canvas).
         let draw_in_progress = match self.tool {
+            SymbolTool::PlaceRectangle => state.rect_from.is_some(),
             SymbolTool::PlaceLine => state.line_from.is_some(),
             SymbolTool::PlaceCircle => state.circle_center.is_some(),
             SymbolTool::PlaceArc => state.arc_center.is_some() || state.arc_radius_start.is_some(),
             _ => false,
         };
         if draw_in_progress {
+            state.rect_from = None;
+            state.rect_cursor = None;
             state.line_from = None;
             state.line_cursor = None;
             state.circle_center = None;
@@ -131,6 +134,16 @@ impl SymbolCanvas<'_> {
         // While waiting for a subsequent click in a multi-click
         // draw flow, update the rubber-band cursor and force a
         // redraw so the preview animates in real time.
+        if self.tool == SymbolTool::PlaceRectangle && state.rect_from.is_some() {
+            state.rect_cursor = Some((wx, wy));
+            return Some(
+                canvas::Action::publish(CanvasAction::CursorAt {
+                    x_mm: Some(ux),
+                    y_mm: Some(uy),
+                })
+                .and_capture(),
+            );
+        }
         if self.tool == SymbolTool::PlaceLine && state.line_from.is_some() {
             state.line_cursor = Some((wx, wy));
             return Some(

@@ -72,6 +72,7 @@ fn push_graphic(
         .push(signex_library::SymbolGraphic {
             kind,
             stroke_width,
+            fill: None,
             part_number: active_part,
         });
     mark_dirty(editor);
@@ -109,14 +110,20 @@ pub(crate) fn apply_symbol_primitive_edit(
             editor.selected = Some(SymbolSelection::Pin(idx));
             mark_dirty(editor);
         }
-        SymbolEditorMsg::AddRectangle { x, y } => {
-            const W: f64 = 5.08;
-            const H: f64 = 2.54;
+        SymbolEditorMsg::AddRectangle {
+            from_x,
+            from_y,
+            to_x,
+            to_y,
+        } => {
+            // Normalize the two clicked corners so `from` is the
+            // bottom-left (min) and `to` is the top-right (max),
+            // regardless of which direction the user dragged.
             push_graphic(
                 editor,
                 signex_library::SymbolGraphicKind::Rectangle {
-                    from: [x - W, y - H],
-                    to: [x + W, y + H],
+                    from: [from_x.min(to_x), from_y.min(to_y)],
+                    to: [from_x.max(to_x), from_y.max(to_y)],
                 },
                 0.15,
             );

@@ -793,6 +793,14 @@ pub enum PanelMsg {
         idx: usize,
         value: String,
     },
+    /// Properties panel — cycle the placed graphic at `idx` through its
+    /// fill states: `None` (unfilled) → preset palette → back to `None`.
+    /// A single control that both toggles fill on/off and picks the
+    /// colour, mirroring the symbol-level local-colour swatches. No-op
+    /// for open shapes (Line / Arc / Text).
+    SymEditorCycleGraphicFill {
+        idx: usize,
+    },
     /// Properties panel — edit the active symbol's name (Altium
     /// "Design Item ID"). Affects the SCH Library panel row label
     /// + the on-disk container's `display_name` when the active

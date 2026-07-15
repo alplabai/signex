@@ -412,6 +412,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         self.draw_symbol_with_renderer(&mut frame, &self.selected, self.camera.scale);
         self.draw_resize_handles(&mut frame);
         self.draw_box_select_overlay(&mut frame, state);
+        self.draw_rect_preview(&mut frame, state);
         self.draw_line_preview(&mut frame, state);
         self.draw_circle_preview(&mut frame, state);
         self.draw_arc_preview(&mut frame, state);
@@ -508,7 +509,13 @@ impl<'a> SymbolCanvas<'a> {
                     let y0 = from[1] as f32;
                     let x1 = to[0] as f32;
                     let y1 = to[1] as f32;
-                    let fill = if !body_drawn {
+                    let fill = if let Some([fr, fg, fb, fa]) = g.fill {
+                        // Explicit per-graphic fill wins; mark the body as
+                        // drawn so the legacy auto-body fill below never
+                        // leaks onto another rectangle.
+                        body_drawn = true;
+                        to_rgba(Color::from_rgba8(fr, fg, fb, fa as f32 / 255.0))
+                    } else if !body_drawn {
                         body_drawn = true;
                         to_rgba(Color {
                             a: 0.16,
@@ -535,9 +542,15 @@ impl<'a> SymbolCanvas<'a> {
                     });
                 }
                 SymbolGraphicKind::Circle { center, radius } => {
+                    let fill = match g.fill {
+                        Some([fr, fg, fb, fa]) => {
+                            to_rgba(Color::from_rgba8(fr, fg, fb, fa as f32 / 255.0))
+                        }
+                        None => [0.0, 0.0, 0.0, 0.0],
+                    };
                     polygons.push(PolygonInput {
                         vertices: circle_vertices(*center, *radius as f32, 40),
-                        fill_color: [0.0, 0.0, 0.0, 0.0],
+                        fill_color: fill,
                         stroke_color: Some(to_rgba(stroke_color)),
                         stroke_width_mm: stroke_world_mm(stroke_w, scale),
                     });
