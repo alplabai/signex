@@ -17,7 +17,6 @@ use crate::canvas::{Camera, CanvasEvent};
 
 #[derive(Debug, Default)]
 pub struct PcbCanvasState {
-    pub camera: Camera,
     panning: bool,
     last_pan_pos: Option<iced::Point>,
     pub pending_fit: Option<Rectangle>,
@@ -44,13 +43,14 @@ pub struct PcbCanvas {
     /// re-uploading unchanged geometry on pan/zoom. `Cell` for the same
     /// `&self`-in-`view()` reason as `scene_cache`.
     scene_generation: std::cell::Cell<u64>,
-    /// Mirror of the widget-`State` camera `(offset.x, offset.y, scale)`,
-    /// published from `update` so `view()` can read the current pan/zoom to
-    /// build the GPU shader program — the real camera lives in
-    /// `PcbCanvasState`, which `view()` cannot reach. Written right after every
-    /// camera mutation so the GPU content stays frame-coherent with the CPU
-    /// background + grid drawn by this same canvas.
-    live_camera: std::cell::Cell<(f32, f32, f32)>,
+    /// The **sole** home of the PCB pan/zoom camera (ADR-0001 §A1: no shadow
+    /// copies of widget state). `RefCell` gives interior mutability so
+    /// `canvas::Program::update` — which only borrows `&self` — can mutate it,
+    /// while `draw` and `view()` read it through the same cell. With no second
+    /// copy in the widget `State`, the CPU background/grid, the CPU content
+    /// path and the GPU shader program are read off one value and can never
+    /// drift out of sync.
+    camera: std::cell::RefCell<Camera>,
     pub pending_fit: std::cell::Cell<Option<Rectangle>>,
     pub grid_visible: bool,
     /// Effective (live) PCB GPU-render flag. When true, `draw` skips the CPU
@@ -75,13 +75,7 @@ impl PcbCanvas {
             content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
             scene_cache: std::cell::RefCell::new(None),
             scene_generation: std::cell::Cell::new(0),
-            live_camera: {
-                // Seed with the same default the widget `State` uses so the
-                // first GPU frame (before any pointer event) matches the CPU
-                // grid drawn from `PcbCanvasState::default().camera`.
-                let camera = Camera::default();
-                std::cell::Cell::new((camera.offset.x, camera.offset.y, camera.scale))
-            },
+            camera: std::cell::RefCell::new(Camera::default()),
             pending_fit: std::cell::Cell::new(None),
             grid_visible: true,
             gpu_render: false,
@@ -132,22 +126,14 @@ impl PcbCanvas {
         self.bg_cache.clear();
     }
 
-    /// Current pan/zoom mirrored out of the widget `State` for the GPU path:
-    /// `(offset_x_px, offset_y_px, scale_px_per_mm)`. See [`Self::live_camera`]
-    /// (the field) for why this bridge exists.
+    /// Current pan/zoom for the GPU path as
+    /// `(offset_x_px, offset_y_px, scale_px_per_mm)`, read in `view()` from the
+    /// single [`Self::camera`] home to build the shader program. Reads the same
+    /// cell the CPU `draw` uses, so the GPU content stays frame-coherent with
+    /// the CPU background + grid.
     pub fn live_camera(&self) -> (f32, f32, f32) {
-        self.live_camera.get()
-    }
-
-    /// Mirror the widget-`State` camera into [`Self::live_camera`]. Called from
-    /// `update` right after each camera mutation (fit / zoom / pan) so `view()`
-    /// reads the same pan/zoom the CPU grid will use on the next frame.
-    fn publish_live_camera(&self, state: &PcbCanvasState) {
-        self.live_camera.set((
-            state.camera.offset.x,
-            state.camera.offset.y,
-            state.camera.scale,
-        ));
+        let camera = self.camera.borrow();
+        (camera.offset.x, camera.offset.y, camera.scale)
     }
 
     /// Build the `signex_gfx` scene for a board snapshot. Shared by the CPU
@@ -439,8 +425,7 @@ impl canvas::Program<Message> for PcbCanvas {
         }
 
         if let Some(target) = state.pending_fit.take() {
-            state.camera.fit_rect(target, bounds);
-            self.publish_live_camera(state);
+            self.camera.borrow_mut().fit_rect(target, bounds);
             return Some(canvas::Action::publish(Message::CanvasEvent(
                 CanvasEvent::CursorMoved,
             )));
@@ -453,9 +438,11 @@ impl canvas::Program<Message> for PcbCanvas {
                     mouse::ScrollDelta::Pixels { y, .. } => *y / 50.0,
                 };
                 if let Some(cursor_pos) = cursor.position_in(bounds)
-                    && state.camera.zoom_at(cursor_pos, scroll_y, bounds)
+                    && self
+                        .camera
+                        .borrow_mut()
+                        .zoom_at(cursor_pos, scroll_y, bounds)
                 {
-                    self.publish_live_camera(state);
                     return Some(
                         canvas::Action::publish(Message::CanvasEvent(CanvasEvent::CursorMoved))
                             .and_capture(),
@@ -480,23 +467,28 @@ impl canvas::Program<Message> for PcbCanvas {
                     if state.panning
                         && let Some(last_pan_pos) = state.last_pan_pos
                     {
-                        state
-                            .camera
+                        self.camera
+                            .borrow_mut()
                             .pan(cursor_pos.x - last_pan_pos.x, cursor_pos.y - last_pan_pos.y);
                         state.last_pan_pos = Some(cursor_pos);
-                        self.publish_live_camera(state);
                         return Some(
                             canvas::Action::publish(Message::CanvasEvent(CanvasEvent::CursorMoved))
                                 .and_capture(),
                         );
                     }
 
-                    let world = state.camera.screen_to_world(cursor_pos, bounds);
+                    let (world, zoom_pct) = {
+                        let camera = self.camera.borrow();
+                        (
+                            camera.screen_to_world(cursor_pos, bounds),
+                            camera.zoom_percent(),
+                        )
+                    };
                     return Some(canvas::Action::publish(Message::CanvasEvent(
                         CanvasEvent::CursorAt {
                             x: world.x,
                             y: world.y,
-                            zoom_pct: state.camera.zoom_percent(),
+                            zoom_pct,
                         },
                     )));
                 }
@@ -509,18 +501,21 @@ impl canvas::Program<Message> for PcbCanvas {
 
     fn draw(
         &self,
-        state: &Self::State,
+        _state: &Self::State,
         renderer: &Renderer,
         _theme: &Theme,
         bounds: Rectangle,
         _cursor: mouse::Cursor,
     ) -> Vec<canvas::Geometry> {
+        // Single read of the sole camera home; both the background/grid cache
+        // and the content cache below project from this one value.
+        let camera = self.camera.borrow();
         let bg = self.bg_cache.draw(renderer, bounds.size(), |frame| {
             frame.fill_rectangle(iced::Point::ORIGIN, bounds.size(), self.theme_bg);
 
             if self.grid_visible {
-                let step = (self.visible_grid_mm as f32 * state.camera.scale).max(8.0);
-                let mut x = state.camera.offset.x.rem_euclid(step) - step;
+                let step = (self.visible_grid_mm as f32 * camera.scale).max(8.0);
+                let mut x = camera.offset.x.rem_euclid(step) - step;
                 while x <= bounds.width + step {
                     let path = canvas::Path::line(
                         iced::Point::new(x, 0.0),
@@ -538,7 +533,7 @@ impl canvas::Program<Message> for PcbCanvas {
                     x += step;
                 }
 
-                let mut y = state.camera.offset.y.rem_euclid(step) - step;
+                let mut y = camera.offset.y.rem_euclid(step) - step;
                 while y <= bounds.height + step {
                     let path = canvas::Path::line(
                         iced::Point::new(0.0, y),
@@ -568,21 +563,18 @@ impl canvas::Program<Message> for PcbCanvas {
         }
 
         let (cached_offset_x, cached_offset_y, cached_scale) = self.content_cache_camera.get();
-        let camera_matches_cache = (cached_offset_x - state.camera.offset.x).abs() < 0.01
-            && (cached_offset_y - state.camera.offset.y).abs() < 0.01
-            && (cached_scale - state.camera.scale).abs() < 0.0001;
+        let camera_matches_cache = (cached_offset_x - camera.offset.x).abs() < 0.01
+            && (cached_offset_y - camera.offset.y).abs() < 0.01
+            && (cached_scale - camera.scale).abs() < 0.0001;
         if !camera_matches_cache {
             self.content_cache.clear();
         }
         let content = self.content_cache.draw(renderer, bounds.size(), |frame| {
-            self.content_cache_camera.set((
-                state.camera.offset.x,
-                state.camera.offset.y,
-                state.camera.scale,
-            ));
+            self.content_cache_camera
+                .set((camera.offset.x, camera.offset.y, camera.scale));
             if let Some(snapshot) = self.active_renderer_snapshot() {
                 let scene = self.build_scene(snapshot);
-                draw_scene(frame, &scene, &state.camera, bounds);
+                draw_scene(frame, &scene, &camera, bounds);
             }
         });
 
@@ -680,5 +672,22 @@ mod tests {
         // so the shader will skip the geometry upload.
         let _ = canvas.gpu_scene(); // hit
         assert_eq!(canvas.scene_generation(), gen_at_build);
+    }
+
+    #[test]
+    fn live_camera_reflects_the_single_source_after_a_mutation() {
+        // #5 regression: `view()` (GPU shader) and the CPU `draw` both read the
+        // one `camera` cell. Mutating it the way `Program::update` does must be
+        // visible through `live_camera()` — there is no separate shadow that
+        // could go stale.
+        let canvas = PcbCanvas::new();
+        let (x0, y0, s0) = canvas.live_camera();
+
+        canvas.camera.borrow_mut().pan(12.0, -7.0);
+
+        let (x1, y1, s1) = canvas.live_camera();
+        assert_eq!(x1, x0 + 12.0);
+        assert_eq!(y1, y0 - 7.0);
+        assert_eq!(s1, s0, "pan must not change scale");
     }
 }
