@@ -172,22 +172,32 @@ This covers Phases 0–6 of the original plan. Those phases are closed.
 
 ## 7. Release Train — v0.14 → v1.0
 
-Near-term and concrete. **Scope decomposition for each version lives in
-the private companion repo** (`signex-internal`, `docs/ROADMAP_DETAIL.md`).
-Only the coarse shape is public.
+Near-term and concrete. **The train is derived from the issue tracker,
+not from the internal specs.** See §9 for why that distinction is
+load-bearing.
 
 | Version | Scope | Milestone |
 |---------|-------|-----------|
-| **v0.14.0** | Footprint editor enabled — sketch constraints, active-bar tooling, closed-profile bakes | `v0.14.0 — Footprint Editor` |
-| **v0.15.0** | Footprint editor parity — selection filter, units, full pad stack, unified active bar | `v0.15.0 — Footprint Editor Parity` |
-| **v0.16.0** | PCB outline editor, pour fill + DRC enforcement, TOML+TSV primitive migration | `v0.16.0 — PCB Outline & Pours` |
-| v0.17+ | Properties-panel parity, sketch Fusion parity, parametric pads | *(not yet gated; see internal detail)* |
+| **v0.14.0** | Everything since v0.13.0: footprint editor enabled, footprint parity, symbol multi-unit, `signex-net` netlist contract, keyboard-shortcut profiles, schematic GPU render, the ADR-0001 decomposition | `v0.14.0 — Footprint, Symbol Units & Netlist` |
+| **v0.15.0** | Editor fixes carrying `tier: p0`, plus Break Track / Drag Track End (the one item v0.14.0 actually deferred) | `v0.15.0 — Editor Fixes` |
+| **v0.16.0** | Command Registry — one addressable action system (menus, keybindings, CLI, plugins) — and the symbol multi-unit tail | `v0.16.0 — Command Registry & Symbol Units` |
+| v0.17+ | Not enumerated | *(gets versions when it gets milestones)* |
 
-The v0.17+ band is deliberately not enumerated here. It has been
-re-planned repeatedly under labels that never shipped, and publishing a
-sequence that has never survived contact with reality is how the last
-revision of this document lost credibility. It gets versions when it gets
-milestones.
+**v0.14.0 is one release, not two.** Its CHANGELOG section was written
+2026-05-31 and never tagged; 170 commits landed past it. Rather than
+invent a phantom (v0.12 is already one — planned, merged, never tagged),
+v0.14.0 claims everything since v0.13.0.
+
+**The v0.17+ band is deliberately empty.** It has been re-planned
+repeatedly under labels that never shipped, and publishing a sequence
+that has never survived contact with reality is how the previous revision
+of this document lost credibility.
+
+**Where near-term scope comes from.** The issue tracker: every open issue
+carries a `tier:` label and, where scheduled, a milestone. The internal
+specs (`signex-internal`) are **not** a source of forward scope — they
+describe work that has largely already shipped. They remain useful as
+implementation detail for whatever is genuinely outstanding.
 
 ---
 
@@ -321,6 +331,32 @@ numbers do not match older documents:
 - **v4.0 / v5.0 promoted to gates.** Previously only half-covered by a
   "Beyond v3.0" table; they have dedicated internal plans
   (`SIMULATION_VIEW.md`, `PLM_INTEGRATION.md`) and milestones.
+
+### Correction, same day
+
+The first cut of §7 gated **v0.15.0 as "Footprint Editor Parity"**
+(selection filter, units toggle, full pad stack), renumbered from the
+internal specs' v0.17 band. **That work was already on `trunk`** —
+`stack.rs` implements `Simple` / `TopMiddleBottom` / `FullStack`, and the
+selection filter and units toggle exist. The roadmap gated work that had
+already shipped.
+
+The tell was in `CHANGELOG.md` the whole time: v0.14.0's own "Deferred to
+v0.15" section lists exactly one item — *Break Track / Drag Track End* —
+not parity.
+
+The mistake is worth recording because it is the *same* mistake this
+document was rewritten to fix. Renumbering the specs onto a real anchor
+is not enough: **the specs describe work that has already shipped.** The
+~100 commits of the `feature/library` branch carried labels v0.13→v0.26
+and implemented most of the spec content; only v0.13.0 was ever tagged,
+so the specs still read as forward plans.
+
+**The rule that follows:** near-term scope comes from the **issue
+tracker**, never from the specs. An issue is open because the work is
+outstanding. A spec section is written because someone once intended it —
+which says nothing about whether it exists today. Before gating a version
+on spec content, grep the tree for it.
 
 ---
 
