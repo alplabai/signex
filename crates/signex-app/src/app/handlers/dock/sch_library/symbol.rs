@@ -105,6 +105,163 @@ impl Signex {
         true
     }
 
+    // ── Graphic-fill colour picker (transient UI state) ─────────────
+    // These mirror the child-sheet colour-picker state transitions:
+    // opening one picker closes the other; "advanced" flips the open
+    // picker into the HSV overlay; cancel closes it. Only set / clear
+    // mark the tab dirty — open / close / cancel are UI-only.
+
+    /// Toggle the placed graphic's fill picker open / closed. Opening it
+    /// closes any local-colour picker. No dirty.
+    pub(super) fn sym_editor_toggle_graphic_fill_picker(&mut self, idx: usize) -> bool {
+        let Some(editor) = self.active_symbol_editor_mut() else {
+            return true;
+        };
+        let was_open = matches!(editor.graphic_fill_picker, Some(p) if p.idx == idx);
+        editor.graphic_fill_picker = if was_open {
+            None
+        } else {
+            Some(crate::app::GraphicFillPicker {
+                idx,
+                advanced: false,
+            })
+        };
+        editor.local_color_picker = None;
+        self.refresh_panel_ctx();
+        true
+    }
+
+    /// Expand the graphic's fill picker into the HSV / RGB overlay. No
+    /// dirty.
+    pub(super) fn sym_editor_open_graphic_fill_advanced(&mut self, idx: usize) -> bool {
+        let Some(editor) = self.active_symbol_editor_mut() else {
+            return true;
+        };
+        editor.graphic_fill_picker = Some(crate::app::GraphicFillPicker {
+            idx,
+            advanced: true,
+        });
+        editor.local_color_picker = None;
+        self.refresh_panel_ctx();
+        true
+    }
+
+    /// Close the graphic's fill picker without committing. No dirty.
+    pub(super) fn sym_editor_cancel_graphic_fill_picker(&mut self) -> bool {
+        let Some(editor) = self.active_symbol_editor_mut() else {
+            return true;
+        };
+        editor.graphic_fill_picker = None;
+        self.refresh_panel_ctx();
+        true
+    }
+
+    /// Set (or clear, when `color` is `None`) the placed graphic's fill
+    /// and close the picker. Dirties + clears the canvas cache.
+    pub(super) fn sym_editor_set_graphic_fill(
+        &mut self,
+        idx: usize,
+        color: Option<[u8; 4]>,
+    ) -> bool {
+        let Some(editor) = self.active_symbol_editor_mut() else {
+            return true;
+        };
+        let mut applied = false;
+        if let Some(g) = editor.primitive_mut().graphics.get_mut(idx) {
+            g.fill = color;
+            applied = true;
+        }
+        editor.graphic_fill_picker = None;
+        if applied {
+            editor.dirty = true;
+            editor.canvas_cache.clear();
+        }
+        if applied {
+            self.mark_active_symbol_tab_dirty();
+        }
+        self.refresh_panel_ctx();
+        true
+    }
+
+    // ── Symbol-level local-colour pickers (transient UI state) ──────
+
+    /// Toggle a local-colour slot's picker open / closed. Opening it
+    /// closes any graphic-fill picker. No dirty.
+    pub(super) fn sym_editor_toggle_local_color_picker(
+        &mut self,
+        slot: crate::app::LocalColorSlot,
+    ) -> bool {
+        let Some(editor) = self.active_symbol_editor_mut() else {
+            return true;
+        };
+        let was_open = matches!(editor.local_color_picker, Some(p) if p.slot == slot);
+        editor.local_color_picker = if was_open {
+            None
+        } else {
+            Some(crate::app::LocalColorPicker {
+                slot,
+                advanced: false,
+            })
+        };
+        editor.graphic_fill_picker = None;
+        self.refresh_panel_ctx();
+        true
+    }
+
+    /// Expand a local-colour slot's picker into the HSV / RGB overlay.
+    /// No dirty.
+    pub(super) fn sym_editor_open_local_color_advanced(
+        &mut self,
+        slot: crate::app::LocalColorSlot,
+    ) -> bool {
+        let Some(editor) = self.active_symbol_editor_mut() else {
+            return true;
+        };
+        editor.local_color_picker = Some(crate::app::LocalColorPicker {
+            slot,
+            advanced: true,
+        });
+        editor.graphic_fill_picker = None;
+        self.refresh_panel_ctx();
+        true
+    }
+
+    /// Close the local-colour picker without committing. No dirty.
+    pub(super) fn sym_editor_cancel_local_color_picker(&mut self) -> bool {
+        let Some(editor) = self.active_symbol_editor_mut() else {
+            return true;
+        };
+        editor.local_color_picker = None;
+        self.refresh_panel_ctx();
+        true
+    }
+
+    /// Set (or clear, when `color` is `None`) a symbol-level local
+    /// colour and close the picker. Dirties + clears the canvas cache.
+    pub(super) fn sym_editor_set_local_color(
+        &mut self,
+        slot: crate::app::LocalColorSlot,
+        color: Option<[u8; 4]>,
+    ) -> bool {
+        let Some(editor) = self.active_symbol_editor_mut() else {
+            return true;
+        };
+        {
+            let sym = editor.primitive_mut();
+            match slot {
+                crate::app::LocalColorSlot::Fill => sym.local_fill_color = color,
+                crate::app::LocalColorSlot::Line => sym.local_line_color = color,
+                crate::app::LocalColorSlot::Pin => sym.local_pin_color = color,
+            }
+        }
+        editor.local_color_picker = None;
+        editor.dirty = true;
+        editor.canvas_cache.clear();
+        self.mark_active_symbol_tab_dirty();
+        self.refresh_panel_ctx();
+        true
+    }
+
     /// SCH Library panel: select a placed graphic so the right-dock
     /// Properties panel renders its per-shape fields. Mirrors
     /// [`sym_editor_select_pin`].

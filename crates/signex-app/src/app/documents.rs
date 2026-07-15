@@ -201,6 +201,35 @@ pub struct TabInfo {
 /// pin layout + the existing
 /// [`crate::library::editor::symbol::state`] mutation helpers, so the
 /// behaviour matches the in-Component Editor experience verbatim.
+/// One of the three symbol-level local-colour slots. Each can carry an
+/// independent RGBA override (or inherit from the sheet palette).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LocalColorSlot {
+    Fill,
+    Line,
+    Pin,
+}
+
+/// Transient open-state for a placed graphic's fill colour-picker.
+/// `idx` is the graphic's index in the active symbol; `advanced` is
+/// `true` once the user expanded the inline palette into the HSV / RGB
+/// overlay. UI-only — never serialized, never snapshotted for undo.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GraphicFillPicker {
+    pub idx: usize,
+    pub advanced: bool,
+}
+
+/// Transient open-state for a symbol-level local-colour picker.
+/// `slot` selects Fills / Lines / Pins; `advanced` is `true` once the
+/// user expanded into the HSV / RGB overlay. UI-only — never
+/// serialized, never snapshotted for undo.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LocalColorPicker {
+    pub slot: LocalColorSlot,
+    pub advanced: bool,
+}
+
 #[derive(Debug)]
 pub struct SymbolEditorState {
     pub path: PathBuf,
@@ -256,6 +285,15 @@ pub struct SymbolEditorState {
     /// on the undo stack). Cleared by `SymbolDragCommit` (emitted on
     /// `ButtonReleased`).
     pub mid_drag: bool,
+    /// Which placed graphic's fill colour-picker is open, plus whether
+    /// it has been expanded to the HSV / RGB overlay. `None` = closed.
+    /// Transient UI-only state: never serialized, never snapshotted for
+    /// undo.
+    pub graphic_fill_picker: Option<GraphicFillPicker>,
+    /// Which symbol-level local colour slot's picker is open. `None` =
+    /// closed. Transient UI-only state: never serialized, never
+    /// snapshotted for undo.
+    pub local_color_picker: Option<LocalColorPicker>,
 }
 
 impl SymbolEditorState {
@@ -284,6 +322,8 @@ impl SymbolEditorState {
             undo_snapshots: Vec::new(),
             redo_snapshots: Vec::new(),
             mid_drag: false,
+            graphic_fill_picker: None,
+            local_color_picker: None,
         };
         state.reset_camera_origin_center();
         state

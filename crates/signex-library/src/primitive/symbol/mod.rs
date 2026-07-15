@@ -229,6 +229,14 @@ pub struct SymbolGraphic {
     /// Stroke width in mm (0.0 = use renderer default).
     #[serde(default)]
     pub stroke_width: f64,
+    /// Optional solid fill colour (RGBA, 0–255). `None` (default) =
+    /// unfilled outline-only shape; `Some(rgba)` = filled interior.
+    /// Only meaningful for closed shapes (Rectangle / Circle); ignored
+    /// for Line / Arc / Text. Additive and back-compatible: files
+    /// written before this field load as `None` and render exactly as
+    /// before, so no `.snxsym` format-token bump is required.
+    #[serde(default)]
+    pub fill: Option<[u8; 4]>,
     /// Which sub-part (unit) this graphic belongs to. `0` (default)
     /// means "shared" — drawn on every part, matching pre-C1 files
     /// where body geometry carried no part scoping. `1..=N` scope the

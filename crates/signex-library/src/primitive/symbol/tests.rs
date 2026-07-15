@@ -37,6 +37,7 @@ fn symbol_json_roundtrip() {
             },
             stroke_width: 0.15,
             part_number: 0,
+            fill: None,
         }],
         schematic_params: ParamMap::new(),
         designator: "U?".into(),
@@ -449,11 +450,35 @@ fn graphic_part_number_round_trips() {
         },
         stroke_width: 0.15,
         part_number: 2,
+        fill: None,
     });
     let file = SymbolFile::from_symbol(s);
     let toml_text = file.to_toml_string().expect("serialise");
     let back = SymbolFile::from_toml_str(&toml_text).expect("parse");
     assert_eq!(back.symbols[0].graphics[0].part_number, 2);
+}
+
+/// A graphic's fill colour survives a `.snxsym` save/load round-trip,
+/// proving the new `SymbolGraphic.fill` field serialises through the
+/// TOML manifest alongside the rest of the graphic. Back-compat for
+/// legacy files missing the field is covered by the additive
+/// `#[serde(default)]`, same as `graphic_missing_part_number_defaults_to_zero`.
+#[test]
+fn graphic_fill_round_trips() {
+    let mut s = Symbol::empty("X");
+    s.graphics.push(SymbolGraphic {
+        kind: SymbolGraphicKind::Rectangle {
+            from: [-2.5, -2.5],
+            to: [2.5, 2.5],
+        },
+        stroke_width: 0.15,
+        part_number: 0,
+        fill: Some([220, 60, 60, 255]),
+    });
+    let file = SymbolFile::from_symbol(s);
+    let toml_text = file.to_toml_string().expect("serialise");
+    let back = SymbolFile::from_toml_str(&toml_text).expect("parse");
+    assert_eq!(back.symbols[0].graphics[0].fill, Some([220, 60, 60, 255]));
 }
 
 /// A graphic left at the default (`0` = shared / drawn on every unit)
@@ -469,6 +494,7 @@ fn graphic_missing_part_number_defaults_to_zero() {
         },
         stroke_width: 0.15,
         part_number: 0,
+        fill: None,
     });
     let file = SymbolFile::from_symbol(s);
     let toml_text = file.to_toml_string().expect("serialise");

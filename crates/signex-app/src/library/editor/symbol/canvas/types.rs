@@ -13,14 +13,16 @@ pub enum CanvasAction {
         x: f64,
         y: f64,
     },
-    /// Stamp a default-sized rectangle (10 × 5 mm) centred on
-    /// `(x, y)`. Drag-to-resize lands in a follow-up — for the
-    /// first cut the rectangle is committed in one click and
-    /// the user can later edit the corners via the Properties
-    /// panel (or move/delete via the Select tool).
+    /// Place an axis-aligned rectangle spanning the two opposite
+    /// corners `(from_x, from_y)` and `(to_x, to_y)` (both grid-snapped
+    /// mm world positions). Emitted on the second click of a two-click
+    /// draw flow (1st click = first corner, 2nd click = opposite
+    /// corner); the handler normalizes the corners.
     AddRectangle {
-        x: f64,
-        y: f64,
+        from_x: f64,
+        from_y: f64,
+        to_x: f64,
+        to_y: f64,
     },
     /// Place a line segment from `from` to `to` (both grid-snapped
     /// mm world positions). Emitted on the second click of a
@@ -187,6 +189,13 @@ pub struct CanvasState {
     /// Cursor position (snapped) updated every `CursorMoved` while
     /// `line_from.is_some()`, used to paint the rubber-band preview.
     pub line_cursor: Option<(f64, f64)>,
+    /// First click corner while in the `PlaceRectangle` two-click draw
+    /// flow. `None` = waiting for the first corner; `Some((x, y))` =
+    /// first corner set, next click commits the opposite corner.
+    pub rect_from: Option<(f64, f64)>,
+    /// Cursor position (snapped) updated every `CursorMoved` while
+    /// `rect_from.is_some()`, used to paint the rubber-band preview.
+    pub rect_cursor: Option<(f64, f64)>,
     /// First click center while in the `PlaceCircle` two-click draw flow.
     pub circle_center: Option<(f64, f64)>,
     /// Live cursor (snapped) while `circle_center.is_some()`, used for

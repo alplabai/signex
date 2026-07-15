@@ -91,9 +91,26 @@ impl SymbolCanvas<'_> {
             SymbolTool::AddPin => {
                 Some(canvas::Action::publish(CanvasAction::AddPin { x: wx, y: wy }).and_capture())
             }
-            SymbolTool::PlaceRectangle => Some(
-                canvas::Action::publish(CanvasAction::AddRectangle { x: wx, y: wy }).and_capture(),
-            ),
+            SymbolTool::PlaceRectangle => {
+                if let Some((from_x, from_y)) = state.rect_from.take() {
+                    // Second click — commit the rectangle.
+                    state.rect_cursor = None;
+                    Some(
+                        canvas::Action::publish(CanvasAction::AddRectangle {
+                            from_x,
+                            from_y,
+                            to_x: wx,
+                            to_y: wy,
+                        })
+                        .and_capture(),
+                    )
+                } else {
+                    // First click — set the first corner and wait.
+                    state.rect_from = Some((wx, wy));
+                    state.rect_cursor = Some((wx, wy));
+                    Some(canvas::Action::capture())
+                }
+            }
             SymbolTool::PlaceLine => {
                 if let Some((from_x, from_y)) = state.line_from.take() {
                     // Second click — commit the line.

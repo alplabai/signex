@@ -58,6 +58,55 @@ impl SymbolCanvas<'_> {
         }
     }
 
+    /// Two-click rectangle placement preview — a rubber-band outline
+    /// spanning the committed first corner and the live cursor.
+    pub(in crate::library::editor::symbol::canvas) fn draw_rect_preview(
+        &self,
+        frame: &mut canvas::Frame,
+        state: &CanvasState,
+    ) {
+        let cam = self.camera;
+        let scale = cam.scale;
+        let ox = cam.offset.x;
+        let oy = cam.offset.y;
+        let w2s = |x: f64, y: f64| -> iced::Point {
+            iced::Point::new(ox + (x as f32) * scale, oy - (y as f32) * scale)
+        };
+        if let (Some((fx, fy)), Some((cx, cy))) = (state.rect_from, state.rect_cursor) {
+            let p0 = w2s(fx, fy);
+            let p1 = w2s(cx, cy);
+            // Screen-space top-left + size (y is flipped, so min/max in
+            // screen coords, not world coords).
+            let left = p0.x.min(p1.x);
+            let top = p0.y.min(p1.y);
+            let width = (p1.x - p0.x).abs();
+            let height = (p1.y - p0.y).abs();
+            let preview_color = Color {
+                a: 0.55,
+                ..self.selected_color
+            };
+            let rect_origin = iced::Point::new(left, top);
+            let rect_size = Size::new(width, height);
+            // Faint fill so the covered area reads at a glance.
+            frame.fill_rectangle(
+                rect_origin,
+                rect_size,
+                Color {
+                    a: 0.10,
+                    ..self.selected_color
+                },
+            );
+            // Start-corner dot so the user can see the anchor.
+            frame.fill(&canvas::Path::circle(p0, 3.0), preview_color);
+            frame.stroke(
+                &canvas::Path::rectangle(rect_origin, rect_size),
+                canvas::Stroke::default()
+                    .with_color(preview_color)
+                    .with_width(stroke_px_at_zoom(SYMBOL_GRAPHIC_STROKE_PX_AT_100, scale)),
+            );
+        }
+    }
+
     /// Two-click line placement preview.
     pub(in crate::library::editor::symbol::canvas) fn draw_line_preview(
         &self,

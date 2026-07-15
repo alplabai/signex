@@ -79,6 +79,7 @@ pub(super) fn build_symbol_editor_panel_ctx(
             idx,
             kind: graphic_kind_to_summary(&g.kind),
             stroke_width: g.stroke_width,
+            fill: g.fill,
         })
         .collect();
 
@@ -102,6 +103,7 @@ pub(super) fn build_symbol_editor_panel_ctx(
                     idx,
                     kind: graphic_kind_to_summary(&g.kind),
                     stroke_width: g.stroke_width,
+                    fill: g.fill,
                 })
             })
             .unwrap_or(SymbolEditorSelection::None),
@@ -145,6 +147,8 @@ pub(super) fn build_symbol_editor_panel_ctx(
         pins,
         graphics,
         selected,
+        graphic_fill_picker: editor.graphic_fill_picker,
+        local_color_picker: editor.local_color_picker,
         symbols_in_file,
         active_idx: editor.active_idx,
         active_part: editor.active_part,

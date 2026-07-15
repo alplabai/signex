@@ -1,6 +1,6 @@
 //! Symbol editor — multi-part (prev/next/new/remove) update logic.
 
-use super::{SymEditor, mark_dirty, push_undo};
+use super::{SymEditor, close_pickers, mark_dirty, push_undo};
 use crate::library::messages::SymbolEditorMsg;
 
 pub(super) fn apply_symbol_parts(editor: &mut SymEditor, msg: SymbolEditorMsg) {
@@ -11,6 +11,7 @@ pub(super) fn apply_symbol_parts(editor: &mut SymEditor, msg: SymbolEditorMsg) {
                 // Drop any selection so it can't dangle on a graphic that
                 // just became hidden on the newly-active unit.
                 editor.selected = None;
+                close_pickers(editor);
                 editor.canvas_cache.clear();
             }
         }
@@ -21,6 +22,7 @@ pub(super) fn apply_symbol_parts(editor: &mut SymEditor, msg: SymbolEditorMsg) {
                 // Drop any selection so it can't dangle on a graphic that
                 // just became hidden on the newly-active unit.
                 editor.selected = None;
+                close_pickers(editor);
                 editor.canvas_cache.clear();
             }
         }
@@ -36,6 +38,7 @@ pub(super) fn apply_symbol_parts(editor: &mut SymEditor, msg: SymbolEditorMsg) {
             // Drop any selection so a stale index can't act (via keyboard
             // Delete / Rotate) on a graphic hidden by the unit switch.
             editor.selected = None;
+            close_pickers(editor);
             mark_dirty(editor);
         }
         SymbolEditorMsg::RemovePart => {
@@ -59,6 +62,7 @@ pub(super) fn apply_symbol_parts(editor: &mut SymEditor, msg: SymbolEditorMsg) {
             // Drop any selection so a stale index can't act on geometry
             // shifted or hidden by the delete + renumber.
             editor.selected = None;
+            close_pickers(editor);
             mark_dirty(editor);
         }
         _ => {}

@@ -3,7 +3,9 @@
 use iced::widget::{Column, container, row, text};
 use iced::{Color, Element, Length};
 
-use super::super::{GraphicFieldId, GraphicKindSummary, GraphicSummary, PanelMsg};
+use super::super::{
+    ColorFieldProps, GraphicFieldId, GraphicKindSummary, GraphicSummary, PanelMsg, color_field,
+};
 
 /// Per-shape numeric Properties rows for a placed graphic (corners /
 /// endpoints / centre + radius / arc angles / text + stroke).
@@ -11,6 +13,8 @@ pub(super) fn view_graphic_selection<'a>(
     mut col: Column<'a, PanelMsg>,
     g: &'a GraphicSummary,
     muted: Color,
+    border_c: Color,
+    fill_picker: Option<crate::app::GraphicFillPicker>,
 ) -> Column<'a, PanelMsg> {
             let g_idx = g.idx;
             // Per-shape numeric fields.
@@ -49,6 +53,7 @@ pub(super) fn view_graphic_selection<'a>(
                     col = col.push(num_field("From Y", GraphicFieldId::FromY, from[1]));
                     col = col.push(num_field("To X", GraphicFieldId::ToX, to[0]));
                     col = col.push(num_field("To Y", GraphicFieldId::ToY, to[1]));
+                    col = col.push(graphic_fill_field(g_idx, g.fill, muted, border_c, fill_picker));
                 }
                 GraphicKindSummary::Line { from, to } => {
                     col = col.push(num_field("Start X", GraphicFieldId::FromX, from[0]));
@@ -60,6 +65,7 @@ pub(super) fn view_graphic_selection<'a>(
                     col = col.push(num_field("Center X", GraphicFieldId::CenterX, center[0]));
                     col = col.push(num_field("Center Y", GraphicFieldId::CenterY, center[1]));
                     col = col.push(num_field("Radius", GraphicFieldId::Radius, *radius));
+                    col = col.push(graphic_fill_field(g_idx, g.fill, muted, border_c, fill_picker));
                 }
                 GraphicKindSummary::Arc {
                     center,
@@ -116,4 +122,43 @@ pub(super) fn view_graphic_selection<'a>(
                 g.stroke_width,
             ));
     col
+}
+
+/// Fill colour row for a closed graphic (Rectangle / Circle) — the
+/// shared [`color_field`] widget wired to the graphic-fill messages.
+/// `picker` carries the transient open-state; the palette / HSV overlay
+/// only expands when the picker targets this graphic's index.
+fn graphic_fill_field<'a>(
+    idx: usize,
+    fill: Option<[u8; 4]>,
+    muted: Color,
+    border_c: Color,
+    picker: Option<crate::app::GraphicFillPicker>,
+) -> Element<'a, PanelMsg> {
+    use std::rc::Rc;
+
+    let this = picker.filter(|p| p.idx == idx);
+    let show_palette = this.is_some();
+    let show_advanced = this.map(|p| p.advanced).unwrap_or(false);
+
+    let on_pick: Rc<dyn Fn([u8; 4]) -> PanelMsg + 'static> =
+        Rc::new(move |rgba| PanelMsg::SymEditorSetGraphicFill { idx, color: rgba });
+    let on_clear = fill
+        .is_some()
+        .then_some(PanelMsg::SymEditorClearGraphicFill { idx });
+
+    color_field(ColorFieldProps {
+        label: "Fill",
+        current: fill,
+        none_label: "None",
+        show_palette,
+        show_advanced,
+        muted,
+        border_c,
+        on_toggle: PanelMsg::SymEditorToggleGraphicFillPicker { idx },
+        on_advanced: PanelMsg::SymEditorOpenGraphicFillAdvanced { idx },
+        on_cancel: PanelMsg::SymEditorCancelGraphicFillPicker,
+        on_pick,
+        on_clear,
+    })
 }
