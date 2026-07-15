@@ -103,7 +103,17 @@ PR's license-compliance block, not in commit trailers.
 Repo settings can't live in git; this section is the audit-trail copy. The
 live settings under **Settings → Rules → Rulesets** are authoritative, and
 [`.github/rulesets/trunk-protection.json`](../.github/rulesets/trunk-protection.json)
-is the importable source for them.
+and [`.github/rulesets/main-protection.json`](../.github/rulesets/main-protection.json)
+are the importable sources for them.
+
+> **Reconciled 2026-07-15.** Until that date this section described protection
+> that did not exist. `trunk` — the default branch, where every PR lands — had
+> **no ruleset applied at all**; `trunk-protection.json` sat in the repo
+> unapplied. `main` had a ruleset, but it required a pull request and **zero
+> approvals**, with no required status checks and rebase merges allowed — on
+> the branch where release tags are cut. Both now match what is written here.
+> If you change this section, change the JSON and re-apply it; see
+> [`.github/rulesets/README.md`](../.github/rulesets/README.md).
 
 ### `trunk` (and `main`, same set)
 

@@ -1,20 +1,38 @@
-# Branch-protection ruleset for `trunk`
+# Branch-protection rulesets
 
-`trunk-protection.json` is an importable GitHub **ruleset** that encodes the
-protection policy for the default branch. Repo settings can't be committed to
-git, so this file is the version-controlled record of intent — a repo admin
-applies it once. The full policy (and the same settings in prose, for audit)
-lives in
+Importable GitHub **rulesets** encoding the protection policy for the two
+protected branches. Repo settings can't be committed to git, so these files are
+the version-controlled record of intent — a repo admin applies them. The full
+policy (and the same settings in prose, for audit) lives in
 [`docs/branching-and-merge-policy.md`](../../docs/branching-and-merge-policy.md).
 
-> **This file is a declaration, not the live state.** It described `trunk`'s
-> protection for months while nothing enforced it: the ruleset had never been
-> applied, the only active rulesets targeted the legacy `main` and `dev`
-> branches, and `trunk` — the default, where every PR lands — was wide open.
-> Applied 2026-07-15 as ruleset "Protect trunk". **If you edit this file,
-> re-apply it** (see below) and verify with `gh api repos/alplabai/signex/rules/branches/trunk`.
+| File | Branch | Ruleset name |
+|------|--------|--------------|
+| `trunk-protection.json` | default (`trunk`) | `Protect trunk` |
+| `main-protection.json` | `main` | `main-protection` |
 
-## What it enforces on `trunk`
+> **These files are declarations, not the live state.** `trunk-protection.json`
+> described `trunk`'s protection for months while nothing enforced it: it had
+> never been applied, the only active rulesets targeted `main` and the legacy
+> `dev`, and `trunk` — the default, where every PR lands — was wide open.
+> `main-protection` *was* live but far weaker than the policy claimed: it
+> required a pull request and **zero approvals**, with no status checks and
+> rebase merges allowed, on the branch where release tags are cut.
+>
+> Both were reconciled on 2026-07-15 and now match the policy. **If you edit
+> either file, re-apply it** (see below) and verify:
+>
+> ```sh
+> gh api repos/alplabai/signex/rules/branches/trunk
+> gh api repos/alplabai/signex/rules/branches/main
+> ```
+
+## What they enforce
+
+Both branches carry the **same** set, per the policy's "`trunk` (and `main`,
+same set)". The one deliberate difference is the merge method: `trunk` takes
+squash or merge commits, while `main` accepts **merge commits only**, because
+`trunk` → `main` promotion is a `--no-ff` release gate.
 
 - **No direct pushes** — changes land through a pull request.
 - **1 approving review** before merge (author can't approve their own PR),
@@ -30,26 +48,27 @@ lives in
   - `No GPL-tool-shaped names anywhere in crates/` — the licence guard
 - **No branch deletion** and **no force-push** (non-fast-forward blocked).
 - **No bypass** (admins included) — this is the load-bearing setting.
-- Merge via **merge commit** or **squash** (rebase disabled).
+- Merge via **merge commit** or **squash** on `trunk`; **merge commit only** on
+  `main` (rebase disabled on both).
 
 ## How to apply
 
 Repo → **Settings → Rules → Rulesets → New ruleset → Import a ruleset** →
-choose `trunk-protection.json` → set enforcement to **Active** → save.
+choose the JSON → set enforcement to **Active** → save.
 
-Or, to create it:
+Or, to create one:
 
 ```sh
 gh api repos/alplabai/signex/rulesets --method POST \
   --input .github/rulesets/trunk-protection.json
 ```
 
-To update the ruleset in place after editing this file (`<id>` from
+To update a ruleset in place after editing its file (`<id>` from
 `gh api repos/alplabai/signex/rulesets`):
 
 ```sh
 gh api repos/alplabai/signex/rulesets/<id> --method PUT \
-  --input .github/rulesets/trunk-protection.json
+  --input .github/rulesets/main-protection.json
 ```
 
 **Validate the required check names first.** `required_status_checks` blocks a
