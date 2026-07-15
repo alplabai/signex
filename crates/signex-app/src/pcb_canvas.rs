@@ -25,8 +25,21 @@ pub struct PcbCanvas {
     pub bg_cache: canvas::Cache,
     pub content_cache: canvas::Cache,
     pub content_cache_camera: std::cell::Cell<(f32, f32, f32)>,
+    /// Mirror of the widget-`State` camera `(offset.x, offset.y, scale)`,
+    /// published from `update` so `view()` can read the current pan/zoom to
+    /// build the GPU shader program — the real camera lives in
+    /// `PcbCanvasState`, which `view()` cannot reach. Written right after every
+    /// camera mutation so the GPU content stays frame-coherent with the CPU
+    /// background + grid drawn by this same canvas.
+    live_camera: std::cell::Cell<(f32, f32, f32)>,
     pub pending_fit: std::cell::Cell<Option<Rectangle>>,
     pub grid_visible: bool,
+    /// Effective (live) PCB GPU-render flag. When true, `draw` skips the CPU
+    /// content tessellation (a `shader` stacked above draws it on the GPU) and
+    /// `view()` mounts the shader stack. Synced from the Preferences toggle —
+    /// updated immediately on draft change for live preview, committed/reverted
+    /// on Save/Discard. Mirrors `UiState::pcb_gpu_render` (the saved value).
+    pub gpu_render: bool,
     pub theme_bg: Color,
     pub theme_grid: Color,
     pub canvas_colors: signex_types::theme::CanvasColors,
@@ -41,8 +54,16 @@ impl PcbCanvas {
             bg_cache: canvas::Cache::default(),
             content_cache: canvas::Cache::default(),
             content_cache_camera: std::cell::Cell::new((0.0, 0.0, 1.0)),
+            live_camera: {
+                // Seed with the same default the widget `State` uses so the
+                // first GPU frame (before any pointer event) matches the CPU
+                // grid drawn from `PcbCanvasState::default().camera`.
+                let camera = Camera::default();
+                std::cell::Cell::new((camera.offset.x, camera.offset.y, camera.scale))
+            },
             pending_fit: std::cell::Cell::new(None),
             grid_visible: true,
+            gpu_render: false,
             theme_bg: crate::render_config::to_iced(&colors.background),
             theme_grid: crate::render_config::to_iced(&colors.grid),
             canvas_colors: colors,
@@ -82,6 +103,57 @@ impl PcbCanvas {
         self.theme_bg = bg;
         self.theme_grid = grid;
         self.bg_cache.clear();
+    }
+
+    /// Current pan/zoom mirrored out of the widget `State` for the GPU path:
+    /// `(offset_x_px, offset_y_px, scale_px_per_mm)`. See [`Self::live_camera`]
+    /// (the field) for why this bridge exists.
+    pub fn live_camera(&self) -> (f32, f32, f32) {
+        self.live_camera.get()
+    }
+
+    /// Mirror the widget-`State` camera into [`Self::live_camera`]. Called from
+    /// `update` right after each camera mutation (fit / zoom / pan) so `view()`
+    /// reads the same pan/zoom the CPU grid will use on the next frame.
+    fn publish_live_camera(&self, state: &PcbCanvasState) {
+        self.live_camera.set((
+            state.camera.offset.x,
+            state.camera.offset.y,
+            state.camera.scale,
+        ));
+    }
+
+    /// Build the `signex_gfx` scene for a board snapshot. Shared by the CPU
+    /// `draw` path and the GPU [`Self::gpu_scene`] path so both tessellate from
+    /// identical instance data.
+    fn build_scene(&self, snapshot: &PcbSnapshot) -> Scene {
+        let mut scene = Scene::default();
+        let theme = ResolvedTheme::from_canvas_colors(self.canvas_colors);
+        PcbRenderer::build_scene(
+            snapshot,
+            &theme,
+            DirtyFlags::LINES | DirtyFlags::CIRCLES | DirtyFlags::POLYGONS | DirtyFlags::OVERLAY,
+            &mut scene,
+        );
+        scene
+    }
+
+    /// Build the scene for GPU rendering: the same geometry as the CPU path,
+    /// but the overlay primitives are folded into the main instance buffers so
+    /// the single shader pass draws them last (on top of the content of the
+    /// same kind). Returns `None` when no board snapshot is loaded.
+    pub fn gpu_scene(&self) -> Option<Scene> {
+        let snapshot = self.active_renderer_snapshot()?;
+        let mut scene = self.build_scene(snapshot);
+
+        let overlay_lines = std::mem::take(&mut scene.overlay_lines);
+        let overlay_circles = std::mem::take(&mut scene.overlay_circles);
+        let overlay_polygons = std::mem::take(&mut scene.overlay_polygons);
+        scene.lines.extend(overlay_lines);
+        scene.circles.extend(overlay_circles);
+        scene.polygons.extend(overlay_polygons);
+
+        Some(scene)
     }
 }
 
@@ -322,6 +394,7 @@ impl canvas::Program<Message> for PcbCanvas {
 
         if let Some(target) = state.pending_fit.take() {
             state.camera.fit_rect(target, bounds);
+            self.publish_live_camera(state);
             return Some(canvas::Action::publish(Message::CanvasEvent(
                 CanvasEvent::CursorMoved,
             )));
@@ -336,6 +409,7 @@ impl canvas::Program<Message> for PcbCanvas {
                 if let Some(cursor_pos) = cursor.position_in(bounds)
                     && state.camera.zoom_at(cursor_pos, scroll_y, bounds)
                 {
+                    self.publish_live_camera(state);
                     return Some(
                         canvas::Action::publish(Message::CanvasEvent(CanvasEvent::CursorMoved))
                             .and_capture(),
@@ -364,6 +438,7 @@ impl canvas::Program<Message> for PcbCanvas {
                             .camera
                             .pan(cursor_pos.x - last_pan_pos.x, cursor_pos.y - last_pan_pos.y);
                         state.last_pan_pos = Some(cursor_pos);
+                        self.publish_live_camera(state);
                         return Some(
                             canvas::Action::publish(Message::CanvasEvent(CanvasEvent::CursorMoved))
                                 .and_capture(),
@@ -437,6 +512,15 @@ impl canvas::Program<Message> for PcbCanvas {
             }
         });
 
+        // GPU mode: a `shader` stacked above this canvas draws the board
+        // content on the GPU (see `Self::gpu_render` / `Self::gpu_scene`). The
+        // CPU canvas then contributes only the background + grid (`bg`), which
+        // sits *behind* the shader — iced's shader primitive composites over
+        // whatever is already there and never clears its own region.
+        if self.gpu_render {
+            return vec![bg];
+        }
+
         let (cached_offset_x, cached_offset_y, cached_scale) = self.content_cache_camera.get();
         let camera_matches_cache = (cached_offset_x - state.camera.offset.x).abs() < 0.01
             && (cached_offset_y - state.camera.offset.y).abs() < 0.01
@@ -451,17 +535,7 @@ impl canvas::Program<Message> for PcbCanvas {
                 state.camera.scale,
             ));
             if let Some(snapshot) = self.active_renderer_snapshot() {
-                let mut scene = Scene::default();
-                let theme = ResolvedTheme::from_canvas_colors(self.canvas_colors);
-                PcbRenderer::build_scene(
-                    snapshot,
-                    &theme,
-                    DirtyFlags::LINES
-                        | DirtyFlags::CIRCLES
-                        | DirtyFlags::POLYGONS
-                        | DirtyFlags::OVERLAY,
-                    &mut scene,
-                );
+                let scene = self.build_scene(snapshot);
                 draw_scene(frame, &scene, &state.camera, bounds);
             }
         });

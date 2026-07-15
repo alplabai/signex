@@ -86,6 +86,14 @@ pub struct UiState {
     pub preferences_draft_multisheet_style: MultisheetStyle,
     pub grid_style: GridStyle,
     pub preferences_draft_grid_style: GridStyle,
+    /// Saved PCB GPU-render toggle (experimental). The *effective* live value
+    /// used by rendering is `PcbCanvas::gpu_render` (updated immediately on
+    /// draft change for live preview, like `render_config` globals for
+    /// grid/theme); this field is the persisted value used only for the
+    /// dirty comparison + on-disk persistence. See [`Self::preferences_draft_differs`].
+    pub pcb_gpu_render: bool,
+    /// Draft mirror of [`Self::pcb_gpu_render`] for Preferences cancel/discard.
+    pub preferences_draft_pcb_gpu_render: bool,
     /// Default symbol-editor grid size (mm) — used when a library is
     /// first opened. Changed from Preferences ▸ Appearance ▸ Symbol Editor.
     pub preferences_draft_symbol_grid_size_mm: f32,
@@ -261,4 +269,21 @@ pub struct UiState {
     /// row. The chrome-strip search bar is the always-rendered input;
     /// `open` gates the dropdown overlay only.
     pub command_palette: super::super::command_palette::CommandPaletteState,
+}
+
+impl UiState {
+    /// True when any Preferences draft differs from its saved live value —
+    /// drives the Save button + the dirty-close guard. Single source of truth
+    /// so every live-preview `PrefMsg::Draft*` handler stays consistent as new
+    /// drafts are added (the old per-handler inline chains had drifted to
+    /// different term sets).
+    pub fn preferences_draft_differs(&self) -> bool {
+        self.preferences_draft_theme != self.theme_id
+            || self.preferences_draft_font != self.ui_font_name
+            || self.preferences_draft_power_port_style != self.power_port_style
+            || self.preferences_draft_label_style != self.label_style
+            || self.preferences_draft_multisheet_style != self.multisheet_style
+            || self.preferences_draft_grid_style != self.grid_style
+            || self.preferences_draft_pcb_gpu_render != self.pcb_gpu_render
+    }
 }

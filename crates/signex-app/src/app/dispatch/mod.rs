@@ -294,7 +294,19 @@ impl Signex {
                                 self.ui_state.annotate_reset_confirm = false
                             }
                             ModalId::ErcDialog => self.ui_state.erc_dialog_open = false,
-                            ModalId::Preferences => self.ui_state.preferences_open = false,
+                            ModalId::Preferences => {
+                                // Universal Preferences-close choke point: the
+                                // native window-close button and the Esc key
+                                // both destroy the detached window and land
+                                // here. Revert unsaved live-preview drafts (the
+                                // Discard button already did this, so the call
+                                // is idempotent) so a previewed-but-unsaved
+                                // change — e.g. the experimental PCB GPU render
+                                // toggle — can't linger silently active with
+                                // the checkbox showing unchecked.
+                                self.revert_preferences_drafts();
+                                self.ui_state.preferences_open = false;
+                            }
                             ModalId::FindReplace => self.ui_state.find_replace.open = false,
                             ModalId::MoveSelection => self.ui_state.move_selection.open = false,
                             ModalId::NetColorPalette => {

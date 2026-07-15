@@ -588,6 +588,33 @@ pub fn write_grid_visible_pref_at(path: &Path, visible: bool) {
 }
 
 // ──────────────────────────────────────────────────────────────────────
+// PCB GPU render (experimental)
+// ──────────────────────────────────────────────────────────────────────
+
+/// Read the PCB GPU-render toggle. Defaults to the compile-time
+/// [`crate::feature_flags::PCB_GPU_RENDER`] when the key is absent, so the
+/// const acts as the factory default and old prefs files stay compatible.
+pub fn read_pcb_gpu_render_pref() -> bool {
+    read_pcb_gpu_render_pref_at(&prefs_path())
+}
+
+pub fn read_pcb_gpu_render_pref_at(path: &Path) -> bool {
+    read_prefs_json(path)
+        .and_then(|json| json["pcb_gpu_render"].as_bool())
+        .unwrap_or(crate::feature_flags::PCB_GPU_RENDER)
+}
+
+pub fn write_pcb_gpu_render_pref(enabled: bool) {
+    write_pcb_gpu_render_pref_at(&prefs_path(), enabled)
+}
+
+pub fn write_pcb_gpu_render_pref_at(path: &Path, enabled: bool) {
+    update_prefs_json(path, |json| {
+        json["pcb_gpu_render"] = serde_json::Value::Bool(enabled);
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────
 // Snap enabled
 // ──────────────────────────────────────────────────────────────────────
 

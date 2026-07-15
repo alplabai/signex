@@ -12,6 +12,7 @@ impl Signex {
         self.ui_state.preferences_draft_multisheet_style = self.ui_state.multisheet_style;
         self.ui_state.preferences_draft_component_classes = self.ui_state.component_classes.clone();
         self.ui_state.preferences_draft_grid_style = self.ui_state.grid_style;
+        self.ui_state.preferences_draft_pcb_gpu_render = self.ui_state.pcb_gpu_render;
         // Seed the Keyboard Shortcuts pane with a fresh working copy of
         // the live profile set, and clear any stale recorder / status.
         self.ui_state.preferences_keymap_editor =
@@ -43,6 +44,57 @@ impl Signex {
         Task::none()
     }
 
+    /// Revert every Preferences live-preview draft back to its saved value and
+    /// repaint, so closing the dialog by ANY means — the Discard button, Esc,
+    /// or the native window-close button — drops unsaved previews instead of
+    /// leaving them silently active (e.g. the experimental PCB GPU render
+    /// toggle would otherwise keep rendering on the GPU with the checkbox
+    /// showing unchecked). Does not touch `preferences_open` or close the
+    /// window; callers own that. Idempotent — safe to call more than once.
+    pub(crate) fn revert_preferences_drafts(&mut self) {
+        self.ui_state.preferences_draft_theme = self.ui_state.theme_id;
+        self.ui_state.preferences_draft_font = self.ui_state.ui_font_name.clone();
+        self.ui_state.preferences_draft_power_port_style = self.ui_state.power_port_style;
+        self.ui_state.preferences_draft_label_style = self.ui_state.label_style;
+        self.ui_state.preferences_draft_multisheet_style = self.ui_state.multisheet_style;
+        self.ui_state.preferences_draft_component_classes =
+            self.ui_state.component_classes.clone();
+        self.ui_state.preferences_draft_grid_style = self.ui_state.grid_style;
+        self.ui_state.preferences_draft_pcb_gpu_render = self.ui_state.pcb_gpu_render;
+        // Revert the live-preview GPU flag to the saved value and repaint the
+        // PCB canvas so a discarded toggle takes no effect.
+        self.interaction_state.pcb_canvas.gpu_render = self.ui_state.pcb_gpu_render;
+        self.interaction_state.pcb_canvas.clear_content_cache();
+        self.interaction_state.pcb_canvas.clear_bg_cache();
+        // Drop the keymap working copy back to the live set so unsaved rebinds
+        // / new profiles are discarded.
+        self.ui_state.preferences_keymap_editor =
+            crate::keymap::KeymapEditorModel::new(self.ui_state.keymap_profiles.clone());
+        self.ui_state.preferences_keymap_status.clear();
+        self.ui_state.preferences_keymap_recorder = None;
+        self.ui_state.preferences_dirty = false;
+        // Revert the render_config globals used for schematic live preview.
+        let tokens = if self.ui_state.theme_id == ThemeId::Custom {
+            self.ui_state
+                .custom_theme
+                .as_ref()
+                .map(|c| c.tokens)
+                .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::Signex))
+        } else {
+            signex_types::theme::theme_tokens(self.ui_state.theme_id)
+        };
+        self.document_state.panel_ctx.tokens = tokens;
+        self.update_canvas_theme();
+        crate::render_config::set_power_port_style(self.ui_state.power_port_style);
+        crate::render_config::set_label_style(self.ui_state.label_style);
+        crate::render_config::set_multisheet_style(self.ui_state.multisheet_style);
+        crate::render_config::set_grid_style(self.ui_state.grid_style);
+        self.interaction_state
+            .active_canvas_mut()
+            .clear_content_cache();
+        self.interaction_state.active_canvas_mut().clear_bg_cache();
+    }
+
     pub(crate) fn handle_preferences_message(
         &mut self,
         msg: crate::preferences::PrefMsg,
@@ -61,41 +113,8 @@ impl Signex {
                 }
             }
             PrefMsg::DiscardAndClose => {
-                self.ui_state.preferences_draft_theme = self.ui_state.theme_id;
-                self.ui_state.preferences_draft_font = self.ui_state.ui_font_name.clone();
-                self.ui_state.preferences_draft_power_port_style = self.ui_state.power_port_style;
-                self.ui_state.preferences_draft_label_style = self.ui_state.label_style;
-                self.ui_state.preferences_draft_multisheet_style = self.ui_state.multisheet_style;
-                self.ui_state.preferences_draft_component_classes =
-                    self.ui_state.component_classes.clone();
-                self.ui_state.preferences_draft_grid_style = self.ui_state.grid_style;
-                // Drop the keymap working copy back to the live set so
-                // unsaved rebinds / new profiles are discarded.
-                self.ui_state.preferences_keymap_editor =
-                    crate::keymap::KeymapEditorModel::new(self.ui_state.keymap_profiles.clone());
-                self.ui_state.preferences_keymap_status.clear();
-                self.ui_state.preferences_keymap_recorder = None;
-                self.ui_state.preferences_dirty = false;
+                self.revert_preferences_drafts();
                 self.ui_state.preferences_open = false;
-                let tokens = if self.ui_state.theme_id == ThemeId::Custom {
-                    self.ui_state
-                        .custom_theme
-                        .as_ref()
-                        .map(|c| c.tokens)
-                        .unwrap_or_else(|| signex_types::theme::theme_tokens(ThemeId::Signex))
-                } else {
-                    signex_types::theme::theme_tokens(self.ui_state.theme_id)
-                };
-                self.document_state.panel_ctx.tokens = tokens;
-                self.update_canvas_theme();
-                crate::render_config::set_power_port_style(self.ui_state.power_port_style);
-                crate::render_config::set_label_style(self.ui_state.label_style);
-                crate::render_config::set_multisheet_style(self.ui_state.multisheet_style);
-                crate::render_config::set_grid_style(self.ui_state.grid_style);
-                self.interaction_state
-                    .active_canvas_mut()
-                    .clear_content_cache();
-                self.interaction_state.active_canvas_mut().clear_bg_cache();
                 return self.close_detached_modal(super::super::state::ModalId::Preferences);
             }
             PrefMsg::Save => {
@@ -118,6 +137,10 @@ impl Signex {
                 self.ui_state.label_style = self.ui_state.preferences_draft_label_style;
                 self.ui_state.multisheet_style = self.ui_state.preferences_draft_multisheet_style;
                 self.ui_state.grid_style = self.ui_state.preferences_draft_grid_style;
+                self.ui_state.pcb_gpu_render = self.ui_state.preferences_draft_pcb_gpu_render;
+                // The live-preview already pushed the draft into the widget;
+                // re-assert it so the saved and effective flags can't diverge.
+                self.interaction_state.pcb_canvas.gpu_render = self.ui_state.pcb_gpu_render;
                 self.update_canvas_theme();
                 let tokens = if self.ui_state.theme_id == ThemeId::Custom {
                     self.ui_state
@@ -139,6 +162,7 @@ impl Signex {
                 crate::fonts::write_label_style_pref(self.ui_state.label_style);
                 crate::fonts::write_multisheet_style_pref(self.ui_state.multisheet_style);
                 crate::fonts::write_grid_style_pref(self.ui_state.grid_style);
+                crate::fonts::write_pcb_gpu_render_pref(self.ui_state.pcb_gpu_render);
                 crate::fonts::write_theme_pref(self.ui_state.theme_id);
                 // Component classes — keep entries with non-empty keys
                 // and labels, dedupe by key (last write wins) so the
@@ -229,21 +253,11 @@ impl Signex {
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_content_cache();
-                self.ui_state.preferences_dirty = self.ui_state.preferences_draft_theme
-                    != self.ui_state.theme_id
-                    || self.ui_state.preferences_draft_font != self.ui_state.ui_font_name
-                    || self.ui_state.preferences_draft_power_port_style
-                        != self.ui_state.power_port_style
-                    || self.ui_state.preferences_draft_label_style != self.ui_state.label_style;
+                self.ui_state.preferences_dirty = self.ui_state.preferences_draft_differs();
             }
             PrefMsg::DraftFont(name) => {
                 self.ui_state.preferences_draft_font = name;
-                self.ui_state.preferences_dirty = self.ui_state.preferences_draft_theme
-                    != self.ui_state.theme_id
-                    || self.ui_state.preferences_draft_font != self.ui_state.ui_font_name
-                    || self.ui_state.preferences_draft_power_port_style
-                        != self.ui_state.power_port_style
-                    || self.ui_state.preferences_draft_label_style != self.ui_state.label_style;
+                self.ui_state.preferences_dirty = self.ui_state.preferences_draft_differs();
             }
             PrefMsg::DraftPowerPortStyle(style) => {
                 self.ui_state.preferences_draft_power_port_style = style;
@@ -251,12 +265,7 @@ impl Signex {
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_content_cache();
-                self.ui_state.preferences_dirty = self.ui_state.preferences_draft_theme
-                    != self.ui_state.theme_id
-                    || self.ui_state.preferences_draft_font != self.ui_state.ui_font_name
-                    || self.ui_state.preferences_draft_power_port_style
-                        != self.ui_state.power_port_style
-                    || self.ui_state.preferences_draft_label_style != self.ui_state.label_style;
+                self.ui_state.preferences_dirty = self.ui_state.preferences_draft_differs();
             }
             PrefMsg::DraftLabelStyle(style) => {
                 self.ui_state.preferences_draft_label_style = style;
@@ -264,14 +273,7 @@ impl Signex {
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_content_cache();
-                self.ui_state.preferences_dirty = self.ui_state.preferences_draft_theme
-                    != self.ui_state.theme_id
-                    || self.ui_state.preferences_draft_font != self.ui_state.ui_font_name
-                    || self.ui_state.preferences_draft_power_port_style
-                        != self.ui_state.power_port_style
-                    || self.ui_state.preferences_draft_label_style != self.ui_state.label_style
-                    || self.ui_state.preferences_draft_multisheet_style
-                        != self.ui_state.multisheet_style;
+                self.ui_state.preferences_dirty = self.ui_state.preferences_draft_differs();
             }
             PrefMsg::DraftMultisheetStyle(style) => {
                 self.ui_state.preferences_draft_multisheet_style = style;
@@ -279,28 +281,23 @@ impl Signex {
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_content_cache();
-                self.ui_state.preferences_dirty = self.ui_state.preferences_draft_theme
-                    != self.ui_state.theme_id
-                    || self.ui_state.preferences_draft_font != self.ui_state.ui_font_name
-                    || self.ui_state.preferences_draft_power_port_style
-                        != self.ui_state.power_port_style
-                    || self.ui_state.preferences_draft_label_style != self.ui_state.label_style
-                    || self.ui_state.preferences_draft_multisheet_style
-                        != self.ui_state.multisheet_style;
+                self.ui_state.preferences_dirty = self.ui_state.preferences_draft_differs();
             }
             PrefMsg::DraftGridStyle(style) => {
                 self.ui_state.preferences_draft_grid_style = style;
                 crate::render_config::set_grid_style(style);
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
-                self.ui_state.preferences_dirty = self.ui_state.preferences_draft_theme
-                    != self.ui_state.theme_id
-                    || self.ui_state.preferences_draft_font != self.ui_state.ui_font_name
-                    || self.ui_state.preferences_draft_power_port_style
-                        != self.ui_state.power_port_style
-                    || self.ui_state.preferences_draft_label_style != self.ui_state.label_style
-                    || self.ui_state.preferences_draft_multisheet_style
-                        != self.ui_state.multisheet_style
-                    || self.ui_state.preferences_draft_grid_style != self.ui_state.grid_style;
+                self.ui_state.preferences_dirty = self.ui_state.preferences_draft_differs();
+            }
+            PrefMsg::DraftPcbGpuRender(enabled) => {
+                self.ui_state.preferences_draft_pcb_gpu_render = enabled;
+                // Live preview: push the draft into the widget's effective flag
+                // and repaint the PCB canvas so the toggle shows immediately.
+                // Persisted only on Save; reverted on Discard.
+                self.interaction_state.pcb_canvas.gpu_render = enabled;
+                self.interaction_state.pcb_canvas.clear_content_cache();
+                self.interaction_state.pcb_canvas.clear_bg_cache();
+                self.ui_state.preferences_dirty = self.ui_state.preferences_draft_differs();
             }
             PrefMsg::DraftSymbolGridSize(size) => {
                 self.ui_state.preferences_draft_symbol_grid_size_mm = size;

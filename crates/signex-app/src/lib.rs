@@ -30,6 +30,7 @@ pub mod pcb_canvas;
 pub mod preferences;
 pub mod render_config;
 pub mod renderer_scene_canvas;
+pub mod scene_shader;
 pub mod schematic_runtime;
 pub mod schematic_shader;
 pub mod status_bar;

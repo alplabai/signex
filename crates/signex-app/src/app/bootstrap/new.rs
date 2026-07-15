@@ -32,7 +32,11 @@ impl Signex {
         let _ = &mut dock;
 
         let sch_canvas = SchematicCanvas::new();
-        let pcb_canvas = crate::pcb_canvas::PcbCanvas::new();
+        let mut pcb_canvas = crate::pcb_canvas::PcbCanvas::new();
+        // Seed the effective GPU-render flag from the persisted preference so
+        // the very first PCB frame honours the saved toggle before the user
+        // opens Preferences. `ui_state.pcb_gpu_render` mirrors the same value.
+        pcb_canvas.gpu_render = crate::fonts::read_pcb_gpu_render_pref();
         // Default to the 50-mil Altium grid; user-set value overrides
         // through the prefs file (UX §1.5 — last-used grid persists).
         let grid_size_mm =
@@ -107,6 +111,8 @@ impl Signex {
                 preferences_draft_multisheet_style: crate::fonts::read_multisheet_style_pref(),
                 grid_style: crate::fonts::read_grid_style_pref(),
                 preferences_draft_grid_style: crate::fonts::read_grid_style_pref(),
+                pcb_gpu_render: crate::fonts::read_pcb_gpu_render_pref(),
+                preferences_draft_pcb_gpu_render: crate::fonts::read_pcb_gpu_render_pref(),
                 preferences_draft_symbol_grid_size_mm: crate::fonts::read_symbol_grid_size_mm_pref(
                 ),
                 preferences_draft_symbol_grid_style: crate::fonts::read_symbol_grid_style_pref(),
