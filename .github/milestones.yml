@@ -125,8 +125,24 @@
   description: "Typst editor, component-linked annotations, measurement log."
   state: open
 
+- title: "v1.4.1 — Design References & Annotations"
+  description: "@component / @pin / @net Typst functions, reference resolution, notebook ↔ schematic navigation, badge overlay, Annotations panel."
+  state: open
+
+- title: "v1.4.2 — Measurements & Signal AI Integration"
+  description: "#measurement() function, measurement timeline, attachments, stale detection, Signal AI notebook read/write (Pro)."
+  state: open
+
+- title: "v1.4.3 — Computational Layer"
+  description: "#python() calculation cells, embedded CPython via pyo3, schematic-value bridge, inline plots, sandboxed execution, slim installer variant."
+  state: open
+
 - title: "v1.5.0 — Block Diagram"
   description: "System-level functional blocks, signal flow, top-down design."
+  state: open
+
+- title: "v1.5.1 — Schematic Linking & Power Tree"
+  description: "Block → sheet links, auto-generated diagram from hierarchy, power tree + budget annotations, signal chain view."
   state: open
 
 - title: "v2.0.0 — PCB Viewer"
@@ -137,30 +153,257 @@
   description: "Interactive routing (greedy, walkaround, push-and-shove), diff pair, length tuning, DRC 15 rules, copper pour."
   state: open
 
+- title: "v2.1.1 — Router: Walkaround"
+  description: "Minkowski obstacle graph, A* pathfinder with corner/via/layer costs, corner-insertion pass, incremental DRC, 50-board test corpus."
+  state: open
+
+- title: "v2.1.2 — Router: Push-and-Shove"
+  description: "Topology-preserving shove solver, rigidity heuristics, via shove, preview buffer + Escape rollback, single-action undo."
+  state: open
+
+- title: "v2.1.3 — Router: Diff Pairs & Length Tuning"
+  description: "Coupled two-net router with gap control, length meander generator, length/skew reporting, teardrops."
+  state: open
+
+- title: "v2.1.4 — Copper Pour"
+  description: "Zone fill engine, thermal relief, island removal, fill priority, on-demand fill, back annotation / ECO."
+  state: open
+
 - title: "v2.2.0 — Community Release"
   description: "PCB output (Gerber X2, Excellon, ODB++, pick-and-place, STEP). Full schematic + PCB editor."
+  state: open
+
+- title: "v2.2.1 — Assembly & 3D Export"
+  description: "Pick-and-place CSV, IPC-2581, STEP 3D export (board body), assembly SVG."
   state: open
 
 - title: "v2.3.0 — 3D Viewer"
   description: "3D PCB, PBR materials, STEP model loading."
   state: open
 
+- title: "v2.3.1 — Realistic 3D View Mode"
+  description: "Realistic3D mode + 2/3 toggle, orbit camera rig, signex-render-wgpu-3d PBR-lite pipeline, baked-texture board render."
+  state: open
+
+- title: "v2.3.2 — 3D Selection & Cross-Probe"
+  description: "Ray-cast hit-test at parity with 2D selection, schematic cross-probe orbits the camera, layer visibility honoured in 3D."
+  state: open
+
+- title: "v2.3.3 — On-Canvas 3D Toolbar"
+  description: "Floating 3D toolbar, camera presets, board flip, component explode slider, HDRI cycle, screenshot."
+  state: open
+
+- title: "v2.3.4 — STEP → glTF Cache Pipeline"
+  description: "signex-3d-models crate (STEP import, tessellation, glTF write), hashed model cache, material fallback, fallback extrusion."
+  state: open
+
+- title: "v2.3.5 — Material Sidecars & Controls"
+  description: ".snxmat parser and bake integration, Properties-panel Board context, PBR preset library v1."
+  state: open
+
+- title: "v2.3.6 — Curated Footprint Library"
+  description: "Curated .glb models for the top 50 stock footprints, CI golden-image render gate, on-demand model download."
+  state: open
+
+- title: "v2.3.7 — Parametric Generators: R / C / L"
+  description: "R_* / C_* / L_* family generators, BOM-driven value + tolerance label bake, CI family regeneration."
+  state: open
+
+- title: "v2.3.8 — Parametric Generators: IC Packages"
+  description: "SOIC / TSSOP / SSOP / QFP / QFN and BGA / LGA / DIP generators, pin-1 decals, part-number labels."
+  state: open
+
+- title: "v2.3.9 — Board-Scope Material Overrides"
+  description: "Project-scoped .snxmat for custom silkscreen art, per-board texture channel overrides, auto-bake toggle."
+  state: open
+
+- title: "v2.3.10 — Advanced Board Controls"
+  description: "Mask misregistration, via tenting modes, edge bevel geometry, wear/weathering overlay."
+  state: open
+
 - title: "v2.4.0 — Advanced PCB"
   description: "Layer stack editor, impedance, constraints, keepout, constraint manager."
+  state: open
+
+- title: "v2.4.1 — Impedance & DRC Rules"
+  description: "Impedance profile per layer pair + calculator, impedance-controlled routing, silk-silk / acute-angle / clearance / height DRC."
+  state: open
+
+- title: "v2.4.2 — Routing Polish & Geometry"
+  description: "Route completion, glossing, split planes, via-in-pad, paste/mask expansion, per-layer keepout, cutouts, castellated holes."
+  state: open
+
+- title: "v2.4.3 — Constraint Manager & HUD"
+  description: "Schematic-side spreadsheet rule editor, query-based rule scoping, Board Insight HUD."
   state: open
 
 - title: "v2.5.0 — High-Speed Design"
   description: "xSignals, DDR SI, eye diagram, PDN analysis."
   state: open
 
+- title: "v2.5.1 — DDR SI & PDN"
+  description: "Eye diagram generation, DDR timing analysis, channel simulation (IBIS → S-param → IBIS), PDN Z(f), return-path analyser."
+  state: open
+
+# v2.6 and v2.7 are P3 and are NOT gates — see docs/ROADMAP.md §8. They
+# are published because they are scoped, not because they are committed.
+# Of every band on the roadmap these are the most likely to move.
+- title: "v2.6.0 — Render Manager & Scene Export"
+  description: "Render Manager dock panel, signex-render-blender scene-bundle export, Blender auto-detect. Blender is detected, never bundled."
+  state: open
+
+- title: "v2.6.1 — Blender Addon & Single-Frame Render"
+  description: "Signex Blender addon, render script generation, single-frame PNG / JPG / EXR output, Install Blender helper."
+  state: open
+
+- title: "v2.6.2 — HDRI Presets & Lighting Rigs"
+  description: "HDRI library, lighting rig presets, sample count presets (Draft / Good / Final)."
+  state: open
+
+- title: "v2.6.3 — Render Queue"
+  description: "Queued jobs with progress and cancel, queue survives restart, output-folder action, per-job log viewer."
+  state: open
+
+- title: "v2.6.4 — Preview-Parity CI Gate"
+  description: "CI diffs a reference scene rendered through Tier-1 and Tier-2; fails on material drift. Golden-image corpus."
+  state: open
+
+- title: "v2.7.0 — Turntable Animation"
+  description: "Turntable camera path, MP4 / WebM export via Blender's ffmpeg encoder, background render thread."
+  state: open
+
+- title: "v2.7.1 — Camera Path Editor"
+  description: "Bezier camera tracks with keyframe editing, timeline scrubber with Tier-1 preview, per-segment easing."
+  state: open
+
+- title: "v2.7.2 — Assembly Animation"
+  description: "Components drop in along BOM order, per-component delay/duration overrides, solder reflow mode."
+  state: open
+
+- title: "v2.7.3 — Simulation Overlay Bake-In"
+  description: "Render-time thermal and EM / SI overlays, per-frame interpolation for time-varying simulation data."
+  state: open
+
 - title: "v3.0.0 — Pro Release"
   description: "Signal AI + plugin system + collaboration. Pro subscription unlocks the AI copilot and live co-editing."
   state: open
 
+# ─────────── speculative — everything below here ───────────
+# docs/ROADMAP.md §11: the order and timing past v3.0 are speculative and
+# user feedback will reshape them. These milestones exist so that scoped
+# work is visible and issues have somewhere to hang — NOT as commitments.
+# None of them carries exit criteria; none of them gates anything.
+# v3.3 (plugin system) is deliberately absent: the roadmap publishes it
+# at band level only, because it has no sub-version staging plan. Do not
+# add "v3.3.0" here before the roadmap defines it.
+- title: "v3.1.0 — Chat & Context"
+  description: "Speculative — Signal panel (streaming chat, markdown), design context injection, locally persisted session history."
+  state: open
+
+- title: "v3.1.1 — Visual & Polish"
+  description: "Speculative — Visual context (canvas screenshot to a vision model), usage meter, graceful offline degradation."
+  state: open
+
+- title: "v3.2.0 — Edit & Analysis Tools"
+  description: "Speculative — Undoable AI edit tools (add_component, draw_wire, set_value, delete_element), check_erc / check_drc / check_si, fix suggestions."
+  state: open
+
+- title: "v3.2.1 — Sim & Templates"
+  description: "Speculative — Simulation and notebook tool use, design review mode, circuit templates, natural-language constraint entry."
+  state: open
+
+- title: "v3.4.0 — Realtime & CRDT"
+  description: "Speculative — Realtime WebSocket client (signex-collab), CRDT document model, auth with accounts / teams / roles."
+  state: open
+
+- title: "v3.4.1 — Presence & Cursors"
+  description: "Speculative — Per-user canvas cursors, presence panel with follow mode, sheet / region / layer / net locking."
+  state: open
+
+- title: "v3.4.2 — Storage & Review"
+  description: "Speculative — Cloud project storage, version history + edit attribution, pinned comments and review workflow, offline op queue with replay."
+  state: open
+
 - title: "v4.0.0 — Simulation"
-  description: "Unified simulation view with block-diagram composition, SPICE (ngspice), simulation wizards."
+  description: "Speculative — Unified simulation view with block-diagram composition, SPICE (ngspice), simulation wizards."
+  state: open
+
+- title: "v4.0.1 — Waveform & Probes"
+  description: "Speculative — Netlist generation from blocks, subcircuit extraction, probes, waveform panel, .raw parser, DC/AC/Transient/Noise/Fourier."
+  state: open
+
+- title: "v4.1.0 — PCB Geometry Blocks & Vendor Models"
+  description: "Speculative — PCB trace / via / region blocks with S-param extraction, IBIS and S-parameter blocks, PRBS, clock, eye and TDR probes."
+  state: open
+
+- title: "v4.1.1 — Advanced SPICE & EM"
+  description: "Speculative — Parameterized blocks, parameter sweep, Monte Carlo, corner analysis, OpenEMS bridge, Smith chart, TDR, sim job queue."
+  state: open
+
+- title: "v4.1.2 — Thermal & Simulation Wizards"
+  description: "Speculative — Elmer FEM bridge, thermal analysis, DC IR drop, 3D thermal overlay, DDR SI / power supply / thermal / PDN / RF wizards."
+  state: open
+
+- title: "v4.2.0 — Panelization"
+  description: "Speculative — Step-and-repeat, rails, tabs, mouse bites, V-cut scoring, auto-fiducials, tooling holes, test coupons."
+  state: open
+
+- title: "v4.2.1 — Fab Docs & Export"
+  description: "Speculative — Drill table, stackup report PDF, DXF import/export, one-click validated manufacturing package, Gerber X3."
+  state: open
+
+- title: "v4.3.0 — Altium & Eagle Import"
+  description: "Speculative — signex-altium-import and signex-eagle-import companion repos (one-way to native .snx*), creepage/clearance DRC (IEC 60950)."
+  state: open
+
+- title: "v4.3.1 — Built-in Git"
+  description: "Speculative — Built-in Git (branch, commit, merge, blame) with visual schematic and PCB diff as canvas overlays."
+  state: open
+
+- title: "v4.4.0 — Auto-Router & Advanced Routing"
+  description: "Speculative — Topological auto-router, ActiveRoute, copper balancing / thieving, backdrilling, thermal-aware routing, placement heatmap."
+  state: open
+
+- title: "v4.4.1 — Advanced Geometry & Import"
+  description: "Speculative — Rigid-flex, embedded components, OrCAD / PADS / Mentor import companions, 3D clearance checking, antenna sim."
   state: open
 
 - title: "v5.0.0 — Signex 365"
-  description: "Cloud PLM platform, BOM Studio, ECO workflow, ERP bridge (Odoo/ERPNext)."
+  description: "Speculative — Cloud PLM platform, BOM Studio, ECO workflow, ERP bridge (Odoo/ERPNext)."
+  state: open
+
+- title: "v5.0.1 — Component Picker"
+  description: "Speculative — Desktop component picker backed by the PLM, paginated component search, lifecycle alerts (EOL / NRND / Obsolete)."
+  state: open
+
+- title: "v5.1.0 — BOM Panel & Pricing"
+  description: "Speculative — BOM Studio panel, live pricing + availability from cached distributor data, BOM cost roll-up per assembly."
+  state: open
+
+- title: "v5.1.1 — Lifecycle & Risk"
+  description: "Speculative — Lifecycle status and part-choice ranking, supply-chain risk alerts, cost optimisation suggestions, unified component model."
+  state: open
+
+- title: "v5.2.0 — BOM & ECO Sync"
+  description: "Speculative — BOM push Signex → PLM, delta sync of changed lines, ECO creation from Signex."
+  state: open
+
+- title: "v5.2.1 — Documents & Lifecycle"
+  description: "Speculative — Document publishing into PLM document management, batch lifecycle status check on file open."
+  state: open
+
+- title: "v5.3.0 — Odoo / ERPNext Sync"
+  description: "Speculative — Released BOMs Signex → PLM → ERP; ERP purchase pricing back into BOM Studio."
+  state: open
+
+- title: "v5.3.1 — ECO & Vendor Sync"
+  description: "Speculative — ECO traceability through manufacturing, vendor sync (PLM AVL → ERP supplier list)."
+  state: open
+
+- title: "v5.4.0 — Compliance & Obsolescence"
+  description: "Speculative — RoHS / REACH status in the desktop, obsolescence monitoring with alternatives, AVL badge on the component picker."
+  state: open
+
+- title: "v5.4.1 — PLM-Aware AI"
+  description: "Speculative — PLM-aware Signal AI design review with supply-chain analysis, reusable testbench library (.snxsim templates) in the PLM."
   state: open
