@@ -51,8 +51,8 @@ as status-check contexts):
   deps). `sources` and `advisories` run in the same job but are advisory.
 - `PR-description self-declaration` — the license-compliance block is present
   and does not admit KiCad-derived source.
-- `No KiCad-shaped names anywhere in crates/` — the representative KiCad guard
-  (the full License-Guard suite runs alongside it and shows on every PR).
+- `No GPL-tool-shaped names anywhere in crates/` — the representative licence
+  guard (the full License-Guard suite runs alongside it and shows on every PR).
 
 **Advisory, not blocking** (surfaced as annotations): `fmt · rustfmt`,
 `clippy` (inside `check`), and the `cargo-deny` `sources` / `advisories`
@@ -120,7 +120,7 @@ is the importable source for them.
   - ✅ Require branches to be up to date before merging
   - Required checks (all green): `check · ubuntu-latest`, `test · workspace`,
     `deny · licenses + deps`, `PR-description self-declaration`,
-    `No KiCad-shaped names anywhere in crates/`
+    `No GPL-tool-shaped names anywhere in crates/`
 
 **Merge gates**
 - ✅ Require conversation resolution before merging

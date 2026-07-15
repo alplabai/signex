@@ -32,7 +32,7 @@
           { "context": "test · workspace" },
           { "context": "deny · licenses + deps" },
           { "context": "PR-description self-declaration" },
-          { "context": "No KiCad-shaped names anywhere in crates/" }
+          { "context": "No GPL-tool-shaped names anywhere in crates/" }
         ]
       }
     }
