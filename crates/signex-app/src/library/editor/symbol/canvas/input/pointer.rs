@@ -10,6 +10,13 @@ use iced::Rectangle;
 use iced::mouse;
 use iced::widget::canvas;
 
+/// Screen-pixel motion a right/middle-button drag must cross before
+/// it counts as a real pan (as opposed to 1px cursor jitter) — mirrors
+/// the footprint canvas's `pan_on_cursor_moved` threshold, so the same
+/// jitter can't wrongly suppress the context menu opening on release
+/// or wrongly close one that's already open.
+const PAN_MOVE_THRESHOLD_PX: f32 = 2.0;
+
 impl SymbolCanvas<'_> {
     /// Right/Middle press: cancel an in-progress multi-click draw, else
     /// start a pan.
@@ -122,8 +129,21 @@ impl SymbolCanvas<'_> {
             let dx = pos.x - last.x;
             let dy = pos.y - last.y;
             state.last_pan_pos = Some(pos);
-            if dx != 0.0 || dy != 0.0 {
+            if !state.pan_moved
+                && (dx.abs() > PAN_MOVE_THRESHOLD_PX || dy.abs() > PAN_MOVE_THRESHOLD_PX)
+            {
                 state.pan_moved = true;
+                // The context menu and a pan can't coexist — the drag
+                // just became real, so close any open menu instead of
+                // publishing this frame's pan (see the dismiss-layer
+                // contract in `app/view/overlays/mod.rs`'s
+                // `dismiss_layer` doc comment: the canvas, not the
+                // dismiss layer, owns closing the menu on a real pan).
+                if self.context_menu_open {
+                    return Some(canvas::Action::publish(CanvasAction::CloseContextMenu));
+                }
+            }
+            if dx != 0.0 || dy != 0.0 {
                 return Some(canvas::Action::publish(CanvasAction::Pan { dx, dy }));
             }
             return None;

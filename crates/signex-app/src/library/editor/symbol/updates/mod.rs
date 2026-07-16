@@ -61,6 +61,39 @@ fn mark_dirty(editor: &mut SymEditor) {
     editor.canvas_cache.clear();
 }
 
+/// `SymbolEditorState::status_message`'s contract is "cleared on the
+/// next successful action" — enforced centrally here, once, rather
+/// than at every individual mutation's success point. Clears for
+/// every message that represents an attempted document/selection
+/// mutation; left untouched for the continuous or chrome-only
+/// messages that fire on every frame/hover and would otherwise flash
+/// a just-set message away before the user can read it (camera pan/
+/// zoom/cursor readout, and the context-menu / active-bar-menu
+/// open/close/toggle chrome, which manage their own state and aren't
+/// "actions" against the symbol itself). A message that itself fails
+/// (e.g. a second bad `JoinSelectionIntoPolygon`) re-sets the message
+/// right after this clear, so the net effect always reflects the
+/// outcome of the most recent relevant action.
+fn clear_stale_status_message(editor: &mut SymEditor, msg: &SymbolEditorMsg) {
+    if !matches!(
+        msg,
+        SymbolEditorMsg::Pan { .. }
+            | SymbolEditorMsg::Zoom { .. }
+            | SymbolEditorMsg::CursorAt { .. }
+            | SymbolEditorMsg::ShowContextMenu { .. }
+            | SymbolEditorMsg::CloseContextMenu
+            | SymbolEditorMsg::ContextMenuOpenSubmenu(_)
+            | SymbolEditorMsg::ToggleActiveBarMenu(_)
+            | SymbolEditorMsg::CloseActiveBarMenu
+            | SymbolEditorMsg::SetSheetColor(_)
+            | SymbolEditorMsg::ToggleGrid
+            | SymbolEditorMsg::CycleGridSize
+            | SymbolEditorMsg::CycleUnit
+    ) {
+        editor.status_message = None;
+    }
+}
+
 /// Close any open colour picker (graphic-fill / local-colours). Call
 /// whenever the selection is dropped or the graphics vector is
 /// structurally mutated (delete / undo / redo / part switch) so a
@@ -209,6 +242,8 @@ pub(crate) fn apply_symbol_primitive_edit(
     msg: SymbolEditorMsg,
 ) {
     use crate::library::editor::symbol::state::SymbolSelection;
+
+    clear_stale_status_message(editor, &msg);
 
     match msg {
         // ── UI / toolbar (no undo — except SetTool's synchronous
@@ -518,6 +553,34 @@ mod tests {
             PathBuf::from("t.snxsym"),
             SymbolFile::from_symbol(Symbol::empty("T")),
         )
+    }
+
+    /// A stale status message (e.g. left over from a failed
+    /// `JoinSelectionIntoPolygon`) is cleared by the very next
+    /// mutating message — here `DeleteSelected` on an empty
+    /// selection, itself a no-op — so it never lingers past the
+    /// action it described. Contract lives on
+    /// `SymbolEditorState::status_message`'s doc comment.
+    #[test]
+    fn stale_status_message_clears_on_next_mutating_message() {
+        let mut editor = new_editor();
+        editor.status_message = Some("stale".to_string());
+
+        apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::DeleteSelected);
+
+        assert!(editor.status_message.is_none());
+    }
+
+    /// Continuous/chrome-only messages (camera pan here) must NOT
+    /// clear a just-set status message before the user can read it.
+    #[test]
+    fn status_message_survives_camera_pan() {
+        let mut editor = new_editor();
+        editor.status_message = Some("keep me".to_string());
+
+        apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::Pan { dx: 1.0, dy: 1.0 });
+
+        assert_eq!(editor.status_message.as_deref(), Some("keep me"));
     }
 
     /// Three `PolygonClick`s then `PolygonCommit` push exactly one

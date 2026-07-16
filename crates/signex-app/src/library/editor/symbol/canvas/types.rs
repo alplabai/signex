@@ -135,6 +135,11 @@ pub enum CanvasAction {
         y: f32,
         target: SymbolContextTarget,
     },
+    /// An in-flight right-drag just crossed the pan motion threshold
+    /// while the context menu was open — close it (the context menu
+    /// and a pan can't coexist; mirrors the footprint canvas's
+    /// `pan_on_cursor_moved`).
+    CloseContextMenu,
 }
 
 /// Pivot mode carried by rotate actions emitted from the Symbol canvas.

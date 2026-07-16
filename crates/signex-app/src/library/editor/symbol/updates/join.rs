@@ -5,29 +5,49 @@
 //! closed `Polygon`, replacing the source graphics. See
 //! [`apply_symbol_join`] for the full contract.
 
-use signex_library::{ChainError, ChainSegment, SymbolGraphic, SymbolGraphicKind};
+use signex_library::{ChainError, ChainSegment, Symbol, SymbolGraphic, SymbolGraphicKind};
 
 use super::{SymEditor, close_pickers, mark_dirty, push_undo};
-use crate::library::editor::symbol::state::{SymbolSelection, join_source_indices};
+use crate::library::editor::symbol::state::{self, SymbolSelection};
 use crate::library::messages::SymbolEditorMsg;
+
+/// Surfaced when a selection mixes shared (part 0) and unit-specific
+/// sources — the one ineligibility reason worth explaining, since
+/// silently proceeding would have rescoped the shared shape onto just
+/// the active unit. See `state::common_graphic_part_number`.
+const MIXED_PARTS_MESSAGE: &str = "Selection mixes shared and unit-specific shapes";
 
 pub(super) fn apply_symbol_join(editor: &mut SymEditor, msg: SymbolEditorMsg) {
     if !matches!(msg, SymbolEditorMsg::JoinSelectionIntoPolygon) {
         return;
     }
 
-    let mut indices = join_source_indices(&editor.selected);
+    let mut indices = state::join_source_indices(&editor.selected);
     if indices.is_empty() {
         return;
     }
     indices.sort_unstable();
     indices.dedup();
 
-    let Some((segments, stroke_width)) = eligible_segments(editor, &indices) else {
-        // Selection contains a non-Line/Arc graphic (or a stale
-        // index) — no-op per the "belt and braces" contract; the
-        // context menu also disables the item in this state.
+    // One shared predicate gates both the context-menu row's `enabled`
+    // flag and this op, so they can never drift apart.
+    if !state::selection_is_join_eligible(editor.primitive(), &editor.selected) {
+        // Distinguish the mixed-part-number case (surfaced) from
+        // every other ineligibility reason — non-Line/Arc graphic,
+        // stale index — which stays a silent no-op; the context menu
+        // already disables the row in all of these states.
+        if state::selection_kinds_are_line_or_arc(editor.primitive(), &indices) {
+            editor.status_message = Some(MIXED_PARTS_MESSAGE.to_string());
+        }
         return;
+    }
+
+    let (segments, stroke_width, part_number) = {
+        let sym = editor.primitive();
+        let part_number = state::common_graphic_part_number(sym, &indices)
+            .expect("selection_is_join_eligible guarantees a common part number");
+        let (segments, stroke_width) = segments_for(sym, &indices);
+        (segments, stroke_width, part_number)
     };
 
     let ring = match resolve_ring_with_auto_close(&segments) {
@@ -38,7 +58,7 @@ pub(super) fn apply_symbol_join(editor: &mut SymEditor, msg: SymbolEditorMsg) {
         }
     };
 
-    splice_selection_into_polygon(editor, &indices, ring, stroke_width);
+    splice_selection_into_polygon(editor, &indices, ring, stroke_width, part_number);
     editor.status_message = None;
 }
 
@@ -61,13 +81,17 @@ fn resolve_ring_with_auto_close(segments: &[ChainSegment]) -> Result<Vec<[f64; 2
 
 /// Composite mutation on success: one undo snapshot, remove the
 /// source graphics (descending index order), append the joined
-/// Polygon, and select it. Does NOT go through `push_graphic`, which
-/// would push a second undo snapshot.
+/// Polygon on `part_number` (the sources' shared part — see
+/// `state::common_graphic_part_number`, never hardcoded to the active
+/// unit, so an all-shared source selection stays shared), and select
+/// it. Does NOT go through `push_graphic`, which would push a second
+/// undo snapshot.
 fn splice_selection_into_polygon(
     editor: &mut SymEditor,
     indices: &[usize],
     ring: Vec<[f64; 2]>,
     stroke_width: f64,
+    part_number: u8,
 ) {
     push_undo(editor);
 
@@ -77,12 +101,11 @@ fn splice_selection_into_polygon(
         editor.primitive_mut().graphics.remove(idx);
     }
 
-    let active_part = editor.active_part;
     editor.primitive_mut().graphics.push(SymbolGraphic {
         kind: SymbolGraphicKind::Polygon { vertices: ring },
         stroke_width,
         fill: None,
-        part_number: active_part,
+        part_number,
     });
     let new_idx = editor.primitive().graphics.len() - 1;
     editor.selected = Some(SymbolSelection::Graphic(new_idx));
@@ -90,15 +113,18 @@ fn splice_selection_into_polygon(
     mark_dirty(editor);
 }
 
-/// Resolve `indices` against the active symbol's graphics, returning
-/// the matching `ChainSegment`s plus the max source stroke width —
-/// or `None` if any index is stale or names a non-Line/Arc graphic
-/// (Polygon/Rectangle/Circle/Text), per the eligibility contract.
-fn eligible_segments(editor: &SymEditor, indices: &[usize]) -> Option<(Vec<ChainSegment>, f64)> {
+/// Build the `ChainSegment`s + max source stroke width for `indices`.
+/// Assumes `state::selection_is_join_eligible` already confirmed every
+/// index names a valid Line/Arc graphic — still defensive (`.get`, not
+/// indexing) since a stale index should never reach here but must not
+/// panic if it somehow does.
+fn segments_for(sym: &Symbol, indices: &[usize]) -> (Vec<ChainSegment>, f64) {
     let mut segments = Vec::with_capacity(indices.len());
     let mut stroke_width = 0.0_f64;
     for &idx in indices {
-        let g = editor.primitive().graphics.get(idx)?;
+        let Some(g) = sym.graphics.get(idx) else {
+            continue;
+        };
         let seg = match g.kind {
             SymbolGraphicKind::Line { from, to } => ChainSegment::Line { from, to },
             SymbolGraphicKind::Arc {
@@ -112,12 +138,12 @@ fn eligible_segments(editor: &SymEditor, indices: &[usize]) -> Option<(Vec<Chain
                 start_deg,
                 end_deg,
             },
-            _ => return None,
+            _ => continue,
         };
         stroke_width = stroke_width.max(g.stroke_width);
         segments.push(seg);
     }
-    Some((segments, stroke_width))
+    (segments, stroke_width)
 }
 
 /// Human-readable status-line text for a failed join attempt.
@@ -383,5 +409,53 @@ mod tests {
         apply_symbol_join(&mut editor, SymbolEditorMsg::JoinSelectionIntoPolygon);
         assert!(editor.primitive().graphics.is_empty());
         assert_eq!(editor.undo_snapshots.len(), 0);
+    }
+
+    /// A selection whose sources are all shared (part 0) keeps the
+    /// result on part 0 — it must not get silently rescoped onto the
+    /// active unit (default 1), which would remove the shared body
+    /// from every other unit (part 0 is admitted by hit-test and
+    /// box-select on every unit).
+    #[test]
+    fn all_part0_selection_keeps_part_zero_on_the_result() {
+        let mut editor = square_editor();
+        assert_eq!(editor.active_part, 1, "default active part");
+
+        apply_symbol_join(&mut editor, SymbolEditorMsg::JoinSelectionIntoPolygon);
+
+        assert_eq!(editor.primitive().graphics.len(), 1);
+        assert_eq!(editor.primitive().graphics[0].part_number, 0);
+    }
+
+    /// A selection mixing a shared (part 0) source with an
+    /// active-unit source is disqualified outright: no mutation, no
+    /// undo entry, and a status message explaining why — distinct
+    /// from the silent no-op every other ineligibility reason gets.
+    #[test]
+    fn mixed_shared_and_unit_specific_selection_is_ineligible() {
+        let mut editor = new_editor();
+        push_line(&mut editor, [0.0, 0.0], [4.0, 0.0]); // part 0
+        editor.primitive_mut().graphics.push(SymbolGraphic {
+            kind: SymbolGraphicKind::Line {
+                from: [4.0, 0.0],
+                to: [4.0, 4.0],
+            },
+            stroke_width: 0.15,
+            fill: None,
+            part_number: 1, // active unit
+        });
+        editor.selected = Some(SymbolSelection::Multiple {
+            pin_indices: Vec::new(),
+            graphic_indices: vec![0, 1],
+        });
+
+        apply_symbol_join(&mut editor, SymbolEditorMsg::JoinSelectionIntoPolygon);
+
+        assert_eq!(editor.primitive().graphics.len(), 2, "nothing mutated");
+        assert_eq!(editor.undo_snapshots.len(), 0, "no undo entry");
+        assert_eq!(
+            editor.status_message.as_deref(),
+            Some("Selection mixes shared and unit-specific shapes")
+        );
     }
 }

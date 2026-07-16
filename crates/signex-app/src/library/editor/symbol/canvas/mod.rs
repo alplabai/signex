@@ -82,6 +82,13 @@ pub struct SymbolCanvas<'a> {
     /// with `part_number == active_part` render on the active part
     /// only. Defaults to `1` (single-part components).
     pub active_part: u8,
+    /// Whether the right-click context menu is currently open (see
+    /// `SymbolEditorState::context_menu`). The context menu and a pan
+    /// can't coexist — once an in-flight right-drag crosses the pan
+    /// motion threshold while this is `true`, the pointer handler
+    /// closes the menu instead of publishing that frame's pan (mirrors
+    /// the footprint canvas's `pan_on_cursor_moved`).
+    pub context_menu_open: bool,
     /// Pan/zoom state owned by the editor tab — see
     /// [`crate::app::SymbolEditorState::camera`].
     pub camera: &'a crate::canvas::Camera,
@@ -121,6 +128,7 @@ impl<'a> SymbolCanvas<'a> {
         tool: SymbolTool,
         polygon_vertices: &'a [(f64, f64)],
         active_part: u8,
+        context_menu_open: bool,
         camera: &'a crate::canvas::Camera,
         grid_size_mm: f64,
         grid_visible: bool,
@@ -144,6 +152,7 @@ impl<'a> SymbolCanvas<'a> {
             tool,
             polygon_vertices,
             active_part,
+            context_menu_open,
             camera,
             grid_size_mm,
             grid_visible,

@@ -311,8 +311,11 @@ pub struct SymbolEditorState {
     /// status`). `None` most of the time; set to `Some(reason)` when
     /// an action fails in a way the user needs to see explained (e.g.
     /// `JoinSelectionIntoPolygon` on a non-connecting selection).
-    /// Cleared on the next successful action. Never serialized, never
-    /// snapshotted for undo.
+    /// Cleared centrally at the top of `apply_symbol_primitive_edit`
+    /// (see `updates::clear_stale_status_message`) on the next message
+    /// that represents an attempted mutation, so it never lingers past
+    /// the action it described. Never serialized, never snapshotted
+    /// for undo.
     pub status_message: Option<String>,
     /// Open right-click context menu, if any. `None` = closed. Mirrors
     /// `FootprintEditorState`'s `context_menu` field 1:1 in structure —

@@ -249,6 +249,7 @@ fn view_symbol_canvas<'a>(
         editor.tool,
         &editor.polygon_vertices,
         editor.active_part,
+        editor.context_menu.is_some(),
         &editor.camera,
         display.grid_size_mm as f64,
         display.grid_visible,
@@ -349,6 +350,7 @@ fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> SymbolEdi
             y,
             target: symbol_context_target_to_msg(target),
         },
+        CanvasAction::CloseContextMenu => SymbolEditorMsg::CloseContextMenu,
     }
 }
 

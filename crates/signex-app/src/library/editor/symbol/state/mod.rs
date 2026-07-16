@@ -364,13 +364,14 @@ pub fn join_source_indices(selected: &Option<SymbolSelection>) -> Vec<usize> {
     }
 }
 
-/// Whether the current selection is eligible for "Join into Polygon":
-/// at least one graphic named, and every named graphic is a `Line` or
-/// an `Arc` — a Rectangle/Circle/Text/Polygon anywhere in the
-/// selection disqualifies the whole op. A stale index (selection
-/// outlived a delete) also disqualifies.
-pub fn selection_is_join_eligible(sym: &Symbol, selected: &Option<SymbolSelection>) -> bool {
-    let indices = join_source_indices(selected);
+/// Whether every graphic `indices` names is a `Line` or an `Arc` — the
+/// source-*kind* half of Join-into-Polygon eligibility. `false` for an
+/// empty list or any stale index. Exposed separately from
+/// [`selection_is_join_eligible`] so a caller that needs to explain
+/// *why* a selection is ineligible (as opposed to just gating on it)
+/// can tell a kind mismatch apart from the part-number mismatch
+/// [`common_graphic_part_number`] checks.
+pub fn selection_kinds_are_line_or_arc(sym: &Symbol, indices: &[usize]) -> bool {
     !indices.is_empty()
         && indices.iter().all(|&idx| {
             matches!(
@@ -378,6 +379,36 @@ pub fn selection_is_join_eligible(sym: &Symbol, selected: &Option<SymbolSelectio
                 Some(SymbolGraphicKind::Line { .. }) | Some(SymbolGraphicKind::Arc { .. })
             )
         })
+}
+
+/// The single `part_number` every graphic `indices` names shares, or
+/// `None` if `indices` is empty, any index is stale, or they don't all
+/// agree. A join across a shared (part 0) shape and one of a unit's
+/// own shapes must never silently rescope the shared shape onto just
+/// that one unit — shared geometry is admitted by hit-test and
+/// box-select on every unit (see `graphic_on_part`), so a non-uniform
+/// result disqualifies the whole selection rather than picking a part
+/// number to overwrite the other sources with.
+pub fn common_graphic_part_number(sym: &Symbol, indices: &[usize]) -> Option<u8> {
+    let mut parts = indices
+        .iter()
+        .map(|&idx| sym.graphics.get(idx).map(|g| g.part_number));
+    let first = parts.next()??;
+    parts.all(|p| p == Some(first)).then_some(first)
+}
+
+/// Whether the current selection is eligible for "Join into Polygon":
+/// at least one graphic named, every named graphic is a `Line` or an
+/// `Arc` (a Rectangle/Circle/Text/Polygon anywhere in the selection
+/// disqualifies the whole op), and every named graphic shares the same
+/// `part_number` (see [`common_graphic_part_number`] — a selection
+/// mixing shared and unit-specific sources disqualifies the whole op
+/// too, surfaced by the caller as a distinct status message rather
+/// than a silent no-op).
+pub fn selection_is_join_eligible(sym: &Symbol, selected: &Option<SymbolSelection>) -> bool {
+    let indices = join_source_indices(selected);
+    selection_kinds_are_line_or_arc(sym, &indices)
+        && common_graphic_part_number(sym, &indices).is_some()
 }
 
 /// Add a pin at the given canvas coordinates and return its index in

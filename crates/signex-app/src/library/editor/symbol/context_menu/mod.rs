@@ -27,8 +27,11 @@ pub use rows::{SymbolMenuRow, build_symbol_context_menu_rows};
 
 /// Fixed panel width — list-style menu, not the Filter chip-grid, so a
 /// fixed width (matching the footprint context menu's `MENU_WIDTH`)
-/// keeps every row's shortcut/chevron column aligned.
-const MENU_WIDTH: f32 = 200.0;
+/// keeps every row's shortcut/chevron column aligned. `pub` so the
+/// overlay mount (`app/view/overlays/bars.rs`'s clamping) sizes its
+/// screen-edge estimate off the same number instead of a second
+/// hardcoded copy.
+pub const MENU_WIDTH: f32 = 200.0;
 
 /// Build the right-click context menu card for the active symbol
 /// editor. Returns `None` when the menu is closed.

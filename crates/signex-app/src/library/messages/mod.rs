@@ -519,7 +519,6 @@ pub enum SymbolRotatePivotMsg {
 /// `editor::symbol::state::SymbolContextTarget`. Carried by
 /// `SymbolEditorMsg::ShowContextMenu`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum SymbolContextTargetMsg {
     Empty,
     Pin(usize),
@@ -529,7 +528,6 @@ pub enum SymbolContextTargetMsg {
 /// Which context-menu submenu is accordion-expanded — pure-data alias
 /// of `editor::symbol::state::SymbolContextSubmenu`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum SymbolContextSubmenuMsg {
     Place,
 }

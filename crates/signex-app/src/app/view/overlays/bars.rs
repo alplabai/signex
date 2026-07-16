@@ -446,7 +446,7 @@ impl Signex {
     fn clamp_symbol_menu_position(requested: (f32, f32), window: (f32, f32)) -> (f32, f32) {
         let (mx, my) = requested;
         let (ww, wh) = window;
-        let est_menu_w: f32 = 200.0;
+        let est_menu_w: f32 = crate::library::editor::symbol::context_menu::MENU_WIDTH;
         let est_menu_h: f32 = 260.0;
         let edge_margin: f32 = 4.0;
         let x = if mx + est_menu_w + edge_margin > ww {
