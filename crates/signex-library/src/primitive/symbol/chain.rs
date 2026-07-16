@@ -117,9 +117,11 @@ pub enum ChainError {
     DegenerateSegment { segment_index: usize },
     /// Every segment chains into one connected path, but it never closes
     /// back on itself. `gap_mm` is the distance between the two loose
-    /// ends.
+    /// ends; `ends` are those two loose (odd-degree) endpoints
+    /// themselves, so a caller can auto-close by synthesizing the
+    /// missing edge between them.
     #[error("chain doesn't close — {gap_mm} mm gap between the two loose ends")]
-    OpenChain { gap_mm: f64 },
+    OpenChain { gap_mm: f64, ends: [[f64; 2]; 2] },
     /// More than two segment endpoints meet at the same point — the
     /// input isn't a simple chain (e.g. a T- or X-junction).
     #[error("{at:?} is shared by more than two segment endpoints")]
@@ -338,12 +340,13 @@ fn validate_topology(n: usize, clusters: &EndpointClusters) -> Result<(), ChainE
     match dangling_nodes.as_slice() {
         [] => Ok(()),
         [a, b] => {
-            let gap_mm = dist_sq(
-                average_point(&clusters.node_points[a]),
-                average_point(&clusters.node_points[b]),
-            )
-            .sqrt();
-            Err(ChainError::OpenChain { gap_mm })
+            let end_a = average_point(&clusters.node_points[a]);
+            let end_b = average_point(&clusters.node_points[b]);
+            let gap_mm = dist_sq(end_a, end_b).sqrt();
+            Err(ChainError::OpenChain {
+                gap_mm,
+                ends: [end_a, end_b],
+            })
         }
         // A connected component whose nodes all have degree ≤ 2 is
         // either a simple cycle (0 dangling nodes) or a simple path

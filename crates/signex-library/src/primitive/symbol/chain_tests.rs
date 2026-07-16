@@ -218,7 +218,14 @@ fn open_chain_three_sides_of_square_reports_gap() {
 
     // Assert
     match err {
-        ChainError::OpenChain { gap_mm } => assert_approx_eq(gap_mm, 4.0),
+        ChainError::OpenChain { gap_mm, ends } => {
+            assert_approx_eq(gap_mm, 4.0);
+            // Loose ends are the two open corners of the missing left
+            // side: (0,0) and (0,4), in either order.
+            let mut sorted = ends.to_vec();
+            sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            assert_eq!(sorted, vec![[0.0, 0.0], [0.0, 4.0]]);
+        }
         other => panic!("expected OpenChain, got {other:?}"),
     }
 }
@@ -335,7 +342,13 @@ fn endpoints_beyond_epsilon_report_open_chain() {
 
     // Assert
     match err {
-        ChainError::OpenChain { gap_mm } => assert_approx_eq(gap_mm, 0.02),
+        ChainError::OpenChain { gap_mm, ends } => {
+            assert_approx_eq(gap_mm, 0.02);
+            let mut sorted = ends.to_vec();
+            sorted.sort_by(|p, q| p.partial_cmp(q).unwrap());
+            assert_point_approx_eq(sorted[0], a);
+            assert_point_approx_eq(sorted[1], a_far);
+        }
         other => panic!("expected OpenChain, got {other:?}"),
     }
 }
