@@ -209,14 +209,24 @@ pub(crate) fn net_label_conflict(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     let mut conn = wire_connectivity(ctx);
     let wires = wire_pairs(ctx);
 
+    let net_labels: Vec<&crate::context::ErcLabel> = ctx
+        .labels
+        .iter()
+        .filter(|l| matches!(l.label_type, LabelType::Net))
+        .collect();
+
+    // Two passes, matching `merged_sheet_parent`'s invariant: every union
+    // completes before any root is sampled. Interleaving anchor-then-sample
+    // per label made the result order-dependent — an earlier label's cached
+    // root can go stale once a later label's anchoring union re-roots its
+    // class (a label at a junction-less T point where two wires meet without
+    // a junction dot; issue #388 follow-up).
+    for lbl in &net_labels {
+        conn.root_of_anchored(&lbl.position, &wires);
+    }
+
     let mut by_root: HashMap<(i64, i64), Vec<&crate::context::ErcLabel>> = HashMap::new();
-    for lbl in &ctx.labels {
-        if !matches!(lbl.label_type, LabelType::Net) {
-            continue;
-        }
-        // A Net label at a wire interior anchors to that wire's net root the
-        // same way `build_netlist` anchors it, so a mid-span conflict is
-        // caught instead of landing on a stray singleton root (issue #388).
+    for lbl in net_labels {
         let root = conn.root_of_anchored(&lbl.position, &wires);
         by_root.entry(root).or_default().push(lbl);
     }
@@ -477,15 +487,23 @@ pub(crate) fn missing_power_flag(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     use std::collections::HashMap;
     let mut conn = wire_connectivity(ctx);
     let wires = wire_pairs(ctx);
-    // Map each label text → set of net roots its labels sit on. Anchor each
-    // label to a wire interior first (issue #388) — the same anchoring
-    // `build_netlist` applies — so a mid-span cross-reference label isn't
-    // missed and a real power port gets false-flagged.
+    let named_labels: Vec<&crate::context::ErcLabel> =
+        ctx.labels.iter().filter(|l| !l.text.is_empty()).collect();
+
+    // Two passes, matching `merged_sheet_parent`'s invariant: every union
+    // completes before any root is sampled. Anchor every label to its wire
+    // interior first (issue #388), THEN read roots — sampling interleaved
+    // with anchoring made an earlier label's cached root go stale once a
+    // later label's union re-rooted its class (a label at a junction-less T
+    // point), which could both miss a real conflict and false-flag a port
+    // that IS cross-referenced.
+    for lbl in &named_labels {
+        conn.root_of_anchored(&lbl.position, &wires);
+    }
+
+    // Map each label text → set of net roots its labels sit on.
     let mut label_nets: HashMap<&str, std::collections::HashSet<(i64, i64)>> = HashMap::new();
-    for lbl in &ctx.labels {
-        if lbl.text.is_empty() {
-            continue;
-        }
+    for lbl in named_labels {
         let root = conn.root_of_anchored(&lbl.position, &wires);
         label_nets
             .entry(lbl.text.as_str())
@@ -854,6 +872,83 @@ mod tests {
         assert!(
             out.is_empty(),
             "port cross-referenced by a mid-wire label is not flagged: {out:?}"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Anchor-then-sample must not be order-dependent on label document order
+    // (follow-up to #388): a wire T where wB ends on wA's interior with NO
+    // junction. wA = (0,0)-(10,0), wB = (5,0)-(5,10). The T point (5,0) is
+    // simultaneously wA's interior and wB's own endpoint, so anchoring one
+    // label there re-roots the whole class — sampling that root before a
+    // later label's anchoring union used to cache a stale root.
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn net_label_conflict_is_independent_of_label_order() {
+        let wires = vec![
+            wire(pt(0.0, 0.0), pt(10.0, 0.0)),
+            wire(pt(5.0, 0.0), pt(5.0, 10.0)),
+        ];
+        let n1 = net_label("N1", pt(5.0, 5.0)); // wB interior
+        let n2 = net_label("N2", pt(5.0, 0.0)); // the T point
+
+        let forward = ctx(
+            wires.clone(),
+            Vec::new(),
+            vec![n1.clone(), n2.clone()],
+            Vec::new(),
+        );
+        let mut out_fwd = Vec::new();
+        net_label_conflict(&forward, &mut out_fwd);
+
+        let reverse = ctx(wires, Vec::new(), vec![n2, n1], Vec::new());
+        let mut out_rev = Vec::new();
+        net_label_conflict(&reverse, &mut out_rev);
+
+        assert_eq!(
+            out_fwd.len(),
+            1,
+            "N1/N2 share a net through the T and conflict: {out_fwd:?}"
+        );
+        assert_eq!(
+            out_fwd.len(),
+            out_rev.len(),
+            "verdict must not depend on label document order (fwd={out_fwd:?}, rev={out_rev:?})"
+        );
+    }
+
+    #[test]
+    fn missing_power_flag_is_independent_of_label_order() {
+        let wires = vec![
+            wire(pt(0.0, 0.0), pt(10.0, 0.0)),
+            wire(pt(5.0, 0.0), pt(5.0, 10.0)),
+        ];
+        let power = power_label("+3V3", pt(5.0, 5.0)); // wB interior
+        let other = net_label("X", pt(5.0, 0.0)); // the T point
+        let port = power_port("+3V3", pt(5.0, 10.0)); // wB's far endpoint
+
+        let forward = ctx(
+            wires.clone(),
+            Vec::new(),
+            vec![power.clone(), other.clone()],
+            vec![port.clone()],
+        );
+        let mut out_fwd = Vec::new();
+        missing_power_flag(&forward, &mut out_fwd);
+
+        let reverse = ctx(wires, Vec::new(), vec![other, power], vec![port]);
+        let mut out_rev = Vec::new();
+        missing_power_flag(&reverse, &mut out_rev);
+
+        assert!(
+            out_fwd.is_empty(),
+            "port cross-referenced through the T is not flagged: {out_fwd:?}"
+        );
+        assert_eq!(
+            out_fwd.len(),
+            out_rev.len(),
+            "verdict must not depend on label document order (fwd={out_fwd:?}, rev={out_rev:?})"
         );
     }
 }
