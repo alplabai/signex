@@ -605,6 +605,17 @@ impl FootprintEditorState {
     /// `sketch_entity_id`, `corner_entity_ids`, and `shape_params` (v0.24
     /// Track A4) don't round-trip through `Pad`, so we re-attach them
     /// by matching `pad.number`.
+    ///
+    /// A pad matched in `old_links` keeps its full editor-side link. A
+    /// pad NOT in `old_links` — one that first appears from the sketch
+    /// side (e.g. "Make Pad from Profile", which mints a `PadAttr`-
+    /// carrying entity directly on the sketch and only reaches
+    /// `state.pads` after the next bake) — is relinked from the
+    /// authoritative source: the sketch entity whose `PadAttr.number`
+    /// matches. Without this fallback such a pad stays permanently
+    /// `sketch_entity_id: None`, so a Pads-mode move can't mirror into
+    /// the sketch and the pad snaps back to its original position on the
+    /// next bake.
     pub fn refresh_pads_from_primitive(&mut self, fp: &Footprint) {
         use std::collections::HashMap;
         type Link = (
@@ -626,12 +637,24 @@ impl FootprintEditorState {
                 )
             })
             .collect();
+        let sketch_links: HashMap<String, signex_sketch::id::SketchEntityId> = fp
+            .sketch
+            .as_ref()
+            .map(|s| {
+                s.entities
+                    .iter()
+                    .filter_map(|e| e.pad.as_ref().map(|attr| (attr.number.clone(), e.id)))
+                    .collect()
+            })
+            .unwrap_or_default();
         let mut new_pads: Vec<EditorPad> = fp.pads.iter().map(EditorPad::from_pad).collect();
         for p in &mut new_pads {
             if let Some((sid, cids, params)) = old_links.get(&p.number) {
                 p.sketch_entity_id = *sid;
                 p.corner_entity_ids = *cids;
                 p.shape_params = params.clone();
+            } else if let Some(sid) = sketch_links.get(&p.number) {
+                p.sketch_entity_id = Some(*sid);
             }
         }
         self.pads = new_pads;
@@ -753,5 +776,57 @@ mod tests {
         FootprintEditorState::sync_pads_to_primitive(&s, &mut fp);
         assert_eq!(fp.pads.len(), 1);
         assert_eq!(fp.pads[0].number, "1");
+    }
+
+    /// A pad that first appears from the SKETCH side — "Make Pad from
+    /// Profile" mints a centre Point carrying a `PadAttr` directly on the
+    /// sketch, and the pad only reaches `state.pads` after the next
+    /// bake. Its number never existed in the prior `state.pads`, so the
+    /// number-vs-old-pads relink misses and it would stay permanently
+    /// unlinked (`sketch_entity_id: None`). An unlinked pad can't
+    /// mirror a move into the sketch, so dragging it in Pads mode leaves
+    /// the profile behind and the pad snaps back on the next bake.
+    ///
+    /// The relink must fall back to the authoritative link: the sketch
+    /// entity whose `PadAttr.number` matches the pad.
+    #[test]
+    fn refresh_relinks_pad_from_sketch_pad_attr() {
+        use signex_sketch::attr::PadAttr;
+        use signex_sketch::entity::{Entity, EntityKind};
+        use signex_sketch::id::SketchEntityId;
+        use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
+        use signex_sketch::sketch::SketchData;
+
+        let mut fp = Footprint::empty("test");
+        let plane_id = PlaneId::new();
+        let mut sketch = SketchData::default();
+        sketch.planes.push(Plane {
+            id: plane_id,
+            kind: PlaneKind::BoardTop,
+        });
+        let centre_id = SketchEntityId::new();
+        let mut centre = Entity::new(centre_id, plane_id, EntityKind::Point { x: 1.0, y: 0.5 });
+        centre.pad = Some(PadAttr {
+            number: "1".into(),
+            ..PadAttr::default()
+        });
+        sketch.entities.push(centre);
+        fp.sketch = Some(sketch);
+        fp.pads.push(Pad {
+            number: "1".into(),
+            ..Pad::default()
+        });
+
+        // state.pads is empty — the pad first appears from the sketch.
+        let mut s = FootprintEditorState::empty();
+        s.refresh_pads_from_primitive(&fp);
+
+        assert_eq!(s.pads.len(), 1);
+        assert_eq!(
+            s.pads[0].sketch_entity_id,
+            Some(centre_id),
+            "pad appearing from the sketch must relink to its \
+             PadAttr-carrying entity by number"
+        );
     }
 }
