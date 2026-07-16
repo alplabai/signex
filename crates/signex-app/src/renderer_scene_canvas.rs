@@ -173,6 +173,24 @@ fn draw_arc_bucket<F>(
         let start_angle = -arc.start_angle;
         let sweep =
             signex_gfx::primitive::arc::ccw_wrapped_sweep_rad(arc.start_angle, arc.end_angle);
+        // Defensive belt: `SymbolFile::from_toml_str` migrates a
+        // stored full-turn Arc (a raw span that's an exact multiple
+        // of 360°) into a Circle on load, but an in-memory Arc that
+        // bypasses that load-time migration — e.g. a Properties-panel
+        // start_deg/end_deg edit typed directly against an
+        // already-loaded graphic — can still reach this draw arm with
+        // a zero CCW-wraparound sweep and a genuinely different raw
+        // pair. A 360° arc IS a circle; draw that instead of nothing.
+        let raw_span = arc.end_angle - arc.start_angle;
+        if is_full_turn_arc(sweep, raw_span) {
+            frame.stroke(
+                &canvas::Path::circle(center, radius),
+                canvas::Stroke::default()
+                    .with_width(options.stroke_px(arc.width))
+                    .with_color(color_from_rgba(arc.color)),
+            );
+            continue;
+        }
         let end_angle = start_angle - sweep;
         let path = canvas::Path::new(|builder| {
             builder.arc(canvas::path::Arc {
@@ -188,6 +206,44 @@ fn draw_arc_bucket<F>(
                 .with_width(options.stroke_px(arc.width))
                 .with_color(color_from_rgba(arc.color)),
         );
+    }
+}
+
+/// `true` when a `signex_gfx::primitive::arc::Arc`'s CCW-wraparound
+/// `sweep` (from `ccw_wrapped_sweep_rad`) has collapsed to (near)
+/// zero despite its raw stored angles genuinely differing —
+/// `draw_arc_bucket`'s full-turn defensive belt for an Arc that
+/// bypassed `SymbolFile::from_toml_str`'s load-time full-turn-to-
+/// Circle migration (e.g. an in-memory Properties-panel edit).
+/// Excludes a genuine zero-sweep degenerate point-arc (`raw_span`
+/// also ~0), which stays invisible on purpose.
+fn is_full_turn_arc(sweep: f32, raw_span: f32) -> bool {
+    sweep.abs() < 1e-4 && raw_span.abs() > 1e-4
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn full_turn_arc_is_detected_when_sweep_collapses_to_zero() {
+        // A 0 -> 360° stored pair: CCW-wraparound sweep is exactly
+        // zero, but the raw span (a full turn, in radians) is not.
+        let sweep = signex_gfx::primitive::arc::ccw_wrapped_sweep_rad(0.0, std::f32::consts::TAU);
+        assert!(is_full_turn_arc(sweep, std::f32::consts::TAU));
+    }
+
+    #[test]
+    fn genuine_zero_sweep_point_arc_is_not_a_full_turn() {
+        // start == end: both the sweep and the raw span are exactly
+        // zero — a real degenerate point-arc, not a full circle.
+        assert!(!is_full_turn_arc(0.0, 0.0));
+    }
+
+    #[test]
+    fn ordinary_arc_is_not_a_full_turn() {
+        let sweep = signex_gfx::primitive::arc::ccw_wrapped_sweep_rad(0.0, 90f32.to_radians());
+        assert!(!is_full_turn_arc(sweep, 90f32.to_radians()));
     }
 }
 

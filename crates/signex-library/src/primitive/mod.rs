@@ -29,6 +29,7 @@ pub use symbol::{
     CHAIN_ARC_SAMPLES, CHAIN_ENDPOINT_EPSILON_MM, ChainError, ChainSegment, ComponentType,
     PinDirection, PinOrientation, PinSymbolKind, Symbol, SymbolFile, SymbolFileError,
     SymbolGraphic, SymbolGraphicKind, SymbolPin, chain_into_closed_contour,
+    normalize_arc_endpoints_deg,
 };
 
 /// Discriminator surfaced on `PrimitiveSummary` so a single `list_*` API can

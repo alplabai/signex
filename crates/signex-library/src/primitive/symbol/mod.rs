@@ -230,6 +230,42 @@ pub enum SymbolGraphicKind {
     },
 }
 
+/// Normalise an `Arc`'s `start_deg`/`end_deg` into this codebase's
+/// counter-clockwise-wraparound sweep convention: `start..end` sweeps
+/// CCW (increasing angle) from `start`, wrapping through a full turn
+/// when `end < start` — the convention the symbol canvas's arc
+/// hit-test, its Arc rotate transform, and the GPU arc shader all
+/// already assume. Returns the pair with a swap applied when needed
+/// (see below), then both endpoints reduced into a canonical
+/// `[0, 360)` range.
+///
+/// Why a swap and not just reducing each field into range: reducing
+/// `start_deg`/`end_deg` independently only ever changes each by a
+/// whole multiple of 360°, so it can't change `end_deg - start_deg`
+/// by anything but a multiple of 360° either — the CCW-wraparound
+/// sweep would stay exactly what it was. When the pair actually
+/// represents a clockwise-signed drag rather than an intentionally
+/// wrapped arc, that unchanged sweep is the WRONG one — the
+/// complement of the arc that was meant. Swapping instead re-orders
+/// the pair so its wraparound sweep becomes the complement
+/// (`360° - old_sweep`), which is the short arc that was intended.
+///
+/// Used by two call sites that can't share a dependency edge: this
+/// crate's own [`SymbolFile::from_toml_str`] (migrating legacy
+/// `.snxsym` files saved by builds that stored a clockwise drag's
+/// raw, unswapped pair) and `signex_app`'s Place Arc placement-commit
+/// handler (the tool that can hand this a raw, possibly-negative pair
+/// from a live drag). Lives here — signex-library must not depend on
+/// signex-app — with signex-app calling into it, not the reverse.
+pub fn normalize_arc_endpoints_deg(start_deg: f64, end_deg: f64) -> (f64, f64) {
+    let (start_deg, end_deg) = if end_deg < start_deg {
+        (end_deg, start_deg)
+    } else {
+        (start_deg, end_deg)
+    };
+    (start_deg.rem_euclid(360.0), end_deg.rem_euclid(360.0))
+}
+
 /// One graphic on the symbol body.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SymbolGraphic {
@@ -404,7 +440,13 @@ impl Symbol {
 /// either variant-shaped or sparse.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SymbolFile {
-    /// Schema sentinel — current emitters write `"snxsym/v1"`.
+    /// Schema sentinel. [`SymbolFile::to_toml_string`] writes
+    /// [`SYMBOL_FILE_FORMAT_TOKEN_V2`] ("snxsym/v2") when any symbol
+    /// in the file contains a [`SymbolGraphicKind::Polygon`] graphic,
+    /// else [`SYMBOL_FILE_FORMAT_TOKEN`] ("snxsym/v1") — see that
+    /// constant's doc comment for why a new tagged variant needs a
+    /// conditional bump when an additive field wouldn't.
+    /// [`SymbolFile::from_toml_str`] accepts either token.
     #[serde(default = "default_format")]
     pub format: String,
     /// File-level UUID — distinct from any contained symbol's uuid.
@@ -421,6 +463,38 @@ pub struct SymbolFile {
 }
 
 const SYMBOL_FILE_FORMAT_TOKEN: &str = "snxsym/v1";
+
+/// Written instead of [`SYMBOL_FILE_FORMAT_TOKEN`] when a file
+/// contains a [`SymbolGraphicKind::Polygon`] graphic.
+///
+/// A `#[serde(default)]` FIELD addition (`SymbolGraphic::fill`,
+/// `::part_number`, `Symbol::part_count`, …) is bidirectional-compat
+/// and needs no token bump: an old build reading a new file just
+/// hits the field's serde default, and a new build reading an old
+/// file does the same — both directions parse cleanly, so nothing
+/// about the format token needs to change.
+///
+/// A new tagged enum VARIANT is a different shape of change. serde's
+/// externally-tagged `#[serde(tag = "kind")]` representation has no
+/// concept of "unknown variant, use a default" — an old build that
+/// doesn't know about `Polygon` hits a hard, opaque
+/// "unknown variant `polygon`" deserialize error the moment it reads
+/// one, not the clean [`SymbolFileError::UnsupportedFormat`] guard a
+/// mismatched format token gives it. The compatibility is one-way: a
+/// v2 file (which may contain a `Polygon`) is unreadable by an old
+/// build, but a v1 file is still perfectly readable by a new one (all
+/// the pre-Polygon variants round-trip unchanged) — so the bump only
+/// needs to happen when a `Polygon` is actually present.
+/// `to_toml_string` computes this per save, from content, not from
+/// whatever token the file happened to load with — a file that later
+/// loses its only `Polygon` (e.g. deleted, or joined back into lines)
+/// self-heals down to v1 on its next save, maximising how many files
+/// stay readable by builds that predate this variant.
+///
+/// The planned multi-unit format bump (epic #289, C1) can fold into
+/// this same v2 token rather than minting a v3 — one conditional
+/// token per actually-incompatible addition, not one per PR.
+const SYMBOL_FILE_FORMAT_TOKEN_V2: &str = "snxsym/v2";
 
 /// Stable column layout for the per-symbol `pins_tsv` block. Adding
 /// or reordering columns is a wire-format break — bump
@@ -511,6 +585,71 @@ struct SymbolWire {
     updated: DateTime<Utc>,
 }
 
+/// Load-time self-heal for two pre-normalization `Arc`-authoring bugs.
+/// Non-`Arc` kinds pass through untouched.
+///
+/// 1. **Full-turn arcs vanish.** A raw span (`end_deg - start_deg`)
+///    that's an exact, nonzero multiple of 360° — legitimate legacy
+///    full-circle authoring (`0 -> 360`), or a placement/rotation
+///    drift that happened to land on exactly one full turn — computes
+///    a zero CCW-wraparound sweep and draws nothing. A 360° arc IS a
+///    circle, so it's converted to one: [`SymbolGraphicKind::Circle`]
+///    with the same `center`/`radius`. Checked, and applied, BEFORE
+///    rule 2 below: an exact-360° span also happens to satisfy rule
+///    2's discriminator (e.g. `30 -> -330`), and running it through
+///    the swap-and-`rem_euclid` there would collapse it to
+///    `start == end` — the exact invisible-point degenerate this
+///    conversion exists to avoid — instead of the correct circle.
+///
+/// 2. **Legacy CW-signed arcs render as their complement.** Before
+///    this codebase's CPU canvas draw path adopted the CCW-wraparound
+///    sweep convention (matching what hit-test / the GPU shader
+///    always assumed), the Place Arc tool could commit a clockwise
+///    drag's raw, unswapped pair — e.g. `start: 30, end: -60` — which
+///    the old (signed-sweep) CPU draw rendered as the short 90° arc
+///    the user actually saw and clicked to place. Reading that same
+///    stored pair under the CCW-wraparound convention sweeps the
+///    270° complement instead. The discriminator distinguishes this
+///    from a pre-existing, INTENTIONALLY wrapped pair (which
+///    `rotation.rs`'s Arc rotate transform has always been able to
+///    produce, e.g. rotating a 0°-crossing arc): a negative or
+///    unwrapped-past-a-full-turn endpoint can only come from the
+///    placement tool's raw drag delta, never from `rotation.rs`,
+///    which always normalizes both endpoints into `[0, 360)`. A
+///    wrapped pair with BOTH endpoints already in `[0, 360)` is left
+///    unchanged — that's the rotation-produced, already-correct
+///    wraparound form.
+fn migrate_legacy_arc(kind: SymbolGraphicKind) -> SymbolGraphicKind {
+    let SymbolGraphicKind::Arc {
+        center,
+        radius,
+        start_deg,
+        end_deg,
+    } = kind
+    else {
+        return kind;
+    };
+    let raw_span = end_deg - start_deg;
+    if raw_span.abs() > 1e-9 && raw_span.rem_euclid(360.0).abs() < 1e-6 {
+        return SymbolGraphicKind::Circle { center, radius };
+    }
+    if end_deg < start_deg && (end_deg < 0.0 || start_deg < 0.0 || raw_span <= -360.0) {
+        let (start_deg, end_deg) = normalize_arc_endpoints_deg(start_deg, end_deg);
+        return SymbolGraphicKind::Arc {
+            center,
+            radius,
+            start_deg,
+            end_deg,
+        };
+    }
+    SymbolGraphicKind::Arc {
+        center,
+        radius,
+        start_deg,
+        end_deg,
+    }
+}
+
 impl SymbolFile {
     /// Build a new container holding a single symbol — what the
     /// `Add New ▸ Symbol` flow seeds.
@@ -558,12 +697,21 @@ impl SymbolFile {
         Self::from_toml_str(text)
     }
 
-    /// Parse the TOML+TSV wire format. The format-token check pins us
-    /// to [`SYMBOL_FILE_FORMAT_TOKEN`]; mismatched tokens surface
+    /// Parse the TOML+TSV wire format. The format-token check accepts
+    /// either [`SYMBOL_FILE_FORMAT_TOKEN`] or
+    /// [`SYMBOL_FILE_FORMAT_TOKEN_V2`]; any other token surfaces
     /// [`SymbolFileError::UnsupportedFormat`].
+    ///
+    /// Every loaded `Arc` graphic passes through
+    /// [`migrate_legacy_arc`], which self-heals two pre-normalization
+    /// authoring bugs in stored `start_deg`/`end_deg` pairs — see that
+    /// function's doc comment. This runs on load (not just for v1
+    /// files) so every consumer of a `Symbol` gets already-migrated
+    /// data regardless of entry point, and the next save re-emits the
+    /// corrected values, healing the file on disk too.
     pub fn from_toml_str(text: &str) -> Result<Self, SymbolFileError> {
         let wire: SymbolFileWire = toml::from_str(text)?;
-        if wire.format != SYMBOL_FILE_FORMAT_TOKEN {
+        if wire.format != SYMBOL_FILE_FORMAT_TOKEN && wire.format != SYMBOL_FILE_FORMAT_TOKEN_V2 {
             return Err(SymbolFileError::UnsupportedFormat { got: wire.format });
         }
         let mut symbols = Vec::with_capacity(wire.symbols.len());
@@ -574,12 +722,20 @@ impl SymbolFile {
             // before `part_count` existed, defaulting to 1) keep all
             // their units instead of collapsing to one.
             let pin_max = pins.iter().map(|p| p.part_number).max().unwrap_or(1).max(1);
+            let graphics = sw
+                .graphics
+                .into_iter()
+                .map(|g| SymbolGraphic {
+                    kind: migrate_legacy_arc(g.kind),
+                    ..g
+                })
+                .collect();
             symbols.push(Symbol {
                 uuid: sw.uuid,
                 name: sw.name,
                 anchor: sw.anchor,
                 pins,
-                graphics: sw.graphics,
+                graphics,
                 schematic_params: sw.schematic_params,
                 designator: sw.designator,
                 comment: sw.comment,
@@ -609,7 +765,27 @@ impl SymbolFile {
     /// Serialise to canonical TOML+TSV. Pin lists become
     /// `pins_tsv = '''\n<header>\n<rows>\n'''` literal multi-line
     /// strings so the bulk data is line-diffable in git output.
+    ///
+    /// The written `format` token is computed fresh from content —
+    /// [`SYMBOL_FILE_FORMAT_TOKEN_V2`] iff any symbol contains a
+    /// [`SymbolGraphicKind::Polygon`] graphic, else
+    /// [`SYMBOL_FILE_FORMAT_TOKEN`] — not copied from `self.format`
+    /// (which may be stale, e.g. right after loading a v1 file that
+    /// has since gained a `Polygon` in this session, or a v2 file
+    /// whose only `Polygon` was just deleted). See
+    /// [`SYMBOL_FILE_FORMAT_TOKEN_V2`]'s doc comment for why this
+    /// stays maximally backward-compatible.
     pub fn to_toml_string(&self) -> Result<String, SymbolFileError> {
+        let format = if self
+            .symbols
+            .iter()
+            .flat_map(|s| &s.graphics)
+            .any(|g| matches!(g.kind, SymbolGraphicKind::Polygon { .. }))
+        {
+            SYMBOL_FILE_FORMAT_TOKEN_V2.to_string()
+        } else {
+            SYMBOL_FILE_FORMAT_TOKEN.to_string()
+        };
         let mut tsv_payloads: Vec<String> = Vec::with_capacity(self.symbols.len());
         let mut wire_symbols: Vec<SymbolWire> = Vec::with_capacity(self.symbols.len());
         for (idx, sym) in self.symbols.iter().enumerate() {
@@ -646,7 +822,7 @@ impl SymbolFile {
             });
         }
         let wire = SymbolFileWire {
-            format: self.format.clone(),
+            format,
             file_uuid: self.file_uuid,
             display_name: self.display_name.clone(),
             created: self.created,
@@ -674,7 +850,9 @@ pub enum SymbolFileError {
     TomlDeserialize(#[from] toml::de::Error),
     #[error("TOML serialise failed: {0}")]
     TomlSerialize(toml::ser::Error),
-    #[error("unsupported .snxsym format token {got:?}; this build supports \"snxsym/v1\"")]
+    #[error(
+        "unsupported .snxsym format token {got:?}; this build supports \"snxsym/v1\" or \"snxsym/v2\""
+    )]
     UnsupportedFormat { got: String },
     #[error(
         "TSV cell in column {column:?} contains a tab, newline, or triple-quote: \

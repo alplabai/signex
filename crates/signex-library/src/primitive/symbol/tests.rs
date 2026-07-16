@@ -505,13 +505,14 @@ fn graphic_missing_part_number_defaults_to_zero() {
     assert_eq!(back.symbols[0].graphics[0].part_number, 0);
 }
 
-// ---- Polygon graphic — additive, no format-token bump ----
+// ---- Polygon graphic — new tagged variant, conditional v2 bump ----
 
-/// A `Polygon` graphic's vertices, fill, and stroke width all survive a
-/// `.snxsym` save/load round-trip — proves the new
-/// `SymbolGraphicKind::Polygon` variant serialises through the TOML
-/// manifest exactly like the pre-existing shape kinds, with no
-/// `SYMBOL_FILE_FORMAT_TOKEN` bump required (`format` stays "snxsym/v1").
+/// A `Polygon` graphic's vertices, fill, and stroke width all survive
+/// a `.snxsym` save/load round-trip. A new tagged VARIANT (unlike a
+/// `#[serde(default)]` field addition) is backward-compat only — an
+/// old build can't deserialize an externally-tagged `kind = "polygon"`
+/// it doesn't know about — so a file containing one is written as
+/// `SYMBOL_FILE_FORMAT_TOKEN_V2` ("snxsym/v2"), not v1.
 #[test]
 fn polygon_graphic_round_trips() {
     let mut s = Symbol::empty("X");
@@ -525,8 +526,8 @@ fn polygon_graphic_round_trips() {
     });
     let file = SymbolFile::from_symbol(s);
     let toml_text = file.to_toml_string().expect("serialise");
-    assert_eq!(file.format, "snxsym/v1");
     let back = SymbolFile::from_toml_str(&toml_text).expect("parse");
+    assert_eq!(back.format, "snxsym/v2");
     let g = &back.symbols[0].graphics[0];
     match &g.kind {
         SymbolGraphicKind::Polygon { vertices } => {
@@ -539,4 +540,165 @@ fn polygon_graphic_round_trips() {
     }
     assert_eq!(g.fill, Some([30, 144, 255, 255]));
     assert_eq!(g.stroke_width, 0.2);
+}
+
+/// A file with no `Polygon` graphic anywhere stays on
+/// `SYMBOL_FILE_FORMAT_TOKEN` ("snxsym/v1") — maximum compat: builds
+/// that predate the `Polygon` variant can still read it.
+#[test]
+fn symbol_file_with_no_polygon_graphic_stays_v1() {
+    let mut s = Symbol::empty("X");
+    s.graphics.push(SymbolGraphic {
+        kind: SymbolGraphicKind::Rectangle {
+            from: [0.0, 0.0],
+            to: [1.0, 1.0],
+        },
+        stroke_width: 0.15,
+        part_number: 0,
+        fill: None,
+    });
+    let file = SymbolFile::from_symbol(s);
+    let toml_text = file.to_toml_string().expect("serialise");
+    let back = SymbolFile::from_toml_str(&toml_text).expect("parse");
+    assert_eq!(back.format, "snxsym/v1");
+}
+
+// ---- Arc CCW-wraparound load migration ----
+
+fn arc_symbol(start_deg: f64, end_deg: f64) -> Symbol {
+    let mut s = Symbol::empty("X");
+    s.graphics.push(SymbolGraphic {
+        kind: SymbolGraphicKind::Arc {
+            center: [0.0, 0.0],
+            radius: 5.0,
+            start_deg,
+            end_deg,
+        },
+        stroke_width: 0.15,
+        part_number: 0,
+        fill: None,
+    });
+    s
+}
+
+/// A legacy CW-signed pair (a raw drag delta, never reconciled into
+/// `[0, 360)`) migrates on load: swapped and reduced, reproducing the
+/// short arc a pre-normalization build's signed CPU draw actually
+/// showed the user.
+#[test]
+fn arc_legacy_cw_signed_pair_migrates_to_ccw_swap_on_load() {
+    let file = SymbolFile::from_symbol(arc_symbol(30.0, -60.0));
+    let toml_text = file.to_toml_string().expect("serialise");
+    let back = SymbolFile::from_toml_str(&toml_text).expect("parse");
+    match &back.symbols[0].graphics[0].kind {
+        SymbolGraphicKind::Arc {
+            start_deg, end_deg, ..
+        } => {
+            assert_eq!(*start_deg, 300.0);
+            assert_eq!(*end_deg, 30.0);
+        }
+        other => panic!("expected Arc, got {other:?}"),
+    }
+}
+
+/// A wrapped pair with both endpoints already in `[0, 360)` — the
+/// form `rotation.rs`'s Arc rotate transform has always produced for
+/// a 0°-crossing arc, meaning wraparound from day one — loads
+/// unchanged.
+#[test]
+fn arc_wraparound_pair_already_in_range_is_unchanged_on_load() {
+    let file = SymbolFile::from_symbol(arc_symbol(330.0, 30.0));
+    let toml_text = file.to_toml_string().expect("serialise");
+    let back = SymbolFile::from_toml_str(&toml_text).expect("parse");
+    match &back.symbols[0].graphics[0].kind {
+        SymbolGraphicKind::Arc {
+            start_deg, end_deg, ..
+        } => {
+            assert_eq!(*start_deg, 330.0);
+            assert_eq!(*end_deg, 30.0);
+        }
+        other => panic!("expected Arc, got {other:?}"),
+    }
+}
+
+/// The migration is a load-time fixed point: a second load->save->load
+/// cycle must not drift the already-migrated value any further.
+#[test]
+fn arc_migration_is_a_load_time_fixed_point() {
+    let file = SymbolFile::from_symbol(arc_symbol(30.0, -60.0));
+    let first_load = SymbolFile::from_toml_str(&file.to_toml_string().unwrap()).unwrap();
+    let second_load = SymbolFile::from_toml_str(&first_load.to_toml_string().unwrap()).unwrap();
+    assert_eq!(
+        first_load.symbols[0].graphics[0].kind,
+        second_load.symbols[0].graphics[0].kind
+    );
+}
+
+#[test]
+fn normalize_arc_endpoints_deg_swaps_a_cw_signed_pair() {
+    assert_eq!(normalize_arc_endpoints_deg(30.0, -60.0), (300.0, 30.0));
+}
+
+#[test]
+fn normalize_arc_endpoints_deg_leaves_ccw_pairs_unswapped() {
+    assert_eq!(normalize_arc_endpoints_deg(10.0, 100.0), (10.0, 100.0));
+}
+
+// ---- Full-turn Arc -> Circle load migration ----
+
+/// An exact, nonzero 360° span (legacy full-circle authoring, or a
+/// drag/rotation that landed on exactly one full turn) migrates to a
+/// `Circle` on load instead of computing a zero CCW-wraparound sweep
+/// and drawing nothing.
+#[test]
+fn arc_full_turn_migrates_to_circle_on_load() {
+    let mut s = Symbol::empty("X");
+    s.graphics.push(SymbolGraphic {
+        kind: SymbolGraphicKind::Arc {
+            center: [1.0, 2.0],
+            radius: 5.0,
+            start_deg: 0.0,
+            end_deg: 360.0,
+        },
+        stroke_width: 0.2,
+        part_number: 1,
+        fill: None,
+    });
+    let file = SymbolFile::from_symbol(s);
+    let toml_text = file.to_toml_string().expect("serialise");
+    let back = SymbolFile::from_toml_str(&toml_text).expect("parse");
+    match &back.symbols[0].graphics[0].kind {
+        SymbolGraphicKind::Circle { center, radius } => {
+            assert_eq!(*center, [1.0, 2.0]);
+            assert_eq!(*radius, 5.0);
+        }
+        other => panic!("expected Circle, got {other:?}"),
+    }
+}
+
+/// A negative exact-360° span also converts (the full-turn check runs
+/// before the CW-signed swap, which would otherwise collapse this to
+/// a degenerate `start == end` point-arc instead of a visible circle).
+#[test]
+fn arc_negative_full_turn_migrates_to_circle_on_load() {
+    let file = SymbolFile::from_symbol(arc_symbol(90.0, -270.0));
+    let toml_text = file.to_toml_string().expect("serialise");
+    let back = SymbolFile::from_toml_str(&toml_text).expect("parse");
+    assert!(matches!(
+        back.symbols[0].graphics[0].kind,
+        SymbolGraphicKind::Circle { .. }
+    ));
+}
+
+/// A near-360° (but not exact) span is a real, valid arc — not a
+/// full-turn — and stays an `Arc`.
+#[test]
+fn arc_near_full_turn_stays_an_arc_on_load() {
+    let file = SymbolFile::from_symbol(arc_symbol(0.0, 350.0));
+    let toml_text = file.to_toml_string().expect("serialise");
+    let back = SymbolFile::from_toml_str(&toml_text).expect("parse");
+    assert!(matches!(
+        back.symbols[0].graphics[0].kind,
+        SymbolGraphicKind::Arc { .. }
+    ));
 }
