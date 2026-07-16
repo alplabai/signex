@@ -314,6 +314,7 @@ fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> SymbolEdi
             start_deg,
             end_deg,
         },
+        CanvasAction::ArcSweepRejected => SymbolEditorMsg::ArcSweepRejected,
         CanvasAction::AddText { x, y } => SymbolEditorMsg::AddText { x, y },
         CanvasAction::PolygonClick { x, y } => SymbolEditorMsg::PolygonClick { x, y },
         CanvasAction::PolygonCommit => SymbolEditorMsg::PolygonCommit,

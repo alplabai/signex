@@ -156,19 +156,37 @@ impl SymbolCanvas<'_> {
                 }
             }
             SymbolTool::PlaceArc => {
-                if let Some((radius, start_deg)) = state.arc_radius_start.take() {
-                    // Third click — commit the arc.
-                    let (cx, cy) = state.arc_center.take().unwrap_or((wx, wy));
-                    state.arc_cursor = None;
+                if let Some((radius, start_deg)) = state.arc_radius_start {
+                    // Third click — peek (don't take yet) so a
+                    // rejected commit (see below) leaves the gesture
+                    // exactly where it was, ready for another click.
+                    let (cx, cy) = state.arc_center.unwrap_or((wx, wy));
                     // Use the unwrapped end angle so arcs that swept
                     // past ±180° are stored correctly. Fall back to a
                     // fresh atan2 only if the cursor never moved after
                     // the second click.
-                    let end_deg = state.arc_end_deg_unwrapped.take().unwrap_or_else(|| {
+                    let end_deg = state.arc_end_deg_unwrapped.unwrap_or_else(|| {
                         let dx = wx - cx;
                         let dy = wy - cy;
                         dy.atan2(dx).to_degrees()
                     });
+                    if arc_sweep_exceeds_full_turn(start_deg, end_deg) {
+                        // A full turn or more: the commit-normalization
+                        // swap (`normalize_arc_commit_deg`) would
+                        // collapse this to `start == end` — an
+                        // invisible, unselectable, un-deletable point-
+                        // arc that still saves to disk. Reject instead
+                        // of committing; gesture state is untouched
+                        // (no `.take()` above), so the third click is
+                        // effectively ignored and dragging can continue.
+                        return Some(
+                            canvas::Action::publish(CanvasAction::ArcSweepRejected).and_capture(),
+                        );
+                    }
+                    state.arc_radius_start = None;
+                    state.arc_center = None;
+                    state.arc_cursor = None;
+                    state.arc_end_deg_unwrapped = None;
                     Some(
                         canvas::Action::publish(CanvasAction::AddArc {
                             cx,
@@ -288,5 +306,39 @@ impl SymbolCanvas<'_> {
         state.polygon_last_click_time = None;
         state.polygon_last_click_pos = None;
         canvas::Action::publish(CanvasAction::PolygonCommit).and_capture()
+    }
+}
+
+/// `true` when the Place Arc gesture's raw, unwrapped drag delta
+/// (`end_deg - start_deg`, BEFORE `normalize_arc_commit_deg`'s
+/// swap-and-`rem_euclid`) covers a full turn or more. Committing such
+/// a drag would collapse to `start_deg == end_deg` after
+/// normalization — a zero-sweep point-arc that's invisible,
+/// unselectable, and un-deletable via the canvas, yet still saves to
+/// disk and still occupies its bounding box.
+fn arc_sweep_exceeds_full_turn(start_deg: f64, end_deg: f64) -> bool {
+    (end_deg - start_deg).abs() >= 360.0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn arc_sweep_exceeds_full_turn_at_exactly_360() {
+        assert!(arc_sweep_exceeds_full_turn(0.0, 360.0));
+        assert!(arc_sweep_exceeds_full_turn(30.0, -330.0));
+    }
+
+    #[test]
+    fn arc_sweep_exceeds_full_turn_past_360() {
+        assert!(arc_sweep_exceeds_full_turn(10.0, 400.0));
+    }
+
+    #[test]
+    fn arc_sweep_within_a_turn_is_not_rejected() {
+        assert!(!arc_sweep_exceeds_full_turn(30.0, -60.0));
+        assert!(!arc_sweep_exceeds_full_turn(10.0, 350.0));
+        assert!(!arc_sweep_exceeds_full_turn(0.0, 359.9));
     }
 }

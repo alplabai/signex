@@ -49,6 +49,12 @@ pub enum SymbolEditorMsg {
         end_deg: f64,
     },
 
+    /// The Place Arc gesture's third click swept >= 360° — rejected
+    /// rather than committed (see `CanvasAction::ArcSweepRejected`'s
+    /// doc comment). Sets `SymbolEditorState::status_message`; no
+    /// graphic is pushed and no undo snapshot is recorded.
+    ArcSweepRejected,
+
     /// Stamp a default "Text" label anchored at `(x, y)`. Edit the
     /// content via the Properties panel after placement.
     AddText { x: f64, y: f64 },

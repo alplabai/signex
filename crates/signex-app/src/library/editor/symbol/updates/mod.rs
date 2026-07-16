@@ -306,6 +306,12 @@ pub(crate) fn apply_symbol_primitive_edit(
                 0.15,
             );
         }
+        // A >= 360° drag was rejected at the gesture level (see
+        // `arc_sweep_exceeds_full_turn`) rather than committed — no
+        // graphic, no undo snapshot; just surface why.
+        SymbolEditorMsg::ArcSweepRejected => {
+            editor.status_message = Some("Arc sweep must be less than a full turn.".to_string());
+        }
         SymbolEditorMsg::AddText { x, y } => {
             push_graphic(
                 editor,
@@ -768,4 +774,21 @@ mod tests {
         }
     }
 
+    /// `ArcSweepRejected` surfaces a status message and commits
+    /// nothing — no graphic, no undo snapshot. The gesture-level
+    /// "third click ignored" behavior lives in `canvas::input::tools`
+    /// (see `arc_sweep_exceeds_full_turn`'s tests); this covers the
+    /// message-dispatch half of the fix.
+    #[test]
+    fn arc_sweep_rejected_sets_status_message_without_committing() {
+        let mut editor = new_editor();
+        apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::ArcSweepRejected);
+
+        assert_eq!(
+            editor.status_message.as_deref(),
+            Some("Arc sweep must be less than a full turn.")
+        );
+        assert!(editor.primitive().graphics.is_empty());
+        assert_eq!(editor.undo_snapshots.len(), 0);
+    }
 }

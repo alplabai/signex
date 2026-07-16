@@ -51,6 +51,14 @@ pub enum CanvasAction {
         start_deg: f64,
         end_deg: f64,
     },
+    /// The three-click Place Arc gesture's third click swept >= 360°
+    /// (unwrapped `end - start`) — a full turn or more, which the
+    /// commit-normalization swap would collapse to `start == end` (an
+    /// invisible, unselectable point-arc that still saves to disk).
+    /// Emitted instead of `AddArc`; the gesture's `CanvasState` fields
+    /// are left untouched so the third click is effectively ignored
+    /// and the user can keep dragging toward a valid sweep.
+    ArcSweepRejected,
     /// Stamp a default text label "Text" anchored at `(x, y)`.
     AddText {
         x: f64,
