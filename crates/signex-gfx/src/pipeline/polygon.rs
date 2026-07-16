@@ -14,44 +14,108 @@ struct PolygonVertex {
     color: [f32; 4],
 }
 
+/// Build the triangle-list vertices for a batch of polygons: a triangle-fan
+/// fill for every contour, followed by a stroke outline (expanded edge quads)
+/// for polygons that carry one. Fill and stroke share this pipeline's
+/// `PolygonVertex` format, so they draw in a single pass — the stroke vertices
+/// come last and composite on top of the fill under alpha blending, matching
+/// the CPU `draw_polygons` order (fill, then stroke).
+///
+/// Every polygon is treated as a **closed contour**, never as a
+/// pre-triangulated triangle soup: `GpuPolygon::vertices` is a contour by the
+/// renderer's contract (the CPU path always fills it as one), so a vertex count
+/// divisible by three must not be reinterpreted as separate triangles — doing
+/// so misdrew any 3/6/9-vertex pour. The fan is exact for convex contours;
+/// concave contours are an approximation shared with the CPU fallback and want
+/// a proper tessellator (earcut) as a follow-up.
 fn triangulate_polygons(polygons: &[GpuPolygon]) -> Vec<PolygonVertex> {
     let mut vertices = Vec::new();
 
     for polygon in polygons {
-        let points = &polygon.vertices;
-        if points.len() < 3 {
+        // Skip degenerate contours entirely (no fill, no stroke), as the CPU
+        // path does.
+        if polygon.vertices.len() < 3 {
             continue;
         }
-
-        if points.len() % 3 == 0 {
-            for point in points {
-                vertices.push(PolygonVertex {
-                    position: *point,
-                    color: polygon.fill_color,
-                });
-            }
-            continue;
-        }
-
-        // Fallback triangle fan for simple contours.
-        let origin = points[0];
-        for idx in 1..(points.len() - 1) {
-            vertices.push(PolygonVertex {
-                position: origin,
-                color: polygon.fill_color,
-            });
-            vertices.push(PolygonVertex {
-                position: points[idx],
-                color: polygon.fill_color,
-            });
-            vertices.push(PolygonVertex {
-                position: points[idx + 1],
-                color: polygon.fill_color,
-            });
-        }
+        append_fill(&mut vertices, polygon);
+        append_stroke(&mut vertices, polygon);
     }
 
     vertices
+}
+
+/// Triangle-fan fill from the first vertex. Assumes `polygon.vertices.len() >= 3`.
+fn append_fill(vertices: &mut Vec<PolygonVertex>, polygon: &GpuPolygon) {
+    let points = &polygon.vertices;
+    let origin = points[0];
+    for idx in 1..(points.len() - 1) {
+        vertices.push(PolygonVertex {
+            position: origin,
+            color: polygon.fill_color,
+        });
+        vertices.push(PolygonVertex {
+            position: points[idx],
+            color: polygon.fill_color,
+        });
+        vertices.push(PolygonVertex {
+            position: points[idx + 1],
+            color: polygon.fill_color,
+        });
+    }
+}
+
+/// Stroke outline: one width-expanded quad per edge of the closed contour
+/// (including the closing edge, `last -> first`), so fill-only-invisible areas
+/// such as rule/keepout zones still read as an outline. World-space width in
+/// mm — the shader's ortho projection scales it with zoom, mirroring the CPU's
+/// `stroke_width * camera.scale`. No miter joins (thin strokes only) and no
+/// screen-space minimum width; both are shared with the CPU path within
+/// tolerance for the sub-0.1 mm widths the renderer emits. No-op when the
+/// polygon has no stroke colour or a non-positive width.
+fn append_stroke(vertices: &mut Vec<PolygonVertex>, polygon: &GpuPolygon) {
+    let Some(stroke_color) = polygon.stroke_color else {
+        return;
+    };
+    if polygon.stroke_width <= 0.0 {
+        return;
+    }
+
+    let points = &polygon.vertices;
+    let half = polygon.stroke_width * 0.5;
+    for i in 0..points.len() {
+        let a = points[i];
+        let b = points[(i + 1) % points.len()];
+        append_edge_quad(vertices, a, b, half, stroke_color);
+    }
+}
+
+/// Emit two triangles for the rectangle centred on edge `a -> b`, `half` units
+/// to either side along the edge normal.
+fn append_edge_quad(
+    vertices: &mut Vec<PolygonVertex>,
+    a: [f32; 2],
+    b: [f32; 2],
+    half: f32,
+    color: [f32; 4],
+) {
+    let dx = b[0] - a[0];
+    let dy = b[1] - a[1];
+    let len = (dx * dx + dy * dy).sqrt();
+    if len <= f32::EPSILON {
+        return;
+    }
+
+    // Unit edge normal scaled to half the stroke width.
+    let nx = -dy / len * half;
+    let ny = dx / len * half;
+    let a0 = [a[0] + nx, a[1] + ny];
+    let a1 = [a[0] - nx, a[1] - ny];
+    let b0 = [b[0] + nx, b[1] + ny];
+    let b1 = [b[0] - nx, b[1] - ny];
+
+    for position in [a0, a1, b0, b0, a1, b1] {
+        vertices.push(PolygonVertex { position, color });
+    }
 }
 
 /// GPU polygon pipeline for filled triangle-list geometry.
@@ -205,15 +269,18 @@ mod tests {
     }
 
     #[test]
-    fn keeps_pretriangulated_vertex_count() {
+    fn fans_every_contour_and_never_treats_it_as_triangle_soup() {
+        // #2 regression: a six-vertex contour must fan into (6 - 2) = 4
+        // triangles (12 vertices), NOT be passed through as two triangles
+        // because its vertex count is divisible by three.
         let polygons = vec![GpuPolygon {
             vertices: vec![
                 [0.0, 0.0],
-                [1.0, 0.0],
-                [0.0, 1.0],
-                [1.0, 0.0],
-                [1.0, 1.0],
-                [0.0, 1.0],
+                [2.0, 0.0],
+                [3.0, 1.0],
+                [2.0, 2.0],
+                [0.0, 2.0],
+                [-1.0, 1.0],
             ],
             fill_color: [0.9, 0.2, 0.1, 1.0],
             stroke_color: None,
@@ -221,7 +288,54 @@ mod tests {
         }];
 
         let vertices = triangulate_polygons(&polygons);
-        assert_eq!(vertices.len(), 6);
+        assert_eq!(vertices.len(), 12);
+    }
+
+    #[test]
+    fn emits_a_stroke_outline_after_the_fill() {
+        // #3: a stroked contour emits the fan fill plus one quad (6 vertices)
+        // per edge of the closed contour, and the stroke comes last so it
+        // composites on top.
+        let stroke = [0.1, 0.9, 0.3, 1.0];
+        let polygons = vec![GpuPolygon {
+            vertices: vec![[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]],
+            fill_color: [0.3, 0.4, 0.5, 1.0],
+            stroke_color: Some(stroke),
+            stroke_width: 0.2,
+        }];
+
+        let vertices = triangulate_polygons(&polygons);
+        // fill: (4 - 2) * 3 = 6; stroke: 4 edges * 6 = 24.
+        assert_eq!(vertices.len(), 30);
+        // Fill first, stroke last (drawn on top).
+        assert_eq!(vertices[0].color, [0.3, 0.4, 0.5, 1.0]);
+        assert_eq!(vertices.last().unwrap().color, stroke);
+    }
+
+    #[test]
+    fn no_stroke_when_color_is_absent() {
+        let polygons = vec![GpuPolygon {
+            vertices: vec![[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]],
+            fill_color: [0.3, 0.4, 0.5, 1.0],
+            stroke_color: None,
+            stroke_width: 0.5,
+        }];
+
+        // Fill only — 6 vertices, no stroke quads.
+        assert_eq!(triangulate_polygons(&polygons).len(), 6);
+    }
+
+    #[test]
+    fn no_stroke_when_width_is_non_positive() {
+        let polygons = vec![GpuPolygon {
+            vertices: vec![[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]],
+            fill_color: [0.3, 0.4, 0.5, 1.0],
+            stroke_color: Some([1.0, 1.0, 1.0, 1.0]),
+            stroke_width: 0.0,
+        }];
+
+        // Zero width contributes no stroke geometry — fill only.
+        assert_eq!(triangulate_polygons(&polygons).len(), 6);
     }
 
     #[test]
