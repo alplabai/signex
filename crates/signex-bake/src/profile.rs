@@ -66,23 +66,54 @@ pub const ARC_SAMPLES: usize = 16;
 /// CCW or CW depending on starting direction) or a [`TraceError`].
 pub type TraceResult = Result<Vec<[f64; 2]>, TraceError>;
 
-/// Trace a closed boundary starting at `start`.
+/// One edge of a traced profile, oriented the way the walk crossed it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ProfileEdge {
+    /// The Line / Arc entity.
+    pub id: SketchEntityId,
+    /// Endpoint the walk entered this edge from.
+    pub from: SketchEntityId,
+    /// Endpoint the walk left this edge by.
+    pub to: SketchEntityId,
+}
+
+/// Entity-level result of a profile trace — the loop's *topology*.
+///
+/// Adjacency and loop closure are pure [`EntityKind`] structure, so
+/// this resolves without a solve. Only turning the loop into positions
+/// needs solved state (see [`trace_closed_profile`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProfileEntities {
+    /// Edges in walk order. The last edge's `to` is the first edge's
+    /// `from` — the loop is closed, and never fewer than 2 edges.
+    pub edges: Vec<ProfileEdge>,
+    /// Every Point the profile owns, deduplicated: edge endpoints plus
+    /// each Arc's `center`. A consumer translating a profile must move
+    /// each of these exactly once — a shared corner Point is an
+    /// endpoint of two edges, and applying the delta twice doubles the
+    /// move.
+    pub points: Vec<SketchEntityId>,
+}
+
+/// Trace a closed boundary starting at `start`, returning its
+/// entity topology.
 ///
 /// Algorithm:
 /// 1. Build endpoint → list-of-edge adjacency over non-construction
 ///    Lines (Arcs / Circles are rejected with the matching error).
-/// 2. Pick an arbitrary endpoint of `start` as the loop anchor;
-///    push its position.
+/// 2. Pick an arbitrary endpoint of `start` as the loop anchor.
 /// 3. Walk: from the current endpoint, find the unique non-visited
 ///    incident edge (excluding the entity we just came from). If
 ///    there's exactly one, advance; otherwise return Branching /
 ///    OpenChain.
 /// 4. Loop closes when the next endpoint equals the anchor.
-pub fn trace_closed_profile(
+///
+/// This is the single loop-walk implementation;
+/// [`trace_closed_profile`] is a position mapping over its result.
+pub fn trace_closed_profile_entities(
     sketch: &SketchData,
-    solve: &FullSolveOutput,
     start: SketchEntityId,
-) -> TraceResult {
+) -> Result<ProfileEntities, TraceError> {
     let start_entity = sketch
         .entities
         .iter()
@@ -99,18 +130,11 @@ pub fn trace_closed_profile(
 
     let (start_a, start_b) = edge_endpoints(start_entity).ok_or(TraceError::NotAnEdge)?;
 
-    let pos_a = point_xy(start_a, &solve.result.state, &solve.result.index, sketch)
-        .ok_or(TraceError::MissingEndpoint(start_a))?;
-    let pos_b = point_xy(start_b, &solve.result.state, &solve.result.index, sketch)
-        .ok_or(TraceError::MissingEndpoint(start_b))?;
-
-    let mut vertices: Vec<[f64; 2]> = Vec::new();
-    vertices.push([pos_a.0, pos_a.1]);
-    // If the seed entity is an Arc, sample its interior between
-    // start_a and start_b before pushing start_b.
-    push_arc_interior_if_arc(&mut vertices, sketch, solve, start_entity, start_a, start_b)?;
-    vertices.push([pos_b.0, pos_b.1]);
-
+    let mut walk = vec![ProfileEdge {
+        id: start,
+        from: start_a,
+        to: start_b,
+    }];
     let mut visited: HashSet<SketchEntityId> = HashSet::new();
     visited.insert(start);
     let mut current_endpoint = start_b;
@@ -141,31 +165,91 @@ pub fn trace_closed_profile(
             next_a
         };
 
-        // Sample arc interior between current_endpoint and `other` if
-        // this edge is an arc — applies whether we're closing the loop
-        // or continuing.
-        push_arc_interior_if_arc(
-            &mut vertices,
-            sketch,
-            solve,
-            next_entity,
-            current_endpoint,
-            other,
-        )?;
+        walk.push(ProfileEdge {
+            id: next_id,
+            from: current_endpoint,
+            to: other,
+        });
 
         if other == start_a {
             // Closed loop.
-            return Ok(vertices);
+            let points = profile_points(&walk, &edges);
+            return Ok(ProfileEntities {
+                edges: walk,
+                points,
+            });
         }
 
-        let pos = point_xy(other, &solve.result.state, &solve.result.index, sketch)
-            .ok_or(TraceError::MissingEndpoint(other))?;
-        vertices.push([pos.0, pos.1]);
         visited.insert(next_id);
         current_endpoint = other;
     }
 
     Err(TraceError::Runaway)
+}
+
+/// Deduplicated Points a traced profile owns, in first-seen order.
+///
+/// Includes each Arc's `center`: [`edge_endpoints`] deliberately omits
+/// it because it is not a *topology* vertex, but it IS geometry the
+/// profile owns — a translate that skips it deforms the arc.
+fn profile_points(
+    walk: &[ProfileEdge],
+    edges: &HashMap<SketchEntityId, &Entity>,
+) -> Vec<SketchEntityId> {
+    let mut seen: HashSet<SketchEntityId> = HashSet::new();
+    let mut out: Vec<SketchEntityId> = Vec::new();
+    for edge in walk {
+        for id in [edge.from, edge.to] {
+            if seen.insert(id) {
+                out.push(id);
+            }
+        }
+        if let Some(EntityKind::Arc { center, .. }) = edges.get(&edge.id).map(|e| &e.kind)
+            && seen.insert(*center)
+        {
+            out.push(*center);
+        }
+    }
+    out
+}
+
+/// Trace a closed boundary starting at `start` and emit its boundary
+/// polygon — [`trace_closed_profile_entities`] plus solved positions,
+/// with Arc segments tessellated into [`ARC_SAMPLES`] interior
+/// vertices.
+pub fn trace_closed_profile(
+    sketch: &SketchData,
+    solve: &FullSolveOutput,
+    start: SketchEntityId,
+) -> TraceResult {
+    let traced = trace_closed_profile_entities(sketch, start)?;
+
+    let pos = |id: SketchEntityId| -> Result<[f64; 2], TraceError> {
+        point_xy(id, &solve.result.state, &solve.result.index, sketch)
+            .map(|(x, y)| [x, y])
+            .ok_or(TraceError::MissingEndpoint(id))
+    };
+
+    // The anchor is pushed once up front; the loop's final edge closes
+    // back onto it, so its `to` is deliberately never pushed again.
+    let anchor = traced.edges[0].from;
+    let mut vertices: Vec<[f64; 2]> = vec![pos(anchor)?];
+    let last = traced.edges.len() - 1;
+
+    for (i, edge) in traced.edges.iter().enumerate() {
+        let entity = sketch
+            .entities
+            .iter()
+            .find(|e| e.id == edge.id)
+            .ok_or(TraceError::NotAnEdge)?;
+        push_arc_interior_if_arc(&mut vertices, sketch, solve, entity, edge.from, edge.to)?;
+        if i == last {
+            break;
+        }
+        vertices.push(pos(edge.to)?);
+    }
+
+    Ok(vertices)
 }
 
 /// If `entity` is an [`EntityKind::Arc`], append [`ARC_SAMPLES`]
