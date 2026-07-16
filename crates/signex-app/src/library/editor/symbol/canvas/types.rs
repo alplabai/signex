@@ -56,6 +56,14 @@ pub enum CanvasAction {
         x: f64,
         y: f64,
     },
+    /// Commit a closed polygon from the click-collect vertex stash
+    /// (grid-snapped mm world positions, implicitly closed). Emitted
+    /// by any of the Place Polygon close gestures — click on the
+    /// first vertex, double-click, Enter, or tool-switch-away — each
+    /// already enforcing the >= 3 vertex minimum before firing.
+    AddPolygon {
+        vertices: Vec<[f64; 2]>,
+    },
     Select(SymbolSelection),
     Deselect,
     Move {
@@ -122,9 +130,9 @@ pub enum RotatePivotMode {
 
 /// Canvas tools — Altium-style `Tool` enum scoped to this surface.
 /// Mirrors the SchLib Place menu: Pin / Line / Rectangle / Ellipse
-/// (Circle) / Arc / Text are the working tools; `Polygon` /
-/// `RoundRectangle` / `Bezier` / `Image` etc. live on the Active
-/// Bar as stubs and are deferred to v0.9.x.
+/// (Circle) / Arc / Text / Polygon are the working tools;
+/// `RoundRectangle` / `Bezier` / `Image` etc. live on the Active Bar
+/// as stubs and are deferred to v0.9.x.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SymbolTool {
     Select,
@@ -134,6 +142,10 @@ pub enum SymbolTool {
     PlaceCircle,
     PlaceArc,
     PlaceText,
+    /// Click-collect closed polygon (>= 3 vertices) — see
+    /// `CanvasState::polygon_vertices` and the close gestures
+    /// documented there.
+    PlacePolygon,
 }
 
 impl SymbolTool {
@@ -146,6 +158,7 @@ impl SymbolTool {
             SymbolTool::PlaceCircle => "Ellipse",
             SymbolTool::PlaceArc => "Arc",
             SymbolTool::PlaceText => "Text",
+            SymbolTool::PlacePolygon => "Polygon",
         }
     }
 }
@@ -213,4 +226,31 @@ pub struct CanvasState {
     /// result this never jumps at the ±180° boundary so arcs that
     /// cross 0° / 360° render continuously.
     pub arc_end_deg_unwrapped: Option<f64>,
+    /// Click-collect vertex stash for the `PlacePolygon` tool
+    /// (grid-snapped mm world positions). Empty = no placement in
+    /// flight. Committed (>= 3 vertices) on any of: a click on the
+    /// first vertex, a double-click, Enter, or switching away from
+    /// the tool; discarded (any count) on Esc or a right-click.
+    pub polygon_vertices: Vec<(f64, f64)>,
+    /// Live cursor (snapped) updated every `CursorMoved` while
+    /// `polygon_vertices` is non-empty — the open end of the
+    /// rubber-band preview polyline.
+    pub polygon_cursor: Option<(f64, f64)>,
+    /// Timestamp of the last `PlacePolygon` left-click — paired with
+    /// the schematic canvas's existing 300 ms / 3 mm double-click
+    /// heuristic to detect the close-by-double-click gesture without
+    /// appending a duplicate vertex.
+    pub polygon_last_click_time: Option<std::time::Instant>,
+    /// World position of the last `PlacePolygon` left-click, paired
+    /// with `polygon_last_click_time` for the double-click distance
+    /// check.
+    pub polygon_last_click_pos: Option<(f64, f64)>,
+    /// Tool seen on the previous canvas event. The dispatcher compares
+    /// this against the live `SymbolCanvas::tool` (sourced from
+    /// `editor.tool`, which toolbar clicks mutate OUTSIDE this
+    /// Program's `update`) on every event so a tool-switch away from
+    /// `PlacePolygon` can still commit the in-flight stash — there is
+    /// no editor-level hook to piggyback on since the stash lives here
+    /// in `CanvasState`, not in the editor model.
+    pub last_tool: Option<SymbolTool>,
 }

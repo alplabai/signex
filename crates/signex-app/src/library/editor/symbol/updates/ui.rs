@@ -15,6 +15,7 @@ pub(super) fn apply_symbol_ui(editor: &mut SymEditor, msg: SymbolEditorMsg) {
                 SymbolToolMsg::PlaceCircle => SymbolTool::PlaceCircle,
                 SymbolToolMsg::PlaceArc => SymbolTool::PlaceArc,
                 SymbolToolMsg::PlaceText => SymbolTool::PlaceText,
+                SymbolToolMsg::PlacePolygon => SymbolTool::PlacePolygon,
             };
             editor.active_bar_menu = None;
         }

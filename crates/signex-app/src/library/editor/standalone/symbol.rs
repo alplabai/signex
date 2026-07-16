@@ -308,6 +308,7 @@ fn symbol_action_to_primitive_msg(action: sym_canvas::CanvasAction) -> SymbolEdi
             end_deg,
         },
         CanvasAction::AddText { x, y } => SymbolEditorMsg::AddText { x, y },
+        CanvasAction::AddPolygon { vertices } => SymbolEditorMsg::AddPolygon { vertices },
         CanvasAction::Select(sel) => SymbolEditorMsg::Select(symbol_selection_to_msg(sel)),
         CanvasAction::Deselect => SymbolEditorMsg::Deselect,
         CanvasAction::Move { x, y } => SymbolEditorMsg::MoveSelected { x, y },

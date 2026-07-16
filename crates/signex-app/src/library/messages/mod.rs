@@ -304,6 +304,7 @@ pub enum SymbolToolMsg {
     PlaceCircle,
     PlaceArc,
     PlaceText,
+    PlacePolygon,
 }
 
 /// v0.13.3 — selection-aware constraint kind tag. The dispatcher

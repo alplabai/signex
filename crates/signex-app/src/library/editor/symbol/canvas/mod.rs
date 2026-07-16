@@ -326,6 +326,16 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<CanvasAction>> {
+        // Tool-switch detection runs first, ahead of every event arm:
+        // the toolbar's tool buttons mutate `editor.tool` OUTSIDE this
+        // Program's `update` (they're plain `LibraryMessage`s, not
+        // `CanvasAction`s), so the very next canvas event after a
+        // switch away from `PlacePolygon` is what actually flushes
+        // the in-flight vertex stash — see `sync_polygon_tool`'s doc
+        // comment for the full rationale.
+        if let Some(action) = self.sync_polygon_tool(state) {
+            return Some(action);
+        }
         // Thin dispatcher — each event kind routes to its extracted
         // `impl SymbolCanvas` method in `input::{tools, pointer,
         // camera, keys}`. Arm order + patterns are identical to the
@@ -421,6 +431,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         self.draw_line_preview(&mut frame, state);
         self.draw_circle_preview(&mut frame, state);
         self.draw_arc_preview(&mut frame, state);
+        self.draw_polygon_preview(&mut frame, state);
 
         vec![frame.into_geometry()]
     }

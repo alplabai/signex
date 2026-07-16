@@ -26,6 +26,7 @@ impl SymbolCanvas<'_> {
             SymbolTool::PlaceLine => state.line_from.is_some(),
             SymbolTool::PlaceCircle => state.circle_center.is_some(),
             SymbolTool::PlaceArc => state.arc_center.is_some() || state.arc_radius_start.is_some(),
+            SymbolTool::PlacePolygon => !state.polygon_vertices.is_empty(),
             _ => false,
         };
         if draw_in_progress {
@@ -39,6 +40,12 @@ impl SymbolCanvas<'_> {
             state.arc_radius_start = None;
             state.arc_cursor = None;
             state.arc_end_deg_unwrapped = None;
+            // Right-click cancels Place Polygon like every other
+            // multi-click tool — no commit, matches Esc.
+            state.polygon_vertices.clear();
+            state.polygon_cursor = None;
+            state.polygon_last_click_time = None;
+            state.polygon_last_click_pos = None;
             return Some(canvas::Action::capture());
         }
         let pos = cursor.position_in(bounds)?;
@@ -179,6 +186,16 @@ impl SymbolCanvas<'_> {
                     });
                 }
             }
+            return Some(
+                canvas::Action::publish(CanvasAction::CursorAt {
+                    x_mm: Some(ux),
+                    y_mm: Some(uy),
+                })
+                .and_capture(),
+            );
+        }
+        if self.tool == SymbolTool::PlacePolygon && !state.polygon_vertices.is_empty() {
+            state.polygon_cursor = Some((wx, wy));
             return Some(
                 canvas::Action::publish(CanvasAction::CursorAt {
                     x_mm: Some(ux),

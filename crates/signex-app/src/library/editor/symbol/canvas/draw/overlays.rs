@@ -265,4 +265,62 @@ impl SymbolCanvas<'_> {
             }
         }
     }
+
+    /// Click-collect polygon placement preview — an open polyline
+    /// through the committed vertices plus a rubber-band segment to
+    /// the live cursor. Once >= 3 vertices are collected, the first
+    /// vertex gets a highlighted ring marking it as the "click here
+    /// to close" affordance.
+    pub(in crate::library::editor::symbol::canvas) fn draw_polygon_preview(
+        &self,
+        frame: &mut canvas::Frame,
+        state: &CanvasState,
+    ) {
+        if state.polygon_vertices.is_empty() {
+            return;
+        }
+        let cam = self.camera;
+        let scale = cam.scale;
+        let ox = cam.offset.x;
+        let oy = cam.offset.y;
+        let w2s = |x: f64, y: f64| -> iced::Point {
+            iced::Point::new(ox + (x as f32) * scale, oy - (y as f32) * scale)
+        };
+        let preview_color = Color {
+            a: 0.55,
+            ..self.selected_color
+        };
+        let path = canvas::Path::new(|builder| {
+            let first = w2s(state.polygon_vertices[0].0, state.polygon_vertices[0].1);
+            builder.move_to(first);
+            for &(x, y) in state.polygon_vertices.iter().skip(1) {
+                builder.line_to(w2s(x, y));
+            }
+            if let Some((cx, cy)) = state.polygon_cursor {
+                builder.line_to(w2s(cx, cy));
+            }
+        });
+        frame.stroke(
+            &path,
+            canvas::Stroke::default()
+                .with_color(preview_color)
+                .with_width(stroke_px_at_zoom(SYMBOL_GRAPHIC_STROKE_PX_AT_100, scale)),
+        );
+        for &(x, y) in &state.polygon_vertices {
+            frame.fill(&canvas::Path::circle(w2s(x, y), 3.0), preview_color);
+        }
+        // Closable affordance: once a close-by-click is actually live
+        // (>= 3 vertices), ring the first vertex so it reads as
+        // clickable, distinct from the plain dots on every other
+        // collected vertex.
+        if state.polygon_vertices.len() >= 3 {
+            let first = w2s(state.polygon_vertices[0].0, state.polygon_vertices[0].1);
+            frame.stroke(
+                &canvas::Path::circle(first, 6.0),
+                canvas::Stroke::default()
+                    .with_color(preview_color)
+                    .with_width(1.5),
+            );
+        }
+    }
 }

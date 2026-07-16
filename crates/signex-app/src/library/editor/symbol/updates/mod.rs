@@ -192,6 +192,19 @@ pub(crate) fn apply_symbol_primitive_edit(
                 0.15,
             );
         }
+        SymbolEditorMsg::AddPolygon { vertices } => {
+            // The canvas only fires this once its stash holds >= 3
+            // vertices, but re-check here too — defence in depth
+            // against a future caller that skips that gate.
+            if vertices.len() >= 3 {
+                push_graphic(
+                    editor,
+                    signex_library::SymbolGraphicKind::Polygon { vertices },
+                    0.15,
+                );
+            }
+        }
+
         // ── Selection ────────────────────────────────────────────
         SymbolEditorMsg::Select(_) | SymbolEditorMsg::Deselect => {
             apply_symbol_selection(editor, msg)

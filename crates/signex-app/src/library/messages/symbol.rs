@@ -53,6 +53,12 @@ pub enum SymbolEditorMsg {
     /// content via the Properties panel after placement.
     AddText { x: f64, y: f64 },
 
+    /// Commit a closed polygon (implicitly closed — see
+    /// `SymbolGraphicKind::Polygon`) from the canvas's click-collect
+    /// vertex stash. The canvas only fires this once its stash holds
+    /// >= 3 vertices.
+    AddPolygon { vertices: Vec<[f64; 2]> },
+
     /// Select a symbol element (pin index / field key).
     Select(SymbolSelectionMsg),
 

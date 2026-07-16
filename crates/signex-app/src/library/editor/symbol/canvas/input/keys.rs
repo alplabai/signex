@@ -41,12 +41,28 @@ impl SymbolCanvas<'_> {
                         state.arc_end_deg_unwrapped = None;
                         true
                     }
+                    // Esc drops the in-flight Polygon stash — no
+                    // commit, regardless of vertex count.
+                    SymbolTool::PlacePolygon if !state.polygon_vertices.is_empty() => {
+                        state.polygon_vertices.clear();
+                        state.polygon_cursor = None;
+                        state.polygon_last_click_time = None;
+                        state.polygon_last_click_pos = None;
+                        true
+                    }
                     _ => false,
                 };
                 if cancelled {
                     return Some(canvas::Action::capture());
                 }
                 None
+            }
+            // Enter commits the in-flight Polygon stash once it holds
+            // >= 3 vertices; below that it's a no-op (keep collecting).
+            iced::keyboard::Key::Named(iced::keyboard::key::Named::Enter)
+                if self.tool == SymbolTool::PlacePolygon && state.polygon_vertices.len() >= 3 =>
+            {
+                Some(super::tools::commit_polygon(state))
             }
             iced::keyboard::Key::Named(iced::keyboard::key::Named::Delete)
             | iced::keyboard::Key::Named(iced::keyboard::key::Named::Backspace) => {
