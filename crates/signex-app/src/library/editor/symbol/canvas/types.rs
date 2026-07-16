@@ -215,10 +215,17 @@ pub struct CanvasState {
     /// Last cursor screen position during a pan, used to compute
     /// per-frame deltas.
     pub last_pan_pos: Option<iced::Point>,
-    /// Set the first time a right/middle-button drag actually moves
-    /// (mirrors the footprint canvas's `pan_moved`). A right-release
-    /// with this still `false` opens the context menu instead of
-    /// having panned; cleared on release.
+    /// Fixed screen position of the secondary-button press that armed
+    /// the current pan — the origin the cumulative pan-motion latch
+    /// (`pan_moved_past_threshold`) measures against, distinct from
+    /// `last_pan_pos` (which moves every frame). Cleared on release /
+    /// cursor-left.
+    pub secondary_press_pos: Option<iced::Point>,
+    /// Set the first time a right/middle-button drag's CUMULATIVE
+    /// displacement from `secondary_press_pos` crosses the pan motion
+    /// threshold (mirrors the footprint canvas's `pan_moved`). A
+    /// right-release with this still `false` opens the context menu
+    /// instead of having panned; cleared on release.
     pub pan_moved: bool,
     /// World-space anchor of a rubber-band box selection in progress.
     /// Set on `ButtonPressed(Left)` that hits empty space; cleared on
