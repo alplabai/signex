@@ -174,7 +174,8 @@ broken layout — these GPUs are not supported.
 
 ## Building
 
-**Prerequisites:** Rust 1.80+ and a GPU supporting Vulkan, Metal, or DX12.
+**Prerequisites:** Rust 1.85+ (the workspace is edition 2024) and a GPU supporting
+Vulkan, Metal, or DX12.
 
 ```bash
 git clone https://github.com/alplabai/signex.git

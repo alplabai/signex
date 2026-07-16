@@ -3,6 +3,7 @@ name = "signex-output"
 description = "Output generation for Signex EDA — PDF, BOM, netlist, sheet templates, print preview"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 
