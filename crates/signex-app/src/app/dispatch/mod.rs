@@ -375,7 +375,19 @@ impl Signex {
                 // Without this the OS paints the window with hard
                 // corners and the modal_card's rounded border is
                 // hidden inside a square OS frame.
-                crate::chrome::apply_rounded_corners::<Message>(id)
+                //
+                // Focus the window as it settles. A freshly-opened
+                // detached window inherits `Level::Normal` and is not
+                // raised by the OS, so it can appear *behind* the main
+                // window — the user would have to move the main window
+                // to find the dialog. Focusing here is permitted:
+                // signex owns the foreground at the moment it opens the
+                // modal, so the OS honours the request (unlike a
+                // foreground grab from a background process).
+                Task::batch([
+                    crate::chrome::apply_rounded_corners::<Message>(id),
+                    iced::window::gain_focus(id),
+                ])
             }
             WindowMsg::UndockTab(idx) => self.handle_undock_tab(idx),
             WindowMsg::UndockedTabOpened { path, id } => {
@@ -421,7 +433,10 @@ impl Signex {
                 per_window.paper_height_mm = self.interaction_state.canvas.paper_height_mm;
                 per_window.fit_to_paper();
                 self.interaction_state.canvases.insert(id, per_window);
-                Task::none()
+                // Raise + focus the undocked tab window — like the
+                // detached modal, it opens at `Level::Normal` and can
+                // land behind the main window otherwise.
+                iced::window::gain_focus(id)
             }
             WindowMsg::ReattachTab(id) => {
                 // Pre-remove so the tab bar shows the reattached tab on
@@ -439,7 +454,9 @@ impl Signex {
                 self.ui_state
                     .windows
                     .insert(id, super::state::WindowKind::DetachedPanel(kind));
-                Task::none()
+                // Raise + focus the detached panel window — same
+                // `Level::Normal` open-behind issue as the modal/tab.
+                iced::window::gain_focus(id)
             }
             WindowMsg::StartDetachedWindowDrag(modal) => {
                 self.handle_start_detached_window_drag(modal)
