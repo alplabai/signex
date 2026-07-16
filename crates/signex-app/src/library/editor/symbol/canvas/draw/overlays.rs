@@ -276,7 +276,7 @@ impl SymbolCanvas<'_> {
         frame: &mut canvas::Frame,
         state: &CanvasState,
     ) {
-        if state.polygon_vertices.is_empty() {
+        if self.polygon_vertices.is_empty() {
             return;
         }
         let cam = self.camera;
@@ -291,9 +291,9 @@ impl SymbolCanvas<'_> {
             ..self.selected_color
         };
         let path = canvas::Path::new(|builder| {
-            let first = w2s(state.polygon_vertices[0].0, state.polygon_vertices[0].1);
+            let first = w2s(self.polygon_vertices[0].0, self.polygon_vertices[0].1);
             builder.move_to(first);
-            for &(x, y) in state.polygon_vertices.iter().skip(1) {
+            for &(x, y) in self.polygon_vertices.iter().skip(1) {
                 builder.line_to(w2s(x, y));
             }
             if let Some((cx, cy)) = state.polygon_cursor {
@@ -306,15 +306,15 @@ impl SymbolCanvas<'_> {
                 .with_color(preview_color)
                 .with_width(stroke_px_at_zoom(SYMBOL_GRAPHIC_STROKE_PX_AT_100, scale)),
         );
-        for &(x, y) in &state.polygon_vertices {
+        for &(x, y) in self.polygon_vertices {
             frame.fill(&canvas::Path::circle(w2s(x, y), 3.0), preview_color);
         }
         // Closable affordance: once a close-by-click is actually live
         // (>= 3 vertices), ring the first vertex so it reads as
         // clickable, distinct from the plain dots on every other
         // collected vertex.
-        if state.polygon_vertices.len() >= 3 {
-            let first = w2s(state.polygon_vertices[0].0, state.polygon_vertices[0].1);
+        if self.polygon_vertices.len() >= 3 {
+            let first = w2s(self.polygon_vertices[0].0, self.polygon_vertices[0].1);
             frame.stroke(
                 &canvas::Path::circle(first, 6.0),
                 canvas::Stroke::default()

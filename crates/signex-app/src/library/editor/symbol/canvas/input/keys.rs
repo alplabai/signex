@@ -16,6 +16,19 @@ impl SymbolCanvas<'_> {
     ) -> Option<canvas::Action<CanvasAction>> {
         match key {
             iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape) => {
+                // Esc drops the in-flight Polygon stash — no commit,
+                // regardless of vertex count. The stash lives on the
+                // editor model, so this needs its own publish (unlike
+                // the other multi-click tools below, whose in-progress
+                // state is purely local to `CanvasState`).
+                if self.tool == SymbolTool::PlacePolygon && !self.polygon_vertices.is_empty() {
+                    state.polygon_cursor = None;
+                    state.polygon_last_click_time = None;
+                    state.polygon_last_click_pos = None;
+                    return Some(
+                        canvas::Action::publish(CanvasAction::PolygonCancel).and_capture(),
+                    );
+                }
                 let cancelled = match self.tool {
                     SymbolTool::PlaceRectangle if state.rect_from.is_some() => {
                         state.rect_from = None;
@@ -41,15 +54,6 @@ impl SymbolCanvas<'_> {
                         state.arc_end_deg_unwrapped = None;
                         true
                     }
-                    // Esc drops the in-flight Polygon stash — no
-                    // commit, regardless of vertex count.
-                    SymbolTool::PlacePolygon if !state.polygon_vertices.is_empty() => {
-                        state.polygon_vertices.clear();
-                        state.polygon_cursor = None;
-                        state.polygon_last_click_time = None;
-                        state.polygon_last_click_pos = None;
-                        true
-                    }
                     _ => false,
                 };
                 if cancelled {
@@ -57,12 +61,18 @@ impl SymbolCanvas<'_> {
                 }
                 None
             }
-            // Enter commits the in-flight Polygon stash once it holds
-            // >= 3 vertices; below that it's a no-op (keep collecting).
+            // Enter commits the in-flight Polygon stash. The
+            // dispatcher decides commit vs. discard from the vertex
+            // count (see `SymbolEditorMsg::PolygonCommit`); the guard
+            // here just avoids publishing a no-op when nothing has
+            // been placed yet.
             iced::keyboard::Key::Named(iced::keyboard::key::Named::Enter)
-                if self.tool == SymbolTool::PlacePolygon && state.polygon_vertices.len() >= 3 =>
+                if self.tool == SymbolTool::PlacePolygon && self.polygon_vertices.len() >= 3 =>
             {
-                Some(super::tools::commit_polygon(state))
+                state.polygon_cursor = None;
+                state.polygon_last_click_time = None;
+                state.polygon_last_click_pos = None;
+                Some(canvas::Action::publish(CanvasAction::PolygonCommit).and_capture())
             }
             iced::keyboard::Key::Named(iced::keyboard::key::Named::Delete)
             | iced::keyboard::Key::Named(iced::keyboard::key::Named::Backspace) => {

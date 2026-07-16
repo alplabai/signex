@@ -56,14 +56,22 @@ pub enum CanvasAction {
         x: f64,
         y: f64,
     },
-    /// Commit a closed polygon from the click-collect vertex stash
-    /// (grid-snapped mm world positions, implicitly closed). Emitted
-    /// by any of the Place Polygon close gestures — click on the
-    /// first vertex, double-click, Enter, or tool-switch-away — each
-    /// already enforcing the >= 3 vertex minimum before firing.
-    AddPolygon {
-        vertices: Vec<[f64; 2]>,
+    /// Append one grid-snapped vertex to the Place Polygon stash
+    /// (`SymbolEditorState::polygon_vertices`). Emitted on a plain
+    /// click while the `PlacePolygon` tool is active and the click
+    /// doesn't match a close gesture.
+    PolygonClick {
+        x: f64,
+        y: f64,
     },
+    /// Commit the Place Polygon stash: pushes a closed-polygon graphic
+    /// when it holds a valid ring (>= 3 vertices after normalising),
+    /// otherwise silently discards it. Emitted by any of the close
+    /// gestures — click on the first vertex, double-click, or Enter.
+    PolygonCommit,
+    /// Discard the Place Polygon stash with no commit. Emitted by Esc
+    /// or a right-click while a polygon placement is in flight.
+    PolygonCancel,
     Select(SymbolSelection),
     Deselect,
     Move {
@@ -143,8 +151,9 @@ pub enum SymbolTool {
     PlaceArc,
     PlaceText,
     /// Click-collect closed polygon (>= 3 vertices) — see
-    /// `CanvasState::polygon_vertices` and the close gestures
-    /// documented there.
+    /// `SymbolEditorState::polygon_vertices` and the close gestures
+    /// documented on `CanvasAction::PolygonClick` / `PolygonCommit` /
+    /// `PolygonCancel`.
     PlacePolygon,
 }
 
@@ -226,31 +235,26 @@ pub struct CanvasState {
     /// result this never jumps at the ±180° boundary so arcs that
     /// cross 0° / 360° render continuously.
     pub arc_end_deg_unwrapped: Option<f64>,
-    /// Click-collect vertex stash for the `PlacePolygon` tool
-    /// (grid-snapped mm world positions). Empty = no placement in
-    /// flight. Committed (>= 3 vertices) on any of: a click on the
-    /// first vertex, a double-click, Enter, or switching away from
-    /// the tool; discarded (any count) on Esc or a right-click.
-    pub polygon_vertices: Vec<(f64, f64)>,
-    /// Live cursor (snapped) updated every `CursorMoved` while
-    /// `polygon_vertices` is non-empty — the open end of the
-    /// rubber-band preview polyline.
+    /// Live cursor (snapped) updated every `CursorMoved` while the
+    /// Place Polygon stash (`SymbolEditorState::polygon_vertices`,
+    /// NOT stored here — see that field's doc comment) is non-empty —
+    /// the open end of the rubber-band preview polyline. Purely a
+    /// view-layer readout, so it's harmless for this to be ephemeral
+    /// per-widget-slot state that could in principle be stale right
+    /// after a tab switch; it never drives a commit by itself.
     pub polygon_cursor: Option<(f64, f64)>,
     /// Timestamp of the last `PlacePolygon` left-click — paired with
-    /// the schematic canvas's existing 300 ms / 3 mm double-click
-    /// heuristic to detect the close-by-double-click gesture without
-    /// appending a duplicate vertex.
+    /// `polygon_last_click_pos` to detect the close-by-double-click
+    /// gesture (300 ms, same snapped vertex) without appending a
+    /// duplicate vertex. Ephemeral click-timing only, not vertex data
+    /// — see `polygon_cursor`'s doc comment for why that's safe to
+    /// leave in this per-widget-slot state.
     pub polygon_last_click_time: Option<std::time::Instant>,
-    /// World position of the last `PlacePolygon` left-click, paired
-    /// with `polygon_last_click_time` for the double-click distance
-    /// check.
+    /// Grid-snapped world position of the last `PlacePolygon`
+    /// left-click, paired with `polygon_last_click_time` for the
+    /// double-click check — the second click must land on the exact
+    /// same snapped vertex, not just within a fixed mm radius, so a
+    /// fine snap grid can't misread two adjacent-but-distinct clicks
+    /// as a double-click.
     pub polygon_last_click_pos: Option<(f64, f64)>,
-    /// Tool seen on the previous canvas event. The dispatcher compares
-    /// this against the live `SymbolCanvas::tool` (sourced from
-    /// `editor.tool`, which toolbar clicks mutate OUTSIDE this
-    /// Program's `update`) on every event so a tool-switch away from
-    /// `PlacePolygon` can still commit the in-flight stash — there is
-    /// no editor-level hook to piggyback on since the stash lives here
-    /// in `CanvasState`, not in the editor model.
-    pub last_tool: Option<SymbolTool>,
 }

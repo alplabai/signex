@@ -19,14 +19,23 @@ impl SymbolCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<CanvasAction>> {
-        // Right-click cancels any in-progress multi-click draw;
+        // Right-click cancels Place Polygon's editor-owned stash —
+        // this needs its own publish (unlike the other multi-click
+        // tools below, whose in-progress state is purely local to
+        // `CanvasState` and never needs to notify the dispatcher).
+        if self.tool == SymbolTool::PlacePolygon && !self.polygon_vertices.is_empty() {
+            state.polygon_cursor = None;
+            state.polygon_last_click_time = None;
+            state.polygon_last_click_pos = None;
+            return Some(canvas::Action::publish(CanvasAction::PolygonCancel).and_capture());
+        }
+        // Right-click cancels any other in-progress multi-click draw;
         // otherwise starts a pan (same as schematic canvas).
         let draw_in_progress = match self.tool {
             SymbolTool::PlaceRectangle => state.rect_from.is_some(),
             SymbolTool::PlaceLine => state.line_from.is_some(),
             SymbolTool::PlaceCircle => state.circle_center.is_some(),
             SymbolTool::PlaceArc => state.arc_center.is_some() || state.arc_radius_start.is_some(),
-            SymbolTool::PlacePolygon => !state.polygon_vertices.is_empty(),
             _ => false,
         };
         if draw_in_progress {
@@ -40,12 +49,6 @@ impl SymbolCanvas<'_> {
             state.arc_radius_start = None;
             state.arc_cursor = None;
             state.arc_end_deg_unwrapped = None;
-            // Right-click cancels Place Polygon like every other
-            // multi-click tool — no commit, matches Esc.
-            state.polygon_vertices.clear();
-            state.polygon_cursor = None;
-            state.polygon_last_click_time = None;
-            state.polygon_last_click_pos = None;
             return Some(canvas::Action::capture());
         }
         let pos = cursor.position_in(bounds)?;
@@ -194,7 +197,7 @@ impl SymbolCanvas<'_> {
                 .and_capture(),
             );
         }
-        if self.tool == SymbolTool::PlacePolygon && !state.polygon_vertices.is_empty() {
+        if self.tool == SymbolTool::PlacePolygon && !self.polygon_vertices.is_empty() {
             state.polygon_cursor = Some((wx, wy));
             return Some(
                 canvas::Action::publish(CanvasAction::CursorAt {

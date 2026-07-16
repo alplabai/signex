@@ -204,22 +204,30 @@ impl SymbolCanvas<'_> {
         }
     }
 
-    /// Click-collect gesture for the `PlacePolygon` tool. Each click
-    /// normally appends a snapped vertex to `state.polygon_vertices`;
-    /// two close gestures are checked first so they don't append a
-    /// duplicate vertex:
+    /// Click-collect gesture for the `PlacePolygon` tool. The vertex
+    /// stash itself (`self.polygon_vertices`) lives on
+    /// `SymbolEditorState`, not this Program's `CanvasState` — a
+    /// document-scoped Vec, not per-widget-slot ephemeral state, so a
+    /// tab switch mid-placement can't leak an in-flight vertex list
+    /// into a different document (see `CanvasAction::PolygonClick`'s
+    /// doc comment). Each plain click publishes `PolygonClick` so the
+    /// dispatcher appends it there; two close gestures are checked
+    /// first so they don't append a duplicate vertex:
     ///
     /// 1. A click on the already-placed first vertex (hit-tolerance
     ///    based, using the unsnapped cursor so it feels the same at
     ///    every zoom level — mirrors `hit_test_graphic_handle`'s
     ///    tolerance derivation).
-    /// 2. A double-click (300 ms / 3 mm — the same heuristic the
-    ///    schematic canvas uses for its own double-click detection).
+    /// 2. A double-click — both clicks must land on the exact same
+    ///    snapped grid vertex within 300 ms (not a fixed mm radius,
+    ///    which at a fine snap grid could misread two adjacent-but-
+    ///    distinct clicks as a double-click).
     ///
-    /// Both close gestures commit only once >= 3 vertices are
-    /// collected; below that they're a no-op (kept collecting)
-    /// rather than a discard — Esc / tool-switch are the discard
-    /// paths (see `on_key_pressed` / `sync_polygon_tool`).
+    /// Both close gestures publish `PolygonCommit` unconditionally
+    /// once matched; the dispatcher (not this gesture code) decides
+    /// commit vs. silent discard from the vertex count, so a double-
+    /// click below 3 vertices still safely consumes the click without
+    /// appending or committing anything.
     fn on_polygon_click(
         &self,
         state: &mut CanvasState,
@@ -229,91 +237,47 @@ impl SymbolCanvas<'_> {
         uy: f64,
     ) -> Option<canvas::Action<CanvasAction>> {
         // Close gesture 1: click on the first vertex.
-        if state.polygon_vertices.len() >= 3
-            && let Some(&(fx, fy)) = state.polygon_vertices.first()
+        if self.polygon_vertices.len() >= 3
+            && let Some(&(fx, fy)) = self.polygon_vertices.first()
         {
             let tol_mm = (8.0_f32 / self.camera.scale.max(0.01)).clamp(0.5, 4.0) as f64;
             let dx = ux - fx;
             let dy = uy - fy;
             if dx * dx + dy * dy <= tol_mm * tol_mm {
-                return Some(commit_polygon(state));
+                return Some(self.publish_polygon_commit(state));
             }
         }
 
-        // Close gesture 2: double-click. Detected before appending so
-        // the second click of the pair never becomes a duplicate
-        // vertex; below 3 vertices this still consumes the click
-        // (capture) without committing or appending — the stash is
-        // too short to close yet.
+        // Close gesture 2: double-click on the same snapped vertex.
+        // Checked before appending so the second click of the pair
+        // never becomes a near-duplicate vertex.
         let now = std::time::Instant::now();
-        if let (Some(last_time), Some((lx, ly))) =
+        if let (Some(last_time), Some(last_pos)) =
             (state.polygon_last_click_time, state.polygon_last_click_pos)
         {
             let dt = now.duration_since(last_time);
-            let dist_sq = (wx - lx).powi(2) + (wy - ly).powi(2);
-            if dt.as_millis() < 300 && dist_sq < 3.0 * 3.0 {
+            if dt.as_millis() < 300 && last_pos == (wx, wy) {
                 state.polygon_last_click_time = None;
                 state.polygon_last_click_pos = None;
-                if state.polygon_vertices.len() >= 3 {
-                    return Some(commit_polygon(state));
-                }
-                return Some(canvas::Action::capture());
+                return Some(self.publish_polygon_commit(state));
             }
         }
 
         // Plain click — append a vertex and keep collecting.
         state.polygon_last_click_time = Some(now);
         state.polygon_last_click_pos = Some((wx, wy));
-        state.polygon_vertices.push((wx, wy));
         state.polygon_cursor = Some((wx, wy));
-        Some(canvas::Action::capture())
+        Some(canvas::Action::publish(CanvasAction::PolygonClick { x: wx, y: wy }).and_capture())
     }
 
-    /// Footprint parity: "leaving Place Polygon commits the in-flight
-    /// stash (>= 3 vertices) / discards it (< 3)". Since the Symbol
-    /// canvas's stash lives in `CanvasState` rather than the editor
-    /// model, there is no message handler this can hook into the way
-    /// the footprint editor's `SetTool` dispatcher does — a toolbar
-    /// click that changes `editor.tool` never reaches this Program's
-    /// `update`. Instead this runs at the top of every canvas event
-    /// and compares the live tool against the tool seen on the
-    /// previous event; on a transition away from `PlacePolygon` it
-    /// flushes the stash before the triggering event is processed
-    /// further (that one event is otherwise a harmless miss — most
-    /// commonly a `CursorMoved` as the pointer re-enters the canvas).
-    pub(in crate::library::editor::symbol::canvas) fn sync_polygon_tool(
-        &self,
-        state: &mut CanvasState,
-    ) -> Option<canvas::Action<CanvasAction>> {
-        let previous = state.last_tool.replace(self.tool);
-        let leaving_polygon =
-            previous == Some(SymbolTool::PlacePolygon) && self.tool != SymbolTool::PlacePolygon;
-        if leaving_polygon && !state.polygon_vertices.is_empty() {
-            // `commit_polygon` always empties the stash; the < 3 case
-            // still publishes, but the updates/mod.rs handler silently
-            // drops an under-count payload (no undo snapshot, no
-            // pushed graphic) — that's the "discard" half of
-            // "commits (>= 3) / discards it (< 3)" for free, with one
-            // code path instead of two.
-            return Some(commit_polygon(state));
-        }
-        None
+    /// Publish the commit action + reset the ephemeral gesture-timing
+    /// fields that live in `CanvasState`. The vertex-count / validity
+    /// check happens at the dispatcher (`SymbolEditorMsg::PolygonCommit`
+    /// handler) against the editor-owned stash, not here.
+    fn publish_polygon_commit(&self, state: &mut CanvasState) -> canvas::Action<CanvasAction> {
+        state.polygon_cursor = None;
+        state.polygon_last_click_time = None;
+        state.polygon_last_click_pos = None;
+        canvas::Action::publish(CanvasAction::PolygonCommit).and_capture()
     }
-}
-
-/// Take the vertex stash and publish the commit action, resetting the
-/// preview cursor. Callers are responsible for checking the stash is
-/// non-empty first; an under-3-vertex payload is a safe no-op at the
-/// `SymbolEditorMsg::AddPolygon` handler (silently dropped, no undo
-/// snapshot) — see `sync_polygon_tool` for the case that relies on
-/// that.
-pub(super) fn commit_polygon(state: &mut CanvasState) -> canvas::Action<CanvasAction> {
-    let vertices = std::mem::take(&mut state.polygon_vertices);
-    state.polygon_cursor = None;
-    state.polygon_last_click_time = None;
-    state.polygon_last_click_pos = None;
-    canvas::Action::publish(CanvasAction::AddPolygon {
-        vertices: vertices.into_iter().map(|(x, y)| [x, y]).collect(),
-    })
-    .and_capture()
 }

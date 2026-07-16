@@ -53,11 +53,19 @@ pub enum SymbolEditorMsg {
     /// content via the Properties panel after placement.
     AddText { x: f64, y: f64 },
 
-    /// Commit a closed polygon (implicitly closed — see
-    /// `SymbolGraphicKind::Polygon`) from the canvas's click-collect
-    /// vertex stash. The canvas only fires this once its stash holds
-    /// >= 3 vertices.
-    AddPolygon { vertices: Vec<[f64; 2]> },
+    /// Append one grid-snapped vertex to `SymbolEditorState::
+    /// polygon_vertices` (Place Polygon click-collect stash).
+    PolygonClick { x: f64, y: f64 },
+
+    /// Commit the Place Polygon stash: pushes a closed polygon
+    /// (implicitly closed — see `SymbolGraphicKind::Polygon`) through
+    /// `push_graphic` when the stash holds a valid ring (>= 3
+    /// vertices after normalising), else silently discards it.
+    PolygonCommit,
+
+    /// Discard the Place Polygon stash with no commit (Esc /
+    /// right-click while a placement is in flight).
+    PolygonCancel,
 
     /// Select a symbol element (pin index / field key).
     Select(SymbolSelectionMsg),

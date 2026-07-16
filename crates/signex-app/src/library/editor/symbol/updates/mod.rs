@@ -88,6 +88,70 @@ fn push_graphic(
     mark_dirty(editor);
 }
 
+/// Commit `editor.polygon_vertices` (the Place Polygon click-collect
+/// stash) if it holds a valid closed ring, else silently discard it.
+/// Always empties the stash. Shared by the `PolygonCommit` message
+/// handler (close-by-click / double-click / Enter) and the `SetTool`
+/// handler's synchronous "leaving Place Polygon" flush — see
+/// `apply_symbol_ui`'s `SetTool` arm for why that flush has to be
+/// synchronous rather than deferred to a later event.
+pub(super) fn commit_or_discard_polygon(editor: &mut SymEditor) {
+    let vertices = normalize_polygon_ring(std::mem::take(&mut editor.polygon_vertices));
+    if vertices.len() >= 3 {
+        push_graphic(
+            editor,
+            signex_library::SymbolGraphicKind::Polygon { vertices },
+            0.15,
+        );
+    } else {
+        // No graphic pushed — no undo snapshot, no dirty flag; just
+        // repaint so the ghost preview disappears.
+        editor.canvas_cache.clear();
+    }
+}
+
+/// Normalise a click-collected vertex ring before committing it:
+///
+/// - Drop a trailing vertex that duplicates the first. A closing
+///   click is meant to be a "connect back to vertex 0" gesture, not a
+///   new point — the click-collect gesture handlers already avoid
+///   appending one for the tolerance-based and double-click closes,
+///   but a plain click can still land exactly on vertex 0's snapped
+///   grid position (a fine snap grid + click slightly outside the
+///   gesture-1 hit tolerance is enough), which would otherwise double
+///   the closing edge at render time.
+/// - Reject a degenerate ring — collinear vertices / zero enclosed
+///   area — by returning an empty Vec, which the caller's `>= 3`
+///   check then discards. A `<3`-vertex input returns empty
+///   unconditionally.
+fn normalize_polygon_ring(mut vertices: Vec<(f64, f64)>) -> Vec<[f64; 2]> {
+    if vertices.len() >= 2 && vertices.first() == vertices.last() {
+        vertices.pop();
+    }
+    if vertices.len() < 3 {
+        return Vec::new();
+    }
+    let points: Vec<[f64; 2]> = vertices.into_iter().map(|(x, y)| [x, y]).collect();
+    if polygon_signed_area2(&points).abs() <= 1e-9 {
+        return Vec::new();
+    }
+    points
+}
+
+/// Twice the shoelace-formula signed area of a closed (implicitly)
+/// vertex ring. Zero (within epsilon) means every vertex is
+/// collinear — a degenerate, invisible "polygon".
+fn polygon_signed_area2(vertices: &[[f64; 2]]) -> f64 {
+    let n = vertices.len();
+    (0..n)
+        .map(|i| {
+            let a = vertices[i];
+            let b = vertices[(i + 1) % n];
+            a[0] * b[1] - b[0] * a[1]
+        })
+        .sum()
+}
+
 /// Apply a primitive-editor event to a standalone Symbol editor
 /// state. Mirrors the symbol-tab arms of `apply_inline_edit` but
 /// against the path-keyed standalone state. Visibility is
@@ -192,17 +256,14 @@ pub(crate) fn apply_symbol_primitive_edit(
                 0.15,
             );
         }
-        SymbolEditorMsg::AddPolygon { vertices } => {
-            // The canvas only fires this once its stash holds >= 3
-            // vertices, but re-check here too — defence in depth
-            // against a future caller that skips that gate.
-            if vertices.len() >= 3 {
-                push_graphic(
-                    editor,
-                    signex_library::SymbolGraphicKind::Polygon { vertices },
-                    0.15,
-                );
-            }
+        SymbolEditorMsg::PolygonClick { x, y } => {
+            editor.polygon_vertices.push((x, y));
+            editor.canvas_cache.clear();
+        }
+        SymbolEditorMsg::PolygonCommit => commit_or_discard_polygon(editor),
+        SymbolEditorMsg::PolygonCancel => {
+            editor.polygon_vertices.clear();
+            editor.canvas_cache.clear();
         }
 
         // ── Selection ────────────────────────────────────────────
@@ -356,3 +417,4 @@ fn rotate_pivot_msg_to_state(
         SymbolRotatePivotMsg::GeometryCenter => GraphicRotationPivotMode::GeometryCenter,
     }
 }
+

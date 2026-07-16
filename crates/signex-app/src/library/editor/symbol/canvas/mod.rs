@@ -68,6 +68,15 @@ pub struct SymbolCanvas<'a> {
     pub symbol: &'a Symbol,
     pub selected: Option<SymbolSelection>,
     pub tool: SymbolTool,
+    /// Click-collect vertex stash for the `PlacePolygon` tool —
+    /// owned by [`crate::app::SymbolEditorState::polygon_vertices`],
+    /// not this Program's ephemeral `CanvasState`, so it can't survive
+    /// a tab switch and mis-commit into a different document (see the
+    /// commit that introduced this field for the cross-tab-corruption
+    /// bug it replaces). Read-only here: the gesture handlers publish
+    /// `CanvasAction::PolygonClick` / `PolygonCommit` / `PolygonCancel`
+    /// and the dispatcher mutates the editor's copy.
+    pub polygon_vertices: &'a [(f64, f64)],
     /// Active sub-part the canvas is filtering pins for. Pins with
     /// `part_number == 0` (Part Zero) render on every part; pins
     /// with `part_number == active_part` render on the active part
@@ -110,6 +119,7 @@ impl<'a> SymbolCanvas<'a> {
         symbol: &'a Symbol,
         selected: Option<SymbolSelection>,
         tool: SymbolTool,
+        polygon_vertices: &'a [(f64, f64)],
         active_part: u8,
         camera: &'a crate::canvas::Camera,
         grid_size_mm: f64,
@@ -132,6 +142,7 @@ impl<'a> SymbolCanvas<'a> {
             symbol,
             selected,
             tool,
+            polygon_vertices,
             active_part,
             camera,
             grid_size_mm,
@@ -326,16 +337,6 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<CanvasAction>> {
-        // Tool-switch detection runs first, ahead of every event arm:
-        // the toolbar's tool buttons mutate `editor.tool` OUTSIDE this
-        // Program's `update` (they're plain `LibraryMessage`s, not
-        // `CanvasAction`s), so the very next canvas event after a
-        // switch away from `PlacePolygon` is what actually flushes
-        // the in-flight vertex stash — see `sync_polygon_tool`'s doc
-        // comment for the full rationale.
-        if let Some(action) = self.sync_polygon_tool(state) {
-            return Some(action);
-        }
         // Thin dispatcher — each event kind routes to its extracted
         // `impl SymbolCanvas` method in `input::{tools, pointer,
         // camera, keys}`. Arm order + patterns are identical to the

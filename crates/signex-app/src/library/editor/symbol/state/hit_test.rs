@@ -144,7 +144,11 @@ fn hit_test_graphic_body(sym: &Symbol, idx: usize, x: f64, y: f64) -> bool {
             if vertices.len() < 2 {
                 false
             } else if g.fill.is_some() {
+                // Filled: interior OR the outline band, so an edge
+                // click (or the outer half of the stroke, which
+                // renders outside the fill) still registers.
                 point_in_polygon([x, y], vertices)
+                    || polygon_outline_hit(x, y, vertices, GRAPHIC_BODY_TOL)
             } else {
                 polygon_outline_hit(x, y, vertices, GRAPHIC_BODY_TOL)
             }
