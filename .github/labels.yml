@@ -7,9 +7,16 @@
 # Families (labels sort alphabetically on GitHub, so the prefix groups them):
 #   type:     what kind of change/issue it is        (blue)
 #   area:     which subsystem it touches             (green; auto-applied by labeler)
+#   tier:     which version gate it blocks           (teal)
 #   priority: how urgent it is                       (graded red→green)
 #   status:   where it is in the workflow            (purple)
 #   plus a handful of standalone signal labels.
+#
+# `tier:` and `priority:` are different axes and must not be conflated.
+# `tier:` answers "which release can this ship in?" (a scope gate, from
+# docs/ROADMAP.md). `priority:` answers "how soon should someone look at
+# it?" (urgency). A `tier: p2` bug can be `priority: critical` — it is
+# urgent, but it still cannot pull v3.0 scope into v1.0.
 #
 # `aliases` migrate pre-existing labels onto the new names without
 # losing the issues/PRs already tagged with the old label.
@@ -100,6 +107,24 @@
   color: "0e8a16"
   description: "Docs and top-level markdown"
 
+# ─────────────────────────── tier: ───────────────────────────
+# The scope gate from docs/ROADMAP.md §"Priority tiers". A feature
+# proposed for an earlier version than its tier allows is answered with
+# "after the current target ships". This family exists so that rule is
+# queryable instead of remembered.
+- name: "tier: p0"
+  color: "006b75"
+  description: "Required for v1.0 — Community Preview cannot ship without it"
+- name: "tier: p1"
+  color: "006b75"
+  description: "Required for v2.0 — professional users expect it"
+- name: "tier: p2"
+  color: "006b75"
+  description: "Differentiator — drives Pro adoption; ships v2.1–v3.0"
+- name: "tier: p3"
+  color: "006b75"
+  description: "Nice to have — stable core required first; v3.x and later"
+
 # ────────────────────────── priority: ─────────────────────────
 - name: "priority: critical"
   color: "b60205"
@@ -132,6 +157,12 @@
   description: "Deferred / parked for now"
 
 # ───────────────────────── standalone ─────────────────────────
+- name: "ui/ux"
+  color: "d4c5f9"
+  description: "Interaction, visual design, or UX-parity concern — cuts across areas"
+- name: "question"
+  color: "cfd3d7"
+  description: "Needs a decision or clarification before work can start"
 - name: "data-loss"
   color: "b60205"
   description: "Can corrupt or lose user data — top priority (see #96, #104)"
@@ -167,3 +198,31 @@
 - name: "invalid"
   color: "cfd3d7"
   description: "Not reproducible or not actionable"
+
+# ──────────────────── pending retirement ─────────────────────
+# These labels are live on GitHub but deliberately NOT declared above,
+# because each duplicates an `area:` label or is obsolete. They are left
+# in place rather than deleted: `delete-other-labels` is false, and
+# removing a label strips it from every issue already carrying it.
+#
+# They are NOT expressed as `aliases:` on the `area:` entries, because an
+# alias renames the old label onto the new one and every target below
+# already exists — label-sync would be renaming onto a live label.
+#
+# Migrate each, then delete it, then (optionally) flip
+# `delete-other-labels: true` in .github/workflows/labels.yml once this
+# file is genuinely complete:
+#
+#   schematic     → area: schematic   (in use: #199, #171)
+#   pcb           → area: pcb
+#   rendering     → area: rendering   (in use: #199, #171, #169, #166)
+#   parser        → area: types
+#   kicad-compat  → obsolete since #62 moved KiCad I/O to the
+#                   signex-kicad-import companion repo; delete outright
+#
+# Per label, to move issues across and remove the old one:
+#
+#   gh issue list --label schematic --json number -q '.[].number' \
+#     | xargs -I{} gh issue edit {} \
+#         --add-label "area: schematic" --remove-label schematic
+#   gh label delete schematic --yes

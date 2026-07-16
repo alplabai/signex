@@ -8,16 +8,20 @@ Brief description of what this PR does and why.
 
 ## License compliance (issue #62)
 
-This tree is Apache-2.0 (clean-room). Opening a PR affirms **no license-gated
-source files** were used — nothing under GPL/copyleft or any other licence
-incompatible with Apache-2.0. There is nothing to fill in — CI
-(`PR-description self-declaration`) passes unless a PR states otherwise.
+- [ ] This is original work, or derived only from sources whose licence I read
+      and confirmed Apache-2.0-compatible.
 
-If your contribution *did* draw on a license-gated source, add a line
-`License-gated sources: yes` — CI routes it to the GPL-3.0 companion repo
-[signex-kicad-import](https://github.com/alplabai/signex-kicad-import), where
-such work belongs. See [docs/LICENSING.md](../docs/LICENSING.md) for the
-rationale.
+**Derived from something? Name the source and its licence:** _(one line, or `n/a`)_
+
+A port is a derivative work — rewriting a project in Rust does not reset its
+licence. GPL/copyleft, **any** Creative Commons licence (CC BY included), and any
+"non-commercial" / "no resale" term are all incompatible here; Signex Pro is sold
+from this source. Full list:
+[CONTRIBUTING.md](../CONTRIBUTING.md#license-compliance-for-contributions).
+Unsure about a source? [Ask in an issue](https://github.com/alplabai/signex/issues/new) —
+that's cheaper than finding out at review. If it *is* license-gated, add a line
+`License-gated sources: yes` and CI routes it to the GPL-3.0 companion repo
+[signex-kicad-import](https://github.com/alplabai/signex-kicad-import).
 
 ## Labels
 
@@ -51,7 +55,7 @@ Hard CI gates (must pass to merge):
 - [ ] `cargo check --workspace` compiles (**Check**)
 - [ ] `cargo test --workspace` passes (**Test**)
 - [ ] `cargo deny check licenses` clean — no GPL transitive deps (**License audit**)
-- [ ] License-compliance block above is filled in (**self-declaration**)
+- [ ] License-compliance question above is answered (**self-declaration**)
 
 Advisory (surfaced by CI, not blocking — please still keep them clean):
 

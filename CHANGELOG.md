@@ -2,7 +2,9 @@
 
 All notable changes to Signex ship here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) loosely and [Semantic Versioning](https://semver.org/spec/v2.0.0.html) strictly.
 
-Each release section is authored **before** the `vX.Y.Z` tag is created, so the release workflow picks it up as the GitHub Release body. See `.claude/hooks/pre-release-guard.sh` for the enforcement.
+Each release section is authored **before** the `vX.Y.Z` tag is created, so the release workflow picks it up as the GitHub Release body. `.github/workflows/release.yml` ("Extract CHANGELOG entry for this tag") matches `## [X.Y.Z]` against the tag with the leading `v` stripped.
+
+**Nothing enforces this.** A missing section is not an error — the workflow silently falls back to auto-generated notes, so a tag cut without a section still ships, just with a worse release page. This file previously cited `.claude/hooks/pre-release-guard.sh` as the enforcement; that path is gitignored and no such hook exists.
 
 ## [Unreleased]
 
@@ -21,15 +23,122 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 - **GPU glyph atlas now trims each frame**, and GPU text prep/draw failures log once instead of being swallowed silently.
 - **Removed the dead `SCHEMATIC_GPU_RENDER` flag** — it gated no live path (the schematic GPU adapter is compiled and tested but not yet mounted).
 
-## [0.14.0] — 2026-05-31
+## [0.14.0] — unreleased
 
-The **v0.14 "Footprint Editor"** milestone. v0.13.0 shipped the
-footprint / sketch editor compiled but hidden behind a feature flag
-while it was finished; v0.14 completes the remaining active-bar tooling
-and **enables the editor** — opening a `.snxfpt` now opens an editable
+**Everything since v0.13.0** — 170 commits, 2026-05-06 → 2026-07-15.
+
+This section was originally written on 2026-05-31 covering only the footprint
+editor, and never tagged. Work kept landing past it: symbol multi-unit, the
+`signex-net` netlist contract, keyboard-shortcut profiles, the schematic GPU
+render path, and 83 commits of ADR-0001 decomposition. Rather than mint a
+phantom version — v0.12 is already one, planned and merged but never tagged —
+v0.14.0 claims all of it. The bulk below was reconstructed from `git log` and
+summarises by theme rather than listing every commit.
+
+### Added — netlist
+
+- **`signex-net` crate — the authoritative `Netlist` contract** (#137). One
+  derivation of connectivity, consumed by everything that needs it instead of
+  each subsystem rolling its own.
+- **Cross-sheet netlist stitching** — `build_project_netlist` (#168).
+- Same-name labels merge into a single net in `build_netlist` (#154).
+- Netlist contract completed and connectivity-gate defects fixed (#157);
+  ERC now consumes the shared derivation, with one `SymbolTransform` (#158).
+- **Project-netlist app wiring** — cache, shared sheet-map, exporter (#159).
+
+### Added — symbol editor
+
+- **Multi-unit parts as a first-class concept** — `part_count`, unit buttons,
+  band→footer layout (#290–#292), per-unit graphics via
+  `SymbolGraphic.part_number` (#293), and per-unit body geometry, with draw,
+  hit-test, and select all scoped to the active unit (#294).
+- **Drawing tools** — two-click line, two-click circle, three-click arc,
+  two-click rectangle with per-graphic fill (#299), rectangle edge handles
+  with resize cursor hints.
+- **Selection** — AutoCAD-style rubber-band box select, select-all (Ctrl+A),
+  clicking a graphic body drags the whole symbol, and clicking a graphic
+  selects only that graphic.
+- Undo/redo and grid controls; separate grid styles for schematic and symbol
+  editors; Properties panel refreshes on canvas selection.
+- Optional pin grab-by-label with whole-pin glow — per-tab toggle, default
+  off (#298).
+- **`anchor2d`** — pivot-aware 2D rotation with a compensated (B-type)
+  `Transform2D`.
+
+### Added — keyboard and commands
+
+- **Configurable keyboard-shortcut profiles with an in-app editor** (#202,
+  supersedes #116).
+- Menu labels are sourced from the command table via `menu_label()` (#270,
+  #282), so menus and the shortcut pane can present differently from one
+  `CommandMetadata` entry (#271).
+- Drift-guard test: every menu command id must resolve in `CommandMetadata`
+  (#272, #283).
+
+### Added — rendering
+
+- **Schematic GPU render module** via iced's shader widget (#169, #200).
+- Schematic renderer scene cutover started in the app canvases; Milestone F
+  schematic-runtime tasks 03–05 completed.
+
+### Changed
+
+- **`signex-gfx` aligned to iced's wgpu 27 + cryoglyph**, dropping the dual
+  GPU stack (#198).
+- **Large-scale decomposition under ADR-0001** — 83 commits splitting god-files
+  and god-functions across `signex-app`, `signex-engine`, `signex-renderer`,
+  `signex-gfx`, `signex-types`, `signex-library`, `signex-net`, `signex-output`,
+  and the 3D importer, under an 800-line cap. Includes the root `Message`
+  namespacing (D3), the canvas `update`/`draw` splits, the property-panel
+  family, and the 1,223-line `collect_overlays` (#210). Internal only — no
+  behaviour change intended.
+- License Guard is framed by GPL rather than by the banned tool's name (#209).
+- Repo governance: label taxonomy, path labeler, CODEOWNERS, refreshed
+  templates (#133); roadmap reconciled and milestones + tiers as code (#300).
+
+### Fixed
+
+- **Data loss / persistence** — TSV cells are escaped so a schematic save can
+  always reopen (#96, #130); persistence made crash-safe with `fsync`
+  `atomic_write`, atomic `.snxprj`, and a corrupt-JSON guard (#104, #119);
+  residual document writes routed through `atomic_write`, New Project guarded
+  (#104, #128); prompt for unsaved changes on app exit (#95, #124).
+- **Connectivity** — wires connect at T-junctions in net derivation (#107,
+  #120); the net-colour flood runs on the authoritative connectivity core
+  (#138).
+- **Editing** — Ctrl+C/X/V/D and shift-chorded shortcuts un-broken (#103,
+  #127); Find/Replace replaces the matched substring rather than the whole
+  field (#102, #125).
+- **Symbol rendering** — pin text rotation corrected for screen Y-flip; name
+  `h_align` reversed for flipped pin orientations; pin tip rotates around the
+  body-end pivot; arc angles negated in both preview and scene renderer for
+  the screen-space y-flip; arc discontinuity past ±180° prevented; rotation
+  angles normalised; `LineJoin::Round` for rectangle/polygon corners; round
+  line caps.
+- **Interaction** — unsnapped cursor position for Select-tool hit-testing,
+  snapped coords retained for drag anchor and delta; `CursorAt` published
+  during box-select drag to force redraw.
+- Preferences modal is responsive to window resize (#208) and the reopen
+  regression is fixed; theme-aligned canvas backdrop, sheet tracks the stored
+  paper size (#201); library server gains a persistent DB backend and rejects
+  duplicate-row POST (#97, #122).
+
+### CI
+
+- lavapipe installed so `signex-gfx` GPU smoke tests run headless (#126).
+- `cargo-deny` advisories are informational, not a merge gate (#123).
+- CI and license guards run on `trunk` (#121); PR preconditions aligned with
+  the org control-process convention (#134); Linux dependency install hardened
+  against the `packages.microsoft.com` apt outage (#155).
+
+### Added — footprint editor (the original v0.14 scope)
+
+v0.13.0 shipped the footprint / sketch editor compiled but hidden behind a
+feature flag while it was finished; v0.14 completes the remaining active-bar
+tooling and **enables the editor** — opening a `.snxfpt` now opens an editable
 tab, and the New Footprint / PCB Library create flow is live again.
 
-### Added — sketch constraints
+#### Sketch constraints
 
 - **Nine more sketch constraints exposed** in the sketch-mode active
   bar: Tangent (line-arc + arc-arc), Angle, Equal-Radius, Point-on-Arc,
@@ -40,7 +149,7 @@ tab, and the New Footprint / PCB Library create flow is live again.
   constraint buttons light up. The two 3-entity Symmetric constraints
   take their third entity from the multi-select extra slot.
 
-### Added — active-bar tools wired
+#### Active-bar tools wired
 
 - **Align / Distribute / Spacing** (12 ops) — Align Left/Right/Top/
   Bottom + center H/V, Distribute Horizontally/Vertically (equal centre
@@ -58,7 +167,7 @@ tab, and the New Footprint / PCB Library create flow is live again.
 - **Selection-filter "All - On / All - Off"** toggle wired to a new
   `SelectionFilter::set_all`.
 
-### Added — deferred cleanup
+#### Deferred cleanup
 
 - **Move Selection by X, Y…** now opens a typed-delta modal (two mm
   inputs) that nudges the pad selection by the entered amount, reusing
@@ -76,21 +185,21 @@ tab, and the New Footprint / PCB Library create flow is live again.
   in prefs, with a "Save current filter as preset" capture. (Replaces the
   schematic-typed presets that could not apply to footprints.)
 
-### Fixed
+#### Fixed — footprint editor
 
 - **Pad shape-param leak** — `mint_shape_geometry_for` now clears a
   pad's `shape_params` before regenerating geometry, so changing a pad's
   shape (e.g. RoundRect → Round) no longer strands stale parameter keys
   for the solver / next bake.
 
-### Changed
+#### Changed — footprint editor
 
 - `FOOTPRINT_EDITOR_ENABLED` flipped `false` → `true`
   (`crates/signex-app/src/feature_flags.rs`). The
   `opening_snxfpt_does_not_create_editable_tab_when_gated` regression
   test branches on the flag and now asserts the enabled behaviour.
 
-### Deferred to v0.15
+#### Deferred to v0.15
 
 - Break Track / Drag Track End (need track-segment split infra).
 

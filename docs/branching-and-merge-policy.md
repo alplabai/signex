@@ -51,8 +51,8 @@ as status-check contexts):
   deps). `sources` and `advisories` run in the same job but are advisory.
 - `PR-description self-declaration` — the license-compliance block is present
   and does not admit KiCad-derived source.
-- `No KiCad-shaped names anywhere in crates/` — the representative KiCad guard
-  (the full License-Guard suite runs alongside it and shows on every PR).
+- `No GPL-tool-shaped names anywhere in crates/` — the representative licence
+  guard (the full License-Guard suite runs alongside it and shows on every PR).
 
 **Advisory, not blocking** (surfaced as annotations): `fmt · rustfmt`,
 `clippy` (inside `check`), and the `cargo-deny` `sources` / `advisories`
@@ -103,7 +103,17 @@ PR's license-compliance block, not in commit trailers.
 Repo settings can't live in git; this section is the audit-trail copy. The
 live settings under **Settings → Rules → Rulesets** are authoritative, and
 [`.github/rulesets/trunk-protection.json`](../.github/rulesets/trunk-protection.json)
-is the importable source for them.
+and [`.github/rulesets/main-protection.json`](../.github/rulesets/main-protection.json)
+are the importable sources for them.
+
+> **Reconciled 2026-07-15.** Until that date this section described protection
+> that did not exist. `trunk` — the default branch, where every PR lands — had
+> **no ruleset applied at all**; `trunk-protection.json` sat in the repo
+> unapplied. `main` had a ruleset, but it required a pull request and **zero
+> approvals**, with no required status checks and rebase merges allowed — on
+> the branch where release tags are cut. Both now match what is written here.
+> If you change this section, change the JSON and re-apply it; see
+> [`.github/rulesets/README.md`](../.github/rulesets/README.md).
 
 ### `trunk` (and `main`, same set)
 
@@ -120,7 +130,7 @@ is the importable source for them.
   - ✅ Require branches to be up to date before merging
   - Required checks (all green): `check · ubuntu-latest`, `test · workspace`,
     `deny · licenses + deps`, `PR-description self-declaration`,
-    `No KiCad-shaped names anywhere in crates/`
+    `No GPL-tool-shaped names anywhere in crates/`
 
 **Merge gates**
 - ✅ Require conversation resolution before merging
