@@ -25,9 +25,11 @@ struct PolygonVertex {
 /// pre-triangulated triangle soup: `GpuPolygon::vertices` is a contour by the
 /// renderer's contract (the CPU path always fills it as one), so a vertex count
 /// divisible by three must not be reinterpreted as separate triangles — doing
-/// so misdrew any 3/6/9-vertex pour. The fan is exact for convex contours;
-/// concave contours are an approximation shared with the CPU fallback and want
-/// a proper tessellator (earcut) as a follow-up.
+/// so misdrew any 3/6/9-vertex pour. The fan is exact for convex contours
+/// ONLY. Concave contours (arbitrary user pours / rule areas) bridge
+/// triangles across the notch and over-fill — a GPU-only limitation: the CPU
+/// path (`frame.fill`, lyon) tessellates the same contour correctly. Needs a
+/// real tessellator (lyon/earcut) for parity before the toggle defaults on.
 fn triangulate_polygons(polygons: &[GpuPolygon]) -> Vec<PolygonVertex> {
     let mut vertices = Vec::new();
 

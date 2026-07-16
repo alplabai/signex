@@ -153,8 +153,16 @@ impl PcbCanvas {
 
     /// Build the scene for GPU rendering: the same geometry as the CPU path,
     /// but the overlay primitives are folded into the main instance buffers so
-    /// the single shader pass draws them last (on top of the content of the
-    /// same kind). Returns `None` when no board snapshot is loaded.
+    /// the single shader pass draws them last *within their own bucket* (on
+    /// top of content of the same kind). KNOWN DIVERGENCE: the fold means an
+    /// overlay polygon draws in the Polygons bucket, which
+    /// `GPU_SCENE_DRAW_ORDER` composites first — so an overlay fill that the
+    /// CPU path paints on top of every line/circle (active-layer zone,
+    /// selection highlight) renders *under* them on the GPU. The `scene::order`
+    /// parity tests can't see this (the fold happens upstream of the shared
+    /// const); fixing it wants dedicated late overlay buckets, tied to the
+    /// pending z-order reconciliation. Returns `None` when no board snapshot
+    /// is loaded.
     pub fn gpu_scene(&self) -> Option<Arc<Scene>> {
         // Fast path: hand back the shared cached scene without re-tessellating.
         // `borrow().clone()` is an `Arc` refcount bump (on a miss it clones

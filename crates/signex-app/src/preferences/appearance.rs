@@ -6,7 +6,9 @@
 
 use super::*;
 use crate::fonts;
-use crate::render_config::{GridStyle, LabelStyle, MultisheetStyle, PinSelectionMode, PowerPortStyle};
+use crate::render_config::{
+    GridStyle, LabelStyle, MultisheetStyle, PinSelectionMode, PowerPortStyle,
+};
 use iced::widget::{Space, button, column, container, row, text};
 use iced::{Background, Border, Element, Length, Theme};
 use signex_types::theme::ThemeId;
@@ -187,6 +189,12 @@ pub(super) fn content_appearance<'a>(
                     .size(12)
                     .style(text_primary),
                 text("Draw the PCB canvas on the GPU (shader) instead of the CPU. Applies immediately.")
+                    .size(10)
+                    .style(text_muted),
+                // Honest surface for the known CPU/GPU divergences pinned by
+                // the `scene::order` parity tests — the toggle ships
+                // default-off until these are reconciled.
+                text("Known gaps: dashed lines draw solid, concave pours can over-fill, overlay highlights may sit under traces.")
                     .size(10)
                     .style(text_muted),
             ]
