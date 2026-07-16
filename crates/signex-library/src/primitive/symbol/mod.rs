@@ -706,8 +706,13 @@ pub enum SymbolFileError {
     InvalidPinsTsv { symbol_index: usize },
 }
 
+mod chain;
 mod serde_tsv;
 #[cfg(test)]
 mod tests;
 
+pub use chain::{
+    CHAIN_ARC_SAMPLES, CHAIN_ENDPOINT_EPSILON_MM, ChainError, ChainSegment,
+    chain_into_closed_contour,
+};
 pub(crate) use serde_tsv::{pins_from_tsv, pins_to_tsv};
