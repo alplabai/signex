@@ -59,6 +59,7 @@ impl SymbolMenuRow {
 /// disables clicks on a `enabled: false` row.
 pub fn build_symbol_context_menu_rows(
     sym: &Symbol,
+    active_part: u8,
     selected: &Option<SymbolSelection>,
 ) -> Vec<SymbolMenuRow> {
     vec![
@@ -66,7 +67,7 @@ pub fn build_symbol_context_menu_rows(
         SymbolMenuRow::item(
             "symbol.join-into-polygon",
             "Join into Polygon",
-            selection_is_join_eligible(sym, selected),
+            selection_is_join_eligible(sym, active_part, selected),
             SymbolEditorMsg::JoinSelectionIntoPolygon,
         ),
         SymbolMenuRow::item(
@@ -149,7 +150,7 @@ mod tests {
     #[test]
     fn top_level_ids_are_stable() {
         let sym = Symbol::empty("T");
-        let rows = build_symbol_context_menu_rows(&sym, &None);
+        let rows = build_symbol_context_menu_rows(&sym, 1, &None);
         assert_eq!(
             row_ids(&rows),
             vec![
@@ -182,7 +183,7 @@ mod tests {
     #[test]
     fn empty_selection_disables_selection_dependent_rows() {
         let sym = Symbol::empty("T");
-        let rows = build_symbol_context_menu_rows(&sym, &None);
+        let rows = build_symbol_context_menu_rows(&sym, 1, &None);
 
         assert!(!find(&rows, "symbol.join-into-polygon").enabled);
         assert!(!find(&rows, "symbol.delete").enabled);
@@ -218,11 +219,79 @@ mod tests {
             pin_indices: Vec::new(),
             graphic_indices: vec![0, 1],
         });
-        let rows = build_symbol_context_menu_rows(&sym, &selected);
+        let rows = build_symbol_context_menu_rows(&sym, 1, &selected);
 
         assert!(find(&rows, "symbol.join-into-polygon").enabled);
         assert!(find(&rows, "symbol.delete").enabled);
         assert!(find(&rows, "symbol.deselect-all").enabled);
+    }
+
+    /// A single selected Line disables Join into Polygon — it can
+    /// never close on its own — while Delete stays enabled.
+    #[test]
+    fn single_line_selection_disables_join_but_not_delete() {
+        let mut sym = Symbol::empty("T");
+        sym.graphics.push(SymbolGraphic {
+            kind: SymbolGraphicKind::Line {
+                from: [0.0, 0.0],
+                to: [4.0, 0.0],
+            },
+            stroke_width: 0.15,
+            fill: None,
+            part_number: 0,
+        });
+        let selected = Some(SymbolSelection::Graphic(0));
+        let rows = build_symbol_context_menu_rows(&sym, 1, &selected);
+
+        assert!(!find(&rows, "symbol.join-into-polygon").enabled);
+        assert!(find(&rows, "symbol.delete").enabled);
+    }
+
+    /// A single selected Arc, by contrast, enables Join into Polygon —
+    /// a sufficiently large sweep can self-close.
+    #[test]
+    fn single_arc_selection_enables_join() {
+        let mut sym = Symbol::empty("T");
+        sym.graphics.push(SymbolGraphic {
+            kind: SymbolGraphicKind::Arc {
+                center: [0.0, 0.0],
+                radius: 2.0,
+                start_deg: 0.0,
+                end_deg: 270.0,
+            },
+            stroke_width: 0.15,
+            fill: None,
+            part_number: 0,
+        });
+        let selected = Some(SymbolSelection::Graphic(0));
+        let rows = build_symbol_context_menu_rows(&sym, 1, &selected);
+
+        assert!(find(&rows, "symbol.join-into-polygon").enabled);
+    }
+
+    /// `SymbolSelection::All` resolves to every visible graphic, so a
+    /// 4-line ring selected via All enables Join into Polygon exactly
+    /// like the equivalent `Multiple` selection would.
+    #[test]
+    fn all_selection_with_a_joinable_ring_enables_join() {
+        let mut sym = Symbol::empty("T");
+        for (from, to) in [
+            ([0.0, 0.0], [4.0, 0.0]),
+            ([4.0, 0.0], [4.0, 4.0]),
+            ([4.0, 4.0], [0.0, 4.0]),
+            ([0.0, 4.0], [0.0, 0.0]),
+        ] {
+            sym.graphics.push(SymbolGraphic {
+                kind: SymbolGraphicKind::Line { from, to },
+                stroke_width: 0.15,
+                fill: None,
+                part_number: 0,
+            });
+        }
+        let selected = Some(SymbolSelection::All);
+        let rows = build_symbol_context_menu_rows(&sym, 1, &selected);
+
+        assert!(find(&rows, "symbol.join-into-polygon").enabled);
     }
 
     /// A mixed selection containing a Rectangle disables Join into
@@ -253,7 +322,7 @@ mod tests {
             pin_indices: Vec::new(),
             graphic_indices: vec![0, 1],
         });
-        let rows = build_symbol_context_menu_rows(&sym, &selected);
+        let rows = build_symbol_context_menu_rows(&sym, 1, &selected);
 
         assert!(!find(&rows, "symbol.join-into-polygon").enabled);
         assert!(find(&rows, "symbol.delete").enabled);
@@ -273,7 +342,7 @@ mod tests {
             part_number: 0,
         });
         let selected = Some(SymbolSelection::Graphic(0));
-        let rows = build_symbol_context_menu_rows(&sym, &selected);
+        let rows = build_symbol_context_menu_rows(&sym, 1, &selected);
 
         assert!(!find(&rows, "symbol.join-into-polygon").enabled);
         assert!(find(&rows, "symbol.delete").enabled);

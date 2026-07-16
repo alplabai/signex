@@ -41,7 +41,8 @@ pub fn view_context_menu<'a>(
     path: &'a Path,
 ) -> Option<iced::Element<'a, LibraryMessage>> {
     let menu_state = editor.context_menu.as_ref()?;
-    let rows = build_symbol_context_menu_rows(editor.primitive(), &editor.selected);
+    let rows =
+        build_symbol_context_menu_rows(editor.primitive(), editor.active_part, &editor.selected);
     let entries = flatten(rows, menu_state.open_submenu, path, false);
     Some(signex_widgets::active_bar_dropdown::view(
         entries,

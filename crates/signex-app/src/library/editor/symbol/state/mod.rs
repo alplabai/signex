@@ -348,18 +348,31 @@ pub fn pin_on_part(pin: &SymbolPin, active_part: u8) -> bool {
     pin.part_number == 0 || pin.part_number == active_part
 }
 
-/// Graphic indices the current selection names individually — the
-/// empty `Vec` for every selection kind that doesn't name individual
-/// graphics (`None`, `Pin`, `Field`, `All`). Shared by the "Join into
-/// Polygon" op (`updates::join`) and its context-menu enablement
-/// check (`context_menu`) so both agree on exactly which selections
-/// name eligible sources.
-pub fn join_source_indices(selected: &Option<SymbolSelection>) -> Vec<usize> {
+/// Graphic indices the current selection names individually. Shared
+/// by the "Join into Polygon" op (`updates::join`) and its
+/// context-menu enablement check (`context_menu`) so both agree on
+/// exactly which selections name eligible sources.
+///
+/// `All` (box-select-everything / Ctrl+A / the Select All menu row)
+/// resolves to every graphic index visible on `active_part` — the
+/// same [`graphic_on_part`] filter hit-test and box-select already
+/// use — rather than the empty `Vec` it used to fall through to,
+/// which disabled Join on a perfect ring the user had just selected
+/// in full. `Pin` / `Field` still resolve to empty: neither names a
+/// graphic.
+pub fn join_source_indices(
+    sym: &Symbol,
+    active_part: u8,
+    selected: &Option<SymbolSelection>,
+) -> Vec<usize> {
     match selected {
         Some(SymbolSelection::Graphic(idx)) => vec![*idx],
         Some(SymbolSelection::Multiple {
             graphic_indices, ..
         }) => graphic_indices.clone(),
+        Some(SymbolSelection::All) => (0..sym.graphics.len())
+            .filter(|&idx| graphic_on_part(&sym.graphics[idx], active_part))
+            .collect(),
         _ => Vec::new(),
     }
 }
@@ -397,17 +410,44 @@ pub fn common_graphic_part_number(sym: &Symbol, indices: &[usize]) -> Option<u8>
     parts.all(|p| p == Some(first)).then_some(first)
 }
 
+/// Whether `indices` names enough sources to plausibly close into a
+/// ring: at least 2 (a lone pair might still fail to chain, but
+/// that's a `chain_into_closed_contour` topology diagnosis, not
+/// something worth pre-empting here), or exactly 1 *Arc* — a
+/// sufficiently large sweep can legitimately self-close via its own
+/// tiny chord gap (see `chain.rs`'s `near_full_sweep_arc_*` case). A
+/// single `Line` can never close on its own; surfacing that as a
+/// chain `OpenChain`/degenerate error would be misleading, so it's
+/// disqualified outright instead.
+pub fn selection_has_enough_join_sources(sym: &Symbol, indices: &[usize]) -> bool {
+    match indices {
+        [] => false,
+        [idx] => matches!(
+            sym.graphics.get(*idx).map(|g| &g.kind),
+            Some(SymbolGraphicKind::Arc { .. })
+        ),
+        _ => true,
+    }
+}
+
 /// Whether the current selection is eligible for "Join into Polygon":
 /// at least one graphic named, every named graphic is a `Line` or an
 /// `Arc` (a Rectangle/Circle/Text/Polygon anywhere in the selection
-/// disqualifies the whole op), and every named graphic shares the same
-/// `part_number` (see [`common_graphic_part_number`] — a selection
-/// mixing shared and unit-specific sources disqualifies the whole op
-/// too, surfaced by the caller as a distinct status message rather
-/// than a silent no-op).
-pub fn selection_is_join_eligible(sym: &Symbol, selected: &Option<SymbolSelection>) -> bool {
-    let indices = join_source_indices(selected);
+/// disqualifies the whole op), the selection names enough sources to
+/// plausibly close (see [`selection_has_enough_join_sources`]), and
+/// every named graphic shares the same `part_number` (see
+/// [`common_graphic_part_number`] — a selection mixing shared and
+/// unit-specific sources disqualifies the whole op too, surfaced by
+/// the caller as a distinct status message rather than a silent
+/// no-op).
+pub fn selection_is_join_eligible(
+    sym: &Symbol,
+    active_part: u8,
+    selected: &Option<SymbolSelection>,
+) -> bool {
+    let indices = join_source_indices(sym, active_part, selected);
     selection_kinds_are_line_or_arc(sym, &indices)
+        && selection_has_enough_join_sources(sym, &indices)
         && common_graphic_part_number(sym, &indices).is_some()
 }
 

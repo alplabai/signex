@@ -22,7 +22,8 @@ pub(super) fn apply_symbol_join(editor: &mut SymEditor, msg: SymbolEditorMsg) {
         return;
     }
 
-    let mut indices = state::join_source_indices(&editor.selected);
+    let mut indices =
+        state::join_source_indices(editor.primitive(), editor.active_part, &editor.selected);
     if indices.is_empty() {
         return;
     }
@@ -31,12 +32,17 @@ pub(super) fn apply_symbol_join(editor: &mut SymEditor, msg: SymbolEditorMsg) {
 
     // One shared predicate gates both the context-menu row's `enabled`
     // flag and this op, so they can never drift apart.
-    if !state::selection_is_join_eligible(editor.primitive(), &editor.selected) {
+    if !state::selection_is_join_eligible(editor.primitive(), editor.active_part, &editor.selected)
+    {
         // Distinguish the mixed-part-number case (surfaced) from
         // every other ineligibility reason — non-Line/Arc graphic,
-        // stale index — which stays a silent no-op; the context menu
-        // already disables the row in all of these states.
-        if state::selection_kinds_are_line_or_arc(editor.primitive(), &indices) {
+        // stale index, or too few sources (a lone Line can never
+        // close on its own) — which stays a silent no-op; the
+        // context menu already disables the row in all of these
+        // states.
+        let kinds_ok = state::selection_kinds_are_line_or_arc(editor.primitive(), &indices);
+        let enough_sources = state::selection_has_enough_join_sources(editor.primitive(), &indices);
+        if kinds_ok && enough_sources {
             editor.status_message = Some(MIXED_PARTS_MESSAGE.to_string());
         }
         return;
@@ -50,8 +56,8 @@ pub(super) fn apply_symbol_join(editor: &mut SymEditor, msg: SymbolEditorMsg) {
         (segments, stroke_width, part_number)
     };
 
-    let ring = match resolve_ring_with_auto_close(&segments) {
-        Ok(ring) => ring,
+    let (ring, auto_closed_gap_mm) = match resolve_ring_with_auto_close(&segments) {
+        Ok(result) => result,
         Err(err) => {
             editor.status_message = Some(chain_error_message(err));
             return;
@@ -59,23 +65,36 @@ pub(super) fn apply_symbol_join(editor: &mut SymEditor, msg: SymbolEditorMsg) {
     };
 
     splice_selection_into_polygon(editor, &indices, ring, stroke_width, part_number);
-    editor.status_message = None;
+    // Success + information, not an error: an auto-closed join
+    // synthesized a new edge the user didn't draw — worth telling
+    // them, since it's a silent-but-consequential change to their
+    // selection. A selection that was already a closed chain leaves
+    // the status line untouched (cleared, per the "next successful
+    // action" contract — see `clear_stale_status_message`).
+    editor.status_message = auto_closed_gap_mm
+        .map(|gap_mm| format!("Closed the outline with a new {gap_mm:.2} mm edge."));
 }
 
 /// Chain `segments` into a closed ring, auto-closing exactly once by
 /// synthesizing the missing edge between an [`ChainError::OpenChain`]'s
-/// two loose ends if the first attempt doesn't close.
-fn resolve_ring_with_auto_close(segments: &[ChainSegment]) -> Result<Vec<[f64; 2]>, ChainError> {
+/// two loose ends if the first attempt doesn't close. `Some(gap_mm)`
+/// in the success tuple means auto-close actually fired (so the
+/// caller can surface it as an informational status message);
+/// `None` means the selection was already a closed chain.
+fn resolve_ring_with_auto_close(
+    segments: &[ChainSegment],
+) -> Result<(Vec<[f64; 2]>, Option<f64>), ChainError> {
     match signex_library::chain_into_closed_contour(segments) {
-        Err(ChainError::OpenChain { ends, .. }) => {
+        Err(ChainError::OpenChain { ends, gap_mm }) => {
             let mut retried = segments.to_vec();
             retried.push(ChainSegment::Line {
                 from: ends[0],
                 to: ends[1],
             });
-            signex_library::chain_into_closed_contour(&retried)
+            let ring = signex_library::chain_into_closed_contour(&retried)?;
+            Ok((ring, Some(gap_mm)))
         }
-        result => result,
+        result => result.map(|ring| (ring, None)),
     }
 }
 
@@ -149,8 +168,16 @@ fn segments_for(sym: &Symbol, indices: &[usize]) -> (Vec<ChainSegment>, f64) {
 /// Human-readable status-line text for a failed join attempt.
 fn chain_error_message(err: ChainError) -> String {
     match err {
-        ChainError::OpenChain { gap_mm, .. } => {
-            format!("Shapes don't connect end-to-end (gap {gap_mm:.2} mm)")
+        // Unreachable, not just unused: this function only ever
+        // receives `resolve_ring_with_auto_close`'s result, and that
+        // function already intercepts `OpenChain` itself, retrying
+        // once with a synthetic edge between the two (and only two)
+        // loose ends. Closing a simple path into a cycle by joining
+        // its two ends always succeeds topologically — the retry can
+        // fail with a DIFFERENT error (or succeed), but the specific
+        // failure it started from can never recur.
+        ChainError::OpenChain { .. } => {
+            unreachable!("resolve_ring_with_auto_close already retried this case")
         }
         ChainError::Branching { at } => format!("Shapes branch at ({:.2}, {:.2})", at[0], at[1]),
         ChainError::Disjoint => "Selection splits into separate chains".to_string(),
@@ -241,7 +268,10 @@ mod tests {
     }
 
     /// 3 of the 4 sides selected (open chain) auto-closes via the
-    /// missing edge and still produces one polygon.
+    /// missing edge, still produces one polygon, and surfaces the
+    /// auto-close as an informational (not error) status message —
+    /// the synthetic edge is a silent-but-consequential change to
+    /// the user's selection that's worth telling them about.
     #[test]
     fn open_three_side_chain_auto_closes() {
         let mut editor = new_editor();
@@ -261,6 +291,22 @@ mod tests {
             other => panic!("expected Polygon, got {other:?}"),
         }
         assert_eq!(editor.undo_snapshots.len(), 1);
+        assert_eq!(
+            editor.status_message.as_deref(),
+            Some("Closed the outline with a new 4.00 mm edge.")
+        );
+    }
+
+    /// A selection that was ALREADY a closed chain (no auto-close
+    /// needed) leaves the status line untouched (cleared) — the
+    /// informational message is specific to the auto-close case.
+    #[test]
+    fn direct_closed_join_leaves_status_none() {
+        let mut editor = square_editor();
+
+        apply_symbol_join(&mut editor, SymbolEditorMsg::JoinSelectionIntoPolygon);
+
+        assert_eq!(editor.primitive().graphics.len(), 1);
         assert!(editor.status_message.is_none());
     }
 
@@ -457,5 +503,76 @@ mod tests {
             editor.status_message.as_deref(),
             Some("Selection mixes shared and unit-specific shapes")
         );
+    }
+
+    /// `SymbolSelection::All` (box-select-everything / Ctrl+A / the
+    /// Select All menu row) resolves to every graphic visible on the
+    /// active part, so joining a perfectly-selected ring via `All`
+    /// succeeds exactly like an explicit `Multiple` selection of the
+    /// same 4 graphics would.
+    #[test]
+    fn all_selection_resolves_to_every_visible_graphic_and_joins() {
+        let mut editor = new_editor();
+        push_line(&mut editor, [0.0, 0.0], [4.0, 0.0]);
+        push_line(&mut editor, [4.0, 0.0], [4.0, 4.0]);
+        push_line(&mut editor, [4.0, 4.0], [0.0, 4.0]);
+        push_line(&mut editor, [0.0, 4.0], [0.0, 0.0]);
+        editor.selected = Some(SymbolSelection::All);
+
+        apply_symbol_join(&mut editor, SymbolEditorMsg::JoinSelectionIntoPolygon);
+
+        assert_eq!(editor.primitive().graphics.len(), 1);
+        match &editor.primitive().graphics[0].kind {
+            SymbolGraphicKind::Polygon { vertices } => assert_eq!(vertices.len(), 4),
+            other => panic!("expected Polygon, got {other:?}"),
+        }
+    }
+
+    /// A single selected `Line` is ineligible — it can never close on
+    /// its own — and the op is a silent no-op (matching the disabled
+    /// menu row), not a misleading "Selection is degenerate" chain
+    /// error.
+    #[test]
+    fn single_line_selection_is_ineligible_and_silent() {
+        let mut editor = new_editor();
+        push_line(&mut editor, [0.0, 0.0], [4.0, 0.0]);
+        editor.selected = Some(SymbolSelection::Graphic(0));
+
+        apply_symbol_join(&mut editor, SymbolEditorMsg::JoinSelectionIntoPolygon);
+
+        assert_eq!(editor.primitive().graphics.len(), 1, "nothing mutated");
+        assert_eq!(editor.undo_snapshots.len(), 0);
+        assert!(
+            editor.status_message.is_none(),
+            "silent no-op, matching the disabled menu row"
+        );
+    }
+
+    /// A single selected `Arc` IS eligible — a sufficiently large
+    /// sweep can legitimately self-close via its own tiny chord gap —
+    /// and joins successfully on its own.
+    #[test]
+    fn single_arc_selection_is_eligible_and_self_closes() {
+        let mut editor = new_editor();
+        editor.primitive_mut().graphics.push(SymbolGraphic {
+            kind: SymbolGraphicKind::Arc {
+                center: [0.0, 0.0],
+                radius: 2.0,
+                start_deg: 0.0,
+                end_deg: 359.9,
+            },
+            stroke_width: 0.15,
+            fill: None,
+            part_number: 0,
+        });
+        editor.selected = Some(SymbolSelection::Graphic(0));
+
+        apply_symbol_join(&mut editor, SymbolEditorMsg::JoinSelectionIntoPolygon);
+
+        assert_eq!(editor.primitive().graphics.len(), 1);
+        match &editor.primitive().graphics[0].kind {
+            SymbolGraphicKind::Polygon { .. } => {}
+            other => panic!("expected Polygon, got {other:?}"),
+        }
     }
 }
