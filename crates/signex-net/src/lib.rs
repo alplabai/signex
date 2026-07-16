@@ -12,7 +12,9 @@
 pub mod uf;
 
 mod build;
-pub use build::{FloodElements, SheetConnectivity, build_netlist, flood_net_elements};
+pub use build::{
+    FloodElements, SheetConnectivity, build_netlist, flood_net_elements, point_on_segment, pt_key,
+};
 
 mod project;
 pub use project::{ProjectNetlist, StitchIssue, build_project_netlist};
