@@ -324,16 +324,13 @@ fn item_in_selection(group: &SymbolSelection, item: &SymbolSelection) -> bool {
 }
 
 /// Returns `true` when the graphic at `idx` should be drawn in the
-/// selection colour. Handles single-graphic, Multiple, and All selections.
+/// selection colour. Handles single-graphic, Multiple, and All
+/// selections. Thin wrapper over `state::graphic_is_selected` — kept
+/// here too since `hit_test_graphic_handle` (state-side) needs the
+/// exact same check to scope `PolygonVertex` handle hit-testing to
+/// the selected polygon only.
 fn is_graphic_selected(sel: &Option<SymbolSelection>, idx: usize) -> bool {
-    match sel {
-        Some(SymbolSelection::Graphic(i)) => *i == idx,
-        Some(SymbolSelection::Multiple {
-            graphic_indices, ..
-        }) => graphic_indices.contains(&idx),
-        Some(SymbolSelection::All) => true,
-        _ => false,
-    }
+    state::graphic_is_selected(sel, idx)
 }
 
 impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
@@ -401,9 +398,14 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
             if let Some(pos) = cursor.position_in(bounds) {
                 let (wx, wy) = world_unsnapped(self, pos.x, pos.y, bounds);
                 let tol_mm = (8.0_f32 / self.camera.scale.max(0.01)).clamp(0.5, 4.0) as f64;
-                if let Some((_, handle)) =
-                    state::hit_test_graphic_handle(self.symbol, wx, wy, tol_mm, self.active_part)
-                {
+                if let Some((_, handle)) = state::hit_test_graphic_handle(
+                    self.symbol,
+                    wx,
+                    wy,
+                    tol_mm,
+                    self.active_part,
+                    &self.selected,
+                ) {
                     return state::handle_interaction(handle);
                 }
             }

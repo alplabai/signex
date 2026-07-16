@@ -321,12 +321,28 @@ pub fn graphic_handles(sym: &Symbol, idx: usize) -> Vec<(GraphicHandle, [f64; 2]
 /// ```text
 /// let tol_mm = (8.0_f32 / camera.scale.max(0.01)).clamp(0.5, 4.0) as f64;
 /// ```
+///
+/// `selected` scopes `PolygonVertex` handles to whichever graphic is
+/// currently selected (via [`super::graphic_is_selected`]) — every
+/// OTHER handle kind (rect corner/edge, line endpoint, circle radius,
+/// arc start/end, text anchor) still hit-tests on every graphic on
+/// the part regardless of selection, matching their existing,
+/// unscoped behaviour (and the draw path, which already only ever
+/// *renders* a selected graphic's handles — see
+/// `draw_resize_handles`). A Polygon can carry far more vertices than
+/// any other kind has handles (a Join-into-Polygon result routinely
+/// tessellates an arc side into ~16 points), so scanning them
+/// unconditionally made an unselected polygon effectively
+/// unclickable-as-a-body: a click almost anywhere near it grabbed an
+/// invisible vertex handle instead of falling through to
+/// `hit_test`'s body selection.
 pub fn hit_test_graphic_handle(
     sym: &Symbol,
     x: f64,
     y: f64,
     tol_mm: f64,
     active_part: u8,
+    selected: &Option<SymbolSelection>,
 ) -> Option<(usize, GraphicHandle)> {
     let r_sq = tol_mm * tol_mm;
     for idx in (0..sym.graphics.len()).rev() {
@@ -337,6 +353,11 @@ pub fn hit_test_graphic_handle(
             continue;
         }
         for (handle, pos) in graphic_handles(sym, idx) {
+            if matches!(handle, GraphicHandle::PolygonVertex(_))
+                && !super::graphic_is_selected(selected, idx)
+            {
+                continue;
+            }
             let dx = pos[0] - x;
             let dy = pos[1] - y;
             if dx * dx + dy * dy <= r_sq {

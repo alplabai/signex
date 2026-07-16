@@ -327,12 +327,65 @@ pub fn graphic_on_part(g: &signex_library::SymbolGraphic, active_part: u8) -> bo
     g.part_number == 0 || g.part_number == active_part
 }
 
-/// Centroid (average of every vertex) of a Polygon graphic — the
-/// shared anchor definition used by canvas selection-anchor lookup,
-/// rotate-pivot geometry-center, and whole-shape translate so all
-/// three agree on the same point. Returns `[0.0, 0.0]` for an empty
-/// vertex list (should not occur — placement always commits >= 3).
+/// Whether the graphic at `idx` is part of `sel` — single source of
+/// truth for "is this graphic currently selected," shared by the
+/// canvas draw path (selection-colour + resize-handle visibility) and
+/// the hit-test path (scoping `PolygonVertex` handle hit-testing to
+/// the selected polygon only — see `hit_test_graphic_handle`'s doc
+/// comment) so the two can never disagree about which graphic is
+/// selected.
+pub fn graphic_is_selected(sel: &Option<SymbolSelection>, idx: usize) -> bool {
+    match sel {
+        Some(SymbolSelection::Graphic(i)) => *i == idx,
+        Some(SymbolSelection::Multiple {
+            graphic_indices, ..
+        }) => graphic_indices.contains(&idx),
+        Some(SymbolSelection::All) => true,
+        _ => false,
+    }
+}
+
+/// Centroid of a Polygon graphic — the shared anchor definition used
+/// by canvas selection-anchor lookup, rotate-pivot geometry-center,
+/// and whole-shape translate so all three agree on the same point.
+///
+/// Area-weighted (the standard shoelace centroid formula), NOT a
+/// plain vertex mean: a joined polygon can carry far more vertices on
+/// one side than another (e.g. a tessellated arc side contributes ~16
+/// points, a straight side contributes 2), and a vertex mean skews
+/// the "centre" toward whichever side happens to be more densely
+/// subdivided — dragging or rotating the shape then pivots around a
+/// point nowhere near its visual middle. Falls back to the vertex
+/// mean when the polygon's signed area is ~zero (a bowtie or other
+/// degenerate/self-intersecting ring, where the area-weighted formula
+/// divides by ~zero) and for the empty list (should not occur —
+/// placement always commits >= 3 vertices).
 pub fn polygon_centroid(vertices: &[[f64; 2]]) -> [f64; 2] {
+    if vertices.is_empty() {
+        return [0.0, 0.0];
+    }
+    let n = vertices.len();
+    let mut area_x2 = 0.0;
+    let mut cx = 0.0;
+    let mut cy = 0.0;
+    for i in 0..n {
+        let [x0, y0] = vertices[i];
+        let [x1, y1] = vertices[(i + 1) % n];
+        let cross = x0 * y1 - x1 * y0;
+        area_x2 += cross;
+        cx += (x0 + x1) * cross;
+        cy += (y0 + y1) * cross;
+    }
+    if area_x2.abs() < 1e-9 {
+        return polygon_vertex_mean(vertices);
+    }
+    // 6 * signed_area == 6 * (area_x2 / 2) == 3 * area_x2.
+    let area_x6 = area_x2 * 3.0;
+    [cx / area_x6, cy / area_x6]
+}
+
+/// Plain vertex mean — [`polygon_centroid`]'s degenerate-ring fallback.
+fn polygon_vertex_mean(vertices: &[[f64; 2]]) -> [f64; 2] {
     let n = vertices.len().max(1) as f64;
     let (sx, sy) = vertices
         .iter()

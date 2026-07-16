@@ -134,8 +134,9 @@ fn hit_test_graphic_handle_finds_rectangle_corner() {
         part_number: 0,
         fill: None,
     });
-    // BR corner is at (to.x, from.y) = (10.0, 0.0).
-    let hit = hit_test_graphic_handle(&s, 10.0, 0.0, 1.5, 1);
+    // BR corner is at (to.x, from.y) = (10.0, 0.0). Non-Polygon handles
+    // hit-test regardless of selection (`None` here).
+    let hit = hit_test_graphic_handle(&s, 10.0, 0.0, 1.5, 1, &None);
     assert_eq!(hit, Some((0, GraphicHandle::RectCorner(2))));
 }
 
@@ -585,6 +586,44 @@ fn polygon_centroid_averages_vertices() {
     assert_eq!(c, [1.0, 1.0]);
 }
 
+/// A rectangle-as-polygon whose top side is densely subdivided into
+/// many extra collinear points (mimicking a tessellated arc side from
+/// a Join-into-Polygon result) still centres at the true geometric
+/// centre — a plain vertex mean would skew toward the densely
+/// subdivided side instead.
+#[test]
+fn polygon_centroid_is_area_weighted_not_skewed_by_a_densely_subdivided_side() {
+    let mut vertices = vec![[0.0, 0.0], [4.0, 0.0], [4.0, 4.0]];
+    // 8 extra collinear points along the top edge (4,4) -> (0,4) — 11
+    // vertices total, 8 of them clustered on one side.
+    for i in 1..9 {
+        let t = i as f64 / 9.0;
+        vertices.push([4.0 - 4.0 * t, 4.0]);
+    }
+    vertices.push([0.0, 4.0]);
+
+    let c = polygon_centroid(&vertices);
+
+    let eps = 1e-9;
+    assert!((c[0] - 2.0).abs() < eps, "expected x ≈ 2.0, got {}", c[0]);
+    assert!((c[1] - 2.0).abs() < eps, "expected y ≈ 2.0, got {}", c[1]);
+}
+
+/// A degenerate ring (~zero signed area — a bowtie) falls back to the
+/// plain vertex mean rather than dividing by ~zero.
+#[test]
+fn polygon_centroid_falls_back_to_vertex_mean_for_a_bowtie() {
+    let vertices = [[0.0, 0.0], [1.27, 1.27], [1.27, 0.0], [0.0, 1.27]];
+    let c = polygon_centroid(&vertices);
+    let expected = [
+        (0.0 + 1.27 + 1.27 + 0.0) / 4.0,
+        (0.0 + 1.27 + 0.0 + 1.27) / 4.0,
+    ];
+    let eps = 1e-9;
+    assert!((c[0] - expected[0]).abs() < eps);
+    assert!((c[1] - expected[1]).abs() < eps);
+}
+
 #[test]
 fn hit_test_outlined_polygon_hits_edge_band_not_interior() {
     let s = polygon_symbol(vec![[0.0, 0.0], [4.0, 0.0], [2.0, 4.0]], None);
@@ -663,11 +702,36 @@ fn graphic_handles_returns_one_per_polygon_vertex() {
     );
 }
 
+/// A `PolygonVertex` handle only hit-tests when its polygon is the
+/// currently-selected graphic — otherwise a click near one of its
+/// (possibly many, tessellated-arc-side) vertices would grab an
+/// invisible handle instead of falling through to `hit_test`'s body
+/// selection.
 #[test]
-fn hit_test_graphic_handle_finds_polygon_vertex() {
+fn hit_test_graphic_handle_finds_polygon_vertex_when_selected() {
     let s = polygon_symbol(vec![[0.0, 0.0], [2.0, 0.0], [1.0, 2.0]], None);
-    let hit = hit_test_graphic_handle(&s, 2.0, 0.0, 1.5, 1);
+    let selected = Some(SymbolSelection::Graphic(0));
+    let hit = hit_test_graphic_handle(&s, 2.0, 0.0, 1.5, 1, &selected);
     assert_eq!(hit, Some((0, GraphicHandle::PolygonVertex(1))));
+}
+
+/// An unselected polygon's vertices don't hit-test at all — a click
+/// on its body must select the shape, not silently grab a vertex
+/// handle the user can't even see (the draw path only renders
+/// handles for the selected graphic).
+#[test]
+fn hit_test_graphic_handle_ignores_polygon_vertex_when_not_selected() {
+    let s = polygon_symbol(vec![[0.0, 0.0], [2.0, 0.0], [1.0, 2.0]], None);
+    let hit = hit_test_graphic_handle(&s, 2.0, 0.0, 1.5, 1, &None);
+    assert_eq!(
+        hit, None,
+        "vertex hit-test misses when the polygon isn't selected"
+    );
+
+    // The same click still finds the shape via body hit-test — the
+    // scenario the fix restores: unselected polygon click selects the
+    // body instead of always grabbing a vertex.
+    assert_eq!(hit_test(&s, 2.0, 0.0, 1), Some(SymbolSelection::Graphic(0)));
 }
 
 #[test]

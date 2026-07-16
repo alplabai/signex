@@ -32,9 +32,14 @@ impl SymbolCanvas<'_> {
                 // Use a screen-pixel-based tolerance so handles are
                 // equally easy to hit at any zoom level.
                 let tol_mm = (8.0_f32 / self.camera.scale.max(0.01)).clamp(0.5, 4.0) as f64;
-                if let Some((idx, handle)) =
-                    state::hit_test_graphic_handle(self.symbol, ux, uy, tol_mm, self.active_part)
-                {
+                if let Some((idx, handle)) = state::hit_test_graphic_handle(
+                    self.symbol,
+                    ux,
+                    uy,
+                    tol_mm,
+                    self.active_part,
+                    &self.selected,
+                ) {
                     state.dragging_handle = Some((idx, handle));
                     state.dragging = false;
                     state.drag_anchor_offset = None;
