@@ -100,7 +100,10 @@ pub(in crate::format) fn decode_cell(cell: &str) -> String {
 /// broken with `\"` (still a literal quote to TOML) so it cannot be
 /// read as the closing delimiter. Interior newlines and tabs are
 /// valid literally in a multi-line basic string and are preserved so
-/// the block stays line-diffable.
+/// the block stays line-diffable. Every other C0 control byte (and
+/// DEL) is illegal unescaped in a TOML basic string, so it is written
+/// as `\uXXXX` — otherwise a cell holding e.g. a BEL or VT byte saves
+/// fine but `toml::from_str` rejects the file on reopen (#386).
 pub(in crate::format) fn escape_tsv_body_for_toml(body: &str) -> String {
     let mut out = String::with_capacity(body.len() + 8);
     let mut quote_run = 0usize;
@@ -119,6 +122,10 @@ pub(in crate::format) fn escape_tsv_body_for_toml(body: &str) -> String {
         match ch {
             '\\' => out.push_str("\\\\"),
             '\r' => out.push_str("\\r"),
+            '\n' | '\t' => out.push(ch),
+            c if (c as u32) < 0x20 || c as u32 == 0x7F => {
+                out.push_str(&format!("\\u{:04X}", c as u32));
+            }
             _ => out.push(ch),
         }
     }

@@ -129,6 +129,26 @@ fn snxsch_survives_backslash_and_quote_in_label_text() {
 }
 
 #[test]
+fn snxsch_survives_c0_control_bytes_in_label_text() {
+    // A C0 control byte other than tab/newline/CR (BEL, VT, FF here)
+    // used to pass through `escape_tsv_body_for_toml` raw, producing
+    // a `.snxsch` that saved fine but `toml::from_str` rejected on
+    // reopen — total document loss (#386).
+    let text = "BEL\u{0007}VT\u{000B}FF\u{000C}end";
+    let mut sheet = empty_sheet();
+    sheet.labels.push(label_with_text(text));
+    let s = SnxSchematic::new(sheet).write_string().expect("serialise");
+
+    // Must be valid TOML on its own terms, not just parseable by our
+    // own (possibly too-lenient) reader.
+    toml::from_str::<toml::Value>(&s).expect("emitted file must be valid TOML");
+
+    let back = SnxSchematic::parse(&s).expect("C0 control bytes must not corrupt the file");
+    assert_eq!(back.sheet.labels.len(), 1);
+    assert_eq!(back.sheet.labels[0].text, text);
+}
+
+#[test]
 fn snxsch_does_not_drop_a_literal_dash_label() {
     let mut sheet = empty_sheet();
     sheet.labels.push(label_with_text("-"));
