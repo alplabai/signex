@@ -123,7 +123,11 @@ pub enum GraphicHandle {
     /// Polygon vertex at the given index into `vertices`. A selected
     /// polygon shows one of these per vertex; dragging one moves
     /// only that vertex (mirrors `LineEndpoint`'s per-point drag).
-    PolygonVertex(u16),
+    /// `u32`, not `u16`: a `u16` truncates/wraps for a polygon past
+    /// 65535 vertices, colliding two different vertices onto the same
+    /// handle id (see `graphic_handles`'s cast, which is `debug_assert`-
+    /// guarded against ever needing to saturate).
+    PolygonVertex(u32),
 }
 
 /// Map a [`GraphicHandle`] to the mouse cursor that should be shown

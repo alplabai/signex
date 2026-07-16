@@ -313,9 +313,20 @@ fn build_endpoint_clusters(polylines: &[Vec<[f64; 2]>]) -> EndpointClusters {
 /// ([`ChainError::OpenChain`] otherwise). `Ok(())` means
 /// [`walk_cycle`] can run.
 fn validate_topology(n: usize, clusters: &EndpointClusters) -> Result<(), ChainError> {
-    for (root, entries) in &clusters.node_entries {
-        if entries.len() > 2 {
-            let at = average_point(&clusters.node_points[root]);
+    // Iterate nodes in a fixed (sorted-by-root-id) order rather than
+    // the HashMap's own iteration order, which isn't guaranteed
+    // stable across runs. Root ids themselves come from the
+    // deterministic union-find below, so sorting them makes both
+    // loops below deterministic too: which node's point gets reported
+    // when several independently qualify as Branching, and which of
+    // two dangling nodes lands in `ends[0]` vs `ends[1]` on an
+    // OpenChain, no longer depend on hash iteration order.
+    let mut roots: Vec<usize> = clusters.node_entries.keys().copied().collect();
+    roots.sort_unstable();
+
+    for &root in &roots {
+        if clusters.node_entries[&root].len() > 2 {
+            let at = average_point(&clusters.node_points[&root]);
             return Err(ChainError::Branching { at });
         }
     }
@@ -324,10 +335,10 @@ fn validate_topology(n: usize, clusters: &EndpointClusters) -> Result<(), ChainE
     // shared (degree-2) node ties them together.
     let mut seg_parent: Vec<usize> = (0..n).collect();
     let mut dangling_nodes: Vec<usize> = Vec::new();
-    for (root, entries) in &clusters.node_entries {
-        match entries.as_slice() {
+    for &root in &roots {
+        match clusters.node_entries[&root].as_slice() {
             [(a, _), (b, _)] => uf_union(&mut seg_parent, *a, *b),
-            [_] => dangling_nodes.push(*root),
+            [_] => dangling_nodes.push(root),
             _ => unreachable!("branching nodes already rejected above"),
         }
     }

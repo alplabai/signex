@@ -100,7 +100,7 @@ pub fn build_symbol_context_menu_rows(
 /// `(id, label, tool)` for every `Place ▸` row — one per canvas
 /// placement tool, mirroring the SchLib Place menu / toolbar tool set
 /// (`SymbolTool`).
-const PLACE_TOOLS: &[(&str, &str, SymbolToolMsg)] = &[
+pub const PLACE_TOOLS: &[(&str, &str, SymbolToolMsg)] = &[
     ("symbol.place-pin", "Pin", SymbolToolMsg::AddPin),
     ("symbol.place-line", "Line", SymbolToolMsg::PlaceLine),
     (

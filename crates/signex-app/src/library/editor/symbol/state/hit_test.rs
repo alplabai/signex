@@ -305,7 +305,15 @@ pub fn graphic_handles(sym: &Symbol, idx: usize) -> Vec<(GraphicHandle, [f64; 2]
         SymbolGraphicKind::Polygon { vertices } => vertices
             .iter()
             .enumerate()
-            .map(|(i, v)| (GraphicHandle::PolygonVertex(i as u16), *v))
+            .map(|(i, v)| {
+                // `u32` covers over 4 billion vertices — no real
+                // symbol will ever get remotely close, but guard the
+                // cast anyway rather than silently truncating/wrapping
+                // (which used to collide distinct vertices onto the
+                // same handle id past a `u16`'s 65535).
+                debug_assert!(i <= u32::MAX as usize, "polygon vertex index overflows u32");
+                (GraphicHandle::PolygonVertex(i as u32), *v)
+            })
             .collect(),
     }
 }

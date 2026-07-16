@@ -23,7 +23,7 @@ use crate::library::messages::{
     LibraryMessage, PrimitiveEdit, SymbolContextSubmenuMsg, SymbolEditorMsg,
 };
 
-pub use rows::{SymbolMenuRow, build_symbol_context_menu_rows};
+pub use rows::{PLACE_TOOLS, SymbolMenuRow, build_symbol_context_menu_rows};
 
 /// Fixed panel width — list-style menu, not the Filter chip-grid, so a
 /// fixed width (matching the footprint context menu's `MENU_WIDTH`)

@@ -502,7 +502,7 @@ pub enum GraphicHandleMsg {
     TextAnchor,
     /// Polygon vertex at the given index — pure-data alias of
     /// `editor::symbol::state::GraphicHandle::PolygonVertex`.
-    PolygonVertex(u16),
+    PolygonVertex(u32),
 }
 
 /// Pivot mode for Symbol-graphic rotate operations.

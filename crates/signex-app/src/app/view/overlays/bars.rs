@@ -429,9 +429,12 @@ impl Signex {
             },
         );
         let card_msg = card.map(Message::Library);
+        let place_open = menu_state.open_submenu
+            == Some(crate::library::editor::symbol::state::SymbolContextSubmenu::Place);
         let (x, y) = Self::clamp_symbol_menu_position(
             (menu_state.x, menu_state.y),
             self.ui_state.window_size,
+            place_open,
         );
         vec![
             Self::dismiss_layer(close_msg),
@@ -443,11 +446,27 @@ impl Signex {
     /// conservative estimate of its footprint stays on screen near
     /// the right / bottom window edges (matches the footprint
     /// overlay's clamping, sized down for the shorter symbol menu).
-    fn clamp_symbol_menu_position(requested: (f32, f32), window: (f32, f32)) -> (f32, f32) {
+    /// `place_submenu_open` accounts for the extra rows the Place ▸
+    /// submenu adds in place (accordion, not a flyout) when expanded —
+    /// otherwise the estimate under-shoots the expanded card's real
+    /// footprint and it can run off the bottom edge.
+    fn clamp_symbol_menu_position(
+        requested: (f32, f32),
+        window: (f32, f32),
+        place_submenu_open: bool,
+    ) -> (f32, f32) {
         let (mx, my) = requested;
         let (ww, wh) = window;
         let est_menu_w: f32 = crate::library::editor::symbol::context_menu::MENU_WIDTH;
-        let est_menu_h: f32 = 260.0;
+        // Roughly one dropdown row's height ([5, 12] padding + a 13pt
+        // label — see signex_widgets::active_bar_dropdown::view).
+        const ROW_HEIGHT_PX: f32 = 28.0;
+        let expanded_rows = if place_submenu_open {
+            crate::library::editor::symbol::context_menu::PLACE_TOOLS.len() as f32
+        } else {
+            0.0
+        };
+        let est_menu_h: f32 = 260.0 + expanded_rows * ROW_HEIGHT_PX;
         let edge_margin: f32 = 4.0;
         let x = if mx + est_menu_w + edge_margin > ww {
             (ww - est_menu_w - edge_margin).max(0.0)
