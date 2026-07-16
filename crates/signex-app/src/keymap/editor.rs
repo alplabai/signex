@@ -1,6 +1,6 @@
 use crate::keymap::{
-    AppCommandId, BindingConflict, CommandGroup, CompiledKeymap, ProfileLoadError, ShortcutContext,
-    ShortcutBinding, ShortcutBindingAction, ShortcutProfile, ShortcutProfileKind,
+    AppCommandId, BindingConflict, CommandGroup, CompiledKeymap, ProfileLoadError, ShortcutBinding,
+    ShortcutBindingAction, ShortcutContext, ShortcutProfile, ShortcutProfileKind,
     ShortcutProfileSet, ShortcutTrigger, fallback_label, metadata_for,
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -156,7 +156,8 @@ impl KeymapEditorModel {
         trigger_text: String,
     ) -> Result<(), ProfileLoadError> {
         let key = (command.clone(), context);
-        self.trigger_drafts.insert(key.clone(), trigger_text.clone());
+        self.trigger_drafts
+            .insert(key.clone(), trigger_text.clone());
 
         if !self.active_profile_is_custom() {
             self.invalid_trigger_drafts.insert(key);
@@ -180,6 +181,16 @@ impl KeymapEditorModel {
 
     pub fn has_invalid_trigger_drafts(&self) -> bool {
         !self.invalid_trigger_drafts.is_empty()
+    }
+
+    /// True when this working copy has diverged from the live profile set —
+    /// feeds the Preferences dirty comparator. Valid trigger edits are
+    /// applied straight into `profiles` (so the set comparison sees them,
+    /// including an edit retyped back to the original, which compares
+    /// clean); an *invalid* draft counts as dirty on its own because it is
+    /// pending user input that Save refuses to commit.
+    pub fn differs_from(&self, live: &ShortcutProfileSet) -> bool {
+        self.profiles != *live || !self.invalid_trigger_drafts.is_empty()
     }
 
     pub fn active_conflicts(&self) -> Vec<BindingConflict> {

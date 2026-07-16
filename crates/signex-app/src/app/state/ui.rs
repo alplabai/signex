@@ -1,7 +1,6 @@
 //! UI-surface state — theme, tool overlays, modal flags, dropdown and
 //! command-palette state. Split from `app/state.rs` as pure code motion.
 
-
 use crate::render_config::{GridStyle, LabelStyle, MultisheetStyle, PowerPortStyle};
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeId;
@@ -123,6 +122,15 @@ pub struct UiState {
     /// while it is open.
     pub preferences_keymap_recorder: Option<KeymapRecorderState>,
     pub preferences_dirty: bool,
+    /// Sticky companion to [`Self::preferences_dirty`] for imperative edits
+    /// the draft comparator cannot observe — currently only Import Theme,
+    /// which swaps the live [`Self::custom_theme`] in place (there is no
+    /// draft copy to diff against). Once set, recomputing the dirty flag
+    /// from [`Self::preferences_has_unsaved_changes`] keeps it `true` until
+    /// Save or a draft reseed (open / revert) clears it, so a later
+    /// appearance-draft change can't clobber the pending import back to
+    /// "clean" and let the dialog close without a prompt.
+    pub preferences_dirty_sticky: bool,
     pub custom_theme: Option<signex_types::theme::CustomThemeFile>,
     /// Rename-sheet modal state. Opened from the Projects-panel tree
     /// context menu; `None` when the modal is closed.
@@ -272,11 +280,13 @@ pub struct UiState {
 }
 
 impl UiState {
-    /// True when any Preferences draft differs from its saved live value —
-    /// drives the Save button + the dirty-close guard. Single source of truth
-    /// so every live-preview `PrefMsg::Draft*` handler stays consistent as new
-    /// drafts are added (the old per-handler inline chains had drifted to
-    /// different term sets).
+    /// True when any Preferences draft differs from its saved live value.
+    /// Single source of truth so every live-preview `PrefMsg::Draft*` handler
+    /// stays consistent as new drafts are added (the old per-handler inline
+    /// chains had drifted to different term sets). Covers ALL draft state —
+    /// the 7 appearance drafts, the component-class table and the keymap
+    /// working copy — so an appearance recompute can't report "clean" while
+    /// a pending rebind or class edit would be lost on close.
     pub fn preferences_draft_differs(&self) -> bool {
         self.preferences_draft_theme != self.theme_id
             || self.preferences_draft_font != self.ui_font_name
@@ -285,5 +295,17 @@ impl UiState {
             || self.preferences_draft_multisheet_style != self.multisheet_style
             || self.preferences_draft_grid_style != self.grid_style
             || self.preferences_draft_pcb_gpu_render != self.pcb_gpu_render
+            || self.preferences_draft_component_classes != self.component_classes
+            || self
+                .preferences_keymap_editor
+                .differs_from(&self.keymap_profiles)
+    }
+
+    /// True when closing Preferences without Save would lose work — drives
+    /// the Save/Discard footer + every dirty-close guard. The draft
+    /// comparator plus the sticky flag for imperative edits it can't see
+    /// (see [`Self::preferences_dirty_sticky`]).
+    pub fn preferences_has_unsaved_changes(&self) -> bool {
+        self.preferences_dirty_sticky || self.preferences_draft_differs()
     }
 }
