@@ -70,12 +70,11 @@ pub const CHAIN_ENDPOINT_EPSILON_MM: f64 = 0.01;
 /// into. Matches `signex-bake::profile::ARC_SAMPLES`.
 pub const CHAIN_ARC_SAMPLES: usize = 16;
 
-/// Doubled (×2) shoelace-area threshold (mm²) below which a closed ring
-/// is treated as having ~zero area (collinear / self-overlapping input)
-/// rather than a real polygon — compared directly against
-/// [`signed_area_x2`]'s undivided output. Small relative to any real
+/// Perpendicular-distance threshold (mm) below which a ring vertex is
+/// treated as lying exactly on the reference line for
+/// [`is_collinear`]'s degeneracy test. Small relative to any real
 /// symbol geometry (mm-scale) but well above float noise.
-const CHAIN_DEGENERATE_AREA_X2_EPS_MM2: f64 = 1e-9;
+const CHAIN_COLLINEAR_EPS_MM: f64 = 1e-6;
 
 /// One input stroke to be chained. Mirrors the geometry-bearing fields
 /// of [`super::SymbolGraphicKind::Line`] / [`super::SymbolGraphicKind::Arc`]
@@ -409,14 +408,43 @@ fn finalize_ring(raw: Vec<[f64; 2]>) -> Result<Vec<[f64; 2]>, ChainError> {
         return Err(ChainError::DegenerateResult);
     }
 
-    let area_x2 = signed_area_x2(&ring);
-    if area_x2.abs() < CHAIN_DEGENERATE_AREA_X2_EPS_MM2 {
+    if is_collinear(&ring, CHAIN_COLLINEAR_EPS_MM) {
         return Err(ChainError::DegenerateResult);
     }
+    let area_x2 = signed_area_x2(&ring);
     if area_x2 < 0.0 {
         ring.reverse();
     }
     Ok(ring)
+}
+
+/// `true` when every vertex in `ring` lies within `eps` mm of the
+/// infinite line through the first two DISTINCT vertices — a
+/// genuinely degenerate (zero-width) ring, the case this gate is
+/// documented to catch.
+///
+/// Deliberately NOT a zero-net-shoelace-area test (what this replaced):
+/// a self-intersecting ring whose crossed lobes cancel to ~zero NET
+/// area — a bowtie, e.g. `(0,0), (1.27,1.27), (1.27,0), (0,1.27)` —
+/// has real 2D extent and renders even-odd; the user drew it on
+/// purpose and it must commit, not be silently discarded as if it
+/// were a straight line. Requires `ring.len() >= 2` (guaranteed by the
+/// `< 3` length gate that runs immediately before this).
+fn is_collinear(ring: &[[f64; 2]], eps: f64) -> bool {
+    let p0 = ring[0];
+    let Some(p1) = ring.iter().skip(1).find(|&&p| dist_sq(p, p0).sqrt() > eps) else {
+        // Every vertex coincides with p0 within eps.
+        return true;
+    };
+    let dir = [p1[0] - p0[0], p1[1] - p0[1]];
+    let dir_len = (dir[0] * dir[0] + dir[1] * dir[1]).sqrt();
+    ring.iter().all(|&p| {
+        // Perpendicular distance from p to the line through p0/p1:
+        // |cross(dir, p - p0)| / |dir|.
+        let v = [p[0] - p0[0], p[1] - p0[1]];
+        let cross = dir[0] * v[1] - dir[1] * v[0];
+        (cross / dir_len).abs() <= eps
+    })
 }
 
 /// Expand one input segment into its ordered point list, endpoints

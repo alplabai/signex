@@ -150,46 +150,100 @@ pub(super) fn commit_or_discard_polygon(editor: &mut SymEditor) {
     }
 }
 
+/// Perpendicular-distance threshold (mm) below which a click-collected
+/// vertex is treated as lying exactly on the reference line for
+/// [`polygon_is_collinear`]'s degeneracy test.
+const POLYGON_COLLINEAR_EPS_MM: f64 = 1e-6;
+
 /// Normalise a click-collected vertex ring before committing it:
 ///
-/// - Drop a trailing vertex that duplicates the first. A closing
-///   click is meant to be a "connect back to vertex 0" gesture, not a
-///   new point — the click-collect gesture handlers already avoid
-///   appending one for the tolerance-based and double-click closes,
-///   but a plain click can still land exactly on vertex 0's snapped
-///   grid position (a fine snap grid + click slightly outside the
-///   gesture-1 hit tolerance is enough), which would otherwise double
-///   the closing edge at render time.
-/// - Reject a degenerate ring — collinear vertices / zero enclosed
-///   area — by returning an empty Vec, which the caller's `>= 3`
-///   check then discards. A `<3`-vertex input returns empty
-///   unconditionally.
-fn normalize_polygon_ring(mut vertices: Vec<(f64, f64)>) -> Vec<[f64; 2]> {
-    if vertices.len() >= 2 && vertices.first() == vertices.last() {
-        vertices.pop();
-    }
-    if vertices.len() < 3 {
+/// - Collapse consecutive epsilon-duplicate vertices (e.g. two slow
+///   clicks landing on the same snapped point mid-sequence — `[P, P,
+///   Q, R]` -> `[P, Q, R]`), including the wrap-around last-to-first
+///   pair (a closing click landing back on vertex 0's snapped grid
+///   position, which would otherwise double the closing edge at
+///   render time). Mirrors `signex_library`'s chain `finalize_ring`
+///   dedup pass exactly, using the same `CHAIN_ENDPOINT_EPSILON_MM`
+///   constant, so this click-collect commit path and the
+///   Join-into-Polygon chain path agree on what counts as "the same
+///   point."
+/// - Reject a degenerate ring — every vertex collinear — by returning
+///   an empty Vec, which the caller's `>= 3` check then discards. A
+///   `<3`-vertex input (before or after dedup) returns empty
+///   unconditionally. Deliberately NOT a zero-net-shoelace-area test:
+///   see [`polygon_is_collinear`]'s doc comment for why a
+///   self-intersecting-but-non-collinear ring (a bowtie) must still
+///   commit.
+fn normalize_polygon_ring(vertices: Vec<(f64, f64)>) -> Vec<[f64; 2]> {
+    let raw: Vec<[f64; 2]> = vertices.into_iter().map(|(x, y)| [x, y]).collect();
+    let points = collapse_consecutive_duplicate_vertices(raw);
+    if points.len() < 3 {
         return Vec::new();
     }
-    let points: Vec<[f64; 2]> = vertices.into_iter().map(|(x, y)| [x, y]).collect();
-    if polygon_signed_area2(&points).abs() <= 1e-9 {
+    if polygon_is_collinear(&points, POLYGON_COLLINEAR_EPS_MM) {
         return Vec::new();
     }
     points
 }
 
-/// Twice the shoelace-formula signed area of a closed (implicitly)
-/// vertex ring. Zero (within epsilon) means every vertex is
-/// collinear — a degenerate, invisible "polygon".
-fn polygon_signed_area2(vertices: &[[f64; 2]]) -> f64 {
-    let n = vertices.len();
-    (0..n)
-        .map(|i| {
-            let a = vertices[i];
-            let b = vertices[(i + 1) % n];
-            a[0] * b[1] - b[0] * a[1]
-        })
-        .sum()
+/// Collapse consecutive epsilon-duplicate points, including the
+/// wrap-around last-to-first pair — mirrors `signex_library`'s chain
+/// `finalize_ring` dedup pass exactly.
+fn collapse_consecutive_duplicate_vertices(raw: Vec<[f64; 2]>) -> Vec<[f64; 2]> {
+    let eps_sq =
+        signex_library::CHAIN_ENDPOINT_EPSILON_MM * signex_library::CHAIN_ENDPOINT_EPSILON_MM;
+    let mut points: Vec<[f64; 2]> = Vec::with_capacity(raw.len());
+    for p in raw {
+        match points.last() {
+            Some(&last) if dist_sq(last, p) <= eps_sq => {}
+            _ => points.push(p),
+        }
+    }
+    while points.len() > 1 && dist_sq(points[0], *points.last().unwrap()) <= eps_sq {
+        points.pop();
+    }
+    points
+}
+
+fn dist_sq(a: [f64; 2], b: [f64; 2]) -> f64 {
+    let dx = a[0] - b[0];
+    let dy = a[1] - b[1];
+    dx * dx + dy * dy
+}
+
+/// `true` when every vertex in `points` lies within `eps` mm of the
+/// infinite line through the first two DISTINCT vertices — mirrors
+/// `signex_library`'s chain `is_collinear` (same algorithm,
+/// independently implemented: it's a private helper on the other side
+/// of the crate boundary). A genuinely degenerate (zero-width) ring,
+/// the case this gate is documented to catch.
+///
+/// Deliberately NOT a zero-net-shoelace-area test (what this
+/// replaced): a self-intersecting ring whose crossed lobes cancel to
+/// ~zero NET area — a bowtie, e.g. `(0,0), (1.27,1.27), (1.27,0),
+/// (0,1.27)` — has real 2D extent and renders even-odd; the user drew
+/// it on purpose and it must commit, not be silently discarded as if
+/// it were a straight line. Requires `points.len() >= 2` (guaranteed
+/// by the `< 3` length gate that runs immediately before this).
+fn polygon_is_collinear(points: &[[f64; 2]], eps: f64) -> bool {
+    let p0 = points[0];
+    let Some(p1) = points
+        .iter()
+        .skip(1)
+        .find(|&&p| dist_sq(p, p0).sqrt() > eps)
+    else {
+        // Every vertex coincides with p0 within eps.
+        return true;
+    };
+    let dir = [p1[0] - p0[0], p1[1] - p0[1]];
+    let dir_len = (dir[0] * dir[0] + dir[1] * dir[1]).sqrt();
+    points.iter().all(|&p| {
+        // Perpendicular distance from p to the line through p0/p1:
+        // |cross(dir, p - p0)| / |dir|.
+        let v = [p[0] - p0[0], p[1] - p0[1]];
+        let cross = dir[0] * v[1] - dir[1] * v[0];
+        (cross / dir_len).abs() <= eps
+    })
 }
 
 /// Normalise an about-to-be-stored `SymbolGraphicKind::Arc`'s
@@ -691,6 +745,44 @@ mod tests {
         match &editor.primitive().graphics[0].kind {
             SymbolGraphicKind::Polygon { vertices } => {
                 assert_eq!(vertices.len(), 3, "duplicate closing vertex dropped");
+                assert_eq!(vertices, &vec![[0.0, 0.0], [4.0, 0.0], [2.0, 3.0]]);
+            }
+            other => panic!("expected Polygon, got {other:?}"),
+        }
+    }
+
+    /// A self-intersecting bowtie whose crossed lobes cancel to
+    /// exactly zero NET shoelace area still commits — it has real 2D
+    /// extent and renders even-odd, unlike a genuinely collinear
+    /// (zero-width) ring.
+    #[test]
+    fn polygon_commit_with_self_intersecting_bowtie_commits() {
+        let mut editor = new_editor();
+        for (x, y) in [(0.0, 0.0), (1.27, 1.27), (1.27, 0.0), (0.0, 1.27)] {
+            apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::PolygonClick { x, y });
+        }
+        apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::PolygonCommit);
+
+        assert_eq!(editor.primitive().graphics.len(), 1);
+        match &editor.primitive().graphics[0].kind {
+            SymbolGraphicKind::Polygon { vertices } => assert_eq!(vertices.len(), 4),
+            other => panic!("expected Polygon, got {other:?}"),
+        }
+    }
+
+    /// Two slow clicks landing on the same snapped point mid-sequence
+    /// collapse into one vertex — `[P, P, Q, R]` -> `[P, Q, R]` —
+    /// mirroring `signex_library`'s chain `finalize_ring` dedup pass.
+    #[test]
+    fn polygon_commit_collapses_a_consecutive_duplicate_mid_sequence() {
+        let mut editor = new_editor();
+        for (x, y) in [(0.0, 0.0), (0.0, 0.0), (4.0, 0.0), (2.0, 3.0)] {
+            apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::PolygonClick { x, y });
+        }
+        apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::PolygonCommit);
+
+        match &editor.primitive().graphics[0].kind {
+            SymbolGraphicKind::Polygon { vertices } => {
                 assert_eq!(vertices, &vec![[0.0, 0.0], [4.0, 0.0], [2.0, 3.0]]);
             }
             other => panic!("expected Polygon, got {other:?}"),

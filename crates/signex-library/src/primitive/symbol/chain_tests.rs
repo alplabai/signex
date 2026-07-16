@@ -416,3 +416,44 @@ fn empty_input_reports_empty() {
         ChainError::Empty
     );
 }
+
+#[test]
+fn self_intersecting_bowtie_with_net_zero_area_commits() {
+    // Arrange: a classic bowtie / hourglass quadrilateral whose
+    // crossed lobes cancel to exactly zero NET shoelace area, but
+    // which has real 2D extent (it's not a straight line) and
+    // renders even-odd — this is what the user actually drew and it
+    // must chain successfully, not be discarded as degenerate.
+    let a = [0.0, 0.0];
+    let b = [1.27, 1.27];
+    let c = [1.27, 0.0];
+    let d = [0.0, 1.27];
+    let segments = [line(a, b), line(b, c), line(c, d), line(d, a)];
+
+    // Act
+    let ring = chain_into_closed_contour(&segments).expect("bowtie should chain");
+
+    // Assert: the net area is (by construction) ~zero, but the ring
+    // itself still commits with all 4 distinct vertices.
+    assert_eq!(ring.len(), 4);
+    assert_approx_eq(signed_area_x2(&ring), 0.0);
+}
+
+#[test]
+fn three_collinear_points_still_report_degenerate() {
+    // Arrange: a "triangle" whose three corners all sit on the same
+    // line — genuinely zero-width, unlike the bowtie above. Must
+    // still be rejected; the collinearity gate replacing the old
+    // net-area gate has to keep catching this case.
+    let segments = [
+        line([0.0, 0.0], [2.0, 0.0]),
+        line([2.0, 0.0], [4.0, 0.0]),
+        line([4.0, 0.0], [0.0, 0.0]),
+    ];
+
+    // Act
+    let err = chain_into_closed_contour(&segments).unwrap_err();
+
+    // Assert
+    assert_eq!(err, ChainError::DegenerateResult);
+}
