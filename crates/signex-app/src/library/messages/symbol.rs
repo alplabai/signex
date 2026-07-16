@@ -67,6 +67,14 @@ pub enum SymbolEditorMsg {
     /// right-click while a placement is in flight).
     PolygonCancel,
 
+    /// Join the selected Line/Arc graphics end-to-end into one closed
+    /// Polygon (`signex_library::chain_into_closed_contour`). No-op
+    /// when the selection is empty, contains fewer than one eligible
+    /// graphic, or contains any non-Line/Arc graphic. An open chain is
+    /// auto-closed once by synthesizing the missing edge between its
+    /// two loose ends before retrying.
+    JoinSelectionIntoPolygon,
+
     /// Select a symbol element (pin index / field key).
     Select(SymbolSelectionMsg),
 

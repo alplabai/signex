@@ -10,6 +10,7 @@
 
 mod camera;
 mod history;
+mod join;
 mod movement;
 mod parts;
 mod selection;
@@ -18,6 +19,7 @@ mod ui;
 
 use camera::apply_symbol_camera;
 use history::apply_symbol_history;
+use join::apply_symbol_join;
 use movement::apply_symbol_move;
 use parts::apply_symbol_parts;
 use selection::apply_symbol_selection;
@@ -308,6 +310,7 @@ pub(crate) fn apply_symbol_primitive_edit(
             editor.polygon_vertices.clear();
             editor.canvas_cache.clear();
         }
+        SymbolEditorMsg::JoinSelectionIntoPolygon => apply_symbol_join(editor, msg),
 
         // ── Selection ────────────────────────────────────────────
         SymbolEditorMsg::Select(_) | SymbolEditorMsg::Deselect => {

@@ -306,6 +306,14 @@ pub struct SymbolEditorState {
     /// `PolygonCancel`, plus the synchronous flush in the `SetTool`
     /// handler when the user switches away from `PlacePolygon`.
     pub polygon_vertices: Vec<(f64, f64)>,
+    /// Transient, user-visible status line rendered in the symbol
+    /// editor's status footer (see `standalone::symbol::view_symbol_
+    /// status`). `None` most of the time; set to `Some(reason)` when
+    /// an action fails in a way the user needs to see explained (e.g.
+    /// `JoinSelectionIntoPolygon` on a non-connecting selection).
+    /// Cleared on the next successful action. Never serialized, never
+    /// snapshotted for undo.
+    pub status_message: Option<String>,
 }
 
 impl SymbolEditorState {
@@ -337,6 +345,7 @@ impl SymbolEditorState {
             graphic_fill_picker: None,
             local_color_picker: None,
             polygon_vertices: Vec::new(),
+            status_message: None,
         };
         state.reset_camera_origin_center();
         state

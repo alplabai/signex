@@ -125,13 +125,18 @@ fn view_symbol_status<'a>(
             grid_toggle,
             grid_cycle,
             Space::new().width(Length::Fill),
-            text(if editor.selected.is_some() {
-                "Del removes · drag to move · scroll zooms · right-drag pans · Home fits"
-            } else {
-                "Ctrl+Z undo · Ctrl+Y redo · scroll zooms · right-drag pans · Home fits"
-            })
-            .size(10)
-            .color(muted),
+            match &editor.status_message {
+                Some(msg) => text(msg.clone())
+                    .size(10)
+                    .color(theme_ext::error_color(tokens)),
+                None => text(if editor.selected.is_some() {
+                    "Del removes · drag to move · scroll zooms · right-drag pans · Home fits"
+                } else {
+                    "Ctrl+Z undo · Ctrl+Y redo · scroll zooms · right-drag pans · Home fits"
+                })
+                .size(10)
+                .color(muted),
+            },
         ]
         .spacing(8)
         .align_y(iced::Alignment::Center),
