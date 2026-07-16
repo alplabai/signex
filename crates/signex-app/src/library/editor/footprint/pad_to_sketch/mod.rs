@@ -183,6 +183,20 @@ fn mint_shape_geometry_for(
 /// v0.15 — when a pad moves in Pads mode (drag), update its backing
 /// sketch `Point`'s coordinates so the sketch stays in sync. No-op
 /// when the pad has no backing sketch entity yet.
+///
+/// v0.14.2 — a `Custom(SketchProfile)` pad does not own its geometry:
+/// "Make Pad from Profile" mints only a centre `Point` at the loop's
+/// centroid and references the loop by seed Line, leaving
+/// `corner_entity_ids` `None`. Moving such a pad therefore has to
+/// translate the profile itself, or the loop stays where it was drawn
+/// — visibly the sketch shape doesn't follow the pad, and silently the
+/// bake (`local_pts = world_pts - pad_position`, `signex-bake`
+/// `pad.rs`) resolves the copper back to the ORIGINAL location, so the
+/// exported footprint has the pad in the wrong place.
+///
+/// The profile is authoritative for a sketch-profile pad; the pad's
+/// position is a derived handle, and moving the handle means
+/// translating the geometry.
 pub fn mirror_move_pad_in_sketch(pad: &EditorPad, footprint: &mut Footprint) {
     let Some(entity_id) = pad.sketch_entity_id else {
         return;
@@ -190,6 +204,11 @@ pub fn mirror_move_pad_in_sketch(pad: &EditorPad, footprint: &mut Footprint) {
     let Some(sketch) = footprint.sketch.as_mut() else {
         return;
     };
+    // Must run BEFORE the centre is overwritten — the delta is measured
+    // from the centre's current position. The centre is a standalone
+    // minted Point and never part of the traced loop, so it cannot be
+    // translated twice.
+    translate_profile_with_pad(sketch, entity_id, pad.position_mm);
     helpers::set_point_xy(sketch, entity_id, pad.position_mm.0, pad.position_mm.1);
     // v0.16 — also reposition the outline-corner Points so the
     // construction outline tracks the pad bbox.
@@ -203,6 +222,78 @@ pub fn mirror_move_pad_in_sketch(pad: &EditorPad, footprint: &mut Footprint) {
         ];
         for (id, (px, py)) in corners.iter().zip(positions.iter()) {
             helpers::set_point_xy(sketch, *id, *px, *py);
+        }
+    }
+}
+
+/// Raw x/y of a sketch `Point` entity, straight off `SketchData` —
+/// the pre-solve authored position, which is what the mirror mutates.
+fn point_xy_of(sketch: &SketchData, id: SketchEntityId) -> Option<(f64, f64)> {
+    sketch
+        .entities
+        .iter()
+        .find(|e| e.id == id)
+        .and_then(|e| match e.kind {
+            EntityKind::Point { x, y } => Some((x, y)),
+            _ => None,
+        })
+}
+
+/// Seed Line of a `Custom(SketchProfile)` pad, read off the `PadAttr`
+/// carried by its centre `Point`. `None` for every other shape — those
+/// pads own their geometry through `corner_entity_ids` instead.
+fn profile_seed_line(sketch: &SketchData, centre: SketchEntityId) -> Option<SketchEntityId> {
+    use signex_sketch::attr::{CustomPadShape, PadShape as SkPadShape};
+
+    let attr = sketch
+        .entities
+        .iter()
+        .find(|e| e.id == centre)?
+        .pad
+        .as_ref()?;
+    match &attr.shape {
+        SkPadShape::Custom(CustomPadShape::SketchProfile { source }) => source.first().copied(),
+        _ => None,
+    }
+}
+
+/// Translate a sketch-profile pad's loop so it tracks the pad to
+/// `new_position`. No-op for non-profile pads, for a zero delta, or
+/// when the loop can't be traced.
+///
+/// Raw-position mutation matches how a user-driven sketch drag behaves
+/// (`SketchEdit::MovePoint` writes entity x/y and lets the next solve
+/// run): a uniform translate preserves translation-invariant
+/// constraints, and anything anchored absolutely re-asserts itself on
+/// the next solve — the same outcome as dragging the loop by hand.
+///
+/// An untraceable loop (open / branching after a Sketch-mode edit)
+/// leaves the profile put. That is not silent: the bake re-walks the
+/// same loop and pushes its own "trace failed … falling back to Rect"
+/// warning.
+fn translate_profile_with_pad(
+    sketch: &mut SketchData,
+    centre: SketchEntityId,
+    new_position: (f64, f64),
+) {
+    let Some(seed) = profile_seed_line(sketch, centre) else {
+        return;
+    };
+    let Some((old_x, old_y)) = point_xy_of(sketch, centre) else {
+        return;
+    };
+    let (dx, dy) = (new_position.0 - old_x, new_position.1 - old_y);
+    if dx == 0.0 && dy == 0.0 {
+        return;
+    }
+    let Ok(traced) = signex_bake::profile::trace_closed_profile_entities(sketch, seed) else {
+        return;
+    };
+    // `traced.points` is already deduplicated and includes Arc centres,
+    // so each owned Point takes the delta exactly once.
+    for id in traced.points {
+        if let Some((x, y)) = point_xy_of(sketch, id) {
+            helpers::set_point_xy(sketch, id, x + dx, y + dy);
         }
     }
 }
