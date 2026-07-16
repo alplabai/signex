@@ -164,7 +164,9 @@ pub(crate) fn apply_symbol_primitive_edit(
     use crate::library::editor::symbol::state::SymbolSelection;
 
     match msg {
-        // ── UI / toolbar (no undo) ───────────────────────────────
+        // ── UI / toolbar (no undo — except SetTool's synchronous
+        // polygon flush, which commits a >=3-vertex stash through
+        // push_graphic and therefore pushes one undo snapshot) ────
         SymbolEditorMsg::SetTool(_)
         | SymbolEditorMsg::ToggleActiveBarMenu(_)
         | SymbolEditorMsg::CloseActiveBarMenu

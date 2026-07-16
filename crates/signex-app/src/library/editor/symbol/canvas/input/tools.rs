@@ -223,11 +223,12 @@ impl SymbolCanvas<'_> {
     ///    which at a fine snap grid could misread two adjacent-but-
     ///    distinct clicks as a double-click).
     ///
-    /// Both close gestures publish `PolygonCommit` unconditionally
-    /// once matched; the dispatcher (not this gesture code) decides
-    /// commit vs. silent discard from the vertex count, so a double-
-    /// click below 3 vertices still safely consumes the click without
-    /// appending or committing anything.
+    /// Both close gestures require `>= 3` collected vertices before
+    /// they publish `PolygonCommit` — the dispatcher's `mem::take`
+    /// discards an invalid ring, so committing early would silently
+    /// WIPE the in-progress stash. Below 3 vertices a matched double-
+    /// click is swallowed (captured, no vertex appended, no commit)
+    /// and collection continues.
     fn on_polygon_click(
         &self,
         state: &mut CanvasState,
@@ -259,6 +260,14 @@ impl SymbolCanvas<'_> {
             if dt.as_millis() < 300 && last_pos == (wx, wy) {
                 state.polygon_last_click_time = None;
                 state.polygon_last_click_pos = None;
+                // Guard mirrors gesture 1 and the Enter arm: below 3
+                // vertices there is nothing valid to close, and the
+                // dispatcher's `mem::take` would wipe the stash — so
+                // swallow the click (no duplicate vertex) and keep
+                // collecting instead of committing.
+                if self.polygon_vertices.len() < 3 {
+                    return Some(canvas::Action::capture());
+                }
                 return Some(self.publish_polygon_commit(state));
             }
         }
