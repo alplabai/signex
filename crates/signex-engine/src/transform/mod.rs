@@ -84,6 +84,22 @@ impl Engine {
                 });
                 self.document.drawings.len() != before_len
             }
+            SelectedKind::ChildSheet => {
+                let before_len = self.document.child_sheets.len();
+                self.document.child_sheets.retain(|cs| cs.uuid != item.uuid);
+                self.document.child_sheets.len() != before_len
+            }
+            SelectedKind::SheetPin => {
+                let mut removed = false;
+                for child_sheet in &mut self.document.child_sheets {
+                    if let Some(pin_idx) = child_sheet.pins.iter().position(|p| p.uuid == item.uuid) {
+                        child_sheet.pins.remove(pin_idx);
+                        removed = true;
+                        break;
+                    }
+                }
+                removed
+            }
             _ => false,
         }
     }
@@ -439,4 +455,5 @@ impl_has_uuid!(
     signex_types::schematic::NoConnect,
     signex_types::schematic::Symbol,
     signex_types::schematic::TextNote,
+    signex_types::schematic::ChildSheet,
 );

@@ -410,4 +410,95 @@ mod tests {
         engine.undo().expect("undo");
         assert_eq!(engine.document().paper_size, "A4");
     }
+
+    #[test]
+    fn delete_child_sheet_and_undo() {
+        let mut document = test_sheet();
+        let child_sheet_uuid = uuid::Uuid::new_v4();
+        document.child_sheets.push(ChildSheet {
+            uuid: child_sheet_uuid,
+            name: "ChildSheet".to_string(),
+            filename: "child.snxsch".to_string(),
+            position: Point::new(10.0, 20.0),
+            size: (30.0, 30.0),
+            stroke_width: 0.12,
+            fill: FillType::None,
+            stroke_color: None,
+            fill_color: None,
+            fields_autoplaced: false,
+            pins: Vec::new(),
+            instances: Vec::new(),
+        });
+
+        let mut engine = Engine::new(document).unwrap();
+        assert_eq!(engine.document().child_sheets.len(), 1);
+        assert_eq!(engine.document().child_sheets[0].uuid, child_sheet_uuid);
+
+        // Delete the child sheet
+        let result = engine.execute(Command::DeleteSelection {
+            items: vec![SelectedItem::new(child_sheet_uuid, SelectedKind::ChildSheet)],
+        });
+        assert!(result.unwrap().changed);
+        assert_eq!(engine.document().child_sheets.len(), 0);
+
+        // Undo the deletion
+        engine.undo().expect("undo");
+        assert_eq!(engine.document().child_sheets.len(), 1);
+        assert_eq!(engine.document().child_sheets[0].uuid, child_sheet_uuid);
+        // Ensure the restored sheet matches the original
+        assert_eq!(engine.document().child_sheets[0].name, "ChildSheet");
+        assert_eq!(engine.document().child_sheets[0].filename, "child.snxsch");
+    }
+
+    #[test]
+    fn delete_sheet_pin_and_undo() {
+        let mut document = test_sheet();
+        let child_sheet_uuid = uuid::Uuid::new_v4();
+        let pin_uuid = uuid::Uuid::new_v4();
+        document.child_sheets.push(ChildSheet {
+            uuid: child_sheet_uuid,
+            name: "ChildSheet".to_string(),
+            filename: "child.snxsch".to_string(),
+            position: Point::new(10.0, 20.0),
+            size: (30.0, 30.0),
+            stroke_width: 0.12,
+            fill: FillType::None,
+            stroke_color: None,
+            fill_color: None,
+            fields_autoplaced: false,
+            pins: vec![SheetPin {
+                uuid: pin_uuid,
+                name: "Pin1".to_string(),
+                direction: "input".to_string(),
+                position: Point::new(15.0, 25.0),
+                rotation: 0.0,
+                auto_generated: false,
+                user_moved: false,
+            }],
+            instances: Vec::new(),
+        });
+
+        let mut engine = Engine::new(document).unwrap();
+        assert_eq!(engine.document().child_sheets.len(), 1);
+        assert_eq!(engine.document().child_sheets[0].pins.len(), 1);
+        assert_eq!(engine.document().child_sheets[0].pins[0].uuid, pin_uuid);
+
+        // Delete the sheet pin
+        let result = engine.execute(Command::DeleteSelection {
+            items: vec![SelectedItem::new(pin_uuid, SelectedKind::SheetPin)],
+        });
+        assert!(result.unwrap().changed);
+        assert_eq!(engine.document().child_sheets.len(), 1);
+        assert_eq!(engine.document().child_sheets[0].pins.len(), 0);
+
+        // Undo the deletion
+        engine.undo().expect("undo");
+        assert_eq!(engine.document().child_sheets.len(), 1);
+        assert_eq!(engine.document().child_sheet[0].pins.len(), 1);
+        assert_eq!(engine.document().child_sheets[0].pins[0].uuid, pin_uuid);
+        // Ensure the restored pin matches the original
+        assert_eq!(engine.document().child_sheets[0].pins[0].name, "Pin1");
+        assert_eq!(engine.document().child_sheets[0].pins[0].direction, "input");
+        assert_eq!(engine.document().child_sheets[0].pins[0].position, Point::new(15.0, 25.0));
+    }
 }
