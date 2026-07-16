@@ -10,11 +10,14 @@
 //! only adapts the schematic's [`ScreenTransform`] into the raw
 //! `offset_px` / `scale_px_per_mm` the shared renderer expects.
 //!
-//! Gated behind [`crate::feature_flags::SCHEMATIC_GPU_RENDER`] and default-off.
-//! Pointer interaction and presentation overlays (selection, ghost preview,
-//! ERC marks) still live on the CPU `canvas` program; wiring those onto the
-//! GPU surface is a follow-up. See [`crate::schematic_runtime::ScreenTransform`]
-//! for the world→screen mapping the shared camera mirrors.
+//! NOT YET MOUNTED: the schematic view still renders through the CPU `canvas`
+//! program. This adapter is kept compiled and unit-tested so it cannot bit-rot,
+//! ready for a follow-up that stacks a `shader` over the schematic canvas
+//! (issue #169 PR 2). Pointer interaction and presentation overlays (selection,
+//! ghost preview, ERC marks) stay on the CPU layer; wiring those onto the GPU
+//! surface is part of that follow-up. See
+//! [`crate::schematic_runtime::ScreenTransform`] for the world→screen mapping
+//! the shared camera mirrors.
 
 use std::sync::Arc;
 
@@ -25,10 +28,7 @@ use crate::schematic_runtime::ScreenTransform;
 
 /// Build the shared GPU [`SceneShaderProgram`] for the schematic from an
 /// already-tessellated `Scene` and the current [`ScreenTransform`].
-pub fn schematic_shader_program(
-    scene: Scene,
-    transform: &ScreenTransform,
-) -> SceneShaderProgram {
+pub fn schematic_shader_program(scene: Scene, transform: &ScreenTransform) -> SceneShaderProgram {
     SceneShaderProgram::new(
         Arc::new(scene),
         // Uncached source: the schematic rebuilds its scene each frame, so it
