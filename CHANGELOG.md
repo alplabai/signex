@@ -6,6 +6,21 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
+### Added — PCB GPU shader render (experimental, default-off)
+
+- **GPU scene render path** — the PCB editor canvas can render traces, pads, vias, and zones through the `signex_gfx` wgpu pipelines via iced's `shader` widget instead of CPU `canvas::Frame` tessellation. Gated behind `feature_flags::PCB_GPU_RENDER` (default `false`) plus a Preferences toggle; the CPU path stays the default until GPU visual parity is confirmed on hardware.
+- **CPU↔GPU draw-order parity lock** — a shared `signex_gfx::scene::order` module defines the canonical bucket draw order both paths walk and pins the known divergences (polygon z-order, dashed lines) with tests, so neither path can drift silently.
+
+### Fixed
+
+- **GPU text now pans with the view** — glyph text rasterised for the GPU path was scaled by zoom but never translated by the pan offset, so labels drifted off the geometry they annotate on any pan; the screen-space pan term is now applied.
+- **Bounded GPU buffer growth** — the line/circle/arc/polygon instance buffers are clamped to the device `max_buffer_size` before reallocation, so a pathological board degrades to a truncated draw instead of panicking the render thread.
+
+### Changed
+
+- **GPU glyph atlas now trims each frame**, and GPU text prep/draw failures log once instead of being swallowed silently.
+- **Removed the dead `SCHEMATIC_GPU_RENDER` flag** — it gated no live path (the schematic GPU adapter is compiled and tested but not yet mounted).
+
 ## [0.14.0] — 2026-05-31
 
 The **v0.14 "Footprint Editor"** milestone. v0.13.0 shipped the
