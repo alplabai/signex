@@ -17,6 +17,7 @@
 //! a layer *below* this shader in a `stack!`.
 
 use std::sync::Arc;
+use std::sync::Once;
 
 use iced::widget::shader::{self, Viewport};
 use iced::{Rectangle, mouse};
@@ -27,10 +28,22 @@ use signex_gfx::pipeline::circle::CirclePipeline;
 use signex_gfx::pipeline::line::LinePipeline;
 use signex_gfx::pipeline::polygon::PolygonPipeline;
 use signex_gfx::pipeline::text::GlyphonTextPipeline;
-use signex_gfx::scene::Scene;
+use signex_gfx::scene::{GPU_SCENE_DRAW_ORDER, Scene, SceneBucket};
 use signex_gfx::wgpu;
 
 use crate::app::Message;
+
+/// Glyph text prep/draw can fail when the atlas is exhausted; a dropped frame
+/// of text beats panicking the render thread. We surface the first failure of
+/// each kind, then stay silent so a persistent problem does not spam the log.
+static TEXT_UPLOAD_WARNED: Once = Once::new();
+static TEXT_DRAW_WARNED: Once = Once::new();
+
+fn log_text_error_once(once: &Once, stage: &str, error: impl std::fmt::Display) {
+    once.call_once(|| {
+        tracing::warn!("PCB GPU text {stage} failed ({error}); dropping this frame's text");
+    });
+}
 
 /// World coordinate (mm) at the render pass origin (top-left).
 ///
@@ -66,16 +79,9 @@ pub struct ScenePipeline {
 }
 
 impl shader::Pipeline for ScenePipeline {
-    fn new(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        format: wgpu::TextureFormat,
-    ) -> Self {
+    fn new(device: &wgpu::Device, queue: &wgpu::Queue, format: wgpu::TextureFormat) -> Self {
         // The camera bind-group layout is shared by every instanced pipeline.
-        let camera = CameraGpu::new(
-            device,
-            CameraUniform::ortho([1.0, 1.0], [0.0, 0.0], 1.0),
-        );
+        let camera = CameraGpu::new(device, CameraUniform::ortho([1.0, 1.0], [0.0, 0.0], 1.0));
         let layout = camera.bind_group_layout();
         Self {
             line: LinePipeline::new(device, format, layout),
@@ -87,10 +93,26 @@ impl shader::Pipeline for ScenePipeline {
             uploaded_generation: None,
         }
     }
+
+    fn trim(&mut self) {
+        // iced calls this at the end of every frame. Release glyph-atlas pages
+        // that fell out of use so a scene that once showed dense text does not
+        // pin the atlas forever. The instance/vertex buffers are intentionally
+        // left resident — they only ever grow to the scene's high-water mark.
+        self.text.trim_atlas();
+    }
 }
 
 /// One frame's worth of scene geometry handed to the GPU. Cheap to build each
 /// frame — it is the same instance data the CPU path already produces.
+///
+/// TypeId caveat: iced keys the stored [`ScenePipeline`] by this primitive's
+/// `TypeId`, so every widget that emits a `ScenePrimitive` shares ONE pipeline
+/// (one set of instance buffers + one camera). That is fine while only the PCB
+/// editor mounts it. If a second `ScenePrimitive`-emitting widget (e.g. a
+/// future schematic GPU surface) is ever live in the same frame, the two would
+/// clobber each other's buffers/camera — split them into distinct primitive
+/// newtypes before mounting a second one.
 #[derive(Debug)]
 pub struct ScenePrimitive {
     /// Shared with the owning [`SceneShaderProgram`] and the `gpu_scene` cache:
@@ -154,35 +176,55 @@ impl shader::Primitive for ScenePrimitive {
         }
 
         // Text is NOT guarded: glyphon rasterises glyphs in screen-pixel space
-        // (`size_mm * scale_px_per_mm`, pixel positions), so it must be
-        // re-prepared every frame that pan/zoom/viewport changes. Its prep can
-        // also fail if the glyph atlas is exhausted; a dropped frame of text is
-        // preferable to a panic on the render thread.
-        let _ = pipeline.text.upload(
+        // (`size_mm * scale_px_per_mm` plus the pan offset), so it must be
+        // re-prepared every frame that pan/zoom/viewport changes. The pan term
+        // is passed explicitly because glyphon works in screen space and, unlike
+        // the instanced primitives, does not go through the camera ortho. Prep
+        // can fail if the glyph atlas is exhausted; a dropped frame of text is
+        // preferable to a panic on the render thread, so log once and move on.
+        if let Err(error) = pipeline.text.upload(
             device,
             queue,
             &self.scene.texts,
             scale_px,
             [vp_px[0] as u32, vp_px[1] as u32],
-        );
+            [self.offset_px[0] * dpi, self.offset_px[1] * dpi],
+        ) {
+            log_text_error_once(&TEXT_UPLOAD_WARNED, "upload", error);
+        }
     }
 
-    fn draw(
-        &self,
-        pipeline: &Self::Pipeline,
-        render_pass: &mut wgpu::RenderPass<'_>,
-    ) -> bool {
+    fn draw(&self, pipeline: &Self::Pipeline, render_pass: &mut wgpu::RenderPass<'_>) -> bool {
         let camera = pipeline.camera.bind_group();
-        // Fills, then strokes, then text on top. NOTE: polygons draw *before*
-        // lines/circles here, whereas the CPU `pcb_canvas::draw_scene` draws
-        // polygons *last* — a known z-order divergence to reconcile when GPU
-        // visual parity is verified (the feature flags disclose parity is
-        // still unconfirmed on hardware).
-        pipeline.polygon.draw(render_pass, camera);
-        pipeline.line.draw(render_pass, camera);
-        pipeline.arc.draw(render_pass, camera);
-        pipeline.circle.draw(render_pass, camera);
-        let _ = pipeline.text.draw(render_pass);
+        // Composite in the shared `GPU_SCENE_DRAW_ORDER` (fills, then strokes,
+        // then text on top). The order lives in one const so it can be diffed
+        // against the CPU `pcb_canvas::draw_scene` order: polygons draw *first*
+        // here but *last* on the CPU — a known z-order divergence (issue #4)
+        // the `scene::order` parity test pins until visual authority
+        // reconciles it. GPU parity stays unconfirmed on hardware (feature-off).
+        for &bucket in GPU_SCENE_DRAW_ORDER {
+            match bucket {
+                SceneBucket::Polygons => pipeline.polygon.draw(render_pass, camera),
+                SceneBucket::Lines => pipeline.line.draw(render_pass, camera),
+                SceneBucket::Arcs => pipeline.arc.draw(render_pass, camera),
+                SceneBucket::Circles => pipeline.circle.draw(render_pass, camera),
+                SceneBucket::Texts => {
+                    if let Err(error) = pipeline.text.draw(render_pass) {
+                        log_text_error_once(&TEXT_DRAW_WARNED, "draw", error);
+                    }
+                }
+                // Not composited by the scene shader: the PCB path folds
+                // overlays into the main buffers upstream and ERC markers are
+                // schematic-only. Handled for exhaustiveness so adding a Scene
+                // bucket forces a decision here.
+                SceneBucket::OverlayLines
+                | SceneBucket::OverlayCircles
+                | SceneBucket::OverlayPolygons
+                | SceneBucket::ErcMarkerLines
+                | SceneBucket::ErcMarkerCircles
+                | SceneBucket::ErcMarkerPolygons => {}
+            }
+        }
         true
     }
 }
@@ -272,8 +314,11 @@ mod tests {
         });
 
         let program = SceneShaderProgram::new(Arc::new(scene), Some(7), [5.0, 6.0], 3.0);
-        let primitive =
-            program.draw(&(), iced::mouse::Cursor::Unavailable, iced::Rectangle::default());
+        let primitive = program.draw(
+            &(),
+            iced::mouse::Cursor::Unavailable,
+            iced::Rectangle::default(),
+        );
 
         assert_eq!(primitive.scene.lines.len(), 1);
         assert_eq!(primitive.generation, Some(7));

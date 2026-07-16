@@ -7,7 +7,7 @@ use iced::{Color, Rectangle, Renderer, Theme};
 use signex_gfx::primitive::circle::Circle as GfxCircle;
 use signex_gfx::primitive::line::LineSegment;
 use signex_gfx::primitive::polygon::GpuPolygon;
-use signex_gfx::scene::{DirtyFlags, Scene};
+use signex_gfx::scene::{CPU_PCB_DRAW_ORDER, DirtyFlags, Scene, SceneBucket};
 use signex_renderer::pcb::{PcbRenderer, PcbSnapshot};
 use signex_renderer::schematic::ViewRenderer;
 use signex_renderer::theme::ResolvedTheme;
@@ -322,7 +322,7 @@ fn draw_lines(
         let width = (line.width * camera.scale).max(0.5);
         let color = color_from_rgba(line.color);
 
-        if (line.style & 1) == 1 {
+        if line.is_dashed() {
             draw_dashed_line(frame, p0, p1, width, color);
         } else {
             let path = canvas::Path::line(p0, p1);
@@ -349,7 +349,7 @@ fn draw_circles(
         let color = color_from_rgba(circle.color);
         let path = canvas::Path::circle(center, radius);
 
-        if circle.stroke_width <= 0.0 {
+        if circle.is_filled() {
             frame.fill(&path, color);
         } else {
             frame.stroke(
@@ -401,13 +401,30 @@ fn draw_polygons(
 }
 
 fn draw_scene(frame: &mut canvas::Frame, scene: &Scene, camera: &Camera, bounds: Rectangle) {
-    draw_lines(frame, &scene.lines, camera, bounds);
-    draw_circles(frame, &scene.circles, camera, bounds);
-    draw_polygons(frame, &scene.polygons, camera, bounds);
-
-    draw_lines(frame, &scene.overlay_lines, camera, bounds);
-    draw_circles(frame, &scene.overlay_circles, camera, bounds);
-    draw_polygons(frame, &scene.overlay_polygons, camera, bounds);
+    // Walk the shared `CPU_PCB_DRAW_ORDER` so this CPU path and the GPU
+    // `scene_shader` cannot silently drift apart; the `scene::order` parity test
+    // diffs the two orders. Main geometry first, then the overlay pass.
+    for &bucket in CPU_PCB_DRAW_ORDER {
+        match bucket {
+            SceneBucket::Lines => draw_lines(frame, &scene.lines, camera, bounds),
+            SceneBucket::Circles => draw_circles(frame, &scene.circles, camera, bounds),
+            SceneBucket::Polygons => draw_polygons(frame, &scene.polygons, camera, bounds),
+            SceneBucket::OverlayLines => draw_lines(frame, &scene.overlay_lines, camera, bounds),
+            SceneBucket::OverlayCircles => {
+                draw_circles(frame, &scene.overlay_circles, camera, bounds)
+            }
+            SceneBucket::OverlayPolygons => {
+                draw_polygons(frame, &scene.overlay_polygons, camera, bounds)
+            }
+            // The PCB CPU path emits no arc, text, or ERC buckets. Handled for
+            // exhaustiveness so adding a Scene bucket forces a decision here.
+            SceneBucket::Arcs
+            | SceneBucket::Texts
+            | SceneBucket::ErcMarkerLines
+            | SceneBucket::ErcMarkerCircles
+            | SceneBucket::ErcMarkerPolygons => {}
+        }
+    }
 }
 
 impl canvas::Program<Message> for PcbCanvas {

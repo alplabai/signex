@@ -467,7 +467,14 @@ async fn run_text_smoke_pass_with(scale_px_per_mm: f32, texts: &[TextItem]) -> R
     let mut text_pipeline = GlyphonTextPipeline::new(&device, &queue, target_format);
 
     text_pipeline
-        .upload(&device, &queue, texts, scale_px_per_mm, [128, 128])
+        .upload(
+            &device,
+            &queue,
+            texts,
+            scale_px_per_mm,
+            [128, 128],
+            [0.0, 0.0],
+        )
         .map_err(|err| format!("failed to prepare text: {err}"))?;
 
     let target = device.create_texture(&wgpu::TextureDescriptor {
