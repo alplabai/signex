@@ -13,6 +13,7 @@ set -euo pipefail
 BINARY_PATH="${1:?usage: build-appimage.sh <binary> <version> <arch>}"
 VERSION="${2:?missing version}"
 ARCH="${3:?missing arch}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
@@ -20,7 +21,9 @@ trap 'rm -rf "$WORK_DIR"' EXIT
 APP_DIR="$WORK_DIR/Signex.AppDir"
 mkdir -p "$APP_DIR/usr/bin"
 mkdir -p "$APP_DIR/usr/share/applications"
+mkdir -p "$APP_DIR/usr/share/icons/hicolor/128x128/apps"
 mkdir -p "$APP_DIR/usr/share/icons/hicolor/256x256/apps"
+mkdir -p "$APP_DIR/usr/share/icons/hicolor/512x512/apps"
 
 cp "$BINARY_PATH" "$APP_DIR/usr/bin/signex"
 chmod +x "$APP_DIR/usr/bin/signex"
@@ -46,14 +49,13 @@ Terminal=false
 DESKTOP_EOF
 cp "$APP_DIR/signex.desktop" "$APP_DIR/usr/share/applications/signex.desktop"
 
-# Placeholder icon — a 1×1 PNG so AppImage's validator doesn't trip.
-# Swap for a real signex.png (256×256) once we have one.
-python3 -c "import struct,zlib,sys;data=b'\\x89PNG\\r\\n\\x1a\\n'+b''.join((struct.pack('>I',len(c))+t+c+struct.pack('>I',zlib.crc32(t+c)&0xffffffff)) for t,c in [(b'IHDR',struct.pack('>IIBBBBB',1,1,8,2,0,0,0)),(b'IDAT',zlib.compress(b'\\x00\\x40\\x40\\x40')),(b'IEND',b'')]);open(sys.argv[1],'wb').write(data)" "$APP_DIR/signex.png"
-cp "$APP_DIR/signex.png" "$APP_DIR/usr/share/icons/hicolor/256x256/apps/signex.png"
+cp "$SCRIPT_DIR/signex-256.png" "$APP_DIR/signex.png"
+cp "$SCRIPT_DIR/signex-128.png" "$APP_DIR/usr/share/icons/hicolor/128x128/apps/signex.png"
+cp "$SCRIPT_DIR/signex-256.png" "$APP_DIR/usr/share/icons/hicolor/256x256/apps/signex.png"
+cp "$SCRIPT_DIR/signex-512.png" "$APP_DIR/usr/share/icons/hicolor/512x512/apps/signex.png"
 
 # appimagetool runtime (linuxdeploy in CI handles this; fall back to
 # appimagetool AppImage if available locally).
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 if [[ -n "${APPIMAGETOOL:-}" ]]; then
     TOOL="$APPIMAGETOOL"
 elif command -v appimagetool &>/dev/null; then
