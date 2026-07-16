@@ -707,6 +707,8 @@ pub enum SymbolFileError {
 }
 
 mod chain;
+#[cfg(test)]
+mod chain_tests;
 mod serde_tsv;
 #[cfg(test)]
 mod tests;
