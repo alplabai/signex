@@ -494,7 +494,7 @@ mod tests {
         // Undo the deletion
         engine.undo().expect("undo");
         assert_eq!(engine.document().child_sheets.len(), 1);
-        assert_eq!(engine.document().child_sheet[0].pins.len(), 1);
+        assert_eq!(engine.document().child_sheets[0].pins.len(), 1);
         assert_eq!(engine.document().child_sheets[0].pins[0].uuid, pin_uuid);
         // Ensure the restored pin matches the original
         assert_eq!(engine.document().child_sheets[0].pins[0].name, "Pin1");
