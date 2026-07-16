@@ -85,9 +85,7 @@ impl Engine {
                 self.document.drawings.len() != before_len
             }
             SelectedKind::ChildSheet => {
-                let before_len = self.document.child_sheets.len();
-                self.document.child_sheets.retain(|cs| cs.uuid != item.uuid);
-                self.document.child_sheets.len() != before_len
+                remove_by_uuid(&mut self.document.child_sheets, item.uuid)
             }
             SelectedKind::SheetPin => {
                 let mut removed = false;
