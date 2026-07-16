@@ -120,6 +120,10 @@ pub enum GraphicHandle {
     ArcEnd,
     /// Text anchor / `position` field.
     TextAnchor,
+    /// Polygon vertex at the given index into `vertices`. A selected
+    /// polygon shows one of these per vertex; dragging one moves
+    /// only that vertex (mirrors `LineEndpoint`'s per-point drag).
+    PolygonVertex(u16),
 }
 
 /// Map a [`GraphicHandle`] to the mouse cursor that should be shown
@@ -321,6 +325,19 @@ pub fn delete_unit(sym: &mut Symbol, part: u8) -> u8 {
 /// (part 0) or scoped to that exact unit — mirrors pin part visibility.
 pub fn graphic_on_part(g: &signex_library::SymbolGraphic, active_part: u8) -> bool {
     g.part_number == 0 || g.part_number == active_part
+}
+
+/// Centroid (average of every vertex) of a Polygon graphic — the
+/// shared anchor definition used by canvas selection-anchor lookup,
+/// rotate-pivot geometry-center, and whole-shape translate so all
+/// three agree on the same point. Returns `[0.0, 0.0]` for an empty
+/// vertex list (should not occur — placement always commits >= 3).
+pub fn polygon_centroid(vertices: &[[f64; 2]]) -> [f64; 2] {
+    let n = vertices.len().max(1) as f64;
+    let (sx, sy) = vertices
+        .iter()
+        .fold((0.0, 0.0), |(sx, sy), v| (sx + v[0], sy + v[1]));
+    [sx / n, sy / n]
 }
 
 /// A pin is visible/editable on `active_part` when it is shared (Part

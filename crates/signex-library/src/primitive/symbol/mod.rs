@@ -220,6 +220,14 @@ pub enum SymbolGraphicKind {
         content: String,
         size: f64,
     },
+    /// Closed-loop polygon, outlined or filled — mirrors
+    /// `FpGraphicKind::Polygon` (footprint primitive). The vertex
+    /// list is closed implicitly (`vertices[N-1]` connects back to
+    /// `vertices[0]` at render / hit-test time); callers never store
+    /// a duplicated closing vertex.
+    Polygon {
+        vertices: Vec<[f64; 2]>,
+    },
 }
 
 /// One graphic on the symbol body.
@@ -231,10 +239,11 @@ pub struct SymbolGraphic {
     pub stroke_width: f64,
     /// Optional solid fill colour (RGBA, 0–255). `None` (default) =
     /// unfilled outline-only shape; `Some(rgba)` = filled interior.
-    /// Only meaningful for closed shapes (Rectangle / Circle); ignored
-    /// for Line / Arc / Text. Additive and back-compatible: files
-    /// written before this field load as `None` and render exactly as
-    /// before, so no `.snxsym` format-token bump is required.
+    /// Only meaningful for closed shapes (Rectangle / Circle /
+    /// Polygon); ignored for Line / Arc / Text. Additive and back-
+    /// compatible: files written before this field load as `None` and
+    /// render exactly as before, so no `.snxsym` format-token bump is
+    /// required.
     #[serde(default)]
     pub fill: Option<[u8; 4]>,
     /// Which sub-part (unit) this graphic belongs to. `0` (default)

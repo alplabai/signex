@@ -254,6 +254,11 @@ impl<'a> SymbolCanvas<'a> {
                         position[1] + size,
                     );
                 }
+                SymbolGraphicKind::Polygon { vertices } => {
+                    for v in vertices {
+                        include_rect(&mut bounds, v[0], v[1], v[0], v[1]);
+                    }
+                }
             }
         }
 
@@ -589,6 +594,23 @@ impl<'a> SymbolCanvas<'a> {
                         rotation_rad: 0.0,
                         h_align: HAlign::Left,
                         v_align: VAlign::Top,
+                    });
+                }
+                SymbolGraphicKind::Polygon { vertices } => {
+                    let fill = match g.fill {
+                        Some([fr, fg, fb, fa]) => {
+                            to_rgba(Color::from_rgba8(fr, fg, fb, fa as f32 / 255.0))
+                        }
+                        None => [0.0, 0.0, 0.0, 0.0],
+                    };
+                    polygons.push(PolygonInput {
+                        vertices: vertices
+                            .iter()
+                            .map(|v| [v[0] as f32, v[1] as f32])
+                            .collect(),
+                        fill_color: fill,
+                        stroke_color: Some(to_rgba(stroke_color)),
+                        stroke_width_mm: stroke_world_mm(stroke_w, scale),
                     });
                 }
             }

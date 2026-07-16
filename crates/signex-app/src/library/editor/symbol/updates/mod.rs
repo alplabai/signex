@@ -192,7 +192,6 @@ pub(crate) fn apply_symbol_primitive_edit(
                 0.15,
             );
         }
-
         // ── Selection ────────────────────────────────────────────
         SymbolEditorMsg::Select(_) | SymbolEditorMsg::Deselect => {
             apply_symbol_selection(editor, msg)
@@ -305,6 +304,11 @@ fn symbol_bbox(sym: &signex_library::Symbol) -> (f64, f64, f64, f64) {
                     position[1] + size,
                 );
             }
+            SymbolGraphicKind::Polygon { vertices } => {
+                for v in vertices {
+                    include_rect(&mut bounds, v[0], v[1], v[0], v[1]);
+                }
+            }
         }
     }
 
@@ -325,6 +329,7 @@ fn graphic_handle_msg_to_state(
         GraphicHandleMsg::ArcStart => GraphicHandle::ArcStart,
         GraphicHandleMsg::ArcEnd => GraphicHandle::ArcEnd,
         GraphicHandleMsg::TextAnchor => GraphicHandle::TextAnchor,
+        GraphicHandleMsg::PolygonVertex(i) => GraphicHandle::PolygonVertex(i),
     }
 }
 

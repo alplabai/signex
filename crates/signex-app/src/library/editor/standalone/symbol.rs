@@ -198,7 +198,10 @@ fn view_symbol_toolbar<'a>(
             // NewPart / RemovePart messages; Phase B fixes their
             // semantics (real delete + persistent empty unit).
             btn("+", PrimitiveEdit::Symbol(SymbolEditorMsg::NewPart)),
-            btn("\u{2212}", PrimitiveEdit::Symbol(SymbolEditorMsg::RemovePart)),
+            btn(
+                "\u{2212}",
+                PrimitiveEdit::Symbol(SymbolEditorMsg::RemovePart)
+            ),
             Space::new().width(8),
             btn(save_label, PrimitiveEdit::Save),
         ]
@@ -345,6 +348,7 @@ fn graphic_handle_to_msg(handle: sym_state::GraphicHandle) -> GraphicHandleMsg {
         GraphicHandle::ArcStart => GraphicHandleMsg::ArcStart,
         GraphicHandle::ArcEnd => GraphicHandleMsg::ArcEnd,
         GraphicHandle::TextAnchor => GraphicHandleMsg::TextAnchor,
+        GraphicHandle::PolygonVertex(i) => GraphicHandleMsg::PolygonVertex(i),
     }
 }
 

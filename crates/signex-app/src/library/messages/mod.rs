@@ -28,7 +28,6 @@ pub type ComponentId = Uuid;
 #[allow(dead_code)]
 pub type Version = u32;
 
-
 mod library_message;
 pub use library_message::LibraryMessage;
 
@@ -500,6 +499,9 @@ pub enum GraphicHandleMsg {
     ArcEnd,
     /// Text anchor / `position` field.
     TextAnchor,
+    /// Polygon vertex at the given index — pure-data alias of
+    /// `editor::symbol::state::GraphicHandle::PolygonVertex`.
+    PolygonVertex(u16),
 }
 
 /// Pivot mode for Symbol-graphic rotate operations.

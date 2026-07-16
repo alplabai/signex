@@ -140,11 +140,41 @@ fn hit_test_graphic_body(sym: &Symbol, idx: usize, x: f64, y: f64) -> bool {
             let half_h = size * 0.5;
             (x - position[0]).abs() <= half_w && (y - position[1]).abs() <= half_h
         }
+        SymbolGraphicKind::Polygon { vertices } => {
+            if vertices.len() < 2 {
+                false
+            } else if g.fill.is_some() {
+                point_in_polygon([x, y], vertices)
+            } else {
+                polygon_outline_hit(x, y, vertices, GRAPHIC_BODY_TOL)
+            }
+        }
     }
 }
 
 fn point_to_segment_dist_sq(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
     signex_sketch::geom::point_to_segment_distance_sq(p, a, b)
+}
+
+/// Even-odd point-in-polygon test (implicitly-closed vertex ring) — a
+/// thin adapter over `signex_sketch::geom::point_in_polygon`. Mirrors
+/// the footprint canvas's own adapter of the same shared helper.
+fn point_in_polygon(p: [f64; 2], vertices: &[[f64; 2]]) -> bool {
+    let polygon: Vec<signex_sketch::geom::Point2> = vertices.iter().map(|&v| v.into()).collect();
+    signex_sketch::geom::point_in_polygon(p, &polygon)
+}
+
+/// `true` when `(x, y)` lies within `tol` of any closed-polygon edge
+/// (including the implicit last-to-first segment).
+fn polygon_outline_hit(x: f64, y: f64, vertices: &[[f64; 2]], tol: f64) -> bool {
+    let n = vertices.len();
+    for i in 0..n {
+        let j = (i + 1) % n;
+        if point_to_segment_dist_sq([x, y], vertices[i], vertices[j]) <= tol * tol {
+            return true;
+        }
+    }
+    false
 }
 
 /// Compute the world (mm) position of a graphic's resize handle.
@@ -206,6 +236,9 @@ pub fn graphic_handle_position(
             [center[0] + radius * e.cos(), center[1] + radius * e.sin()]
         }
         (SymbolGraphicKind::Text { position, .. }, GraphicHandle::TextAnchor) => *position,
+        (SymbolGraphicKind::Polygon { vertices }, GraphicHandle::PolygonVertex(i)) => {
+            *vertices.get(i as usize)?
+        }
         _ => return None,
     })
 }
@@ -265,6 +298,11 @@ pub fn graphic_handles(sym: &Symbol, idx: usize) -> Vec<(GraphicHandle, [f64; 2]
         SymbolGraphicKind::Text { position, .. } => {
             vec![(GraphicHandle::TextAnchor, *position)]
         }
+        SymbolGraphicKind::Polygon { vertices } => vertices
+            .iter()
+            .enumerate()
+            .map(|(i, v)| (GraphicHandle::PolygonVertex(i as u16), *v))
+            .collect(),
     }
 }
 
@@ -383,7 +421,12 @@ pub fn move_graphic_handle(sym: &mut Symbol, idx: usize, handle: GraphicHandle, 
             position[0] = x;
             position[1] = y;
         }
+        (SymbolGraphicKind::Polygon { vertices }, GraphicHandle::PolygonVertex(i)) => {
+            if let Some(v) = vertices.get_mut(i as usize) {
+                v[0] = x;
+                v[1] = y;
+            }
+        }
         _ => {}
     }
 }
-

@@ -386,6 +386,9 @@ fn symbol_graphic_kind_round_trip_each_variant() {
             content: "U1".into(),
             size: 1.27,
         },
+        SymbolGraphicKind::Polygon {
+            vertices: vec![[0.0, 0.0], [1.0, 0.0], [0.5, 1.0]],
+        },
     ];
     for k in cases {
         let json = serde_json::to_string(&k).unwrap();
@@ -500,4 +503,40 @@ fn graphic_missing_part_number_defaults_to_zero() {
     let toml_text = file.to_toml_string().expect("serialise");
     let back = SymbolFile::from_toml_str(&toml_text).expect("parse");
     assert_eq!(back.symbols[0].graphics[0].part_number, 0);
+}
+
+// ---- Polygon graphic — additive, no format-token bump ----
+
+/// A `Polygon` graphic's vertices, fill, and stroke width all survive a
+/// `.snxsym` save/load round-trip — proves the new
+/// `SymbolGraphicKind::Polygon` variant serialises through the TOML
+/// manifest exactly like the pre-existing shape kinds, with no
+/// `SYMBOL_FILE_FORMAT_TOKEN` bump required (`format` stays "snxsym/v1").
+#[test]
+fn polygon_graphic_round_trips() {
+    let mut s = Symbol::empty("X");
+    s.graphics.push(SymbolGraphic {
+        kind: SymbolGraphicKind::Polygon {
+            vertices: vec![[-2.5, -1.0], [2.5, -1.0], [2.5, 1.0], [-2.5, 1.0]],
+        },
+        stroke_width: 0.2,
+        part_number: 1,
+        fill: Some([30, 144, 255, 255]),
+    });
+    let file = SymbolFile::from_symbol(s);
+    let toml_text = file.to_toml_string().expect("serialise");
+    assert_eq!(file.format, "snxsym/v1");
+    let back = SymbolFile::from_toml_str(&toml_text).expect("parse");
+    let g = &back.symbols[0].graphics[0];
+    match &g.kind {
+        SymbolGraphicKind::Polygon { vertices } => {
+            assert_eq!(
+                vertices,
+                &vec![[-2.5, -1.0], [2.5, -1.0], [2.5, 1.0], [-2.5, 1.0]]
+            );
+        }
+        other => panic!("expected Polygon, got {other:?}"),
+    }
+    assert_eq!(g.fill, Some([30, 144, 255, 255]));
+    assert_eq!(g.stroke_width, 0.2);
 }

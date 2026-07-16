@@ -199,5 +199,8 @@ fn graphic_kind_to_summary(
             content: content.clone(),
             size: *size,
         },
+        SymbolGraphicKind::Polygon { vertices } => GraphicKindSummary::Polygon {
+            vertex_count: vertices.len(),
+        },
     }
 }
