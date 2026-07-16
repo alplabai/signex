@@ -11,30 +11,41 @@
 //!
 //! [`ChainSegment::Arc`] mirrors [`super::SymbolGraphicKind::Arc`]'s
 //! `{ center, radius, start_deg, end_deg }` shape, so it must match that
-//! type's real interpretation exactly. The authoritative reference is
-//! `crates/signex-app/src/library/editor/symbol/state/hit_test.rs`
-//! (the `graphic_contains_point` arm for `Arc`, plus the `ArcStart`/
-//! `ArcEnd` handle-position arms just below it):
+//! type's real interpretation exactly.
 //!
 //! - The point at angle `a` (degrees) on the circle is
 //!   `center + radius * (cos(a), sin(a))` — standard math convention, no
-//!   axis flips.
+//!   axis flips. Authoritative reference:
+//!   `crates/signex-app/src/library/editor/symbol/state/hit_test.rs`'s
+//!   `graphic_contains_point` `Arc` arm and its `ArcStart`/`ArcEnd`
+//!   handle-position arms just below it.
 //! - The arc always sweeps **counter-clockwise** (increasing angle) from
 //!   `start_deg` to `end_deg`, wrapping through 360° when
-//!   `start_deg > end_deg` (see the `hit_test.rs` `if s <= e { .. } else
-//!   { a >= s || a <= e }` split). This is corroborated by
-//!   `signex-renderer`'s `arc_emitter_preserves_wraparound_and_tiny_radius_inputs`
-//!   test, which exercises exactly a `start > end` wraparound arc.
+//!   `start_deg > end_deg`. Corroborated by two independent runtime
+//!   consumers computing the identical wraparound: `hit_test.rs:131-135`
+//!   (`if s <= e { a >= s && a <= e } else { a >= s || a <= e }`) and
+//!   `crates/signex-gfx/src/shader/arc.wgsl:52-54`'s `normalize_angle`
+//!   (`sweep = normalize_angle(end_angle - start_angle)`, `in_sweep = a
+//!   <= sweep`).
 //!
-//! `start_deg == end_deg` is a degenerate zero-sweep case in the
-//! `SymbolGraphicKind::Arc` hit-test world, but for a *chain input* we
-//! treat it as a **full 360° circle**: the CCW-wraparound formula used
-//! for the sweep magnitude (`(end - start).rem_euclid(360°)`, promoted to
-//! 360° whenever it lands on exactly 0°) naturally falls out of the same
-//! wraparound rule used for every other arc, needs no special case, and
-//! gives a single self-closing segment a well-defined, useful ring
-//! (see the `full_circle_arc_alone_*` tests below) instead of silently
-//! collapsing to a single repeated point.
+//! `start_deg == end_deg` (mod 360°) is a **degenerate zero-sweep**
+//! input, not an implicit full circle — every runtime consumer treats it
+//! as a zero-length point: `hit_test.rs`'s `s <= e` range collapses to
+//! the single value `[s, s]`, and `arc.wgsl`'s `sweep` is `0.0` there too
+//! (`in_sweep` only true exactly on the start angle). This module rejects
+//! such a segment up front — along with any other segment whose own two
+//! endpoints coincide within [`CHAIN_ENDPOINT_EPSILON_MM`] — as
+//! [`ChainError::DegenerateResult`], rather than silently materialising a
+//! circle the user never actually drew.
+//!
+//! Known divergence, not this module's concern: the CPU canvas fallback
+//! (`renderer_scene_canvas.rs`'s `draw_arc_bucket`) feeds
+//! `start_angle`/`end_angle` straight into `iced`'s `canvas::path::Arc`
+//! builder as a signed sweep, without the `normalize_angle` wraparound
+//! the GPU shader and `hit_test.rs` both apply — being fixed separately.
+//! This module follows the `hit_test.rs`/GPU-shader convention
+//! (CCW-always, wraparound-normalised), which is the one every other
+//! reader of `SymbolGraphicKind::Arc` should also treat as authoritative.
 //!
 //! `crates/signex-bake/src/profile.rs`'s `push_arc_interior_if_arc` uses
 //! a *different* arc representation (`center`/`start`/`end` points plus
@@ -43,7 +54,7 @@
 //! such flag, so CCW-always (per `hit_test.rs`) is the only convention
 //! consistent with the existing symbol data model.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Endpoints within this distance (mm) are treated as the same point for
 /// chaining purposes.
@@ -53,10 +64,11 @@ pub const CHAIN_ENDPOINT_EPSILON_MM: f64 = 0.01;
 /// into. Matches `signex-bake::profile::ARC_SAMPLES`.
 pub const CHAIN_ARC_SAMPLES: usize = 16;
 
-/// Squared degenerate-area threshold (mm²) below which a closed ring is
-/// treated as having ~zero area (collinear / self-overlapping input)
-/// rather than a real polygon. Small relative to any real symbol
-/// geometry (mm-scale) but well above float noise.
+/// Doubled (×2) shoelace-area threshold (mm²) below which a closed ring
+/// is treated as having ~zero area (collinear / self-overlapping input)
+/// rather than a real polygon — compared directly against
+/// [`signed_area_x2`]'s undivided output. Small relative to any real
+/// symbol geometry (mm-scale) but well above float noise.
 const CHAIN_DEGENERATE_AREA_X2_EPS_MM2: f64 = 1e-9;
 
 /// One input stroke to be chained. Mirrors the geometry-bearing fields
@@ -83,6 +95,11 @@ pub enum ChainError {
     /// No segments were given.
     #[error("no segments given")]
     Empty,
+    /// A segment carries a non-finite (`NaN`/`inf`) coordinate or
+    /// radius. Checked up front so bad input never masquerades as a
+    /// real topology error (e.g. a silent `OpenChain { gap_mm: NaN }`).
+    #[error("segment {segment_index} has a non-finite coordinate or radius")]
+    InvalidInput { segment_index: usize },
     /// Every segment chains into one connected path, but it never closes
     /// back on itself. `gap_mm` is the distance between the two loose
     /// ends.
@@ -97,9 +114,15 @@ pub enum ChainError {
     /// segments).
     #[error("segments form more than one connected component")]
     Disjoint,
-    /// The chained ring has fewer than 3 distinct vertices, or its
-    /// enclosed area is ~zero (collinear / self-cancelling input).
-    #[error("chained ring is degenerate (too few vertices or ~zero area)")]
+    /// The chained ring has fewer than 3 distinct vertices, its
+    /// enclosed area is ~zero (collinear / self-cancelling input), or
+    /// one of the *input* segments is itself degenerate — its own two
+    /// endpoints (chord) are closer together than
+    /// [`CHAIN_ENDPOINT_EPSILON_MM`]. This includes a zero-sweep `Arc`
+    /// (`start_deg == end_deg` mod 360°; see the module doc comment).
+    #[error(
+        "chained ring is degenerate (too few vertices, ~zero area, or a zero-length input segment)"
+    )]
     DegenerateResult,
 }
 
@@ -123,20 +146,96 @@ pub enum ChainError {
 /// grid: symbol "join into polygon" selections are a handful of
 /// segments, so the quadratic cost is irrelevant, and avoiding both
 /// float-hashing and bucket-boundary edge cases keeps the endpoint match
-/// exact and easy to audit.
+/// exact and easy to audit. Clustering is **transitive**: if endpoint
+/// `A` is within epsilon of `B`, and `B` is within epsilon of `C`, then
+/// `A` and `C` join the same node even when `A` and `C` alone are
+/// farther apart than epsilon — a chain of several sub-epsilon joints
+/// can span a cumulative distance larger than one epsilon.
 pub fn chain_into_closed_contour(segments: &[ChainSegment]) -> Result<Vec<[f64; 2]>, ChainError> {
     if segments.is_empty() {
         return Err(ChainError::Empty);
     }
+    validate_finite(segments)?;
 
     let polylines: Vec<Vec<[f64; 2]>> = segments.iter().map(tessellate_segment).collect();
+    reject_sub_epsilon_segments(&polylines)?;
+
+    let clusters = build_endpoint_clusters(&polylines);
+    validate_topology(polylines.len(), &clusters)?;
+
+    finalize_ring(walk_cycle(&polylines, &clusters))
+}
+
+/// Reject any segment carrying a `NaN`/`inf` coordinate or radius up
+/// front. Left unchecked, non-finite input propagates silently through
+/// every downstream distance/angle computation and can surface as a
+/// misleading [`ChainError::OpenChain`] (`gap_mm: NaN`) or
+/// [`ChainError::Disjoint`] instead of the actual problem: bad input.
+fn validate_finite(segments: &[ChainSegment]) -> Result<(), ChainError> {
+    for (segment_index, seg) in segments.iter().enumerate() {
+        let finite = match *seg {
+            ChainSegment::Line { from, to } => from.iter().chain(to.iter()).all(|v| v.is_finite()),
+            ChainSegment::Arc {
+                center,
+                radius,
+                start_deg,
+                end_deg,
+            } => {
+                center.iter().all(|v| v.is_finite())
+                    && radius.is_finite()
+                    && start_deg.is_finite()
+                    && end_deg.is_finite()
+            }
+        };
+        if !finite {
+            return Err(ChainError::InvalidInput { segment_index });
+        }
+    }
+    Ok(())
+}
+
+/// Reject any segment whose own two endpoints — measured as the
+/// straight-line distance between its first and last tessellated point
+/// (its chord) — are closer together than [`CHAIN_ENDPOINT_EPSILON_MM`].
+/// Chord distance is a cheap, always-available proxy for segment length:
+/// exact for a `Line`, and for the only case that matters here (a
+/// near-zero sweep) it shrinks to zero in lockstep with true arc length.
+///
+/// This catches both a near-zero-length `Line` stub and a zero-sweep
+/// `Arc` (see the module doc comment) with the same rule. Left
+/// unchecked, such a stub's two coincident ends land on whatever node
+/// its real endpoint touches, inflating that node's degree and faking a
+/// [`ChainError::Branching`] at an otherwise clean corner.
+fn reject_sub_epsilon_segments(polylines: &[Vec<[f64; 2]>]) -> Result<(), ChainError> {
+    let eps_sq = CHAIN_ENDPOINT_EPSILON_MM * CHAIN_ENDPOINT_EPSILON_MM;
+    for poly in polylines {
+        let first = poly[0];
+        let last = *poly.last().expect("tessellated segment is never empty");
+        if dist_sq(first, last) < eps_sq {
+            return Err(ChainError::DegenerateResult);
+        }
+    }
+    Ok(())
+}
+
+/// Endpoint-adjacency result of clustering every segment's start/end
+/// point. `node_entries`/`node_points` are keyed by cluster id (an
+/// arbitrary but stable `usize`); `endpoint_node` maps a segment's own
+/// `(segment_index, is_start)` endpoint directly to its cluster id.
+struct EndpointClusters {
+    node_entries: HashMap<usize, Vec<(usize, bool)>>,
+    node_points: HashMap<usize, Vec<[f64; 2]>>,
+    endpoint_node: HashMap<(usize, bool), usize>,
+}
+
+/// Cluster the `2n` segment endpoints (start + end of every segment)
+/// into nodes — points within [`CHAIN_ENDPOINT_EPSILON_MM`] of each
+/// other, transitively (see the [`chain_into_closed_contour`] doc
+/// comment) — via a small union-find.
+fn build_endpoint_clusters(polylines: &[Vec<[f64; 2]>]) -> EndpointClusters {
     let n = polylines.len();
     let eps_sq = CHAIN_ENDPOINT_EPSILON_MM * CHAIN_ENDPOINT_EPSILON_MM;
 
-    // Cluster the 2n segment-endpoints (start + end of every segment)
-    // into "nodes" — points within epsilon of each other, transitively,
-    // via a small union-find. Ref `2*seg` is that segment's start
-    // point, `2*seg + 1` is its end point.
     let endpoint_at = |seg: usize, is_start: bool| -> [f64; 2] {
         let poly = &polylines[seg];
         if is_start {
@@ -148,6 +247,7 @@ pub fn chain_into_closed_contour(segments: &[ChainSegment]) -> Result<Vec<[f64; 
     let refs: Vec<[f64; 2]> = (0..n)
         .flat_map(|seg| [endpoint_at(seg, true), endpoint_at(seg, false)])
         .collect();
+
     let mut parent: Vec<usize> = (0..refs.len()).collect();
     for i in 0..refs.len() {
         for j in (i + 1)..refs.len() {
@@ -157,23 +257,36 @@ pub fn chain_into_closed_contour(segments: &[ChainSegment]) -> Result<Vec<[f64; 
         }
     }
 
-    // Group by cluster root into node tables: which (segment, is_start)
-    // entries land on each node, and that node's representative point.
     let mut node_entries: HashMap<usize, Vec<(usize, bool)>> = HashMap::new();
     let mut node_points: HashMap<usize, Vec<[f64; 2]>> = HashMap::new();
+    let mut endpoint_node: HashMap<(usize, bool), usize> = HashMap::new();
     for seg in 0..n {
         for is_start in [true, false] {
             let ref_idx = ref_index(seg, is_start);
             let root = uf_find(&mut parent, ref_idx);
             node_entries.entry(root).or_default().push((seg, is_start));
             node_points.entry(root).or_default().push(refs[ref_idx]);
+            endpoint_node.insert((seg, is_start), root);
         }
     }
 
-    // Branching: any node touched by more than two segment-ends.
-    for (root, entries) in &node_entries {
+    EndpointClusters {
+        node_entries,
+        node_points,
+        endpoint_node,
+    }
+}
+
+/// Confirm `clusters` describes exactly one simple cycle spanning all
+/// `n` segments: no node touched by more than two segment-ends
+/// ([`ChainError::Branching`]), exactly one connected component
+/// ([`ChainError::Disjoint`] otherwise), and no loose ends
+/// ([`ChainError::OpenChain`] otherwise). `Ok(())` means
+/// [`walk_cycle`] can run.
+fn validate_topology(n: usize, clusters: &EndpointClusters) -> Result<(), ChainError> {
+    for (root, entries) in &clusters.node_entries {
         if entries.len() > 2 {
-            let at = average_point(&node_points[root]);
+            let at = average_point(&clusters.node_points[root]);
             return Err(ChainError::Branching { at });
         }
     }
@@ -182,38 +295,40 @@ pub fn chain_into_closed_contour(segments: &[ChainSegment]) -> Result<Vec<[f64; 
     // shared (degree-2) node ties them together.
     let mut seg_parent: Vec<usize> = (0..n).collect();
     let mut dangling_nodes: Vec<usize> = Vec::new();
-    for (root, entries) in &node_entries {
+    for (root, entries) in &clusters.node_entries {
         match entries.as_slice() {
             [(a, _), (b, _)] => uf_union(&mut seg_parent, *a, *b),
             [_] => dangling_nodes.push(*root),
             _ => unreachable!("branching nodes already rejected above"),
         }
     }
-    let components: std::collections::HashSet<usize> =
-        (0..n).map(|s| uf_find(&mut seg_parent, s)).collect();
+    let components: HashSet<usize> = (0..n).map(|s| uf_find(&mut seg_parent, s)).collect();
     if components.len() > 1 {
         return Err(ChainError::Disjoint);
     }
 
     match dangling_nodes.as_slice() {
-        [] => {}
+        [] => Ok(()),
         [a, b] => {
             let gap_mm = dist_sq(
-                average_point(&node_points[a]),
-                average_point(&node_points[b]),
+                average_point(&clusters.node_points[a]),
+                average_point(&clusters.node_points[b]),
             )
             .sqrt();
-            return Err(ChainError::OpenChain { gap_mm });
+            Err(ChainError::OpenChain { gap_mm })
         }
         // A connected component whose nodes all have degree ≤ 2 is
         // either a simple cycle (0 dangling nodes) or a simple path
         // (exactly 2) — never anything else.
         _ => unreachable!("connected max-degree-2 component has 0 or 2 dangling nodes"),
     }
+}
 
-    // Every node has degree exactly 2 and every segment is reachable
-    // from every other — this is a single simple cycle. Walk it,
-    // reversing each segment's polyline as needed.
+/// Walk the single simple cycle [`validate_topology`] already confirmed,
+/// reversing each segment's tessellated polyline as needed, and return
+/// the raw (not yet deduplicated / wound) point sequence.
+fn walk_cycle(polylines: &[Vec<[f64; 2]>], clusters: &EndpointClusters) -> Vec<[f64; 2]> {
+    let n = polylines.len();
     let mut visited = vec![false; n];
     let mut ring_raw: Vec<[f64; 2]> = Vec::new();
     let mut current_seg = 0usize;
@@ -232,8 +347,8 @@ pub fn chain_into_closed_contour(segments: &[ChainSegment]) -> Result<Vec<[f64; 
         }
 
         let arrived_via_is_start = !forward;
-        let arrived_node = uf_find(&mut parent, ref_index(current_seg, arrived_via_is_start));
-        let (next_seg, next_is_start) = node_entries[&arrived_node]
+        let arrived_node = clusters.endpoint_node[&(current_seg, arrived_via_is_start)];
+        let (next_seg, next_is_start) = clusters.node_entries[&arrived_node]
             .iter()
             .copied()
             .find(|&(s, is_start)| !(s == current_seg && is_start == arrived_via_is_start))
@@ -241,8 +356,7 @@ pub fn chain_into_closed_contour(segments: &[ChainSegment]) -> Result<Vec<[f64; 
         current_seg = next_seg;
         forward = next_is_start;
     }
-
-    finalize_ring(ring_raw)
+    ring_raw
 }
 
 /// Collapse consecutive (and wrap-around) duplicate points, reject
@@ -288,13 +402,11 @@ fn tessellate_segment(seg: &ChainSegment) -> Vec<[f64; 2]> {
         } => {
             let s = start_deg.rem_euclid(360.0);
             let e = end_deg.rem_euclid(360.0);
-            // CCW sweep magnitude in (0, 360]; `s == e` (any full-turn
-            // multiple of 360° apart) lands exactly on 360°, i.e. a
-            // full circle — see the module doc comment.
-            let mut delta = e - s;
-            if delta <= 0.0 {
-                delta += 360.0;
-            }
+            // CCW sweep magnitude in [0, 360°) — no promotion when it
+            // lands on exactly 0°. `start_deg == end_deg` (mod 360°) is
+            // a real zero-sweep segment, rejected up front by
+            // `reject_sub_epsilon_segments`; see the module doc comment.
+            let delta = (e - s).rem_euclid(360.0);
             (0..=CHAIN_ARC_SAMPLES)
                 .map(|i| {
                     let frac = i as f64 / CHAIN_ARC_SAMPLES as f64;
@@ -457,6 +569,56 @@ mod tests {
     }
 
     #[test]
+    fn wraparound_arc_through_zero_degrees_samples_lie_on_circle() {
+        // Arrange: an Arc sweeping CCW from 330° through 0° to 30° (a
+        // 60° sweep), closed by the straight chord between its two
+        // endpoints — a "circular segment" / lens shape. Exercises the
+        // `start_deg > end_deg` wraparound branch end-to-end through
+        // the public API, not just via bulge direction.
+        let center = [0.0, 0.0];
+        let radius = 2.0;
+        let point_at = |deg: f64| -> [f64; 2] {
+            [
+                center[0] + radius * deg.to_radians().cos(),
+                center[1] + radius * deg.to_radians().sin(),
+            ]
+        };
+        let segments = [
+            ChainSegment::Arc {
+                center,
+                radius,
+                start_deg: 330.0,
+                end_deg: 30.0,
+            },
+            line(point_at(30.0), point_at(330.0)), // closing chord
+        ];
+
+        // Act
+        let ring = chain_into_closed_contour(&segments).expect("lens shape should close");
+
+        // Assert: the chord duplicates the arc's own two endpoints, so
+        // the ring is exactly the arc's CHAIN_ARC_SAMPLES + 1 samples.
+        assert_eq!(ring.len(), CHAIN_ARC_SAMPLES + 1);
+        assert!(signed_area_x2(&ring) > 0.0, "must be wound CCW");
+
+        // Pin the actual through-0° sample positions (not just "some
+        // point is above the center") at 345°, 360°/0°, and 15° — the
+        // three interior samples straddling the wraparound.
+        for deg in [345.0_f64, 360.0, 375.0] {
+            let expected = point_at(deg);
+            let found = ring
+                .iter()
+                .find(|p| dist_sq(**p, expected) < 1e-12)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "expected a tessellated sample near {expected:?} (angle {deg}°) in {ring:?}"
+                    )
+                });
+            assert_approx_eq(dist_sq(*found, center).sqrt(), radius);
+        }
+    }
+
+    #[test]
     fn open_chain_three_sides_of_square_reports_gap() {
         // Arrange: bottom, right, top sides present; left side missing.
         let segments = [
@@ -530,6 +692,28 @@ mod tests {
     }
 
     #[test]
+    fn sub_epsilon_stub_segment_is_rejected_before_it_can_fake_branching() {
+        // Arrange: a clean triangle corner at (4,0), plus a near-zero-
+        // length "stub" line hanging off that same corner (0.005 mm — a
+        // real artifact size, e.g. a mis-drawn duplicate click). Before
+        // the up-front sub-epsilon rejection, this stub's own two ends
+        // both clustered onto the corner node, faking a 4-way Branching
+        // there instead of being recognised as junk input.
+        let segments = [
+            line([0.0, 0.0], [4.0, 0.0]),
+            line([4.0, 0.0], [4.0, 4.0]),
+            line([4.0, 4.0], [0.0, 0.0]),
+            line([4.0, 0.0], [4.005, 0.0]), // stub, 0.005 mm < epsilon
+        ];
+
+        // Act
+        let err = chain_into_closed_contour(&segments).unwrap_err();
+
+        // Assert: rejected as degenerate input, not misreported as Branching.
+        assert_eq!(err, ChainError::DegenerateResult);
+    }
+
+    #[test]
     fn endpoints_within_epsilon_still_chain() {
         // Arrange: a triangle where one joint is off by 0.005 mm — under
         // CHAIN_ENDPOINT_EPSILON_MM (0.01).
@@ -568,10 +752,13 @@ mod tests {
     }
 
     #[test]
-    fn full_circle_arc_alone_closes_into_a_ring() {
-        // Arrange: a single Arc with start_deg == end_deg — per the
-        // module doc comment, this chains as a full 360° circle rather
-        // than a zero-length degenerate arc.
+    fn zero_sweep_arc_alone_is_rejected_as_degenerate() {
+        // Arrange: start_deg == end_deg. Per the product decision (see
+        // the module doc comment), this is a degenerate zero-length
+        // segment, not an implicit full circle: every runtime consumer
+        // of SymbolGraphicKind::Arc (hit_test.rs, arc.wgsl, the CPU
+        // canvas draw path) treats start==end as a zero-sweep point, so
+        // chaining must never materialise a circle the user never saw.
         let segments = [ChainSegment::Arc {
             center: [1.0, 1.0],
             radius: 2.0,
@@ -580,14 +767,42 @@ mod tests {
         }];
 
         // Act
-        let ring = chain_into_closed_contour(&segments).expect("full circle should chain");
+        let err = chain_into_closed_contour(&segments).unwrap_err();
 
-        // Assert: CHAIN_ARC_SAMPLES vertices, all on the circle, CCW.
-        assert_eq!(ring.len(), CHAIN_ARC_SAMPLES);
-        for p in &ring {
-            assert_approx_eq(dist_sq(*p, [1.0, 1.0]).sqrt(), 2.0);
-        }
-        assert!(signed_area_x2(&ring) > 0.0);
+        // Assert
+        assert_eq!(err, ChainError::DegenerateResult);
+    }
+
+    #[test]
+    fn non_finite_line_coordinate_reports_invalid_input() {
+        // Arrange
+        let segments = [line([0.0, 0.0], [f64::NAN, 4.0])];
+
+        // Act
+        let err = chain_into_closed_contour(&segments).unwrap_err();
+
+        // Assert
+        assert_eq!(err, ChainError::InvalidInput { segment_index: 0 });
+    }
+
+    #[test]
+    fn non_finite_arc_radius_reports_invalid_input() {
+        // Arrange
+        let segments = [
+            line([0.0, 0.0], [4.0, 0.0]),
+            ChainSegment::Arc {
+                center: [0.0, 0.0],
+                radius: f64::INFINITY,
+                start_deg: 0.0,
+                end_deg: 90.0,
+            },
+        ];
+
+        // Act
+        let err = chain_into_closed_contour(&segments).unwrap_err();
+
+        // Assert
+        assert_eq!(err, ChainError::InvalidInput { segment_index: 1 });
     }
 
     #[test]
